@@ -2,7 +2,6 @@ package org.lightink.reader.service
 
 import io.reactivex.Observable
 import io.reactivex.Single
-import io.vertx.core.json.JsonObject
 import io.vertx.reactivex.ext.web.client.WebClient
 import org.jsoup.Jsoup
 import org.lightink.reader.booksource.BookSource
@@ -22,7 +21,7 @@ class MainService {
     @Autowired
     private lateinit var source: BookSource
 
-    fun search(searchKey: String): Single<MutableList<JsonObject>> {
+    fun search(searchKey: String): Single<MutableList<HashMap<String, String?>>> {
 
 //        val link = bookSource.search.link
         val link = "https://www.daocaorenshuwu.com/plus/search.php?q=\${key}"
@@ -37,14 +36,13 @@ class MainService {
                     Observable.fromIterable(t)
                 }
                 .map { t ->
-                    val jsonObject = JsonObject()
-                    jsonObject.put("name", t.parserAttr(source.metadata.name.first()))
-                    jsonObject.put("author", t.select(source.metadata.author.first()).text())
-                    jsonObject.put("link", t.parserAttr(source.metadata.link.first()))
-                    println("jsonObject: " + jsonObject)
-                    return@map jsonObject
+                    val map = hashMapOf<String, String?>()
+                    map.put("name", t.parserAttr(source.metadata.name.first()))
+                    map.put("author", t.select(source.metadata.author.first()).text())
+                    map.put("link", t.parserAttr(source.metadata.link.first()))
+                    return@map map
                 }
-                .filter { it.getString("name").isNotBlank() }
+                .filter { it.get("name") != null && it.get("name")!!.isNotBlank() }
                 .toList()
 
 

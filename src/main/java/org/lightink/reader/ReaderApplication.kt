@@ -19,6 +19,9 @@ class ReaderApplication {
     @Autowired
     private lateinit var restVerticle: RestVerticle
 
+    @Autowired
+    private lateinit var vertx: Vertx;
+
     @Bean
     fun vertx(): Vertx {
         val vertx = Vertx.vertx()
@@ -27,19 +30,8 @@ class ReaderApplication {
     }
 
     @PostConstruct
-    fun deployVerticle(vertx: Vertx) {
+    fun deployVerticle() {
         vertx.deployVerticle(restVerticle)
-    }
-
-    @PostConstruct
-    fun jsonConfig(){
-        Json.mapper.apply {
-            registerKotlinModule()
-        }
-
-        Json.prettyMapper.apply {
-            registerKotlinModule()
-        }
     }
 
     @Bean
@@ -49,6 +41,15 @@ class ReaderApplication {
 
     @Bean
     fun bookSource(webClient: WebClient): BookSource {
+
+        Json.mapper.apply {
+            registerKotlinModule()
+        }
+
+        Json.prettyMapper.apply {
+            registerKotlinModule()
+        }
+
         val completableFuture = CompletableFuture<BookSource>()
         webClient.getAbs("https://gitee.com/chimisgo/BookSourceRepository/raw/master/sources/%E7%A8%BB%E8%8D%89%E4%BA%BA%E4%B9%A6%E5%B1%8B.json")
                 .rxSend()

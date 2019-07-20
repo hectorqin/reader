@@ -2,11 +2,9 @@ package org.lightink.reader.verticle
 
 import io.vertx.core.http.HttpMethod
 import io.vertx.reactivex.core.AbstractVerticle
-import io.vertx.reactivex.ext.auth.jwt.JWTAuth
 import io.vertx.reactivex.ext.web.Router
 import io.vertx.reactivex.ext.web.handler.BodyHandler
 import io.vertx.reactivex.ext.web.handler.CorsHandler
-import io.vertx.reactivex.ext.web.handler.JWTAuthHandler
 import mu.KotlinLogging
 import org.gosky.aroundight.api.BaseApi
 import org.lightink.reader.ext.error
@@ -30,8 +28,6 @@ class RestVerticle : AbstractVerticle() {
     @Autowired
     private lateinit var apiList: List<BaseApi>
 
-    @Autowired
-    private lateinit var jwtAuth: JWTAuth
 
     @Throws(Exception::class)
     override fun start() {
@@ -65,8 +61,6 @@ class RestVerticle : AbstractVerticle() {
         router.route().handler(BodyHandler.create()) // <3>
 
         router.get("/health").handler { it.success("ok!") }
-
-        router.route("/*").handler(JWTAuthHandler.create(jwtAuth, "/user/login"));
 
         apiList.forEach { it.initRouter(router) }
 

@@ -24,7 +24,7 @@ class MainApi : BaseApi {
     private lateinit var mainService: MainService
 
     override fun initRouter(router: Router) {
-        router.post("/search").handler { search(it) }
+        router.get("/search").handler { search(it) }
 
     }
 
