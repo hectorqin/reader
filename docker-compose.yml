@@ -1,0 +1,12 @@
+version: '2'
+services:
+  service:
+    image: lightink/lightink:latest
+    container_name: lightink
+    environment:
+      - JAVA_TOOL_OPTIONS=-Xms256m -Xmx512m
+      - logDir=/app/log
+    ports:
+      - "9010:8080"
+    volumes:
+      - /app/log:/app/log
