@@ -1,8 +1,8 @@
 version: '2'
 services:
   service:
-    image: lightink/lightink:latest
-    container_name: lightink
+    image: zoharsoul/lightink-server:latest
+    container_name: lightink-server
     environment:
       - JAVA_TOOL_OPTIONS=-Xms256m -Xmx512m
       - logDir=/app/log
