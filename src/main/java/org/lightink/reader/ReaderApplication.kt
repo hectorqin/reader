@@ -5,19 +5,34 @@ import io.vertx.core.json.Json
 import io.vertx.reactivex.core.Vertx
 import io.vertx.reactivex.ext.web.client.WebClient
 import org.lightink.reader.booksource.BookSource
+import org.lightink.reader.verticle.RestVerticle
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.context.annotation.Bean
 import java.util.concurrent.CompletableFuture
+import javax.annotation.PostConstruct
 
 
 @SpringBootApplication
 class ReaderApplication {
-
+    @Autowired
+    private lateinit var restVerticle: RestVerticle
 
     @Bean
     fun vertx(): Vertx {
         val vertx = Vertx.vertx()
+
+        return vertx
+    }
+
+    @PostConstruct
+    fun deployVerticle(vertx: Vertx) {
+        vertx.deployVerticle(restVerticle)
+    }
+
+    @PostConstruct
+    fun jsonConfig(){
         Json.mapper.apply {
             registerKotlinModule()
         }
@@ -25,7 +40,6 @@ class ReaderApplication {
         Json.prettyMapper.apply {
             registerKotlinModule()
         }
-        return vertx
     }
 
     @Bean

@@ -1,4 +1,4 @@
-package org.gosky.aroundight.verticle
+package org.lightink.reader.verticle
 
 import io.vertx.core.http.HttpMethod
 import io.vertx.reactivex.core.AbstractVerticle

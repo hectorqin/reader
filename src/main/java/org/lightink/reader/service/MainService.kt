@@ -1,6 +1,5 @@
 package org.lightink.reader.service
 
-import com.google.gson.Gson
 import io.reactivex.Observable
 import io.reactivex.Single
 import io.vertx.core.json.JsonObject
@@ -24,8 +23,6 @@ class MainService {
     private lateinit var source: BookSource
 
     fun search(searchKey: String): Single<MutableList<JsonObject>> {
-        val bookSource = Gson().fromJson<BookSource>("", BookSource::class.java)
-
 
 //        val link = bookSource.search.link
         val link = "https://www.daocaorenshuwu.com/plus/search.php?q=\${key}"
