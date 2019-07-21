@@ -30,6 +30,7 @@ class MainApi : BaseApi {
 
     private fun search(routingContext: RoutingContext) {
         val key = routingContext.queryParams().get("key")
+        logger.info { "search: $key" }
         mainService.search(key)
                 .subscribe { t ->
                     routingContext.success(t)

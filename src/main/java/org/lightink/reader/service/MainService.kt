@@ -3,6 +3,7 @@ package org.lightink.reader.service
 import io.reactivex.Observable
 import io.reactivex.Single
 import io.vertx.reactivex.ext.web.client.WebClient
+import mu.KotlinLogging
 import org.jsoup.Jsoup
 import org.lightink.reader.booksource.BookSource
 import org.lightink.reader.ext.parserAttr
@@ -13,6 +14,10 @@ import org.springframework.stereotype.Service
  * @Date: 2019-07-19 18:23
  * @Description:
  */
+
+private val logger = KotlinLogging.logger {}
+
+
 @Service
 class MainService {
 
