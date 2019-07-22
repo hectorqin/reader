@@ -6,7 +6,7 @@ import io.vertx.reactivex.ext.web.client.WebClient
 import mu.KotlinLogging
 import org.jsoup.Jsoup
 import org.lightink.reader.booksource.BookSource
-import org.lightink.reader.ext.parserAttr
+import org.lightink.reader.ext.parser
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 
@@ -42,15 +42,46 @@ class MainService {
                 }
                 .map { t ->
                     val map = hashMapOf<String, String?>()
-                    map.put("name", t.parserAttr(source.metadata.name.first()))
+                    map.put("name", t.parser(source.metadata.name.first()))
                     map.put("author", t.select(source.metadata.author.first()).text())
-                    map.put("link", t.parserAttr(source.metadata.link.first()))
+                    map.put("link", t.parser(source.metadata.link.first()))
                     return@map map
                 }
                 .filter { it.get("name") != null && it.get("name")!!.isNotBlank() }
                 .toList()
 
 
+    }
+
+
+    fun details(link: String): Single<HashMap<String, Any>> {
+        val url = "https://www.daocaorenshuwu.com/${link}"
+
+        return webClient.getAbs(url)
+                .rxSend()
+                .map { t ->
+                    return@map Jsoup.parse(t.bodyAsString())
+                }
+                .map { t ->
+                    val map = hashMapOf<String, Any>()
+                    map.put("cover", t.parser(source.metadata.cover.first()))
+                    map.put("summary", t.parser(source.metadata.summary.first()))
+                    map.put("category", t.parser(source.metadata.category.first()))
+                    map.put("status", t.parser(source.metadata.status.first()))
+                    map.put("update", t.parser(source.metadata.update.first()))
+                    map.put("lastChapter", t.parser(source.metadata.lastChapter.first()))
+                    val catalog = t.select(source.catalog.list)
+                    map.put("catalogs", catalog.map {
+                        val catalogs = hashMapOf<String, String>()
+                        catalogs.put("chapterName", it.parser(source.catalog.chapter.name))
+                        catalogs.put("chapterlink", it.parser(source.catalog.chapter.link))
+                        catalogs
+                    });
+
+                    return@map map
+                }
+//                .filter { it.get("name") != null && it.get("name")!!.isNotBlank() }
+//                .toList()
     }
 
 

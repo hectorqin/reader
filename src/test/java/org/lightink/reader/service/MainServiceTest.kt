@@ -23,7 +23,7 @@ class MainServiceTest {
         val countDownLatch = CountDownLatch(1)
 
         mainService.search("人道天堂")
-                ?.subscribe({ t ->
+                .subscribe({ t ->
                     println(t.toString())
                     countDownLatch.countDown()
                 }, { e ->
@@ -32,5 +32,27 @@ class MainServiceTest {
                 })
 
         countDownLatch.await()
+    }
+
+    @Test
+    fun details() {
+
+
+        val countDownLatch = CountDownLatch(1)
+
+        mainService.search("人道天堂")
+                .flatMap {
+                    return@flatMap mainService.details(it.first()["link"]!!)
+                }
+                .subscribe({ t ->
+                    println(t.toString())
+                    countDownLatch.countDown()
+                }, { e ->
+                    e.printStackTrace()
+
+                })
+
+        countDownLatch.await()
+
     }
 }

@@ -1,6 +1,8 @@
 package org.lightink.reader.ext
 
 import org.jsoup.nodes.Element
+import javax.script.ScriptEngineManager
+
 
 /**
  * @Date: 2019-07-19 23:43
@@ -8,7 +10,35 @@ import org.jsoup.nodes.Element
  */
 
 
-fun Element.parserAttr(selector: String): String? {
-    val split = selector.split("@attr->")
-    return this.select(split.first()).attr(split.last())
+//fun Element.parserAttr(selector: String): String? {
+//    val split = selector.split("@attr->")
+//    return this.select(split.first()).attr(split.last())
+//}
+
+val engine = ScriptEngineManager().getEngineByName("nashorn")
+
+
+fun Element.parser(selector: String): String {
+
+    var element: Element = this
+
+    var text = ""
+
+    for (s in selector.split("@")) {
+
+        if (s.startsWith("attr->")) {
+            text = element.attr(s.removePrefix("attr->"))
+        } else if (s.startsWith("js->")) {
+            text = engine.eval(s.removePrefix("js->").replace("\${this}", "\"$text\"")).toString()
+        } else {
+            element = element.selectFirst(s)
+            text = element.text()
+        }
+
+    }
+    return text
+
 }
+
+
+
