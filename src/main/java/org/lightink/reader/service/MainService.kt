@@ -80,8 +80,28 @@ class MainService {
 
                     return@map map
                 }
-//                .filter { it.get("name") != null && it.get("name")!!.isNotBlank() }
-//                .toList()
+
+    }
+
+    fun content(href: String): Single<HashMap<String, Any>> {
+
+        return webClient.getAbs(href)
+                .rxSend()
+                .map { t ->
+                    return@map Jsoup.parse(t.bodyAsString())
+                }
+                .map { t ->
+                    val map = hashMapOf<String, Any>()
+                    val filter = t.parser(source.content.filter.first())
+                    if (filter.isNotBlank()) {
+                        t.select(filter).remove()
+                    }
+
+                    map.put("text", t.parser(source.content.text))
+                    map.put("nextLink", t.parser(source.content.next.link))
+                    map.put("nextText", source.content.next.text);
+                    return@map map
+                }
     }
 
 

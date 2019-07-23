@@ -26,6 +26,7 @@ class MainApi : BaseApi {
     override fun initRouter(router: Router) {
         router.get("/search").handler { search(it) }
         router.get("/details").handler { details(it) }
+        router.get("/content").handler { content(it) }
 
     }
 
@@ -42,6 +43,15 @@ class MainApi : BaseApi {
         val link = routingContext.queryParams().get("link")
         logger.info { "link: $link" }
         mainService.details(link)
+                .subscribe { t ->
+                    routingContext.success(t)
+                }
+    }
+
+    private fun content(routingContext: RoutingContext) {
+        val href = routingContext.queryParams().get("href")
+        logger.info { "href: $href" }
+        mainService.content(href)
                 .subscribe { t ->
                     routingContext.success(t)
                 }

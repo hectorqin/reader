@@ -32,12 +32,24 @@ fun Element.parser(selector: String): String {
             text = engine.eval(s.removePrefix("js->").replace("\${this}", "\"$text\"")).toString()
         } else {
             element = element.selectFirst(s)
-            text = element.text()
+            if (element.hasText()) {
+                text = element.text()
+            } else {
+                text = element.data()
+            }
         }
 
     }
     return text
 
+}
+
+
+fun String.url(): String {
+    if (this.startsWith("//")) {
+        return "http:" + this
+    }
+    return this
 }
 
 
