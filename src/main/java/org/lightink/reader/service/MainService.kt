@@ -98,7 +98,9 @@ class MainService {
                     }
 
                     map.put("text", t.parser(source.content.text))
-                    map.put("nextLink", t.parser(source.content.next.link))
+                    val nextlinks = t.select(source.content.next.link)
+                    val nextlink = nextlinks.filter { it.text() == source.content.next.text }.firstOrNull()?.text()
+                    map.put("nextLink", nextlink.orEmpty())
                     map.put("nextText", source.content.next.text);
                     return@map map
                 }
