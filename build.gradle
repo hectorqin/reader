@@ -45,7 +45,6 @@ dependencies {
     implementation "com.fasterxml.jackson.module:jackson-module-kotlin:2.9.+"
     implementation 'io.github.microutils:kotlin-logging:1.6.24'
 
-
 }
 compileKotlin {
     kotlinOptions {
