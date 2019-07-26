@@ -2,6 +2,7 @@ package org.lightink.reader
 
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.vertx.core.json.Json
+import io.vertx.ext.web.client.WebClientOptions
 import io.vertx.reactivex.core.Vertx
 import io.vertx.reactivex.ext.web.client.WebClient
 import org.lightink.reader.booksource.BookSource
@@ -36,7 +37,12 @@ class ReaderApplication {
 
     @Bean
     fun webClient(vertx: Vertx): WebClient {
-        return WebClient.create(vertx)
+        val webClientOptions = WebClientOptions()
+        webClientOptions.isTryUseCompression = true
+        webClientOptions.logActivity = true
+        val webClient = WebClient.create(vertx, webClientOptions)
+
+        return webClient
     }
 
     @Bean
