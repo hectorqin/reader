@@ -18,8 +18,8 @@ data class BookSource(
 )
 
 data class Content(
-        val filter: List<String>,
-        val next: Next,
+        val filter: List<String> = emptyList(),
+        val next: Next?,
         val text: String
 )
 
@@ -34,16 +34,16 @@ data class Search(
 )
 
 data class Metadata(
-        val author: List<String>,
-        val catalog: List<Any>,
-        val category: List<String>,
-        val cover: List<String>,
-        val lastChapter: List<String>,
-        val link: List<String>,
-        val name: List<String>,
-        val status: List<String>,
-        val summary: List<String>,
-        val update: List<String>
+        val author: List<String> = emptyList(),
+        val catalog: List<Any> = emptyList(),
+        val category: List<String> = emptyList(),
+        val cover: List<String> = emptyList(),
+        val lastChapter: List<String> = emptyList(),
+        val link: List<String> = emptyList(),
+        val name: List<String> = emptyList(),
+        val status: List<String> = emptyList(),
+        val summary: List<String> = emptyList(),
+        val update: List<String> = emptyList()
 )
 
 data class Catalog(

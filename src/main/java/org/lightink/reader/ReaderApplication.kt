@@ -1,6 +1,7 @@
 package org.lightink.reader
 
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
+import com.google.gson.Gson
 import io.vertx.core.json.Json
 import io.vertx.ext.web.client.WebClientOptions
 import io.vertx.reactivex.core.Vertx
@@ -57,10 +58,10 @@ class ReaderApplication {
         }
 
         val completableFuture = CompletableFuture<BookSource>()
-        webClient.getAbs("https://gitee.com/chimisgo/BookSourceRepository/raw/master/sources/%E7%A8%BB%E8%8D%89%E4%BA%BA%E4%B9%A6%E5%B1%8B.json")
+        webClient.getAbs("https://gitee.com/hunji66/hm-source/raw/master/sources/%E6%88%91%E7%9A%84%E5%B0%8F%E4%B9%A6%E5%B1%8B.json")
                 .rxSend()
                 .subscribe { t ->
-                    completableFuture.complete(t.bodyAsJson(BookSource::class.java))
+                    completableFuture.complete(Gson().fromJson<BookSource>(t.bodyAsString(),BookSource::class.java))
                 }
         return completableFuture.get()
     }

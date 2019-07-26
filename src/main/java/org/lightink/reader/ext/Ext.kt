@@ -17,7 +17,6 @@ import javax.script.ScriptEngineManager
 
 val engine = ScriptEngineManager().getEngineByName("nashorn")
 
-
 fun Element.parser(selector: String): String {
 
     var element: Element = this
@@ -25,6 +24,10 @@ fun Element.parser(selector: String): String {
     var text = ""
 
     for (s in selector.split("@")) {
+
+        if (s.isBlank()) {
+            continue
+        }
 
         if (s.startsWith("attr->")) {
             text = element.attr(s.removePrefix("attr->"))
@@ -41,6 +44,18 @@ fun Element.parser(selector: String): String {
 
     }
     return text
+
+}
+
+
+fun Element.parser(selectorList: List<String>): String {
+    selectorList.forEach {
+        val s = this.parser(it)
+        if (s.isNotBlank()) {
+            return s
+        }
+    }
+    return ""
 
 }
 
