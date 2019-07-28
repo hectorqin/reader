@@ -8,6 +8,7 @@ import io.vertx.reactivex.ext.web.client.WebClient
 import mu.KotlinLogging
 import org.jsoup.Jsoup
 import org.lightink.reader.booksource.BookSource
+import org.lightink.reader.contants.PropertyType
 import org.lightink.reader.ext.parser
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
@@ -93,12 +94,12 @@ class MainService {
                 .map { p ->
                     val t = p.first
                     val map = hashMapOf<String, Any>()
-                    map.put("cover", t.parser(source.metadata.cover))
-                    map.put("summary", t.parser(source.metadata.summary))
-                    map.put("category", t.parser(source.metadata.category))
-                    map.put("status", t.parser(source.metadata.status))
-                    map.put("update", t.parser(source.metadata.update))
-                    map.put("lastChapter", t.parser(source.metadata.lastChapter))
+                    map.put("cover", t.parser(source.metadata.cover, propertyType = PropertyType.DETAIL))
+                    map.put("summary", t.parser(source.metadata.summary, propertyType = PropertyType.DETAIL))
+                    map.put("category", t.parser(source.metadata.category, propertyType = PropertyType.DETAIL))
+                    map.put("status", t.parser(source.metadata.status, propertyType = PropertyType.DETAIL))
+                    map.put("update", t.parser(source.metadata.update, propertyType = PropertyType.DETAIL))
+                    map.put("lastChapter", t.parser(source.metadata.lastChapter, propertyType = PropertyType.DETAIL))
 
                     val catalogDocument = if (p.second != null) {
                         p.second
@@ -120,7 +121,7 @@ class MainService {
 
     fun content(href: String): Single<HashMap<String, Any>> {
 
-        return webClient.getAbs(href)
+        return webClient.getAbs(bookSource.url + href)
                 .rxSend()
                 .map { t ->
                     return@map Jsoup.parse(t.bodyAsString())

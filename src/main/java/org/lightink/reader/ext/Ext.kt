@@ -1,6 +1,7 @@
 package org.lightink.reader.ext
 
 import org.jsoup.nodes.Element
+import org.lightink.reader.contants.PropertyType
 import javax.script.ScriptEngineManager
 
 
@@ -34,17 +35,18 @@ fun Element.parser(selector: String): String {
         } else if (s.startsWith("js->")) {
             text = engine.eval(s.removePrefix("js->").replace("\${this}", "\"$text\"")).toString()
         } else {
-            val element1 = element.selectFirst(s)
-            if (element1 == null) {
+
+            if (element.selectFirst(s) == null) {
                 continue
             } else {
-                element = element1
+                if (element.select(s).hasText()) {
+                    text = element.select(s).text()
+                } else {
+                    text = element.selectFirst(s).data()
+                }
+                element = element.selectFirst(s)
             }
-            if (element.hasText()) {
-                text = element.text()
-            } else {
-                text = element.data()
-            }
+
         }
 
     }
@@ -53,8 +55,16 @@ fun Element.parser(selector: String): String {
 }
 
 
-fun Element.parser(selectorList: List<String>): String {
-    selectorList.forEach {
+fun Element.parser(selectorList: List<String>?, propertyType: PropertyType = PropertyType.SEARCH): String {
+    if (selectorList == null) {
+        return ""
+    }
+
+    if (propertyType == PropertyType.DETAIL) {
+        selectorList.reversed()
+    } else {
+        selectorList
+    }.forEach {
         val s = this.parser(it)
         if (s.isNotBlank()) {
             return s
@@ -71,6 +81,7 @@ fun String.url(): String {
     }
     return this
 }
+
 
 
 
