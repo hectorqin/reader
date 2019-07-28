@@ -71,14 +71,27 @@ class MainService {
 
 
     fun details(link: String): Single<HashMap<String, Any>> {
-        val url = "https://www.daocaorenshuwu.com/${link}"
+        val url = "${bookSource.url}$link"
 
         return webClient.getAbs(url)
                 .rxSend()
                 .map { t ->
                     return@map Jsoup.parse(t.bodyAsString())
                 }
-                .map { t ->
+                .flatMap { t ->
+                    val catalogLink = t.parser(source.metadata.catalog)
+                    if (catalogLink.isNotBlank()) {
+                        logger.info { "catalogLink: $catalogLink" }
+                        return@flatMap webClient.getAbs(bookSource.url + catalogLink).rxSend()
+                                .map {
+                                    return@map t to Jsoup.parse(it.bodyAsString())
+                                }
+                    } else {
+                        return@flatMap Single.just(t to null)
+                    }
+                }
+                .map { p ->
+                    val t = p.first
                     val map = hashMapOf<String, Any>()
                     map.put("cover", t.parser(source.metadata.cover))
                     map.put("summary", t.parser(source.metadata.summary))
@@ -86,7 +99,13 @@ class MainService {
                     map.put("status", t.parser(source.metadata.status))
                     map.put("update", t.parser(source.metadata.update))
                     map.put("lastChapter", t.parser(source.metadata.lastChapter))
-                    val catalog = t.select(source.catalog.list)
+
+                    val catalogDocument = if (p.second != null) {
+                        p.second
+                    } else {
+                        t
+                    }
+                    val catalog = catalogDocument!!.select(source.catalog.list)
                     map.put("catalogs", catalog.map {
                         val catalogs = hashMapOf<String, String>()
                         catalogs.put("chapterName", it.parser(source.catalog.chapter.name))

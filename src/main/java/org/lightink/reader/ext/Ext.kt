@@ -34,7 +34,12 @@ fun Element.parser(selector: String): String {
         } else if (s.startsWith("js->")) {
             text = engine.eval(s.removePrefix("js->").replace("\${this}", "\"$text\"")).toString()
         } else {
-            element = element.selectFirst(s)
+            val element1 = element.selectFirst(s)
+            if (element1 == null) {
+                continue
+            } else {
+                element = element1
+            }
             if (element.hasText()) {
                 text = element.text()
             } else {

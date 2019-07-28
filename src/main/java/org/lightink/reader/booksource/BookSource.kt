@@ -35,7 +35,7 @@ data class Search(
 
 data class Metadata(
         val author: List<String> = emptyList(),
-        val catalog: List<Any> = emptyList(),
+        val catalog: List<String> = emptyList(),
         val category: List<String> = emptyList(),
         val cover: List<String> = emptyList(),
         val lastChapter: List<String> = emptyList(),
