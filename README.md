@@ -19,12 +19,9 @@ cd /home/docker/qingmo/;docker-compose -f docker-compose.yml pull ; docker-compo
 #### Request
 
 - Method: `GET`
-- URL:  ```search?key=${}```
+- URL:  ```/:code/:name/search?key=${}```
     - 搜索人道天堂:  ```search?key=${人道天堂}```
-- Headers：
-- Body:
-```
-```
+
 
 ##### Response
 - Body
@@ -47,12 +44,9 @@ cd /home/docker/qingmo/;docker-compose -f docker-compose.yml pull ; docker-compo
 #### Request
 
 - Method: `GET`
-- URL:  ```details?link=${}```
-    - 查看搜索出来的数据的详情:  ```details?link=/book/rendaotiantang/```
-- Headers：
-- Body:
-```
-```
+- URL:  ```/:code/:name/details?link=${}```
+    - 查看搜索出来的数据的详情:  ```/:code/:name/details?link=/book/rendaotiantang/```
+
 
 ##### Response
 - Body
@@ -86,12 +80,9 @@ cd /home/docker/qingmo/;docker-compose -f docker-compose.yml pull ; docker-compo
 #### Request
 
 - Method: `GET`
-- URL:  ```content?href=${}```
-    - 查看目录中的chapterlink:  ```content?href=https://www.daocaorenshuwu.com/book/rendaotiantang/585695.html```
-- Headers：
-- Body:
-```
-```
+- URL:  ```/:code/:name/content?href=${}```
+    - 查看目录中的chapterlink:  ```/:code/:name/content?href=https://www.daocaorenshuwu.com/book/rendaotiantang/585695.html```
+
 
 ##### Response
 - Body
@@ -114,10 +105,7 @@ cd /home/docker/qingmo/;docker-compose -f docker-compose.yml pull ; docker-compo
 
 - Method: `GET`
 - URL:  ```/book_source/repository```
-- Headers：
-- Body:
-```
-```
+
 
 ##### Response
 - Body
@@ -149,10 +137,7 @@ cd /home/docker/qingmo/;docker-compose -f docker-compose.yml pull ; docker-compo
 - Method: `GET`
 - URL:  ```/book_source/description/:code```
     - eg:  ```/book_source/description/2333```
-- Headers：
-- Body:
-```
-```
+
 
 ##### Response
 - Body
@@ -194,10 +179,7 @@ cd /home/docker/qingmo/;docker-compose -f docker-compose.yml pull ; docker-compo
 - Method: `GET`
 - URL:  ```/book_source/:code/:name```
     - eg:  ```/book_source/2333/My716```
-- Headers：
-- Body:
-```
-```
+
 
 ##### Response
 - Body
