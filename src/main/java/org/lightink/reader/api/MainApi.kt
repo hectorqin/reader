@@ -24,16 +24,19 @@ class MainApi : BaseApi {
     private lateinit var mainService: MainService
 
     override fun initRouter(router: Router) {
-        router.get("/search").handler { search(it) }
-        router.get("/details").handler { details(it) }
-        router.get("/content").handler { content(it) }
+        router.get("/:code/:name/search").handler { search(it) }
+        router.get("/:code/:name/details").handler { details(it) }
+        router.get("/:code/:name/content").handler { content(it) }
 
     }
 
     private fun search(routingContext: RoutingContext) {
         val key = routingContext.queryParams().get("key")
+        val code = routingContext.pathParam("code")
+        val name = routingContext.pathParam("name")
+
         logger.info { "search: $key" }
-        mainService.search(key)
+        mainService.search(code, name, key)
                 .subscribe { t ->
                     routingContext.success(t)
                 }
@@ -41,8 +44,10 @@ class MainApi : BaseApi {
 
     private fun details(routingContext: RoutingContext) {
         val link = routingContext.queryParams().get("link")
+        val code = routingContext.pathParam("code")
+        val name = routingContext.pathParam("name")
         logger.info { "link: $link" }
-        mainService.details(link)
+        mainService.details(code, name, link)
                 .subscribe { t ->
                     routingContext.success(t)
                 }
@@ -50,8 +55,10 @@ class MainApi : BaseApi {
 
     private fun content(routingContext: RoutingContext) {
         val href = routingContext.queryParams().get("href")
+        val code = routingContext.pathParam("code")
+        val name = routingContext.pathParam("name")
         logger.info { "href: $href" }
-        mainService.content(href)
+        mainService.content(code, name, href)
                 .subscribe { t ->
                     routingContext.success(t)
                 }

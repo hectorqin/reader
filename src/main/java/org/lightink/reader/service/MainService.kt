@@ -7,7 +7,6 @@ import io.vertx.reactivex.ext.web.client.HttpRequest
 import io.vertx.reactivex.ext.web.client.WebClient
 import mu.KotlinLogging
 import org.jsoup.Jsoup
-import org.lightink.reader.booksource.BookSource
 import org.lightink.reader.contants.PropertyType
 import org.lightink.reader.ext.parser
 import org.springframework.beans.factory.annotation.Autowired
@@ -27,120 +26,132 @@ class MainService {
     @Autowired
     private lateinit var webClient: WebClient
     @Autowired
-    private lateinit var source: BookSource
-    @Autowired
-    private lateinit var bookSource: BookSource
+    private lateinit var bookSourceService: BookSourceService
 
-    fun search(searchKey: String): Single<MutableList<HashMap<String, String?>>> {
 
-        var link = bookSource.search.link
-        val httpRequest: HttpRequest<Buffer>
+    fun search(code: String, name: String, searchKey: String): Single<MutableList<HashMap<String, String?>>> {
 
-        if (link.contains("@post->")) {
-            val split = link.split("@post->")
-            link = split[0]
-            val param = split[1].split("=")
-            httpRequest = webClient.postAbs(link)
-                    .addQueryParam(param[0], param[1].replace("\${key}", searchKey))
-        } else {
-            httpRequest = webClient.getAbs(link.replace("\${key}", searchKey))
-        }
+        return bookSourceService.bookSource(code, name)
+                .flatMap { bookSource ->
 
-//        val link = "https://www.daocaorenshuwu.com/plus/search.php?q=\${key}"
-        return httpRequest
-                .rxSend()
-                .map { t ->
-                    val document = Jsoup.parse(t.bodyAsString())
-                    document.select(source.search.list)
+                    var link = bookSource.search.link
+                    val httpRequest: HttpRequest<Buffer>
+
+                    if (link.contains("@post->")) {
+                        val split = link.split("@post->")
+                        link = split[0]
+                        val param = split[1].split("=")
+                        httpRequest = webClient.postAbs(link)
+                                .addQueryParam(param[0], param[1].replace("\${key}", searchKey))
+                    } else {
+                        httpRequest = webClient.getAbs(link.replace("\${key}", searchKey))
+                    }
+
+                    //        val link = "https://www.daocaorenshuwu.com/plus/search.php?q=\${key}"
+                    return@flatMap httpRequest
+                            .rxSend()
+                            .map { t ->
+                                val document = Jsoup.parse(t.bodyAsString())
+                                document.select(bookSource.search.list)
+                            }
+                            .toObservable()
+                            .flatMap { t ->
+                                Observable.fromIterable(t)
+                            }
+                            .map { t ->
+                                val map = hashMapOf<String, String?>()
+                                map.put("name", t.parser(bookSource.metadata.name))
+                                map.put("author", t.select(bookSource.metadata.author.first()).text())
+                                map.put("link", t.parser(bookSource.metadata.link))
+                                return@map map
+                            }
+                            .filter { it.get("name") != null && it.get("name")!!.isNotBlank() }
+                            .toList()
+
                 }
-                .toObservable()
-                .flatMap { t ->
-                    Observable.fromIterable(t)
-                }
-                .map { t ->
-                    val map = hashMapOf<String, String?>()
-                    map.put("name", t.parser(source.metadata.name))
-                    map.put("author", t.select(source.metadata.author.first()).text())
-                    map.put("link", t.parser(source.metadata.link))
-                    return@map map
-                }
-                .filter { it.get("name") != null && it.get("name")!!.isNotBlank() }
-                .toList()
-
 
     }
 
 
-    fun details(link: String): Single<HashMap<String, Any>> {
-        val url = "${bookSource.url}$link"
+    fun details(code: String, name: String, link: String): Single<HashMap<String, Any>> {
 
-        return webClient.getAbs(url)
-                .rxSend()
-                .map { t ->
-                    return@map Jsoup.parse(t.bodyAsString())
-                }
-                .flatMap { t ->
-                    val catalogLink = t.parser(source.metadata.catalog)
-                    if (catalogLink.isNotBlank()) {
-                        logger.info { "catalogLink: $catalogLink" }
-                        return@flatMap webClient.getAbs(bookSource.url + catalogLink).rxSend()
-                                .map {
-                                    return@map t to Jsoup.parse(it.bodyAsString())
+
+        return bookSourceService.bookSource(code, name)
+                .flatMap { source ->
+
+                    val url = "${source.url}$link"
+
+                    return@flatMap webClient.getAbs(url)
+                            .rxSend()
+                            .map { t ->
+                                return@map Jsoup.parse(t.bodyAsString())
+                            }
+                            .flatMap { t ->
+                                val catalogLink = t.parser(source.metadata.catalog)
+                                if (catalogLink.isNotBlank()) {
+                                    logger.info { "catalogLink: $catalogLink" }
+                                    return@flatMap webClient.getAbs(source.url + catalogLink).rxSend()
+                                            .map {
+                                                return@map t to Jsoup.parse(it.bodyAsString())
+                                            }
+                                } else {
+                                    return@flatMap Single.just(t to null)
                                 }
-                    } else {
-                        return@flatMap Single.just(t to null)
-                    }
-                }
-                .map { p ->
-                    val t = p.first
-                    val map = hashMapOf<String, Any>()
-                    map.put("cover", t.parser(source.metadata.cover, propertyType = PropertyType.DETAIL))
-                    map.put("summary", t.parser(source.metadata.summary, propertyType = PropertyType.DETAIL))
-                    map.put("category", t.parser(source.metadata.category, propertyType = PropertyType.DETAIL))
-                    map.put("status", t.parser(source.metadata.status, propertyType = PropertyType.DETAIL))
-                    map.put("update", t.parser(source.metadata.update, propertyType = PropertyType.DETAIL))
-                    map.put("lastChapter", t.parser(source.metadata.lastChapter, propertyType = PropertyType.DETAIL))
+                            }
+                            .map { p ->
+                                val t = p.first
+                                val map = hashMapOf<String, Any>()
+                                map.put("cover", t.parser(source.metadata.cover, propertyType = PropertyType.DETAIL))
+                                map.put("summary", t.parser(source.metadata.summary, propertyType = PropertyType.DETAIL))
+                                map.put("category", t.parser(source.metadata.category, propertyType = PropertyType.DETAIL))
+                                map.put("status", t.parser(source.metadata.status, propertyType = PropertyType.DETAIL))
+                                map.put("update", t.parser(source.metadata.update, propertyType = PropertyType.DETAIL))
+                                map.put("lastChapter", t.parser(source.metadata.lastChapter, propertyType = PropertyType.DETAIL))
 
-                    val catalogDocument = if (p.second != null) {
-                        p.second
-                    } else {
-                        t
-                    }
-                    val catalog = catalogDocument!!.select(source.catalog.list)
-                    map.put("catalogs", catalog.map {
-                        val catalogs = hashMapOf<String, String>()
-                        catalogs.put("chapterName", it.parser(source.catalog.chapter.name))
-                        catalogs.put("chapterlink", it.parser(source.catalog.chapter.link))
-                        catalogs
-                    });
+                                val catalogDocument = if (p.second != null) {
+                                    p.second
+                                } else {
+                                    t
+                                }
+                                val catalog = catalogDocument!!.select(source.catalog.list)
+                                map.put("catalogs", catalog.map {
+                                    val catalogs = hashMapOf<String, String>()
+                                    catalogs.put("chapterName", it.parser(source.catalog.chapter.name))
+                                    catalogs.put("chapterlink", it.parser(source.catalog.chapter.link))
+                                    catalogs
+                                });
 
-                    return@map map
+                                return@map map
+                            }
                 }
 
     }
 
-    fun content(href: String): Single<HashMap<String, Any>> {
+    fun content(code: String, name: String, href: String): Single<HashMap<String, Any>> {
+        return bookSourceService.bookSource(code, name)
+                .flatMap { source ->
 
-        return webClient.getAbs(bookSource.url + href)
-                .rxSend()
-                .map { t ->
-                    return@map Jsoup.parse(t.bodyAsString())
-                }
-                .map { t ->
-                    val map = hashMapOf<String, Any>()
-                    val filter = t.parser(source.content.filter)
-                    if (filter.isNotBlank()) {
-                        t.select(filter).remove()
-                    }
+                    return@flatMap webClient.getAbs(source.url + href)
+                            .rxSend()
+                            .map { t ->
+                                return@map Jsoup.parse(t.bodyAsString())
+                            }
+                            .map { t ->
+                                val map = hashMapOf<String, Any>()
+                                val filter = t.parser(source.content.filter)
+                                if (filter.isNotBlank()) {
+                                    t.select(filter).remove()
+                                }
 
-                    map.put("text", t.parser(source.content.text))
-                    if (source.content.next != null) {
-                        val nextlinks = t.select(source.content.next?.link)
-                        val nextlink = nextlinks.filter { it.text() == source.content.next?.text }.firstOrNull()?.text()
-                        map.put("nextLink", nextlink.orEmpty())
-                        map.put("nextText", source.content.next?.text.orEmpty());
-                    }
-                    return@map map
+                                map.put("text", t.parser(source.content.text))
+                                if (source.content.next != null) {
+                                    val nextlinks = t.select(source.content.next?.link)
+                                    val nextlink = nextlinks.filter { it.text() == source.content.next?.text }.firstOrNull()?.text()
+                                    map.put("nextLink", nextlink.orEmpty())
+                                    map.put("nextText", source.content.next?.text.orEmpty());
+                                }
+                                return@map map
+                            }
                 }
     }
 
