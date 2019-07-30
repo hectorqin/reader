@@ -99,3 +99,99 @@ cd /home/docker/qingmo/;docker-compose -f docker-compose.yml pull ; docker-compo
 }
 }
 ```
+
+
+#### 获取书源仓库列表
+
+返回楚观git仓库中登记的书源仓库
+
+#### Request
+
+- Method: `GET`
+- URL:  ```/book_source/repository```
+- Headers：
+- Body:
+```
+```
+
+##### Response
+- Body
+```
+[
+    {
+        "about": "",
+        "author": "纯二",
+        "code": "2333",
+        "url": "https://gitee.com/chuner821/houmo/raw/master/chuner.json"
+    },
+    {
+        "about": "",
+        "author": "旧人",
+        "code": "9713",
+        "url": "https://gitee.com/tyj9713/BookSourceRepository/raw/master/repository.json"
+    }
+]
+```
+
+#### 获取指定的${code}书源仓库中的书源的描述
+
+获取指定的${code}书源仓库中的书源的描述
+
+#### Request
+
+- Method: `GET`
+- URL:  ```/book_source/description/:code```
+    - eg:  ```/book_source/description/2333```
+- Headers：
+- Body:
+```
+```
+
+##### Response
+- Body
+```
+{
+    "name": "By 纯二",
+    "summary": "This is just a book source repository.",
+    "list": [
+        {
+            "name": "My716",
+            "url": "http://api.zhuishushenqi.com",
+            "category": 3,
+            "rank": 41,
+            "auth": false,
+            "version": 102
+        },
+        {
+            "name": "中学生读物",
+            "url": "https://fox2008.cn",
+            "category": 0,
+            "rank": 12,
+            "auth": false,
+            "version": 100
+        },
+        ....
+    ],
+    "url": "https://gitee.com/chuner821/houmo/raw/master/chuner.json"
+}
+```
+
+#### 获取指定的${code}/${name}书源
+
+获取指定的${code}/${name}书源
+
+#### Request
+
+- Method: `GET`
+- URL:  ```/book_source/:code/:name```
+    - eg:  ```/book_source/2333/My716```
+- Headers：
+- Body:
+```
+```
+
+##### Response
+- Body
+```
+太长 从略
+```
