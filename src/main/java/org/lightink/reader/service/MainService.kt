@@ -62,7 +62,7 @@ class MainService {
                                 val map = hashMapOf<String, String?>()
                                 map.put("name", t.parser(bookSource.metadata.name))
                                 map.put("author", t.select(bookSource.metadata.author.first()).text())
-                                map.put("link", t.parser(bookSource.metadata.link))
+                                map.put("link", "http://qingmo.zohar.space/$code/$name/details?link=" + t.parser(bookSource.metadata.link))
                                 return@map map
                             }
                             .filter { it.get("name") != null && it.get("name")!!.isNotBlank() }
@@ -117,7 +117,7 @@ class MainService {
                                 map.put("catalogs", catalog.map {
                                     val catalogs = hashMapOf<String, String>()
                                     catalogs.put("chapterName", it.parser(source.catalog.chapter.name))
-                                    catalogs.put("chapterlink", it.parser(source.catalog.chapter.link))
+                                    catalogs.put("chapterlink", "http://qingmo.zohar.space/$code/$name/content?herf=" + it.parser(source.catalog.chapter.link))
                                     catalogs
                                 })
 
