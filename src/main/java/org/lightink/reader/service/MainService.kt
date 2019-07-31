@@ -119,7 +119,9 @@ class MainService {
                                     catalogs.put("chapterName", it.parser(source.catalog.chapter.name))
                                     catalogs.put("chapterlink", it.parser(source.catalog.chapter.link))
                                     catalogs
-                                });
+                                })
+
+                                map.put("orderBy", source.catalog.orderBy)
 
                                 return@map map
                             }

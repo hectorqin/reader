@@ -22,7 +22,7 @@ class MainServiceTest {
     fun search() {
         val countDownLatch = CountDownLatch(1)
 
-        mainService.search("人道天堂")
+        mainService.search("", "", "人道天堂")
                 .subscribe({ t ->
                     println(t.toString())
                     countDownLatch.countDown()
@@ -40,9 +40,9 @@ class MainServiceTest {
 
         val countDownLatch = CountDownLatch(1)
 
-        mainService.search("人道天堂")
+        mainService.search("", "", "人道天堂")
                 .flatMap {
-                    return@flatMap mainService.details(it.first()["link"]!!)
+                    return@flatMap mainService.details("", "", it.first()["link"]!!)
                 }
                 .subscribe({ t ->
                     println(t.toString())
@@ -62,12 +62,12 @@ class MainServiceTest {
 
         val countDownLatch = CountDownLatch(1)
 
-        mainService.search("人道天堂")
+        mainService.search("", "", "人道天堂")
                 .flatMap {
-                    return@flatMap mainService.details(it.first()["link"]!!)
+                    return@flatMap mainService.details("", "", it.first()["link"]!!)
                 }
                 .flatMap {
-                    return@flatMap mainService.content("http://www.daocaorenshuwu.com/book/rendaotiantang/585721.html")
+                    return@flatMap mainService.content("", "", "http://www.daocaorenshuwu.com/book/rendaotiantang/585721.html")
                 }
                 .subscribe({ t ->
                     println(t.toString())

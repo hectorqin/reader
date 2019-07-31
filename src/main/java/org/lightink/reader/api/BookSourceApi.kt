@@ -49,5 +49,24 @@ class BookSourceApi : BaseApi {
                                 it.success(t)
                             }
                 }
+
+        router.get("/git/repository.json")
+                .handler {
+                    bookSourceService.serverRepositoryJson()
+                            .subscribe { t ->
+                                it.success(t)
+                            }
+                }
+
+        router.get("/git/sources/:name")
+                .handler {
+
+                    val name = it.pathParam("name")
+                    bookSourceService.serverBookSourceJson(name.replace(".json", ""))
+                            .subscribe { t ->
+                                it.success(t)
+                            }
+                }
+
     }
 }

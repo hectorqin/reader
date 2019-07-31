@@ -52,5 +52,17 @@ class BookSourceServiceTest {
 
     }
 
+    @Test
+    fun serverBookRepositoryJson() {
+        val countDownLatch = CountDownLatch(1)
+        bookSourceService.serverRepositoryJson()
+                .subscribe { t ->
+                    println(t.toString())
+                    countDownLatch.countDown()
+                }
+
+        countDownLatch.await()
+    }
+
 
 }
