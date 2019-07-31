@@ -145,9 +145,9 @@ class BookSourceService {
             }
             .map {
                 val code = JsonObject(it.toString()).getString("code")
-                val name = JsonObject(it.toString()).getString("name").split("-")[1]
+                val pureName = JsonObject(it.toString()).getString("name").split("-")[1]
                 JsonObject()
-                        .put("name", "qingmo-$name")
+                        .put("name", name)
                         .put("version", "100")
                         .put("category", "3")
                         .put("url", "http://qingmo.zohar.space")
@@ -165,7 +165,7 @@ class BookSourceService {
                         )
                         .put("catalog", JsonObject()
                                 .put("list", "\$.catalogs")
-                                .put("orderBy", "\$.orderBy")
+                                .put("orderBy", 0)
                                 .put("chapter", JsonObject()
                                         .put("name", "\$.chapterName")
                                         .put("link", "\$.chapterlink")
@@ -174,7 +174,7 @@ class BookSourceService {
                         .put("content", JsonObject()
                                 .put("text", "\$.text"))
                         .put("search", JsonObject()
-                                .put("link", "http://qingmo.zohar.space/$code/$name/search?key=\${key}")
+                                .put("link", "http://qingmo.zohar.space/$code/$pureName/search?key=\${key}")
                                 .put("list", "\$[*]"))
 
             }
