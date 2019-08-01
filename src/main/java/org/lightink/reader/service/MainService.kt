@@ -117,7 +117,7 @@ class MainService {
                                 map.put("catalogs", catalog.map {
                                     val catalogs = hashMapOf<String, String>()
                                     catalogs.put("chapterName", it.parser(source.catalog.chapter.name))
-                                    catalogs.put("chapterlink", "http://qingmo.zohar.space/$code/$name/content?herf=" + it.parser(source.catalog.chapter.link))
+                                    catalogs.put("chapterlink", "http://qingmo.zohar.space/$code/$name/content?href=" + it.parser(source.catalog.chapter.link))
                                     catalogs
                                 })
 
