@@ -78,18 +78,16 @@ class BookSourceService {
             return Single.just(cacheData);
         }
 
-        var url = ""
-
         return bookSourceDescription(code)
                 .map {
-                    url = it.getString("url").split("raw")[0]
-                    return@map it.getJsonArray("list").first { t -> JsonObject(t.toString()).getString("name") == name }
-                }
-                .map { t ->
-                    val jsonObject = JsonObject(t.toString())
-                    val path = url + "raw/master/sources/" + jsonObject.getString("name") + ".json"
+                    var url = it.getString("url")
+                    url = url.substring(0, url.lastIndexOf("/"))
+                    val cell = it.getJsonArray("list").first { t -> JsonObject(t.toString()).getString("name") == name }
+                    val jsonObject = JsonObject(cell.toString())
+                    val path = url + "/sources/" + jsonObject.getString("name") + ".json"
                     path
                 }
+
                 .flatMap { path ->
                     webClient.getAbs(path)
                             .rxSend()
