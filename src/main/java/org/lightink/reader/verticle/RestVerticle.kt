@@ -1,10 +1,14 @@
 package org.lightink.reader.verticle
 
 import io.vertx.core.http.HttpMethod
+import io.vertx.core.logging.LoggerFactory
+import io.vertx.core.logging.SLF4JLogDelegateFactory
+import io.vertx.ext.web.handler.LoggerFormat
 import io.vertx.reactivex.core.AbstractVerticle
 import io.vertx.reactivex.ext.web.Router
 import io.vertx.reactivex.ext.web.handler.BodyHandler
 import io.vertx.reactivex.ext.web.handler.CorsHandler
+import io.vertx.reactivex.ext.web.handler.LoggerHandler
 import mu.KotlinLogging
 import org.gosky.aroundight.api.BaseApi
 import org.lightink.reader.ext.error
@@ -58,7 +62,15 @@ class RestVerticle : AbstractVerticle() {
         allowedMethods.add(HttpMethod.PUT)
 
         router.route().handler(CorsHandler.create("*").allowedHeaders(allowedHeaders).allowedMethods(allowedMethods))
-        router.route().handler(BodyHandler.create()) // <3>
+        router.route().handler(BodyHandler.create())
+
+        System.setProperty(LoggerFactory.LOGGER_DELEGATE_FACTORY_CLASS_NAME, SLF4JLogDelegateFactory::class.java.name)
+
+        LoggerFactory.getLogger(LoggerFactory::class.java) // Required for Logback to work in Vertx
+
+
+        router.route().handler(LoggerHandler.create(LoggerFormat.DEFAULT));
+
 
         router.get("/health").handler { it.success("ok!") }
 
@@ -68,6 +80,8 @@ class RestVerticle : AbstractVerticle() {
             logger.error { routerContext.failure().message }
             routerContext.error("error" to routerContext.failure().message)
         }
+
+
 
         vertx.createHttpServer().requestHandler(router).listen(8080)
 

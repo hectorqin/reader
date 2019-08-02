@@ -40,11 +40,11 @@ fun Element.parser(selector: String): String {
             if (element.selectFirst(s) == null) {
                 continue
             } else {
-//                if (element.select(s).hasText()) {
-//                    text = element.select(s).text()
-//                } else {
+                if (element.select(s).hasText()) {
+                    text = element.select(s).toString()
+                } else {
                     text = element.selectFirst(s).data()
-//                }
+                }
                 element = element.selectFirst(s)
             }
 

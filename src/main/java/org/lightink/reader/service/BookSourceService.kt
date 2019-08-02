@@ -34,8 +34,11 @@ class BookSourceService {
 
     fun bookSourceRepositoryList(): Single<List<BookSourceRepository>> {
 
+        logger.info { "start fetch book source repostory list..." }
+
         val cacheData = cache.getIfPresent("bookSourceRepositoryList")
         if (cacheData != null && cacheData is List<*> && cacheData.size > 0) {
+            logger.info { "fetch book source repostory list from cache" }
             return Single.just(cacheData as List<BookSourceRepository>);
         }
 
@@ -45,6 +48,7 @@ class BookSourceService {
                     val jsonArray = it.bodyAsJsonObject().getJsonArray("list")
                     val fromJson = Gson().fromJson<List<BookSourceRepository>>(jsonArray.toString(), object : TypeToken<ArrayList<BookSourceRepository>>() {}.type)
                     cache.put("bookSourceRepositoryList", fromJson);
+                    logger.info { "fetch book source repostory list from network" }
                     fromJson
                 }
 
