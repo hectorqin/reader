@@ -1,5 +1,6 @@
 package org.lightink.reader.service
 
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.springframework.beans.factory.annotation.Autowired
@@ -80,4 +81,10 @@ class MainServiceTest {
         countDownLatch.await()
 
     }
+
+    @Test
+    fun urlTest() {
+        println("//www.daocaorenshuwu.com/book/jianlai/1925220.html".toHttpUrl().encodedPath)
+    }
 }
+
