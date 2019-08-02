@@ -41,7 +41,7 @@ class BookSourceServiceTest {
     @Test
     fun bookSource() {
         val countDownLatch = CountDownLatch(1)
-        bookSourceService.bookSource("2333","顶点小说①")
+        bookSourceService.bookSource("1212","稻草人书屋")
                 .subscribe { t ->
                     println(t.toString())
                     countDownLatch.countDown()

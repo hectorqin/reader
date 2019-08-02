@@ -8,6 +8,8 @@ import io.reactivex.Single
 import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
 import io.vertx.reactivex.ext.web.client.WebClient
+import mu.KotlinLogging
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.lightink.reader.booksource.BookSource
 import org.lightink.reader.booksource.BookSourceRepository
 import org.springframework.beans.factory.annotation.Autowired
@@ -19,6 +21,8 @@ import java.util.*
  * @Date: 2019-07-29 23:59
  * @Description:
  */
+
+private val logger = KotlinLogging.logger {}
 
 @Service
 class BookSourceService {
@@ -89,7 +93,7 @@ class BookSourceService {
                 }
 
                 .flatMap { path ->
-                    webClient.getAbs(path)
+                    webClient.getAbs(path.toHttpUrl().toString())
                             .rxSend()
                             .map {
                                 it.bodyAsJsonObject()
