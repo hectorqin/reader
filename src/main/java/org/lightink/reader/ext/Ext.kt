@@ -41,7 +41,7 @@ fun Element.parser(selector: String): String {
                 continue
             } else {
                 if (element.select(s).hasText()) {
-                    text = element.select(s).outerHtml()
+                    text = element.select(s).html()
                 } else {
                     text = element.selectFirst(s).data()
                 }
