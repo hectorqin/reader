@@ -12,6 +12,7 @@ import org.lightink.reader.ext.getEncodeAbs
 import org.lightink.reader.ext.parser
 import org.lightink.reader.ext.url
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 
 /**
@@ -29,9 +30,13 @@ class MainService {
     private lateinit var webClient: WebClient
     @Autowired
     private lateinit var bookSourceService: BookSourceService
+    @Value("\${qingmo.server.url}")
+    private lateinit var serviceUrl: String
 
 
     fun search(code: String, name: String, searchKey: String): Single<MutableList<HashMap<String, String?>>> {
+
+        logger.info { "serviceUrl == >  " + serviceUrl }
 
         return bookSourceService.bookSource(code, name)
                 .flatMap { bookSource ->
@@ -64,7 +69,7 @@ class MainService {
                                 val map = hashMapOf<String, String?>()
                                 map.put("name", t.parser(bookSource.metadata.name))
                                 map.put("author", t.select(bookSource.metadata.author.first()).text())
-                                map.put("link", "http://qingmo.zohar.space/$code/$name/details?link=" + t.parser(bookSource.metadata.link).url())
+                                map.put("link", "$serviceUrl/$code/$name/details?link=" + t.parser(bookSource.metadata.link).url())
                                 return@map map
                             }
                             .filter { it.get("name") != null && it.get("name")!!.isNotBlank() }
@@ -120,7 +125,7 @@ class MainService {
                                     val catalogs = hashMapOf<String, String>()
                                     catalogs.put("chapterName", it.parser(source.catalog.chapter.name))
                                     val chapterlink = it.parser(source.catalog.chapter.link).url()
-                                    catalogs.put("chapterlink", "http://qingmo.zohar.space/$code/$name/content?href=" + chapterlink)
+                                    catalogs.put("chapterlink", "$serviceUrl/$code/$name/content?href=" + chapterlink)
                                     catalogs
                                 })
 

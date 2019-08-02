@@ -14,6 +14,7 @@ import org.lightink.reader.booksource.BookSource
 import org.lightink.reader.booksource.BookSourceRepository
 import org.lightink.reader.ext.getEncodeAbs
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.util.*
 
@@ -30,6 +31,9 @@ class BookSourceService {
 
     @Autowired
     private lateinit var webClient: WebClient
+
+    @Value("\${qingmo.server.url}")
+    private lateinit var serviceUrl: String
 
     private val cache = CacheBuilder.newBuilder().build<String, Any>()
 
@@ -158,7 +162,7 @@ class BookSourceService {
                         .put("name", name)
                         .put("version", "100")
                         .put("category", "3")
-                        .put("url", "http://qingmo.zohar.space")
+                        .put("url", "$serviceUrl")
                         .put("charset", "utf8")
                         .put("metadata", JsonObject()
                                 .put("name", JsonArray().add("\$.name"))
@@ -182,7 +186,7 @@ class BookSourceService {
                         .put("content", JsonObject()
                                 .put("text", "\$.text"))
                         .put("search", JsonObject()
-                                .put("link", "http://qingmo.zohar.space/$code/$pureName/search?key=\${key}")
+                                .put("link", "$serviceUrl/$code/$pureName/search?key=\${key}")
                                 .put("list", "\$[*]"))
 
             }

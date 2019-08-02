@@ -13,5 +13,5 @@ RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
 EXPOSE 9000
 
 COPY --from=build-env /app/build/libs/reader-0.0.1-SNAPSHOT.jar /app/bin/qingmo.jar
-CMD ["java", "-jar", "/app/bin/qingmo.jar"]
+CMD ["java", "-jar", "/app/bin/qingmo.jar" ]
 
