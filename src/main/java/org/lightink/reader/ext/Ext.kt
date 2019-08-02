@@ -1,5 +1,6 @@
 package org.lightink.reader.ext
 
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 import org.lightink.reader.contants.PropertyType
 import javax.script.ScriptEngineManager
@@ -39,11 +40,11 @@ fun Element.parser(selector: String): String {
             if (element.selectFirst(s) == null) {
                 continue
             } else {
-                if (element.select(s).hasText()) {
-                    text = element.select(s).text()
-                } else {
+//                if (element.select(s).hasText()) {
+//                    text = element.select(s).text()
+//                } else {
                     text = element.selectFirst(s).data()
-                }
+//                }
                 element = element.selectFirst(s)
             }
 
@@ -77,7 +78,9 @@ fun Element.parser(selectorList: List<String>?, propertyType: PropertyType = Pro
 
 fun String.url(): String {
     if (this.startsWith("//")) {
-        return "http:" + this
+        return ("http:" + this).toHttpUrl().encodedPath
+    } else if (this.startsWith("http")){
+        return this.toHttpUrl().encodedPath
     }
     return this
 }

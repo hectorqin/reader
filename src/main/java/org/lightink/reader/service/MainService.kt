@@ -6,7 +6,6 @@ import io.vertx.reactivex.core.buffer.Buffer
 import io.vertx.reactivex.ext.web.client.HttpRequest
 import io.vertx.reactivex.ext.web.client.WebClient
 import mu.KotlinLogging
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 import org.lightink.reader.contants.PropertyType
 import org.lightink.reader.ext.parser
@@ -119,7 +118,7 @@ class MainService {
                                 map.put("catalogs", catalog.map {
                                     val catalogs = hashMapOf<String, String>()
                                     catalogs.put("chapterName", it.parser(source.catalog.chapter.name))
-                                    val chapterlink = it.parser(source.catalog.chapter.link).url().toHttpUrl().encodedPath
+                                    val chapterlink = it.parser(source.catalog.chapter.link).url()
                                     catalogs.put("chapterlink", "http://qingmo.zohar.space/$code/$name/content?href=" + chapterlink)
                                     catalogs
                                 })
