@@ -8,6 +8,7 @@ import io.vertx.reactivex.ext.web.client.WebClient
 import mu.KotlinLogging
 import org.jsoup.Jsoup
 import org.lightink.reader.contants.PropertyType
+import org.lightink.reader.ext.getEncodeAbs
 import org.lightink.reader.ext.parser
 import org.lightink.reader.ext.url
 import org.springframework.beans.factory.annotation.Autowired
@@ -45,7 +46,7 @@ class MainService {
                         httpRequest = webClient.postAbs(link)
                                 .addQueryParam(param[0], param[1].replace("\${key}", searchKey))
                     } else {
-                        httpRequest = webClient.getAbs(link.replace("\${key}", searchKey))
+                        httpRequest = webClient.getEncodeAbs(link.replace("\${key}", searchKey))
                     }
 
                     //        val link = "https://www.daocaorenshuwu.com/plus/search.php?q=\${key}"
@@ -82,7 +83,7 @@ class MainService {
 
                     val url = "${source.url}$link"
 
-                    return@flatMap webClient.getAbs(url)
+                    return@flatMap webClient.getEncodeAbs(url)
                             .rxSend()
                             .map { t ->
                                 return@map Jsoup.parse(t.bodyAsString())
@@ -91,7 +92,7 @@ class MainService {
                                 val catalogLink = t.parser(source.metadata.catalog)
                                 if (catalogLink.isNotBlank()) {
                                     logger.info { "catalogLink: $catalogLink" }
-                                    return@flatMap webClient.getAbs(source.url + catalogLink).rxSend()
+                                    return@flatMap webClient.getEncodeAbs(source.url + catalogLink).rxSend()
                                             .map {
                                                 return@map t to Jsoup.parse(it.bodyAsString())
                                             }
@@ -135,7 +136,7 @@ class MainService {
         return bookSourceService.bookSource(code, name)
                 .flatMap { source ->
 
-                    return@flatMap webClient.getAbs(source.url + href)
+                    return@flatMap webClient.getEncodeAbs(source.url + href)
                             .rxSend()
                             .map { t ->
                                 return@map Jsoup.parse(t.bodyAsString())

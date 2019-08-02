@@ -12,6 +12,7 @@ import mu.KotlinLogging
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.lightink.reader.booksource.BookSource
 import org.lightink.reader.booksource.BookSourceRepository
+import org.lightink.reader.ext.getEncodeAbs
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Service
 import java.util.*
@@ -42,7 +43,7 @@ class BookSourceService {
             return Single.just(cacheData as List<BookSourceRepository>);
         }
 
-        return webClient.getAbs("https://gitee.com/hunji66/BookSource/raw/master/src/hm.json")
+        return webClient.getEncodeAbs("https://gitee.com/hunji66/BookSource/raw/master/src/hm.json")
                 .rxSend()
                 .map {
                     val jsonArray = it.bodyAsJsonObject().getJsonArray("list")
@@ -67,7 +68,7 @@ class BookSourceService {
                     return@map it.first { t -> t.code == code }
                 }
                 .flatMap { t ->
-                    return@flatMap webClient.getAbs(t.url)
+                    return@flatMap webClient.getEncodeAbs(t.url)
                             .rxSend()
                             .map {
                                 val jsonObject = it.bodyAsJsonObject().put("url", t.url)
@@ -97,7 +98,7 @@ class BookSourceService {
                 }
 
                 .flatMap { path ->
-                    webClient.getAbs(path.toHttpUrl().toString())
+                    webClient.getEncodeAbs(path.toHttpUrl().toString())
                             .rxSend()
                             .map {
                                 it.bodyAsJsonObject()

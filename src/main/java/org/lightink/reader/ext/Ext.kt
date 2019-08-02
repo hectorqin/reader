@@ -1,5 +1,8 @@
 package org.lightink.reader.ext
 
+import io.vertx.reactivex.core.buffer.Buffer
+import io.vertx.reactivex.ext.web.client.HttpRequest
+import io.vertx.reactivex.ext.web.client.WebClient
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 import org.lightink.reader.contants.PropertyType
@@ -79,10 +82,15 @@ fun Element.parser(selectorList: List<String>?, propertyType: PropertyType = Pro
 fun String.url(): String {
     if (this.startsWith("//")) {
         return ("http:" + this).toHttpUrl().encodedPath
-    } else if (this.startsWith("http")){
+    } else if (this.startsWith("http")) {
         return this.toHttpUrl().encodedPath
     }
     return this
+}
+
+
+fun WebClient.getEncodeAbs(absoluteURI: String): HttpRequest<Buffer> {
+    return this.getAbs(absoluteURI.toHttpUrl().toString())
 }
 
 
