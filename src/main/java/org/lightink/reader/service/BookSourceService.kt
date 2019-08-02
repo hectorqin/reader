@@ -125,6 +125,7 @@ class BookSourceService {
                                     it.getJsonArray("list").map {
                                         val jsonObject = JsonObject(it.toString())
                                         jsonObject.put("name", author + "-" + jsonObject.getString("name"))
+                                        jsonObject.put("url", "real site => " + jsonObject.getString("url"))
                                         jsonObject.put("code", code)
                                     }
                                 }
