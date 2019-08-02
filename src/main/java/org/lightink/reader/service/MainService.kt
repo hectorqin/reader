@@ -6,6 +6,7 @@ import io.vertx.reactivex.core.buffer.Buffer
 import io.vertx.reactivex.ext.web.client.HttpRequest
 import io.vertx.reactivex.ext.web.client.WebClient
 import mu.KotlinLogging
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.Jsoup
 import org.lightink.reader.contants.PropertyType
 import org.lightink.reader.ext.parser
@@ -117,7 +118,8 @@ class MainService {
                                 map.put("catalogs", catalog.map {
                                     val catalogs = hashMapOf<String, String>()
                                     catalogs.put("chapterName", it.parser(source.catalog.chapter.name))
-                                    catalogs.put("chapterlink", "http://qingmo.zohar.space/$code/$name/content?href=" + it.parser(source.catalog.chapter.link))
+                                    val chapterlink = it.parser(source.catalog.chapter.link).toHttpUrl().encodedPath
+                                    catalogs.put("chapterlink", "http://qingmo.zohar.space/$code/$name/content?href=" + chapterlink)
                                     catalogs
                                 })
 
@@ -147,10 +149,10 @@ class MainService {
 
                                 map.put("text", t.parser(source.content.text))
                                 if (source.content.next != null) {
-                                    val nextlinks = t.select(source.content.next?.link)
-                                    val nextlink = nextlinks.filter { it.text() == source.content.next?.text }.firstOrNull()?.text()
+                                    val nextlinks = t.select(source.content.next.link)
+                                    val nextlink = nextlinks.filter { it.text() == source.content.next.text }.firstOrNull()?.text()
                                     map.put("nextLink", nextlink.orEmpty())
-                                    map.put("nextText", source.content.next?.text.orEmpty());
+                                    map.put("nextText", source.content.next.text.orEmpty());
                                 }
                                 return@map map
                             }
