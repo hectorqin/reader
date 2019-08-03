@@ -162,7 +162,7 @@ class BookSourceService {
                         .put("name", name)
                         .put("version", "100")
                         .put("category", "3")
-                        .put("url", "$serviceUrl")
+                        .put("url", serviceUrl)
                         .put("charset", "utf8")
                         .put("metadata", JsonObject()
                                 .put("name", JsonArray().add("\$.name"))

@@ -10,6 +10,7 @@ import org.jsoup.Jsoup
 import org.lightink.reader.contants.PropertyType
 import org.lightink.reader.ext.getEncodeAbs
 import org.lightink.reader.ext.parser
+import org.lightink.reader.ext.universalChardet
 import org.lightink.reader.ext.url
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
@@ -58,7 +59,11 @@ class MainService {
                     return@flatMap httpRequest
                             .rxSend()
                             .map { t ->
-                                val document = Jsoup.parse(t.bodyAsString())
+//                                val detector = UniversalDetector()
+//                                detector.handleData(t.body().bytes)
+//                                val charset = detector.detectedCharset
+//                                detector.reset()
+                                val document = Jsoup.parse(t.body().bytes.universalChardet())
                                 document.select(bookSource.search.list)
                             }
                             .toObservable()
@@ -91,7 +96,8 @@ class MainService {
                     return@flatMap webClient.getEncodeAbs(url)
                             .rxSend()
                             .map { t ->
-                                return@map Jsoup.parse(t.bodyAsString())
+                                val document = Jsoup.parse(t.body().bytes.universalChardet())
+                                return@map document
                             }
                             .flatMap { t ->
                                 val catalogLink = t.parser(source.metadata.catalog)
@@ -144,7 +150,7 @@ class MainService {
                     return@flatMap webClient.getEncodeAbs(source.url + href)
                             .rxSend()
                             .map { t ->
-                                return@map Jsoup.parse(t.bodyAsString())
+                                return@map Jsoup.parse(t.body().bytes.universalChardet())
                             }
                             .map { t ->
                                 val map = hashMapOf<String, Any>()

@@ -6,6 +6,8 @@ import io.vertx.reactivex.ext.web.client.WebClient
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 import org.lightink.reader.contants.PropertyType
+import org.mozilla.universalchardet.UniversalDetector
+import java.nio.charset.Charset
 import javax.script.ScriptEngineManager
 
 
@@ -91,6 +93,18 @@ fun String.url(): String {
 
 fun WebClient.getEncodeAbs(absoluteURI: String): HttpRequest<Buffer> {
     return this.getAbs(absoluteURI.toHttpUrl().toString())
+}
+
+val detector = UniversalDetector(null)
+
+fun ByteArray.universalChardet(): String {
+
+    detector.handleData(this, 0, this.size)
+    detector.dataEnd()
+    val charset = detector.detectedCharset
+    detector.reset()
+    return String(this, Charset.forName(charset))
+
 }
 
 
