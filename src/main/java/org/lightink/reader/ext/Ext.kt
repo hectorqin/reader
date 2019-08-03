@@ -95,15 +95,19 @@ fun WebClient.getEncodeAbs(absoluteURI: String): HttpRequest<Buffer> {
     return this.getAbs(absoluteURI.toHttpUrl().toString())
 }
 
-val detector = UniversalDetector(null)
 
 fun ByteArray.universalChardet(): String {
 
+    val detector = UniversalDetector(null)
     detector.handleData(this, 0, this.size)
     detector.dataEnd()
     val charset = detector.detectedCharset
     detector.reset()
-    return String(this, Charset.forName(charset))
+    if (charset != null) {
+        return this.toString(Charset.forName(charset))
+    } else {
+        return this.toString()
+    }
 
 }
 
