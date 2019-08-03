@@ -4,7 +4,7 @@ services:
     image: zoharsoul/lightink-server:latest
     container_name: lightink-server
     environment:
-      - JAVA_TOOL_OPTIONS=-Xms256m -Xmx512m -Dqingmo.zohar.space=8080
+      - JAVA_TOOL_OPTIONS=-Xms256m -Xmx512m
       - logDir=/app/log
       - QINGMO_SERVER_URL=http://qingmo.zohar.space
     ports:
