@@ -15,6 +15,7 @@ import org.lightink.reader.ext.url
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
+import java.nio.charset.Charset
 
 /**
  * @Date: 2019-07-19 18:23
@@ -45,24 +46,24 @@ class MainService {
                     var link = bookSource.search.link
                     val httpRequest: HttpRequest<Buffer>
 
+                    val searchKeyEncoded = if (bookSource.charset.isNotBlank()) {
+                        searchKey.toByteArray().toString(Charset.forName(bookSource.charset))
+                    } else searchKey
+
                     if (link.contains("@post->")) {
                         val split = link.split("@post->")
                         link = split[0]
                         val param = split[1].split("=")
                         httpRequest = webClient.postAbs(link)
-                                .addQueryParam(param[0], param[1].replace("\${key}", searchKey))
+                                .addQueryParam(param[0], param[1].replace("\${key}", searchKeyEncoded))
                     } else {
-                        httpRequest = webClient.getEncodeAbs(link.replace("\${key}", searchKey))
+                        httpRequest = webClient.getEncodeAbs(link.replace("\${key}", searchKeyEncoded))
                     }
 
                     //        val link = "https://www.daocaorenshuwu.com/plus/search.php?q=\${key}"
                     return@flatMap httpRequest
                             .rxSend()
                             .map { t ->
-//                                val detector = UniversalDetector()
-//                                detector.handleData(t.body().bytes)
-//                                val charset = detector.detectedCharset
-//                                detector.reset()
                                 val document = Jsoup.parse(t.body().bytes.universalChardet())
                                 document.select(bookSource.search.list)
                             }
@@ -75,6 +76,13 @@ class MainService {
                                 map.put("name", t.parser(bookSource.metadata.name))
                                 map.put("author", t.select(bookSource.metadata.author.first()).text())
                                 map.put("link", "$serviceUrl/$code/$name/details?link=" + t.parser(bookSource.metadata.link).url())
+
+                                map.put("cover", t.parser(bookSource.metadata.cover, propertyType = PropertyType.DETAIL))
+                                map.put("summary", t.parser(bookSource.metadata.summary, propertyType = PropertyType.DETAIL))
+                                map.put("category", t.parser(bookSource.metadata.category, propertyType = PropertyType.DETAIL))
+                                map.put("status", t.parser(bookSource.metadata.status, propertyType = PropertyType.DETAIL))
+                                map.put("update", t.parser(bookSource.metadata.update, propertyType = PropertyType.DETAIL))
+                                map.put("lastChapter", t.parser(bookSource.metadata.lastChapter, propertyType = PropertyType.DETAIL))
                                 return@map map
                             }
                             .filter { it.get("name") != null && it.get("name")!!.isNotBlank() }
