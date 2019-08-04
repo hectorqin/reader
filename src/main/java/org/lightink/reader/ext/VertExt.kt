@@ -1,6 +1,8 @@
 package org.lightink.reader.ext
 
 import com.google.gson.Gson
+import io.reactivex.Maybe
+import io.reactivex.Single
 import io.vertx.core.json.JsonObject
 import io.vertx.reactivex.ext.web.RoutingContext
 
@@ -30,4 +32,24 @@ fun RoutingContext.error(any: Any?) {
             .putHeader("content-type", "application/json")
             .setStatusCode(500)
             .end(Gson().toJson(any))
+}
+
+fun Single<*>.subscribe(routingContext: RoutingContext) {
+
+    this.subscribe({ onSuccess ->
+        routingContext.success(onSuccess)
+    }, { error ->
+        routingContext.error(error)
+    })
+
+}
+
+fun Maybe<*>.subscribe(routingContext: RoutingContext) {
+
+    this.subscribe({ onSuccess ->
+        routingContext.success(onSuccess)
+    }, { error ->
+        routingContext.error(error)
+    })
+
 }

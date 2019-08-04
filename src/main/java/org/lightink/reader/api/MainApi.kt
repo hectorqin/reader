@@ -4,7 +4,7 @@ import io.vertx.reactivex.ext.web.Router
 import io.vertx.reactivex.ext.web.RoutingContext
 import mu.KotlinLogging
 import org.gosky.aroundight.api.BaseApi
-import org.lightink.reader.ext.success
+import org.lightink.reader.ext.subscribe
 import org.lightink.reader.service.MainService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
@@ -37,9 +37,7 @@ class MainApi : BaseApi {
 
         logger.info { "search: $key" }
         mainService.search(code, name, key)
-                .subscribe { t ->
-                    routingContext.success(t)
-                }
+                .subscribe(routingContext)
     }
 
     private fun details(routingContext: RoutingContext) {
@@ -48,9 +46,8 @@ class MainApi : BaseApi {
         val name = routingContext.pathParam("name")
         logger.info { "link: $link" }
         mainService.details(code, name, link)
-                .subscribe { t ->
-                    routingContext.success(t)
-                }
+                .subscribe(routingContext)
+
     }
 
     private fun content(routingContext: RoutingContext) {
@@ -59,9 +56,8 @@ class MainApi : BaseApi {
         val name = routingContext.pathParam("name")
         logger.info { "href: $href" }
         mainService.content(code, name, href)
-                .subscribe { t ->
-                    routingContext.success(t)
-                }
+                .subscribe(routingContext)
+
     }
 
 }
