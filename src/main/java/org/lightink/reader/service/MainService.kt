@@ -124,7 +124,7 @@ class MainService {
                                     logger.info { "catalogLink: $catalogLink" }
                                     return@flatMap webClient.getEncodeAbs(source.url + catalogLink).rxSend()
                                             .map {
-                                                return@map t to Jsoup.parse(it.bodyAsString())
+                                                return@map t to Jsoup.parse(it.body().bytes.universalChardet())
                                             }
                                 } else {
                                     return@flatMap Single.just(t to null)
