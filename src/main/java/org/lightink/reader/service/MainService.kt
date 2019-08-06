@@ -66,7 +66,11 @@ class MainService {
                     return@flatMap httpRequest
                             .map { t ->
                                 val document = Jsoup.parse(t.body().bytes.universalChardet())
-                                document.select(bookSource.search.list)
+                                var elements = document.select(bookSource.search.list).toList()
+                                if (elements.isEmpty()) {
+                                    elements = listOf(document)
+                                }
+                                elements
                             }
                             .toObservable()
                             .flatMap { t ->
