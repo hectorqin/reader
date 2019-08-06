@@ -1,7 +1,7 @@
 version: '2'
 services:
   service:
-    image: zoharsoul/lightink-server:latest
+    image: qingmo/lightink-server:latest
     container_name: lightink-server
     environment:
       - JAVA_TOOL_OPTIONS=-Xms256m -Xmx512m
