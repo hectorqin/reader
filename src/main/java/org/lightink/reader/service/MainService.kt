@@ -3,7 +3,7 @@ package org.lightink.reader.service
 import io.reactivex.Observable
 import io.reactivex.Single
 import io.vertx.reactivex.core.buffer.Buffer
-import io.vertx.reactivex.ext.web.client.HttpRequest
+import io.vertx.reactivex.ext.web.client.HttpResponse
 import io.vertx.reactivex.ext.web.client.WebClient
 import mu.KotlinLogging
 import org.jsoup.Jsoup
@@ -15,7 +15,7 @@ import org.lightink.reader.ext.url
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
-import java.nio.charset.Charset
+import java.net.URLEncoder
 
 /**
  * @Date: 2019-07-19 18:23
@@ -44,10 +44,10 @@ class MainService {
                 .flatMap { bookSource ->
 
                     var link = bookSource.search.link
-                    val httpRequest: HttpRequest<Buffer>
+                    val httpRequest: Single<HttpResponse<Buffer>>
 
                     val searchKeyEncoded = if (bookSource.charset.isNotBlank()) {
-                        searchKey.toByteArray().toString(Charset.forName(bookSource.charset))
+                        URLEncoder.encode(searchKey, bookSource.charset)
                     } else searchKey
 
                     if (link.contains("@post->")) {
@@ -55,14 +55,15 @@ class MainService {
                         link = split[0]
                         val param = split[1].split("=")
                         httpRequest = webClient.postAbs(link)
-                                .addQueryParam(param[0], param[1].replace("\${key}", searchKeyEncoded))
+                                .putHeader("content-type", "application/x-www-form-urlencoded")
+                                .rxSendBuffer(Buffer.buffer().appendString(split[1].replace("\${key}", searchKeyEncoded)))
                     } else {
                         httpRequest = webClient.getEncodeAbs(link.replace("\${key}", searchKeyEncoded))
+                                .rxSend()
                     }
 
                     //        val link = "https://www.daocaorenshuwu.com/plus/search.php?q=\${key}"
                     return@flatMap httpRequest
-                            .rxSend()
                             .map { t ->
                                 val document = Jsoup.parse(t.body().bytes.universalChardet())
                                 document.select(bookSource.search.list)

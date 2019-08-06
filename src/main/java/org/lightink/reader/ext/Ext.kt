@@ -7,6 +7,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 import org.lightink.reader.contants.PropertyType
 import org.mozilla.universalchardet.UniversalDetector
+import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import javax.script.ScriptEngineManager
 
@@ -106,10 +107,21 @@ fun ByteArray.universalChardet(): String {
     if (charset != null) {
         return this.toString(Charset.forName(charset))
     } else {
+        for ((key, value) in Charset.availableCharsets()) {
+            try {
+                value.newDecoder().decode(ByteBuffer.wrap(this))
+            } catch (e: Exception) {
+                continue
+            }
+            return this.toString(Charset.forName(key))
+        }
         return this.toString()
     }
 
 }
+
+
+
 
 
 
