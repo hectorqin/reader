@@ -63,8 +63,10 @@ class MainService {
                     }
 
                     //        val link = "https://www.daocaorenshuwu.com/plus/search.php?q=\${key}"
+                    var redirectUrl = ""
                     return@flatMap httpRequest
                             .map { t ->
+                                redirectUrl = t.followedRedirects().last()
                                 val document = Jsoup.parse(t.body().bytes.universalChardet())
                                 var elements = document.select(bookSource.search.list).toList()
                                 if (elements.isEmpty()) {
@@ -80,7 +82,11 @@ class MainService {
                                 val map = hashMapOf<String, String?>()
                                 map.put("name", t.parser(bookSource.metadata.name))
                                 map.put("author", t.select(bookSource.metadata.author.first()).text())
-                                map.put("link", "$serviceUrl/$code/$name/details?link=" + t.parser(bookSource.metadata.link).url())
+                                var url = t.parser(bookSource.metadata.link).url()
+                                if (url.isBlank()){
+                                    url = redirectUrl
+                                }
+                                map.put("link", "$serviceUrl/$code/$name/details?link=" + url)
 
                                 map.put("cover", t.parser(bookSource.metadata.cover, propertyType = PropertyType.DETAIL))
                                 map.put("summary", t.parser(bookSource.metadata.summary, propertyType = PropertyType.DETAIL))
