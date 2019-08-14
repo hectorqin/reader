@@ -36,7 +36,7 @@ class BookSourceService {
     @Value("\${qingmo.server.url}")
     private lateinit var serviceUrl: String
 
-    private val cache = CacheBuilder.newBuilder().refreshAfterWrite(30, TimeUnit.MINUTES).build<String, Any>()
+    private val cache = CacheBuilder.newBuilder().expireAfterWrite(30, TimeUnit.MINUTES).build<String, Any>()
 
     fun bookSourceRepositoryList(): Single<List<BookSourceRepository>> {
 
