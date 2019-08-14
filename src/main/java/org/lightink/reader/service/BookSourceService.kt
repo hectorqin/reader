@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.util.*
+import java.util.concurrent.TimeUnit
 
 
 /**
@@ -35,7 +36,7 @@ class BookSourceService {
     @Value("\${qingmo.server.url}")
     private lateinit var serviceUrl: String
 
-    private val cache = CacheBuilder.newBuilder().build<String, Any>()
+    private val cache = CacheBuilder.newBuilder().refreshAfterWrite(30, TimeUnit.MINUTES).build<String, Any>()
 
     fun bookSourceRepositoryList(): Single<List<BookSourceRepository>> {
 
