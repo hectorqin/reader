@@ -157,8 +157,10 @@ class BookSourceService {
                 it.first { JsonObject(it.toString()).getString("name") == name }
             }
             .map {
-                val code = JsonObject(it.toString()).getString("code")
-                val pureName = JsonObject(it.toString()).getString("name").split("-")[1]
+                val booksourceJson = JsonObject(it.toString())
+                val code = booksourceJson.getString("code")
+                val pureName = booksourceJson.getString("name").split("-")[1]
+                val rankLinkArray = booksourceJson.getJsonObject("rank").getJsonArray("link")
                 JsonObject()
                         .put("name", name)
                         .put("version", "100")
@@ -189,7 +191,8 @@ class BookSourceService {
                         .put("search", JsonObject()
                                 .put("link", "$serviceUrl/$code/$pureName/search?key=\${key}")
                                 .put("list", "\$[*]"))
-
+                        .put("rank", JsonObject()
+                                .put("link", rankLinkArray))
             }
 
 

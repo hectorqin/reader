@@ -66,7 +66,7 @@ class MainService {
                     var redirectUrl = ""
                     return@flatMap httpRequest
                             .map { t ->
-                                redirectUrl = t.followedRedirects().last()
+                                redirectUrl = t.followedRedirects().lastOrNull().orEmpty()
                                 val document = Jsoup.parse(t.body().bytes.universalChardet())
                                 var elements = document.select(bookSource.search.list).toList()
                                 if (elements.isEmpty()) {
