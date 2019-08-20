@@ -149,51 +149,58 @@ class BookSourceService {
                     }
 
 
-    fun serverBookSourceJson(name: String) = serverRepositoryJson()
-            .map {
-                it.getJsonArray("list")
-            }
-            .map {
-                it.first { JsonObject(it.toString()).getString("name") == name }
-            }
-            .map {
-                val booksourceJson = JsonObject(it.toString())
-                val code = booksourceJson.getString("code")
-                val pureName = booksourceJson.getString("name").split("-")[1]
-                val rankLinkArray = booksourceJson.getJsonObject("rank").getJsonArray("link")
-                JsonObject()
-                        .put("name", name)
-                        .put("version", "100")
-                        .put("category", "3")
-                        .put("url", serviceUrl)
-                        .put("charset", "utf8")
-                        .put("metadata", JsonObject()
-                                .put("name", JsonArray().add("\$.name"))
-                                .put("author", JsonArray().add("\$.author"))
-                                .put("link", JsonArray().add("\$.link"))
-                                .put("cover", JsonArray().add("\$.cover"))
-                                .put("summary", JsonArray().add("\$.summary"))
-                                .put("category", JsonArray().add("\$.category"))
-                                .put("update", JsonArray().add("\$.update"))
-                                .put("lastChapter", JsonArray().add("\$.lastChapter"))
-                                .put("status", JsonArray().add("\$.status"))
-                        )
-                        .put("catalog", JsonObject()
-                                .put("list", "\$.catalogs")
-                                .put("orderBy", 0)
-                                .put("chapter", JsonObject()
-                                        .put("name", "\$.chapterName")
-                                        .put("link", "\$.chapterlink")
-                                )
-                        )
-                        .put("content", JsonObject()
-                                .put("text", "\$.text"))
-                        .put("search", JsonObject()
-                                .put("link", "$serviceUrl/$code/$pureName/search?key=\${key}")
-                                .put("list", "\$[*]"))
-                        .put("rank", JsonObject()
-                                .put("link", rankLinkArray))
-            }
+    fun serverBookSourceJson(name: String): Single<JsonObject> {
+        val split = name.split("-")
+        val code = split[0]
+        val pureName = split[1]
+        return bookSource(code, split[1])
+                .map {
+//                val rank = booksourceJson.getJsonObject("rank")
+//                val rankLinkArray = rank.getJsonObject("link")
+                    val jsonObject = JsonObject()
+                            .put("name", name)
+                            .put("version", "100")
+                            .put("category", "3")
+                            .put("url", serviceUrl)
+                            .put("charset", "utf8")
+                            .put("metadata", JsonObject()
+                                    .put("name", JsonArray().add("\$.name"))
+                                    .put("author", JsonArray().add("\$.author"))
+                                    .put("link", JsonArray().add("\$.link"))
+                                    .put("cover", JsonArray().add("\$.cover"))
+                                    .put("summary", JsonArray().add("\$.summary"))
+                                    .put("category", JsonArray().add("\$.category"))
+                                    .put("update", JsonArray().add("\$.update"))
+                                    .put("lastChapter", JsonArray().add("\$.lastChapter"))
+                                    .put("status", JsonArray().add("\$.status"))
+                            )
+                            .put("catalog", JsonObject()
+                                    .put("list", "\$.catalogs")
+                                    .put("orderBy", 0)
+                                    .put("chapter", JsonObject()
+                                            .put("name", "\$.chapterName")
+                                            .put("link", "\$.chapterlink")
+                                    )
+                            )
+                            .put("content", JsonObject()
+                                    .put("text", "\$.text"))
+                            .put("search", JsonObject()
+                                    .put("link", "$serviceUrl/$code/$pureName/search?key=\${key}")
+                                    .put("list", "\$[*]"))
+
+//                if (rankLinkArray != null) {
+//                    rankLinkArray.getJsonArray("link")
+//
+//                    rankLinkArray.put("list","\$.list")
+//                    rankLinkArray.put("page",rankLinkArray.getJsonObject("page").put("begin"))
+//
+//                    jsonObject.put("rank",)
+//                }
+
+
+                    return@map jsonObject
+                }
+    }
 
 
 }
