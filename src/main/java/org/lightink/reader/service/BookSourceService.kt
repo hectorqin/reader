@@ -149,13 +149,22 @@ class BookSourceService {
                     }
 
 
+    /**
+     * @param name 格式形如 纯二-笔趣阁
+     */
     fun serverBookSourceJson(name: String): Single<JsonObject> {
         val split = name.split("-")
-        val code = split[0]
-        val pureName = split[1]
-        return bookSource(code, split[1])
+        val author = split[0]
+        val pureName = split[1] //json文件名
+        var code: String = ""
+       return bookSourceRepositoryList()
+                .map { it.first { it.author == author } }
+                .flatMap { t ->
+                    code = t.code
+                    return@flatMap bookSource(t.code, pureName)
+                }
                 .map {
-//                val rank = booksourceJson.getJsonObject("rank")
+                    //                val rank = booksourceJson.getJsonObject("rank")
 //                val rankLinkArray = rank.getJsonObject("link")
                     val jsonObject = JsonObject()
                             .put("name", name)
@@ -200,6 +209,7 @@ class BookSourceService {
 
                     return@map jsonObject
                 }
+
     }
 
 
