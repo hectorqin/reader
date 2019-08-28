@@ -200,7 +200,7 @@ class BookSourceService {
 
                         val linkJsonArray = it.rank.link.map {
                             val linkJson = JsonObject()
-                            linkJson.put("link", "$serviceUrl/$code/rank/top/${it.name}")
+                            linkJson.put("link", "$serviceUrl/$code/$pureName/rank/top/${it.name}")
                             linkJson.put("name", it.name)
                             linkJson
                         }

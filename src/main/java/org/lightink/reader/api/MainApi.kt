@@ -27,6 +27,7 @@ class MainApi : BaseApi {
         router.get("/:code/:name/search").handler { search(it) }
         router.get("/:code/:name/details").handler { details(it) }
         router.get("/:code/:name/content").handler { content(it) }
+        router.get("/:code/:name/rank/top/:classify").handler { rank(it) }
 
     }
 
@@ -59,5 +60,17 @@ class MainApi : BaseApi {
                 .subscribe(routingContext)
 
     }
+
+    private fun rank(routingContext: RoutingContext) {
+        val classify = routingContext.pathParam("classify")
+        val code = routingContext.pathParam("code")
+        val name = routingContext.pathParam("name")
+
+        logger.info { "rank: $classify" }
+        mainService.rank(code, name, classify)
+                .subscribe(routingContext)
+    }
+
+
 
 }

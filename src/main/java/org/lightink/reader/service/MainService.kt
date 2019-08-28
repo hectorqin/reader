@@ -1,5 +1,6 @@
 package org.lightink.reader.service
 
+import com.fasterxml.jackson.databind.deser.SettableBeanProperty
 import io.reactivex.Observable
 import io.reactivex.Single
 import io.vertx.reactivex.core.buffer.Buffer
@@ -7,6 +8,8 @@ import io.vertx.reactivex.ext.web.client.HttpResponse
 import io.vertx.reactivex.ext.web.client.WebClient
 import mu.KotlinLogging
 import org.jsoup.Jsoup
+import org.lightink.reader.booksource.BookSource
+import org.lightink.reader.booksource.Rank
 import org.lightink.reader.contants.PropertyType
 import org.lightink.reader.ext.getEncodeAbs
 import org.lightink.reader.ext.parser
@@ -16,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.net.URLEncoder
+import kotlin.properties.Delegates
 
 /**
  * @Date: 2019-07-19 18:23
@@ -83,7 +87,7 @@ class MainService {
                                 map.put("name", t.parser(bookSource.metadata.name))
                                 map.put("author", t.select(bookSource.metadata.author.first()).text())
                                 var url = t.parser(bookSource.metadata.link).url()
-                                if (url.isBlank()){
+                                if (url.isBlank()) {
                                     url = redirectUrl
                                 }
                                 map.put("link", "$serviceUrl/$code/$name/details?link=" + url)
@@ -188,6 +192,44 @@ class MainService {
                                 return@map map
                             }
                 }
+    }
+
+
+    fun rank(code: String, name: String, classify: String): Single<MutableList<HashMap<String, String?>>> {
+        var rank: Rank by Delegates.notNull()
+        var bookSource: BookSource by Delegates.notNull()
+        return bookSourceService.bookSource(code, name)
+                .map {
+                    bookSource = it
+                    rank = it.rank!!
+                    it.rank.link.first { it.name == classify }
+                }
+                .flatMap { t ->
+                    return@flatMap webClient.getEncodeAbs(t.link)
+                            .rxSend()
+                }
+                .map {
+                    val document = Jsoup.parse(it.body().bytes.universalChardet())
+                    document.select(rank.list).toList()
+                }
+                .toObservable()
+                .flatMap { t ->
+                    Observable.fromIterable(t)
+                }
+                .map { t ->
+                    val map = hashMapOf<String, String?>()
+                    map.put("name", t.parser(bookSource.metadata.name))
+                    map.put("author", t.select(bookSource.metadata.author.first()).text())
+                    map.put("link", "$serviceUrl/$code/$name/details?link=" + t.parser(bookSource.metadata.link).url())
+                    map.put("cover", t.parser(bookSource.metadata.cover))
+                    map.put("summary", t.parser(bookSource.metadata.summary))
+                    map.put("category", t.parser(bookSource.metadata.category))
+                    map.put("status", t.parser(bookSource.metadata.status))
+                    map.put("update", t.parser(bookSource.metadata.update))
+                    map.put("lastChapter", t.parser(bookSource.metadata.lastChapter))
+                    return@map map
+                }
+                .toList()
     }
 
 
