@@ -213,8 +213,8 @@ class BookSourceService {
                                     .put("limit", it.rank.page.limit)
                                     .put("begin", "")
                                     .put("next", "/\${index}"))
-                            jsonObject.put("rank", rankJson)
                         }
+                        jsonObject.put("rank", rankJson)
                     }
 
                     return@map jsonObject
