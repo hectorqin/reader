@@ -206,7 +206,7 @@ class BookSourceService {
                         }
 
                         rankJson.put("link", linkJsonArray)
-                        rankJson.put("list", "\$.list")
+                        rankJson.put("list", "\$[*]")
                         if (it.rank.page != null) {
                             rankJson.put("page", JsonObject()
                                     .put("index", it.rank.page.index)
