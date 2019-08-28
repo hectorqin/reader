@@ -207,12 +207,14 @@ class BookSourceService {
 
                         rankJson.put("link", linkJsonArray)
                         rankJson.put("list", "\$.list")
-                        rankJson.put("page", JsonObject()
-                                .put("index", it.rank.page.index)
-                                .put("limit", it.rank.page.limit)
-                                .put("begin", "")
-                                .put("next", "/\${index}"))
-                        jsonObject.put("rank", rankJson)
+                        if (it.rank.page != null) {
+                            rankJson.put("page", JsonObject()
+                                    .put("index", it.rank.page.index)
+                                    .put("limit", it.rank.page.limit)
+                                    .put("begin", "")
+                                    .put("next", "/\${index}"))
+                            jsonObject.put("rank", rankJson)
+                        }
                     }
 
                     return@map jsonObject

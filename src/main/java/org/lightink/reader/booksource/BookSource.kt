@@ -34,7 +34,7 @@ data class Next(
 data class Rank(
         val link: List<Link>,
         val list: String,
-        val page: Page
+        val page: Page?
 )
 
 data class Page(
