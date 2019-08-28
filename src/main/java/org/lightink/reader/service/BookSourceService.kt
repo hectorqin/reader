@@ -96,7 +96,7 @@ class BookSourceService {
                 .map {
                     var url = it.getString("url")
                     url = url.substring(0, url.lastIndexOf("/"))
-                    val cell = it.getJsonArray("list").first { t -> JsonObject(t.toString()).getString("name") == name }
+                    val cell = it.getJsonArray("list").firstOrNull { t -> JsonObject(t.toString()).getString("name") == name }
                     val jsonObject = JsonObject(cell.toString())
                     val path = url + "/sources/" + jsonObject.getString("name") + ".json"
                     path
@@ -157,15 +157,13 @@ class BookSourceService {
         val author = split[0]
         val pureName = split[1] //json文件名
         var code: String = ""
-       return bookSourceRepositoryList()
+        return bookSourceRepositoryList()
                 .map { it.first { it.author == author } }
                 .flatMap { t ->
                     code = t.code
                     return@flatMap bookSource(t.code, pureName)
                 }
                 .map {
-                    //                val rank = booksourceJson.getJsonObject("rank")
-//                val rankLinkArray = rank.getJsonObject("link")
                     val jsonObject = JsonObject()
                             .put("name", name)
                             .put("version", "100")
@@ -197,15 +195,25 @@ class BookSourceService {
                                     .put("link", "$serviceUrl/$code/$pureName/search?key=\${key}")
                                     .put("list", "\$[*]"))
 
-//                if (rankLinkArray != null) {
-//                    rankLinkArray.getJsonArray("link")
-//
-//                    rankLinkArray.put("list","\$.list")
-//                    rankLinkArray.put("page",rankLinkArray.getJsonObject("page").put("begin"))
-//
-//                    jsonObject.put("rank",)
-//                }
+                    if (it.rank != null) {
+                        val rankJson = JsonObject()
 
+                        val linkJsonArray = it.rank.link.map {
+                            val linkJson = JsonObject()
+                            linkJson.put("link", "$serviceUrl/$code/rank/top/${it.name}")
+                            linkJson.put("name", it.name)
+                            linkJson
+                        }
+
+                        rankJson.put("link", linkJsonArray)
+                        rankJson.put("list", "\$.list")
+                        rankJson.put("page", JsonObject()
+                                .put("index", it.rank.page.index)
+                                .put("limit", it.rank.page.limit)
+                                .put("begin", "")
+                                .put("next", "/\${index}"))
+                        jsonObject.put("rank", rankJson)
+                    }
 
                     return@map jsonObject
                 }
