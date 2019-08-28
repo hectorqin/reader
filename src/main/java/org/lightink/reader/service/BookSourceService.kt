@@ -48,7 +48,7 @@ class BookSourceService {
             return Single.just(cacheData as List<BookSourceRepository>);
         }
 
-        return webClient.getEncodeAbs("https://gitee.com/hunji66/BookSource/raw/master/src/hm.json")
+        return webClient.getEncodeAbs("https://gitee.com/deepink/BookSource/raw/master/src/hm.json")
                 .rxSend()
                 .map {
                     val jsonArray = it.bodyAsJsonObject().getJsonArray("list")
