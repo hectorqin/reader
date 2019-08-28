@@ -25,7 +25,7 @@ import javax.script.ScriptEngineManager
 
 val engine = ScriptEngineManager().getEngineByName("nashorn")
 
-fun Element.parser(selector: String): String {
+fun Element.parser(selector: String, propertyType: PropertyType = PropertyType.SEARCH): String {
 
     var element: Element = this
 
@@ -46,8 +46,10 @@ fun Element.parser(selector: String): String {
             if (element.selectFirst(s) == null) {
                 continue
             } else {
-                if (element.select(s).hasText()) {
+                if (element.select(s).hasText() && propertyType == PropertyType.CONTENT) {
                     text = element.select(s).html()
+                } else if (element.select(s).hasText()) {
+                    text = element.select(s).text()
                 } else {
                     text = element.selectFirst(s).data()
                 }
@@ -72,7 +74,7 @@ fun Element.parser(selectorList: List<String>?, propertyType: PropertyType = Pro
     } else {
         selectorList
     }.forEach {
-        val s = this.parser(it)
+        val s = this.parser(it, propertyType)
         if (s.isNotBlank()) {
             return s
         }

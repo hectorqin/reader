@@ -5,5 +5,5 @@ package org.lightink.reader.contants
  * @Description:
  */
 enum class PropertyType {
-    SEARCH,DETAIL,RANK
+    SEARCH,DETAIL,RANK,CONTENT
 }

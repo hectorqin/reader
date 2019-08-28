@@ -9,6 +9,7 @@ import io.vertx.reactivex.ext.web.client.WebClient
 import mu.KotlinLogging
 import org.jsoup.Jsoup
 import org.lightink.reader.booksource.BookSource
+import org.lightink.reader.booksource.Content
 import org.lightink.reader.booksource.Rank
 import org.lightink.reader.contants.PropertyType
 import org.lightink.reader.ext.getEncodeAbs
@@ -182,7 +183,7 @@ class MainService {
                                     t.select(filter).remove()
                                 }
 
-                                map.put("text", t.parser(source.content.text))
+                                map.put("text", t.parser(source.content.text, PropertyType.CONTENT))
                                 if (source.content.next != null) {
                                     val nextlinks = t.select(source.content.next.link)
                                     val nextlink = nextlinks.filter { it.text() == source.content.next.text }.firstOrNull()?.text()
