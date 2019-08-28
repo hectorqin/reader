@@ -2,6 +2,7 @@ package org.lightink.reader
 
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.vertx.core.Future
+import io.vertx.core.http.HttpClientOptions
 import io.vertx.core.http.HttpClientRequest
 import io.vertx.core.http.HttpHeaders
 import io.vertx.core.http.RequestOptions
@@ -54,9 +55,8 @@ class ReaderApplication {
         webClientOptions.isTryUseCompression = true
         webClientOptions.logActivity = true
         webClientOptions.isFollowRedirects = true
-
-        val delegateHttpClient = vertx.delegate.createHttpClient()
-
+        webClientOptions.isTrustAll = true
+        val delegateHttpClient = vertx.delegate.createHttpClient(HttpClientOptions().setTrustAll(true))
         delegateHttpClient.redirectHandler { resp ->
             try {
                 val statusCode = resp.statusCode()

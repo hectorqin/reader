@@ -39,6 +39,7 @@ fun Single<*>.subscribe(routingContext: RoutingContext) {
     this.subscribe({ onSuccess ->
         routingContext.success(onSuccess)
     }, { error ->
+        error.printStackTrace()
         routingContext.error(error)
     })
 
@@ -49,6 +50,7 @@ fun Maybe<*>.subscribe(routingContext: RoutingContext) {
     this.subscribe({ onSuccess ->
         routingContext.success(onSuccess)
     }, { error ->
+        error.printStackTrace()
         routingContext.error(error)
     })
 
