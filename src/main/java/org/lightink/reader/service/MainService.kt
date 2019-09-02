@@ -73,7 +73,7 @@ class MainService {
                     return@flatMap httpRequest
                             .flatMap {
                                 if (it.getHeader("Content-type").startsWith("application/json")) {
-                                    val list: List<String> = JsonPath.read(it.bodyAsString(), "$.store.book[*].author", null)
+                                    val list: List<String> = JsonPath.read(it.bodyAsString(), bookSource.search.list, null)
                                     return@flatMap Observable.fromIterable(list)
                                             .map { t ->
                                                 val map = hashMapOf<String, String?>()
