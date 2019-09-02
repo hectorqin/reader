@@ -1,5 +1,6 @@
 package org.lightink.reader.ext
 
+import com.jayway.jsonpath.JsonPath
 import io.vertx.reactivex.core.buffer.Buffer
 import io.vertx.reactivex.ext.web.client.HttpRequest
 import io.vertx.reactivex.ext.web.client.WebClient
@@ -10,18 +11,13 @@ import org.mozilla.universalchardet.UniversalDetector
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import javax.script.ScriptEngineManager
+import kotlin.reflect.jvm.internal.impl.load.kotlin.JvmType
 
 
 /**
  * @Date: 2019-07-19 23:43
  * @Description:
  */
-
-
-//fun Element.parserAttr(selector: String): String? {
-//    val split = selector.split("@attr->")
-//    return this.select(split.first()).attr(split.last())
-//}
 
 val engine = ScriptEngineManager().getEngineByName("nashorn")
 
@@ -122,6 +118,38 @@ fun ByteArray.universalChardet(): String {
 
 }
 
+fun Any.jsonParser(list: List<String>?): String {
+    if (list == null) {
+        return ""
+    }
+
+    list.forEach {
+        val s = this.jsonParser(it)
+        if (s.isNotBlank()) {
+            return s
+        }
+    }
+    return ""
+}
+
+fun Any.jsonParser(jsonpath: String): String {
+    var text = ""
+
+    for (s in jsonpath.split("@")) {
+
+        if (s.isBlank()) {
+            continue
+        }
+
+        if (s.startsWith("js->")) {
+            text = engine.eval(s.removePrefix("js->").replace("\${this}", "\"$text\"")).toString()
+        } else {
+            text = JsonPath.read(this, jsonpath)
+        }
+
+    }
+    return text
+}
 
 
 

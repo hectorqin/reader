@@ -47,6 +47,7 @@ dependencies {
     implementation 'com.google.guava:guava:28.0-jre'
     implementation("com.squareup.okhttp3:okhttp:4.0.1")
     implementation 'com.googlecode.juniversalchardet:juniversalchardet:1.0.3'
+    implementation 'com.jayway.jsonpath:json-path:2.4.0'
 
 
 }
