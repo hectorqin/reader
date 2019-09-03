@@ -73,13 +73,13 @@ class MainService {
                     return@flatMap httpRequest
                             .flatMap {
                                 if (it.getHeader("Content-type").startsWith("application/json")) {
-                                    val list: List<String> = JsonPath.read(it.bodyAsString(), bookSource.search.list, null)
+                                    val list: List<*> = JsonPath.read(it.bodyAsString(), bookSource.search.list, null)
                                     return@flatMap Observable.fromIterable(list)
                                             .map { t ->
                                                 val map = hashMapOf<String, String?>()
-                                                val document = Configuration.defaultConfiguration().jsonProvider().parse(t)
+//                                                val document = Configuration.defaultConfiguration().jsonProvider().parse(t)
 
-                                                map.put("name", document.jsonParser(bookSource.metadata.name))
+                                                map.put("name", t.jsonParser(bookSource.metadata.name))
                                                 map.put("author", t.jsonParser(bookSource.metadata.author))
                                                 var url = t.jsonParser(bookSource.metadata.link).url()
                                                 map.put("link", "$serviceUrl/$code/$name/details?link=" + url)

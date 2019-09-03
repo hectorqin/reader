@@ -144,7 +144,7 @@ fun Any.jsonParser(jsonpath: String): String {
         if (s.startsWith("js->")) {
             text = engine.eval(s.removePrefix("js->").replace("\${this}", "\"$text\"")).toString()
         } else {
-            text = JsonPath.read(this, jsonpath)
+            text = JsonPath.read(this, s)
         }
 
     }
