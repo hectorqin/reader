@@ -20,7 +20,11 @@ import org.springframework.stereotype.Service
 import java.net.URLEncoder
 import kotlin.properties.Delegates
 import com.jayway.jsonpath.Configuration.defaultConfiguration
+import io.reactivex.Scheduler
+import io.reactivex.schedulers.Schedulers
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.lightink.reader.ext.*
+import java.util.concurrent.CompletableFuture
 
 
 /**
@@ -144,10 +148,11 @@ class MainService {
         return bookSourceService.bookSource(code, name)
                 .flatMap { source ->
 
-                    val url = "${source.url}$link"
+                    val url =  if (link.startsWith("http")) link else source.url + link
 
                     return@flatMap webClient.getEncodeAbs(url)
                             .rxSend()
+                            .observeOn(Schedulers.io())
                             .flatMap {
                                 if (it.getHeader("Content-type").startsWith("application/json")) {
                                     val t = it.bodyAsString()
@@ -159,12 +164,24 @@ class MainService {
                                     map.put("update", t.jsonParser(source.metadata.update.reversed()))
                                     map.put("lastChapter", t.jsonParser(source.metadata.lastChapter.reversed()))
 
-                                    val catalog: List<String> = JsonPath.read(t, source.catalog.list, null)
+                                    val catalogLink = t.jsonParser(source.metadata.catalog)
+
+                                    var catalogDocument = t
+                                    if (catalogLink.isNotBlank()) {
+                                        val completedFuture = CompletableFuture<String>()
+                                        val catalogurl =  if (link.startsWith("http")) catalogLink.url() else source.url + catalogLink.url()
+                                        webClient.getEncodeAbs(catalogurl)
+                                                .send {
+                                                    completedFuture.complete(it.result().bodyAsString())
+                                                }
+                                        catalogDocument = completedFuture.get()
+                                    }
+                                    val catalog: List<Any> = JsonPath.read(catalogDocument, source.catalog.list, null)
                                     map.put("catalogs", catalog.map {
                                         val catalogs = hashMapOf<String, String>()
                                         catalogs.put("chapterName", it.jsonParser(source.catalog.chapter.name))
-                                        val chapterlink = it.jsonParser(source.catalog.chapter.link).url()
-                                        catalogs.put("chapterlink", "$serviceUrl/$code/$name/content?href=" + chapterlink)
+                                        val chapterlink = it.jsonParser(source.catalog.chapter.link).toHttpUrl().toString()
+                                        catalogs.put("chapterlink", "$serviceUrl/$code/$name/content?href=" + URLEncoder.encode(chapterlink))
                                         catalogs
                                     })
 
@@ -229,8 +246,8 @@ class MainService {
     fun content(code: String, name: String, href: String): Single<HashMap<String, Any>> {
         return bookSourceService.bookSource(code, name)
                 .flatMap { source ->
-
-                    return@flatMap webClient.getEncodeAbs(source.url + href)
+                    var absoluteURI = if (href.startsWith("http")) href else source.url + href
+                    return@flatMap webClient.getEncodeAbs(absoluteURI)
                             .rxSend()
                             .flatMap {
                                 if (it.getHeader("Content-type").startsWith("application/json")) {

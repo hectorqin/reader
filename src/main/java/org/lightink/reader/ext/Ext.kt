@@ -4,6 +4,8 @@ import com.jayway.jsonpath.JsonPath
 import io.vertx.reactivex.core.buffer.Buffer
 import io.vertx.reactivex.ext.web.client.HttpRequest
 import io.vertx.reactivex.ext.web.client.WebClient
+import net.minidev.json.JSONArray
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 import org.lightink.reader.contants.PropertyType
@@ -82,9 +84,9 @@ fun Element.parser(selectorList: List<String>?, propertyType: PropertyType = Pro
 
 fun String.url(): String {
     if (this.startsWith("//")) {
-        return ("http:" + this).toHttpUrl().encodedPath
+        return ("http:" + this).toHttpUrl().toString()
     } else if (this.startsWith("http")) {
-        return this.toHttpUrl().encodedPath
+        return this.toHttpUrl().toString()
     }
     return this
 }
@@ -144,7 +146,16 @@ fun Any.jsonParser(jsonpath: String): String {
         if (s.startsWith("js->")) {
             text = engine.eval(s.removePrefix("js->").replace("\${this}", "\"$text\"")).toString()
         } else {
-            text = JsonPath.read(this, s)
+            if (this is String) {
+                var read = JsonPath.read<Any>(this, s)
+                if (read is JSONArray) {
+                    text = read[0].toString()
+                } else {
+                    text = read.toString()
+                }
+            } else {
+                text = JsonPath.read(this, s)
+            }
         }
 
     }
