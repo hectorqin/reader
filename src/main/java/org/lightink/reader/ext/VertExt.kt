@@ -1,10 +1,9 @@
 package org.lightink.reader.ext
 
 import com.google.gson.Gson
-import io.reactivex.Maybe
-import io.reactivex.Single
+
 import io.vertx.core.json.JsonObject
-import io.vertx.reactivex.ext.web.RoutingContext
+import io.vertx.ext.web.RoutingContext
 
 
 /**
@@ -15,11 +14,10 @@ import io.vertx.reactivex.ext.web.RoutingContext
 
 
 fun RoutingContext.success(any: Any?) {
-    var toJson: String
-    if (any is JsonObject) {
-        toJson = any.toString()
+    val toJson: String = if (any is JsonObject) {
+        any.toString()
     } else {
-        toJson = Gson().toJson(any)
+        Gson().toJson(any)
     }
     this.response()
             .putHeader("content-type", "application/json")
@@ -34,24 +32,24 @@ fun RoutingContext.error(any: Any?) {
             .end(Gson().toJson(any))
 }
 
-fun Single<*>.subscribe(routingContext: RoutingContext) {
-
-    this.subscribe({ onSuccess ->
-        routingContext.success(onSuccess)
-    }, { error ->
-        error.printStackTrace()
-        routingContext.error(error)
-    })
-
-}
-
-fun Maybe<*>.subscribe(routingContext: RoutingContext) {
-
-    this.subscribe({ onSuccess ->
-        routingContext.success(onSuccess)
-    }, { error ->
-        error.printStackTrace()
-        routingContext.error(error)
-    })
-
-}
+//fun Single<*>.subscribe(routingContext: RoutingContext) {
+//
+//    this.subscribe({ onSuccess ->
+//        routingContext.success(onSuccess)
+//    }, { error ->
+//        error.printStackTrace()
+//        routingContext.error(error)
+//    })
+//
+//}
+//
+//fun Maybe<*>.subscribe(routingContext: RoutingContext) {
+//
+//    this.subscribe({ onSuccess ->
+//        routingContext.success(onSuccess)
+//    }, { error ->
+//        error.printStackTrace()
+//        routingContext.error(error)
+//    })
+//
+//}

@@ -3,11 +3,10 @@ package org.lightink.reader.service
 import com.google.common.cache.CacheBuilder
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import io.reactivex.Observable
-import io.reactivex.Single
 import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
-import io.vertx.reactivex.ext.web.client.WebClient
+import io.vertx.ext.web.client.WebClient
+import io.vertx.kotlin.ext.web.client.sendAwait
 import mu.KotlinLogging
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.lightink.reader.booksource.BookSource
@@ -38,19 +37,19 @@ class BookSourceService {
 
     private val cache = CacheBuilder.newBuilder().expireAfterWrite(30, TimeUnit.MINUTES).build<String, Any>()
 
-    fun bookSourceRepositoryList(): Single<List<BookSourceRepository>> {
+    suspend fun bookSourceRepositoryList(): List<BookSourceRepository> {
 
         logger.info { "start fetch book source repostory list..." }
 
         val cacheData = cache.getIfPresent("bookSourceRepositoryList")
         if (cacheData != null && cacheData is List<*> && cacheData.size > 0) {
             logger.info { "fetch book source repostory list from cache" }
-            return Single.just(cacheData as List<BookSourceRepository>);
+            return cacheData as List<BookSourceRepository>;
         }
 
         return webClient.getEncodeAbs("https://gitee.com/deepink/BookSource/raw/master/src/hm.json")
-                .rxSend()
-                .map {
+                .sendAwait()
+                .let {
                     val jsonArray = it.bodyAsJsonObject().getJsonArray("list")
                     val fromJson = Gson().fromJson<List<BookSourceRepository>>(jsonArray.toString(), object : TypeToken<ArrayList<BookSourceRepository>>() {}.type)
                     cache.put("bookSourceRepositoryList", fromJson);
@@ -61,39 +60,36 @@ class BookSourceService {
     }
 
 
-    fun bookSourceDescription(code: String): Single<JsonObject> {
+    suspend fun bookSourceDescription(code: String): JsonObject {
 
         val cacheData = cache.getIfPresent(code)
         if (cacheData != null && cacheData is JsonObject) {
-            return Single.just(cacheData);
+            return cacheData;
         }
 
-        return bookSourceRepositoryList()
-                .map {
-                    return@map it.first { t -> t.code == code }
-                }
-                .flatMap { t ->
-                    return@flatMap webClient.getEncodeAbs(t.url)
-                            .rxSend()
-                            .map {
-                                val jsonObject = it.bodyAsJsonObject().put("url", t.url)
-                                cache.put(code, jsonObject);
-                                jsonObject
-                            }
+        val bookSourceRepository = bookSourceRepositoryList()
+                .first { t -> t.code == code }
+
+        return webClient.getEncodeAbs(bookSourceRepository.url)
+                .sendAwait()
+                .let {
+                    val jsonObject = it.bodyAsJsonObject().put("url", bookSourceRepository.url)
+                    cache.put(code, jsonObject);
+                    jsonObject
                 }
 
     }
 
 
-    fun bookSource(code: String, name: String): Single<BookSource> {
+    suspend fun bookSource(code: String, name: String): BookSource {
 
         val cacheData = cache.getIfPresent("$code-$name")
         if (cacheData != null && cacheData is BookSource) {
-            return Single.just(cacheData);
+            return cacheData;
         }
 
         return bookSourceDescription(code)
-                .map {
+                .let {
                     var url = it.getString("url")
                     url = url.substring(0, url.lastIndexOf("/"))
                     val cell = it.getJsonArray("list").firstOrNull { t -> JsonObject(t.toString()).getString("name") == name }
@@ -101,33 +97,25 @@ class BookSourceService {
                     val path = url + "/sources/" + jsonObject.getString("name") + ".json"
                     path
                 }
-
-                .flatMap { path ->
+                .let { path ->
                     webClient.getEncodeAbs(path.toHttpUrl().toString())
-                            .rxSend()
-                            .map {
-                                it.bodyAsJsonObject()
-                            }
+                            .sendAwait()
+                            .bodyAsJsonObject()
                 }
-                .map {
+                .let {
                     val fromJson = Gson().fromJson<BookSource>(it.toString(), BookSource::class.java)
                     cache.put("$code-$name", fromJson);
                     fromJson
                 }
     }
 
-    fun serverRepositoryJson() =
+    suspend fun serverRepositoryJson() =
             bookSourceRepositoryList()
-                    .toObservable()
-                    .flatMap {
-                        return@flatMap Observable.fromIterable(it)
-                    }
-                    .flatMap {
+                    .map {
                         val author = it.author
                         val code = it.code
-                        return@flatMap bookSourceDescription(code)
-                                .toObservable()
-                                .map {
+                        return@map bookSourceDescription(code)
+                                .let {
                                     it.getJsonArray("list").map {
                                         val jsonObject = JsonObject(it.toString())
                                         jsonObject.put("name", author + "-" + jsonObject.getString("name"))
@@ -152,18 +140,18 @@ class BookSourceService {
     /**
      * @param name 格式形如 纯二-笔趣阁
      */
-    fun serverBookSourceJson(name: String): Single<JsonObject> {
+    suspend fun serverBookSourceJson(name: String): JsonObject {
         val split = name.split("-")
         val author = split[0]
         val pureName = split[1] //json文件名
         var code: String = ""
         return bookSourceRepositoryList()
-                .map { it.first { it.author == author } }
-                .flatMap { t ->
+                .first { it.author == author }
+                .let { t ->
                     code = t.code
-                    return@flatMap bookSource(t.code, pureName)
+                    return@let bookSource(t.code, pureName)
                 }
-                .map {
+                .let {
                     val jsonObject = JsonObject()
                             .put("name", name)
                             .put("version", "100")
@@ -217,7 +205,7 @@ class BookSourceService {
                         jsonObject.put("rank", rankJson)
                     }
 
-                    return@map jsonObject
+                    return@let jsonObject
                 }
 
     }

@@ -1,6 +1,10 @@
 package org.gosky.aroundight.api
 
-import io.vertx.reactivex.ext.web.Router
+import io.vertx.ext.web.Route
+import io.vertx.ext.web.Router
+import io.vertx.ext.web.RoutingContext
+import io.vertx.kotlin.coroutines.dispatcher
+import kotlinx.coroutines.launch
 
 
 /**
@@ -10,6 +14,8 @@ import io.vertx.reactivex.ext.web.Router
  */
 interface BaseApi {
 
-    fun initRouter(router: Router)
+    suspend fun initRouter(router: Router)
+
+
 
 }

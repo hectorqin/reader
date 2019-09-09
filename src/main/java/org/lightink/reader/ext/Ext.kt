@@ -1,9 +1,9 @@
 package org.lightink.reader.ext
 
 import com.jayway.jsonpath.JsonPath
-import io.vertx.reactivex.core.buffer.Buffer
-import io.vertx.reactivex.ext.web.client.HttpRequest
-import io.vertx.reactivex.ext.web.client.WebClient
+import io.vertx.core.buffer.Buffer
+import io.vertx.ext.web.client.HttpRequest
+import io.vertx.ext.web.client.WebClient
 import net.minidev.json.JSONArray
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl

@@ -1,10 +1,16 @@
 package org.lightink.reader.api
 
-import io.vertx.reactivex.ext.web.Router
+import io.vertx.ext.web.Route
+import io.vertx.ext.web.Router
+import io.vertx.ext.web.RoutingContext
+import io.vertx.kotlin.coroutines.dispatcher
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.gosky.aroundight.api.BaseApi
-import org.lightink.reader.ext.subscribe
 import org.lightink.reader.service.BookSourceService
+import org.lightink.reader.verticle.coroutineHandler
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
 
@@ -22,44 +28,38 @@ class BookSourceApi : BaseApi {
     private lateinit var bookSourceService: BookSourceService
 
 
-    override fun initRouter(router: Router) {
-        router.get("/book_source/repository")
-                .handler {
-                    bookSourceService.bookSourceRepositoryList()
-                            .subscribe(it)
+    override suspend fun initRouter(router: Router) {
 
+        router.get("/book_source/repository")
+                .coroutineHandler {
+                    bookSourceService.bookSourceRepositoryList()
                 }
 
         router.get("/book_source/description/:code")
-                .handler {
+                .coroutineHandler {
                     val code = it.pathParam("code")
                     bookSourceService.bookSourceDescription(code)
-                            .subscribe(it)
-
                 }
 
         router.get("/book_source/:code/:name")
-                .handler {
+                .coroutineHandler {
                     val code = it.pathParam("code")
                     val name = it.pathParam("name")
                     bookSourceService.bookSource(code, name)
-                            .subscribe(it)
-
                 }
 
         router.get("/git/repository.json")
-                .handler {
+                .coroutineHandler {
                     bookSourceService.serverRepositoryJson()
-                            .subscribe(it)
+
                 }
 
         router.get("/git/sources/:name")
-                .handler {
+                .coroutineHandler {
                     val name = it.pathParam("name")
                     bookSourceService.serverBookSourceJson(name.replace(".json", ""))
-                            .subscribe(it)
-
                 }
 
     }
+
 }
