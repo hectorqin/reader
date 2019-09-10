@@ -54,8 +54,8 @@ class ReaderApplication {
         webClientOptions.isFollowRedirects = true
         webClientOptions.isTrustAll = true
 
-        val delegateHttpClient = vertx.createHttpClient(HttpClientOptions().setTrustAll(true))
-        delegateHttpClient.redirectHandler { resp ->
+        val httpClient = vertx.createHttpClient(HttpClientOptions().setTrustAll(true))
+        httpClient.redirectHandler { resp ->
             try {
                 val statusCode = resp.statusCode()
                 val location = resp.getHeader(HttpHeaders.LOCATION)
@@ -94,7 +94,7 @@ class ReaderApplication {
                     requestOptions.port = port
                     requestOptions.isSsl = ssl
                     requestOptions.uri = requestURI
-                    return@redirectHandler Future.succeededFuture<HttpClientRequest>(delegateHttpClient.request(m, requestOptions))
+                    return@redirectHandler Future.succeededFuture<HttpClientRequest>(httpClient.request(m, requestOptions))
                 }
                 return@redirectHandler null
             } catch (e: Exception) {

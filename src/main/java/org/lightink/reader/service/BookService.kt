@@ -15,15 +15,22 @@ import org.springframework.stereotype.Service
 import java.net.URLEncoder
 import kotlin.properties.Delegates
 import com.jayway.jsonpath.Configuration.defaultConfiguration
+import io.vertx.core.AsyncResult
 import io.vertx.core.buffer.Buffer
+import io.vertx.ext.web.client.HttpRequest
 import io.vertx.ext.web.client.HttpResponse
 import io.vertx.ext.web.client.WebClient
+import io.vertx.kotlin.coroutines.awaitBlocking
+import io.vertx.kotlin.coroutines.awaitEvent
+import io.vertx.kotlin.coroutines.awaitResult
 
 import io.vertx.kotlin.ext.web.client.sendAwait
 import io.vertx.kotlin.ext.web.client.sendBufferAwait
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.lightink.reader.ext.*
 import java.util.concurrent.CompletableFuture
+import kotlin.concurrent.thread
+import kotlin.math.log
 
 
 /**
@@ -134,7 +141,6 @@ class MainService {
      * 书的详情
      */
     suspend fun details(code: String, name: String, link: String): HashMap<String, Any> {
-
 
         val source = bookSourceService.bookSource(code, name)
 
@@ -265,24 +271,42 @@ class MainService {
 
         val resp = webClient.getEncodeAbs(rankLink.link)
                 .sendAwait()
-        val document = Jsoup.parse(resp.body().bytes.universalChardet())
-        val list = document.select(bookSource.rank.list)
-                .map { t ->
-                    val map = hashMapOf<String, String?>()
-                    map.put("name", t.parser(bookSource.metadata.name))
-                    map.put("author", t.select(bookSource.metadata.author.first()).text())
-                    map.put("link", "$serviceUrl/$code/$name/details?link=" + t.parser(bookSource.metadata.link).url())
-                    map.put("cover", t.parser(bookSource.metadata.cover))
-                    map.put("summary", t.parser(bookSource.metadata.summary))
-                    map.put("category", t.parser(bookSource.metadata.category))
-                    map.put("status", t.parser(bookSource.metadata.status))
-                    map.put("update", t.parser(bookSource.metadata.update))
-                    map.put("lastChapter", t.parser(bookSource.metadata.lastChapter))
-                    return@map map
-                }
-                .toList()
 
-        return list
+        if (resp.getHeader("Content-type").startsWith("application/json")) {
+            return JsonPath.read<List<Any>>(resp.bodyAsString(), bookSource.rank.list, null)
+                    .map { t ->
+                        val map = hashMapOf<String, String?>()
+                        map.put("name", t.jsonParser(bookSource.metadata.name))
+                        map.put("author", t.jsonParser(bookSource.metadata.author.first()))
+                        map.put("link", "$serviceUrl/$code/$name/details?link=" + t.jsonParser(bookSource.metadata.link).url())
+                        map.put("cover", t.jsonParser(bookSource.metadata.cover))
+                        map.put("summary", t.jsonParser(bookSource.metadata.summary))
+                        map.put("category", t.jsonParser(bookSource.metadata.category))
+                        map.put("status", t.jsonParser(bookSource.metadata.status))
+                        map.put("update", t.jsonParser(bookSource.metadata.update))
+                        map.put("lastChapter", t.jsonParser(bookSource.metadata.lastChapter))
+                        return@map map
+                    }
+
+        } else {
+
+            val document = Jsoup.parse(resp.body().bytes.universalChardet())
+            val list = document.select(bookSource.rank.list)
+                    .map { t ->
+                        val map = hashMapOf<String, String?>()
+                        map.put("name", t.parser(bookSource.metadata.name))
+                        map.put("author", t.select(bookSource.metadata.author.first()).text())
+                        map.put("link", "$serviceUrl/$code/$name/details?link=" + t.parser(bookSource.metadata.link).url())
+                        map.put("cover", t.parser(bookSource.metadata.cover))
+                        map.put("summary", t.parser(bookSource.metadata.summary))
+                        map.put("category", t.parser(bookSource.metadata.category))
+                        map.put("status", t.parser(bookSource.metadata.status))
+                        map.put("update", t.parser(bookSource.metadata.update))
+                        map.put("lastChapter", t.parser(bookSource.metadata.lastChapter))
+                        return@map map
+                    }
+                    .toList()
+            return list
+        }
     }
-
 }
