@@ -141,7 +141,7 @@ class BookSourceService {
                         mutableList.addAll(t2)
                         mutableList
                     }
-                    .map {
+                    .let {
                         JsonObject()
                                 .put("name", "qingmo")
                                 .put("summary", "Provided links by qingmo")

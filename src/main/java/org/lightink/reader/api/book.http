@@ -6,16 +6,17 @@
 # * 'ptr' and 'ptrp' create a POST request with a simple or parameter-like body;
 # * 'mptr' and 'fptr' create a POST request to submit a form with a text or file field (multipart/form-data);
 
-### 书源仓库列表
-GET http://localhost:8080/book_source/repository
+### 搜索 无限恐怖
+GET http://localhost:8080/9251/%E8%BD%AE%E5%9B%9E%E5%B0%8F%E8%AF%B4/search?key=%E6%97%A0%E9%99%90%E6%81%90%E6%80%96
 Accept: application/json
 
-### 书源仓库内容
-GET http://localhost:8080/book_source/description/9251
+### 详情
+GET http://localhost:8080/2333/gdugm716/details?link=http://api.gdugm.cn/book/info?bookId=584ce11681f83ff24f5931b5
 Accept: application/json
 
-### 书源内容
-GET http://localhost:8080/book_source/9251/%E8%BD%AE%E5%9B%9E%E5%B0%8F%E8%AF%B4
+### 内容
+GET http://localhost:8080/2333/gdugm716/content?href=http%3A%2F%2Fchapter.wgfgr.cn%2Fchapter%2Fhttp%253A%252F%252Fbook.kdqb.cc%252FgetBooks.aspx%253Fmethod%253Dcontent%2526bookId%253D1467951%2526chapterFile%253DU_1553311_201703211740158181_7879_1.txt
 Accept: application/json
 
 ###
+
