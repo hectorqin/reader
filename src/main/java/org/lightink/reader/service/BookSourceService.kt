@@ -7,6 +7,8 @@ import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.client.WebClient
 import io.vertx.kotlin.ext.web.client.sendAwait
+import kotlinx.coroutines.async
+import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.lightink.reader.booksource.BookSource
@@ -37,6 +39,9 @@ class BookSourceService {
 
     private val cache = CacheBuilder.newBuilder().expireAfterWrite(30, TimeUnit.MINUTES).build<String, Any>()
 
+    /**
+     * 原始书源仓库列表
+     */
     suspend fun bookSourceRepositoryList(): List<BookSourceRepository> {
 
         logger.info { "start fetch book source repostory list..." }
@@ -59,7 +64,9 @@ class BookSourceService {
 
     }
 
-
+    /**
+     * 原始书源仓库的内容
+     */
     suspend fun bookSourceDescription(code: String): JsonObject {
 
         val cacheData = cache.getIfPresent(code)
@@ -80,7 +87,9 @@ class BookSourceService {
 
     }
 
-
+    /**
+     * 原始的书源内容
+     */
     suspend fun bookSource(code: String, name: String): BookSource {
 
         val cacheData = cache.getIfPresent("$code-$name")
@@ -109,6 +118,9 @@ class BookSourceService {
                 }
     }
 
+    /**
+     * 输出的书源列表(厚墨专用)
+     */
     suspend fun serverRepositoryJson() =
             bookSourceRepositoryList()
                     .map {
@@ -138,6 +150,7 @@ class BookSourceService {
 
 
     /**
+     * 输出的书源内容(厚墨专用)
      * @param name 格式形如 纯二-笔趣阁
      */
     suspend fun serverBookSourceJson(name: String): JsonObject {

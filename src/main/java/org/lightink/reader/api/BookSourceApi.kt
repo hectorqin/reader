@@ -1,18 +1,15 @@
 package org.lightink.reader.api
 
-import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
-import io.vertx.ext.web.RoutingContext
-import io.vertx.kotlin.coroutines.dispatcher
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineScope
 import mu.KotlinLogging
 import org.gosky.aroundight.api.BaseApi
+import org.lightink.reader.ext.success
 import org.lightink.reader.service.BookSourceService
 import org.lightink.reader.verticle.coroutineHandler
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
+import kotlin.math.log
 
 /**
  * @Date: 2019-07-29 23:58
@@ -28,34 +25,33 @@ class BookSourceApi : BaseApi {
     private lateinit var bookSourceService: BookSourceService
 
 
-    override suspend fun initRouter(router: Router) {
-
+    override suspend fun initRouter(router: Router, coroutineScope: CoroutineScope) {
         router.get("/book_source/repository")
-                .coroutineHandler {
-                    bookSourceService.bookSourceRepositoryList()
+                .coroutineHandler(coroutineScope) {
+                    return@coroutineHandler bookSourceService.bookSourceRepositoryList()
                 }
 
         router.get("/book_source/description/:code")
-                .coroutineHandler {
+                .coroutineHandler(coroutineScope) {
                     val code = it.pathParam("code")
                     bookSourceService.bookSourceDescription(code)
                 }
 
         router.get("/book_source/:code/:name")
-                .coroutineHandler {
+                .coroutineHandler(coroutineScope) {
                     val code = it.pathParam("code")
                     val name = it.pathParam("name")
                     bookSourceService.bookSource(code, name)
                 }
 
         router.get("/git/repository.json")
-                .coroutineHandler {
+                .coroutineHandler(coroutineScope) {
                     bookSourceService.serverRepositoryJson()
 
                 }
 
         router.get("/git/sources/:name")
-                .coroutineHandler {
+                .coroutineHandler(coroutineScope) {
                     val name = it.pathParam("name")
                     bookSourceService.serverBookSourceJson(name.replace(".json", ""))
                 }

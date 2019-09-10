@@ -1,0 +1,21 @@
+# For a quick start check out our HTTP Requests collection (Tools|HTTP Client|Open HTTP Requests Collection) or
+# paste cURL into the file and request will be converted to HTTP Request format.
+#
+# Following HTTP Request Live Templates are available:
+# * 'gtrp' and 'gtr' create a GET request with or without query parameters;
+# * 'ptr' and 'ptrp' create a POST request with a simple or parameter-like body;
+# * 'mptr' and 'fptr' create a POST request to submit a form with a text or file field (multipart/form-data);
+
+### 书源仓库列表
+GET http://localhost:8080/book_source/repository
+Accept: application/json
+
+### 书源仓库内容
+GET http://localhost:8080/book_source/description/9251
+Accept: application/json
+
+### 书源内容
+GET http://localhost:8080/book_source/9251/%E8%BD%AE%E5%9B%9E%E5%B0%8F%E8%AF%B4
+Accept: application/json
+
+###

@@ -12,6 +12,7 @@ import io.vertx.ext.web.handler.LoggerFormat
 import io.vertx.ext.web.handler.LoggerHandler
 import io.vertx.kotlin.coroutines.CoroutineVerticle
 import io.vertx.kotlin.coroutines.dispatcher
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
@@ -78,7 +79,7 @@ class RestVerticle : CoroutineVerticle() {
 
 
         router.get("/health").handler { it.success("ok!") }
-        apiList.forEach { it.initRouter(router) }
+        apiList.forEach { it.initRouter(router, CoroutineScope(coroutineContext)) }
 
         router.errorHandler(500) { routerContext ->
             logger.error { routerContext.failure().message }
@@ -86,6 +87,7 @@ class RestVerticle : CoroutineVerticle() {
         }
 
         vertx.createHttpServer().requestHandler(router).listen(8080)
+
     }
 
 }
@@ -93,13 +95,13 @@ class RestVerticle : CoroutineVerticle() {
 /**
  * An extension method for simplifying coroutines usage with Vert.x Web routers
  */
-fun Route.coroutineHandler(fn: suspend (RoutingContext) -> Unit) {
+fun Route.coroutineHandler(coroutineScope: CoroutineScope, fn: suspend (RoutingContext) -> Any) {
     handler { ctx ->
-        runBlocking (ctx.vertx().dispatcher()) {
+        coroutineScope.launch(ctx.vertx().dispatcher()) {
             try {
-                fn(ctx)
+                ctx.success(fn(ctx))
             } catch (e: Exception) {
-                ctx.fail(e)
+                ctx.error(e)
             }
         }
     }
