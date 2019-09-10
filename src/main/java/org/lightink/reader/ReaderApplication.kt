@@ -103,7 +103,7 @@ class ReaderApplication {
         }
 
 //        val webClient = WebClient.wrap(HttpClient(delegateHttpClient), webClientOptions)
-        val webClient = WebClient.create(vertx, webClientOptions)
+        val webClient = WebClient.wrap(httpClient, webClientOptions)
 
 
         return webClient
