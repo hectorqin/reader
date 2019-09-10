@@ -83,7 +83,7 @@ class RestVerticle : CoroutineVerticle() {
 
         router.errorHandler(500) { routerContext ->
             logger.error { routerContext.failure().message }
-            routerContext.error("error" to routerContext.failure().message)
+            routerContext.error(routerContext.failure())
         }
 
         vertx.createHttpServer().requestHandler(router).listen(8080)

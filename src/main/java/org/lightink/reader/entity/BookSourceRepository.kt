@@ -1,4 +1,4 @@
-package org.lightink.reader.booksource
+package org.lightink.reader.entity
 
 /**
  * @Date: 2019-07-30 00:06

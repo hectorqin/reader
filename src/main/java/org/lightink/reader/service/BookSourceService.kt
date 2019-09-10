@@ -7,12 +7,10 @@ import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.client.WebClient
 import io.vertx.kotlin.ext.web.client.sendAwait
-import kotlinx.coroutines.async
-import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import org.lightink.reader.booksource.BookSource
-import org.lightink.reader.booksource.BookSourceRepository
+import org.lightink.reader.entity.BookSource
+import org.lightink.reader.entity.BookSourceRepository
 import org.lightink.reader.ext.getEncodeAbs
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value

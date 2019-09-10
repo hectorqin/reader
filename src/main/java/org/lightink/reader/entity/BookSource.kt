@@ -1,4 +1,4 @@
-package org.lightink.reader.booksource
+package org.lightink.reader.entity
 
 
 

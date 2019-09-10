@@ -4,6 +4,8 @@ import com.google.gson.Gson
 
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.RoutingContext
+import mu.KotlinLogging
+import org.lightink.reader.entity.BasicError
 
 
 /**
@@ -11,7 +13,7 @@ import io.vertx.ext.web.RoutingContext
  * @Date: 2019-05-21 16:17
  * @Description:
  */
-
+private val logger = KotlinLogging.logger {}
 
 fun RoutingContext.success(any: Any?) {
     val toJson: String = if (any is JsonObject) {
@@ -24,12 +26,23 @@ fun RoutingContext.success(any: Any?) {
             .end(toJson)
 }
 
-fun RoutingContext.error(any: Any?) {
+fun RoutingContext.error(throwable: Throwable) {
+    val basicError = BasicError(
+            "service exception",
+            throwable.stackTrace.toString(),
+            throwable.message.toString(),
+            this.request().path(),
+            500,
+            System.currentTimeMillis()
+    )
+
+    logger.error(throwable) { }
+
     this.request()
             .response()
             .putHeader("content-type", "application/json")
             .setStatusCode(500)
-            .end(Gson().toJson(any))
+            .end(Gson().toJson(basicError))
 }
 
 //fun Single<*>.subscribe(routingContext: RoutingContext) {

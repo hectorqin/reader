@@ -1,36 +1,21 @@
 package org.lightink.reader.service
 
-import com.fasterxml.jackson.databind.deser.SettableBeanProperty
-import com.jayway.jsonpath.Configuration
 import com.jayway.jsonpath.JsonPath
 import mu.KotlinLogging
 import org.jsoup.Jsoup
-import org.lightink.reader.booksource.BookSource
-import org.lightink.reader.booksource.Content
-import org.lightink.reader.booksource.Rank
 import org.lightink.reader.contants.PropertyType
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.net.URLEncoder
-import kotlin.properties.Delegates
-import com.jayway.jsonpath.Configuration.defaultConfiguration
-import io.vertx.core.AsyncResult
 import io.vertx.core.buffer.Buffer
-import io.vertx.ext.web.client.HttpRequest
 import io.vertx.ext.web.client.HttpResponse
 import io.vertx.ext.web.client.WebClient
-import io.vertx.kotlin.coroutines.awaitBlocking
-import io.vertx.kotlin.coroutines.awaitEvent
-import io.vertx.kotlin.coroutines.awaitResult
 
 import io.vertx.kotlin.ext.web.client.sendAwait
 import io.vertx.kotlin.ext.web.client.sendBufferAwait
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.lightink.reader.ext.*
-import java.util.concurrent.CompletableFuture
-import kotlin.concurrent.thread
-import kotlin.math.log
 
 
 /**
@@ -39,7 +24,6 @@ import kotlin.math.log
  */
 
 private val logger = KotlinLogging.logger {}
-
 
 @Service
 class MainService {
