@@ -28,8 +28,8 @@ fun RoutingContext.success(any: Any?) {
 
 fun RoutingContext.error(throwable: Throwable) {
     val basicError = BasicError(
-            "service exception",
-            throwable.stackTrace.toString(),
+            "Internal Server Error",
+            throwable,
             throwable.message.toString(),
             this.request().path(),
             500,
