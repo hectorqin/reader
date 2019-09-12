@@ -37,12 +37,12 @@ dependencies {
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
     implementation "org.jsoup:jsoup:1.11.3"
     implementation 'com.google.code.gson:gson:2.8.5'
-    implementation "io.vertx:vertx-core:3.8.0"
-    implementation "io.vertx:vertx-lang-kotlin:3.8.0"
-    implementation "io.vertx:vertx-lang-kotlin-coroutines:3.8.0"
-    implementation 'io.vertx:vertx-web:3.8.0'
-    implementation 'io.vertx:vertx-web-client:3.8.0'
-//    implementation 'io.vertx:vertx-rx-java2:3.8.0'
+    implementation "io.vertx:vertx-core:3.8.1"
+    implementation "io.vertx:vertx-lang-kotlin:3.8.1"
+    implementation "io.vertx:vertx-lang-kotlin-coroutines:3.8.1"
+    implementation 'io.vertx:vertx-web:3.8.1'
+    implementation 'io.vertx:vertx-web-client:3.8.1'
+//    implementation 'io.vertx:vertx-rx-java2:3.8.1'
     implementation "com.fasterxml.jackson.module:jackson-module-kotlin:2.9.+"
     implementation 'io.github.microutils:kotlin-logging:1.6.24'
     implementation 'com.google.guava:guava:28.0-jre'

@@ -81,9 +81,13 @@ class RestVerticle : CoroutineVerticle() {
         router.get("/health").handler { it.success("ok!") }
         apiList.forEach { it.initRouter(router, CoroutineScope(coroutineContext)) }
 
-        router.errorHandler(500) { routerContext ->
-            logger.error { routerContext.failure().message }
-            routerContext.error(routerContext.failure())
+//        router.errorHandler(500) { routerContext ->
+//            logger.error { routerContext.failure().message }
+//            routerContext.error(routerContext.failure())
+//        }
+
+        router.route().last().failureHandler { ctx ->
+            ctx.error(ctx.failure())
         }
 
         vertx.createHttpServer().requestHandler(router).listen(8080)

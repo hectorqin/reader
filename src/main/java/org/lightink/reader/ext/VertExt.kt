@@ -38,8 +38,7 @@ fun RoutingContext.error(throwable: Throwable) {
 
     val errorJson = Gson().toJson(basicError)
     logger.error { errorJson }
-    this.request()
-            .response()
+    this.response()
             .putHeader("content-type", "application/json")
             .setStatusCode(500)
             .end(errorJson)
