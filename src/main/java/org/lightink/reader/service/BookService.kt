@@ -151,6 +151,8 @@ class MainService {
                         .sendAwait().bodyAsString()
             }
 
+
+
             val catalog: List<Any> = JsonPath.read(catalogDocument, source.catalog.list, null)
             map.put("catalogs", catalog.map {
                 val catalogs = hashMapOf<String, String>()
@@ -159,6 +161,7 @@ class MainService {
                 catalogs.put("chapterlink", "$serviceUrl/$code/$name/content?href=" + URLEncoder.encode(chapterlink))
                 catalogs
             })
+
 
             map.put("orderBy", source.catalog.orderBy)
             return map

@@ -36,13 +36,13 @@ fun RoutingContext.error(throwable: Throwable) {
             System.currentTimeMillis()
     )
 
-    logger.error(throwable) { }
-
+    val errorJson = Gson().toJson(basicError)
+    logger.error { errorJson }
     this.request()
             .response()
             .putHeader("content-type", "application/json")
             .setStatusCode(500)
-            .end(Gson().toJson(basicError))
+            .end(errorJson)
 }
 
 //fun Single<*>.subscribe(routingContext: RoutingContext) {
