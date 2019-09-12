@@ -7,12 +7,36 @@
         </encoder>
     </appender>
 
+
+    <appender name="file" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>./log/qingmo-%d{yyyy-MM-dd}-${HOSTNAME}.%i.log</fileNamePattern>
+            <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+                <maxFileSize>100MB</maxFileSize>
+            </timeBasedFileNamingAndTriggeringPolicy>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger{0} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+
     <logger name="io.netty" level="warn"/>
-<!--    <logger name="io.vertx" level="TRACE"/>-->
+    <!--    <logger name="io.vertx" level="TRACE"/>-->
     <logger name="org.lightink.reader" level="debug"/>
 
-    <root level="info">
-        <appender-ref ref="STDOUT" />
-    </root>
+    <springProfile name="default">
+        <root level="INFO">
+<!--            <appender-ref ref="CONSOLE"/>-->
+            <appender-ref ref="file"/>
+        </root>
+    </springProfile>
+
+
+    <springProfile name="prod">
+        <root level="INFO">
+            <appender-ref ref="file"/>
+        </root>
+    </springProfile>
 
 </configuration>
