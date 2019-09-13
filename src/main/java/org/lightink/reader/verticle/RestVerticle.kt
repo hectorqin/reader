@@ -78,9 +78,9 @@ class RestVerticle : CoroutineVerticle() {
 
 
         router.route().handler(LoggerHandler.create(LoggerFormat.DEFAULT));
-        router.route().handler {
-            logger.info("request url: {}", URLDecoder.decode(it.request().absoluteURI()))
-        }
+//        router.route().handler {
+//            logger.info("request url: {}", URLDecoder.decode(it.request().absoluteURI()))
+//        }
 
         router.get("/health").handler { it.success("ok!") }
         apiList.forEach { it.initRouter(router, CoroutineScope(coroutineContext)) }
