@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.context.annotation.Bean
+import uk.org.lidalia.sysoutslf4j.context.SysOutOverSLF4J
 import javax.annotation.PostConstruct
 
 
@@ -115,5 +116,8 @@ class ReaderApplication {
 
 fun main(args: Array<String>) {
     SpringApplication.run(ReaderApplication::class.java, *args)
+
+    SysOutOverSLF4J.sendSystemOutAndErrToSLF4J();
+
 }
 

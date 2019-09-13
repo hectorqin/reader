@@ -12,6 +12,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.lightink.reader.entity.BookSource
 import org.lightink.reader.entity.BookSourceRepository
 import org.lightink.reader.ext.getEncodeAbs
+import org.lightink.reader.ext.gson
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -54,7 +55,7 @@ class BookSourceService {
                 .sendAwait()
                 .let {
                     val jsonArray = it.bodyAsJsonObject().getJsonArray("list")
-                    val fromJson = Gson().fromJson<List<BookSourceRepository>>(jsonArray.toString(), object : TypeToken<ArrayList<BookSourceRepository>>() {}.type)
+                    val fromJson = gson.fromJson<List<BookSourceRepository>>(jsonArray.toString(), object : TypeToken<ArrayList<BookSourceRepository>>() {}.type)
                     cache.put("bookSourceRepositoryList", fromJson);
                     logger.info { "fetch book source repostory list from network" }
                     fromJson
@@ -110,7 +111,7 @@ class BookSourceService {
                             .bodyAsJsonObject()
                 }
                 .let {
-                    val fromJson = Gson().fromJson<BookSource>(it.toString(), BookSource::class.java)
+                    val fromJson = gson.fromJson<BookSource>(it.toString(), BookSource::class.java)
                     cache.put("$code-$name", fromJson);
                     fromJson
                 }

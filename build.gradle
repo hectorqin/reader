@@ -49,6 +49,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.1.1")
     implementation 'com.googlecode.juniversalchardet:juniversalchardet:1.0.3'
     implementation 'com.jayway.jsonpath:json-path:2.4.0'
+    implementation 'uk.org.lidalia:sysout-over-slf4j:1.0.2'
 
 
 }

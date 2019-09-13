@@ -15,11 +15,13 @@ import org.lightink.reader.entity.BasicError
  */
 private val logger = KotlinLogging.logger {}
 
+val gson = Gson()
+
 fun RoutingContext.success(any: Any?) {
     val toJson: String = if (any is JsonObject) {
         any.toString()
     } else {
-        Gson().toJson(any)
+        gson.toJson(any)
     }
     this.response()
             .putHeader("content-type", "application/json")
@@ -36,7 +38,7 @@ fun RoutingContext.error(throwable: Throwable) {
             System.currentTimeMillis()
     )
 
-    val errorJson = Gson().toJson(basicError)
+    val errorJson = gson.toJson(basicError)
     logger.error { errorJson }
     this.response()
             .putHeader("content-type", "application/json")
