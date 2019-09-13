@@ -31,7 +31,7 @@ fun RoutingContext.error(throwable: Throwable) {
             "Internal Server Error",
             throwable,
             throwable.message.toString(),
-            this.request().path(),
+            this.request().uri(),
             500,
             System.currentTimeMillis()
     )

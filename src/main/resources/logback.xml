@@ -27,8 +27,7 @@
 
     <springProfile name="default">
         <root level="INFO">
-<!--            <appender-ref ref="CONSOLE"/>-->
-            <appender-ref ref="file"/>
+            <appender-ref ref="STDOUT"/>
         </root>
     </springProfile>
 
