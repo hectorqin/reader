@@ -19,8 +19,10 @@ import mu.KotlinLogging
 import org.gosky.aroundight.api.BaseApi
 import org.lightink.reader.ext.error
 import org.lightink.reader.ext.success
+import org.lightink.reader.ext.url
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
+import java.net.URLDecoder
 
 
 /**
@@ -76,7 +78,9 @@ class RestVerticle : CoroutineVerticle() {
 
 
         router.route().handler(LoggerHandler.create(LoggerFormat.DEFAULT));
-
+        router.route().handler {
+            logger.info("request url: {}", URLDecoder.decode(it.request().absoluteURI()))
+        }
 
         router.get("/health").handler { it.success("ok!") }
         apiList.forEach { it.initRouter(router, CoroutineScope(coroutineContext)) }
