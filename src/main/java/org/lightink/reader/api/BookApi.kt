@@ -38,7 +38,10 @@ class MainApi : BaseApi {
         val code = routingContext.pathParam("code")
         val name = routingContext.pathParam("name")
 
-        logger.info { "search: $key" }
+        //日志打点
+        //code name searchurl search key
+        logger.info("search ==> code: {} , name: {} , search key: {}", code, name, key)
+
         return mainService.search(code, name, key)
     }
 

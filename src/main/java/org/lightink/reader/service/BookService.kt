@@ -41,10 +41,6 @@ class MainService {
     suspend fun search(code: String, name: String, searchKey: String): List<HashMap<String, String?>> {
         val bookSource = bookSourceService.bookSource(code, name)
 
-        //日志打点
-        //code name searchurl search key
-        logger.info { "search == >  " + serviceUrl }
-
 
         val link = bookSource.search.link
         //搜索内容encode
