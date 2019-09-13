@@ -10,4 +10,4 @@ services:
     ports:
       - "9010:8080"
     volumes:
-      - /app/log/qingmo:/app/log
+      - /app/log/qingmo:/log
