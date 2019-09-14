@@ -18,6 +18,8 @@ private val logger = KotlinLogging.logger {}
 val gson = Gson()
 
 fun RoutingContext.success(any: Any?) {
+    logger.info { any }
+
     val toJson: String = if (any is JsonObject) {
         any.toString()
     } else {
@@ -31,7 +33,7 @@ fun RoutingContext.success(any: Any?) {
 fun RoutingContext.error(throwable: Throwable) {
     val basicError = BasicError(
             "Internal Server Error",
-            throwable,
+            throwable.toString(),
             throwable.message.toString(),
             this.request().uri(),
             500,
@@ -39,6 +41,7 @@ fun RoutingContext.error(throwable: Throwable) {
     )
 
     val errorJson = gson.toJson(basicError)
+    logger.error("Internal Server Error", throwable)
     logger.error { errorJson }
     this.response()
             .putHeader("content-type", "application/json")
