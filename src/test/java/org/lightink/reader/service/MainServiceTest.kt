@@ -3,7 +3,7 @@ package org.lightink.reader.service
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.Test
 import org.junit.runner.RunWith
-import org.lightink.reader.ext.url
+import org.lightink.reader.utils.url
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.junit4.SpringRunner

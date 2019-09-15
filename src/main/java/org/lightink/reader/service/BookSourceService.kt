@@ -1,7 +1,6 @@
 package org.lightink.reader.service
 
 import com.google.common.cache.CacheBuilder
-import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import io.vertx.core.json.JsonArray
 import io.vertx.core.json.JsonObject
@@ -11,8 +10,8 @@ import mu.KotlinLogging
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.lightink.reader.entity.BookSource
 import org.lightink.reader.entity.BookSourceRepository
-import org.lightink.reader.ext.getEncodeAbs
-import org.lightink.reader.ext.gson
+import org.lightink.reader.utils.getEncodeAbs
+import org.lightink.reader.utils.gson
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service

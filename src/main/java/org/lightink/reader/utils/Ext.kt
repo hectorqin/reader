@@ -1,11 +1,10 @@
-package org.lightink.reader.ext
+package org.lightink.reader.utils
 
 import com.jayway.jsonpath.JsonPath
 import io.vertx.core.buffer.Buffer
 import io.vertx.ext.web.client.HttpRequest
 import io.vertx.ext.web.client.WebClient
 import net.minidev.json.JSONArray
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.jsoup.nodes.Element
 import org.lightink.reader.contants.PropertyType
@@ -13,7 +12,6 @@ import org.mozilla.universalchardet.UniversalDetector
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import javax.script.ScriptEngineManager
-import kotlin.reflect.jvm.internal.impl.load.kotlin.JvmType
 
 
 /**

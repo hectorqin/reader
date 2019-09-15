@@ -51,8 +51,6 @@ class MainApi : BaseApi {
         val name = routingContext.pathParam("name")
         logger.info { "link: $link" }
         return mainService.details(code, name, link)
-
-
     }
 
     private suspend fun content(routingContext: RoutingContext): HashMap<String, Any> {

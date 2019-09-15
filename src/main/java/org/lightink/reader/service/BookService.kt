@@ -14,8 +14,11 @@ import io.vertx.ext.web.client.WebClient
 
 import io.vertx.kotlin.ext.web.client.sendAwait
 import io.vertx.kotlin.ext.web.client.sendBufferAwait
+import io.vertx.kotlin.sqlclient.preparedQueryAwait
+import io.vertx.mysqlclient.MySQLPool
+import io.vertx.sqlclient.Tuple
 import okhttp3.HttpUrl.Companion.toHttpUrl
-import org.lightink.reader.ext.*
+import org.lightink.reader.utils.*
 
 
 /**
@@ -34,13 +37,15 @@ class MainService {
     private lateinit var bookSourceService: BookSourceService
     @Value("\${qingmo.server.url}")
     private lateinit var serviceUrl: String
+    @Autowired
+    private lateinit var mySQLClient: MySQLPool
 
     /**
      * 搜索结果
      */
     suspend fun search(code: String, name: String, searchKey: String): List<HashMap<String, String?>> {
-        val bookSource = bookSourceService.bookSource(code, name)
 
+        val bookSource = bookSourceService.bookSource(code, name)
 
         val link = bookSource.search.link
         //搜索内容encode
@@ -62,9 +67,9 @@ class MainService {
 
         //val link = "https://www.daocaorenshuwu.com/plus/search.php?q=\${key}"
 
-        if (httpResponse.getHeader("Content-type").startsWith("application/json")) {
+        val result = if (httpResponse.getHeader("Content-type").startsWith("application/json")) {
             val list: List<Any> = JsonPath.read(httpResponse.bodyAsString(), bookSource.search.list, null)
-            return list
+            list
                     .map { t ->
                         val map = hashMapOf<String, String?>()
                         //val document = Configuration.defaultConfiguration().jsonProvider().parse(t)
@@ -92,7 +97,7 @@ class MainService {
             if (elements.isEmpty()) {
                 elements = listOf(document)
             }
-            return elements
+            elements
                     .map { t ->
                         val map = hashMapOf<String, String?>()
                         map.put("name", t.parser(bookSource.metadata.name))
@@ -116,6 +121,12 @@ class MainService {
                     .toList()
         }
 
+        //插入搜索记录
+        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo) values (?, ?, ?, ?, ?, ?) ",
+                Tuple.of(code, name, searchKey, "search", 1, ""))
+
+        return result
+
     }
 
     /**
@@ -129,7 +140,7 @@ class MainService {
         val resp = webClient.getEncodeAbs(url)
                 .sendAwait()
 
-        if (resp.getHeader("Content-type").startsWith("application/json")) {
+        val map = if (resp.getHeader("Content-type").startsWith("application/json")) {
             val t = resp.bodyAsString()
             val map = hashMapOf<String, Any>()
             map.put("cover", t.jsonParser(source.metadata.cover.reversed()))
@@ -149,7 +160,6 @@ class MainService {
             }
 
 
-
             val catalog: List<Any> = JsonPath.read(catalogDocument, source.catalog.list, null)
             map.put("catalogs", catalog.map {
                 val catalogs = hashMapOf<String, String>()
@@ -161,7 +171,7 @@ class MainService {
 
 
             map.put("orderBy", source.catalog.orderBy)
-            return map
+            map
         } else {
 
             val document = Jsoup.parse(resp.body().bytes.universalChardet())
@@ -193,9 +203,13 @@ class MainService {
             })
 
             map.put("orderBy", source.catalog.orderBy)
-
-            return map
+            map
         }
+
+        //插入查询书籍详情记录
+        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo) values (?, ?, ?, ?, ?, ?) ",
+                Tuple.of(code, name, link, "detail", 1, ""))
+        return map
     }
 
 
@@ -208,7 +222,7 @@ class MainService {
         val resp = webClient.getEncodeAbs(absoluteURI)
                 .sendAwait()
 
-        if (resp.getHeader("Content-type").startsWith("application/json")) {
+        val hashMap = if (resp.getHeader("Content-type").startsWith("application/json")) {
             val map = hashMapOf<String, Any>()
             val t = resp.bodyAsString()
             map.put("text", t.jsonParser(source.content.text))
@@ -218,7 +232,7 @@ class MainService {
 //              map.put("nextLink", nextlink.orEmpty())
 //              map.put("nextText", source.content.next.text.orEmpty());
 //          }
-            return map
+            map
         } else {
             Jsoup.parse(resp.body().bytes.universalChardet())
                     .let { t ->
@@ -235,10 +249,16 @@ class MainService {
                             map.put("nextLink", nextlink.orEmpty())
                             map.put("nextText", source.content.next.text.orEmpty());
                         }
-                        return map
+                        map
                     }
         }
 
+
+        //插入内容与正文访问记录
+        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo) values (?, ?, ?, ?, ?, ?) ",
+                Tuple.of(code, name, href, "content", 1, ""))
+
+        return hashMap
     }
 
     /**
@@ -256,8 +276,8 @@ class MainService {
         val resp = webClient.getEncodeAbs(rankLink.link)
                 .sendAwait()
 
-        if (resp.getHeader("Content-type").startsWith("application/json")) {
-            return JsonPath.read<List<Any>>(resp.bodyAsString(), bookSource.rank.list, null)
+        val result = if (resp.getHeader("Content-type").startsWith("application/json")) {
+            JsonPath.read<List<Any>>(resp.bodyAsString(), bookSource.rank.list, null)
                     .map { t ->
                         val map = hashMapOf<String, String?>()
                         map.put("name", t.jsonParser(bookSource.metadata.name))
@@ -290,7 +310,13 @@ class MainService {
                         return@map map
                     }
                     .toList()
-            return list
+            list
         }
+
+        //插入排行榜访问记录
+        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo) values (?, ?, ?, ?, ?, ?) ",
+                Tuple.of(code, name, classify, "rank", 1, ""))
+
+        return result
     }
 }

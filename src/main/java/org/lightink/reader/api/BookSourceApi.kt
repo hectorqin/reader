@@ -4,12 +4,10 @@ import io.vertx.ext.web.Router
 import kotlinx.coroutines.CoroutineScope
 import mu.KotlinLogging
 import org.gosky.aroundight.api.BaseApi
-import org.lightink.reader.ext.success
 import org.lightink.reader.service.BookSourceService
 import org.lightink.reader.verticle.coroutineHandler
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
-import kotlin.math.log
 
 /**
  * @Date: 2019-07-29 23:58

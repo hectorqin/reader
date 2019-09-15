@@ -1,11 +1,17 @@
-package org.lightink.reader.ext
+package org.lightink.reader.utils
 
 import com.google.gson.Gson
+import io.vertx.core.Handler
 
 import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.RoutingContext
+import io.vertx.kotlin.mysqlclient.preparedQueryAwait
+import io.vertx.mysqlclient.MySQLPool
+import io.vertx.sqlclient.Tuple
 import mu.KotlinLogging
 import org.lightink.reader.entity.BasicError
+import java.net.URLDecoder
+import java.net.URLEncoder
 
 
 /**
@@ -18,8 +24,6 @@ private val logger = KotlinLogging.logger {}
 val gson = Gson()
 
 fun RoutingContext.success(any: Any?) {
-    logger.info { any }
-
     val toJson: String = if (any is JsonObject) {
         any.toString()
     } else {
@@ -31,11 +35,12 @@ fun RoutingContext.success(any: Any?) {
 }
 
 fun RoutingContext.error(throwable: Throwable) {
+    val path = URLDecoder.decode(this.request().absoluteURI())
     val basicError = BasicError(
             "Internal Server Error",
             throwable.toString(),
             throwable.message.toString(),
-            this.request().uri(),
+            path,
             500,
             System.currentTimeMillis()
     )
@@ -43,6 +48,20 @@ fun RoutingContext.error(throwable: Throwable) {
     val errorJson = gson.toJson(basicError)
     logger.error("Internal Server Error", throwable)
     logger.error { errorJson }
+
+    //插入失败打点
+    try {
+        val code = this.pathParam("code")
+        val name = this.pathParam("name")
+
+        SpringContextUtils.getBean(MySQLPool::class.java).preparedQuery("insert b_history(code, name, link, type, status, errorinfo) values (?, ?, ?, ?, ?, ?) ",
+                Tuple.of(code, name, path, "failed", 1, "")) {
+                }
+
+    } catch (e: Exception) {
+        logger.error("insert error log failed", e)
+    }
+
     this.response()
             .putHeader("content-type", "application/json")
             .setStatusCode(500)

@@ -8,6 +8,14 @@ import io.vertx.core.http.impl.HttpUtils
 import io.vertx.core.json.Json
 import io.vertx.ext.web.client.WebClient
 import io.vertx.ext.web.client.WebClientOptions
+import io.vertx.kotlin.mysqlclient.MySQLConnectOptions
+import io.vertx.kotlin.mysqlclient.mySQLConnectOptionsOf
+import io.vertx.kotlin.sqlclient.PoolOptions
+import io.vertx.kotlin.sqlclient.poolOptionsOf
+import io.vertx.mysqlclient.MySQLConnectOptions
+import io.vertx.mysqlclient.MySQLPool
+import mu.KotlinLogging
+import org.lightink.reader.config.MysqlConfig
 
 import org.lightink.reader.verticle.RestVerticle
 import org.springframework.beans.factory.annotation.Autowired
@@ -17,9 +25,11 @@ import org.springframework.context.annotation.Bean
 import uk.org.lidalia.sysoutslf4j.context.SysOutOverSLF4J
 import javax.annotation.PostConstruct
 
+private val logger = KotlinLogging.logger {}
 
 @SpringBootApplication
 class ReaderApplication {
+
     @Autowired
     private lateinit var restVerticle: RestVerticle
 
@@ -110,14 +120,37 @@ class ReaderApplication {
         return webClient
     }
 
+    @Bean
+    fun mysqlClient(mysqlConfig: MysqlConfig): MySQLPool {
+        // Connect options
+
+        logger.info("mysqlConfig: {}", mysqlConfig)
+
+        val connectOptions = mySQLConnectOptionsOf(
+                port = mysqlConfig.port,
+                host = mysqlConfig.host,
+                database = mysqlConfig.database,
+                user = mysqlConfig.user,
+                password = mysqlConfig.password)
+
+        // Pool options
+        val poolOptions = poolOptionsOf(
+                maxSize = 5)
+
+        // Create the client pool
+        val client = MySQLPool.pool(connectOptions, poolOptions)
+
+        return client
+    }
 
 }
-
 
 fun main(args: Array<String>) {
     SpringApplication.run(ReaderApplication::class.java, *args)
-
     SysOutOverSLF4J.sendSystemOutAndErrToSLF4J();
 
 }
+
+
+
 
