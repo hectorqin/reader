@@ -1,0 +1,7 @@
+qingmo:
+  mysql:
+    port: 3306
+    host: 172.16.17.3
+    database: qingmo
+    user: qingmo
+    password: qm123456
