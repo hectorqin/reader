@@ -1,5 +1,6 @@
 package org.lightink.reader.utils
 
+import com.google.common.base.Throwables
 import com.google.gson.Gson
 import io.vertx.core.Handler
 
@@ -55,8 +56,8 @@ fun RoutingContext.error(throwable: Throwable) {
         val name = this.pathParam("name")
 
         SpringContextUtils.getBean(MySQLPool::class.java).preparedQuery("insert b_history(code, name, link, type, status, errorinfo) values (?, ?, ?, ?, ?, ?) ",
-                Tuple.of(code, name, path, "failed", 1, "")) {
-                }
+                Tuple.of(code, name, path, "failed", 0, Throwables.getStackTraceAsString(throwable))) {
+        }
 
     } catch (e: Exception) {
         logger.error("insert error log failed", e)
