@@ -19,50 +19,50 @@ class BookSourceServiceTest {
     @Autowired
     private lateinit var bookSourceService: BookSourceService
 
-    @Test
-    fun bookSourceRepositoryList() {
-        val countDownLatch = CountDownLatch(1)
-        bookSourceService.bookSourceRepositoryList()
-                .subscribe { t ->
-                    println(t.toString())
-                    countDownLatch.countDown()
-                }
-
-        countDownLatch.await()
-
-    }
-
-    @Test
-    fun bookSourceDescription() {
-
-
-    }
-
-    @Test
-    fun bookSource() {
-        val countDownLatch = CountDownLatch(1)
-        bookSourceService.bookSource("1212","稻草人书屋")
-                .subscribe { t ->
-                    println(t.toString())
-                    countDownLatch.countDown()
-                }
-
-        countDownLatch.await()
-
-
-    }
-
-    @Test
-    fun serverBookRepositoryJson() {
-        val countDownLatch = CountDownLatch(1)
-        bookSourceService.serverRepositoryJson()
-                .subscribe { t ->
-                    println(t.toString())
-                    countDownLatch.countDown()
-                }
-
-        countDownLatch.await()
-    }
+//    @Test
+//    fun bookSourceRepositoryList() {
+//        val countDownLatch = CountDownLatch(1)
+//        bookSourceService.bookSourceRepositoryList()
+//                .subscribe { t ->
+//                    println(t.toString())
+//                    countDownLatch.countDown()
+//                }
+//
+//        countDownLatch.await()
+//
+//    }
+//
+//    @Test
+//    fun bookSourceDescription() {
+//
+//
+//    }
+//
+//    @Test
+//    fun bookSource() {
+//        val countDownLatch = CountDownLatch(1)
+//        bookSourceService.bookSource("1212","稻草人书屋")
+//                .subscribe { t ->
+//                    println(t.toString())
+//                    countDownLatch.countDown()
+//                }
+//
+//        countDownLatch.await()
+//
+//
+//    }
+//
+//    @Test
+//    fun serverBookRepositoryJson() {
+//        val countDownLatch = CountDownLatch(1)
+//        bookSourceService.serverRepositoryJson()
+//                .subscribe { t ->
+//                    println(t.toString())
+//                    countDownLatch.countDown()
+//                }
+//
+//        countDownLatch.await()
+//    }
 
 
 }

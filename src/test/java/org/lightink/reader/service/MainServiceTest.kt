@@ -20,68 +20,68 @@ class MainServiceTest {
     @Autowired
     private lateinit var mainService: MainService
 
-    @Test
-    fun search() {
-        val countDownLatch = CountDownLatch(1)
-
-        mainService.search("", "", "人道天堂")
-                .subscribe({ t ->
-                    println(t.toString())
-                    countDownLatch.countDown()
-                }, { e ->
-                    e.printStackTrace()
-
-                })
-
-        countDownLatch.await()
-    }
-
-    @Test
-    fun details() {
-
-
-        val countDownLatch = CountDownLatch(1)
-
-        mainService.search("", "", "人道天堂")
-                .flatMap {
-                    return@flatMap mainService.details("", "", it.first()["link"]!!)
-                }
-                .subscribe({ t ->
-                    println(t.toString())
-                    countDownLatch.countDown()
-                }, { e ->
-                    e.printStackTrace()
-
-                })
-
-        countDownLatch.await()
-
-    }
-
-
-    @Test
-    fun content() {
-
-        val countDownLatch = CountDownLatch(1)
-
-        mainService.search("", "", "人道天堂")
-                .flatMap {
-                    return@flatMap mainService.details("", "", it.first()["link"]!!)
-                }
-                .flatMap {
-                    return@flatMap mainService.content("", "", "http://www.daocaorenshuwu.com/book/rendaotiantang/585721.html")
-                }
-                .subscribe({ t ->
-                    println(t.toString())
-                    countDownLatch.countDown()
-                }, { e ->
-                    e.printStackTrace()
-
-                })
-
-        countDownLatch.await()
-
-    }
+//    @Test
+//    fun search() {
+//        val countDownLatch = CountDownLatch(1)
+//
+//        mainService.search("", "", "人道天堂")
+//                .subscribe({ t ->
+//                    println(t.toString())
+//                    countDownLatch.countDown()
+//                }, { e ->
+//                    e.printStackTrace()
+//
+//                })
+//
+//        countDownLatch.await()
+//    }
+//
+//    @Test
+//    fun details() {
+//
+//
+//        val countDownLatch = CountDownLatch(1)
+//
+//        mainService.search("", "", "人道天堂")
+//                .flatMap {
+//                    return@flatMap mainService.details("", "", it.first()["link"]!!)
+//                }
+//                .subscribe({ t ->
+//                    println(t.toString())
+//                    countDownLatch.countDown()
+//                }, { e ->
+//                    e.printStackTrace()
+//
+//                })
+//
+//        countDownLatch.await()
+//
+//    }
+//
+//
+//    @Test
+//    fun content() {
+//
+//        val countDownLatch = CountDownLatch(1)
+//
+//        mainService.search("", "", "人道天堂")
+//                .flatMap {
+//                    return@flatMap mainService.details("", "", it.first()["link"]!!)
+//                }
+//                .flatMap {
+//                    return@flatMap mainService.content("", "", "http://www.daocaorenshuwu.com/book/rendaotiantang/585721.html")
+//                }
+//                .subscribe({ t ->
+//                    println(t.toString())
+//                    countDownLatch.countDown()
+//                }, { e ->
+//                    e.printStackTrace()
+//
+//                })
+//
+//        countDownLatch.await()
+//
+//    }
 
     @Test
     fun urlTest() {
