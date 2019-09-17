@@ -6,7 +6,7 @@ import io.vertx.ext.web.RoutingContext
 import kotlinx.coroutines.CoroutineScope
 import mu.KotlinLogging
 import org.gosky.aroundight.api.BaseApi
-import org.lightink.reader.service.MainService
+import org.lightink.reader.service.BookService
 import org.lightink.reader.verticle.coroutineHandler
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
@@ -23,7 +23,7 @@ private val logger = KotlinLogging.logger {}
 class MainApi : BaseApi {
 
     @Autowired
-    private lateinit var mainService: MainService
+    private lateinit var bookService: BookService
 
     override suspend fun initRouter(router: Router, coroutineScope: CoroutineScope) {
         router.get("/:code/:name/search").coroutineHandler(coroutineScope) { search(it) }
@@ -42,7 +42,7 @@ class MainApi : BaseApi {
         //code name searchurl search key
         logger.info("search ==> code: {} , name: {} , search key: {}", code, name, key)
 
-        return mainService.search(code, name, key)
+        return bookService.search(code, name, key)
     }
 
     private suspend fun details(routingContext: RoutingContext): HashMap<String, Any> {
@@ -50,7 +50,7 @@ class MainApi : BaseApi {
         val code = routingContext.pathParam("code")
         val name = routingContext.pathParam("name")
         logger.info { "link: $link" }
-        return mainService.details(code, name, link)
+        return bookService.details(code, name, link)
     }
 
     private suspend fun content(routingContext: RoutingContext): HashMap<String, Any> {
@@ -58,7 +58,7 @@ class MainApi : BaseApi {
         val code = routingContext.pathParam("code")
         val name = routingContext.pathParam("name")
         logger.info { "href: $href" }
-        return mainService.content(code, name, href)
+        return bookService.content(code, name, href)
 
 
     }
@@ -69,7 +69,7 @@ class MainApi : BaseApi {
         val name = routingContext.pathParam("name")
 
         logger.info { "rank: $classify" }
-        return mainService.rank(code, name, classify)
+        return bookService.rank(code, name, classify)
 
     }
 
