@@ -57,10 +57,11 @@ fun RoutingContext.error(throwable: Throwable) {
 
         val currentTimeMillis = System.currentTimeMillis()
         SpringContextUtils.getBean(MySQLPool::class.java)
-                .preparedQuery("insert b_history(code, name, link, type, status, errorinfo, errorinfo,minute,hour,day) values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
-                Tuple.of(code, name, path, "failed", 0, Throwables.getStackTraceAsString(throwable)
-                        , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60 , currentTimeMillis / 1000 / 60 / 60 / 24)) {
-        }
+                .preparedQuery("insert b_history(code, name, link, type, status, errorinfo,minute,hour,day)" +
+                        " values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
+                        Tuple.of(code, name, path, "failed", 0, Throwables.getStackTraceAsString(throwable)
+                                , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60, currentTimeMillis / 1000 / 60 / 60 / 24)) {
+                }
 
     } catch (e: Exception) {
         logger.error("insert error log failed", e)
