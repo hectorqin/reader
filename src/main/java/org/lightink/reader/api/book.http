@@ -18,5 +18,10 @@ Accept: application/json
 GET http://localhost:8080/2333/gdugm716/content?href=http%3A%2F%2Fchapter.wgfgr.cn%2Fchapter%2Fhttp%253A%252F%252Fbook.kdqb.cc%252FgetBooks.aspx%253Fmethod%253Dcontent%2526bookId%253D1467951%2526chapterFile%253DU_1553311_201703211740158181_7879_1.txt
 Accept: application/json
 
+### api请求记录
+GET http://localhost:8080/api_record/list?startDate=2019-09-16 00:00:00&endDate=2019-09-18 00:00:00&type=minute
+Accept: application/json
+
 ###
+
 
