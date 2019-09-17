@@ -7,7 +7,6 @@ import org.lightink.reader.utils.url
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.junit4.SpringRunner
-import java.util.concurrent.CountDownLatch
 
 /**
  * @Date: 2019-07-19 19:39
@@ -15,10 +14,10 @@ import java.util.concurrent.CountDownLatch
  */
 @RunWith(SpringRunner::class)
 @SpringBootTest
-class MainServiceTest {
+class BookServiceTest {
 
     @Autowired
-    private lateinit var mainService: MainService
+    private lateinit var bookService: BookService
 
 //    @Test
 //    fun search() {

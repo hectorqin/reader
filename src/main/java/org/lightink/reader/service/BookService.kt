@@ -29,7 +29,7 @@ import org.lightink.reader.utils.*
 private val logger = KotlinLogging.logger {}
 
 @Service
-class MainService {
+class BookService {
 
     @Autowired
     private lateinit var webClient: WebClient
@@ -123,7 +123,8 @@ class MainService {
 
         //插入搜索记录
         val currentTimeMillis = System.currentTimeMillis()
-        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo,minute,hour,day) values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
+        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo,minute,hour,day)" +
+                " values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
                 Tuple.of(code, name, searchKey, "search", 1, ""
                         , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60 , currentTimeMillis / 1000 / 60 / 60 / 24))
 
@@ -210,7 +211,8 @@ class MainService {
 
         //插入查询书籍详情记录
         val currentTimeMillis = System.currentTimeMillis()
-        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, errorinfo,minute,hour,day) values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
+        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, minute, hour, day) " +
+                "values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
                 Tuple.of(code, name, link, "detail", 1, ""
                         , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60 , currentTimeMillis / 1000 / 60 / 60 / 24))
         return map
@@ -260,7 +262,7 @@ class MainService {
 
         //插入内容与正文访问记录
         val currentTimeMillis = System.currentTimeMillis()
-        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, errorinfo,minute,hour,day) values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
+        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, minute, hour, day) values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
                 Tuple.of(code, name, href, "content", 1, ""
                         , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60 , currentTimeMillis / 1000 / 60 / 60 / 24))
 
@@ -321,7 +323,7 @@ class MainService {
 
         //插入排行榜访问记录
         val currentTimeMillis = System.currentTimeMillis()
-        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, errorinfo,minute,hour,day) " +
+        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, minute, hour, day) " +
                 "values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
                 Tuple.of(code, name, classify, "rank", 1, "", currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60
                         , currentTimeMillis / 1000 / 60 / 60 / 24))
