@@ -65,7 +65,7 @@ class BookSourceService {
     /**
      * 原始书源仓库的内容
      */
-    suspend fun bookSourceDescription(code: String): JsonObject {
+    suspend fun bookSourceDescription(code: String): JsonObject? {
 
         val cacheData = cache.getIfPresent(code)
         if (cacheData != null && cacheData is JsonObject) {
@@ -75,14 +75,18 @@ class BookSourceService {
         val bookSourceRepository = bookSourceRepositoryList()
                 .first { t -> t.code == code }
 
-        return webClient.getEncodeAbs(bookSourceRepository.url)
+        val sendAwait = webClient.getEncodeAbs(bookSourceRepository.url)
                 .sendAwait()
-                .let {
-                    val jsonObject = it.bodyAsJsonObject().put("url", bookSourceRepository.url)
-                    cache.put(code, jsonObject);
-                    jsonObject
-                }
 
+        try {
+            val jsonObject = sendAwait.bodyAsJsonObject().put("url", bookSourceRepository.url)
+            cache.put(code, jsonObject)
+            return jsonObject
+        } catch (e: Exception) {
+            logger.warn("bookSourceDescription error", e)
+        }
+
+        return null
     }
 
     /**
@@ -95,7 +99,7 @@ class BookSourceService {
             return cacheData;
         }
 
-        return bookSourceDescription(code)
+        return bookSourceDescription(code)!!
                 .let {
                     var url = it.getString("url")
                     url = url.substring(0, url.lastIndexOf("/"))
@@ -126,7 +130,7 @@ class BookSourceService {
                         val code = it.code
                         return@map bookSourceDescription(code)
                                 .let {
-                                    it.getJsonArray("list").map {
+                                    it?.getJsonArray("list")?.map {
                                         val jsonObject = JsonObject(it.toString())
                                         jsonObject.put("name", author + "-" + jsonObject.getString("name"))
                                         jsonObject.put("url", "real site => " + jsonObject.getString("url"))
@@ -134,6 +138,7 @@ class BookSourceService {
                                     }
                                 }
                     }
+                    .filterNotNull()
                     .reduce { t1: List<JsonObject>, t2: List<JsonObject> ->
                         val mutableList = t1.toMutableList()
                         mutableList.addAll(t2)

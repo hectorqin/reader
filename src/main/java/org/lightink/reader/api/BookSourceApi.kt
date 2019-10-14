@@ -32,7 +32,7 @@ class BookSourceApi : BaseApi {
         router.get("/book_source/description/:code")
                 .coroutineHandler(coroutineScope) {
                     val code = it.pathParam("code")
-                    bookSourceService.bookSourceDescription(code)
+                    bookSourceService.bookSourceDescription(code)!!
                 }
 
         router.get("/book_source/:code/:name")
