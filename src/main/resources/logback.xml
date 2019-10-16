@@ -20,6 +20,9 @@
         </encoder>
     </appender>
 
+    <appender name="ASYNC_ROLLING_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="file" />
+    </appender>
 
     <logger name="io.netty" level="warn"/>
     <!--    <logger name="io.vertx" level="TRACE"/>-->
@@ -34,7 +37,7 @@
 
     <springProfile name="prod">
         <root level="INFO">
-            <appender-ref ref="file"/>
+            <appender-ref ref="ASYNC_ROLLING_FILE"/>
         </root>
     </springProfile>
 

@@ -28,12 +28,12 @@ GET http://localhost:8080/git/sources/%E6%B2%9A%E6%B0%B4-%E6%96%8B%E4%B9%A6%E8%8
 Accept: application/json
 
 ### 转发厚墨书源
-GET http://qingmo.zohar.space/houmo/6666/repository.json
+GET http://qingmo.zohar.space/houmo/git/6666/repository.json
 Accept: application/json
 
 
 ### 转发厚墨书源
-GET http://qingmo.zohar.space/houmo/git/6666/sources/:name
+GET http://qingmo.zohar.space/houmo/git/6666/sources/%E6%98%95%E8%96%87%E4%B9%A6%E5%8D%95
 Accept: application/json
 
 ###
