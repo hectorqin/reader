@@ -50,7 +50,7 @@ class BookSourceService {
             return cacheData as List<BookSourceRepository>;
         }
 
-        return webClient.getEncodeAbs("https://gitee.com/deepink/BookSource/raw/master/src/hm.json")
+        return webClient.getEncodeAbs("https://raw.githubusercontent.com/chimisgo/BookSource/master/src/hm.json")
                 .sendAwait()
                 .let {
                     val jsonArray = it.bodyAsJsonObject().getJsonArray("list")
