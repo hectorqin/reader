@@ -43,7 +43,7 @@ class BookSourceApi : BaseApi {
                 }
 
 
-        router.get("/houmo/:code/repository.json")
+        router.get("/houmo/git/:code/repository.json")
                 .coroutineHandler(coroutineScope) {
                     val code = it.pathParam("code")
                     bookSourceService.bookSourceDescription(code)!!
@@ -51,7 +51,7 @@ class BookSourceApi : BaseApi {
 
         router.get("/houmo/git/:code/sources/:name")
                 .coroutineHandler(coroutineScope) {
-                    val code = it.pathParam("code")
+                    val code =  it.pathParam("code")
                     val name = it.pathParam("name").replace(".json","")
                     bookSourceService.bookSource(code, name)
                 }
