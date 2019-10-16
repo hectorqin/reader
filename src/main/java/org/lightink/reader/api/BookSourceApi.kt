@@ -42,6 +42,20 @@ class BookSourceApi : BaseApi {
                     bookSourceService.bookSource(code, name)
                 }
 
+
+        router.get("/houmo/:code/repository.json")
+                .coroutineHandler(coroutineScope) {
+                    val code = it.pathParam("code")
+                    bookSourceService.bookSourceDescription(code)!!
+                }
+
+        router.get("/houmo/git/:code/sources/:name")
+                .coroutineHandler(coroutineScope) {
+                    val code = it.pathParam("code")
+                    val name = it.pathParam("name")
+                    bookSourceService.bookSource(code, name)
+                }
+
         router.get("/git/repository.json")
                 .coroutineHandler(coroutineScope) {
                     bookSourceService.serverRepositoryJson()
