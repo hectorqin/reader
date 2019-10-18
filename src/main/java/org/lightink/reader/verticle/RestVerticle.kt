@@ -77,11 +77,7 @@ class RestVerticle : CoroutineVerticle() {
 
         router.route().handler(LoggerHandler.create(LoggerFormat.DEFAULT));
         router.route().handler {
-            try {
-                logger.info("request url: {}", URLDecoder.decode(it.request().absoluteURI()))
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            logger.info("request url: {}", URLDecoder.decode(it.request().absoluteURI()))
             it.next()
         }
 
