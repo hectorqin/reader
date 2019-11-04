@@ -1,7 +1,6 @@
 package org.lightink.reader.entity
 
 
-
 /**
  * @Date: 2019-07-19 18:31
  * @Description:
@@ -17,7 +16,8 @@ data class BookSource(
         val name: String,
         val search: Search,
         val url: String,
-        val version: Int
+        val version: Int,
+        val auth: Auth?
 )
 
 data class Content(
@@ -71,10 +71,45 @@ data class Metadata(
 data class Catalog(
         val chapter: Chapter,
         val list: String,
-        val orderBy: Int
+        val orderBy: Int,
+        val booklet: Booklet?
 )
 
 data class Chapter(
         val link: String,
         val name: String
 )
+
+
+data class Auth(
+        val buy: Buy,
+        val cookie: String,
+        val login: String,
+        val params: String,
+        val verify: Verify,
+        val vip: Vip
+)
+
+data class Buy(
+        val key: String,
+        val value: String
+)
+
+data class Verify(
+        val key: String,
+        val link: String,
+        val value: String
+)
+
+data class Vip(
+        val key: String,
+        val value: String
+)
+
+
+data class Booklet(
+        val list: String,
+        val name: String
+)
+
+
