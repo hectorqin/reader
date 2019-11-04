@@ -6,110 +6,31 @@ package org.lightink.reader.entity
  * @Description:
  */
 
-data class BookSource(
-        val catalog: Catalog,
-        val category: Int,
-        val charset: String,
-        val content: Content,
-        val metadata: Metadata,
-        val rank: Rank?,
-        val name: String,
-        val search: Search,
-        val url: String,
-        val version: Int,
-        val auth: Auth?
-)
+class BookSource(var name: String, val summary: String, val version: Int, val category: Int, var url: String, val charset: String, val metadata: Metadata, val catalog: Catalog, val content: Content, val search: Search, val rank: Rank?, val auth: Auth?) {
 
-data class Content(
-        val filter: List<String> = emptyList(),
-        val next: Next?,
-        val text: String
-)
+    data class Metadata(val name: List<String>, val author: List<String>, val cover: List<String>, val summary: List<String>, val category: List<String>, val status: List<String>?, val update: List<String>?, val lastChapter: List<String>?, val link: List<String>, val catalog: List<String>, val custom: List<String>?)
 
-data class Next(
-        val link: String,
-        val text: String
-)
+    data class Search(val link: String, val list: String)
 
-data class Rank(
-        val link: List<Link>,
-        val list: String,
-        val page: Page?
-)
+    data class Rank(val link: List<RankLink>, val list: String, val page: Page?)
 
-data class Page(
-        val begin: String,
-        val index: Int,
-        val limit: Int,
-        val next: String
-)
+    data class RankLink(val name: String, val link: String)
 
+    data class Page(val index: Int, val limit: Int, val begin: String, val next: String)
 
-data class Link(
-        val link: String,
-        val name: String
-)
+    data class Catalog(val list: String, val orderBy: Int, val booklet: Booklet?, val chapter: Chapter, val page: Page?)
 
-data class Search(
-        val link: String,
-        val list: String
-)
+    data class Booklet(val name: String, val list: String)
 
-data class Metadata(
-        val author: List<String> = emptyList(),
-        val catalog: List<String> = emptyList(),
-        val category: List<String> = emptyList(),
-        val cover: List<String> = emptyList(),
-        val lastChapter: List<String> = emptyList(),
-        val link: List<String> = emptyList(),
-        val name: List<String> = emptyList(),
-        val status: List<String> = emptyList(),
-        val summary: List<String> = emptyList(),
-        val update: List<String> = emptyList()
-)
+    data class Chapter(val name: String, val link: String)
 
-data class Catalog(
-        val chapter: Chapter,
-        val list: String,
-        val orderBy: Int,
-        val booklet: Booklet?
-)
+    data class Content(val text: String, val filter: List<String>?, val page: Page?)
 
-data class Chapter(
-        val link: String,
-        val name: String
-)
+    data class Auth(val login: String, val cookie: String, val header: String?, val params: String?, val verify: AuthVerify, val vip: AuthChapterVip?, val buy: AuthChapterBuy?)
 
+    data class AuthVerify(val link: String, val key: String, val value: String)
 
-data class Auth(
-        val buy: Buy,
-        val cookie: String,
-        val login: String,
-        val params: String,
-        val verify: Verify,
-        val vip: Vip
-)
+    data class AuthChapterVip(val key: String, val value: String)
 
-data class Buy(
-        val key: String,
-        val value: String
-)
-
-data class Verify(
-        val key: String,
-        val link: String,
-        val value: String
-)
-
-data class Vip(
-        val key: String,
-        val value: String
-)
-
-
-data class Booklet(
-        val list: String,
-        val name: String
-)
-
-
+    data class AuthChapterBuy(val key: String, val value: String)
+}

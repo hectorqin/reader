@@ -149,9 +149,9 @@ class BookService {
             map.put("cover", t.jsonParser(source.metadata.cover.reversed()))
             map.put("summary", t.jsonParser(source.metadata.summary.reversed()))
             map.put("category", t.jsonParser(source.metadata.category.reversed()))
-            map.put("status", t.jsonParser(source.metadata.status.reversed()))
-            map.put("update", t.jsonParser(source.metadata.update.reversed()))
-            map.put("lastChapter", t.jsonParser(source.metadata.lastChapter.reversed()))
+            map.put("status", t.jsonParser(source.metadata.status?.reversed()))
+            map.put("update", t.jsonParser(source.metadata.update?.reversed()))
+            map.put("lastChapter", t.jsonParser(source.metadata.lastChapter?.reversed()))
 
             val catalogLink = t.jsonParser(source.metadata.catalog)
 
@@ -249,12 +249,12 @@ class BookService {
                         }
 
                         map.put("text", t.parser(source.content.text, PropertyType.CONTENT))
-                        if (source.content.next != null) {
-                            val nextlinks = t.select(source.content.next.link)
-                            val nextlink = nextlinks.filter { it.text() == source.content.next.text }.firstOrNull()?.text()
-                            map.put("nextLink", nextlink.orEmpty())
-                            map.put("nextText", source.content.next.text.orEmpty());
-                        }
+//                        if (source.content.next != null) {
+//                            val nextlinks = t.select(source.content.next.link)
+//                            val nextlink = nextlinks.filter { it.text() == source.content.next.text }.firstOrNull()?.text()
+//                            map.put("nextLink", nextlink.orEmpty())
+//                            map.put("nextText", source.content.next.text.orEmpty());
+//                        }
                         map
                     }
         }
