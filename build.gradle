@@ -50,7 +50,9 @@ dependencies {
     implementation 'com.jayway.jsonpath:json-path:2.4.0'
     implementation 'uk.org.lidalia:sysout-over-slf4j:1.0.2'
     implementation 'io.vertx:vertx-mysql-client:3.8.1'
-
+    //Retrofit
+    implementation 'com.squareup.okhttp3:logging-interceptor:4.1.0'
+    implementation 'com.squareup.retrofit2:retrofit:2.6.1'
 }
 compileKotlin {
     kotlinOptions {
