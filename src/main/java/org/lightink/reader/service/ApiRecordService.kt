@@ -13,8 +13,8 @@ private val logger = KotlinLogging.logger {}
 @Service
 class ApiRecordService {
 
-    @Autowired
-    private lateinit var mySQLClient: MySQLPool
+//    @Autowired
+//    private lateinit var mySQLClient: MySQLPool
 
     /**
      * 获取api请求记录
@@ -23,24 +23,25 @@ class ApiRecordService {
      */
     suspend fun findApiRecord(startDate: String, endDate: String, type: String): List<Map<String, Int>> {
 
-        val sql = "select count(status = 1) as success_count, count(status = 0) as failed_count\n" +
-                "from b_history\n" +
-                "where create_at > ?\n" +
-                "  and create_at < ?\n" +
-                when (type) {
-                    "hour" -> "group by hour"
-                    "minute" -> "group by minute"
-                    "day" -> "group by day"
-                    else -> throw RuntimeException("group by类型不正确")
-                }
-
-
-        return mySQLClient.preparedQueryAwait(sql, Tuple.of(startDate, endDate))
-                .map {
-                    val successCount = it.getInteger("success_count")
-                    val failedCount = it.getInteger("failed_count")
-                    mapOf("successCount" to successCount, "failedCount" to failedCount)
-                }
+//        val sql = "select count(status = 1) as success_count, count(status = 0) as failed_count\n" +
+//                "from b_history\n" +
+//                "where create_at > ?\n" +
+//                "  and create_at < ?\n" +
+//                when (type) {
+//                    "hour" -> "group by hour"
+//                    "minute" -> "group by minute"
+//                    "day" -> "group by day"
+//                    else -> throw RuntimeException("group by类型不正确")
+//                }
+//
+//
+//        return mySQLClient.preparedQueryAwait(sql, Tuple.of(startDate, endDate))
+//                .map {
+//                    val successCount = it.getInteger("success_count")
+//                    val failedCount = it.getInteger("failed_count")
+//                    mapOf("successCount" to successCount, "failedCount" to failedCount)
+//                }
+        return emptyList()
     }
 
 }

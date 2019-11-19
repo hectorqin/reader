@@ -7,8 +7,11 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.coroutine.CompositeCoroutine
 import io.legado.app.utils.htmlFormat
 import io.legado.app.utils.isAbsUrl
+import mu.KotlinLogging
 import java.text.SimpleDateFormat
 import java.util.*
+
+private val logger = KotlinLogging.logger {}
 
 object Debug {
     private var debugSource: String? = null
@@ -20,12 +23,12 @@ object Debug {
 
     @Synchronized
     fun log(
-        sourceUrl: String?,
-        msg: String? = "",
-        print: Boolean = true,
-        isHtml: Boolean = false,
-        showTime: Boolean = true,
-        state: Int = 1
+            sourceUrl: String?,
+            msg: String? = "",
+            print: Boolean = true,
+            isHtml: Boolean = false,
+            showTime: Boolean = true,
+            state: Int = 1
     ) {
         if (debugSource != sourceUrl || callback == null || !print) return
         var printMsg = msg ?: ""
@@ -34,7 +37,7 @@ object Debug {
         }
         if (showTime) {
             printMsg =
-                "${DEBUG_TIME_FORMAT.format(Date(System.currentTimeMillis() - startTime))} $printMsg"
+                    "${DEBUG_TIME_FORMAT.format(Date(System.currentTimeMillis() - startTime))} $printMsg"
         }
         callback?.printLog(state, printMsg)
     }
@@ -48,43 +51,12 @@ object Debug {
         }
     }
 
-//    fun startDebug(rssSource: RssSource) {
-//        cancelDebug()
-//        debugSource = rssSource.sourceUrl
-//        log(debugSource, "︾开始解析RSS")
-//        Rss.getArticles(rssSource)
-//            .onSuccess {
-//                if (it == null) {
-//                    log(debugSource, "︽解析失败", state = -1)
-//                } else {
-//                    val ruleContent = rssSource.ruleContent
-//                    if (it.isNotEmpty() && it[0].description.isNullOrEmpty() && !ruleContent.isNullOrEmpty()) {
-//                        log(debugSource, "︽解析完成")
-//                        log(debugSource, showTime = false)
-//                        rssContentDebug(it[0], ruleContent)
-//                    } else {
-//                        log(debugSource, "︽解析完成", state = 1000)
-//                    }
-//                }
-//            }
-//            .onError {
-//                log(debugSource, it.localizedMessage, state = -1)
-//            }
-//    }
-
-//    private fun rssContentDebug(rssArticle: RssArticle, ruleContent: String) {
-//        log(debugSource, "︾开始解析内容")
-//        Rss.getContent(rssArticle, ruleContent)
-//            .onSuccess {
-//                log(debugSource, it)
-//                log(debugSource, "︽解析完成", state = 1000)
-//            }
-//            .onError {
-//                log(debugSource, it.localizedMessage, state = -1)
-//            }
-//    }
-
     fun startDebug(webBook: WebBook, key: String) {
+        callback = object : Callback {
+            override fun printLog(state: Int, msg: String) {
+                logger.info("state: {}, msg: {}", state, msg)
+            }
+        }
         cancelDebug()
         debugSource = webBook.sourceUrl
         startTime = System.currentTimeMillis()
@@ -111,96 +83,96 @@ object Debug {
     private fun exploreDebug(webBook: WebBook, url: String) {
         log(debugSource, "︾开始解析发现页")
         val explore = webBook.exploreBook(url, 1)
-            .onSuccess { exploreBooks ->
-                exploreBooks?.let {
-                    if (exploreBooks.isNotEmpty()) {
-                        log(debugSource, "︽发现页解析完成")
-                        log(debugSource, showTime = false)
-                        infoDebug(webBook, exploreBooks[0].toBook())
-                    } else {
-                        log(debugSource, "︽未获取到书籍", state = -1)
+                .onSuccess { exploreBooks ->
+                    exploreBooks?.let {
+                        if (exploreBooks.isNotEmpty()) {
+                            log(debugSource, "︽发现页解析完成")
+                            log(debugSource, showTime = false)
+                            infoDebug(webBook, exploreBooks[0].toBook())
+                        } else {
+                            log(debugSource, "︽未获取到书籍", state = -1)
+                        }
                     }
                 }
-            }
-            .onError {
-                log(
-                    debugSource,
-                    it.localizedMessage,
-                    state = -1
-                )
-            }
+                .onError {
+                    log(
+                            debugSource,
+                            it.localizedMessage,
+                            state = -1
+                    )
+                }
         tasks.add(explore)
     }
 
     private fun searchDebug(webBook: WebBook, key: String) {
         log(debugSource, "︾开始解析搜索页")
         val search = webBook.searchBook(key, 1)
-            .onSuccess { searchBooks ->
-                searchBooks?.let {
-                    if (searchBooks.isNotEmpty()) {
-                        log(debugSource, "︽搜索页解析完成")
-                        log(debugSource, showTime = false)
-                        infoDebug(webBook, searchBooks[0].toBook())
-                    } else {
-                        log(debugSource, "︽未获取到书籍", state = -1)
+                .onSuccess { searchBooks ->
+                    searchBooks?.let {
+                        if (searchBooks.isNotEmpty()) {
+                            log(debugSource, "︽搜索页解析完成")
+                            log(debugSource, showTime = false)
+                            infoDebug(webBook, searchBooks[0].toBook())
+                        } else {
+                            log(debugSource, "︽未获取到书籍", state = -1)
+                        }
                     }
                 }
-            }
-            .onError {
-                log(debugSource, it.localizedMessage, state = -1)
-            }
+                .onError {
+                    log(debugSource, it.localizedMessage, state = -1)
+                }
         tasks.add(search)
     }
 
     private fun infoDebug(webBook: WebBook, book: Book) {
         log(debugSource, "︾开始解析详情页")
         val info = webBook.getBookInfo(book)
-            .onSuccess {
-                log(debugSource, "︽详情页解析完成")
-                log(debugSource, showTime = false)
-                tocDebug(webBook, book)
-            }
-            .onError {
-                log(debugSource, it.localizedMessage, state = -1)
-            }
+                .onSuccess {
+                    log(debugSource, "︽详情页解析完成")
+                    log(debugSource, showTime = false)
+                    tocDebug(webBook, book)
+                }
+                .onError {
+                    log(debugSource, it.localizedMessage, state = -1)
+                }
         tasks.add(info)
     }
 
     private fun tocDebug(webBook: WebBook, book: Book) {
         log(debugSource, "︾开始解析目录页")
         val chapterList = webBook.getChapterList(book)
-            .onSuccess { chapterList ->
-                chapterList?.let {
-                    if (it.isNotEmpty()) {
-                        log(debugSource, "︽目录页解析完成")
-                        log(debugSource, showTime = false)
-                        val nextChapterUrl = if (it.size > 1) it[1].url else null
-                        contentDebug(webBook, book, it[0], nextChapterUrl)
-                    } else {
-                        log(debugSource, "︽目录列表为空", state = -1)
+                .onSuccess { chapterList ->
+                    chapterList?.let {
+                        if (it.isNotEmpty()) {
+                            log(debugSource, "︽目录页解析完成")
+                            log(debugSource, showTime = false)
+                            val nextChapterUrl = if (it.size > 1) it[1].url else null
+                            contentDebug(webBook, book, it[0], nextChapterUrl)
+                        } else {
+                            log(debugSource, "︽目录列表为空", state = -1)
+                        }
                     }
                 }
-            }
-            .onError {
-                log(debugSource, it.localizedMessage, state = -1)
-            }
+                .onError {
+                    log(debugSource, it.localizedMessage, state = -1)
+                }
         tasks.add(chapterList)
     }
 
     private fun contentDebug(
-        webBook: WebBook,
-        book: Book,
-        bookChapter: BookChapter,
-        nextChapterUrl: String?
+            webBook: WebBook,
+            book: Book,
+            bookChapter: BookChapter,
+            nextChapterUrl: String?
     ) {
         log(debugSource, "︾开始解析正文页")
         val content = webBook.getContent(book, bookChapter, nextChapterUrl)
-            .onSuccess {
-                log(debugSource, "︽正文页解析完成", state = 1000)
-            }
-            .onError {
-                log(debugSource, it.localizedMessage, state = -1)
-            }
+                .onSuccess {
+                    log(debugSource, "︽正文页解析完成", state = 1000)
+                }
+                .onError {
+                    log(debugSource, it.localizedMessage, state = -1)
+                }
         tasks.add(content)
     }
 

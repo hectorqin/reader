@@ -16,6 +16,7 @@ import kotlin.coroutines.CoroutineContext
 
 class WebBook(val bookSource: BookSource) {
 
+
     val sourceUrl: String
         get() = bookSource.bookSourceUrl
 

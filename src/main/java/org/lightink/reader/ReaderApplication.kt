@@ -120,28 +120,28 @@ class ReaderApplication {
         return webClient
     }
 
-    @Bean
-    fun mysqlClient(mysqlConfig: MysqlConfig): MySQLPool {
-        // Connect options
-
-        logger.info("mysqlConfig: {}", mysqlConfig)
-
-        val connectOptions = mySQLConnectOptionsOf(
-                port = mysqlConfig.port,
-                host = mysqlConfig.host,
-                database = mysqlConfig.database,
-                user = mysqlConfig.user,
-                password = mysqlConfig.password)
-
-        // Pool options
-        val poolOptions = poolOptionsOf(
-                maxSize = 5)
-
-        // Create the client pool
-        val client = MySQLPool.pool(connectOptions, poolOptions)
-
-        return client
-    }
+//    @Bean
+//    fun mysqlClient(mysqlConfig: MysqlConfig): MySQLPool {
+//        // Connect options
+//
+//        logger.info("mysqlConfig: {}", mysqlConfig)
+//
+//        val connectOptions = mySQLConnectOptionsOf(
+//                port = mysqlConfig.port,
+//                host = mysqlConfig.host,
+//                database = mysqlConfig.database,
+//                user = mysqlConfig.user,
+//                password = mysqlConfig.password)
+//
+//        // Pool options
+//        val poolOptions = poolOptionsOf(
+//                maxSize = 5)
+//
+//        // Create the client pool
+//        val client = MySQLPool.pool(connectOptions, poolOptions)
+//
+//        return client
+//    }
 
 }
 

@@ -37,8 +37,8 @@ class BookService {
     private lateinit var bookSourceService: BookSourceService
     @Value("\${qingmo.server.url}")
     private lateinit var serviceUrl: String
-    @Autowired
-    private lateinit var mySQLClient: MySQLPool
+//    @Autowired
+//    private lateinit var mySQLClient: MySQLPool
 
     /**
      * 搜索结果
@@ -122,11 +122,11 @@ class BookService {
         }
 
         //插入搜索记录
-        val currentTimeMillis = System.currentTimeMillis()
-        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo,minute,hour,day)" +
-                " values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
-                Tuple.of(code, name, searchKey, "search", 1, ""
-                        , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60 , currentTimeMillis / 1000 / 60 / 60 / 24))
+//        val currentTimeMillis = System.currentTimeMillis()
+//        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo,minute,hour,day)" +
+//                " values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
+//                Tuple.of(code, name, searchKey, "search", 1, ""
+//                        , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60 , currentTimeMillis / 1000 / 60 / 60 / 24))
 
         return result
 
@@ -210,11 +210,11 @@ class BookService {
         }
 
         //插入查询书籍详情记录
-        val currentTimeMillis = System.currentTimeMillis()
-        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, minute, hour, day) " +
-                "values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
-                Tuple.of(code, name, link, "detail", 1, ""
-                        , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60 , currentTimeMillis / 1000 / 60 / 60 / 24))
+//        val currentTimeMillis = System.currentTimeMillis()
+//        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, minute, hour, day) " +
+//                "values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
+//                Tuple.of(code, name, link, "detail", 1, ""
+//                        , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60 , currentTimeMillis / 1000 / 60 / 60 / 24))
         return map
     }
 
@@ -261,10 +261,10 @@ class BookService {
 
 
         //插入内容与正文访问记录
-        val currentTimeMillis = System.currentTimeMillis()
-        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, minute, hour, day) values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
-                Tuple.of(code, name, href, "content", 1, ""
-                        , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60 , currentTimeMillis / 1000 / 60 / 60 / 24))
+//        val currentTimeMillis = System.currentTimeMillis()
+//        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, minute, hour, day) values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
+//                Tuple.of(code, name, href, "content", 1, ""
+//                        , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60 , currentTimeMillis / 1000 / 60 / 60 / 24))
 
         return hashMap
     }
@@ -323,10 +323,10 @@ class BookService {
 
         //插入排行榜访问记录
         val currentTimeMillis = System.currentTimeMillis()
-        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, minute, hour, day) " +
-                "values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
-                Tuple.of(code, name, classify, "rank", 1, "", currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60
-                        , currentTimeMillis / 1000 / 60 / 60 / 24))
+//        mySQLClient.preparedQueryAwait("insert b_history(code, name, link, type, status, errorinfo, minute, hour, day) " +
+//                "values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
+//                Tuple.of(code, name, classify, "rank", 1, "", currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60
+//                        , currentTimeMillis / 1000 / 60 / 60 / 24))
 
         return result
     }
