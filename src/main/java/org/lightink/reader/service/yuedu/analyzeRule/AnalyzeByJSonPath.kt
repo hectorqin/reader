@@ -1,9 +1,9 @@
 package io.legado.app.model.analyzeRule
 
-import android.text.TextUtils
 import com.jayway.jsonpath.JsonPath
 import com.jayway.jsonpath.ReadContext
 import io.legado.app.utils.splitNotBlank
+import org.lightink.reader.service.yuedu.utils.TextUtils
 import java.util.*
 import java.util.regex.Pattern
 

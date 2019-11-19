@@ -1,7 +1,5 @@
 package io.legado.app.model.webbook
 
-import io.legado.app.App
-import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookSource
 import io.legado.app.model.Debug
@@ -19,7 +17,9 @@ object BookInfo {
         baseUrl: String
     ) {
         body ?: throw Exception(
-            App.INSTANCE.getString(R.string.error_get_web_content, baseUrl)
+//            App.INSTANCE.getString(R.string.error_get_web_content, baseUrl)
+        //todo getString
+        "error_get_web_content"
         )
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${baseUrl}")
         val infoRule = bookSource.getBookInfoRule()

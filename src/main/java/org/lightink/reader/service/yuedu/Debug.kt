@@ -1,10 +1,9 @@
 package io.legado.app.model
 
-import android.annotation.SuppressLint
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
-import io.legado.app.data.entities.RssArticle
-import io.legado.app.data.entities.RssSource
+//import io.legado.app.data.entities.RssArticle
+//import io.legado.app.data.entities.RssSource
 import io.legado.app.help.coroutine.CompositeCoroutine
 import io.legado.app.utils.htmlFormat
 import io.legado.app.utils.isAbsUrl
@@ -16,7 +15,6 @@ object Debug {
     var callback: Callback? = null
     private val tasks: CompositeCoroutine = CompositeCoroutine()
 
-    @SuppressLint("ConstantLocale")
     private val DEBUG_TIME_FORMAT = SimpleDateFormat("[mm:ss.SSS]", Locale.getDefault())
     private var startTime: Long = System.currentTimeMillis()
 
@@ -50,41 +48,41 @@ object Debug {
         }
     }
 
-    fun startDebug(rssSource: RssSource) {
-        cancelDebug()
-        debugSource = rssSource.sourceUrl
-        log(debugSource, "︾开始解析RSS")
-        Rss.getArticles(rssSource)
-            .onSuccess {
-                if (it == null) {
-                    log(debugSource, "︽解析失败", state = -1)
-                } else {
-                    val ruleContent = rssSource.ruleContent
-                    if (it.isNotEmpty() && it[0].description.isNullOrEmpty() && !ruleContent.isNullOrEmpty()) {
-                        log(debugSource, "︽解析完成")
-                        log(debugSource, showTime = false)
-                        rssContentDebug(it[0], ruleContent)
-                    } else {
-                        log(debugSource, "︽解析完成", state = 1000)
-                    }
-                }
-            }
-            .onError {
-                log(debugSource, it.localizedMessage, state = -1)
-            }
-    }
+//    fun startDebug(rssSource: RssSource) {
+//        cancelDebug()
+//        debugSource = rssSource.sourceUrl
+//        log(debugSource, "︾开始解析RSS")
+//        Rss.getArticles(rssSource)
+//            .onSuccess {
+//                if (it == null) {
+//                    log(debugSource, "︽解析失败", state = -1)
+//                } else {
+//                    val ruleContent = rssSource.ruleContent
+//                    if (it.isNotEmpty() && it[0].description.isNullOrEmpty() && !ruleContent.isNullOrEmpty()) {
+//                        log(debugSource, "︽解析完成")
+//                        log(debugSource, showTime = false)
+//                        rssContentDebug(it[0], ruleContent)
+//                    } else {
+//                        log(debugSource, "︽解析完成", state = 1000)
+//                    }
+//                }
+//            }
+//            .onError {
+//                log(debugSource, it.localizedMessage, state = -1)
+//            }
+//    }
 
-    private fun rssContentDebug(rssArticle: RssArticle, ruleContent: String) {
-        log(debugSource, "︾开始解析内容")
-        Rss.getContent(rssArticle, ruleContent)
-            .onSuccess {
-                log(debugSource, it)
-                log(debugSource, "︽解析完成", state = 1000)
-            }
-            .onError {
-                log(debugSource, it.localizedMessage, state = -1)
-            }
-    }
+//    private fun rssContentDebug(rssArticle: RssArticle, ruleContent: String) {
+//        log(debugSource, "︾开始解析内容")
+//        Rss.getContent(rssArticle, ruleContent)
+//            .onSuccess {
+//                log(debugSource, it)
+//                log(debugSource, "︽解析完成", state = 1000)
+//            }
+//            .onError {
+//                log(debugSource, it.localizedMessage, state = -1)
+//            }
+//    }
 
     fun startDebug(webBook: WebBook, key: String) {
         cancelDebug()

@@ -1,8 +1,5 @@
 package io.legado.app.model.webbook
 
-import android.text.TextUtils
-import io.legado.app.App
-import io.legado.app.R
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
@@ -12,19 +9,22 @@ import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.withContext
+import org.lightink.reader.service.yuedu.utils.TextUtils
 
 object BookChapterList {
 
     suspend fun analyzeChapterList(
-        coroutineScope: CoroutineScope,
-        book: Book,
-        body: String?,
-        bookSource: BookSource,
-        baseUrl: String
+            coroutineScope: CoroutineScope,
+            book: Book,
+            body: String?,
+            bookSource: BookSource,
+            baseUrl: String
     ): List<BookChapter> {
         var chapterList = arrayListOf<BookChapter>()
         body ?: throw Exception(
-            App.INSTANCE.getString(R.string.error_get_web_content, baseUrl)
+//            App.INSTANCE.getString(R.string.error_get_web_content, baseUrl)
+                //todo getString
+                "error_get_web_content"
         )
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${baseUrl}")
         val tocRule = bookSource.getTocRule()
@@ -39,7 +39,7 @@ object BookChapterList {
             listRule = listRule.substring(1)
         }
         var chapterData =
-            analyzeChapterList(body, baseUrl, tocRule, listRule, book, bookSource, log = true)
+                analyzeChapterList(body, baseUrl, tocRule, listRule, book, bookSource, log = true)
         chapterData.chapterList?.let {
             chapterList.addAll(it)
         }
@@ -48,20 +48,20 @@ object BookChapterList {
             while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
                 nextUrlList.add(nextUrl)
                 AnalyzeUrl(
-                    ruleUrl = nextUrl, book = book, headerMapF = bookSource.getHeaderMap()
+                        ruleUrl = nextUrl, book = book, headerMapF = bookSource.getHeaderMap()
                 ).getResponseAwait()
-                    .body?.let { nextBody ->
-                        chapterData = analyzeChapterList(
+                        .body?.let { nextBody ->
+                    chapterData = analyzeChapterList(
                             nextBody, nextUrl, tocRule, listRule,
                             book, bookSource, log = false
-                        )
-                        nextUrl = if (chapterData.nextUrl.isNotEmpty())
-                            chapterData.nextUrl[0]
-                        else ""
-                        chapterData.chapterList?.let {
-                            chapterList.addAll(it)
-                        }
+                    )
+                    nextUrl = if (chapterData.nextUrl.isNotEmpty())
+                        chapterData.nextUrl[0]
+                    else ""
+                    chapterData.chapterList?.let {
+                        chapterList.addAll(it)
                     }
+                }
             }
             Debug.log(bookSource.bookSourceUrl, "◇目录总页数:${nextUrlList.size}")
         } else if (chapterData.nextUrl.size > 1) {
@@ -73,12 +73,12 @@ object BookChapterList {
             for (item in chapterDataList) {
                 withContext(coroutineScope.coroutineContext) {
                     val nextBody = AnalyzeUrl(
-                        ruleUrl = item.nextUrl,
-                        book = book,
-                        headerMapF = bookSource.getHeaderMap()
+                            ruleUrl = item.nextUrl,
+                            book = book,
+                            headerMapF = bookSource.getHeaderMap()
                     ).getResponseAwait().body
                     val nextChapterData = analyzeChapterList(
-                        nextBody, item.nextUrl, tocRule, listRule, book, bookSource
+                            nextBody, item.nextUrl, tocRule, listRule, book, bookSource
                     )
                     item.chapterList = nextChapterData.chapterList
                 }
@@ -109,14 +109,14 @@ object BookChapterList {
 
 
     private fun analyzeChapterList(
-        body: String?,
-        baseUrl: String,
-        tocRule: TocRule,
-        listRule: String,
-        book: Book,
-        bookSource: BookSource,
-        getNextUrl: Boolean = true,
-        log: Boolean = false
+            body: String?,
+            baseUrl: String,
+            tocRule: TocRule,
+            listRule: String,
+            book: Book,
+            bookSource: BookSource,
+            getNextUrl: Boolean = true,
+            log: Boolean = false
     ): ChapterData<List<String>> {
         val chapterList = arrayListOf<BookChapter>()
         val nextUrlList = arrayListOf<String>()
@@ -133,9 +133,9 @@ object BookChapterList {
                 }
             }
             Debug.log(
-                bookSource.bookSourceUrl,
-                "└" + TextUtils.join("，\n", nextUrlList),
-                log
+                    bookSource.bookSourceUrl,
+                    "└" + TextUtils.join("，\n", nextUrlList),
+                    log
             )
         }
         Debug.log(bookSource.bookSourceUrl, "┌获取目录列表", log)

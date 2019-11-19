@@ -1,15 +1,13 @@
 package io.legado.app.model.analyzeRule
 
-import android.text.TextUtils
-import android.util.Base64
-import androidx.annotation.Keep
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
 import io.legado.app.constant.Pattern.JS_PATTERN
 import io.legado.app.data.entities.BaseBook
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.utils.*
+import org.lightink.reader.service.yuedu.utils.Base64
+import org.lightink.reader.service.yuedu.utils.TextUtils
 import org.mozilla.javascript.NativeObject
-import java.util.*
 import java.util.regex.Pattern
 import javax.script.SimpleBindings
 import kotlin.collections.HashMap

@@ -1,8 +1,5 @@
 package io.legado.app.model.analyzeRule
 
-import android.annotation.SuppressLint
-import android.text.TextUtils
-import androidx.annotation.Keep
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
 import io.legado.app.constant.Pattern.EXP_PATTERN
 import io.legado.app.constant.Pattern.JS_PATTERN
@@ -10,7 +7,7 @@ import io.legado.app.data.api.IHttpGetApi
 import io.legado.app.data.api.IHttpPostApi
 import io.legado.app.data.entities.BaseBook
 import io.legado.app.help.JsExtensions
-import io.legado.app.help.http.AjaxWebView
+//import io.legado.app.help.http.AjaxWebView
 import io.legado.app.help.http.HttpHelper
 import io.legado.app.help.http.RequestMethod
 import io.legado.app.help.http.Res
@@ -19,6 +16,7 @@ import okhttp3.FormBody
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.lightink.reader.service.yuedu.utils.TextUtils
 import retrofit2.Call
 import java.net.URLEncoder
 import java.util.*
@@ -270,13 +268,14 @@ class AnalyzeUrl(
         sourceRegex: String? = null
     ): Res {
         if (useWebView) {
-            val params = AjaxWebView.AjaxParams(url)
-            params.headerMap = headerMap
-            params.requestMethod = method
-            params.javaScript = jsStr
-            params.sourceRegex = sourceRegex
-            params.postData = bodyTxt?.toByteArray()
-            return HttpHelper.ajax(params)
+//            val params = AjaxWebView.AjaxParams(url)
+//            params.headerMap = headerMap
+//            params.requestMethod = method
+//            params.javaScript = jsStr
+//            params.sourceRegex = sourceRegex
+//            params.postData = bodyTxt?.toByteArray()
+//            return HttpHelper.ajax(params)
+            //todo webview
         }
         val res = when {
             method == RequestMethod.POST -> {

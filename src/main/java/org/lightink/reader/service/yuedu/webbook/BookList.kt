@@ -1,7 +1,5 @@
 package io.legado.app.model.webbook
 
-import io.legado.app.App
-import io.legado.app.R
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.BookHelp
@@ -22,10 +20,12 @@ object BookList {
     ): ArrayList<SearchBook> {
         val bookList = ArrayList<SearchBook>()
         body ?: throw Exception(
-            App.INSTANCE.getString(
-                R.string.error_get_web_content,
-                analyzeUrl.ruleUrl
-            )
+//            App.INSTANCE.getString(
+//                R.string.error_get_web_content,
+//                analyzeUrl.ruleUrl
+//            )
+                //todo getString
+                "error_get_web_content"
         )
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${analyzeUrl.ruleUrl}")
         val analyzeRule = AnalyzeRule(null)

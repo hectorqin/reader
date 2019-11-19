@@ -1,33 +1,28 @@
 package io.legado.app.data.entities
 
-import android.os.Parcelable
-import androidx.room.Entity
-import androidx.room.Ignore
-import androidx.room.Index
-import androidx.room.PrimaryKey
-import io.legado.app.App
+
+//import io.legado.app.App
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppConst.userAgent
 import io.legado.app.data.entities.rule.*
 import io.legado.app.help.JsExtensions
-import io.legado.app.utils.ACache
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
-import io.legado.app.utils.getPrefString
-import kotlinx.android.parcel.IgnoredOnParcel
-import kotlinx.android.parcel.Parcelize
+//import io.legado.app.utils.getPrefString
+
+
 import java.util.*
 import javax.script.SimpleBindings
 
-@Parcelize
-@Entity(
-    tableName = "book_sources",
-    indices = [(Index(value = ["bookSourceUrl"], unique = false))]
-)
+//@Parcelize
+//@Entity(
+//    tableName = "book_sources",
+//    indices = [(Index(value = ["bookSourceUrl"], unique = false))]
+//)
 data class BookSource(
     var bookSourceName: String = "",           // 名称
     var bookSourceGroup: String? = null,       // 分组
-    @PrimaryKey
+//    @PrimaryKey
     var bookSourceUrl: String = "",           // 地址，包括 http/https
     var bookSourceType: Int = 0,               // 类型，0 文本，1 音频
     var bookUrlPattern: String? = null,       //详情页url正则
@@ -45,31 +40,33 @@ data class BookSource(
     var ruleBookInfo: String? = null,         // 书籍信息页规则
     var ruleToc: String? = null,          // 目录页规则
     var ruleContent: String? = null           // 正文页规则
-) : Parcelable {
-    @Ignore
-    @IgnoredOnParcel
+)  {
+//    @Ignore
+//    @IgnoredOnParcel
     private var searchRuleV: SearchRule? = null
 
-    @Ignore
-    @IgnoredOnParcel
+//    @Ignore
+//    @IgnoredOnParcel
     private var exploreRuleV: ExploreRule? = null
 
-    @Ignore
-    @IgnoredOnParcel
+//    @Ignore
+//    @IgnoredOnParcel
     private var bookInfoRuleV: BookInfoRule? = null
 
-    @Ignore
-    @IgnoredOnParcel
+//    @Ignore
+//    @IgnoredOnParcel
     private var tocRuleV: TocRule? = null
 
-    @Ignore
-    @IgnoredOnParcel
+//    @Ignore
+//    @IgnoredOnParcel
     private var contentRuleV: ContentRule? = null
 
     @Throws(Exception::class)
     fun getHeaderMap(): Map<String, String> {
         val headerMap = HashMap<String, String>()
-        headerMap[AppConst.UA_NAME] = App.INSTANCE.getPrefString("user_agent") ?: userAgent
+//        headerMap[AppConst.UA_NAME] = App.INSTANCE.getPrefString("user_agent") ?: userAgent
+        //todo UA
+        headerMap[AppConst.UA_NAME] = userAgent
         header?.let {
             val header1 = when {
                 it.startsWith("@js:", true) ->
@@ -125,39 +122,39 @@ data class BookSource(
         return contentRuleV!!
     }
 
-    fun getExploreKinds(): ArrayList<ExploreKind>? {
-        val exploreKinds = arrayListOf<ExploreKind>()
-        exploreUrl?.let {
-            var a = it
-            if (a.isNotBlank()) {
-                try {
-                    if (it.startsWith("<js>", false)) {
-                        val aCache = ACache.get(App.INSTANCE, "explore")
-                        a = aCache.getAsString(bookSourceUrl) ?: ""
-                        if (a.isBlank()) {
-                            val bindings = SimpleBindings()
-                            bindings["baseUrl"] = bookSourceUrl
-                            bindings["java"] = JsExtensions
-                            a = AppConst.SCRIPT_ENGINE.eval(
-                                it.substring(4, it.lastIndexOf("<")),
-                                bindings
-                            ).toString()
-                            aCache.put(bookSourceUrl, a)
-                        }
-                    }
-                    val b = a.split("(&&|\n)+".toRegex())
-                    b.map { c ->
-                        val d = c.split("::")
-                        if (d.size > 1)
-                            exploreKinds.add(ExploreKind(d[0], d[1]))
-                    }
-                } catch (e: Exception) {
-                    exploreKinds.add(ExploreKind(e.localizedMessage))
-                }
-            }
-        }
-        return exploreKinds
-    }
+//    fun getExploreKinds(): ArrayList<ExploreKind>? {
+//        val exploreKinds = arrayListOf<ExploreKind>()
+//        exploreUrl?.let {
+//            var a = it
+//            if (a.isNotBlank()) {
+//                try {
+//                    if (it.startsWith("<js>", false)) {
+//                        val aCache = ACache.get(App.INSTANCE, "explore")
+//                        a = aCache.getAsString(bookSourceUrl) ?: ""
+//                        if (a.isBlank()) {
+//                            val bindings = SimpleBindings()
+//                            bindings["baseUrl"] = bookSourceUrl
+//                            bindings["java"] = JsExtensions
+//                            a = AppConst.SCRIPT_ENGINE.eval(
+//                                it.substring(4, it.lastIndexOf("<")),
+//                                bindings
+//                            ).toString()
+//                            aCache.put(bookSourceUrl, a)
+//                        }
+//                    }
+//                    val b = a.split("(&&|\n)+".toRegex())
+//                    b.map { c ->
+//                        val d = c.split("::")
+//                        if (d.size > 1)
+//                            exploreKinds.add(ExploreKind(d[0], d[1]))
+//                    }
+//                } catch (e: Exception) {
+//                    exploreKinds.add(ExploreKind(e.localizedMessage))
+//                }
+//            }
+//        }
+//        return exploreKinds
+//    }
 
     /**
      * 执行JS

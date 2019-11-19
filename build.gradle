@@ -22,6 +22,9 @@ sourceCompatibility = '1.8'
 
 repositories {
     mavenCentral()
+    maven { url "https://jitpack.io" }
+    google()
+    jcenter()
 }
 
 configurations {
@@ -53,6 +56,16 @@ dependencies {
     //Retrofit
     implementation 'com.squareup.okhttp3:logging-interceptor:4.1.0'
     implementation 'com.squareup.retrofit2:retrofit:2.6.1'
+
+//    //anko
+//    def anko_version = '0.10.8'
+//    implementation "org.jetbrains.anko:anko:$anko_version"
+
+    //JS
+    implementation 'com.github.gedoor:rhino-android:1.3'
+
+    implementation 'cn.wanghaomiao:JsoupXpath:2.3.2'
+    implementation 'com.jayway.jsonpath:json-path:2.4.0'
 }
 compileKotlin {
     kotlinOptions {

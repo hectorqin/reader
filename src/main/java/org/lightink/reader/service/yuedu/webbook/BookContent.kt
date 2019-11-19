@@ -1,7 +1,6 @@
 package io.legado.app.model.webbook
 
-import io.legado.app.App
-import io.legado.app.R
+
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
@@ -18,19 +17,21 @@ object BookContent {
 
     @Throws(Exception::class)
     suspend fun analyzeContent(
-        coroutineScope: CoroutineScope,
-        body: String?,
-        book: Book,
-        bookChapter: BookChapter,
-        bookSource: BookSource,
-        baseUrl: String,
-        nextChapterUrlF: String? = null
+            coroutineScope: CoroutineScope,
+            body: String?,
+            book: Book,
+            bookChapter: BookChapter,
+            bookSource: BookSource,
+            baseUrl: String,
+            nextChapterUrlF: String? = null
     ): String {
         body ?: throw Exception(
-            App.INSTANCE.getString(
-                R.string.error_get_web_content,
-                baseUrl
-            )
+//            App.INSTANCE.getString(
+//                R.string.error_get_web_content,
+//                baseUrl
+//            )
+                // todo getString
+                "error_get_web_content"
         )
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${baseUrl}")
         val content = StringBuilder()
@@ -43,28 +44,30 @@ object BookContent {
             val nextChapterUrl = if (!nextChapterUrlF.isNullOrEmpty())
                 nextChapterUrlF
             else
-                App.db.bookChapterDao().getChapter(book.bookUrl, bookChapter.index + 1)?.url
+                //todo
+                throw RuntimeException("我在java上没有App.db啊啊啊")
+//                App.db.bookChapterDao().getChapter(book.bookUrl, bookChapter.index + 1)?.url
             while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
                 if (!nextChapterUrl.isNullOrEmpty()
-                    && NetworkUtils.getAbsoluteURL(baseUrl, nextUrl)
-                    == NetworkUtils.getAbsoluteURL(baseUrl, nextChapterUrl)
+                        && NetworkUtils.getAbsoluteURL(baseUrl, nextUrl)
+                        == NetworkUtils.getAbsoluteURL(baseUrl, nextChapterUrl)
                 ) break
                 nextUrlList.add(nextUrl)
                 AnalyzeUrl(
-                    ruleUrl = nextUrl,
-                    book = book,
-                    headerMapF = bookSource.getHeaderMap()
+                        ruleUrl = nextUrl,
+                        book = book,
+                        headerMapF = bookSource.getHeaderMap()
                 ).getResponseAwait()
-                    .body?.let { nextBody ->
-                        contentData =
+                        .body?.let { nextBody ->
+                    contentData =
                             analyzeContent(
-                                nextBody, contentRule, book,
-                                bookChapter, bookSource, baseUrl, false
+                                    nextBody, contentRule, book,
+                                    bookChapter, bookSource, baseUrl, false
                             )
-                        nextUrl =
+                    nextUrl =
                             if (contentData.nextUrl.isNotEmpty()) contentData.nextUrl[0] else ""
-                        content.append(contentData.content)
-                    }
+                    content.append(contentData.content)
+                }
             }
             Debug.log(bookSource.bookSourceUrl, "◇本章总页数:${nextUrlList.size}")
         } else if (contentData.nextUrl.size > 1) {
@@ -76,18 +79,18 @@ object BookContent {
             for (item in contentDataList) {
                 withContext(coroutineScope.coroutineContext) {
                     AnalyzeUrl(
-                        ruleUrl = item.nextUrl,
-                        book = book,
-                        headerMapF = bookSource.getHeaderMap()
+                            ruleUrl = item.nextUrl,
+                            book = book,
+                            headerMapF = bookSource.getHeaderMap()
                     ).getResponseAwait()
-                        .body?.let {
-                            contentData =
+                            .body?.let {
+                        contentData =
                                 analyzeContent(
-                                    it, contentRule, book, bookChapter,
-                                    bookSource, item.nextUrl, false
+                                        it, contentRule, book, bookChapter,
+                                        bookSource, item.nextUrl, false
                                 )
-                            item.content = contentData.content
-                        }
+                        item.content = contentData.content
+                    }
                 }
             }
             for (item in contentDataList) {
@@ -103,13 +106,13 @@ object BookContent {
 
     @Throws(Exception::class)
     private fun analyzeContent(
-        body: String,
-        contentRule: ContentRule,
-        book: Book,
-        chapter: BookChapter,
-        bookSource: BookSource,
-        baseUrl: String,
-        printLog: Boolean = true
+            body: String,
+            contentRule: ContentRule,
+            book: Book,
+            chapter: BookChapter,
+            bookSource: BookSource,
+            baseUrl: String,
+            printLog: Boolean = true
     ): ContentData<List<String>> {
         val nextUrlList = arrayListOf<String>()
         val analyzeRule = AnalyzeRule(book)

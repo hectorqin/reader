@@ -1,25 +1,25 @@
 package io.legado.app.data.entities
 
-import android.os.Parcelable
-import androidx.room.*
+//import android.os.Parcelable
+//import androidx.room.*
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
-import kotlinx.android.parcel.IgnoredOnParcel
-import kotlinx.android.parcel.Parcelize
 
-@Parcelize
-@Entity(
-    tableName = "searchBooks",
-    indices = [(Index(value = ["bookUrl"], unique = true))],
-    foreignKeys = [(ForeignKey(
-        entity = BookSource::class,
-        parentColumns = ["bookSourceUrl"],
-        childColumns = ["origin"],
-        onDelete = ForeignKey.CASCADE
-    ))]
-)
+
+
+//@Parcelize
+//@Entity(
+//    tableName = "searchBooks",
+//    indices = [(Index(value = ["bookUrl"], unique = true))],
+//    foreignKeys = [(ForeignKey(
+//        entity = BookSource::class,
+//        parentColumns = ["bookSourceUrl"],
+//        childColumns = ["origin"],
+//        onDelete = ForeignKey.CASCADE
+//    ))]
+//)
 data class SearchBook(
-    @PrimaryKey
+//    @PrimaryKey
     var bookUrl: String = "",
     var origin: String = "",                     // 书源规则
     var originName: String = "",
@@ -35,14 +35,14 @@ data class SearchBook(
     var time: Long = System.currentTimeMillis(),
     var variable: String? = null,
     var originOrder: Int = 0
-) : Parcelable, BaseBook, Comparable<SearchBook> {
+) :  BaseBook, Comparable<SearchBook> {
 
-    @Ignore
-    @IgnoredOnParcel
+//    @Ignore
+//    @IgnoredOnParcel
     override var infoHtml: String? = null
 
-    @Ignore
-    @IgnoredOnParcel
+//    @Ignore
+//    @IgnoredOnParcel
     override var tocHtml: String? = null
 
     override fun equals(other: Any?): Boolean {
@@ -62,8 +62,8 @@ data class SearchBook(
         return other.originOrder - this.originOrder
     }
 
-    @Ignore
-    @IgnoredOnParcel
+//    @Ignore
+//    @IgnoredOnParcel
     override var variableMap: HashMap<String, String>? = null
         get() {
             if (field == null) {
@@ -77,8 +77,8 @@ data class SearchBook(
         variable = GSON.toJson(variableMap)
     }
 
-    @Ignore
-    @IgnoredOnParcel
+//    @Ignore
+//    @IgnoredOnParcel
     var origins: LinkedHashSet<String>? = null
         private set
 
