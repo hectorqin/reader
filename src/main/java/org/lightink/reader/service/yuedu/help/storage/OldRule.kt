@@ -14,7 +14,7 @@ object OldRule {
     private val headerPattern = Pattern.compile("@Header:\\{.+?\\}", Pattern.CASE_INSENSITIVE)
     private val jsPattern = Pattern.compile("\\{\\{.+?\\}\\}", Pattern.CASE_INSENSITIVE)
 
-    fun jsonToBookSource(json: String): BookSource? {
+    fun jsonToBookSource(json: String): BookSource {
         var source: BookSource? = null
         runCatching {
             source = GSON.fromJsonObject<BookSource>(json.trim())
@@ -87,7 +87,7 @@ object OldRule {
                 }
             }
         }
-        return source
+        return source!!
     }
 
     private fun toNewUrls(oldUrl: String?): String? {

@@ -19,41 +19,31 @@ class DebugTest {
 
     @Test
     fun startDebug() {
-        val bookSource = OldRule.jsonToBookSource("  {\n" +
-                "    \"bookSourceGroup\": \"优, S级, [ャ灬7℃↘寵.]\",\n" +
-                "    \"bookSourceName\": \"笔趣阁\",\n" +
-                "    \"bookSourceType\": \"\",\n" +
-                "    \"bookSourceUrl\": \"https://www.bqg3.com\",\n" +
-                "    \"enable\": true,\n" +
-                "    \"httpUserAgent\": \"\",\n" +
-                "    \"ruleIntroduce\": \"id.intro@tag.p.0@textNodes#注意：|最新章节.*|如果你觉得.*\",\n" +
-                "    \"ruleBookAuthor\": \"id.info@tag.p.0@text#作    者：\",\n" +
-                "    \"ruleBookName\": \"id.info@tag.h1@text# .*\",\n" +
-                "    \"ruleBookKind\": \"class.con_top@textNodes@js:result.match(/> (.*) >/)[1]\",\n" +
-                "    \"ruleBookLastChapter\": \"id.info@tag.a.-1@text\",\n" +
-                "    \"ruleCoverUrl\": \"id.fmimg@tag.img@src\",\n" +
-                "    \"ruleBookContent\": \"id.content@textNodes#天.*bqg3\\\\.com,|https\\\\:\\\\/\\\\/www.*\",\n" +
-                "    \"ruleChapterList\": \"id.list@tag.dd@tag.a\",\n" +
-                "    \"ruleChapterName\": \"text\",\n" +
-                "    \"ruleChapterUrl\": \"\",\n" +
-                "    \"ruleChapterUrlNext\": \"\",\n" +
-                "    \"ruleContentUrl\": \"href\",\n" +
-                "    \"ruleContentUrlNext\": \"\",\n" +
-                "    \"ruleFindUrl\": \"\",\n" +
-                "    \"ruleSearchAuthor\": \"class.odd.1@text\",\n" +
-                "    \"ruleSearchCoverUrl\": \"class.odd.0@tag.a@href#/(\\\\d+)_(\\\\d+)/#/files/article/image/\$1/\$2/\$2s.jpg\",\n" +
-                "    \"ruleSearchKind\": \"\",\n" +
-                "    \"ruleSearchLastChapter\": \"class.even.0@text\",\n" +
-                "    \"ruleSearchIntroduce\": \"\",\n" +
-                "    \"ruleSearchList\": \"class.grid@tag.tr!0\",\n" +
-                "    \"ruleSearchName\": \"class.odd.0@text\",\n" +
-                "    \"ruleSearchNoteUrl\": \"class.odd.0@tag.a@href\",\n" +
-                "    \"ruleSearchUrl\": \"/modules/article/search.php?searchtype=articlename&searchkey=searchKey|char=gbk\",\n" +
-                "    \"serialNumber\": 51,\n" +
-                "    \"weight\": 0\n" +
-                "  }")!!
+        val bookSource = OldRule.jsonToBookSource("{\n" +
+                "  \"bookSourceGroup\": \"✯༇薅白魔人♪\",\n" +
+                "  \"bookSourceName\": \"有兔\",\n" +
+                "  \"bookSourceUrl\": \"http://app.youzibank.com\",\n" +
+                "  \"enable\": true,\n" +
+                "  \"ruleBookContent\": \"@Js:result\",\n" +
+                "  \"ruleBookName\": \"\",\n" +
+                "  \"ruleChapterList\": \"data.*\",\n" +
+                "  \"ruleChapterName\": \"name\",\n" +
+                "  \"ruleContentUrl\": \"https://book.chengxinqinye.com/book{\$.filePath}\",\n" +
+                "  \"ruleFindUrl\": \"历史传记::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=193&clsIdSecond=0&gender=-1&pageNo=searchPage\\n经济管理::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=205&clsIdSecond=0&gender=-1&pageNo=searchPage\\n社科心理::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=212&clsIdSecond=0&gender=-1&pageNo=searchPage\\n艺术生活::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=245&clsIdSecond=0&gender=-1&pageNo=searchPage\\n历史著作::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=258&clsIdSecond=0&gender=-1&pageNo=searchPage\\n成功励志::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=269&clsIdSecond=0&gender=-1&pageNo=searchPage\\n英文著作::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=276&clsIdSecond=0&gender=-1&pageNo=searchPage\\n儿童读物::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=280&clsIdSecond=0&gender=-1&pageNo=searchPage\\n古典文学::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=283&clsIdSecond=0&gender=-1&pageNo=searchPage\\n现代文学::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=287&clsIdSecond=0&gender=-1&pageNo=searchPage\\n商业思维::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=291&clsIdSecond=0&gender=-1&pageNo=searchPage\\n其他::/book/list?selectionModuleId=0&fullFlag=0&orderBy=read_cnt&clsIdFirst=116&clsIdSecond=0&gender=2&pageNo=searchPage\",\n" +
+                "  \"ruleSearchAuthor\": \"author\",\n" +
+                "  \"ruleSearchCoverUrl\": \"https://book.banquanzhuce.com/book{\$.photoPath}\",\n" +
+                "  \"ruleSearchIntroduce\": \"intro\",\n" +
+                "  \"ruleSearchKind\": \"clsName\",\n" +
+                "  \"ruleSearchLastChapter\": \"lastUpdate\",\n" +
+                "  \"ruleSearchList\": \"data.*\",\n" +
+                "  \"ruleSearchName\": \"name\",\n" +
+                "  \"ruleSearchNoteUrl\": \"/book/chapter/listAll?bookId={\$.id}\",\n" +
+                "  \"ruleSearchUrl\": \"http://app.youzibank.com:80/es/search/book?q=searchKey&pageNo=searchPage&pageSize=10@header:{Seq:'2482380c2df68970a7833191e8193316'}\",\n" +
+                "  \"serialNumber\": 1,\n" +
+                "  \"weight\": 0\n" +
+                "}")
         val webBook = WebBook(bookSource)
         Debug.startDebug(webBook, "剑来")
-        Thread.sleep(10000)
+        Thread.sleep(1000000)
     }
 }
