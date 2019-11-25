@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN gradle assemble --info
 
-FROM openjdk:8-jre
+FROM openjdk:8-jdk-alpine
 # 时区
 RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
   && echo Asia/Shanghai > /etc/timezone \
