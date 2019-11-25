@@ -5,10 +5,20 @@ WORKDIR /app
 RUN gradle assemble --info
 
 FROM openjdk:8-jdk-alpine
+# Install base packages
+RUN apk update
+RUN apk upgrade
+RUN apk add ca-certificates && update-ca-certificates
+# Change TimeZone
+RUN apk add --update tzdata
 # 时区
-RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-  && echo Asia/Shanghai > /etc/timezone \
-  && dpkg-reconfigure -f noninteractive tzdata
+ENV TZ=Asia/Shanghai
+# Clean APK cache
+RUN rm -rf /var/cache/apk/*
+
+#RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+#  && echo Asia/Shanghai > /etc/timdezone \
+#  && dpkg-reconfigure -f noninteractive tzdata
 
 EXPOSE 9000
 
