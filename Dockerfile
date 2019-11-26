@@ -21,7 +21,8 @@ RUN rm -rf /var/cache/apk/*
 #  && dpkg-reconfigure -f noninteractive tzdata
 
 EXPOSE 9000
-
+RUN apk add --no-cache tini
+ENTRYPOINT ["/sbin/tini", "--"]
 COPY --from=hengyunabc/arthas:latest /opt/arthas /opt/arthas
 COPY --from=build-env /app/build/libs/reader-0.0.1-SNAPSHOT.jar /app/bin/qingmo.jar
 CMD ["java", "-jar", "/app/bin/qingmo.jar" ]
