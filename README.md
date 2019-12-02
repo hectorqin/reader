@@ -3,12 +3,11 @@
 
 ### 接口文档与相关说明
 
-<http://docs-qingmo.zohar.space/>
+<http://docs.yuedu.best/>
 
-<http://docs-qingmo.zohar.space/>
+<http://docs.yuedu.best/>
 
-<http://docs-qingmo.zohar.space/>
-
+<http://docs.yuedu.best/>
 
 ### 部署
 
@@ -17,3 +16,6 @@ wget -O docker-compose.yml https://raw.githubusercontent.com/lightink-qingmo/lig
 
 cd /home/docker/qingmo/;docker-compose -f docker-compose.yml pull ; docker-compose -f docker-compose.yml up -d
 
+### 感谢
+
+阅读 <https://github.com/gedoor/MyBookshelf>
