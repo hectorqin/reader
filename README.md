@@ -18,4 +18,4 @@ cd /home/docker/qingmo/;docker-compose -f docker-compose.yml pull ; docker-compo
 
 ### 感谢
 
-阅读 <https://github.com/gedoor/MyBookshelf>
+[阅读] <https://github.com/gedoor/MyBookshelf>
