@@ -33,23 +33,17 @@ class ReaderApplication {
     @Autowired
     private lateinit var restVerticle: RestVerticle
 
-    @Autowired
-    private lateinit var vertx: Vertx;
-
-    @Bean
-    fun vertx(): Vertx {
-        val vertx = Vertx.vertx()
-
-        return vertx
+    companion object {
+        fun vertx() = Vertx.vertx()
     }
 
     @PostConstruct
     fun deployVerticle() {
-        vertx.deployVerticle(restVerticle)
+        vertx().deployVerticle(restVerticle)
     }
 
     @Bean
-    fun webClient(vertx: Vertx): WebClient {
+    fun webClient(): WebClient {
 
         Json.mapper.apply {
             registerKotlinModule()
@@ -65,7 +59,7 @@ class ReaderApplication {
         webClientOptions.isFollowRedirects = true
         webClientOptions.isTrustAll = true
 
-        val httpClient = vertx.createHttpClient(HttpClientOptions().setTrustAll(true))
+        val httpClient = vertx().createHttpClient(HttpClientOptions().setTrustAll(true))
 
 //        val webClient = WebClient.wrap(HttpClient(delegateHttpClient), webClientOptions)
         val webClient = WebClient.wrap(httpClient, webClientOptions)

@@ -13,7 +13,9 @@ import io.legado.app.model.webbook.BookInfo
 import io.legado.app.model.webbook.BookList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import mu.KotlinLogging
 import kotlin.coroutines.CoroutineContext
+private val logger = KotlinLogging.logger {}
 
 class WebBook(val bookSource: BookSource) {
 
@@ -29,8 +31,9 @@ class WebBook(val bookSource: BookSource) {
             key: String,
             page: Int? = 1,
             scope: CoroutineScope = Coroutine.DEFAULT,
-            context: CoroutineContext = Dispatchers.IO
+            context: CoroutineContext = Dispatchers.Unconfined
     ): Coroutine<List<SearchBook>> {
+        logger.info { "func searchBook" }
         return Coroutine.async(scope, context) {
             bookSource.searchUrl?.let { searchUrl ->
                 val analyzeUrl = AnalyzeUrl(
@@ -40,7 +43,9 @@ class WebBook(val bookSource: BookSource) {
                         baseUrl = sourceUrl,
                         headerMapF = bookSource.getHeaderMap()
                 )
+                val currentTimeMillis = System.currentTimeMillis()
                 val res = analyzeUrl.getResponseAwait()
+                logger.info { "getResponseAwait " + (System.currentTimeMillis() - currentTimeMillis)}
                 BookList.analyzeBookList(
                         res.body,
                         bookSource,

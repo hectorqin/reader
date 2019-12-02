@@ -2,9 +2,9 @@ qingmo:
   server:
     url: http://localhost:8080
 
-  mysql:
-    port:
-    host:
-    database:
-    user:
-    password:
+#  mysql:
+#    port:
+#    host:
+#    database:
+#    user:
+#    password:

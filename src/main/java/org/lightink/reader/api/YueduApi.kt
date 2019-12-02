@@ -8,11 +8,19 @@ import io.legado.app.model.WebBook
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import mu.KotlinLogging
 import org.gosky.aroundight.api.BaseApi
 import org.lightink.reader.utils.error
 import org.lightink.reader.utils.success
 import org.lightink.reader.verticle.coroutineHandler
 import org.springframework.stereotype.Component
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+
+private val logger = KotlinLogging.logger {}
 
 @Component
 class YueduApi : BaseApi {
@@ -84,6 +92,7 @@ class YueduApi : BaseApi {
         val bookSource = context.bodyAsJson.getJsonObject("bookSource").toString()
         val key = context.bodyAsJson.getString("key")
         val page = context.bodyAsJson.getInteger("page", 1)
+        logger.info { "searchBook" }
         WebBook(bookSource).searchBook(key, page)
                 .onSuccess {
                     context.success(it)
