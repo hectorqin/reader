@@ -50,47 +50,8 @@ fun RoutingContext.error(throwable: Throwable) {
     logger.error("Internal Server Error", throwable)
     logger.error { errorJson }
 
-//    //插入失败打点
-//    try {
-//        val code = this.pathParam("code")
-//        val name = this.pathParam("name")
-//
-//        val currentTimeMillis = System.currentTimeMillis()
-////        SpringContextUtils.getBean(MySQLPool::class.java)
-////                .preparedQuery("insert b_history(code, name, link, type, status, errorinfo,minute,hour,day)" +
-////                        " values (?, ?, ?, ?, ?, ?, ?, ?, ?) ",
-////                        Tuple.of(code, name, path, "failed", 0, Throwables.getStackTraceAsString(throwable)
-////                                , currentTimeMillis / 1000 / 60, currentTimeMillis / 1000 / 60 / 60, currentTimeMillis / 1000 / 60 / 60 / 24)) {
-////                }
-//
-//    } catch (e: Exception) {
-//        logger.error("insert error log failed", e)
-//    }
-
     this.response()
             .putHeader("content-type", "application/json")
             .setStatusCode(500)
             .end(errorJson)
 }
-
-//fun Single<*>.subscribe(routingContext: RoutingContext) {
-//
-//    this.subscribe({ onSuccess ->
-//        routingContext.success(onSuccess)
-//    }, { error ->
-//        error.printStackTrace()
-//        routingContext.error(error)
-//    })
-//
-//}
-//
-//fun Maybe<*>.subscribe(routingContext: RoutingContext) {
-//
-//    this.subscribe({ onSuccess ->
-//        routingContext.success(onSuccess)
-//    }, { error ->
-//        error.printStackTrace()
-//        routingContext.error(error)
-//    })
-//
-//}

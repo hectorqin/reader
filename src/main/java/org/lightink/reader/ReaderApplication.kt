@@ -66,82 +66,12 @@ class ReaderApplication {
         webClientOptions.isTrustAll = true
 
         val httpClient = vertx.createHttpClient(HttpClientOptions().setTrustAll(true))
-        httpClient.redirectHandler { resp ->
-            try {
-                val statusCode = resp.statusCode()
-                val location = resp.getHeader(HttpHeaders.LOCATION)
-                if (location != null && (statusCode == 301 || statusCode == 302 || statusCode == 303 || statusCode == 307)) {
-                    val m = resp.request().method()
-//                    if (statusCode == 303) {
-//                        m = HttpMethod.GET
-//                    } else if (m != HttpMethod.GET && m != HttpMethod.HEAD) {
-//                        return@redirectHandler null
-//                    }
-                    val uri = HttpUtils.resolveURIReference(resp.request().absoluteURI(), location)
-                    val ssl: Boolean
-                    var port = uri.getPort()
-                    val protocol = uri.getScheme()
-                    val chend = protocol.get(protocol.length - 1)
-                    if (chend == 'p') {
-                        ssl = false
-                        if (port == -1) {
-                            port = 80
-                        }
-                    } else if (chend == 's') {
-                        ssl = true
-                        if (port == -1) {
-                            port = 443
-                        }
-                    } else {
-                        return@redirectHandler null
-                    }
-                    var requestURI = uri.getPath()
-                    val query = uri.getQuery()
-                    if (query != null) {
-                        requestURI += "?$query"
-                    }
-                    val requestOptions = RequestOptions()
-                    requestOptions.host = uri.host
-                    requestOptions.port = port
-                    requestOptions.isSsl = ssl
-                    requestOptions.uri = requestURI
-                    return@redirectHandler Future.succeededFuture<HttpClientRequest>(httpClient.request(m, requestOptions))
-                }
-                return@redirectHandler null
-            } catch (e: Exception) {
-                return@redirectHandler Future.failedFuture<HttpClientRequest>(e)
-            }
-        }
 
 //        val webClient = WebClient.wrap(HttpClient(delegateHttpClient), webClientOptions)
         val webClient = WebClient.wrap(httpClient, webClientOptions)
 
-
         return webClient
     }
-
-//    @Bean
-//    fun mysqlClient(mysqlConfig: MysqlConfig): MySQLPool {
-//        // Connect options
-//
-//        logger.info("mysqlConfig: {}", mysqlConfig)
-//
-//        val connectOptions = mySQLConnectOptionsOf(
-//                port = mysqlConfig.port,
-//                host = mysqlConfig.host,
-//                database = mysqlConfig.database,
-//                user = mysqlConfig.user,
-//                password = mysqlConfig.password)
-//
-//        // Pool options
-//        val poolOptions = poolOptionsOf(
-//                maxSize = 5)
-//
-//        // Create the client pool
-//        val client = MySQLPool.pool(connectOptions, poolOptions)
-//
-//        return client
-//    }
 
 }
 

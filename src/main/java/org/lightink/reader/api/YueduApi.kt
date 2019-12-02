@@ -65,6 +65,17 @@ class YueduApi : BaseApi {
     }
 
     private fun exploreBook(context: RoutingContext) {
+        val bookSource = context.bodyAsJson.getJsonObject("bookSource").toString()
+        val ruleFindUrl = context.bodyAsJson.getString("ruleFindUrl")
+        val page = context.bodyAsJson.getInteger("page", 1)
+
+        WebBook(bookSource).exploreBook(ruleFindUrl, page)
+                .onSuccess {
+                    context.success(it)
+                }
+                .onError {
+                    context.error(it)
+                }
 
     }
 

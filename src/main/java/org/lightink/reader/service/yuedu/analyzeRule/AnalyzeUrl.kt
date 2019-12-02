@@ -18,6 +18,7 @@ import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.lightink.reader.service.yuedu.utils.TextUtils
 import retrofit2.Call
+import java.lang.RuntimeException
 import java.net.URLEncoder
 import java.util.*
 import java.util.regex.Pattern
@@ -276,6 +277,7 @@ class AnalyzeUrl(
 //            params.postData = bodyTxt?.toByteArray()
 //            return HttpHelper.ajax(params)
             //todo webview
+            throw RuntimeException("java server not support webview!")
         }
         val res = when {
             method == RequestMethod.POST -> {
