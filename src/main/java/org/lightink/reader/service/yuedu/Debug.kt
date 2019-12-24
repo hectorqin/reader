@@ -15,7 +15,11 @@ private val logger = KotlinLogging.logger {}
 
 object Debug {
     private var debugSource: String? = null
-    var callback: Callback? = null
+    var callback: Callback? = object : Callback {
+        override fun printLog(state: Int, msg: String) {
+            logger.info("state: {}, msg: {}", state, msg)
+        }
+    }
     private val tasks: CompositeCoroutine = CompositeCoroutine()
 
     private val DEBUG_TIME_FORMAT = SimpleDateFormat("[mm:ss.SSS]", Locale.getDefault())
@@ -30,7 +34,7 @@ object Debug {
             showTime: Boolean = true,
             state: Int = 1
     ) {
-        if (debugSource != sourceUrl || callback == null || !print) return
+//        if (debugSource != sourceUrl || callback == null || !print) return
         var printMsg = msg ?: ""
         if (isHtml) {
             printMsg = printMsg.htmlFormat()
