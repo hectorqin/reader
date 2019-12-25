@@ -5,6 +5,7 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.model.WebBook
+import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
 import kotlinx.coroutines.CoroutineScope
@@ -33,8 +34,9 @@ class HoumoApi : BaseApi {
     }
 
     private fun getBookInfo(context: RoutingContext) {
-        val bookSource = context.bodyAsJson.getJsonObject("bookSource").toString()
-        val book = context.bodyAsJson.getJsonObject("searchBook").mapTo(SearchBook::class.java).toBook()
+        val bookSourceCode = context.request().params().get("bookSource")
+        val book =  JsonObject(context.request().params().get("searchBook")).mapTo(SearchBook::class.java).toBook()
+        val bookSource = YueduSchedule.Shuyuan.get(bookSourceCode)
         WebBook(bookSource).getBookInfo(book)
                 .onSuccess {
                     context.success(it)
