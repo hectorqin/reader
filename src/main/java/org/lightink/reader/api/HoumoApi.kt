@@ -47,9 +47,11 @@ class HoumoApi : BaseApi {
     }
 
     private fun getContent(context: RoutingContext) {
-        val bookSource = context.bodyAsJson.getJsonObject("bookSource").toString()
-        val book = context.bodyAsJson.getJsonObject("book").mapTo(Book::class.java)
-        val bookChapter = context.bodyAsJson.getJsonObject("bookChapter").mapTo(BookChapter::class.java)
+        val bookSourceCode = context.request().params().get("bookSource").toString()
+        val book = JsonObject(context.request().params().get("book")).mapTo(Book::class.java)
+        val bookChapter = JsonObject(context.request().params().get("bookChapter")).mapTo(BookChapter::class.java)
+        val bookSource = YueduSchedule.Shuyuan.get(bookSourceCode)
+
         WebBook(bookSource).getContent(book, bookChapter)
                 .onSuccess {
                     context.success(it)
