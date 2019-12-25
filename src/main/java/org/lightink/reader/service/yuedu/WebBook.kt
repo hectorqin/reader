@@ -19,7 +19,7 @@ private val logger = KotlinLogging.logger {}
 
 class WebBook(val bookSource: BookSource) {
 
-    constructor(bookSourceString: String) : this(OldRule.jsonToBookSource(bookSourceString))
+    constructor(bookSourceString: String) : this(OldRule.jsonToBookSource(bookSourceString)!!)
 
     val sourceUrl: String
         get() = bookSource.bookSourceUrl
