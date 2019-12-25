@@ -61,8 +61,10 @@ class HoumoApi : BaseApi {
     }
 
     private fun getChapterList(context: RoutingContext) {
-        val bookSource = context.bodyAsJson.getJsonObject("bookSource").toString()
-        val book = context.bodyAsJson.getJsonObject("book").mapTo(Book::class.java)
+        val bookSourceCode = context.request().params().get("bookSource").toString()
+        val book = JsonObject(context.request().params().get("book")).mapTo(Book::class.java)
+        val bookSource = YueduSchedule.Shuyuan.get(bookSourceCode)
+
         WebBook(bookSource).getChapterList(book)
                 .onSuccess {
                     context.success(it)
