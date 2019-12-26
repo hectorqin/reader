@@ -64,9 +64,9 @@ object HttpHelper {
                 //增加返回值为字符串的支持(以实体类返回)
                 .addConverterFactory(EncodeConverter(encode))
                 //增加返回值为Observable<T>的支持
-                .callFactory(VertxCallFactory(rxClient))
+//                .callFactory(VertxCallFactory(rxClient))
                 .addCallAdapterFactory(CoroutinesCallAdapterFactory.create())
-//                .client(client)
+                .client(client)
                 .build()
     }
 
