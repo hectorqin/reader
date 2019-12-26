@@ -34,8 +34,8 @@ class HoumoApi : BaseApi {
     }
 
     private fun getBookInfo(context: RoutingContext) {
-        val bookSourceCode = context.request().params().get("bookSource")
-        val book =  JsonObject(context.request().params().get("searchBook")).mapTo(SearchBook::class.java).toBook()
+        val bookSourceCode = context.bodyAsJson.getJsonObject("bookSource").toString()
+        val book =  context.bodyAsJson.getJsonObject("searchBook").mapTo(SearchBook::class.java).toBook()
         val bookSource = YueduSchedule.Shuyuan.get(bookSourceCode)
         WebBook(bookSource).getBookInfo(book)
                 .onSuccess {
@@ -47,9 +47,9 @@ class HoumoApi : BaseApi {
     }
 
     private fun getContent(context: RoutingContext) {
-        val bookSourceCode = context.request().params().get("bookSource").toString()
-        val book = JsonObject(context.request().params().get("book")).mapTo(Book::class.java)
-        val bookChapter = JsonObject(context.request().params().get("bookChapter")).mapTo(BookChapter::class.java)
+        val bookSourceCode = context.bodyAsJson.getJsonObject("bookSource").toString()
+        val book = context.bodyAsJson.getJsonObject("book").mapTo(Book::class.java)
+        val bookChapter = context.bodyAsJson.getJsonObject("bookChapter").mapTo(BookChapter::class.java)
         val bookSource = YueduSchedule.Shuyuan.get(bookSourceCode)
 
         WebBook(bookSource).getContent(book, bookChapter)
@@ -63,8 +63,8 @@ class HoumoApi : BaseApi {
     }
 
     private fun getChapterList(context: RoutingContext) {
-        val bookSourceCode = context.request().params().get("bookSource").toString()
-        val book = JsonObject(context.request().params().get("book")).mapTo(Book::class.java)
+        val bookSourceCode = context.bodyAsJson.getJsonObject("bookSource").toString()
+        val book = context.bodyAsJson.getJsonObject("book").mapTo(Book::class.java)
         val bookSource = YueduSchedule.Shuyuan.get(bookSourceCode)
 
         WebBook(bookSource).getChapterList(book)
@@ -93,9 +93,9 @@ class HoumoApi : BaseApi {
 
     private fun searchBook(context: RoutingContext) {
 
-        val bookSourceCode = context.request().params().get("bookSource")
-        val key = context.request().params().get("key")
-        val page = context.request().params().get("page")?.toInt(1)
+        val bookSourceCode = context.bodyAsJson.getJsonObject("bookSource").toString()
+        val key = context.bodyAsJson.getString("key")
+        val page = context.bodyAsJson.getInteger("page", 1)
         val bookSource = YueduSchedule.Shuyuan.get(bookSourceCode)
 
         WebBook(bookSource).searchBook(key, page)
