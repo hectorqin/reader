@@ -35,6 +35,7 @@ class YueduSchedule {
                     Shuyuan.shuyuanlist = map
                     logger.info("shuyuan: {}", map)
                 }
+        
     }
 
     companion object Shuyuan {

@@ -1,14 +1,14 @@
 package io.legado.app.help.http
 
-import com.julienviet.retrofit.vertx.VertxCallFactory
 import io.vertx.core.http.HttpClientOptions
-import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.*
+import okhttp3.ConnectionSpec
+import okhttp3.logging.HttpLoggingInterceptor
 import org.lightink.reader.ReaderApplication
 import retrofit2.Retrofit
 import java.util.*
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
+
 
 object HttpHelper {
 
@@ -25,6 +25,8 @@ object HttpHelper {
         val dispatcher = Dispatcher()
         dispatcher.maxRequests = 200
         dispatcher.maxRequestsPerHost = 200
+        val logging = HttpLoggingInterceptor()
+        logging.level = HttpLoggingInterceptor.Level.BODY
 
         val builder = OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)
@@ -39,6 +41,8 @@ object HttpHelper {
                 .protocols(listOf(Protocol.HTTP_1_1))
                 .dispatcher(dispatcher)
                 .addInterceptor(getHeaderInterceptor())
+                .addInterceptor(logging)
+
 
         builder.build()
     }

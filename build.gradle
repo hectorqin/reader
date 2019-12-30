@@ -59,6 +59,7 @@ dependencies {
     implementation 'cn.wanghaomiao:JsoupXpath:2.3.2'
     implementation 'com.jayway.jsonpath:json-path:2.4.0'
     implementation 'com.julienviet:retrofit-vertx:1.1.3'
+    implementation("com.squareup.okhttp3:logging-interceptor:4.2.1")
 
 }
 compileKotlin {
