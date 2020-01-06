@@ -13,6 +13,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
 import org.gosky.aroundight.api.BaseApi
+import org.lightink.reader.service.YueduSchedule
 import org.lightink.reader.utils.error
 import org.lightink.reader.utils.success
 import org.lightink.reader.verticle.coroutineHandler
@@ -35,7 +36,12 @@ class YueduApi : BaseApi {
     }
 
     private fun getBookInfo(context: RoutingContext) {
-        val bookSource = context.bodyAsJson.getJsonObject("bookSource").toString()
+        val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
+        val bookSource = if (bookSourceCode != null) {
+            YueduSchedule.Shuyuan.get(bookSourceCode)
+        } else {
+            context.bodyAsJson.getJsonObject("bookSource").toString()
+        }
         val book = context.bodyAsJson.getJsonObject("searchBook").mapTo(SearchBook::class.java).toBook()
         WebBook(bookSource).getBookInfo(book)
                 .onSuccess {
@@ -47,7 +53,12 @@ class YueduApi : BaseApi {
     }
 
     private fun getContent(context: RoutingContext) {
-        val bookSource = context.bodyAsJson.getJsonObject("bookSource").toString()
+        val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
+        val bookSource = if (bookSourceCode != null) {
+            YueduSchedule.Shuyuan.get(bookSourceCode)
+        } else {
+            context.bodyAsJson.getJsonObject("bookSource").toString()
+        }
         val book = context.bodyAsJson.getJsonObject("book").mapTo(Book::class.java)
         val bookChapter = context.bodyAsJson.getJsonObject("bookChapter").mapTo(BookChapter::class.java)
         WebBook(bookSource).getContent(book, bookChapter)
@@ -61,7 +72,12 @@ class YueduApi : BaseApi {
     }
 
     private fun getChapterList(context: RoutingContext) {
-        val bookSource = context.bodyAsJson.getJsonObject("bookSource").toString()
+        val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
+        val bookSource = if (bookSourceCode != null) {
+            YueduSchedule.Shuyuan.get(bookSourceCode)
+        } else {
+            context.bodyAsJson.getJsonObject("bookSource").toString()
+        }
         val book = context.bodyAsJson.getJsonObject("book").mapTo(Book::class.java)
         WebBook(bookSource).getChapterList(book)
                 .onSuccess {
@@ -73,7 +89,12 @@ class YueduApi : BaseApi {
     }
 
     private fun exploreBook(context: RoutingContext) {
-        val bookSource = context.bodyAsJson.getJsonObject("bookSource").toString()
+        val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
+        val bookSource = if (bookSourceCode != null) {
+            YueduSchedule.Shuyuan.get(bookSourceCode)
+        } else {
+            context.bodyAsJson.getJsonObject("bookSource").toString()
+        }
         val ruleFindUrl = context.bodyAsJson.getString("ruleFindUrl")
         val page = context.bodyAsJson.getInteger("page", 1)
 
@@ -89,7 +110,12 @@ class YueduApi : BaseApi {
 
     private fun searchBook(context: RoutingContext) {
 
-        val bookSource = context.bodyAsJson.getJsonObject("bookSource").toString()
+        val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
+        val bookSource = if (bookSourceCode != null) {
+            YueduSchedule.Shuyuan.get(bookSourceCode)
+        } else {
+            context.bodyAsJson.getJsonObject("bookSource").toString()
+        }
         val key = context.bodyAsJson.getString("key")
         val page = context.bodyAsJson.getInteger("page", 1)
         logger.info { "searchBook" }
