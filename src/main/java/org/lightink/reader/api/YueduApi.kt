@@ -33,6 +33,11 @@ class YueduApi : BaseApi {
         router.post("/yuedu/getBookInfo").handler { getBookInfo(it) }
         router.post("/yuedu/getChapterList").handler { getChapterList(it) }
         router.post("/yuedu/getContent").handler { getContent(it) }
+        router.get("/yuedu/md5").handler { getMd5(it) }
+    }
+
+    private fun getMd5(it: RoutingContext) {
+        it.success(YueduSchedule.Shuyuan.shuyuanlist)
     }
 
     private fun getBookInfo(context: RoutingContext) {
