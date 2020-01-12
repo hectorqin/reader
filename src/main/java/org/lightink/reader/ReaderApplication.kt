@@ -1,5 +1,6 @@
 package org.lightink.reader
 
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.vertx.core.Future
 import io.vertx.core.Vertx
@@ -52,6 +53,8 @@ class ReaderApplication {
         Json.prettyMapper.apply {
             registerKotlinModule()
         }
+
+        Json.mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
         val webClientOptions = WebClientOptions()
         webClientOptions.isTryUseCompression = true
