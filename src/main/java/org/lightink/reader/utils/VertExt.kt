@@ -2,6 +2,7 @@ package org.lightink.reader.utils
 
 import com.google.common.base.Throwables
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import io.vertx.core.Handler
 
 import io.vertx.core.json.JsonObject
@@ -22,7 +23,7 @@ import java.net.URLEncoder
  */
 private val logger = KotlinLogging.logger {}
 
-val gson = Gson()
+val gson = GsonBuilder().disableHtmlEscaping().create()
 
 fun RoutingContext.success(any: Any?) {
     val toJson: String = if (any is JsonObject) {
