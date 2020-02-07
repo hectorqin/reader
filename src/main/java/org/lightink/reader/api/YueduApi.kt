@@ -41,7 +41,6 @@ class YueduApi : BaseApi {
     }
 
 
-
     private fun getBookInfo(context: RoutingContext) {
         val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
         val bookSource = if (bookSourceCode != null) {
@@ -70,7 +69,7 @@ class YueduApi : BaseApi {
         val bookChapter = context.bodyAsJson.getJsonObject("bookChapter").mapTo(BookChapter::class.java)
         WebBook(bookSource).getContent(book, bookChapter)
                 .onSuccess {
-                    context.success(it)
+                    context.success(mapOf<String, Any?>("text" to it))
                 }
                 .onError {
                     context.error(it)
