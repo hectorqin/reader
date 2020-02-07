@@ -53,7 +53,11 @@ class WebBook(val bookSource: BookSource) {
                         analyzeUrl,
                         res.url,
                         true
-                )
+                ).map {
+                    it.tocHtml = ""
+                    it.infoHtml = ""
+                    it
+                }
             } ?: arrayListOf()
         }
     }
@@ -107,6 +111,7 @@ class WebBook(val bookSource: BookSource) {
                 analyzeUrl.getResponseAwait().body
             }
             BookInfo.analyzeBookInfo(book, body, bookSource, book.bookUrl)
+            book.tocHtml = null
             book
         }
     }
