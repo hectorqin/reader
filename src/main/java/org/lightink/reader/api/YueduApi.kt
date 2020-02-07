@@ -40,6 +40,8 @@ class YueduApi : BaseApi {
         it.success(YueduSchedule.Shuyuan.shuyuanlist)
     }
 
+
+
     private fun getBookInfo(context: RoutingContext) {
         val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
         val bookSource = if (bookSourceCode != null) {
@@ -64,7 +66,7 @@ class YueduApi : BaseApi {
         } else {
             context.bodyAsJson.getJsonObject("bookSource").toString()
         }
-        val book = context.bodyAsJson.getJsonObject("book").mapTo(Book::class.java)
+        val book = context.bodyAsJson.getJsonObject("book")?.mapTo(Book::class.java)
         val bookChapter = context.bodyAsJson.getJsonObject("bookChapter").mapTo(BookChapter::class.java)
         WebBook(bookSource).getContent(book, bookChapter)
                 .onSuccess {

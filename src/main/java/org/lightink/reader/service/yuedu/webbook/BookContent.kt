@@ -19,7 +19,7 @@ object BookContent {
     suspend fun analyzeContent(
             coroutineScope: CoroutineScope,
             body: String?,
-            book: Book,
+            book: Book?,
             bookChapter: BookChapter,
             bookSource: BookSource,
             baseUrl: String,
@@ -108,7 +108,7 @@ object BookContent {
     private fun analyzeContent(
             body: String,
             contentRule: ContentRule,
-            book: Book,
+            book: Book?,
             chapter: BookChapter,
             bookSource: BookSource,
             baseUrl: String,

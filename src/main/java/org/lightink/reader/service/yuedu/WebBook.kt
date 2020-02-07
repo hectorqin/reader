@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import mu.KotlinLogging
 import kotlin.coroutines.CoroutineContext
+
 private val logger = KotlinLogging.logger {}
 
 class WebBook(val bookSource: BookSource) {
@@ -45,7 +46,7 @@ class WebBook(val bookSource: BookSource) {
                 )
                 val currentTimeMillis = System.currentTimeMillis()
                 val res = analyzeUrl.getResponseAwait()
-                logger.info { "getResponseAwait " + (System.currentTimeMillis() - currentTimeMillis)}
+                logger.info { "getResponseAwait " + (System.currentTimeMillis() - currentTimeMillis) }
                 BookList.analyzeBookList(
                         res.body,
                         bookSource,
@@ -138,7 +139,7 @@ class WebBook(val bookSource: BookSource) {
      * 章节内容
      */
     fun getContent(
-            book: Book,
+            book: Book?,
             bookChapter: BookChapter,
             nextChapterUrl: String? = null,
             scope: CoroutineScope = Coroutine.DEFAULT,
@@ -148,14 +149,14 @@ class WebBook(val bookSource: BookSource) {
             if (bookSource.getContentRule().content.isNullOrEmpty()) {
                 return@async bookChapter.url
             }
-            val body = if (bookChapter.url == book.bookUrl && !book.tocHtml.isNullOrEmpty()) {
+            val body = if (book != null && bookChapter.url == book.bookUrl && !book.tocHtml.isNullOrEmpty()) {
                 book.tocHtml
             } else {
                 val analyzeUrl =
                         AnalyzeUrl(
                                 book = book,
                                 ruleUrl = bookChapter.url,
-                                baseUrl = book.tocUrl,
+                                baseUrl = book?.tocUrl,
                                 headerMapF = bookSource.getHeaderMap()
                         )
                 analyzeUrl.getResponseAwait(

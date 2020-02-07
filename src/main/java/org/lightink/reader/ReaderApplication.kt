@@ -35,7 +35,8 @@ class ReaderApplication {
     private lateinit var restVerticle: RestVerticle
 
     companion object {
-        fun vertx() = Vertx.vertx()
+        val vertx by lazy { Vertx.vertx() }
+        fun vertx() = vertx
     }
 
     @PostConstruct

@@ -46,8 +46,8 @@ class AnalyzeUrl(
     private var baseUrl: String = ""
     lateinit var url: String
         private set
-    var path: String? = null
-        private set
+//    var path: String? = null
+//        private set
     val headerMap = HashMap<String, String>()
     private var queryStr: String? = null
     private val fieldMap = LinkedHashMap<String, String>()
