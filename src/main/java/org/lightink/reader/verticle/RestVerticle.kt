@@ -1,8 +1,6 @@
 package org.lightink.reader.verticle
 
 import io.vertx.core.http.HttpMethod
-import io.vertx.core.logging.LoggerFactory
-import io.vertx.core.logging.SLF4JLogDelegateFactory
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
@@ -11,33 +9,19 @@ import io.vertx.ext.web.handler.CorsHandler
 import io.vertx.ext.web.handler.LoggerFormat
 import io.vertx.ext.web.handler.LoggerHandler
 import io.vertx.kotlin.coroutines.CoroutineVerticle
-import io.vertx.kotlin.coroutines.dispatcher
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import mu.KotlinLogging
-import org.gosky.aroundight.api.BaseApi
 import org.lightink.reader.utils.error
 import org.lightink.reader.utils.success
-import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.stereotype.Component
 import java.net.URLDecoder
 
 
-/**
- * @Date: 2019-02-24 14:50
- * @Description:
- */
-
 private val logger = KotlinLogging.logger {}
 
-@Component
-class RestVerticle : CoroutineVerticle() {
+abstract class RestVerticle : CoroutineVerticle() {
 
     protected lateinit var router: Router
-
-    @Autowired
-    private lateinit var apiList: List<BaseApi>
-
 
     override suspend fun start() {
         super.start()
@@ -69,12 +53,6 @@ class RestVerticle : CoroutineVerticle() {
         router.route().handler(CorsHandler.create("*").allowedHeaders(allowedHeaders).allowedMethods(allowedMethods))
         router.route().handler(BodyHandler.create())
 
-
-        System.setProperty(LoggerFactory.LOGGER_DELEGATE_FACTORY_CLASS_NAME, SLF4JLogDelegateFactory::class.java.name)
-
-        LoggerFactory.getLogger(LoggerFactory::class.java) // Required for Logback to work in Vertx
-
-
         router.route().handler(LoggerHandler.create(LoggerFormat.DEFAULT));
         router.route().handler {
             logger.info("request url: {}", URLDecoder.decode(it.request().absoluteURI()))
@@ -83,7 +61,8 @@ class RestVerticle : CoroutineVerticle() {
         }
 
         router.get("/health").handler { it.success("ok!") }
-        apiList.forEach { it.initRouter(router, CoroutineScope(coroutineContext)) }
+
+        initRouter(router)
 
 //        router.errorHandler(500) { routerContext ->
 //            logger.error { routerContext.failure().message }
@@ -98,18 +77,21 @@ class RestVerticle : CoroutineVerticle() {
 
     }
 
-}
+    abstract suspend fun initRouter(router: Router);
 
-/**
- * An extension method for simplifying coroutines usage with Vert.x Web routers
- */
-fun Route.coroutineHandler(coroutineScope: CoroutineScope, fn: suspend (RoutingContext) -> Any) {
-    handler { ctx ->
-        coroutineScope.launch(ctx.vertx().dispatcher()) {
-            try {
-                ctx.success(fn(ctx))
-            } catch (e: Exception) {
-                ctx.error(e)
+
+    /**
+     * An extension method for simplifying coroutines usage with Vert.x Web routers
+     */
+    fun Route.coroutineHandler(fn: suspend (RoutingContext) -> Any) {
+        handler { ctx ->
+            val job = launch(Dispatchers.IO) {
+                try {
+                    ctx.success(fn(ctx))
+//                    fn(ctx)
+                } catch (e: Exception) {
+                    ctx.error(e)
+                }
             }
         }
     }

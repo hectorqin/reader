@@ -8,6 +8,7 @@ import io.legado.app.utils.*
 import org.lightink.reader.service.yuedu.utils.Base64
 import org.lightink.reader.service.yuedu.utils.TextUtils
 import org.mozilla.javascript.NativeObject
+import java.lang.RuntimeException
 import java.util.regex.Pattern
 import javax.script.SimpleBindings
 import kotlin.collections.HashMap
@@ -35,7 +36,7 @@ class AnalyzeRule(var book: BaseBook? = null) {
     @Throws(Exception::class)
     @JvmOverloads
     fun setContent(content: Any?, baseUrl: String? = this.baseUrl): AnalyzeRule {
-        if (content == null) throw AssertionError("Content cannot be null")
+        if (content == null) throw RuntimeException("Content cannot be null")
         isJSON = content.toString().isJson()
         this.content = content
         this.baseUrl = baseUrl

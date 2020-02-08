@@ -49,7 +49,7 @@ class DebugTest {
                 "\t\"serialNumber\": 15,\n" +
                 "\t\"weight\": 0\n" +
                 "}")
-        val webBook = WebBook(bookSource)
+        val webBook = WebBook(bookSource!!)
         Debug.startDebug(webBook, "剑来")
         Thread.sleep(1000000)
     }

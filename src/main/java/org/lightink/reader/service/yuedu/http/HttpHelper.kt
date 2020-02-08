@@ -41,7 +41,7 @@ object HttpHelper {
                 .protocols(listOf(Protocol.HTTP_1_1))
                 .dispatcher(dispatcher)
                 .addInterceptor(getHeaderInterceptor())
-                .addInterceptor(logging)
+//                .addInterceptor(logging)
 
 
         builder.build()

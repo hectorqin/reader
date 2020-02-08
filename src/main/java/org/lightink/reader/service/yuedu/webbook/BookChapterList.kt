@@ -14,7 +14,7 @@ import org.lightink.reader.service.yuedu.utils.TextUtils
 object BookChapterList {
 
     suspend fun analyzeChapterList(
-            coroutineScope: CoroutineScope,
+//            coroutineScope: CoroutineScope,
             book: Book,
             body: String?,
             bookSource: BookSource,
@@ -71,7 +71,7 @@ object BookChapterList {
                 chapterDataList.add(data)
             }
             for (item in chapterDataList) {
-                withContext(coroutineScope.coroutineContext) {
+//                withContext(coroutineScope.coroutineContext) {
                     val nextBody = AnalyzeUrl(
                             ruleUrl = item.nextUrl,
                             book = book,
@@ -81,7 +81,7 @@ object BookChapterList {
                             nextBody, item.nextUrl, tocRule, listRule, book, bookSource
                     )
                     item.chapterList = nextChapterData.chapterList
-                }
+//                }
             }
             for (item in chapterDataList) {
                 item.chapterList?.let {

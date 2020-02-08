@@ -2,38 +2,52 @@ package org.lightink.reader.api
 
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
-import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
+import io.legado.app.help.storage.OldRule
+import io.legado.app.model.Debug
 import io.legado.app.model.WebBook
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import mu.KotlinLogging
-import org.gosky.aroundight.api.BaseApi
 import org.lightink.reader.service.YueduSchedule
+import org.lightink.reader.service.yuedu.constant.DeepinkBookSource
 import org.lightink.reader.utils.error
 import org.lightink.reader.utils.success
-import org.lightink.reader.verticle.coroutineHandler
+import org.lightink.reader.verticle.RestVerticle
 import org.springframework.stereotype.Component
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 
 private val logger = KotlinLogging.logger {}
 
 @Component
-class YueduApi : BaseApi {
+class YueduApi : RestVerticle() {
 
 
-    override suspend fun initRouter(router: Router, coroutineScope: CoroutineScope) {
-        router.post("/yuedu/searchBook").handler { searchBook(it) }
-        router.post("/yuedu/exploreBook").handler { exploreBook(it) }
-        router.post("/yuedu/getBookInfo").handler { getBookInfo(it) }
-        router.post("/yuedu/getChapterList").handler { getChapterList(it) }
-        router.post("/yuedu/getContent").handler { getContent(it) }
+    override suspend fun initRouter(router: Router) {
+        router.post("/yuedu/searchBook").coroutineHandler { searchBook(it) }
+        router.post("/yuedu/exploreBook").coroutineHandler { exploreBook(it) }
+        router.post("/yuedu/getBookInfo").coroutineHandler { getBookInfo(it) }
+        router.post("/yuedu/getChapterList").coroutineHandler { getChapterList(it) }
+        router.post("/yuedu/getContent").coroutineHandler { getContent(it) }
         router.get("/yuedu/md5").handler { getMd5(it) }
+        router.get("/yuedu/check").coroutineHandler { check(it) }
+    }
+
+    private suspend fun check(value: RoutingContext) {
+        for (mutableEntry in YueduSchedule.shuyuanlist) {
+            try {
+                logger.info("开始检测 md5: {}", mutableEntry.key)
+                val bookSource = OldRule.jsonToBookSource(json = mutableEntry.value)!!
+                val webBook = WebBook(bookSource)
+                Debug.startDebug(webBook, "剑来")
+                logger.info("结束检测 md5: {}", mutableEntry.key)
+                logger.info("生成文件 md5: {}", mutableEntry.key)
+                DeepinkBookSource.generate(bookSource.bookSourceName,
+                        bookSource.bookSourceUrl, mutableEntry.key)
+            } catch (e: Exception) {
+
+            }
+
+        }
     }
 
     private fun getMd5(it: RoutingContext) {
@@ -41,7 +55,7 @@ class YueduApi : BaseApi {
     }
 
 
-    private fun getBookInfo(context: RoutingContext) {
+    private suspend fun getBookInfo(context: RoutingContext): Book {
         val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
         val bookSource = if (bookSourceCode != null) {
             YueduSchedule.Shuyuan.get(bookSourceCode)
@@ -49,16 +63,11 @@ class YueduApi : BaseApi {
             context.bodyAsJson.getJsonObject("bookSource").toString()
         }
         val book = context.bodyAsJson.getJsonObject("searchBook").mapTo(SearchBook::class.java).toBook()
-        WebBook(bookSource).getBookInfo(book)
-                .onSuccess {
-                    context.success(it)
-                }
-                .onError {
-                    context.error(it)
-                }
+        return WebBook(bookSource).getBookInfo(book)
+
     }
 
-    private fun getContent(context: RoutingContext) {
+    private suspend fun getContent(context: RoutingContext): String {
         val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
         val bookSource = if (bookSourceCode != null) {
             YueduSchedule.Shuyuan.get(bookSourceCode)
@@ -67,17 +76,11 @@ class YueduApi : BaseApi {
         }
         val book = context.bodyAsJson.getJsonObject("book")?.mapTo(Book::class.java)
         val bookChapter = context.bodyAsJson.getJsonObject("bookChapter").mapTo(BookChapter::class.java)
-        WebBook(bookSource).getContent(book, bookChapter)
-                .onSuccess {
-                    context.success(mapOf<String, Any?>("text" to it))
-                }
-                .onError {
-                    context.error(it)
-                }
+        return WebBook(bookSource).getContent(book, bookChapter)
 
     }
 
-    private fun getChapterList(context: RoutingContext) {
+    private suspend fun getChapterList(context: RoutingContext): List<BookChapter> {
         val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
         val bookSource = if (bookSourceCode != null) {
             YueduSchedule.Shuyuan.get(bookSourceCode)
@@ -85,16 +88,11 @@ class YueduApi : BaseApi {
             context.bodyAsJson.getJsonObject("bookSource").toString()
         }
         val book = context.bodyAsJson.getJsonObject("book").mapTo(Book::class.java)
-        WebBook(bookSource).getChapterList(book)
-                .onSuccess {
-                    context.success(it)
-                }
-                .onError {
-                    context.error(it)
-                }
+        return WebBook(bookSource).getChapterList(book)
+
     }
 
-    private fun exploreBook(context: RoutingContext) {
+    private suspend fun exploreBook(context: RoutingContext): List<SearchBook> {
         val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
         val bookSource = if (bookSourceCode != null) {
             YueduSchedule.Shuyuan.get(bookSourceCode)
@@ -104,17 +102,11 @@ class YueduApi : BaseApi {
         val ruleFindUrl = context.bodyAsJson.getString("ruleFindUrl")
         val page = context.bodyAsJson.getInteger("page", 1)
 
-        WebBook(bookSource).exploreBook(ruleFindUrl, page)
-                .onSuccess {
-                    context.success(it)
-                }
-                .onError {
-                    context.error(it)
-                }
+        return WebBook(bookSource).exploreBook(ruleFindUrl, page)
 
     }
 
-    private fun searchBook(context: RoutingContext) {
+    private suspend fun searchBook(context: RoutingContext): List<SearchBook> {
 
         val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
         val bookSource = if (bookSourceCode != null) {
@@ -125,13 +117,8 @@ class YueduApi : BaseApi {
         val key = context.bodyAsJson.getString("key")
         val page = context.bodyAsJson.getInteger("page", 1)
         logger.info { "searchBook" }
-        WebBook(bookSource).searchBook(key, page)
-                .onSuccess {
-                    context.success(it)
-                }
-                .onError {
-                    context.error(it)
-                }
+        return WebBook(bookSource).searchBook(key, page)
+
     }
 
 }

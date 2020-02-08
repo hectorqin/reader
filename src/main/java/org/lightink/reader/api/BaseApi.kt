@@ -11,7 +11,7 @@ import kotlinx.coroutines.CoroutineScope
  */
 interface BaseApi {
 
-    suspend fun initRouter(router: Router, coroutineScope: CoroutineScope)
+    suspend fun initRouter(router: Router)
 
 
 

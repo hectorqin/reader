@@ -16,6 +16,7 @@ import io.vertx.kotlin.sqlclient.poolOptionsOf
 import io.vertx.mysqlclient.MySQLConnectOptions
 import io.vertx.mysqlclient.MySQLPool
 import mu.KotlinLogging
+import org.lightink.reader.api.YueduApi
 import org.lightink.reader.config.MysqlConfig
 
 import org.lightink.reader.verticle.RestVerticle
@@ -32,7 +33,7 @@ private val logger = KotlinLogging.logger {}
 class ReaderApplication {
 
     @Autowired
-    private lateinit var restVerticle: RestVerticle
+    private lateinit var yueduApi: YueduApi
 
     companion object {
         val vertx by lazy { Vertx.vertx() }
@@ -41,7 +42,7 @@ class ReaderApplication {
 
     @PostConstruct
     fun deployVerticle() {
-        vertx().deployVerticle(restVerticle)
+        vertx().deployVerticle(yueduApi)
     }
 
     @Bean
