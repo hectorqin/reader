@@ -76,7 +76,9 @@ class YueduApi : RestVerticle() {
         }
         val book = context.bodyAsJson.getJsonObject("book")?.mapTo(Book::class.java)
         val bookChapter = context.bodyAsJson.getJsonObject("bookChapter").mapTo(BookChapter::class.java)
-        return WebBook(bookSource).getContent(book, bookChapter)
+        val content = WebBook(bookSource).getContent(book, bookChapter)
+
+        return mapOf<String, Any?>("text" to content)
 
     }
 
