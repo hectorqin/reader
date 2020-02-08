@@ -67,7 +67,7 @@ class YueduApi : RestVerticle() {
 
     }
 
-    private suspend fun getContent(context: RoutingContext): String {
+    private suspend fun getContent(context: RoutingContext): Map<String, Any?> {
         val bookSourceCode = context.bodyAsJson.getString("bookSourceCode")
         val bookSource = if (bookSourceCode != null) {
             YueduSchedule.Shuyuan.get(bookSourceCode)
