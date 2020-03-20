@@ -3,11 +3,7 @@
 
 ### 接口文档与相关说明
 
-<http://docs.yuedu.best/>
-
-<http://docs.yuedu.best/>
-
-<http://docs.yuedu.best/>
+https://github.com/lightink-qingmo/qingmo-doc
 
 ### 部署
 
