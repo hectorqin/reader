@@ -15,9 +15,7 @@ import kotlinx.coroutines.withContext
 
 object BookContent {
 
-    @Throws(Exception::class)
     suspend fun analyzeContent(
-//            coroutineScope: CoroutineScope,
             body: String?,
             book: Book?,
             bookChapter: BookChapter,
@@ -26,11 +24,6 @@ object BookContent {
             nextChapterUrlF: String? = null
     ): String {
         body ?: throw Exception(
-//            App.INSTANCE.getString(
-//                R.string.error_get_web_content,
-//                baseUrl
-//            )
-                // todo getString
                 "error_get_web_content"
         )
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${baseUrl}")
@@ -46,7 +39,6 @@ object BookContent {
             else
                 //todo
                 throw RuntimeException("我在java上没有App.db啊啊啊")
-//                App.db.bookChapterDao().getChapter(book.bookUrl, bookChapter.index + 1)?.url
             while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
                 if (!nextChapterUrl.isNullOrEmpty()
                         && NetworkUtils.getAbsoluteURL(baseUrl, nextUrl)
@@ -62,7 +54,7 @@ object BookContent {
                     contentData =
                             analyzeContent(
                                     nextBody, contentRule, book,
-                                    bookChapter, bookSource, baseUrl, false
+                                    bookChapter, bookSource, baseUrl
                             )
                     nextUrl =
                             if (contentData.nextUrl.isNotEmpty()) contentData.nextUrl[0] else ""
@@ -87,7 +79,7 @@ object BookContent {
                         contentData =
                                 analyzeContent(
                                         it, contentRule, book, bookChapter,
-                                        bookSource, item.nextUrl, false
+                                        bookSource, item.nextUrl
                                 )
                         item.content = contentData.content
                     }
@@ -104,15 +96,13 @@ object BookContent {
         return content.toString()
     }
 
-    @Throws(Exception::class)
     private fun analyzeContent(
             body: String,
             contentRule: ContentRule,
             book: Book?,
             chapter: BookChapter,
             bookSource: BookSource,
-            baseUrl: String,
-            printLog: Boolean = true
+            baseUrl: String
     ): ContentData<List<String>> {
         val nextUrlList = arrayListOf<String>()
         val analyzeRule = AnalyzeRule(book)
@@ -120,11 +110,11 @@ object BookContent {
         analyzeRule.chapter = chapter
         val nextUrlRule = contentRule.nextContentUrl
         if (!nextUrlRule.isNullOrEmpty()) {
-            Debug.log(bookSource.bookSourceUrl, "┌获取正文下一页链接", printLog)
+            Debug.log(bookSource.bookSourceUrl, "┌获取正文下一页链接")
             analyzeRule.getStringList(nextUrlRule, true)?.let {
                 nextUrlList.addAll(it)
             }
-            Debug.log(bookSource.bookSourceUrl, "└" + nextUrlList.joinToString("，"), printLog)
+            Debug.log(bookSource.bookSourceUrl, "└" + nextUrlList.joinToString("，"))
         }
         val content = analyzeRule.getString(contentRule.content).htmlFormat()
         return ContentData(content, nextUrlList)

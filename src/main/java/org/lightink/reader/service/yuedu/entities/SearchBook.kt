@@ -103,7 +103,7 @@ data class SearchBook(
             coverUrl = coverUrl,
             intro = intro,
             tocUrl = tocUrl,
-            originOrder = originOrder,
+//            originOrder = originOrder,
             variable = variable
         ).apply {
             this.infoHtml = this@SearchBook.infoHtml

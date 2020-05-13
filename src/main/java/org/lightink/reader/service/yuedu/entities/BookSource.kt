@@ -33,13 +33,13 @@ data class BookSource(
     var loginUrl: String? = null,             // 登录地址
     var lastUpdateTime: Long = 0,             // 最后更新时间，用于排序
     var weight: Int = 0,                      // 智能排序的权重
-    var exploreUrl: String? = null,           //发现url
-    var ruleExplore: String? = null,          // 发现规则
-    var searchUrl: String? = null,            //搜索url
-    var ruleSearch: String? = null,           // 搜索规则
-    var ruleBookInfo: String? = null,         // 书籍信息页规则
-    var ruleToc: String? = null,          // 目录页规则
-    var ruleContent: String? = null           // 正文页规则
+    var exploreUrl: String? = null,                 // 发现url
+    var ruleExplore: ExploreRule? = null,           // 发现规则
+    var searchUrl: String? = null,                  // 搜索url
+    var ruleSearch: SearchRule? = null,             // 搜索规则
+    var ruleBookInfo: BookInfoRule? = null,         // 书籍信息页规则
+    var ruleToc: TocRule? = null,                   // 目录页规则
+    var ruleContent: ContentRule? = null            // 正文页规则
 )  {
 //    @Ignore
 //    @IgnoredOnParcel
@@ -83,43 +83,23 @@ data class BookSource(
     }
 
     fun getSearchRule(): SearchRule {
-        searchRuleV ?: let {
-            searchRuleV = GSON.fromJsonObject<SearchRule>(ruleSearch)
-            searchRuleV ?: let { searchRuleV = SearchRule() }
-        }
-        return searchRuleV!!
+        return ruleSearch ?: SearchRule()
     }
 
     fun getExploreRule(): ExploreRule {
-        exploreRuleV ?: let {
-            exploreRuleV = GSON.fromJsonObject<ExploreRule>(ruleExplore)
-            exploreRuleV ?: let { exploreRuleV = ExploreRule() }
-        }
-        return exploreRuleV!!
+        return ruleExplore ?: ExploreRule()
     }
 
     fun getBookInfoRule(): BookInfoRule {
-        bookInfoRuleV ?: let {
-            bookInfoRuleV = GSON.fromJsonObject<BookInfoRule>(ruleBookInfo)
-            bookInfoRuleV ?: let { bookInfoRuleV = BookInfoRule() }
-        }
-        return bookInfoRuleV!!
+        return ruleBookInfo ?: BookInfoRule()
     }
 
     fun getTocRule(): TocRule {
-        tocRuleV ?: let {
-            tocRuleV = GSON.fromJsonObject<TocRule>(ruleToc)
-            tocRuleV ?: let { tocRuleV = TocRule() }
-        }
-        return tocRuleV!!
+        return ruleToc ?: TocRule()
     }
 
     fun getContentRule(): ContentRule {
-        contentRuleV ?: let {
-            contentRuleV = GSON.fromJsonObject<ContentRule>(ruleContent)
-            contentRuleV ?: let { contentRuleV = ContentRule() }
-        }
-        return contentRuleV!!
+        return ruleContent ?: ContentRule()
     }
 
 //    fun getExploreKinds(): ArrayList<ExploreKind>? {

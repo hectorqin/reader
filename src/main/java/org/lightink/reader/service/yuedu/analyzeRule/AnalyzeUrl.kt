@@ -13,6 +13,7 @@ import io.legado.app.help.http.RequestMethod
 import io.legado.app.help.http.Res
 import io.legado.app.utils.*
 import okhttp3.FormBody
+import okhttp3.MediaType
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -31,7 +32,7 @@ import javax.script.SimpleBindings
  */
 class AnalyzeUrl(
     var ruleUrl: String,
-    key: String? = null,
+    key: String? = null, //搜索关键字,只有搜索有
     page: Int? = null,
     headerMapF: Map<String, String>? = null,
     baseUrl: String? = null,

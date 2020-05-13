@@ -1,13 +1,13 @@
 package io.legado.app.model.analyzeRule
 
 import io.legado.app.utils.splitNotBlank
+import org.lightink.reader.service.yuedu.utils.TextUtils.isEmpty
+import org.lightink.reader.service.yuedu.utils.TextUtils.join
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.select.Collector
 import org.jsoup.select.Elements
 import org.jsoup.select.Evaluator
-import org.lightink.reader.service.yuedu.utils.TextUtils.isEmpty
-import org.lightink.reader.service.yuedu.utils.TextUtils.join
 import org.seimicrawler.xpath.JXNode
 import java.util.*
 

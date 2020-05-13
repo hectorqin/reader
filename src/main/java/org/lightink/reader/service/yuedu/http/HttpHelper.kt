@@ -41,14 +41,14 @@ object HttpHelper {
                 .protocols(listOf(Protocol.HTTP_1_1))
                 .dispatcher(dispatcher)
                 .addInterceptor(getHeaderInterceptor())
-//                .addInterceptor(logging)
+                .addInterceptor(logging)
 
 
         builder.build()
     }
 
     val rxClient by lazy {
-        val httpClient = ReaderApplication.vertx().createHttpClient(
+        val httpClient = ReaderApplication.vertx.createHttpClient(
                 HttpClientOptions()
                         .setMaxPoolSize(1000)
         )

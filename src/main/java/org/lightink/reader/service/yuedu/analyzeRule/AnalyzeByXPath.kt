@@ -1,10 +1,10 @@
 package io.legado.app.model.analyzeRule
 
 import io.legado.app.utils.splitNotBlank
+import org.lightink.reader.service.yuedu.utils.TextUtils
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
-import org.lightink.reader.service.yuedu.utils.TextUtils
 import org.seimicrawler.xpath.JXDocument
 import org.seimicrawler.xpath.JXNode
 import java.util.*

@@ -7,6 +7,7 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.utils.*
 import org.lightink.reader.service.yuedu.utils.Base64
 import org.lightink.reader.service.yuedu.utils.TextUtils
+import org.jsoup.Jsoup
 import org.mozilla.javascript.NativeObject
 import java.lang.RuntimeException
 import java.util.regex.Pattern

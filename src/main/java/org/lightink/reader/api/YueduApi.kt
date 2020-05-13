@@ -63,7 +63,7 @@ class YueduApi : RestVerticle() {
             context.bodyAsJson.getJsonObject("bookSource").toString()
         }
         val book = context.bodyAsJson.getJsonObject("searchBook").mapTo(SearchBook::class.java).toBook()
-        return WebBook(bookSource).getBookInfo(book)
+        return WebBook(bookSource).getBookInfo(book.bookUrl)
 
     }
 
@@ -76,7 +76,7 @@ class YueduApi : RestVerticle() {
         }
         val book = context.bodyAsJson.getJsonObject("book")?.mapTo(Book::class.java)
         val bookChapter = context.bodyAsJson.getJsonObject("bookChapter").mapTo(BookChapter::class.java)
-        val content = WebBook(bookSource).getContent(book, bookChapter)
+        val content = WebBook(bookSource).getContent(bookChapter.url)
 
         return mapOf<String, Any?>("text" to content)
 
@@ -90,7 +90,7 @@ class YueduApi : RestVerticle() {
             context.bodyAsJson.getJsonObject("bookSource").toString()
         }
         val book = context.bodyAsJson.getJsonObject("book").mapTo(Book::class.java)
-        return WebBook(bookSource).getChapterList(book)
+        return WebBook(bookSource).getChapterList(book.tocUrl)
 
     }
 

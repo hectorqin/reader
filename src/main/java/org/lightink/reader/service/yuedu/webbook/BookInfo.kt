@@ -17,8 +17,6 @@ object BookInfo {
         baseUrl: String
     ) {
         body ?: throw Exception(
-//            App.INSTANCE.getString(R.string.error_get_web_content, baseUrl)
-        //todo getString
         "error_get_web_content"
         )
         Debug.log(bookSource.bookSourceUrl, "≡获取成功:${baseUrl}")
@@ -60,7 +58,7 @@ object BookInfo {
         analyzeRule.getString(infoRule.intro).let {
             if (it.isNotEmpty()) book.intro = it.htmlFormat()
         }
-        Debug.log(bookSource.bookSourceUrl, "└${book.intro}", isHtml = true)
+        Debug.log(bookSource.bookSourceUrl, "└${book.intro}")
 
         Debug.log(bookSource.bookSourceUrl, "┌获取封面链接")
         analyzeRule.getString(infoRule.coverUrl).let {
