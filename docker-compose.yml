@@ -6,7 +6,6 @@ services:
     environment:
       - JAVA_TOOL_OPTIONS=-Xms256m -Xmx512m -Dspring.profiles.active=prod
       - logDir=/app/log
-      - QINGMO_SERVER_URL=http://qingmo.zohar.space
     ports:
       - "9010:8080"
     volumes:
