@@ -56,7 +56,7 @@
       </div>
       <div class="setting-wrapper">
         <div class="setting-title">
-          搜索设定
+          搜索书源
         </div>
         <div class="setting-item">
           <el-select
@@ -77,7 +77,7 @@
         </div>
       </div>
       <div class="bottom-icons">
-        <a href="https://github.com/celetor/web-yuedu3" target="_blank">
+        <a href="https://github.com/hectorqin/reader" target="_blank">
           <div class="bottom-icon">
             <img :src="require('../assets/imgs/github.png')" alt="" />
           </div>
@@ -86,7 +86,10 @@
     </div>
     <div class="shelf-wrapper" ref="shelfWrapper">
       <div class="shelf-title">
-        {{ this.isSearchResult ? "搜索结果" : "书架" }}
+        {{ isSearchResult ? "搜索结果" : "书架" }}
+        <div class="title-btn" v-if="isSearchResult" @click="backToShelf">
+          返回书架
+        </div>
       </div>
       <div class="books-wrapper">
         <div class="wrapper">
@@ -202,7 +205,7 @@ export default {
             this.$store.commit("setNewConnect", true);
             instance.confirmButtonLoading = true;
             instance.confirmButtonText = "校验中……";
-            this.loadBookshelf()
+            this.loadBookshelf(instance.inputValue)
               .then(() => {
                 instance.confirmButtonLoading = false;
                 done();
@@ -318,7 +321,7 @@ export default {
         background: "rgb(247,247,247)"
       });
 
-      return Axios.get("http://" + localStorage.url + "/getBookshelf", {
+      return Axios.get("http://" + api + "/getBookshelf", {
         timeout: 3000
       })
         .then(response => {
@@ -452,6 +455,10 @@ export default {
         return "http://" + localStorage.url + "/cover?path=" + coverUrl;
       }
       return null;
+    },
+    backToShelf() {
+      this.isSearchResult = false;
+      this.searchResult = [];
     }
   },
   computed: {
@@ -581,6 +588,15 @@ export default {
       font-size: 20px;
       font-weight: 500;
       font-family: FZZCYSK;
+      margin-bottom: 15px;
+
+      .title-btn {
+        font-size: 14px;
+        line-height: 28px;
+        float: right;
+        cursor: pointer;
+        user-select: none;
+      }
     }
 
     >>>.el-icon-loading {

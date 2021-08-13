@@ -45,77 +45,59 @@ class YueduApi : RestVerticle() {
     private lateinit var webClient: WebClient
 
     override suspend fun initRouter(router: Router) {
-        // router.post("/yuedu/searchBook").coroutineHandler { searchBook(it) }
-        // router.post("/yuedu/exploreBook").coroutineHandler { exploreBook(it) }
-        // router.post("/yuedu/getBookInfo").coroutineHandler { getBookInfo(it) }
-        // router.post("/yuedu/getChapterList").coroutineHandler { getChapterList(it) }
-        // router.post("/yuedu/getBookContent").coroutineHandler { getBookContent(it) }
-        // router.get("/yuedu/md5").handler { getMd5(it) }
-        // router.get("/yuedu/check").coroutineHandler { check(it) }
-
         // 兼容阅读3 webapi
-        router.post("/yuedu/saveSource").coroutineHandler { saveSource(it) }
-        router.post("/yuedu/saveSources").coroutineHandler { saveSources(it) }
+        router.post("/reader3/saveSource").coroutineHandler { saveSource(it) }
+        router.post("/reader3/saveSources").coroutineHandler { saveSources(it) }
 
-        router.get("/yuedu/getSources").coroutineHandler { getSources(it) }
-        router.post("/yuedu/getSources").coroutineHandler { getSources(it) }
+        router.get("/reader3/getSources").coroutineHandler { getSources(it) }
+        router.post("/reader3/getSources").coroutineHandler { getSources(it) }
 
-        router.post("/yuedu/deleteSource").coroutineHandler { deleteSource(it) }
-        router.post("/yuedu/deleteSources").coroutineHandler { deleteSources(it) }
+        router.post("/reader3/deleteSource").coroutineHandler { deleteSource(it) }
+        router.post("/reader3/deleteSources").coroutineHandler { deleteSources(it) }
 
-        router.get("/yuedu/getBookshelf").coroutineHandler { getBookshelf(it) }
-        router.post("/yuedu/saveBook").coroutineHandler { saveBook(it) }
-        router.post("/yuedu/deleteBook").coroutineHandler { deleteBook(it) }
+        router.get("/reader3/getBookshelf").coroutineHandler { getBookshelf(it) }
+        router.post("/reader3/saveBook").coroutineHandler { saveBook(it) }
+        router.post("/reader3/deleteBook").coroutineHandler { deleteBook(it) }
 
         // 探索
-        router.post("/yuedu/exploreBook").coroutineHandler { exploreBook(it) }
-        router.get("/yuedu/exploreBook").coroutineHandler { exploreBook(it) }
+        router.post("/reader3/exploreBook").coroutineHandler { exploreBook(it) }
+        router.get("/reader3/exploreBook").coroutineHandler { exploreBook(it) }
 
         // 搜索
-        router.get("/yuedu/searchBook").coroutineHandler { searchBook(it) }
-        router.post("/yuedu/searchBook").coroutineHandler { searchBook(it) }
+        router.get("/reader3/searchBook").coroutineHandler { searchBook(it) }
+        router.post("/reader3/searchBook").coroutineHandler { searchBook(it) }
 
         // 书籍详情
-        router.get("/yuedu/getBookInfo").coroutineHandler { getBookInfo(it) }
-        router.post("/yuedu/getBookInfo").coroutineHandler { getBookInfo(it) }
+        router.get("/reader3/getBookInfo").coroutineHandler { getBookInfo(it) }
+        router.post("/reader3/getBookInfo").coroutineHandler { getBookInfo(it) }
 
         // 章节列表
-        router.get("/yuedu/getChapterList").coroutineHandler { getChapterList(it) }
-        router.post("/yuedu/getChapterList").coroutineHandler { getChapterList(it) }
+        router.get("/reader3/getChapterList").coroutineHandler { getChapterList(it) }
+        router.post("/reader3/getChapterList").coroutineHandler { getChapterList(it) }
 
         // 内容
-        router.get("/yuedu/getBookContent").coroutineHandler { getBookContent(it) }
-        router.post("/yuedu/getBookContent").coroutineHandler { getBookContent(it) }
+        router.get("/reader3/getBookContent").coroutineHandler { getBookContent(it) }
+        router.post("/reader3/getBookContent").coroutineHandler { getBookContent(it) }
 
         // 封面
-        router.get("/yuedu/cover").coroutineHandlerWithoutRes { getBookCover(it) }
+        router.get("/reader3/cover").coroutineHandlerWithoutRes { getBookCover(it) }
 
         // 搜索其它来源
-        router.get("/yuedu/searchBookSource").coroutineHandler { searchBookSource(it) }
-        router.get("/yuedu/getBookSource").coroutineHandler { getBookSource(it) }
-        router.get("/yuedu/getSource").coroutineHandler { getBookSource(it) }
+        router.get("/reader3/searchBookSource").coroutineHandler { searchBookSource(it) }
+        router.get("/reader3/getBookSource").coroutineHandler { getBookSource(it) }
+        router.get("/reader3/getSource").coroutineHandler { getBookSource(it) }
 
         // 换源
-        router.get("/yuedu/saveBookSource").coroutineHandler { saveBookSource(it) }
+        router.get("/reader3/saveBookSource").coroutineHandler { saveBookSource(it) }
 
         // web界面
         router.route("/web/*").handler(StaticHandler.create("web"));
 
         // 加载书源
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("bookSource"))
-        if (bookSourceList != null) {
-            installedBookSourceList = arrayListOf<String>()
-            for (i in 0 until bookSourceList.size()) {
-                installedBookSourceList.add(bookSourceList.getJsonObject(i).toString())
-            }
-        }
+        loadInstalledBookSourceList();
 
         // 加载书籍详情缓存
-        var _bookInfoCache: JsonObject? = asJsonObject(getStorage("bookInfoCache"))
-        if (_bookInfoCache != null) {
-            bookInfoCache = _bookInfoCache.map as MutableMap<String, Map<String, Any>>
-            logger.info("load bookInfoCache {}", bookInfoCache)
-        }
+        loadBookCacheInfo();
     }
 
     private suspend fun getBookInfo(context: RoutingContext): ReturnData {
@@ -429,8 +411,9 @@ class YueduApi : RestVerticle() {
             bookSourceList.add(bookSourceMap)
         }
 
-        logger.info("bookSourceList: {}", bookSourceList)
+        // logger.info("bookSourceList: {}", bookSourceList)
         saveStorage("bookSourceList", bookSourceList)
+        loadInstalledBookSourceList();
         val returnData = ReturnData()
         return returnData.setData(bookSourceList.getList())
     }
@@ -462,8 +445,9 @@ class YueduApi : RestVerticle() {
             }
         }
 
-        logger.info("bookSourceList: {}", bookSourceList)
+        // logger.info("bookSourceList: {}", bookSourceList)
         saveStorage("bookSourceList", bookSourceList!!)
+        loadInstalledBookSourceList();
         val returnData = ReturnData()
         return returnData.setData(bookSourceList.getList())
     }
@@ -496,8 +480,9 @@ class YueduApi : RestVerticle() {
             bookSourceList.remove(existIndex)
         }
 
-        logger.info("bookSourceList: {}", bookSourceList)
+        // logger.info("bookSourceList: {}", bookSourceList)
         saveStorage("bookSourceList", bookSourceList)
+        loadInstalledBookSourceList();
         val returnData = ReturnData()
         return returnData.setData(bookSourceList.getList())
     }
@@ -524,8 +509,9 @@ class YueduApi : RestVerticle() {
             }
         }
 
-        logger.info("bookSourceList: {}", bookSourceList)
+        // logger.info("bookSourceList: {}", bookSourceList)
         saveStorage("bookSourceList", bookSourceList)
+        loadInstalledBookSourceList();
         val returnData = ReturnData()
         return returnData.setData(bookSourceList.getList())
     }
@@ -717,6 +703,14 @@ class YueduApi : RestVerticle() {
     /**
      * 非 API
      */
+    private suspend fun loadBookCacheInfo() {
+        var _bookInfoCache: JsonObject? = asJsonObject(getStorage("bookInfoCache"))
+        if (_bookInfoCache != null) {
+            bookInfoCache = _bookInfoCache.map as MutableMap<String, Map<String, Any>>
+            // logger.info("load bookInfoCache {}", bookInfoCache)
+        }
+    }
+
     private suspend fun mergeBookCacheInfo(book: Book): Book {
         var cacheInfo: Book? = bookInfoCache.get(book.bookUrl)?.toDataClass()
 
@@ -791,6 +785,16 @@ class YueduApi : RestVerticle() {
         }
         // 使用默认
         return bookSourceString
+    }
+
+    private suspend fun loadInstalledBookSourceList() {
+        var bookSourceList: JsonArray? = asJsonArray(getStorage("bookSource"))
+        if (bookSourceList != null) {
+            installedBookSourceList = arrayListOf<String>()
+            for (i in 0 until bookSourceList.size()) {
+                installedBookSourceList.add(bookSourceList.getJsonObject(i).toString())
+            }
+        }
     }
 
     private suspend fun getInstalledBookSourceString(sourceIndex: Int = -1): String? {
