@@ -1,4 +1,7 @@
 qingmo:
+  app:
+    storagePath: './storage'
+
   server:
     url: http://localhost:8080
 

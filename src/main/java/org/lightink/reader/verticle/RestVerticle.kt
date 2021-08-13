@@ -95,4 +95,16 @@ abstract class RestVerticle : CoroutineVerticle() {
             }
         }
     }
+
+    fun Route.coroutineHandlerWithoutRes(fn: suspend (RoutingContext) -> Any) {
+        handler { ctx ->
+            val job = launch(Dispatchers.IO) {
+                try {
+                    fn(ctx)
+                } catch (e: Exception) {
+                    ctx.error(e)
+                }
+            }
+        }
+    }
 }

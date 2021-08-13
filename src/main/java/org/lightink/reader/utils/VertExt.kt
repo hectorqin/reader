@@ -6,6 +6,7 @@ import com.google.gson.GsonBuilder
 import io.vertx.core.Handler
 
 import io.vertx.core.json.JsonObject
+import io.vertx.core.json.JsonArray
 import io.vertx.ext.web.RoutingContext
 import io.vertx.kotlin.mysqlclient.preparedQueryAwait
 import io.vertx.mysqlclient.MySQLPool
@@ -14,7 +15,13 @@ import mu.KotlinLogging
 import org.lightink.reader.entity.BasicError
 import java.net.URLDecoder
 import java.net.URLEncoder
-
+import java.io.File
+import org.lightink.reader.config.AppConfig
+import com.google.gson.reflect.TypeToken
+import kotlin.reflect.KProperty1
+import kotlin.reflect.KMutableProperty
+import kotlin.reflect.full.memberProperties
+import io.legado.app.data.entities.Book
 
 /**
  * @Auther: zoharSoul
@@ -55,4 +62,123 @@ fun RoutingContext.error(throwable: Throwable) {
             .putHeader("content-type", "application/json")
             .setStatusCode(500)
             .end(errorJson)
+}
+
+fun saveStorage(name: String, value: Any) {
+    val toJson: String = if (value is JsonObject || value is JsonArray) {
+        value.toString()
+    } else {
+        gson.toJson(value)
+    }
+
+    var storagePath: String = "./storage"
+    logger.info("storagePath: {}", storagePath)
+    var storageDir = File(storagePath)
+    if (!storageDir.exists()) {
+        storageDir.mkdirs()
+    }
+
+    val file = File(storagePath + "/${name}.json")
+    logger.info("storage key: {} path: {}", name, file.absoluteFile)
+
+    if (!file.parentFile.exists()) {
+        file.parentFile.mkdirs()
+    }
+
+    if (!file.exists()) {
+        file.createNewFile()
+    }
+    file.writeText(toJson)
+}
+
+fun getStorage(name: String): String?  {
+    var storagePath: String = "./storage"
+    logger.info("storagePath: {}", storagePath)
+    var storageDir = File(storagePath)
+    if (!storageDir.exists()) {
+        storageDir.mkdirs()
+    }
+
+    val file = File(storagePath + "/${name}.json")
+    logger.info("storage key: {} path: {}", name, file.absoluteFile)
+    if (!file.exists()) {
+        return null
+    }
+    return file.readText()
+}
+
+fun asJsonArray(value: Any?): JsonArray? {
+    if (value is JsonArray) {
+        return value
+    } else if (value is String) {
+        return JsonArray(value)
+    }
+    return null
+}
+
+fun asJsonObject(value: Any?): JsonObject? {
+    if (value is JsonObject) {
+        return value
+    } else if (value is String) {
+        return JsonObject(value)
+    }
+    return null
+}
+
+//convert a data class to a map
+fun <T> T.serializeToMap(): Map<String, Any> {
+    return convert()
+}
+
+//convert string to a map
+fun <T> T.toMap(): Map<String, Any> {
+    return convert()
+}
+
+//convert a map to a data class
+inline fun <reified T> Map<String, Any>.toDataClass(): T {
+    return convert()
+}
+
+//convert an object of type I to type O
+inline fun <I, reified O> I.convert(): O {
+    val json = if (this is String) {
+        this
+    } else {
+        gson.toJson(this)
+    }
+    return gson.fromJson(json, object : TypeToken<O>() {}.type)
+}
+
+@Suppress("UNCHECKED_CAST")
+fun <R> readInstanceProperty(instance: Any, propertyName: String): R {
+    val property = instance::class.memberProperties
+                     // don't cast here to <Any, R>, it would succeed silently
+                     .first { it.name == propertyName } as KProperty1<Any, *>
+    // force a invalid cast exception if incorrect type here
+    return property.get(instance) as R
+}
+
+@Suppress("UNCHECKED_CAST")
+fun setInstanceProperty(instance: Any, propertyName: String, propertyValue: Any) {
+    val property = instance::class.memberProperties
+                     .first { it.name == propertyName }
+    if(property is KMutableProperty<*>) {
+        property.setter.call(instance, propertyValue)
+    }
+}
+
+fun Book.fillData(newBook: Book, keys: List<String>): Book {
+    keys.let {
+        for (key in it) {
+            var current = readInstanceProperty<String>(this, key)
+            if (current.isNullOrEmpty()) {
+                var cacheValue = readInstanceProperty<String>(newBook, key)
+                if (!cacheValue.isNullOrEmpty()) {
+                    setInstanceProperty(this, key, cacheValue)
+                }
+            }
+        }
+    }
+    return this
 }

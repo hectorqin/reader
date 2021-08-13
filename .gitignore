@@ -37,3 +37,5 @@ out
 
 #/src/main/resources/application-prod.yml
 /src/main/resources/application-default.yml
+
+/src/main/resources/web

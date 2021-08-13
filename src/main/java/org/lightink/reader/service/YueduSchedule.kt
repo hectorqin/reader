@@ -20,23 +20,23 @@ class YueduSchedule {
     @Autowired
     private lateinit var webClient: WebClient
 
-    @Scheduled(cron = "0 0 2 * * ?")
-    @PostConstruct
-    fun getBookSource() {
-        webClient.getAbs(shuyuanUrl)
-                .send {
-                    val map = mutableMapOf<String, String>()
-                    it.result().bodyAsJsonArray()
-                            .forEach {
-                                val md5Encode = MD5Utils
-                                        .md5Encode(JsonObject.mapFrom(it).getString("bookSourceUrl")).toString()
-                                map.put(md5Encode, it.toString())
-                            }
-                    Shuyuan.shuyuanlist = map
-                    logger.info("shuyuan: {}", map)
-                }
-        
-    }
+    // @Scheduled(cron = "0 0 2 * * ?")
+    // @PostConstruct
+    // fun getBookSource() {
+    //     webClient.getAbs(shuyuanUrl)
+    //             .send {
+    //                 val map = mutableMapOf<String, String>()
+    //                 it.result().bodyAsJsonArray()
+    //                         .forEach {
+    //                             val md5Encode = MD5Utils
+    //                                     .md5Encode(JsonObject.mapFrom(it).getString("bookSourceUrl")).toString()
+    //                             map.put(md5Encode, it.toString())
+    //                         }
+    //                 Shuyuan.shuyuanlist = map
+    //                 logger.info("shuyuan: {}", map)
+    //             }
+
+    // }
 
     companion object Shuyuan {
         var shuyuanlist = mutableMapOf<String, String>()

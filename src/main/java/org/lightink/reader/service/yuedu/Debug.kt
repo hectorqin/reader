@@ -81,7 +81,7 @@ object Debug {
     private suspend fun tocDebug(webBook: WebBook, book: Book) {
         log(msg = "︾开始解析目录页")
         runCatching {
-            webBook.getChapterList(book.tocUrl)
+            webBook.getChapterList(book)
         }
                 .onSuccess { chapterList ->
                     chapterList?.let {
@@ -107,7 +107,7 @@ object Debug {
             nextChapterUrl: String?
     ) {
         log(webBook.sourceUrl, "︾开始解析正文页")
-        runCatching { webBook.getContent(bookChapter.url, nextChapterUrl) }
+        runCatching { webBook.getBookContent(bookChapter.url, nextChapterUrl) }
                 .onSuccess {
                     log(webBook.sourceUrl, "︽正文页解析完成")
                 }

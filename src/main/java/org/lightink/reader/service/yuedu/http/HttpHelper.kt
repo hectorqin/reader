@@ -26,7 +26,7 @@ object HttpHelper {
         dispatcher.maxRequests = 200
         dispatcher.maxRequestsPerHost = 200
         val logging = HttpLoggingInterceptor()
-        logging.level = HttpLoggingInterceptor.Level.BODY
+        // logging.level = HttpLoggingInterceptor.Level.BODY
 
         val builder = OkHttpClient.Builder()
                 .connectTimeout(15, TimeUnit.SECONDS)

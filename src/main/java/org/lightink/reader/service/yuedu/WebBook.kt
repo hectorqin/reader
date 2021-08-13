@@ -82,6 +82,9 @@ class WebBook(val bookSource: BookSource) {
     suspend fun getBookInfo(bookUrl: String): Book {
         val book = Book()
         book.bookUrl = bookUrl
+        book.origin = bookSource.bookSourceUrl
+        book.originName = bookSource.bookSourceName
+        book.originOrder = bookSource.customOrder
         book.type = bookSource.bookSourceType
         val analyzeUrl = AnalyzeUrl(
             book = book,
@@ -100,11 +103,8 @@ class WebBook(val bookSource: BookSource) {
      * 目录
      */
     suspend fun getChapterList(
-        tocUrl: String
+        book: Book
     ): List<BookChapter> {
-        val book = Book()
-        book.tocUrl = tocUrl
-        book.type = bookSource.bookSourceType
         val body = if (book.bookUrl == book.tocUrl && !book.tocHtml.isNullOrEmpty()) {
             book.tocHtml
         } else {
@@ -122,7 +122,7 @@ class WebBook(val bookSource: BookSource) {
     /**
      * 章节内容
      */
-    suspend fun getContent(
+    suspend fun getBookContent(
 //        book: Book?,
 //        bookChapter: BookChapter,
         bookChapterUrl:String,
