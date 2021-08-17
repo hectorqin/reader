@@ -381,12 +381,28 @@ export default {
           background: "rgba(0,0,0,0)"
         });
       }
-      //保存阅读进度
       let bookUrl = sessionStorage.getItem("bookUrl");
-      let book = JSON.parse(localStorage.getItem(bookUrl));
-      book.index = index;
-      localStorage.setItem(bookUrl, JSON.stringify(book));
-      this.$store.state.readingBook.index = index;
+      try {
+        // 保存阅读进度
+        let book = JSON.parse(localStorage.getItem(bookUrl));
+        book.index = index;
+        localStorage.setItem(bookUrl, JSON.stringify(book));
+        // this.$store.state.readingBook.index = index;
+        book.catalog = this.$store.state.readingBook.catalog;
+        this.$store.commit("setReadingBook", book);
+        sessionStorage.setItem("chapterIndex", index);
+        //
+        localStorage.setItem(
+          "readingRecent",
+          JSON.stringify({
+            name: book.bookName,
+            url: book.bookUrl,
+            chapterIndex: index
+          })
+        );
+      } catch (error) {
+        //
+      }
       //let chapterUrl = this.$store.state.readingBook.catalog[index].url;
       let chapterName = this.$store.state.readingBook.catalog[index].title;
       let chapterIndex = this.$store.state.readingBook.catalog[index].index;
