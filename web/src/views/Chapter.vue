@@ -101,6 +101,9 @@
     </div>
     <div class="read-bar" :style="rightBarTheme">
       <div class="tools">
+        <div class="tool-icon progress-text">
+          {{ parseInt((chapterIndex * 100) / catalog.length) }}%
+        </div>
         <div
           class="tool-icon"
           :class="{ 'no-point': noPoint }"
@@ -282,7 +285,10 @@ export default {
   },
   computed: {
     catalog() {
-      return this.$store.state.catalog;
+      return (this.$store.state.readingBook || {}).catalog || [];
+    },
+    chapterIndex() {
+      return (this.$store.state.readingBook || {}).index || 0;
     },
     windowHeight() {
       return window.innerHeight;
@@ -341,7 +347,7 @@ export default {
         }, 1000);
         return;
       }
-      this.$message.info("获取章节列表");
+      // this.$message.info("获取章节列表");
       this.getCatalog(this.$store.state.readingBook.bookUrl).then(
         res => {
           if (res.data.isSuccess) {
@@ -445,7 +451,7 @@ export default {
       let index = this.$store.state.readingBook.index;
       index++;
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
-        this.$message.info("下一章");
+        // this.$message.info("下一章");
         this.getContent(index);
       } else {
         this.$message.error("本章是最后一章");
@@ -456,7 +462,7 @@ export default {
       let index = this.$store.state.readingBook.index;
       index--;
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
-        this.$message.info("上一章");
+        // this.$message.info("上一章");
         this.getContent(index);
       } else {
         this.$message.error("本章是第一章");
@@ -542,6 +548,10 @@ export default {
         cursor: pointer;
         outline: none;
         margin-top: -1px;
+
+        &.progress-text {
+          font-size: 16px;
+        }
 
         .iconfont {
           font-family: iconfont;
