@@ -1,7 +1,16 @@
 <template>
   <div class="cata-wrapper" :style="popupTheme">
-    <div class="title">
-      目录
+    <div class="title-zone">
+      <div class="title">
+        目录
+      </div>
+      <div :class="{ 'title-btn': true }">
+        <span class="progress-percent">
+          已读{{ parseInt((index * 100) / catalog.length) }}%
+        </span>
+        {{ index }} /
+        {{ catalog.length }}
+      </div>
     </div>
     <div
       class="data-wrapper"
@@ -33,14 +42,17 @@ import "../assets/fonts/popfont.css";
 export default {
   name: "PopCata",
   data() {
-    return {
-      isNight: this.$store.state.config.theme == 6,
-      index: this.$store.state.readingBook.index
-    };
+    return {};
   },
   computed: {
+    index() {
+      return this.$store.state.readingBook.index;
+    },
+    isNight() {
+      return this.$store.state.config.theme == 6;
+    },
     catalog() {
-      return this.$store.state.readingBook.catalog;
+      return this.$store.state.readingBook.catalog || [];
     },
     popCataVisible() {
       return this.$store.state.popCataVisible;
@@ -56,13 +68,6 @@ export default {
   },
   mounted() {},
   watch: {
-    theme(theme) {
-      if (theme == 6) {
-        this.isNight = true;
-      } else {
-        this.isNight = false;
-      }
-    },
     popCataVisible() {
       this.$nextTick(() => {
         let index = this.$store.state.readingBook.index;
@@ -88,17 +93,35 @@ export default {
 <style lang="stylus" scoped>
 .cata-wrapper {
   margin: -16px;
-  padding: 18px 0 24px 25px;
+  padding: 18px 25px 24px 25px;
 
   // background: #ede7da url('../assets/imgs/themes/popup_1.png') repeat;
+  .title-zone {
+    margin: 0 0 20px 0;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
   .title {
     font-size: 18px;
     font-weight: 400;
     font-family: FZZCYSK;
-    margin: 0 0 20px 0;
     color: #ed4259;
-    width: fit-content;
     border-bottom: 1px solid #ed4259;
+    width: fit-content;
+  }
+
+  .title-btn {
+    font-size: 14px;
+    line-height: 26px;
+    color: #606266;
+    .progress-percent {
+      display: inline-block;
+      margin-right: 25px;
+    }
   }
 
   .data-wrapper {

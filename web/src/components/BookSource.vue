@@ -2,12 +2,12 @@
   <div class="cata-wrapper" :style="popupTheme">
     <div class="title-zone">
       <div class="title">来源</div>
-      <div
-        :class="{ 'title-btn': true, loading: loadingMore }"
-        @click="loadMoreSource"
-      >
-        <i class="el-icon-loading" v-if="loadingMore"></i>
-        {{ loadingMore ? "加载中..." : "加载更多" }}
+      <div :class="{ 'title-btn': true, loading: loadingMore }">
+        <span class="source-count">共{{ bookSource.length }}个源</span>
+        <span :class="{ loading: loadingMore }" @click="loadMoreSource">
+          <i class="el-icon-loading" v-if="loadingMore"></i>
+          {{ loadingMore ? "加载中..." : "加载更多" }}
+        </span>
       </div>
     </div>
     <div
@@ -229,6 +229,11 @@ export default {
     line-height: 26px;
     color: #ed4259;
     cursor: pointer;
+    .source-count {
+      display: inline-block;
+      margin-right: 25px;
+      color: #606266;
+    }
     &.loading {
       color: #606266;
     }
