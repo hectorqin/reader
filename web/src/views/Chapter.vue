@@ -148,14 +148,6 @@ export default {
     Pcontent,
     ReadSettings
   },
-  created() {
-    var config = JSON.parse(localStorage.getItem("config"));
-    if (config != null) this.$store.commit("setConfig", config);
-  },
-  beforeCreate() {
-    let config = JSON.parse(localStorage.getItem("config"));
-    if (config != null) this.$store.commit("setConfig", config);
-  },
   mounted() {
     this.loading = this.$loading({
       target: this.$refs.content,
@@ -341,6 +333,14 @@ export default {
   },
   methods: {
     loadCatalog() {
+      if (!localStorage.url) {
+        setTimeout(() => {
+          if (this.loadCatalog) {
+            this.loadCatalog();
+          }
+        }, 1000);
+        return;
+      }
       this.$message.info("获取章节列表");
       this.getCatalog(this.$store.state.readingBook.bookUrl).then(
         res => {

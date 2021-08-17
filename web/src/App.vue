@@ -7,7 +7,12 @@
 <script>
 export default {
   name: "app",
-  components: {}
+  components: {},
+  beforeCreate() {
+    // console.log(this);
+    var config = JSON.parse(localStorage.getItem("config"));
+    if (config != null) this.$store.commit("setConfig", config);
+  }
 };
 </script>
 

@@ -1,5 +1,11 @@
 <template>
-  <div class="index-wrapper">
+  <div
+    class="index-wrapper"
+    :class="{
+      night: isNight,
+      day: !isNight
+    }"
+  >
     <div class="navigation-wrapper">
       <div class="navigation-title">
         阅读
@@ -25,6 +31,7 @@
         <div class="reading-recent">
           <el-tag
             type="warning"
+            :effect="isNight ? 'dark' : 'light'"
             class="recent-book"
             @click="
               toDetail(
@@ -46,6 +53,7 @@
         <div class="setting-item">
           <el-tag
             :type="connectType"
+            :effect="isNight ? 'dark' : 'light'"
             class="setting-connect"
             :class="{ 'no-point': newConnect }"
             @click="setIP"
@@ -79,9 +87,23 @@
       <div class="bottom-icons">
         <a href="https://github.com/hectorqin/reader" target="_blank">
           <div class="bottom-icon">
-            <img :src="require('../assets/imgs/github.png')" alt="" />
+            <img
+              v-if="isNight"
+              :src="require('../assets/imgs/github.png')"
+              alt=""
+            />
+            <img v-else :src="require('../assets/imgs/github2.png')" alt="" />
           </div>
         </a>
+        <span
+          class="theme-item"
+          :style="themeColor"
+          ref="themes"
+          @click="toogleNight"
+        >
+          <i class="el-icon-moon" v-if="!isNight"></i>
+          <i class="el-icon-sunny" v-else></i>
+        </span>
       </div>
     </div>
     <div class="shelf-wrapper" ref="shelfWrapper">
@@ -129,6 +151,7 @@
               <div v-if="isSearchResult">
                 <el-tag
                   type="success"
+                  :effect="isNight ? 'dark' : 'light'"
                   class="setting-connect"
                   @click.prevent.capture="saveBook(book)"
                 >
@@ -276,7 +299,7 @@ export default {
         lock: true,
         text: "正在搜索书籍",
         spinner: "el-icon-loading",
-        background: "rgb(247,247,247)"
+        background: this.isNight ? "#121212" : "rgb(247,247,247)"
       });
 
       Axios.get("http://" + localStorage.url + "/searchBook", {
@@ -318,7 +341,7 @@ export default {
         lock: true,
         text: "正在获取书籍信息",
         spinner: "el-icon-loading",
-        background: "rgb(247,247,247)"
+        background: this.isNight ? "#121212" : "rgb(247,247,247)"
       });
 
       return Axios.get("http://" + api + "/getBookshelf", {
@@ -459,9 +482,36 @@ export default {
     backToShelf() {
       this.isSearchResult = false;
       this.searchResult = [];
+    },
+    toogleNight() {
+      let config = this.config;
+      if (this.isNight) {
+        config.theme = 0;
+      } else {
+        config.theme = 6;
+      }
+      this.$store.commit("setConfig", config);
+      localStorage.setItem("config", JSON.stringify(config));
     }
   },
   computed: {
+    config() {
+      return this.$store.state.config;
+    },
+    isNight() {
+      return this.$store.state.config.theme == 6;
+    },
+    themeColor() {
+      if (this.$store.state.config.theme == 6) {
+        return {
+          background: "#f7f7f7"
+        };
+      } else {
+        return {
+          background: "#222"
+        };
+      }
+    },
     shelf() {
       return this.isSearchResult ? this.searchResult : this.$store.state.shelf;
     },
@@ -577,12 +627,43 @@ export default {
       align-items: center;
       display: flex;
       flex-direction: row;
+
+      .bottom-icon {
+        height: 36px;
+        img {
+          width: 36px;
+          height: 36px;
+        }
+      }
+
+      .theme-item {
+        line-height: 32px;
+        width: 36px;
+        height: 36px;
+        margin-right: 16px;
+        border-radius: 100%;
+        display: inline-block;
+        cursor: pointer;
+        text-align: center;
+        vertical-align: middle;
+        margin-left: 150px;
+
+        .el-icon-moon {
+          color: #f7f7f7;
+          line-height: 34px;
+        }
+        .el-icon-sunny {
+          color: #121212;
+          line-height: 34px;
+        }
+      }
     }
   }
 
   .shelf-wrapper {
     padding: 48px 48px;
     width: 100%;
+    background-color: #fff;
 
     .shelf-title {
       font-size: 20px;
@@ -697,6 +778,30 @@ export default {
     .books-wrapper::-webkit-scrollbar {
       width: 0 !important;
     }
+  }
+}
+
+.night {
+  >>>.navigation-wrapper {
+    background-color: #121212;
+    border-right: 1px solid #555;
+  }
+  >>>.navigation-title {
+    color: #bbb;
+  }
+  >>>.shelf-title {
+    color: #bbb;
+  }
+  >>>.shelf-wrapper {
+    background-color: #222;
+  }
+  >>>.el-input__inner {
+    background-color: #444;
+    border: 1px solid #444 !important;
+    color: #aaa;
+  }
+  .book .info .name {
+    color: #bbb !important;
   }
 }
 </style>
