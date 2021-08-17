@@ -4,7 +4,7 @@
 
 接口从 [lightink-server](https://github.com/lightink-qingmo/lightink-server) 修改而来，网页从 [阅读3.0Web端](https://github.com/celetor/web-yuedu3) 修改而来。
 
-## 编译
+## 开发编译
 
 ### 编译前端
 
@@ -31,11 +31,30 @@ java -jar build/libs/reader-1.0.0.jar
 ## Docker部署
 
 ```bash
-docker build -t reader:latest .
-docker run -d --restart=always -name=reader -v ./log:/app/log -v ./storage:/app/storage -p 8080:8080 reader:latest
+# 自行编译
+# docker build -t reader:latest .
+# docker run -d --restart=always -name=reader -v $(PWD)/log:/log -v $(PWD)/storage:/storage -p 8080:8080 reader:latest
+
+# 使用预编译的镜像
+docker run -d --restart=always -name=reader -v $(PWD)/log:/log -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader
 
 # web端 http://localhost:8080/web/
 # 接口地址 http://localhost:8080/reader3/
+```
+
+## 数据存储
+
+接口服务使用文件存储书源及目录等信息，存储位置为 storage 目录，目录结构如下：
+
+```bash
+storage
+├── bookInfoCache.json   # 搜索缓存Map
+├── bookSource.json      # 书源列表
+├── bookshelf.json       # 书架书籍列表
+└── 斗罗大陆              # 书籍缓存目录
+    ├── 04abb3842aabc03d08a14186be005e89.json # A书源目录列表
+    ├── bookSource.json                       # 书籍书源列表
+    └── dd82fe35c050e73427a710e9dd6feaf8.json # B书源目录列表
 ```
 
 ## 接口文档
