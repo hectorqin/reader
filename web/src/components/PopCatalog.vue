@@ -81,10 +81,10 @@ export default {
       return index == this.$store.state.readingBook.index;
     },
     gotoChapter(note) {
-      this.index = this.catalog.indexOf(note);
+      const index = this.catalog.indexOf(note);
       this.$store.commit("setPopCataVisible", false);
       this.$store.commit("setContentLoading", true);
-      this.$emit("getContent", this.index);
+      this.$emit("getContent", index);
     }
   }
 };
