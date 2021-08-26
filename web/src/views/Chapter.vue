@@ -8,11 +8,38 @@
       <div class="tools">
         <el-popover
           placement="right"
-          :width="cataWidth"
+          :width="popperWidth"
+          trigger="click"
+          :visible-arrow="false"
+          v-model="popBookShelfVisible"
+          popper-class="popper-component"
+        >
+          <BookShelf
+            ref="popBookShelf"
+            class="popup"
+            :popBookShelfVisible="popBookShelfVisible"
+            @loadCatalog="loadCatalog"
+            @toShelf="toShelf"
+            @close="popBookShelfVisible = false"
+          />
+          <div
+            class="tool-icon"
+            :class="{ 'no-point': noPoint }"
+            slot="reference"
+          >
+            <div class="iconfont">
+              &#58892;
+            </div>
+            <div class="icon-text">书架</div>
+          </div>
+        </el-popover>
+        <el-popover
+          placement="right"
+          :width="popperWidth"
           trigger="click"
           :visible-arrow="false"
           v-model="popBookSourceVisible"
-          popper-class="pop-cata"
+          popper-class="popper-component"
         >
           <BookSource
             ref="popBookSource"
@@ -35,11 +62,11 @@
         </el-popover>
         <el-popover
           placement="right"
-          :width="cataWidth"
+          :width="popperWidth"
           trigger="click"
           :visible-arrow="false"
           v-model="popCataVisible"
-          popper-class="pop-cata"
+          popper-class="popper-component"
         >
           <PopCata
             @getContent="getContent"
@@ -60,12 +87,12 @@
           </div>
         </el-popover>
         <el-popover
-          placement="bottom-right"
+          placement="right"
           width="470"
           trigger="click"
           :visible-arrow="false"
           v-model="readSettingsVisible"
-          popper-class="pop-setting"
+          popper-class="popper-component"
         >
           <ReadSettings class="popup" />
 
@@ -80,11 +107,15 @@
             <div class="icon-text">设置</div>
           </div>
         </el-popover>
-        <div class="tool-icon" @click="toShelf">
+        <div
+          class="tool-icon"
+          :class="{ 'no-point': noPoint }"
+          @click="toShelf"
+        >
           <div class="iconfont">
-            &#58892;
+            &#58920;
           </div>
-          <div class="icon-text">书架</div>
+          <div class="icon-text">首页</div>
         </div>
         <div class="tool-icon" :class="{ 'no-point': noPoint }" @click="toTop">
           <div class="iconfont">
@@ -145,6 +176,7 @@
 import PopCata from "../components/PopCatalog.vue";
 import ReadSettings from "../components/ReadSettings.vue";
 import BookSource from "../components/BookSource.vue";
+import BookShelf from "../components/BookShelf.vue";
 import Pcontent from "../components/Content.vue";
 import Axios from "axios";
 import jump from "../plugins/jump";
@@ -153,6 +185,7 @@ export default {
   components: {
     PopCata,
     BookSource,
+    BookShelf,
     Pcontent,
     ReadSettings
   },
@@ -168,7 +201,7 @@ export default {
     const that = this;
     let bookUrl = sessionStorage.getItem("bookUrl");
     let bookName = sessionStorage.getItem("bookName");
-    let chapterIndex = sessionStorage.getItem("chapterIndex") || 0;
+    let chapterIndex = (sessionStorage.getItem("chapterIndex") || 0) | 0;
     var book = JSON.parse(localStorage.getItem(bookUrl));
     if (book == null || chapterIndex > 0) {
       book = {
@@ -285,6 +318,7 @@ export default {
         marginRight: -(this.$store.state.config.readWidth / 2 + 52) + "px"
       },
       popBookSourceVisible: false,
+      popBookShelfVisible: false,
       book: null
     };
   },
@@ -293,7 +327,7 @@ export default {
       return (this.$store.state.readingBook || {}).catalog || [];
     },
     chapterIndex() {
-      return (this.$store.state.readingBook || {}).index || 0;
+      return ((this.$store.state.readingBook || {}).index || 0) | 0;
     },
     windowHeight() {
       return window.innerHeight;
@@ -335,7 +369,7 @@ export default {
     readWidth() {
       return this.$store.state.config.readWidth - 130 + "px";
     },
-    cataWidth() {
+    popperWidth() {
       return this.$store.state.config.readWidth - 33;
     },
     show() {
@@ -486,12 +520,7 @@ export default {
 </script>
 
 <style lang="stylus" scoped>
->>>.pop-setting {
-  margin-left: 68px;
-  top: 0;
-}
-
->>>.pop-cata {
+>>>.popper-component {
   margin-left: 10px;
 }
 

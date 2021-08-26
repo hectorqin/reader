@@ -35,14 +35,14 @@
             class="recent-book"
             @click="
               toDetail(
-                readingRecent.url,
-                readingRecent.name,
-                readingRecent.chapterIndex
+                readingRecent.bookUrl,
+                readingRecent.bookName,
+                readingRecent.index
               )
             "
-            :class="{ 'no-point': readingRecent.url == '' }"
+            :class="{ 'no-point': readingRecent.bookUrl == '' }"
           >
-            {{ readingRecent.name }}
+            {{ readingRecent.bookName }}
           </el-tag>
         </div>
       </div>
@@ -183,9 +183,9 @@ export default {
       isSearchResult: false,
       searchResult: [],
       readingRecent: {
-        name: "尚无阅读记录",
-        url: "",
-        chapterIndex: 0
+        bookName: "尚无阅读记录",
+        bookUrl: "",
+        index: 0
       },
       refreshLoading: false
     };
@@ -204,8 +204,8 @@ export default {
       let readingRecentStr = localStorage.getItem("readingRecent");
       if (readingRecentStr != null) {
         this.readingRecent = JSON.parse(readingRecentStr);
-        if (typeof this.readingRecent.chapterIndex == "undefined") {
-          this.readingRecent.chapterIndex = 0;
+        if (typeof this.readingRecent.index == "undefined") {
+          this.readingRecent.index = 0;
         }
       }
       this.bookSourceUrl = localStorage.getItem("bookSourceUrl") || "";
@@ -401,9 +401,9 @@ export default {
       sessionStorage.setItem("bookName", bookName);
       sessionStorage.setItem("chapterIndex", chapterIndex);
       this.readingRecent = {
-        name: bookName,
-        url: bookUrl,
-        chapterIndex: chapterIndex
+        bookName: bookName,
+        bookUrl: bookUrl,
+        index: chapterIndex
       };
       localStorage.setItem("readingRecent", JSON.stringify(this.readingRecent));
       this.$router.push({
@@ -705,7 +705,8 @@ export default {
 
     .books-wrapper {
       height: 100%;
-      overflow: scroll;
+      overflow-x: hidden;
+      overflow-y: scroll;
 
       .wrapper {
         display: grid ;
