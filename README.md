@@ -36,10 +36,10 @@ java -jar build/libs/reader-1.0.0.jar
 ```bash
 # 自行编译
 # docker build -t reader:latest .
-# docker run -d --restart=always -name=reader -v $(PWD)/log:/log -v $(PWD)/storage:/storage -p 8080:8080 reader:latest
+# docker run -d --restart=always --name=reader -v $(PWD)/log:/log -v $(PWD)/storage:/storage -p 8080:8080 reader:latest
 
 # 使用预编译的镜像
-docker run -d --restart=always -name=reader -v $(PWD)/log:/log -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader
+docker run -d --restart=always --name=reader -v $(PWD)/log:/log -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader
 
 # web端 http://localhost:8080/web/
 # 接口地址 http://localhost:8080/reader3/
