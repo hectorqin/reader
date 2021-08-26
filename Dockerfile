@@ -13,15 +13,12 @@ RUN gradle assemble --info
 
 FROM openjdk:8-jdk-alpine
 # Install base packages
-RUN apk update; \
-    apk upgrade; \
-    # Add CA certs
-    apk add ca-certificates; \
+RUN \
+    # apk update; \
+    # apk upgrade; \
+    # Add CA certs tini tzdata
+    apk add --no-cache ca-certificates tini tzdata; \
     update-ca-certificates; \
-    # Change TimeZone
-    apk add --update tzdata; \
-    # Add tini
-    apk add --no-cache tini; \
     # Clean APK cache
     rm -rf /var/cache/apk/*;
 
