@@ -593,6 +593,7 @@ class YueduApi : RestVerticle() {
             var existBook = bookshelf.getJsonObject(existIndex).mapTo(Book::class.java)
             book.durChapterIndex = existBook.durChapterIndex
             book.durChapterTitle = existBook.durChapterTitle
+            book.durChapterTime = existBook.durChapterTime
 
             var bookMap: Map<String, Any?> = book.serializeToMap()
             bookList.set(existIndex, bookMap)
@@ -749,6 +750,8 @@ class YueduApi : RestVerticle() {
             if (bookSource != null) {
                 var bookChapterList = getLocalChapterList(book, bookSource, refresh)
                 var bookChapter = bookChapterList.last()
+                book.lastCheckTime = System.currentTimeMillis()
+                book.lastCheckCount = bookChapterList.size - book.totalChapterNum
                 book.latestChapterTitle = bookChapter.title
                 book.totalChapterNum = bookChapterList.size
                 bookList.add(book)
@@ -935,10 +938,11 @@ class YueduApi : RestVerticle() {
             var bookList = bookshelf.getList()
             var existBook = bookshelf.getJsonObject(existIndex).mapTo(Book::class.java)
             existBook.latestChapterTitle = bookChapter.title
+            existBook.lastCheckCount = bookChapterList.size - existBook.totalChapterNum
             existBook.totalChapterNum = bookChapterList.size
+            existBook.lastCheckTime = System.currentTimeMillis()
+            // TODO 最新章节更新时间
             // existBook.latestChapterTime = System.currentTimeMillis()
-            // lastCheckTime
-            // lastCheckCount
 
             logger.info("saveShelfBookLatestChapter: {}", existBook)
 

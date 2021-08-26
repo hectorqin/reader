@@ -41,3 +41,4 @@ out
 /src/main/resources/web
 /storage*
 /log
+/bin
