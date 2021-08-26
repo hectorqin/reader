@@ -1,7 +1,10 @@
-qingmo:
-  mysql:
-    port: 3306
-    host: 172.16.17.3
-    database: qingmo
-    user: qingmo
-    password: qm123456
+spring:
+  profiles:
+    active: prod
+
+reader:
+  app:
+    storagePath: 'storage'
+
+  server:
+    url: http://localhost:8080

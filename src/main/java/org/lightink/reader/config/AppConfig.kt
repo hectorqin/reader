@@ -4,7 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.stereotype.Component
 
 @Component
-@ConfigurationProperties(prefix = "qingmo.app")
+@ConfigurationProperties(prefix = "reader.app")
 class AppConfig {
     lateinit var storagePath: String // 存储路径
 }

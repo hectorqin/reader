@@ -112,6 +112,10 @@
         <div class="title-btn" v-if="isSearchResult" @click="backToShelf">
           返回书架
         </div>
+        <div class="title-btn" v-else @click="refreshShelf">
+          <i class="el-icon-loading" v-if="refreshLoading"></i>
+          {{ refreshLoading ? "刷新中..." : "刷新" }}
+        </div>
       </div>
       <div class="books-wrapper">
         <div class="wrapper">
@@ -182,7 +186,8 @@ export default {
         name: "尚无阅读记录",
         url: "",
         chapterIndex: 0
-      }
+      },
+      refreshLoading: false
     };
   },
   watch: {
@@ -326,7 +331,7 @@ export default {
         }
       );
     },
-    loadBookshelf(api) {
+    loadBookshelf(api, refresh) {
       api = api || localStorage.url;
       if (!api) {
         this.$message.error("请先设置后端 url 与端口");
@@ -339,14 +344,19 @@ export default {
       this.loading = this.$loading({
         target: this.$refs.shelfWrapper,
         lock: true,
-        text: "正在获取书籍信息",
+        text: refresh ? "正在刷新书籍信息" : "正在获取书籍信息",
         spinner: "el-icon-loading",
         background: this.isNight ? "#121212" : "rgb(247,247,247)"
       });
 
-      return Axios.get("http://" + api + "/getBookshelf", {
-        timeout: 3000
-      })
+      return Axios.get(
+        "http://" + api + "/getBookshelf?refresh=" + (refresh ? 1 : 0),
+        refresh
+          ? {}
+          : {
+              timeout: 3000
+            }
+      )
         .then(response => {
           if (response.data.isSuccess) {
             this.loading.close();
@@ -377,6 +387,9 @@ export default {
           this.$store.commit("setNewConnect", false);
           throw error;
         });
+    },
+    refreshShelf() {
+      return this.loadBookshelf(null, true);
     },
     toDetail(bookUrl, bookName, chapterIndex) {
       if (this.isSearchResult) {

@@ -39,5 +39,5 @@ out
 /src/main/resources/application-default.yml
 
 /src/main/resources/web
-/storage
+/storage*
 /log

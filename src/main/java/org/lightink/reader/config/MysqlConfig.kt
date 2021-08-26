@@ -4,7 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.stereotype.Component
 
 @Component
-@ConfigurationProperties(prefix = "qingmo.mysql")
+@ConfigurationProperties(prefix = "reader.mysql")
 class MysqlConfig {
 
     var port: Int = 0

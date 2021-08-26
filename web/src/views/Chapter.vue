@@ -41,7 +41,12 @@
           v-model="popCataVisible"
           popper-class="pop-cata"
         >
-          <PopCata @getContent="getContent" ref="popCata" class="popup" />
+          <PopCata
+            @getContent="getContent"
+            ref="popCata"
+            class="popup"
+            @refresh="refreshCatalog"
+          />
 
           <div
             class="tool-icon"
@@ -102,7 +107,7 @@
     <div class="read-bar" :style="rightBarTheme">
       <div class="tools">
         <div class="tool-icon progress-text">
-          {{ parseInt((chapterIndex * 100) / catalog.length) }}%
+          {{ parseInt(((chapterIndex + 1) * 100) / catalog.length) }}%
         </div>
         <div
           class="tool-icon"
@@ -338,17 +343,17 @@ export default {
     }
   },
   methods: {
-    loadCatalog() {
+    loadCatalog(refresh) {
       if (!localStorage.url) {
         setTimeout(() => {
           if (this.loadCatalog) {
-            this.loadCatalog();
+            this.loadCatalog(refresh);
           }
         }, 1000);
         return;
       }
       // this.$message.info("获取章节列表");
-      this.getCatalog(this.$store.state.readingBook.bookUrl).then(
+      this.getCatalog(this.$store.state.readingBook.bookUrl, refresh).then(
         res => {
           if (res.data.isSuccess) {
             var book = Object.assign({}, this.$store.state.readingBook);
@@ -367,13 +372,18 @@ export default {
         }
       );
     },
-    getCatalog(bookUrl) {
+    getCatalog(bookUrl, refresh) {
       return Axios.get(
         "http://" +
           localStorage.url +
           "/getChapterList?url=" +
-          encodeURIComponent(bookUrl)
+          encodeURIComponent(bookUrl) +
+          "&refresh=" +
+          (refresh ? 1 : 0)
       );
+    },
+    refreshCatalog() {
+      return this.loadCatalog(true);
     },
     getContent(index) {
       //展示进度条

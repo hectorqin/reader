@@ -1,13 +1,6 @@
-qingmo:
+reader:
   app:
-    storagePath: './storage'
+    storagePath: 'storage'
 
   server:
     url: http://localhost:8080
-
-#  mysql:
-#    port:
-#    host:
-#    database:
-#    user:
-#    password:

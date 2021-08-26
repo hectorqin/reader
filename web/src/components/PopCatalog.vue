@@ -6,10 +6,16 @@
       </div>
       <div :class="{ 'title-btn': true }">
         <span class="progress-percent">
-          已读{{ parseInt((index * 100) / catalog.length) }}%
+          已读{{ parseInt(((index + 1) * 100) / catalog.length) }}%
         </span>
-        {{ index }} /
-        {{ catalog.length }}
+        <span>{{ index + 1 }} / {{ catalog.length }}</span>
+        <span
+          :class="{ loading: refreshLoading, 'refresh-btn': true }"
+          @click="refreshChapter"
+        >
+          <i class="el-icon-loading" v-if="refreshLoading"></i>
+          {{ refreshLoading ? "刷新中..." : "刷新" }}
+        </span>
       </div>
     </div>
     <div
@@ -42,7 +48,9 @@ import "../assets/fonts/popfont.css";
 export default {
   name: "PopCata",
   data() {
-    return {};
+    return {
+      refreshLoading: false
+    };
   },
   computed: {
     index() {
@@ -74,6 +82,9 @@ export default {
         let wrapper = this.$refs.cataData;
         jump(this.$refs.cata[index], { container: wrapper, duration: 0 });
       });
+    },
+    catalog() {
+      this.refreshLoading = false;
     }
   },
   methods: {
@@ -85,6 +96,10 @@ export default {
       this.$store.commit("setPopCataVisible", false);
       this.$store.commit("setContentLoading", true);
       this.$emit("getContent", index);
+    },
+    refreshChapter() {
+      this.refreshLoading = true;
+      this.$emit("refresh");
     }
   }
 };
@@ -121,6 +136,15 @@ export default {
     .progress-percent {
       display: inline-block;
       margin-right: 25px;
+    }
+    .refresh-btn {
+      display: inline-block;
+      margin-left: 25px;
+      color: #ed4259;
+      cursor: pointer;
+      &.loading {
+        color: #606266;
+      }
     }
   }
 

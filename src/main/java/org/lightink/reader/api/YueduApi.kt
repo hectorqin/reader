@@ -144,7 +144,7 @@ class YueduApi : RestVerticle() {
         coverUrl = URLDecoder.decode(coverUrl, "UTF-8")
         webClient.getAbs(coverUrl).send {
             var result = it.result()
-            var res = context.response()
+            var res = context.response().putHeader("Cache-Control", "86400")
             result.headers().forEach {
                 res.putHeader(it.key, it.value)
             }
@@ -315,12 +315,12 @@ class YueduApi : RestVerticle() {
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
             name = context.bodyAsJson.getString("name")
-            lastIndex = context.bodyAsJson.getInteger("lastIndex", 0)
+            lastIndex = context.bodyAsJson.getInteger("lastIndex", -1)
             searchSize = context.bodyAsJson.getInteger("searchSize", 5)
         } else {
             // get 请求
             name = context.queryParam("name").firstOrNull() ?: ""
-            lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: 0
+            lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
             searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 5
         }
         if (installedBookSourceList.size <= 0) {
@@ -337,6 +337,7 @@ class YueduApi : RestVerticle() {
         searchSize = if(searchSize > 0) searchSize else 5
         var resultList = arrayListOf<SearchBook>()
         for (i in lastIndex until installedBookSourceList.size) {
+            // logger.info("searchBookSource from Index: {}", i)
             var bookSource = installedBookSourceList.get(i)
             try {
                 var result = saveBookInfoCache(WebBook(bookSource).searchBook(name, 1))
@@ -412,7 +413,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("bookSourceList", bookSourceList)
+        saveStorage("bookSource", bookSourceList)
         loadInstalledBookSourceList();
         val returnData = ReturnData()
         return returnData.setData(bookSourceList.getList())
@@ -446,7 +447,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("bookSourceList", bookSourceList!!)
+        saveStorage("bookSource", bookSourceList!!)
         loadInstalledBookSourceList();
         val returnData = ReturnData()
         return returnData.setData(bookSourceList.getList())
@@ -481,7 +482,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("bookSourceList", bookSourceList)
+        saveStorage("bookSource", bookSourceList)
         loadInstalledBookSourceList();
         val returnData = ReturnData()
         return returnData.setData(bookSourceList.getList())
@@ -510,19 +511,24 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("bookSourceList", bookSourceList)
+        saveStorage("bookSource", bookSourceList)
         loadInstalledBookSourceList();
         val returnData = ReturnData()
         return returnData.setData(bookSourceList.getList())
     }
 
     private suspend fun getBookshelf(context: RoutingContext): ReturnData {
-        var bookshelf: JsonArray? = asJsonArray(getStorage("bookshelf"))
-        val returnData = ReturnData()
-        if (bookshelf != null) {
-            return returnData.setData(bookshelf.getList())
+        var refresh: Int = 0
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            refresh = context.bodyAsJson.getInteger("refresh", 0)
+        } else {
+            // get 请求
+            refresh = context.queryParam("refresh").firstOrNull()?.toInt() ?: 0
         }
-        return returnData.setData(arrayListOf<Int>())
+        var bookList = getBookShelfBooks(refresh > 0)
+        val returnData = ReturnData()
+        return returnData.setData(bookList)
     }
 
     private suspend fun getShelfBook(context: RoutingContext): ReturnData {
@@ -727,6 +733,26 @@ class YueduApi : RestVerticle() {
                 bookInfoCache.put(book.bookUrl, book.serializeToMap())
             }
             saveStorage("bookInfoCache", bookInfoCache)
+        }
+        return bookList
+    }
+
+    private suspend fun getBookShelfBooks(refresh: Boolean = false): List<Book> {
+        var bookshelf: JsonArray? = asJsonArray(getStorage("bookshelf"))
+        if (bookshelf == null) {
+            return arrayListOf<Book>()
+        }
+        var bookList = arrayListOf<Book>()
+        for (i in 0 until bookshelf.size()) {
+            var book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
+            var bookSource = getInstalledBookSourceStringBySourceURL(book.origin)
+            if (bookSource != null) {
+                var bookChapterList = getLocalChapterList(book, bookSource, refresh)
+                var bookChapter = bookChapterList.last()
+                book.latestChapterTitle = bookChapter.title
+                book.totalChapterNum = bookChapterList.size
+                bookList.add(book)
+            }
         }
         return bookList
     }
@@ -949,7 +975,7 @@ class YueduApi : RestVerticle() {
             }
         }
 
-        logger.info("bookSourceList: {}", bookSourceList)
+        // logger.info("bookSourceList: {}", bookSourceList)
         saveStorage(bookName + "/bookSource", bookSourceList!!)
     }
 }

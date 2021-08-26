@@ -64,6 +64,12 @@ fun RoutingContext.error(throwable: Throwable) {
             .end(errorJson)
 }
 
+fun getStoragePath(): String {
+    var appConfig: AppConfig = SpringContextUtils.getBean("appConfig", AppConfig::class.java)
+    // logger.info("storagePath from appConfig: {}", appConfig.storagePath)
+    return appConfig.storagePath
+}
+
 fun saveStorage(name: String, value: Any) {
     val toJson: String = if (value is JsonObject || value is JsonArray) {
         value.toString()
@@ -71,8 +77,7 @@ fun saveStorage(name: String, value: Any) {
         gson.toJson(value)
     }
 
-    var storagePath: String = "./storage"
-    logger.info("storagePath: {}", storagePath)
+    var storagePath = getStoragePath()
     var storageDir = File(storagePath)
     if (!storageDir.exists()) {
         storageDir.mkdirs()
@@ -92,8 +97,7 @@ fun saveStorage(name: String, value: Any) {
 }
 
 fun getStorage(name: String): String?  {
-    var storagePath: String = "./storage"
-    logger.info("storagePath: {}", storagePath)
+    var storagePath = getStoragePath()
     var storageDir = File(storagePath)
     if (!storageDir.exists()) {
         storageDir.mkdirs()
