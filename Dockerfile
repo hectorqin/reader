@@ -30,7 +30,7 @@ RUN rm -rf /var/cache/apk/*
 EXPOSE 8080
 RUN apk add --no-cache tini
 ENTRYPOINT ["/sbin/tini", "--"]
-COPY --from=hengyunabc/arthas:latest /opt/arthas /opt/arthas
+# COPY --from=hengyunabc/arthas:latest /opt/arthas /opt/arthas
 COPY --from=build-env /app/build/libs/reader-1.0.0.jar /app/bin/reader.jar
 CMD ["java", "-jar", "/app/bin/reader.jar" ]
 
