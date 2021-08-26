@@ -13,24 +13,27 @@ RUN gradle assemble --info
 
 FROM openjdk:8-jdk-alpine
 # Install base packages
-RUN apk update
-RUN apk upgrade
-RUN apk add ca-certificates && update-ca-certificates
-# Change TimeZone
-RUN apk add --update tzdata
+RUN apk update; \
+    apk upgrade; \
+    # Add CA certs
+    apk add ca-certificates; \
+    update-ca-certificates; \
+    # Change TimeZone
+    apk add --update tzdata; \
+    # Clean APK cache
+    rm -rf /var/cache/apk/* \
+    # Add tini
+    apk add --no-cache tini
+
 # 时区
 ENV TZ=Asia/Shanghai
-# Clean APK cache
-RUN rm -rf /var/cache/apk/*
 
 #RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
 #  && echo Asia/Shanghai > /etc/timdezone \
 #  && dpkg-reconfigure -f noninteractive tzdata
 
 EXPOSE 8080
-RUN apk add --no-cache tini
 ENTRYPOINT ["/sbin/tini", "--"]
 # COPY --from=hengyunabc/arthas:latest /opt/arthas /opt/arthas
 COPY --from=build-env /app/build/libs/reader-1.0.0.jar /app/bin/reader.jar
 CMD ["java", "-jar", "/app/bin/reader.jar" ]
-
