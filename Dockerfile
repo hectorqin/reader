@@ -20,10 +20,10 @@ RUN apk update; \
     update-ca-certificates; \
     # Change TimeZone
     apk add --update tzdata; \
-    # Clean APK cache
-    rm -rf /var/cache/apk/* \
     # Add tini
-    apk add --no-cache tini
+    apk add --no-cache tini; \
+    # Clean APK cache
+    rm -rf /var/cache/apk/*;
 
 # 时区
 ENV TZ=Asia/Shanghai
