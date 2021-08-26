@@ -746,16 +746,18 @@ class YueduApi : RestVerticle() {
         var bookList = arrayListOf<Book>()
         for (i in 0 until bookshelf.size()) {
             var book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
-            var bookSource = getInstalledBookSourceStringBySourceURL(book.origin)
-            if (bookSource != null) {
-                var bookChapterList = getLocalChapterList(book, bookSource, refresh)
-                var bookChapter = bookChapterList.last()
-                book.lastCheckTime = System.currentTimeMillis()
-                book.lastCheckCount = bookChapterList.size - book.totalChapterNum
-                book.latestChapterTitle = bookChapter.title
-                book.totalChapterNum = bookChapterList.size
-                bookList.add(book)
+            if (refresh) {
+                var bookSource = getInstalledBookSourceStringBySourceURL(book.origin)
+                if (bookSource != null) {
+                    var bookChapterList = getLocalChapterList(book, bookSource, refresh)
+                    var bookChapter = bookChapterList.last()
+                    book.lastCheckTime = System.currentTimeMillis()
+                    book.lastCheckCount = bookChapterList.size - book.totalChapterNum
+                    book.latestChapterTitle = bookChapter.title
+                    book.totalChapterNum = bookChapterList.size
+                }
             }
+            bookList.add(book)
         }
         return bookList
     }
