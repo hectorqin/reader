@@ -109,18 +109,12 @@ export default {
     },
     changeBook(book) {
       this.$message.info("换书成功");
-      sessionStorage.setItem("bookUrl", book.bookUrl);
-      sessionStorage.setItem("bookName", book.name);
-      sessionStorage.setItem("chapterIndex", book.durChapterIndex);
       const readingBook = {
         bookName: book.name,
         bookUrl: book.bookUrl,
         index: book.durChapterIndex
       };
-      localStorage.setItem("readingRecent", JSON.stringify(readingBook));
-
       this.$store.commit("setReadingBook", readingBook);
-      sessionStorage.setItem("bookUrl", readingBook.bookUrl);
       localStorage.setItem(readingBook.bookUrl, JSON.stringify(readingBook));
       this.$emit("close");
       this.$emit("loadCatalog");

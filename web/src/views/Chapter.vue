@@ -22,11 +22,7 @@
             @toShelf="toShelf"
             @close="popBookShelfVisible = false"
           />
-          <div
-            class="tool-icon"
-            :class="{ 'no-point': noPoint }"
-            slot="reference"
-          >
+          <div class="tool-icon" slot="reference">
             <div class="iconfont">
               &#58892;
             </div>
@@ -96,22 +92,14 @@
         >
           <ReadSettings class="popup" />
 
-          <div
-            class="tool-icon"
-            :class="{ 'no-point': noPoint }"
-            slot="reference"
-          >
+          <div class="tool-icon" slot="reference">
             <div class="iconfont">
               &#58971;
             </div>
             <div class="icon-text">设置</div>
           </div>
         </el-popover>
-        <div
-          class="tool-icon"
-          :class="{ 'no-point': noPoint }"
-          @click="toShelf"
-        >
+        <div class="tool-icon" @click="toShelf">
           <div class="iconfont">
             &#58920;
           </div>
@@ -138,7 +126,7 @@
     <div class="read-bar" :style="rightBarTheme">
       <div class="tools">
         <div class="tool-icon progress-text">
-          {{ parseInt(((chapterIndex + 1) * 100) / catalog.length) }}%
+          {{ readingProgress }}
         </div>
         <div
           class="tool-icon"
@@ -190,26 +178,52 @@ export default {
     ReadSettings
   },
   mounted() {
-    this.loading = this.$loading({
-      target: this.$refs.content,
-      lock: true,
-      text: "正在获取内容",
-      spinner: "el-icon-loading",
-      background: "rgba(0,0,0,0)"
-    });
     //获取书籍数据
     const that = this;
     let bookUrl = sessionStorage.getItem("bookUrl");
-    let bookName = sessionStorage.getItem("bookName");
-    let chapterIndex = (sessionStorage.getItem("chapterIndex") || 0) | 0;
-    var book = JSON.parse(localStorage.getItem(bookUrl));
-    if (book == null || chapterIndex > 0) {
-      book = {
-        bookName: bookName,
-        bookUrl: bookUrl,
-        index: chapterIndex
-      };
-      localStorage.setItem(bookUrl, JSON.stringify(book));
+    let readingBook = false;
+    if (bookUrl) {
+      let bookName = sessionStorage.getItem("bookName");
+      let chapterIndex = (sessionStorage.getItem("chapterIndex") || 0) | 0;
+      readingBook = JSON.parse(localStorage.getItem(bookUrl));
+      if (readingBook == null || chapterIndex > 0) {
+        readingBook = {
+          bookName: bookName,
+          bookUrl: bookUrl,
+          index: chapterIndex
+        };
+      }
+    } else {
+      try {
+        //获取最近阅读书籍
+        let readingRecentStr = localStorage.getItem("readingRecent");
+        if (readingRecentStr != null) {
+          const readingRecent = JSON.parse(readingRecentStr);
+          if (typeof readingRecent.index == "undefined") {
+            readingRecent.index = 0;
+          }
+          if (readingRecent.bookUrl && readingRecent.bookName) {
+            readingBook = readingRecent;
+          }
+        }
+      } catch (error) {
+        //
+      }
+    }
+
+    if (readingBook) {
+      this.loading = this.$loading({
+        target: this.$refs.content,
+        lock: true,
+        text: "正在获取内容",
+        spinner: "el-icon-loading",
+        background: "rgba(0,0,0,0)"
+      });
+      localStorage.setItem(bookUrl, JSON.stringify(readingBook));
+      this.$store.commit("setReadingBook", readingBook);
+      this.loadCatalog();
+    } else {
+      this.$message.error("请在书架选择书籍");
     }
 
     // window.addEventListener keyup 声明函数
@@ -219,12 +233,22 @@ export default {
         case "ArrowLeft":
           event.stopPropagation();
           event.preventDefault();
-          that.toLastChapter();
+          if (
+            that.$store.state.readingBook &&
+            that.$store.state.readingBook.bookUrl
+          ) {
+            that.toLastChapter();
+          }
           break;
         case "ArrowRight":
           event.stopPropagation();
           event.preventDefault();
-          that.toNextChapter();
+          if (
+            that.$store.state.readingBook &&
+            that.$store.state.readingBook.bookUrl
+          ) {
+            that.toNextChapter();
+          }
           break;
         case "ArrowUp":
           event.stopPropagation();
@@ -250,9 +274,7 @@ export default {
           break;
       }
     };
-    this.$store.commit("setReadingBook", book);
 
-    this.loadCatalog();
     window.addEventListener("keyup", this.func_keyup);
   },
   destroyed() {
@@ -374,6 +396,18 @@ export default {
     },
     show() {
       return this.$store.state.showContent;
+    },
+    readingProgress() {
+      if (
+        this.$store.state.readingBook &&
+        this.$store.state.readingBook.catalog
+      ) {
+        return (
+          parseInt(((this.chapterIndex + 1) * 100) / this.catalog.length) + "%"
+        );
+      } else {
+        return "";
+      }
     }
   },
   methods: {
@@ -422,7 +456,7 @@ export default {
     getContent(index) {
       //展示进度条
       this.$store.commit("setShowContent", false);
-      if (!this.loading.visible) {
+      if (!this.loading || !this.loading.visible) {
         this.loading = this.$loading({
           target: this.$refs.content,
           lock: true,
@@ -431,7 +465,12 @@ export default {
           background: "rgba(0,0,0,0)"
         });
       }
-      let bookUrl = sessionStorage.getItem("bookUrl");
+      let bookUrl = this.$store.state.readingBook.bookUrl;
+      sessionStorage.setItem("bookUrl", bookUrl);
+      sessionStorage.setItem(
+        "bookName",
+        this.$store.state.readingBook.bookName
+      );
       try {
         // 保存阅读进度
         let book = JSON.parse(localStorage.getItem(bookUrl));
@@ -445,9 +484,9 @@ export default {
         localStorage.setItem(
           "readingRecent",
           JSON.stringify({
-            name: book.bookName,
-            url: book.bookUrl,
-            chapterIndex: index
+            bookName: book.bookName,
+            bookUrl: book.bookUrl,
+            index: index
           })
         );
       } catch (error) {
