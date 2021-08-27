@@ -13,7 +13,12 @@ import {
   Input,
   Select,
   Option,
-  Tag
+  Tag,
+  Collapse,
+  CollapseItem,
+  Dialog,
+  Checkbox,
+  CheckboxGroup
 } from "element-ui";
 
 Vue.use(Button);
@@ -28,6 +33,11 @@ Vue.use(Select);
 Vue.use(Option);
 Vue.use(Tag);
 Vue.use(Loading.directive);
+Vue.use(Collapse);
+Vue.use(CollapseItem);
+Vue.use(Dialog);
+Vue.use(Checkbox);
+Vue.use(CheckboxGroup);
 
 Vue.prototype.$msgbox = MessageBox;
 Vue.prototype.$message = Message;

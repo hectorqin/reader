@@ -83,6 +83,59 @@
             </el-option>
           </el-select>
         </div>
+        <div class="setting-item">
+          <el-tag
+            type="info"
+            :effect="isNight ? 'dark' : 'light'"
+            slot="reference"
+            class="setting-btn"
+            @click="showManageDialog = true"
+          >
+            书源管理
+          </el-tag>
+          <el-popover
+            placement="right"
+            width="600"
+            trigger="click"
+            :visible-arrow="false"
+            v-model="popExploreVisible"
+            popper-class="popper-component"
+          >
+            <Explore
+              ref="popExplore"
+              class="popup"
+              :popExploreVisible="popExploreVisible"
+              :bookSourceUrl="bookSourceUrl"
+              :bookSourceList="bookSourceList"
+              @showSearchList="showSearchList"
+              @close="popExploreVisible = false"
+            />
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+            >
+              探索书源
+            </el-tag>
+            <!-- <div class="" slot="reference">探索书源</div> -->
+          </el-popover>
+          <el-tag
+            type="info"
+            :effect="isNight ? 'dark' : 'light'"
+            slot="reference"
+            class="setting-btn"
+            @click="uploadBookSource"
+          >
+            导入书源
+          </el-tag>
+          <input
+            ref="fileRef"
+            type="file"
+            @change="onBookSourceFileChange"
+            style="display:none"
+          />
+        </div>
       </div>
       <div class="bottom-icons">
         <a href="https://github.com/hectorqin/reader" target="_blank">
@@ -108,9 +161,15 @@
     </div>
     <div class="shelf-wrapper" ref="shelfWrapper">
       <div class="shelf-title">
-        {{ isSearchResult ? "搜索结果" : "书架" }}
+        {{
+          isSearchResult ? (isExploreResult ? "探索结果" : "搜索结果") : "书架"
+        }}
         <div class="title-btn" v-if="isSearchResult" @click="backToShelf">
           返回书架
+        </div>
+        <div class="title-btn" v-if="isExploreResult" @click="loadMoreExplore">
+          <i class="el-icon-loading" v-if="exploreLoading"></i>
+          {{ exploreLoading ? "加载中..." : "加载更多" }}
         </div>
         <div class="title-btn" v-else @click="refreshShelf">
           <i class="el-icon-loading" v-if="refreshLoading"></i>
@@ -167,27 +226,112 @@
         </div>
       </div>
     </div>
+    <el-dialog title="导入书源" :visible.sync="showImportDialog">
+      <div class="source-container">
+        <el-checkbox-group
+          v-model="checkedSourceIndex"
+          @change="handleCheckedSourcesChange"
+        >
+          <el-checkbox
+            v-for="(source, index) in importBookSource"
+            :label="index"
+            :key="index"
+            class="source-checkbox"
+            >{{ source.bookSourceName }} {{ source.bookSourceUrl }}</el-checkbox
+          >
+        </el-checkbox-group>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-checkbox
+          :indeterminate="isIndeterminate"
+          v-model="checkAll"
+          @change="handleCheckAllChange"
+          border
+          class="float-left"
+          >全选</el-checkbox
+        >
+        <span class="check-tip">已选择 {{ checkedSourceIndex.length }} 个</span>
+        <el-button @click="showImportDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveBookSourceList">确定</el-button>
+      </div>
+    </el-dialog>
+    <el-dialog title="书源管理" :visible.sync="showManageDialog">
+      <div class="source-container">
+        <el-table
+          :data="bookSourceList"
+          height="400"
+          @selection-change="handleSelectionChange"
+        >
+          <el-table-column
+            type="selection"
+            width="45"
+            :selectable="getSourceBook"
+          >
+          </el-table-column>
+          <el-table-column
+            property="bookSourceName"
+            label="书源名称"
+          ></el-table-column>
+          <el-table-column
+            property="bookSourceUrl"
+            label="书源链接"
+          ></el-table-column>
+          <el-table-column label="书架书籍" width="180">
+            <template slot-scope="scope">
+              <pre>{{ showSourceBook(scope.row) }}</pre>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-button
+          type="primary"
+          class="float-left"
+          @click="deleteBookSourceList"
+          >批量删除</el-button
+        >
+        <span class="check-tip"
+          >已选择 {{ manageSourceSelection.length }} 个</span
+        >
+        <el-button @click="showManageDialog = false">取消</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
 import "../assets/fonts/shelffont.css";
+import Explore from "../components/Explore.vue";
 import Axios from "axios";
 
 export default {
+  components: {
+    Explore
+  },
   data() {
     return {
       search: "",
       bookSourceUrl: "",
       bookSourceList: [],
       isSearchResult: false,
+      isExploreResult: false,
       searchResult: [],
       readingRecent: {
         bookName: "尚无阅读记录",
         bookUrl: "",
         index: 0
       },
-      refreshLoading: false
+      refreshLoading: false,
+      popExploreVisible: false,
+      exploreLoading: false,
+      importBookSource: [],
+      showImportDialog: false,
+      checkAll: false,
+      isIndeterminate: false,
+      checkedSourceIndex: [],
+
+      showManageDialog: false,
+      manageSourceSelection: []
     };
   },
   watch: {
@@ -494,6 +638,7 @@ export default {
     },
     backToShelf() {
       this.isSearchResult = false;
+      this.isExploreResult = false;
       this.searchResult = [];
     },
     toogleNight() {
@@ -505,6 +650,127 @@ export default {
       }
       this.$store.commit("setConfig", config);
       localStorage.setItem("config", JSON.stringify(config));
+    },
+    showSearchList(data) {
+      this.isSearchResult = true;
+      this.isExploreResult = true;
+      this.exploreLoading = false;
+      this.searchResult = data;
+    },
+    loadMoreExplore() {
+      this.exploreLoading = true;
+      this.$refs.popExplore.loadMore();
+    },
+    uploadBookSource() {
+      this.$refs.fileRef.dispatchEvent(new MouseEvent("click"));
+    },
+    onBookSourceFileChange(event) {
+      const rawFile = event.target.files && event.target.files[0];
+      this.$refs.fileRef.value = null;
+      const reader = new FileReader();
+      reader.onload = e => {
+        const data = e.target.result;
+        try {
+          this.importBookSource = JSON.parse(data);
+          this.showImportDialog = true;
+        } catch (error) {
+          this.$message.error("导入书源出错");
+        }
+      };
+      reader.readAsText(rawFile);
+    },
+    handleCheckAllChange(val) {
+      this.checkedSourceIndex = val
+        ? this.importBookSource.map((v, i) => i)
+        : [];
+      this.isIndeterminate = false;
+    },
+    handleCheckedSourcesChange(value) {
+      let checkedCount = value.length;
+      this.checkAll = checkedCount === this.importBookSource.length;
+      this.isIndeterminate =
+        checkedCount > 0 && checkedCount < this.importBookSource.length;
+    },
+    saveBookSourceList() {
+      if (!localStorage.url) {
+        this.$message.error("请先设置后端 url 与端口");
+        this.$store.commit("setConnectStatus", "点击设置后端 url 与 端口");
+        this.$store.commit("setNewConnect", false);
+        this.$store.commit("setConnectType", "danger");
+        return;
+      }
+      if (!this.checkedSourceIndex.length) {
+        this.$message.error("请选择需要导入的源");
+        return;
+      }
+      const sourceList = this.checkedSourceIndex.map(
+        v => this.importBookSource[v]
+      );
+      Axios.post(
+        "http://" + localStorage.url + "/saveSources",
+        sourceList
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            this.$message.success("导入书源成功");
+            this.loadBookSource();
+            this.showImportDialog = false;
+          } else {
+            this.$message.error(res.data.errorMsg);
+          }
+        },
+        () => {
+          //
+          this.$message.error("后端连接失败");
+        }
+      );
+    },
+    getSourceBook(bookSource) {
+      const res = [];
+      (this.$store.state.shelf || []).forEach(v => {
+        if (v.origin === bookSource.bookSourceUrl) {
+          res.push(v.name);
+        }
+      });
+      return !res.length;
+    },
+    showSourceBook(bookSource) {
+      const res = [];
+      (this.$store.state.shelf || []).forEach(v => {
+        if (v.origin === bookSource.bookSourceUrl) {
+          res.push(v.name);
+        }
+      });
+      return res.join("\n");
+    },
+    handleSelectionChange(val) {
+      this.manageSourceSelection = val;
+    },
+    deleteBookSourceList() {
+      if (!this.manageSourceSelection.length) {
+        this.$message.error("请选择需要导入的源");
+        return;
+      }
+      Axios.post(
+        "http://" + localStorage.url + "/deleteSources",
+        this.manageSourceSelection
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            this.$message.success("删除书源成功");
+            this.loadBookSource();
+            this.showManageDialog = false;
+          } else {
+            this.$message.error(res.data.errorMsg);
+          }
+        },
+        () => {
+          //
+          this.$message.error("后端连接失败");
+        }
+      );
     }
   },
   computed: {
@@ -627,15 +893,20 @@ export default {
         padding-top: 16px;
       }
 
+      .setting-btn {
+        margin-right: 15px;
+        cursor: pointer;
+      }
+
       .setting-select {
         width: 100%;
       }
     }
 
     .bottom-icons {
-      position: fixed;
+      position: absolute;
       bottom: 0;
-      height: 120px;
+      padding-bottom: 30px;
       width: 260px;
       align-items: center;
       display: flex;
@@ -690,6 +961,11 @@ export default {
         float: right;
         cursor: pointer;
         user-select: none;
+        margin-left: 15px;
+
+        >>>.el-icon-loading {
+          font-size: 16px;
+        }
       }
     }
 
@@ -817,5 +1093,59 @@ export default {
   .book .info .name {
     color: #bbb !important;
   }
+  >>>.el-dialog {
+    background-color: #222;
+  }
+  >>>.el-dialog__title {
+    color: #bbb;
+  }
+  >>>.el-table {
+    background-color: transparent;
+  }
+
+  >>.el-table__expanded-cell {
+    background-color: transparent;
+  }
+  >>>.el-table th, >>>.el-table tr {
+    background-color: transparent;
+  }
+  >>>.el-table td, >>>.el-table th.is-leaf {
+    border-bottom: 1px solid #555;
+  }
+  >>>.el-table--border::after, >>>.el-table--group::after, >>>.el-table::before {
+    background-color: transparent;
+  }
+  >>>.el-table--enable-row-hover .el-table__body tr:hover>td {
+    background-color: #333;
+  }
+  >>>.check-tip {
+    color: #bbb;
+  }
+}
+
+.source-container {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 0 10px;
+
+  >>>.source-checkbox {
+    display: block;
+    padding: 8px 0;
+    width: 100%;
+  }
+
+  pre {
+    margin: 0;
+  }
+}
+.float-left {
+  float: left;
+}
+
+.check-tip {
+  display: inline-block;
+  float: left;
+  line-height: 40px;
+  margin-left: 10px;
 }
 </style>
