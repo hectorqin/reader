@@ -1106,13 +1106,22 @@ export default {
   >>.el-table__expanded-cell {
     background-color: transparent;
   }
-  >>>.el-table th, >>>.el-table tr {
-    background-color: transparent;
+  >>>.el-table th, >>>.el-table tr{
+    background-color: #222 !important;
   }
-  >>>.el-table td, >>>.el-table th.is-leaf {
+  >>>.el-table td {
     border-bottom: 1px solid #555;
   }
-  >>>.el-table--border::after, >>>.el-table--group::after, >>>.el-table::before {
+  >>>.el-table th.is-leaf {
+    border-bottom: 1px solid #555;
+  }
+  >>>.el-table--border::after {
+    background-color: transparent;
+  }
+  >>>.el-table--group::after {
+    background-color: transparent;
+  }
+  >>>.el-table::before {
     background-color: transparent;
   }
   >>>.el-table--enable-row-hover .el-table__body tr:hover>td {
