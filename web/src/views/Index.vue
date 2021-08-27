@@ -191,7 +191,14 @@
               class="info"
               @click="toDetail(book.bookUrl, book.name, book.durChapterIndex)"
             >
-              <div class="name">{{ book.name }}</div>
+              <i
+                class="el-icon-close delete-book-icon"
+                v-if="!isSearchResult"
+                @click.stop="deleteBook(book)"
+              ></i>
+              <div class="name">
+                {{ book.name }}
+              </div>
               <div class="sub">
                 <div class="author">
                   {{ book.author }}
@@ -216,7 +223,7 @@
                   type="success"
                   :effect="isNight ? 'dark' : 'light'"
                   class="setting-connect"
-                  @click.prevent.capture="saveBook(book)"
+                  @click.stop="saveBook(book)"
                 >
                   加入书架
                 </el-tag>
@@ -551,7 +558,7 @@ export default {
       };
       localStorage.setItem("readingRecent", JSON.stringify(this.readingRecent));
       this.$router.push({
-        path: "/chapter"
+        path: "/reader"
       });
     },
     saveBook(book) {
@@ -571,6 +578,49 @@ export default {
           if (res.data.isSuccess) {
             //
             this.$message.success("加入书架成功");
+            this.loadBookshelf();
+          } else {
+            this.$message.error(res.data.errorMsg);
+          }
+        },
+        () => {
+          //
+          this.$message.error("后端连接失败");
+        }
+      );
+    },
+    async deleteBook(book) {
+      if (!localStorage.url) {
+        this.$message.error("请先设置后端 url 与端口");
+        this.$store.commit("setConnectStatus", "点击设置后端 url 与 端口");
+        this.$store.commit("setNewConnect", false);
+        this.$store.commit("setConnectType", "danger");
+        return;
+      }
+      if (!book || !book.name || !book.bookUrl || !book.origin) {
+        this.$message.error("书籍信息错误");
+        return;
+      }
+      const res = await this.$confirm(
+        "此操作将删除书籍信息以及阅读进度, 是否继续?",
+        "提示",
+        {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post("http://" + localStorage.url + "/deleteBook", book).then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            this.$message.success("删除成功");
+            this.loadBookshelf();
           } else {
             this.$message.error(res.data.errorMsg);
           }
@@ -1011,6 +1061,7 @@ export default {
           }
 
           .info {
+            position: relative;
             display: flex;
             flex-direction: column;
             justify-content: space-around;
@@ -1018,6 +1069,14 @@ export default {
             height: 112px;
             margin-left: 20px;
             flex: 1;
+
+            .delete-book-icon {
+              position: absolute;
+              right: 5px;
+              top: 5px;
+              font-size: 24px;
+              color: #33373D;
+            }
 
             .name {
               width: fit-content;
@@ -1091,6 +1150,9 @@ export default {
     color: #aaa;
   }
   .book .info .name {
+    color: #bbb !important;
+  }
+  .book .info .delete-book-icon {
     color: #bbb !important;
   }
   >>>.el-dialog {

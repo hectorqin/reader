@@ -132,7 +132,7 @@ export default {
             } else {
               this.exploreList = [].concat(this.exploreList, res.data.data);
             }
-            console.log(this.exploreList);
+            // console.log(this.exploreList);
             this.$emit("showSearchList", this.exploreList);
           } else {
             this.$message.error(res.data.errorMsg);
