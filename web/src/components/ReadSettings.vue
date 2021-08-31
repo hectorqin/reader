@@ -62,7 +62,6 @@
 </template>
 
 <script>
-import "../assets/fonts/popfont.css";
 import "../assets/fonts/iconfont.css";
 import config from "../plugins/config";
 export default {
@@ -202,7 +201,7 @@ export default {
     font-size: 18px;
     line-height: 22px;
     margin-bottom: 28px;
-    font-family: FZZCYSK;
+    font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
     font-weight: 400;
   }
 
@@ -306,7 +305,7 @@ export default {
           .lang {
             color: #a6a6a6;
             font-weight: 400;
-            font-family: FZZCYSK;
+            font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
           }
 
           b {

@@ -5,16 +5,20 @@ buildscript {
     }
     dependencies {
         classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath 'io.github.fvarrui:javapackager:1.5.1'
     }
 }
 plugins {
     id 'org.springframework.boot' version '2.1.6.RELEASE'
     id 'java'
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.0.9'
     id "org.jetbrains.kotlin.plugin.spring" version "1.3.61"
 }
 
 apply plugin: 'io.spring.dependency-management'
 apply plugin: 'kotlin'
+apply plugin: 'io.github.fvarrui.javapackager.plugin'
 
 group = 'org.lightink'
 version = '1.0.0'
@@ -71,4 +75,21 @@ compileTestKotlin {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+}
+
+application {
+    // Define the main class for the application
+    mainClassName = "org.lightink.reader.ReaderApplicationKt"
+}
+
+task packageReader(type: io.github.fvarrui.javapackager.gradle.PackageTask, dependsOn: build) {
+	// mandatory
+	mainClass = "org.lightink.reader.ReaderApplicationKt"
+	// optional
+	bundleJre = true
+}
+
+javafx {
+    version = "11.0.2"
+    modules = [ 'javafx.web' ]
 }

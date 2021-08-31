@@ -6,6 +6,31 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
     <link rel="icon" href="<%= BASE_URL %>favicon.ico" />
     <title>Reader Bookshelf</title>
+    <script>
+      // 通用加载脚本方法
+      function loadScript(src, callback, async) {
+        var script = document.createElement('script');
+        if (async) script.async = 'async';
+        script.src = src;
+
+        if (callback) {
+          script.onload = callback;
+        }
+
+        document.head.appendChild(script);
+      }
+
+      // 获取单个查询参数
+      function getQueryString(sVar, first) {
+        return decodeURI(window.location.search.replace(new RegExp('^(?:.*' + (first ? '?' : '') + '[&\\?]' + encodeURI(sVar).replace(/[\.\+\*]/g, '\\$&') + '(?:\\=([^&]*))?)?.*$', 'i'), '$1'));
+      }
+
+      if (window.getQueryString('debug')) {
+        window.loadScript('https://cdn.bootcdn.net/ajax/libs/vConsole/3.9.1/vconsole.min.js', function() {
+          new VConsole();
+        }, true);
+      }
+    </script>
   </head>
   <style>
     body::-webkit-scrollbar {

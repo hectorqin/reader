@@ -307,7 +307,6 @@
 </template>
 
 <script>
-import "../assets/fonts/shelffont.css";
 import Explore from "../components/Explore.vue";
 import Axios from "axios";
 
@@ -363,6 +362,7 @@ export default {
     } catch (error) {
       //
     }
+    localStorage.url = localStorage.url || location.host + "/reader3";
     this.loadBookshelf()
       .then(() => {
         if (!this.bookSourceList.length) {
@@ -384,10 +384,16 @@ export default {
             this.$store.commit("setNewConnect", true);
             instance.confirmButtonLoading = true;
             instance.confirmButtonText = "校验中……";
-            this.loadBookshelf(instance.inputValue)
+            var inputUrl = instance.inputValue.replace(/\/*$/g, "");
+            this.loadBookshelf(inputUrl)
               .then(() => {
                 instance.confirmButtonLoading = false;
                 done();
+                localStorage.url = inputUrl;
+                if (!this.bookSourceList.length) {
+                  // 加载书源列表
+                  this.loadBookSource();
+                }
               })
               .catch(() => {
                 instance.confirmButtonLoading = false;
@@ -399,7 +405,6 @@ export default {
         }
       })
         .then(({ value }) => {
-          localStorage.url = value;
           this.$message({
             type: "success",
             message: "与" + value + "连接成功"
@@ -716,7 +721,7 @@ export default {
     },
     onBookSourceFileChange(event) {
       const rawFile = event.target.files && event.target.files[0];
-      this.$refs.fileRef.value = null;
+      // console.log("rawFile", rawFile);
       const reader = new FileReader();
       reader.onload = e => {
         const data = e.target.result;
@@ -724,10 +729,49 @@ export default {
           this.importBookSource = JSON.parse(data);
           this.showImportDialog = true;
         } catch (error) {
-          this.$message.error("导入书源出错");
+          this.$message.error("书源文件错误");
         }
       };
+      reader.onerror = () => {
+        // console.log("FileReader error", e);
+        // FileReader 读取出错，只能上传读取了
+        let param = new FormData();
+        param.append("file", rawFile);
+        Axios.post("http://" + localStorage.url + "/readSourceFile", param, {
+          headers: { "Content-Type": "multipart/form-data" }
+        }).then(
+          res => {
+            if (res.data.isSuccess) {
+              //
+              let sourceList = [];
+              res.data.data.forEach(v => {
+                try {
+                  const data = JSON.parse(v);
+                  if (Array.isArray(data)) {
+                    sourceList = sourceList.concat(data);
+                  }
+                } catch (error) {
+                  //
+                }
+              });
+              if (sourceList.length) {
+                this.importBookSource = sourceList;
+                this.showImportDialog = true;
+              } else {
+                this.$message.error("书源文件错误");
+              }
+            } else {
+              this.$message.error(res.data.errorMsg);
+            }
+          },
+          () => {
+            //
+            this.$message.error("后端连接失败");
+          }
+        );
+      };
       reader.readAsText(rawFile);
+      this.$refs.fileRef.value = null;
     },
     handleCheckAllChange(val) {
       this.checkedSourceIndex = val
@@ -872,14 +916,14 @@ export default {
 
     .navigation-title {
       font-size: 24px;
-      font-weight: 500;
-      font-family: FZZCYSK;
+      font-weight: 600;
+      font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
     }
 
     .navigation-sub-title {
       font-size: 16px;
-      font-weight: 300;
-      font-family: FZZCYSK;
+      font-weight: 500;
+      font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
       margin-top: 16px;
       color: #b1b1b1;
     }
@@ -902,7 +946,7 @@ export default {
       .recent-title {
         font-size: 14px;
         color: #b1b1b1;
-        font-family: FZZCYSK;
+        font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
       }
 
       .reading-recent {
@@ -926,7 +970,7 @@ export default {
       .setting-title {
         font-size: 14px;
         color: #b1b1b1;
-        font-family: FZZCYSK;
+        font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
       }
 
       .no-point {
@@ -1001,8 +1045,8 @@ export default {
 
     .shelf-title {
       font-size: 20px;
-      font-weight: 500;
-      font-family: FZZCYSK;
+      font-weight: 600;
+      font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
       margin-bottom: 15px;
 
       .title-btn {
@@ -1218,5 +1262,9 @@ export default {
   float: left;
   line-height: 40px;
   margin-left: 10px;
+}
+
+.source-container::-webkit-scrollbar {
+  width: 0 !important;
 }
 </style>

@@ -43,7 +43,6 @@
 import jump from "../plugins/jump";
 import config from "../plugins/config";
 import Axios from "axios";
-import "../assets/fonts/popfont.css";
 export default {
   name: "Explore",
   data() {
@@ -188,7 +187,7 @@ export default {
   .title {
     font-size: 18px;
     font-weight: 400;
-    font-family: FZZCYSK;
+    font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
     color: #ed4259;
     border-bottom: 1px solid #ed4259;
     width: fit-content;
@@ -230,6 +229,10 @@ export default {
         cursor: pointer;
       }
     }
+  }
+
+  .data-wrapper::-webkit-scrollbar {
+    width: 0 !important;
   }
 
   >>>.el-collapse-item__header {

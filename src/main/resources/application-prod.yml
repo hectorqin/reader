@@ -5,6 +5,9 @@ spring:
 reader:
   app:
     storagePath: 'storage'
+    showUI: false
 
   server:
-    url: http://localhost:8080
+    port: 8080
+    webUrl: http://localhost:${reader.server.port}/web/
+

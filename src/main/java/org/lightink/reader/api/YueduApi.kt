@@ -33,6 +33,8 @@ import io.legado.app.utils.MD5Utils
 import java.net.URLDecoder;
 import io.vertx.ext.web.client.WebClient
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.core.env.Environment
+import java.io.File
 
 private val logger = KotlinLogging.logger {}
 
@@ -44,7 +46,17 @@ class YueduApi : RestVerticle() {
     @Autowired
     private lateinit var webClient: WebClient
 
+    @Autowired
+    private lateinit var env: Environment
+
     override suspend fun initRouter(router: Router) {
+        logger.info("port: {}", port)
+        var serverPort = env.getProperty("reader.server.port", Int::class.java)
+        logger.info("serverPort: {}", serverPort)
+        if (serverPort != null && serverPort > 0) {
+            port = serverPort;
+        }
+
         // 兼容阅读3 webapi
         router.post("/reader3/saveSource").coroutineHandler { saveSource(it) }
         router.post("/reader3/saveSources").coroutineHandler { saveSources(it) }
@@ -92,6 +104,9 @@ class YueduApi : RestVerticle() {
 
         // web界面
         router.route("/web/*").handler(StaticHandler.create("web"));
+
+        // 上传书源文件
+        router.post("/reader3/readSourceFile").coroutineHandler { readSourceFile(it) }
 
         // 加载书源
         loadInstalledBookSourceList();
@@ -150,6 +165,23 @@ class YueduApi : RestVerticle() {
             }
             res.end(result.bodyAsBuffer())
         }
+    }
+
+    private suspend fun readSourceFile(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (context.fileUploads() == null || context.fileUploads().isEmpty()) {
+            return returnData.setErrorMsg("请上传文件")
+        }
+        var sourceList = JsonArray()
+        context.fileUploads().forEach {
+            // logger.info("readSourceFile: {}", it.uploadedFileName())
+            var file = File(it.uploadedFileName())
+            if (file.exists()) {
+                sourceList.add(file.readText())
+                file.delete()
+            }
+        }
+        return returnData.setData(sourceList.getList())
     }
 
     private suspend fun getChapterList(context: RoutingContext): ReturnData {

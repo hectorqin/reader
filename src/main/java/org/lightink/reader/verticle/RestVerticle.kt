@@ -23,6 +23,8 @@ abstract class RestVerticle : CoroutineVerticle() {
 
     protected lateinit var router: Router
 
+    open var port: Int = 8080
+
     override suspend fun start() {
         super.start()
         router = Router.router(vertx)
@@ -54,7 +56,7 @@ abstract class RestVerticle : CoroutineVerticle() {
         router.route().handler(BodyHandler.create())
 
         router.route().handler(LoggerHandler.create(LoggerFormat.DEFAULT));
-        router.route().handler {
+        router.route("/reader3/*").handler {
             logger.info("request url: {}", URLDecoder.decode(it.request().absoluteURI()))
             logger.info("request body: {}", it.bodyAsString)
             it.next()
@@ -73,7 +75,8 @@ abstract class RestVerticle : CoroutineVerticle() {
             ctx.error(ctx.failure())
         }
 
-        vertx.createHttpServer().requestHandler(router).listen(8080)
+        logger.info("port: {}", port)
+        vertx.createHttpServer().requestHandler(router).listen(port)
 
     }
 

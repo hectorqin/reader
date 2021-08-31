@@ -42,3 +42,4 @@ out
 /storage*
 /log
 /bin
+/file-uploads
