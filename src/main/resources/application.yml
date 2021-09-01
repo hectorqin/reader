@@ -2,6 +2,7 @@ reader:
   app:
     storagePath: storage
     showUI: false
+    debug: false
 
   server:
     port: 8080

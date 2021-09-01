@@ -9,7 +9,9 @@ FROM gradle:5.2.1-jdk8-alpine AS build-env
 ADD --chown=gradle:gradle . /app
 WORKDIR /app
 COPY --from=build-web /app/web/dist /app/src/main/resources/web
-RUN gradle assemble --info
+RUN \
+    rm src/main/java/org/lightink/reader/ReaderUIApplication.kt; \
+    gradle -b cli.gradle assemble --info;
 
 FROM openjdk:8-jdk-alpine
 # Install base packages

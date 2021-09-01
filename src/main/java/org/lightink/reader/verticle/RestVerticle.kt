@@ -93,6 +93,7 @@ abstract class RestVerticle : CoroutineVerticle() {
                     ctx.success(fn(ctx))
 //                    fn(ctx)
                 } catch (e: Exception) {
+                    logger.error("Error: {}", e)
                     ctx.error(e)
                 }
             }
@@ -105,6 +106,7 @@ abstract class RestVerticle : CoroutineVerticle() {
                 try {
                     fn(ctx)
                 } catch (e: Exception) {
+                    logger.error("Error: {}", e)
                     ctx.error(e)
                 }
             }
