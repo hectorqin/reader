@@ -16,6 +16,36 @@ export default {
     window.onresize = () => {
       this.$store.commit("setMiniInterface", window.innerWidth < 750);
     };
+  },
+  mounted() {
+    if (this.theme) {
+      document.body.className =
+        (document.body.className || "").replace("night-theme", "") +
+        " night-theme";
+    } else {
+      document.body.className = (document.body.className || "").replace(
+        "night-theme",
+        ""
+      );
+    }
+  },
+  computed: {
+    theme() {
+      return this.$store.state.config.theme;
+    }
+  },
+  watch: {
+    theme(val) {
+      if (val === 6) {
+        document.body.className =
+          document.body.className.replace("night-theme", "") + " night-theme";
+      } else {
+        document.body.className = document.body.className.replace(
+          "night-theme",
+          ""
+        );
+      }
+    }
   }
 };
 </script>

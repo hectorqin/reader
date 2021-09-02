@@ -72,7 +72,6 @@ class ReaderUIApplication: Application() {
 
     fun boot() {
         launch(*launchArgs)
-        System.setProperty("sun.net.http.allowRestrictedHeaders", "true")
     }
 
     override fun init() {
@@ -174,6 +173,7 @@ class ReaderUIApplication: Application() {
     }
 
     fun showWebScreen(stage: Stage, url: String) {
+        System.setProperty("sun.net.http.allowRestrictedHeaders", "true")
         var webView = WebView();
         var webEngine = webView.getEngine();
         webEngine.load(url);

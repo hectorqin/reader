@@ -961,6 +961,7 @@ export default {
     min-width: 260px;
     padding: 48px 36px;
     height: 100vh;
+    box-sizing: border-box;
     background-color: #F7F7F7;
 
     .navigation-title {
@@ -1049,12 +1050,12 @@ export default {
 
     .bottom-icons {
       position: absolute;
-      bottom: 0;
-      padding-bottom: 30px;
-      width: 260px;
+      bottom: 30px;
+      width: 188px;
       align-items: center;
       display: flex;
       flex-direction: row;
+      justify-content: space-between;
 
       .bottom-icon {
         height: 36px;
@@ -1068,13 +1069,11 @@ export default {
         line-height: 32px;
         width: 36px;
         height: 36px;
-        margin-right: 16px;
         border-radius: 100%;
         display: inline-block;
         cursor: pointer;
         text-align: center;
         vertical-align: middle;
-        margin-left: 150px;
 
         .el-icon-moon {
           color: #f7f7f7;
@@ -1288,6 +1287,14 @@ export default {
   >>>.check-tip {
     color: #bbb;
   }
+
+  >>> .el-table__body-wrapper::-webkit-scrollbar {
+    background-color: #333 !important;
+  }
+
+  >>> .el-dialog__wrapper::-webkit-scrollbar {
+    background-color: #333 !important;
+  }
 }
 
 .source-container {
@@ -1322,12 +1329,15 @@ export default {
 >>> .el-table__body-wrapper::-webkit-scrollbar {
   width: 0 !important;
 }
+>>> .el-dialog__wrapper::-webkit-scrollbar {
+  width: 0 !important;
+}
 @media screen and (max-width: 750px) {
   .index-wrapper {
     overflow-x: hidden;
 
     >>>.navigation-wrapper {
-      padding: 20px 24px;
+      padding: 20px 36px;
       box-sizing: border-box;
       display: none;
     }
