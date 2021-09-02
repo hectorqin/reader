@@ -4,6 +4,29 @@
 
 接口从 [lightink-server](https://github.com/lightink-qingmo/lightink-server) 修改而来，网页从 [阅读3.0Web端](https://github.com/celetor/web-yuedu3) 修改而来。
 
+## 功能
+
+- 书源管理
+- 书架管理
+- 搜索
+- 书海
+- 看书
+- 移动端适配
+- 换源
+
+## 预览
+
+![](imgs/1.jpg)
+![](imgs/2.jpg)
+![](imgs/3.jpg)
+![](imgs/4.jpg)
+![](imgs/5.jpg)
+![](imgs/6.jpg)
+![](imgs/7.jpg)
+![](imgs/8.jpg)
+![](imgs/9.jpg)
+![](imgs/10.jpg)
+
 ## 开发编译
 
 ### 编译前端
