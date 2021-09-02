@@ -3,6 +3,7 @@ reader:
     storagePath: storage
     showUI: false
     debug: false
+    packaged: false
 
   server:
     port: 8080

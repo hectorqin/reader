@@ -16,6 +16,7 @@ import org.lightink.reader.entity.BasicError
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.io.File
+import java.nio.file.Paths
 import org.lightink.reader.config.AppConfig
 import com.google.gson.reflect.TypeToken
 import kotlin.reflect.KProperty1
@@ -31,6 +32,8 @@ import io.legado.app.data.entities.Book
 private val logger = KotlinLogging.logger {}
 
 val gson = GsonBuilder().disableHtmlEscaping().create()
+
+var storageFinalPath = ""
 
 fun RoutingContext.success(any: Any?) {
     val toJson: String = if (any is JsonObject) {
@@ -65,9 +68,25 @@ fun RoutingContext.error(throwable: Throwable) {
 }
 
 fun getStoragePath(): String {
+    if (storageFinalPath.isNotEmpty()) {
+        return storageFinalPath;
+    }
     var appConfig: AppConfig = SpringContextUtils.getBean("appConfig", AppConfig::class.java)
     // logger.info("storagePath from appConfig: {}", appConfig.storagePath)
-    return appConfig.storagePath
+    var storageDir = File(appConfig.storagePath)
+    if (storageDir.isAbsolute() || !appConfig.packaged) {
+        return appConfig.storagePath;
+    }
+    // 打包为 app，需要使用用户目录存储
+    var userHome = System.getProperty("user.home");
+
+    if (userHome == null) {
+        return appConfig.storagePath;
+    }
+
+    var path = Paths.get(userHome, ".reader", appConfig.storagePath);
+    storageFinalPath = path.toString();
+    return storageFinalPath;
 }
 
 fun saveStorage(name: String, value: Any) {

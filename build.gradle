@@ -87,7 +87,16 @@ task buildReader(type: io.github.fvarrui.javapackager.gradle.PackageTask, depend
 	mainClass = "org.lightink.reader.ReaderUIApplicationKt"
 	// optional
 	bundleJre = false
-    vmArgs = ["-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.debug=true"]
+    vmArgs = ["-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.packaged=true", "-Dreader.app.debug=true"]
+}
+
+task packageReaderMac(type: io.github.fvarrui.javapackager.gradle.PackageTask, dependsOn: build) {
+	// mandatory
+	mainClass = "org.lightink.reader.ReaderUIApplicationKt"
+	// optional
+	bundleJre = false
+    createZipball = true
+    vmArgs = ["-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.packaged=true", "-Dreader.app.debug=false"]
 }
 
 task packageReaderWin(type: io.github.fvarrui.javapackager.gradle.PackageTask, dependsOn: build) {
@@ -97,7 +106,7 @@ task packageReaderWin(type: io.github.fvarrui.javapackager.gradle.PackageTask, d
 	bundleJre = false
     createZipball = true
     platform = "windows"
-    vmArgs = ["-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.debug=false"]
+    vmArgs = ["-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.packaged=true", "-Dreader.app.debug=false"]
 }
 
 task packageReaderLinux(type: io.github.fvarrui.javapackager.gradle.PackageTask, dependsOn: build) {
@@ -107,7 +116,7 @@ task packageReaderLinux(type: io.github.fvarrui.javapackager.gradle.PackageTask,
 	bundleJre = false
     createZipball = true
     platform = "linux"
-    vmArgs = ["-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.debug=false"]
+    vmArgs = ["-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.packaged=true", "-Dreader.app.debug=false"]
 }
 
 javafx {

@@ -1281,6 +1281,9 @@ export default {
   >>>.el-table::before {
     background-color: transparent;
   }
+  >>>.el-table {
+    background-color: transparent;
+  }
   >>>.el-table--enable-row-hover .el-table__body tr:hover>td {
     background-color: #333;
   }
