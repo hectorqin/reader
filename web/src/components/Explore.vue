@@ -3,9 +3,14 @@
     <div class="title-zone">
       <div class="title">书海</div>
       <div :class="{ 'title-btn': true }">
-        <span class="source-count"
-          >共{{ bookSourceListNew.length }}个可用书源</span
-        >
+        <span class="source-count">
+          共{{ bookSourceListNew.length }}个可用书源
+        </span>
+        <i
+          class="el-icon-close close-btn"
+          v-if="$store.state.miniInterface"
+          @click.stop="close"
+        ></i>
       </div>
     </div>
     <div
@@ -164,6 +169,9 @@ export default {
           duration: 0
         });
       });
+    },
+    close() {
+      this.$emit("hideExplorePop");
     }
   }
 };
@@ -197,11 +205,14 @@ export default {
     font-size: 14px;
     line-height: 26px;
     color: #ed4259;
-    cursor: pointer;
     .source-count {
       display: inline-block;
       margin-right: 25px;
       color: #606266;
+    }
+    .close-btn {
+      font-size: 20px;
+      vertical-align: middle;
     }
     &.loading {
       color: #606266;

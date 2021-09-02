@@ -6,7 +6,7 @@
       day: !isNight
     }"
   >
-    <div class="navigation-wrapper">
+    <div class="navigation-wrapper" :style="navigationClass">
       <div class="navigation-title">
         阅读
       </div>
@@ -95,7 +95,7 @@
           </el-tag>
           <el-popover
             placement="right"
-            width="600"
+            :width="popupWidth"
             trigger="click"
             :visible-arrow="false"
             v-model="popExploreVisible"
@@ -109,12 +109,15 @@
               :bookSourceList="bookSourceList"
               @showSearchList="showSearchList"
               @close="popExploreVisible = false"
+              @hideExplorePop="popExploreVisible = false"
             />
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
               slot="reference"
+              ref="exploreBtn"
               class="setting-btn"
+              @click="showNavigation = false"
             >
               探索书源
             </el-tag>
@@ -161,12 +164,16 @@
     </div>
     <div class="shelf-wrapper" ref="shelfWrapper">
       <div class="shelf-title">
+        <i class="el-icon-menu" v-if="showMenu" @click="toggleMenu"></i>
         {{
           isSearchResult ? (isExploreResult ? "探索结果" : "搜索结果") : "书架"
         }}
         <div class="title-btn" v-if="isSearchResult" @click="backToShelf">
           返回书架
         </div>
+        <!-- <div class="title-btn" @click="showExplorePop">
+          书海
+        </div> -->
         <div class="title-btn" v-if="isExploreResult" @click="loadMoreExplore">
           <i class="el-icon-loading" v-if="exploreLoading"></i>
           {{ exploreLoading ? "加载中..." : "加载更多" }}
@@ -180,6 +187,7 @@
         <div class="wrapper">
           <div
             class="book"
+            :style="showNavigation ? { width: '360px !important' } : {}"
             v-for="book in shelf"
             :key="book.bookUrl"
             @click="toDetail(book.bookUrl, book.name, book.durChapterIndex)"
@@ -233,7 +241,12 @@
         </div>
       </div>
     </div>
-    <el-dialog title="导入书源" :visible.sync="showImportDialog">
+    <el-dialog
+      title="导入书源"
+      :visible.sync="showImportDialog"
+      :width="dialogWidth"
+      :top="dialogTop"
+    >
       <div class="source-container">
         <el-checkbox-group
           v-model="checkedSourceIndex"
@@ -262,7 +275,12 @@
         <el-button type="primary" @click="saveBookSourceList">确定</el-button>
       </div>
     </el-dialog>
-    <el-dialog title="书源管理" :visible.sync="showManageDialog">
+    <el-dialog
+      title="书源管理"
+      :visible.sync="showManageDialog"
+      :width="dialogWidth"
+      :top="dialogTop"
+    >
       <div class="source-container">
         <el-table
           :data="bookSourceList"
@@ -271,7 +289,7 @@
         >
           <el-table-column
             type="selection"
-            width="45"
+            width="25"
             :selectable="getSourceBook"
           >
           </el-table-column>
@@ -283,7 +301,7 @@
             property="bookSourceUrl"
             label="书源链接"
           ></el-table-column>
-          <el-table-column label="书架书籍" width="180">
+          <el-table-column label="书架书籍">
             <template slot-scope="scope">
               <pre>{{ showSourceBook(scope.row) }}</pre>
             </template>
@@ -337,7 +355,8 @@ export default {
       checkedSourceIndex: [],
 
       showManageDialog: false,
-      manageSourceSelection: []
+      manageSourceSelection: [],
+      showNavigation: false
     };
   },
   watch: {
@@ -865,6 +884,14 @@ export default {
           this.$message.error("后端连接失败");
         }
       );
+    },
+    toggleMenu() {
+      if (this.showMenu) {
+        this.showNavigation = !this.showNavigation;
+      }
+    },
+    showExplorePop() {
+      this.popExploreVisible = true;
     }
   },
   computed: {
@@ -896,6 +923,27 @@ export default {
     },
     newConnect() {
       return this.$store.state.newConnect;
+    },
+    showMenu() {
+      return this.$store.state.miniInterface;
+    },
+    navigationClass() {
+      return !this.showMenu || (this.showMenu && this.showNavigation)
+        ? {
+            display: "block"
+          }
+        : {
+            display: "none"
+          };
+    },
+    dialogWidth() {
+      return this.showMenu ? "85%" : "50%";
+    },
+    dialogTop() {
+      return this.showMenu ? "5vh" : "15vh";
+    },
+    popupWidth() {
+      return this.showMenu ? window.innerWidth : "600";
     }
   }
 };
@@ -912,6 +960,7 @@ export default {
     width: 260px;
     min-width: 260px;
     padding: 48px 36px;
+    height: 100vh;
     background-color: #F7F7F7;
 
     .navigation-title {
@@ -989,6 +1038,7 @@ export default {
 
       .setting-btn {
         margin-right: 15px;
+        margin-bottom: 15px;
         cursor: pointer;
       }
 
@@ -1042,6 +1092,8 @@ export default {
     padding: 48px 48px;
     width: 100%;
     background-color: #fff;
+    display: flex;
+    flex-direction: column;
 
     .shelf-title {
       font-size: 20px;
@@ -1074,7 +1126,7 @@ export default {
     }
 
     .books-wrapper {
-      height: 100%;
+      flex: 1;
       overflow-x: hidden;
       overflow-y: scroll;
 
@@ -1266,5 +1318,40 @@ export default {
 
 .source-container::-webkit-scrollbar {
   width: 0 !important;
+}
+>>> .el-table__body-wrapper::-webkit-scrollbar {
+  width: 0 !important;
+}
+@media screen and (max-width: 750px) {
+  .index-wrapper {
+    overflow-x: hidden;
+
+    >>>.navigation-wrapper {
+      padding: 20px 24px;
+      box-sizing: border-box;
+      display: none;
+    }
+    >>>.shelf-wrapper {
+      padding: 0;
+
+      .shelf-title {
+        padding: 20px 24px 0 24px;
+      }
+
+      .books-wrapper {
+        .wrapper {
+          display: flex;
+          flex-direction: column;
+
+          .book {
+            box-sizing: border-box;
+            width: 100%;
+            margin-bottom: 0;
+            padding: 10px 20px;
+          }
+        }
+      }
+    }
+  }
 }
 </style>

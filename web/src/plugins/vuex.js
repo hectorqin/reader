@@ -20,6 +20,7 @@ export default new Vuex.Store({
       fontSize: 18,
       readWidth: 800
     },
+    miniInterface: false,
     readSettingsVisible: false
   },
   mutations: {
@@ -55,6 +56,9 @@ export default new Vuex.Store({
     },
     setShowContent(state, visible) {
       state.showContent = visible;
+    },
+    setMiniInterface(state, mini) {
+      state.miniInterface = mini;
     }
   }
 });

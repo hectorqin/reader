@@ -44,7 +44,7 @@
             >
           </div>
         </li>
-        <li class="read-width">
+        <li class="read-width" v-if="!$store.state.miniInterface">
           <i>页面宽度</i>
           <div class="resize">
             <span class="less" @click="lessReadWidth"
@@ -191,7 +191,7 @@ export default {
 .settings-wrapper {
   user-select: none;
   margin: -13px;
-  width: 478px;
+  // width: 478px;
   height: 300px;
   text-align: left;
   padding: 40px 0 40px 24px;

@@ -3,6 +3,7 @@
     class="chapter-wrapper"
     :style="bodyTheme"
     :class="{ night: isNight, day: !isNight }"
+    @click="showToolBar = !showToolBar"
   >
     <div class="tool-bar" :style="leftBarTheme">
       <div class="tools">
@@ -49,10 +50,9 @@
             class="tool-icon"
             :class="{ 'no-point': noPoint }"
             slot="reference"
+            style="padding-top: 9px"
           >
-            <div>
-              <i class="el-icon-menu"></i>
-            </div>
+            <i class="el-icon-menu"></i>
             <div class="icon-text">书源</div>
           </div>
         </el-popover>
@@ -84,7 +84,7 @@
         </el-popover>
         <el-popover
           placement="right"
-          width="470"
+          :width="popperWidth"
           trigger="click"
           :visible-arrow="false"
           v-model="readSettingsVisible"
@@ -126,6 +126,7 @@
     <div class="read-bar" :style="rightBarTheme">
       <div class="tools">
         <div class="tool-icon progress-text">
+          <span v-if="$store.state.miniInterface">阅读进度: </span>
           {{ readingProgress }}
         </div>
         <div
@@ -136,12 +137,14 @@
           <div class="iconfont">
             &#58920;
           </div>
+          <span v-if="$store.state.miniInterface">上一章</span>
         </div>
         <div
           class="tool-icon"
           :class="{ 'no-point': noPoint }"
           @click="toNextChapter"
         >
+          <span v-if="$store.state.miniInterface">下一章</span>
           <div class="iconfont">
             &#58913;
           </div>
@@ -276,6 +279,8 @@ export default {
     };
 
     window.addEventListener("keyup", this.func_keyup);
+
+    // console.log(this);
   },
   destroyed() {
     window.removeEventListener("keyup", this.func_keyup);
@@ -294,23 +299,6 @@ export default {
         this.isNight = false;
       }
     },
-    bodyColor(color) {
-      this.bodyTheme.background = color;
-    },
-    chapterColor(color) {
-      this.chapterTheme.background = color;
-    },
-    readWidth(width) {
-      this.chapterTheme.width = width;
-      let leftToolMargin = -((parseInt(width) + 130) / 2 + 68) + "px";
-      let rightToolMargin = -((parseInt(width) + 130) / 2 + 52) + "px";
-      this.leftBarTheme.marginLeft = leftToolMargin;
-      this.rightBarTheme.marginRight = rightToolMargin;
-    },
-    popupColor(color) {
-      this.leftBarTheme.background = color;
-      this.rightBarTheme.background = color;
-    },
     readSettingsVisible(visible) {
       if (!visible) {
         let configText = JSON.stringify(this.$store.state.config);
@@ -323,24 +311,9 @@ export default {
       title: "",
       content: [],
       noPoint: true,
-      isNight: this.$store.state.config.theme == 6,
-      bodyTheme: {
-        background: config.themes[this.$store.state.config.theme].body
-      },
-      chapterTheme: {
-        background: config.themes[this.$store.state.config.theme].content,
-        width: this.$store.state.config.readWidth - 130 + "px"
-      },
-      leftBarTheme: {
-        background: config.themes[this.$store.state.config.theme].popup,
-        marginLeft: -(this.$store.state.config.readWidth / 2 + 68) + "px"
-      },
-      rightBarTheme: {
-        background: config.themes[this.$store.state.config.theme].popup,
-        marginRight: -(this.$store.state.config.readWidth / 2 + 52) + "px"
-      },
       popBookSourceVisible: false,
       popBookShelfVisible: false,
+      showToolBar: true,
       book: null
     };
   },
@@ -379,20 +352,57 @@ export default {
     theme() {
       return this.config.theme;
     },
-    bodyColor() {
-      return config.themes[this.config.theme].body;
+    isNight() {
+      return this.$store.state.config.theme == 6;
     },
-    chapterColor() {
-      return config.themes[this.config.theme].content;
+    bodyTheme() {
+      return {
+        background: config.themes[this.$store.state.config.theme].body
+      };
     },
-    popupColor() {
-      return config.themes[this.config.theme].popup;
+    chapterTheme() {
+      return {
+        background: config.themes[this.$store.state.config.theme].content,
+        width: this.readWidth
+      };
+    },
+    leftBarTheme() {
+      return {
+        background: config.themes[this.$store.state.config.theme].popup,
+        marginLeft: this.$store.state.miniInterface
+          ? 0
+          : -(this.$store.state.config.readWidth / 2 + 68) + "px",
+        display:
+          this.$store.state.miniInterface && !this.showToolBar
+            ? "none"
+            : "block"
+      };
+    },
+    rightBarTheme() {
+      return {
+        background: config.themes[this.$store.state.config.theme].popup,
+        marginRight: this.$store.state.miniInterface
+          ? 0
+          : -(this.$store.state.config.readWidth / 2 + 52) + "px",
+        display:
+          this.$store.state.miniInterface && !this.showToolBar
+            ? "none"
+            : "block"
+      };
     },
     readWidth() {
-      return this.$store.state.config.readWidth - 130 + "px";
+      if (!this.$store.state.miniInterface) {
+        return this.$store.state.config.readWidth - 130 + "px";
+      } else {
+        return window.innerWidth + "px";
+      }
     },
     popperWidth() {
-      return this.$store.state.config.readWidth - 33;
+      if (!this.$store.state.miniInterface) {
+        return this.$store.state.config.readWidth - 33;
+      } else {
+        return window.innerWidth - 33;
+      }
     },
     show() {
       return this.$store.state.showContent;
@@ -730,6 +740,50 @@ export default {
 
   >>>.popper__arrow {
     background: #666;
+  }
+}
+@media screen and (max-width: 750px) {
+  .chapter-wrapper {
+    padding: 0;
+
+    .tool-bar {
+      left: 0;
+      width: 100vw;
+      margin-left: 0 !important;
+
+      .tools {
+        flex-direction: row;
+        justify-content: space-between;
+        .tool-icon {
+          border: none;
+        }
+      }
+    }
+
+    .read-bar {
+      right: 0;
+      width: 100vw;
+      margin-right: 0 !important;
+
+      .tools {
+        flex-direction: row;
+        justify-content: space-between;
+        padding: 0 15px;
+        .tool-icon {
+          border: none;
+          width: auto;
+          .iconfont {
+            display: inline-block;
+          }
+        }
+      }
+    }
+
+    .chapter {
+      width: 100vw !important;
+      padding: 0 20px;
+      box-sizing: border-box;
+    }
   }
 }
 </style>

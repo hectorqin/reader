@@ -14,6 +14,7 @@ export default {
       return (
         <div>
           {this.carray.map(a => {
+            a = a.replace(/^\s+/g, "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;");
             return <p style={style} domPropsInnerHTML={a} />;
           })}
         </div>
