@@ -29,6 +29,25 @@
 
 ## 开发编译
 
+### 编译脚本
+
+```bash
+$ ./build.sh
+
+USAGE: ./build.sh build|run|win|linux|mac|serve|cli|yarn|web|sync
+
+build   调试打包
+run     桌面端编译运行，需要先执行 sync 命令编译同步web资源
+win     打包 windows 安装包
+linux   打包 linux 安装包
+mac     打包 mac 安装包
+serve   服务端编译运行
+cli     服务端打包命令
+yarn    web页面 yarn 快捷命令，默认 install
+web     开发web页面
+sync    编译同步web资源
+```
+
 ### 编译前端
 
 ```bash
