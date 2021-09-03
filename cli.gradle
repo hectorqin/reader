@@ -72,4 +72,3 @@ compileTestKotlin {
         jvmTarget = "1.8"
     }
 }
-// mainClassName = "org.lightink.reader.ReaderApplicationKt"
