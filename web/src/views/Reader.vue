@@ -155,7 +155,17 @@
     <div class="chapter" ref="content" :style="chapterTheme">
       <div class="content">
         <div class="top-bar" ref="top"></div>
-        <div class="title" ref="title" v-if="show">{{ title }}</div>
+        <div
+          class="title"
+          ref="title"
+          v-if="show"
+          :style="{
+            color: $store.state.config.fontColor,
+            ...this.$store.getters.currentFontFamily
+          }"
+        >
+          {{ title }}
+        </div>
         <Pcontent :carray="content" />
         <div class="bottom-bar" ref="bottom"></div>
       </div>
@@ -171,7 +181,6 @@ import BookShelf from "../components/BookShelf.vue";
 import Pcontent from "../components/Content.vue";
 import Axios from "axios";
 import jump from "../plugins/jump";
-import config from "../plugins/config";
 export default {
   components: {
     PopCata,
@@ -292,17 +301,17 @@ export default {
     content() {
       this.$store.commit("setContentLoading", false);
     },
-    theme(theme) {
-      if (theme == 6) {
-        this.isNight = true;
-      } else {
-        this.isNight = false;
-      }
-    },
     readSettingsVisible(visible) {
       if (!visible) {
         let configText = JSON.stringify(this.$store.state.config);
         localStorage.setItem("config", configText);
+      }
+    },
+    title(title) {
+      if (title) {
+        document.title = this.$store.state.readingBook.bookName + " - " + title;
+      } else {
+        document.title = this.$store.state.readingBook.bookName;
       }
     }
   },
@@ -353,25 +362,32 @@ export default {
       return this.config.theme;
     },
     isNight() {
-      return this.$store.state.config.theme == 6;
+      return this.$store.getters.isNight;
     },
     bodyTheme() {
       return {
-        background: config.themes[this.$store.state.config.theme].body
+        background: this.$store.getters.currentThemeConfig.body
       };
     },
     chapterTheme() {
-      return {
-        background: config.themes[this.$store.state.config.theme].content,
-        width: this.readWidth
-      };
+      if (typeof this.$store.getters.currentThemeConfig.content === "string") {
+        return {
+          background: this.$store.getters.currentThemeConfig.content,
+          width: this.readWidth
+        };
+      } else {
+        return {
+          ...this.$store.getters.currentThemeConfig.content,
+          width: this.readWidth
+        };
+      }
     },
     leftBarTheme() {
       return {
-        background: config.themes[this.$store.state.config.theme].popup,
+        background: this.$store.getters.currentThemeConfig.popup,
         marginLeft: this.$store.state.miniInterface
           ? 0
-          : -(this.$store.state.config.readWidth / 2 + 68) + "px",
+          : -(this.readWidthConfig / 2 + 68) + "px",
         display:
           this.$store.state.miniInterface && !this.showToolBar
             ? "none"
@@ -380,10 +396,10 @@ export default {
     },
     rightBarTheme() {
       return {
-        background: config.themes[this.$store.state.config.theme].popup,
+        background: this.$store.getters.currentThemeConfig.popup,
         marginRight: this.$store.state.miniInterface
           ? 0
-          : -(this.$store.state.config.readWidth / 2 + 52) + "px",
+          : -(this.readWidthConfig / 2 + 52) + "px",
         display:
           this.$store.state.miniInterface && !this.showToolBar
             ? "none"
@@ -392,14 +408,21 @@ export default {
     },
     readWidth() {
       if (!this.$store.state.miniInterface) {
-        return this.$store.state.config.readWidth - 130 + "px";
+        return this.readWidthConfig - 130 + "px";
       } else {
         return window.innerWidth + "px";
       }
     },
+    readWidthConfig() {
+      var width = this.$store.state.config.readWidth;
+      while (width > this.$store.state.windowWidth - 120) {
+        width -= 160;
+      }
+      return width;
+    },
     popperWidth() {
       if (!this.$store.state.miniInterface) {
-        return this.$store.state.config.readWidth - 33;
+        return this.readWidthConfig - 33;
       } else {
         return window.innerWidth - 33;
       }
@@ -433,6 +456,11 @@ export default {
       // this.$message.info("获取章节列表");
       this.getCatalog(this.$store.state.readingBook.bookUrl, refresh).then(
         res => {
+          // 连接后端成功，加载自定义样式
+          window.customCSSLoad ||
+            window.loadLink(this.$store.getters.customCSSUrl, () => {
+              window.customCSSLoad = true;
+            });
           if (res.data.isSuccess) {
             var book = Object.assign({}, this.$store.state.readingBook);
             book.catalog = res.data.data;
@@ -668,6 +696,7 @@ export default {
     min-height: 100vh;
     width: 670px;
     margin: 0 auto;
+    background-size: cover;
 
     >>>.el-icon-loading {
       font-size: 36px;
@@ -764,6 +793,7 @@ export default {
       right: 0;
       width: 100vw;
       margin-right: 0 !important;
+      height: 45px;
 
       .tools {
         flex-direction: row;
@@ -772,8 +802,14 @@ export default {
         .tool-icon {
           border: none;
           width: auto;
+          padding: 0;
+          height: 45px;
+          line-height: 45px;
           .iconfont {
             display: inline-block;
+          }
+          span {
+            vertical-align: middle;
           }
         }
       }
@@ -783,6 +819,7 @@ export default {
       width: 100vw !important;
       padding: 0 20px;
       box-sizing: border-box;
+      border: none;
     }
   }
 }

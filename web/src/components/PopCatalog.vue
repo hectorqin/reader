@@ -21,7 +21,7 @@
     <div
       class="data-wrapper"
       ref="cataData"
-      :class="{ night: isNight, day: !isNight }"
+      :class="{ night: $store.getters.isNight, day: !$store.getters.isNight }"
     >
       <div class="cata">
         <div
@@ -43,7 +43,6 @@
 
 <script>
 import jump from "../plugins/jump";
-import config from "../plugins/config";
 export default {
   name: "PopCata",
   data() {
@@ -54,9 +53,6 @@ export default {
   computed: {
     index() {
       return this.$store.state.readingBook.index;
-    },
-    isNight() {
-      return this.$store.state.config.theme == 6;
     },
     catalog() {
       return this.$store.state.readingBook.catalog || [];
@@ -69,7 +65,7 @@ export default {
     },
     popupTheme() {
       return {
-        background: config.themes[this.theme].popup
+        background: this.$store.getters.currentThemeConfig.popup
       };
     }
   },

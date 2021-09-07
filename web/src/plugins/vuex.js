@@ -1,5 +1,6 @@
 import Vue from "vue";
 import Vuex from "vuex";
+import themeConfig from "./config";
 
 Vue.use(Vuex);
 
@@ -18,10 +19,12 @@ export default new Vuex.Store({
       theme: 0,
       font: 0,
       fontSize: 18,
+      fontWeight: 400,
       readWidth: 800
     },
     miniInterface: false,
-    readSettingsVisible: false
+    readSettingsVisible: false,
+    windowWidth: window.innerWidth
   },
   mutations: {
     setConnectStatus(state, connectStatus) {
@@ -59,6 +62,60 @@ export default new Vuex.Store({
     },
     setMiniInterface(state, mini) {
       state.miniInterface = mini;
+    },
+    setWindowWidth(state, width) {
+      state.windowWidth = width;
+    }
+  },
+  getters: {
+    isNight: state => {
+      return state.config.theme == 6;
+    },
+    currentContentBGImg: state => {
+      if (state.config.contentBGImg) {
+        return state.config.contentBGImg.startsWith("/bg/") ||
+          state.config.contentBGImg.startsWith("http://") ||
+          state.config.contentBGImg.startsWith("https://") ||
+          state.config.contentBGImg.startsWith("//")
+          ? state.config.contentBGImg
+          : "//" +
+              localStorage.url.replace(/\/reader3\/?/, "") +
+              state.config.contentBGImg;
+      }
+      return undefined;
+    },
+    customCSSUrl: () => {
+      if (localStorage.url) {
+        return (
+          "//" +
+          localStorage.url.replace(/\/reader3\/?/, "") +
+          "/assets/reader.css"
+        );
+      }
+      return false;
+    },
+    currentFontFamily: state => {
+      return themeConfig.fonts[state.config.font];
+    },
+    currentThemeConfig: (state, getters) => {
+      if (state.config.theme === "custom") {
+        return {
+          body: state.config.bodyColor || "#eadfca",
+          content: {
+            backgroundImage: getters.currentContentBGImg
+              ? `url(${getters.currentContentBGImg})`
+              : null,
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            backgroundAttachment: "fixed",
+            backgroundColor: state.config.contentColor || "#ede7da",
+            backgroundSize: "cover"
+          },
+          popup: state.config.popupColor || "#ede7da"
+        };
+      } else {
+        return themeConfig.themes[state.config.theme];
+      }
     }
   }
 });

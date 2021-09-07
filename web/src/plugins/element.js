@@ -18,7 +18,8 @@ import {
   CollapseItem,
   Dialog,
   Checkbox,
-  CheckboxGroup
+  CheckboxGroup,
+  ColorPicker
 } from "element-ui";
 
 Vue.use(Button);
@@ -38,6 +39,7 @@ Vue.use(CollapseItem);
 Vue.use(Dialog);
 Vue.use(Checkbox);
 Vue.use(CheckboxGroup);
+Vue.use(ColorPicker);
 
 Vue.prototype.$msgbox = MessageBox;
 Vue.prototype.$message = Message;

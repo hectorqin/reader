@@ -13,7 +13,7 @@
     <div
       class="data-wrapper"
       ref="sourceList"
-      :class="{ night: isNight, day: !isNight }"
+      :class="{ night: $store.getters.isNight, day: !$store.getters.isNight }"
     >
       <div class="cata">
         <div
@@ -38,13 +38,11 @@
 
 <script>
 import jump from "../plugins/jump";
-import config from "../plugins/config";
 import Axios from "axios";
 export default {
   name: "BookSource",
   data() {
     return {
-      isNight: this.$store.state.config.theme == 6,
       index: this.$store.state.readingBook.index,
       bookSource: [],
       loadingMore: false,
@@ -58,7 +56,7 @@ export default {
     },
     popupTheme() {
       return {
-        background: config.themes[this.theme].popup
+        background: this.$store.getters.currentThemeConfig.popup
       };
     },
     bookSourceMap() {
@@ -70,13 +68,6 @@ export default {
   },
   mounted() {},
   watch: {
-    theme(theme) {
-      if (theme == 6) {
-        this.isNight = true;
-      } else {
-        this.isNight = false;
-      }
-    },
     popBookSourceVisible(isVisible) {
       if (isVisible) {
         this.getBookSource();

@@ -1,5 +1,4 @@
 <script>
-import config from "../plugins/config";
 export default {
   name: "pcontent",
   data() {
@@ -7,15 +6,20 @@ export default {
   },
   props: ["carray"],
   render() {
-    const { fontFamily, fontSize } = this;
-    let style = fontFamily;
-    style.fontSize = fontSize;
+    const { fontSize, fontWeight, fontColor } = this;
+    let style = {
+      fontSize,
+      fontWeight,
+      color: fontColor,
+      ...this.$store.getters.currentFontFamily,
+      ...(this.$store.state.config.contentCSS || {})
+    };
     if (this.show) {
       return (
-        <div>
+        <div style={style}>
           {this.carray.map(a => {
             a = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + a.replace(/^\s+/g, "");
-            return <p style={style} domPropsInnerHTML={a} />;
+            return <p domPropsInnerHTML={a} />;
           })}
         </div>
       );
@@ -27,11 +31,14 @@ export default {
     show() {
       return this.$store.state.showContent;
     },
-    fontFamily() {
-      return config.fonts[this.$store.state.config.font];
-    },
     fontSize() {
       return this.$store.state.config.fontSize + "px";
+    },
+    fontWeight() {
+      return this.$store.state.config.fontWeight || undefined;
+    },
+    fontColor() {
+      return this.$store.state.config.fontColor || undefined;
     }
   },
   watch: {

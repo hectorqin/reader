@@ -368,6 +368,7 @@ export default {
     }
   },
   mounted() {
+    document.title = "Reader Bookshelf";
     try {
       //获取最近阅读书籍
       let readingRecentStr = localStorage.getItem("readingRecent");
@@ -384,6 +385,11 @@ export default {
     localStorage.url = localStorage.url || location.host + "/reader3";
     this.loadBookshelf()
       .then(() => {
+        // 连接后端成功，加载自定义样式
+        window.customCSSLoad ||
+          window.loadLink(this.$store.getters.customCSSUrl, () => {
+            window.customCSSLoad = true;
+          });
         if (!this.bookSourceList.length) {
           // 加载书源列表
           this.loadBookSource();
@@ -899,10 +905,10 @@ export default {
       return this.$store.state.config;
     },
     isNight() {
-      return this.$store.state.config.theme == 6;
+      return this.$store.getters.isNight;
     },
     themeColor() {
-      if (this.$store.state.config.theme == 6) {
+      if (this.$store.getters.isNight) {
         return {
           background: "#f7f7f7"
         };

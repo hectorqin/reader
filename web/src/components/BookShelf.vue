@@ -13,7 +13,7 @@
     <div
       class="data-wrapper"
       ref="bookList"
-      :class="{ night: isNight, day: !isNight }"
+      :class="{ night: $store.getters.isNight, day: !$store.getters.isNight }"
     >
       <div class="cata">
         <div
@@ -41,13 +41,11 @@
 
 <script>
 import jump from "../plugins/jump";
-import config from "../plugins/config";
 import Axios from "axios";
 export default {
   name: "BookShelf",
   data() {
     return {
-      isNight: this.$store.state.config.theme == 6,
       bookList: [],
       refreshLoading: false
     };
@@ -59,19 +57,12 @@ export default {
     },
     popupTheme() {
       return {
-        background: config.themes[this.theme].popup
+        background: this.$store.getters.currentThemeConfig.popup
       };
     }
   },
   mounted() {},
   watch: {
-    theme(theme) {
-      if (theme == 6) {
-        this.isNight = true;
-      } else {
-        this.isNight = false;
-      }
-    },
     popBookShelfVisible(isVisible) {
       if (isVisible) {
         this.getBookshelf();

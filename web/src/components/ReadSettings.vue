@@ -2,38 +2,110 @@
   <div
     class="settings-wrapper"
     :style="popupTheme"
-    :class="{ night: isNight, day: !isNight }"
+    :class="{ night: $store.getters.isNight, day: !$store.getters.isNight }"
   >
-    <div class="settings-title">设置</div>
+    <div class="settings-title">
+      设置
+      <div class="title-btn" @click="resetConfig">重置为默认配置</div>
+    </div>
     <div class="setting-list">
       <ul>
         <li class="theme-list">
-          <i>阅读主题</i>
-          <span
-            class="theme-item"
-            v-for="(themeColor, index) in themeColors"
-            :key="index"
-            :style="themeColor"
-            ref="themes"
-            @click="setTheme(index)"
-            :class="{ selected: selectedTheme == index }"
-            ><em v-if="index < 6" class="iconfont">&#58980;</em
-            ><em v-else class="moon-icon">{{ moonIcon }}</em></span
-          >
+          <span class="setting-item-title">阅读主题</span>
+          <div class="selection-zone">
+            <span
+              class="theme-item"
+              v-for="(themeColor, index) in themeColors"
+              :key="index"
+              :style="themeColor"
+              ref="themes"
+              @click="setTheme(index)"
+              :class="{ selected: selectedTheme == index }"
+              ><em v-if="index < 6" class="iconfont">&#58980;</em
+              ><em v-else class="moon-icon">{{ moonIcon }}</em></span
+            >
+            <span
+              class="font-item"
+              :key="'custom'"
+              ref="themes"
+              @click="setTheme('custom')"
+              :class="{ selected: selectedTheme == 'custom' }"
+              >自定义</span
+            >
+          </div>
+        </li>
+        <li class="custom-theme-li" v-if="selectedTheme == 'custom'">
+          <span class="setting-item-title">自定义</span>
+          <div class="custom-theme">
+            <span class="custom-theme-title"
+              >页面背景颜色
+              <el-color-picker v-model="bodyColor"></el-color-picker>
+            </span>
+            <span class="custom-theme-title"
+              >浮窗背景颜色
+              <el-color-picker v-model="popupColor"></el-color-picker
+            ></span>
+            <span class="custom-theme-title"
+              >阅读背景颜色
+              <el-color-picker v-model="contentColor"></el-color-picker
+            ></span>
+            <span class="custom-theme-title"
+              >阅读背景图片
+              <img
+                class="content-bg-preview"
+                v-for="(item, index) in builtinBG"
+                :key="index"
+                :class="{
+                  selected: $store.state.config.contentBGImg == item.src
+                }"
+                :src="item.src"
+                alt=""
+                @click="setBGImg(item.src)"
+              />
+              <div
+                class="content-bg-preview"
+                v-for="item in $store.state.config.customBGImgList || []"
+                :key="item"
+                :class="{
+                  selected: $store.state.config.contentBGImg == item
+                }"
+              >
+                <img
+                  :src="getCustomBGImgURL(item)"
+                  alt=""
+                  @click="setBGImg(item)"
+                />
+                <i
+                  class="el-icon-close delete-bg-icon"
+                  @click.stop="deleteCustomBGImg(item)"
+                ></i>
+              </div>
+
+              <span class="upload-bg-btn" @click="uploadBGFile">上传</span>
+              <input
+                ref="bgFileRef"
+                type="file"
+                @change="onBGFileChange"
+                style="display:none"
+              />
+            </span>
+          </div>
         </li>
         <li class="font-list">
-          <i>正文字体</i>
-          <span
-            class="font-item"
-            v-for="(font, index) in fonts"
-            :key="index"
-            :class="{ selected: selectedFont == index }"
-            @click="setFont(index)"
-            >{{ font }}</span
-          >
+          <span class="setting-item-title">正文字体</span>
+          <div class="selection-zone">
+            <span
+              class="font-item"
+              v-for="(font, index) in fonts"
+              :key="index"
+              :class="{ selected: selectedFont == index }"
+              @click="setFont(index)"
+              >{{ font }}</span
+            >
+          </div>
         </li>
         <li class="font-size">
-          <i>字体大小</i>
+          <span class="setting-item-title">字体大小</span>
           <div class="resize">
             <span class="less" @click="lessFontSize"
               ><em class="iconfont">&#58966;</em></span
@@ -44,8 +116,24 @@
             >
           </div>
         </li>
+        <li class="font-size">
+          <span class="setting-item-title">字体粗细</span>
+          <div class="resize">
+            <span class="less" @click="lessFontWeight"
+              ><em class="iconfont">&#58966;</em></span
+            ><b></b> <span class="lang">{{ fontWeight }}</span
+            ><b></b>
+            <span class="more" @click="moreFontWeight"
+              ><em class="iconfont">&#58976;</em></span
+            >
+          </div>
+        </li>
+        <li class="font-size">
+          <span class="setting-item-title font-color-title">字体颜色</span>
+          <el-color-picker v-model="fontColor"></el-color-picker>
+        </li>
         <li class="read-width" v-if="!$store.state.miniInterface">
-          <i>页面宽度</i>
+          <span class="setting-item-title">页面宽度</span>
           <div class="resize">
             <span class="less" @click="lessReadWidth"
               ><em class="iconfont">&#58965;</em></span
@@ -63,14 +151,12 @@
 
 <script>
 import "../assets/fonts/iconfont.css";
-import config from "../plugins/config";
+import Axios from "axios";
 export default {
   name: "ReadSettings",
   data() {
     return {
       theme: 0,
-      isNight: this.$store.state.config.theme == 6,
-      moonIcon: "",
       themeColors: [
         {
           background: "rgba(250, 245, 235, 0.8)"
@@ -94,30 +180,52 @@ export default {
           background: "rgba(0, 0, 0, 0.5)"
         }
       ],
-      moonIconStyle: {
-        display: "inline",
-        color: "rgba(255,255,255,0.2)"
-      },
-      fonts: ["雅黑", "宋体", "楷书"]
+      fontColor:
+        this.$store.state.config.fontColor ||
+        (this.$store.state.config.theme != 6 ? "#262626" : "#666666"),
+      bodyColor: this.$store.state.config.bodyColor || "#eadfca",
+      contentColor: this.$store.state.config.contentColor || "#ede7da",
+      popupColor: this.$store.state.config.popupColor || "#ede7da",
+      builtinBG: [
+        { src: "bg/山水画.jpg" },
+        { src: "bg/山水墨影.jpg" },
+        { src: "bg/羊皮纸1.jpg" },
+        { src: "bg/护眼漫绿.jpg" },
+        { src: "bg/羊皮纸2.jpg" },
+        { src: "bg/新羊皮纸.jpg" },
+        { src: "bg/羊皮纸3.jpg" },
+        { src: "bg/明媚倾城.jpg" },
+        { src: "bg/羊皮纸4.jpg" },
+        { src: "bg/深宫魅影.jpg" },
+        { src: "bg/午后沙滩.jpg" },
+        { src: "bg/清新时光.jpg" },
+        { src: "bg/宁静夜色.jpg" },
+        { src: "bg/边彩画布.jpg" }
+      ],
+      fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"]
     };
   },
   mounted() {
     //初始化设置项目
     var config = this.$store.state.config;
     this.theme = config.theme;
-    if (this.theme == 6) {
-      this.moonIcon = "";
-    } else {
-      this.moonIcon = "";
-    }
   },
   computed: {
     config() {
       return this.$store.state.config;
     },
+    moonIcon() {
+      return this.$store.getters.isNight ? "" : "";
+    },
+    moonIconStyle() {
+      return {
+        display: "inline",
+        color: this.$store.getters.isNight ? "#ed4259" : "rgba(255,255,255,0.2)"
+      };
+    },
     popupTheme() {
       return {
-        background: config.themes[this.config.theme].popup
+        background: this.$store.getters.currentThemeConfig.popup
       };
     },
     selectedTheme() {
@@ -129,21 +237,37 @@ export default {
     fontSize() {
       return this.$store.state.config.fontSize;
     },
+    fontWeight() {
+      return this.$store.state.config.fontWeight || 400;
+    },
     readWidth() {
       return this.$store.state.config.readWidth;
     }
   },
+  watch: {
+    fontColor(color) {
+      let config = this.config;
+      config.fontColor = color;
+      this.$store.commit("setConfig", { ...config });
+    },
+    bodyColor(color) {
+      let config = this.config;
+      config.bodyColor = color;
+      this.$store.commit("setConfig", { ...config });
+    },
+    popupColor(color) {
+      let config = this.config;
+      config.popupColor = color;
+      this.$store.commit("setConfig", { ...config });
+    },
+    contentColor(color) {
+      let config = this.config;
+      config.contentColor = color;
+      this.$store.commit("setConfig", { ...config });
+    }
+  },
   methods: {
     setTheme(theme) {
-      if (theme == 6) {
-        this.isNight = true;
-        this.moonIcon = "";
-        this.moonIconStyle.color = "#ed4259";
-      } else {
-        this.isNight = false;
-        this.moonIcon = "";
-        this.moonIconStyle.color = "rgba(255,255,255,0.2)";
-      }
       let config = this.config;
       config.theme = theme;
       this.$store.commit("setConfig", config);
@@ -163,15 +287,102 @@ export default {
       if (config.fontSize > 12) config.fontSize -= 2;
       this.$store.commit("setConfig", config);
     },
+    moreFontWeight() {
+      let config = this.config;
+      config.fontWeight = config.fontWeight || 400;
+      if (config.fontWeight < 900) config.fontWeight += 100;
+      this.$store.commit("setConfig", config);
+    },
+    lessFontWeight() {
+      let config = this.config;
+      config.fontWeight = config.fontWeight || 400;
+      if (config.fontWeight > 100) config.fontWeight -= 100;
+      this.$store.commit("setConfig", config);
+    },
     moreReadWidth() {
       let config = this.config;
-      if (config.readWidth < 960) config.readWidth += 160;
+      if (config.readWidth < 1440) config.readWidth += 160;
       this.$store.commit("setConfig", config);
     },
     lessReadWidth() {
       let config = this.config;
       if (config.readWidth > 640) config.readWidth -= 160;
       this.$store.commit("setConfig", config);
+    },
+    getCustomBGImgURL(src) {
+      return "//" + localStorage.url.replace(/\/reader3\/?/, "") + src;
+    },
+    setBGImg(src) {
+      let config = this.config;
+      config.contentBGImg = src;
+      this.$store.commit("setConfig", { ...config });
+    },
+    uploadBGFile() {
+      this.$refs.bgFileRef.dispatchEvent(new MouseEvent("click"));
+    },
+    onBGFileChange(event) {
+      const rawFile = event.target.files && event.target.files[0];
+      // console.log("rawFile", rawFile);
+      let param = new FormData();
+      param.append("file", rawFile);
+      param.append("type", "background");
+      Axios.post("http://" + localStorage.url + "/uploadFile", param, {
+        headers: { "Content-Type": "multipart/form-data" }
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            let config = this.config;
+            config.customBGImgList = config.customBGImgList || [];
+            if (!config.customBGImgList.includes(res.data.data[0])) {
+              config.customBGImgList.push(res.data.data[0]);
+            }
+            config.contentBGImg = res.data.data[0];
+            this.$store.commit("setConfig", { ...config });
+          } else {
+            this.$message.error(res.data.errorMsg);
+          }
+        },
+        () => {
+          //
+          this.$message.error("后端连接失败");
+        }
+      );
+    },
+    deleteCustomBGImg(src) {
+      Axios.post("http://" + localStorage.url + "/deleteFile", {
+        url: src
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            let config = this.config;
+            config.customBGImgList = config.customBGImgList || [];
+            var index = config.customBGImgList.indexOf(src);
+            if (index != -1) {
+              config.customBGImgList.splice(index, 1);
+            }
+            if (config.contentBGImg === src) {
+              config.contentBGImg = this.builtinBG[0].src;
+            }
+            this.$store.commit("setConfig", { ...config });
+          } else {
+            this.$message.error(res.data.errorMsg);
+          }
+        },
+        () => {
+          //
+          this.$message.error("后端连接失败");
+        }
+      );
+    },
+    resetConfig() {
+      const config = {
+        theme: 0,
+        font: 0,
+        fontSize: 18,
+        fontWeight: 400,
+        readWidth: 800
+      };
+      this.$store.commit("setConfig", { ...config });
     }
   }
 };
@@ -190,11 +401,11 @@ export default {
 
 .settings-wrapper {
   user-select: none;
-  margin: -13px;
+  margin: -17px;
   // width: 478px;
-  height: 300px;
+  // height: 300px;
   text-align: left;
-  padding: 40px 0 40px 24px;
+  padding: 40px 24px;
   background: #ede7da url('../assets/imgs/themes/popup_1.png') repeat;
 
   .settings-title {
@@ -203,24 +414,95 @@ export default {
     margin-bottom: 28px;
     font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
     font-weight: 400;
+
+    .title-btn {
+      float: right;
+      font-size: 14px;
+      color: #ed4259;
+    }
   }
 
   .setting-list {
+    max-height: 50vh;
+    overflow-y: auto;
     ul {
       list-style: none outside none;
       margin: 0;
       padding: 0;
 
+      .custom-theme-li {
+        margin-top: 28px;
+      }
+
       li {
         list-style: none outside none;
 
-        i {
-          font: 12px / 16px PingFangSC-Regular, '-apple-system', Simsun;
+        .setting-item-title {
           display: inline-block;
-          min-width: 48px;
+          width: 56px;
           margin-right: 16px;
-          vertical-align: middle;
+          vertical-align: top;
+          line-height: 36px;
           color: #666;
+        }
+        .font-color-title {
+          line-height: 40px;
+        }
+        .selection-zone {
+          display: inline-block;
+          width: calc(100% - 72px);
+          word-wrap: break-word;
+
+          span {
+            margin-bottom: 5px;
+          }
+        }
+
+        .custom-theme {
+          width: calc(100% - 72px);
+          display: inline-block;
+
+          .custom-theme-title {
+            display: inline-block;
+            margin-right: 28px;
+            margin-bottom: 5px;
+          }
+
+          .content-bg-preview {
+            width: 36px;
+            height: 36px;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 10px;
+            margin-bottom: 8px;
+            position: relative;
+            box-sizing: border-box;
+
+            img {
+              width: 100%;
+              height: 100%;
+              display: inline-block;
+              vertical-align: middle;
+            }
+
+            .delete-bg-icon {
+              position: absolute;
+              top: -6px;
+              right: -6px;
+              font-size: 18px;
+              color: #ed4259;
+            }
+          }
+          .selected {
+            color: #ed4259;
+            border: 1px solid #ed4259;
+          }
+          .upload-bg-btn {
+            display: inline-block;
+            margin-left: 10px;
+            color: #ed4259;
+            cursor: pointer;
+          }
         }
 
         .theme-item {
@@ -237,6 +519,18 @@ export default {
           .iconfont {
             display: none;
           }
+        }
+
+        .font-item {
+          width: 78px;
+          height: 34px;
+          cursor: pointer;
+          margin-right: 16px;
+          border-radius: 2px;
+          text-align: center;
+          vertical-align: middle;
+          display: inline-block;
+          font: 14px / 34px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
         }
 
         .selected {
@@ -279,13 +573,12 @@ export default {
 
         .resize {
           display: inline-block;
-          width: 274px;
           height: 34px;
           vertical-align: middle;
           border-radius: 2px;
 
           span {
-            width: 89px;
+            min-width: 72px;
             height: 34px;
             line-height: 34px;
             display: inline-block;
@@ -316,6 +609,12 @@ export default {
         }
       }
     }
+  }
+  .setting-list::-webkit-scrollbar {
+    width: 0 !important;
+  }
+  .el-color-picker {
+    vertical-align: middle;
   }
 }
 

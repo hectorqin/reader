@@ -20,6 +20,20 @@
         document.head.appendChild(script);
       }
 
+      // 通用加载样式方法
+      function loadLink(href, callback, rel, type) {
+        var link = document.createElement('link');
+        link.rel = rel || "stylesheet";
+        link.type = type || "text/css";
+        link.href = href;
+
+        if (callback) {
+          link.onload = callback;
+        }
+
+        document.getElementsByTagName("head")[0].appendChild(link);
+      }
+
       // 获取单个查询参数
       function getQueryString(sVar, first) {
         return decodeURI(window.location.search.replace(new RegExp('^(?:.*' + (first ? '?' : '') + '[&\\?]' + encodeURI(sVar).replace(/[\.\+\*]/g, '\\$&') + '(?:\\=([^&]*))?)?.*$', 'i'), '$1'));

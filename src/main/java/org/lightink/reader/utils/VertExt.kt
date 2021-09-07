@@ -34,6 +34,7 @@ private val logger = KotlinLogging.logger {}
 val gson = GsonBuilder().disableHtmlEscaping().create()
 
 var storageFinalPath = ""
+var workDirPath = ""
 
 fun RoutingContext.success(any: Any?) {
     val toJson: String = if (any is JsonObject) {
@@ -65,6 +66,18 @@ fun RoutingContext.error(throwable: Throwable) {
             .putHeader("content-type", "application/json")
             .setStatusCode(500)
             .end(errorJson)
+}
+
+fun getWorkDir(subPath: String): String {
+    if (workDirPath.isEmpty()) {
+        var appConfig: AppConfig = SpringContextUtils.getBean("appConfig", AppConfig::class.java)
+        if (appConfig.packaged) {
+            workDirPath = Paths.get(System.getProperty("user.home"), ".reader").toString()
+        }
+    }
+    var path = Paths.get(workDirPath, subPath);
+
+    return path.toString();
 }
 
 fun getStoragePath(): String {

@@ -42,6 +42,8 @@ import javafx.stage.WindowEvent
 import javafx.stage.StageStyle
 import javafx.event.EventHandler
 import com.sun.javafx.application.LauncherImpl
+import com.sun.javafx.scene.text.FontHelper
+import javafx.scene.text.Font
 
 import javafx.scene.control.ProgressBar
 import javafx.scene.image.ImageView
@@ -94,6 +96,7 @@ class ReaderUIApplication: Application() {
                     if (debug != null && debug) {
                         webUrl = webUrl + "?debug=1"
                     }
+                    System.setProperty("reader.system.fonts", Font.getFontNames().joinToString(separator = ","))
                     if (showUI && ::primaryStage.isInitialized){
                         Platform.runLater(object : Runnable {
                             override fun run() {
@@ -174,6 +177,7 @@ class ReaderUIApplication: Application() {
 
     fun showWebScreen(stage: Stage, url: String) {
         System.setProperty("sun.net.http.allowRestrictedHeaders", "true")
+        // logger.info("Font.getFontNames: {}", Font.getFontNames())
         var webView = WebView();
         var webEngine = webView.getEngine();
         webEngine.load(url);

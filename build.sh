@@ -27,7 +27,11 @@ case $task in
             port=8080
         fi
         ./gradlew assemble --info
-        java -jar build/libs/reader-$version.jar --reader.app.showUI=true --reader.server.port=$port
+        if test $? -eq 0; then
+            shift
+            shift
+            java -jar build/libs/reader-$version.jar --reader.app.showUI=true --reader.server.port=$port $@
+        fi
     ;;
     win)
         # 打包 windows 安装包
@@ -50,8 +54,12 @@ case $task in
         mv src/main/java/org/lightink/reader/ReaderUIApplication.kt src/main/java/org/lightink/reader/ReaderUIApplication.kt.back
         getVersion ./cli.gradle
         ./gradlew -b cli.gradle assemble --info
-        mv src/main/java/org/lightink/reader/ReaderUIApplication.kt.back src/main/java/org/lightink/reader/ReaderUIApplication.kt
-        java -jar build/libs/reader-$version.jar --reader.server.port=$port
+        if test $? -eq 0; then
+            mv src/main/java/org/lightink/reader/ReaderUIApplication.kt.back src/main/java/org/lightink/reader/ReaderUIApplication.kt
+            java -jar build/libs/reader-$version.jar --reader.server.port=$port
+        else
+            mv src/main/java/org/lightink/reader/ReaderUIApplication.kt.back src/main/java/org/lightink/reader/ReaderUIApplication.kt
+        fi
     ;;
     cli)
         # 服务端打包命令

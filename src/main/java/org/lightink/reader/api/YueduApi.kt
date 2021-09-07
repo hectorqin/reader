@@ -23,6 +23,7 @@ import org.lightink.reader.utils.serializeToMap
 import org.lightink.reader.utils.toDataClass
 import org.lightink.reader.utils.toMap
 import org.lightink.reader.utils.fillData
+import org.lightink.reader.utils.getWorkDir
 import org.lightink.reader.verticle.RestVerticle
 import org.springframework.stereotype.Component
 import io.vertx.core.json.JsonObject
@@ -105,14 +106,42 @@ class YueduApi : RestVerticle() {
         // web界面
         router.route("/web/*").handler(StaticHandler.create("web"));
 
+        // assets
+        var assetsDir = getWorkDir("reader-assets");
+        var assetsDirFile = File(assetsDir);
+        if (!assetsDirFile.exists()) {
+            assetsDirFile.mkdirs();
+        }
+        var assetsCss = getWorkDir("reader-assets/reader.css");
+        var assetsCssFile = File(assetsCss);
+        if (!assetsCssFile.exists()) {
+            assetsCssFile.writeText("/* 在此处可以编写CSS样式来自定义页面 */");
+        }
+        router.route("/assets/*").handler(StaticHandler.create().setAllowRootFileSystemAccess(true).setWebRoot(assetsDir));
+
         // 上传书源文件
         router.post("/reader3/readSourceFile").coroutineHandler { readSourceFile(it) }
+
+        // 上传文件
+        router.post("/reader3/uploadFile").coroutineHandler { uploadFile(it) }
+
+        // 删除文件
+        router.post("/reader3/deleteFile").coroutineHandler { deleteFile(it) }
+
+        // 获取系统字体
+        router.get("/reader3/getSystemInfo").coroutineHandler { getSystemInfo(it) }
 
         // 加载书源
         loadInstalledBookSourceList();
 
         // 加载书籍详情缓存
         loadBookCacheInfo();
+    }
+
+    private suspend fun getSystemInfo(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        var systemFont = System.getProperty("reader.system.fonts")
+        return returnData.setData(mapOf("fonts" to systemFont))
     }
 
     private suspend fun getBookInfo(context: RoutingContext): ReturnData {
@@ -182,6 +211,62 @@ class YueduApi : RestVerticle() {
             }
         }
         return returnData.setData(sourceList.getList())
+    }
+
+    private suspend fun uploadFile(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (context.fileUploads() == null || context.fileUploads().isEmpty()) {
+            return returnData.setErrorMsg("请上传文件")
+        }
+        var fileList = JsonArray()
+        var type = context.request().getParam("type")
+        if (type.isNullOrEmpty()) {
+            type = "images"
+        }
+        // logger.info("type: {}", type)
+        context.fileUploads().forEach {
+            // logger.info("uploadFile: {} {}", it.uploadedFileName(), it.fileName())
+            var file = File(it.uploadedFileName())
+            if (file.exists()) {
+                var fileName = it.fileName()
+                var newFile = File(getWorkDir("reader-assets/" + type + "/" + fileName))
+                if (!newFile.parentFile.exists()) {
+                    newFile.parentFile.mkdirs()
+                }
+                if (newFile.exists()) {
+                    newFile.delete()
+                }
+                // logger.info("renameTo: {}", newFile)
+                if (file.renameTo(newFile)) {
+                    fileList.add("/assets/" + type + "/" + fileName)
+                }
+            }
+        }
+        return returnData.setData(fileList.getList())
+    }
+
+    private suspend fun deleteFile(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        var url: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            url = context.bodyAsJson.getString("url") ?: ""
+        } else {
+            // get 请求
+            url = context.queryParam("url").firstOrNull() ?: ""
+        }
+        if (url.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入文件链接")
+        }
+        if (!url.startsWith("/assets/")) {
+            return returnData.setErrorMsg("文件链接错误")
+        }
+        var file = File(getWorkDir(url.replace("/assets/", "reader-assets/", false)))
+        logger.info("delete file: {}", file)
+        if (file.exists()) {
+            file.delete()
+        }
+        return returnData.setData("")
     }
 
     private suspend fun getChapterList(context: RoutingContext): ReturnData {
