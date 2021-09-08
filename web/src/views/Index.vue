@@ -19,7 +19,7 @@
           placeholder="搜索书籍"
           v-model="search"
           class="search-input"
-          @keyup.enter.native="searchBook"
+          @keyup.enter.native="searchBook(1)"
         >
           <i slot="prefix" class="el-input__icon el-icon-search"></i>
         </el-input>
@@ -174,11 +174,15 @@
         <!-- <div class="title-btn" @click="showExplorePop">
           书海
         </div> -->
-        <div class="title-btn" v-if="isExploreResult" @click="loadMoreExplore">
-          <i class="el-icon-loading" v-if="exploreLoading"></i>
-          {{ exploreLoading ? "加载中..." : "加载更多" }}
+        <div class="title-btn" v-if="isSearchResult" @click="loadMore">
+          <i class="el-icon-loading" v-if="LoadingMore"></i>
+          {{ LoadingMore ? "加载中..." : "加载更多" }}
         </div>
-        <div class="title-btn" v-else @click="refreshShelf">
+        <div
+          class="title-btn"
+          v-else-if="!isSearchResult"
+          @click="refreshShelf"
+        >
           <i class="el-icon-loading" v-if="refreshLoading"></i>
           {{ refreshLoading ? "刷新中..." : "刷新" }}
         </div>
@@ -340,6 +344,7 @@ export default {
       isSearchResult: false,
       isExploreResult: false,
       searchResult: [],
+      searchPage: 1,
       readingRecent: {
         bookName: "尚无阅读记录",
         bookUrl: "",
@@ -347,7 +352,7 @@ export default {
       },
       refreshLoading: false,
       popExploreVisible: false,
-      exploreLoading: false,
+      LoadingMore: false,
       importBookSource: [],
       showImportDialog: false,
       checkAll: false,
@@ -363,7 +368,7 @@ export default {
     bookSourceUrl(val) {
       localStorage.setItem("bookSourceUrl", val);
       if (this.isSearchResult && val) {
-        this.searchBook();
+        this.searchBook(1);
       }
     }
   },
@@ -468,7 +473,7 @@ export default {
         }
       );
     },
-    searchBook() {
+    searchBook(page) {
       if (!localStorage.url) {
         this.$message.error("请先设置后端 url 与端口");
         this.$store.commit("setConnectStatus", "点击设置后端 url 与 端口");
@@ -476,6 +481,10 @@ export default {
         this.$store.commit("setConnectType", "danger");
         return;
       }
+      if (page) {
+        this.searchPage = page;
+      }
+      page = this.searchPage;
       if (!this.search) {
         this.$message.error("请输入关键词进行搜索");
         return;
@@ -489,18 +498,35 @@ export default {
       });
 
       Axios.get("http://" + localStorage.url + "/searchBook", {
-        timeout: 3000,
+        timeout: 30000,
         params: {
           key: this.search,
-          bookSourceUrl: this.bookSourceUrl
+          bookSourceUrl: this.bookSourceUrl,
+          page: page
         }
       }).then(
         res => {
           this.loading.close();
+          this.LoadingMore = false;
           if (res.data.isSuccess) {
             //
             this.isSearchResult = true;
-            this.searchResult = res.data.data;
+            if (page === 1) {
+              this.searchResult = res.data.data;
+            } else {
+              var data = [].concat(this.searchResult);
+              var length = data.length;
+              res.data.data.forEach(v => {
+                if (!this.searchResultMap[v.bookUrl]) {
+                  data.push(v);
+                }
+              });
+              this.searchResult = data;
+              console.log(data.length, length);
+              if (data.length === length) {
+                this.$message.error("没有更多啦");
+              }
+            }
           } else {
             this.$message.error(res.data.errorMsg);
           }
@@ -734,12 +760,16 @@ export default {
     showSearchList(data) {
       this.isSearchResult = true;
       this.isExploreResult = true;
-      this.exploreLoading = false;
+      this.LoadingMore = false;
       this.searchResult = data;
     },
-    loadMoreExplore() {
-      this.exploreLoading = true;
-      this.$refs.popExplore.loadMore();
+    loadMore() {
+      this.LoadingMore = true;
+      if (this.isExploreResult) {
+        this.$refs.popExplore.loadMore();
+      } else {
+        this.searchBook(this.searchPage + 1);
+      }
     },
     uploadBookSource() {
       this.$refs.fileRef.dispatchEvent(new MouseEvent("click"));
@@ -920,6 +950,12 @@ export default {
     },
     shelf() {
       return this.isSearchResult ? this.searchResult : this.$store.state.shelf;
+    },
+    searchResultMap() {
+      return this.searchResult.reduce((c, v) => {
+        c[v.bookUrl] = v;
+        return c;
+      }, {});
     },
     connectStatus() {
       return this.$store.state.connectStatus;
