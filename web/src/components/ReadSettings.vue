@@ -402,6 +402,7 @@ export default {
         font: 0,
         fontSize: 18,
         fontWeight: 400,
+        readMethod: "上下滑动",
         readWidth: 800
       };
       this.$store.commit("setConfig", { ...config });
