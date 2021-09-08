@@ -4,7 +4,7 @@ export default {
   data() {
     return {};
   },
-  props: ["carray"],
+  props: ["carray", "title"],
   render() {
     const { fontSize, fontWeight, fontColor } = this;
     let style = {
@@ -17,6 +17,7 @@ export default {
     if (this.show) {
       return (
         <div style={style}>
+          <h3>{this.title}</h3>
           {this.carray.map(a => {
             a = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + a.replace(/^\s+/g, "");
             return <p domPropsInnerHTML={a} />;
@@ -58,5 +59,10 @@ p {
   display: block;
   word-wrap: break-word;
   word-break: break-all;
+}
+h3 {
+    font-size: 1.5em;
+    line-height: 1.2;
+    margin: 1em 0;
 }
 </style>

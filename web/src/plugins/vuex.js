@@ -20,11 +20,13 @@ export default new Vuex.Store({
       font: 0,
       fontSize: 18,
       fontWeight: 400,
+      readMethod: "上下滑动",
       readWidth: 800
     },
     miniInterface: false,
     readSettingsVisible: false,
-    windowWidth: window.innerWidth
+    windowWidth: window.innerWidth,
+    touchable: "ontouchstart" in document
   },
   mutations: {
     setConnectStatus(state, connectStatus) {
@@ -65,9 +67,19 @@ export default new Vuex.Store({
     },
     setWindowWidth(state, width) {
       state.windowWidth = width;
+    },
+    setTouchable(state, touchable) {
+      state.touchable = touchable;
     }
   },
   getters: {
+    isSlideRead: state => {
+      return (
+        state.miniInterface &&
+        state.touchable &&
+        state.config.readMethod === "左右滑动"
+      );
+    },
     isNight: state => {
       return state.config.theme == 6;
     },

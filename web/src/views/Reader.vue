@@ -3,7 +3,7 @@
     class="chapter-wrapper"
     :style="bodyTheme"
     :class="{ night: isNight, day: !isNight }"
-    @click="showToolBar = !showToolBar"
+    ref="chapterWrapperRef"
   >
     <div class="tool-bar" :style="leftBarTheme">
       <div class="tools">
@@ -99,13 +99,22 @@
             <div class="icon-text">设置</div>
           </div>
         </el-popover>
-        <div class="tool-icon" @click="toShelf">
+        <div
+          class="tool-icon"
+          @click="toShelf"
+          :style="$store.state.miniInterface ? { order: -1 } : {}"
+        >
           <div class="iconfont">
             &#58920;
           </div>
           <div class="icon-text">首页</div>
         </div>
-        <div class="tool-icon" :class="{ 'no-point': noPoint }" @click="toTop">
+        <div
+          class="tool-icon"
+          :class="{ 'no-point': noPoint }"
+          @click="toTop"
+          v-if="!isSlideRead"
+        >
           <div class="iconfont">
             &#58914;
           </div>
@@ -115,6 +124,7 @@
           class="tool-icon"
           :class="{ 'no-point': noPoint }"
           @click="toBottom"
+          v-if="!isSlideRead"
         >
           <div class="iconfont">
             &#58915;
@@ -133,6 +143,7 @@
           class="tool-icon"
           :class="{ 'no-point': noPoint }"
           @click="toLastChapter"
+          :style="$store.state.miniInterface ? { order: -1 } : {}"
         >
           <div class="iconfont">
             &#58920;
@@ -152,22 +163,40 @@
       </div>
     </div>
     <div class="chapter-bar"></div>
-    <div class="chapter" ref="content" :style="chapterTheme">
-      <div class="content">
-        <div class="top-bar" ref="top"></div>
-        <div
-          class="title"
-          ref="title"
-          v-if="show"
-          :style="{
-            color: $store.state.config.fontColor,
-            ...this.$store.getters.currentFontFamily
-          }"
-        >
-          {{ title }}
+    <div
+      class="chapter"
+      ref="content"
+      :class="chapterClass"
+      :style="chapterTheme"
+    >
+      <div class="top-bar" ref="top">
+        {{ $store.state.miniInterface ? title : "" }}
+      </div>
+      <div
+        class="content"
+        @touchstart="handleTouchStart"
+        @touchmove="handleTouchMove"
+        @touchend="handleTouchEnd"
+        @click="handlerClick"
+      >
+        <div class="content-inner">
+          <Pcontent
+            class="book-content"
+            :title="title"
+            :carray="content"
+            :style="contentStyle"
+            ref="bookContentRef"
+          />
         </div>
-        <Pcontent :carray="content" />
-        <div class="bottom-bar" ref="bottom"></div>
+      </div>
+      <div class="bottom-bar" ref="bottom">
+        {{ $store.getters.isSlideRead ? `${currentPage} / ${totalPages}` : "" }}
+        <span
+          class="bottom-btn"
+          v-if="this.show && !$store.getters.isSlideRead"
+          @click="toNextChapter"
+          >加载下一章</span
+        >
       </div>
     </div>
   </div>
@@ -181,6 +210,8 @@ import BookShelf from "../components/BookShelf.vue";
 import Pcontent from "../components/Content.vue";
 import Axios from "axios";
 import jump from "../plugins/jump";
+import Animate from "../plugins/animate";
+
 export default {
   components: {
     PopCata,
@@ -289,6 +320,7 @@ export default {
 
     window.addEventListener("keyup", this.func_keyup);
 
+    window.readerPage = this;
     // console.log(this);
   },
   destroyed() {
@@ -300,6 +332,9 @@ export default {
     },
     content() {
       this.$store.commit("setContentLoading", false);
+      this.$nextTick(() => {
+        this.computePages();
+      });
     },
     readSettingsVisible(visible) {
       if (!visible) {
@@ -313,6 +348,21 @@ export default {
       } else {
         document.title = this.$store.state.readingBook.bookName;
       }
+    },
+    isSlideRead(val) {
+      if (!val) {
+        this.contentStyle = {};
+        this.transformX = 0;
+        this.$nextTick(() => {
+          this.computePages();
+          this.showPage(this.currentPage, 0);
+        });
+      } else {
+        this.$nextTick(() => {
+          this.computePages();
+          this.showPage(this.currentPage, 0);
+        });
+      }
     }
   },
   data() {
@@ -323,7 +373,12 @@ export default {
       popBookSourceVisible: false,
       popBookShelfVisible: false,
       showToolBar: true,
-      book: null
+      book: null,
+      contentStyle: {},
+      currentPage: 1,
+      totalPages: 1,
+      transformX: 0,
+      showLastPage: false
     };
   },
   computed: {
@@ -368,6 +423,12 @@ export default {
       return {
         background: this.$store.getters.currentThemeConfig.body
       };
+    },
+    isSlideRead() {
+      return this.$store.getters.isSlideRead;
+    },
+    chapterClass() {
+      return this.$store.getters.isSlideRead ? "slide-reader" : "";
     },
     chapterTheme() {
       if (typeof this.$store.getters.currentThemeConfig.content === "string") {
@@ -562,7 +623,11 @@ export default {
       );
     },
     toTop() {
-      jump(this.$refs.top);
+      if (this.$store.state.miniInterface) {
+        this.scrollContent(-document.documentElement.scrollTop, 1000);
+      } else {
+        jump(this.$refs.top);
+      }
     },
     toBottom() {
       jump(this.$refs.bottom);
@@ -591,6 +656,229 @@ export default {
     },
     toShelf() {
       this.$router.push("/");
+    },
+    computePages() {
+      if (this.isSlideRead) {
+        this.totalPages = Math.ceil(
+          this.$refs.bookContentRef.$el.scrollWidth / window.innerWidth
+        );
+      } else {
+        this.totalPages = Math.ceil(
+          this.$refs.bookContentRef.$el.scrollHeight / window.innerHeight
+        );
+      }
+      if (this.showLastPage) {
+        this.showPage(this.totalPages, 0);
+        this.showLastPage = false;
+      }
+    },
+    nextPage(moveX) {
+      if (this.$store.getters.isSlideRead) {
+        if (this.currentPage < this.totalPages) {
+          if (typeof moveX === "undefined") {
+            this.transformX =
+              -(window.innerWidth - 16) * (this.currentPage - 1);
+          }
+          this.currentPage += 1;
+          this.transform(
+            typeof moveX === "undefined" ? -(window.innerWidth - 16) : moveX,
+            300
+          );
+        } else {
+          this.contentStyle = {};
+          this.transformX = 0;
+          this.currentPage = 1;
+          this.toNextChapter();
+        }
+      } else {
+        if (
+          document.documentElement.scrollTop + window.innerHeight <
+          document.documentElement.scrollHeight
+        ) {
+          const moveY = window.innerHeight - 10;
+          this.scrollContent(moveY, 300);
+        } else {
+          this.currentPage = 1;
+          this.toNextChapter();
+        }
+      }
+    },
+    prevPage(moveX) {
+      if (this.$store.getters.isSlideRead) {
+        if (this.currentPage > 1) {
+          if (typeof moveX === "undefined") {
+            this.transformX =
+              -(window.innerWidth - 16) * (this.currentPage - 1);
+          }
+          this.currentPage -= 1;
+          this.transform(
+            typeof moveX === "undefined" ? window.innerWidth - 16 : moveX,
+            300
+          );
+        } else {
+          this.showLastPage = true;
+          this.contentStyle = {};
+          this.transformX = 0;
+          this.currentPage = 1;
+          this.toLastChapter();
+        }
+      } else {
+        if (document.documentElement.scrollTop > 0) {
+          const moveY = -window.innerHeight + 10;
+          this.scrollContent(moveY, 300);
+        } else {
+          this.currentPage = 1;
+          this.toLastChapter();
+        }
+      }
+    },
+    showPage(page, duration) {
+      this.currentPage = Math.min(page, this.totalPages);
+      if (this.$store.getters.isSlideRead) {
+        const moveX =
+          -(window.innerWidth - 16) * (this.currentPage - 1) - this.transformX;
+        this.transform(moveX, typeof duration === "undefined" ? 300 : duration);
+      } else {
+        const moveY =
+          (window.innerHeight - 10) * (this.currentPage - 1) -
+          document.documentElement.scrollTop;
+        this.scrollContent(
+          moveY,
+          typeof duration === "undefined" ? 300 : duration
+        );
+      }
+    },
+    transform(moveX, duration) {
+      const onEnd = () => {
+        this.contentStyle = {
+          transform: `translateX(${this.transformX + moveX}px)`
+        };
+        this.transformX += moveX;
+      };
+      if (!duration) {
+        onEnd();
+        return;
+      }
+      const timing = Animate.Utils.makeEaseInOut(
+        Animate.Timings.power.bind(null, 3)
+      );
+
+      new Animate({
+        duration: duration || 500,
+        timing: timing,
+        draw: progress => {
+          this.contentStyle = {
+            transform: `translateX(${this.transformX + moveX * progress}px)`
+          };
+        },
+        onEnd
+      });
+    },
+    scrollContent(moveY, duration) {
+      // console.log("scrollContent", moveY);
+      const lastScrollTop = document.documentElement.scrollTop;
+      const onEnd = () => {
+        document.documentElement.scrollTop = lastScrollTop + moveY;
+      };
+      if (!duration) {
+        onEnd();
+        return;
+      }
+      const timing = Animate.Utils.makeEaseInOut(
+        Animate.Timings.power.bind(null, 3)
+      );
+
+      new Animate({
+        duration: duration || 500,
+        timing: timing,
+        draw: progress => {
+          document.documentElement.scrollTop = lastScrollTop + moveY * progress;
+        },
+        onEnd
+      });
+    },
+    handlerClick(e) {
+      if (!this.lastTouch) {
+        this.eventHandler(e);
+      }
+    },
+    handleTouchStart(e) {
+      // e.preventDefault();
+      // e.stopPropagation();
+      this.lastTouch = false;
+      this.lastMoveX = false;
+      if (e.touches && e.touches[0]) {
+        this.lastTouch = e.touches[0];
+      }
+    },
+    handleTouchMove(e) {
+      if (e.touches && e.touches[0] && this.lastTouch) {
+        e.preventDefault();
+        e.stopPropagation();
+        const moveX = e.touches[0].clientX - this.lastTouch.clientX;
+        this.contentStyle = {
+          transform: `translateX(${this.transformX + moveX}px)`
+        };
+        this.lastMoveX = moveX;
+      }
+    },
+    handleTouchEnd() {
+      if (this.lastMoveX) {
+        this.transformX += this.lastMoveX;
+        if (this.lastMoveX > 0) {
+          // 上一页
+          this.prevPage(window.innerWidth - 16 - this.lastMoveX);
+        } else {
+          // 下一页
+          this.nextPage(-(window.innerWidth - 16) - this.lastMoveX);
+        }
+      } else if (this.lastTouch) {
+        this.eventHandler(this.lastTouch);
+      }
+      setTimeout(() => {
+        this.lastTouch = false;
+        this.lastMoveX = false;
+      }, 50);
+    },
+    eventHandler(point) {
+      if (
+        this.popBookSourceVisible ||
+        this.popBookShelfVisible ||
+        this.popCataVisible ||
+        this.readSettingsVisible
+      ) {
+        return;
+      }
+      // 根据点击位置判断操作
+      const midX = window.innerWidth / 2;
+      const midY = window.innerHeight / 2;
+      if (
+        Math.abs(point.clientY - midY) <= window.innerHeight * 0.25 &&
+        Math.abs(point.clientX - midX) <= window.innerWidth * 0.25
+      ) {
+        // 点击中部区域显示菜单
+        this.showToolBar = !this.showToolBar;
+      } else if (this.isSlideRead) {
+        if (point.clientX > midX) {
+          // 点击右侧，下一页
+          this.showToolBar = false;
+          this.nextPage();
+        } else if (point.clientX < midX) {
+          // 点击左侧，上一页
+          this.showToolBar = false;
+          this.prevPage();
+        }
+      } else {
+        if (point.clientY > midY) {
+          // 点击下部，下一页
+          this.showToolBar = false;
+          this.nextPage();
+        } else if (point.clientY < midY) {
+          // 点击上部，上一页
+          this.showToolBar = false;
+          this.prevPage();
+        }
+      }
     }
   }
 };
@@ -713,14 +1001,25 @@ export default {
       line-height: 1.8;
       overflow: hidden;
       font-family: 'Microsoft YaHei', PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', sans-serif;
+    }
 
-      .title {
-        margin-bottom: 57px;
-        font: 24px / 32px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
-      }
-
-      .bottom-bar, .top-bar {
-        height: 64px;
+    .bottom-bar, .top-bar {
+      height: 44px;
+      box-sizing: border-box;
+      font-size: 0.8em;
+    }
+    .top-bar {
+      height: 44px;
+      padding: 10px;
+    }
+    .bottom-bar {
+      width: 100%;
+      text-align: center;
+      .bottom-btn {
+        font-size: 14px;
+        cursor: pointer;
+        display: inline-block;
+        margin: 10px auto;
       }
     }
   }
@@ -744,6 +1043,10 @@ export default {
   >>>.chapter {
     border: 1px solid #d8d8d8;
     color: #262626;
+  }
+
+  .bottom-bar, .top-bar {
+    color: rgba(0, 0, 0, 0.4);
   }
 }
 
@@ -770,6 +1073,10 @@ export default {
   >>>.popper__arrow {
     background: #666;
   }
+
+  .bottom-bar, .top-bar {
+    color: #666;
+  }
 }
 @media screen and (max-width: 750px) {
   .chapter-wrapper {
@@ -782,7 +1089,7 @@ export default {
 
       .tools {
         flex-direction: row;
-        justify-content: space-between;
+        justify-content: space-around;
         .tool-icon {
           border: none;
         }
@@ -797,7 +1104,7 @@ export default {
 
       .tools {
         flex-direction: row;
-        justify-content: space-between;
+        justify-content: space-around;
         padding: 0 15px;
         .tool-icon {
           border: none;
@@ -817,10 +1124,64 @@ export default {
 
     .chapter {
       width: 100vw !important;
-      padding: 0 20px;
+      padding: 0 16px;
       box-sizing: border-box;
       border: none;
+      text-align: justify;
+
+      .top-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        z-index: 50;
+        background: inherit;
+      }
+
+      .content-inner {
+        padding-top: 45px;
+      }
     }
+
+    .chapter.slide-reader {
+      padding: 0;
+
+      .bottom-bar {
+        height: 18px;
+        position: absolute;
+        bottom: 0;
+        padding: 0 16px;
+      }
+
+      .top-bar {
+        position: relative;
+      }
+
+      .content {
+        position: absolute;
+        overflow: visible;
+        top: 44px;
+        bottom: 18px;
+      }
+
+      .content-inner {
+        margin: 0 16px;
+        overflow: hidden;
+        text-align: justify;
+        padding: 0;
+      }
+
+      .book-content {
+        height: calc(100vh - 44px - 18px);
+        -webkit-columns: calc(100vw - 32px) 1;
+        -webkit-column-gap: 32px;
+        columns: calc(100vw - 16px) 1;
+        column-gap: 16px;
+      }
+    }
+  }
+  .chapter-wrapper::-webkit-scrollbar {
+    width: 0 !important;
   }
 }
 </style>

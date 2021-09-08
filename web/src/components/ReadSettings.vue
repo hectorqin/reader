@@ -144,6 +144,19 @@
             >
           </div>
         </li>
+        <li class="read-width" v-if="$store.state.miniInterface">
+          <span class="setting-item-title">翻页方式</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(method, index) in readMethods"
+              :key="index"
+              :class="{ selected: readMethod == method }"
+              @click="setReadMethod(method)"
+              >{{ method }}</span
+            >
+          </div>
+        </li>
       </ul>
     </div>
   </div>
@@ -202,7 +215,8 @@ export default {
         { src: "bg/宁静夜色.jpg" },
         { src: "bg/边彩画布.jpg" }
       ],
-      fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"]
+      fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"],
+      readMethods: ["上下滑动", "左右滑动"]
     };
   },
   mounted() {
@@ -233,6 +247,9 @@ export default {
     },
     selectedFont() {
       return this.$store.state.config.font;
+    },
+    readMethod() {
+      return this.$store.state.config.readMethod || "上下滑动";
     },
     fontSize() {
       return this.$store.state.config.fontSize;
@@ -275,6 +292,11 @@ export default {
     setFont(font) {
       let config = this.config;
       config.font = font;
+      this.$store.commit("setConfig", config);
+    },
+    setReadMethod(method) {
+      let config = this.config;
+      config.readMethod = method;
       this.$store.commit("setConfig", config);
     },
     moreFontSize() {

@@ -16,6 +16,7 @@ export default {
     window.onresize = () => {
       this.$store.commit("setMiniInterface", window.innerWidth < 750);
       this.$store.commit("setWindowWidth", window.innerWidth);
+      this.$store.commit("setTouchable", "ontouchstart" in document);
     };
   },
   mounted() {
