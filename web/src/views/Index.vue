@@ -168,6 +168,7 @@
         {{
           isSearchResult ? (isExploreResult ? "探索结果" : "搜索结果") : "书架"
         }}
+        ({{ shelf.length }})
         <div class="title-btn" v-if="isSearchResult" @click="backToShelf">
           返回书架
         </div>
@@ -187,7 +188,7 @@
           {{ refreshLoading ? "刷新中..." : "刷新" }}
         </div>
       </div>
-      <div class="books-wrapper">
+      <div class="books-wrapper" ref="bookList">
         <div class="wrapper">
           <div
             class="book"
@@ -197,7 +198,7 @@
             @click="toDetail(book.bookUrl, book.name, book.durChapterIndex)"
           >
             <div class="cover-img">
-              <img class="cover" :src="getCover(book.coverUrl)" alt="" />
+              <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" />
             </div>
             <div
               class="info"
@@ -361,7 +362,9 @@ export default {
 
       showManageDialog: false,
       manageSourceSelection: [],
-      showNavigation: false
+      showNavigation: false,
+
+      lastScrollTop: 0
     };
   },
   watch: {
@@ -369,6 +372,13 @@ export default {
       localStorage.setItem("bookSourceUrl", val);
       if (this.isSearchResult && val) {
         this.searchBook(1);
+      }
+    },
+    searchResult(val) {
+      if (this.isSearchResult && val.length) {
+        this.$nextTick(() => {
+          this.$refs.bookList.scrollTop = this.lastScrollTop;
+        });
       }
     }
   },
@@ -522,7 +532,6 @@ export default {
                 }
               });
               this.searchResult = data;
-              console.log(data.length, length);
               if (data.length === length) {
                 this.$message.error("没有更多啦");
               }
@@ -764,6 +773,7 @@ export default {
       this.searchResult = data;
     },
     loadMore() {
+      this.lastScrollTop = this.$refs.bookList.scrollTop;
       this.LoadingMore = true;
       if (this.isExploreResult) {
         this.$refs.popExplore.loadMore();

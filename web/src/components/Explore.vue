@@ -125,7 +125,22 @@ export default {
             if (page === 1) {
               this.exploreList = res.data.data;
             } else {
-              this.exploreList = [].concat(this.exploreList, res.data.data);
+              // this.exploreList = [].concat(this.exploreList, res.data.data);
+              var data = [].concat(this.exploreList);
+              var map = data.reduce((c, v) => {
+                c[v.bookUrl] = v;
+                return c;
+              }, {});
+              var length = data.length;
+              res.data.data.forEach(v => {
+                if (!map[v.bookUrl]) {
+                  data.push(v);
+                }
+              });
+              this.exploreList = data;
+              if (data.length === length) {
+                this.$message.error("没有更多啦");
+              }
             }
             // console.log(this.exploreList);
             this.$emit("showSearchList", this.exploreList);
