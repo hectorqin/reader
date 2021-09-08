@@ -24,7 +24,9 @@ import org.lightink.reader.utils.toDataClass
 import org.lightink.reader.utils.toMap
 import org.lightink.reader.utils.fillData
 import org.lightink.reader.utils.getWorkDir
+import org.lightink.reader.utils.SpringContextUtils
 import org.lightink.reader.verticle.RestVerticle
+import org.lightink.reader.SpringEvent
 import org.springframework.stereotype.Component
 import io.vertx.core.json.JsonObject
 import io.vertx.core.json.JsonArray
@@ -136,6 +138,14 @@ class YueduApi : RestVerticle() {
 
         // 加载书籍详情缓存
         loadBookCacheInfo();
+    }
+
+    override fun started() {
+        SpringContextUtils.getApplicationContext().publishEvent(SpringEvent(this as java.lang.Object, "READY", ""));
+    }
+
+    override fun onStartError() {
+        SpringContextUtils.getApplicationContext().publishEvent(SpringEvent(this as java.lang.Object, "START_ERROR", "应用启动失败，请检查" + port + "端口是否被占用"));
     }
 
     private suspend fun getSystemInfo(context: RoutingContext): ReturnData {

@@ -76,12 +76,31 @@ abstract class RestVerticle : CoroutineVerticle() {
         }
 
         logger.info("port: {}", port)
-        vertx.createHttpServer().requestHandler(router).listen(port)
-
+        vertx.createHttpServer().requestHandler(router).exceptionHandler{error ->
+            onException(error)
+        }.listen(port) { res ->
+            if (res.succeeded()) {
+                logger.info("Server running at: http://localhost:{}", port);
+                logger.info("Web reader running at: http://localhost:{}/web/", port);
+                started();
+            } else {
+                onStartError();
+            }
+        }
     }
 
     abstract suspend fun initRouter(router: Router);
 
+    open fun onException(error: Throwable) {
+        logger.error("vertx exception: {}", error)
+    }
+
+    open fun onStartError() {
+    }
+
+    open fun started() {
+
+    }
 
     /**
      * An extension method for simplifying coroutines usage with Vert.x Web routers

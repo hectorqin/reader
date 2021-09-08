@@ -25,7 +25,7 @@
               ><em v-else class="moon-icon">{{ moonIcon }}</em></span
             >
             <span
-              class="font-item"
+              class="span-item"
               :key="'custom'"
               ref="themes"
               @click="setTheme('custom')"
@@ -95,7 +95,7 @@
           <span class="setting-item-title">正文字体</span>
           <div class="selection-zone">
             <span
-              class="font-item"
+              class="span-item"
               v-for="(font, index) in fonts"
               :key="index"
               :class="{ selected: selectedFont == index }"
@@ -419,6 +419,7 @@ export default {
       float: right;
       font-size: 14px;
       color: #ed4259;
+      cursor: pointer;
     }
   }
 
@@ -456,6 +457,27 @@ export default {
           span {
             margin-bottom: 5px;
           }
+        }
+
+        .span-item {
+          width: 78px;
+          height: 34px;
+          cursor: pointer;
+          margin-right: 16px;
+          border-radius: 2px;
+          text-align: center;
+          vertical-align: middle;
+          display: inline-block;
+          font: 14px / 34px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
+        }
+
+        .span-item:hover {
+          border: 1px solid #ed4259;
+          color: #ed4259;
+        }
+        .span-item.selected  {
+          border: 1px solid #ed4259;
+          color: #ed4259;
         }
 
         .custom-theme {
@@ -521,18 +543,6 @@ export default {
           }
         }
 
-        .font-item {
-          width: 78px;
-          height: 34px;
-          cursor: pointer;
-          margin-right: 16px;
-          border-radius: 2px;
-          text-align: center;
-          vertical-align: middle;
-          display: inline-block;
-          font: 14px / 34px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
-        }
-
         .selected {
           color: #ed4259;
 
@@ -545,26 +555,9 @@ export default {
       .font-list {
         margin-top: 28px;
 
-        .font-item {
-          width: 78px;
-          height: 34px;
-          cursor: pointer;
-          margin-right: 16px;
-          border-radius: 2px;
-          text-align: center;
-          vertical-align: middle;
-          display: inline-block;
-          font: 14px / 34px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
-        }
-
         .selected {
           color: #ed4259;
           border: 1px solid #ed4259;
-        }
-
-        .font-item:hover {
-          border: 1px solid #ed4259;
-          color: #ed4259;
         }
       }
 
@@ -631,11 +624,9 @@ export default {
     color: #ed4259;
   }
 
-  >>>.font-list {
-    .font-item {
-      border: 1px solid #666;
-      background: rgba(45, 45, 45, 0.5);
-    }
+  .span-item {
+    border: 1px solid #666;
+    background: rgba(45, 45, 45, 0.5);
   }
 
   >>>.resize {
@@ -662,11 +653,9 @@ export default {
     color: rgba(255, 255, 255, 0.2);
   }
 
-  >>>.font-list {
-    .font-item {
-      background: rgba(255, 255, 255, 0.5);
-      border: 1px solid rgba(0, 0, 0, 0.1);
-    }
+  .span-item {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(0, 0, 0, 0.1);
   }
 
   >>>.resize {

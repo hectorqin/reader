@@ -21,6 +21,8 @@ import org.lightink.reader.config.MysqlConfig
 
 import org.lightink.reader.verticle.RestVerticle
 import org.lightink.reader.utils.SpringContextUtils
+import org.lightink.reader.SpringEvent
+
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.SpringBootApplication
@@ -37,6 +39,7 @@ import javafx.application.Application
 import javafx.application.Platform
 import javafx.scene.Scene
 import javafx.scene.web.WebView
+import javafx.scene.web.WebErrorEvent
 import javafx.stage.Stage
 import javafx.stage.WindowEvent
 import javafx.stage.StageStyle
@@ -46,10 +49,15 @@ import com.sun.javafx.scene.text.FontHelper
 import javafx.scene.text.Font
 
 import javafx.scene.control.ProgressBar
+import javafx.scene.control.Dialog
+import javafx.scene.control.ButtonType
 import javafx.scene.image.ImageView
 import javafx.scene.layout.VBox
 import javafx.scene.paint.Color;
 import javafx.scene.image.Image;
+import javafx.beans.value.ChangeListener
+import javafx.beans.value.ObservableValue
+import javafx.concurrent.Worker
 
 import org.springframework.core.env.Environment
 import org.springframework.core.env.ConfigurableEnvironment
@@ -68,6 +76,7 @@ class ReaderUIApplication: Application() {
     lateinit var env: ConfigurableEnvironment
 
     var isSpringBootLaunched = false
+    var springBootError = ""
     var showUI = false
 
     var defaultIcons = arrayOf<Image>();
@@ -93,9 +102,17 @@ class ReaderUIApplication: Application() {
                         port = serverPort;
                     }
                     webUrl = env.getProperty("reader.server.webUrl") ?: ("http://localhost:" + port + "/web/")
-                    if (debug != null && debug) {
-                        webUrl = webUrl + "?debug=1"
+                    var sep = if(webUrl.contains("?")) {
+                        "&"
+                    } else {
+                        "?"
                     }
+                    if (debug != null && debug) {
+                        webUrl = webUrl + sep + "debug=1&nopwa=1"
+                    } else {
+                        webUrl = webUrl + sep + "nopwa=1"
+                    }
+                    logger.info("webUrl: {}", webUrl)
                     System.setProperty("reader.system.fonts", Font.getFontNames().joinToString(separator = ","))
                     if (showUI && ::primaryStage.isInitialized){
                         Platform.runLater(object : Runnable {
@@ -107,21 +124,41 @@ class ReaderUIApplication: Application() {
                 }
             }
             app.addListeners(envListener)
-            var startedListener = object: ApplicationListener<ApplicationReadyEvent> {
-                override fun onApplicationEvent(event: ApplicationReadyEvent) {
-                    isSpringBootLaunched = true
-                    if (showUI && ::primaryStage.isInitialized && ::webUrl.isInitialized){
-                        Platform.runLater(object : Runnable {
-                            override fun run() {
-                                splashStage.hide()
-                                splashStage.setScene(null)
-                                showWebScreen(primaryStage, webUrl)
-                            }
-                        })
+            var springListener = object: ApplicationListener<SpringEvent> {
+                override fun onApplicationEvent(event: SpringEvent) {
+                    val eventType = event.getEvent()
+                    if (eventType == "READY") {
+                        isSpringBootLaunched = true
+                        if (showUI && ::primaryStage.isInitialized && ::webUrl.isInitialized){
+                            Platform.runLater(object : Runnable {
+                                override fun run() {
+                                    splashStage.hide()
+                                    splashStage.setScene(null)
+                                    showWebScreen(primaryStage, webUrl)
+                                }
+                            })
+                        }
+                    } else if (eventType == "START_ERROR") {
+                        springBootError = event.getMessage()
+                        if (showUI){
+                            Platform.runLater(object : Runnable {
+                                override fun run() {
+                                    if (::splashStage.isInitialized) {
+                                        splashStage.hide()
+                                        splashStage.setScene(null)
+                                    }
+                                    showAlert(springBootError);
+                                    stop();
+                                }
+                            })
+                        } else {
+                            logger.error(springBootError);
+                            stop();
+                        }
                     }
                 }
             }
-            app.addListeners(startedListener)
+            app.addListeners(springListener)
             app.run(*launchArgs)
         }.start()
     }
@@ -142,7 +179,12 @@ class ReaderUIApplication: Application() {
                 if (isSpringBootLaunched) {
                     showWebScreen(stage, webUrl)
                 } else {
-                    showSplashScreen()
+                    if (springBootError.isNotEmpty()) {
+                        showAlert(springBootError)
+                        stop()
+                    } else {
+                        showSplashScreen()
+                    }
                 }
             }
         } catch(e: Exception) {
@@ -175,11 +217,44 @@ class ReaderUIApplication: Application() {
         splashStage.show()
     }
 
+    fun showAlert(message: String) {
+        var alert = Dialog<Any>();
+        alert.getDialogPane().setContentText(message);
+        alert.getDialogPane().getButtonTypes().add(ButtonType.OK);
+        alert.showAndWait();
+    }
+
+    fun showConfirm(message: String): Boolean {
+        var confirm = Dialog<Any>();
+        confirm.getDialogPane().setContentText(message);
+        confirm.getDialogPane().getButtonTypes().addAll(ButtonType.YES, ButtonType.NO);
+        val result = confirm.showAndWait().filter(ButtonType.YES::equals).isPresent();
+
+        return result
+    }
+
     fun showWebScreen(stage: Stage, url: String) {
         System.setProperty("sun.net.http.allowRestrictedHeaders", "true")
         // logger.info("Font.getFontNames: {}", Font.getFontNames())
+        // logger.info("showWebScreen: {}", url)
         var webView = WebView();
         var webEngine = webView.getEngine();
+        webEngine.setOnError{ event ->
+            logger.info("error: {}", event)
+        };
+        webEngine.setOnAlert{ event ->
+            showAlert(event.data.toString())
+        };
+        webEngine.setConfirmHandler{ message ->
+            showConfirm(message)
+        };
+        webEngine.getLoadWorker().stateProperty().addListener{_, oldState, newState ->
+            logger.info("State from {} to {} , exception: {}", oldState, newState, webEngine.getLoadWorker().getException());
+            if (newState == Worker.State.FAILED) {
+                logger.info("reload {}", url)
+                webEngine.load(url);
+            }
+        }
         webEngine.load(url);
         val scene = Scene(webView, 1280.0, 800.0)
         stage.setScene(scene)

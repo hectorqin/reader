@@ -368,7 +368,7 @@ export default {
     }
   },
   mounted() {
-    document.title = "Reader Bookshelf";
+    document.title = "阅读";
     try {
       //获取最近阅读书籍
       let readingRecentStr = localStorage.getItem("readingRecent");

@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0, user-scalable=0" />
     <link rel="icon" href="<%= BASE_URL %>favicon.ico" />
-    <title>Reader Bookshelf</title>
+    <title>阅读</title>
     <script>
       // 通用加载脚本方法
       function loadScript(src, callback, async) {
@@ -39,6 +39,12 @@
         return decodeURI(window.location.search.replace(new RegExp('^(?:.*' + (first ? '?' : '') + '[&\\?]' + encodeURI(sVar).replace(/[\.\+\*]/g, '\\$&') + '(?:\\=([^&]*))?)?.*$', 'i'), '$1'));
       }
 
+      window.onerror = function() {
+        if (window.getQueryString('debug')) {
+          alert(JSON.stringify(arguments));
+        }
+      }
+
       if (window.getQueryString('debug')) {
         window.loadScript('https://cdn.bootcdn.net/ajax/libs/vConsole/3.9.1/vconsole.min.js', function() {
           new VConsole();
@@ -56,10 +62,7 @@
   </style>
   <body style="margin: 0;height:100% ">
     <noscript>
-      <strong
-        >We're sorry but yd-web-tool doesn't work properly without JavaScript
-        enabled. Please enable it to continue.</strong
-      >
+      <strong>请启用浏览器的Javascript支持</strong>
     </noscript>
     <div id="app"></div>
     <!-- built files will be auto injected -->
