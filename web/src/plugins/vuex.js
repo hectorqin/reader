@@ -73,7 +73,7 @@ export default new Vuex.Store({
     },
     currentContentBGImg: state => {
       if (state.config.contentBGImg) {
-        return state.config.contentBGImg.startsWith("/bg/") ||
+        return state.config.contentBGImg.startsWith("bg/") ||
           state.config.contentBGImg.startsWith("http://") ||
           state.config.contentBGImg.startsWith("https://") ||
           state.config.contentBGImg.startsWith("//")
