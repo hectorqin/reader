@@ -6,7 +6,7 @@ export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home
 
 task=$1
 
-version="1.0.0"
+version="1.1.0"
 
 getVersion()
 {
