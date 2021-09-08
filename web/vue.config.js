@@ -8,9 +8,13 @@ module.exports = {
   pwa: {
     name: "阅读",
     themeColor: "#ffffff",
-    msTileColor: "#000000"
+    msTileColor: "#000000",
 
-    // appleMobileWebAppCapable: 'no',
-    // appleMobileWebAppStatusBarStyle: 'default',
+    appleMobileWebAppCapable: "yes",
+    appleMobileWebAppStatusBarStyle: "black-translucent"
+
+    // manifestOptions: {
+    //   display: "standalone"
+    // }
   }
 };
