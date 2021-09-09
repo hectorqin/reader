@@ -90,7 +90,11 @@
           v-model="readSettingsVisible"
           popper-class="popper-component"
         >
-          <ReadSettings class="popup" />
+          <ReadSettings
+            class="popup"
+            @hideSettingPop="readSettingsVisible = false"
+            @showClickZone="showClickZone = true"
+          />
 
           <div class="tool-icon" slot="reference">
             <div class="iconfont">
@@ -169,6 +173,16 @@
       :class="chapterClass"
       :style="chapterTheme"
     >
+      <div
+        class="click-zone"
+        v-if="showClickZone"
+        :style="!isSlideRead ? { position: 'fixed' } : {}"
+      >
+        <div :style="showPrevPageStyle"><span>点击前一页</span></div>
+        <div :style="showMenuZoneStyle"><span>点击显示菜单</span></div>
+        <div :style="showNextPageStyle"><span>点击后一页</span></div>
+        <div class="close-btn" @click="showClickZone = false">关闭</div>
+      </div>
       <div class="top-bar" ref="top">
         {{ $store.state.miniInterface ? title : "" }}
       </div>
@@ -222,7 +236,6 @@ export default {
   },
   mounted() {
     //获取书籍数据
-    const that = this;
     let bookUrl = sessionStorage.getItem("bookUrl");
     let readingBook = false;
     if (bookUrl) {
@@ -269,62 +282,13 @@ export default {
       this.$message.error("请在书架选择书籍");
     }
 
-    // window.addEventListener keyup 声明函数
-
-    this.func_keyup = function(event) {
-      switch (event.key) {
-        case "ArrowLeft":
-          event.stopPropagation();
-          event.preventDefault();
-          if (
-            that.$store.state.readingBook &&
-            that.$store.state.readingBook.bookUrl
-          ) {
-            that.toLastChapter();
-          }
-          break;
-        case "ArrowRight":
-          event.stopPropagation();
-          event.preventDefault();
-          if (
-            that.$store.state.readingBook &&
-            that.$store.state.readingBook.bookUrl
-          ) {
-            that.toNextChapter();
-          }
-          break;
-        case "ArrowUp":
-          event.stopPropagation();
-          event.preventDefault();
-          if (document.documentElement.scrollTop === 0) {
-            that.$message.warning("已到达页面顶部");
-          } else {
-            jump(0 - document.documentElement.clientHeight + 100);
-          }
-          break;
-        case "ArrowDown":
-          event.stopPropagation();
-          event.preventDefault();
-          if (
-            document.documentElement.clientHeight +
-              document.documentElement.scrollTop ===
-            document.documentElement.scrollHeight
-          ) {
-            that.$message.warning("已到达页面底部");
-          } else {
-            jump(document.documentElement.clientHeight - 100);
-          }
-          break;
-      }
-    };
-
-    window.addEventListener("keyup", this.func_keyup);
+    // window.addEventListener
+    window.addEventListener("keydown", this.keydownHandler);
 
     window.readerPage = this;
-    // console.log(this);
   },
   destroyed() {
-    window.removeEventListener("keyup", this.func_keyup);
+    window.removeEventListener("keydown", this.keydownHandler);
   },
   watch: {
     chapterName(to) {
@@ -353,16 +317,11 @@ export default {
       if (!val) {
         this.contentStyle = {};
         this.transformX = 0;
-        this.$nextTick(() => {
-          this.computePages();
-          this.showPage(this.currentPage, 0);
-        });
-      } else {
-        this.$nextTick(() => {
-          this.computePages();
-          this.showPage(this.currentPage, 0);
-        });
       }
+      this.$nextTick(() => {
+        this.computePages();
+        this.showPage(this.currentPage, 0);
+      });
     }
   },
   data() {
@@ -378,7 +337,8 @@ export default {
       currentPage: 1,
       totalPages: 1,
       transformX: 0,
-      showLastPage: false
+      showLastPage: false,
+      showClickZone: false
     };
   },
   computed: {
@@ -502,6 +462,60 @@ export default {
       } else {
         return "";
       }
+    },
+    showPrevPageStyle() {
+      if (this.isSlideRead) {
+        // 左半部
+        return {
+          left: 0,
+          top: 0,
+          bottom: 0,
+          right: window.innerWidth / 2 + "px",
+          background: "#43987324",
+          paddingRight: window.innerWidth * 0.2 + "px"
+        };
+      } else {
+        // 上半部
+        return {
+          left: 0,
+          top: 0,
+          right: 0,
+          bottom: window.innerHeight / 2 + "px",
+          background: "#43987324"
+        };
+      }
+    },
+    showMenuZoneStyle() {
+      return {
+        top: window.innerHeight * 0.3 + "px",
+        bottom: window.innerHeight * 0.3 + "px",
+        left: window.innerWidth * 0.3 + "px",
+        right: window.innerWidth * 0.3 + "px",
+        background: "#636060",
+        zIndex: 10
+      };
+    },
+    showNextPageStyle() {
+      if (this.isSlideRead) {
+        // 右半部
+        return {
+          right: 0,
+          top: 0,
+          bottom: 0,
+          left: window.innerWidth / 2 + "px",
+          background: "#6b1a7324",
+          paddingLeft: window.innerWidth * 0.2 + "px"
+        };
+      } else {
+        // 下半部
+        return {
+          left: 0,
+          bottom: 0,
+          right: 0,
+          top: window.innerHeight / 2 + "px",
+          background: "#6b1a7324"
+        };
+      }
     }
   },
   methods: {
@@ -624,7 +638,10 @@ export default {
     },
     toTop() {
       if (this.$store.state.miniInterface) {
-        this.scrollContent(-document.documentElement.scrollTop, 1000);
+        this.scrollContent(
+          -(document.documentElement.scrollTop || document.body.scrollTop),
+          1000
+        );
       } else {
         jump(this.$refs.top);
       }
@@ -633,6 +650,13 @@ export default {
       jump(this.$refs.bottom);
     },
     toNextChapter() {
+      if (
+        !this.$store.state.readingBook ||
+        !this.$store.state.readingBook.bookUrl ||
+        !this.$store.state.readingBook.catalog
+      ) {
+        return;
+      }
       this.$store.commit("setContentLoading", true);
       let index = this.$store.state.readingBook.index;
       index++;
@@ -644,6 +668,13 @@ export default {
       }
     },
     toLastChapter() {
+      if (
+        !this.$store.state.readingBook ||
+        !this.$store.state.readingBook.bookUrl ||
+        !this.$store.state.readingBook.catalog
+      ) {
+        return;
+      }
       this.$store.commit("setContentLoading", true);
       let index = this.$store.state.readingBook.index;
       index--;
@@ -673,6 +704,9 @@ export default {
       }
     },
     nextPage(moveX) {
+      if (!this.show) {
+        return;
+      }
       if (this.$store.getters.isSlideRead) {
         if (this.currentPage < this.totalPages) {
           if (typeof moveX === "undefined") {
@@ -692,7 +726,8 @@ export default {
         }
       } else {
         if (
-          document.documentElement.scrollTop + window.innerHeight <
+          (document.documentElement.scrollTop || document.body.scrollTop) +
+            window.innerHeight <
           document.documentElement.scrollHeight
         ) {
           const moveY = window.innerHeight - 10;
@@ -704,6 +739,9 @@ export default {
       }
     },
     prevPage(moveX) {
+      if (!this.show) {
+        return;
+      }
       if (this.$store.getters.isSlideRead) {
         if (this.currentPage > 1) {
           if (typeof moveX === "undefined") {
@@ -723,7 +761,9 @@ export default {
           this.toLastChapter();
         }
       } else {
-        if (document.documentElement.scrollTop > 0) {
+        if (
+          (document.documentElement.scrollTop || document.body.scrollTop) > 0
+        ) {
           const moveY = -window.innerHeight + 10;
           this.scrollContent(moveY, 300);
         } else {
@@ -733,6 +773,9 @@ export default {
       }
     },
     showPage(page, duration) {
+      if (!this.show) {
+        return;
+      }
       this.currentPage = Math.min(page, this.totalPages);
       if (this.$store.getters.isSlideRead) {
         const moveX =
@@ -741,7 +784,7 @@ export default {
       } else {
         const moveY =
           (window.innerHeight - 10) * (this.currentPage - 1) -
-          document.documentElement.scrollTop;
+          (document.documentElement.scrollTop || document.body.scrollTop);
         this.scrollContent(
           moveY,
           typeof duration === "undefined" ? 300 : duration
@@ -776,9 +819,11 @@ export default {
     },
     scrollContent(moveY, duration) {
       // console.log("scrollContent", moveY);
-      const lastScrollTop = document.documentElement.scrollTop;
+      const lastScrollTop =
+        document.documentElement.scrollTop || document.body.scrollTop;
       const onEnd = () => {
         document.documentElement.scrollTop = lastScrollTop + moveY;
+        document.body.scrollTop = lastScrollTop + moveY;
       };
       if (!duration) {
         onEnd();
@@ -793,6 +838,7 @@ export default {
         timing: timing,
         draw: progress => {
           document.documentElement.scrollTop = lastScrollTop + moveY * progress;
+          document.body.scrollTop = lastScrollTop + moveY * progress;
         },
         onEnd
       });
@@ -841,6 +887,7 @@ export default {
       }, 50);
     },
     eventHandler(point) {
+      // console.log(point);
       if (
         this.popBookSourceVisible ||
         this.popBookShelfVisible ||
@@ -853,11 +900,16 @@ export default {
       const midX = window.innerWidth / 2;
       const midY = window.innerHeight / 2;
       if (
-        Math.abs(point.clientY - midY) <= window.innerHeight * 0.25 &&
-        Math.abs(point.clientX - midX) <= window.innerWidth * 0.25
+        Math.abs(point.clientY - midY) <= window.innerHeight * 0.2 &&
+        Math.abs(point.clientX - midX) <= window.innerWidth * 0.2
       ) {
         // 点击中部区域显示菜单
         this.showToolBar = !this.showToolBar;
+      } else if (this.$store.state.config.clickMethod === "下一页") {
+        // 全屏点击下一页
+        this.showToolBar = false;
+        this.nextPage();
+        return;
       } else if (this.isSlideRead) {
         if (point.clientX > midX) {
           // 点击右侧，下一页
@@ -878,6 +930,58 @@ export default {
           this.showToolBar = false;
           this.prevPage();
         }
+      }
+    },
+    keydownHandler(event) {
+      // console.log("keyup", event);
+      if (
+        this.popBookSourceVisible ||
+        this.popBookShelfVisible ||
+        this.popCataVisible ||
+        this.readSettingsVisible
+      ) {
+        return;
+      }
+      const keyCodeMap = {
+        37: "ArrowLeft",
+        38: "ArrowUp",
+        39: "ArrowRight",
+        40: "ArrowDown"
+      };
+      const eventKey = event.key || keyCodeMap[event.keyCode];
+      switch (eventKey) {
+        case "ArrowLeft":
+          event.preventDefault();
+          event.stopPropagation();
+          this.showToolBar = false;
+          if (this.isSlideRead) {
+            this.prevPage();
+          } else {
+            this.toLastChapter();
+          }
+          break;
+        case "ArrowRight":
+          event.preventDefault();
+          event.stopPropagation();
+          this.showToolBar = false;
+          if (this.isSlideRead) {
+            this.nextPage();
+          } else {
+            this.toNextChapter();
+          }
+          break;
+        case "ArrowUp":
+          event.preventDefault();
+          event.stopPropagation();
+          this.showToolBar = false;
+          this.prevPage();
+          break;
+        case "ArrowDown":
+          event.preventDefault();
+          event.stopPropagation();
+          this.showToolBar = false;
+          this.nextPage();
+          break;
       }
     }
   }
@@ -985,6 +1089,7 @@ export default {
     width: 670px;
     margin: 0 auto;
     background-size: cover;
+    position: relative;
 
     >>>.el-icon-loading {
       font-size: 36px;
@@ -994,6 +1099,39 @@ export default {
     >>>.el-loading-text {
       font-weight: 500;
       color: #B5B5B5;
+    }
+
+    .click-zone {
+      position: absolute;
+      z-index: 120;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #333;
+      opacity: 0.8;
+      color: #fff;
+      font-size: 14px;
+      pointer-events: none;
+
+      div {
+        position: absolute;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .close-btn {
+        left: 0;
+        right: 0;
+        bottom: 20px;
+        height: 45px;
+        line-height: 45px;
+        z-index: 10;
+        padding: 0;
+        pointer-events: all;
+      }
     }
 
     .content {

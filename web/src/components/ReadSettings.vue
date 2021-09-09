@@ -157,6 +157,20 @@
             >
           </div>
         </li>
+        <li class="read-width" v-if="$store.state.miniInterface">
+          <span class="setting-item-title">全屏点击</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(method, index) in clickMethods"
+              :key="index"
+              :class="{ selected: clickMethod == method }"
+              @click="setClickMethod(method)"
+              >{{ method }}</span
+            >
+            <span class="font-btn" @click="showClickZone">显示翻页区域</span>
+          </div>
+        </li>
       </ul>
     </div>
   </div>
@@ -216,7 +230,8 @@ export default {
         { src: "bg/边彩画布.jpg" }
       ],
       fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"],
-      readMethods: ["上下滑动", "左右滑动"]
+      readMethods: ["上下滑动", "左右滑动"],
+      clickMethods: ["下一页", "自动"]
     };
   },
   mounted() {
@@ -250,6 +265,9 @@ export default {
     },
     readMethod() {
       return this.$store.state.config.readMethod || "上下滑动";
+    },
+    clickMethod() {
+      return this.$store.state.config.clickMethod || "自动";
     },
     fontSize() {
       return this.$store.state.config.fontSize;
@@ -297,6 +315,11 @@ export default {
     setReadMethod(method) {
       let config = this.config;
       config.readMethod = method;
+      this.$store.commit("setConfig", config);
+    },
+    setClickMethod(method) {
+      let config = this.config;
+      config.clickMethod = method;
       this.$store.commit("setConfig", config);
     },
     moreFontSize() {
@@ -403,9 +426,14 @@ export default {
         fontSize: 18,
         fontWeight: 400,
         readMethod: "上下滑动",
+        clickMethod: "自动",
         readWidth: 800
       };
       this.$store.commit("setConfig", { ...config });
+    },
+    showClickZone() {
+      this.$emit("hideSettingPop");
+      this.$emit("showClickZone");
     }
   }
 };
@@ -480,6 +508,11 @@ export default {
           span {
             margin-bottom: 5px;
           }
+        }
+
+        .font-btn {
+          cursor: pointer;
+          color: #ed4259;
         }
 
         .span-item {

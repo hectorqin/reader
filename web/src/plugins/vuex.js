@@ -21,6 +21,7 @@ export default new Vuex.Store({
       fontSize: 18,
       fontWeight: 400,
       readMethod: "上下滑动",
+      clickMethod: "自动",
       readWidth: 800
     },
     miniInterface: false,
@@ -74,11 +75,7 @@ export default new Vuex.Store({
   },
   getters: {
     isSlideRead: state => {
-      return (
-        state.miniInterface &&
-        state.touchable &&
-        state.config.readMethod === "左右滑动"
-      );
+      return state.miniInterface && state.config.readMethod === "左右滑动";
     },
     isNight: state => {
       return state.config.theme == 6;
