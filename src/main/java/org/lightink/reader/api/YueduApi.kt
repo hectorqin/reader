@@ -38,6 +38,7 @@ import io.vertx.ext.web.client.WebClient
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.core.env.Environment
 import java.io.File
+import java.lang.Runtime
 
 private val logger = KotlinLogging.logger {}
 
@@ -151,7 +152,15 @@ class YueduApi : RestVerticle() {
     private suspend fun getSystemInfo(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         var systemFont = System.getProperty("reader.system.fonts")
-        return returnData.setData(mapOf("fonts" to systemFont))
+        var freeMemory = "" + (Runtime.getRuntime().freeMemory() / 1024 / 1024) + "M"
+        var totalMemory = "" + (Runtime.getRuntime().totalMemory() / 1024 / 1024) + "M"
+        var maxMemory = "" + (Runtime.getRuntime().maxMemory() / 1024 / 1024) + "M"
+        return returnData.setData(mapOf(
+            "fonts" to systemFont,
+            "freeMemory" to freeMemory,
+            "totalMemory" to totalMemory,
+            "maxMemory" to maxMemory
+        ))
     }
 
     private suspend fun getBookInfo(context: RoutingContext): ReturnData {

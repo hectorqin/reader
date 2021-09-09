@@ -337,6 +337,7 @@ export default {
       currentPage: 1,
       totalPages: 1,
       transformX: 0,
+      transforming: false,
       showLastPage: false,
       showClickZone: false
     };
@@ -707,6 +708,10 @@ export default {
       if (!this.show) {
         return;
       }
+      if (this.transforming) {
+        return;
+      }
+      this.transforming = true;
       if (this.$store.getters.isSlideRead) {
         if (this.currentPage < this.totalPages) {
           if (typeof moveX === "undefined") {
@@ -742,6 +747,10 @@ export default {
       if (!this.show) {
         return;
       }
+      if (this.transforming) {
+        return;
+      }
+      this.transforming = true;
       if (this.$store.getters.isSlideRead) {
         if (this.currentPage > 1) {
           if (typeof moveX === "undefined") {
@@ -776,6 +785,10 @@ export default {
       if (!this.show) {
         return;
       }
+      if (this.transforming) {
+        return;
+      }
+      this.transforming = true;
       this.currentPage = Math.min(page, this.totalPages);
       if (this.$store.getters.isSlideRead) {
         const moveX =
@@ -797,6 +810,7 @@ export default {
           transform: `translateX(${this.transformX + moveX}px)`
         };
         this.transformX += moveX;
+        this.transforming = false;
       };
       if (!duration) {
         onEnd();
@@ -824,6 +838,7 @@ export default {
       const onEnd = () => {
         document.documentElement.scrollTop = lastScrollTop + moveY;
         document.body.scrollTop = lastScrollTop + moveY;
+        this.transforming = false;
       };
       if (!duration) {
         onEnd();
@@ -884,7 +899,7 @@ export default {
       setTimeout(() => {
         this.lastTouch = false;
         this.lastMoveX = false;
-      }, 50);
+      }, 300);
     },
     eventHandler(point) {
       // console.log(point);
