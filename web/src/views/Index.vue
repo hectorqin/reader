@@ -6,7 +6,7 @@
       day: !isNight
     }"
   >
-    <div class="navigation-wrapper" :style="navigationClass">
+    <div class="navigation-wrapper" :class="navigationClass">
       <div class="navigation-title">
         阅读
       </div>
@@ -121,7 +121,6 @@
             >
               探索书源
             </el-tag>
-            <!-- <div class="" slot="reference">探索书源</div> -->
           </el-popover>
           <el-tag
             type="info"
@@ -172,9 +171,6 @@
         <div class="title-btn" v-if="isSearchResult" @click="backToShelf">
           返回书架
         </div>
-        <!-- <div class="title-btn" @click="showExplorePop">
-          书海
-        </div> -->
         <div class="title-btn" v-if="isSearchResult" @click="loadMore">
           <i class="el-icon-loading" v-if="LoadingMore"></i>
           {{ LoadingMore ? "加载中..." : "加载更多" }}
@@ -187,12 +183,15 @@
           <i class="el-icon-loading" v-if="refreshLoading"></i>
           {{ refreshLoading ? "刷新中..." : "刷新" }}
         </div>
+        <div class="title-btn" @click="showExplorePop">
+          书海
+        </div>
       </div>
       <div class="books-wrapper" ref="bookList">
         <div class="wrapper">
           <div
             class="book"
-            :style="showNavigation ? { width: '360px !important' } : {}"
+            :style="showNavigation ? { minWidth: '360px !important' } : {}"
             v-for="book in shelf"
             :key="book.bookUrl"
             @click="toDetail(book.bookUrl, book.name, book.durChapterIndex)"
@@ -364,6 +363,8 @@ export default {
       manageSourceSelection: [],
       showNavigation: false,
 
+      navigationClass: "",
+
       lastScrollTop: 0
     };
   },
@@ -379,6 +380,23 @@ export default {
         this.$nextTick(() => {
           this.$refs.bookList.scrollTop = this.lastScrollTop;
         });
+      }
+    },
+    showMenu(val) {
+      if (!val) {
+        this.navigationClass = "";
+      } else if (!this.showNavigation) {
+        this.navigationClass = "navigation-hidden";
+      }
+    },
+    showNavigation(val) {
+      if (!val) {
+        this.navigationClass = "navigation-out";
+        setTimeout(() => {
+          this.navigationClass = "navigation-hidden";
+        }, 300);
+      } else {
+        this.navigationClass = "navigation-in";
       }
     }
   },
@@ -411,6 +429,9 @@ export default {
         }
       })
       .catch(() => {});
+    this.navigationClass =
+      this.showMenu && !this.showNavigation ? "navigation-hidden" : "";
+    window.shelfPage = this;
   },
   methods: {
     setIP() {
@@ -937,7 +958,9 @@ export default {
       }
     },
     showExplorePop() {
-      this.popExploreVisible = true;
+      setTimeout(() => {
+        this.popExploreVisible = true;
+      }, 100);
     }
   },
   computed: {
@@ -978,15 +1001,6 @@ export default {
     },
     showMenu() {
       return this.$store.state.miniInterface;
-    },
-    navigationClass() {
-      return !this.showMenu || (this.showMenu && this.showNavigation)
-        ? {
-            display: "block"
-          }
-        : {
-            display: "none"
-          };
     },
     dialogWidth() {
       return this.showMenu ? "85%" : "50%";
@@ -1394,7 +1408,6 @@ export default {
     >>>.navigation-wrapper {
       padding: 20px 36px;
       box-sizing: border-box;
-      display: none;
     }
     >>>.shelf-wrapper {
       padding: 0;
@@ -1418,5 +1431,18 @@ export default {
       }
     }
   }
+}
+</style>
+<style>
+.navigation-hidden {
+  margin-left: -260px;
+}
+.navigation-in {
+  margin-left: 0px;
+  transition: margin-left 0.3s;
+}
+.navigation-out {
+  margin-left: -260px;
+  transition: margin-left 0.3s;
 }
 </style>
