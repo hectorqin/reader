@@ -714,7 +714,6 @@ export default {
       if (this.transforming) {
         return;
       }
-      this.transforming = true;
       if (this.$store.getters.isSlideRead) {
         if (this.currentPage < this.totalPages) {
           if (typeof moveX === "undefined") {
@@ -722,6 +721,7 @@ export default {
               -(this.windowSize.width - 16) * (this.currentPage - 1);
           }
           this.currentPage += 1;
+          this.transforming = true;
           this.transform(
             typeof moveX === "undefined"
               ? -(this.windowSize.width - 16)
@@ -741,6 +741,7 @@ export default {
           document.documentElement.scrollHeight
         ) {
           const moveY = this.windowSize.height - 10;
+          this.transforming = true;
           this.scrollContent(moveY, 300);
         } else {
           this.currentPage = 1;
@@ -755,7 +756,6 @@ export default {
       if (this.transforming) {
         return;
       }
-      this.transforming = true;
       if (this.$store.getters.isSlideRead) {
         if (this.currentPage > 1) {
           if (typeof moveX === "undefined") {
@@ -763,6 +763,7 @@ export default {
               -(this.windowSize.width - 16) * (this.currentPage - 1);
           }
           this.currentPage -= 1;
+          this.transforming = true;
           this.transform(
             typeof moveX === "undefined" ? this.windowSize.width - 16 : moveX,
             300
@@ -779,6 +780,7 @@ export default {
           (document.documentElement.scrollTop || document.body.scrollTop) > 0
         ) {
           const moveY = -this.windowSize.height + 10;
+          this.transforming = true;
           this.scrollContent(moveY, 300);
         } else {
           this.currentPage = 1;
@@ -790,10 +792,6 @@ export default {
       if (!this.show) {
         return;
       }
-      if (this.transforming) {
-        return;
-      }
-      this.transforming = true;
       this.currentPage = Math.min(page, this.totalPages);
       if (this.$store.getters.isSlideRead) {
         const moveX =

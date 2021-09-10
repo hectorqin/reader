@@ -312,10 +312,15 @@ class ReaderUIApplication: Application() {
                 webEngine.load(url);
             }
         }
+        webEngine.titleProperty().addListener{_, _, t ->
+            if (t.isNotEmpty()) {
+                stage.setTitle(t)
+            }
+        }
         webEngine.load(url);
         val scene = Scene(webView, windowSize.width, windowSize.height)
         stage.setScene(scene)
-        stage.setTitle("Reader")
+        stage.setTitle("阅读")
         stage.getIcons().addAll(defaultIcons);
         stage.initStyle(StageStyle.UNIFIED);
         stage.show()
