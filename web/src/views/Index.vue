@@ -1538,12 +1538,14 @@ export default {
   color: #bbb !important;
   border: none;
 }
-.night-theme .el-popper[x-placement^="bottom"] .popper__arrow,
-.night-theme .el-popper[x-placement^="bottom"] .popper__arrow::after {
+.night-theme .popper-intro.el-popper[x-placement^="bottom"] .popper__arrow,
+.night-theme
+  .popper-intro.el-popper[x-placement^="bottom"]
+  .popper__arrow::after {
   border-bottom-color: #121212 !important;
 }
-.night-theme .el-popper[x-placement^="top"] .popper__arrow,
-.night-theme .el-popper[x-placement^="top"] .popper__arrow::after {
+.night-theme .popper-intro.el-popper[x-placement^="top"] .popper__arrow,
+.night-theme .popper-intro.el-popper[x-placement^="top"] .popper__arrow::after {
   border-top-color: #121212 !important;
 }
 .night-theme .el-popover__title {

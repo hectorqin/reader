@@ -1,5 +1,5 @@
 <template>
-  <div class="cata-wrapper" :style="popupTheme">
+  <div class="popup-wrapper" :style="popupTheme">
     <div class="title-zone">
       <div class="title">
         目录
@@ -101,11 +101,11 @@ export default {
 </script>
 
 <style lang="stylus" scoped>
-.cata-wrapper {
+.popup-wrapper {
   margin: -16px;
+  margin-bottom: -13px;
   padding: 18px 25px 24px 25px;
 
-  // background: #ede7da url('../assets/imgs/themes/popup_1.png') repeat;
   .title-zone {
     margin: 0 0 20px 0;
     width: 100%;

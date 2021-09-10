@@ -138,5 +138,29 @@ export default {
   .el-checkbox__inner {
     background: #bbb;
   }
+  .el-input__inner {
+    background-color: #bbb;
+    border: 1px solid #bbb !important;
+    color: #ddd;
+  }
+  .el-select-dropdown {
+    background-color: #333;
+    border: 1px solid #333 !important;
+  }
+  .el-select-dropdown__item {
+    color: #ddd;
+  }
+  .el-select-dropdown__item.hover, .el-select-dropdown__item:hover {
+    background-color: #444;
+  }
+  .el-popper[x-placement^="bottom"] .popper__arrow, .el-popper[x-placement^="bottom"] .popper__arrow::after {
+    border-bottom-color: #333 !important;
+  }
+  .el-popper[x-placement^="top"] .popper__arrow, .el-popper[x-placement^="top"] .popper__arrow::after {
+    border-top-color: #333 !important;
+  }
+}
+.el-popover:focus, .el-popover:focus:active, .el-popover__reference:focus:hover, .el-popover__reference:focus:not(.focusing) {
+  outline: none;
 }
 </style>

@@ -452,12 +452,10 @@ export default {
 
 .settings-wrapper {
   user-select: none;
-  margin: -17px;
-  // width: 478px;
-  // height: 300px;
+  margin: -16px;
+  margin-bottom: -13px;
   text-align: left;
   padding: 40px 24px;
-  background: #ede7da url('../assets/imgs/themes/popup_1.png') repeat;
 
   .settings-title {
     font-size: 18px;
@@ -475,7 +473,7 @@ export default {
   }
 
   .setting-list {
-    max-height: 50vh;
+    max-height: 45vh;
     overflow-y: auto;
     ul {
       list-style: none outside none;

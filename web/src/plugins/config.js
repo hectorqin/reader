@@ -52,7 +52,7 @@ var settings = {
     {
       body: "#ede7da url(" + body_6 + ") repeat",
       content: "#ede7da url(" + content_6 + ") repeat",
-      popup: "rgba(0,0,0,.9)"
+      popup: "#121212"
     }
   ],
   fonts: [
