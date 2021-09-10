@@ -209,14 +209,31 @@
               class="info"
               @click="toDetail(book.bookUrl, book.name, book.durChapterIndex)"
             >
-              <i
-                class="el-icon-close delete-book-icon"
-                v-if="!isSearchResult"
-                @click.stop="deleteBook(book)"
-              ></i>
-              <div class="name">
-                {{ book.name }}
+              <div class="book-operation">
+                <i
+                  class="el-icon-info"
+                  v-if="showMenu"
+                  @click.stop="toggleBookIntroPop(book)"
+                ></i>
+                <i
+                  class="el-icon-close"
+                  v-if="!isSearchResult"
+                  @click.stop="deleteBook(book)"
+                ></i>
               </div>
+              <el-popover
+                :title="book.name"
+                placement="top"
+                width="300"
+                trigger="hover"
+                popper-class="popper-intro"
+                v-model="popIntroVisible[book.name]"
+              >
+                <div class="book-intro" v-html="renderBookIntro(book)"></div>
+                <div class="name" slot="reference">
+                  {{ book.name }}
+                </div>
+              </el-popover>
               <div class="sub">
                 <div class="author">
                   {{ book.author }}
@@ -370,6 +387,8 @@ export default {
       showNavigation: false,
 
       navigationClass: "",
+
+      popIntroVisible: {},
 
       lastScrollTop: 0
     };
@@ -605,6 +624,10 @@ export default {
             this.loading.close();
             this.$store.commit("setConnectType", "success");
             // this.$store.commit("increaseBookNum", response.data.data.length);
+            this.popIntroVisible = response.data.data.reduce((c, v) => {
+              c[v.name] = false;
+              return c;
+            }, {});
             this.$store.commit(
               "addBooks",
               response.data.data.sort(function(a, b) {
@@ -967,6 +990,29 @@ export default {
       setTimeout(() => {
         this.popExploreVisible = true;
       }, 100);
+    },
+    renderBookIntro(book) {
+      const intro = (book.intro || "暂无简介").split("\n");
+      return intro
+        .map(v => {
+          return `<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${v.replace(
+            /^\s+/g,
+            ""
+          )}</p>`;
+        })
+        .join("");
+    },
+    toggleBookIntroPop(book) {
+      setTimeout(() => {
+        for (const i in this.popIntroVisible) {
+          if (Object.hasOwnProperty.call(this.popIntroVisible, i)) {
+            if (i !== book.name) {
+              this.popIntroVisible[i] = false;
+            }
+          }
+        }
+        this.popIntroVisible[book.name] = !this.popIntroVisible[book.name];
+      }, 100);
     }
   },
   computed: {
@@ -1253,12 +1299,16 @@ export default {
             margin-left: 20px;
             flex: 1;
 
-            .delete-book-icon {
+            .book-operation {
               position: absolute;
               right: 5px;
               top: 5px;
               font-size: 24px;
               color: #969ba3;
+
+              i {
+                margin-left: 10px;
+              }
             }
 
             .name {
@@ -1335,7 +1385,7 @@ export default {
   .book .info .name {
     color: #bbb !important;
   }
-  .book .info .delete-book-icon {
+  .book .info .book-operation {
     color: #6b6b6b !important;
   }
   .book .info .sub {
@@ -1476,5 +1526,27 @@ export default {
 .navigation-out {
   margin-left: -260px;
   transition: margin-left 0.3s;
+}
+.popper-intro {
+  padding: 15px;
+}
+.book-intro {
+  line-height: 1.6;
+}
+.night-theme .popper-intro {
+  background: #121212;
+  color: #bbb !important;
+  border: none;
+}
+.night-theme .el-popper[x-placement^="bottom"] .popper__arrow,
+.night-theme .el-popper[x-placement^="bottom"] .popper__arrow::after {
+  border-bottom-color: #121212 !important;
+}
+.night-theme .el-popper[x-placement^="top"] .popper__arrow,
+.night-theme .el-popper[x-placement^="top"] .popper__arrow::after {
+  border-top-color: #121212 !important;
+}
+.night-theme .el-popover__title {
+  color: #ddd !important;
 }
 </style>

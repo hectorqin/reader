@@ -23,17 +23,8 @@ export default {
     };
   },
   mounted() {
-    if (this.theme) {
-      document.body.className =
-        (document.body.className || "").replace("night-theme", "") +
-        " night-theme";
-    } else {
-      document.body.className = (document.body.className || "").replace(
-        "night-theme",
-        ""
-      );
-    }
     window.reader = this;
+    this.setTheme(this.isNight);
   },
   computed: {
     isNight() {
@@ -42,11 +33,17 @@ export default {
   },
   watch: {
     isNight(val) {
-      if (val) {
+      this.setTheme(val);
+    }
+  },
+  methods: {
+    setTheme(isNight) {
+      if (isNight) {
         document.body.className =
-          document.body.className.replace("night-theme", "") + " night-theme";
+          (document.body.className || "").replace("night-theme", "") +
+          " night-theme";
       } else {
-        document.body.className = document.body.className.replace(
+        document.body.className = (document.body.className || "").replace(
           "night-theme",
           ""
         );
@@ -116,6 +113,30 @@ export default {
     width: 100vw !important;
     box-sizing: border-box;
     margin: 0 !important;
+  }
+}
+.night-theme {
+  .el-message-box {
+    background: #212121;
+    border: 1px solid #212121;
+    .el-message-box__title {
+      color: #888;
+    }
+    .el-message-box__content {
+      color: #777;
+    }
+  }
+  .el-button--default {
+    background: #888;
+    color: #ddd;
+    border: 1px solid #888;
+  }
+  .el-button--primary {
+    background: #185798;
+    border: 1px solid #185798;
+  }
+  .el-checkbox__inner {
+    background: #bbb;
   }
 }
 </style>
