@@ -26,7 +26,10 @@ export default new Vuex.Store({
     },
     miniInterface: false,
     readSettingsVisible: false,
-    windowWidth: window.innerWidth,
+    windowSize: {
+      width: window.innerWidth,
+      height: window.innerHeight
+    },
     touchable: "ontouchstart" in document
   },
   mutations: {
@@ -66,8 +69,8 @@ export default new Vuex.Store({
     setMiniInterface(state, mini) {
       state.miniInterface = mini;
     },
-    setWindowWidth(state, width) {
-      state.windowWidth = width;
+    setWindowSize(state, size) {
+      state.windowSize = size;
     },
     setTouchable(state, touchable) {
       state.touchable = touchable;

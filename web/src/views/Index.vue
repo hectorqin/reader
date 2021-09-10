@@ -1015,7 +1015,7 @@ export default {
       return this.showMenu ? "5vh" : "15vh";
     },
     popupWidth() {
-      return this.showMenu ? window.innerWidth : "600";
+      return this.showMenu ? this.$store.state.windowSize.width : "600";
     }
   }
 };

@@ -322,6 +322,12 @@ export default {
         this.computePages();
         this.showPage(this.currentPage, 0);
       });
+    },
+    windowSize() {
+      this.$nextTick(() => {
+        this.computePages();
+        this.showPage(this.currentPage, 0);
+      });
     }
   },
   data() {
@@ -349,11 +355,8 @@ export default {
     chapterIndex() {
       return ((this.$store.state.readingBook || {}).index || 0) | 0;
     },
-    windowHeight() {
-      return window.innerHeight;
-    },
-    contentHeight() {
-      return this.$refs.content.offsetHeight;
+    windowSize() {
+      return this.$store.state.windowSize;
     },
     popCataVisible: {
       get() {
@@ -432,12 +435,12 @@ export default {
       if (!this.$store.state.miniInterface) {
         return this.readWidthConfig - 130 + "px";
       } else {
-        return window.innerWidth + "px";
+        return this.windowSize.width + "px";
       }
     },
     readWidthConfig() {
       var width = this.$store.state.config.readWidth;
-      while (width > this.$store.state.windowWidth - 120) {
+      while (width > this.$store.state.windowSize.width - 120) {
         width -= 160;
       }
       return width;
@@ -446,7 +449,7 @@ export default {
       if (!this.$store.state.miniInterface) {
         return this.readWidthConfig - 33;
       } else {
-        return window.innerWidth - 33;
+        return this.windowSize.width - 33;
       }
     },
     show() {
@@ -471,9 +474,9 @@ export default {
           left: 0,
           top: 0,
           bottom: 0,
-          right: window.innerWidth / 2 + "px",
+          right: this.windowSize.width / 2 + "px",
           background: "#43987324",
-          paddingRight: window.innerWidth * 0.2 + "px"
+          paddingRight: this.windowSize.width * 0.2 + "px"
         };
       } else {
         // 上半部
@@ -481,17 +484,17 @@ export default {
           left: 0,
           top: 0,
           right: 0,
-          bottom: window.innerHeight / 2 + "px",
+          bottom: this.windowSize.height / 2 + "px",
           background: "#43987324"
         };
       }
     },
     showMenuZoneStyle() {
       return {
-        top: window.innerHeight * 0.3 + "px",
-        bottom: window.innerHeight * 0.3 + "px",
-        left: window.innerWidth * 0.3 + "px",
-        right: window.innerWidth * 0.3 + "px",
+        top: this.windowSize.height * 0.3 + "px",
+        bottom: this.windowSize.height * 0.3 + "px",
+        left: this.windowSize.width * 0.3 + "px",
+        right: this.windowSize.width * 0.3 + "px",
         background: "#636060",
         zIndex: 10
       };
@@ -503,9 +506,9 @@ export default {
           right: 0,
           top: 0,
           bottom: 0,
-          left: window.innerWidth / 2 + "px",
+          left: this.windowSize.width / 2 + "px",
           background: "#6b1a7324",
-          paddingLeft: window.innerWidth * 0.2 + "px"
+          paddingLeft: this.windowSize.width * 0.2 + "px"
         };
       } else {
         // 下半部
@@ -513,7 +516,7 @@ export default {
           left: 0,
           bottom: 0,
           right: 0,
-          top: window.innerHeight / 2 + "px",
+          top: this.windowSize.height / 2 + "px",
           background: "#6b1a7324"
         };
       }
@@ -692,11 +695,11 @@ export default {
     computePages() {
       if (this.isSlideRead) {
         this.totalPages = Math.ceil(
-          this.$refs.bookContentRef.$el.scrollWidth / window.innerWidth
+          this.$refs.bookContentRef.$el.scrollWidth / this.windowSize.width
         );
       } else {
         this.totalPages = Math.ceil(
-          this.$refs.bookContentRef.$el.scrollHeight / window.innerHeight
+          this.$refs.bookContentRef.$el.scrollHeight / this.windowSize.height
         );
       }
       if (this.showLastPage) {
@@ -716,11 +719,13 @@ export default {
         if (this.currentPage < this.totalPages) {
           if (typeof moveX === "undefined") {
             this.transformX =
-              -(window.innerWidth - 16) * (this.currentPage - 1);
+              -(this.windowSize.width - 16) * (this.currentPage - 1);
           }
           this.currentPage += 1;
           this.transform(
-            typeof moveX === "undefined" ? -(window.innerWidth - 16) : moveX,
+            typeof moveX === "undefined"
+              ? -(this.windowSize.width - 16)
+              : moveX,
             300
           );
         } else {
@@ -732,10 +737,10 @@ export default {
       } else {
         if (
           (document.documentElement.scrollTop || document.body.scrollTop) +
-            window.innerHeight <
+            this.windowSize.height <
           document.documentElement.scrollHeight
         ) {
-          const moveY = window.innerHeight - 10;
+          const moveY = this.windowSize.height - 10;
           this.scrollContent(moveY, 300);
         } else {
           this.currentPage = 1;
@@ -755,11 +760,11 @@ export default {
         if (this.currentPage > 1) {
           if (typeof moveX === "undefined") {
             this.transformX =
-              -(window.innerWidth - 16) * (this.currentPage - 1);
+              -(this.windowSize.width - 16) * (this.currentPage - 1);
           }
           this.currentPage -= 1;
           this.transform(
-            typeof moveX === "undefined" ? window.innerWidth - 16 : moveX,
+            typeof moveX === "undefined" ? this.windowSize.width - 16 : moveX,
             300
           );
         } else {
@@ -773,7 +778,7 @@ export default {
         if (
           (document.documentElement.scrollTop || document.body.scrollTop) > 0
         ) {
-          const moveY = -window.innerHeight + 10;
+          const moveY = -this.windowSize.height + 10;
           this.scrollContent(moveY, 300);
         } else {
           this.currentPage = 1;
@@ -792,11 +797,12 @@ export default {
       this.currentPage = Math.min(page, this.totalPages);
       if (this.$store.getters.isSlideRead) {
         const moveX =
-          -(window.innerWidth - 16) * (this.currentPage - 1) - this.transformX;
+          -(this.windowSize.width - 16) * (this.currentPage - 1) -
+          this.transformX;
         this.transform(moveX, typeof duration === "undefined" ? 300 : duration);
       } else {
         const moveY =
-          (window.innerHeight - 10) * (this.currentPage - 1) -
+          (this.windowSize.height - 10) * (this.currentPage - 1) -
           (document.documentElement.scrollTop || document.body.scrollTop);
         this.scrollContent(
           moveY,
@@ -888,10 +894,10 @@ export default {
         this.transformX += this.lastMoveX;
         if (this.lastMoveX > 0) {
           // 上一页
-          this.prevPage(window.innerWidth - 16 - this.lastMoveX);
+          this.prevPage(this.windowSize.width - 16 - this.lastMoveX);
         } else {
           // 下一页
-          this.nextPage(-(window.innerWidth - 16) - this.lastMoveX);
+          this.nextPage(-(this.windowSize.width - 16) - this.lastMoveX);
         }
       } else if (this.lastTouch) {
         this.eventHandler(this.lastTouch);
@@ -912,11 +918,11 @@ export default {
         return;
       }
       // 根据点击位置判断操作
-      const midX = window.innerWidth / 2;
-      const midY = window.innerHeight / 2;
+      const midX = this.windowSize.width / 2;
+      const midY = this.windowSize.height / 2;
       if (
-        Math.abs(point.clientY - midY) <= window.innerHeight * 0.2 &&
-        Math.abs(point.clientX - midX) <= window.innerWidth * 0.2
+        Math.abs(point.clientY - midY) <= this.windowSize.height * 0.2 &&
+        Math.abs(point.clientX - midX) <= this.windowSize.width * 0.2
       ) {
         // 点击中部区域显示菜单
         this.showToolBar = !this.showToolBar;
@@ -1145,6 +1151,7 @@ export default {
         line-height: 45px;
         z-index: 10;
         padding: 0;
+        cursor: pointer;
         pointer-events: all;
       }
     }

@@ -12,10 +12,13 @@ export default {
     // console.log(this);
     var config = JSON.parse(localStorage.getItem("config"));
     if (config != null) this.$store.commit("setConfig", config);
-    this.$store.commit("setMiniInterface", window.innerWidth < 750);
+    this.$store.commit("setMiniInterface", window.innerWidth <= 750);
     window.onresize = () => {
-      this.$store.commit("setMiniInterface", window.innerWidth < 750);
-      this.$store.commit("setWindowWidth", window.innerWidth);
+      this.$store.commit("setMiniInterface", window.innerWidth <= 750);
+      this.$store.commit("setWindowSize", {
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
       this.$store.commit("setTouchable", "ontouchstart" in document);
     };
   },
