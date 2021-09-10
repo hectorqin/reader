@@ -98,6 +98,9 @@ export default {
     local("MYing Hei T"), local("TBGothic"),
     /*Kindle Paperwihite*/ local("DK-HEITI");
 }
+*::-webkit-scrollbar {
+  width: 0 !important;
+}
 </style>
 <style lang="stylus">
 .popper-component {

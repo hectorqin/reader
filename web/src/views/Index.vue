@@ -7,136 +7,138 @@
     }"
   >
     <div class="navigation-wrapper" :class="navigationClass">
-      <div class="navigation-title">
-        阅读
-      </div>
-      <div class="navigation-sub-title">
-        清风不识字，何故乱翻书
-      </div>
-      <div class="search-wrapper">
-        <el-input
-          size="mini"
-          placeholder="搜索书籍"
-          v-model="search"
-          class="search-input"
-          @keyup.enter.native="searchBook(1)"
-        >
-          <i slot="prefix" class="el-input__icon el-icon-search"></i>
-        </el-input>
-      </div>
-      <div class="recent-wrapper">
-        <div class="recent-title">
-          最近阅读
+      <div class="navigation-inner-wrapper">
+        <div class="navigation-title">
+          阅读
         </div>
-        <div class="reading-recent">
-          <el-tag
-            type="warning"
-            :effect="isNight ? 'dark' : 'light'"
-            class="recent-book"
-            @click="
-              toDetail(
-                readingRecent.bookUrl,
-                readingRecent.bookName,
-                readingRecent.index
-              )
-            "
-            :class="{ 'no-point': readingRecent.bookUrl == '' }"
-          >
-            {{ readingRecent.bookName }}
-          </el-tag>
+        <div class="navigation-sub-title">
+          清风不识字，何故乱翻书
         </div>
-      </div>
-      <div class="setting-wrapper">
-        <div class="setting-title">
-          后端设定
-        </div>
-        <div class="setting-item">
-          <el-tag
-            :type="connectType"
-            :effect="isNight ? 'dark' : 'light'"
-            class="setting-connect"
-            :class="{ 'no-point': newConnect }"
-            @click="setIP"
-          >
-            {{ connectStatus }}
-          </el-tag>
-        </div>
-      </div>
-      <div class="setting-wrapper">
-        <div class="setting-title">
-          搜索书源
-        </div>
-        <div class="setting-item">
-          <el-select
+        <div class="search-wrapper">
+          <el-input
             size="mini"
-            v-model="bookSourceUrl"
-            class="setting-select"
-            filterable
-            placeholder="请选择搜索书源"
+            placeholder="搜索书籍"
+            v-model="search"
+            class="search-input"
+            @keyup.enter.native="searchBook(1)"
           >
-            <el-option
-              v-for="(item, index) in bookSourceList"
-              :key="'source-' + index"
-              :label="item.bookSourceName"
-              :value="item.bookSourceUrl"
-            >
-            </el-option>
-          </el-select>
+            <i slot="prefix" class="el-input__icon el-icon-search"></i>
+          </el-input>
         </div>
-        <div class="setting-item">
-          <el-tag
-            type="info"
-            :effect="isNight ? 'dark' : 'light'"
-            slot="reference"
-            class="setting-btn"
-            @click="showManageDialog = true"
-          >
-            书源管理
-          </el-tag>
-          <el-popover
-            placement="right"
-            :width="popupWidth"
-            trigger="click"
-            :visible-arrow="false"
-            v-model="popExploreVisible"
-            popper-class="popper-component"
-          >
-            <Explore
-              ref="popExplore"
-              class="popup"
-              :popExploreVisible="popExploreVisible"
-              :bookSourceUrl="bookSourceUrl"
-              :bookSourceList="bookSourceList"
-              @showSearchList="showSearchList"
-              @close="popExploreVisible = false"
-              @hideExplorePop="popExploreVisible = false"
-            />
+        <div class="recent-wrapper">
+          <div class="recent-title">
+            最近阅读
+          </div>
+          <div class="reading-recent">
+            <el-tag
+              type="warning"
+              :effect="isNight ? 'dark' : 'light'"
+              class="recent-book"
+              @click="
+                toDetail(
+                  readingRecent.bookUrl,
+                  readingRecent.bookName,
+                  readingRecent.index
+                )
+              "
+              :class="{ 'no-point': readingRecent.bookUrl == '' }"
+            >
+              {{ readingRecent.bookName }}
+            </el-tag>
+          </div>
+        </div>
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            后端设定
+          </div>
+          <div class="setting-item">
+            <el-tag
+              :type="connectType"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-connect"
+              :class="{ 'no-point': newConnect }"
+              @click="setIP"
+            >
+              {{ connectStatus }}
+            </el-tag>
+          </div>
+        </div>
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            搜索书源
+          </div>
+          <div class="setting-item">
+            <el-select
+              size="mini"
+              v-model="bookSourceUrl"
+              class="setting-select"
+              filterable
+              placeholder="请选择搜索书源"
+            >
+              <el-option
+                v-for="(item, index) in bookSourceList"
+                :key="'source-' + index"
+                :label="item.bookSourceName"
+                :value="item.bookSourceUrl"
+              >
+              </el-option>
+            </el-select>
+          </div>
+          <div class="setting-item">
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
               slot="reference"
-              ref="exploreBtn"
               class="setting-btn"
-              @click="showNavigation = false"
+              @click="showManageDialog = true"
             >
-              探索书源
+              书源管理
             </el-tag>
-          </el-popover>
-          <el-tag
-            type="info"
-            :effect="isNight ? 'dark' : 'light'"
-            slot="reference"
-            class="setting-btn"
-            @click="uploadBookSource"
-          >
-            导入书源
-          </el-tag>
-          <input
-            ref="fileRef"
-            type="file"
-            @change="onBookSourceFileChange"
-            style="display:none"
-          />
+            <el-popover
+              placement="right"
+              :width="popupWidth"
+              trigger="click"
+              :visible-arrow="false"
+              v-model="popExploreVisible"
+              popper-class="popper-component"
+            >
+              <Explore
+                ref="popExplore"
+                class="popup"
+                :popExploreVisible="popExploreVisible"
+                :bookSourceUrl="bookSourceUrl"
+                :bookSourceList="bookSourceList"
+                @showSearchList="showSearchList"
+                @close="popExploreVisible = false"
+                @hideExplorePop="popExploreVisible = false"
+              />
+              <el-tag
+                type="info"
+                :effect="isNight ? 'dark' : 'light'"
+                slot="reference"
+                ref="exploreBtn"
+                class="setting-btn"
+                @click="showNavigation = false"
+              >
+                探索书源
+              </el-tag>
+            </el-popover>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="uploadBookSource"
+            >
+              导入书源
+            </el-tag>
+            <input
+              ref="fileRef"
+              type="file"
+              @change="onBookSourceFileChange"
+              style="display:none"
+            />
+          </div>
         </div>
       </div>
       <div class="bottom-icons">
@@ -161,9 +163,13 @@
         </span>
       </div>
     </div>
-    <div class="shelf-wrapper" ref="shelfWrapper">
+    <div
+      class="shelf-wrapper"
+      ref="shelfWrapper"
+      @click="showNavigation = false"
+    >
       <div class="shelf-title">
-        <i class="el-icon-menu" v-if="showMenu" @click="toggleMenu"></i>
+        <i class="el-icon-menu" v-if="showMenu" @click.stop="toggleMenu"></i>
         {{
           isSearchResult ? (isExploreResult ? "探索结果" : "搜索结果") : "书架"
         }}
@@ -1025,10 +1031,18 @@ export default {
   .navigation-wrapper {
     width: 260px;
     min-width: 260px;
-    padding: 48px 36px;
     height: 100vh;
     box-sizing: border-box;
     background-color: #F7F7F7;
+    position: relative;
+
+    .navigation-inner-wrapper {
+      padding: 48px 36px 66px 36px;
+      height: 100vh;
+      max-height: 100vh;
+      overflow-y: auto;
+      box-sizing: border-box;
+    }
 
     .navigation-title {
       font-size: 24px;
@@ -1118,13 +1132,16 @@ export default {
       position: absolute;
       bottom: 30px;
       width: 188px;
+      left: 36px;
       align-items: center;
       display: flex;
       flex-direction: row;
       justify-content: space-between;
+      pointer-events: none;
 
       .bottom-icon {
         height: 36px;
+        pointer-events: all;
         img {
           width: 36px;
           height: 36px;
@@ -1140,6 +1157,7 @@ export default {
         cursor: pointer;
         text-align: center;
         vertical-align: middle;
+        pointer-events: all;
 
         .el-icon-moon {
           color: #f7f7f7;
@@ -1165,6 +1183,10 @@ export default {
       font-weight: 600;
       font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
       margin-bottom: 15px;
+
+      .el-icon-menu {
+        cursor: pointer;
+      }
 
       .title-btn {
         font-size: 14px;
@@ -1236,7 +1258,7 @@ export default {
               right: 5px;
               top: 5px;
               font-size: 24px;
-              color: #33373D;
+              color: #969ba3;
             }
 
             .name {
@@ -1251,7 +1273,7 @@ export default {
               flex-direction: row;
               font-size: 12px;
               font-weight: 600;
-              color: #6b6b6b;
+              color: #969ba3;
 
               .dot {
                 margin: 0 7px;
@@ -1259,7 +1281,7 @@ export default {
             }
 
             .intro, .dur-chapter, .last-chapter {
-              color: #969ba3;
+              color: #6b6b6b;
               font-size: 13px;
               margin-top: 3px;
               font-weight: 500;
@@ -1314,7 +1336,13 @@ export default {
     color: #bbb !important;
   }
   .book .info .delete-book-icon {
-    color: #bbb !important;
+    color: #6b6b6b !important;
+  }
+  .book .info .sub {
+    color: #6b6b6b !important;
+  }
+  .book .info .intro, .book .info .dur-chapter, .book .info .last-chapter {
+    color: #969ba3 !important;
   }
   >>>.el-dialog {
     background-color: #222;
@@ -1395,6 +1423,9 @@ export default {
 .source-container::-webkit-scrollbar {
   width: 0 !important;
 }
+.navigation-inner-wrapper::-webkit-scrollbar {
+  width: 0 !important;
+}
 >>> .el-table__body-wrapper::-webkit-scrollbar {
   width: 0 !important;
 }
@@ -1406,8 +1437,9 @@ export default {
     overflow-x: hidden;
 
     >>>.navigation-wrapper {
-      padding: 20px 36px;
-      box-sizing: border-box;
+      .navigation-inner-wrapper {
+        padding: 20px 36px 66px 36px;
+      }
     }
     >>>.shelf-wrapper {
       padding: 0;

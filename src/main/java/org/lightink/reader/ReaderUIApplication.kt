@@ -15,13 +15,18 @@ import io.vertx.kotlin.sqlclient.PoolOptions
 import io.vertx.kotlin.sqlclient.poolOptionsOf
 import io.vertx.mysqlclient.MySQLConnectOptions
 import io.vertx.mysqlclient.MySQLPool
+import io.vertx.core.json.JsonObject
 import mu.KotlinLogging
 import org.lightink.reader.api.YueduApi
-import org.lightink.reader.config.MysqlConfig
+import org.lightink.reader.entity.Size
 
 import org.lightink.reader.verticle.RestVerticle
 import org.lightink.reader.utils.SpringContextUtils
 import org.lightink.reader.SpringEvent
+
+import org.lightink.reader.utils.getStorage
+import org.lightink.reader.utils.saveStorage
+import org.lightink.reader.utils.asJsonObject
 
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringApplication
@@ -74,6 +79,7 @@ class ReaderUIApplication: Application() {
 
     lateinit var webUrl: String
     lateinit var env: ConfigurableEnvironment
+    var windowConfigMap = mutableMapOf<String, Any>()
 
     var isSpringBootLaunched = false
     var springBootError = ""
@@ -217,11 +223,15 @@ class ReaderUIApplication: Application() {
         splashStage.show()
     }
 
-    fun showAlert(message: String) {
+    fun showAlert(message: String, wait: Boolean = true) {
         var alert = Dialog<Any>();
         alert.getDialogPane().setContentText(message);
         alert.getDialogPane().getButtonTypes().add(ButtonType.OK);
-        alert.showAndWait();
+        if (wait) {
+            alert.showAndWait();
+        } else {
+            alert.show();
+        }
     }
 
     fun showConfirm(message: String): Boolean {
@@ -233,7 +243,54 @@ class ReaderUIApplication: Application() {
         return result
     }
 
+    fun applyWindowConfig(stage: Stage): Size {
+        var width = 1280.0;
+        var height = 800.0;
+        try {
+            val windowConfigObject = asJsonObject(getStorage("windowConfig"))
+            if (windowConfigObject != null) {
+                windowConfigMap = windowConfigObject.map
+            }
+            val setWindowPosition = windowConfigMap.getOrDefault("setWindowPosition", false) as Boolean? ?: false
+            if (setWindowPosition) {
+                var positionX = windowConfigMap.getOrDefault("positionX", 0.0) as Double? ?: 0.0
+                var positionY = windowConfigMap.getOrDefault("positionY", 0.0) as Double? ?: 0.0
+                stage.setX(positionX)
+                stage.setY(positionY)
+            }
+            val rememberSize = windowConfigMap.getOrDefault("rememberSize", true) as Boolean? ?: true
+            val rememberPosition = windowConfigMap.getOrDefault("rememberPosition", false) as Boolean? ?: false
+            if (rememberSize) {
+                stage.widthProperty().addListener{_, _, w ->
+                    windowConfigMap.put("width", w)
+                }
+                stage.heightProperty().addListener{_, _, h ->
+                    windowConfigMap.put("height", h)
+                }
+            }
+            if (rememberPosition) {
+                stage.xProperty().addListener{_, _, x ->
+                    windowConfigMap.put("positionX", x)
+                }
+                stage.yProperty().addListener{_, _, y ->
+                    windowConfigMap.put("positionY", y)
+                }
+            }
+            val setWindowSize = windowConfigMap.getOrDefault("setWindowSize", true) as Boolean? ?: true
+            if (setWindowSize) {
+                width = windowConfigMap.getOrDefault("width", width) as Double? ?: width
+                height = windowConfigMap.getOrDefault("height", height) as Double? ?: height
+            }
+        } catch(e: Exception) {
+            showAlert("窗口配置加载失败，请检查窗口配置文件(windowConfig.json)", false)
+            e.printStackTrace()
+        }
+        return Size(width, height)
+    }
+
     fun showWebScreen(stage: Stage, url: String) {
+        // 配置主窗口
+        var windowSize = applyWindowConfig(stage);
         System.setProperty("sun.net.http.allowRestrictedHeaders", "true")
         // logger.info("Font.getFontNames: {}", Font.getFontNames())
         // logger.info("showWebScreen: {}", url)
@@ -256,7 +313,7 @@ class ReaderUIApplication: Application() {
             }
         }
         webEngine.load(url);
-        val scene = Scene(webView, 1280.0, 800.0)
+        val scene = Scene(webView, windowSize.width, windowSize.height)
         stage.setScene(scene)
         stage.setTitle("Reader")
         stage.getIcons().addAll(defaultIcons);
@@ -265,6 +322,7 @@ class ReaderUIApplication: Application() {
     }
 
     override fun stop() {
+        saveStorage("windowConfig", windowConfigMap)
         super.stop()
         var context = SpringContextUtils.getApplicationContext()
         logger.info("application stop: {}", context)

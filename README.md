@@ -27,6 +27,47 @@
 ![](imgs/9.jpg)
 ![](imgs/10.jpg)
 
+## 数据存储
+
+接口服务使用文件存储书源及目录等信息，存储位置为 storage 目录(可通过运行时添加 `-Dreader.app.storagePath=/path/to/storage` 修改)。
+
+> MacOS客户端的存储目录是 `~/.reader/storage`，Window和Linux客户端为 `运行目录/storage`
+
+数据存储目录结构如下：
+
+```bash
+storage
+├── bookInfoCache.json   # 搜索缓存Map
+├── bookSource.json      # 书源列表
+├── bookshelf.json       # 书架书籍列表
+├── windowConfig.json    # 窗口配置文件
+└── 斗罗大陆              # 书籍缓存目录
+    ├── 04abb3842aabc03d08a14186be005e89.json # A书源目录列表
+    ├── bookSource.json                       # 书籍书源列表
+    └── dd82fe35c050e73427a710e9dd6feaf8.json # B书源目录列表
+```
+
+### 窗口配置文件
+
+`storage/windowConfig.json`
+
+该文件是图形界面的相关配置，JSON格式，修改后，程序重启才会生效
+
+> 请仔细检查配置内容，不支持注释，此处注释只是为了方便理解
+
+```json
+{
+    "positionX": 0.0,              // 窗口位置 横坐标
+    "positionY": 0.0,              // 窗口位置 纵坐标
+    "width": 1280.0,               // 窗口大小 宽度
+    "height": 800.0,               // 窗口大小 高度
+    "rememberSize": true,          // 改变窗口大小时，是否记住窗口大小，默认记住
+    "rememberPosition": false,     // 移动窗口时，是否记住窗口位置，默认不记住
+    "setWindowPosition": false,    // 启动时是否设置窗口位置，默认不设置，窗口默认居中
+    "setWindowSize": true,         // 启动时是否设置窗口大小，默认按照配置文件进行设置
+}
+```
+
 ## 开发编译
 
 ### 编译脚本
@@ -85,21 +126,6 @@ docker run -d --restart=always --name=reader -v $(PWD)/log:/log -v $(PWD)/storag
 
 # web端 http://localhost:8080/web/
 # 接口地址 http://localhost:8080/reader3/
-```
-
-## 数据存储
-
-接口服务使用文件存储书源及目录等信息，存储位置为 storage 目录(可通过运行时添加 `-Dreader.app.storagePath=/path/to/storage` 修改)，目录结构如下：
-
-```bash
-storage
-├── bookInfoCache.json   # 搜索缓存Map
-├── bookSource.json      # 书源列表
-├── bookshelf.json       # 书架书籍列表
-└── 斗罗大陆              # 书籍缓存目录
-    ├── 04abb3842aabc03d08a14186be005e89.json # A书源目录列表
-    ├── bookSource.json                       # 书籍书源列表
-    └── dd82fe35c050e73427a710e9dd6feaf8.json # B书源目录列表
 ```
 
 ## 接口文档
