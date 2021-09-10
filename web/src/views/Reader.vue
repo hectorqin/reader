@@ -138,6 +138,16 @@
       </div>
     </div>
     <div class="read-bar" :style="rightBarTheme">
+      <div class="progress" v-if="$store.state.miniInterface">
+        <el-slider
+          v-model="currentPage"
+          :min="1"
+          :max="totalPages"
+          :show-tooltip="$store.state.miniInterface && showToolBar"
+          :format-tooltip="formatProgressTip"
+          @change="showPage"
+        ></el-slider>
+      </div>
       <div class="tools">
         <div class="tool-icon progress-text">
           <span v-if="$store.state.miniInterface">阅读进度: </span>
@@ -1002,6 +1012,9 @@ export default {
           this.nextPage();
           break;
       }
+    },
+    formatProgressTip(value) {
+      return `第 ${value}/${this.totalPages} 页`;
     }
   }
 };
@@ -1206,6 +1219,10 @@ export default {
   .bottom-bar, .top-bar {
     color: rgba(0, 0, 0, 0.4);
   }
+
+  >>>.el-slider__runway {
+    background-color: #fff;
+  }
 }
 
 .night {
@@ -1235,6 +1252,17 @@ export default {
   .bottom-bar, .top-bar {
     color: #666;
   }
+
+  >>>.el-slider__runway {
+    background-color: #282828;
+  }
+  >>>.el-slider__bar {
+    background-color: #185798;
+  }
+  >>>.el-slider__button {
+    border: 2px solid #185798;
+    background-color: #282828;
+  }
 }
 @media screen and (max-width: 750px) {
   .chapter-wrapper {
@@ -1258,12 +1286,16 @@ export default {
       right: 0;
       width: 100vw;
       margin-right: 0 !important;
-      height: 45px;
+
+      .progress {
+        padding: 10px 36px;
+      }
 
       .tools {
         flex-direction: row;
         justify-content: space-around;
         padding: 0 15px;
+        height: 45px;
         .tool-icon {
           border: none;
           width: auto;

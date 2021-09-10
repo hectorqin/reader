@@ -15,7 +15,7 @@ import content_5 from "../assets/imgs/themes/content_5.png";
 import popup_5 from "../assets/imgs/themes/popup_5.png";
 import body_6 from "../assets/imgs/themes/body_6.png";
 import content_6 from "../assets/imgs/themes/content_6.png";
-import popup_6 from "../assets/imgs/themes/popup_6.png";
+// import popup_6 from "../assets/imgs/themes/popup_6.png";
 
 var settings = {
   themes: [
@@ -52,7 +52,7 @@ var settings = {
     {
       body: "#ede7da url(" + body_6 + ") repeat",
       content: "#ede7da url(" + content_6 + ") repeat",
-      popup: "#ede7da url(" + popup_6 + ") repeat"
+      popup: "rgba(0,0,0,.9)"
     }
   ],
   fonts: [

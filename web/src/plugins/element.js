@@ -19,7 +19,8 @@ import {
   Dialog,
   Checkbox,
   CheckboxGroup,
-  ColorPicker
+  ColorPicker,
+  Slider
 } from "element-ui";
 
 Vue.use(Button);
@@ -40,6 +41,7 @@ Vue.use(Dialog);
 Vue.use(Checkbox);
 Vue.use(CheckboxGroup);
 Vue.use(ColorPicker);
+Vue.use(Slider);
 
 Vue.prototype.$msgbox = MessageBox;
 Vue.prototype.$message = Message;
