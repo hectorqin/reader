@@ -296,6 +296,9 @@ export default {
     },
     content() {
       this.$store.commit("setContentLoading", false);
+      this.contentStyle = {};
+      this.transformX = 0;
+      this.currentPage = 1;
       this.$nextTick(() => {
         this.computePages();
       });
@@ -695,7 +698,8 @@ export default {
     computePages() {
       if (this.isSlideRead) {
         this.totalPages = Math.ceil(
-          this.$refs.bookContentRef.$el.scrollWidth / this.windowSize.width
+          this.$refs.bookContentRef.$el.scrollWidth /
+            (this.windowSize.width - 16)
         );
       } else {
         this.totalPages = Math.ceil(
@@ -729,9 +733,6 @@ export default {
             300
           );
         } else {
-          this.contentStyle = {};
-          this.transformX = 0;
-          this.currentPage = 1;
           this.toNextChapter();
         }
       } else {
@@ -740,6 +741,7 @@ export default {
             this.windowSize.height <
           document.documentElement.scrollHeight
         ) {
+          this.currentPage += 1;
           const moveY = this.windowSize.height - 10;
           this.transforming = true;
           this.scrollContent(moveY, 300);
@@ -770,15 +772,13 @@ export default {
           );
         } else {
           this.showLastPage = true;
-          this.contentStyle = {};
-          this.transformX = 0;
-          this.currentPage = 1;
           this.toLastChapter();
         }
       } else {
         if (
           (document.documentElement.scrollTop || document.body.scrollTop) > 0
         ) {
+          this.currentPage -= 1;
           const moveY = -this.windowSize.height + 10;
           this.transforming = true;
           this.scrollContent(moveY, 300);
