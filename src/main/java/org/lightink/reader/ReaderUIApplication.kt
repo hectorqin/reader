@@ -66,6 +66,7 @@ import javafx.concurrent.Worker
 
 import org.springframework.core.env.Environment
 import org.springframework.core.env.ConfigurableEnvironment
+import org.springframework.core.env.MapPropertySource
 
 import java.util.concurrent.CompletableFuture
 
@@ -97,6 +98,10 @@ class ReaderUIApplication: Application() {
             var envListener = object: ApplicationListener<ApplicationEnvironmentPreparedEvent> {
                 override fun onApplicationEvent(event: ApplicationEnvironmentPreparedEvent) {
                     env = event.getEnvironment()
+                    // 加载 windowConfig
+                    var windowConfigSource = loadPropertySourceFromWindowConfig()
+                    env.getPropertySources().addFirst(windowConfigSource)
+                    // 获取应用相关配置
                     showUI = env.getProperty("reader.app.showUI", Boolean::class.java) ?: false
                     logger.info("showUI: {}", showUI)
                     var debug = env.getProperty("reader.app.debug", Boolean::class.java)
@@ -119,7 +124,7 @@ class ReaderUIApplication: Application() {
                         webUrl = webUrl + sep + "nopwa=1"
                     }
                     logger.info("webUrl: {}", webUrl)
-                    System.setProperty("reader.system.fonts", Font.getFontNames().joinToString(separator = ","))
+                    // System.setProperty("reader.system.fonts", Font.getFontNames().joinToString(separator = ","))
                     if (showUI && ::primaryStage.isInitialized){
                         Platform.runLater(object : Runnable {
                             override fun run() {
@@ -243,14 +248,44 @@ class ReaderUIApplication: Application() {
         return result
     }
 
+    fun loadPropertySourceFromWindowConfig(): MapPropertySource {
+        loadWindowConfig()
+        var windowConfigPort = 0
+        var windowConfigSource = mutableMapOf<String, Any>()
+        try {
+            val serverPort = windowConfigMap.getOrDefault("serverPort", null)
+            if (serverPort != null) {
+                windowConfigPort = serverPort as Int
+                if (windowConfigPort > 0) {
+                    windowConfigSource.put("reader.server.port", windowConfigPort)
+                }
+            }
+            val showUI = windowConfigMap.getOrDefault("showUI", true) as Boolean? ?: true
+            windowConfigSource.put("reader.app.showUI", showUI)
+            val debug = windowConfigMap.getOrDefault("debug", null)
+            if (debug != null) {
+                windowConfigSource.put("reader.app.debug", debug as Boolean)
+            }
+        } catch(e: Exception) {
+            e.printStackTrace()
+        }
+
+        return MapPropertySource("windowConfig", windowConfigSource)
+    }
+
+    fun loadWindowConfig() {
+        val windowConfigObject = asJsonObject(getStorage("windowConfig"))
+        if (windowConfigObject != null) {
+            windowConfigMap = windowConfigObject.map
+        }
+        logger.info("windowConfigMap: {}", windowConfigMap)
+    }
+
     fun applyWindowConfig(stage: Stage): Size {
         var width = 1280.0;
         var height = 800.0;
         try {
-            val windowConfigObject = asJsonObject(getStorage("windowConfig"))
-            if (windowConfigObject != null) {
-                windowConfigMap = windowConfigObject.map
-            }
+            loadWindowConfig()
             val setWindowPosition = windowConfigMap.getOrDefault("setWindowPosition", false) as Boolean? ?: false
             if (setWindowPosition) {
                 var positionX = windowConfigMap.getOrDefault("positionX", 0.0) as Double? ?: 0.0
@@ -305,15 +340,19 @@ class ReaderUIApplication: Application() {
         webEngine.setConfirmHandler{ message ->
             showConfirm(message)
         };
+        var reloadCount = 0;
         webEngine.getLoadWorker().stateProperty().addListener{_, oldState, newState ->
             logger.info("State from {} to {} , exception: {}", oldState, newState, webEngine.getLoadWorker().getException());
             if (newState == Worker.State.FAILED) {
-                logger.info("reload {}", url)
-                webEngine.load(url);
+                if (reloadCount < 5) {
+                    reloadCount += 1
+                    logger.info("reload {}", url)
+                    webEngine.load(url);
+                }
             }
         }
         webEngine.titleProperty().addListener{_, _, t ->
-            if (t.isNotEmpty()) {
+            if (t != null && t.isNotEmpty()) {
                 stage.setTitle(t)
             }
         }

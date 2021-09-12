@@ -620,8 +620,8 @@ export default {
             }
       )
         .then(response => {
+          this.loading.close();
           if (response.data.isSuccess) {
-            this.loading.close();
             this.$store.commit("setConnectType", "success");
             // this.$store.commit("increaseBookNum", response.data.data.length);
             this.popIntroVisible = response.data.data.reduce((c, v) => {

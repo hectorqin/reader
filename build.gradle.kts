@@ -136,7 +136,7 @@ tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("packageReaderMa
     setBundleJre(false)
 	// bundleJre = false
     setCreateZipball(true)
-    vmArgs = arrayListOf<String>("-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.packaged=true", "-Dreader.app.debug=false")
+    vmArgs = arrayListOf<String>("-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.packaged=true", "-Dreader.app.debug=false", "-Dlogging.path=\$HOME/.reader/logs")
 }
 
 tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("packageReaderWin") {

@@ -43,7 +43,7 @@ fun RoutingContext.success(any: Any?) {
         gson.toJson(any)
     }
     this.response()
-            .putHeader("content-type", "application/json")
+            .putHeader("content-type", "application/json; charset=utf-8")
             .end(toJson)
 }
 
@@ -63,15 +63,18 @@ fun RoutingContext.error(throwable: Throwable) {
     logger.error { errorJson }
 
     this.response()
-            .putHeader("content-type", "application/json")
+            .putHeader("content-type", "application/json; charset=utf-8")
             .setStatusCode(500)
             .end(errorJson)
 }
 
 fun getWorkDir(subPath: String): String {
     if (workDirPath.isEmpty()) {
-        var appConfig: AppConfig = SpringContextUtils.getBean("appConfig", AppConfig::class.java)
-        if (appConfig.packaged) {
+        var osName = System.getProperty("os.name")
+        var currentDir = System.getProperty("user.dir")
+        logger.info("osName: {} currentDir: {}", osName, currentDir)
+        // MacOS 存放目录为用户目录
+        if (osName.startsWith("Mac OS") && !currentDir.startsWith("/Users/")) {
             workDirPath = Paths.get(System.getProperty("user.home"), ".reader").toString()
         }
     }
@@ -84,22 +87,20 @@ fun getStoragePath(): String {
     if (storageFinalPath.isNotEmpty()) {
         return storageFinalPath;
     }
-    var appConfig: AppConfig = SpringContextUtils.getBean("appConfig", AppConfig::class.java)
-    // logger.info("storagePath from appConfig: {}", appConfig.storagePath)
-    var storageDir = File(appConfig.storagePath)
-    if (storageDir.isAbsolute() || !appConfig.packaged) {
-        return appConfig.storagePath;
+    var appConfig = SpringContextUtils.getBean("appConfig", AppConfig::class.java)
+    var storageDir = File("storage")
+    if (appConfig != null) {
+        // logger.info("storagePath from appConfig: {}", appConfig.storagePath)
+        storageDir = File(appConfig.storagePath)
     }
-    // 打包为 app，需要使用用户目录存储
-    var userHome = System.getProperty("user.home");
-
-    if (userHome == null) {
-        return appConfig.storagePath;
+    if (storageDir.isAbsolute()) {
+        return storageDir.toString();
     }
-
-    var path = Paths.get(userHome, ".reader", appConfig.storagePath);
-    storageFinalPath = path.toString();
-    return storageFinalPath;
+    var storagePath = getWorkDir(storageDir.toString())
+    if (appConfig != null) {
+        storageFinalPath = storagePath
+    }
+    return storagePath;
 }
 
 fun saveStorage(name: String, value: Any) {

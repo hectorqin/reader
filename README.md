@@ -61,6 +61,9 @@ storage
 
 ```json
 {
+    "serverPort": 8080,            // web服务端口，默认为 8080
+    "showUI": true,                // 是否显示UI界面，默认为显示
+    "debug": false,                // 是否调试模式，默认为否
     "positionX": 0.0,              // 窗口位置 横坐标
     "positionY": 0.0,              // 窗口位置 纵坐标
     "width": 1280.0,               // 窗口大小 宽度

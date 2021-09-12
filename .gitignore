@@ -40,7 +40,7 @@ out
 
 /src/main/resources/web
 /storage*
-/log
+/logs
 /bin
 /file-uploads
 /reader-assets

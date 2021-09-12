@@ -54,12 +54,7 @@ class YueduApi : RestVerticle() {
     private lateinit var env: Environment
 
     override suspend fun initRouter(router: Router) {
-        logger.info("port: {}", port)
-        var serverPort = env.getProperty("reader.server.port", Int::class.java)
-        logger.info("serverPort: {}", serverPort)
-        if (serverPort != null && serverPort > 0) {
-            port = serverPort;
-        }
+        setupPort()
 
         // 兼容阅读3 webapi
         router.post("/reader3/saveSource").coroutineHandler { saveSource(it) }
@@ -107,7 +102,7 @@ class YueduApi : RestVerticle() {
         router.get("/reader3/saveBookSource").coroutineHandler { saveBookSource(it) }
 
         // web界面
-        router.route("/web/*").handler(StaticHandler.create("web"));
+        router.route("/web/*").handler(StaticHandler.create("web").setDefaultContentEncoding("UTF-8"));
 
         // assets
         var assetsDir = getWorkDir("reader-assets");
@@ -120,7 +115,7 @@ class YueduApi : RestVerticle() {
         if (!assetsCssFile.exists()) {
             assetsCssFile.writeText("/* 在此处可以编写CSS样式来自定义页面 */");
         }
-        router.route("/assets/*").handler(StaticHandler.create().setAllowRootFileSystemAccess(true).setWebRoot(assetsDir));
+        router.route("/assets/*").handler(StaticHandler.create().setAllowRootFileSystemAccess(true).setWebRoot(assetsDir).setDefaultContentEncoding("UTF-8"));
 
         // 上传书源文件
         router.post("/reader3/readSourceFile").coroutineHandler { readSourceFile(it) }
@@ -139,6 +134,15 @@ class YueduApi : RestVerticle() {
 
         // 加载书籍详情缓存
         loadBookCacheInfo();
+    }
+
+    suspend fun setupPort() {
+        logger.info("port: {}", port)
+        var serverPort = env.getProperty("reader.server.port", Int::class.java)
+        logger.info("serverPort: {}", serverPort)
+        if (serverPort != null && serverPort > 0) {
+            port = serverPort;
+        }
     }
 
     override fun started() {
