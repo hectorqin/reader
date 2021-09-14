@@ -116,6 +116,25 @@ storage
 
 > 自定义样式可能需要配合 `!important` 来设定属性
 
+## 接口服务配置
+
+```yml
+reader:
+  app:
+    storagePath: storage   # 数据存储目录
+    showUI: false          # 是否显示UI
+    debug: false           # 是否调试模式
+    packaged: false        # 是否打包为客户端
+    secure: false          # 是否需要登录鉴权
+    inviteCode: ""         # 注册邀请码，为空时则开放注册，否则注册时需要输入邀请码
+    secureKey: ""          # 管理密码，开启鉴权时，添加、删除源时需要输入管理密码
+
+  server:
+    port: 8080             # 监听端口
+    webUrl: http://localhost:${reader.server.port}/web/    # web链接
+
+```
+
 ## 开发编译
 
 ### 编译脚本

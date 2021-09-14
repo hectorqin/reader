@@ -32,32 +32,30 @@ abstract class RestVerticle : CoroutineVerticle() {
         super.start()
         router = Router.router(vertx)
         router.route().handler(CookieHandler.create());
-	    router.route().handler(SessionHandler.create(LocalSessionStore.create(vertx)));
+	    router.route().handler(
+            SessionHandler.create(LocalSessionStore.create(vertx))
+                            .setSessionCookieName("reader.session")
+        );
 
         // CORS support
-        val allowedHeaders = HashSet<String>()
-        allowedHeaders.add("x-requested-with")
-        //        allowedHeaders.add("Access-Control-Allow-Origin");
-        allowedHeaders.add("Access-Control-Allow-Headers")
-        allowedHeaders.add("origin")
-        allowedHeaders.add("Content-Type")
-        allowedHeaders.add("accept")
-        allowedHeaders.add("authorization")
-        allowedHeaders.add("X-PINGARUNER")
+        router.route().handler {
+            it.addHeadersEndHandler { _ ->
+                val origin = it.request().getHeader("Origin")
+                if (origin != null && origin.isNotEmpty()) {
+                    var res = it.response()
+                    res.putHeader("Access-Control-Allow-Origin", origin)
+                    res.putHeader("Access-Control-Allow-Credentials", "true")
+                    res.putHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE")
+                    res.putHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, X-Requested-With")
+                }
+            }
+            if (it.request().method() == HttpMethod.OPTIONS) {
+                it.success("")
+            } else {
+                it.next()
+            }
+        }
 
-        val allowedMethods = HashSet<HttpMethod>()
-        allowedMethods.add(HttpMethod.GET)
-        allowedMethods.add(HttpMethod.POST)
-        allowedMethods.add(HttpMethod.OPTIONS)
-        /*
-         * these methods aren't necessary for this sample,
-         * but you may need them for your projects
-         */
-        allowedMethods.add(HttpMethod.DELETE)
-        allowedMethods.add(HttpMethod.PATCH)
-        allowedMethods.add(HttpMethod.PUT)
-
-        router.route().handler(CorsHandler.create("*").allowedHeaders(allowedHeaders).allowedMethods(allowedMethods))
         router.route().handler(BodyHandler.create())
 
         router.route().handler(LoggerHandler.create(LoggerFormat.DEFAULT));
@@ -107,6 +105,11 @@ abstract class RestVerticle : CoroutineVerticle() {
 
     }
 
+    open fun onHandlerError(ctx: RoutingContext, error: Exception) {
+        logger.error("Error: {}", error)
+        ctx.error(error)
+    }
+
     /**
      * An extension method for simplifying coroutines usage with Vert.x Web routers
      */
@@ -117,8 +120,7 @@ abstract class RestVerticle : CoroutineVerticle() {
                     ctx.success(fn(ctx))
 //                    fn(ctx)
                 } catch (e: Exception) {
-                    logger.error("Error: {}", e)
-                    ctx.error(e)
+                    onHandlerError(ctx, e)
                 }
             }
         }
@@ -130,8 +132,7 @@ abstract class RestVerticle : CoroutineVerticle() {
                 try {
                     fn(ctx)
                 } catch (e: Exception) {
-                    logger.error("Error: {}", e)
-                    ctx.error(e)
+                    onHandlerError(ctx, e)
                 }
             }
         }

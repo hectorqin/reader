@@ -178,7 +178,7 @@
 
 <script>
 import "../assets/fonts/iconfont.css";
-import Axios from "axios";
+import Axios from "../plugins/axios";
 export default {
   name: "ReadSettings",
   data() {

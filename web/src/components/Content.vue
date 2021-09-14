@@ -4,7 +4,7 @@ export default {
   data() {
     return {};
   },
-  props: ["carray", "title"],
+  props: ["carray", "title", "showContent"],
   render() {
     const { fontSize, fontWeight, fontColor } = this;
     let style = {
@@ -14,7 +14,7 @@ export default {
       ...this.$store.getters.currentFontFamily,
       ...(this.$store.state.config.contentCSS || {})
     };
-    if (this.show) {
+    if (this.showContent) {
       return (
         <div style={style}>
           <h3>{this.title}</h3>
@@ -43,13 +43,12 @@ export default {
     }
   },
   watch: {
-    fontSize() {
-      let that = this;
-      that.$store.commit("setShowContent", false);
-      this.$nextTick(() => {
-        that.$store.commit("setShowContent", true);
-      });
-    }
+    // fontSize() {
+    //   this.$store.commit("setShowContent", false);
+    //   this.$nextTick(() => {
+    //     this.$store.commit("setShowContent", true);
+    //   });
+    // }
   }
 };
 </script>
@@ -61,7 +60,7 @@ p {
   word-break: break-all;
 }
 h3 {
-    font-size: 1.5em;
+    font-size: 28px;
     line-height: 1.2;
     margin: 1em 0;
 }

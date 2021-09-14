@@ -19,7 +19,7 @@
             ref="popBookShelf"
             class="popup"
             :visible="popBookShelfVisible"
-            @loadCatalog="loadCatalog"
+            @loadCatalog="loadCatalog(true)"
             @toShelf="toShelf"
             @close="popBookShelfVisible = false"
           />
@@ -42,7 +42,7 @@
             ref="popBookSource"
             class="popup"
             :visible="popBookSourceVisible"
-            @loadCatalog="loadCatalog"
+            @loadCatalog="loadCatalog(true)"
             @close="popBookSourceVisible = false"
           />
 
@@ -211,6 +211,7 @@
             class="book-content"
             :title="title"
             :carray="content"
+            :showContent="show"
             :style="contentStyle"
             ref="bookContentRef"
           />
@@ -235,7 +236,7 @@ import ReadSettings from "../components/ReadSettings.vue";
 import BookSource from "../components/BookSource.vue";
 import BookShelf from "../components/BookShelf.vue";
 import Pcontent from "../components/Content.vue";
-import Axios from "axios";
+import Axios from "../plugins/axios";
 import jump from "../plugins/jump";
 import Animate from "../plugins/animate";
 
@@ -248,53 +249,7 @@ export default {
     ReadSettings
   },
   mounted() {
-    //获取书籍数据
-    let bookUrl = sessionStorage.getItem("bookUrl");
-    let readingBook = false;
-    if (bookUrl) {
-      let bookName = sessionStorage.getItem("bookName");
-      let chapterIndex = (sessionStorage.getItem("chapterIndex") || 0) | 0;
-      readingBook = JSON.parse(localStorage.getItem(bookUrl));
-      if (readingBook == null || chapterIndex > 0) {
-        readingBook = {
-          bookName: bookName,
-          bookUrl: bookUrl,
-          index: chapterIndex
-        };
-      }
-    } else {
-      try {
-        //获取最近阅读书籍
-        let readingRecentStr = localStorage.getItem("readingRecent");
-        if (readingRecentStr != null) {
-          const readingRecent = JSON.parse(readingRecentStr);
-          if (typeof readingRecent.index == "undefined") {
-            readingRecent.index = 0;
-          }
-          if (readingRecent.bookUrl && readingRecent.bookName) {
-            readingBook = readingRecent;
-          }
-        }
-      } catch (error) {
-        //
-      }
-    }
-
-    if (readingBook) {
-      this.loading = this.$loading({
-        target: this.$refs.content,
-        lock: true,
-        text: "正在获取内容",
-        spinner: "el-icon-loading",
-        background: "rgba(0,0,0,0)"
-      });
-      localStorage.setItem(bookUrl, JSON.stringify(readingBook));
-      this.$store.commit("setReadingBook", readingBook);
-      this.loadCatalog();
-    } else {
-      this.$message.error("请在书架选择书籍");
-    }
-
+    this.init();
     // window.addEventListener
     window.addEventListener("keydown", this.keydownHandler);
 
@@ -317,8 +272,7 @@ export default {
     },
     readSettingsVisible(visible) {
       if (!visible) {
-        let configText = JSON.stringify(this.$store.state.config);
-        localStorage.setItem("config", configText);
+        //
       }
     },
     title(title) {
@@ -343,6 +297,11 @@ export default {
         this.computePages();
         this.showPage(this.currentPage, 0);
       });
+    },
+    loginAuth(val) {
+      if (val) {
+        this.init();
+      }
     }
   },
   data() {
@@ -519,9 +478,26 @@ export default {
           background: "#6b1a7324"
         };
       }
+    },
+    loginAuth() {
+      return this.$store.state.loginAuth;
     }
   },
   methods: {
+    init() {
+      if (this.$store.state.readingBook) {
+        this.loading = this.$loading({
+          target: this.$refs.content,
+          lock: true,
+          text: "正在获取内容",
+          spinner: "el-icon-loading",
+          background: "rgba(0,0,0,0)"
+        });
+        this.loadCatalog();
+      } else {
+        this.$message.error("请在书架选择书籍");
+      }
+    },
     loadCatalog(refresh) {
       if (!this.api) {
         setTimeout(() => {
@@ -546,6 +522,7 @@ export default {
             var index = book.index || 0;
             this.getContent(index);
           } else {
+            this.loading.close();
             this.$message.error(res.data.errorMsg);
           }
         },
@@ -570,7 +547,7 @@ export default {
     },
     getContent(index) {
       //展示进度条
-      this.$store.commit("setShowContent", false);
+      this.show = false;
       if (!this.loading || !this.loading.visible) {
         this.loading = this.$loading({
           target: this.$refs.content,
@@ -581,29 +558,12 @@ export default {
         });
       }
       let bookUrl = this.$store.state.readingBook.bookUrl;
-      sessionStorage.setItem("bookUrl", bookUrl);
-      sessionStorage.setItem(
-        "bookName",
-        this.$store.state.readingBook.bookName
-      );
       try {
         // 保存阅读进度
-        let book = JSON.parse(localStorage.getItem(bookUrl));
+        let book = { ...this.$store.state.readingBook };
         book.index = index;
-        localStorage.setItem(bookUrl, JSON.stringify(book));
-        // this.$store.state.readingBook.index = index;
         book.catalog = this.$store.state.readingBook.catalog;
         this.$store.commit("setReadingBook", book);
-        sessionStorage.setItem("chapterIndex", index);
-        //
-        localStorage.setItem(
-          "readingRecent",
-          JSON.stringify({
-            bookName: book.bookName,
-            bookUrl: book.bookUrl,
-            index: index
-          })
-        );
       } catch (error) {
         //
       }
@@ -1157,7 +1117,7 @@ export default {
     .bottom-bar, .top-bar {
       height: 44px;
       box-sizing: border-box;
-      font-size: 0.8em;
+      font-size: 12px;
     }
     .top-bar {
       height: 44px;

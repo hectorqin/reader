@@ -352,7 +352,8 @@
 
 <script>
 import Explore from "../components/Explore.vue";
-import Axios from "axios";
+import Axios from "../plugins/axios";
+import noCover from "../assets/imgs/noCover.jpeg";
 
 export default {
   components: {
@@ -367,11 +368,6 @@ export default {
       isExploreResult: false,
       searchResult: [],
       searchPage: 1,
-      readingRecent: {
-        bookName: "尚无阅读记录",
-        bookUrl: "",
-        index: 0
-      },
       refreshLoading: false,
       popExploreVisible: false,
       LoadingMore: false,
@@ -396,7 +392,7 @@ export default {
   },
   watch: {
     bookSourceUrl(val) {
-      localStorage.setItem("bookSourceUrl", val);
+      window.localStorage && window.localStorage.setItem("bookSourceUrl", val);
       if (this.isSearchResult && val) {
         this.searchBook(1);
       }
@@ -424,41 +420,39 @@ export default {
       } else {
         this.navigationClass = "navigation-in";
       }
+    },
+    loginAuth(val) {
+      if (val) {
+        this.init();
+      }
     }
   },
   mounted() {
     document.title = "阅读";
-    try {
-      //获取最近阅读书籍
-      let readingRecentStr = localStorage.getItem("readingRecent");
-      if (readingRecentStr != null) {
-        this.readingRecent = JSON.parse(readingRecentStr);
-        if (typeof this.readingRecent.index == "undefined") {
-          this.readingRecent.index = 0;
-        }
-      }
-      this.bookSourceUrl = localStorage.getItem("bookSourceUrl") || "";
-    } catch (error) {
-      //
-    }
-    this.loadBookshelf()
-      .then(() => {
-        // 连接后端成功，加载自定义样式
-        window.customCSSLoad ||
-          window.loadLink(this.$store.getters.customCSSUrl, () => {
-            window.customCSSLoad = true;
-          });
-        if (!this.bookSourceList.length) {
-          // 加载书源列表
-          this.loadBookSource();
-        }
-      })
-      .catch(() => {});
+    this.bookSourceUrl =
+      (window.localStorage && window.localStorage.getItem("bookSourceUrl")) ||
+      "";
     this.navigationClass =
       this.showMenu && !this.showNavigation ? "navigation-hidden" : "";
     window.shelfPage = this;
+    this.init();
   },
   methods: {
+    init() {
+      this.loadBookshelf()
+        .then(() => {
+          // 连接后端成功，加载自定义样式
+          window.customCSSLoad ||
+            window.loadLink(this.$store.getters.customCSSUrl, () => {
+              window.customCSSLoad = true;
+            });
+          if (!this.bookSourceList.length) {
+            // 加载书源列表
+            this.loadBookSource();
+          }
+        })
+        .catch(() => {});
+    },
     setIP() {
       this.$prompt("请输入接口地址 ( 如：localhost:8080/reader3 )", "提示", {
         confirmButtonText: "确定",
@@ -476,7 +470,8 @@ export default {
                 this.connecting = false;
                 instance.confirmButtonLoading = false;
                 done();
-                localStorage.setItem("api_prefix", inputUrl);
+                window.localStorage &&
+                  window.localStorage.setItem("api_prefix", inputUrl);
                 this.$store.commit("setApi", inputUrl);
                 if (!this.bookSourceList.length) {
                   // 加载书源列表
@@ -500,32 +495,6 @@ export default {
         })
         .catch(() => {});
     },
-    getUserInfo() {
-      if (!this.api) {
-        this.$message.error("请先设置后端接口地址");
-        this.$store.commit("setConnected", false);
-        return;
-      }
-      Axios.get(this.api + "/getUserInfo", {
-        timeout: 3000
-      }).then(
-        res => {
-          this.loading.close();
-          if (res.data.isSuccess) {
-            if (res.data.secure) {
-              // 需要注册登录
-            }
-          } else {
-            this.$message.error(res.data.errorMsg);
-          }
-        },
-        () => {
-          //
-          this.loading.close();
-          this.$message.error("后端连接失败");
-        }
-      );
-    },
     loadBookSource() {
       if (!this.api) {
         this.$message.error("请先设置后端接口地址");
@@ -544,8 +513,6 @@ export default {
               this.bookSourceUrl =
                 this.bookSourceUrl || this.bookSourceList[0].bookSourceUrl;
             }
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
         () => {
@@ -610,10 +577,12 @@ export default {
             this.$message.error(res.data.errorMsg);
           }
         },
-        () => {
+        res => {
           //
           this.loading.close();
-          this.$message.error("后端连接失败");
+          this.$message.error(
+            ((res || {}).data || {}).errorMsg || "后端连接失败"
+          );
         }
       );
     },
@@ -666,14 +635,12 @@ export default {
                 return y - x;
               })
             );
-          } else {
-            this.$message.error(response.data.errorMsg);
           }
         })
         .catch(error => {
           this.loading.close();
           this.$store.commit("setConnected", false);
-          this.$message.error("后端连接失败");
+          this.$message.error("后端连接失败 " + (error && error.toString()));
           throw error;
         });
     },
@@ -681,20 +648,18 @@ export default {
       return this.loadBookshelf(null, true);
     },
     toDetail(bookUrl, bookName, chapterIndex) {
+      if (!bookUrl) {
+        return;
+      }
       if (this.isSearchResult) {
         // this.$message.error("请先加入书架");
         // return;
       }
-      chapterIndex = chapterIndex || 0;
-      sessionStorage.setItem("bookUrl", bookUrl);
-      sessionStorage.setItem("bookName", bookName);
-      sessionStorage.setItem("chapterIndex", chapterIndex);
-      this.readingRecent = {
+      this.$store.commit("setReadingBook", {
         bookName: bookName,
         bookUrl: bookUrl,
-        index: chapterIndex
-      };
-      localStorage.setItem("readingRecent", JSON.stringify(this.readingRecent));
+        index: chapterIndex || 0
+      });
       this.$router.push({
         path: "/reader"
       });
@@ -818,7 +783,7 @@ export default {
       if (coverUrl) {
         return this.api + "/cover?path=" + coverUrl;
       }
-      return null;
+      return noCover;
     },
     backToShelf() {
       this.isSearchResult = false;
@@ -833,7 +798,6 @@ export default {
         config.theme = 6;
       }
       this.$store.commit("setConfig", config);
-      localStorage.setItem("config", JSON.stringify(config));
     },
     showSearchList(data) {
       this.isSearchResult = true;
@@ -1076,6 +1040,19 @@ export default {
     },
     popupWidth() {
       return this.showMenu ? this.$store.state.windowSize.width : "600";
+    },
+    readingRecent() {
+      return this.$store.state.readingBook &&
+        this.$store.state.readingBook.bookName
+        ? this.$store.state.readingBook
+        : {
+            bookName: "尚无阅读记录",
+            bookUrl: "",
+            index: 0
+          };
+    },
+    loginAuth() {
+      return this.$store.state.loginAuth;
     }
   }
 };
@@ -1143,13 +1120,10 @@ export default {
         margin: 18px 0;
 
         .recent-book {
-          font-size: 10px;
-          // font-weight: 400;
-          // margin: 12px 0;
-          // font-weight: 500;
-          // color: #6B7C87;
           cursor: pointer;
-          // padding: 6px 18px;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
       }
     }
@@ -1168,9 +1142,10 @@ export default {
       }
 
       .setting-connect {
-        font-size: 8px;
-        // color: #6B7C87;
         cursor: pointer;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
 
       .setting-item {
@@ -1407,12 +1382,6 @@ export default {
   }
   .book .info .intro, .book .info .dur-chapter, .book .info .last-chapter {
     color: #969ba3 !important;
-  }
-  >>>.el-dialog {
-    background-color: #222;
-  }
-  >>>.el-dialog__title {
-    color: #bbb;
   }
   >>>.el-table {
     background-color: transparent;

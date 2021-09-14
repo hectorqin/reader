@@ -46,7 +46,7 @@
 
 <script>
 import jump from "../plugins/jump";
-import Axios from "axios";
+import Axios from "../plugins/axios";
 export default {
   name: "Explore",
   data() {

@@ -185,6 +185,12 @@ class YueduApi : RestVerticle() {
         SpringContextUtils.getApplicationContext().publishEvent(SpringEvent(this as java.lang.Object, "START_ERROR", "应用启动失败，请检查" + port + "端口是否被占用"));
     }
 
+    override fun onHandlerError(context: RoutingContext, error: Exception) {
+        val returnData = ReturnData()
+        logger.error("Error: {}", error)
+        context.success(returnData.setData(error).setErrorMsg(error.toString()))
+    }
+
     private suspend fun login(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         val username = context.bodyAsJson.getString("username") ?: ""
@@ -230,17 +236,8 @@ class YueduApi : RestVerticle() {
             var salt = getRandomString(8)
             var passwordEncrypted = genEncryptedPassword(password, salt)
             var newUser = User(username, passwordEncrypted, salt)
-            userMap.put(username, newUser.toMap())
-            saveStorage("data/users", userMap)
 
-            val loginData = mapOf(
-                "username" to newUser.username,
-                "last_login_at" to newUser.last_login_at,
-                "created_at" to newUser.created_at
-            )
-
-            context.session().put("userInfo", loginData)
-
+            val loginData = saveUserSession(context, userMap, newUser)
             return returnData.setData(loginData)
         } else {
             // 登录
@@ -252,20 +249,29 @@ class YueduApi : RestVerticle() {
             if (passwordEncrypted != userInfo.password) {
                 return returnData.setErrorMsg("密码错误")
             }
-            userInfo.last_login_at = System.currentTimeMillis()
-            userMap.put(username, userInfo.toMap())
-            saveStorage("data/users", userMap)
-
-            val loginData = mapOf(
-                "username" to userInfo.username,
-                "last_login_at" to userInfo.last_login_at,
-                "created_at" to userInfo.created_at
-            )
-
-            context.session().put("userInfo", loginData)
-
+            val loginData = saveUserSession(context, userMap, userInfo)
             return returnData.setData(loginData)
         }
+    }
+
+    private suspend fun saveUserSession(context: RoutingContext, userMap: MutableMap<String, Map<String, Any>>, user: User, regenerateToken: Boolean = true): Map<String, Any> {
+        user.last_login_at = System.currentTimeMillis()
+        if (regenerateToken) {
+            user.token = genEncryptedPassword(user.username, System.currentTimeMillis().toString())
+        }
+        userMap.put(user.username, user.toMap())
+        saveStorage("data/users", userMap)
+
+        val loginData = mapOf(
+            "username" to user.username,
+            "lastLoginAt" to user.last_login_at,
+            "accessToken" to user.username + ":" + user.token,
+            "createdAt" to user.created_at
+        )
+
+        context.session().put("userInfo", loginData)
+
+        return loginData
     }
 
     private suspend fun getUserInfo(context: RoutingContext): ReturnData {
@@ -287,6 +293,38 @@ class YueduApi : RestVerticle() {
         }
         var userInfo = context.session().get("userInfo") as Map<String, Any>?
         if (userInfo != null) {
+            return true
+        }
+        // 自动登录
+        var accessToken = context.queryParam("accessToken").firstOrNull() ?: ""
+        if (accessToken.isNotEmpty()) {
+            var userMap = mutableMapOf<String, Map<String, Any>>()
+            var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+            if (userMapJson != null) {
+                userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+            }
+            var username = accessToken.split(":", limit=2)[0]
+            var token = accessToken.split(":", limit=2)[1]
+            var existedUser: User? = userMap.getOrDefault(username, null)?.toDataClass()
+            if (existedUser != null && existedUser.token.isNotEmpty() && token.isNotEmpty() && existedUser.token.equals(token)) {
+                // 保存用户session
+                saveUserSession(context, userMap, existedUser, false)
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private suspend fun checkManagerAuth(context: RoutingContext): Boolean {
+        if (!appConfig.secure) {
+            return true
+        }
+        if (appConfig.secureKey.isEmpty()) {
+            return true
+        }
+        var secureKey = context.queryParam("secureKey").firstOrNull() ?: ""
+        if (secureKey.equals(appConfig.secureKey)) {
             return true
         }
         return false
@@ -673,7 +711,7 @@ class YueduApi : RestVerticle() {
                     }
                 }
             } catch(e: Exception) {
-
+                e.printStackTrace()
             }
             if (resultList.size >= searchSize) {
                 lastIndex = i
@@ -688,14 +726,17 @@ class YueduApi : RestVerticle() {
         val returnData = ReturnData()
         val name: String
         val bookUrl: String
+        var refresh: Int = 0
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
             name = context.bodyAsJson.getString("name")
             bookUrl = context.bodyAsJson.getString("url")
+            refresh = context.bodyAsJson.getInteger("refresh", 0)
         } else {
             // get 请求
             name = context.queryParam("name").firstOrNull() ?: ""
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
+            refresh = context.queryParam("refresh").firstOrNull()?.toInt() ?: 0
         }
         var book = getShelfBookByName(name, getUserNameSpace(context)) ?: getShelfBookByURL(bookUrl, getUserNameSpace(context))
         if (book == null) {
@@ -706,7 +747,36 @@ class YueduApi : RestVerticle() {
         }
         var bookSourceList: JsonArray? = asJsonArray(getStorage("data/" + book.name + "/bookSource"))
         if (bookSourceList != null) {
-            return returnData.setData(bookSourceList.getList())
+            var list = bookSourceList.getList() as MutableList<Map<String,Any>>
+            if (refresh > 0) {
+                // 刷新源
+                var resultList = arrayListOf<SearchBook>()
+                for (i in 0 until list.size) {
+                    try {
+                        var searchBook: SearchBook = list.get(i).toDataClass()
+                        var bookSource = getInstalledBookSourceStringBySourceURL(searchBook.origin)
+                        if (bookSource == null) {
+                            continue;
+                        }
+                        var result = saveBookInfoCache(WebBook(bookSource).searchBook(book.name, 1))
+                        if (result.size > 0) {
+                            for (j in 0 until result.size) {
+                                var _book = result.get(j)
+                                if (_book.name.equals(book.name)) {
+                                    list.set(i, _book.toMap())
+                                    resultList.add(_book)
+                                    break;
+                                }
+                            }
+                        }
+                    } catch(e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                // logger.info("refreshed bookSourceList: {}", resultList)
+                saveBookSources(book.name, resultList)
+            }
+            return returnData.setData(list)
         }
         return returnData.setData(arrayListOf<Int>())
     }
@@ -715,6 +785,9 @@ class YueduApi : RestVerticle() {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
         }
         val bookSource = context.bodyAsJson.mapTo(BookSource::class.java)
         var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
@@ -749,6 +822,9 @@ class YueduApi : RestVerticle() {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
         }
         val bookSourceJsonArray = context.bodyAsJsonArray
         var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
@@ -796,6 +872,9 @@ class YueduApi : RestVerticle() {
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        }
         val bookSource = context.bodyAsJson.mapTo(BookSource::class.java)
         var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
         if (bookSourceList == null) {
@@ -824,6 +903,9 @@ class YueduApi : RestVerticle() {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
         }
         val bookSourceJsonArray = context.bodyAsJsonArray
         var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
@@ -1122,7 +1204,7 @@ class YueduApi : RestVerticle() {
 
         if (chapterList == null || refresh) {
             var onlineChapterList = WebBook(bookSource).getChapterList(book)
-            saveStorage(book.name + "/" + md5Encode, onlineChapterList)
+            saveStorage("data/" + book.name + "/" + md5Encode, onlineChapterList)
             saveShelfBookLatestChapter(book, onlineChapterList, userNameSpace)
             return onlineChapterList
         }
@@ -1309,6 +1391,9 @@ class YueduApi : RestVerticle() {
     }
 
     private suspend fun saveBookSources(bookName: String, sourceList: List<SearchBook>) {
+        if (bookName.isEmpty()) {
+            return;
+        }
         var bookSourceList: JsonArray? = asJsonArray(getStorage("data/" + bookName + "/bookSource"))
         if (bookSourceList == null) {
             bookSourceList = JsonArray()
@@ -1335,6 +1420,6 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage(bookName + "/bookSource", bookSourceList!!)
+        saveStorage("data/" + bookName + "/bookSource", bookSourceList!!)
     }
 }

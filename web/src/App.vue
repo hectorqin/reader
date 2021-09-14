@@ -1,17 +1,72 @@
 <template>
   <div id="app">
     <router-view></router-view>
+    <el-dialog
+      title="登录"
+      :visible.sync="showLogin"
+      :width="dialogWidth"
+      :top="dialogTop"
+    >
+      <el-form :model="loginForm">
+        <el-form-item label="用户名">
+          <el-input v-model="loginForm.username" autocomplete="off"></el-input>
+        </el-form-item>
+        <el-form-item label="密码">
+          <el-input v-model="loginForm.password" autocomplete="off"></el-input>
+        </el-form-item>
+        <el-form-item label="邀请码(没有则不填)">
+          <el-input v-model="loginForm.code" autocomplete="off"></el-input>
+        </el-form-item>
+        <el-checkbox v-model="remember">记住登录信息</el-checkbox>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button @click="cancel">取 消</el-button>
+        <el-button type="primary" @click="login">确 定</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script>
+import Axios from "./plugins/axios";
 export default {
   name: "app",
-  components: {},
+  data() {
+    return {
+      remember: true,
+      loginForm: {
+        username: "",
+        password: "",
+        code: ""
+      }
+    };
+  },
   beforeCreate() {
-    // console.log(this);
-    var config = JSON.parse(localStorage.getItem("config"));
-    if (config != null) this.$store.commit("setConfig", config);
+    try {
+      // 获取配置
+      const config = JSON.parse(
+        window.localStorage && window.localStorage.getItem("config")
+      );
+      if (config && typeof config === "object") {
+        this.$store.commit("setConfig", config);
+      }
+    } catch (error) {
+      //
+    }
+    try {
+      // 获取最近阅读书籍
+      const readingRecent = JSON.parse(
+        window.localStorage && window.localStorage.getItem("readingRecent")
+      );
+      if (readingRecent && typeof readingRecent === "object") {
+        if (typeof readingRecent.index == "undefined") {
+          readingRecent.index = 0;
+        }
+        this.$store.commit("setReadingBook", readingRecent);
+      }
+    } catch (error) {
+      //
+    }
     this.$store.commit("setMiniInterface", window.innerWidth <= 750);
     window.onresize = () => {
       this.$store.commit("setMiniInterface", window.innerWidth <= 750);
@@ -22,13 +77,29 @@ export default {
       this.$store.commit("setTouchable", "ontouchstart" in document);
     };
   },
+  beforeMount() {
+    this.setTheme(this.isNight);
+  },
   mounted() {
     window.reader = this;
-    this.setTheme(this.isNight);
   },
   computed: {
     isNight() {
       return this.$store.getters.isNight;
+    },
+    dialogWidth() {
+      return this.$store.state.miniInterface ? "85%" : "50%";
+    },
+    dialogTop() {
+      return this.$store.state.miniInterface ? "5vh" : "15vh";
+    },
+    showLogin: {
+      get() {
+        return this.$store.state.showLogin;
+      },
+      set(value) {
+        this.$store.commit("setShowLogin", value);
+      }
     }
   },
   watch: {
@@ -47,6 +118,23 @@ export default {
           "night-theme",
           ""
         );
+      }
+    },
+    cancel() {
+      this.showLogin = false;
+      this.loginForm = {
+        username: "",
+        password: ""
+      };
+    },
+    async login() {
+      const res = await Axios.post("/login", this.loginForm);
+      if (res.data.isSuccess) {
+        this.$store.commit("setShowLogin", false);
+        this.$store.commit("setLoginAuth", true);
+        if (this.remember && res.data.data && res.data.data.accessToken) {
+          this.$store.commit("setToken", res.data.data.accessToken);
+        }
       }
     }
   }
@@ -131,9 +219,19 @@ export default {
     color: #ddd;
     border: 1px solid #888;
   }
+  .el-button:focus, .el-button:hover {
+      color: #eee;
+      border-color: #bbb;
+      background-color: #bbb;
+  }
   .el-button--primary {
     background: #185798;
     border: 1px solid #185798;
+  }
+  .el-button--primary:focus, .el-button--primary:hover {
+      background: #2b67bb;
+      border-color: #2b67bb;
+      color: #FFF;
   }
   .el-checkbox__inner {
     background: #bbb;
@@ -158,6 +256,12 @@ export default {
   }
   .el-popper[x-placement^="top"] .popper__arrow, .el-popper[x-placement^="top"] .popper__arrow::after {
     border-top-color: #333 !important;
+  }
+  .el-dialog {
+    background-color: #222;
+  }
+  .el-dialog__title {
+    color: #bbb;
   }
 }
 .el-popover:focus, .el-popover:focus:active, .el-popover__reference:focus:hover, .el-popover__reference:focus:not(.focusing) {

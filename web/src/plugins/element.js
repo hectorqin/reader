@@ -20,7 +20,9 @@ import {
   Checkbox,
   CheckboxGroup,
   ColorPicker,
-  Slider
+  Slider,
+  Form,
+  FormItem
 } from "element-ui";
 
 Vue.use(Button);
@@ -42,6 +44,8 @@ Vue.use(Checkbox);
 Vue.use(CheckboxGroup);
 Vue.use(ColorPicker);
 Vue.use(Slider);
+Vue.use(Form);
+Vue.use(FormItem);
 
 Vue.prototype.$msgbox = MessageBox;
 Vue.prototype.$message = Message;

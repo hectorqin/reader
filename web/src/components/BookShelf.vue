@@ -1,7 +1,7 @@
 <template>
   <div class="popup-wrapper" :style="popupTheme">
     <div class="title-zone">
-      <div class="title">书架</div>
+      <div class="title">书架({{ bookList.length }})</div>
       <div :class="{ 'title-btn': true, loading: refreshLoading }">
         <!-- <span class="home-btn" @click="backToHome">回首页</span> -->
         <span :class="{ loading: refreshLoading }" @click="refreshShelf">
@@ -41,7 +41,7 @@
 
 <script>
 import jump from "../plugins/jump";
-import Axios from "axios";
+import Axios from "../plugins/axios";
 export default {
   name: "BookShelf",
   data() {
@@ -105,7 +105,6 @@ export default {
         index: book.durChapterIndex
       };
       this.$store.commit("setReadingBook", readingBook);
-      localStorage.setItem(readingBook.bookUrl, JSON.stringify(readingBook));
       this.$emit("close");
       this.$emit("loadCatalog");
     },

@@ -1,9 +1,12 @@
 <template>
   <div class="popup-wrapper" :style="popupTheme">
     <div class="title-zone">
-      <div class="title">来源</div>
+      <div class="title">来源({{ bookSource.length }})</div>
       <div :class="{ 'title-btn': true, loading: loadingMore }">
-        <span class="source-count">共{{ bookSource.length }}个源</span>
+        <span :class="{ loading: loading }" @click="refresh">
+          <i class="el-icon-loading" v-if="loading"></i>
+          {{ loading ? "刷新中..." : "刷新" }}
+        </span>
         <span :class="{ loading: loadingMore }" @click="loadMoreSource">
           <i class="el-icon-loading" v-if="loadingMore"></i>
           {{ loadingMore ? "加载中..." : "加载更多" }}
@@ -38,13 +41,14 @@
 
 <script>
 import jump from "../plugins/jump";
-import Axios from "axios";
+import Axios from "../plugins/axios";
 export default {
   name: "BookSource",
   data() {
     return {
       index: this.$store.state.readingBook.index,
       bookSource: [],
+      loading: false,
       loadingMore: false,
       lastIndex: 0
     };
@@ -78,13 +82,15 @@ export default {
     isSelected(searchBook) {
       return searchBook.bookUrl == this.$store.state.readingBook.bookUrl;
     },
-    getBookSource() {
+    getBookSource(refresh) {
       Axios.get(this.api + `/getBookSource`, {
         params: {
-          url: this.$store.state.readingBook.bookUrl
+          url: this.$store.state.readingBook.bookUrl,
+          refresh: refresh ? 1 : 0
         }
       }).then(
         res => {
+          this.loading = false;
           if (res.data.isSuccess) {
             this.bookSource = res.data.data || [];
             if (this.bookSource.length) {
@@ -118,8 +124,6 @@ export default {
             var book = Object.assign({}, this.$store.state.readingBook);
             book.bookUrl = searchBook.bookUrl;
             this.$store.commit("setReadingBook", book);
-            sessionStorage.setItem("bookUrl", book.bookUrl);
-            localStorage.setItem(book.bookUrl, JSON.stringify(book));
             this.$emit("close");
             this.$emit("loadCatalog");
           } else {
@@ -132,6 +136,11 @@ export default {
           throw err;
         }
       );
+    },
+    refresh() {
+      if (this.loadingMore) return;
+      this.loading = true;
+      this.getBookSource(true);
     },
     loadMoreSource() {
       if (this.loadingMore) return;
@@ -221,8 +230,10 @@ export default {
     cursor: pointer;
     .source-count {
       display: inline-block;
-      margin-right: 25px;
       color: #606266;
+    }
+    span {
+      margin-left: 15px;
     }
     &.loading {
       color: #606266;

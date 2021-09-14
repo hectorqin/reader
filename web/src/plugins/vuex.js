@@ -7,7 +7,9 @@ Vue.use(Vuex);
 export default new Vuex.Store({
   state: {
     connected: false,
-    api: localStorage.getItem("api_prefix") || location.host + "/reader3",
+    api:
+      (window.localStorage && window.localStorage.getItem("api_prefix")) ||
+      location.host + "/reader3",
     shelfBooks: [],
     readingBook: {},
     config: {
@@ -24,7 +26,11 @@ export default new Vuex.Store({
       width: window.innerWidth,
       height: window.innerHeight
     },
-    touchable: "ontouchstart" in document
+    touchable: "ontouchstart" in document,
+    showLogin: false,
+    loginAuth: true,
+    token:
+      (window.localStorage && window.localStorage.getItem("api_token")) || ""
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -32,10 +38,16 @@ export default new Vuex.Store({
     },
     setReadingBook(state, readingBook) {
       state.readingBook = readingBook;
-      localStorage.setItem("readingRecent", JSON.stringify(readingBook));
+      window.localStorage &&
+        window.localStorage.setItem(
+          "readingRecent",
+          JSON.stringify(readingBook)
+        );
     },
     setConfig(state, config) {
       state.config = config;
+      window.localStorage &&
+        window.localStorage.setItem("config", JSON.stringify(config));
     },
     setMiniInterface(state, mini) {
       state.miniInterface = mini;
@@ -51,6 +63,19 @@ export default new Vuex.Store({
     },
     setConnected(state, connected) {
       state.connected = connected;
+    },
+    setShowLogin(state, showLogin) {
+      state.showLogin = showLogin;
+      if (showLogin) {
+        state.loginAuth = false;
+      }
+    },
+    setLoginAuth(state, loginAuth) {
+      state.loginAuth = loginAuth;
+    },
+    setToken(state, token) {
+      state.token = token;
+      window.localStorage && window.localStorage.setItem("api_token", token);
     }
   },
   getters: {
