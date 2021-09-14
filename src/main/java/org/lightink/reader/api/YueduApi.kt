@@ -167,10 +167,12 @@ class YueduApi : RestVerticle() {
             var dataDir = File(getWorkDir("storage/data"))
             if (!dataDir.exists()) {
                 var storageDir = File(getWorkDir("storage"))
-                var backupDir = File(getWorkDir("storage-backup"))
-                storageDir.renameTo(backupDir)
-                dataDir.parentFile.mkdirs()
-                backupDir.copyRecursively(dataDir)
+                if (storageDir.exists()) {
+                    var backupDir = File(getWorkDir("storage-backup"))
+                    storageDir.renameTo(backupDir)
+                    dataDir.parentFile.mkdirs()
+                    backupDir.copyRecursively(dataDir)
+                }
             }
         } catch(e: Exception) {
             e.printStackTrace()
