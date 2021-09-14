@@ -50,15 +50,13 @@ export default {
       refreshLoading: false
     };
   },
+  props: ["visible"],
   computed: {
     index() {
       return this.$store.state.readingBook.index;
     },
     catalog() {
       return this.$store.state.readingBook.catalog || [];
-    },
-    popCataVisible() {
-      return this.$store.state.popCataVisible;
     },
     theme() {
       return this.$store.state.config.theme;
@@ -71,12 +69,14 @@ export default {
   },
   mounted() {},
   watch: {
-    popCataVisible() {
-      this.$nextTick(() => {
-        let index = this.$store.state.readingBook.index;
-        let wrapper = this.$refs.cataData;
-        jump(this.$refs.cata[index], { container: wrapper, duration: 0 });
-      });
+    visible(isVisible) {
+      if (isVisible) {
+        this.$nextTick(() => {
+          let index = this.$store.state.readingBook.index;
+          let wrapper = this.$refs.cataData;
+          jump(this.$refs.cata[index], { container: wrapper, duration: 0 });
+        });
+      }
     },
     catalog() {
       this.refreshLoading = false;
@@ -88,8 +88,7 @@ export default {
     },
     gotoChapter(note) {
       const index = this.catalog.indexOf(note);
-      this.$store.commit("setPopCataVisible", false);
-      this.$store.commit("setContentLoading", true);
+      this.$emit("close");
       this.$emit("getContent", index);
     },
     refreshChapter() {

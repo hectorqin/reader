@@ -12,6 +12,14 @@ Vue.config.productionTip = false;
 
 Vue.use(VueLazyload);
 
+Vue.mixin({
+  computed: {
+    api() {
+      return this.$store.getters.api;
+    }
+  }
+});
+
 new Vue({
   router,
   store,

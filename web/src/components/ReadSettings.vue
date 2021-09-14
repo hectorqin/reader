@@ -355,7 +355,7 @@ export default {
       this.$store.commit("setConfig", config);
     },
     getCustomBGImgURL(src) {
-      return "//" + localStorage.url.replace(/\/reader3\/?/, "") + src;
+      return this.api.replace(/\/reader3\/?/, "") + src;
     },
     setBGImg(src) {
       let config = this.config;
@@ -371,7 +371,7 @@ export default {
       let param = new FormData();
       param.append("file", rawFile);
       param.append("type", "background");
-      Axios.post("http://" + localStorage.url + "/uploadFile", param, {
+      Axios.post(this.api + "/uploadFile", param, {
         headers: { "Content-Type": "multipart/form-data" }
       }).then(
         res => {
@@ -394,7 +394,7 @@ export default {
       );
     },
     deleteCustomBGImg(src) {
-      Axios.post("http://" + localStorage.url + "/deleteFile", {
+      Axios.post(this.api + "/deleteFile", {
         url: src
       }).then(
         res => {
@@ -432,7 +432,7 @@ export default {
       this.$store.commit("setConfig", { ...config });
     },
     showClickZone() {
-      this.$emit("hideSettingPop");
+      this.$emit("close");
       this.$emit("showClickZone");
     }
   }

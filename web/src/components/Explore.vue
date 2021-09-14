@@ -57,7 +57,7 @@ export default {
       exploreList: []
     };
   },
-  props: ["popExploreVisible", "bookSourceUrl", "bookSourceList"],
+  props: ["visible", "bookSourceUrl", "bookSourceList"],
   computed: {
     theme() {
       return this.$store.state.config.theme;
@@ -85,7 +85,7 @@ export default {
   },
   mounted() {},
   watch: {
-    popExploreVisible(isVisible) {
+    visible(isVisible) {
       if (isVisible) {
         //
       }
@@ -112,7 +112,7 @@ export default {
       this.page = page || 1;
       this.ruleFindUrl = url;
       this.sourceIndex = index;
-      Axios.get("http://" + localStorage.url + `/exploreBook`, {
+      Axios.get(this.api + `/exploreBook`, {
         params: {
           ruleFindUrl: url,
           bookSourceIndex: index,
@@ -177,7 +177,7 @@ export default {
       });
     },
     close() {
-      this.$emit("hideExplorePop");
+      this.$emit("close");
     }
   }
 };

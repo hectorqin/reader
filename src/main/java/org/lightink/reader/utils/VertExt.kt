@@ -23,6 +23,7 @@ import kotlin.reflect.KProperty1
 import kotlin.reflect.KMutableProperty
 import kotlin.reflect.full.memberProperties
 import io.legado.app.data.entities.Book
+import io.legado.app.utils.MD5Utils
 
 /**
  * @Auther: zoharSoul
@@ -218,4 +219,17 @@ fun Book.fillData(newBook: Book, keys: List<String>): Book {
         }
     }
     return this
+}
+
+fun getRandomString(length: Int) : String {
+    val allowedChars = "ABCDEFGHIJKLMNOPQRSTUVWXTZabcdefghiklmnopqrstuvwxyz0123456789"
+    return (1..length)
+        .map { allowedChars.random() }
+        .joinToString("")
+}
+
+fun genEncryptedPassword(password: String, salt: String): String {
+    return MD5Utils.md5Encode(
+        MD5Utils.md5Encode(password + salt).toString() + salt
+    ).toString()
 }

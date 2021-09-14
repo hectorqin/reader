@@ -8,6 +8,9 @@ reader:
     showUI: false
     debug: false
     packaged: false
+    secure: false
+    inviteCode: ""
+    secureKey: ""
 
   server:
     port: 8080

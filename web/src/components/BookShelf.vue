@@ -50,7 +50,7 @@ export default {
       refreshLoading: false
     };
   },
-  props: ["popBookShelfVisible"],
+  props: ["visible"],
   computed: {
     theme() {
       return this.$store.state.config.theme;
@@ -63,7 +63,7 @@ export default {
   },
   mounted() {},
   watch: {
-    popBookShelfVisible(isVisible) {
+    visible(isVisible) {
       if (isVisible) {
         this.getBookshelf();
       }
@@ -74,7 +74,7 @@ export default {
       return book.bookUrl == this.$store.state.readingBook.bookUrl;
     },
     getBookshelf(refresh) {
-      Axios.get("http://" + localStorage.url + `/getBookshelf`, {
+      Axios.get(this.api + `/getBookshelf`, {
         params: {
           refresh: refresh ? 1 : 0
         }

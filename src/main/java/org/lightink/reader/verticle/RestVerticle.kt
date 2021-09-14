@@ -8,6 +8,9 @@ import io.vertx.ext.web.handler.BodyHandler
 import io.vertx.ext.web.handler.CorsHandler
 import io.vertx.ext.web.handler.LoggerFormat
 import io.vertx.ext.web.handler.LoggerHandler
+import io.vertx.ext.web.handler.CookieHandler
+import io.vertx.ext.web.handler.SessionHandler
+import io.vertx.ext.web.sstore.LocalSessionStore
 import io.vertx.kotlin.coroutines.CoroutineVerticle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -28,6 +31,8 @@ abstract class RestVerticle : CoroutineVerticle() {
     override suspend fun start() {
         super.start()
         router = Router.router(vertx)
+        router.route().handler(CookieHandler.create());
+	    router.route().handler(SessionHandler.create(LocalSessionStore.create(vertx)));
 
         // CORS support
         val allowedHeaders = HashSet<String>()

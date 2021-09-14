@@ -18,7 +18,7 @@
           <BookShelf
             ref="popBookShelf"
             class="popup"
-            :popBookShelfVisible="popBookShelfVisible"
+            :visible="popBookShelfVisible"
             @loadCatalog="loadCatalog"
             @toShelf="toShelf"
             @close="popBookShelfVisible = false"
@@ -41,7 +41,7 @@
           <BookSource
             ref="popBookSource"
             class="popup"
-            :popBookSourceVisible="popBookSourceVisible"
+            :visible="popBookSourceVisible"
             @loadCatalog="loadCatalog"
             @close="popBookSourceVisible = false"
           />
@@ -69,6 +69,8 @@
             ref="popCata"
             class="popup"
             @refresh="refreshCatalog"
+            :visible="popCataVisible"
+            @close="popCataVisible = false"
           />
 
           <div
@@ -92,7 +94,8 @@
         >
           <ReadSettings
             class="popup"
-            @hideSettingPop="readSettingsVisible = false"
+            :visible="readSettingsVisible"
+            @close="readSettingsVisible = false"
             @showClickZone="showClickZone = true"
           />
 
@@ -305,7 +308,6 @@ export default {
       this.title = to;
     },
     content() {
-      this.$store.commit("setContentLoading", false);
       this.contentStyle = {};
       this.transformX = 0;
       this.currentPage = 1;
@@ -348,10 +350,13 @@ export default {
       title: "",
       content: [],
       noPoint: true,
+      popCataVisible: false,
+      readSettingsVisible: false,
       popBookSourceVisible: false,
       popBookShelfVisible: false,
       showToolBar: true,
       book: null,
+      show: false,
       contentStyle: {},
       currentPage: 1,
       totalPages: 1,
@@ -370,22 +375,6 @@ export default {
     },
     windowSize() {
       return this.$store.state.windowSize;
-    },
-    popCataVisible: {
-      get() {
-        return this.$store.state.popCataVisible;
-      },
-      set(value) {
-        this.$store.commit("setPopCataVisible", value);
-      }
-    },
-    readSettingsVisible: {
-      get() {
-        return this.$store.state.readSettingsVisible;
-      },
-      set(value) {
-        this.$store.commit("setReadSettingsVisible", value);
-      }
     },
     config() {
       return this.$store.state.config;
@@ -465,9 +454,6 @@ export default {
         return this.windowSize.width - 33;
       }
     },
-    show() {
-      return this.$store.state.showContent;
-    },
     readingProgress() {
       if (
         this.$store.state.readingBook &&
@@ -537,7 +523,7 @@ export default {
   },
   methods: {
     loadCatalog(refresh) {
-      if (!localStorage.url) {
+      if (!this.api) {
         setTimeout(() => {
           if (this.loadCatalog) {
             this.loadCatalog(refresh);
@@ -572,8 +558,7 @@ export default {
     },
     getCatalog(bookUrl, refresh) {
       return Axios.get(
-        "http://" +
-          localStorage.url +
+        this.api +
           "/getChapterList?url=" +
           encodeURIComponent(bookUrl) +
           "&refresh=" +
@@ -628,10 +613,8 @@ export default {
       this.title = chapterName;
       //强制滚回顶层
       jump(this.$refs.top, { duration: 0 });
-      let that = this;
       Axios.get(
-        "http://" +
-          localStorage.url +
+        this.api +
           "/getBookContent?url=" +
           encodeURIComponent(bookUrl) +
           "&index=" +
@@ -639,16 +622,15 @@ export default {
       ).then(
         res => {
           let data = res.data.data;
-          that.content = data.split(/\n+/);
-          this.$store.commit("setContentLoading", true);
-          that.loading.close();
-          that.noPoint = false;
-          that.$store.commit("setShowContent", true);
+          this.content = data.split(/\n+/);
+          this.loading.close();
+          this.noPoint = false;
+          this.show = true;
         },
         err => {
-          that.loading.close();
-          that.$message.error("获取章节内容失败");
-          that.content = "　　获取章节内容失败！";
+          this.loading.close();
+          this.$message.error("获取章节内容失败");
+          this.content = "　　获取章节内容失败！";
           throw err;
         }
       );
@@ -674,7 +656,6 @@ export default {
       ) {
         return;
       }
-      this.$store.commit("setContentLoading", true);
       let index = this.$store.state.readingBook.index;
       index++;
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
@@ -692,7 +673,6 @@ export default {
       ) {
         return;
       }
-      this.$store.commit("setContentLoading", true);
       let index = this.$store.state.readingBook.index;
       index--;
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {

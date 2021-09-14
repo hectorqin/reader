@@ -41,6 +41,30 @@
 
 ```bash
 storage
+├── assets                                        # 静态资源
+│   ├── background                                # 自定义阅读背景图片保存目录
+│   │   └── 6.jpg
+│   └── reader.css                                # 自定义CSS样式文件
+├── cache                                         # 缓存目录
+│   ├── 6190ac40068e74c2c82624e91a5f8a0c.jpg      # 书籍封面缓存
+│   └── ea11967236129bdae6133c3c9ff8c2dd.jpg
+├── data                                          # 数据目录
+│   ├── bookInfoCache.json                        # 搜索缓存Map
+│   ├── bookSource.json                           # 书源列表
+│   ├── bookshelf.json                            # 书架书籍列表
+│   └── 斗罗大陆                                    # 书籍缓存目录
+│       ├── 04abb3842aabc03d08a14186be005e89.json # A书源目录列表
+│       ├── 5576c3b5fc70453d5b40f437cf88cdb5.json # B书源目录列表
+│       └── bookSource.json                       # 书籍书源列表
+└── windowConfig.json                             # 窗口配置文件
+```
+
+旧版目录结构
+
+> 覆盖安装新版后，会自动迁移旧版结构到新版，并在数据目录父目录下保存旧版目录备份 `storage-backup`，如果确认无误，可以自行删除
+
+```bash
+storage
 ├── bookInfoCache.json   # 搜索缓存Map
 ├── bookSource.json      # 书源列表
 ├── bookshelf.json       # 书架书籍列表

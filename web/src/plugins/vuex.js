@@ -6,15 +6,10 @@ Vue.use(Vuex);
 
 export default new Vuex.Store({
   state: {
-    connectStatus: "正在连接后端服务器……",
-    connectType: "",
-    newConnect: true,
-    shelf: [],
-    catalog: "",
+    connected: false,
+    api: localStorage.getItem("api_prefix") || location.host + "/reader3",
+    shelfBooks: [],
     readingBook: {},
-    popCataVisible: false,
-    contentLoading: true,
-    showContent: false,
     config: {
       theme: 0,
       font: 0,
@@ -25,7 +20,6 @@ export default new Vuex.Store({
       readWidth: 800
     },
     miniInterface: false,
-    readSettingsVisible: false,
     windowSize: {
       width: window.innerWidth,
       height: window.innerHeight
@@ -33,38 +27,15 @@ export default new Vuex.Store({
     touchable: "ontouchstart" in document
   },
   mutations: {
-    setConnectStatus(state, connectStatus) {
-      state.connectStatus = connectStatus;
-    },
-    setConnectType(state, connectType) {
-      state.connectType = connectType;
-    },
-    setNewConnect(state, newConnect) {
-      state.newConnect = newConnect;
-    },
-    addBooks(state, books) {
-      state.shelf = books;
-    },
-    setCatalog(state, catalog) {
-      state.catalog = catalog;
-    },
-    setPopCataVisible(state, visible) {
-      state.popCataVisible = visible;
-    },
-    setContentLoading(state, loading) {
-      state.contentLoading = loading;
+    setShelfBooks(state, books) {
+      state.shelfBooks = books;
     },
     setReadingBook(state, readingBook) {
       state.readingBook = readingBook;
+      localStorage.setItem("readingRecent", JSON.stringify(readingBook));
     },
     setConfig(state, config) {
       state.config = config;
-    },
-    setReadSettingsVisible(state, visible) {
-      state.readSettingsVisible = visible;
-    },
-    setShowContent(state, visible) {
-      state.showContent = visible;
     },
     setMiniInterface(state, mini) {
       state.miniInterface = mini;
@@ -74,35 +45,45 @@ export default new Vuex.Store({
     },
     setTouchable(state, touchable) {
       state.touchable = touchable;
+    },
+    setApi(state, api) {
+      state.api = api;
+    },
+    setConnected(state, connected) {
+      state.connected = connected;
     }
   },
   getters: {
+    api: state => {
+      if (
+        state.api.startsWith("http://") ||
+        state.api.startsWith("https://") ||
+        state.api.startsWith("//")
+      ) {
+        return state.api;
+      }
+      return "//" + state.api;
+    },
     isSlideRead: state => {
       return state.miniInterface && state.config.readMethod === "左右滑动";
     },
     isNight: state => {
       return state.config.theme == 6;
     },
-    currentContentBGImg: state => {
+    currentContentBGImg: (state, getters) => {
       if (state.config.contentBGImg) {
         return state.config.contentBGImg.startsWith("bg/") ||
           state.config.contentBGImg.startsWith("http://") ||
           state.config.contentBGImg.startsWith("https://") ||
           state.config.contentBGImg.startsWith("//")
           ? state.config.contentBGImg
-          : "//" +
-              localStorage.url.replace(/\/reader3\/?/, "") +
-              state.config.contentBGImg;
+          : getters.api.replace(/\/reader3\/?/, "") + state.config.contentBGImg;
       }
       return undefined;
     },
-    customCSSUrl: () => {
-      if (localStorage.url) {
-        return (
-          "//" +
-          localStorage.url.replace(/\/reader3\/?/, "") +
-          "/assets/reader.css"
-        );
+    customCSSUrl: (_, getters) => {
+      if (getters.api) {
+        return getters.api.replace(/\/reader3\/?/, "") + "/assets/reader.css";
       }
       return false;
     },

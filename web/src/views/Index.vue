@@ -56,7 +56,7 @@
               :type="connectType"
               :effect="isNight ? 'dark' : 'light'"
               class="setting-connect"
-              :class="{ 'no-point': newConnect }"
+              :class="{ 'no-point': connecting }"
               @click="setIP"
             >
               {{ connectStatus }}
@@ -105,12 +105,11 @@
               <Explore
                 ref="popExplore"
                 class="popup"
-                :popExploreVisible="popExploreVisible"
+                :visible="popExploreVisible"
                 :bookSourceUrl="bookSourceUrl"
                 :bookSourceList="bookSourceList"
                 @showSearchList="showSearchList"
                 @close="popExploreVisible = false"
-                @hideExplorePop="popExploreVisible = false"
               />
               <el-tag
                 type="info"
@@ -390,6 +389,8 @@ export default {
 
       popIntroVisible: {},
 
+      connecting: false,
+
       lastScrollTop: 0
     };
   },
@@ -440,7 +441,6 @@ export default {
     } catch (error) {
       //
     }
-    localStorage.url = localStorage.url || location.host + "/reader3";
     this.loadBookshelf()
       .then(() => {
         // 连接后端成功，加载自定义样式
@@ -460,22 +460,24 @@ export default {
   },
   methods: {
     setIP() {
-      this.$prompt("请输入接口地址 ( 如：127.0.0.1:9527 )", "提示", {
+      this.$prompt("请输入接口地址 ( 如：localhost:8080/reader3 )", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
         // inputPattern: /^((2[0-4]\d|25[0-5]|[1]?\d\d?)\.){3}(2[0-4]\d|25[0-5]|[1]?\d\d?):([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-6][0-5][0-5][0-3][0-5])$/,
         // inputErrorMessage: "url 形式不正确",
         beforeClose: (action, instance, done) => {
           if (action === "confirm") {
-            this.$store.commit("setNewConnect", true);
+            this.connecting = true;
             instance.confirmButtonLoading = true;
             instance.confirmButtonText = "校验中……";
             var inputUrl = instance.inputValue.replace(/\/*$/g, "");
             this.loadBookshelf(inputUrl)
               .then(() => {
+                this.connecting = false;
                 instance.confirmButtonLoading = false;
                 done();
-                localStorage.url = inputUrl;
+                localStorage.setItem("api_prefix", inputUrl);
+                this.$store.commit("setApi", inputUrl);
                 if (!this.bookSourceList.length) {
                   // 加载书源列表
                   this.loadBookSource();
@@ -498,15 +500,39 @@ export default {
         })
         .catch(() => {});
     },
-    loadBookSource() {
-      if (!localStorage.url) {
-        this.$message.error("请先设置后端 url 与端口");
-        this.$store.commit("setConnectStatus", "点击设置后端 url 与 端口");
-        this.$store.commit("setNewConnect", false);
-        this.$store.commit("setConnectType", "danger");
+    getUserInfo() {
+      if (!this.api) {
+        this.$message.error("请先设置后端接口地址");
+        this.$store.commit("setConnected", false);
         return;
       }
-      Axios.get("http://" + localStorage.url + "/getSources", {
+      Axios.get(this.api + "/getUserInfo", {
+        timeout: 3000
+      }).then(
+        res => {
+          this.loading.close();
+          if (res.data.isSuccess) {
+            if (res.data.secure) {
+              // 需要注册登录
+            }
+          } else {
+            this.$message.error(res.data.errorMsg);
+          }
+        },
+        () => {
+          //
+          this.loading.close();
+          this.$message.error("后端连接失败");
+        }
+      );
+    },
+    loadBookSource() {
+      if (!this.api) {
+        this.$message.error("请先设置后端接口地址");
+        this.$store.commit("setConnected", false);
+        return;
+      }
+      Axios.get(this.api + "/getSources", {
         timeout: 3000
       }).then(
         res => {
@@ -530,11 +556,9 @@ export default {
       );
     },
     searchBook(page) {
-      if (!localStorage.url) {
-        this.$message.error("请先设置后端 url 与端口");
-        this.$store.commit("setConnectStatus", "点击设置后端 url 与 端口");
-        this.$store.commit("setNewConnect", false);
-        this.$store.commit("setConnectType", "danger");
+      if (!this.api) {
+        this.$message.error("请先设置后端接口地址");
+        this.$store.commit("setConnected", false);
         return;
       }
       if (page) {
@@ -553,7 +577,7 @@ export default {
         background: this.isNight ? "#121212" : "rgb(247,247,247)"
       });
 
-      Axios.get("http://" + localStorage.url + "/searchBook", {
+      Axios.get(this.api + "/searchBook", {
         timeout: 30000,
         params: {
           key: this.search,
@@ -594,12 +618,10 @@ export default {
       );
     },
     loadBookshelf(api, refresh) {
-      api = api || localStorage.url;
+      api = api || this.api;
       if (!api) {
-        this.$message.error("请先设置后端 url 与端口");
-        this.$store.commit("setConnectStatus", "点击设置后端 url 与 端口");
-        this.$store.commit("setNewConnect", false);
-        this.$store.commit("setConnectType", "danger");
+        this.$message.error("请先设置后端接口地址");
+        this.$store.commit("setConnected", false);
         return Promise.reject(false);
       }
 
@@ -611,8 +633,16 @@ export default {
         background: this.isNight ? "#121212" : "rgb(247,247,247)"
       });
 
+      if (
+        !api.startsWith("http://") &&
+        !api.startsWith("https://") &&
+        !api.startsWith("//")
+      ) {
+        api = "//" + api;
+      }
+
       return Axios.get(
-        "http://" + api + "/getBookshelf?refresh=" + (refresh ? 1 : 0),
+        api + "/getBookshelf?refresh=" + (refresh ? 1 : 0),
         refresh
           ? {}
           : {
@@ -621,36 +651,29 @@ export default {
       )
         .then(response => {
           this.loading.close();
+          this.$store.commit("setConnected", true);
           if (response.data.isSuccess) {
-            this.$store.commit("setConnectType", "success");
             // this.$store.commit("increaseBookNum", response.data.data.length);
             this.popIntroVisible = response.data.data.reduce((c, v) => {
               c[v.name] = false;
               return c;
             }, {});
             this.$store.commit(
-              "addBooks",
+              "setShelfBooks",
               response.data.data.sort(function(a, b) {
                 var x = a["durChapterTime"] || 0;
                 var y = b["durChapterTime"] || 0;
                 return y - x;
               })
             );
-            this.$store.commit(
-              "setConnectStatus",
-              "已连接 " + localStorage.url
-            );
-            this.$store.commit("setNewConnect", false);
           } else {
             this.$message.error(response.data.errorMsg);
           }
         })
         .catch(error => {
           this.loading.close();
-          this.$store.commit("setConnectType", "danger");
-          this.$store.commit("setConnectStatus", "点击设置后端 url 与 端口");
+          this.$store.commit("setConnected", false);
           this.$message.error("后端连接失败");
-          this.$store.commit("setNewConnect", false);
           throw error;
         });
     },
@@ -677,18 +700,16 @@ export default {
       });
     },
     saveBook(book) {
-      if (!localStorage.url) {
-        this.$message.error("请先设置后端 url 与端口");
-        this.$store.commit("setConnectStatus", "点击设置后端 url 与 端口");
-        this.$store.commit("setNewConnect", false);
-        this.$store.commit("setConnectType", "danger");
+      if (!this.api) {
+        this.$message.error("请先设置后端接口地址");
+        this.$store.commit("setConnected", false);
         return;
       }
       if (!book || !book.bookUrl || !book.origin) {
         this.$message.error("书籍信息错误");
         return;
       }
-      Axios.post("http://" + localStorage.url + "/saveBook", book).then(
+      Axios.post(this.api + "/saveBook", book).then(
         res => {
           if (res.data.isSuccess) {
             //
@@ -705,11 +726,9 @@ export default {
       );
     },
     async deleteBook(book) {
-      if (!localStorage.url) {
-        this.$message.error("请先设置后端 url 与端口");
-        this.$store.commit("setConnectStatus", "点击设置后端 url 与 端口");
-        this.$store.commit("setNewConnect", false);
-        this.$store.commit("setConnectType", "danger");
+      if (!this.api) {
+        this.$message.error("请先设置后端接口地址");
+        this.$store.commit("setConnected", false);
         return;
       }
       if (!book || !book.name || !book.bookUrl || !book.origin) {
@@ -730,7 +749,7 @@ export default {
       if (!res) {
         return;
       }
-      Axios.post("http://" + localStorage.url + "/deleteBook", book).then(
+      Axios.post(this.api + "/deleteBook", book).then(
         res => {
           if (res.data.isSuccess) {
             //
@@ -797,7 +816,7 @@ export default {
     },
     getCover(coverUrl) {
       if (coverUrl) {
-        return "http://" + localStorage.url + "/cover?path=" + coverUrl;
+        return this.api + "/cover?path=" + coverUrl;
       }
       return null;
     },
@@ -852,7 +871,7 @@ export default {
         // FileReader 读取出错，只能上传读取了
         let param = new FormData();
         param.append("file", rawFile);
-        Axios.post("http://" + localStorage.url + "/readSourceFile", param, {
+        Axios.post(this.api + "/readSourceFile", param, {
           headers: { "Content-Type": "multipart/form-data" }
         }).then(
           res => {
@@ -901,11 +920,9 @@ export default {
         checkedCount > 0 && checkedCount < this.importBookSource.length;
     },
     saveBookSourceList() {
-      if (!localStorage.url) {
-        this.$message.error("请先设置后端 url 与端口");
-        this.$store.commit("setConnectStatus", "点击设置后端 url 与 端口");
-        this.$store.commit("setNewConnect", false);
-        this.$store.commit("setConnectType", "danger");
+      if (!this.api) {
+        this.$message.error("请先设置后端接口地址");
+        this.$store.commit("setConnected", false);
         return;
       }
       if (!this.checkedSourceIndex.length) {
@@ -915,10 +932,7 @@ export default {
       const sourceList = this.checkedSourceIndex.map(
         v => this.importBookSource[v]
       );
-      Axios.post(
-        "http://" + localStorage.url + "/saveSources",
-        sourceList
-      ).then(
+      Axios.post(this.api + "/saveSources", sourceList).then(
         res => {
           if (res.data.isSuccess) {
             //
@@ -937,7 +951,7 @@ export default {
     },
     getSourceBook(bookSource) {
       const res = [];
-      (this.$store.state.shelf || []).forEach(v => {
+      (this.$store.state.shelfBooks || []).forEach(v => {
         if (v.origin === bookSource.bookSourceUrl) {
           res.push(v.name);
         }
@@ -946,7 +960,7 @@ export default {
     },
     showSourceBook(bookSource) {
       const res = [];
-      (this.$store.state.shelf || []).forEach(v => {
+      (this.$store.state.shelfBooks || []).forEach(v => {
         if (v.origin === bookSource.bookSourceUrl) {
           res.push(v.name);
         }
@@ -961,10 +975,7 @@ export default {
         this.$message.error("请选择需要导入的源");
         return;
       }
-      Axios.post(
-        "http://" + localStorage.url + "/deleteSources",
-        this.manageSourceSelection
-      ).then(
+      Axios.post(this.api + "/deleteSources", this.manageSourceSelection).then(
         res => {
           if (res.data.isSuccess) {
             //
@@ -1034,7 +1045,9 @@ export default {
       }
     },
     shelf() {
-      return this.isSearchResult ? this.searchResult : this.$store.state.shelf;
+      return this.isSearchResult
+        ? this.searchResult
+        : this.$store.state.shelfBooks;
     },
     searchResultMap() {
       return this.searchResult.reduce((c, v) => {
@@ -1043,13 +1056,14 @@ export default {
       }, {});
     },
     connectStatus() {
-      return this.$store.state.connectStatus;
+      return this.$store.state.connected
+        ? `已连接` + this.api
+        : this.connecting
+        ? "正在连接后端服务器……"
+        : "点击设置后端接口前缀";
     },
     connectType() {
-      return this.$store.state.connectType;
-    },
-    newConnect() {
-      return this.$store.state.newConnect;
+      return this.$store.state.connected ? "success" : "danger";
     },
     showMenu() {
       return this.$store.state.miniInterface;

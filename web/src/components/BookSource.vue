@@ -49,7 +49,7 @@ export default {
       lastIndex: 0
     };
   },
-  props: ["popBookSourceVisible"],
+  props: ["visible"],
   computed: {
     theme() {
       return this.$store.state.config.theme;
@@ -68,7 +68,7 @@ export default {
   },
   mounted() {},
   watch: {
-    popBookSourceVisible(isVisible) {
+    visible(isVisible) {
       if (isVisible) {
         this.getBookSource();
       }
@@ -79,7 +79,7 @@ export default {
       return searchBook.bookUrl == this.$store.state.readingBook.bookUrl;
     },
     getBookSource() {
-      Axios.get("http://" + localStorage.url + `/getBookSource`, {
+      Axios.get(this.api + `/getBookSource`, {
         params: {
           url: this.$store.state.readingBook.bookUrl
         }
@@ -105,7 +105,7 @@ export default {
       );
     },
     changeBookSource(searchBook) {
-      Axios.get("http://" + localStorage.url + `/saveBookSource`, {
+      Axios.get(this.api + `/saveBookSource`, {
         params: {
           name: this.$store.state.readingBook.bookName,
           newUrl: searchBook.bookUrl,
@@ -136,7 +136,7 @@ export default {
     loadMoreSource() {
       if (this.loadingMore) return;
       this.loadingMore = true;
-      Axios.get("http://" + localStorage.url + `/searchBookSource`, {
+      Axios.get(this.api + `/searchBookSource`, {
         params: {
           name: this.$store.state.readingBook.bookName,
           lastIndex: this.lastIndex

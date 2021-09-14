@@ -139,8 +139,8 @@ export default {
     background: #bbb;
   }
   .el-input__inner {
-    background-color: #bbb;
-    border: 1px solid #bbb !important;
+    background-color: #444;
+    border: 1px solid #444 !important;
     color: #ddd;
   }
   .el-select-dropdown {
