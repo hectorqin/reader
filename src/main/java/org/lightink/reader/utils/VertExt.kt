@@ -4,13 +4,9 @@ import com.google.common.base.Throwables
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import io.vertx.core.Handler
-
 import io.vertx.core.json.JsonObject
 import io.vertx.core.json.JsonArray
 import io.vertx.ext.web.RoutingContext
-import io.vertx.kotlin.mysqlclient.preparedQueryAwait
-import io.vertx.mysqlclient.MySQLPool
-import io.vertx.sqlclient.Tuple
 import mu.KotlinLogging
 import org.lightink.reader.entity.BasicError
 import java.net.URLDecoder

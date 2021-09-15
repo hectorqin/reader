@@ -9,12 +9,6 @@ import io.vertx.core.http.impl.HttpUtils
 import io.vertx.core.json.Json
 import io.vertx.ext.web.client.WebClient
 import io.vertx.ext.web.client.WebClientOptions
-import io.vertx.kotlin.mysqlclient.MySQLConnectOptions
-import io.vertx.kotlin.mysqlclient.mySQLConnectOptionsOf
-import io.vertx.kotlin.sqlclient.PoolOptions
-import io.vertx.kotlin.sqlclient.poolOptionsOf
-import io.vertx.mysqlclient.MySQLConnectOptions
-import io.vertx.mysqlclient.MySQLPool
 import io.vertx.core.json.JsonObject
 import mu.KotlinLogging
 import org.lightink.reader.api.YueduApi

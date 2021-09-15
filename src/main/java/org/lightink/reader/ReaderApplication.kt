@@ -5,26 +5,17 @@ import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import io.vertx.core.Future
 import io.vertx.core.Vertx
 import io.vertx.core.http.*
-import io.vertx.core.http.impl.HttpUtils
 import io.vertx.core.json.Json
 import io.vertx.ext.web.client.WebClient
 import io.vertx.ext.web.client.WebClientOptions
-import io.vertx.kotlin.mysqlclient.MySQLConnectOptions
-import io.vertx.kotlin.mysqlclient.mySQLConnectOptionsOf
-import io.vertx.kotlin.sqlclient.PoolOptions
-import io.vertx.kotlin.sqlclient.poolOptionsOf
-import io.vertx.mysqlclient.MySQLConnectOptions
-import io.vertx.mysqlclient.MySQLPool
 import mu.KotlinLogging
 import org.lightink.reader.api.YueduApi
-import org.lightink.reader.config.MysqlConfig
 
 import org.lightink.reader.verticle.RestVerticle
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.context.annotation.Bean
-import uk.org.lidalia.sysoutslf4j.context.SysOutOverSLF4J
 import javax.annotation.PostConstruct
 
 private val logger = KotlinLogging.logger {}
@@ -42,12 +33,6 @@ class ReaderApplication {
 
     @PostConstruct
     fun deployVerticle() {
-        vertx().deployVerticle(yueduApi)
-    }
-
-    @Bean
-    fun webClient(): WebClient {
-
         Json.mapper.apply {
             registerKotlinModule()
         }
@@ -58,6 +43,11 @@ class ReaderApplication {
 
         Json.mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
+        vertx().deployVerticle(yueduApi)
+    }
+
+    @Bean
+    fun webClient(): WebClient {
         val webClientOptions = WebClientOptions()
         webClientOptions.isTryUseCompression = true
         webClientOptions.logActivity = true

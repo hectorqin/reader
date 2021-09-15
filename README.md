@@ -45,6 +45,8 @@
 
 数据存储目录结构如下：
 
+> 书籍缓存目录由 `书名` 变为 `书名_作者名`，这个变动需要手动编辑，否则书籍书源列表缓存信息无法使用
+
 ```bash
 storage
 ├── assets                                        # 静态资源
@@ -58,7 +60,7 @@ storage
 │   ├── bookInfoCache.json                        # 搜索缓存Map
 │   ├── bookSource.json                           # 书源列表
 │   ├── bookshelf.json                            # 书架书籍列表
-│   └── 斗罗大陆                                    # 书籍缓存目录
+│   └── 斗罗大陆_唐家三少                            # 书籍缓存目录
 │       ├── 04abb3842aabc03d08a14186be005e89.json # A书源目录列表
 │       ├── 5576c3b5fc70453d5b40f437cf88cdb5.json # B书源目录列表
 │       └── bookSource.json                       # 书籍书源列表

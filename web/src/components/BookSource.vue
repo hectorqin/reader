@@ -113,7 +113,7 @@ export default {
     changeBookSource(searchBook) {
       Axios.get(this.api + `/saveBookSource`, {
         params: {
-          name: this.$store.state.readingBook.bookName,
+          bookUrl: this.$store.state.readingBook.bookUrl,
           newUrl: searchBook.bookUrl,
           bookSourceUrl: searchBook.origin
         }
@@ -144,7 +144,7 @@ export default {
       this.loadingMore = true;
       Axios.get(this.api + `/searchBookSource`, {
         params: {
-          name: this.$store.state.readingBook.bookName,
+          url: this.$store.state.readingBook.bookUrl,
           lastIndex: this.lastIndex
         }
       }).then(
@@ -260,6 +260,8 @@ export default {
         flex-wrap: wrap;
         justify-content: space-between;
         font: 16px / 40px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
+        max-width: 100%;
+        overflow: hidden;
 
         .log-text {
           margin-right: 26px;
