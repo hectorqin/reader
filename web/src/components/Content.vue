@@ -7,20 +7,27 @@ export default {
   props: ["carray", "title", "showContent"],
   render() {
     const { fontSize, fontWeight, fontColor } = this;
-    let style = {
+    const style = {
       fontSize,
       fontWeight,
       color: fontColor,
       ...this.$store.getters.currentFontFamily,
       ...(this.$store.state.config.contentCSS || {})
     };
+    const pStyle = {
+      lineHeight: this.$store.state.config.lineHeight,
+      margin:
+        typeof this.$store.state.config.paragraphSpace !== "undefined"
+          ? this.$store.state.config.paragraphSpace + "em"
+          : null
+    };
     if (this.showContent) {
       return (
         <div style={style}>
           <h3>{this.title}</h3>
           {this.carray.map(a => {
-            a = "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;" + a.replace(/^\s+/g, "");
-            return <p domPropsInnerHTML={a} />;
+            a = a.replace(/^\s+/g, "");
+            return <p style={pStyle} domPropsInnerHTML={a} />;
           })}
         </div>
       );
@@ -58,6 +65,7 @@ p {
   display: block;
   word-wrap: break-word;
   word-break: break-all;
+  text-indent: 2em;
 }
 h3 {
     font-size: 28px;

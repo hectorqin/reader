@@ -29,6 +29,8 @@
 
 <script>
 import Axios from "./plugins/axios";
+import settings from "./plugins/config";
+
 export default {
   name: "app",
   data() {
@@ -48,7 +50,7 @@ export default {
         window.localStorage && window.localStorage.getItem("config")
       );
       if (config && typeof config === "object") {
-        this.$store.commit("setConfig", config);
+        this.$store.commit("setConfig", { ...settings.config, ...config });
       }
     } catch (error) {
       //

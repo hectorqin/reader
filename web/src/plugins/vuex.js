@@ -1,6 +1,6 @@
 import Vue from "vue";
 import Vuex from "vuex";
-import themeConfig from "./config";
+import settings from "./config";
 
 Vue.use(Vuex);
 
@@ -12,15 +12,7 @@ export default new Vuex.Store({
       location.host + "/reader3",
     shelfBooks: [],
     readingBook: {},
-    config: {
-      theme: 0,
-      font: 0,
-      fontSize: 18,
-      fontWeight: 400,
-      readMethod: "上下滑动",
-      clickMethod: "自动",
-      readWidth: 800
-    },
+    config: { ...settings.config },
     miniInterface: false,
     windowSize: {
       width: window.innerWidth,
@@ -117,7 +109,7 @@ export default new Vuex.Store({
       return false;
     },
     currentFontFamily: state => {
-      return themeConfig.fonts[state.config.font];
+      return settings.fonts[state.config.font];
     },
     currentThemeConfig: (state, getters) => {
       if (state.config.theme === "custom") {
@@ -136,7 +128,7 @@ export default new Vuex.Store({
           popup: state.config.popupColor || "#ede7da"
         };
       } else {
-        return themeConfig.themes[state.config.theme];
+        return settings.themes[state.config.theme];
       }
     }
   }

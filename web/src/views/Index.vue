@@ -523,7 +523,7 @@ export default {
         refresh
           ? {}
           : {
-              timeout: 3000
+              timeout: 30000
             }
       )
         .then(response => {
@@ -561,7 +561,6 @@ export default {
         return;
       }
       Axios.get(this.api + "/getSources", {
-        timeout: 3000,
         params: {
           simple: 1
         }

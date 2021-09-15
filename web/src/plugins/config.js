@@ -17,7 +17,18 @@ import body_6 from "../assets/imgs/themes/body_6.png";
 import content_6 from "../assets/imgs/themes/content_6.png";
 // import popup_6 from "../assets/imgs/themes/popup_6.png";
 
-var settings = {
+const settings = {
+  config: {
+    theme: 0,
+    font: 0,
+    fontSize: 18,
+    fontWeight: 400,
+    readMethod: "上下滑动",
+    clickMethod: "自动",
+    readWidth: 800,
+    lineHeight: 1.8, // 行高
+    paragraphSpace: 1 // 段间距
+  },
   themes: [
     {
       body: "#ede7da url(" + body_0 + ") repeat",

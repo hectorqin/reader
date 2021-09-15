@@ -129,6 +129,30 @@
           </div>
         </li>
         <li class="font-size">
+          <span class="setting-item-title">段落行高</span>
+          <div class="resize">
+            <span class="less" @click="lessLineHeight"
+              ><em class="iconfont">&#58966;</em></span
+            ><b></b> <span class="lang">{{ lineHeight }}</span
+            ><b></b>
+            <span class="more" @click="moreLineHeight"
+              ><em class="iconfont">&#58976;</em></span
+            >
+          </div>
+        </li>
+        <li class="font-size">
+          <span class="setting-item-title">段落间距</span>
+          <div class="resize">
+            <span class="less" @click="lessParagraphSpace"
+              ><em class="iconfont">&#58966;</em></span
+            ><b></b> <span class="lang">{{ paragraphSpace }}</span
+            ><b></b>
+            <span class="more" @click="moreParagraphSpace"
+              ><em class="iconfont">&#58976;</em></span
+            >
+          </div>
+        </li>
+        <li class="font-size">
           <span class="setting-item-title font-color-title">字体颜色</span>
           <el-color-picker v-model="fontColor"></el-color-picker>
         </li>
@@ -179,6 +203,8 @@
 <script>
 import "../assets/fonts/iconfont.css";
 import Axios from "../plugins/axios";
+import settings from "../plugins/config";
+
 export default {
   name: "ReadSettings",
   data() {
@@ -264,16 +290,27 @@ export default {
       return this.$store.state.config.font;
     },
     readMethod() {
-      return this.$store.state.config.readMethod || "上下滑动";
+      return this.$store.state.config.readMethod ?? settings.config.readMethod;
     },
     clickMethod() {
-      return this.$store.state.config.clickMethod || "自动";
+      return (
+        this.$store.state.config.clickMethod ?? settings.config.clickMethod
+      );
     },
     fontSize() {
       return this.$store.state.config.fontSize;
     },
     fontWeight() {
-      return this.$store.state.config.fontWeight || 400;
+      return this.$store.state.config.fontWeight ?? settings.config.fontWeight;
+    },
+    lineHeight() {
+      return this.$store.state.config.lineHeight ?? settings.config.lineHeight;
+    },
+    paragraphSpace() {
+      return (
+        this.$store.state.config.paragraphSpace ??
+        settings.config.paragraphSpace
+      );
     },
     readWidth() {
       return this.$store.state.config.readWidth;
@@ -334,14 +371,44 @@ export default {
     },
     moreFontWeight() {
       let config = this.config;
-      config.fontWeight = config.fontWeight || 400;
+      config.fontWeight = config.fontWeight || settings.config.fontWeight;
       if (config.fontWeight < 900) config.fontWeight += 100;
       this.$store.commit("setConfig", config);
     },
     lessFontWeight() {
       let config = this.config;
-      config.fontWeight = config.fontWeight || 400;
+      config.fontWeight = config.fontWeight || settings.config.fontWeight;
       if (config.fontWeight > 100) config.fontWeight -= 100;
+      this.$store.commit("setConfig", config);
+    },
+    moreLineHeight() {
+      let config = this.config;
+      config.lineHeight = config.lineHeight || settings.config.lineHeight;
+      if (config.lineHeight < 3) config.lineHeight += 0.2;
+      config.lineHeight = +config.lineHeight.toFixed(1);
+      this.$store.commit("setConfig", config);
+    },
+    lessLineHeight() {
+      let config = this.config;
+      config.lineHeight = config.lineHeight || settings.config.lineHeight;
+      if (config.lineHeight > 1) config.lineHeight -= 0.2;
+      config.lineHeight = +config.lineHeight.toFixed(1);
+      this.$store.commit("setConfig", config);
+    },
+    moreParagraphSpace() {
+      let config = this.config;
+      config.paragraphSpace =
+        config.paragraphSpace ?? settings.config.paragraphSpace;
+      if (config.paragraphSpace < 3) config.paragraphSpace += 0.2;
+      config.paragraphSpace = +config.paragraphSpace.toFixed(1);
+      this.$store.commit("setConfig", config);
+    },
+    lessParagraphSpace() {
+      let config = this.config;
+      config.paragraphSpace =
+        config.paragraphSpace ?? settings.config.paragraphSpace;
+      if (config.paragraphSpace > 0) config.paragraphSpace -= 0.2;
+      config.paragraphSpace = +config.paragraphSpace.toFixed(1);
       this.$store.commit("setConfig", config);
     },
     moreReadWidth() {
@@ -414,16 +481,7 @@ export default {
       );
     },
     resetConfig() {
-      const config = {
-        theme: 0,
-        font: 0,
-        fontSize: 18,
-        fontWeight: 400,
-        readMethod: "上下滑动",
-        clickMethod: "自动",
-        readWidth: 800
-      };
-      this.$store.commit("setConfig", { ...config });
+      this.$store.commit("setConfig", { ...settings.config });
     },
     showClickZone() {
       this.$emit("close");
