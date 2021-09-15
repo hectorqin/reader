@@ -27,7 +27,7 @@ const settings = {
     clickMethod: "自动",
     readWidth: 800,
     lineHeight: 1.8, // 行高
-    paragraphSpace: 1 // 段间距
+    paragraphSpace: 0.2 // 段间距
   },
   themes: [
     {

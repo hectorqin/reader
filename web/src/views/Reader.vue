@@ -142,14 +142,17 @@
     </div>
     <div class="read-bar" :style="rightBarTheme">
       <div class="progress" v-if="$store.state.miniInterface">
-        <el-slider
-          v-model="currentPage"
-          :min="1"
-          :max="totalPages"
-          :show-tooltip="$store.state.miniInterface && showToolBar"
-          :format-tooltip="formatProgressTip"
-          @change="showPage"
-        ></el-slider>
+        <div class="progress-bar">
+          <el-slider
+            v-model="currentPage"
+            :min="1"
+            :max="totalPages"
+            :show-tooltip="false"
+            @change="showPage"
+            @input="progressValue = $event"
+          ></el-slider>
+        </div>
+        <span class="progress-tip">{{ formatProgressTip() }}</span>
       </div>
       <div class="tools">
         <div class="tool-icon progress-text">
@@ -179,7 +182,6 @@
         </div>
       </div>
     </div>
-    <div class="chapter-bar"></div>
     <div
       class="chapter"
       ref="content"
@@ -218,7 +220,10 @@
         </div>
       </div>
       <div class="bottom-bar" ref="bottom">
-        {{ $store.getters.isSlideRead ? `${currentPage} / ${totalPages}` : "" }}
+        <span v-if="$store.getters.isSlideRead">{{
+          `第${currentPage}/${totalPages}页 ${readingProgress}`
+        }}</span>
+        <span v-if="$store.getters.isSlideRead">{{ timeStr }}</span>
         <span
           class="bottom-btn"
           v-if="this.show && !$store.getters.isSlideRead"
@@ -250,12 +255,33 @@ export default {
   },
   mounted() {
     this.init();
-    // window.addEventListener
     window.addEventListener("keydown", this.keydownHandler);
 
     window.readerPage = this;
+
+    this.formatTime();
+    this.timer = setInterval(() => {
+      this.formatTime();
+    }, 5000);
+
+    this.$store.watch(
+      state => state.config,
+      () => {
+        this.$nextTick(() => {
+          this.computePages(() => {
+            if (this.currentPage > this.totalPages) {
+              this.showPage(this.totalPages, 0);
+            }
+          });
+        });
+      },
+      {
+        deep: true
+      }
+    );
   },
   destroyed() {
+    this.timer && clearInterval(this.timer);
     window.removeEventListener("keydown", this.keydownHandler);
   },
   watch: {
@@ -288,14 +314,16 @@ export default {
         this.transformX = 0;
       }
       this.$nextTick(() => {
-        this.computePages();
-        this.showPage(this.currentPage, 0);
+        this.computePages(() => {
+          this.showPage(this.currentPage, 0);
+        });
       });
     },
     windowSize() {
       this.$nextTick(() => {
-        this.computePages();
-        this.showPage(this.currentPage, 0);
+        this.computePages(() => {
+          this.showPage(this.currentPage, 0);
+        });
       });
     },
     loginAuth(val) {
@@ -322,7 +350,9 @@ export default {
       transformX: 0,
       transforming: false,
       showLastPage: false,
-      showClickZone: false
+      showClickZone: false,
+      timeStr: "",
+      progressValue: 1
     };
   },
   computed: {
@@ -401,8 +431,8 @@ export default {
     },
     readWidthConfig() {
       var width = this.$store.state.config.readWidth;
-      while (width > this.$store.state.windowSize.width - 120) {
-        width -= 160;
+      while (width > this.$store.state.windowSize.width - 140) {
+        width -= 20;
       }
       return width;
     },
@@ -648,7 +678,13 @@ export default {
     toShelf() {
       this.$router.push("/");
     },
-    computePages() {
+    computePages(cb) {
+      if (!this.$refs.bookContentRef || !this.$refs.bookContentRef.$el) {
+        setTimeout(() => {
+          this.computePages(cb);
+        }, 30);
+        return;
+      }
       if (this.isSlideRead) {
         this.totalPages = Math.ceil(
           this.$refs.bookContentRef.$el.scrollWidth /
@@ -663,6 +699,7 @@ export default {
         this.showPage(this.totalPages, 0);
         this.showLastPage = false;
       }
+      cb && cb();
     },
     nextPage(moveX) {
       if (!this.show) {
@@ -959,7 +996,12 @@ export default {
       }
     },
     formatProgressTip(value) {
-      return `第 ${value}/${this.totalPages} 页`;
+      return `第 ${value || this.progressValue}/${this.totalPages} 页`;
+    },
+    formatTime() {
+      const now = new Date();
+      const pad = v => (v > 10 ? "" + v : "0" + v);
+      this.timeStr = pad(now.getHours()) + ":" + pad(now.getMinutes());
     }
   }
 };
@@ -971,7 +1013,7 @@ export default {
 }
 
 .chapter-wrapper {
-  padding: 0 4%;
+  padding: 0;
   flex-direction: column;
   align-items: center;
 
@@ -1156,6 +1198,10 @@ export default {
     }
   }
 
+  >>>.progress-tip {
+    color: rgba(0, 0, 0, 0.4);
+  }
+
   >>>.chapter {
     border: 1px solid #d8d8d8;
     color: #262626;
@@ -1183,6 +1229,10 @@ export default {
     .icon-text {
       color: #666;
     }
+  }
+
+  >>>.progress-tip {
+    color: #666;
   }
 
   >>>.chapter {
@@ -1234,6 +1284,18 @@ export default {
 
       .progress {
         padding: 10px 36px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+
+        .progress-bar {
+          flex: 1;
+          padding: 0 20px;
+        }
+
+        .progress-tip {
+          font-size: 14px;
+        }
       }
 
       .tools {
@@ -1271,6 +1333,8 @@ export default {
         width: 100vw;
         z-index: 50;
         background: inherit;
+        height: 30px;
+        padding: 6px 16px;
       }
 
       .content-inner {
@@ -1282,10 +1346,13 @@ export default {
       padding: 0;
 
       .bottom-bar {
-        height: 18px;
+        height: 24px;
         position: absolute;
         bottom: 0;
         padding: 0 16px;
+        padding-bottom: 6px;
+        display: flex;
+        justify-content: space-between;
       }
 
       .top-bar {
@@ -1295,8 +1362,8 @@ export default {
       .content {
         position: absolute;
         overflow: visible;
-        top: 44px;
-        bottom: 18px;
+        top: 30px;
+        bottom: 24px;
       }
 
       .content-inner {

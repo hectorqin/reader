@@ -16,7 +16,11 @@ export default {
     };
     const pStyle = {
       lineHeight: this.$store.state.config.lineHeight,
-      margin:
+      marginTop:
+        typeof this.$store.state.config.paragraphSpace !== "undefined"
+          ? this.$store.state.config.paragraphSpace + "em"
+          : null,
+      marginBottom:
         typeof this.$store.state.config.paragraphSpace !== "undefined"
           ? this.$store.state.config.paragraphSpace + "em"
           : null
