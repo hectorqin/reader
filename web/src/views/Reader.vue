@@ -523,13 +523,13 @@ export default {
             this.getContent(index);
           } else {
             this.loading.close();
-            this.$message.error(res.data.errorMsg);
           }
         },
-        err => {
+        error => {
           this.loading.close();
-          this.$message.error("获取书籍目录失败");
-          throw err;
+          this.$message.error(
+            "获取书籍目录列表 " + (error && error.toString())
+          );
         }
       );
     },
@@ -587,11 +587,14 @@ export default {
           this.noPoint = false;
           this.show = true;
         },
-        err => {
-          this.loading.close();
-          this.$message.error("获取章节内容失败");
+        error => {
           this.content = "　　获取章节内容失败！";
-          throw err;
+          this.show = true;
+          this.loading.close();
+          this.$message.error(
+            "获取章节内容失败 " + (error && error.toString())
+          );
+          throw error;
         }
       );
     },
@@ -830,11 +833,13 @@ export default {
       if (e.touches && e.touches[0] && this.lastTouch) {
         e.preventDefault();
         e.stopPropagation();
-        const moveX = e.touches[0].clientX - this.lastTouch.clientX;
-        this.contentStyle = {
-          transform: `translateX(${this.transformX + moveX}px)`
-        };
-        this.lastMoveX = moveX;
+        if (this.isSlideRead) {
+          const moveX = e.touches[0].clientX - this.lastTouch.clientX;
+          this.contentStyle = {
+            transform: `translateX(${this.transformX + moveX}px)`
+          };
+          this.lastMoveX = moveX;
+        }
       }
     },
     handleTouchEnd() {

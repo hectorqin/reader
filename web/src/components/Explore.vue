@@ -27,16 +27,22 @@
             :key="'source-' + index"
             ref="source"
           >
-            <el-tag
-              type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="explore-btn"
+            <div
+              class="explore-group"
               v-for="(group, indexG) in source.exploreGroup"
               :key="'group-' + indexG"
-              @click="exploreBookSource(group.url, source.index, 1)"
             >
-              {{ group.name }}
-            </el-tag>
+              <el-tag
+                type="info"
+                :effect="$store.getters.isNight ? 'dark' : 'light'"
+                class="explore-btn"
+                v-for="(item, indexI) in group"
+                :key="'group-' + indexI"
+                @click="exploreBookSource(item.url, source.index, 1, index)"
+              >
+                {{ item.name }}
+              </el-tag>
+            </div>
           </el-collapse-item>
         </el-collapse>
       </div>
@@ -54,6 +60,7 @@ export default {
       page: 1,
       ruleFindUrl: "",
       sourceIndex: -1,
+      displayIndex: -1,
       exploreList: []
     };
   },
@@ -83,11 +90,18 @@ export default {
       return list;
     }
   },
-  mounted() {},
+  mounted() {
+    window.explorePop = this;
+  },
   watch: {
     visible(isVisible) {
-      if (isVisible) {
-        //
+      if (isVisible && this.displayIndex >= 0) {
+        this.$nextTick(() => {
+          jump(this.$refs.source[this.displayIndex].$el, {
+            container: this.$refs.sourceList,
+            duration: 0
+          });
+        });
       }
     }
   },
@@ -99,19 +113,37 @@ export default {
       if (!bookSource.exploreUrl) {
         return [];
       }
-      const result = bookSource.exploreUrl.split("\n").map(v => {
-        v = v.split("::");
-        return {
-          name: v[0],
-          url: v[1]
-        };
-      });
+      const result = [];
+      let zone = [];
+      bookSource.exploreUrl
+        .replace(/\r\n/g, "\n")
+        .split("\n")
+        .forEach(v => {
+          if (!v) {
+            if (zone.length) {
+              // 出现空行，分割为一块
+              result.push(zone);
+              zone = [];
+            }
+          } else {
+            v = v.split("::");
+            zone.push({
+              name: v[0],
+              url: v[1]
+            });
+          }
+        });
+      if (zone.length) {
+        result.push(zone);
+      }
+      // console.log(bookSource.bookSourceName, result);
       return result;
     },
-    exploreBookSource(url, index, page) {
+    exploreBookSource(url, index, page, displayIndex) {
       this.page = page || 1;
       this.ruleFindUrl = url;
       this.sourceIndex = index;
+      this.displayIndex = displayIndex;
       Axios.get(this.api + `/exploreBook`, {
         params: {
           ruleFindUrl: url,
@@ -144,18 +176,22 @@ export default {
             }
             // console.log(this.exploreList);
             this.$emit("showSearchList", this.exploreList);
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        err => {
-          throw err;
+        error => {
+          this.$message.error("探索失败 " + (error && error.toString()));
+          throw error;
         }
       );
     },
     loadMore() {
       this.page = this.page + 1;
-      this.exploreBookSource(this.ruleFindUrl, this.sourceIndex, this.page);
+      this.exploreBookSource(
+        this.ruleFindUrl,
+        this.sourceIndex,
+        this.page,
+        this.displayIndex
+      );
     },
     jumpToActive() {
       this.$nextTick(() => {
@@ -240,6 +276,13 @@ export default {
         border: none;
       }
 
+      .explore-group {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2px;
+        padding-top: 2px;
+      }
+
       .explore-btn {
         margin-right: 15px;
         margin-bottom: 5px;
@@ -274,14 +317,20 @@ export default {
     >>>.el-collapse-item__wrap {
       border-bottom: 1px solid #666;
     }
+    >>>.explore-group {
+      border-bottom: 1px dashed #333;
+    }
   }
 
   .day {
     >>>.el-collapse-item__header {
-      border-bottom: 1px solid #f2f2f2;
+      border-bottom: 1px solid #EBEEF5;
     }
     >>>.el-collapse-item__wrap {
-      border-bottom: 1px solid #f2f2f2;
+      border-bottom: 1px solid #EBEEF5;
+    }
+    >>>.explore-group {
+      border-bottom: 1px dashed #efefef;
     }
   }
 }

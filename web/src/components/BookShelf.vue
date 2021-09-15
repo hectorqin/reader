@@ -86,14 +86,14 @@ export default {
             if (this.bookList.length) {
               this.jumpToActive();
             }
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        err => {
-          this.loading.close();
-          this.$message.error("加载书架信息失败");
-          throw err;
+        error => {
+          this.refreshLoading = false;
+          this.$message.error(
+            "获取书架书籍失败 " + (error && error.toString())
+          );
+          throw error;
         }
       );
     },

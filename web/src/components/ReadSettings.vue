@@ -383,13 +383,10 @@ export default {
             }
             config.contentBGImg = res.data.data[0];
             this.$store.commit("setConfig", { ...config });
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        () => {
-          //
-          this.$message.error("后端连接失败");
+        error => {
+          this.$message.error("上传文件失败 " + (error && error.toString()));
         }
       );
     },
@@ -409,13 +406,10 @@ export default {
               config.contentBGImg = this.builtinBG[0].src;
             }
             this.$store.commit("setConfig", { ...config });
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        () => {
-          //
-          this.$message.error("后端连接失败");
+        error => {
+          this.$message.error("删除文件失败 " + (error && error.toString()));
         }
       );
     },

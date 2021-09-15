@@ -363,7 +363,6 @@ export default {
     return {
       search: "",
       bookSourceUrl: "",
-      bookSourceList: [],
       isSearchResult: false,
       isExploreResult: false,
       searchResult: [],
@@ -495,37 +494,97 @@ export default {
         })
         .catch(() => {});
     },
-    loadBookSource() {
-      if (!this.api) {
+    loadBookshelf(api, refresh) {
+      api = api || this.api;
+      if (!api) {
         this.$message.error("请先设置后端接口地址");
         this.$store.commit("setConnected", false);
+        return Promise.reject(false);
+      }
+
+      this.loading = this.$loading({
+        target: this.$refs.shelfWrapper,
+        lock: true,
+        text: refresh ? "正在刷新书籍信息" : "正在获取书籍信息",
+        spinner: "el-icon-loading",
+        background: this.isNight ? "#121212" : "rgb(247,247,247)"
+      });
+
+      if (
+        !api.startsWith("http://") &&
+        !api.startsWith("https://") &&
+        !api.startsWith("//")
+      ) {
+        api = "//" + api;
+      }
+
+      return Axios.get(
+        api + "/getBookshelf?refresh=" + (refresh ? 1 : 0),
+        refresh
+          ? {}
+          : {
+              timeout: 3000
+            }
+      )
+        .then(response => {
+          this.$store.commit("setConnected", true);
+          this.loading.close();
+          if (response.data.isSuccess) {
+            // this.$store.commit("increaseBookNum", response.data.data.length);
+            this.popIntroVisible = response.data.data.reduce((c, v) => {
+              c[v.name] = false;
+              return c;
+            }, {});
+            this.$store.commit(
+              "setShelfBooks",
+              response.data.data.sort(function(a, b) {
+                var x = a["durChapterTime"] || 0;
+                var y = b["durChapterTime"] || 0;
+                return y - x;
+              })
+            );
+          }
+        })
+        .catch(error => {
+          this.loading.close();
+          this.$store.commit("setConnected", false);
+          this.$message.error("后端连接失败 " + (error && error.toString()));
+          throw error;
+        });
+    },
+    refreshShelf() {
+      return this.loadBookshelf(null, true);
+    },
+    loadBookSource() {
+      if (!this.$store.state.connected) {
+        this.$message.error("后端未连接");
         return;
       }
       Axios.get(this.api + "/getSources", {
-        timeout: 3000
+        timeout: 3000,
+        params: {
+          simple: 1
+        }
       }).then(
         res => {
           this.loading.close();
           if (res.data.isSuccess) {
-            //
-            this.bookSourceList = res.data.data;
+            this.$store.commit("setBookSourceList", res.data.data || []);
             if (this.bookSourceList.length) {
               this.bookSourceUrl =
                 this.bookSourceUrl || this.bookSourceList[0].bookSourceUrl;
             }
           }
         },
-        () => {
-          //
+        error => {
           this.loading.close();
-          this.$message.error("后端连接失败");
+          this.$message.error("加载书源列表 " + (error && error.toString()));
         }
       );
     },
     searchBook(page) {
-      if (!this.api) {
-        this.$message.error("请先设置后端接口地址");
-        this.$store.commit("setConnected", false);
+      if (!this.$store.state.connected) {
+        this.$message.error("后端未连接");
         return;
       }
       if (page) {
@@ -573,79 +632,13 @@ export default {
                 this.$message.error("没有更多啦");
               }
             }
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        res => {
-          //
+        error => {
           this.loading.close();
-          this.$message.error(
-            ((res || {}).data || {}).errorMsg || "后端连接失败"
-          );
+          this.$message.error("搜索书籍失败 " + (error && error.toString()));
         }
       );
-    },
-    loadBookshelf(api, refresh) {
-      api = api || this.api;
-      if (!api) {
-        this.$message.error("请先设置后端接口地址");
-        this.$store.commit("setConnected", false);
-        return Promise.reject(false);
-      }
-
-      this.loading = this.$loading({
-        target: this.$refs.shelfWrapper,
-        lock: true,
-        text: refresh ? "正在刷新书籍信息" : "正在获取书籍信息",
-        spinner: "el-icon-loading",
-        background: this.isNight ? "#121212" : "rgb(247,247,247)"
-      });
-
-      if (
-        !api.startsWith("http://") &&
-        !api.startsWith("https://") &&
-        !api.startsWith("//")
-      ) {
-        api = "//" + api;
-      }
-
-      return Axios.get(
-        api + "/getBookshelf?refresh=" + (refresh ? 1 : 0),
-        refresh
-          ? {}
-          : {
-              timeout: 3000
-            }
-      )
-        .then(response => {
-          this.loading.close();
-          this.$store.commit("setConnected", true);
-          if (response.data.isSuccess) {
-            // this.$store.commit("increaseBookNum", response.data.data.length);
-            this.popIntroVisible = response.data.data.reduce((c, v) => {
-              c[v.name] = false;
-              return c;
-            }, {});
-            this.$store.commit(
-              "setShelfBooks",
-              response.data.data.sort(function(a, b) {
-                var x = a["durChapterTime"] || 0;
-                var y = b["durChapterTime"] || 0;
-                return y - x;
-              })
-            );
-          }
-        })
-        .catch(error => {
-          this.loading.close();
-          this.$store.commit("setConnected", false);
-          this.$message.error("后端连接失败 " + (error && error.toString()));
-          throw error;
-        });
-    },
-    refreshShelf() {
-      return this.loadBookshelf(null, true);
     },
     toDetail(bookUrl, bookName, chapterIndex) {
       if (!bookUrl) {
@@ -665,11 +658,6 @@ export default {
       });
     },
     saveBook(book) {
-      if (!this.api) {
-        this.$message.error("请先设置后端接口地址");
-        this.$store.commit("setConnected", false);
-        return;
-      }
       if (!book || !book.bookUrl || !book.origin) {
         this.$message.error("书籍信息错误");
         return;
@@ -680,22 +668,14 @@ export default {
             //
             this.$message.success("加入书架成功");
             this.loadBookshelf();
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        () => {
-          //
-          this.$message.error("后端连接失败");
+        error => {
+          this.$message.error("加入书架失败 " + (error && error.toString()));
         }
       );
     },
     async deleteBook(book) {
-      if (!this.api) {
-        this.$message.error("请先设置后端接口地址");
-        this.$store.commit("setConnected", false);
-        return;
-      }
       if (!book || !book.name || !book.bookUrl || !book.origin) {
         this.$message.error("书籍信息错误");
         return;
@@ -720,13 +700,10 @@ export default {
             //
             this.$message.success("删除成功");
             this.loadBookshelf();
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        () => {
-          //
-          this.$message.error("后端连接失败");
+        error => {
+          this.$message.error("删除失败 " + (error && error.toString()));
         }
       );
     },
@@ -858,13 +835,12 @@ export default {
               } else {
                 this.$message.error("书源文件错误");
               }
-            } else {
-              this.$message.error(res.data.errorMsg);
             }
           },
-          () => {
-            //
-            this.$message.error("后端连接失败");
+          error => {
+            this.$message.error(
+              "读取书源文件内容失败 " + (error && error.toString())
+            );
           }
         );
       };
@@ -884,9 +860,8 @@ export default {
         checkedCount > 0 && checkedCount < this.importBookSource.length;
     },
     saveBookSourceList() {
-      if (!this.api) {
-        this.$message.error("请先设置后端接口地址");
-        this.$store.commit("setConnected", false);
+      if (!this.$store.state.connected) {
+        this.$message.error("后端未连接");
         return;
       }
       if (!this.checkedSourceIndex.length) {
@@ -903,13 +878,10 @@ export default {
             this.$message.success("导入书源成功");
             this.loadBookSource();
             this.showImportDialog = false;
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        () => {
-          //
-          this.$message.error("后端连接失败");
+        error => {
+          this.$message.error("导入书源失败 " + (error && error.toString()));
         }
       );
     },
@@ -946,13 +918,10 @@ export default {
             this.$message.success("删除书源成功");
             this.loadBookSource();
             this.showManageDialog = false;
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        () => {
-          //
-          this.$message.error("后端连接失败");
+        error => {
+          this.$message.error("删除书源失败 " + (error && error.toString()));
         }
       );
     },
@@ -1053,6 +1022,9 @@ export default {
     },
     loginAuth() {
       return this.$store.state.loginAuth;
+    },
+    bookSourceList() {
+      return this.$store.state.bookSourceList;
     }
   }
 };
@@ -1218,6 +1190,7 @@ export default {
       font-weight: 600;
       font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
       margin-bottom: 15px;
+      min-width: 320px;
 
       .el-icon-menu {
         cursor: pointer;

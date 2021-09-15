@@ -861,9 +861,30 @@ class YueduApi : RestVerticle() {
     }
 
     private suspend fun getSources(context: RoutingContext): ReturnData {
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
         val returnData = ReturnData()
+        var simple: Int = 0
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            simple = context.bodyAsJson.getInteger("simple", 0)
+        } else {
+            // get 请求
+            simple = context.queryParam("simple").firstOrNull()?.toInt() ?: 0
+        }
+        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
         if (bookSourceList != null) {
+            if (simple > 0) {
+                var list = arrayListOf<Map<String, Any?>>()
+                for (i in 0 until bookSourceList.size()) {
+                    var bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
+                    list.add(mapOf<String, Any?>(
+                        "bookSourceGroup" to bookSource.bookSourceGroup,
+                        "bookSourceName" to bookSource.bookSourceName,
+                        "bookSourceUrl" to bookSource.bookSourceUrl,
+                        "exploreUrl" to bookSource.exploreUrl
+                    ))
+                }
+                return returnData.setData(list)
+            }
             return returnData.setData(bookSourceList.getList())
         }
         return returnData.setData(arrayListOf<Int>())

@@ -30,7 +30,8 @@ export default new Vuex.Store({
     showLogin: false,
     loginAuth: true,
     token:
-      (window.localStorage && window.localStorage.getItem("api_token")) || ""
+      (window.localStorage && window.localStorage.getItem("api_token")) || "",
+    bookSourceList: []
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -76,6 +77,9 @@ export default new Vuex.Store({
     setToken(state, token) {
       state.token = token;
       window.localStorage && window.localStorage.setItem("api_token", token);
+    },
+    setBookSourceList(state, list) {
+      state.bookSourceList = list;
     }
   },
   getters: {

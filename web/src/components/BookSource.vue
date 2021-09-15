@@ -99,14 +99,14 @@ export default {
             } else {
               this.loadMoreSource();
             }
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        err => {
-          this.loading.close();
-          this.$message.error("加载书籍来源失败");
-          throw err;
+        error => {
+          this.loading = false;
+          this.$message.error(
+            "获取书籍来源信息失败 " + (error && error.toString())
+          );
+          throw error;
         }
       );
     },
@@ -126,14 +126,11 @@ export default {
             this.$store.commit("setReadingBook", book);
             this.$emit("close");
             this.$emit("loadCatalog");
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        err => {
-          this.loading.close();
-          this.$message.error("修改书籍来源失败");
-          throw err;
+        error => {
+          this.$message.error("换源失败 " + (error && error.toString()));
+          throw error;
         }
       );
     },
@@ -164,15 +161,14 @@ export default {
             if (res.data.data.lastIndex) {
               this.lastIndex = res.data.data.lastIndex;
             }
-          } else {
-            this.$message.error(res.data.errorMsg);
           }
         },
-        err => {
+        error => {
           this.loadingMore = false;
-          this.loading.close();
-          this.$message.error("加载书籍来源失败");
-          throw err;
+          this.$message.error(
+            "加载更多书籍来源失败 " + (error && error.toString())
+          );
+          throw error;
         }
       );
     },

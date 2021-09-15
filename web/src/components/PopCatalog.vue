@@ -189,4 +189,9 @@ export default {
     }
   }
 }
+@media screen and (max-width: 500px) {
+  .popup-wrapper .data-wrapper .cata .log {
+    width: 100%;
+  }
+}
 </style>
