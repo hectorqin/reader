@@ -14,7 +14,7 @@ reader:
 
   server:
     port: 8080
-    webUrl: http://localhost:${reader.server.port}/web/
+    webUrl: http://localhost:${reader.server.port}
 
 logging:
   path: "./logs"

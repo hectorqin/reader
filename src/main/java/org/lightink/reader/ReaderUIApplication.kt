@@ -112,7 +112,7 @@ class ReaderUIApplication: Application() {
                     if (serverPort != null && serverPort > 0) {
                         port = serverPort;
                     }
-                    webUrl = env.getProperty("reader.server.webUrl") ?: ("http://localhost:" + port + "/web/")
+                    webUrl = env.getProperty("reader.server.webUrl") ?: ("http://localhost:" + port)
                     var sep = if(webUrl.contains("?")) {
                         "&"
                     } else {

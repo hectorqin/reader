@@ -84,7 +84,7 @@ abstract class RestVerticle : CoroutineVerticle() {
         }.listen(port) { res ->
             if (res.succeeded()) {
                 logger.info("Server running at: http://localhost:{}", port);
-                logger.info("Web reader running at: http://localhost:{}/web/", port);
+                logger.info("Web reader running at: http://localhost:{}", port);
                 started();
             } else {
                 onStartError();

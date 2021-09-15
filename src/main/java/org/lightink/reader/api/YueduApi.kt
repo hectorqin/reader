@@ -113,7 +113,7 @@ class YueduApi : RestVerticle() {
         router.get("/reader3/saveBookSource").coroutineHandler { saveBookSource(it) }
 
         // web界面
-        router.route("/web/*").handler(StaticHandler.create("web").setDefaultContentEncoding("UTF-8"));
+        router.route("/*").handler(StaticHandler.create("web").setDefaultContentEncoding("UTF-8"));
 
         // assets
         var assetsDir = getWorkDir("storage/assets");

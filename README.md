@@ -4,6 +4,12 @@
 
 接口从 [lightink-server](https://github.com/lightink-qingmo/lightink-server) 修改而来，网页从 [阅读3.0Web端](https://github.com/celetor/web-yuedu3) 修改而来。
 
+在线体验 👉 [https://reader.htmake.com](https://reader.htmake.com)
+
+> Demo 服务器是腾讯云的1M小水管，勿打求饶
+>
+> 数据不定期清除
+
 ## 功能
 
 - 书源管理
@@ -131,7 +137,7 @@ reader:
 
   server:
     port: 8080             # 监听端口
-    webUrl: http://localhost:${reader.server.port}/web/    # web链接
+    webUrl: http://localhost:${reader.server.port}    # web链接
 
 ```
 
@@ -177,7 +183,7 @@ java -jar build/libs/reader-1.3.0.jar
 # 指定 storage 路径  默认为相对路径 storage
 # java -Dreader.app.storagePath=cacheStorage  -jar build/libs/reader-1.3.0.jar
 
-# web端 http://localhost:8080/web/
+# web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/
 ```
 
@@ -191,7 +197,7 @@ java -jar build/libs/reader-1.3.0.jar
 # 使用预编译的镜像
 docker run -d --restart=always --name=reader -v $(PWD)/log:/log -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader
 
-# web端 http://localhost:8080/web/
+# web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/
 ```
 
