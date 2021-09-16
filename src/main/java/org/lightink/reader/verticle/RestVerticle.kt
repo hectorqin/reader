@@ -58,7 +58,7 @@ abstract class RestVerticle : CoroutineVerticle() {
 
         router.route().handler(LoggerHandler.create(LoggerFormat.DEFAULT));
         router.route("/reader3/*").handler {
-            logger.info("request url: {}", URLDecoder.decode(it.request().absoluteURI()))
+            logger.info("{} {}", it.request().rawMethod(), URLDecoder.decode(it.request().absoluteURI(), "UTF-8"))
             logger.info("request body: {}", it.bodyAsString)
             it.next()
         }

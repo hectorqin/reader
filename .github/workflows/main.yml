@@ -11,3 +11,4 @@ jobs:
         name: hectorqin/reader
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
+        snapshot: true

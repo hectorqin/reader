@@ -13,7 +13,9 @@ import java.lang.RuntimeException
 import java.util.regex.Pattern
 import javax.script.SimpleBindings
 import kotlin.collections.HashMap
+import mu.KotlinLogging
 
+private val logger = KotlinLogging.logger {}
 
 /**
  * Created by REFGD.
@@ -587,7 +589,10 @@ class AnalyzeRule(var book: BaseBook? = null) {
         bindings["book"] = book
         bindings["result"] = result
         bindings["baseUrl"] = baseUrl
-        return SCRIPT_ENGINE.eval(jsStr, bindings)
+        // logger.info("evalJS: {}", jsStr)
+        val res = SCRIPT_ENGINE.eval(jsStr, bindings)
+        // logger.info("result: {}", res)
+        return res
     }
 
     /**
