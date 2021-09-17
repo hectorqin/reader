@@ -2,6 +2,7 @@ import Vue from "vue";
 import Vuex from "vuex";
 import settings from "./config";
 
+const defaultNS = [{ username: "默认", userNS: "default" }];
 Vue.use(Vuex);
 
 export default new Vuex.Store({
@@ -26,6 +27,7 @@ export default new Vuex.Store({
     bookSourceList: [],
     isSecureMode: false,
     secureKey: "",
+    userList: [].concat(defaultNS),
     userNS: "default",
     showManagerMode: false
   },
@@ -88,6 +90,15 @@ export default new Vuex.Store({
     },
     setShowManagerMode(state, showManagerMode) {
       state.showManagerMode = showManagerMode;
+    },
+    setUserList(state, userList) {
+      if (userList.length) {
+        state.userList = []
+          .concat([{ username: "系统默认", userNS: "default" }])
+          .concat(userList);
+      } else {
+        state.userList = [].concat(defaultNS);
+      }
     }
   },
   getters: {

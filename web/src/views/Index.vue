@@ -397,7 +397,6 @@ import Explore from "../components/Explore.vue";
 import Axios from "../plugins/axios";
 import noCover from "../assets/imgs/noCover.jpeg";
 
-const defaultNS = [{ username: "默认", userNS: "default" }];
 export default {
   components: {
     Explore
@@ -429,9 +428,7 @@ export default {
 
       connecting: false,
 
-      lastScrollTop: 0,
-
-      userList: [].concat(defaultNS)
+      lastScrollTop: 0
     };
   },
   watch: {
@@ -1033,19 +1030,10 @@ export default {
       Axios.get(this.api + "/getUserList").then(
         res => {
           if (res.data.isSuccess) {
-            this.userList = []
-              .concat([
-                {
-                  username: "系统默认",
-                  userNS: "default"
-                }
-              ])
-              .concat(
-                res.data.data.map(v => ({
-                  ...v,
-                  userNS: v.username
-                }))
-              );
+            this.userList = res.data.data.map(v => ({
+              ...v,
+              userNS: v.username
+            }));
             this.$store.commit("setIsSecureMode", true);
             this.init(true);
           }
@@ -1059,7 +1047,7 @@ export default {
     },
     exitSecureMode() {
       this.userNS = "default";
-      this.userList = [].concat(defaultNS);
+      this.userList = [];
       this.$store.commit("setIsSecureMode", false);
       this.init(true);
     }
@@ -1140,6 +1128,14 @@ export default {
         if (val) {
           this.$store.commit("setIsSecureMode", true);
         }
+      }
+    },
+    userList: {
+      get() {
+        return this.$store.state.userList;
+      },
+      set(val) {
+        this.$store.commit("setUserList", val);
       }
     }
   }
