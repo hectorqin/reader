@@ -41,6 +41,10 @@ export const request = async ({
   if (store.state.token) {
     params.accessToken = store.state.token;
   }
+  if (store.state.isSecureMode && store.state.secureKey) {
+    params.secureKey = store.state.secureKey;
+    params.userNS = store.state.userNS;
+  }
   const query = {
     url,
     method,
@@ -63,7 +67,7 @@ export const request = async ({
         // 需要登录
         store.commit("setShowLogin", true);
         setTimeout(() => {
-          errorMsg && Message.error(errorMsg);
+          errorMsg && Message.error({ message: errorMsg, duration: 2000 });
         }, 200);
         break;
       case "NEED_SECURE_KEY":
@@ -73,6 +77,7 @@ export const request = async ({
         );
         if (result && result.action === "confirm" && result.value) {
           params.secureKey = result.value;
+          store.commit("setSecureKey", result.value);
           return await request({
             url,
             method,
@@ -84,11 +89,11 @@ export const request = async ({
         }
         break;
       default:
-        errorMsg && Message.error(errorMsg);
+        errorMsg && Message.error({ message: errorMsg, duration: 2000 });
         break;
     }
   } else {
-    alert && errorMsg && Message.success(errorMsg);
+    alert && errorMsg && Message.success({ message: errorMsg, duration: 1500 });
   }
 
   return response;

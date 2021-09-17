@@ -12,10 +12,18 @@
           <el-input v-model="loginForm.username" autocomplete="off"></el-input>
         </el-form-item>
         <el-form-item label="密码">
-          <el-input v-model="loginForm.password" autocomplete="off"></el-input>
+          <el-input
+            v-model="loginForm.password"
+            autocomplete="off"
+            @keyup.enter.native="login"
+          ></el-input>
         </el-form-item>
         <el-form-item label="邀请码(没有则不填)">
-          <el-input v-model="loginForm.code" autocomplete="off"></el-input>
+          <el-input
+            v-model="loginForm.code"
+            autocomplete="off"
+            @keyup.enter.native="login"
+          ></el-input>
         </el-form-item>
         <el-checkbox v-model="remember">记住登录信息</el-checkbox>
       </el-form>

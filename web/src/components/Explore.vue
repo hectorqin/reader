@@ -38,7 +38,9 @@
                 class="explore-btn"
                 v-for="(item, indexI) in group"
                 :key="'group-' + indexI"
-                @click="exploreBookSource(item.url, source.index, 1, index)"
+                @click="
+                  exploreBookSource(item.url, source.bookSourceUrl, 1, index)
+                "
               >
                 {{ item.name }}
               </el-tag>
@@ -59,12 +61,12 @@ export default {
     return {
       page: 1,
       ruleFindUrl: "",
-      sourceIndex: -1,
+      bookSourceUrl: "",
       displayIndex: -1,
       exploreList: []
     };
   },
-  props: ["visible", "bookSourceUrl", "bookSourceList"],
+  props: ["visible", "bookSourceList"],
   computed: {
     theme() {
       return this.$store.state.config.theme;
@@ -76,13 +78,13 @@ export default {
     },
     bookSourceListNew() {
       const list = [];
-      this.bookSourceList.forEach((source, index) => {
+      this.bookSourceList.forEach(source => {
         const exploreGroup = this.getExploreGroup(source);
         if (exploreGroup.length) {
           list.push({
             bookSourceName: source.bookSourceName,
             exploreGroup,
-            index
+            bookSourceUrl: source.bookSourceUrl
           });
         }
       });
@@ -106,9 +108,6 @@ export default {
     }
   },
   methods: {
-    isSelected(bookSource) {
-      return bookSource.bookSourceUrl == this.bookSourceUrl;
-    },
     getExploreGroup(bookSource) {
       if (!bookSource.exploreUrl) {
         return [];
@@ -139,15 +138,15 @@ export default {
       // console.log(bookSource.bookSourceName, result);
       return result;
     },
-    exploreBookSource(url, index, page, displayIndex) {
+    exploreBookSource(url, sourceUrl, page, displayIndex) {
       this.page = page || 1;
       this.ruleFindUrl = url;
-      this.sourceIndex = index;
+      this.bookSourceUrl = sourceUrl;
       this.displayIndex = displayIndex;
       Axios.get(this.api + `/exploreBook`, {
         params: {
           ruleFindUrl: url,
-          bookSourceIndex: index,
+          bookSourceUrl: sourceUrl,
           page
         }
       }).then(
@@ -188,7 +187,7 @@ export default {
       this.page = this.page + 1;
       this.exploreBookSource(
         this.ruleFindUrl,
-        this.sourceIndex,
+        this.bookSourceUrl,
         this.page,
         this.displayIndex
       );

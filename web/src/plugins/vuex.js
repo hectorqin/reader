@@ -23,7 +23,11 @@ export default new Vuex.Store({
     loginAuth: true,
     token:
       (window.localStorage && window.localStorage.getItem("api_token")) || "",
-    bookSourceList: []
+    bookSourceList: [],
+    isSecureMode: false,
+    secureKey: "",
+    userNS: "",
+    showManagerMode: false
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -72,6 +76,18 @@ export default new Vuex.Store({
     },
     setBookSourceList(state, list) {
       state.bookSourceList = list;
+    },
+    setUserNS(state, userNS) {
+      state.userNS = userNS;
+    },
+    setSecureKey(state, secureKey) {
+      state.secureKey = secureKey;
+    },
+    setIsSecureMode(state, isSecureMode) {
+      state.isSecureMode = isSecureMode;
+    },
+    setShowManagerMode(state, showManagerMode) {
+      state.showManagerMode = showManagerMode;
     }
   },
   getters: {

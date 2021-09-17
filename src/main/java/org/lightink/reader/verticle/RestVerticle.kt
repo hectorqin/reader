@@ -47,7 +47,8 @@ abstract class RestVerticle : CoroutineVerticle() {
                     res.putHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, If-Modified-Since, If-None-Match, If-Unmodified-Since, X-Requested-With")
                 }
             }
-            if (it.request().method() == HttpMethod.OPTIONS) {
+            val origin = it.request().getHeader("Origin")
+            if (origin != null && origin.isNotEmpty() && it.request().method() == HttpMethod.OPTIONS) {
                 it.success("")
             } else {
                 it.next()

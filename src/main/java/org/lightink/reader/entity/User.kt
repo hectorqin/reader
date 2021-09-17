@@ -6,5 +6,6 @@ data class User(
         var salt: String,
         var token: String="",
         var last_login_at: Long = System.currentTimeMillis(),
-        var created_at: Long = System.currentTimeMillis()
+        var created_at: Long = System.currentTimeMillis(),
+        var enableWebdav: Boolean = true
 )

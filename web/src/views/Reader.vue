@@ -537,7 +537,6 @@ export default {
         }, 1000);
         return;
       }
-      // this.$message.info("获取章节列表");
       this.getCatalog(this.$store.state.readingBook.bookUrl, refresh).then(
         res => {
           // 连接后端成功，加载自定义样式
@@ -652,7 +651,6 @@ export default {
       let index = this.$store.state.readingBook.index;
       index++;
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
-        // this.$message.info("下一章");
         this.getContent(index);
       } else {
         this.$message.error("本章是最后一章");
@@ -669,7 +667,6 @@ export default {
       let index = this.$store.state.readingBook.index;
       index--;
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
-        // this.$message.info("上一章");
         this.getContent(index);
       } else {
         this.$message.error("本章是第一章");

@@ -37,18 +37,23 @@ import io.vertx.core.http.HttpMethod
 import org.lightink.reader.api.ReturnData
 import io.legado.app.utils.MD5Utils
 import java.net.URLDecoder;
+import java.net.URLEncoder;
 import io.vertx.ext.web.client.WebClient
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.core.env.Environment
 import java.io.File
 import java.lang.Runtime
 import kotlin.collections.mutableMapOf
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat;
+import io.legado.app.utils.EncoderUtils
+import org.springframework.scheduling.annotation.Scheduled
 
 private val logger = KotlinLogging.logger {}
 
 @Component
 class YueduApi : RestVerticle() {
-    var installedBookSourceList = arrayListOf<String>()
     var bookInfoCache = mutableMapOf<String, Map<String, Any>>()
 
     @Autowired
@@ -145,11 +150,77 @@ class YueduApi : RestVerticle() {
         // 获取用户信息
         router.get("/reader3/getUserInfo").coroutineHandler { getUserInfo(it) }
 
-        // webdav 服务
-        // router.route().rawMethod("MKCOL").coroutineHandler {}
+        // 获取用户列表
+        router.get("/reader3/getUserList").coroutineHandler { getUserList(it) }
 
-        // 加载书源
-        loadInstalledBookSourceList();
+        // webdav 服务
+        router.route("/reader3/webdav*").handler {
+            it.addHeadersEndHandler { _ ->
+                var res = it.response()
+                res.putHeader("DAV", "1,2")
+                res.putHeader("Access-Control-Allow-Origin", "*")
+                res.putHeader("Access-Control-Allow-Credentials", "true")
+                res.putHeader("Access-Control-Expose-Headers", "DAV, content-length, Allow")
+                res.putHeader("MS-Author-Via", "DAV")
+                res.putHeader("Allow", "OPTIONS,GET,PUT,PROPFIND,MKCOL")
+                if (appConfig.secure) {
+                    res.putHeader("WWW-Authenticate", "Basic realm=\"Default realm\"")
+                }
+            }
+            val rawMethod = it.request().rawMethod()
+            var isContinue = true
+            if (!checkAuthorization(it)) {
+                if (
+                    rawMethod == "PROPFIND" ||
+                    rawMethod == "MKCOL" ||
+                    rawMethod == "PUT" ||
+                    rawMethod == "GET"
+                ) {
+                    isContinue = false
+                    it.response().setStatusCode(401).end()
+                } else if(rawMethod == "OPTIONS") {
+                    var authorization = it.request().getHeader("Authorization")
+                    if (authorization != null) {
+                        isContinue = false
+                        it.response().setStatusCode(401).end()
+                    }
+                }
+            }
+            if (isContinue) {
+                when (rawMethod) {
+                    "PROPFIND" -> launch(Dispatchers.IO) {
+                        try {
+                            webdavList(it)
+                        } catch (e: Exception) {
+                            onHandlerError(it, e)
+                        }
+                    }
+                    "MKCOL" -> launch(Dispatchers.IO) {
+                        try {
+                            webdavMkdir(it)
+                        } catch (e: Exception) {
+                            onHandlerError(it, e)
+                        }
+                    }
+                    "PUT" -> launch(Dispatchers.IO) {
+                        try {
+                            webdavUpload(it)
+                        } catch (e: Exception) {
+                            onHandlerError(it, e)
+                        }
+                    }
+                    "GET" -> launch(Dispatchers.IO) {
+                        try {
+                            webdavDownload(it)
+                        } catch (e: Exception) {
+                            onHandlerError(it, e)
+                        }
+                    }
+                    "OPTIONS" -> it.response().setStatusCode(200).end()
+                    else -> it.response().setStatusCode(405).end()
+                }
+            }
+        }
 
         // 加载书籍详情缓存
         loadBookCacheInfo();
@@ -192,7 +263,209 @@ class YueduApi : RestVerticle() {
     override fun onHandlerError(context: RoutingContext, error: Exception) {
         val returnData = ReturnData()
         logger.error("Error: {}", error)
-        context.success(returnData.setData(error).setErrorMsg(error.toString()))
+        if (!context.response().headWritten()) {
+            context.success(returnData.setData(error).setErrorMsg(error.toString()))
+        } else {
+            context.response().end(error.toString())
+        }
+    }
+
+    private fun checkAuthorization(context: RoutingContext): Boolean {
+        if (!appConfig.secure) {
+            context.put("webdavUserNameSpace", "default")
+            context.put("webdavUser", null)
+            return true
+        }
+        var authorization = context.request().getHeader("Authorization")
+        logger.info("authorization: {}", authorization)
+        if (authorization == null || authorization.isEmpty()) {
+            return false
+        }
+
+        // Basic YTox
+        val auth = EncoderUtils.base64Decode(authorization.replace("Basic ", "", true)).split(":", limit=2)
+        if (auth.size < 2) {
+            return false
+        }
+        val username = auth[0]
+        val password = auth[1]
+        var userMap = mutableMapOf<String, Map<String, Any>>()
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+        if (userMapJson != null) {
+            userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+        }
+        var existedUser = userMap.getOrDefault(username, null)
+        if (existedUser == null) {
+            return false
+        }
+        var userInfo: User? = existedUser.toDataClass()
+        if (userInfo == null) {
+            return false
+        }
+        var passwordEncrypted = genEncryptedPassword(password, userInfo.salt)
+        if (passwordEncrypted != userInfo.password) {
+            return false
+        }
+
+        if (!userInfo.enableWebdav) {
+            return false
+        }
+
+        context.put("webdavUserNameSpace", userInfo.username)
+        context.put("webdavUser", userInfo)
+
+        return true
+    }
+
+    private suspend fun getUserWebdavHome(context: RoutingContext): String {
+        var prefix = getWorkDir("storage/webdav")
+        var userNamespace = context.get("webdavUserNameSpace") as String? ?: ""
+        if (userNamespace.isNotEmpty()) {
+            prefix = prefix + "/" + userNamespace
+        }
+        var file = File(prefix)
+        if (!file.exists()) {
+            file.mkdirs()
+        }
+        return prefix
+    }
+
+    private suspend fun webdavList(context: RoutingContext) {
+        var home = getUserWebdavHome(context)
+        var path = context.request().path().replace("/reader3/webdav/", "/", true)
+        path = URLDecoder.decode(path, "UTF-8")
+        var file = File(home + path)
+        if (!file.exists()) {
+            context.response().setStatusCode(404).end()
+            return
+        }
+
+        var xml =
+        """<?xml version="1.0" encoding="utf-8"?>
+            <D:multistatus xmlns:D="DAV:">
+                %s
+            </D:multistatus>
+        """
+
+        var dirResponse =
+        """<D:response>
+                <D:href>%s</D:href>
+                <D:propstat>
+                    <D:status>HTTP/1.1 200 OK</D:status>
+                    <D:prop>
+                        <D:getlastmodified>%s</D:getlastmodified>
+                        <D:creationdate>%s</D:creationdate>
+                        <D:resourcetype>
+                            <D:collection />
+                        </D:resourcetype>
+                        <D:displayname>%s</D:displayname>
+                    </D:prop>
+                </D:propstat>
+            </D:response>
+        """
+
+        var fileResponse =
+        """<D:response>
+                <D:href>%s</D:href>
+                <D:propstat>
+                    <D:status>HTTP/1.1 200 OK</D:status>
+                    <D:prop>
+                        <D:getlastmodified>%s</D:getlastmodified>
+                        <D:creationdate>%s</D:creationdate>
+                        <D:resourcetype />
+                        <D:displayname>%s</D:displayname>
+                        <D:getcontentlength>%s</D:getcontentlength>
+                        <D:getcontenttype>%s</D:getcontenttype>
+                    </D:prop>
+                </D:propstat>
+            </D:response>
+        """
+
+        var fileUrl = context.request().absoluteURI()
+
+        // 只支持一级
+        var formatter = { f: File, url: String, showName: Boolean ->
+            var name = if(showName) f.name else ""
+            var modifiedDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(f.lastModified())
+            if (f.isFile()) {
+                String.format(fileResponse, url, modifiedDate, modifiedDate, name, f.length(), "")
+            } else {
+                String.format(dirResponse, url, modifiedDate, modifiedDate, name)
+            }
+        }
+
+        var response = ""
+        if (file.isFile()) {
+            response = String.format(xml, formatter(file, fileUrl, true))
+            context.response().setStatusCode(207).end(response)
+            return
+        }
+
+        if (file.isDirectory()) {
+            fileUrl = if (fileUrl.endsWith("/")) fileUrl else fileUrl + "/"
+            response = formatter(file, fileUrl, false)
+            file.listFiles().forEach {
+                val fileName = URLEncoder.encode(it.name, "UTF-8")
+                response = response + formatter(it, fileUrl + fileName, true)
+            }
+            response = String.format(xml, response)
+            context.response().setStatusCode(207).end(response)
+            return
+        }
+
+        context.response().setStatusCode(404).end()
+    }
+
+    private suspend fun webdavMkdir(context: RoutingContext) {
+        var home = getUserWebdavHome(context)
+        var path = context.request().path().replace("/reader3/webdav/", "/", true)
+        path = URLDecoder.decode(path, "UTF-8")
+        var file = File(home + path)
+        if (file.exists()) {
+            context.response().setStatusCode(405).end()
+            return
+        }
+        try {
+            file.mkdirs()
+            context.response().setStatusCode(201).end()
+        } catch(e: Exception) {
+            context.response().setStatusCode(500).end()
+        }
+    }
+
+    private suspend fun webdavUpload(context: RoutingContext) {
+        var home = getUserWebdavHome(context)
+        var path = context.request().path().replace("/reader3/webdav/", "/", true)
+        path = URLDecoder.decode(path, "UTF-8")
+        var file = File(home + path)
+        if (!file.parentFile.exists()) {
+            context.response().setStatusCode(405).end()
+            return
+        }
+        try {
+            file.writeBytes(context.getBody().getBytes())
+            // TODO 同步用户进度
+
+            context.response().setStatusCode(201).end()
+        } catch(e: Exception) {
+            context.response().setStatusCode(500).end()
+        }
+    }
+
+    private suspend fun webdavDownload(context: RoutingContext) {
+        var home = getUserWebdavHome(context)
+        var path = context.request().path().replace("/reader3/webdav/", "/", true)
+        path = URLDecoder.decode(path, "UTF-8")
+        var file = File(home + path)
+        if (!file.exists()) {
+            context.response().setStatusCode(405).end()
+            return
+        }
+        if (file.isDirectory()) {
+            context.response().setStatusCode(405).end()
+            return
+        }
+        context.response().putHeader("Cache-Control", "86400").sendFile(file.toString())
     }
 
     private suspend fun login(context: RoutingContext): ReturnData {
@@ -278,6 +551,29 @@ class YueduApi : RestVerticle() {
         return loginData
     }
 
+    private suspend fun getUserList(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!appConfig.secure || appConfig.secureKey.isEmpty()) {
+            return returnData.setErrorMsg("不支持的操作")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        }
+        var userMap = mutableMapOf<String, Map<String, Any>>()
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+        if (userMapJson != null) {
+            userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+        }
+        var userList = arrayListOf<Map<String, Any>>()
+        userMap.forEach{
+            userList.add(it.value)
+        }
+        return returnData.setData(userList)
+    }
+
     private suspend fun getUserInfo(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         var userInfo = context.session().get("userInfo") as Map<String, Any>?
@@ -329,6 +625,11 @@ class YueduApi : RestVerticle() {
         }
         var secureKey = context.queryParam("secureKey").firstOrNull() ?: ""
         if (secureKey.equals(appConfig.secureKey)) {
+            // 判断是否需要修改 userNameSpace
+            var userNS = context.queryParam("userNS").firstOrNull()
+            if (userNS != null) {
+                context.put("userNameSpace", userNS)
+            }
             return true
         }
         return false
@@ -337,6 +638,12 @@ class YueduApi : RestVerticle() {
     private suspend fun getUserNameSpace(context: RoutingContext): String {
         if (!appConfig.secure) {
             return ""
+        }
+        // 管理权限，可以修改 userNameSpace 来获取任意用户信息
+        checkManagerAuth(context)
+        var userNS = context.get("userNameSpace") as String?
+        if (userNS != null) {
+            return if (userNS.isNotEmpty()) "/" + userNS else userNS
         }
         var userInfo = context.session().get("userInfo") as Map<String, Any>?
         if (userInfo != null) {
@@ -538,7 +845,7 @@ class YueduApi : RestVerticle() {
                 bookSource = getBookSourceString(context, cacheInfo.origin)
             } else {
                 // 看看有没有传入书源
-                bookSource = getBookSourceString(context, "", -1)
+                bookSource = getBookSourceString(context)
             }
             if (bookSource.isNullOrEmpty()) {
                 return returnData.setErrorMsg("未配置书源")
@@ -583,7 +890,7 @@ class YueduApi : RestVerticle() {
             // 看看有没有加入书架
             var bookInfo = getShelfBookByURL(bookUrl, userNameSpace)
             if (bookInfo != null && !bookInfo.origin.isNullOrEmpty()) {
-                bookSource = getInstalledBookSourceStringBySourceURL(bookInfo.origin)
+                bookSource = getBookSourceStringBySourceURL(bookInfo.origin, userNameSpace)
             }
             // 看看有没有缓存数据
             var cacheInfo: Book? = bookInfoCache.get(bookUrl)?.toDataClass()
@@ -688,16 +995,18 @@ class YueduApi : RestVerticle() {
             lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
             searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 5
         }
-        if (installedBookSourceList.size <= 0) {
+        var userNameSpace = getUserNameSpace(context)
+        var userBookSourceList = loadBookSourceStringList(userNameSpace)
+        if (userBookSourceList.size <= 0) {
             return returnData.setErrorMsg("未配置书源")
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
         }
-        if (lastIndex >= installedBookSourceList.size) {
+        if (lastIndex >= userBookSourceList.size) {
             return returnData.setErrorMsg("没有更多了")
         }
-        var book = getShelfBookByURL(bookUrl, getUserNameSpace(context))
+        var book = getShelfBookByURL(bookUrl, userNameSpace)
         if (book == null) {
             book = bookInfoCache.get(bookUrl)?.toDataClass()
         }
@@ -708,9 +1017,9 @@ class YueduApi : RestVerticle() {
         lastIndex = lastIndex + 1
         searchSize = if(searchSize > 0) searchSize else 5
         var resultList = arrayListOf<SearchBook>()
-        for (i in lastIndex until installedBookSourceList.size) {
+        for (i in lastIndex until userBookSourceList.size) {
             // logger.info("searchBookSource from Index: {}", i)
-            var bookSource = installedBookSourceList.get(i)
+            var bookSource = userBookSourceList.get(i)
             try {
                 var result = saveBookInfoCache(WebBook(bookSource).searchBook(book.name, 1))
                 if (result.size > 0) {
@@ -749,7 +1058,8 @@ class YueduApi : RestVerticle() {
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
         }
-        var book = getShelfBookByURL(bookUrl, getUserNameSpace(context))
+        var userNameSpace = getUserNameSpace(context)
+        var book = getShelfBookByURL(bookUrl, userNameSpace)
         if (book == null) {
             book = bookInfoCache.get(bookUrl)?.toDataClass()
         }
@@ -765,7 +1075,7 @@ class YueduApi : RestVerticle() {
                 for (i in 0 until list.size) {
                     try {
                         var searchBook: SearchBook = list.get(i).toDataClass()
-                        var bookSource = getInstalledBookSourceStringBySourceURL(searchBook.origin)
+                        var bookSource = getBookSourceStringBySourceURL(searchBook.origin, userNameSpace)
                         if (bookSource == null) {
                             continue;
                         }
@@ -791,17 +1101,28 @@ class YueduApi : RestVerticle() {
         }
         return returnData.setData(arrayListOf<Int>())
     }
+    private suspend fun getUserBookSourceJson(userNameSpace: String): JsonArray? {
+        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource" + userNameSpace))
+        if (bookSourceList == null && userNameSpace.isNotEmpty()) {
+            // 用户书源文件不存在，拷贝系统书源
+            var systemBookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
+            if (systemBookSourceList != null) {
+                saveStorage("data/bookSource" + userNameSpace, systemBookSourceList.getList())
+                bookSourceList = systemBookSourceList
+            }
+        }
+        return bookSourceList
+    }
 
     private suspend fun saveSource(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        if (!checkManagerAuth(context)) {
-            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
-        }
         val bookSource = context.bodyAsJson.mapTo(BookSource::class.java)
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
+
+        var userNameSpace = getUserNameSpace(context)
+        var bookSourceList = getUserBookSourceJson(userNameSpace)
         if (bookSourceList == null) {
             bookSourceList = JsonArray()
         }
@@ -809,7 +1130,7 @@ class YueduApi : RestVerticle() {
         var existIndex: Int = -1
         for (i in 0 until bookSourceList.size()) {
             var _bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
-            if (_bookSource.bookSourceName.equals(bookSource.bookSourceName)) {
+            if (_bookSource.bookSourceUrl.equals(bookSource.bookSourceUrl)) {
                 existIndex = i
                 break;
             }
@@ -824,8 +1145,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("data/bookSource", bookSourceList)
-        loadInstalledBookSourceList();
+        saveStorage("data/bookSource" + userNameSpace, bookSourceList)
         return returnData.setData(bookSourceList.getList())
     }
 
@@ -834,11 +1154,10 @@ class YueduApi : RestVerticle() {
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        if (!checkManagerAuth(context)) {
-            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
-        }
         val bookSourceJsonArray = context.bodyAsJsonArray
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
+
+        var userNameSpace = getUserNameSpace(context)
+        var bookSourceList = getUserBookSourceJson(userNameSpace)
         if (bookSourceList == null) {
             bookSourceList = JsonArray()
         }
@@ -848,7 +1167,7 @@ class YueduApi : RestVerticle() {
             var existIndex: Int = -1
             for (i in 0 until bookSourceList!!.size()) {
                 var _bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
-                if (_bookSource.bookSourceName.equals(bookSource.bookSourceName)) {
+                if (_bookSource.bookSourceUrl.equals(bookSource.bookSourceUrl)) {
                     existIndex = i
                     break;
                 }
@@ -864,8 +1183,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("data/bookSource", bookSourceList!!)
-        loadInstalledBookSourceList();
+        saveStorage("data/bookSource" + userNameSpace, bookSourceList!!)
         return returnData.setData(bookSourceList.getList())
     }
 
@@ -879,7 +1197,8 @@ class YueduApi : RestVerticle() {
             // get 请求
             simple = context.queryParam("simple").firstOrNull()?.toInt() ?: 0
         }
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
+        var userNameSpace = getUserNameSpace(context)
+        var bookSourceList = getUserBookSourceJson(userNameSpace)
         if (bookSourceList != null) {
             if (simple > 0) {
                 var list = arrayListOf<Map<String, Any?>>()
@@ -904,11 +1223,10 @@ class YueduApi : RestVerticle() {
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        if (!checkManagerAuth(context)) {
-            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
-        }
         val bookSource = context.bodyAsJson.mapTo(BookSource::class.java)
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
+
+        var userNameSpace = getUserNameSpace(context)
+        var bookSourceList = getUserBookSourceJson(userNameSpace)
         if (bookSourceList == null) {
             bookSourceList = JsonArray()
         }
@@ -916,7 +1234,7 @@ class YueduApi : RestVerticle() {
         var existIndex: Int = -1
         for (i in 0 until bookSourceList.size()) {
             var _bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
-            if (_bookSource.bookSourceName.equals(bookSource.bookSourceName)) {
+            if (_bookSource.bookSourceUrl.equals(bookSource.bookSourceUrl)) {
                 existIndex = i
                 break;
             }
@@ -926,8 +1244,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("data/bookSource", bookSourceList)
-        loadInstalledBookSourceList();
+        saveStorage("data/bookSource" + userNameSpace, bookSourceList)
         return returnData.setData(bookSourceList.getList())
     }
 
@@ -936,11 +1253,10 @@ class YueduApi : RestVerticle() {
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        if (!checkManagerAuth(context)) {
-            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
-        }
         val bookSourceJsonArray = context.bodyAsJsonArray
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
+
+        var userNameSpace = getUserNameSpace(context)
+        var bookSourceList = getUserBookSourceJson(userNameSpace)
         if (bookSourceList == null) {
             bookSourceList = JsonArray()
         }
@@ -950,7 +1266,7 @@ class YueduApi : RestVerticle() {
             var existIndex: Int = -1
             for (i in 0 until bookSourceList.size()) {
                 var _bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
-                if (_bookSource.bookSourceName.equals(bookSource.bookSourceName)) {
+                if (_bookSource.bookSourceUrl.equals(bookSource.bookSourceUrl)) {
                     existIndex = i
                     break;
                 }
@@ -961,8 +1277,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("data/bookSource", bookSourceList)
-        loadInstalledBookSourceList();
+        saveStorage("data/bookSource" + userNameSpace, bookSourceList)
         return returnData.setData(bookSourceList.getList())
     }
 
@@ -1013,9 +1328,10 @@ class YueduApi : RestVerticle() {
         if (book.bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("书籍链接不能为空")
         }
+        var userNameSpace = getUserNameSpace(context)
         if (book.tocUrl.isNullOrEmpty()) {
             // 补全书籍信息
-            var bookSource = getInstalledBookSourceStringBySourceURL(book.origin)
+            var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace)
             if (bookSource == null) {
                 return returnData.setErrorMsg("书源信息错误")
             }
@@ -1023,7 +1339,6 @@ class YueduApi : RestVerticle() {
             book = newBook.fillData(book, listOf("name", "author", "coverUrl", "intro", "latestChapterTitle", "wordCount"))
         }
         book = mergeBookCacheInfo(book)
-        var userNameSpace = getUserNameSpace(context)
         var bookshelf: JsonArray? = asJsonArray(getStorage("data/bookshelf" + userNameSpace))
         if (bookshelf == null) {
             bookshelf = JsonArray()
@@ -1093,7 +1408,7 @@ class YueduApi : RestVerticle() {
         bookSourceUrl = URLDecoder.decode(bookSourceUrl, "UTF-8")
         newBookUrl = URLDecoder.decode(newBookUrl, "UTF-8")
         // 查找是否存在该书源
-        var bookSourceString = getInstalledBookSourceStringBySourceURL(bookSourceUrl)
+        var bookSourceString = getBookSourceStringBySourceURL(bookSourceUrl, userNameSpace)
 
         if (bookSourceString.isNullOrEmpty()) {
             return returnData.setErrorMsg("书源信息错误")
@@ -1204,7 +1519,7 @@ class YueduApi : RestVerticle() {
         for (i in 0 until bookshelf.size()) {
             var book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
             if (refresh) {
-                var bookSource = getInstalledBookSourceStringBySourceURL(book.origin)
+                var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace)
                 if (bookSource != null) {
                     var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace)
                     var bookChapter = bookChapterList.last()
@@ -1238,7 +1553,7 @@ class YueduApi : RestVerticle() {
         return localChapterList
     }
 
-    private suspend fun getBookSourceString(context: RoutingContext, sourceUrl: String = "", sourceIndex: Int = 0): String? {
+    private suspend fun getBookSourceString(context: RoutingContext, sourceUrl: String = ""): String? {
         var bookSourceString: String? = null
         if (context.request().method() == HttpMethod.POST) {
             var bookSource = context.bodyAsJson.getJsonObject("bookSource")
@@ -1246,15 +1561,7 @@ class YueduApi : RestVerticle() {
                 bookSourceString = bookSource.toString()
             }
         }
-        if (bookSourceString.isNullOrEmpty()) {
-            var bookSourceIndex: Int
-            if (context.request().method() == HttpMethod.POST) {
-                bookSourceIndex = context.bodyAsJson.getInteger("bookSourceIndex", -1)
-            } else {
-                bookSourceIndex = context.queryParam("bookSourceIndex").firstOrNull()?.toInt() ?: -1
-            }
-            bookSourceString = getInstalledBookSourceString(bookSourceIndex)
-        }
+        var userNameSpace = getUserNameSpace(context)
         if (bookSourceString.isNullOrEmpty()) {
             var bookSourceUrl: String
             if (context.request().method() == HttpMethod.POST) {
@@ -1263,57 +1570,36 @@ class YueduApi : RestVerticle() {
                 bookSourceUrl = context.queryParam("bookSourceUrl").firstOrNull() ?: ""
             }
             bookSourceUrl = URLDecoder.decode(bookSourceUrl, "UTF-8")
-            bookSourceString = getInstalledBookSourceStringBySourceURL(bookSourceUrl)
+            bookSourceString = getBookSourceStringBySourceURL(bookSourceUrl, userNameSpace)
         }
         if (bookSourceString.isNullOrEmpty() && !sourceUrl.isNullOrEmpty()) {
-            bookSourceString = getInstalledBookSourceStringBySourceURL(sourceUrl)
+            bookSourceString = getBookSourceStringBySourceURL(sourceUrl, userNameSpace)
         }
-        if (bookSourceString.isNullOrEmpty()) {
-            bookSourceString = getInstalledBookSourceString(sourceIndex)
-        }
-        // 使用默认
         return bookSourceString
     }
 
-    private suspend fun loadInstalledBookSourceList() {
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
+    private suspend fun loadBookSourceStringList(userNameSpace: String): List<String> {
+        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource" + userNameSpace))
+        var userBookSourceList = arrayListOf<String>()
         if (bookSourceList != null) {
-            installedBookSourceList = arrayListOf<String>()
             for (i in 0 until bookSourceList.size()) {
-                installedBookSourceList.add(bookSourceList.getJsonObject(i).toString())
+                userBookSourceList.add(bookSourceList.getJsonObject(i).toString())
             }
         }
+        return userBookSourceList
     }
 
-    private suspend fun getInstalledBookSourceString(sourceIndex: Int = -1): String? {
-        var bookSourceString: String? = null
-        if (sourceIndex >= 0 && sourceIndex <= installedBookSourceList.size) {
-            bookSourceString = installedBookSourceList.get(sourceIndex)
-        }
-        return bookSourceString
-    }
-
-    private suspend fun getInstalledBookSourceStringByCustomOrder(customOrder: Int): String? {
-        var bookSourceString: String? = null
-        for (i in 0 until installedBookSourceList.size) {
-            val sourceMap = installedBookSourceList.get(i).toMap()
-            if (customOrder == (sourceMap.get("customOrder") as Number)) {
-                bookSourceString = installedBookSourceList.get(i)
-                break;
-            }
-        }
-        return bookSourceString
-    }
-
-    private suspend fun getInstalledBookSourceStringBySourceURL(sourceUrl: String): String? {
+    private suspend fun getBookSourceStringBySourceURL(sourceUrl: String, userNameSpace: String): String? {
         var bookSourceString: String? = null
         if (sourceUrl.isNullOrEmpty()) {
             return bookSourceString
         }
-        for (i in 0 until installedBookSourceList.size) {
-            val sourceMap = installedBookSourceList.get(i).toMap()
+        // 优先查找用户的书源
+        var userBookSourceList = loadBookSourceStringList(userNameSpace)
+        for (i in 0 until userBookSourceList.size) {
+            val sourceMap = userBookSourceList.get(i).toMap()
             if (sourceUrl == (sourceMap.get("bookSourceUrl") as String)) {
-                bookSourceString = installedBookSourceList.get(i)
+                bookSourceString = userBookSourceList.get(i)
                 break;
             }
         }
@@ -1432,5 +1718,45 @@ class YueduApi : RestVerticle() {
 
         // logger.info("bookSourceList: {}", bookSourceList)
         saveStorage("data/" + book.name + "_" + book.author + "/bookSource", bookSourceList!!)
+    }
+
+
+    /**
+     * 定时任务
+     */
+
+    /**
+     * 每十分钟检查一次书架书籍更新
+     */
+    @Scheduled(cron = "0 0/10 * * * ?")
+    fun shelfUpdateJob()
+    {
+        launch(Dispatchers.IO) {
+            try {
+                logger.info("开始检查书架书籍更新")
+                // 刷新系统默认书架
+                getBookShelfBooks(true, "")
+
+                // 刷新用户书架
+                var userMap = mutableMapOf<String, Map<String, Any>>()
+                var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+                if (userMapJson != null) {
+                    userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+                }
+                userMap.forEach{
+                    try {
+                        var ns = it.value.getOrDefault("username", "") as String? ?: ""
+                        if (ns.isNotEmpty()) {
+                            getBookShelfBooks(true, "/" + ns)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                logger.info("书架书籍更新检查结束")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
     }
 }

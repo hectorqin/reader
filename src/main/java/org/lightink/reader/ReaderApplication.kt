@@ -15,12 +15,14 @@ import org.lightink.reader.verticle.RestVerticle
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringApplication
 import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.context.annotation.Bean
 import javax.annotation.PostConstruct
 
 private val logger = KotlinLogging.logger {}
 
 @SpringBootApplication
+@EnableScheduling
 class ReaderApplication {
 
     @Autowired

@@ -60,6 +60,10 @@ storage
 │   ├── bookInfoCache.json                        # 搜索缓存Map
 │   ├── bookSource.json                           # 书源列表
 │   ├── bookshelf.json                            # 书架书籍列表
+│   ├── bookshelf                                 # 用户书架书籍目录
+│   |   └── userA.json                            # 用户A书架书籍列表
+│   ├── bookSource                                # 用户书源列表目录
+│   |   └── userA.json                            # 用户A书籍书源列表
 │   └── 斗罗大陆_唐家三少                            # 书籍缓存目录
 │       ├── 04abb3842aabc03d08a14186be005e89.json # A书源目录列表
 │       ├── 5576c3b5fc70453d5b40f437cf88cdb5.json # B书源目录列表
@@ -315,10 +319,12 @@ lastIndex 是上次搜索结果中返回的字段，默认为 0，可以传入 `
 
 ## TODO
 
+- [x] 定时更新书架书籍章节
 - [ ] 多源并发搜索书籍
 - [ ] 并发更新书架章节
 - [ ] 并发搜索书籍来源
-- [ ] 定时更新书架书籍章节
+- [ ] WebDav同步
+- [ ] 导入本地书籍，支持epub
 
 ## 感谢
 

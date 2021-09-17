@@ -48,7 +48,18 @@ Vue.use(Form);
 Vue.use(FormItem);
 
 Vue.prototype.$msgbox = MessageBox;
-Vue.prototype.$message = Message;
+Vue.prototype.$message = Object.assign({}, Message, {
+  error(message, duration) {
+    const options = typeof message === "string" ? { message } : message;
+    options.duration = duration || 2000;
+    Message.error(options);
+  },
+  success(message, duration) {
+    const options = typeof message === "string" ? { message } : message;
+    options.duration = duration || 1000;
+    Message.success(options);
+  }
+});
 Vue.prototype.$alert = MessageBox.alert;
 Vue.prototype.$confirm = MessageBox.confirm;
 Vue.prototype.$prompt = MessageBox.prompt;

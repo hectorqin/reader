@@ -106,7 +106,6 @@
                 ref="popExplore"
                 class="popup"
                 :visible="popExploreVisible"
-                :bookSourceUrl="bookSourceUrl"
                 :bookSourceList="bookSourceList"
                 @showSearchList="showSearchList"
                 @close="popExploreVisible = false"
@@ -137,6 +136,49 @@
               @change="onBookSourceFileChange"
               style="display:none"
             />
+          </div>
+        </div>
+        <div class="setting-wrapper" v-if="$store.state.showManagerMode">
+          <div class="setting-title">
+            用户空间
+          </div>
+          <div class="setting-item">
+            <el-select
+              size="mini"
+              v-model="userNS"
+              class="setting-select"
+              filterable
+              placeholder="请选择用户空间"
+            >
+              <el-option
+                v-for="(item, index) in userList"
+                :key="'source-' + index"
+                :label="item.username"
+                :value="item.userNS"
+              >
+              </el-option>
+            </el-select>
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="loadUserList"
+            >
+              加载用户空间
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              v-if="$store.state.isSecureMode"
+              @click="exitSecureMode"
+            >
+              退出管理模式
+            </el-tag>
           </div>
         </div>
       </div>
@@ -355,6 +397,7 @@ import Explore from "../components/Explore.vue";
 import Axios from "../plugins/axios";
 import noCover from "../assets/imgs/noCover.jpeg";
 
+const defaultNS = [{ username: "默认", userNS: "" }];
 export default {
   components: {
     Explore
@@ -386,7 +429,9 @@ export default {
 
       connecting: false,
 
-      lastScrollTop: 0
+      lastScrollTop: 0,
+
+      userList: [].concat(defaultNS)
     };
   },
   watch: {
@@ -424,6 +469,11 @@ export default {
       if (val) {
         this.init();
       }
+    },
+    userNS(val) {
+      if (val) {
+        this.init(true);
+      }
     }
   },
   mounted() {
@@ -437,7 +487,8 @@ export default {
     this.init();
   },
   methods: {
-    init() {
+    init(refresh) {
+      this.getUserInfo();
       this.loadBookshelf()
         .then(() => {
           // 连接后端成功，加载自定义样式
@@ -445,7 +496,7 @@ export default {
             window.loadLink(this.$store.getters.customCSSUrl, () => {
               window.customCSSLoad = true;
             });
-          if (!this.bookSourceList.length) {
+          if (refresh || !this.bookSourceList.length) {
             // 加载书源列表
             this.loadBookSource();
           }
@@ -554,6 +605,22 @@ export default {
     },
     refreshShelf() {
       return this.loadBookshelf(null, true);
+    },
+    getUserInfo() {
+      Axios.get(this.api + "/getUserInfo").then(
+        res => {
+          if (res.data.isSuccess) {
+            if (res.data.data.secure && res.data.data.secureKey) {
+              this.$store.commit("setShowManagerMode", true);
+            }
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载用户信息失败 " + (error && error.toString())
+          );
+        }
+      );
     },
     loadBookSource() {
       if (!this.$store.state.connected) {
@@ -956,6 +1023,44 @@ export default {
         }
         this.popIntroVisible[book.name] = !this.popIntroVisible[book.name];
       }, 100);
+    },
+    loadUserList() {
+      if (!this.$store.state.connected) {
+        this.$message.error("后端未连接");
+        return;
+      }
+      Axios.get(this.api + "/getUserList").then(
+        res => {
+          if (res.data.isSuccess) {
+            this.userList = []
+              .concat([
+                {
+                  username: "系统默认",
+                  userNS: ""
+                }
+              ])
+              .concat(
+                res.data.data.map(v => ({
+                  ...v,
+                  userNS: v.username
+                }))
+              );
+            this.$store.commit("setIsSecureMode", true);
+            this.init(true);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载用户空间失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    exitSecureMode() {
+      this.userNS = "";
+      this.userList = [].concat(defaultNS);
+      this.$store.commit("setIsSecureMode", false);
+      this.init(true);
     }
   },
   computed: {
@@ -1024,6 +1129,17 @@ export default {
     },
     bookSourceList() {
       return this.$store.state.bookSourceList;
+    },
+    userNS: {
+      get() {
+        return this.$store.state.userNS;
+      },
+      set(val) {
+        this.$store.commit("setUserNS", val);
+        if (val) {
+          this.$store.commit("setIsSecureMode", true);
+        }
+      }
     }
   }
 };
