@@ -43,7 +43,7 @@
 
 > MacOS客户端的存储目录是 `~/.reader/storage`，Window和Linux客户端为 `运行目录/storage`
 
-数据存储目录结构如下：
+v1.3.0以上版本数据存储目录结构如下：
 
 > 书籍缓存目录由 `书名` 变为 `书名_作者名`，这个变动需要手动编辑，否则书籍书源列表缓存信息无法使用
 
@@ -55,23 +55,30 @@ storage
 │   └── reader.css                                # 自定义CSS样式文件
 ├── cache                                         # 缓存目录
 │   ├── 6190ac40068e74c2c82624e91a5f8a0c.jpg      # 书籍封面缓存
+│   ├── bookInfoCache.json                        # 书籍搜索缓存Map
 │   └── ea11967236129bdae6133c3c9ff8c2dd.jpg
 ├── data                                          # 数据目录
-│   ├── bookInfoCache.json                        # 搜索缓存Map
-│   ├── bookSource.json                           # 书源列表
-│   ├── bookshelf.json                            # 书架书籍列表
-│   ├── bookshelf                                 # 用户书架书籍目录
-│   |   └── userA.json                            # 用户A书架书籍列表
-│   ├── bookSource                                # 用户书源列表目录
-│   |   └── userA.json                            # 用户A书籍书源列表
-│   └── 斗罗大陆_唐家三少                            # 书籍缓存目录
-│       ├── 04abb3842aabc03d08a14186be005e89.json # A书源目录列表
-│       ├── 5576c3b5fc70453d5b40f437cf88cdb5.json # B书源目录列表
-│       └── bookSource.json                       # 书籍书源列表
+│   ├── default                                   # 系统默认用户的数据目录 (reader.app.secure为false时)
+│   │   ├── bookSource.json                       # 书源列表
+│   │   ├── bookshelf.json                        # 书架书籍列表
+│   │   ├── 斗罗大陆_唐家三少                        # 书籍缓存目录
+│   │   │   ├── 5d01bc88d6b19ebbe974acaac1675811.json    # A书源目录列表
+│   │   │   ├── 7e5ca1cc2a1ea2e09fdec4ee2e150f02.json    # B书源目录列表
+│   │   │   └── bookSource.json                          # 书籍书源列表
+│   ├── hector                                    # 用户 hector 的数据目录 (reader.app.secure为true时的用户目录)
+│   │   ├── bookSource.json                       # 书源列表
+│   │   ├── bookshelf.json                        # 书架书籍列表
+│   │   ├── webdav                                # webdav 存储目录
+│   │   │   ├── backup2021-09-15.zip              # 阅读3备份文件
+│   │   │   └── bookProgress                      # 阅读3书籍进度备份目录
+│   │   │       └── 斗罗大陆_唐家三少.json           # 阅读3书籍进度
+│   │   └── 斗罗大陆_唐家三少                        # 书籍缓存目录
+│   │       └── 2d44d0ec2397b6c1d4010b97d914031e.json
+│   └── users.json                                # 用户列表
 └── windowConfig.json                             # 窗口配置文件
 ```
 
-旧版目录结构
+v1.3.0及以下旧版目录结构
 
 > 覆盖安装新版后，会自动迁移旧版结构到新版，并在数据目录父目录下保存旧版目录备份 `storage-backup`，如果确认无误，可以自行删除
 
@@ -137,9 +144,9 @@ reader:
     showUI: false          # 是否显示UI
     debug: false           # 是否调试模式
     packaged: false        # 是否打包为客户端
-    secure: false          # 是否需要登录鉴权
+    secure: false          # 是否需要登录鉴权，开启后将支持多用户模式
     inviteCode: ""         # 注册邀请码，为空时则开放注册，否则注册时需要输入邀请码
-    secureKey: ""          # 管理密码，开启鉴权时，添加、删除源时需要输入管理密码
+    secureKey: ""          # 管理密码，开启鉴权时，前端管理用户空间的管理密码
 
   server:
     port: 8080             # 监听端口

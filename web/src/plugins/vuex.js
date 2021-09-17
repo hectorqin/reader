@@ -26,7 +26,7 @@ export default new Vuex.Store({
     bookSourceList: [],
     isSecureMode: false,
     secureKey: "",
-    userNS: "",
+    userNS: "default",
     showManagerMode: false
   },
   mutations: {

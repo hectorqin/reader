@@ -237,7 +237,7 @@ class YueduApi : RestVerticle() {
 
     suspend fun migration() {
         try {
-            var dataDir = File(getWorkDir("storage/data"))
+            var dataDir = File(getWorkDir("storage/data/default"))
             if (!dataDir.exists()) {
                 var storageDir = File(getWorkDir("storage"))
                 if (storageDir.exists()) {
@@ -318,11 +318,12 @@ class YueduApi : RestVerticle() {
     }
 
     private suspend fun getUserWebdavHome(context: RoutingContext): String {
-        var prefix = getWorkDir("storage/webdav")
-        var userNamespace = context.get("webdavUserNameSpace") as String? ?: ""
-        if (userNamespace.isNotEmpty()) {
-            prefix = prefix + "/" + userNamespace
+        var prefix = getWorkDir("storage/data")
+        var userNameSpace = context.get("webdavUserNameSpace") as String? ?: ""
+        if (userNameSpace.isNotEmpty()) {
+            prefix = prefix + "/" + userNameSpace
         }
+        prefix = prefix + "/webdav"
         var file = File(prefix)
         if (!file.exists()) {
             file.mkdirs()
@@ -627,7 +628,7 @@ class YueduApi : RestVerticle() {
         if (secureKey.equals(appConfig.secureKey)) {
             // 判断是否需要修改 userNameSpace
             var userNS = context.queryParam("userNS").firstOrNull()
-            if (userNS != null) {
+            if (userNS != null && userNS.isNotEmpty()) {
                 context.put("userNameSpace", userNS)
             }
             return true
@@ -637,23 +638,38 @@ class YueduApi : RestVerticle() {
 
     private suspend fun getUserNameSpace(context: RoutingContext): String {
         if (!appConfig.secure) {
-            return ""
+            return "default"
         }
         // 管理权限，可以修改 userNameSpace 来获取任意用户信息
         checkManagerAuth(context)
         var userNS = context.get("userNameSpace") as String?
-        if (userNS != null) {
-            return if (userNS.isNotEmpty()) "/" + userNS else userNS
+        if (userNS != null && userNS.isNotEmpty()) {
+            return userNS
         }
         var userInfo = context.session().get("userInfo") as Map<String, Any>?
         if (userInfo != null) {
             var ns = userInfo.getOrDefault("username", "") as String? ?: ""
-            if (ns.isNotEmpty()) {
-                return "/" + ns;
-            }
             return ns;
         }
-        return ""
+        return "default"
+    }
+
+    private suspend fun getUserStorage(context: Any, path: String): String? {
+        var userNameSpace = ""
+        when(context) {
+            is RoutingContext -> userNameSpace = getUserNameSpace(context)
+            is String -> userNameSpace = context
+        }
+        return getStorage("data" + "/" + userNameSpace + "/" + path)
+    }
+
+    private suspend fun saveUserStorage(context: Any, path: String, value: Any) {
+        var userNameSpace = ""
+        when(context) {
+            is RoutingContext -> userNameSpace = getUserNameSpace(context)
+            is String -> userNameSpace = context
+        }
+        return saveStorage("data" + "/" + userNameSpace + "/" + path, value)
     }
 
     private suspend fun getSystemInfo(context: RoutingContext): ReturnData {
@@ -1038,7 +1054,7 @@ class YueduApi : RestVerticle() {
                 break;
             }
         }
-        saveBookSources(book, resultList)
+        saveBookSources(book, resultList, userNameSpace)
         return returnData.setData(mapOf("lastIndex" to lastIndex, "list" to resultList))
     }
 
@@ -1066,7 +1082,7 @@ class YueduApi : RestVerticle() {
         if (book == null) {
             return returnData.setErrorMsg("书籍信息错误")
         }
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/" + book.name + "_" + book.author + "/bookSource"))
+        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author + "/bookSource"))
         if (bookSourceList != null) {
             var list = bookSourceList.getList() as MutableList<Map<String,Any>>
             if (refresh > 0) {
@@ -1095,19 +1111,19 @@ class YueduApi : RestVerticle() {
                     }
                 }
                 // logger.info("refreshed bookSourceList: {}", resultList)
-                saveBookSources(book, resultList)
+                saveBookSources(book, resultList, userNameSpace)
             }
             return returnData.setData(list)
         }
         return returnData.setData(arrayListOf<Int>())
     }
     private suspend fun getUserBookSourceJson(userNameSpace: String): JsonArray? {
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource" + userNameSpace))
+        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookSource"))
         if (bookSourceList == null && userNameSpace.isNotEmpty()) {
             // 用户书源文件不存在，拷贝系统书源
-            var systemBookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource"))
+            var systemBookSourceList: JsonArray? = asJsonArray(getUserStorage("default", "bookSource"))
             if (systemBookSourceList != null) {
-                saveStorage("data/bookSource" + userNameSpace, systemBookSourceList.getList())
+                saveUserStorage(userNameSpace, "bookSource", systemBookSourceList.getList())
                 bookSourceList = systemBookSourceList
             }
         }
@@ -1145,7 +1161,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("data/bookSource" + userNameSpace, bookSourceList)
+        saveUserStorage(userNameSpace, "bookSource", bookSourceList)
         return returnData.setData(bookSourceList.getList())
     }
 
@@ -1183,7 +1199,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("data/bookSource" + userNameSpace, bookSourceList!!)
+        saveUserStorage(userNameSpace, "bookSource", bookSourceList!!)
         return returnData.setData(bookSourceList.getList())
     }
 
@@ -1244,7 +1260,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("data/bookSource" + userNameSpace, bookSourceList)
+        saveUserStorage(userNameSpace, "bookSource", bookSourceList)
         return returnData.setData(bookSourceList.getList())
     }
 
@@ -1277,7 +1293,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("data/bookSource" + userNameSpace, bookSourceList)
+        saveUserStorage(userNameSpace, "bookSource", bookSourceList)
         return returnData.setData(bookSourceList.getList())
     }
 
@@ -1339,7 +1355,7 @@ class YueduApi : RestVerticle() {
             book = newBook.fillData(book, listOf("name", "author", "coverUrl", "intro", "latestChapterTitle", "wordCount"))
         }
         book = mergeBookCacheInfo(book)
-        var bookshelf: JsonArray? = asJsonArray(getStorage("data/bookshelf" + userNameSpace))
+        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
             bookshelf = JsonArray()
         }
@@ -1366,8 +1382,8 @@ class YueduApi : RestVerticle() {
             var bookMap: Map<String, Any?> = book.serializeToMap()
             bookshelf.add(bookMap)
         }
-        logger.info("bookshelf: {}", bookshelf)
-        saveStorage("data/bookshelf" + userNameSpace, bookshelf)
+        // logger.info("bookshelf: {}", bookshelf)
+        saveUserStorage(userNameSpace, "bookshelf", bookshelf)
         return returnData.setData(book)
     }
 
@@ -1418,7 +1434,7 @@ class YueduApi : RestVerticle() {
 
         var bookSource: BookSource = bookSourceString.toMap().toDataClass()
 
-        var bookshelf: JsonArray? = asJsonArray(getStorage("data/bookshelf" + userNameSpace))
+        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
             bookshelf = JsonArray()
         }
@@ -1445,7 +1461,7 @@ class YueduApi : RestVerticle() {
         bookList.set(existIndex, bookMap)
         bookshelf = JsonArray(bookList)
         logger.info("bookshelf: {}", bookshelf)
-        saveStorage("data/bookshelf" + userNameSpace, bookshelf)
+        saveUserStorage(userNameSpace, "bookshelf", bookshelf)
         return returnData.setData(book)
     }
 
@@ -1456,7 +1472,7 @@ class YueduApi : RestVerticle() {
         }
         val book = context.bodyAsJson.mapTo(Book::class.java)
         var userNameSpace = getUserNameSpace(context)
-        var bookshelf: JsonArray? = asJsonArray(getStorage("data/bookshelf" + userNameSpace))
+        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
             bookshelf = JsonArray()
         }
@@ -1472,8 +1488,8 @@ class YueduApi : RestVerticle() {
         if (existIndex >= 0) {
             bookshelf.remove(existIndex)
         }
-        logger.info("bookshelf: {}", bookshelf)
-        saveStorage("data/bookshelf" + userNameSpace, bookshelf)
+        // logger.info("bookshelf: {}", bookshelf)
+        saveUserStorage(userNameSpace, "bookshelf", bookshelf)
         return returnData.setData(bookshelf.getList())
     }
 
@@ -1483,11 +1499,22 @@ class YueduApi : RestVerticle() {
      * 非 API
      */
     private suspend fun loadBookCacheInfo() {
-        var _bookInfoCache: JsonObject? = asJsonObject(getStorage("data/bookInfoCache"))
+        var _bookInfoCache: JsonObject? = asJsonObject(getStorage("cache/bookInfoCache"))
         if (_bookInfoCache != null) {
             bookInfoCache = _bookInfoCache.map as MutableMap<String, Map<String, Any>>
             // logger.info("load bookInfoCache {}", bookInfoCache)
         }
+    }
+
+    private suspend fun saveBookInfoCache(bookList: List<SearchBook>): List<SearchBook> {
+        if (bookList.size > 0) {
+            for (i in 0 until bookList.size) {
+                var book = bookList.get(i)
+                bookInfoCache.put(book.bookUrl, book.serializeToMap())
+            }
+            saveStorage("cache/bookInfoCache", bookInfoCache)
+        }
+        return bookList
     }
 
     private suspend fun mergeBookCacheInfo(book: Book): Book {
@@ -1499,19 +1526,8 @@ class YueduApi : RestVerticle() {
         return book
     }
 
-    private suspend fun saveBookInfoCache(bookList: List<SearchBook>): List<SearchBook> {
-        if (bookList.size > 0) {
-            for (i in 0 until bookList.size) {
-                var book = bookList.get(i)
-                bookInfoCache.put(book.bookUrl, book.serializeToMap())
-            }
-            saveStorage("data/bookInfoCache", bookInfoCache)
-        }
-        return bookList
-    }
-
     private suspend fun getBookShelfBooks(refresh: Boolean = false, userNameSpace: String): List<Book> {
-        var bookshelf: JsonArray? = asJsonArray(getStorage("data/bookshelf" + userNameSpace))
+        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
             return arrayListOf<Book>()
         }
@@ -1537,11 +1553,11 @@ class YueduApi : RestVerticle() {
 
     private suspend fun getLocalChapterList(book: Book, bookSource: String, refresh: Boolean = false, userNameSpace: String): List<BookChapter> {
         val md5Encode = MD5Utils.md5Encode(book.bookUrl).toString()
-        var chapterList: JsonArray? = asJsonArray(getStorage("data/" + book.name + "_" + book.author + "/" + md5Encode))
+        var chapterList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author + "/" + md5Encode))
 
         if (chapterList == null || refresh) {
             var onlineChapterList = WebBook(bookSource).getChapterList(book)
-            saveStorage("data/" + book.name + "_" + book.author + "/" + md5Encode, onlineChapterList)
+            saveUserStorage(userNameSpace, book.name + "_" + book.author + "/" + md5Encode, onlineChapterList)
             saveShelfBookLatestChapter(book, onlineChapterList, userNameSpace)
             return onlineChapterList
         }
@@ -1579,7 +1595,7 @@ class YueduApi : RestVerticle() {
     }
 
     private suspend fun loadBookSourceStringList(userNameSpace: String): List<String> {
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/bookSource" + userNameSpace))
+        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookSource"))
         var userBookSourceList = arrayListOf<String>()
         if (bookSourceList != null) {
             for (i in 0 until bookSourceList.size()) {
@@ -1610,7 +1626,7 @@ class YueduApi : RestVerticle() {
         if (url.isEmpty()) {
             return null
         }
-        var bookshelf: JsonArray? = asJsonArray(getStorage("data/bookshelf" + userNameSpace))
+        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
             return null
         }
@@ -1624,7 +1640,7 @@ class YueduApi : RestVerticle() {
     }
 
     private suspend fun saveShelfBookProgress(book: Book, bookChapter: BookChapter, userNameSpace: String) {
-        var bookshelf: JsonArray? = asJsonArray(getStorage("data/bookshelf" + userNameSpace))
+        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
             bookshelf = JsonArray()
         }
@@ -1649,12 +1665,12 @@ class YueduApi : RestVerticle() {
             var existBookMap: Map<String, Any?> = existBook.serializeToMap()
             bookList.set(existIndex, existBookMap)
             bookshelf = JsonArray(bookList)
-            saveStorage("data/bookshelf" + userNameSpace, bookshelf)
+            saveUserStorage(userNameSpace, "bookshelf", bookshelf)
         }
     }
 
     private suspend fun saveShelfBookLatestChapter(book: Book, bookChapterList: List<BookChapter>, userNameSpace: String) {
-        var bookshelf: JsonArray? = asJsonArray(getStorage("data/bookshelf" + userNameSpace))
+        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
             bookshelf = JsonArray()
         }
@@ -1683,15 +1699,15 @@ class YueduApi : RestVerticle() {
             var existBookMap: Map<String, Any?> = existBook.serializeToMap()
             bookList.set(existIndex, existBookMap)
             bookshelf = JsonArray(bookList)
-            saveStorage("data/bookshelf" + userNameSpace, bookshelf)
+            saveUserStorage(userNameSpace, "bookshelf", bookshelf)
         }
     }
 
-    private suspend fun saveBookSources(book: Book, sourceList: List<SearchBook>) {
+    private suspend fun saveBookSources(book: Book, sourceList: List<SearchBook>, userNameSpace: String) {
         if (book.name.isEmpty()) {
             return;
         }
-        var bookSourceList: JsonArray? = asJsonArray(getStorage("data/" + book.name + "_" + book.author + "/bookSource"))
+        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author + "/bookSource"))
         if (bookSourceList == null) {
             bookSourceList = JsonArray()
         }
@@ -1717,7 +1733,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveStorage("data/" + book.name + "_" + book.author + "/bookSource", bookSourceList!!)
+        saveUserStorage(userNameSpace, book.name + "_" + book.author + "/bookSource", bookSourceList!!)
     }
 
 

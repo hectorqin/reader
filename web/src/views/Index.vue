@@ -397,7 +397,7 @@ import Explore from "../components/Explore.vue";
 import Axios from "../plugins/axios";
 import noCover from "../assets/imgs/noCover.jpeg";
 
-const defaultNS = [{ username: "默认", userNS: "" }];
+const defaultNS = [{ username: "默认", userNS: "default" }];
 export default {
   components: {
     Explore
@@ -470,10 +470,8 @@ export default {
         this.init();
       }
     },
-    userNS(val) {
-      if (val) {
-        this.init(true);
-      }
+    userNS() {
+      this.init(true);
     }
   },
   mounted() {
@@ -484,13 +482,16 @@ export default {
     this.navigationClass =
       this.showMenu && !this.showNavigation ? "navigation-hidden" : "";
     window.shelfPage = this;
+    this.getUserInfo();
     this.init();
   },
   methods: {
     init(refresh) {
-      this.getUserInfo();
+      if (this.initing) return;
+      this.initing = true;
       this.loadBookshelf()
         .then(() => {
+          this.initing = false;
           // 连接后端成功，加载自定义样式
           window.customCSSLoad ||
             window.loadLink(this.$store.getters.customCSSUrl, () => {
@@ -1036,7 +1037,7 @@ export default {
               .concat([
                 {
                   username: "系统默认",
-                  userNS: ""
+                  userNS: "default"
                 }
               ])
               .concat(
@@ -1057,7 +1058,7 @@ export default {
       );
     },
     exitSecureMode() {
-      this.userNS = "";
+      this.userNS = "default";
       this.userList = [].concat(defaultNS);
       this.$store.commit("setIsSecureMode", false);
       this.init(true);
