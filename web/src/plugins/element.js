@@ -22,7 +22,8 @@ import {
   ColorPicker,
   Slider,
   Form,
-  FormItem
+  FormItem,
+  Switch
 } from "element-ui";
 
 Vue.use(Button);
@@ -46,6 +47,7 @@ Vue.use(ColorPicker);
 Vue.use(Slider);
 Vue.use(Form);
 Vue.use(FormItem);
+Vue.use(Switch);
 
 Vue.prototype.$msgbox = MessageBox;
 Vue.prototype.$message = Object.assign({}, Message, {

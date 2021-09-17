@@ -426,10 +426,20 @@
             property="created_at"
             label="注册时间"
           ></el-table-column>
-          <el-table-column
-            property="enableWebdav"
-            label="启用webdav"
-          ></el-table-column>
+          <el-table-column property="enableWebdav" label="启用webdav">
+            <template slot-scope="scope">
+              <el-switch
+                v-if="scope.row.userNS !== 'default'"
+                v-model="scope.row.enableWebdav"
+                active-color="#13ce66"
+                inactive-color="#ff4949"
+                :active-value="true"
+                :inactive-value="false"
+                @change="toggleUserWebdav(scope.row, $event)"
+              >
+              </el-switch>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
       <div slot="footer" class="dialog-footer">
@@ -1121,6 +1131,25 @@ export default {
         },
         error => {
           this.$message.error("删除用户失败 " + (error && error.toString()));
+        }
+      );
+    },
+    toggleUserWebdav(user, enableWebdav) {
+      Axios.post(this.api + "/updateUser", {
+        username: user.username,
+        enableWebdav
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("修改成功");
+            this.userList = res.data.data.map(v => ({
+              ...v,
+              userNS: v.username
+            }));
+          }
+        },
+        error => {
+          this.$message.error("修改失败 " + (error && error.toString()));
         }
       );
     },

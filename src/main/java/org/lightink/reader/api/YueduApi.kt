@@ -159,6 +159,9 @@ class YueduApi : RestVerticle() {
         // 删除用户
         router.post("/reader3/deleteUsers").coroutineHandler { deleteUsers(it) }
 
+        // 更新用户
+        router.post("/reader3/updateUser").coroutineHandler { updateUser(it) }
+
         // webdav 服务
         router.route("/reader3/webdav*").handler {
             it.addHeadersEndHandler { _ ->
@@ -749,13 +752,15 @@ class YueduApi : RestVerticle() {
         if (!checkManagerAuth(context)) {
             return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
         }
-        var userMap = mutableMapOf<String, Map<String, Any>>()
+        var userMap = mutableMapOf<String, MutableMap<String, Any>>()
         var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
         if (userMapJson != null) {
-            userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+            userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
         }
         var userList = arrayListOf<Map<String, Any>>()
         userMap.forEach{
+            it.value.remove("password")
+            it.value.remove("salt")
             userList.add(it.value)
         }
         return returnData.setData(userList)
@@ -772,7 +777,7 @@ class YueduApi : RestVerticle() {
         if (!checkManagerAuth(context)) {
             return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
         }
-        var userMap = mutableMapOf<String, Map<String, Any>>()
+        var userMap = mutableMapOf<String, MutableMap<String, Any>>()
         var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
 
         if (userMapJson != null) {
@@ -790,12 +795,56 @@ class YueduApi : RestVerticle() {
                     }
                 }
             }
-            userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+            userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
             saveStorage("data/users", userMap)
         }
 
         var userList = arrayListOf<Map<String, Any>>()
         userMap.forEach{
+            it.value.remove("password")
+            it.value.remove("salt")
+            userList.add(it.value)
+        }
+        return returnData.setData(userList)
+    }
+
+    private suspend fun updateUser(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!appConfig.secure || appConfig.secureKey.isEmpty()) {
+            return returnData.setErrorMsg("不支持的操作")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        }
+        val username = context.bodyAsJson.getString("username") ?: ""
+        val enableWebdav = context.bodyAsJson.getBoolean("enableWebdav")
+        if (username.isEmpty()) {
+            return returnData.setErrorMsg("参数错误")
+        }
+
+        var userMap = mutableMapOf<String, MutableMap<String, Any>>()
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+
+        if (userMapJson != null) {
+            userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
+            var existedUser = userMap.getOrDefault(username, null)
+            if (existedUser == null) {
+                return returnData.setErrorMsg("用户不存在")
+            }
+            if (enableWebdav != null) {
+                existedUser.put("enableWebdav", enableWebdav)
+            }
+            userMap.put(username, existedUser)
+            saveStorage("data/users", userMap)
+        }
+
+        var userList = arrayListOf<Map<String, Any>>()
+        userMap.forEach{
+            it.value.remove("password")
+            it.value.remove("salt")
             userList.add(it.value)
         }
         return returnData.setData(userList)
