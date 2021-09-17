@@ -90,7 +90,7 @@
               :effect="isNight ? 'dark' : 'light'"
               slot="reference"
               class="setting-btn"
-              @click="showManageDialog = true"
+              @click="showBookSourceManageDialog = true"
             >
               书源管理
             </el-tag>
@@ -168,6 +168,16 @@
               @click="loadUserList"
             >
               加载用户空间
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              v-if="$store.state.isSecureMode"
+              @click="showUserManageDialog = true"
+            >
+              管理用户空间
             </el-tag>
             <el-tag
               type="info"
@@ -345,7 +355,7 @@
     </el-dialog>
     <el-dialog
       title="书源管理"
-      :visible.sync="showManageDialog"
+      :visible.sync="showBookSourceManageDialog"
       :width="dialogWidth"
       :top="dialogTop"
     >
@@ -353,12 +363,12 @@
         <el-table
           :data="bookSourceList"
           height="400"
-          @selection-change="handleSelectionChange"
+          @selection-change="manageSourceSelection = $event"
         >
           <el-table-column
             type="selection"
             width="25"
-            :selectable="getSourceBook"
+            :selectable="isBookSourceSelectable"
           >
           </el-table-column>
           <el-table-column
@@ -386,7 +396,50 @@
         <span class="check-tip"
           >已选择 {{ manageSourceSelection.length }} 个</span
         >
-        <el-button @click="showManageDialog = false">取消</el-button>
+        <el-button @click="showBookSourceManageDialog = false">取消</el-button>
+      </div>
+    </el-dialog>
+    <el-dialog
+      title="用户管理"
+      :visible.sync="showUserManageDialog"
+      :width="dialogWidth"
+      :top="dialogTop"
+    >
+      <div class="source-container">
+        <el-table
+          :data="userList"
+          height="400"
+          @selection-change="manageUserSelection = $event"
+        >
+          <el-table-column
+            type="selection"
+            width="25"
+            :selectable="isUserSelectable"
+          >
+          </el-table-column>
+          <el-table-column property="username" label="用户名"></el-table-column>
+          <el-table-column
+            property="last_login_at"
+            label="上次登录"
+          ></el-table-column>
+          <el-table-column
+            property="created_at"
+            label="注册时间"
+          ></el-table-column>
+          <el-table-column
+            property="enableWebdav"
+            label="启用webdav"
+          ></el-table-column>
+        </el-table>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" class="float-left" @click="deleteUserList"
+          >批量删除</el-button
+        >
+        <span class="check-tip"
+          >已选择 {{ manageUserSelection.length }} 个</span
+        >
+        <el-button @click="showUserManageDialog = false">取消</el-button>
       </div>
     </el-dialog>
   </div>
@@ -418,7 +471,7 @@ export default {
       isIndeterminate: false,
       checkedSourceIndex: [],
 
-      showManageDialog: false,
+      showBookSourceManageDialog: false,
       manageSourceSelection: [],
       showNavigation: false,
 
@@ -428,7 +481,10 @@ export default {
 
       connecting: false,
 
-      lastScrollTop: 0
+      lastScrollTop: 0,
+
+      showUserManageDialog: false,
+      manageUserSelection: []
     };
   },
   watch: {
@@ -464,7 +520,7 @@ export default {
     },
     loginAuth(val) {
       if (val) {
-        this.init();
+        this.init(true);
       }
     },
     userNS() {
@@ -949,7 +1005,7 @@ export default {
         }
       );
     },
-    getSourceBook(bookSource) {
+    isBookSourceSelectable(bookSource) {
       const res = [];
       (this.$store.state.shelfBooks || []).forEach(v => {
         if (v.origin === bookSource.bookSourceUrl) {
@@ -967,21 +1023,17 @@ export default {
       });
       return res.join("\n");
     },
-    handleSelectionChange(val) {
-      this.manageSourceSelection = val;
-    },
     deleteBookSourceList() {
       if (!this.manageSourceSelection.length) {
-        this.$message.error("请选择需要导入的源");
+        this.$message.error("请选择需要删除的源");
         return;
       }
       Axios.post(this.api + "/deleteSources", this.manageSourceSelection).then(
         res => {
           if (res.data.isSuccess) {
-            //
+            this.manageSourceSelection = [];
             this.$message.success("删除书源成功");
             this.loadBookSource();
-            this.showManageDialog = false;
           }
         },
         error => {
@@ -1042,6 +1094,33 @@ export default {
           this.$message.error(
             "加载用户空间失败 " + (error && error.toString())
           );
+        }
+      );
+    },
+    isUserSelectable(user) {
+      return user.userNS !== "default";
+    },
+    deleteUserList() {
+      if (!this.manageUserSelection.length) {
+        this.$message.error("请选择需要删除的用户");
+        return;
+      }
+      Axios.post(
+        this.api + "/deleteUsers",
+        this.manageUserSelection.map(v => v.username)
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.manageUserSelection = [];
+            this.$message.success("删除用户成功");
+            this.userList = res.data.data.map(v => ({
+              ...v,
+              userNS: v.username
+            }));
+          }
+        },
+        error => {
+          this.$message.error("删除用户失败 " + (error && error.toString()));
         }
       );
     },

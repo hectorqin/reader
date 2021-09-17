@@ -4,6 +4,7 @@ import io.vertx.core.buffer.Buffer
 import io.vertx.ext.web.client.HttpRequest
 import io.vertx.ext.web.client.WebClient
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import java.io.File
 
 
 /**
@@ -24,6 +25,18 @@ fun WebClient.getEncodeAbs(absoluteURI: String): HttpRequest<Buffer> {
     return this.getAbs(absoluteURI.toHttpUrl().toString())
 }
 
+fun File.deleteRecursively() {
+    if (this.exists()) {
+        if (this.isFile() ) {
+            this.delete();
+        } else {
+            this.listFiles().forEach{
+                it.deleteRecursively()
+            }
+            this.delete()
+        }
+    }
+}
 
 
 

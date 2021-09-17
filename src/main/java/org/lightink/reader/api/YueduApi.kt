@@ -28,6 +28,7 @@ import org.lightink.reader.utils.getRandomString
 import org.lightink.reader.utils.genEncryptedPassword
 import org.lightink.reader.entity.User
 import org.lightink.reader.utils.SpringContextUtils
+import org.lightink.reader.utils.deleteRecursively
 import org.lightink.reader.verticle.RestVerticle
 import org.lightink.reader.SpringEvent
 import org.springframework.stereotype.Component
@@ -38,6 +39,8 @@ import org.lightink.reader.api.ReturnData
 import io.legado.app.utils.MD5Utils
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.net.URL;
+import java.util.UUID;
 import io.vertx.ext.web.client.WebClient
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.core.env.Environment
@@ -153,6 +156,9 @@ class YueduApi : RestVerticle() {
         // 获取用户列表
         router.get("/reader3/getUserList").coroutineHandler { getUserList(it) }
 
+        // 删除用户
+        router.post("/reader3/deleteUsers").coroutineHandler { deleteUsers(it) }
+
         // webdav 服务
         router.route("/reader3/webdav*").handler {
             it.addHeadersEndHandler { _ ->
@@ -162,7 +168,7 @@ class YueduApi : RestVerticle() {
                 res.putHeader("Access-Control-Allow-Credentials", "true")
                 res.putHeader("Access-Control-Expose-Headers", "DAV, content-length, Allow")
                 res.putHeader("MS-Author-Via", "DAV")
-                res.putHeader("Allow", "OPTIONS,GET,PUT,PROPFIND,MKCOL")
+                res.putHeader("Allow", "OPTIONS,DELETE,GET,PUT,PROPFIND,MKCOL,MOVE,COPY,LOCK,UNLOCK")
                 if (appConfig.secure) {
                     res.putHeader("WWW-Authenticate", "Basic realm=\"Default realm\"")
                 }
@@ -174,7 +180,12 @@ class YueduApi : RestVerticle() {
                     rawMethod == "PROPFIND" ||
                     rawMethod == "MKCOL" ||
                     rawMethod == "PUT" ||
-                    rawMethod == "GET"
+                    rawMethod == "GET" ||
+                    rawMethod == "DELETE" ||
+                    rawMethod == "MOVE" ||
+                    rawMethod == "COPY" ||
+                    rawMethod == "LOCK" ||
+                    rawMethod == "UNLOCK"
                 ) {
                     isContinue = false
                     it.response().setStatusCode(401).end()
@@ -212,6 +223,41 @@ class YueduApi : RestVerticle() {
                     "GET" -> launch(Dispatchers.IO) {
                         try {
                             webdavDownload(it)
+                        } catch (e: Exception) {
+                            onHandlerError(it, e)
+                        }
+                    }
+                    "DELETE" -> launch(Dispatchers.IO) {
+                        try {
+                            webdavDelete(it)
+                        } catch (e: Exception) {
+                            onHandlerError(it, e)
+                        }
+                    }
+                    "MOVE" -> launch(Dispatchers.IO) {
+                        try {
+                            webdavMove(it)
+                        } catch (e: Exception) {
+                            onHandlerError(it, e)
+                        }
+                    }
+                    "COPY" -> launch(Dispatchers.IO) {
+                        try {
+                            webdavCopy(it)
+                        } catch (e: Exception) {
+                            onHandlerError(it, e)
+                        }
+                    }
+                    "LOCK" -> launch(Dispatchers.IO) {
+                        try {
+                            webdavLock(it)
+                        } catch (e: Exception) {
+                            onHandlerError(it, e)
+                        }
+                    }
+                    "UNLOCK" -> launch(Dispatchers.IO) {
+                        try {
+                            webdavUnLock(it)
                         } catch (e: Exception) {
                             onHandlerError(it, e)
                         }
@@ -440,8 +486,15 @@ class YueduApi : RestVerticle() {
         path = URLDecoder.decode(path, "UTF-8")
         var file = File(home + path)
         if (!file.parentFile.exists()) {
+            context.response().setStatusCode(409).end()
+            return
+        }
+        if (file.isDirectory()) {
             context.response().setStatusCode(405).end()
             return
+        }
+        if (file.exists()) {
+            file.delete();
         }
         try {
             file.writeBytes(context.getBody().getBytes())
@@ -459,7 +512,7 @@ class YueduApi : RestVerticle() {
         path = URLDecoder.decode(path, "UTF-8")
         var file = File(home + path)
         if (!file.exists()) {
-            context.response().setStatusCode(405).end()
+            context.response().setStatusCode(404).end()
             return
         }
         if (file.isDirectory()) {
@@ -467,6 +520,139 @@ class YueduApi : RestVerticle() {
             return
         }
         context.response().putHeader("Cache-Control", "86400").sendFile(file.toString())
+    }
+
+    private suspend fun webdavDelete(context: RoutingContext) {
+        var home = getUserWebdavHome(context)
+        var path = context.request().path().replace("/reader3/webdav/", "/", true)
+        path = URLDecoder.decode(path, "UTF-8")
+        var file = File(home + path)
+        if (!file.exists()) {
+            context.response().setStatusCode(404).end()
+            return
+        }
+        file.deleteRecursively()
+        context.response().setStatusCode(200).end()
+    }
+
+    private suspend fun webdavMove(context: RoutingContext) {
+        var home = getUserWebdavHome(context)
+        var path = context.request().path().replace("/reader3/webdav/", "/", true)
+        path = URLDecoder.decode(path, "UTF-8")
+
+        var file = File(home + path)
+        if (!file.exists()) {
+            context.response().setStatusCode(412).end()
+            return
+        }
+        var destination = context.request().getHeader("Destination")
+        if (destination == null) {
+            context.response().setStatusCode(400).end()
+            return
+        }
+        var destinationUrl = URL(destination)
+        destination = destinationUrl.path?.replace("/reader3/webdav/", "/", true)
+        if (destination == null) {
+            context.response().setStatusCode(400).end()
+            return
+        }
+
+        var overwrite = context.request().getHeader("Overwrite")
+        var destinationFile = File(home + URLDecoder.decode(destination, "UTF-8"))
+        if (destinationFile.exists()) {
+            if (overwrite == null || overwrite.isEmpty()) {
+                context.response().setStatusCode(412).end()
+                return
+            }
+            destinationFile.deleteRecursively()
+        }
+        file.renameTo(destinationFile)
+
+        context.response().setStatusCode(201).end()
+    }
+
+    private suspend fun webdavCopy(context: RoutingContext) {
+        var home = getUserWebdavHome(context)
+        var path = context.request().path().replace("/reader3/webdav/", "/", true)
+        path = URLDecoder.decode(path, "UTF-8")
+
+        var file = File(home + path)
+        if (!file.exists()) {
+            context.response().setStatusCode(412).end()
+            return
+        }
+        var destination = context.request().getHeader("Destination")
+        if (destination == null) {
+            context.response().setStatusCode(400).end()
+            return
+        }
+        var destinationUrl = URL(destination)
+        destination = destinationUrl.path?.replace("/reader3/webdav/", "/", true)
+        if (destination == null) {
+            context.response().setStatusCode(400).end()
+            return
+        }
+
+        var overwrite = context.request().getHeader("Overwrite")
+        var destinationFile = File(home + URLDecoder.decode(destination, "UTF-8"))
+        if (destinationFile.exists()) {
+            if (overwrite == null || overwrite.isEmpty()) {
+                context.response().setStatusCode(412).end()
+                return
+            }
+            destinationFile.deleteRecursively()
+        }
+        file.copyRecursively(destinationFile)
+
+        context.response().setStatusCode(201).end()
+    }
+
+    private suspend fun webdavLock(context: RoutingContext) {
+        var response =
+        """<?xml version="1.0" encoding="utf-8"?>
+        <D:prop xmlns:D="DAV:">
+            <D:lockdiscovery>
+                <D:activelock>
+                    <D:locktype>
+                        <write />
+                    </D:locktype>
+                    <D:lockscope>
+                        <exclusive />
+                    </D:lockscope>
+                    <D:locktoken>
+                        <D:href>%s</D:href>
+                    </D:locktoken>
+                    <D:lockroot>
+                        <D:href>%s</D:href>
+                    </D:lockroot>
+                    <D:depth>infinity</D:depth>
+                    <D:owner>
+                        <a:href xmlns:a="DAV:">http://www.apple.com/webdav_fs/</a:href>
+                    </D:owner>
+                    <D:timeout>%s</D:timeout>
+                </D:activelock>
+            </D:lockdiscovery>
+        </D:prop>
+        """
+        var lockToken = "urn:uuid:" + UUID.randomUUID().toString()
+
+        var timeout = context.request().getHeader("Timeout")
+        if (timeout == null) {
+            timeout = "Second-3600"
+        }
+
+        var fileUrl = context.request().absoluteURI()
+
+        context.response().putHeader("Lock-Token", lockToken).setStatusCode(200).end(String.format(response, lockToken, fileUrl, timeout))
+    }
+
+    private suspend fun webdavUnLock(context: RoutingContext) {
+        var lockToken = context.request().getHeader("Lock-Token")
+        if (lockToken == null) {
+            context.response().setStatusCode(400).end()
+            return
+        }
+        context.response().putHeader("Lock-Token", lockToken).setStatusCode(204).end()
     }
 
     private suspend fun login(context: RoutingContext): ReturnData {
@@ -568,6 +754,46 @@ class YueduApi : RestVerticle() {
         if (userMapJson != null) {
             userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
         }
+        var userList = arrayListOf<Map<String, Any>>()
+        userMap.forEach{
+            userList.add(it.value)
+        }
+        return returnData.setData(userList)
+    }
+
+    private suspend fun deleteUsers(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!appConfig.secure || appConfig.secureKey.isEmpty()) {
+            return returnData.setErrorMsg("不支持的操作")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        }
+        var userMap = mutableMapOf<String, Map<String, Any>>()
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+
+        if (userMapJson != null) {
+            val userJsonArray = context.bodyAsJsonArray
+            for (i in 0 until userJsonArray.size()) {
+                var username = userJsonArray.getString(i)
+                if (username != null && userMapJson.containsKey(username)) {
+                    // 删除用户信息
+                    userMapJson.remove(username)
+                    // 移除用户目录
+                    var userHome = File(getWorkDir("storage/data/" + username))
+                    logger.info("delete userHome: {}", userHome)
+                    if (userHome.exists()) {
+                        userHome.deleteRecursively()
+                    }
+                }
+            }
+            userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+            saveStorage("data/users", userMap)
+        }
+
         var userList = arrayListOf<Map<String, Any>>()
         userMap.forEach{
             userList.add(it.value)
