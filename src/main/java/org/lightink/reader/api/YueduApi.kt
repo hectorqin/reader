@@ -2472,22 +2472,24 @@ class YueduApi : RestVerticle() {
             try {
                 logger.info("开始检查书架书籍更新")
                 // 刷新系统默认书架
-                getBookShelfBooks(true, "")
+                getBookShelfBooks(true, "default")
 
                 // 刷新用户书架
-                var userMap = mutableMapOf<String, Map<String, Any>>()
-                var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
-                if (userMapJson != null) {
-                    userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
-                }
-                userMap.forEach{
-                    try {
-                        var ns = it.value.getOrDefault("username", "") as String? ?: ""
-                        if (ns.isNotEmpty()) {
-                            getBookShelfBooks(true, "/" + ns)
+                if (appConfig.secure) {
+                    var userMap = mutableMapOf<String, Map<String, Any>>()
+                    var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+                    if (userMapJson != null) {
+                        userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+                    }
+                    userMap.forEach{
+                        try {
+                            var ns = it.value.getOrDefault("username", "") as String? ?: ""
+                            if (ns.isNotEmpty()) {
+                                getBookShelfBooks(true, ns)
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
                         }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
                     }
                 }
                 logger.info("书架书籍更新检查结束")
