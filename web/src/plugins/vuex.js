@@ -26,7 +26,9 @@ export default new Vuex.Store({
       (window.localStorage && window.localStorage.getItem("api_token")) || "",
     bookSourceList: [],
     isSecureMode: false,
+    isManagerMode: false,
     secureKey: "",
+    userInfo: {},
     userList: [].concat(defaultNS),
     userNS: "default",
     showManagerMode: false
@@ -82,14 +84,20 @@ export default new Vuex.Store({
     setUserNS(state, userNS) {
       state.userNS = userNS;
     },
-    setSecureKey(state, secureKey) {
-      state.secureKey = secureKey;
-    },
     setIsSecureMode(state, isSecureMode) {
       state.isSecureMode = isSecureMode;
     },
+    setSecureKey(state, secureKey) {
+      state.secureKey = secureKey;
+    },
+    setIsManagerMode(state, isManagerMode) {
+      state.isManagerMode = isManagerMode;
+    },
     setShowManagerMode(state, showManagerMode) {
       state.showManagerMode = showManagerMode;
+    },
+    setUserInfo(state, userInfo) {
+      state.userInfo = userInfo;
     },
     setUserList(state, userList) {
       if (userList.length) {

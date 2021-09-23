@@ -689,7 +689,8 @@ export default {
         );
       } else {
         this.totalPages = Math.ceil(
-          this.$refs.bookContentRef.$el.scrollHeight / this.windowSize.height
+          this.$refs.bookContentRef.$el.scrollHeight /
+            (this.windowSize.height - 35)
         );
       }
       if (this.showLastPage) {
@@ -729,7 +730,7 @@ export default {
           document.documentElement.scrollHeight
         ) {
           this.currentPage += 1;
-          const moveY = this.windowSize.height - 10;
+          const moveY = this.windowSize.height - 35;
           this.transforming = true;
           this.scrollContent(moveY, 300);
         } else {
@@ -766,7 +767,7 @@ export default {
           (document.documentElement.scrollTop || document.body.scrollTop) > 0
         ) {
           this.currentPage -= 1;
-          const moveY = -this.windowSize.height + 10;
+          const moveY = -this.windowSize.height + 35;
           this.transforming = true;
           this.scrollContent(moveY, 300);
         } else {
@@ -865,9 +866,10 @@ export default {
     },
     handleTouchMove(e) {
       if (e.touches && e.touches[0] && this.lastTouch) {
-        e.preventDefault();
-        e.stopPropagation();
+        this.lastMoveY = e.touches[0].clientY - this.lastTouch.clientY;
         if (this.isSlideRead) {
+          e.preventDefault();
+          e.stopPropagation();
           const moveX = e.touches[0].clientX - this.lastTouch.clientX;
           this.contentStyle = {
             transform: `translateX(${this.transformX + moveX}px)`
@@ -886,12 +888,13 @@ export default {
           // 下一页
           this.nextPage(-(this.windowSize.width - 16) - this.lastMoveX);
         }
-      } else if (this.lastTouch) {
+      } else if (Math.abs(this.lastMoveY) <= 3 && this.lastTouch) {
         this.eventHandler(this.lastTouch);
       }
       setTimeout(() => {
         this.lastTouch = false;
         this.lastMoveX = false;
+        this.lastMoveY = false;
       }, 300);
     },
     eventHandler(point) {
@@ -1102,6 +1105,7 @@ export default {
     text-align: left;
     padding: 0 65px;
     min-height: 100vh;
+    min-height: calc(var(--vh, 1vh) * 100);
     width: 670px;
     margin: 0 auto;
     background-size: cover;
@@ -1372,6 +1376,7 @@ export default {
 
       .book-content {
         height: calc(100vh - 44px - 18px);
+        height: calc(var(--vh, 1vh) * 100 - 44px - 18px);
         -webkit-columns: calc(100vw - 32px) 1;
         -webkit-column-gap: 32px;
         columns: calc(100vw - 16px) 1;

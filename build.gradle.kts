@@ -9,11 +9,12 @@ buildscript {
     val kotlin_version: String by extra
     extra["kotlin_version"] = "1.3.50"
     repositories {
+	    mavenLocal()
         mavenCentral()
     }
     dependencies {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
-        classpath("io.github.fvarrui:javapackager:1.5.1")
+        classpath("io.github.fvarrui:javapackager:1.6.1-SNAPSHOT")
     }
 }
 plugins {
@@ -55,7 +56,7 @@ apply(plugin = "kotlin")
 apply(plugin = "io.github.fvarrui.javapackager.plugin")
 
 group = "org.lightink"
-version = "1.3.0"
+version = "1.4.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
@@ -135,7 +136,7 @@ tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("packageReaderMa
 	// optional
     setBundleJre(false)
 	// bundleJre = false
-    setCreateZipball(true)
+    // setCreateZipball(true)
     vmArgs = arrayListOf<String>("-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.packaged=true", "-Dreader.app.debug=false", "-Dlogging.path=\$HOME/.reader/logs")
 }
 
@@ -170,6 +171,11 @@ tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("packageReaderLi
     setCreateZipball(true)
     platform = Platform.linux
     vmArgs = arrayListOf<String>("-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.debug=false")
+    withGroovyBuilder {
+        "linuxConfig" {
+            "setWrapJar"(false)
+        }
+    }
 }
 
 tasks {

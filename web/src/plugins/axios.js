@@ -8,6 +8,13 @@ const service = Axios.create({
   timeout: 3 * 60 * 1000
 });
 
+store.watch(
+  state => state.api,
+  () => {
+    service.defaults.baseURL = store.getters.api;
+  }
+);
+
 service.interceptors.request.use(
   config => config,
   error => {
@@ -41,7 +48,7 @@ export const request = async ({
   if (store.state.token) {
     params.accessToken = store.state.token;
   }
-  if (store.state.isSecureMode && store.state.secureKey) {
+  if (store.state.isManagerMode && store.state.secureKey) {
     params.secureKey = store.state.secureKey;
     params.userNS = store.state.userNS;
   }

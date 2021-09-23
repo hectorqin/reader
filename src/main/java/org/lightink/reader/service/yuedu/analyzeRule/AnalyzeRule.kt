@@ -4,6 +4,7 @@ import io.legado.app.constant.AppConst.SCRIPT_ENGINE
 import io.legado.app.constant.Pattern.JS_PATTERN
 import io.legado.app.data.entities.BaseBook
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.help.JsExtensions
 import io.legado.app.utils.*
 import org.lightink.reader.service.yuedu.utils.Base64
 import org.lightink.reader.service.yuedu.utils.TextUtils
@@ -21,7 +22,7 @@ private val logger = KotlinLogging.logger {}
  * Created by REFGD.
  * 统一解析接口
  */
-class AnalyzeRule(var book: BaseBook? = null) {
+class AnalyzeRule(var book: BaseBook? = null): JsExtensions {
     var chapter: BookChapter? = null
     private var content: Any? = null
     private var baseUrl: String? = null
@@ -598,7 +599,7 @@ class AnalyzeRule(var book: BaseBook? = null) {
     /**
      * js实现跨域访问,不能删
      */
-    fun ajax(urlStr: String): String? {
+    override fun ajax(urlStr: String): String? {
         return try {
             val analyzeUrl = AnalyzeUrl(urlStr, null, null, null, baseUrl, book)
             val call = analyzeUrl.getResponse()
@@ -606,45 +607,6 @@ class AnalyzeRule(var book: BaseBook? = null) {
             response.body()
         } catch (e: Exception) {
             e.localizedMessage
-        }
-    }
-
-    /**
-     * js实现解码,不能删
-     */
-    fun base64Decode(str: String): String {
-        return EncoderUtils.base64Decode(str)
-    }
-
-    fun base64Encode(str: String): String? {
-        return EncoderUtils.base64Encode(str)
-    }
-
-    fun base64Encode(str: String, flags: Int = Base64.NO_WRAP): String? {
-        return EncoderUtils.base64Encode(str, flags)
-    }
-
-    fun md5Encode(str: String): String? {
-        return MD5Utils.md5Encode(str)
-    }
-
-    fun md5Encode16(str: String): String? {
-        return MD5Utils.md5Encode16(str)
-    }
-
-    /**
-     * 章节数转数字
-     */
-    fun toNumChapter(s: String?): String? {
-        if (s == null) {
-            return null
-        }
-        val pattern = Pattern.compile("(第)(.+?)(章)")
-        val matcher = pattern.matcher(s)
-        return if (matcher.find()) {
-            matcher.group(1) + StringUtils.stringToInt(matcher.group(2)) + matcher.group(3)
-        } else {
-            s
         }
     }
 

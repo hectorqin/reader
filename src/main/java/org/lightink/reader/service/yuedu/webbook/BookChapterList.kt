@@ -165,7 +165,9 @@ object BookChapterList {
         for ((index, item) in list.withIndex()) {
             item.index = index
         }
-        book.latestChapterTitle = list.last().title
+        if (list.size > 0) {
+            book.latestChapterTitle = list.last().title
+        }
 //        book.durChapterTitle =
 //            list.getOrNull(book.durChapterIndex)?.title ?: book.latestChapterTitle
         if (book.totalChapterNum < list.size) {

@@ -29,6 +29,9 @@ import org.lightink.reader.utils.genEncryptedPassword
 import org.lightink.reader.entity.User
 import org.lightink.reader.utils.SpringContextUtils
 import org.lightink.reader.utils.deleteRecursively
+import org.lightink.reader.utils.unzip
+import org.lightink.reader.utils.zip
+import org.lightink.reader.utils.jsonEncode
 import org.lightink.reader.verticle.RestVerticle
 import org.lightink.reader.SpringEvent
 import org.springframework.stereotype.Component
@@ -162,6 +165,23 @@ class YueduApi : RestVerticle() {
         // 更新用户
         router.post("/reader3/updateUser").coroutineHandler { updateUser(it) }
 
+        // 获取webdav备份列表
+        router.get("/reader3/getWebdavFileList").coroutineHandler { getWebdavFileList(it) }
+
+        // 下载webdav文件
+        router.get("/reader3/getWebdavFile").coroutineHandlerWithoutRes { getWebdavFile(it) }
+
+        // 删除webdav文件
+        router.get("/reader3/deleteWebdavFile").coroutineHandler { deleteWebdavFile(it) }
+        router.post("/reader3/deleteWebdavFile").coroutineHandler { deleteWebdavFile(it) }
+        router.post("/reader3/deleteWebdavFileList").coroutineHandler { deleteWebdavFileList(it) }
+
+        // 从webdav备份恢复
+        router.post("/reader3/restoreFromWebdav").coroutineHandler { restoreFromWebdav(it) }
+
+        // 备份到webdav
+        router.post("/reader3/backupToWebdav").coroutineHandler { backupToWebdav(it) }
+
         // webdav 服务
         router.route("/reader3/webdav*").handler {
             it.addHeadersEndHandler { _ ->
@@ -177,7 +197,6 @@ class YueduApi : RestVerticle() {
                 }
             }
             val rawMethod = it.request().rawMethod()
-            var isContinue = true
             if (!checkAuthorization(it)) {
                 if (
                     rawMethod == "PROPFIND" ||
@@ -190,84 +209,82 @@ class YueduApi : RestVerticle() {
                     rawMethod == "LOCK" ||
                     rawMethod == "UNLOCK"
                 ) {
-                    isContinue = false
                     it.response().setStatusCode(401).end()
+                    return@handler
                 } else if(rawMethod == "OPTIONS") {
                     var authorization = it.request().getHeader("Authorization")
                     if (authorization != null) {
-                        isContinue = false
                         it.response().setStatusCode(401).end()
+                        return@handler
                     }
                 }
             }
-            if (isContinue) {
-                when (rawMethod) {
-                    "PROPFIND" -> launch(Dispatchers.IO) {
-                        try {
-                            webdavList(it)
-                        } catch (e: Exception) {
-                            onHandlerError(it, e)
-                        }
+            when (rawMethod) {
+                "PROPFIND" -> launch(Dispatchers.IO) {
+                    try {
+                        webdavList(it)
+                    } catch (e: Exception) {
+                        onHandlerError(it, e)
                     }
-                    "MKCOL" -> launch(Dispatchers.IO) {
-                        try {
-                            webdavMkdir(it)
-                        } catch (e: Exception) {
-                            onHandlerError(it, e)
-                        }
-                    }
-                    "PUT" -> launch(Dispatchers.IO) {
-                        try {
-                            webdavUpload(it)
-                        } catch (e: Exception) {
-                            onHandlerError(it, e)
-                        }
-                    }
-                    "GET" -> launch(Dispatchers.IO) {
-                        try {
-                            webdavDownload(it)
-                        } catch (e: Exception) {
-                            onHandlerError(it, e)
-                        }
-                    }
-                    "DELETE" -> launch(Dispatchers.IO) {
-                        try {
-                            webdavDelete(it)
-                        } catch (e: Exception) {
-                            onHandlerError(it, e)
-                        }
-                    }
-                    "MOVE" -> launch(Dispatchers.IO) {
-                        try {
-                            webdavMove(it)
-                        } catch (e: Exception) {
-                            onHandlerError(it, e)
-                        }
-                    }
-                    "COPY" -> launch(Dispatchers.IO) {
-                        try {
-                            webdavCopy(it)
-                        } catch (e: Exception) {
-                            onHandlerError(it, e)
-                        }
-                    }
-                    "LOCK" -> launch(Dispatchers.IO) {
-                        try {
-                            webdavLock(it)
-                        } catch (e: Exception) {
-                            onHandlerError(it, e)
-                        }
-                    }
-                    "UNLOCK" -> launch(Dispatchers.IO) {
-                        try {
-                            webdavUnLock(it)
-                        } catch (e: Exception) {
-                            onHandlerError(it, e)
-                        }
-                    }
-                    "OPTIONS" -> it.response().setStatusCode(200).end()
-                    else -> it.response().setStatusCode(405).end()
                 }
+                "MKCOL" -> launch(Dispatchers.IO) {
+                    try {
+                        webdavMkdir(it)
+                    } catch (e: Exception) {
+                        onHandlerError(it, e)
+                    }
+                }
+                "PUT" -> launch(Dispatchers.IO) {
+                    try {
+                        webdavUpload(it)
+                    } catch (e: Exception) {
+                        onHandlerError(it, e)
+                    }
+                }
+                "GET" -> launch(Dispatchers.IO) {
+                    try {
+                        webdavDownload(it)
+                    } catch (e: Exception) {
+                        onHandlerError(it, e)
+                    }
+                }
+                "DELETE" -> launch(Dispatchers.IO) {
+                    try {
+                        webdavDelete(it)
+                    } catch (e: Exception) {
+                        onHandlerError(it, e)
+                    }
+                }
+                "MOVE" -> launch(Dispatchers.IO) {
+                    try {
+                        webdavMove(it)
+                    } catch (e: Exception) {
+                        onHandlerError(it, e)
+                    }
+                }
+                "COPY" -> launch(Dispatchers.IO) {
+                    try {
+                        webdavCopy(it)
+                    } catch (e: Exception) {
+                        onHandlerError(it, e)
+                    }
+                }
+                "LOCK" -> launch(Dispatchers.IO) {
+                    try {
+                        webdavLock(it)
+                    } catch (e: Exception) {
+                        onHandlerError(it, e)
+                    }
+                }
+                "UNLOCK" -> launch(Dispatchers.IO) {
+                    try {
+                        webdavUnLock(it)
+                    } catch (e: Exception) {
+                        onHandlerError(it, e)
+                    }
+                }
+                "OPTIONS" -> it.response().setStatusCode(200).end()
+                else -> it.response().setStatusCode(405).end()
             }
         }
 
@@ -321,8 +338,6 @@ class YueduApi : RestVerticle() {
 
     private fun checkAuthorization(context: RoutingContext): Boolean {
         if (!appConfig.secure) {
-            context.put("webdavUserNameSpace", "default")
-            context.put("webdavUser", null)
             return true
         }
         var authorization = context.request().getHeader("Authorization")
@@ -356,19 +371,22 @@ class YueduApi : RestVerticle() {
             return false
         }
 
-        if (!userInfo.enableWebdav) {
+        if (!userInfo.enable_webdav) {
             return false
         }
 
-        context.put("webdavUserNameSpace", userInfo.username)
-        context.put("webdavUser", userInfo)
+        context.put("username", userInfo.username)
 
         return true
     }
 
-    private suspend fun getUserWebdavHome(context: RoutingContext): String {
+    private suspend fun getUserWebdavHome(context: Any): String {
         var prefix = getWorkDir("storage/data")
-        var userNameSpace = context.get("webdavUserNameSpace") as String? ?: ""
+        var userNameSpace = ""
+        when(context) {
+            is RoutingContext -> userNameSpace = getUserNameSpace(context)
+            is String -> userNameSpace = context
+        }
         if (userNameSpace.isNotEmpty()) {
             prefix = prefix + "/" + userNameSpace
         }
@@ -501,8 +519,11 @@ class YueduApi : RestVerticle() {
         }
         try {
             file.writeBytes(context.getBody().getBytes())
-            // TODO 同步用户进度
-
+            // 同步用户进度
+            if (file.toString().indexOf("/bookProgress/") > 0 && file.toString().indexOf(".json") > 0) {
+                val userNameSpace = getUserNameSpace(context)
+                syncBookProgressFromWebdav(file, userNameSpace)
+            }
             context.response().setStatusCode(201).end()
         } catch(e: Exception) {
             context.response().setStatusCode(500).end()
@@ -729,14 +750,10 @@ class YueduApi : RestVerticle() {
         userMap.put(user.username, user.toMap())
         saveStorage("data/users", userMap)
 
-        val loginData = mapOf(
-            "username" to user.username,
-            "lastLoginAt" to user.last_login_at,
-            "accessToken" to user.username + ":" + user.token,
-            "createdAt" to user.created_at
-        )
+        val loginData = formatUser(user)
 
-        context.session().put("userInfo", loginData)
+        context.session().put("username", user.username)
+        context.put("username", user.username)
 
         return loginData
     }
@@ -759,9 +776,7 @@ class YueduApi : RestVerticle() {
         }
         var userList = arrayListOf<Map<String, Any>>()
         userMap.forEach{
-            it.value.remove("password")
-            it.value.remove("salt")
-            userList.add(it.value)
+            userList.add(formatUser(it.value))
         }
         return returnData.setData(userList)
     }
@@ -801,9 +816,7 @@ class YueduApi : RestVerticle() {
 
         var userList = arrayListOf<Map<String, Any>>()
         userMap.forEach{
-            it.value.remove("password")
-            it.value.remove("salt")
-            userList.add(it.value)
+            userList.add(formatUser(it.value))
         }
         return returnData.setData(userList)
     }
@@ -835,7 +848,7 @@ class YueduApi : RestVerticle() {
                 return returnData.setErrorMsg("用户不存在")
             }
             if (enableWebdav != null) {
-                existedUser.put("enableWebdav", enableWebdav)
+                existedUser.put("enable_webdav", enableWebdav)
             }
             userMap.put(username, existedUser)
             saveStorage("data/users", userMap)
@@ -843,18 +856,25 @@ class YueduApi : RestVerticle() {
 
         var userList = arrayListOf<Map<String, Any>>()
         userMap.forEach{
-            it.value.remove("password")
-            it.value.remove("salt")
-            userList.add(it.value)
+            userList.add(formatUser(it.value))
         }
         return returnData.setData(userList)
     }
 
     private suspend fun getUserInfo(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
-        var userInfo = context.session().get("userInfo") as Map<String, Any>?
+        checkAuth(context)
+        var username = context.session().get("username") as String?
         var secure = env.getProperty("reader.app.secure", Boolean::class.java)
         var secureKey = env.getProperty("reader.app.secureKey")
+
+        var userInfo: Any? = null
+        if (username != null) {
+            var user = getUserInfoClass(username)
+            if (user != null) {
+                userInfo = formatUser(user)
+            }
+        }
 
         return returnData.setData(mapOf(
             "userInfo" to userInfo,
@@ -863,12 +883,238 @@ class YueduApi : RestVerticle() {
         ))
     }
 
+    private suspend fun getWebdavFileList(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (appConfig.secure) {
+            var userInfo = context.get("userInfo") as User?
+            if (userInfo == null) {
+                return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+            }
+            if (!userInfo.enable_webdav) {
+                return returnData.setErrorMsg("未开启webdav功能")
+            }
+        }
+        var path: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            path = context.bodyAsJson.getString("path") ?: ""
+        } else {
+            // get 请求
+            path = context.queryParam("path").firstOrNull() ?: ""
+        }
+        if (path.isEmpty()) {
+            path = "/"
+        }
+        path = URLDecoder.decode(path, "UTF-8")
+        var home = getUserWebdavHome(context)
+        var file = File(home + path)
+        logger.info("file: {} {}", path, file)
+        if (!file.exists()) {
+            return returnData.setErrorMsg("路径不存在")
+        }
+        if (!file.isDirectory()) {
+            return returnData.setErrorMsg("路径不是目录")
+        }
+        var fileList = arrayListOf<Map<String, Any>>()
+        file.listFiles().forEach{
+            if (!it.name.startsWith(".")) {
+                fileList.add(mapOf(
+                    "name" to it.name,
+                    "size" to it.length(),
+                    "path" to it.toString().replace(home, ""),
+                    "lastModified" to it.lastModified(),
+                    "isDirectory" to it.isDirectory()
+                ))
+            }
+        }
+        return returnData.setData(fileList)
+    }
+
+    private suspend fun getWebdavFile(context: RoutingContext) {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            context.success(returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用"))
+            return
+        }
+        if (appConfig.secure) {
+            var userInfo = context.get("userInfo") as User?
+            if (userInfo == null) {
+                context.success(returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用"))
+                return
+            }
+            if (!userInfo.enable_webdav) {
+                context.success(returnData.setErrorMsg("未开启webdav功能"))
+                return
+            }
+        }
+        var path: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            path = context.bodyAsJson.getString("path") ?: ""
+        } else {
+            // get 请求
+            path = context.queryParam("path").firstOrNull() ?: ""
+        }
+        if (path.isEmpty()) {
+            context.success(returnData.setErrorMsg("参数错误"))
+            return
+        }
+        path = URLDecoder.decode(path, "UTF-8")
+        var home = getUserWebdavHome(context)
+        var file = File(home + path)
+        logger.info("file: {} {}", path, file)
+        if (!file.exists()) {
+            context.success(returnData.setErrorMsg("路径不存在"))
+            return
+        }
+        context.response().putHeader("Cache-Control", "86400").sendFile(file.toString())
+    }
+
+    private suspend fun deleteWebdavFile(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (appConfig.secure) {
+            var userInfo = context.get("userInfo") as User?
+            if (userInfo == null) {
+                return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+            }
+            if (!userInfo.enable_webdav) {
+                return returnData.setErrorMsg("未开启webdav功能")
+            }
+        }
+        var path: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            path = context.bodyAsJson.getString("path") ?: ""
+        } else {
+            // get 请求
+            path = context.queryParam("path").firstOrNull() ?: ""
+        }
+        if (path.isEmpty()) {
+            return returnData.setErrorMsg("参数错误")
+        }
+        path = URLDecoder.decode(path, "UTF-8")
+        var home = getUserWebdavHome(context)
+        var file = File(home + path)
+        logger.info("file: {} {}", path, file)
+        if (!file.exists()) {
+            return returnData.setErrorMsg("路径不存在")
+        }
+        file.deleteRecursively()
+        return returnData.setData("")
+    }
+
+
+    private suspend fun deleteWebdavFileList(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (appConfig.secure) {
+            var userInfo = context.get("userInfo") as User?
+            if (userInfo == null) {
+                return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+            }
+            if (!userInfo.enable_webdav) {
+                return returnData.setErrorMsg("未开启webdav功能")
+            }
+        }
+        var path = context.bodyAsJson.getJsonArray("path")
+        if (path == null) {
+            return returnData.setErrorMsg("参数错误")
+        }
+        var home = getUserWebdavHome(context)
+        path.forEach {
+            var filePath = URLDecoder.decode(it as String? ?: "", "UTF-8")
+            if (filePath.isNotEmpty()) {
+                var file = File(home + filePath)
+                file.deleteRecursively()
+            }
+        }
+        return returnData.setData("")
+    }
+
+    private suspend fun restoreFromWebdav(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (appConfig.secure) {
+            var userInfo = context.get("userInfo") as User?
+            if (userInfo == null) {
+                return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+            }
+            if (!userInfo.enable_webdav) {
+                return returnData.setErrorMsg("未开启webdav功能")
+            }
+        }
+        var path: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            path = context.bodyAsJson.getString("path") ?: ""
+        } else {
+            // get 请求
+            path = context.queryParam("path").firstOrNull() ?: ""
+        }
+        if (path.isEmpty()) {
+            path = "/"
+        }
+        path = URLDecoder.decode(path, "UTF-8")
+        var ext = getFileExt(path)
+        if (ext != "zip") {
+            return returnData.setErrorMsg("路径不是zip备份文件")
+        }
+        var home = getUserWebdavHome(context)
+        var file = File(home + path)
+        logger.info("file: {} {}", path, file)
+        if (!file.exists()) {
+            return returnData.setErrorMsg("路径不存在")
+        }
+        if (!syncFromWebdav(file.toString(), getUserNameSpace(context))) {
+            return returnData.setErrorMsg("恢复失败")
+        }
+        return returnData.setData("")
+    }
+
+    private suspend fun backupToWebdav(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (appConfig.secure) {
+            var userInfo = context.get("userInfo") as User?
+            if (userInfo == null) {
+                return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+            }
+            if (!userInfo.enable_webdav) {
+                return returnData.setErrorMsg("未开启webdav功能")
+            }
+        }
+        val userNameSpace = getUserNameSpace(context)
+        var latestZipFilePath = getLastBackFileFromWebdav(userNameSpace)
+        if (latestZipFilePath == null) {
+            return returnData.setErrorMsg("请先使用阅读App备份到webdav")
+        }
+        if (!saveToWebdav(latestZipFilePath, userNameSpace)) {
+            return returnData.setErrorMsg("备份失败")
+        }
+        return returnData.setData("")
+    }
+
     private suspend fun checkAuth(context: RoutingContext): Boolean {
         if (!appConfig.secure) {
             return true
         }
-        var userInfo = context.session().get("userInfo") as Map<String, Any>?
+        var username = context.session().get("username") as String? ?: ""
+        var userInfo = getUserInfoClass(username)
         if (userInfo != null) {
+            context.put("username", userInfo.username)
+            context.put("userInfo", userInfo)
             return true
         }
         // 自动登录
@@ -877,15 +1123,20 @@ class YueduApi : RestVerticle() {
             var userMap = mutableMapOf<String, Map<String, Any>>()
             var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
             if (userMapJson != null) {
-                userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+                userMap = userMapJson.map as? MutableMap<String, Map<String, Any>> ?: mutableMapOf<String, Map<String, Any>>()
             }
-            var username = accessToken.split(":", limit=2)[0]
-            var token = accessToken.split(":", limit=2)[1]
-            var existedUser: User? = userMap.getOrDefault(username, null)?.toDataClass()
-            if (existedUser != null && existedUser.token.isNotEmpty() && token.isNotEmpty() && existedUser.token.equals(token)) {
-                // 保存用户session
-                saveUserSession(context, userMap, existedUser, false)
-                return true
+            var tmp = accessToken.split(":", limit=2)
+            if (tmp.size >= 2) {
+                var _username = tmp[0]
+                var token = tmp[1]
+                var existedUser: User? = userMap.getOrDefault(_username, null)?.toDataClass()
+                if (existedUser != null && existedUser.token.isNotEmpty() && token.isNotEmpty() && existedUser.token.equals(token)) {
+                    // 保存用户session
+                    saveUserSession(context, userMap, existedUser, false)
+                    context.put("username", existedUser.username)
+                    context.put("userInfo", existedUser)
+                    return true
+                }
             }
         }
 
@@ -921,10 +1172,9 @@ class YueduApi : RestVerticle() {
         if (userNS != null && userNS.isNotEmpty()) {
             return userNS
         }
-        var userInfo = context.session().get("userInfo") as Map<String, Any>?
-        if (userInfo != null) {
-            var ns = userInfo.getOrDefault("username", "") as String? ?: ""
-            return ns;
+        var username = context.get("username") as String?
+        if (username != null) {
+            return username;
         }
         return "default"
     }
@@ -935,6 +1185,9 @@ class YueduApi : RestVerticle() {
             is RoutingContext -> userNameSpace = getUserNameSpace(context)
             is String -> userNameSpace = context
         }
+        if (userNameSpace.isEmpty()) {
+            return getStorage("data" + "/" + path)
+        }
         return getStorage("data" + "/" + userNameSpace + "/" + path)
     }
 
@@ -943,6 +1196,9 @@ class YueduApi : RestVerticle() {
         when(context) {
             is RoutingContext -> userNameSpace = getUserNameSpace(context)
             is String -> userNameSpace = context
+        }
+        if (userNameSpace.isEmpty()) {
+            return saveStorage("data" + "/" + path, value)
         }
         return saveStorage("data" + "/" + userNameSpace + "/" + path, value)
     }
@@ -1003,7 +1259,7 @@ class YueduApi : RestVerticle() {
             return
         }
         coverUrl = URLDecoder.decode(coverUrl, "UTF-8")
-        var ext = getFileExt(coverUrl)
+        var ext = getFileExt(coverUrl, "png")
         val md5Encode = MD5Utils.md5Encode(coverUrl).toString()
         var cachePath = getWorkDir("storage/cache/" + md5Encode + "." + ext)
         var cacheFile = File(cachePath)
@@ -1017,18 +1273,28 @@ class YueduApi : RestVerticle() {
             cacheFile.parentFile.mkdirs()
         }
 
-        webClient.getAbs(coverUrl).send {
-            var result = it.result()
-            var res = context.response().putHeader("Cache-Control", "86400")
-            cacheFile.writeBytes(result.bodyAsBuffer().getBytes())
-            res.sendFile(cacheFile.toString())
+        launch(Dispatchers.IO) {
+            webClient.getAbs(coverUrl).timeout(3000).send {
+                var bodyBytes = it.result()?.bodyAsBuffer()?.getBytes()
+                if (bodyBytes != null) {
+                    var res = context.response().putHeader("Cache-Control", "86400")
+                    cacheFile.writeBytes(bodyBytes)
+                    res.sendFile(cacheFile.toString())
+                } else {
+                    context.response().setStatusCode(404).end()
+                }
+            }
         }
     }
 
-    private suspend fun getFileExt(url: String): String {
-        var seqs = url.split("?", ignoreCase = true, limit = 2)
-        var file = seqs[0].split("/").last()
-        return file.split(".", ignoreCase = true, limit = 2).last()
+    private suspend fun getFileExt(url: String, defaultExt: String=""): String {
+        try {
+            var seqs = url.split("?", ignoreCase = true, limit = 2)
+            var file = seqs[0].split("/").last()
+            return file.split(".", ignoreCase = true, limit = 2).last()
+        } catch (e: Exception) {
+            return defaultExt
+        }
     }
 
     private suspend fun readSourceFile(context: RoutingContext): ReturnData {
@@ -1201,7 +1467,9 @@ class YueduApi : RestVerticle() {
                 var chapterList = getLocalChapterList(bookInfo, bookSource, false, userNameSpace)
                 if (chapterIndex <= chapterList.size) {
                     var chapter = chapterList.get(chapterIndex)
-                    saveShelfBookProgress(bookInfo, chapter, getUserNameSpace(context))
+                    saveShelfBookProgress(bookInfo, chapter, userNameSpace)
+                    // 保存到 webdav
+                    saveBookProgressToWebdav(bookInfo, chapter, userNameSpace)
                     chapterUrl = chapter.url
                 }
             }
@@ -1392,9 +1660,10 @@ class YueduApi : RestVerticle() {
         }
         return returnData.setData(arrayListOf<Int>())
     }
+
     private suspend fun getUserBookSourceJson(userNameSpace: String): JsonArray? {
         var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookSource"))
-        if (bookSourceList == null && userNameSpace.isNotEmpty()) {
+        if (bookSourceList == null && !userNameSpace.equals("default")) {
             // 用户书源文件不存在，拷贝系统书源
             var systemBookSourceList: JsonArray? = asJsonArray(getUserStorage("default", "bookSource"))
             if (systemBookSourceList != null) {
@@ -1480,6 +1749,7 @@ class YueduApi : RestVerticle() {
 
     private suspend fun getSources(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
+        checkAuth(context)
         var simple: Int = 0
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
@@ -1709,35 +1979,21 @@ class YueduApi : RestVerticle() {
 
         var bookSource: BookSource = bookSourceString.toMap().toDataClass()
 
-        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
-        if (bookshelf == null) {
-            bookshelf = JsonArray()
-        }
-        // 遍历判断书本是否存在
-        var existIndex: Int = -1
-        for (i in 0 until bookshelf.size()) {
-            var _book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
-            if (_book.name.equals(book.name)) {
-                existIndex = i
-                break;
-            }
-        }
-        if (existIndex < 0) {
-            return returnData.setErrorMsg("书籍信息错误")
-        }
-        var bookList = bookshelf.getList()
-        book.origin = bookSource.bookSourceUrl
-        book.originName = bookSource.bookSourceName
-        book.bookUrl = newBookUrl
-        book.tocUrl = newBookInfo.tocUrl
-        book = mergeBookCacheInfo(book)
+        editShelfBook(book, userNameSpace) { existBook ->
+            existBook.origin = bookSource.bookSourceUrl
+            existBook.originName = bookSource.bookSourceName
+            existBook.bookUrl = newBookUrl
+            existBook.tocUrl = newBookInfo.tocUrl
+            existBook.durChapterTime = System.currentTimeMillis()
 
-        var bookMap: Map<String, Any?> = book.serializeToMap()
-        bookList.set(existIndex, bookMap)
-        bookshelf = JsonArray(bookList)
-        logger.info("bookshelf: {}", bookshelf)
-        saveUserStorage(userNameSpace, "bookshelf", bookshelf)
-        return returnData.setData(book)
+            logger.info("saveBookSource: {}", existBook)
+
+            newBookInfo = existBook
+
+            existBook
+        }
+
+        return returnData.setData(newBookInfo)
     }
 
     private suspend fun deleteBook(context: RoutingContext): ReturnData {
@@ -1813,10 +2069,12 @@ class YueduApi : RestVerticle() {
                 var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace)
                 if (bookSource != null) {
                     var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace)
-                    var bookChapter = bookChapterList.last()
+                    if (bookChapterList.size > 0) {
+                        var bookChapter = bookChapterList.last()
+                        book.latestChapterTitle = bookChapter.title
+                    }
                     book.lastCheckTime = System.currentTimeMillis()
                     book.lastCheckCount = bookChapterList.size - book.totalChapterNum
-                    book.latestChapterTitle = bookChapter.title
                     book.totalChapterNum = bookChapterList.size
                 }
             }
@@ -1915,36 +2173,34 @@ class YueduApi : RestVerticle() {
     }
 
     private suspend fun saveShelfBookProgress(book: Book, bookChapter: BookChapter, userNameSpace: String) {
-        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
-        if (bookshelf == null) {
-            bookshelf = JsonArray()
-        }
-        // 遍历判断书本是否存在
-        var existIndex: Int = -1
-        for (i in 0 until bookshelf.size()) {
-            var _book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
-            if (_book.name.equals(book.name)) {
-                existIndex = i
-                break;
-            }
-        }
-        if (existIndex >= 0) {
-            var bookList = bookshelf.getList()
-            var existBook = bookshelf.getJsonObject(existIndex).mapTo(Book::class.java)
+        editShelfBook(book, userNameSpace) { existBook ->
             existBook.durChapterIndex = bookChapter.index
             existBook.durChapterTitle = bookChapter.title
             existBook.durChapterTime = System.currentTimeMillis()
 
             logger.info("saveShelfBookProgress: {}", existBook)
 
-            var existBookMap: Map<String, Any?> = existBook.serializeToMap()
-            bookList.set(existIndex, existBookMap)
-            bookshelf = JsonArray(bookList)
-            saveUserStorage(userNameSpace, "bookshelf", bookshelf)
+            existBook
         }
     }
 
     private suspend fun saveShelfBookLatestChapter(book: Book, bookChapterList: List<BookChapter>, userNameSpace: String) {
+        editShelfBook(book, userNameSpace) { existBook ->
+            if (bookChapterList.size > 0) {
+                var bookChapter = bookChapterList.last()
+                existBook.latestChapterTitle = bookChapter.title
+            }
+            existBook.lastCheckCount = bookChapterList.size - existBook.totalChapterNum
+            existBook.totalChapterNum = bookChapterList.size
+            existBook.lastCheckTime = System.currentTimeMillis()
+            // TODO 最新章节更新时间
+            // existBook.latestChapterTime = System.currentTimeMillis()
+            logger.info("saveShelfBookLatestChapter: {}", existBook)
+            existBook
+        }
+    }
+
+    private suspend fun editShelfBook(book: Book, userNameSpace: String, handler: (Book)->Book) {
         var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
             bookshelf = JsonArray()
@@ -1953,23 +2209,23 @@ class YueduApi : RestVerticle() {
         var existIndex: Int = -1
         for (i in 0 until bookshelf.size()) {
             var _book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
-            if (_book.name.equals(book.name)) {
+            // 根据书籍链接查找
+            if (book.bookUrl.isNotEmpty() && _book.bookUrl.equals(book.bookUrl)) {
+                existIndex = i
+                break;
+            }
+            // 根据作者和书名查找
+            if (book.name.isNotEmpty() && _book.name.equals(book.name) && book.author.isNotEmpty() && _book.author.equals(book.author)) {
                 existIndex = i
                 break;
             }
         }
         if (existIndex >= 0) {
-            var bookChapter = bookChapterList.last()
             var bookList = bookshelf.getList()
             var existBook = bookshelf.getJsonObject(existIndex).mapTo(Book::class.java)
-            existBook.latestChapterTitle = bookChapter.title
-            existBook.lastCheckCount = bookChapterList.size - existBook.totalChapterNum
-            existBook.totalChapterNum = bookChapterList.size
-            existBook.lastCheckTime = System.currentTimeMillis()
-            // TODO 最新章节更新时间
-            // existBook.latestChapterTime = System.currentTimeMillis()
+            existBook = handler(existBook)
 
-            logger.info("saveShelfBookLatestChapter: {}", existBook)
+            logger.info("editShelfBook: {}", existBook)
 
             var existBookMap: Map<String, Any?> = existBook.serializeToMap()
             bookList.set(existIndex, existBookMap)
@@ -2011,6 +2267,196 @@ class YueduApi : RestVerticle() {
         saveUserStorage(userNameSpace, book.name + "_" + book.author + "/bookSource", bookSourceList!!)
     }
 
+    fun getUserInfoClass(username: String): User? {
+        var user: User? = getUserInfoMap(username)?.toDataClass()
+        return user
+    }
+
+    fun getUserInfoMap(username: String): Map<String, Any>? {
+        if (username.isEmpty()) {
+            return null
+        }
+        var userMap = mutableMapOf<String, Map<String, Any>>()
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+        if (userMapJson != null) {
+            userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+        }
+        return userMap.getOrDefault(username, null)
+    }
+
+    fun formatUser(userInfo: Any): MutableMap<String, Any> {
+        var user: User? = null
+        if (userInfo !is User) {
+            var userMap = userInfo as? Map<String, Any>
+            if (userMap != null) {
+                user = userMap.toDataClass()
+            }
+        } else {
+            user = userInfo
+        }
+        if (user == null) {
+            return mutableMapOf()
+        }
+        return mutableMapOf(
+            "username" to user.username,
+            "lastLoginAt" to user.last_login_at,
+            "accessToken" to user.username + ":" + user.token,
+            "enableWebdav" to user.enable_webdav,
+            "createdAt" to user.created_at
+        )
+    }
+
+    suspend fun syncBookProgressFromWebdav(progressFilePath: Any, userNameSpace: String) {
+        var progressFile: File? = null
+        when (progressFilePath) {
+            is File -> progressFile = progressFilePath
+            is String -> progressFile = File(progressFilePath)
+        }
+        if (progressFile == null) {
+            return
+        }
+        var book = asJsonObject(progressFile.readText())?.mapTo(Book::class.java)
+        if (book != null) {
+            editShelfBook(book, userNameSpace) { existBook ->
+                existBook.durChapterIndex = book.durChapterIndex
+                existBook.durChapterPos = book.durChapterPos
+                existBook.durChapterTime = book.durChapterTime
+                existBook.durChapterTitle = book.durChapterTitle
+
+                logger.info("syncShelfBookProgress: {}", existBook)
+                existBook
+            }
+        }
+    }
+
+    suspend fun saveBookProgressToWebdav(book: Book, bookChapter: BookChapter, userNameSpace: String) {
+        val userHome = getUserWebdavHome(userNameSpace)
+        var bookProgressDir = File(userHome + "/bookProgress")
+        if (!bookProgressDir.exists()) {
+            bookProgressDir = File(userHome + "/legado/bookProgress")
+            if (!bookProgressDir.exists()) {
+                return
+            }
+        }
+        var progressFile = File(bookProgressDir.toString() + "/" + book.name + "_" + book.author + ".json")
+        progressFile.writeText(jsonEncode(mapOf(
+            "name" to book.name,
+            "author" to book.author,
+            "durChapterIndex" to bookChapter.index,
+            "durChapterPos" to 0,
+            "durChapterTime" to System.currentTimeMillis(),
+            "durChapterTitle" to bookChapter.title
+        ), true))
+    }
+
+    suspend fun syncFromWebdav(zipFilePath: String, userNameSpace: String): Boolean {
+        var descDir = getWorkDir("storage/data/" + userNameSpace + "/tmp")
+        var descDirFile = File(descDir)
+        try {
+            val userHome = getUserWebdavHome(userNameSpace)
+            var zipFile = File(zipFilePath)
+            if (!zipFile.exists()) {
+                return false
+            }
+            descDirFile.deleteRecursively()
+            if (zipFile.unzip(descDir)) {
+                // 同步 书源
+                val bookSourceFile = File(descDir + "/bookSource.json")
+                if (bookSourceFile.exists()) {
+                    val userBookSourceFile = File(getWorkDir("storage/data/" + userNameSpace + "/bookSource.json"))
+                    userBookSourceFile.deleteRecursively()
+                    bookSourceFile.renameTo(userBookSourceFile)
+                }
+                // 同步 书架
+                val bookshelfFile = File(descDir + "/bookshelf.json")
+                if (bookshelfFile.exists()) {
+                    val userBookSourceFile = File(getWorkDir("storage/data/" + userNameSpace + "/bookshelf.json"))
+                    userBookSourceFile.deleteRecursively()
+                    bookshelfFile.renameTo(userBookSourceFile)
+                }
+
+                // 同步阅读进度
+                var bookProgressDir = File(userHome + "/bookProgress")
+                if (!bookProgressDir.exists()) {
+                    bookProgressDir = File(userHome + "/legado/bookProgress")
+                }
+                if (bookProgressDir.exists() && bookProgressDir.isDirectory()) {
+                    bookProgressDir.listFiles().forEach{
+                        syncBookProgressFromWebdav(it, userNameSpace)
+                    }
+                }
+                return true
+            }
+        } catch(e: Exception) {
+            e.printStackTrace()
+        } finally {
+            descDirFile.deleteRecursively()
+        }
+        return true;
+    }
+
+    suspend fun saveToWebdav(latestZipFilePath: String, userNameSpace: String): Boolean {
+        var descDir = getWorkDir("storage/data/" + userNameSpace + "/tmp")
+        var descDirFile = File(descDir)
+        descDirFile.deleteRecursively()
+        try {
+            val userHome = getUserWebdavHome(userNameSpace)
+            var legadoHome = userHome
+            if (latestZipFilePath.indexOf("legado") > 0) {
+                legadoHome = userHome + "/legado"
+            }
+            var zipFile = File(latestZipFilePath)
+            if (zipFile.unzip(descDir)) {
+                // 同步 书源
+                val userBookSourceFile = File(getWorkDir("storage/data/" + userNameSpace + "/bookSource.json"))
+                if (userBookSourceFile.exists()) {
+                    val bookSourceFile = File(descDir + "/bookSource.json")
+                    bookSourceFile.deleteRecursively()
+                    userBookSourceFile.copyRecursively(bookSourceFile)
+                }
+                // 同步 书架
+                val userBookshelfFile = File(getWorkDir("storage/data/" + userNameSpace + "/bookshelf.json"))
+                if (userBookshelfFile.exists()) {
+                    val bookshelfFile = File(descDir + "/bookshelf.json")
+                    bookshelfFile.deleteRecursively()
+                    userBookshelfFile.copyRecursively(bookshelfFile)
+                }
+
+                // 压缩
+                val today = SimpleDateFormat("yyyy-MM-dd").format(System.currentTimeMillis())
+                return descDirFile.zip(legadoHome + "/backup" + today + ".zip")
+            }
+        } catch(e: Exception) {
+            e.printStackTrace()
+        }  finally {
+            descDirFile.deleteRecursively()
+        }
+        return false;
+    }
+
+    suspend fun getLastBackFileFromWebdav(userNameSpace: String): String? {
+        val userHome = getUserWebdavHome(userNameSpace)
+        var legadoHome = File(userHome + "/legado")
+        if (!legadoHome.exists()) {
+            legadoHome = File(userHome)
+        }
+        if (!legadoHome.exists()) {
+            return null
+        }
+        var latestZipFile: String? = null
+        val zipFileReg = Regex("^backup[0-9-]+.zip$", RegexOption.IGNORE_CASE)    //忽略大小写
+        legadoHome.listFiles().also{
+            it.sortByDescending {
+                it.lastModified()
+            }
+        }.forEach {
+            if (zipFileReg.matches(it.name)) {
+                latestZipFile = it.toString()
+                return@forEach
+            }
+        }
+        return latestZipFile
+    }
 
     /**
      * 定时任务

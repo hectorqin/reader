@@ -29,6 +29,7 @@ import io.legado.app.utils.MD5Utils
 private val logger = KotlinLogging.logger {}
 
 val gson = GsonBuilder().disableHtmlEscaping().create()
+val prettyGson = GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create()
 
 var storageFinalPath = ""
 var workDirPath = ""
@@ -228,4 +229,11 @@ fun genEncryptedPassword(password: String, salt: String): String {
     return MD5Utils.md5Encode(
         MD5Utils.md5Encode(password + salt).toString() + salt
     ).toString()
+}
+
+fun jsonEncode(value: Any, pretty: Boolean): String {
+    if (pretty) {
+        return prettyGson.toJson(value)
+    }
+    return gson.toJson(value)
 }

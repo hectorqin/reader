@@ -78,7 +78,17 @@ export default {
       //
     }
     this.$store.commit("setMiniInterface", window.innerWidth <= 750);
+
+    document.documentElement.style.setProperty(
+      "--vh",
+      `${window.innerHeight * 0.01}px`
+    );
+
     window.onresize = () => {
+      document.documentElement.style.setProperty(
+        "--vh",
+        `${window.innerHeight * 0.01}px`
+      );
       this.$store.commit("setMiniInterface", window.innerWidth <= 750);
       this.$store.commit("setWindowSize", {
         width: window.innerWidth,
@@ -91,6 +101,10 @@ export default {
     this.setTheme(this.isNight);
   },
   mounted() {
+    document.documentElement.style.setProperty(
+      "--vh",
+      `${window.innerHeight * 0.01}px`
+    );
     window.reader = this;
   },
   computed: {
@@ -98,10 +112,15 @@ export default {
       return this.$store.getters.isNight;
     },
     dialogWidth() {
-      return this.$store.state.miniInterface ? "85%" : "50%";
+      return this.$store.state.miniInterface ? "85%" : "450px";
     },
     dialogTop() {
-      return this.$store.state.miniInterface ? "5vh" : "15vh";
+      return (
+        Math.max(
+          (this.$store.state.windowSize.height - 390 - 70 - 54) / 2,
+          50
+        ) + "px"
+      );
     },
     showLogin: {
       get() {
@@ -159,6 +178,7 @@ export default {
   color: #2c3e50;
   margin: 0;
   height: 100%;
+  position: relative;
 }
 
 @font-face {
@@ -197,7 +217,9 @@ export default {
     /*Kindle Paperwihite*/ local("DK-HEITI");
 }
 *::-webkit-scrollbar {
+  display: none;
   width: 0 !important;
+  height: 0 !important;
 }
 </style>
 <style lang="stylus">
@@ -276,5 +298,8 @@ export default {
 }
 .el-popover:focus, .el-popover:focus:active, .el-popover__reference:focus:hover, .el-popover__reference:focus:not(.focusing) {
   outline: none;
+}
+.el-message-box {
+  max-width: 85vw;
 }
 </style>

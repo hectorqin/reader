@@ -40,7 +40,7 @@ data class BookSource(
     var ruleBookInfo: BookInfoRule? = null,         // 书籍信息页规则
     var ruleToc: TocRule? = null,                   // 目录页规则
     var ruleContent: ContentRule? = null            // 正文页规则
-)  {
+) : JsExtensions {
 //    @Ignore
 //    @IgnoredOnParcel
     private var searchRuleV: SearchRule? = null
@@ -142,7 +142,7 @@ data class BookSource(
     @Throws(Exception::class)
     private fun evalJS(jsStr: String): Any {
         val bindings = SimpleBindings()
-        bindings["java"] = JsExtensions
+        bindings["java"] = this
         return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
     }
 

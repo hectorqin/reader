@@ -23,7 +23,8 @@ import {
   Slider,
   Form,
   FormItem,
-  Switch
+  Switch,
+  Link
 } from "element-ui";
 
 Vue.use(Button);
@@ -48,6 +49,7 @@ Vue.use(Slider);
 Vue.use(Form);
 Vue.use(FormItem);
 Vue.use(Switch);
+Vue.use(Link);
 
 Vue.prototype.$msgbox = MessageBox;
 Vue.prototype.$message = Object.assign({}, Message, {

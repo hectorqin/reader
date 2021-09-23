@@ -68,7 +68,7 @@ storage
 │   ├── hector                                    # 用户 hector 的数据目录 (reader.app.secure为true时的用户目录)
 │   │   ├── bookSource.json                       # 书源列表
 │   │   ├── bookshelf.json                        # 书架书籍列表
-│   │   ├── webdav                                # webdav 存储目录
+│   │   ├── webdav                                # webdav 存储目录 可能会存在 legado 子目录
 │   │   │   ├── backup2021-09-15.zip              # 阅读3备份文件
 │   │   │   └── bookProgress                      # 阅读3书籍进度备份目录
 │   │   │       └── 斗罗大陆_唐家三少.json           # 阅读3书籍进度
@@ -191,10 +191,10 @@ yarn sync
 ```bash
 ./gradlew assemble --info
 
-java -jar build/libs/reader-1.3.0.jar
+java -jar build/libs/reader-1.4.0.jar
 
 # 指定 storage 路径  默认为相对路径 storage
-# java -Dreader.app.storagePath=cacheStorage  -jar build/libs/reader-1.3.0.jar
+# java -Dreader.app.storagePath=cacheStorage  -jar build/libs/reader-1.4.0.jar
 
 # web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/
@@ -330,7 +330,7 @@ lastIndex 是上次搜索结果中返回的字段，默认为 0，可以传入 `
 - [ ] 多源并发搜索书籍
 - [ ] 并发更新书架章节
 - [ ] 并发搜索书籍来源
-- [ ] WebDav同步
+- [x] WebDav同步
 - [ ] 导入本地书籍，支持epub
 
 ## 感谢

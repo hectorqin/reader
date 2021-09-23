@@ -138,6 +138,36 @@
             />
           </div>
         </div>
+        <div
+          class="setting-wrapper"
+          v-if="
+            !$store.state.isSecureMode || $store.state.userInfo.enableWebdav
+          "
+        >
+          <div class="setting-title">
+            WebDAV
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="showWebdavFile('/')"
+            >
+              文件管理
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="backupToWebdav"
+            >
+              保存备份
+            </el-tag>
+          </div>
+        </div>
         <div class="setting-wrapper" v-if="$store.state.showManagerMode">
           <div class="setting-title">
             用户空间
@@ -174,7 +204,7 @@
               :effect="isNight ? 'dark' : 'light'"
               slot="reference"
               class="setting-btn"
-              v-if="$store.state.isSecureMode"
+              v-if="$store.state.isManagerMode"
               @click="showUserManageDialog = true"
             >
               管理用户空间
@@ -184,7 +214,7 @@
               :effect="isNight ? 'dark' : 'light'"
               slot="reference"
               class="setting-btn"
-              v-if="$store.state.isSecureMode"
+              v-if="$store.state.isManagerMode"
               @click="exitSecureMode"
             >
               退出管理模式
@@ -362,7 +392,7 @@
       <div class="source-container">
         <el-table
           :data="bookSourceList"
-          height="400"
+          :height="dialogContentHeight"
           @selection-change="manageSourceSelection = $event"
         >
           <el-table-column
@@ -408,7 +438,7 @@
       <div class="source-container">
         <el-table
           :data="userList"
-          height="400"
+          :height="dialogContentHeight"
           @selection-change="manageUserSelection = $event"
         >
           <el-table-column
@@ -419,12 +449,14 @@
           </el-table-column>
           <el-table-column property="username" label="用户名"></el-table-column>
           <el-table-column
-            property="last_login_at"
+            property="lastLoginAt"
             label="上次登录"
+            :formatter="formatTableField"
           ></el-table-column>
           <el-table-column
-            property="created_at"
+            property="createdAt"
             label="注册时间"
+            :formatter="formatTableField"
           ></el-table-column>
           <el-table-column property="enableWebdav" label="启用webdav">
             <template slot-scope="scope">
@@ -452,6 +484,78 @@
         <el-button @click="showUserManageDialog = false">取消</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog
+      title="WebDAV文件管理"
+      :visible.sync="showWebdavManageDialog"
+      :width="dialogWidth"
+      :top="dialogTop"
+    >
+      <div class="source-container">
+        <el-table
+          :data="webdavFileList"
+          :height="dialogContentHeight"
+          @selection-change="webdavFileSelection = $event"
+        >
+          <el-table-column
+            type="selection"
+            width="25"
+            :selectable="row => !row.toParent"
+          >
+          </el-table-column>
+          <el-table-column property="name" min-width="100px" label="文件名">
+            <template slot-scope="scope">
+              <span v-if="!scope.row.isDirectory">{{ scope.row.name }}</span>
+              <el-link
+                type="primary"
+                v-if="scope.row.isDirectory"
+                @click="showWebdavFile(scope.row.path)"
+                >{{ scope.row.name }}</el-link
+              >
+            </template>
+          </el-table-column>
+          <el-table-column
+            property="size"
+            label="大小"
+            :formatter="formatTableField"
+          ></el-table-column>
+          <el-table-column
+            property="lastModified"
+            label="修改时间"
+            :formatter="formatTableField"
+          ></el-table-column>
+          <el-table-column label="操作">
+            <template slot-scope="scope">
+              <el-button
+                type="text"
+                @click="deleteWebdavFile(scope.row)"
+                style="color: #f56c6c"
+                v-if="!scope.row.toParent"
+                >删除</el-button
+              >
+              <el-button
+                type="text"
+                @click="restoreFromWebdav(scope.row)"
+                v-if="!scope.row.isDirectory && scope.row.name.endsWith('.zip')"
+                >还原</el-button
+              >
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-button
+          type="primary"
+          class="float-left"
+          @click="deleteWebdavFileList"
+          >批量删除</el-button
+        >
+        <span class="check-tip"
+          >已选择 {{ webdavFileSelection.length }} 个</span
+        >
+        <el-button @click="showWebdavManageDialog = false">取消</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -460,6 +564,53 @@ import Explore from "../components/Explore.vue";
 import Axios from "../plugins/axios";
 import noCover from "../assets/imgs/noCover.jpeg";
 
+Date.prototype.format = function(fmt) {
+  var o = {
+    "M+": this.getMonth() + 1, //月份
+    "d+": this.getDate(), //日
+    "h+": this.getHours(), //小时
+    "m+": this.getMinutes(), //分
+    "s+": this.getSeconds(), //秒
+    "q+": Math.floor((this.getMonth() + 3) / 3), //季度
+    S: this.getMilliseconds() //毫秒
+  };
+  if (/(y+)/.test(fmt)) {
+    fmt = fmt.replace(
+      RegExp.$1,
+      (this.getFullYear() + "").substr(4 - RegExp.$1.length)
+    );
+  }
+  for (var k in o) {
+    if (new RegExp("(" + k + ")").test(fmt)) {
+      fmt = fmt.replace(
+        RegExp.$1,
+        RegExp.$1.length == 1 ? o[k] : ("00" + o[k]).substr(("" + o[k]).length)
+      );
+    }
+  }
+  return fmt;
+};
+const formatSize = function(value, scale) {
+  if (value == null || value == "") {
+    return "0 Bytes";
+  }
+  var unitArr = new Array(
+    "Bytes",
+    "KB",
+    "MB",
+    "GB",
+    "TB",
+    "PB",
+    "EB",
+    "ZB",
+    "YB"
+  );
+  var index = 0;
+  index = Math.floor(Math.log(value) / Math.log(1024));
+  var size = value / Math.pow(1024, index);
+  size = size.toFixed(scale || 2);
+  return size + " " + unitArr[index];
+};
 export default {
   components: {
     Explore
@@ -494,7 +645,13 @@ export default {
       lastScrollTop: 0,
 
       showUserManageDialog: false,
-      manageUserSelection: []
+      manageUserSelection: [],
+
+      webdavCurrentPath: "/",
+      webdavFileList: [],
+
+      showWebdavManageDialog: false,
+      webdavFileSelection: []
     };
   },
   watch: {
@@ -528,10 +685,8 @@ export default {
         this.navigationClass = "navigation-in";
       }
     },
-    loginAuth(val) {
-      if (val) {
-        this.init(true);
-      }
+    loginAuth() {
+      this.init(true);
     },
     userNS() {
       this.init(true);
@@ -674,8 +829,12 @@ export default {
       Axios.get(this.api + "/getUserInfo").then(
         res => {
           if (res.data.isSuccess) {
+            this.$store.commit("setIsSecureMode", res.data.data.secure);
             if (res.data.data.secure && res.data.data.secureKey) {
               this.$store.commit("setShowManagerMode", true);
+            }
+            if (res.data.data.userInfo) {
+              this.$store.commit("setUserInfo", res.data.data.userInfo);
             }
           }
         },
@@ -842,35 +1001,6 @@ export default {
       let int = parseInt((time - t) / 1000);
       let str = "";
 
-      Date.prototype.format = function(fmt) {
-        var o = {
-          "M+": this.getMonth() + 1, //月份
-          "d+": this.getDate(), //日
-          "h+": this.getHours(), //小时
-          "m+": this.getMinutes(), //分
-          "s+": this.getSeconds(), //秒
-          "q+": Math.floor((this.getMonth() + 3) / 3), //季度
-          S: this.getMilliseconds() //毫秒
-        };
-        if (/(y+)/.test(fmt)) {
-          fmt = fmt.replace(
-            RegExp.$1,
-            (this.getFullYear() + "").substr(4 - RegExp.$1.length)
-          );
-        }
-        for (var k in o) {
-          if (new RegExp("(" + k + ")").test(fmt)) {
-            fmt = fmt.replace(
-              RegExp.$1,
-              RegExp.$1.length == 1
-                ? o[k]
-                : ("00" + o[k]).substr(("" + o[k]).length)
-            );
-          }
-        }
-        return fmt;
-      };
-
       if (int <= 30) {
         str = "刚刚";
       } else if (int < 60) {
@@ -888,7 +1018,10 @@ export default {
     },
     getCover(coverUrl) {
       if (coverUrl) {
-        return this.api + "/cover?path=" + coverUrl;
+        return {
+          src: this.api + "/cover?path=" + coverUrl,
+          error: noCover
+        };
       }
       return noCover;
     },
@@ -1033,9 +1166,19 @@ export default {
       });
       return res.join("\n");
     },
-    deleteBookSourceList() {
+    async deleteBookSourceList() {
       if (!this.manageSourceSelection.length) {
         this.$message.error("请选择需要删除的源");
+        return;
+      }
+      const res = await this.$confirm("确认要删除所选择的书源吗?", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
         return;
       }
       Axios.post(this.api + "/deleteSources", this.manageSourceSelection).then(
@@ -1096,7 +1239,7 @@ export default {
               ...v,
               userNS: v.username
             }));
-            this.$store.commit("setIsSecureMode", true);
+            this.$store.commit("setIsManagerMode", true);
             this.init(true);
           }
         },
@@ -1110,9 +1253,19 @@ export default {
     isUserSelectable(user) {
       return user.userNS !== "default";
     },
-    deleteUserList() {
+    async deleteUserList() {
       if (!this.manageUserSelection.length) {
         this.$message.error("请选择需要删除的用户");
+        return;
+      }
+      const res = await this.$confirm("确认要删除所选择的用户吗?", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
         return;
       }
       Axios.post(
@@ -1153,11 +1306,168 @@ export default {
         }
       );
     },
+    formatTableField(row, column, cellValue) {
+      switch (column.property) {
+        case "createdAt":
+        case "lastLoginAt":
+        case "lastModified":
+          return cellValue ? new Date(cellValue).format("yy-MM-dd hh:mm") : "";
+        case "size":
+          return row.isDirectory ? "" : formatSize(cellValue);
+        default:
+          return cellValue;
+      }
+    },
     exitSecureMode() {
       this.userNS = "default";
       this.userList = [];
-      this.$store.commit("setIsSecureMode", false);
+      this.$store.commit("setIsManagerMode", false);
       this.init(true);
+    },
+    showWebdavFile(path) {
+      this.webdavCurrentPath = path || "/";
+      Axios.get(this.api + "/getWebdavFileList", {
+        params: {
+          path: this.webdavCurrentPath
+        }
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            res.data.data = res.data.data || [];
+            if (this.webdavCurrentPath !== "/") {
+              const paths = this.webdavCurrentPath.split("/").filter(v => v);
+              paths.pop();
+              res.data.data.unshift({
+                name: "..",
+                isDirectory: true,
+                toParent: true,
+                path: "/" + paths.join("/")
+              });
+            }
+            this.webdavFileList = res.data.data;
+            this.showWebdavManageDialog = true;
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载WebDAV文件列表失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    async deleteWebdavFileList() {
+      if (!this.webdavFileSelection.length) {
+        this.$message.error("请选择需要删除的文件");
+        return;
+      }
+      const res = await this.$confirm("确认要删除所选择的文件吗?", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/deleteWebdavFileList", {
+        path: this.webdavFileSelection.map(v => v.path)
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.webdavFileSelection = [];
+            this.$message.success("删除文件成功");
+            this.showWebdavFile(this.webdavCurrentPath);
+          }
+        },
+        error => {
+          this.$message.error("删除文件失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async deleteWebdavFile(row) {
+      const res = await this.$confirm(
+        `确认要删除该${row.isDirectory ? "文件夹" : "文件"}吗?`,
+        "提示",
+        {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/deleteWebdavFile", {
+        path: row.path
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("删除文件成功");
+            this.showWebdavFile(this.webdavCurrentPath);
+          }
+        },
+        error => {
+          this.$message.error("删除文件失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async restoreFromWebdav(row) {
+      const res = await this.$confirm(
+        `确认要从该压缩文件恢复书源和书架信息吗?`,
+        "提示",
+        {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/restoreFromWebdav", {
+        path: row.path
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("恢复成功");
+            this.init(true);
+          }
+        },
+        error => {
+          this.$message.error("恢复失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async backupToWebdav() {
+      const res = await this.$confirm(
+        `确认要用当前书源和书架信息覆盖备份文件中的书源和书架信息吗?`,
+        "提示",
+        {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/backupToWebdav").then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("备份成功");
+          }
+        },
+        error => {
+          this.$message.error("备份失败 " + (error && error.toString()));
+        }
+      );
     }
   },
   computed: {
@@ -1203,10 +1513,24 @@ export default {
       return this.$store.state.miniInterface;
     },
     dialogWidth() {
-      return this.showMenu ? "85%" : "50%";
+      return this.showMenu ? "85%" : "700px";
     },
     dialogTop() {
-      return this.showMenu ? "5vh" : "15vh";
+      return (
+        (this.$store.state.windowSize.height -
+          this.dialogContentHeight -
+          70 -
+          54 -
+          60) /
+          2 +
+        "px"
+      );
+    },
+    dialogContentHeight() {
+      return Math.min(
+        0.9 * this.$store.state.windowSize.height - 70 - 54 - 60,
+        400
+      );
     },
     popupWidth() {
       return this.showMenu ? this.$store.state.windowSize.width : "600";
@@ -1234,7 +1558,7 @@ export default {
       set(val) {
         this.$store.commit("setUserNS", val);
         if (val) {
-          this.$store.commit("setIsSecureMode", true);
+          this.$store.commit("setIsManagerMode", true);
         }
       }
     },
@@ -1261,6 +1585,7 @@ export default {
     width: 260px;
     min-width: 260px;
     height: 100vh;
+    height: calc(var(--vh, 1vh) * 100);
     box-sizing: border-box;
     background-color: #F7F7F7;
     position: relative;
@@ -1268,7 +1593,9 @@ export default {
     .navigation-inner-wrapper {
       padding: 48px 36px 66px 36px;
       height: 100vh;
+      height: calc(var(--vh, 1vh) * 100);
       max-height: 100vh;
+      max-height: calc(var(--vh, 1vh) * 100);
       overflow-y: auto;
       box-sizing: border-box;
     }
