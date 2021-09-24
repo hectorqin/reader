@@ -1342,10 +1342,11 @@ class YueduApi : RestVerticle() {
                 if (newFile.exists()) {
                     newFile.delete()
                 }
-                logger.info("renameTo: {}", newFile)
-                if (file.renameTo(newFile)) {
+                logger.info("moveTo: {}", newFile)
+                if (file.copyRecursively(newFile)) {
                     fileList.add("/assets/" + userNameSpace + "/" + type + "/" + fileName)
                 }
+                file.deleteRecursively()
             }
         }
         return returnData.setData(fileList.getList())

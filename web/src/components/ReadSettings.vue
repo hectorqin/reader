@@ -421,7 +421,11 @@ export default {
     },
     setBGImg(src) {
       let config = this.config;
-      config.contentBGImg = src;
+      if (config.contentBGImg === src) {
+        delete config.contentBGImg;
+      } else {
+        config.contentBGImg = src;
+      }
       this.$store.commit("setConfig", { ...config });
     },
     uploadBGFile() {
