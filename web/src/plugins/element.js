@@ -64,6 +64,9 @@ Vue.prototype.$message = Object.assign({}, Message, {
     Message.success(options);
   }
 });
+Vue.prototype.$ELEMENT = {
+  zIndex: 2100
+};
 Vue.prototype.$alert = MessageBox.alert;
 Vue.prototype.$confirm = MessageBox.confirm;
 Vue.prototype.$prompt = MessageBox.prompt;

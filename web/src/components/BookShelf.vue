@@ -1,7 +1,7 @@
 <template>
   <div class="popup-wrapper" :style="popupTheme">
     <div class="title-zone">
-      <div class="title">书架({{ bookList.length }})</div>
+      <div class="title">书架({{ shelfBooks.length }})</div>
       <div :class="{ 'title-btn': true, loading: refreshLoading }">
         <!-- <span class="home-btn" @click="backToHome">回首页</span> -->
         <span :class="{ loading: refreshLoading }" @click="refreshShelf">
@@ -18,9 +18,9 @@
       <div class="cata">
         <div
           class="log"
-          v-for="(book, index) in bookList"
+          v-for="book in shelfBooks"
           :class="{ selected: isSelected(book) }"
-          :key="index"
+          :key="book.bookUrl"
           @click="changeBook(book)"
           ref="book"
         >
@@ -46,7 +46,6 @@ export default {
   name: "BookShelf",
   data() {
     return {
-      bookList: [],
       refreshLoading: false
     };
   },
@@ -59,6 +58,9 @@ export default {
       return {
         background: this.$store.getters.currentThemeConfig.popup
       };
+    },
+    shelfBooks() {
+      return this.$store.getters.shelfBooks;
     }
   },
   mounted() {},
@@ -74,6 +76,9 @@ export default {
       return book.bookUrl == this.$store.state.readingBook.bookUrl;
     },
     getBookshelf(refresh) {
+      if (this.shelfBooks.length) {
+        return;
+      }
       Axios.get(this.api + `/getBookshelf`, {
         params: {
           refresh: refresh ? 1 : 0
@@ -82,8 +87,8 @@ export default {
         res => {
           this.refreshLoading = false;
           if (res.data.isSuccess) {
-            this.bookList = res.data.data || [];
-            if (this.bookList.length) {
+            this.$store.commit("setShelfBooks", res.data.data);
+            if (this.shelfBooks.length) {
               this.jumpToActive();
             }
           }
@@ -116,7 +121,7 @@ export default {
     jumpToActive() {
       this.$nextTick(() => {
         let index = -1;
-        this.bookList.some((v, i) => {
+        this.shelfBooks.some((v, i) => {
           if (v.bookUrl == this.$store.state.readingBook.bookUrl) {
             index = i;
             return true;

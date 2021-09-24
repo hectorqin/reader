@@ -443,6 +443,10 @@ export default {
       }).then(
         res => {
           if (res.data.isSuccess) {
+            if (!res.data.data.length) {
+              this.$message.error("上传文件失败");
+              return;
+            }
             let config = this.config;
             config.customBGImgList = config.customBGImgList || [];
             if (!config.customBGImgList.includes(res.data.data[0])) {

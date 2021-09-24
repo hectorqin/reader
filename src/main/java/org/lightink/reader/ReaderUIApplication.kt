@@ -247,6 +247,12 @@ class ReaderUIApplication: Application() {
         var windowConfigPort = 0
         var windowConfigSource = mutableMapOf<String, Any>()
         try {
+            // 支持配置 接口服务
+            val serverConfig = windowConfigMap.getOrDefault("serverConfig", null) as? MutableMap<String, Any>
+            if (serverConfig != null) {
+                windowConfigSource = serverConfig
+            }
+
             val serverPort = windowConfigMap.getOrDefault("serverPort", null)
             if (serverPort != null) {
                 windowConfigPort = serverPort as Int
@@ -264,6 +270,7 @@ class ReaderUIApplication: Application() {
             e.printStackTrace()
         }
 
+        logger.info("windowConfigSource: {}", windowConfigSource)
         return MapPropertySource("windowConfig", windowConfigSource)
     }
 
@@ -275,6 +282,15 @@ class ReaderUIApplication: Application() {
         logger.info("windowConfigMap: {}", windowConfigMap)
     }
 
+    fun getWindowConfigDoubleProperty(name: String, defaultVal: Double): Double {
+        var value = windowConfigMap.getOrDefault(name, defaultVal)
+        return when(value) {
+            is Int -> value.toDouble()
+            is Double -> value
+            else -> defaultVal
+        }
+    }
+
     fun applyWindowConfig(stage: Stage): Size {
         var width = 1280.0;
         var height = 800.0;
@@ -282,8 +298,8 @@ class ReaderUIApplication: Application() {
             loadWindowConfig()
             val setWindowPosition = windowConfigMap.getOrDefault("setWindowPosition", false) as Boolean? ?: false
             if (setWindowPosition) {
-                var positionX = windowConfigMap.getOrDefault("positionX", 0.0) as Double? ?: 0.0
-                var positionY = windowConfigMap.getOrDefault("positionY", 0.0) as Double? ?: 0.0
+                var positionX = getWindowConfigDoubleProperty("positionX", 0.0)
+                var positionY = getWindowConfigDoubleProperty("positionY", 0.0)
                 stage.setX(positionX)
                 stage.setY(positionY)
             }
@@ -307,8 +323,8 @@ class ReaderUIApplication: Application() {
             }
             val setWindowSize = windowConfigMap.getOrDefault("setWindowSize", true) as Boolean? ?: true
             if (setWindowSize) {
-                width = windowConfigMap.getOrDefault("width", width) as Double? ?: width
-                height = windowConfigMap.getOrDefault("height", height) as Double? ?: height
+                width = getWindowConfigDoubleProperty("width", width)
+                height = getWindowConfigDoubleProperty("height", height)
             }
         } catch(e: Exception) {
             showAlert("窗口配置加载失败，请检查窗口配置文件(windowConfig.json)", false)
@@ -360,7 +376,7 @@ class ReaderUIApplication: Application() {
     }
 
     override fun stop() {
-        saveStorage("windowConfig", windowConfigMap)
+        saveStorage("windowConfig", windowConfigMap, true)
         super.stop()
         var context = SpringContextUtils.getApplicationContext()
         logger.info("application stop: {}", context)

@@ -121,6 +121,7 @@ class YueduApi : RestVerticle() {
 
         // 换源
         router.get("/reader3/saveBookSource").coroutineHandler { saveBookSource(it) }
+        router.post("/reader3/saveBookSource").coroutineHandler { saveBookSource(it) }
 
         // web界面
         router.route("/*").handler(StaticHandler.create("web").setDefaultContentEncoding("UTF-8"));
@@ -1316,9 +1317,13 @@ class YueduApi : RestVerticle() {
 
     private suspend fun uploadFile(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
         if (context.fileUploads() == null || context.fileUploads().isEmpty()) {
             return returnData.setErrorMsg("请上传文件")
         }
+        var userNameSpace = getUserNameSpace(context)
         var fileList = JsonArray()
         var type = context.request().getParam("type")
         if (type.isNullOrEmpty()) {
@@ -1330,7 +1335,7 @@ class YueduApi : RestVerticle() {
             var file = File(it.uploadedFileName())
             if (file.exists()) {
                 var fileName = it.fileName()
-                var newFile = File(getWorkDir("storage/assets/" + type + "/" + fileName))
+                var newFile = File(getWorkDir("storage/assets/" + userNameSpace + "/" + type + "/" + fileName))
                 if (!newFile.parentFile.exists()) {
                     newFile.parentFile.mkdirs()
                 }
@@ -1339,7 +1344,7 @@ class YueduApi : RestVerticle() {
                 }
                 // logger.info("renameTo: {}", newFile)
                 if (file.renameTo(newFile)) {
-                    fileList.add("/assets/" + type + "/" + fileName)
+                    fileList.add("/assets/" + userNameSpace + "/" + type + "/" + fileName)
                 }
             }
         }
@@ -1348,6 +1353,9 @@ class YueduApi : RestVerticle() {
 
     private suspend fun deleteFile(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
         var url: String
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
@@ -1359,10 +1367,11 @@ class YueduApi : RestVerticle() {
         if (url.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入文件链接")
         }
-        if (!url.startsWith("/assets/")) {
+        var userNameSpace = getUserNameSpace(context)
+        if (!url.startsWith("/assets/" + userNameSpace + "/")) {
             return returnData.setErrorMsg("文件链接错误")
         }
-        var file = File(getWorkDir(url.replace("/assets/", "reader-assets/", false)))
+        var file = File(getWorkDir("storage" + url))
         logger.info("delete file: {}", file)
         if (file.exists()) {
             file.delete()
@@ -1984,7 +1993,6 @@ class YueduApi : RestVerticle() {
             existBook.originName = bookSource.bookSourceName
             existBook.bookUrl = newBookUrl
             existBook.tocUrl = newBookInfo.tocUrl
-            existBook.durChapterTime = System.currentTimeMillis()
 
             logger.info("saveBookSource: {}", existBook)
 

@@ -4,7 +4,7 @@ export default {
   data() {
     return {};
   },
-  props: ["carray", "title", "showContent"],
+  props: ["content", "title", "showContent"],
   render() {
     const { fontSize, fontWeight, fontColor } = this;
     const style = {
@@ -29,7 +29,7 @@ export default {
       return (
         <div style={style}>
           <h3>{this.title}</h3>
-          {this.carray.map(a => {
+          {this.content.split(/\n+/).map(a => {
             a = a.replace(/^\s+/g, "");
             return <p style={pStyle} domPropsInnerHTML={a} />;
           })}

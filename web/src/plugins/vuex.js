@@ -1,6 +1,7 @@
 import Vue from "vue";
 import Vuex from "vuex";
 import settings from "./config";
+import packageInfo from "../../package.json";
 
 const defaultNS = [{ username: "默认", userNS: "default" }];
 Vue.use(Vuex);
@@ -31,7 +32,9 @@ export default new Vuex.Store({
     userInfo: {},
     userList: [].concat(defaultNS),
     userNS: "default",
-    showManagerMode: false
+    showManagerMode: false,
+    version: packageInfo.version,
+    filterRules: []
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -39,6 +42,21 @@ export default new Vuex.Store({
     },
     setReadingBook(state, readingBook) {
       state.readingBook = readingBook;
+      // 更新书架信息
+      for (let i = 0; i < state.shelfBooks.length; i++) {
+        if (state.shelfBooks[i].bookUrl === readingBook.bookUrl) {
+          state.shelfBooks[i] = {
+            ...state.shelfBooks[i],
+            durChapterTime: new Date().getTime(),
+            durChapterIndex: readingBook.index,
+            durChapterTitle: (
+              (readingBook.catalog || [])[readingBook.index] || {}
+            ).title
+          };
+          break;
+        }
+      }
+      state.shelfBooks = [].concat(state.shelfBooks);
       window.localStorage &&
         window.localStorage.setItem(
           "readingRecent",
@@ -107,6 +125,17 @@ export default new Vuex.Store({
       } else {
         state.userList = [].concat(defaultNS);
       }
+    },
+    setFilterRules(state, filterRules) {
+      state.filterRules = filterRules;
+      window.localStorage &&
+        window.localStorage.setItem("filterRules", JSON.stringify(filterRules));
+    },
+    addFilterRule(state, rule) {
+      const filterRules = [].concat(state.filterRules).concat([rule]);
+      state.filterRules = filterRules;
+      window.localStorage &&
+        window.localStorage.setItem("filterRules", JSON.stringify(filterRules));
     }
   },
   getters: {
@@ -165,6 +194,13 @@ export default new Vuex.Store({
       } else {
         return settings.themes[state.config.theme];
       }
+    },
+    shelfBooks: state => {
+      return state.shelfBooks.sort(function(a, b) {
+        var x = a["durChapterTime"] || 0;
+        var y = b["durChapterTime"] || 0;
+        return y - x;
+      });
     }
   }
 });

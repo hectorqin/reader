@@ -101,9 +101,11 @@ fun getStoragePath(): String {
     return storagePath;
 }
 
-fun saveStorage(name: String, value: Any) {
+fun saveStorage(name: String, value: Any, pretty: Boolean = false) {
     val toJson: String = if (value is JsonObject || value is JsonArray) {
         value.toString()
+    } else if (pretty) {
+        prettyGson.toJson(value)
     } else {
         gson.toJson(value)
     }

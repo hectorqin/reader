@@ -280,6 +280,7 @@ export default {
         justify-content: space-between;
         margin-bottom: 2px;
         padding-top: 2px;
+        overflow-x: auto;
       }
 
       .explore-btn {

@@ -212,7 +212,7 @@
           <Pcontent
             class="book-content"
             :title="title"
-            :carray="content"
+            :content="filterContent"
             :showContent="show"
             :style="contentStyle"
             ref="bookContentRef"
@@ -335,7 +335,7 @@ export default {
   data() {
     return {
       title: "",
-      content: [],
+      content: "",
       noPoint: true,
       popCataVisible: false,
       readSettingsVisible: false,
@@ -511,6 +511,23 @@ export default {
     },
     loginAuth() {
       return this.$store.state.loginAuth;
+    },
+    filterRules() {
+      return this.$store.state.filterRules;
+    },
+    filterContent() {
+      let content = this.content;
+      try {
+        this.filterRules.forEach(rule => {
+          const scope = rule.scope.split(";");
+          if (scope[0] === this.$store.state.readingBook.bookName) {
+            content = content.replace(rule.pattern, rule.replacement);
+          }
+        });
+      } catch (error) {
+        //
+      }
+      return content;
     }
   },
   methods: {
@@ -539,11 +556,6 @@ export default {
       }
       this.getCatalog(this.$store.state.readingBook.bookUrl, refresh).then(
         res => {
-          // 连接后端成功，加载自定义样式
-          window.customCSSLoad ||
-            window.loadLink(this.$store.getters.customCSSUrl, () => {
-              window.customCSSLoad = true;
-            });
           if (res.data.isSuccess) {
             var book = Object.assign({}, this.$store.state.readingBook);
             book.catalog = res.data.data;
@@ -596,12 +608,25 @@ export default {
       } catch (error) {
         //
       }
+      //强制滚回顶层
+      jump(this.$refs.top, { duration: 0 });
+      // 如果超出目录范围，尝试刷新目录
+      if (!this.$store.state.readingBook.catalog[index]) {
+        if (this.tryRefresh) {
+          this.tryRefresh = false;
+          this.content = "获取章节内容失败，请更新目录！";
+          this.show = true;
+          this.loading.close();
+        } else {
+          this.tryRefresh = true;
+          this.refreshCatalog();
+        }
+        return;
+      }
       //let chapterUrl = this.$store.state.readingBook.catalog[index].url;
       let chapterName = this.$store.state.readingBook.catalog[index].title;
       let chapterIndex = this.$store.state.readingBook.catalog[index].index;
       this.title = chapterName;
-      //强制滚回顶层
-      jump(this.$refs.top, { duration: 0 });
       Axios.get(
         this.api +
           "/getBookContent?url=" +
@@ -611,13 +636,13 @@ export default {
       ).then(
         res => {
           let data = res.data.data;
-          this.content = data.split(/\n+/);
+          this.content = data;
           this.loading.close();
           this.noPoint = false;
           this.show = true;
         },
         error => {
-          this.content = "　　获取章节内容失败！";
+          this.content = "获取章节内容失败！\n" + (error && error.toString());
           this.show = true;
           this.loading.close();
           this.$message.error(
@@ -851,11 +876,16 @@ export default {
       });
     },
     handlerClick(e) {
-      if (!this.lastTouch) {
+      if (!this.lastTouch && !this.ignoreNextClick) {
         this.eventHandler(e);
       }
+      this.ignoreNextClick = false;
     },
     handleTouchStart(e) {
+      this.lastSelection = this.checkSelection();
+      if (this.lastSelection) {
+        return;
+      }
       // e.preventDefault();
       // e.stopPropagation();
       this.lastTouch = false;
@@ -865,6 +895,9 @@ export default {
       }
     },
     handleTouchMove(e) {
+      if (this.checkSelection()) {
+        return;
+      }
       if (e.touches && e.touches[0] && this.lastTouch) {
         this.lastMoveY = e.touches[0].clientY - this.lastTouch.clientY;
         if (this.isSlideRead) {
@@ -879,6 +912,16 @@ export default {
       }
     },
     handleTouchEnd() {
+      if (this.checkSelection(true)) {
+        return;
+      }
+      if (this.lastSelection) {
+        setTimeout(() => {
+          this.showTextFilterPrompt(this.lastSelection);
+          this.lastSelection = false;
+        }, 200);
+        return;
+      }
       if (this.lastMoveX) {
         this.transformX += this.lastMoveX;
         if (this.lastMoveX > 0) {
@@ -899,6 +942,11 @@ export default {
     },
     eventHandler(point) {
       // console.log(point);
+      if (this.checkSelection(true)) {
+        // 选择文本
+        this.ignoreNextClick = true;
+        return;
+      }
       if (
         this.popBookSourceVisible ||
         this.popBookShelfVisible ||
@@ -1002,6 +1050,56 @@ export default {
       const now = new Date();
       const pad = v => (v > 10 ? "" + v : "0" + v);
       this.timeStr = pad(now.getHours()) + ":" + pad(now.getMinutes());
+    },
+    checkSelection(show) {
+      let text = "";
+      if (window.getSelection) {
+        text = window.getSelection().toString();
+      } else if (document.selection && document.selection.type != "Control") {
+        text = document.selection.createRange().text;
+      }
+      if (text && show) {
+        setTimeout(() => {
+          this.showTextFilterPrompt(text);
+        }, 200);
+      }
+      return text;
+    },
+    async showTextFilterPrompt(text) {
+      if (this.showTextFilterPrompting) {
+        return;
+      }
+      this.showTextFilterPrompting = true;
+      const h = this.$createElement;
+      const bgColor = this.isNight ? "#121212" : "#eee";
+      const result = await this.$prompt(
+        h("div", null, [
+          h("p", null, "是否要将下列文字替换为输入内容:"),
+          h(
+            "pre",
+            {
+              style: `margin-top: 10px;background: ${bgColor};padding: 10px;border: 1px solid ${bgColor};border-radius: 5px;white-space: pre-wrap;word-wrap: break-word;word-break: break-all;`
+            },
+            text
+          )
+        ]),
+        "操作确认",
+        {
+          inputPlaceholder: "留空为过滤"
+        }
+      ).catch(() => {});
+      if (result && result.action === "confirm") {
+        this.$store.commit("addFilterRule", {
+          name: "文本替换",
+          pattern: text,
+          replacement: result.value || "",
+          scope:
+            this.$store.state.readingBook.bookName +
+            ";" +
+            this.$store.state.readingBook.bookUrl
+        });
+      }
+      this.showTextFilterPrompting = false;
     }
   }
 };
@@ -1025,7 +1123,7 @@ export default {
     position: fixed;
     top: 0;
     left: 50%;
-    z-index: 100;
+    z-index: 2001;
 
     .tools {
       display: flex;

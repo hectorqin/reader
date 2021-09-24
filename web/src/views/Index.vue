@@ -10,6 +10,7 @@
       <div class="navigation-inner-wrapper">
         <div class="navigation-title">
           阅读
+          <span class="version-text">v{{ $store.state.version }}</span>
         </div>
         <div class="navigation-sub-title">
           清风不识字，何故乱翻书
@@ -129,6 +130,15 @@
               @click="uploadBookSource"
             >
               导入书源
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="loadBookSource(true)"
+            >
+              缓存书源
             </el-tag>
             <input
               ref="fileRef"
@@ -251,16 +261,14 @@
     >
       <div class="shelf-title">
         <i class="el-icon-menu" v-if="showMenu" @click.stop="toggleMenu"></i>
-        {{
-          isSearchResult ? (isExploreResult ? "探索结果" : "搜索结果") : "书架"
-        }}
-        ({{ shelf.length }})
+        {{ isSearchResult ? (isExploreResult ? "探索" : "搜索") : "书架" }}
+        ({{ bookList.length }})
         <div class="title-btn" v-if="isSearchResult" @click="backToShelf">
-          返回书架
+          书架
         </div>
         <div class="title-btn" v-if="isSearchResult" @click="loadMore">
-          <i class="el-icon-loading" v-if="LoadingMore"></i>
-          {{ LoadingMore ? "加载中..." : "加载更多" }}
+          <i class="el-icon-loading" v-if="loadingMore"></i>
+          {{ loadingMore ? "加载中..." : "加载更多" }}
         </div>
         <div
           class="title-btn"
@@ -270,7 +278,11 @@
           <i class="el-icon-loading" v-if="refreshLoading"></i>
           {{ refreshLoading ? "刷新中..." : "刷新" }}
         </div>
-        <div class="title-btn" @click="showExplorePop">
+        <div
+          class="title-btn"
+          @click="showExplorePop"
+          v-if="!(isSearchResult && !isExploreResult)"
+        >
           书海
         </div>
       </div>
@@ -279,7 +291,7 @@
           <div
             class="book"
             :style="showNavigation ? { minWidth: '360px !important' } : {}"
-            v-for="book in shelf"
+            v-for="book in bookList"
             :key="book.bookUrl"
             @click="toDetail(book.bookUrl, book.name, book.durChapterIndex)"
           >
@@ -458,7 +470,7 @@
             label="注册时间"
             :formatter="formatTableField"
           ></el-table-column>
-          <el-table-column property="enableWebdav" label="启用webdav">
+          <el-table-column property="enableWebdav" label="启用WebDAV">
             <template slot-scope="scope">
               <el-switch
                 v-if="scope.row.userNS !== 'default'"
@@ -625,7 +637,7 @@ export default {
       searchPage: 1,
       refreshLoading: false,
       popExploreVisible: false,
-      LoadingMore: false,
+      loadingMore: false,
       importBookSource: [],
       showImportDialog: false,
       checkAll: false,
@@ -685,8 +697,10 @@ export default {
         this.navigationClass = "navigation-in";
       }
     },
-    loginAuth() {
-      this.init(true);
+    loginAuth(val) {
+      if (val) {
+        this.init(true);
+      }
     },
     userNS() {
       this.init(true);
@@ -700,25 +714,24 @@ export default {
     this.navigationClass =
       this.showMenu && !this.showNavigation ? "navigation-hidden" : "";
     window.shelfPage = this;
-    this.getUserInfo();
     this.init();
   },
   methods: {
     init(refresh) {
       if (this.initing) return;
       this.initing = true;
+      if (!refresh) {
+        if (this.shelfBooks.length) {
+          // 加载书源列表
+          this.loadBookSource(refresh);
+          return;
+        }
+      }
       this.loadBookshelf()
         .then(() => {
           this.initing = false;
-          // 连接后端成功，加载自定义样式
-          window.customCSSLoad ||
-            window.loadLink(this.$store.getters.customCSSUrl, () => {
-              window.customCSSLoad = true;
-            });
-          if (refresh || !this.bookSourceList.length) {
-            // 加载书源列表
-            this.loadBookSource();
-          }
+          // 加载书源列表
+          this.loadBookSource(refresh);
         })
         .catch(() => {});
     },
@@ -742,10 +755,8 @@ export default {
                 window.localStorage &&
                   window.localStorage.setItem("api_prefix", inputUrl);
                 this.$store.commit("setApi", inputUrl);
-                if (!this.bookSourceList.length) {
-                  // 加载书源列表
-                  this.loadBookSource();
-                }
+                // 加载书源列表
+                this.loadBookSource();
               })
               .catch(() => {
                 instance.confirmButtonLoading = false;
@@ -773,11 +784,11 @@ export default {
       }
 
       this.loading = this.$loading({
-        target: this.$refs.shelfWrapper,
+        target: this.$refs.bookList,
         lock: true,
         text: refresh ? "正在刷新书籍信息" : "正在获取书籍信息",
         spinner: "el-icon-loading",
-        background: this.isNight ? "#121212" : "rgb(247,247,247)"
+        background: this.isNight ? "#222" : "#fff"
       });
 
       if (
@@ -788,14 +799,7 @@ export default {
         api = "//" + api;
       }
 
-      return Axios.get(
-        api + "/getBookshelf?refresh=" + (refresh ? 1 : 0),
-        refresh
-          ? {}
-          : {
-              timeout: 30000
-            }
-      )
+      return Axios.get(api + "/getBookshelf?refresh=" + (refresh ? 1 : 0))
         .then(response => {
           this.$store.commit("setConnected", true);
           this.loading.close();
@@ -805,14 +809,7 @@ export default {
               c[v.name] = false;
               return c;
             }, {});
-            this.$store.commit(
-              "setShelfBooks",
-              response.data.data.sort(function(a, b) {
-                var x = a["durChapterTime"] || 0;
-                var y = b["durChapterTime"] || 0;
-                return y - x;
-              })
-            );
+            this.$store.commit("setShelfBooks", response.data.data);
           }
         })
         .catch(error => {
@@ -825,27 +822,33 @@ export default {
     refreshShelf() {
       return this.loadBookshelf(null, true);
     },
-    getUserInfo() {
-      Axios.get(this.api + "/getUserInfo").then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$store.commit("setIsSecureMode", res.data.data.secure);
-            if (res.data.data.secure && res.data.data.secureKey) {
-              this.$store.commit("setShowManagerMode", true);
-            }
-            if (res.data.data.userInfo) {
-              this.$store.commit("setUserInfo", res.data.data.userInfo);
-            }
-          }
-        },
-        error => {
-          this.$message.error(
-            "加载用户信息失败 " + (error && error.toString())
-          );
+    loadBookSource(refresh) {
+      const cacheKey = this.api + "#bookSource@" + this.userNS;
+      const handler = data => {
+        data = data || [];
+        this.$store.commit("setBookSourceList", data);
+        if (this.bookSourceList.length) {
+          this.bookSourceUrl =
+            this.bookSourceUrl || this.bookSourceList[0].bookSourceUrl;
         }
-      );
-    },
-    loadBookSource() {
+        window.localStorage &&
+          window.localStorage.setItem(cacheKey, JSON.stringify(data));
+      };
+
+      if (!refresh) {
+        // 从缓存中获取
+        try {
+          const localSourceList = JSON.parse(
+            window.localStorage && window.localStorage.getItem(cacheKey)
+          );
+          if (Array.isArray(localSourceList)) {
+            handler(localSourceList);
+            return;
+          }
+        } catch (error) {
+          //
+        }
+      }
       if (!this.$store.state.connected) {
         this.$message.error("后端未连接");
         return;
@@ -858,11 +861,7 @@ export default {
         res => {
           this.loading.close();
           if (res.data.isSuccess) {
-            this.$store.commit("setBookSourceList", res.data.data || []);
-            if (this.bookSourceList.length) {
-              this.bookSourceUrl =
-                this.bookSourceUrl || this.bookSourceList[0].bookSourceUrl;
-            }
+            handler(res.data.data);
           }
         },
         error => {
@@ -884,14 +883,6 @@ export default {
         this.$message.error("请输入关键词进行搜索");
         return;
       }
-      this.loading = this.$loading({
-        target: this.$refs.shelfWrapper,
-        lock: true,
-        text: "正在搜索书籍",
-        spinner: "el-icon-loading",
-        background: this.isNight ? "#121212" : "rgb(247,247,247)"
-      });
-
       Axios.get(this.api + "/searchBook", {
         timeout: 30000,
         params: {
@@ -901,11 +892,11 @@ export default {
         }
       }).then(
         res => {
-          this.loading.close();
-          this.LoadingMore = false;
+          this.loadingMore = false;
           if (res.data.isSuccess) {
             //
             this.isSearchResult = true;
+            this.isExploreResult = false;
             if (page === 1) {
               this.searchResult = res.data.data;
             } else {
@@ -924,7 +915,6 @@ export default {
           }
         },
         error => {
-          this.loading.close();
           this.$message.error("搜索书籍失败 " + (error && error.toString()));
         }
       );
@@ -1011,13 +1001,20 @@ export default {
         str = parseInt(int / 3600) + "小时前";
       } else if (int < 2592000) {
         str = parseInt(int / 86400) + "天前";
+      } else if (int < 31536000) {
+        str = parseInt(int / 2592000) + "月前";
       } else {
-        str = new Date(t).format("yyyy-MM-dd hh:mm");
+        str = parseInt(int / 31536000) + "年前";
       }
       return str;
     },
     getCover(coverUrl) {
-      if (coverUrl) {
+      if (
+        coverUrl &&
+        (coverUrl.startsWith("http://") ||
+          coverUrl.startsWith("https://") ||
+          coverUrl.startsWith("//"))
+      ) {
         return {
           src: this.api + "/cover?path=" + coverUrl,
           error: noCover
@@ -1042,12 +1039,12 @@ export default {
     showSearchList(data) {
       this.isSearchResult = true;
       this.isExploreResult = true;
-      this.LoadingMore = false;
+      this.loadingMore = false;
       this.searchResult = data;
     },
     loadMore() {
       this.lastScrollTop = this.$refs.bookList.scrollTop;
-      this.LoadingMore = true;
+      this.loadingMore = true;
       if (this.isExploreResult) {
         this.$refs.popExplore.loadMore();
       } else {
@@ -1139,7 +1136,7 @@ export default {
           if (res.data.isSuccess) {
             //
             this.$message.success("导入书源成功");
-            this.loadBookSource();
+            this.loadBookSource(true);
             this.showImportDialog = false;
           }
         },
@@ -1186,7 +1183,7 @@ export default {
           if (res.data.isSuccess) {
             this.manageSourceSelection = [];
             this.$message.success("删除书源成功");
-            this.loadBookSource();
+            this.loadBookSource(true);
           }
         },
         error => {
@@ -1488,10 +1485,13 @@ export default {
         };
       }
     },
-    shelf() {
+    bookList() {
       return this.isSearchResult
         ? this.searchResult
-        : this.$store.state.shelfBooks;
+        : this.$store.getters.shelfBooks;
+    },
+    shelfBooks() {
+      return this.$store.getters.shelfBooks;
     },
     searchResultMap() {
       return this.searchResult.reduce((c, v) => {
@@ -1604,6 +1604,14 @@ export default {
       font-size: 24px;
       font-weight: 600;
       font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
+
+      .version-text {
+        float: right;
+        font-size: 14px;
+        line-height: 33px;
+        font-weight: 400;
+        color: #b1b1b1;
+      }
     }
 
     .navigation-sub-title {
@@ -1738,6 +1746,7 @@ export default {
       font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
       margin-bottom: 15px;
       min-width: 320px;
+      box-sizing: border-box;
 
       .el-icon-menu {
         cursor: pointer;
@@ -1749,7 +1758,7 @@ export default {
         float: right;
         cursor: pointer;
         user-select: none;
-        margin-left: 15px;
+        margin-left: 10px;
 
         >>>.el-icon-loading {
           font-size: 16px;

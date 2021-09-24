@@ -30,10 +30,22 @@ abstract class RestVerticle : CoroutineVerticle() {
     override suspend fun start() {
         super.start()
         router = Router.router(vertx)
+        val cookieName = "reader.session"
 	    router.route().handler(
             SessionHandler.create(LocalSessionStore.create(vertx))
-                            .setSessionCookieName("reader.session")
+                            .setSessionCookieName(cookieName)
+                            .setSessionTimeout(7L * 86400 * 1000)
         );
+        router.route().handler {
+            it.addHeadersEndHandler { _ ->
+                val cookie = it.getCookie(cookieName)
+                if (cookie != null) {
+                    // 每次访问都延长cookie有效期
+                    cookie.setMaxAge(2L * 86400 * 1000)
+                }
+            }
+            it.next()
+        }
 
         // CORS support
         router.route().handler {

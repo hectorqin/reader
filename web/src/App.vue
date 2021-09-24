@@ -77,6 +77,17 @@ export default {
     } catch (error) {
       //
     }
+    try {
+      // 获取过滤规则
+      const filterRules = JSON.parse(
+        window.localStorage && window.localStorage.getItem("filterRules")
+      );
+      if (filterRules && Array.isArray(filterRules)) {
+        this.$store.commit("setFilterRules", filterRules);
+      }
+    } catch (error) {
+      //
+    }
     this.$store.commit("setMiniInterface", window.innerWidth <= 750);
 
     document.documentElement.style.setProperty(
@@ -96,6 +107,14 @@ export default {
       });
       this.$store.commit("setTouchable", "ontouchstart" in document);
     };
+
+    const api = window.getQueryString("api");
+    if (api) {
+      this.$store.commit("setApi", api);
+    }
+  },
+  created() {
+    this.getUserInfo();
   },
   beforeMount() {
     this.setTheme(this.isNight);
@@ -129,11 +148,23 @@ export default {
       set(value) {
         this.$store.commit("setShowLogin", value);
       }
+    },
+    connected() {
+      return this.$store.state.connected;
     }
   },
   watch: {
     isNight(val) {
       this.setTheme(val);
+    },
+    connected(val) {
+      if (val) {
+        // 连接后端成功，加载自定义样式
+        window.customCSSLoad ||
+          window.loadLink(this.$store.getters.customCSSUrl, () => {
+            window.customCSSLoad = true;
+          });
+      }
     }
   },
   methods: {
@@ -164,7 +195,29 @@ export default {
         if (this.remember && res.data.data && res.data.data.accessToken) {
           this.$store.commit("setToken", res.data.data.accessToken);
         }
+        this.getUserInfo();
       }
+    },
+    getUserInfo() {
+      Axios.get(this.api + "/getUserInfo").then(
+        res => {
+          this.$store.commit("setConnected", true);
+          if (res.data.isSuccess) {
+            this.$store.commit("setIsSecureMode", res.data.data.secure);
+            if (res.data.data.secure && res.data.data.secureKey) {
+              this.$store.commit("setShowManagerMode", true);
+            }
+            if (res.data.data.userInfo) {
+              this.$store.commit("setUserInfo", res.data.data.userInfo);
+            }
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载用户信息失败 " + (error && error.toString())
+          );
+        }
+      );
     }
   }
 };
@@ -233,6 +286,7 @@ export default {
     width: 100vw !important;
     box-sizing: border-box;
     margin: 0 !important;
+    overflow-x: hidden;
   }
 }
 .night-theme {
@@ -301,5 +355,9 @@ export default {
 }
 .el-message-box {
   max-width: 85vw;
+}
+.popper-component.el-popover {
+  border: none;
+  box-shadow: none;
 }
 </style>

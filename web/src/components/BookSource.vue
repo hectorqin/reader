@@ -111,12 +111,10 @@ export default {
       );
     },
     changeBookSource(searchBook) {
-      Axios.get(this.api + `/saveBookSource`, {
-        params: {
-          bookUrl: this.$store.state.readingBook.bookUrl,
-          newUrl: searchBook.bookUrl,
-          bookSourceUrl: searchBook.origin
-        }
+      Axios.post(this.api + `/saveBookSource`, {
+        bookUrl: this.$store.state.readingBook.bookUrl,
+        newUrl: searchBook.bookUrl,
+        bookSourceUrl: searchBook.origin
       }).then(
         res => {
           if (res.data.isSuccess) {
