@@ -254,17 +254,22 @@ export default {
     ReadSettings
   },
   mounted() {
+    window.readerPage = this;
+  },
+  activated() {
     this.init();
     window.addEventListener("keydown", this.keydownHandler);
-
-    window.readerPage = this;
-
+    if (this.title) {
+      document.title =
+        this.$store.state.readingBook.bookName + " - " + this.title;
+    } else {
+      document.title = this.$store.state.readingBook.bookName;
+    }
     this.formatTime();
     this.timer = setInterval(() => {
       this.formatTime();
     }, 5000);
-
-    this.$store.watch(
+    this.unwatchFn = this.$store.watch(
       state => state.config,
       () => {
         this.$nextTick(() => {
@@ -280,9 +285,11 @@ export default {
       }
     );
   },
-  destroyed() {
+  deactivated() {
+    this.lastReadingBook = this.$store.state.readingBook;
     this.timer && clearInterval(this.timer);
     window.removeEventListener("keydown", this.keydownHandler);
+    this.unwatchFn && this.unwatchFn();
   },
   watch: {
     chapterName(to) {
@@ -533,14 +540,20 @@ export default {
   methods: {
     init() {
       if (this.$store.state.readingBook) {
-        this.loading = this.$loading({
-          target: this.$refs.content,
-          lock: true,
-          text: "正在获取内容",
-          spinner: "el-icon-loading",
-          background: "rgba(0,0,0,0)"
-        });
-        this.loadCatalog();
+        if (
+          !this.lastReadingBook ||
+          this.lastReadingBook.bookUrl !== this.$store.state.readingBook.bookUrl
+        ) {
+          this.loading = this.$loading({
+            target: this.$refs.content,
+            lock: true,
+            text: "正在获取内容",
+            spinner: "el-icon-loading",
+            background: "rgba(0,0,0,0)"
+          });
+          this.lastReadingBook = this.$store.state.readingBook;
+          this.loadCatalog();
+        }
       } else {
         this.$message.error("请在书架选择书籍");
       }

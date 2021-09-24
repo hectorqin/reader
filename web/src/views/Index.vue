@@ -716,6 +716,9 @@ export default {
     window.shelfPage = this;
     this.init();
   },
+  activated() {
+    document.title = "阅读";
+  },
   methods: {
     init(refresh) {
       if (this.initing) return;

@@ -209,7 +209,6 @@ export default {
   name: "ReadSettings",
   data() {
     return {
-      theme: 0,
       themeColors: [
         {
           background: "rgba(250, 245, 235, 0.8)"
@@ -260,11 +259,7 @@ export default {
       clickMethods: ["下一页", "自动"]
     };
   },
-  mounted() {
-    //初始化设置项目
-    var config = this.$store.state.config;
-    this.theme = config.theme;
-  },
+  mounted() {},
   computed: {
     config() {
       return this.$store.state.config;
