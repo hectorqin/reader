@@ -272,15 +272,15 @@ java -jar reader-$version.jar --reader.app.secure=true --reader.app.secureKey=�
 ```bash
 # 自行编译
 # docker build -t reader:latest .
-# docker run -d --restart=always --name=reader -v $(PWD)/log:/log -v $(PWD)/storage:/storage -p 8080:8080 reader:latest
+# docker run -d --restart=always --name=reader -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 reader:latest
 
 # 使用预编译的镜像
 
 # 自用版
-docker run -d --restart=always --name=reader -v $(PWD)/log:/log -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader
+docker run -d --restart=always --name=reader -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader
 
 # 多用户版
-docker run -d --restart=always --name=reader -v $(PWD)/log:/log -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader java -jar /app/bin/reader.jar --reader.app.secure=true --reader.app.secureKey=管理密码 --reader.app.inviteCode=注册邀请码
+docker run -d --restart=always --name=reader -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader java -jar /app/bin/reader.jar --reader.app.secure=true --reader.app.secureKey=管理密码 --reader.app.inviteCode=注册邀请码
 
 # 更新docker镜像
 # docker pull hectorqin/reader

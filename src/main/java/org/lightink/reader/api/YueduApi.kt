@@ -1331,8 +1331,8 @@ class YueduApi : RestVerticle() {
         }
         // logger.info("type: {}", type)
         context.fileUploads().forEach {
-            // logger.info("uploadFile: {} {}", it.uploadedFileName(), it.fileName())
             var file = File(it.uploadedFileName())
+            logger.info("uploadFile: {} {} {}", it.uploadedFileName(), it.fileName(), file)
             if (file.exists()) {
                 var fileName = it.fileName()
                 var newFile = File(getWorkDir("storage/assets/" + userNameSpace + "/" + type + "/" + fileName))
@@ -1342,7 +1342,7 @@ class YueduApi : RestVerticle() {
                 if (newFile.exists()) {
                     newFile.delete()
                 }
-                // logger.info("renameTo: {}", newFile)
+                logger.info("renameTo: {}", newFile)
                 if (file.renameTo(newFile)) {
                     fileList.add("/assets/" + userNameSpace + "/" + type + "/" + fileName)
                 }

@@ -83,6 +83,21 @@ module.exports = {
               maxEntries: 1000
             }
           }
+        },
+        {
+          // 获取书籍封面
+          urlPattern: new RegExp("^https://[^/]*/reader3/cover"),
+          handler: "cacheFirst",
+          options: {
+            cacheName: "bookCover",
+            cacheableResponse: {
+              statuses: [200]
+            },
+            expiration: {
+              maxAgeSeconds: 86400 * 30,
+              maxEntries: 1000
+            }
+          }
         }
       ]
     }
