@@ -23,6 +23,8 @@ module.exports = {
       // swSrc is required in InjectManifest mode.
       // swSrc: "src/service-worker.js"
       // ignoreURLParametersMatching: [new RegExp("accessToken")],
+      exclude: ["index.html"],
+      cleanupOutdatedCaches: true,
       runtimeCaching: [
         {
           // 首页
@@ -38,7 +40,7 @@ module.exports = {
         {
           // 获取书架
           urlPattern: new RegExp("^https://[^/]*/reader3/getBookshelf"),
-          handler: "staleWhileRevalidate",
+          handler: "networkFirst",
           options: {
             cacheName: "bookshelf",
             cacheableResponse: {
