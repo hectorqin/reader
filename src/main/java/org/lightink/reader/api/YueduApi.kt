@@ -2088,8 +2088,10 @@ class YueduApi : RestVerticle() {
                         var bookChapter = bookChapterList.last()
                         book.latestChapterTitle = bookChapter.title
                     }
-                    book.lastCheckTime = System.currentTimeMillis()
-                    book.lastCheckCount = bookChapterList.size - book.totalChapterNum
+                    if (bookChapterList.size - book.totalChapterNum > 0) {
+                        book.lastCheckTime = System.currentTimeMillis()
+                        book.lastCheckCount = bookChapterList.size - book.totalChapterNum
+                    }
                     book.totalChapterNum = bookChapterList.size
                 }
             }
@@ -2205,9 +2207,11 @@ class YueduApi : RestVerticle() {
                 var bookChapter = bookChapterList.last()
                 existBook.latestChapterTitle = bookChapter.title
             }
-            existBook.lastCheckCount = bookChapterList.size - existBook.totalChapterNum
+            if (bookChapterList.size - existBook.totalChapterNum > 0) {
+                existBook.lastCheckCount = bookChapterList.size - existBook.totalChapterNum
+                existBook.lastCheckTime = System.currentTimeMillis()
+            }
             existBook.totalChapterNum = bookChapterList.size
-            existBook.lastCheckTime = System.currentTimeMillis()
             // TODO 最新章节更新时间
             // existBook.latestChapterTime = System.currentTimeMillis()
             logger.info("saveShelfBookLatestChapter: {}", existBook)

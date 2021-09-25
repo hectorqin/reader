@@ -295,7 +295,7 @@
             :key="book.bookUrl"
             @click="toDetail(book.bookUrl, book.name, book.durChapterIndex)"
           >
-            <div class="cover-img">
+            <div class="cover-img" @click.stop="toggleBookIntroPop(book)">
               <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" />
             </div>
             <div
@@ -303,11 +303,6 @@
               @click="toDetail(book.bookUrl, book.name, book.durChapterIndex)"
             >
               <div class="book-operation">
-                <i
-                  class="el-icon-info"
-                  v-if="showMenu"
-                  @click.stop="toggleBookIntroPop(book)"
-                ></i>
                 <i
                   class="el-icon-close"
                   v-if="!isSearchResult"
@@ -335,16 +330,14 @@
                 <div class="size" v-if="book.totalChapterNum">
                   共{{ book.totalChapterNum }}章
                 </div>
-                <div class="dot" v-if="!isSearchResult">•</div>
-                <div class="date" v-if="!isSearchResult">
-                  {{ dateFormat(book.lastCheckTime) }}
-                </div>
               </div>
               <div class="dur-chapter" v-if="!isSearchResult">
                 已读：{{ book.durChapterTitle }}
               </div>
               <div class="last-chapter">
-                最新：{{ book.latestChapterTitle }}
+                {{
+                  book.lastCheckTime ? dateFormat(book.lastCheckTime) : "最新"
+                }}：{{ book.latestChapterTitle }}
               </div>
               <div v-if="isSearchResult">
                 <el-tag
@@ -1852,7 +1845,7 @@ export default {
             .book-operation {
               position: absolute;
               right: 5px;
-              top: 5px;
+              top: 0px;
               font-size: 24px;
               color: #969ba3;
 
@@ -2085,6 +2078,8 @@ export default {
 }
 .book-intro {
   line-height: 1.6;
+  max-height: 300px;
+  overflow-y: auto;
 }
 .night-theme .popper-intro {
   background: #121212;
