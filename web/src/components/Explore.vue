@@ -17,9 +17,14 @@
       class="data-wrapper"
       ref="sourceList"
       :class="{ night: $store.getters.isNight, day: !$store.getters.isNight }"
+      @scroll="scrollHandler"
     >
       <div class="cata">
-        <el-collapse class="source-collapse" ref="sourceList">
+        <el-collapse
+          class="source-collapse"
+          ref="sourceList"
+          v-model="showCollapse"
+        >
           <el-collapse-item
             v-for="(source, index) in bookSourceListNew"
             :title="source.bookSourceName"
@@ -27,24 +32,24 @@
             :key="'source-' + index"
             ref="source"
           >
-            <div
-              class="explore-group"
-              v-for="(group, indexG) in source.exploreGroup"
-              :key="'group-' + indexG"
-            >
-              <el-tag
-                type="info"
-                :effect="$store.getters.isNight ? 'dark' : 'light'"
-                class="explore-btn"
-                v-for="(item, indexI) in group"
-                :key="'group-' + indexI"
-                @click="
-                  exploreBookSource(item.url, source.bookSourceUrl, 1, index)
-                "
+            <template v-if="showCollapse.includes(index)">
+              <div
+                class="explore-group"
+                v-for="(group, indexG) in source.exploreGroup"
+                :key="'group-' + indexG"
               >
-                {{ item.name }}
-              </el-tag>
-            </div>
+                <el-tag
+                  type="info"
+                  :effect="$store.getters.isNight ? 'dark' : 'light'"
+                  class="explore-btn"
+                  v-for="(item, indexI) in group"
+                  :key="'group-' + indexI"
+                  @click="exploreBookSource(item.url, source.bookSourceUrl, 1)"
+                >
+                  {{ item.name }}
+                </el-tag>
+              </div>
+            </template>
           </el-collapse-item>
         </el-collapse>
       </div>
@@ -62,8 +67,8 @@ export default {
       page: 1,
       ruleFindUrl: "",
       bookSourceUrl: "",
-      displayIndex: -1,
-      exploreList: []
+      exploreList: [],
+      showCollapse: []
     };
   },
   props: ["visible", "bookSourceList"],
@@ -97,12 +102,10 @@ export default {
   },
   watch: {
     visible(isVisible) {
-      if (isVisible && this.displayIndex >= 0) {
+      if (isVisible) {
         this.$nextTick(() => {
-          jump(this.$refs.source[this.displayIndex].$el, {
-            container: this.$refs.sourceList,
-            duration: 0
-          });
+          this.lastScrollTop &&
+            (this.$refs.sourceList.scrollTop = this.lastScrollTop);
         });
       }
     }
@@ -138,11 +141,10 @@ export default {
       // console.log(bookSource.bookSourceName, result);
       return result;
     },
-    exploreBookSource(url, sourceUrl, page, displayIndex) {
+    exploreBookSource(url, sourceUrl, page) {
       this.page = page || 1;
       this.ruleFindUrl = url;
       this.bookSourceUrl = sourceUrl;
-      this.displayIndex = displayIndex;
       Axios.get(this.api + `/exploreBook`, {
         params: {
           ruleFindUrl: url,
@@ -185,12 +187,7 @@ export default {
     },
     loadMore() {
       this.page = this.page + 1;
-      this.exploreBookSource(
-        this.ruleFindUrl,
-        this.bookSourceUrl,
-        this.page,
-        this.displayIndex
-      );
+      this.exploreBookSource(this.ruleFindUrl, this.bookSourceUrl, this.page);
     },
     jumpToActive() {
       this.$nextTick(() => {
@@ -213,6 +210,9 @@ export default {
     },
     close() {
       this.$emit("close");
+    },
+    scrollHandler() {
+      this.lastScrollTop = this.$refs.sourceList.scrollTop;
     }
   }
 };

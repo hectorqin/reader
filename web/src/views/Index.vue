@@ -401,7 +401,7 @@
       :width="dialogWidth"
       :top="dialogTop"
     >
-      <div class="source-container">
+      <div class="source-container table-container">
         <el-table
           :data="bookSourceList"
           :height="dialogContentHeight"
@@ -410,18 +410,22 @@
           <el-table-column
             type="selection"
             width="25"
+            fixed
             :selectable="isBookSourceSelectable"
           >
           </el-table-column>
           <el-table-column
             property="bookSourceName"
             label="书源名称"
+            min-width="120"
+            fixed
           ></el-table-column>
           <el-table-column
             property="bookSourceUrl"
             label="书源链接"
+            min-width="120"
           ></el-table-column>
-          <el-table-column label="书架书籍">
+          <el-table-column label="书架书籍" min-width="120">
             <template slot-scope="scope">
               <pre>{{ showSourceBook(scope.row) }}</pre>
             </template>
@@ -447,7 +451,7 @@
       :width="dialogWidth"
       :top="dialogTop"
     >
-      <div class="source-container">
+      <div class="source-container table-container">
         <el-table
           :data="userList"
           :height="dialogContentHeight"
@@ -457,20 +461,32 @@
             type="selection"
             width="25"
             :selectable="isUserSelectable"
+            fixed
           >
           </el-table-column>
-          <el-table-column property="username" label="用户名"></el-table-column>
+          <el-table-column
+            property="username"
+            label="用户名"
+            min-width="100"
+            fixed
+          ></el-table-column>
           <el-table-column
             property="lastLoginAt"
             label="上次登录"
             :formatter="formatTableField"
+            min-width="120"
           ></el-table-column>
           <el-table-column
             property="createdAt"
             label="注册时间"
             :formatter="formatTableField"
+            min-width="120"
           ></el-table-column>
-          <el-table-column property="enableWebdav" label="启用WebDAV">
+          <el-table-column
+            property="enableWebdav"
+            label="WebDAV"
+            min-width="80"
+          >
             <template slot-scope="scope">
               <el-switch
                 v-if="scope.row.userNS !== 'default'"
@@ -503,7 +519,7 @@
       :width="dialogWidth"
       :top="dialogTop"
     >
-      <div class="source-container">
+      <div class="source-container table-container">
         <el-table
           :data="webdavFileList"
           :height="dialogContentHeight"
@@ -512,10 +528,16 @@
           <el-table-column
             type="selection"
             width="25"
+            fixed
             :selectable="row => !row.toParent"
           >
           </el-table-column>
-          <el-table-column property="name" min-width="100px" label="文件名">
+          <el-table-column
+            property="name"
+            min-width="150px"
+            label="文件名"
+            fixed
+          >
             <template slot-scope="scope">
               <span v-if="!scope.row.isDirectory">{{ scope.row.name }}</span>
               <el-link
@@ -530,13 +552,15 @@
             property="size"
             label="大小"
             :formatter="formatTableField"
+            min-width="100px"
           ></el-table-column>
           <el-table-column
             property="lastModified"
             label="修改时间"
             :formatter="formatTableField"
+            width="120px"
           ></el-table-column>
-          <el-table-column label="操作">
+          <el-table-column label="操作" width="100px">
             <template slot-scope="scope">
               <el-button
                 type="text"
@@ -826,7 +850,12 @@ export default {
       return this.loadBookshelf(null, true);
     },
     loadBookSource(refresh) {
-      const cacheKey = this.api + "#bookSource@" + this.userNS;
+      const cacheKey =
+        this.api +
+        "#bookSource@" +
+        (this.$store.state.isManagerMode
+          ? this.userNS
+          : (this.$store.state.userInfo || {}).username || "default");
       const handler = data => {
         data = data || [];
         this.$store.commit("setBookSourceList", data);
@@ -1964,6 +1993,10 @@ export default {
   overflow-y: auto;
   padding: 0 10px;
 
+  &.table-container {
+    padding: 0;
+  }
+
   >>>.source-checkbox {
     display: block;
     padding: 8px 0;
@@ -2027,6 +2060,11 @@ export default {
         }
       }
     }
+  }
+}
+@media screen and (max-width: 450px) {
+  .source-container.table-container {
+    margin: -15px -5px;
   }
 }
 </style>
