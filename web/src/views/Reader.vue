@@ -554,6 +554,11 @@ export default {
           });
           this.lastReadingBook = this.$store.state.readingBook;
           this.loadCatalog(false, true);
+        } else {
+          setTimeout(() => {
+            console.log("setReadingBook", this.lastReadingBook);
+            this.$store.commit("setReadingBook", this.lastReadingBook);
+          }, 100);
         }
       } else {
         this.$message.error("请在书架选择书籍");
