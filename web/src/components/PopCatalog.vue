@@ -105,7 +105,9 @@ export default {
 .popup-wrapper {
   margin: -16px;
   margin-bottom: -13px;
-  padding: 18px 25px 24px 25px;
+  padding: 24px;
+  padding-top: calc(24px + constant(safe-area-inset-top));
+  padding-top: calc(24px + env(safe-area-inset-top));
 
   .title-zone {
     margin: 0 0 20px 0;

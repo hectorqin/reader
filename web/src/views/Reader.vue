@@ -420,7 +420,10 @@ export default {
     },
     rightBarTheme() {
       return {
-        background: this.$store.getters.currentThemeConfig.popup,
+        background: this.$store.getters.currentThemeConfig.popup.replace(
+          "to bottom",
+          "to top"
+        ),
         marginRight: this.$store.state.miniInterface
           ? 0
           : -(this.readWidthConfig / 2 + 52) + "px",
@@ -685,12 +688,13 @@ export default {
     toBottom() {
       jump(this.$refs.bottom);
     },
-    toNextChapter() {
+    toNextChapter(onError) {
       if (
         !this.$store.state.readingBook ||
         !this.$store.state.readingBook.bookUrl ||
         !this.$store.state.readingBook.catalog
       ) {
+        onError && onError();
         return;
       }
       let index = this.$store.state.readingBook.index;
@@ -698,15 +702,17 @@ export default {
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
         this.getContent(index);
       } else {
+        onError && onError();
         this.$message.error("本章是最后一章");
       }
     },
-    toLastChapter() {
+    toLastChapter(onError) {
       if (
         !this.$store.state.readingBook ||
         !this.$store.state.readingBook.bookUrl ||
         !this.$store.state.readingBook.catalog
       ) {
+        onError && onError();
         return;
       }
       let index = this.$store.state.readingBook.index;
@@ -715,6 +721,7 @@ export default {
         this.getContent(index);
       } else {
         this.$message.error("本章是第一章");
+        onError && onError();
       }
     },
     toShelf() {
@@ -766,7 +773,12 @@ export default {
             300
           );
         } else {
-          this.toNextChapter();
+          this.toNextChapter(() => {
+            if (typeof moveX !== "undefined") {
+              // 没有下一章，但是已经做了动画，恢复
+              this.showPage(this.currentPage, 0);
+            }
+          });
         }
       } else {
         if (
@@ -805,7 +817,12 @@ export default {
           );
         } else {
           this.showLastPage = true;
-          this.toLastChapter();
+          this.toLastChapter(() => {
+            if (typeof moveX !== "undefined") {
+              // 没有下一章，但是已经做了动画，恢复
+              this.showPage(this.currentPage, 0);
+            }
+          });
         }
       } else {
         if (
@@ -1142,6 +1159,8 @@ export default {
   .tool-bar {
     position: fixed;
     top: 0;
+    padding-top: constant(safe-area-inset-top) !important;
+    padding-top: env(safe-area-inset-top) !important;
     left: 50%;
     z-index: 2001;
 
@@ -1176,6 +1195,8 @@ export default {
   .read-bar {
     position: fixed;
     bottom: 0;
+    padding-bottom: constant(safe-area-inset-bottom);
+    padding-bottom: env(safe-area-inset-bottom);
     right: 50%;
     z-index: 100;
 
@@ -1457,7 +1478,11 @@ export default {
         z-index: 50;
         background: inherit;
         height: 30px;
+        height: calc(30px + constant(safe-area-inset-top));
+        height: calc(30px + env(safe-area-inset-top));
         padding: 6px 16px;
+        padding-top: calc(6px + constant(safe-area-inset-top));
+        padding-top: calc(6px + env(safe-area-inset-top));
       }
 
       .content-inner {
@@ -1486,6 +1511,8 @@ export default {
         position: absolute;
         overflow: visible;
         top: 30px;
+        top: calc(30px + constant(safe-area-inset-top));
+        top: calc(30px + env(safe-area-inset-top));
         bottom: 24px;
       }
 
@@ -1497,8 +1524,12 @@ export default {
       }
 
       .book-content {
-        height: calc(100vh - 44px - 18px);
-        height: calc(var(--vh, 1vh) * 100 - 44px - 18px);
+        height: calc(100vh - 30px - 24px);
+        height: calc(100vh - 30px - 24px - constant(safe-area-inset-top));
+        height: calc(100vh - 30px - 24px - env(safe-area-inset-top));
+        height: calc(var(--vh, 1vh) * 100 - 30px - 24px);
+        height: calc(var(--vh, 1vh) * 100 - 30px - 24px - constant(safe-area-inset-top));
+        height: calc(var(--vh, 1vh) * 100 - 30px - 24px - env(safe-area-inset-top));
         -webkit-columns: calc(100vw - 32px) 1;
         -webkit-column-gap: 32px;
         columns: calc(100vw - 16px) 1;

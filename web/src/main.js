@@ -16,6 +16,9 @@ Vue.mixin({
   computed: {
     api() {
       return this.$store.getters.api;
+    },
+    isWebApp() {
+      return window.navigator.standalone;
     }
   }
 });

@@ -116,8 +116,27 @@ export default {
     if (api) {
       this.$store.commit("setApi", api);
     }
+
+    document.documentElement.style.setProperty(
+      "--status-bar-height",
+      window.navigator.standalone ? `20px` : "0px"
+    );
   },
   created() {
+    window
+      .matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", e => {
+        if (this.autoTheme) {
+          if (e.matches) {
+            // 系统开启暗色模式
+            this.setNightTheme(true);
+          } else {
+            // 系统关闭暗色模式
+            this.setNightTheme(false);
+          }
+        }
+      });
+
     this.getUserInfo();
   },
   beforeMount() {
@@ -133,6 +152,9 @@ export default {
   computed: {
     isNight() {
       return this.$store.getters.isNight;
+    },
+    autoTheme() {
+      return this.$store.state.config.autoTheme;
     },
     dialogWidth() {
       return this.$store.state.miniInterface ? "85%" : "450px";
@@ -161,6 +183,9 @@ export default {
     isNight(val) {
       this.setTheme(val);
     },
+    autoTheme() {
+      this.autoSetTheme();
+    },
     connected(val) {
       if (val) {
         // 连接后端成功，加载自定义样式
@@ -172,6 +197,17 @@ export default {
     }
   },
   methods: {
+    autoSetTheme() {
+      if (this.autoTheme) {
+        if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+          // 是暗色模式
+          this.$store.commit("setNightTheme", true);
+        } else {
+          // 非暗色模式
+          this.$store.commit("setNightTheme", false);
+        }
+      }
+    },
     setTheme(isNight) {
       if (isNight) {
         document.body.className =
@@ -235,6 +271,7 @@ export default {
   color: #2c3e50;
   margin: 0;
   height: 100%;
+  height: calc(100% + var(--status-bar-height, 0px));
   position: relative;
 }
 

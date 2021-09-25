@@ -135,6 +135,23 @@ export default new Vuex.Store({
       state.filterRules = filterRules;
       window.localStorage &&
         window.localStorage.setItem("filterRules", JSON.stringify(filterRules));
+    },
+    setNightTheme(state, isNight) {
+      let config = { ...state.config };
+      if (isNight) {
+        if (config.theme !== 6) {
+          window.localStorage &&
+            window.localStorage.setItem("lastDayTheme", config.theme);
+        }
+        config.theme = 6;
+      } else if (config.theme === 6) {
+        const lastDayTheme =
+          (window.localStorage &&
+            window.localStorage.getItem("lastDayTheme")) ||
+          0;
+        config.theme = lastDayTheme;
+      }
+      state.config = config;
     }
   },
   getters: {
@@ -177,10 +194,17 @@ export default new Vuex.Store({
     currentThemeConfig: (state, getters) => {
       if (state.config.theme === "custom") {
         return {
-          body: state.config.bodyColor || "#eadfca",
+          body:
+            (state.miniInterface
+              ? "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 56px), "
+              : "") + (state.config.bodyColor || "#eadfca"),
           content: {
             backgroundImage: getters.currentContentBGImg
-              ? `url(${getters.currentContentBGImg})`
+              ? `${
+                  state.miniInterface
+                    ? "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 56px), "
+                    : ""
+                }url(${getters.currentContentBGImg})`
               : null,
             backgroundPosition: "center",
             backgroundRepeat: "no-repeat",
@@ -188,10 +212,27 @@ export default new Vuex.Store({
             backgroundColor: state.config.contentColor || "#ede7da",
             backgroundSize: "cover"
           },
-          popup: state.config.popupColor || "#ede7da"
+          popup:
+            (state.miniInterface
+              ? "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 36px), "
+              : "") + (state.config.popupColor || "#ede7da")
         };
       } else {
-        return settings.themes[state.config.theme];
+        const config = {
+          ...settings.themes[state.config.theme]
+        };
+        if (state.miniInterface) {
+          config.body =
+            "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 36px), " +
+            config.body;
+          config.content =
+            "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 36px), " +
+            config.content;
+          config.popup =
+            "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 36px), " +
+            config.popup;
+        }
+        return config;
       }
     },
     shelfBooks: state => {

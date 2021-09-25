@@ -8,7 +8,10 @@
   >
     <div
       class="navigation-wrapper"
-      :class="navigationClass"
+      :class="[
+        navigationClass,
+        isWebApp && !isNight ? 'status-bar-light-bg' : ''
+      ]"
       :style="navigationStyle"
     >
       <div class="navigation-inner-wrapper">
@@ -260,6 +263,7 @@
     </div>
     <div
       class="shelf-wrapper"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg' : ''"
       ref="shelfWrapper"
       @click="showNavigation = false"
       @touchstart="handleTouchStart"
@@ -726,10 +730,8 @@ export default {
         this.navigationClass = "navigation-in";
       }
     },
-    loginAuth(val) {
-      if (val) {
-        this.init(true);
-      }
+    loginAuth() {
+      this.init(true);
     },
     userNS() {
       this.init(true);
@@ -1065,13 +1067,11 @@ export default {
       this.searchResult = [];
     },
     toogleNight() {
-      let config = this.config;
       if (this.isNight) {
-        config.theme = 0;
+        this.$store.commit("setNightTheme", false);
       } else {
-        config.theme = 6;
+        this.$store.commit("setNightTheme", true);
       }
-      this.$store.commit("setConfig", config);
     },
     showSearchList(data) {
       this.isSearchResult = true;
@@ -1513,8 +1513,6 @@ export default {
     handleTouchMove(e) {
       if (e.touches && e.touches[0] && this.lastTouch) {
         if (this.collapseMenu) {
-          e.preventDefault();
-          e.stopPropagation();
           const moveX = e.touches[0].clientX - this.lastTouch.clientX;
           const moveY = e.touches[0].clientY - this.lastTouch.clientY;
           if (Math.abs(moveY) > Math.abs(moveX)) {
@@ -1522,6 +1520,8 @@ export default {
             this.lastMoveX = 0;
             return;
           }
+          e.preventDefault();
+          e.stopPropagation();
           if (!this.showNavigation && moveX > 0 && moveX <= 270) {
             // 往左拉，打开目录
             this.navigationStyle = {
@@ -1667,11 +1667,14 @@ export default {
   .navigation-wrapper {
     width: 260px;
     min-width: 260px;
-    height: 100vh;
-    height: calc(var(--vh, 1vh) * 100);
+    height: 100%;
     box-sizing: border-box;
     background-color: #F7F7F7;
     position: relative;
+    padding-top: constant(safe-area-inset-top) !important;
+    padding-top: env(safe-area-inset-top) !important;
+    padding-bottom: constant(safe-area-inset-bottom);
+    padding-bottom: env(safe-area-inset-bottom);
 
     .navigation-inner-wrapper {
       padding: 48px 36px 66px 36px;
@@ -1818,10 +1821,14 @@ export default {
 
   .shelf-wrapper {
     padding: 48px 48px;
+    height: 100%;
+    max-height: 100%;
     width: 100%;
     background-color: #fff;
     display: flex;
     flex-direction: column;
+    padding-top: constant(safe-area-inset-top) !important;
+    padding-top: env(safe-area-inset-top) !important;
 
     .shelf-title {
       font-size: 20px;
@@ -2157,5 +2164,12 @@ export default {
 }
 .night-theme .el-popover__title {
   color: #ddd !important;
+}
+.status-bar-light-bg {
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.2) 0,
+    transparent 36px
+  ) !important;
 }
 </style>

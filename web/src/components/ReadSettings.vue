@@ -32,6 +32,14 @@
               :class="{ selected: selectedTheme == 'custom' }"
               >自定义</span
             >
+            <span
+              class="span-item"
+              :key="'autoTheme'"
+              ref="themes"
+              @click="setAutoTheme"
+              :class="{ selected: $store.state.config.autoTheme }"
+              >自动切换</span
+            >
           </div>
         </li>
         <li class="custom-theme-li" v-if="selectedTheme == 'custom'">
@@ -339,6 +347,11 @@ export default {
       config.theme = theme;
       this.$store.commit("setConfig", config);
     },
+    setAutoTheme() {
+      let config = this.config;
+      config.autoTheme = !config.autoTheme;
+      this.$store.commit("setConfig", config);
+    },
     setFont(font) {
       let config = this.config;
       config.font = font;
@@ -510,7 +523,9 @@ export default {
   margin: -16px;
   margin-bottom: -13px;
   text-align: left;
-  padding: 40px 24px;
+  padding: 24px;
+  padding-top: calc(24px + constant(safe-area-inset-top));
+  padding-top: calc(24px + env(safe-area-inset-top));
 
   .settings-title {
     font-size: 18px;

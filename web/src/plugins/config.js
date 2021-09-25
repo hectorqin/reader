@@ -27,28 +27,29 @@ const settings = {
     clickMethod: "自动",
     readWidth: 800,
     lineHeight: 1.8, // 行高
-    paragraphSpace: 0.2 // 段间距
+    paragraphSpace: 0.2, // 段间距
+    autoTheme: true // 自动切换主题
   },
   themes: [
     {
-      body: "#ede7da url(" + body_0 + ") repeat",
-      content: "#ede7da url(" + content_0 + ") repeat",
-      popup: "#ede7da url(" + popup_0 + ") repeat"
+      body: "url(" + body_0 + ") repeat",
+      content: "url(" + content_0 + ") repeat",
+      popup: "url(" + popup_0 + ") repeat"
     },
     {
-      body: "#ede7da url(" + body_1 + ") repeat",
-      content: "#ede7da url(" + content_1 + ") repeat",
-      popup: "#ede7da url(" + popup_1 + ") repeat"
+      body: "url(" + body_1 + ") repeat",
+      content: "url(" + content_1 + ") repeat",
+      popup: "url(" + popup_1 + ") repeat"
     },
     {
-      body: "#ede7da url(" + body_2 + ") repeat",
-      content: "#ede7da url(" + content_2 + ") repeat",
-      popup: "#ede7da url(" + popup_2 + ") repeat"
+      body: "url(" + body_2 + ") repeat",
+      content: "url(" + content_2 + ") repeat",
+      popup: "url(" + popup_2 + ") repeat"
     },
     {
-      body: "#ede7da url(" + body_3 + ") repeat",
-      content: "#ede7da url(" + content_3 + ") repeat",
-      popup: "#ede7da url(" + popup_3 + ") repeat"
+      body: "url(" + body_3 + ") repeat",
+      content: "url(" + content_3 + ") repeat",
+      popup: "url(" + popup_3 + ") repeat"
     },
     {
       body: "#ebcece repeat",
@@ -56,13 +57,13 @@ const settings = {
       popup: "#faeceb repeat"
     },
     {
-      body: "#ede7da url(" + body_5 + ") repeat",
-      content: "#ede7da url(" + content_5 + ") repeat",
-      popup: "#ede7da url(" + popup_5 + ") repeat"
+      body: "url(" + body_5 + ") repeat",
+      content: "url(" + content_5 + ") repeat",
+      popup: "url(" + popup_5 + ") repeat"
     },
     {
-      body: "#ede7da url(" + body_6 + ") repeat",
-      content: "#ede7da url(" + content_6 + ") repeat",
+      body: "url(" + body_6 + ") repeat",
+      content: "url(" + content_6 + ") repeat",
       popup: "#121212"
     }
   ],
