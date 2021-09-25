@@ -1673,15 +1673,10 @@ export default {
     position: relative;
     padding-top: constant(safe-area-inset-top) !important;
     padding-top: env(safe-area-inset-top) !important;
-    padding-bottom: constant(safe-area-inset-bottom);
-    padding-bottom: env(safe-area-inset-bottom);
 
     .navigation-inner-wrapper {
       padding: 48px 36px 66px 36px;
-      height: 100vh;
-      height: calc(var(--vh, 1vh) * 100);
-      max-height: 100vh;
-      max-height: calc(var(--vh, 1vh) * 100);
+      height: 100%;
       overflow-y: auto;
       box-sizing: border-box;
     }
@@ -1827,8 +1822,7 @@ export default {
     background-color: #fff;
     display: flex;
     flex-direction: column;
-    padding-top: constant(safe-area-inset-top) !important;
-    padding-top: env(safe-area-inset-top) !important;
+    box-sizing: border-box;
 
     .shelf-title {
       font-size: 20px;
@@ -2100,6 +2094,8 @@ export default {
     }
     >>>.shelf-wrapper {
       padding: 0;
+      padding-top: constant(safe-area-inset-top) !important;
+      padding-top: env(safe-area-inset-top) !important;
 
       .shelf-title {
         padding: 20px 24px 0 24px;

@@ -1195,8 +1195,6 @@ export default {
   .read-bar {
     position: fixed;
     bottom: 0;
-    padding-bottom: constant(safe-area-inset-bottom);
-    padding-bottom: env(safe-area-inset-bottom);
     right: 50%;
     z-index: 100;
 
@@ -1406,6 +1404,8 @@ export default {
 @media screen and (max-width: 750px) {
   .chapter-wrapper {
     padding: 0;
+    position: relative;
+    height: 100%;
 
     .tool-bar {
       left: 0;
@@ -1469,6 +1469,7 @@ export default {
       box-sizing: border-box;
       border: none;
       text-align: justify;
+      position: relative;
 
       .top-bar {
         position: fixed;
@@ -1492,6 +1493,7 @@ export default {
 
     .chapter.slide-reader {
       padding: 0;
+      height: 100%;
 
       .bottom-bar {
         height: 24px;
@@ -1521,15 +1523,11 @@ export default {
         overflow: hidden;
         text-align: justify;
         padding: 0;
+        height: 100%;
       }
 
       .book-content {
-        height: calc(100vh - 30px - 24px);
-        height: calc(100vh - 30px - 24px - constant(safe-area-inset-top));
-        height: calc(100vh - 30px - 24px - env(safe-area-inset-top));
-        height: calc(var(--vh, 1vh) * 100 - 30px - 24px);
-        height: calc(var(--vh, 1vh) * 100 - 30px - 24px - constant(safe-area-inset-top));
-        height: calc(var(--vh, 1vh) * 100 - 30px - 24px - env(safe-area-inset-top));
+        height: 100%;
         -webkit-columns: calc(100vw - 32px) 1;
         -webkit-column-gap: 32px;
         columns: calc(100vw - 16px) 1;
