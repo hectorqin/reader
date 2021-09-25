@@ -1,4 +1,20 @@
 // vue.config.js
+var packageInfo = require("./package.json");
+
+function buildVersion() {
+  const now = new Date();
+  const pad = v => (v >= 10 ? "" + v : "0" + v);
+  return (
+    pad(now.getMonth() + 1) +
+    pad(now.getDate()) +
+    pad(now.getHours()) +
+    pad(now.getMinutes())
+  );
+}
+process.env.VUE_APP_BUILD_VERSION =
+  process.env.VUE_APP_BUILD_VERSION ||
+  "v" + packageInfo.version + "-" + buildVersion();
+
 module.exports = {
   publicPath: "./",
   productionSourceMap: false,

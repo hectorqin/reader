@@ -5,10 +5,12 @@
         目录
       </div>
       <div :class="{ 'title-btn': true }">
-        <span class="progress-percent">
+        <span class="progress-percent" v-if="catalog.length">
           已读{{ parseInt(((index + 1) * 100) / catalog.length) }}%
         </span>
-        <span>{{ index + 1 }} / {{ catalog.length }}</span>
+        <span v-if="catalog.length"
+          >{{ index + 1 }} / {{ catalog.length }}</span
+        >
         <span
           :class="{ loading: refreshLoading, 'refresh-btn': true }"
           @click="refreshChapter"

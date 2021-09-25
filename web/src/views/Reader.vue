@@ -19,7 +19,7 @@
             ref="popBookShelf"
             class="popup"
             :visible="popBookShelfVisible"
-            @loadCatalog="loadCatalog(true)"
+            @loadCatalog="loadCatalog(true, true)"
             @toShelf="toShelf"
             @close="popBookShelfVisible = false"
           />
@@ -42,7 +42,7 @@
             ref="popBookSource"
             class="popup"
             :visible="popBookSourceVisible"
-            @loadCatalog="loadCatalog(true)"
+            @loadCatalog="loadCatalog(true, true)"
             @close="popBookSourceVisible = false"
           />
 
@@ -226,7 +226,7 @@
         <span v-if="$store.getters.isSlideRead">{{ timeStr }}</span>
         <span
           class="bottom-btn"
-          v-if="this.show && !$store.getters.isSlideRead"
+          v-if="show && !$store.getters.isSlideRead && !error"
           @click="toNextChapter"
           >加载下一章</span
         >
@@ -343,6 +343,7 @@ export default {
     return {
       title: "",
       content: "",
+      error: false,
       noPoint: true,
       popCataVisible: false,
       readSettingsVisible: false,
@@ -451,10 +452,7 @@ export default {
       }
     },
     readingProgress() {
-      if (
-        this.$store.state.readingBook &&
-        this.$store.state.readingBook.catalog
-      ) {
+      if (this.catalog && this.catalog.length) {
         return (
           parseInt(((this.chapterIndex + 1) * 100) / this.catalog.length) + "%"
         );
@@ -552,13 +550,13 @@ export default {
             background: "rgba(0,0,0,0)"
           });
           this.lastReadingBook = this.$store.state.readingBook;
-          this.loadCatalog();
+          this.loadCatalog(false, true);
         }
       } else {
         this.$message.error("请在书架选择书籍");
       }
     },
-    loadCatalog(refresh) {
+    loadCatalog(refresh, init) {
       if (!this.api) {
         setTimeout(() => {
           if (this.loadCatalog) {
@@ -576,6 +574,12 @@ export default {
             var index = book.index || 0;
             this.getContent(index);
           } else {
+            if (init) {
+              this.title = "";
+              this.content = "获取章节目录失败！\n" + res.data.errorMsg;
+              this.error = true;
+              this.show = true;
+            }
             this.loading.close();
           }
         },
@@ -628,6 +632,7 @@ export default {
         if (this.tryRefresh) {
           this.tryRefresh = false;
           this.content = "获取章节内容失败，请更新目录！";
+          this.error = true;
           this.show = true;
           this.loading.close();
         } else {
@@ -652,10 +657,12 @@ export default {
           this.content = data;
           this.loading.close();
           this.noPoint = false;
+          this.error = false;
           this.show = true;
         },
         error => {
           this.content = "获取章节内容失败！\n" + (error && error.toString());
+          this.error = true;
           this.show = true;
           this.loading.close();
           this.$message.error(
@@ -1271,6 +1278,10 @@ export default {
       line-height: 1.8;
       overflow: hidden;
       font-family: 'Microsoft YaHei', PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', sans-serif;
+
+      .content-inner {
+        min-height: calc(var(--vh, 1vh) * 80);
+      }
     }
 
     .bottom-bar, .top-bar {

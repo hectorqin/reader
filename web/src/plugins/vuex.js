@@ -1,7 +1,6 @@
 import Vue from "vue";
 import Vuex from "vuex";
 import settings from "./config";
-import packageInfo from "../../package.json";
 
 const defaultNS = [{ username: "默认", userNS: "default" }];
 Vue.use(Vuex);
@@ -33,7 +32,7 @@ export default new Vuex.Store({
     userList: [].concat(defaultNS),
     userNS: "default",
     showManagerMode: false,
-    version: packageInfo.version,
+    version: process.env.VUE_APP_BUILD_VERSION,
     filterRules: []
   },
   mutations: {

@@ -6,11 +6,15 @@
       day: !isNight
     }"
   >
-    <div class="navigation-wrapper" :class="navigationClass">
+    <div
+      class="navigation-wrapper"
+      :class="navigationClass"
+      :style="navigationStyle"
+    >
       <div class="navigation-inner-wrapper">
         <div class="navigation-title">
           阅读
-          <span class="version-text">v{{ $store.state.version }}</span>
+          <span class="version-text">{{ $store.state.version }}</span>
         </div>
         <div class="navigation-sub-title">
           清风不识字，何故乱翻书
@@ -258,9 +262,16 @@
       class="shelf-wrapper"
       ref="shelfWrapper"
       @click="showNavigation = false"
+      @touchstart="handleTouchStart"
+      @touchmove="handleTouchMove"
+      @touchend="handleTouchEnd"
     >
       <div class="shelf-title">
-        <i class="el-icon-menu" v-if="showMenu" @click.stop="toggleMenu"></i>
+        <i
+          class="el-icon-menu"
+          v-if="collapseMenu"
+          @click.stop="toggleMenu"
+        ></i>
         {{ isSearchResult ? (isExploreResult ? "探索" : "搜索") : "书架" }}
         ({{ bookList.length }})
         <div class="title-btn" v-if="isSearchResult" @click="backToShelf">
@@ -666,6 +677,7 @@ export default {
       showNavigation: false,
 
       navigationClass: "",
+      navigationStyle: {},
 
       popIntroVisible: {},
 
@@ -697,7 +709,7 @@ export default {
         });
       }
     },
-    showMenu(val) {
+    collapseMenu(val) {
       if (!val) {
         this.navigationClass = "";
       } else if (!this.showNavigation) {
@@ -729,7 +741,7 @@ export default {
       (window.localStorage && window.localStorage.getItem("bookSourceUrl")) ||
       "";
     this.navigationClass =
-      this.showMenu && !this.showNavigation ? "navigation-hidden" : "";
+      this.collapseMenu && !this.showNavigation ? "navigation-hidden" : "";
     window.shelfPage = this;
     this.init();
   },
@@ -1217,7 +1229,7 @@ export default {
       );
     },
     toggleMenu() {
-      if (this.showMenu) {
+      if (this.collapseMenu) {
         this.showNavigation = !this.showNavigation;
       }
     },
@@ -1490,6 +1502,52 @@ export default {
           this.$message.error("备份失败 " + (error && error.toString()));
         }
       );
+    },
+    handleTouchStart(e) {
+      this.lastTouch = false;
+      this.lastMoveX = false;
+      if (e.touches && e.touches[0]) {
+        this.lastTouch = e.touches[0];
+      }
+    },
+    handleTouchMove(e) {
+      if (e.touches && e.touches[0] && this.lastTouch) {
+        if (this.collapseMenu) {
+          e.preventDefault();
+          e.stopPropagation();
+          const moveX = e.touches[0].clientX - this.lastTouch.clientX;
+          const moveY = e.touches[0].clientY - this.lastTouch.clientY;
+          if (Math.abs(moveY) > Math.abs(moveX)) {
+            this.navigationStyle = {};
+            this.lastMoveX = 0;
+            return;
+          }
+          if (!this.showNavigation && moveX > 0 && moveX <= 270) {
+            // 往左拉，打开目录
+            this.navigationStyle = {
+              marginLeft: moveX - 270 + "px"
+            };
+            this.lastMoveX = moveX;
+          } else if (this.showNavigation && moveX < 0 && moveX >= -270) {
+            // 往左拉，关闭目录
+            this.navigationStyle = {
+              marginLeft: moveX + "px"
+            };
+            this.lastMoveX = moveX;
+          }
+        }
+      }
+    },
+    handleTouchEnd() {
+      if (this.collapseMenu) {
+        if (this.lastMoveX > 0) {
+          this.showNavigation = true;
+          this.navigationStyle = {};
+        } else if (this.lastMoveX < 0) {
+          this.showNavigation = false;
+          this.navigationStyle = {};
+        }
+      }
     }
   },
   computed: {
@@ -1534,11 +1592,11 @@ export default {
     connectType() {
       return this.$store.state.connected ? "success" : "danger";
     },
-    showMenu() {
+    collapseMenu() {
       return this.$store.state.miniInterface;
     },
     dialogWidth() {
-      return this.showMenu ? "85%" : "700px";
+      return this.collapseMenu ? "85%" : "700px";
     },
     dialogTop() {
       return (
@@ -1558,7 +1616,7 @@ export default {
       );
     },
     popupWidth() {
-      return this.showMenu ? this.$store.state.windowSize.width : "600";
+      return this.collapseMenu ? this.$store.state.windowSize.width : "600";
     },
     readingRecent() {
       return this.$store.state.readingBook &&
@@ -1859,6 +1917,7 @@ export default {
               font-size: 16px;
               font-weight: 700;
               color: #33373D;
+              margin-right: 30px;
             }
 
             .sub {
