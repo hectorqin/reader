@@ -49,7 +49,7 @@ module.exports = {
         {
           // 获取书源
           urlPattern: new RegExp("^https://[^/]*/reader3/getSources"),
-          handler: "staleWhileRevalidate",
+          handler: "networkFirst",
           options: {
             cacheName: "bookSources",
             cacheableResponse: {
