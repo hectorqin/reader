@@ -1233,7 +1233,10 @@ class YueduApi : RestVerticle() {
         }
         bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
         logger.info("getBookInfo with bookUrl: {}", bookUrl)
-        var bookInfo = getShelfBookByURL(bookUrl, getUserNameSpace(context))
+        var bookInfo: Book? = null
+        if (checkAuth(context)) {
+            bookInfo = getShelfBookByURL(bookUrl, getUserNameSpace(context))
+        }
         if (bookInfo == null) {
             // 看看有没有缓存数据
             var bookSource: String? = null
@@ -1613,6 +1616,9 @@ class YueduApi : RestVerticle() {
 
     private suspend fun getBookSource(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
         val bookUrl: String
         var refresh: Int = 0
         if (context.request().method() == HttpMethod.POST) {
