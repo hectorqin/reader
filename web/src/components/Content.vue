@@ -26,12 +26,15 @@ export default {
           : null
     };
     if (this.showContent) {
+      let wordCount = this.title.length + 2; // 2为两个换行符
       return (
         <div style={style}>
-          <h3>{this.title}</h3>
+          <h3 data-pos={0}>{this.title}</h3>
           {this.content.split(/\n+/).map(a => {
             a = a.replace(/^\s+/g, "");
-            return <p style={pStyle} domPropsInnerHTML={a} />;
+            const pos = wordCount;
+            wordCount += a.length + 2; // 2为两个换行符
+            return <p style={pStyle} domPropsInnerHTML={a} data-pos={pos} />;
           })}
         </div>
       );
@@ -71,9 +74,15 @@ p {
   word-break: break-all;
   text-indent: 2em;
 }
+p.reading {
+  color: red !important;
+}
 h3 {
     font-size: 28px;
     line-height: 1.2;
     margin: 1em 0;
+}
+h3.reading {
+  color: red !important;
 }
 </style>

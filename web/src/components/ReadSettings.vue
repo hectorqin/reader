@@ -358,6 +358,7 @@ export default {
       this.$store.commit("setConfig", config);
     },
     setReadMethod(method) {
+      this.$emit("readMethodChange");
       let config = this.config;
       config.readMethod = method;
       this.$store.commit("setConfig", config);

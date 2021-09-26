@@ -92,6 +92,20 @@ export default {
     } catch (error) {
       //
     }
+    try {
+      const speechVoiceConfig = JSON.parse(
+        window.localStorage && window.localStorage.getItem("speechVoiceConfig")
+      );
+      if (speechVoiceConfig && typeof speechVoiceConfig === "object") {
+        this.$store.commit("setSpeechVoiceConfig", {
+          ...settings.speechVoiceConfig,
+          ...speechVoiceConfig
+        });
+      }
+    } catch (error) {
+      //
+    }
+
     this.$store.commit("setMiniInterface", window.innerWidth <= 750);
 
     document.documentElement.style.setProperty(

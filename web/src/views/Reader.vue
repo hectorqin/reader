@@ -97,6 +97,7 @@
             :visible="readSettingsVisible"
             @close="readSettingsVisible = false"
             @showClickZone="showClickZone = true"
+            @readMethodChange="beforeReadMethodChange"
           />
 
           <div class="tool-icon" slot="reference">
@@ -142,9 +143,15 @@
     </div>
     <div class="read-bar" :style="rightBarTheme">
       <div
+        class="headset-item"
+        :style="popupAbsoluteBtnStyle"
+        @click="showReadBar = true"
+      >
+        <i class="el-icon-headset"></i>
+      </div>
+      <div
         class="theme-item"
-        :style="themeBtnStyle"
-        ref="themes"
+        :style="popupAbsoluteBtnStyle"
         @click="toogleNight"
       >
         <i class="el-icon-moon" v-if="!isNight"></i>
@@ -191,6 +198,92 @@
         </div>
       </div>
     </div>
+    <div class="read-bar" :style="readBarTheme">
+      <div class="reader-bar-inner">
+        <div class="operate-bar">
+          <div class="close-btn" @click="exitRead">
+            <i class="el-icon-close"></i>
+          </div>
+          <div class="center">
+            <span class="ctrl-btn" @click="speechPrev">上一段</span>
+            <span class="play-pause-btn" @click="toggleSpeech">
+              <i
+                class="el-icon-video-pause"
+                :style="popupAbsoluteBtnStyle"
+                v-if="speechSpeaking"
+              ></i>
+              <i
+                class="el-icon-video-play"
+                :style="popupAbsoluteBtnStyle"
+                v-else
+              ></i>
+            </span>
+            <span class="ctrl-btn" @click="speechNext">下一段</span>
+          </div>
+          <div
+            class="collapse-btn"
+            @click="showSpeechConfig = !showSpeechConfig"
+          >
+            <i class="el-icon-bottom" v-if="showSpeechConfig"></i>
+            <i class="el-icon-top" v-else></i>
+          </div>
+        </div>
+        <div class="setting-item" v-if="showSpeechConfig">
+          <div class="setting-title">语音库</div>
+          <div class="setting-value">
+            <div class="voice-list">
+              <el-radio-group
+                v-model="voiceName"
+                size="small"
+                class="radio-group"
+              >
+                <el-radio-button
+                  class="radio-button"
+                  :label="voice.name"
+                  :key="index"
+                  v-for="(voice, index) in voiceList"
+                ></el-radio-button>
+              </el-radio-group>
+            </div>
+          </div>
+        </div>
+        <div class="setting-item" v-if="showSpeechConfig">
+          <div class="setting-title">语音设置</div>
+          <div class="setting-value">
+            <div class="progress">
+              <span class="progress-tip">语速</span>
+              <div class="progress-bar">
+                <el-slider
+                  v-model="speechRate"
+                  :min="0.5"
+                  :max="2"
+                  :step="0.1"
+                  :show-tooltip="false"
+                  @change="changeSpeechRate"
+                ></el-slider>
+              </div>
+              <span class="setting-btn" @click="changeSpeechRate(1)">重置</span>
+            </div>
+            <div class="progress">
+              <span class="progress-tip">语调</span>
+              <div class="progress-bar">
+                <el-slider
+                  v-model="speechPitch"
+                  :min="0"
+                  :max="2"
+                  :step="0.1"
+                  :show-tooltip="false"
+                  @change="changeSpeechPitch"
+                ></el-slider>
+              </div>
+              <span class="setting-btn" @click="changeSpeechPitch(1)"
+                >重置</span
+              >
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div
       class="chapter"
       ref="content"
@@ -217,7 +310,7 @@
         @touchend="handleTouchEnd"
         @click="handlerClick"
       >
-        <div class="content-inner">
+        <div class="content-inner" v-if="show">
           <Pcontent
             class="book-content"
             :title="title"
@@ -229,13 +322,13 @@
         </div>
       </div>
       <div class="bottom-bar" ref="bottom">
-        <span v-if="$store.getters.isSlideRead">{{
+        <span v-if="isSlideRead">{{
           `第${currentPage}/${totalPages}页 ${readingProgress}`
         }}</span>
-        <span v-if="$store.getters.isSlideRead">{{ timeStr }}</span>
+        <span v-if="isSlideRead">{{ timeStr }}</span>
         <span
           class="bottom-btn"
-          v-if="show && !$store.getters.isSlideRead && !error"
+          v-if="show && !isSlideRead && !error"
           @click="toNextChapter"
           >加载下一章</span
         >
@@ -264,6 +357,15 @@ export default {
   },
   mounted() {
     window.readerPage = this;
+    this.speechAvalable =
+      window.speechSynthesis && window.speechSynthesis.getVoices;
+    if (this.speechAvalable) {
+      this.fetchVoiceList();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = this.fetchVoiceList;
+      }
+    }
+    window.addEventListener("unload", this.saveReadingPosition);
   },
   activated() {
     this.init();
@@ -293,11 +395,14 @@ export default {
         deep: true
       }
     );
+    window.addEventListener("scroll", this.scrollHandler);
   },
   deactivated() {
+    this.startSavePosition = false;
     this.lastReadingBook = this.$store.state.readingBook;
     this.timer && clearInterval(this.timer);
     window.removeEventListener("keydown", this.keydownHandler);
+    window.removeEventListener("scroll", this.scrollHandler);
     this.unwatchFn && this.unwatchFn();
   },
   watch: {
@@ -310,6 +415,7 @@ export default {
       this.currentPage = 1;
       this.$nextTick(() => {
         this.computePages();
+        this.saveReadingPosition();
       });
     },
     readSettingsVisible(visible) {
@@ -331,7 +437,11 @@ export default {
       }
       this.$nextTick(() => {
         this.computePages(() => {
-          this.showPage(this.currentPage, 0);
+          if (this.currentParagraph) {
+            this.showParagraph(this.currentParagraph, true);
+          } else {
+            this.showPage(this.currentPage, 0);
+          }
         });
       });
     },
@@ -345,6 +455,17 @@ export default {
     loginAuth(val) {
       if (val) {
         this.init();
+      }
+    },
+    showReadBar(val) {
+      if (val) {
+        this.showToolBar = false;
+      }
+    },
+    readingBook(val, oldVal) {
+      if (val.bookUrl !== oldVal.bookUrl) {
+        this.startSavePosition = false;
+        this.autoShowPosition();
       }
     }
   },
@@ -369,10 +490,23 @@ export default {
       showLastPage: false,
       showClickZone: false,
       timeStr: "",
-      progressValue: 1
+      progressValue: 1,
+
+      speechAvalable: false,
+      showReadBar: false,
+      voiceList: [],
+      speechSpeaking: false,
+      showSpeechConfig: true,
+
+      currentParagraph: null,
+
+      startSavePosition: false
     };
   },
   computed: {
+    readingBook() {
+      return this.$store.state.readingBook || {};
+    },
     catalog() {
       return (this.$store.state.readingBook || {}).catalog || [];
     },
@@ -397,19 +531,24 @@ export default {
       };
     },
     isSlideRead() {
-      return this.$store.getters.isSlideRead;
+      return this.showReadBar ? false : this.$store.getters.isSlideRead;
     },
     chapterClass() {
-      return this.$store.getters.isSlideRead ? "slide-reader" : "";
+      return this.isSlideRead ? "slide-reader" : "";
     },
     chapterTheme() {
+      let readingStyle = this.showReadBar
+        ? { paddingBottom: (this.showSpeechConfig ? 280 : 80) + "px" }
+        : {};
       if (typeof this.$store.getters.currentThemeConfig.content === "string") {
         return {
+          ...readingStyle,
           background: this.$store.getters.currentThemeConfig.content,
           width: this.readWidth
         };
       } else {
         return {
+          ...readingStyle,
           ...this.$store.getters.currentThemeConfig.content,
           width: this.readWidth
         };
@@ -429,10 +568,7 @@ export default {
     },
     rightBarTheme() {
       return {
-        background: this.$store.getters.currentThemeConfig.popup.replace(
-          "to bottom",
-          "to top"
-        ),
+        background: this.$store.getters.currentThemeConfig.popupPure,
         marginRight: this.$store.state.miniInterface
           ? 0
           : -(this.readWidthConfig / 2 + 52) + "px",
@@ -440,6 +576,17 @@ export default {
           this.$store.state.miniInterface && !this.showToolBar
             ? "none"
             : "block"
+      };
+    },
+    readBarTheme() {
+      return {
+        background: this.$store.getters.currentThemeConfig.popupPure,
+        marginRight: this.$store.state.miniInterface
+          ? 0
+          : -(this.readWidthConfig / 2) + "px",
+        zIndex: 200,
+        display: this.speechAvalable && this.showReadBar ? "block" : "none",
+        width: this.$store.state.miniInterface ? "100vw" : "500px"
       };
     },
     readWidth() {
@@ -547,14 +694,70 @@ export default {
       return content;
     },
     themeBtnStyle() {
-      if (this.$store.getters.isNight) {
-        return {
-          background: "#f7f7f7"
-        };
-      } else {
-        return {
-          background: "#222"
-        };
+      // if (this.$store.getters.isNight) {
+      //   return {
+      //     background: "#f7f7f7"
+      //   };
+      // } else {
+      //   return {
+      //     background: "#222"
+      //   };
+      // }
+      return {
+        background: this.$store.getters.currentThemeConfig.popupPure
+      };
+    },
+    popupAbsoluteBtnStyle() {
+      return {
+        background: this.$store.getters.currentThemeConfig.popupPure
+      };
+    },
+    voiceName: {
+      get() {
+        return this.$store.state.speechVoiceConfig.voiceName;
+      },
+      set(val) {
+        if (val !== this.$store.state.speechVoiceConfig.voiceName) {
+          if (this.speechSpeaking) {
+            this.restartSpeech();
+          }
+        }
+        this.$store.commit("setSpeechVoiceConfig", {
+          ...this.$store.state.speechVoiceConfig,
+          voiceName: val
+        });
+      }
+    },
+    speechRate: {
+      get() {
+        return this.$store.state.speechVoiceConfig.speechRate;
+      },
+      set(val) {
+        if (val !== this.$store.state.speechVoiceConfig.speechRate) {
+          if (this.speechSpeaking) {
+            this.restartSpeech();
+          }
+        }
+        this.$store.commit("setSpeechVoiceConfig", {
+          ...this.$store.state.speechVoiceConfig,
+          speechRate: val
+        });
+      }
+    },
+    speechPitch: {
+      get() {
+        return this.$store.state.speechVoiceConfig.speechPitch;
+      },
+      set(val) {
+        if (val !== this.$store.state.speechVoiceConfig.speechPitch) {
+          if (this.speechSpeaking) {
+            this.restartSpeech();
+          }
+        }
+        this.$store.commit("setSpeechVoiceConfig", {
+          ...this.$store.state.speechVoiceConfig,
+          speechPitch: val
+        });
       }
     }
   },
@@ -573,8 +776,11 @@ export default {
             background: "rgba(0,0,0,0)"
           });
           this.lastReadingBook = this.$store.state.readingBook;
+          // 跳转记住的位置
+          this.autoShowPosition();
           this.loadCatalog(false, true);
         } else {
+          this.startSavePosition = true;
           setTimeout(() => {
             // console.log("setReadingBook", this.lastReadingBook);
             this.$store.commit("setReadingBook", this.lastReadingBook);
@@ -607,6 +813,7 @@ export default {
               this.content = "获取章节目录失败！\n" + res.data.errorMsg;
               this.error = true;
               this.show = true;
+              this.$emit("showContent");
             }
             this.loading.close();
           }
@@ -648,7 +855,6 @@ export default {
         // 保存阅读进度
         let book = { ...this.$store.state.readingBook };
         book.index = index;
-        book.catalog = this.$store.state.readingBook.catalog;
         this.$store.commit("setReadingBook", book);
       } catch (error) {
         //
@@ -662,6 +868,7 @@ export default {
           this.content = "获取章节内容失败，请更新目录！";
           this.error = true;
           this.show = true;
+          this.$emit("showContent");
           this.loading.close();
         } else {
           this.tryRefresh = true;
@@ -688,10 +895,12 @@ export default {
             this.noPoint = false;
             this.error = false;
             this.show = true;
+            this.$emit("showContent");
           } else {
             this.content = "获取章节内容失败！\n" + res.data.errorMsg;
             this.error = true;
             this.show = true;
+            this.$emit("showContent");
             this.loading.close();
           }
         },
@@ -699,6 +908,7 @@ export default {
           this.content = "获取章节内容失败！\n" + (error && error.toString());
           this.error = true;
           this.show = true;
+          this.$emit("showContent");
           this.loading.close();
           this.$message.error(
             "获取章节内容失败 " + (error && error.toString())
@@ -790,7 +1000,7 @@ export default {
       if (this.transforming) {
         return;
       }
-      if (this.$store.getters.isSlideRead) {
+      if (this.isSlideRead) {
         if (this.currentPage < this.totalPages) {
           if (typeof moveX === "undefined") {
             this.transformX =
@@ -835,7 +1045,7 @@ export default {
       if (this.transforming) {
         return;
       }
-      if (this.$store.getters.isSlideRead) {
+      if (this.isSlideRead) {
         if (this.currentPage > 1) {
           if (typeof moveX === "undefined") {
             this.transformX =
@@ -875,7 +1085,7 @@ export default {
         return;
       }
       this.currentPage = Math.min(page, this.totalPages);
-      if (this.$store.getters.isSlideRead) {
+      if (this.isSlideRead) {
         const moveX =
           -(this.windowSize.width - 16) * (this.currentPage - 1) -
           this.transformX;
@@ -897,6 +1107,8 @@ export default {
         };
         this.transformX += moveX;
         this.transforming = false;
+        // 保存进度
+        setTimeout(this.saveReadingPosition, duration);
       };
       if (!duration) {
         onEnd();
@@ -925,6 +1137,8 @@ export default {
         document.documentElement.scrollTop = lastScrollTop + moveY;
         document.body.scrollTop = lastScrollTop + moveY;
         this.transforming = false;
+        // 保存进度
+        setTimeout(this.saveReadingPosition, duration);
       };
       if (!duration) {
         onEnd();
@@ -1032,7 +1246,9 @@ export default {
         Math.abs(point.clientX - midX) <= this.windowSize.width * 0.2
       ) {
         // 点击中部区域显示菜单
-        this.showToolBar = !this.showToolBar;
+        if (!this.showReadBar) {
+          this.showToolBar = !this.showToolBar;
+        }
       } else if (this.$store.state.config.clickMethod === "下一页") {
         // 全屏点击下一页
         this.showToolBar = false;
@@ -1176,6 +1392,268 @@ export default {
       } else {
         this.$store.commit("setNightTheme", true);
       }
+    },
+    fetchVoiceList() {
+      this.voiceList = window.speechSynthesis.getVoices().sort((a, b) => {
+        if (a.lang.startsWith("zh-") && b.lang.startsWith("zh-")) {
+          return a.lang > b.lang ? 1 : a.lang < b.lang ? -1 : 0;
+        } else if (a.lang.startsWith("zh-")) {
+          return -1;
+        } else if (b.lang.startsWith("zh-")) {
+          return 1;
+        }
+        return a.lang > b.lang ? 1 : a.lang < b.lang ? -1 : 0;
+      });
+    },
+    changeSpeechRate(rate) {
+      this.speechRate = rate;
+    },
+    changeSpeechPitch(pitch) {
+      this.speechPitch = pitch;
+    },
+    startSpeech() {
+      if (this.error) {
+        return;
+      }
+      if (!this.voiceName) {
+        return;
+      }
+      const voice = this.voiceList.find(v => v.name === this.voiceName);
+      if (!voice) {
+        return;
+      }
+
+      if (window.speechSynthesis.speaking) {
+        return;
+      }
+
+      const paragraph = this.getCurrentParagraph();
+      this.utterance = new SpeechSynthesisUtterance(paragraph.innerText);
+
+      this.utterance.onstart = () => {
+        this.speechSpeaking = true;
+        this.skipAutoNext = false;
+      };
+      this.utterance.onend = () => {
+        // 下一段
+        if (!this.skipAutoNext) {
+          this.speechNext();
+        } else {
+          this.skipAutoNext = false;
+          this.speechSpeaking = false;
+        }
+      };
+      this.utterance.onerror = event => {
+        this.$message.error("朗读错误:  " + event);
+        this.speechSpeaking = false;
+      };
+      this.utterance.voice = voice;
+      this.utterance.pitch = this.speechPitch;
+      this.utterance.rate = this.speechRate;
+
+      this.scrollContent(paragraph.getBoundingClientRect().top - 30);
+      paragraph.className = "reading";
+      this.speechSpeaking = true;
+      window.speechSynthesis.speak(this.utterance);
+    },
+    stopSpeech() {
+      this.skipAutoNext = true;
+      window.speechSynthesis.cancel();
+      const current = this.getCurrentParagraph();
+      current.className = "";
+    },
+    restartSpeech() {
+      this.stopSpeech();
+      setTimeout(() => {
+        this.startSpeech();
+      }, 100);
+    },
+    toggleSpeech() {
+      this.speechSpeaking ? this.stopSpeech() : this.startSpeech();
+    },
+    speechPrev() {
+      if (window.speechSynthesis.speaking) {
+        this.stopSpeech();
+      }
+      const current = this.getCurrentParagraph();
+      const prev = this.getPrevParagraph();
+      if (prev) {
+        this.scrollContent(prev.getBoundingClientRect().top - 30);
+        current.className = "";
+        prev.className = "reading";
+        this.startSpeech();
+      } else {
+        // 上一章
+        this.$once("showContent", () => {
+          setTimeout(() => {
+            this.startSpeech();
+          }, 100);
+        });
+        this.toLastChapter();
+      }
+    },
+    speechNext() {
+      if (window.speechSynthesis.speaking) {
+        this.stopSpeech();
+      }
+      const current = this.getCurrentParagraph();
+      const next = this.getNextParagraph();
+      if (next) {
+        this.scrollContent(next.getBoundingClientRect().top - 30);
+        current.className = "";
+        next.className = "reading";
+        this.startSpeech();
+      } else {
+        // 下一章
+        this.$once("showContent", () => {
+          setTimeout(() => {
+            this.startSpeech();
+          }, 100);
+        });
+        this.toNextChapter();
+      }
+    },
+    getCurrentParagraph() {
+      const readingEle = this.$refs.bookContentRef.$el.querySelectorAll(
+        ".reading"
+      );
+      let currentParagraph = null;
+      if (!readingEle.length) {
+        // 没有正在读的段落，遍历找到当前页面的第一段
+        const list = this.$refs.bookContentRef.$el.querySelectorAll("h3,p");
+        for (let i = 0; i < list.length; i++) {
+          const elePos = list[i].getBoundingClientRect();
+          if (this.isSlideRead) {
+            if (elePos.right > 0) {
+              currentParagraph = list[i];
+              break;
+            }
+          } else {
+            if (elePos.bottom > 50) {
+              currentParagraph = list[i];
+              break;
+            }
+          }
+        }
+      } else {
+        currentParagraph = readingEle[0];
+      }
+      return currentParagraph;
+    },
+    getPrevParagraph() {
+      const current = this.getCurrentParagraph();
+      const list = this.$refs.bookContentRef.$el.querySelectorAll("h3,p");
+      for (let i = 0; i < list.length; i++) {
+        if (i > 0 && current === list[i]) {
+          return list[i - 1];
+        }
+      }
+      return null;
+    },
+    getNextParagraph() {
+      const current = this.getCurrentParagraph();
+      const list = this.$refs.bookContentRef.$el.querySelectorAll("h3,p");
+      for (let i = 0; i < list.length; i++) {
+        if (current === list[i]) {
+          return list[i + 1];
+        }
+      }
+      return null;
+    },
+    exitRead() {
+      this.stopSpeech();
+      const current = this.getCurrentParagraph();
+      this.showReadBar = false;
+      this.showParagraph(current);
+    },
+    showParagraph(paragraph, scroll) {
+      if (!paragraph) {
+        return;
+      }
+      if (this.isSlideRead) {
+        // 跳转位置
+        this.$nextTick(() => {
+          const pos = paragraph.getBoundingClientRect();
+          if (pos.left > this.windowSize.width - 16) {
+            this.showPage(
+              Math.round(pos.left / (this.windowSize.width - 16)) + 1,
+              0
+            );
+          }
+        });
+      } else if (scroll) {
+        // 跳转位置
+        this.$nextTick(() => {
+          const pos = paragraph.getBoundingClientRect();
+          this.scrollContent(pos.top - 30, 0);
+        });
+      }
+    },
+    scrollHandler() {
+      if (!this.isSlideRead) {
+        this.currentPage = Math.round(
+          ((document.documentElement.scrollTop || document.body.scrollTop) +
+            this.windowSize.height) /
+            (this.windowSize.height - 35)
+        );
+      }
+      this.saveReadingPosition();
+    },
+    beforeReadMethodChange() {
+      this.currentParagraph = this.getCurrentParagraph();
+    },
+    showPosition(pos) {
+      const list = this.$refs.bookContentRef.$el.querySelectorAll("h3,p");
+      for (let i = 0; i < list.length; i++) {
+        if (
+          list[i].dataset &&
+          typeof list[i].dataset.pos !== "undefined" &&
+          +list[i].dataset.pos >= pos
+        ) {
+          this.showParagraph(list[i], true);
+          break;
+        }
+      }
+    },
+    saveReadingPosition() {
+      try {
+        if (this.error || !this.startSavePosition) {
+          return;
+        }
+        this.currentParagraph = this.getCurrentParagraph();
+        if (this.currentParagraph) {
+          const firstCharPos = this.$refs.bookContentRef.$el.innerText.indexOf(
+            this.currentParagraph.innerText
+          );
+          window.localStorage &&
+            window.localStorage.setItem(
+              this.$store.state.readingBook.bookUrl + "@pos",
+              firstCharPos
+            );
+        }
+      } catch (error) {
+        //
+      }
+    },
+    autoShowPosition() {
+      this.$once("showContent", () => {
+        setTimeout(() => {
+          this.startSavePosition = true;
+        }, 200);
+        if (this.error) {
+          return;
+        }
+        const lastPosition =
+          window.localStorage &&
+          window.localStorage.getItem(
+            this.$store.state.readingBook.bookUrl + "@pos"
+          );
+        if (+lastPosition) {
+          this.$nextTick(() => {
+            this.showPosition(+lastPosition);
+          });
+        }
+      });
     }
   }
 };
@@ -1237,6 +1715,43 @@ export default {
     right: 50%;
     z-index: 100;
 
+    .progress {
+      padding: 10px 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      .progress-bar {
+        flex: 1;
+        padding: 0 10px;
+      }
+
+      .progress-tip {
+        font-size: 14px;
+        margin-left: 5px;
+      }
+    }
+
+    .headset-item {
+      line-height: 32px;
+      width: 36px;
+      height: 36px;
+      border-radius: 100%;
+      display: block;
+      cursor: pointer;
+      text-align: center;
+      vertical-align: middle;
+      pointer-events: all;
+      position: absolute;
+      top: -120px;
+      left: 4px;
+      right: auto;
+
+      .el-icon-headset {
+        line-height: 34px;
+      }
+    }
+
     .theme-item {
       line-height: 32px;
       width: 36px;
@@ -1253,11 +1768,11 @@ export default {
       right: auto;
 
       .el-icon-moon {
-        color: #f7f7f7;
+        color: #121212;
         line-height: 34px;
       }
       .el-icon-sunny {
-        color: #121212;
+        color: #666;
         line-height: 34px;
       }
     }
@@ -1287,6 +1802,90 @@ export default {
           height: 16px;
           font-size: 16px;
           margin: 0 auto 6px;
+        }
+      }
+    }
+
+    .reader-bar-inner {
+      display: flex;
+      flex-direction: column;
+      padding-bottom: calc(10px + constant(safe-area-inset-top));
+      padding-bottom: calc(10px + env(safe-area-inset-top));
+      padding-left: 5px;
+      padding-right: 5px;
+
+      .operate-bar {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        padding: 10px 10px 0 10px;
+        align-items: center;
+
+        .close-btn, .collapse-btn {
+          font-size: 22px;
+          height: 35px;
+        }
+
+        .center {
+          span {
+            display: inline-block;
+            cursor: pointer;
+          }
+          .play-pause-btn {
+            font-size: 50px;
+            margin-top: -40px;
+            i {
+              border-radius: 100%;
+            }
+          }
+          .ctrl-btn {
+            margin: 0px 15px;
+          }
+        }
+      }
+
+      .setting-item {
+        display: flex;
+        flex-direction: column;
+        padding: 5px 10px;
+
+        .setting-title {
+          font-size: 14px;
+        }
+
+        .setting-btn {
+          font-size: 14px;
+          cursor: pointer;
+          display: inline-block;
+          margin-left: 5px;
+        }
+
+        .voice-list {
+          display: flex;
+          flex-direction: row;
+          overflow-x: auto;
+          padding: 5px 10px;
+
+          .radio-group {
+            white-space: nowrap;
+
+            .radio-button {
+              margin-right: 10px;
+
+              .el-radio-button__inner {
+                border-radius: 4px 4px 4px 4px;
+              }
+            }
+          }
+        }
+
+        .progress {
+          padding: 5px 10px;
+
+          .progress-tip {
+            margin-left: 0;
+            margin-right: 5px;
+          }
         }
       }
     }
@@ -1408,6 +2007,22 @@ export default {
     color: rgba(0, 0, 0, 0.4);
   }
 
+  >>>.reader-bar-inner {
+    color: #121212;
+
+    .setting-title {
+      color: rgba(0, 0, 0, 0.8);
+    }
+
+    .setting-value {
+      color: rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  >>>.headset-item {
+    color: #121212;
+  }
+
   >>>.chapter {
     border: 1px solid #d8d8d8;
     color: #262626;
@@ -1419,6 +2034,10 @@ export default {
 
   >>>.el-slider__runway {
     background-color: #fff;
+  }
+
+  >>>.play-pause-btn {
+    color: #409EFF;
   }
 }
 
@@ -1438,6 +2057,14 @@ export default {
   }
 
   >>>.progress-tip {
+    color: #666;
+  }
+
+  >>>.reader-bar-inner {
+    color: #666;
+  }
+
+  >>>.headset-item {
     color: #666;
   }
 
@@ -1463,6 +2090,9 @@ export default {
   >>>.el-slider__button {
     border: 2px solid #185798;
     background-color: #282828;
+  }
+  >>>.play-pause-btn {
+    color: #185798;
   }
 }
 @media screen and (max-width: 750px) {
@@ -1490,20 +2120,9 @@ export default {
       width: 100vw;
       margin-right: 0 !important;
 
-      .progress {
-        padding: 10px 36px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-
-        .progress-bar {
-          flex: 1;
-          padding: 0 20px;
-        }
-
-        .progress-tip {
-          font-size: 14px;
-        }
+      .headset-item {
+        left: auto;
+        right: 20px;
       }
 
       .theme-item {
@@ -1556,7 +2175,9 @@ export default {
       }
 
       .content-inner {
-        padding-top: 45px;
+        margin-top: calc(30px + constant(safe-area-inset-top));
+        margin-top: calc(30px + env(safe-area-inset-top));
+        padding-top: 15px;
       }
     }
 
@@ -1606,6 +2227,28 @@ export default {
   }
   .chapter-wrapper::-webkit-scrollbar {
     width: 0 !important;
+  }
+}
+</style>
+<style lang="stylus">
+.voice-list {
+  .el-radio-button__inner {
+    border-radius: 4px !important;
+    border-left: 1px solid #DCDFE6;
+    box-shadow: none;
+  }
+}
+.night-theme {
+  .voice-list {
+    .el-radio-button__inner {
+      background-color: #bbb;
+      border-color: #bbb;
+    }
+    .el-radio-button__orig-radio:checked+.el-radio-button__inner {
+      background-color: #185798;
+      border-color: #185798;
+      box-shadow: none;
+    }
   }
 }
 </style>

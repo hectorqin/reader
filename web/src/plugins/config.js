@@ -30,6 +30,11 @@ const settings = {
     paragraphSpace: 0.2, // 段间距
     autoTheme: true // 自动切换主题
   },
+  speechVoiceConfig: {
+    voiceName: "",
+    speechRate: 1,
+    speechPitch: 1
+  },
   themes: [
     {
       body: "url(" + body_0 + ") repeat",

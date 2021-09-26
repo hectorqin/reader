@@ -13,6 +13,9 @@
         isWebApp && !isNight ? 'status-bar-light-bg' : ''
       ]"
       :style="navigationStyle"
+      @touchstart="handleTouchStart"
+      @touchmove="handleTouchMove"
+      @touchend="handleTouchEnd"
     >
       <div class="navigation-inner-wrapper">
         <div class="navigation-title">
@@ -1506,6 +1509,7 @@ export default {
     handleTouchStart(e) {
       this.lastTouch = false;
       this.lastMoveX = false;
+      this.touchMoveTimes = 0;
       if (e.touches && e.touches[0]) {
         this.lastTouch = e.touches[0];
       }
@@ -1523,18 +1527,23 @@ export default {
           e.preventDefault();
           e.stopPropagation();
           if (!this.showNavigation && moveX > 0 && moveX <= 270) {
-            // 往左拉，打开目录
-            this.navigationStyle = {
-              marginLeft: moveX - 270 + "px"
-            };
+            // 往右拉，打开目录
+            if (this.touchMoveTimes % 3 === 0) {
+              this.navigationStyle = {
+                marginLeft: moveX - 270 + "px"
+              };
+            }
             this.lastMoveX = moveX;
           } else if (this.showNavigation && moveX < 0 && moveX >= -270) {
             // 往左拉，关闭目录
-            this.navigationStyle = {
-              marginLeft: moveX + "px"
-            };
+            if (this.touchMoveTimes % 3 === 0) {
+              this.navigationStyle = {
+                marginLeft: moveX + "px"
+              };
+            }
             this.lastMoveX = moveX;
           }
+          this.touchMoveTimes++;
         }
       }
     },

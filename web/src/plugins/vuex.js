@@ -33,7 +33,8 @@ export default new Vuex.Store({
     userNS: "default",
     showManagerMode: false,
     version: process.env.VUE_APP_BUILD_VERSION,
-    filterRules: []
+    filterRules: [],
+    speechVoiceConfig: { ...settings.speechVoiceConfig }
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -154,6 +155,14 @@ export default new Vuex.Store({
       state.config = config;
       window.localStorage &&
         window.localStorage.setItem("config", JSON.stringify(config));
+    },
+    setSpeechVoiceConfig(state, voiceConfig) {
+      state.speechVoiceConfig = voiceConfig;
+      window.localStorage &&
+        window.localStorage.setItem(
+          "speechVoiceConfig",
+          JSON.stringify(voiceConfig)
+        );
     }
   },
   getters: {
@@ -214,6 +223,7 @@ export default new Vuex.Store({
             backgroundColor: state.config.contentColor || "#ede7da",
             backgroundSize: "cover"
           },
+          popupPure: state.config.popupColor || "#ede7da",
           popup:
             (state.miniInterface
               ? "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 36px), "
@@ -223,6 +233,7 @@ export default new Vuex.Store({
         const config = {
           ...settings.themes[state.config.theme]
         };
+        config.popupPure = config.popup;
         if (state.miniInterface) {
           config.body =
             "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 36px), " +
