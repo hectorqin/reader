@@ -1948,11 +1948,6 @@ export default {
             }
           }
         }
-
-        .book:hover {
-          background: rgba(0, 0, 0, 0.1);
-          transition-duration: 0.5s;
-        }
       }
 
       .wrapper:last-child {
@@ -2167,5 +2162,12 @@ export default {
     rgba(0, 0, 0, 0.2) 0,
     transparent 36px
   ) !important;
+}
+
+@media (hover: hover) {
+  .book:hover {
+    background: rgba(0, 0, 0, 0.1);
+    transition-duration: 0.5s;
+  }
 }
 </style>

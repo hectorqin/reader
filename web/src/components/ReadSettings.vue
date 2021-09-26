@@ -595,10 +595,6 @@ export default {
           font: 14px / 34px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
         }
 
-        .span-item:hover {
-          border: 1px solid #ed4259;
-          color: #ed4259;
-        }
         .span-item.selected  {
           border: 1px solid #ed4259;
           color: #ed4259;
@@ -708,10 +704,6 @@ export default {
             }
           }
 
-          .less:hover, .more:hover {
-            color: #ed4259;
-          }
-
           .lang {
             color: #a6a6a6;
             font-weight: 400;
@@ -788,6 +780,18 @@ export default {
 
     b {
       border-right: 1px solid #e5e5e5;
+    }
+  }
+}
+
+@media (hover: hover) {
+  .span-item:hover {
+    border: 1px solid #ed4259;
+    color: #ed4259;
+  }
+  .font-size, .read-width {
+    .less:hover, .more:hover {
+      color: #ed4259;
     }
   }
 }

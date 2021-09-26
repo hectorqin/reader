@@ -152,6 +152,8 @@ export default new Vuex.Store({
         config.theme = lastDayTheme;
       }
       state.config = config;
+      window.localStorage &&
+        window.localStorage.setItem("config", JSON.stringify(config));
     }
   },
   getters: {

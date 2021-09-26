@@ -141,6 +141,15 @@
       </div>
     </div>
     <div class="read-bar" :style="rightBarTheme">
+      <div
+        class="theme-item"
+        :style="themeBtnStyle"
+        ref="themes"
+        @click="toogleNight"
+      >
+        <i class="el-icon-moon" v-if="!isNight"></i>
+        <i class="el-icon-sunny" v-else></i>
+      </div>
       <div class="progress" v-if="$store.state.miniInterface">
         <div class="progress-bar">
           <el-slider
@@ -536,6 +545,17 @@ export default {
         //
       }
       return content;
+    },
+    themeBtnStyle() {
+      if (this.$store.getters.isNight) {
+        return {
+          background: "#f7f7f7"
+        };
+      } else {
+        return {
+          background: "#222"
+        };
+      }
     }
   },
   methods: {
@@ -556,7 +576,7 @@ export default {
           this.loadCatalog(false, true);
         } else {
           setTimeout(() => {
-            console.log("setReadingBook", this.lastReadingBook);
+            // console.log("setReadingBook", this.lastReadingBook);
             this.$store.commit("setReadingBook", this.lastReadingBook);
           }, 100);
         }
@@ -661,12 +681,19 @@ export default {
           chapterIndex
       ).then(
         res => {
-          let data = res.data.data;
-          this.content = data;
-          this.loading.close();
-          this.noPoint = false;
-          this.error = false;
-          this.show = true;
+          if (res.data.isSuccess) {
+            let data = res.data.data;
+            this.content = data;
+            this.loading.close();
+            this.noPoint = false;
+            this.error = false;
+            this.show = true;
+          } else {
+            this.content = "获取章节内容失败！\n" + res.data.errorMsg;
+            this.error = true;
+            this.show = true;
+            this.loading.close();
+          }
         },
         error => {
           this.content = "获取章节内容失败！\n" + (error && error.toString());
@@ -1142,6 +1169,13 @@ export default {
         });
       }
       this.showTextFilterPrompting = false;
+    },
+    toogleNight() {
+      if (this.isNight) {
+        this.$store.commit("setNightTheme", false);
+      } else {
+        this.$store.commit("setNightTheme", true);
+      }
     }
   }
 };
@@ -1202,6 +1236,31 @@ export default {
     bottom: 0;
     right: 50%;
     z-index: 100;
+
+    .theme-item {
+      line-height: 32px;
+      width: 36px;
+      height: 36px;
+      border-radius: 100%;
+      display: block;
+      cursor: pointer;
+      text-align: center;
+      vertical-align: middle;
+      pointer-events: all;
+      position: absolute;
+      top: -60px;
+      left: 4px;
+      right: auto;
+
+      .el-icon-moon {
+        color: #f7f7f7;
+        line-height: 34px;
+      }
+      .el-icon-sunny {
+        color: #121212;
+        line-height: 34px;
+      }
+    }
 
     .tools {
       display: flex;
@@ -1445,6 +1504,11 @@ export default {
         .progress-tip {
           font-size: 14px;
         }
+      }
+
+      .theme-item {
+        left: auto;
+        right: 20px;
       }
 
       .tools {

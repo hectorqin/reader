@@ -128,17 +128,10 @@ export default {
   created() {
     window
       .matchMedia("(prefers-color-scheme: dark)")
-      .addEventListener("change", e => {
-        if (this.autoTheme) {
-          if (e.matches) {
-            // 系统开启暗色模式
-            this.setNightTheme(true);
-          } else {
-            // 系统关闭暗色模式
-            this.setNightTheme(false);
-          }
-        }
+      .addEventListener("change", () => {
+        this.autoSetTheme(this.autoTheme);
       });
+    this.autoSetTheme(this.autoTheme);
 
     this.getUserInfo();
   },
@@ -186,8 +179,8 @@ export default {
     isNight(val) {
       this.setTheme(val);
     },
-    autoTheme() {
-      this.autoSetTheme();
+    autoTheme(val) {
+      this.autoSetTheme(val);
     },
     connected(val) {
       if (val) {
@@ -200,8 +193,8 @@ export default {
     }
   },
   methods: {
-    autoSetTheme() {
-      if (this.autoTheme) {
+    autoSetTheme(autoTheme) {
+      if (autoTheme) {
         if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
           // 是暗色模式
           this.$store.commit("setNightTheme", true);
