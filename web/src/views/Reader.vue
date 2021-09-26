@@ -396,6 +396,11 @@ export default {
       }
     );
     window.addEventListener("scroll", this.scrollHandler);
+    try {
+      this.releaseWakeLockFn = this.wakeLock();
+    } catch (e) {
+      //
+    }
   },
   deactivated() {
     this.startSavePosition = false;
@@ -404,6 +409,7 @@ export default {
     window.removeEventListener("keydown", this.keydownHandler);
     window.removeEventListener("scroll", this.scrollHandler);
     this.unwatchFn && this.unwatchFn();
+    this.releaseWakeLockFn && this.releaseWakeLockFn();
   },
   watch: {
     chapterName(to) {
@@ -1654,6 +1660,84 @@ export default {
           });
         }
       });
+    },
+    wakeLock() {
+      if ("WakeLock" in window && "request" in window.WakeLock) {
+        let wakeLock = null;
+        const requestWakeLock = () => {
+          const controller = new AbortController();
+          const signal = controller.signal;
+          window.WakeLock.request("screen", { signal }).catch(e => {
+            if (e.name === "AbortError") {
+              // console.log("Wake Lock was aborted");
+            } else {
+              // console.error(`${e.name}, ${e.message}`);
+            }
+          });
+          // console.log("Wake Lock is active");
+          return controller;
+        };
+
+        wakeLock = requestWakeLock();
+
+        const handleVisibilityChange = () => {
+          if (wakeLock !== null && document.visibilityState === "visible") {
+            wakeLock = requestWakeLock();
+          }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        document.addEventListener("fullscreenchange", handleVisibilityChange);
+        return () => {
+          if (wakeLock != null) {
+            wakeLock.abort();
+            wakeLock = null;
+          }
+          document.removeEventListener(
+            "visibilitychange",
+            handleVisibilityChange
+          );
+          document.removeEventListener(
+            "fullscreenchange",
+            handleVisibilityChange
+          );
+        };
+      } else if ("wakeLock" in navigator && "request" in navigator.wakeLock) {
+        let wakeLock = null;
+        const requestWakeLock = async () => {
+          try {
+            wakeLock = await navigator.wakeLock.request("screen");
+            wakeLock.addEventListener("release", () => {
+              // console.log("Wake Lock was released");
+            });
+            // console.log("Wake Lock is active");
+          } catch (e) {
+            // console.error(`${e.name}, ${e.message}`);
+          }
+        };
+        requestWakeLock();
+        const handleVisibilityChange = () => {
+          if (wakeLock !== null && document.visibilityState === "visible") {
+            requestWakeLock();
+          }
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        document.addEventListener("fullscreenchange", handleVisibilityChange);
+        return () => {
+          if (wakeLock != null) {
+            wakeLock.release();
+            wakeLock = null;
+          }
+          document.removeEventListener(
+            "visibilitychange",
+            handleVisibilityChange
+          );
+          document.removeEventListener(
+            "fullscreenchange",
+            handleVisibilityChange
+          );
+        };
+      }
     }
   }
 };
