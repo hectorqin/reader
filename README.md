@@ -279,6 +279,17 @@ java -jar reader-$version.jar --reader.app.secure=true --reader.app.secureKey=�
 
 # docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 reader:latest
 
+# 跨平台镜像
+
+# 新建构建器
+# docker buildx create --use --name mybuilder
+# 启动构建器
+# docker buildx inspect mybuilder --bootstrap
+# 查看构建器及其所支持的cpu架构
+# docker buildx ls
+# 构建跨平台镜像
+# docker buildx build -t reader:latest --platform=linux/arm,linux/arm64,linux/amd64 . --push
+
 # 使用预编译的镜像
 
 # 自用版
