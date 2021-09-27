@@ -41,7 +41,6 @@
 
 <script>
 import Axios from "./plugins/axios";
-import settings from "./plugins/config";
 
 export default {
   name: "app",
@@ -56,55 +55,7 @@ export default {
     };
   },
   beforeCreate() {
-    try {
-      // 获取配置
-      const config = JSON.parse(
-        window.localStorage && window.localStorage.getItem("config")
-      );
-      if (config && typeof config === "object") {
-        this.$store.commit("setConfig", { ...settings.config, ...config });
-      }
-    } catch (error) {
-      //
-    }
-    try {
-      // 获取最近阅读书籍
-      const readingRecent = JSON.parse(
-        window.localStorage && window.localStorage.getItem("readingRecent")
-      );
-      if (readingRecent && typeof readingRecent === "object") {
-        if (typeof readingRecent.index == "undefined") {
-          readingRecent.index = 0;
-        }
-        this.$store.commit("setReadingBook", readingRecent);
-      }
-    } catch (error) {
-      //
-    }
-    try {
-      // 获取过滤规则
-      const filterRules = JSON.parse(
-        window.localStorage && window.localStorage.getItem("filterRules")
-      );
-      if (filterRules && Array.isArray(filterRules)) {
-        this.$store.commit("setFilterRules", filterRules);
-      }
-    } catch (error) {
-      //
-    }
-    try {
-      const speechVoiceConfig = JSON.parse(
-        window.localStorage && window.localStorage.getItem("speechVoiceConfig")
-      );
-      if (speechVoiceConfig && typeof speechVoiceConfig === "object") {
-        this.$store.commit("setSpeechVoiceConfig", {
-          ...settings.speechVoiceConfig,
-          ...speechVoiceConfig
-        });
-      }
-    } catch (error) {
-      //
-    }
+    this.$store.dispatch("syncFromLocalStorage");
 
     this.$store.commit("setMiniInterface", window.innerWidth <= 750);
 
@@ -138,6 +89,18 @@ export default {
         ? `${(window.devicePixelRatio - 1 || 1) * 20}px`
         : "0px"
     );
+
+    try {
+      const docStyle = getComputedStyle(document.documentElement);
+      this.$store.commit("setSafeArea", {
+        top: docStyle.getPropertyValue("--sat") | 0,
+        bottom: docStyle.getPropertyValue("--sab") | 0,
+        left: docStyle.getPropertyValue("--sal") | 0,
+        right: docStyle.getPropertyValue("--sar") | 0
+      });
+    } catch (error) {
+      //
+    }
   },
   created() {
     window
@@ -324,6 +287,9 @@ export default {
   display: none;
   width: 0 !important;
   height: 0 !important;
+}
+*:focus {
+  outline: none !important;
 }
 </style>
 <style lang="stylus">

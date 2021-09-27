@@ -188,11 +188,11 @@
             </el-tag>
           </div>
         </div>
-        <div class="setting-wrapper" v-if="$store.state.showManagerMode">
+        <div class="setting-wrapper">
           <div class="setting-title">
             用户空间
           </div>
-          <div class="setting-item">
+          <div class="setting-item" v-if="$store.state.showManagerMode">
             <el-select
               size="mini"
               v-model="userNS"
@@ -215,7 +215,28 @@
               :effect="isNight ? 'dark' : 'light'"
               slot="reference"
               class="setting-btn"
+              @click="saveUserConfig"
+              v-if="localStorageAvaliable"
+            >
+              备份用户配置
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="restoreUserConfig"
+              v-if="localStorageAvaliable"
+            >
+              同步用户配置
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
               @click="loadUserList"
+              v-if="$store.state.showManagerMode"
             >
               加载用户空间
             </el-tag>
@@ -699,7 +720,12 @@ export default {
       webdavFileList: [],
 
       showWebdavManageDialog: false,
-      webdavFileSelection: []
+      webdavFileSelection: [],
+
+      localStorageAvaliable:
+        window.localStorage &&
+        window.localStorage.getItem &&
+        window.localStorage.setItem
     };
   },
   watch: {
@@ -1264,6 +1290,71 @@ export default {
         this.popIntroVisible[book.name] = !this.popIntroVisible[book.name];
       }, 100);
     },
+    async saveUserConfig() {
+      if (!window.localStorage) {
+        this.$message.error("当前终端不支持localStorage");
+        return;
+      }
+      const res = await this.$confirm(
+        "确认要备份当前终端的阅读配置、过滤规则吗?",
+        "提示"
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      const userConfig = {};
+      ["config", "filterRules"].forEach(key => {
+        const val = window.localStorage.getItem(key);
+        if (val) {
+          userConfig[key] = val;
+        }
+      });
+      Axios.post(this.api + "/saveUserConfig", userConfig).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("备份成功");
+          }
+        },
+        error => {
+          this.$message.error("备份失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async restoreUserConfig() {
+      if (!window.localStorage) {
+        this.$message.error("当前终端不支持localStorage");
+        return;
+      }
+      const res = await this.$confirm(
+        "确认要从备份文件中恢复当前终端的阅读配置、过滤规则吗?",
+        "提示"
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      const userConfig = {};
+      Axios.get(this.api + "/getUserConfig", userConfig).then(
+        res => {
+          if (res.data.isSuccess) {
+            for (const key in res.data.data) {
+              if (Object.hasOwnProperty.call(res.data.data, key)) {
+                window.localStorage &&
+                  window.localStorage.setItem(key, res.data.data[key]);
+              }
+            }
+            this.$store.dispatch("syncFromLocalStorage");
+            this.$message.success("恢复成功");
+          }
+        },
+        error => {
+          this.$message.error("恢复失败 " + (error && error.toString()));
+        }
+      );
+    },
     loadUserList() {
       if (!this.$store.state.connected) {
         this.$message.error("后端未连接");
@@ -1680,6 +1771,7 @@ export default {
     box-sizing: border-box;
     background-color: #F7F7F7;
     position: relative;
+    padding-top: 0;
     padding-top: constant(safe-area-inset-top) !important;
     padding-top: env(safe-area-inset-top) !important;
 

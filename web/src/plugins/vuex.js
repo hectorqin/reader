@@ -34,7 +34,13 @@ export default new Vuex.Store({
     showManagerMode: false,
     version: process.env.VUE_APP_BUILD_VERSION,
     filterRules: [],
-    speechVoiceConfig: { ...settings.speechVoiceConfig }
+    speechVoiceConfig: { ...settings.speechVoiceConfig },
+    safeArea: {
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0
+    }
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -163,6 +169,9 @@ export default new Vuex.Store({
           "speechVoiceConfig",
           JSON.stringify(voiceConfig)
         );
+    },
+    setSafeArea(state, safeArea) {
+      state.safeArea = { ...state.safeArea, ...safeArea };
     }
   },
   getters: {
@@ -254,6 +263,60 @@ export default new Vuex.Store({
         var y = b["durChapterTime"] || 0;
         return y - x;
       });
+    }
+  },
+  actions: {
+    syncFromLocalStorage({ commit }) {
+      if (!window.localStorage) {
+        return;
+      }
+      try {
+        // 获取配置
+        const config = JSON.parse(window.localStorage.getItem("config"));
+        if (config && typeof config === "object") {
+          commit("setConfig", { ...settings.config, ...config });
+        }
+      } catch (error) {
+        //
+      }
+      try {
+        // 获取最近阅读书籍
+        const readingRecent = JSON.parse(
+          window.localStorage.getItem("readingRecent")
+        );
+        if (readingRecent && typeof readingRecent === "object") {
+          if (typeof readingRecent.index == "undefined") {
+            readingRecent.index = 0;
+          }
+          commit("setReadingBook", readingRecent);
+        }
+      } catch (error) {
+        //
+      }
+      try {
+        // 获取过滤规则
+        const filterRules = JSON.parse(
+          window.localStorage.getItem("filterRules")
+        );
+        if (filterRules && Array.isArray(filterRules)) {
+          commit("setFilterRules", filterRules);
+        }
+      } catch (error) {
+        //
+      }
+      try {
+        const speechVoiceConfig = JSON.parse(
+          window.localStorage.getItem("speechVoiceConfig")
+        );
+        if (speechVoiceConfig && typeof speechVoiceConfig === "object") {
+          commit("setSpeechVoiceConfig", {
+            ...settings.speechVoiceConfig,
+            ...speechVoiceConfig
+          });
+        }
+      } catch (error) {
+        //
+      }
     }
   }
 });

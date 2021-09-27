@@ -145,7 +145,8 @@
       <div
         class="headset-item"
         :style="popupAbsoluteBtnStyle"
-        @click="showReadBar = true"
+        @click="showReadBar = !showReadBar"
+        v-if="speechAvalable"
       >
         <i class="el-icon-headset"></i>
       </div>
@@ -460,7 +461,7 @@ export default {
     },
     loginAuth(val) {
       if (val) {
-        this.init();
+        this.init(true);
       }
     },
     showReadBar(val) {
@@ -768,9 +769,10 @@ export default {
     }
   },
   methods: {
-    init() {
+    init(refresh) {
       if (this.$store.state.readingBook) {
         if (
+          refresh ||
           !this.lastReadingBook ||
           this.lastReadingBook.bookUrl !== this.$store.state.readingBook.bookUrl
         ) {
@@ -1288,8 +1290,12 @@ export default {
         this.popBookSourceVisible ||
         this.popBookShelfVisible ||
         this.popCataVisible ||
-        this.readSettingsVisible
+        this.readSettingsVisible ||
+        this.showTextFilterPrompting
       ) {
+        return;
+      }
+      if (document.activeElement !== document.body) {
         return;
       }
       const keyCodeMap = {
@@ -1360,19 +1366,27 @@ export default {
       if (this.showTextFilterPrompting) {
         return;
       }
+      if (!text.replace(/\s+/, "")) {
+        return;
+      }
       this.showTextFilterPrompting = true;
       const h = this.$createElement;
       const bgColor = this.isNight ? "#121212" : "#eee";
+      const preEle = h(
+        "pre",
+        {
+          key: "" + new Date().getTime(),
+          attrs: {
+            contenteditable: "true"
+          },
+          style: `margin-top: 10px;background: ${bgColor};padding: 10px;border: 1px solid ${bgColor};border-radius: 5px;white-space: pre-wrap;word-wrap: break-word;word-break: break-all;`
+        },
+        text
+      );
       const result = await this.$prompt(
         h("div", null, [
           h("p", null, "是否要将下列文字替换为输入内容:"),
-          h(
-            "pre",
-            {
-              style: `margin-top: 10px;background: ${bgColor};padding: 10px;border: 1px solid ${bgColor};border-radius: 5px;white-space: pre-wrap;word-wrap: break-word;word-break: break-all;`
-            },
-            text
-          )
+          preEle
         ]),
         "操作确认",
         {
@@ -1380,15 +1394,20 @@ export default {
         }
       ).catch(() => {});
       if (result && result.action === "confirm") {
-        this.$store.commit("addFilterRule", {
-          name: "文本替换",
-          pattern: text,
-          replacement: result.value || "",
-          scope:
-            this.$store.state.readingBook.bookName +
-            ";" +
-            this.$store.state.readingBook.bookUrl
-        });
+        text = ((preEle.elm || {}).innerText || "").replace(/\s+/, "");
+        if (text) {
+          this.$store.commit("addFilterRule", {
+            name: "文本替换",
+            pattern: text,
+            replacement: result.value || "",
+            scope:
+              this.$store.state.readingBook.bookName +
+              ";" +
+              this.$store.state.readingBook.bookUrl
+          });
+        } else {
+          this.$message.error("过滤内容为空!");
+        }
       }
       this.showTextFilterPrompting = false;
     },
@@ -1530,12 +1549,14 @@ export default {
         for (let i = 0; i < list.length; i++) {
           const elePos = list[i].getBoundingClientRect();
           if (this.isSlideRead) {
+            // 段尾出现在视野里
             if (elePos.right > 0) {
               currentParagraph = list[i];
               break;
             }
           } else {
-            if (elePos.bottom > 50) {
+            // 段尾出现在视野里
+            if (elePos.bottom > 50 + (this.$store.state.safeArea.top | 0)) {
               currentParagraph = list[i];
               break;
             }
@@ -1591,7 +1612,10 @@ export default {
         // 跳转位置
         this.$nextTick(() => {
           const pos = paragraph.getBoundingClientRect();
-          this.scrollContent(pos.top - 30, 0);
+          this.scrollContent(
+            pos.top - 30 - (this.$store.state.safeArea.top | 0),
+            0
+          );
         });
       }
     },
@@ -1760,6 +1784,7 @@ export default {
   .tool-bar {
     position: fixed;
     top: 0;
+    padding-top: 0;
     padding-top: constant(safe-area-inset-top) !important;
     padding-top: env(safe-area-inset-top) !important;
     left: 50%;
@@ -1893,6 +1918,7 @@ export default {
     .reader-bar-inner {
       display: flex;
       flex-direction: column;
+      padding-bottom: 10px;
       padding-bottom: calc(10px + constant(safe-area-inset-top));
       padding-bottom: calc(10px + env(safe-area-inset-top));
       padding-left: 5px;
@@ -2259,6 +2285,7 @@ export default {
       }
 
       .content-inner {
+        margin-top: 30px;
         margin-top: calc(30px + constant(safe-area-inset-top));
         margin-top: calc(30px + env(safe-area-inset-top));
         padding-top: 15px;
@@ -2324,13 +2351,20 @@ export default {
 }
 .night-theme {
   .voice-list {
+    .el-radio-button {
+      box-shadow: none !important;
+    }
     .el-radio-button__inner {
       background-color: #bbb;
       border-color: #bbb;
     }
+    .el-radio-button__inner:hover {
+      color: #185798;
+    }
     .el-radio-button__orig-radio:checked+.el-radio-button__inner {
       background-color: #185798;
       border-color: #185798;
+      color: #fff;
       box-shadow: none;
     }
   }

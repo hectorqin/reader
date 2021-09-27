@@ -53,6 +53,16 @@
     </script>
   </head>
   <style>
+    :root {
+      --sat: constant(safe-area-inset-top);
+      --sat: env(safe-area-inset-top);
+      --sar: constant(safe-area-inset-right);
+      --sar: env(safe-area-inset-right);
+      --sab: constant(safe-area-inset-bottom);
+      --sab: env(safe-area-inset-bottom);
+      --sal: constant(safe-area-inset-left);
+      --sal: env(safe-area-inset-left);
+    }
     body::-webkit-scrollbar {
       display: none;
     }

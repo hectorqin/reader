@@ -157,6 +157,12 @@ class YueduApi : RestVerticle() {
         // 获取用户信息
         router.get("/reader3/getUserInfo").coroutineHandler { getUserInfo(it) }
 
+        // 用户备份本地配置
+        router.post("/reader3/saveUserConfig").coroutineHandler { saveUserConfig(it) }
+
+        // 用户恢复本地配置
+        router.get("/reader3/getUserConfig").coroutineHandler { getUserConfig(it) }
+
         // 获取用户列表
         router.get("/reader3/getUserList").coroutineHandler { getUserList(it) }
 
@@ -882,6 +888,33 @@ class YueduApi : RestVerticle() {
             "secure" to secure,
             "secureKey" to secureKey?.isNotEmpty()
         ))
+    }
+
+    private suspend fun saveUserConfig(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val content = context.bodyAsJson
+        if (content == null) {
+            return returnData.setErrorMsg("参数错误")
+        }
+        val userNameSpace = getUserNameSpace(context)
+        saveUserStorage(userNameSpace, "userConfig", content)
+        return returnData.setData("")
+    }
+
+    private suspend fun getUserConfig(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val userNameSpace = getUserNameSpace(context)
+        val userConfig = asJsonObject(getUserStorage(userNameSpace, "userConfig"))
+        if (userConfig == null) {
+            return returnData.setErrorMsg("没有备份文件")
+        }
+        return returnData.setData(userConfig.map)
     }
 
     private suspend fun getWebdavFileList(context: RoutingContext): ReturnData {
