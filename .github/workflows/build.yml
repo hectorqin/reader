@@ -1,5 +1,8 @@
-name: Publish Docker
-on: [push]
+name: Build Docker Image
+on:
+  push:
+    branches:
+      - master
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,3 +15,4 @@ jobs:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
         snapshot: true
+        tags: "test"
