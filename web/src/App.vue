@@ -82,12 +82,14 @@ export default {
       this.$store.commit("setApi", api);
     }
 
+    window.webAppDistance =
+      window.navigator.userAgent.indexOf("iPhone") >= 0 &&
+      window.navigator.standalone
+        ? (window.devicePixelRatio - 1 || 1) * 20
+        : 0;
     document.documentElement.style.setProperty(
       "--status-bar-height",
-      window.navigator.userAgent.indexOf("iPhone") >= 0 &&
-        window.navigator.standalone
-        ? `${(window.devicePixelRatio - 1 || 1) * 20}px`
-        : "0px"
+      `${window.webAppDistance}px`
     );
 
     try {

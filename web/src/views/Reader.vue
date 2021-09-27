@@ -1455,6 +1455,10 @@ export default {
       }
 
       const paragraph = this.getCurrentParagraph();
+      if (!paragraph.innerText) {
+        this.speechNext();
+        return;
+      }
       this.utterance = new SpeechSynthesisUtterance(paragraph.innerText);
 
       this.utterance.onstart = () => {
@@ -1471,14 +1475,20 @@ export default {
         }
       };
       this.utterance.onerror = event => {
-        this.$message.error("朗读错误:  " + event);
-        this.speechSpeaking = false;
+        if (event.error || event.name) {
+          this.$message.error(
+            `朗读错误:  ${event.type || ""}  ${event.error ||
+              event.name ||
+              event.toString()}`
+          );
+        }
+        this.speechSpeaking = window.speechSynthesis.speaking || false;
       };
       this.utterance.voice = voice;
       this.utterance.pitch = this.speechPitch;
       this.utterance.rate = this.speechRate;
 
-      this.scrollContent(paragraph.getBoundingClientRect().top - 30);
+      this.showParagraph(paragraph, true);
       paragraph.className = "reading";
       this.speechSpeaking = true;
       window.speechSynthesis.speak(this.utterance);
@@ -1505,7 +1515,7 @@ export default {
       const current = this.getCurrentParagraph();
       const prev = this.getPrevParagraph();
       if (prev) {
-        this.scrollContent(prev.getBoundingClientRect().top - 30);
+        this.showParagraph(prev, true);
         current.className = "";
         prev.className = "reading";
         this.startSpeech();
@@ -1526,7 +1536,7 @@ export default {
       const current = this.getCurrentParagraph();
       const next = this.getNextParagraph();
       if (next) {
-        this.scrollContent(next.getBoundingClientRect().top - 30);
+        this.showParagraph(next, true);
         current.className = "";
         next.className = "reading";
         this.startSpeech();
@@ -1558,7 +1568,13 @@ export default {
             }
           } else {
             // 段尾出现在视野里
-            if (elePos.bottom > 50 + (this.$store.state.safeArea.top | 0)) {
+            if (
+              elePos.bottom >
+              30 +
+                20 +
+                (window.webAppDistance | 0) +
+                (this.$store.state.safeArea.top | 0)
+            ) {
               currentParagraph = list[i];
               break;
             }
@@ -1615,7 +1631,10 @@ export default {
         this.$nextTick(() => {
           const pos = paragraph.getBoundingClientRect();
           this.scrollContent(
-            pos.top - 30 - (this.$store.state.safeArea.top | 0),
+            pos.top -
+              30 -
+              (window.webAppDistance | 0) -
+              (this.$store.state.safeArea.top | 0),
             0
           );
         });

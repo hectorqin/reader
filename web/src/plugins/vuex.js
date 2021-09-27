@@ -51,13 +51,17 @@ export default new Vuex.Store({
       // 更新书架信息
       for (let i = 0; i < state.shelfBooks.length; i++) {
         if (state.shelfBooks[i].bookUrl === readingBook.bookUrl) {
+          const title = ((readingBook.catalog || [])[readingBook.index] || {})
+            .title;
           state.shelfBooks[i] = {
             ...state.shelfBooks[i],
             durChapterTime: new Date().getTime(),
             durChapterIndex: readingBook.index,
-            durChapterTitle: (
-              (readingBook.catalog || [])[readingBook.index] || {}
-            ).title
+            ...(title
+              ? {
+                  durChapterTitle: title
+                }
+              : {})
           };
           break;
         }
