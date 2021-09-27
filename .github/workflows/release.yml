@@ -13,6 +13,14 @@ jobs:
         name: Checkout
         uses: actions/checkout@v2
       -
+        name: Setup node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      -
+        name: Build web
+        run: cd web && npm install && npm run build
+      -
         name: Docker meta
         id: meta
         uses: docker/metadata-action@v3
@@ -42,6 +50,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           context: .
+          file: ./.github/workflows/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
