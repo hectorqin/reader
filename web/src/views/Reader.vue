@@ -1366,7 +1366,7 @@ export default {
       if (this.showTextFilterPrompting) {
         return;
       }
-      if (!text.replace(/\s+/, "")) {
+      if (!text.replace(/^\s+/, "").replace(/\s+$/, "")) {
         return;
       }
       this.showTextFilterPrompting = true;
@@ -1394,7 +1394,9 @@ export default {
         }
       ).catch(() => {});
       if (result && result.action === "confirm") {
-        text = ((preEle.elm || {}).innerText || "").replace(/\s+/, "");
+        text = ((preEle.elm || {}).innerText || "")
+          .replace(/^\s+/, "")
+          .replace(/\s+$/, "");
         if (text) {
           this.$store.commit("addFilterRule", {
             name: "文本替换",
