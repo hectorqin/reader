@@ -56,7 +56,7 @@ apply(plugin = "kotlin")
 apply(plugin = "io.github.fvarrui.javapackager.plugin")
 
 group = "org.lightink"
-version = "1.4.0"
+version = "1.5.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
