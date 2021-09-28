@@ -1,12 +1,3 @@
-# Build jar
-FROM gradle:5.2.1-jdk8-alpine AS build-env
-ADD --chown=gradle:gradle . /app
-WORKDIR /app
-RUN \
-    mv /app/web/dist /app/src/main/resources/web; \
-    rm src/main/java/org/lightink/reader/ReaderUIApplication.kt; \
-    gradle -b cli.gradle assemble --info;
-
 FROM openjdk:8-jdk-alpine
 # Install base packages
 RUN \
@@ -21,12 +12,7 @@ RUN \
 # 时区
 ENV TZ=Asia/Shanghai
 
-#RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-#  && echo Asia/Shanghai > /etc/timdezone \
-#  && dpkg-reconfigure -f noninteractive tzdata
-
 EXPOSE 8080
 ENTRYPOINT ["/sbin/tini", "--"]
-# COPY --from=hengyunabc/arthas:latest /opt/arthas /opt/arthas
-COPY --from=build-env /app/build/libs/app-1.5.0.jar /app/bin/reader.jar
+ADD ./build/libs/app-1.5.0.jar /app/bin/reader.jar
 CMD ["java", "-jar", "/app/bin/reader.jar" ]
