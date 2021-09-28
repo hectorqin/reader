@@ -1534,8 +1534,10 @@ class YueduApi : RestVerticle() {
     }
 
     private suspend fun exploreBook(context: RoutingContext): ReturnData {
-        var bookSource = getBookSourceString(context)
         val returnData = ReturnData()
+        // 如果登录了，就使用用户的书源
+        checkAuth(context)
+        var bookSource = getBookSourceString(context)
         if (bookSource.isNullOrEmpty()) {
             return returnData.setErrorMsg("未配置书源")
         }
@@ -1557,8 +1559,10 @@ class YueduApi : RestVerticle() {
     }
 
     private suspend fun searchBook(context: RoutingContext): ReturnData {
-        var bookSource = getBookSourceString(context)
         val returnData = ReturnData()
+        // 如果登录了，就使用用户的书源
+        checkAuth(context)
+        var bookSource = getBookSourceString(context)
         if (bookSource.isNullOrEmpty()) {
             return returnData.setErrorMsg("未配置书源")
         }
