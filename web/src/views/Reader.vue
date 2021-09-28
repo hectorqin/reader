@@ -1345,7 +1345,7 @@ export default {
     },
     formatTime() {
       const now = new Date();
-      const pad = v => (v > 10 ? "" + v : "0" + v);
+      const pad = v => (v >= 10 ? "" + v : "0" + v);
       this.timeStr = pad(now.getHours()) + ":" + pad(now.getMinutes());
     },
     checkSelection(show) {
@@ -2094,13 +2094,12 @@ export default {
 
       .content-inner {
         min-height: calc(var(--vh, 1vh) * 80);
+        padding-bottom: 25px;
       }
     }
 
     .bottom-bar, .top-bar {
-      height: 44px;
       box-sizing: border-box;
-      font-size: 12px;
     }
     .top-bar {
       height: 44px;
@@ -2109,11 +2108,15 @@ export default {
     .bottom-bar {
       width: 100%;
       text-align: center;
+      padding-bottom: 30px;
       .bottom-btn {
         font-size: 14px;
         cursor: pointer;
         display: inline-block;
-        margin: 10px auto;
+        margin: 0 auto;
+        padding: 10px 40px;
+        width: 80%;
+        box-sizing: border-box;
       }
     }
   }
@@ -2303,6 +2306,7 @@ export default {
         padding: 6px 16px;
         padding-top: calc(6px + constant(safe-area-inset-top));
         padding-top: calc(6px + env(safe-area-inset-top));
+        font-size: 12px;
       }
 
       .content-inner {
@@ -2310,6 +2314,7 @@ export default {
         margin-top: calc(30px + constant(safe-area-inset-top));
         margin-top: calc(30px + env(safe-area-inset-top));
         padding-top: 15px;
+        padding-bottom: 15px;
       }
     }
 
@@ -2325,6 +2330,7 @@ export default {
         padding-bottom: 6px;
         display: flex;
         justify-content: space-between;
+        font-size: 12px;
       }
 
       .top-bar {

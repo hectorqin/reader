@@ -3,13 +3,15 @@
     <div class="title-zone">
       <div class="title">
         目录
+        <span v-if="catalog.length">({{ catalog.length }})</span>
       </div>
       <div :class="{ 'title-btn': true }">
-        <span class="progress-percent" v-if="catalog.length">
-          已读{{ parseInt(((index + 1) * 100) / catalog.length) }}%
-        </span>
-        <span v-if="catalog.length"
-          >{{ index + 1 }} / {{ catalog.length }}</span
+        <span class="span-btn" v-if="catalog.length" @click="asc = !asc">{{
+          asc ? "倒序" : "顺序"
+        }}</span>
+        <span class="span-btn" v-if="catalog.length" @click="toTop">顶部</span>
+        <span class="span-btn" v-if="catalog.length" @click="toBottom"
+          >底部</span
         >
         <span
           :class="{ loading: refreshLoading, 'refresh-btn': true }"
@@ -28,7 +30,7 @@
       <div class="cata">
         <div
           class="log"
-          v-for="(note, index) in catalog"
+          v-for="(note, index) in cataList"
           :class="{ selected: isSelected(index) }"
           :key="note.durChapterIndex"
           @click="gotoChapter(note)"
@@ -49,7 +51,8 @@ export default {
   name: "PopCata",
   data() {
     return {
-      refreshLoading: false
+      refreshLoading: false,
+      asc: true
     };
   },
   props: ["visible"],
@@ -59,6 +62,13 @@ export default {
     },
     catalog() {
       return this.$store.state.readingBook.catalog || [];
+    },
+    cataList() {
+      if (this.asc) {
+        return this.catalog;
+      } else {
+        return [].concat(this.catalog).reverse();
+      }
     },
     theme() {
       return this.$store.state.config.theme;
@@ -74,19 +84,26 @@ export default {
     visible(isVisible) {
       if (isVisible) {
         this.$nextTick(() => {
-          let index = this.$store.state.readingBook.index;
-          let wrapper = this.$refs.cataData;
-          jump(this.$refs.cata[index], { container: wrapper, duration: 0 });
+          this.jumpToCurrent();
         });
       }
     },
     catalog() {
       this.refreshLoading = false;
+    },
+    asc() {
+      this.jumpToCurrent();
     }
   },
   methods: {
     isSelected(index) {
-      return index == this.$store.state.readingBook.index;
+      if (this.asc) {
+        return index == this.$store.state.readingBook.index;
+      } else {
+        return (
+          this.catalog.length - 1 - index == this.$store.state.readingBook.index
+        );
+      }
     },
     gotoChapter(note) {
       const index = this.catalog.indexOf(note);
@@ -96,6 +113,21 @@ export default {
     refreshChapter() {
       this.refreshLoading = true;
       this.$emit("refresh");
+    },
+    jumpToCurrent(index) {
+      if (typeof index === "undefined") {
+        index = this.asc
+          ? this.$store.state.readingBook.index
+          : this.catalog.length - 1 - this.$store.state.readingBook.index;
+      }
+      let wrapper = this.$refs.cataData;
+      jump(this.$refs.cata[index], { container: wrapper, duration: 0 });
+    },
+    toTop() {
+      this.jumpToCurrent(0);
+    },
+    toBottom() {
+      this.jumpToCurrent(this.catalog.length - 1);
     }
   }
 };
@@ -135,9 +167,15 @@ export default {
       display: inline-block;
       margin-right: 25px;
     }
+    .span-btn {
+      display: inline-block;
+      color: #ed4259;
+      margin-left: 15px;
+      cursor: pointer;
+    }
     .refresh-btn {
       display: inline-block;
-      margin-left: 25px;
+      margin-left: 15px;
       color: #ed4259;
       cursor: pointer;
       &.loading {
