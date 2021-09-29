@@ -4,7 +4,7 @@
       <div class="title">书海</div>
       <div :class="{ 'title-btn': true }">
         <span class="source-count">
-          共{{ bookSourceListNew.length }}个可用书源
+          共{{ bookSourceShowLength }}个可用书源
         </span>
         <i
           class="el-icon-close close-btn"
@@ -44,7 +44,11 @@
             :name="index"
             :key="'source-' + index"
             ref="source"
-            v-show="!sourceGroup || source.bookSourceGroup === sourceGroup"
+            v-show="
+              !sourceGroup ||
+                (sourceGroup === '未分组' && source.bookSourceGroup === '') ||
+                source.bookSourceGroup === sourceGroup
+            "
           >
             <template v-if="showCollapse.includes(index)">
               <div
@@ -117,7 +121,18 @@ export default {
       this.bookSourceListNew.forEach(v => {
         v.bookSourceGroup && groups.add(v.bookSourceGroup);
       });
+      groups.add("未分组");
       return Array.from(groups);
+    },
+    bookSourceShowLength() {
+      if (!this.sourceGroup) {
+        return this.bookSourceListNew.length;
+      }
+      return this.bookSourceListNew.filter(v =>
+        this.sourceGroup === "未分组"
+          ? !v.bookSourceGroup
+          : v.bookSourceGroup === this.sourceGroup
+      ).length;
     }
   },
   mounted() {

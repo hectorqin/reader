@@ -144,6 +144,15 @@
             >
               缓存书源
             </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="showFailureBookSource()"
+            >
+              失效书源
+            </el-tag>
             <input
               ref="fileRef"
               type="file"
@@ -422,15 +431,29 @@
       </div>
     </el-dialog>
     <el-dialog
-      title="书源管理"
+      :title="isShowFailureBookSource ? '失效书源管理' : '书源管理'"
       :visible.sync="showBookSourceManageDialog"
       :width="dialogWidth"
       :top="dialogTop"
+      @closed="isShowFailureBookSource = false"
     >
       <div class="source-container table-container">
+        <div class="source-group-wrapper">
+          <el-tag
+            type="info"
+            :effect="$store.getters.isNight ? 'dark' : 'light'"
+            class="source-group-btn"
+            :class="showSourceGroup === name ? 'selected' : ''"
+            v-for="name in bookSourceShowGroup"
+            :key="'sourceGroup-' + name"
+            @click="setShowSourceGroup(name)"
+          >
+            {{ name }}
+          </el-tag>
+        </div>
         <el-table
-          :data="bookSourceList"
-          :height="dialogContentHeight"
+          :data="bookSourceShowResultPageList"
+          :height="dialogContentHeight - 42 - 42"
           @selection-change="manageSourceSelection = $event"
         >
           <el-table-column
@@ -450,6 +473,21 @@
             property="bookSourceUrl"
             label="书源链接"
             min-width="120"
+          >
+            <template slot-scope="scope">
+              <el-link
+                type="primary"
+                :href="scope.row.bookSourceUrl"
+                target="_blank"
+                >{{ scope.row.bookSourceUrl }}</el-link
+              >
+            </template>
+          </el-table-column>
+          <el-table-column
+            property="errorMsg"
+            label="错误信息"
+            min-width="120"
+            v-if="isShowFailureBookSource"
           ></el-table-column>
           <el-table-column label="书架书籍" min-width="120">
             <template slot-scope="scope">
@@ -457,18 +495,41 @@
             </template>
           </el-table-column>
         </el-table>
+        <div class="pagination-wrapper">
+          <el-pagination
+            :current-page.sync="bookSourcePagination.page"
+            :page-sizes="[50, 100, 200, 300, 400]"
+            :page-size.sync="bookSourcePagination.size"
+            layout="total, sizes, prev, pager, next"
+            :total="bookSourceShowLength"
+            :pager-count="collapseMenu ? 5 : 7"
+          >
+          </el-pagination>
+        </div>
       </div>
       <div slot="footer" class="dialog-footer">
         <el-button
           type="primary"
           class="float-left"
+          size="medium"
           @click="deleteBookSourceList"
           >批量删除</el-button
         >
         <span class="check-tip"
           >已选择 {{ manageSourceSelection.length }} 个</span
         >
-        <el-button @click="showBookSourceManageDialog = false">取消</el-button>
+        <el-button
+          @click="checkBookSource"
+          v-if="isShowFailureBookSource"
+          size="medium"
+          style="margin-bottom: 5px;"
+          :disabled="isCheckingBookSource"
+          >{{ isCheckingBookSource ? "正在" : "" }} 检测书源
+          {{ checkBookSourceTip }}</el-button
+        >
+        <el-button @click="showBookSourceManageDialog = false" size="medium"
+          >取消</el-button
+        >
       </div>
     </el-dialog>
     <el-dialog
@@ -672,6 +733,52 @@ const formatSize = function(value, scale) {
   size = size.toFixed(scale || 2);
   return size + " " + unitArr[index];
 };
+const LimitResquest = function(limit, process) {
+  let currentSum = 0;
+  let requests = [];
+
+  async function run() {
+    let err, result;
+    try {
+      ++currentSum;
+      handler.leftCount = requests.length;
+      const fn = requests.shift();
+      result = await fn();
+    } catch (error) {
+      err = error;
+      // console.log("Error", err);
+      handler.errorCount++;
+    } finally {
+      --currentSum;
+      handler.requestCount++;
+      handler.leftCount = requests.length;
+      process && process(handler, result, err);
+      if (requests.length > 0) {
+        run();
+      }
+    }
+  }
+
+  const handler = reqFn => {
+    if (!reqFn || !(reqFn instanceof Function)) {
+      return;
+    }
+    requests.push(reqFn);
+    handler.leftCount = requests.length;
+    if (currentSum < limit) {
+      run();
+    }
+  };
+
+  handler.requestCount = 0;
+  handler.leftCount = 0;
+  handler.errorCount = 0;
+  handler.cancel = () => {
+    requests = [];
+  };
+
+  return handler;
+};
 export default {
   components: {
     Explore
@@ -695,6 +802,10 @@ export default {
 
       showBookSourceManageDialog: false,
       manageSourceSelection: [],
+      isShowFailureBookSource: false,
+      checkBookSourceTip: "",
+      isCheckingBookSource: false,
+
       showNavigation: false,
 
       navigationClass: "",
@@ -718,7 +829,13 @@ export default {
       localStorageAvaliable:
         window.localStorage &&
         window.localStorage.getItem &&
-        window.localStorage.setItem
+        window.localStorage.setItem,
+
+      showSourceGroup: "",
+      bookSourcePagination: {
+        page: 1,
+        size: 50
+      }
     };
   },
   watch: {
@@ -1211,6 +1328,28 @@ export default {
       });
       return res.join("\n");
     },
+    async checkBookSource() {
+      this.isCheckingBookSource = true;
+      const limitFunc = LimitResquest(5, handler => {
+        this.checkBookSourceTip =
+          "已检查 " + handler.requestCount + "/" + this.bookSourceList.length;
+        if (!handler.leftCount) {
+          this.isCheckingBookSource = false;
+        }
+      });
+      this.bookSourceList.forEach(v => {
+        limitFunc(() => {
+          return Axios.get(this.api + "/searchBook", {
+            timeout: 5000,
+            params: {
+              key: "斗罗大陆",
+              bookSourceUrl: v.bookSourceUrl
+            },
+            silent: true
+          });
+        });
+      });
+    },
     async deleteBookSourceList() {
       if (!this.manageSourceSelection.length) {
         this.$message.error("请选择需要删除的源");
@@ -1229,6 +1368,10 @@ export default {
       Axios.post(this.api + "/deleteSources", this.manageSourceSelection).then(
         res => {
           if (res.data.isSuccess) {
+            this.$store.commit(
+              "removeFailureBookSource",
+              this.manageSourceSelection
+            );
             this.manageSourceSelection = [];
             this.$message.success("删除书源成功");
             this.loadBookSource(true);
@@ -1630,6 +1773,17 @@ export default {
           this.navigationStyle = {};
         }
       }
+    },
+    showFailureBookSource() {
+      this.isShowFailureBookSource = true;
+      this.showBookSourceManageDialog = true;
+    },
+    setShowSourceGroup(group) {
+      if (this.showSourceGroup === group) {
+        this.showSourceGroup = "";
+      } else {
+        this.showSourceGroup = group;
+      }
     }
   },
   computed: {
@@ -1734,6 +1888,46 @@ export default {
       set(val) {
         this.$store.commit("setUserList", val);
       }
+    },
+    bookSourceShowList() {
+      return this.isShowFailureBookSource
+        ? this.$store.state.failureBookSource
+        : this.bookSourceList;
+    },
+    bookSourceShowGroup() {
+      const groups = new Set();
+      this.bookSourceShowList.forEach(v => {
+        v.bookSourceGroup && groups.add(v.bookSourceGroup);
+      });
+      groups.add("未分组");
+      return Array.from(groups);
+    },
+    bookSourceShowLength() {
+      return this.bookSourceShowResult.length;
+    },
+    bookSourceShowResult() {
+      if (!this.showSourceGroup) {
+        return this.bookSourceShowList;
+      }
+      return this.bookSourceShowList.filter(v =>
+        this.showSourceGroup === "未分组"
+          ? !v.bookSourceGroup
+          : v.bookSourceGroup === this.showSourceGroup
+      );
+    },
+    bookSourceShowResultPageList() {
+      const start =
+        (this.bookSourcePagination.page - 1) * this.bookSourcePagination.size;
+      if (start > this.bookSourceShowResult.length) {
+        return [];
+      }
+      return this.bookSourceShowResult.slice(
+        start,
+        Math.min(
+          start + this.bookSourcePagination.size,
+          this.bookSourceShowResult.length
+        )
+      );
     }
   }
 };
@@ -2106,6 +2300,15 @@ export default {
   >>>.el-table--enable-row-hover .el-table__body tr:hover>td {
     background-color: #333;
   }
+  >>>.el-table__fixed-right::before, >>>.el-table__fixed::before {
+    background-color: #333;
+  }
+  >>>.el-table__body tr.hover-row.current-row>td,
+  >>>.el-table__body tr.hover-row.el-table__row--striped.current-row>td,
+  >>>.el-table__body tr.hover-row.el-table__row--striped>td,
+  >>>.el-table__body tr.hover-row>td {
+    background-color: #bbb;
+  }
   >>>.check-tip {
     color: #bbb;
   }
@@ -2128,6 +2331,35 @@ export default {
     padding: 0;
   }
 
+  .source-group-wrapper {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 5px 0;
+
+    .source-group-btn {
+      margin-right: 10px;
+      cursor: pointer;
+    }
+
+    .source-group-btn.selected {
+      color: #ed4259;
+    }
+  }
+
+  .pagination-wrapper {
+    padding: 5px 0;
+    margin-top: 10px;
+    margin-bottom: -10px;
+
+    .el-pagination {
+      float: right;
+      max-width: 100%;
+      overflow-x: auto;
+      box-sizing: border-box;
+    }
+  }
+
   >>>.source-checkbox {
     display: block;
     padding: 8px 0;
@@ -2147,6 +2379,7 @@ export default {
   float: left;
   line-height: 40px;
   margin-left: 10px;
+  font-size: 14px;
 }
 
 .source-container::-webkit-scrollbar {

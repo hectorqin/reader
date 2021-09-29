@@ -96,7 +96,38 @@ export const request = async ({
         }
         break;
       default:
-        errorMsg && Message.error({ message: errorMsg, duration: 2000 });
+        if (params.bookSourceUrl) {
+          // 判断是否失效书源
+          if (errorMsg) {
+            window.errorMsgList = window.errorMsgList || [];
+            window.errorMsgList.push(errorMsg);
+            const errorTypeList = [
+              "UnknownHostException",
+              "ConnectException: Failed to connect",
+              "SocketException: Connection reset",
+              "responseCode: 400",
+              "responseCode: 403",
+              "responseCode: 404",
+              "responseCode: 500",
+              "responseCode: 502",
+              "responseCode: 503",
+              "responseCode: 504",
+              "responseCode: 513"
+            ];
+            for (let index = 0; index < errorTypeList.length; index++) {
+              if (errorMsg.indexOf(errorTypeList[index]) >= 0) {
+                store.commit("addFailureBookSource", {
+                  bookSourceUrl: params.bookSourceUrl,
+                  errorMsg
+                });
+                break;
+              }
+            }
+          }
+        }
+        if (!options.silent) {
+          errorMsg && Message.error({ message: errorMsg, duration: 2000 });
+        }
         break;
     }
   } else {

@@ -1354,7 +1354,8 @@ export default {
         37: "ArrowLeft",
         38: "ArrowUp",
         39: "ArrowRight",
-        40: "ArrowDown"
+        40: "ArrowDown",
+        27: "Escape"
       };
       const eventKey = event.key || keyCodeMap[event.keyCode];
       switch (eventKey) {
@@ -1389,6 +1390,9 @@ export default {
           event.stopPropagation();
           this.showToolBar = false;
           this.nextPage();
+          break;
+        case "Escape":
+          this.toShelf();
           break;
       }
     },

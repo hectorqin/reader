@@ -2117,19 +2117,23 @@ class YueduApi : RestVerticle() {
         var bookList = arrayListOf<Book>()
         for (i in 0 until bookshelf.size()) {
             var book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
-            if (refresh) {
-                var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace)
-                if (bookSource != null) {
-                    var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace)
-                    if (bookChapterList.size > 0) {
-                        var bookChapter = bookChapterList.last()
-                        book.latestChapterTitle = bookChapter.title
+            if (book.canUpdate && refresh) {
+                try {
+                    var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace)
+                    if (bookSource != null) {
+                        var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace)
+                        if (bookChapterList.size > 0) {
+                            var bookChapter = bookChapterList.last()
+                            book.latestChapterTitle = bookChapter.title
+                        }
+                        if (bookChapterList.size - book.totalChapterNum > 0) {
+                            book.lastCheckTime = System.currentTimeMillis()
+                            book.lastCheckCount = bookChapterList.size - book.totalChapterNum
+                        }
+                        book.totalChapterNum = bookChapterList.size
                     }
-                    if (bookChapterList.size - book.totalChapterNum > 0) {
-                        book.lastCheckTime = System.currentTimeMillis()
-                        book.lastCheckCount = bookChapterList.size - book.totalChapterNum
-                    }
-                    book.totalChapterNum = bookChapterList.size
+                } catch(e: Exception) {
+                    e.printStackTrace()
                 }
             }
             bookList.add(book)

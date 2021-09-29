@@ -109,7 +109,9 @@ object BookList {
             init?.let {
                 if (it.isNotEmpty()) {
                     Debug.log(bookSource.bookSourceUrl, "≡执行详情页初始化规则")
-                    analyzeRule.setContent(analyzeRule.getElement(it))
+                    analyzeRule.getElement(it)?.let { res ->
+                        analyzeRule.setContent(res)
+                    }
                 }
             }
             Debug.log(bookSource.bookSourceUrl, "┌获取书名")

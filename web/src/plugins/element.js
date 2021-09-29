@@ -26,7 +26,8 @@ import {
   Switch,
   Link,
   RadioGroup,
-  RadioButton
+  RadioButton,
+  Pagination
 } from "element-ui";
 
 Vue.use(Button);
@@ -54,6 +55,7 @@ Vue.use(Switch);
 Vue.use(Link);
 Vue.use(RadioGroup);
 Vue.use(RadioButton);
+Vue.use(Pagination);
 
 Vue.prototype.$msgbox = MessageBox;
 Vue.prototype.$message = Object.assign({}, Message, {

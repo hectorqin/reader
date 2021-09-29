@@ -199,14 +199,17 @@ export default {
       this.showLogin = false;
       this.loginForm = {
         username: "",
-        password: ""
+        password: "",
+        code: ""
       };
     },
     async login() {
       const res = await Axios.post("/login", this.loginForm);
       if (res.data.isSuccess) {
         this.$store.commit("setShowLogin", false);
-        this.$store.commit("setLoginAuth", true);
+        this.$nextTick(() => {
+          this.$store.commit("setLoginAuth", true);
+        });
         if (this.remember && res.data.data && res.data.data.accessToken) {
           this.$store.commit("setToken", res.data.data.accessToken);
         }
@@ -329,6 +332,11 @@ export default {
       border-color: #bbb;
       background-color: #bbb;
   }
+  .el-button.is-disabled, .el-button.is-disabled:focus, .el-button.is-disabled:hover {
+      color: #C0C4CC;
+      background-color: #333;
+      border-color: #333;
+  }
   .el-button--primary {
     background: #185798;
     border: 1px solid #185798;
@@ -367,6 +375,17 @@ export default {
   }
   .el-dialog__title {
     color: #bbb;
+  }
+  .el-pagination .btn-next, .el-pagination .btn-prev {
+    background: center center no-repeat #444;
+    color: #ddd;
+  }
+  .el-pager li {
+    background: #444;
+    color: #ddd;
+  }
+  .el-pager li.btn-quicknext, .el-pager li.btn-quickprev {
+    color: #ddd;
   }
 }
 .el-popover:focus, .el-popover:focus:active, .el-popover__reference:focus:hover, .el-popover__reference:focus:not(.focusing) {

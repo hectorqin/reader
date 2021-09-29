@@ -41,11 +41,32 @@ export default new Vuex.Store({
       left: 0,
       right: 0
     },
-    autoPlay: false
+    autoPlay: false,
+    failureBookSource: []
   },
   mutations: {
     setShelfBooks(state, books) {
-      state.shelfBooks = books;
+      // 过滤一下不用的字段，省点内存
+      state.shelfBooks = books.map(v => {
+        return {
+          author: v.author,
+          bookUrl: v.bookUrl,
+          coverUrl: v.coverUrl,
+          durChapterIndex: v.durChapterIndex,
+          durChapterPos: v.durChapterPos,
+          durChapterTime: v.durChapterTime,
+          durChapterTitle: v.durChapterTitle,
+          // kind: v.kind,
+          intro: v.intro,
+          lastCheckTime: v.lastCheckTime,
+          latestChapterTitle: v.latestChapterTitle,
+          name: v.name,
+          origin: v.origin,
+          originName: v.originName,
+          totalChapterNum: v.totalChapterNum,
+          type: v.type
+        };
+      });
     },
     setReadingBook(state, readingBook) {
       state.readingBook = readingBook;
@@ -107,7 +128,16 @@ export default new Vuex.Store({
       window.localStorage && window.localStorage.setItem("api_token", token);
     },
     setBookSourceList(state, list) {
-      state.bookSourceList = list;
+      // 过滤一下不用的字段，省点内存
+      state.bookSourceList = list.map(v => {
+        return {
+          bookSourceGroup: v.bookSourceGroup,
+          bookSourceName: v.bookSourceName,
+          bookSourceType: v.bookSourceType,
+          bookSourceUrl: v.bookSourceUrl,
+          exploreUrl: v.exploreUrl
+        };
+      });
     },
     setUserNS(state, userNS) {
       state.userNS = userNS;
@@ -179,6 +209,32 @@ export default new Vuex.Store({
     },
     setAutoPlay(state, autoPlay) {
       state.autoPlay = autoPlay;
+    },
+    addFailureBookSource(state, { bookSourceUrl, errorMsg }) {
+      const index = state.failureBookSource.findIndex(
+        v => v.bookSourceUrl === bookSourceUrl
+      );
+      if (index >= 0) {
+        return;
+      }
+      const bookSource = state.bookSourceList.find(
+        v => v.bookSourceUrl === bookSourceUrl
+      );
+      if (bookSource) {
+        state.failureBookSource = state.failureBookSource.concat([
+          { ...bookSource, errorMsg }
+        ]);
+      }
+    },
+    removeFailureBookSource(state, bookSourceList) {
+      for (let i = 0; i < bookSourceList.length; i++) {
+        const index = state.failureBookSource.findIndex(
+          v => v.bookSourceUrl === bookSourceList[i].bookSourceUrl
+        );
+        if (index >= 0) {
+          state.failureBookSource.splice(index, 1);
+        }
+      }
     }
   },
   getters: {

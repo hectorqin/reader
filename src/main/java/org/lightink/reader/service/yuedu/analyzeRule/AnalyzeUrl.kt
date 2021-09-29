@@ -24,6 +24,9 @@ import java.net.URLEncoder
 import java.util.*
 import java.util.regex.Pattern
 import javax.script.SimpleBindings
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 
 /**
@@ -304,6 +307,7 @@ class AnalyzeUrl(
                 .getMapAsync(url, fieldMap, headerMap)
                 .await()
         }
+        res.body() ?: throw Exception(String.format("responseCode: %d message: %s", res.code(), res.message() ?: "error_get_web_content"))
         return Res(NetworkUtils.getUrl(res), res.body())
     }
 
