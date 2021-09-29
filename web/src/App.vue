@@ -32,8 +32,8 @@
         <el-checkbox v-model="remember">记住登录信息</el-checkbox>
       </el-form>
       <div slot="footer" class="dialog-footer">
-        <el-button @click="cancel">取 消</el-button>
-        <el-button type="primary" @click="login">确 定</el-button>
+        <el-button size="medium" @click="cancel">取 消</el-button>
+        <el-button size="medium" type="primary" @click="login">确 定</el-button>
       </div>
     </el-dialog>
   </div>

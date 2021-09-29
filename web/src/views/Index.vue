@@ -422,12 +422,17 @@
           v-model="checkAll"
           @change="handleCheckAllChange"
           border
+          size="medium"
           class="float-left"
           >全选</el-checkbox
         >
         <span class="check-tip">已选择 {{ checkedSourceIndex.length }} 个</span>
-        <el-button @click="showImportDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveBookSourceList">确定</el-button>
+        <el-button size="medium" @click="showImportDialog = false"
+          >取消</el-button
+        >
+        <el-button size="medium" type="primary" @click="saveBookSourceList"
+          >确定</el-button
+        >
       </div>
     </el-dialog>
     <el-dialog
@@ -590,13 +595,19 @@
         </el-table>
       </div>
       <div slot="footer" class="dialog-footer">
-        <el-button type="primary" class="float-left" @click="deleteUserList"
+        <el-button
+          type="primary"
+          size="medium"
+          class="float-left"
+          @click="deleteUserList"
           >批量删除</el-button
         >
         <span class="check-tip"
           >已选择 {{ manageUserSelection.length }} 个</span
         >
-        <el-button @click="showUserManageDialog = false">取消</el-button>
+        <el-button size="medium" @click="showUserManageDialog = false"
+          >取消</el-button
+        >
       </div>
     </el-dialog>
 
@@ -669,6 +680,7 @@
       <div slot="footer" class="dialog-footer">
         <el-button
           type="primary"
+          size="medium"
           class="float-left"
           @click="deleteWebdavFileList"
           >批量删除</el-button
@@ -676,7 +688,9 @@
         <span class="check-tip"
           >已选择 {{ webdavFileSelection.length }} 个</span
         >
-        <el-button @click="showWebdavManageDialog = false">取消</el-button>
+        <el-button size="medium" @click="showWebdavManageDialog = false"
+          >取消</el-button
+        >
       </div>
     </el-dialog>
   </div>
@@ -1332,7 +1346,7 @@ export default {
       this.isCheckingBookSource = true;
       const limitFunc = LimitResquest(5, handler => {
         this.checkBookSourceTip =
-          "已检查 " + handler.requestCount + "/" + this.bookSourceList.length;
+          handler.requestCount + "/" + this.bookSourceList.length;
         if (!handler.leftCount) {
           this.isCheckingBookSource = false;
         }

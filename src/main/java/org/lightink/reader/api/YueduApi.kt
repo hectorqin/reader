@@ -81,6 +81,7 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/saveSource").coroutineHandler { saveSource(it) }
         router.post("/reader3/saveSources").coroutineHandler { saveSources(it) }
 
+        router.get("/reader3/getSource").coroutineHandler { getSource(it) }
         router.get("/reader3/getSources").coroutineHandler { getSources(it) }
         router.post("/reader3/getSources").coroutineHandler { getSources(it) }
 
@@ -88,6 +89,7 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/deleteSources").coroutineHandler { deleteSources(it) }
 
         router.get("/reader3/getBookshelf").coroutineHandler { getBookshelf(it) }
+        router.get("/reader3/getShelfBook").coroutineHandler { getShelfBook(it) }
         router.post("/reader3/saveBook").coroutineHandler { saveBook(it) }
         router.post("/reader3/deleteBook").coroutineHandler { deleteBook(it) }
 
@@ -1797,7 +1799,44 @@ class YueduApi : RestVerticle() {
 
         // logger.info("bookSourceList: {}", bookSourceList)
         saveUserStorage(userNameSpace, "bookSource", bookSourceList!!)
-        return returnData.setData(bookSourceList.getList())
+        return returnData.setData("")
+    }
+
+    private suspend fun getSource(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        checkAuth(context)
+        var bookSourceUrl: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            bookSourceUrl = context.bodyAsJson.getString("bookSourceUrl")
+        } else {
+            // get 请求
+            bookSourceUrl = context.queryParam("bookSourceUrl").firstOrNull() ?: ""
+        }
+        if (bookSourceUrl.isNullOrEmpty()) {
+            return returnData.setErrorMsg("书源链接不能为空")
+        }
+        bookSourceUrl = URLDecoder.decode(bookSourceUrl, "UTF-8")
+
+        var userNameSpace = getUserNameSpace(context)
+        var bookSourceList = getUserBookSourceJson(userNameSpace)
+        if (bookSourceList == null) {
+            bookSourceList = JsonArray()
+        }
+        // 遍历判断书本是否存在
+        var existIndex: Int = -1
+        for (i in 0 until bookSourceList.size()) {
+            var _bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
+            if (_bookSource.bookSourceUrl.equals(bookSourceUrl)) {
+                existIndex = i
+                break;
+            }
+        }
+        if (existIndex < 0) {
+            return returnData.setErrorMsg("书源信息不存在")
+        }
+
+        return returnData.setData(bookSourceList.getJsonObject(existIndex).map)
     }
 
     private suspend fun getSources(context: RoutingContext): ReturnData {
@@ -1859,7 +1898,7 @@ class YueduApi : RestVerticle() {
 
         // logger.info("bookSourceList: {}", bookSourceList)
         saveUserStorage(userNameSpace, "bookSource", bookSourceList)
-        return returnData.setData(bookSourceList.getList())
+        return returnData.setData("")
     }
 
     private suspend fun deleteSources(context: RoutingContext): ReturnData {
@@ -1892,7 +1931,7 @@ class YueduApi : RestVerticle() {
 
         // logger.info("bookSourceList: {}", bookSourceList)
         saveUserStorage(userNameSpace, "bookSource", bookSourceList)
-        return returnData.setData(bookSourceList.getList())
+        return returnData.setData("")
     }
 
     private suspend fun getBookshelf(context: RoutingContext): ReturnData {
@@ -1917,17 +1956,24 @@ class YueduApi : RestVerticle() {
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        val params = context.bodyAsJson
-        var url = params.getString("url")
-        if (url != null) {
-            var book = getShelfBookByURL(url, getUserNameSpace(context))
-            if (book != null) {
-                return returnData.setData(book)
-            } else {
-                return returnData.setErrorMsg("书籍不存在")
-            }
+        var url: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            url = context.bodyAsJson.getString("url")
+        } else {
+            // get 请求
+            url = context.queryParam("url").firstOrNull() ?: ""
         }
-        return returnData.setErrorMsg("书籍不存在")
+        if (url.isNullOrEmpty()) {
+            return returnData.setErrorMsg("书源链接不能为空")
+        }
+        url = URLDecoder.decode(url, "UTF-8")
+
+        var book = getShelfBookByURL(url, getUserNameSpace(context))
+        if (book == null) {
+            return returnData.setErrorMsg("书籍不存在")
+        }
+        return returnData.setData(book)
     }
 
     private suspend fun saveBook(context: RoutingContext): ReturnData {
@@ -2073,7 +2119,7 @@ class YueduApi : RestVerticle() {
         }
         // logger.info("bookshelf: {}", bookshelf)
         saveUserStorage(userNameSpace, "bookshelf", bookshelf)
-        return returnData.setData(bookshelf.getList())
+        return returnData.setData("")
     }
 
 
