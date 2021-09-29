@@ -40,6 +40,7 @@ class AnalyzeUrl(
     var useWebView: Boolean = false
 ) : JsExtensions {
     companion object {
+        val paramPattern: Pattern = Pattern.compile("\\s*,\\s*(?=\\{)")
         private val pagePattern = Pattern.compile("<(.*?)>")
         private val jsonType = "application/json; charset=utf-8".toMediaTypeOrNull()
     }

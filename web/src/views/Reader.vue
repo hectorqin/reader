@@ -146,7 +146,7 @@
         class="headset-item"
         :style="popupAbsoluteBtnStyle"
         @click="showReadBar = !showReadBar"
-        v-if="speechAvalable"
+        v-if="speechAvalable && !isCarToon && !isAudio"
       >
         <i class="el-icon-headset"></i>
       </div>
@@ -158,7 +158,7 @@
         <i class="el-icon-moon" v-if="!isNight"></i>
         <i class="el-icon-sunny" v-else></i>
       </div>
-      <div class="progress" v-if="$store.state.miniInterface">
+      <div class="progress" v-if="$store.state.miniInterface && !isAudio">
         <div class="progress-bar">
           <el-slider
             v-model="currentPage"
@@ -312,13 +312,17 @@
         @click="handlerClick"
       >
         <div class="content-inner" v-if="show">
-          <Pcontent
+          <Content
             class="book-content"
             :title="title"
             :content="filterContent"
             :showContent="show"
+            :error="error"
             :style="contentStyle"
             ref="bookContentRef"
+            @prevChapter="toLastChapter"
+            @nextChapter="toNextChapter"
+            @updateProgress="saveReadingPosition"
           />
         </div>
       </div>
@@ -343,7 +347,7 @@ import PopCata from "../components/PopCatalog.vue";
 import ReadSettings from "../components/ReadSettings.vue";
 import BookSource from "../components/BookSource.vue";
 import BookShelf from "../components/BookShelf.vue";
-import Pcontent from "../components/Content.vue";
+import Content from "../components/Content.vue";
 import Axios from "../plugins/axios";
 import jump from "../plugins/jump";
 import Animate from "../plugins/animate";
@@ -353,7 +357,7 @@ export default {
     PopCata,
     BookSource,
     BookShelf,
-    Pcontent,
+    Content,
     ReadSettings
   },
   mounted() {
@@ -402,6 +406,7 @@ export default {
     } catch (e) {
       //
     }
+    this.$Lazyload.$on("loaded", this.lazyloadHandler);
   },
   deactivated() {
     this.startSavePosition = false;
@@ -411,6 +416,7 @@ export default {
     window.removeEventListener("scroll", this.scrollHandler);
     this.unwatchFn && this.unwatchFn();
     this.releaseWakeLockFn && this.releaseWakeLockFn();
+    this.$Lazyload.$off("loaded", this.lazyloadHandler);
   },
   watch: {
     chapterName(to) {
@@ -538,10 +544,18 @@ export default {
       };
     },
     isSlideRead() {
-      return this.showReadBar ? false : this.$store.getters.isSlideRead;
+      return this.showReadBar || this.isCarToon || this.isAudio
+        ? false
+        : this.$store.getters.isSlideRead;
     },
     chapterClass() {
-      return this.isSlideRead ? "slide-reader" : "";
+      return this.isSlideRead
+        ? "slide-reader"
+        : this.isCarToon
+        ? "cartoon"
+        : this.isAudio
+        ? "audio"
+        : "";
     },
     chapterTheme() {
       let readingStyle = this.showReadBar
@@ -766,6 +780,12 @@ export default {
           speechPitch: val
         });
       }
+    },
+    isCarToon() {
+      return !this.error && (this.content || "").indexOf("<img") >= 0;
+    },
+    isAudio() {
+      return !this.error && this.$store.state.readingBook.type === 1;
     }
   },
   methods: {
@@ -776,6 +796,7 @@ export default {
           !this.lastReadingBook ||
           this.lastReadingBook.bookUrl !== this.$store.state.readingBook.bookUrl
         ) {
+          this.show = false;
           this.loading = this.$loading({
             target: this.$refs.content,
             lock: true,
@@ -893,9 +914,19 @@ export default {
           "/getBookContent?url=" +
           encodeURIComponent(bookUrl) +
           "&index=" +
-          chapterIndex
+          chapterIndex,
+        {
+          timeout: 30000
+        }
       ).then(
         res => {
+          if (
+            bookUrl !== this.$store.state.readingBook.bookUrl ||
+            index !== this.$store.state.readingBook.index
+          ) {
+            // 已经换书或者换章节了
+            return;
+          }
           if (res.data.isSuccess) {
             let data = res.data.data;
             this.content = data;
@@ -913,6 +944,13 @@ export default {
           }
         },
         error => {
+          if (
+            bookUrl !== this.$store.state.readingBook.bookUrl ||
+            index !== this.$store.state.readingBook.index
+          ) {
+            // 已经换书或者换章节了
+            return;
+          }
           this.content = "获取章节内容失败！\n" + (error && error.toString());
           this.error = true;
           this.show = true;
@@ -1177,6 +1215,9 @@ export default {
       if (this.lastSelection) {
         return;
       }
+      if (this.isAudio) {
+        return;
+      }
       // e.preventDefault();
       // e.stopPropagation();
       this.lastTouch = false;
@@ -1246,6 +1287,14 @@ export default {
       ) {
         return;
       }
+      if (this.isAudio) {
+        // 音频
+        // 点击中部区域显示菜单
+        if (!this.showReadBar) {
+          this.showToolBar = !this.showToolBar;
+        }
+        return;
+      }
       // 根据点击位置判断操作
       const midX = this.windowSize.width / 2;
       const midY = this.windowSize.height / 2;
@@ -1296,6 +1345,9 @@ export default {
         return;
       }
       if (document.activeElement !== document.body) {
+        return;
+      }
+      if (this.isAudio) {
         return;
       }
       const keyCodeMap = {
@@ -1654,15 +1706,29 @@ export default {
       this.currentParagraph = this.getCurrentParagraph();
     },
     showPosition(pos) {
-      const list = this.$refs.bookContentRef.$el.querySelectorAll("h3,p");
-      for (let i = 0; i < list.length; i++) {
-        if (
-          list[i].dataset &&
-          typeof list[i].dataset.pos !== "undefined" &&
-          +list[i].dataset.pos >= pos
-        ) {
-          this.showParagraph(list[i], true);
-          break;
+      if (this.isAudio) {
+        // seek
+        if (!this.$refs.bookContentRef) {
+          setTimeout(() => {
+            this.showPosition(pos);
+          }, 10);
+          return;
+        }
+        this.$refs.bookContentRef.ensureSeekTime(pos);
+      } else if (this.isCarToon) {
+        // 跳转
+        this.scrollContent(pos, 0);
+      } else {
+        const list = this.$refs.bookContentRef.$el.querySelectorAll("h3,p");
+        for (let i = 0; i < list.length; i++) {
+          if (
+            list[i].dataset &&
+            typeof list[i].dataset.pos !== "undefined" &&
+            +list[i].dataset.pos >= pos
+          ) {
+            this.showParagraph(list[i], true);
+            break;
+          }
         }
       }
     },
@@ -1671,17 +1737,27 @@ export default {
         if (this.error || !this.startSavePosition) {
           return;
         }
-        this.currentParagraph = this.getCurrentParagraph();
-        if (this.currentParagraph) {
-          const firstCharPos = this.$refs.bookContentRef.$el.innerText.indexOf(
-            this.currentParagraph.innerText
-          );
-          window.localStorage &&
-            window.localStorage.setItem(
-              this.$store.state.readingBook.bookUrl + "@pos",
-              firstCharPos
+        let position = 0;
+        if (this.isAudio) {
+          position = this.$refs.bookContentRef
+            ? this.$refs.bookContentRef.currentTime
+            : 0;
+        } else if (this.isCarToon) {
+          position =
+            document.documentElement.scrollTop || document.body.scrollTop;
+        } else {
+          this.currentParagraph = this.getCurrentParagraph();
+          if (this.currentParagraph) {
+            position = this.$refs.bookContentRef.$el.innerText.indexOf(
+              this.currentParagraph.innerText
             );
+          }
         }
+        window.localStorage &&
+          window.localStorage.setItem(
+            this.$store.state.readingBook.bookUrl + "@pos",
+            position
+          );
       } catch (error) {
         //
       }
@@ -1782,6 +1858,11 @@ export default {
             handleVisibilityChange
           );
         };
+      }
+    },
+    lazyloadHandler() {
+      if (!this.isAudio) {
+        this.computePages();
       }
     }
   }
@@ -2120,6 +2201,20 @@ export default {
       }
     }
   }
+
+  .chapter.audio {
+    .top-bar, .bottom-bar {
+      display: none;
+    }
+    .content-inner {
+      height: calc(var(--vh, 1vh) * 100);
+      margin-top: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      display: flex;
+      align-items: center;
+    }
+  }
 }
 
 .day {
@@ -2315,6 +2410,14 @@ export default {
         margin-top: calc(30px + env(safe-area-inset-top));
         padding-top: 15px;
         padding-bottom: 15px;
+      }
+    }
+
+    .chapter.cartoon {
+      padding: 0;
+
+      .content-inner {
+        padding-top: 1px;
       }
     }
 

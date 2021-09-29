@@ -121,6 +121,14 @@ export default {
             this.$message.info("换源成功");
             var book = Object.assign({}, this.$store.state.readingBook);
             book.bookUrl = searchBook.bookUrl;
+            book.type =
+              typeof searchBook.type !== "undefined"
+                ? searchBook.type
+                : book.type;
+            book.coverUrl =
+              typeof searchBook.coverUrl !== "undefined"
+                ? searchBook.coverUrl
+                : book.coverUrl;
             this.$store.commit("setReadingBook", book);
             this.$emit("close");
             this.$emit("loadCatalog");

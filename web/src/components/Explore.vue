@@ -13,6 +13,19 @@
         ></i>
       </div>
     </div>
+    <div class="source-group-wrapper">
+      <el-tag
+        type="info"
+        :effect="$store.getters.isNight ? 'dark' : 'light'"
+        class="source-group-btn"
+        :class="sourceGroup === name ? 'selected' : ''"
+        v-for="name in bookSourceGroup"
+        :key="'sourceGroup-' + name"
+        @click="setSourceGroup(name)"
+      >
+        {{ name }}
+      </el-tag>
+    </div>
     <div
       class="data-wrapper"
       ref="sourceList"
@@ -31,6 +44,7 @@
             :name="index"
             :key="'source-' + index"
             ref="source"
+            v-show="!sourceGroup || source.bookSourceGroup === sourceGroup"
           >
             <template v-if="showCollapse.includes(index)">
               <div
@@ -68,7 +82,8 @@ export default {
       ruleFindUrl: "",
       bookSourceUrl: "",
       exploreList: [],
-      showCollapse: []
+      showCollapse: [],
+      sourceGroup: ""
     };
   },
   props: ["visible", "bookSourceList"],
@@ -88,6 +103,7 @@ export default {
         if (exploreGroup.length) {
           list.push({
             bookSourceName: source.bookSourceName,
+            bookSourceGroup: source.bookSourceGroup,
             exploreGroup,
             bookSourceUrl: source.bookSourceUrl
           });
@@ -95,6 +111,13 @@ export default {
       });
       // console.log(list);
       return list;
+    },
+    bookSourceGroup() {
+      const groups = new Set();
+      this.bookSourceListNew.forEach(v => {
+        v.bookSourceGroup && groups.add(v.bookSourceGroup);
+      });
+      return Array.from(groups);
     }
   },
   mounted() {
@@ -213,6 +236,13 @@ export default {
     },
     scrollHandler() {
       this.lastScrollTop = this.$refs.sourceList.scrollTop;
+    },
+    setSourceGroup(group) {
+      if (this.sourceGroup === group) {
+        this.sourceGroup = "";
+      } else {
+        this.sourceGroup = group;
+      }
     }
   }
 };
@@ -259,6 +289,22 @@ export default {
     }
     &.loading {
       color: #606266;
+    }
+  }
+
+  .source-group-wrapper {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 5px 0;
+
+    .source-group-btn {
+      margin-right: 10px;
+      cursor: pointer;
+    }
+
+    .source-group-btn.selected {
+      color: #ed4259;
     }
   }
 

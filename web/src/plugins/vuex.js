@@ -40,7 +40,8 @@ export default new Vuex.Store({
       bottom: 0,
       left: 0,
       right: 0
-    }
+    },
+    autoPlay: false
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -67,11 +68,10 @@ export default new Vuex.Store({
         }
       }
       state.shelfBooks = [].concat(state.shelfBooks);
+      // eslint-disable-next-line no-unused-vars
+      const { catalog, ...info } = readingBook;
       window.localStorage &&
-        window.localStorage.setItem(
-          "readingRecent",
-          JSON.stringify(readingBook)
-        );
+        window.localStorage.setItem("readingRecent", JSON.stringify(info));
     },
     setConfig(state, config) {
       state.config = config;
@@ -176,6 +176,9 @@ export default new Vuex.Store({
     },
     setSafeArea(state, safeArea) {
       state.safeArea = { ...state.safeArea, ...safeArea };
+    },
+    setAutoPlay(state, autoPlay) {
+      state.autoPlay = autoPlay;
     }
   },
   getters: {

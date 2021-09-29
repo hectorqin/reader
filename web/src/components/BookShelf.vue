@@ -107,7 +107,10 @@ export default {
       const readingBook = {
         bookName: book.name,
         bookUrl: book.bookUrl,
-        index: book.durChapterIndex
+        index: book.durChapterIndex,
+        type: book.type,
+        coverUrl: book.coverUrl,
+        author: book.author
       };
       this.$store.commit("setReadingBook", readingBook);
       this.$emit("close");

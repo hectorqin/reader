@@ -1,10 +1,16 @@
 <script>
 export default {
-  name: "pcontent",
+  name: "Content",
   data() {
-    return {};
+    return {
+      currentTime: 0,
+      audioDuration: 0,
+      playing: false,
+      currentSpeed: 1,
+      startTime: 0
+    };
   },
-  props: ["content", "title", "showContent"],
+  props: ["content", "error", "title", "showContent"],
   render() {
     const { fontSize, fontWeight, fontColor } = this;
     const style = {
@@ -26,14 +32,33 @@ export default {
           : null
     };
     if (this.showContent) {
+      if (!this.error && this.readingBook.type === 1) {
+        // 音频
+        return this.renderAudio();
+      }
       let wordCount = this.title.length + 2; // 2为两个换行符
       return (
-        <div style={style}>
+        <div
+          class="content-body"
+          style={style}
+          v-lazy-container={{
+            selector: "img"
+          }}
+        >
           <h3 data-pos={0}>{this.title}</h3>
           {this.content.split(/\n+/).map(a => {
             a = a.replace(/^\s+/g, "");
             const pos = wordCount;
             wordCount += a.length + 2; // 2为两个换行符
+            if (a.indexOf("<img") >= 0) {
+              // 漫画
+              // 将 src 替换为 data-src 懒加载
+              a = a.replace(/src=/g, "data-src=");
+              return (
+                <div style={style} domPropsInnerHTML={a} data-pos={pos}></div>
+              );
+            }
+            // 文本内容
             return <p style={pStyle} domPropsInnerHTML={a} data-pos={pos} />;
           })}
         </div>
@@ -42,7 +67,22 @@ export default {
       return <div />;
     }
   },
+  mounted() {
+    if (this.isAudio) {
+      this.play(true);
+    }
+  },
   computed: {
+    readingBook() {
+      return this.$store.state.readingBook;
+    },
+    chapter() {
+      return (
+        this.$store.state.readingBook.catalog[
+          this.$store.state.readingBook.index
+        ] || {}
+      );
+    },
     show() {
       return this.$store.state.showContent;
     },
@@ -54,15 +94,245 @@ export default {
     },
     fontColor() {
       return this.$store.state.config.fontColor || undefined;
+    },
+    autoPlay: {
+      get() {
+        return this.$store.state.autoPlay;
+      },
+      set(val) {
+        this.$store.commit("setAutoPlay", val);
+      }
+    },
+    isCarToon() {
+      return !this.error && (this.content || "").indexOf("<img") >= 0;
+    },
+    isAudio() {
+      return !this.error && this.readingBook.type === 1;
     }
   },
-  watch: {
-    // fontSize() {
-    //   this.$store.commit("setShowContent", false);
-    //   this.$nextTick(() => {
-    //     this.$store.commit("setShowContent", true);
-    //   });
-    // }
+  methods: {
+    renderAudio() {
+      return (
+        <div class="content-audio">
+          <audio
+            ref="audio"
+            preload="preload"
+            src={this.content}
+            vOn:loadMetaData={() => {
+              console.log(arguments);
+            }}
+            vOn:progress={this.onProgress}
+            vOn:playing={this.onProgress}
+            vOn:timeupdate={this.onTimeupdate}
+            vOn:play={this.onPlay}
+            vOn:pause={this.onPause}
+            vOn:ended={this.onEnd}
+            vOn:error={this.onError}
+            vOn:seeked={this.onSeeked}
+            vOn:seeking={this.onSeeking}
+            vOn:stalled={this.audioEvent}
+            vOn:suspend={this.onsuspend}
+            vOn:loadeddata={this.audioEvent}
+            vOn:loadedmetadata={this.audioEvent}
+            vOn:canplay={this.onCanPlay}
+            vOn:canplaythrough={this.audioEvent}
+            vOn:waiting={this.onWaiting}
+          ></audio>
+          <div class="book-cover">
+            <img v-lazy={this.getCover(this.readingBook.coverUrl)} />
+          </div>
+          <div class="book-progress">
+            <div class="progress-tip">{this.formatTime(this.currentTime)}</div>
+            <div class="progress-container">
+              <el-slider
+                vModel={this.currentTime}
+                min={0}
+                max={this.audioDuration}
+                show-tooltip={false}
+                vOn:change={val => {
+                  this.seekTime(val);
+                }}
+                vOn:input={val => {
+                  this.seekTime(val);
+                }}
+              ></el-slider>
+            </div>
+            <div class="progress-tip total-time">
+              {this.formatTime(this.audioDuration)}
+            </div>
+          </div>
+          <div class="book-operation">
+            <i
+              class="reader-iconfont reader-icon-jian15s"
+              vOn:click_stop_prevent={() => {
+                this.seekTime(this.$refs.audio.currentTime - 15);
+              }}
+            ></i>
+            <i
+              class="reader-iconfont reader-icon-player-backward-step"
+              vOn:click_stop_prevent={this.prevChapter}
+            ></i>
+            <i
+              class={[
+                "reader-iconfont",
+                this.playing
+                  ? "reader-icon-player-play"
+                  : "reader-icon-player-pause"
+              ]}
+              vOn:click_stop_prevent={this.toggle}
+            ></i>
+            <i
+              class="reader-iconfont reader-icon-player-forward-step"
+              vOn:click_stop_prevent={this.nextChapter}
+            ></i>
+            <i
+              class="reader-iconfont reader-icon-15s"
+              vOn:click_stop_prevent={() => {
+                this.seekTime(this.$refs.audio.currentTime + 15);
+              }}
+            ></i>
+          </div>
+          <div
+            class="book-info"
+            style={{
+              background: this.getCover(this.readingBook.coverUrl, true)
+            }}
+          >
+            <div class="book-cover">
+              <img v-lazy={this.getCover(this.readingBook.coverUrl)} />
+            </div>
+            <div class="book-intro">
+              <div class="title">{this.title}</div>
+              <div class="subtitle">
+                {this.readingBook.bookName}
+                {this.readingBook.author ? "•" : ""}
+                {this.readingBook.author}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    },
+    formatTime(val) {
+      if (!val) {
+        return "00:00";
+      }
+      const pad = v => (v >= 10 ? "" + v : "0" + v);
+      if (val < 60) {
+        return "00:" + pad(val);
+      } else if (val < 3600) {
+        const m = Math.round(val / 60);
+        const s = val % 60;
+        return pad(m) + ":" + pad(s);
+      } else {
+        const h = Math.round(val / 3600);
+        const m = Math.round(val / 3600 / 60);
+        const s = val % 60;
+        return pad(h) + ":" + pad(m) + ":" + pad(s);
+      }
+    },
+    seekTime(val) {
+      if (!isNaN(val) && val !== Infinity) {
+        if (this.$refs.audio) {
+          this.$refs.audio.currentTime = val;
+        }
+      }
+    },
+    ensureSeekTime(val) {
+      this.startTime = val;
+    },
+    toggle() {
+      if (this.playing) {
+        this.$refs.audio && this.$refs.audio.pause();
+      } else {
+        this.play();
+      }
+    },
+    play(init) {
+      if (!this.$refs.audio) {
+        setTimeout(() => {
+          this.play(init);
+        }, 10);
+        return;
+      }
+      if (init) {
+        this.$refs.audio.load();
+
+        this.stateTimer && clearInterval(this.stateTimer);
+
+        this.stateTimer = setInterval(() => {
+          let duration = this.$refs.audio.duration;
+          if (
+            this.$refs.audio.readyState >= 1 &&
+            !isNaN(duration) &&
+            duration !== Infinity &&
+            duration
+          ) {
+            clearInterval(this.stateTimer);
+            this.stateTimer = null;
+            this.audioDuration = parseInt(duration);
+            this.$refs.audio.playbackRate = this.currentSpeed;
+            this.$refs.audio.currentTime = this.startTime;
+            // 有时会失败（看浏览器）
+            if (this.autoPlay) {
+              this.$refs.audio.play();
+            }
+          }
+        }, 100);
+      }
+      if (!init || this.autoPlay) {
+        this.$refs.audio.play();
+      }
+    },
+    prevChapter() {
+      this.autoPlay = true;
+      this.$emit("prevChapter");
+    },
+    nextChapter() {
+      this.autoPlay = true;
+      this.$emit("nextChapter");
+    },
+    onProgress() {
+      // 记录缓存进度。触发事件包括缓存数据更新时的 progress 事件，以及各种播放动作会触发的 playing 事件
+    },
+    onTimeupdate() {
+      if (this.$refs.audio) {
+        this.currentTime = this.$refs.audio.currentTime | 0;
+      }
+      this.$emit("updateProgress");
+    },
+    onPlay() {
+      this.playing = true;
+    },
+    onPause() {
+      this.playing = false;
+    },
+    onEnd() {
+      this.playing = false;
+      this.currentTime = 0;
+      this.audioDuration = 0;
+      this.autoPlay = true;
+      this.$emit("nextChapter");
+    },
+    onError(event) {
+      // console.log(arguments);
+      this.$message.error(event.toString());
+      this.playing = false;
+    },
+    onSeeked() {},
+    onSeeking() {},
+    audioEvent() {
+      // console.log("audioEvent", arguments);
+    },
+    onsuspend() {
+      // console.log("onsuspend", arguments);
+    },
+    onCanPlay() {
+      // console.log("onCanPlay", arguments);
+    },
+    onWaiting() {
+      // console.log("onWaiting", arguments);
+    }
   }
 };
 </script>
@@ -78,11 +348,132 @@ p.reading {
   color: red !important;
 }
 h3 {
-    font-size: 28px;
-    line-height: 1.2;
-    margin: 1em 0;
+  font-size: 28px;
+  line-height: 1.2;
+  margin: 1em 0;
+  text-align: center;
 }
 h3.reading {
   color: red !important;
+}
+.content-audio {
+  margin: 0 auto;
+  width: 100%;
+
+  .book-cover {
+
+    img {
+      max-width: 200px;
+      margin: 0 auto;
+      display: block;
+    }
+  }
+
+  .book-progress {
+    padding: 25px 15px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+
+    .progress-tip {
+      padding-top: 5px;
+      padding-bottom: 5px;
+      font-size: 14px;
+      width: 45px;
+    }
+
+    .progress-container {
+      flex: 1;
+      margin-left: 10px;
+      margin-right: 10px;
+    }
+
+    .total-time {
+      text-align: right;
+    }
+  }
+
+  .book-operation {
+    padding: 0px 15px 25px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+
+    i {
+      display: inline-block;
+      cursor: pointer;
+      font-size: 24px;
+    }
+  }
+
+  .book-info {
+    padding: 10px 15px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+
+    .book-cover {
+      width: 50px;
+
+      img {
+        width: 100%;
+        max-height: 100%;
+      }
+    }
+
+    .book-intro {
+      flex: 1;
+      padding-left: 15px;
+
+      .title {
+        font-size: 16px;
+      }
+
+      .subtitle {
+        margin-top: 5px;
+        font-size: 14px;
+      }
+    }
+  }
+}
+</style>
+<style lang="stylus">
+.content-body {
+  img {
+    width: 100%;
+    display: block;
+  }
+}
+.day {
+  .content-audio {
+    .book-operation {
+      color: #222;
+    }
+
+    .book-intro {
+      .title {
+        color: #121212;
+      }
+      .subtitle {
+        color: #666;
+      }
+    }
+  }
+}
+.night {
+  .content-audio {
+    .book-operation {
+      color: #888;
+    }
+
+    .book-intro {
+      .title {
+        color: #888;
+      }
+      .subtitle {
+        color: #666;
+      }
+    }
+  }
 }
 </style>

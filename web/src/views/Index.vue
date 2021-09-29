@@ -45,13 +45,7 @@
               type="warning"
               :effect="isNight ? 'dark' : 'light'"
               class="recent-book"
-              @click="
-                toDetail(
-                  readingRecent.bookUrl,
-                  readingRecent.bookName,
-                  readingRecent.index
-                )
-              "
+              @click="toDetail(readingRecent)"
               :class="{ 'no-point': readingRecent.bookUrl == '' }"
             >
               {{ readingRecent.bookName }}
@@ -332,15 +326,12 @@
             :style="showNavigation ? { minWidth: '360px !important' } : {}"
             v-for="book in bookList"
             :key="book.bookUrl"
-            @click="toDetail(book.bookUrl, book.name, book.durChapterIndex)"
+            @click="toDetail(book)"
           >
             <div class="cover-img" @click.stop="toggleBookIntroPop(book)">
               <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" />
             </div>
-            <div
-              class="info"
-              @click="toDetail(book.bookUrl, book.name, book.durChapterIndex)"
-            >
+            <div class="info" @click="toDetail(book)">
               <div class="book-operation">
                 <i
                   class="el-icon-close"
@@ -370,10 +361,13 @@
                   共{{ book.totalChapterNum }}章
                 </div>
               </div>
-              <div class="dur-chapter" v-if="!isSearchResult">
+              <div
+                class="dur-chapter"
+                v-if="!isSearchResult && book.durChapterTitle"
+              >
                 已读：{{ book.durChapterTitle }}
               </div>
-              <div class="last-chapter">
+              <div class="last-chapter" v-if="book.latestChapterTitle">
                 {{
                   book.lastCheckTime ? dateFormat(book.lastCheckTime) : "最新"
                 }}：{{ book.latestChapterTitle }}
@@ -630,7 +624,6 @@
 <script>
 import Explore from "../components/Explore.vue";
 import Axios from "../plugins/axios";
-import noCover from "../assets/imgs/noCover.jpeg";
 
 Date.prototype.format = function(fmt) {
   var o = {
@@ -987,8 +980,8 @@ export default {
         }
       );
     },
-    toDetail(bookUrl, bookName, chapterIndex) {
-      if (!bookUrl) {
+    toDetail(book) {
+      if (!book.bookUrl) {
         return;
       }
       if (this.isSearchResult) {
@@ -996,9 +989,12 @@ export default {
         // return;
       }
       this.$store.commit("setReadingBook", {
-        bookName: bookName,
-        bookUrl: bookUrl,
-        index: chapterIndex || 0
+        bookName: book.bookName || book.name,
+        bookUrl: book.bookUrl,
+        index: book.index ?? book.durChapterIndex ?? 0,
+        type: book.type,
+        coverUrl: book.coverUrl,
+        author: book.author
       });
       this.$router.push({
         path: "/reader"
@@ -1075,20 +1071,6 @@ export default {
         str = parseInt(int / 31536000) + "年前";
       }
       return str;
-    },
-    getCover(coverUrl) {
-      if (
-        coverUrl &&
-        (coverUrl.startsWith("http://") ||
-          coverUrl.startsWith("https://") ||
-          coverUrl.startsWith("//"))
-      ) {
-        return {
-          src: this.api + "/cover?path=" + coverUrl,
-          error: noCover
-        };
-      }
-      return noCover;
     },
     backToShelf() {
       this.isSearchResult = false;

@@ -333,13 +333,13 @@ class YueduApi : RestVerticle() {
         SpringContextUtils.getApplicationContext().publishEvent(SpringEvent(this as java.lang.Object, "START_ERROR", "应用启动失败，请检查" + port + "端口是否被占用"));
     }
 
-    override fun onHandlerError(context: RoutingContext, error: Exception) {
+    override fun onHandlerError(ctx: RoutingContext, error: Exception) {
         val returnData = ReturnData()
-        logger.error("Error: {}", error)
-        if (!context.response().headWritten()) {
-            context.success(returnData.setData(error).setErrorMsg(error.toString()))
+        logger.error("onHandlerError: ", error)
+        if (!ctx.response().headWritten()) {
+            ctx.success(returnData.setData(error).setErrorMsg(error.toString()))
         } else {
-            context.response().end(error.toString())
+            ctx.response().end(error.toString())
         }
     }
 

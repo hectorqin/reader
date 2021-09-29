@@ -9,7 +9,7 @@ import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.NetworkUtils
-import io.legado.app.utils.htmlFormat
+import io.legado.app.utils.HtmlFormatter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.withContext
 
@@ -116,7 +116,7 @@ object BookContent {
             }
             Debug.log(bookSource.bookSourceUrl, "└" + nextUrlList.joinToString("，"))
         }
-        val content = analyzeRule.getString(contentRule.content).htmlFormat()
+        val content = HtmlFormatter.formatKeepImg(analyzeRule.getString(contentRule.content))
         return ContentData(content, nextUrlList)
     }
 }

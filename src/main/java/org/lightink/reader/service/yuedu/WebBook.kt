@@ -128,9 +128,9 @@ class WebBook(val bookSource: BookSource) {
         bookChapterUrl:String,
         nextChapterUrl: String? = null
     ): String {
-//        if (bookSource.getContentRule().content.isNullOrEmpty()) {
-//            return bookChapter.url
-//        }
+       if (bookSource.getContentRule().content.isNullOrEmpty()) {
+           return bookChapterUrl
+       }
 //        val body = if (book != null && bookChapter.url == book.bookUrl && !book.tocHtml.isNullOrEmpty()) {
 //            book.tocHtml
 //        } else {

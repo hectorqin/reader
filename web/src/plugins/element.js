@@ -57,6 +57,11 @@ Vue.use(RadioButton);
 
 Vue.prototype.$msgbox = MessageBox;
 Vue.prototype.$message = Object.assign({}, Message, {
+  info(message, duration) {
+    const options = typeof message === "string" ? { message } : message;
+    options.duration = duration || 1000;
+    Message.info(options);
+  },
   error(message, duration) {
     const options = typeof message === "string" ? { message } : message;
     options.duration = duration || 2000;
