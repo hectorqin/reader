@@ -118,9 +118,7 @@ export default {
             ref="audio"
             preload="preload"
             src={this.content}
-            vOn:loadMetaData={() => {
-              console.log(arguments);
-            }}
+            vOn:loadMetaData={this.audioEvent}
             vOn:progress={this.onProgress}
             vOn:playing={this.onProgress}
             vOn:timeupdate={this.onTimeupdate}
