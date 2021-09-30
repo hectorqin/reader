@@ -1,5 +1,6 @@
 import Axios from "axios";
 import { Message, MessageBox } from "element-ui";
+import { errorTypeList } from "./config";
 import store from "./vuex";
 
 const service = Axios.create({
@@ -60,7 +61,21 @@ export const request = async ({
     data,
     ...options
   };
-  const response = await service(query);
+  const response = await service(query).catch(e => {
+    if (params.bookSourceUrl && store.state.failureIncludeTimeout) {
+      // 判断是否失效书源
+      const errorMsg = e.toString();
+      window.errorMsgList = window.errorMsgList || [];
+      window.errorMsgList.push(errorMsg);
+      if (errorMsg.indexOf("timeout") >= 0) {
+        store.commit("addFailureBookSource", {
+          bookSourceUrl: params.bookSourceUrl,
+          errorMsg
+        });
+      }
+    }
+    throw e;
+  });
   if (!response) {
     return;
   }
@@ -101,19 +116,6 @@ export const request = async ({
           if (errorMsg) {
             window.errorMsgList = window.errorMsgList || [];
             window.errorMsgList.push(errorMsg);
-            const errorTypeList = [
-              "UnknownHostException",
-              "ConnectException: Failed to connect",
-              "SocketException: Connection reset",
-              "responseCode: 400",
-              "responseCode: 403",
-              "responseCode: 404",
-              "responseCode: 500",
-              "responseCode: 502",
-              "responseCode: 503",
-              "responseCode: 504",
-              "responseCode: 513"
-            ];
             for (let index = 0; index < errorTypeList.length; index++) {
               if (errorMsg.indexOf(errorTypeList[index]) >= 0) {
                 store.commit("addFailureBookSource", {

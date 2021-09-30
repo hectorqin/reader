@@ -42,6 +42,7 @@ export default new Vuex.Store({
       right: 0
     },
     autoPlay: false,
+    failureIncludeTimeout: false,
     failureBookSource: []
   },
   mutations: {
@@ -235,6 +236,9 @@ export default new Vuex.Store({
           state.failureBookSource.splice(index, 1);
         }
       }
+    },
+    setFailureIncludeTimeout(state, failureIncludeTimeout) {
+      state.failureIncludeTimeout = failureIncludeTimeout;
     }
   },
   getters: {

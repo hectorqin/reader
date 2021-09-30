@@ -346,6 +346,11 @@ export default {
       border-color: #2b67bb;
       color: #FFF;
   }
+  .el-input-number__increase, .el-input-number__decrease {
+      background-color: #909399;
+      border-color: #909399;
+      color: #fff;
+  }
   .el-checkbox__inner {
     background: #bbb;
   }
@@ -386,6 +391,9 @@ export default {
   }
   .el-pager li.btn-quicknext, .el-pager li.btn-quickprev {
     color: #ddd;
+  }
+  .el-pager li.active {
+    color: #409EFF;
   }
 }
 .el-popover:focus, .el-popover:focus:active, .el-popover__reference:focus:hover, .el-popover__reference:focus:not(.focusing) {

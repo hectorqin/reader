@@ -106,4 +106,19 @@ const settings = {
     }
   ]
 };
+export const errorTypeList = [
+  "UnknownHostException",
+  "ConnectException: Failed to connect",
+  "SocketException: Connection reset",
+  "SSLHandshakeException",
+  "responseCode: 307",
+  "responseCode: 400",
+  "responseCode: 403",
+  "responseCode: 404",
+  "responseCode: 500",
+  "responseCode: 502",
+  "responseCode: 503",
+  "responseCode: 504",
+  "responseCode: 513"
+];
 export default settings;

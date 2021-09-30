@@ -440,9 +440,35 @@
       :visible.sync="showBookSourceManageDialog"
       :width="dialogWidth"
       :top="dialogTop"
-      @closed="isShowFailureBookSource = false"
+      @closed="
+        isShowFailureBookSource = false;
+        showSourceGroup = '';
+      "
     >
       <div class="source-container table-container">
+        <div class="check-form" v-if="isShowFailureBookSource">
+          <span>搜索词：</span>
+          <el-input v-model="checkBookSourceConfig.keyword" size="small">
+          </el-input>
+          <span style="min-width: 68px;">超时(ms)：</span>
+          <el-input-number
+            v-model="checkBookSourceConfig.timeout"
+            :min="1000"
+            :max="15000"
+            :step="500"
+            size="small"
+          >
+          </el-input-number>
+          <span>并发数：</span>
+          <el-input-number
+            v-model="checkBookSourceConfig.concurrent"
+            :min="3"
+            :max="15"
+            :step="1"
+            size="small"
+          >
+          </el-input-number>
+        </div>
         <div class="source-group-wrapper">
           <el-tag
             type="info"
@@ -458,7 +484,9 @@
         </div>
         <el-table
           :data="bookSourceShowResultPageList"
-          :height="dialogContentHeight - 42 - 42"
+          :height="
+            dialogContentHeight - 42 - 42 - (isShowFailureBookSource ? 32 : 0)
+          "
           @selection-change="manageSourceSelection = $event"
         >
           <el-table-column
@@ -500,17 +528,15 @@
             </template>
           </el-table-column>
         </el-table>
-        <div class="pagination-wrapper">
-          <el-pagination
-            :current-page.sync="bookSourcePagination.page"
-            :page-sizes="[50, 100, 200, 300, 400]"
-            :page-size.sync="bookSourcePagination.size"
-            layout="total, sizes, prev, pager, next"
-            :total="bookSourceShowLength"
-            :pager-count="collapseMenu ? 5 : 7"
-          >
-          </el-pagination>
-        </div>
+        <el-pagination
+          :current-page.sync="bookSourcePagination.page"
+          :page-sizes="[25, 50, 100, 200, 300, 400]"
+          :page-size.sync="bookSourcePagination.size"
+          layout="total, sizes, prev, pager, next"
+          :total="bookSourceShowLength"
+          :pager-count="collapseMenu ? 5 : 7"
+        >
+        </el-pagination>
       </div>
       <div slot="footer" class="dialog-footer">
         <el-button
@@ -529,7 +555,7 @@
           size="medium"
           style="margin-bottom: 5px;"
           :disabled="isCheckingBookSource"
-          >{{ isCheckingBookSource ? "正在" : "" }} 检测书源
+          >{{ isCheckingBookSource ? "正在" : "" }}检测书源
           {{ checkBookSourceTip }}</el-button
         >
         <el-button @click="showBookSourceManageDialog = false" size="medium"
@@ -699,6 +725,7 @@
 <script>
 import Explore from "../components/Explore.vue";
 import Axios from "../plugins/axios";
+import { errorTypeList } from "../plugins/config";
 
 Date.prototype.format = function(fmt) {
   var o = {
@@ -848,7 +875,12 @@ export default {
       showSourceGroup: "",
       bookSourcePagination: {
         page: 1,
-        size: 50
+        size: 25
+      },
+      checkBookSourceConfig: {
+        keyword: "斗罗大陆",
+        timeout: 5000,
+        concurrent: 5
       }
     };
   },
@@ -1051,13 +1083,11 @@ export default {
         }
       }).then(
         res => {
-          this.loading.close();
           if (res.data.isSuccess) {
             handler(res.data.data);
           }
         },
         error => {
-          this.loading.close();
           this.$message.error("加载书源列表 " + (error && error.toString()));
         }
       );
@@ -1343,20 +1373,29 @@ export default {
       return res.join("\n");
     },
     async checkBookSource() {
+      if (!this.checkBookSourceConfig.keyword) {
+        this.$message.error("请输入搜索关键词");
+        return;
+      }
       this.isCheckingBookSource = true;
-      const limitFunc = LimitResquest(5, handler => {
-        this.checkBookSourceTip =
-          handler.requestCount + "/" + this.bookSourceList.length;
-        if (!handler.leftCount) {
-          this.isCheckingBookSource = false;
+      this.$store.commit("setFailureIncludeTimeout", true);
+      const limitFunc = LimitResquest(
+        this.checkBookSourceConfig.concurrent,
+        handler => {
+          this.checkBookSourceTip =
+            handler.requestCount + "/" + this.bookSourceList.length;
+          if (!handler.leftCount) {
+            this.isCheckingBookSource = false;
+            this.$store.commit("setFailureIncludeTimeout", false);
+          }
         }
-      });
+      );
       this.bookSourceList.forEach(v => {
         limitFunc(() => {
           return Axios.get(this.api + "/searchBook", {
-            timeout: 5000,
+            timeout: this.checkBookSourceConfig.timeout,
             params: {
-              key: "斗罗大陆",
+              key: this.checkBookSourceConfig.keyword,
               bookSourceUrl: v.bookSourceUrl
             },
             silent: true
@@ -1909,12 +1948,16 @@ export default {
         : this.bookSourceList;
     },
     bookSourceShowGroup() {
-      const groups = new Set();
-      this.bookSourceShowList.forEach(v => {
-        v.bookSourceGroup && groups.add(v.bookSourceGroup);
-      });
-      groups.add("未分组");
-      return Array.from(groups);
+      if (!this.isShowFailureBookSource) {
+        const groups = new Set();
+        this.bookSourceShowList.forEach(v => {
+          v.bookSourceGroup && groups.add(v.bookSourceGroup);
+        });
+        groups.add("未分组");
+        return Array.from(groups);
+      } else {
+        return [].concat(errorTypeList).concat(["timeout"]);
+      }
     },
     bookSourceShowLength() {
       return this.bookSourceShowResult.length;
@@ -1923,11 +1966,19 @@ export default {
       if (!this.showSourceGroup) {
         return this.bookSourceShowList;
       }
-      return this.bookSourceShowList.filter(v =>
-        this.showSourceGroup === "未分组"
-          ? !v.bookSourceGroup
-          : v.bookSourceGroup === this.showSourceGroup
-      );
+      if (this.isShowFailureBookSource) {
+        return this.bookSourceShowList.filter(v =>
+          this.showSourceGroup
+            ? v.errorMsg.indexOf(this.showSourceGroup) >= 0
+            : true
+        );
+      } else {
+        return this.bookSourceShowList.filter(v =>
+          this.showSourceGroup === "未分组"
+            ? !v.bookSourceGroup
+            : v.bookSourceGroup === this.showSourceGroup
+        );
+      }
     },
     bookSourceShowResultPageList() {
       const start =
@@ -2345,6 +2396,29 @@ export default {
     padding: 0;
   }
 
+  .check-form {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    align-items: center;
+    justify-content: space-between;
+
+    span {
+      display: inline-block;
+      min-width: 56px;
+      text-align-last: justify;
+    }
+    .el-input {
+      width: auto;
+      min-width: 100px;
+      margin-right: 10px;
+    }
+    .el-input-number {
+      min-width: 130px;
+      margin-right: 10px;
+    }
+  }
+
   .source-group-wrapper {
     display: flex;
     flex-direction: row;
@@ -2357,21 +2431,18 @@ export default {
     }
 
     .source-group-btn.selected {
-      color: #ed4259;
+      color: #fff;
+      background: #409EFF;
+      border-color: #409EFF;
     }
   }
 
-  .pagination-wrapper {
-    padding: 5px 0;
-    margin-top: 10px;
-    margin-bottom: -10px;
-
-    .el-pagination {
-      float: right;
-      max-width: 100%;
-      overflow-x: auto;
-      box-sizing: border-box;
-    }
+  .el-pagination {
+    margin-top: 8px;
+    float: right;
+    max-width: 100%;
+    overflow-x: auto;
+    box-sizing: border-box;
   }
 
   >>>.source-checkbox {
@@ -2386,6 +2457,18 @@ export default {
 }
 .float-left {
   float: left;
+}
+
+.night {
+  .source-container {
+    .source-group-wrapper {
+      .source-group-btn.selected {
+        color: #fff;
+        background: #185798;
+        border-color: #185798;
+      }
+    }
+  }
 }
 
 .check-tip {
