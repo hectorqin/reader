@@ -277,6 +277,7 @@ export default {
               ...this.iframeStyle,
               height: message.data + "px"
             };
+            this.$emit("contentChange");
           }
         }
       });
@@ -330,13 +331,15 @@ export default {
         }, 10);
         return;
       }
-      this.$refs.iframe.contentWindow.postMessage(
-        JSON.stringify({
-          event,
-          ...data
-        }),
-        "*"
-      );
+      this.$refs.iframe &&
+        this.$refs.iframe.contentWindow &&
+        this.$refs.iframe.contentWindow.postMessage(
+          JSON.stringify({
+            event,
+            ...data
+          }),
+          "*"
+        );
     },
     formatTime(val) {
       if (!val) {

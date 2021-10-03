@@ -22,6 +22,7 @@
             @loadCatalog="loadCatalog(true, true)"
             @toShelf="toShelf"
             @close="popBookShelfVisible = false"
+            @hideContent="show = false"
           />
           <div class="tool-icon" slot="reference">
             <div class="iconfont">
@@ -324,6 +325,7 @@
             @nextChapter="toNextChapter"
             @updateProgress="saveReadingPosition"
             @iframeInited="$emit('iframeInited')"
+            @contentChange="computePages()"
           />
         </div>
       </div>
@@ -431,6 +433,11 @@ export default {
         this.computePages();
         this.saveReadingPosition();
       });
+      if (this.isEpub) {
+        this.$once("iframeInited", () => {
+          this.computePages();
+        });
+      }
     },
     readSettingsVisible(visible) {
       if (!visible) {

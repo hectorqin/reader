@@ -112,9 +112,10 @@ export default {
         coverUrl: book.coverUrl,
         author: book.author
       };
+      this.$emit("hideContent");
       this.$store.commit("setReadingBook", readingBook);
-      this.$emit("close");
       this.$emit("loadCatalog");
+      this.$emit("close");
     },
     refreshShelf() {
       if (this.refreshLoading) return;
