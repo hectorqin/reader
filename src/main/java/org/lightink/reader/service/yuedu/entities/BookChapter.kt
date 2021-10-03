@@ -13,7 +13,11 @@ data class BookChapter(
         var tag: String? = null,            //
         var start: Long? = null,            // 章节起始位置
         var end: Long? = null,               // 章节终止位置
-        var variable: String? = null
+        var isVip: Boolean = false,         // 是否VIP
+        var isPay: Boolean = false,         // 是否已购买
+        var startFragmentId: String? = null,  //EPUB书籍当前章节的fragmentId
+        var endFragmentId: String? = null,    //EPUB书籍下一章节的fragmentId
+        var variable: String? = null        //变量
 ) {
 
     var variableMap: HashMap<String, String>? = null

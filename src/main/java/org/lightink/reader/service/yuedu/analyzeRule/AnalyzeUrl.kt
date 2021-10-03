@@ -1,8 +1,8 @@
 package io.legado.app.model.analyzeRule
 
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
-import io.legado.app.constant.Pattern.EXP_PATTERN
-import io.legado.app.constant.Pattern.JS_PATTERN
+import io.legado.app.constant.AppPattern.EXP_PATTERN
+import io.legado.app.constant.AppPattern.JS_PATTERN
 import io.legado.app.data.api.IHttpGetApi
 import io.legado.app.data.api.IHttpPostApi
 import io.legado.app.data.entities.BaseBook

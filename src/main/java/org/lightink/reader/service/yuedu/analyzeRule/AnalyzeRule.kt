@@ -1,7 +1,7 @@
 package io.legado.app.model.analyzeRule
 
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
-import io.legado.app.constant.Pattern.JS_PATTERN
+import io.legado.app.constant.AppPattern.JS_PATTERN
 import io.legado.app.data.entities.BaseBook
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.JsExtensions

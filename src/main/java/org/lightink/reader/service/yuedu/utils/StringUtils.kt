@@ -1,11 +1,15 @@
 package io.legado.app.utils
 
 import org.lightink.reader.service.yuedu.utils.TextUtils
+import java.text.DecimalFormat
 import java.text.ParseException
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.regex.Matcher
 import java.util.regex.Pattern
+import kotlin.math.abs
+import kotlin.math.log10
+import kotlin.math.pow
 
 object StringUtils {
     private val TAG = "StringUtils"
@@ -86,6 +90,20 @@ object StringUtils {
         }
 
         return ""
+    }
+
+    /**
+     * 单位转换
+     */
+    fun toSize(length: Long): String {
+        if (length <= 0) return "0"
+        val units = arrayOf("b", "kb", "M", "G", "T")
+        //计算单位的，原理是利用lg,公式是 lg(1024^n) = nlg(1024)，最后 nlg(1024)/lg(1024) = n。
+        val digitGroups =
+            (log10(length.toDouble()) / log10(1024.0)).toInt()
+        //计算原理是，size/单位值。单位值指的是:比如说b = 1024,KB = 1024^2
+        return DecimalFormat("#,##0.##")
+            .format(length / 1024.0.pow(digitGroups.toDouble())) + " " + units[digitGroups]
     }
 
     fun toFirstCapital(str: String): String {
@@ -206,20 +224,20 @@ object StringUtils {
     }
 
     // 移除字符串首尾空字符的高效方法(利用ASCII值判断,包括全角空格)
-//    fun trim(s: String): String {
-//        if (isEmpty(s)) return ""
-//        var start = 0
-//        val len = s.length
-//        var end = len - 1
-//        while (start < end && (s[start].toInt() <= 0x20 || s[start] == '　')) {
-//            ++start
-//        }
-//        while (start < end && (s[end].toInt() <= 0x20 || s[end] == '　')) {
-//            --end
-//        }
-//        if (end < len) ++end
-//        return if (start > 0 || end < len) s.substring(start, end) else s
-//    }
+   fun trim(s: String): String {
+       if (s.isNullOrEmpty()) return ""
+       var start = 0
+       val len = s.length
+       var end = len - 1
+       while (start < end && (s[start].toInt() <= 0x20 || s[start] == '　')) {
+           ++start
+       }
+       while (start < end && (s[end].toInt() <= 0x20 || s[end] == '　')) {
+           --end
+       }
+       if (end < len) ++end
+       return if (start > 0 || end < len) s.substring(start, end) else s
+   }
 
     fun repeat(str: String, n: Int): String {
         val stringBuilder = StringBuilder()

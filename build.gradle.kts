@@ -79,7 +79,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version")
-//    implementation("org.jsoup:jsoup:1.11.3")
+    implementation("org.jsoup:jsoup:1.14.1")
     implementation("com.google.code.gson:gson:2.8.5")
     implementation("io.vertx:vertx-core:3.8.1")
     implementation("io.vertx:vertx-lang-kotlin:3.8.1")
@@ -103,6 +103,7 @@ dependencies {
     implementation("com.julienviet:retrofit-vertx:1.1.3")
     implementation("com.squareup.okhttp3:logging-interceptor:4.2.1")
 
+    implementation("xmlpull:xmlpull:1.1.3.1")
 }
 
 val compileKotlin: KotlinCompile by tasks

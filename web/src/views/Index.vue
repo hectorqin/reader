@@ -320,6 +320,15 @@
           <i class="el-icon-loading" v-if="refreshLoading"></i>
           {{ refreshLoading ? "刷新中..." : "刷新" }}
         </div>
+        <div class="title-btn" v-if="!isSearchResult" @click="importLocalBook">
+          导入
+          <input
+            ref="bookRef"
+            type="file"
+            @change="onBookFileChange"
+            style="display:none"
+          />
+        </div>
         <div
           class="title-btn"
           @click="showExplorePop"
@@ -719,6 +728,45 @@
         >
       </div>
     </el-dialog>
+
+    <el-dialog
+      title="导入本地书籍"
+      :visible.sync="showImportBookDialog"
+      :width="dialogWidth"
+      :top="dialogTop"
+      @closed="importBookDialogClosed"
+    >
+      <div class="source-container table-container">
+        <div class="check-form">
+          <span>书名：</span>
+          <el-input v-model="importBookInfo.name" size="small"> </el-input>
+          <span style="min-width: 68px;">作者：</span>
+          <el-input v-model="importBookInfo.author" size="small"> </el-input>
+        </div>
+        <div class="chapter-title">
+          章节列表({{ importBookChapters.length }})
+        </div>
+        <div
+          class="chapter-list"
+          :style="{ maxHeight: dialogContentHeight - 40 - 35 + 'px' }"
+        >
+          <p v-for="(chapter, index) in importBookChapters" :key="index">
+            {{ chapter.title }}
+          </p>
+        </div>
+      </div>
+      <div slot="footer" class="dialog-footer">
+        <el-button
+          type="primary"
+          size="medium"
+          @click="saveBook(importBookInfo, true)"
+          >确定导入</el-button
+        >
+        <el-button size="medium" @click="showImportBookDialog = false"
+          >取消</el-button
+        >
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -881,7 +929,10 @@ export default {
         keyword: "斗罗大陆",
         timeout: 5000,
         concurrent: 5
-      }
+      },
+      importBookInfo: {},
+      importBookChapters: [],
+      showImportBookDialog: false
     };
   },
   watch: {
@@ -1161,7 +1212,7 @@ export default {
         path: "/reader"
       });
     },
-    saveBook(book) {
+    saveBook(book, isImport) {
       if (!book || !book.bookUrl || !book.origin) {
         this.$message.error("书籍信息错误");
         return;
@@ -1170,12 +1221,18 @@ export default {
         res => {
           if (res.data.isSuccess) {
             //
-            this.$message.success("加入书架成功");
+            if (isImport) {
+              this.showImportBookDialog = false;
+            }
+            this.$message.success(isImport ? "导入书籍成功" : "加入书架成功");
             this.loadBookshelf();
           }
         },
         error => {
-          this.$message.error("加入书架失败 " + (error && error.toString()));
+          this.$message.error(
+            (isImport ? "导入书籍失败" : "加入书架失败 ") +
+              (error && error.toString())
+          );
         }
       );
     },
@@ -1837,6 +1894,54 @@ export default {
       } else {
         this.showSourceGroup = group;
       }
+    },
+    importLocalBook() {
+      this.$refs.bookRef.dispatchEvent(new MouseEvent("click"));
+    },
+    onBookFileChange() {
+      const rawFile = event.target.files && event.target.files[0];
+      if (!rawFile) {
+        return;
+      }
+      let param = new FormData();
+      param.append("file", rawFile);
+      Axios.post(this.api + "/importBookPreview", param, {
+        headers: { "Content-Type": "multipart/form-data" }
+      }).then(
+        res => {
+          if (res.data.isSuccess && res.data.data.length) {
+            //
+            this.importBookInfo = res.data.data[0].book;
+            this.importBookChapters = res.data.data[0].chapters;
+            this.showImportBookDialog = true;
+          }
+        },
+        error => {
+          this.$message.error("上传书籍 " + (error && error.toString()));
+        }
+      );
+    },
+    importBookDialogClosed() {
+      const url = this.importBookInfo.bookUrl;
+      this.importBookInfo = {};
+      this.importBookChapters = [];
+
+      Axios.post(
+        this.api + "/deleteFile",
+        {
+          url
+        },
+        {
+          silent: true
+        }
+      ).then(
+        () => {
+          //
+        },
+        () => {
+          //
+        }
+      );
     }
   },
   computed: {
@@ -2416,6 +2521,23 @@ export default {
     .el-input-number {
       min-width: 130px;
       margin-right: 10px;
+    }
+  }
+
+  .chapter-title {
+    font-size: 15px;
+    padding: 5px 0;
+    font-weight: 600;
+  }
+
+  .chapter-list {
+    overflow-y: auto;
+    box-sizing: border-box;
+    padding: 0 5px;
+
+    p {
+      margin-top: 0.4em;
+      margin-bottom: 0.4em;
     }
   }
 

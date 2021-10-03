@@ -376,7 +376,7 @@ class ReaderUIApplication: Application() {
     }
 
     override fun stop() {
-        saveStorage("windowConfig", windowConfigMap, true)
+        saveStorage("windowConfig", value = windowConfigMap, pretty = true)
         super.stop()
         var context = SpringContextUtils.getApplicationContext()
         logger.info("application stop: {}", context)

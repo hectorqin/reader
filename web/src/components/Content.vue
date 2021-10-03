@@ -7,40 +7,25 @@ export default {
       audioDuration: 0,
       playing: false,
       currentSpeed: 1,
-      startTime: 0
+      startTime: 0,
+      iframeStyle: {}
     };
   },
   props: ["content", "error", "title", "showContent"],
   render() {
-    const { fontSize, fontWeight, fontColor } = this;
-    const style = {
-      fontSize,
-      fontWeight,
-      color: fontColor,
-      ...this.$store.getters.currentFontFamily,
-      ...(this.$store.state.config.contentCSS || {})
-    };
-    const pStyle = {
-      lineHeight: this.$store.state.config.lineHeight,
-      marginTop:
-        typeof this.$store.state.config.paragraphSpace !== "undefined"
-          ? this.$store.state.config.paragraphSpace + "em"
-          : null,
-      marginBottom:
-        typeof this.$store.state.config.paragraphSpace !== "undefined"
-          ? this.$store.state.config.paragraphSpace + "em"
-          : null
-    };
     if (this.showContent) {
-      if (!this.error && this.readingBook.type === 1) {
+      if (this.isAudio) {
         // 音频
         return this.renderAudio();
+      } else if (this.isEpub) {
+        // epub
+        return this.renderEpub();
       }
       let wordCount = this.title.length + 2; // 2为两个换行符
       return (
         <div
           class="content-body"
-          style={style}
+          style={this.containerStyle}
           v-lazy-container={{
             selector: "img"
           }}
@@ -55,11 +40,17 @@ export default {
               // 将 src 替换为 data-src 懒加载
               a = a.replace(/src=/g, "data-src=");
               return (
-                <div style={style} domPropsInnerHTML={a} data-pos={pos}></div>
+                <div
+                  style={this.containerStyle}
+                  domPropsInnerHTML={a}
+                  data-pos={pos}
+                ></div>
               );
             }
             // 文本内容
-            return <p style={pStyle} domPropsInnerHTML={a} data-pos={pos} />;
+            return (
+              <p style={this.pStyle} domPropsInnerHTML={a} data-pos={pos} />
+            );
           })}
         </div>
       );
@@ -70,6 +61,8 @@ export default {
   mounted() {
     if (this.isAudio) {
       this.play(true);
+    } else if (this.isEpub) {
+      this.initIframe();
     }
   },
   computed: {
@@ -89,12 +82,6 @@ export default {
     fontSize() {
       return this.$store.state.config.fontSize + "px";
     },
-    fontWeight() {
-      return this.$store.state.config.fontWeight || undefined;
-    },
-    fontColor() {
-      return this.$store.state.config.fontColor || undefined;
-    },
     autoPlay: {
       get() {
         return this.$store.state.autoPlay;
@@ -104,10 +91,53 @@ export default {
       }
     },
     isCarToon() {
-      return !this.error && (this.content || "").indexOf("<img") >= 0;
+      return (
+        !this.error && !this.isEpub && (this.content || "").indexOf("<img") >= 0
+      );
     },
     isAudio() {
       return !this.error && this.readingBook.type === 1;
+    },
+    isEpub() {
+      return (
+        !this.error && this.readingBook.bookUrl.toLowerCase().endsWith(".epub")
+      );
+    },
+    containerStyle() {
+      return {
+        fontSize: this.$store.state.config.fontSize + "px",
+        fontWeight: this.$store.state.config.fontWeight || undefined,
+        color:
+          this.$store.state.config.fontColor ||
+          (this.$store.getters.isNight ? "#666" : "#262626"),
+        ...this.$store.getters.currentFontFamily,
+        ...(this.$store.state.config.contentCSS || {})
+      };
+    },
+    pStyle() {
+      return {
+        lineHeight: this.$store.state.config.lineHeight,
+        marginTop:
+          typeof this.$store.state.config.paragraphSpace !== "undefined"
+            ? this.$store.state.config.paragraphSpace + "em"
+            : null,
+        marginBottom:
+          typeof this.$store.state.config.paragraphSpace !== "undefined"
+            ? this.$store.state.config.paragraphSpace + "em"
+            : null
+      };
+    }
+  },
+  watch: {
+    containerStyle() {
+      if (this.isEpub) {
+        this.setIframeStyle();
+      }
+    },
+    pStyle() {
+      if (this.isEpub) {
+        this.setIframeStyle();
+      }
     }
   },
   methods: {
@@ -209,6 +239,103 @@ export default {
             </div>
           </div>
         </div>
+      );
+    },
+    renderEpub() {
+      return (
+        <iframe
+          class="epub-iframe"
+          ref="iframe"
+          style={this.iframeStyle}
+          src={this.$store.getters.apiRoot + this.content}
+        ></iframe>
+      );
+    },
+    initIframe() {
+      window.addEventListener("message", event => {
+        if (
+          this.$refs.iframe &&
+          event.source === this.$refs.iframe.contentWindow
+        ) {
+          //
+          let message;
+          try {
+            message = JSON.parse(event.data);
+          } catch (error) {
+            return;
+          }
+          if (message.event === "inited") {
+            // 设置iframe样式
+            this.setIframeStyle();
+            // 同步iframe高度
+            this.syncIframeHeight();
+            setTimeout(() => {
+              this.$emit("iframeInited");
+            }, 10);
+          } else if (message.event === "setHeight") {
+            this.iframeStyle = {
+              ...this.iframeStyle,
+              height: message.data + "px"
+            };
+          }
+        }
+      });
+    },
+    syncIframeHeight() {
+      this.sendToIframe("execute", {
+        script:
+          "reader_notify('setHeight', document.documentElement.scrollHeight || document.body.scrollHeight)"
+      });
+    },
+    setIframeStyle() {
+      let bodyStyle = "";
+      for (const i in this.containerStyle) {
+        if (Object.hasOwnProperty.call(this.containerStyle, i)) {
+          bodyStyle +=
+            i.replace(/([A-Z])/g, v => "-" + v.toLowerCase()) +
+            ":" +
+            this.containerStyle[i] +
+            ";";
+        }
+      }
+      let pStyle = "";
+      for (const i in this.pStyle) {
+        if (Object.hasOwnProperty.call(this.pStyle, i)) {
+          pStyle +=
+            i.replace(/([A-Z])/g, v => "-" + v.toLowerCase()) +
+            ":" +
+            this.pStyle[i] +
+            ";";
+        }
+      }
+      this.sendToIframe("setStyle", {
+        style: `body {
+          ${bodyStyle}
+        }
+        body p {
+          ${pStyle}
+        }
+        img {
+          max-width: 100% !important;
+        }
+        body p img {
+          margin-top: 5px;
+        }`
+      });
+    },
+    sendToIframe(event, data) {
+      if (!this.$refs.iframe) {
+        setTimeout(() => {
+          this.sendToIframe(event, data);
+        }, 10);
+        return;
+      }
+      this.$refs.iframe.contentWindow.postMessage(
+        JSON.stringify({
+          event,
+          ...data
+        }),
+        "*"
       );
     },
     formatTime(val) {
@@ -433,6 +560,12 @@ h3.reading {
       }
     }
   }
+}
+.epub-iframe {
+  border: none;
+  width: 100%;
+  min-height: calc(var(--vh, 1vh) * 50);
+  pointer-events: none;
 }
 </style>
 <style lang="stylus">

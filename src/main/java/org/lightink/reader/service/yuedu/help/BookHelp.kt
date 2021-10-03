@@ -1,5 +1,10 @@
 package io.legado.app.help
 
+import io.legado.app.constant.AppPattern
+import io.legado.app.data.entities.Book
+import io.legado.app.utils.FileUtils
+import java.io.File
+
 //import io.legado.app.utils.getPrefInt
 //import io.legado.app.utils.getPrefString
 //import org.apache.commons.text.similarity.JaccardSimilarity
@@ -18,4 +23,21 @@ object BookHelp {
             ?: ""
     }
 
+    /**
+     * 格式化书名
+     */
+    fun formatBookName(name: String): String {
+        return name
+            .replace(AppPattern.nameRegex, "")
+            .trim { it <= ' ' }
+    }
+
+    /**
+     * 格式化作者
+     */
+    fun formatBookAuthor(author: String): String {
+        return author
+            .replace(AppPattern.authorRegex, "")
+            .trim { it <= ' ' }
+    }
 }

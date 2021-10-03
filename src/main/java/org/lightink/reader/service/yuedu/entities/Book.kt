@@ -2,11 +2,16 @@ package io.legado.app.data.entities
 
 
 import io.legado.app.constant.BookType
+import io.legado.app.constant.AppPattern
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
-
-
+import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.FileUtils
+import io.legado.app.localBook.LocalBook
+import java.nio.charset.Charset
+import java.io.File
 import kotlin.math.max
+import kotlin.math.min
 
 data class Book(
         var bookUrl: String = "",                   // 详情页Url(本地书源存储完整文件路径)
@@ -21,7 +26,7 @@ data class Book(
         var customCoverUrl: String? = null,         // 封面Url(用户修改)
         var intro: String? = null,            // 简介内容(书源获取)
        var customIntro: String? = null,      // 简介内容(用户修改)
-    //    var charset: String? = null,                // 自定义字符集名称(仅适用于本地书籍)
+       var charset: String? = null,                // 自定义字符集名称(仅适用于本地书籍)
         var type: Int = 0,                          // @BookType
        var group: Int = 0,                         // 自定义分组索引号
         var latestChapterTitle: String? = null,     // 最新章节标题
@@ -38,8 +43,40 @@ data class Book(
        var order: Int = 0,                         // 手动排序
        var originOrder: Int = 0,                   //书源排序
         var useReplaceRule: Boolean = true,         // 正文使用净化替换规则
-        var variable: String? = null                // 自定义书籍变量信息(用于书源规则检索书籍信息)
-) : BaseBook {
+        var variable: String? = null,                // 自定义书籍变量信息(用于书源规则检索书籍信息)
+        var readConfig: ReadConfig? = null
+    ) : BaseBook {
+
+    fun isLocalBook(): Boolean {
+        return origin == BookType.local
+    }
+
+    fun isLocalTxt(): Boolean {
+        return isLocalBook() && originName.endsWith(".txt", true)
+    }
+
+    fun isEpub(): Boolean {
+        return originName.endsWith(".epub", true)
+    }
+
+    fun isUmd(): Boolean {
+        return originName.endsWith(".umd", true)
+    }
+
+    fun isOnLineTxt(): Boolean {
+        return !isLocalBook() && type == 0
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (other is Book) {
+            return other.bookUrl == bookUrl
+        }
+        return false
+    }
+
+    override fun hashCode(): Int {
+        return bookUrl.hashCode()
+    }
 
     override var variableMap: HashMap<String, String>? = null
         get() {
@@ -57,6 +94,46 @@ data class Book(
     override fun putVariable(key: String, value: String) {
         variableMap?.put(key, value)
         variable = GSON.toJson(variableMap)
+    }
+
+    fun getRealAuthor() = author.replace(AppPattern.authorRegex, "")
+
+    fun getUnreadChapterNum() = max(totalChapterNum - durChapterIndex - 1, 0)
+
+    fun fileCharset(): Charset {
+        return charset(charset ?: "UTF-8")
+    }
+
+    private fun config(): ReadConfig {
+        if (readConfig == null) {
+            readConfig = ReadConfig()
+        }
+        return readConfig!!
+    }
+
+    fun setDelTag(tag: Long) {
+        config().delTag =
+            if ((config().delTag and tag) == tag) config().delTag and tag.inv() else config().delTag or tag
+    }
+
+    fun getDelTag(tag: Long): Boolean {
+        return config().delTag and tag == tag
+    }
+
+    fun getFolderName(): String {
+        //防止书名过长,只取9位
+        var folderName = name.replace(AppPattern.fileNameRegex, "")
+        folderName = folderName.substring(0, min(9, folderName.length))
+        return folderName + MD5Utils.md5Encode16(bookUrl)
+    }
+
+    var rootDir: String = ""
+
+    fun getLocalFile(): File {
+        if (isEpub()) {
+            return FileUtils.getFile(File(rootDir + originName), "index.epub")
+        }
+        return File(rootDir + originName)
     }
 
     fun toSearchBook(): SearchBook {
@@ -79,5 +156,38 @@ data class Book(
             this.infoHtml = this@Book.infoHtml
             this.tocHtml = this@Book.tocHtml
         }
+    }
+
+    companion object {
+        const val hTag = 2L
+        const val rubyTag = 4L
+        const val imgTag = 8L
+        const val imgStyleDefault = "DEFAULT"
+        const val imgStyleFull = "FULL"
+        const val imgStyleText = "TEXT"
+
+        fun initLocalBook(bookUrl: String, localPath: String): Book {
+            val fileName = File(localPath).name
+            val nameAuthor = LocalBook.analyzeNameAuthor(fileName)
+            val book = Book(bookUrl, "", BookType.local, localPath, nameAuthor.first, nameAuthor.second).also {
+                it.canUpdate = false
+            }
+            return book
+        }
+    }
+
+    data class ReadConfig(
+        var reverseToc: Boolean = false,
+        var pageAnim: Int = -1,
+        var reSegment: Boolean = false,
+        var imageStyle: String? = null,
+        var useReplaceRule: Boolean = false,   // 正文使用净化替换规则
+        var delTag: Long = 0L   //去除标签
+    )
+
+    class Converters {
+        fun readConfigToString(config: ReadConfig?): String = GSON.toJson(config)
+
+        fun stringToReadConfig(json: String?) = GSON.fromJsonObject<ReadConfig>(json)
     }
 }

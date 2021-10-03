@@ -12,6 +12,7 @@ import io.vertx.ext.web.RoutingContext
 import io.vertx.ext.web.handler.StaticHandler;
 import mu.KotlinLogging
 import org.lightink.reader.config.AppConfig
+import org.lightink.reader.config.BookConfig
 import org.lightink.reader.service.yuedu.constant.DeepinkBookSource
 import org.lightink.reader.utils.error
 import org.lightink.reader.utils.success
@@ -32,6 +33,7 @@ import org.lightink.reader.utils.deleteRecursively
 import org.lightink.reader.utils.unzip
 import org.lightink.reader.utils.zip
 import org.lightink.reader.utils.jsonEncode
+import org.lightink.reader.utils.getRelativePath
 import org.lightink.reader.verticle.RestVerticle
 import org.lightink.reader.SpringEvent
 import org.springframework.stereotype.Component
@@ -55,6 +57,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat;
 import io.legado.app.utils.EncoderUtils
 import org.springframework.scheduling.annotation.Scheduled
+import io.legado.app.localBook.LocalBook
+import java.nio.file.Paths
 
 private val logger = KotlinLogging.logger {}
 
@@ -129,17 +133,21 @@ class YueduApi : RestVerticle() {
         router.route("/*").handler(StaticHandler.create("web").setDefaultContentEncoding("UTF-8"));
 
         // assets
-        var assetsDir = getWorkDir("storage/assets");
+        var assetsDir = getWorkDir("storage", "assets");
         var assetsDirFile = File(assetsDir);
         if (!assetsDirFile.exists()) {
             assetsDirFile.mkdirs();
         }
-        var assetsCss = getWorkDir("storage/assets/reader.css");
+        var assetsCss = getWorkDir("storage", "assets", "reader.css");
         var assetsCssFile = File(assetsCss);
         if (!assetsCssFile.exists()) {
             assetsCssFile.writeText("/* 在此处可以编写CSS样式来自定义页面 */");
         }
         router.route("/assets/*").handler(StaticHandler.create().setAllowRootFileSystemAccess(true).setWebRoot(assetsDir).setDefaultContentEncoding("UTF-8"));
+
+        // epub资源
+        var dataDir = getWorkDir("storage", "data");
+        router.route("/epub/*").handler(StaticHandler.create().setAllowRootFileSystemAccess(true).setWebRoot(dataDir).setDefaultContentEncoding("UTF-8"));
 
         // 上传书源文件
         router.post("/reader3/readSourceFile").coroutineHandler { readSourceFile(it) }
@@ -190,6 +198,9 @@ class YueduApi : RestVerticle() {
 
         // 备份到webdav
         router.post("/reader3/backupToWebdav").coroutineHandler { backupToWebdav(it) }
+
+        // 导入本地文件
+        router.post("/reader3/importBookPreview").coroutineHandler { importBookPreview(it) }
 
         // webdav 服务
         router.route("/reader3/webdav*").handler {
@@ -312,7 +323,7 @@ class YueduApi : RestVerticle() {
 
     suspend fun migration() {
         try {
-            var dataDir = File(getWorkDir("storage/data/default"))
+            var dataDir = File(getWorkDir("storage", "data", "default"))
             if (!dataDir.exists()) {
                 var storageDir = File(getWorkDir("storage"))
                 if (storageDir.exists()) {
@@ -363,7 +374,7 @@ class YueduApi : RestVerticle() {
         val username = auth[0]
         val password = auth[1]
         var userMap = mutableMapOf<String, Map<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
         if (userMapJson != null) {
             userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
         }
@@ -390,16 +401,16 @@ class YueduApi : RestVerticle() {
     }
 
     private suspend fun getUserWebdavHome(context: Any): String {
-        var prefix = getWorkDir("storage/data")
+        var prefix = getWorkDir("storage", "data")
         var userNameSpace = ""
         when(context) {
             is RoutingContext -> userNameSpace = getUserNameSpace(context)
             is String -> userNameSpace = context
         }
         if (userNameSpace.isNotEmpty()) {
-            prefix = prefix + "/" + userNameSpace
+            prefix = prefix + File.separator + userNameSpace
         }
-        prefix = prefix + "/webdav"
+        prefix = prefix + File.separator + "webdav"
         var file = File(prefix)
         if (!file.exists()) {
             file.mkdirs()
@@ -699,7 +710,7 @@ class YueduApi : RestVerticle() {
             return returnData.setErrorMsg("请输入密码")
         }
         var userMap = mutableMapOf<String, Map<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
         if (userMapJson != null) {
             userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
         }
@@ -757,7 +768,7 @@ class YueduApi : RestVerticle() {
             user.token = genEncryptedPassword(user.username, System.currentTimeMillis().toString())
         }
         userMap.put(user.username, user.toMap())
-        saveStorage("data/users", userMap)
+        saveStorage("data", "users", value = userMap)
 
         val loginData = formatUser(user)
 
@@ -779,7 +790,7 @@ class YueduApi : RestVerticle() {
             return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
         }
         var userMap = mutableMapOf<String, MutableMap<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
         if (userMapJson != null) {
             userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
         }
@@ -802,7 +813,7 @@ class YueduApi : RestVerticle() {
             return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
         }
         var userMap = mutableMapOf<String, MutableMap<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
 
         if (userMapJson != null) {
             val userJsonArray = context.bodyAsJsonArray
@@ -812,7 +823,7 @@ class YueduApi : RestVerticle() {
                     // 删除用户信息
                     userMapJson.remove(username)
                     // 移除用户目录
-                    var userHome = File(getWorkDir("storage/data/" + username))
+                    var userHome = File(getWorkDir("storage", "data", username))
                     logger.info("delete userHome: {}", userHome)
                     if (userHome.exists()) {
                         userHome.deleteRecursively()
@@ -820,7 +831,7 @@ class YueduApi : RestVerticle() {
                 }
             }
             userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
-            saveStorage("data/users", userMap)
+            saveStorage("data", "users", value = userMap)
         }
 
         var userList = arrayListOf<Map<String, Any>>()
@@ -848,7 +859,7 @@ class YueduApi : RestVerticle() {
         }
 
         var userMap = mutableMapOf<String, MutableMap<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
 
         if (userMapJson != null) {
             userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
@@ -860,7 +871,7 @@ class YueduApi : RestVerticle() {
                 existedUser.put("enable_webdav", enableWebdav)
             }
             userMap.put(username, existedUser)
-            saveStorage("data/users", userMap)
+            saveStorage("data", "users", value = userMap)
         }
 
         var userList = arrayListOf<Map<String, Any>>()
@@ -1157,7 +1168,7 @@ class YueduApi : RestVerticle() {
         var accessToken = context.queryParam("accessToken").firstOrNull() ?: ""
         if (accessToken.isNotEmpty()) {
             var userMap = mutableMapOf<String, Map<String, Any>>()
-            var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+            var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
             if (userMapJson != null) {
                 userMap = userMapJson.map as? MutableMap<String, Map<String, Any>> ?: mutableMapOf<String, Map<String, Any>>()
             }
@@ -1215,16 +1226,16 @@ class YueduApi : RestVerticle() {
         return "default"
     }
 
-    private suspend fun getUserStorage(context: Any, path: String): String? {
+    private suspend fun getUserStorage(context: Any, vararg path: String): String? {
         var userNameSpace = ""
         when(context) {
             is RoutingContext -> userNameSpace = getUserNameSpace(context)
             is String -> userNameSpace = context
         }
         if (userNameSpace.isEmpty()) {
-            return getStorage("data" + "/" + path)
+            return getStorage("data", *path)
         }
-        return getStorage("data" + "/" + userNameSpace + "/" + path)
+        return getStorage("data", userNameSpace, *path)
     }
 
     private suspend fun saveUserStorage(context: Any, path: String, value: Any) {
@@ -1234,9 +1245,9 @@ class YueduApi : RestVerticle() {
             is String -> userNameSpace = context
         }
         if (userNameSpace.isEmpty()) {
-            return saveStorage("data" + "/" + path, value)
+            return saveStorage("data", path, value = value)
         }
-        return saveStorage("data" + "/" + userNameSpace + "/" + path, value)
+        return saveStorage("data", userNameSpace, path, value = value)
     }
 
     private suspend fun getSystemInfo(context: RoutingContext): ReturnData {
@@ -1300,7 +1311,7 @@ class YueduApi : RestVerticle() {
         coverUrl = URLDecoder.decode(coverUrl, "UTF-8")
         var ext = getFileExt(coverUrl, "png")
         val md5Encode = MD5Utils.md5Encode(coverUrl).toString()
-        var cachePath = getWorkDir("storage/cache/" + md5Encode + "." + ext)
+        var cachePath = getWorkDir("storage", "cache", md5Encode + "." + ext)
         var cacheFile = File(cachePath)
         if (cacheFile.exists()) {
             logger.info("send cache: {}", cacheFile)
@@ -1330,7 +1341,7 @@ class YueduApi : RestVerticle() {
         try {
             var seqs = url.split("?", ignoreCase = true, limit = 2)
             var file = seqs[0].split("/").last()
-            return file.split(".", ignoreCase = true, limit = 2).last()
+            return file.split(".", ignoreCase = true, limit = 2).last()?.toLowerCase()
         } catch (e: Exception) {
             return defaultExt
         }
@@ -1373,7 +1384,7 @@ class YueduApi : RestVerticle() {
             logger.info("uploadFile: {} {} {}", it.uploadedFileName(), it.fileName(), file)
             if (file.exists()) {
                 var fileName = it.fileName()
-                var newFile = File(getWorkDir("storage/assets/" + userNameSpace + "/" + type + "/" + fileName))
+                var newFile = File(getWorkDir("storage", "assets", userNameSpace, type, fileName))
                 if (!newFile.parentFile.exists()) {
                     newFile.parentFile.mkdirs()
                 }
@@ -1412,10 +1423,55 @@ class YueduApi : RestVerticle() {
         }
         var file = File(getWorkDir("storage" + url))
         logger.info("delete file: {}", file)
-        if (file.exists()) {
-            file.delete()
-        }
+        file.deleteRecursively()
         return returnData.setData("")
+    }
+
+    private suspend fun importBookPreview(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (context.fileUploads() == null || context.fileUploads().isEmpty()) {
+            return returnData.setErrorMsg("请上传书籍文件")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        var fileList = arrayListOf<Map<String, Any>>()
+        context.fileUploads().forEach {
+            var file = File(it.uploadedFileName())
+            logger.info("uploadFile: {} {} {}", it.uploadedFileName(), it.fileName(), file)
+            if (file.exists()) {
+                val fileName = it.fileName()
+                val ext = getFileExt(fileName)
+                if (ext != "txt" && ext != "epub" && ext != "umd") {
+                    file.deleteRecursively()
+                    return returnData.setErrorMsg("不支持导入" + ext + "格式的书籍文件")
+                }
+                val localFilePath = Paths.get("storage", "assets", userNameSpace, "book", fileName).toString()
+                val localFileUrl = "/assets/" + userNameSpace + "/book/" + fileName
+                var filePath = localFilePath
+                if (fileName.endsWith(".epub", true)) {
+                    filePath = filePath + File.separator + "index.epub"
+                }
+                var newFile = File(getWorkDir(filePath))
+                if (!newFile.parentFile.exists()) {
+                    newFile.parentFile.mkdirs()
+                }
+                if (newFile.exists()) {
+                    newFile.delete()
+                }
+                logger.info("moveTo: {}", newFile)
+                if (file.copyRecursively(newFile)) {
+                    val book = Book.initLocalBook(localFileUrl, localFilePath).also {
+                        it.rootDir = getWorkDir()
+                    }
+                    val chapters = LocalBook.getChapterList(book)
+                    fileList.add(mapOf("book" to book, "chapters" to chapters))
+                }
+                file.deleteRecursively()
+            }
+        }
+        return returnData.setData(fileList)
     }
 
     private suspend fun getChapterList(context: RoutingContext): ReturnData {
@@ -1459,12 +1515,12 @@ class YueduApi : RestVerticle() {
         } else {
             bookSource = getBookSourceString(context, bookInfo.origin)
         }
-        if (bookSource.isNullOrEmpty()) {
+        if (!bookInfo.isLocalBook() && bookSource.isNullOrEmpty()) {
             return returnData.setErrorMsg("未配置书源")
         }
         // 缓存章节列表
         logger.info("bookInfo: {}", bookInfo)
-        var chapterList = getLocalChapterList(bookInfo, bookSource, refresh > 0, getUserNameSpace(context))
+        var chapterList = getLocalChapterList(bookInfo, bookSource ?: "", refresh > 0, getUserNameSpace(context))
 
         return returnData.setData(chapterList)
     }
@@ -1488,13 +1544,20 @@ class YueduApi : RestVerticle() {
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
             chapterIndex = context.queryParam("index").firstOrNull()?.toInt() ?: -1
         }
+        if (bookUrl.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入书籍链接")
+        }
         var bookSource = getBookSourceString(context)
         var userNameSpace = getUserNameSpace(context)
+        var isInBookShelf = false
+        var bookInfo: Book? = null
+        var chapterInfo: BookChapter? = null
         if (!bookUrl.isNullOrEmpty()) {
             bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
             // 看看有没有加入书架
-            var bookInfo = getShelfBookByURL(bookUrl, userNameSpace)
+            bookInfo = getShelfBookByURL(bookUrl, userNameSpace)
             if (bookInfo != null && !bookInfo.origin.isNullOrEmpty()) {
+                isInBookShelf = true
                 bookSource = getBookSourceStringBySourceURL(bookInfo.origin, userNameSpace)
             }
             // 看看有没有缓存数据
@@ -1508,21 +1571,27 @@ class YueduApi : RestVerticle() {
                 if (bookUrl.isNullOrEmpty()) {
                     return returnData.setErrorMsg("请输入书籍链接")
                 }
-                if (bookSource.isNullOrEmpty()) {
+                if (bookInfo != null && !bookInfo.isLocalBook() && bookSource.isNullOrEmpty()) {
                     return returnData.setErrorMsg("未配置书源")
                 }
-                bookInfo = bookInfo ?: mergeBookCacheInfo(WebBook(bookSource).getBookInfo(bookUrl))
-                var chapterList = getLocalChapterList(bookInfo, bookSource, false, userNameSpace)
+                bookInfo = bookInfo ?: mergeBookCacheInfo(WebBook(bookSource ?: "").getBookInfo(bookUrl))
+                var chapterList = getLocalChapterList(bookInfo, bookSource ?: "", false, userNameSpace)
                 if (chapterIndex <= chapterList.size) {
-                    var chapter = chapterList.get(chapterIndex)
-                    saveShelfBookProgress(bookInfo, chapter, userNameSpace)
-                    // 保存到 webdav
-                    saveBookProgressToWebdav(bookInfo, chapter, userNameSpace)
-                    chapterUrl = chapter.url
+                    chapterInfo = chapterList.get(chapterIndex)
+                    // 书架书籍保存阅读进度
+                    if (isInBookShelf) {
+                        saveShelfBookProgress(bookInfo, chapterInfo, userNameSpace)
+                        // 保存到 webdav
+                        saveBookProgressToWebdav(bookInfo, chapterInfo, userNameSpace)
+                    }
+                    chapterUrl = chapterInfo.url
                 }
             }
         }
-        if (bookSource.isNullOrEmpty()) {
+        if (bookInfo == null) {
+            return returnData.setErrorMsg("获取书籍信息失败")
+        }
+        if (!bookInfo.isLocalBook() && bookSource.isNullOrEmpty()) {
             return returnData.setErrorMsg("未配置书源")
         }
         if (chapterUrl.isNullOrEmpty()) {
@@ -1530,7 +1599,40 @@ class YueduApi : RestVerticle() {
         }
         chapterUrl = URLDecoder.decode(chapterUrl, "UTF-8")
 
-        val content = WebBook(bookSource).getBookContent(chapterUrl)
+        var content = ""
+        if (bookInfo.isLocalBook()) {
+            if (chapterInfo == null) {
+                var chapterList = getLocalChapterList(bookInfo, bookSource ?: "", false, userNameSpace)
+                for(i in 0 until chapterList.size) {
+                    if (chapterUrl == chapterList.get(i).url) {
+                        chapterInfo = chapterList.get(i)
+                        break
+                    }
+                }
+                if (chapterInfo == null) {
+                    return returnData.setErrorMsg("获取章节信息失败")
+                }
+            }
+            if (bookInfo.isEpub()) {
+                var chapterFilePath = getWorkDir(bookInfo.originName, "index", "OEBPS", chapterInfo.url)
+                if (!File(chapterFilePath).exists()) {
+                    return returnData.setErrorMsg("章节文件不存在")
+                }
+                // 处理 js 注入脚本
+                BookConfig.injectJavascriptToEpubChapter(chapterFilePath);
+
+                // 直接返回 html访问地址
+                content = bookInfo.bookUrl.replace("storage/data/", "/epub/") + "/index/OEBPS/" + chapterInfo.url
+                return returnData.setData(content)
+            }
+            var bookContent = LocalBook.getContent(bookInfo, chapterInfo)
+            if (bookContent == null) {
+                return returnData.setErrorMsg("获取章节内容失败")
+            }
+            content = bookContent
+        } else {
+            content = WebBook(bookSource ?: "").getBookContent(chapterUrl)
+        }
 
         return returnData.setData(content)
     }
@@ -1680,7 +1782,7 @@ class YueduApi : RestVerticle() {
         if (book == null) {
             return returnData.setErrorMsg("书籍信息错误")
         }
-        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author + "/bookSource"))
+        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
         if (bookSourceList != null) {
             var list = bookSourceList.getList() as MutableList<Map<String,Any>>
             if (refresh > 0) {
@@ -1989,7 +2091,37 @@ class YueduApi : RestVerticle() {
             return returnData.setErrorMsg("书籍链接不能为空")
         }
         var userNameSpace = getUserNameSpace(context)
-        if (book.tocUrl.isNullOrEmpty()) {
+        if (book.isLocalBook()) {
+            // 导入本地书籍
+            if (book.bookUrl.startsWith("/assets/")) {
+                // 临时文件，移动到书籍目录
+                // storage/assets/hector/book/《极道天魔》（校对版全本）作者：滚开.txt
+                val tempFile = File(getWorkDir("storage" + book.bookUrl))
+                val localFilePath = getWorkDir("storage", "data", userNameSpace, book.name + "_" + book.author, tempFile.name)
+                logger.info("localFilePath: {}", localFilePath)
+                var localFile = File(localFilePath)
+                localFile.deleteRecursively()
+                if (!localFile.parentFile.exists()) {
+                    localFile.parentFile.mkdirs()
+                }
+                if (!tempFile.copyRecursively(localFile)) {
+                    return returnData.setErrorMsg("导入本地书籍失败")
+                }
+                if (book.isEpub()) {
+                    // 解压文件 index.epub
+                    val unzipFile = File(localFilePath + File.separator + "index")
+                    unzipFile.deleteRecursively()
+                    val localEpubFile = File(localFilePath + File.separator + "index.epub")
+                    if (!localEpubFile.unzip(unzipFile.toString())) {
+                        return returnData.setErrorMsg("导入本地Epub书籍失败")
+                    }
+                }
+                tempFile.deleteRecursively()
+                // 修改书籍信息
+                book.bookUrl = localFilePath
+                book.originName = localFilePath
+            }
+        } else if (book.tocUrl.isNullOrEmpty()) {
             // 补全书籍信息
             var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace)
             if (bookSource == null) {
@@ -2128,7 +2260,7 @@ class YueduApi : RestVerticle() {
      * 非 API
      */
     private suspend fun loadBookCacheInfo() {
-        var _bookInfoCache: JsonObject? = asJsonObject(getStorage("cache/bookInfoCache"))
+        var _bookInfoCache: JsonObject? = asJsonObject(getStorage("cache", "bookInfoCache"))
         if (_bookInfoCache != null) {
             bookInfoCache = _bookInfoCache.map as MutableMap<String, Map<String, Any>>
             // logger.info("load bookInfoCache {}", bookInfoCache)
@@ -2141,7 +2273,7 @@ class YueduApi : RestVerticle() {
                 var book = bookList.get(i)
                 bookInfoCache.put(book.bookUrl, book.serializeToMap())
             }
-            saveStorage("cache/bookInfoCache", bookInfoCache)
+            saveStorage("data", "bookInfoCache", value = bookInfoCache)
         }
         return bookList
     }
@@ -2190,13 +2322,20 @@ class YueduApi : RestVerticle() {
 
     private suspend fun getLocalChapterList(book: Book, bookSource: String, refresh: Boolean = false, userNameSpace: String): List<BookChapter> {
         val md5Encode = MD5Utils.md5Encode(book.bookUrl).toString()
-        var chapterList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author + "/" + md5Encode))
+        var chapterList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, md5Encode))
 
         if (chapterList == null || refresh) {
-            var onlineChapterList = WebBook(bookSource).getChapterList(book)
-            saveUserStorage(userNameSpace, book.name + "_" + book.author + "/" + md5Encode, onlineChapterList)
-            saveShelfBookLatestChapter(book, onlineChapterList, userNameSpace)
-            return onlineChapterList
+            var newChapterList: List<BookChapter>
+            if (book.isLocalBook()) {
+                newChapterList = LocalBook.getChapterList(book.also{
+                    it.rootDir = getWorkDir()
+                })
+            } else {
+                newChapterList = WebBook(bookSource).getChapterList(book)
+            }
+            saveUserStorage(userNameSpace, getRelativePath(book.name + "_" + book.author, md5Encode), newChapterList)
+            saveShelfBookLatestChapter(book, newChapterList, userNameSpace)
+            return newChapterList
         }
         var localChapterList = arrayListOf<BookChapter>()
         for (i in 0 until chapterList.size()) {
@@ -2344,7 +2483,7 @@ class YueduApi : RestVerticle() {
         if (book.name.isEmpty()) {
             return;
         }
-        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author + "/bookSource"))
+        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
         if (bookSourceList == null) {
             bookSourceList = JsonArray()
         }
@@ -2370,7 +2509,7 @@ class YueduApi : RestVerticle() {
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
-        saveUserStorage(userNameSpace, book.name + "_" + book.author + "/bookSource", bookSourceList!!)
+        saveUserStorage(userNameSpace, getRelativePath(book.name + "_" + book.author, "bookSource"), bookSourceList!!)
     }
 
     fun getUserInfoClass(username: String): User? {
@@ -2383,7 +2522,7 @@ class YueduApi : RestVerticle() {
             return null
         }
         var userMap = mutableMapOf<String, Map<String, Any>>()
-        var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
         if (userMapJson != null) {
             userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
         }
@@ -2437,14 +2576,14 @@ class YueduApi : RestVerticle() {
 
     suspend fun saveBookProgressToWebdav(book: Book, bookChapter: BookChapter, userNameSpace: String) {
         val userHome = getUserWebdavHome(userNameSpace)
-        var bookProgressDir = File(userHome + "/bookProgress")
+        var bookProgressDir = File(userHome + File.separator + "bookProgress")
         if (!bookProgressDir.exists()) {
-            bookProgressDir = File(userHome + "/legado/bookProgress")
+            bookProgressDir = File(userHome + File.separator + "legado" + File.separator + "bookProgress")
             if (!bookProgressDir.exists()) {
                 return
             }
         }
-        var progressFile = File(bookProgressDir.toString() + "/" + book.name + "_" + book.author + ".json")
+        var progressFile = File(bookProgressDir.toString() + File.separator + book.name + "_" + book.author + ".json")
         progressFile.writeText(jsonEncode(mapOf(
             "name" to book.name,
             "author" to book.author,
@@ -2456,7 +2595,7 @@ class YueduApi : RestVerticle() {
     }
 
     suspend fun syncFromWebdav(zipFilePath: String, userNameSpace: String): Boolean {
-        var descDir = getWorkDir("storage/data/" + userNameSpace + "/tmp")
+        var descDir = getWorkDir("storage", "data", userNameSpace, "tmp")
         var descDirFile = File(descDir)
         try {
             val userHome = getUserWebdavHome(userNameSpace)
@@ -2467,24 +2606,24 @@ class YueduApi : RestVerticle() {
             descDirFile.deleteRecursively()
             if (zipFile.unzip(descDir)) {
                 // 同步 书源
-                val bookSourceFile = File(descDir + "/bookSource.json")
+                val bookSourceFile = File(descDir + File.separator + "bookSource.json")
                 if (bookSourceFile.exists()) {
-                    val userBookSourceFile = File(getWorkDir("storage/data/" + userNameSpace + "/bookSource.json"))
+                    val userBookSourceFile = File(getWorkDir("storage", "data", userNameSpace, "bookSource.json"))
                     userBookSourceFile.deleteRecursively()
                     bookSourceFile.renameTo(userBookSourceFile)
                 }
                 // 同步 书架
-                val bookshelfFile = File(descDir + "/bookshelf.json")
+                val bookshelfFile = File(descDir + File.separator + "bookshelf.json")
                 if (bookshelfFile.exists()) {
-                    val userBookSourceFile = File(getWorkDir("storage/data/" + userNameSpace + "/bookshelf.json"))
+                    val userBookSourceFile = File(getWorkDir("storage", "data", userNameSpace, "bookshelf.json"))
                     userBookSourceFile.deleteRecursively()
                     bookshelfFile.renameTo(userBookSourceFile)
                 }
 
                 // 同步阅读进度
-                var bookProgressDir = File(userHome + "/bookProgress")
+                var bookProgressDir = File(userHome + File.separator + "bookProgress")
                 if (!bookProgressDir.exists()) {
-                    bookProgressDir = File(userHome + "/legado/bookProgress")
+                    bookProgressDir = File(userHome + File.separator +  "legado" + File.separator +  "bookProgress")
                 }
                 if (bookProgressDir.exists() && bookProgressDir.isDirectory()) {
                     bookProgressDir.listFiles().forEach{
@@ -2502,35 +2641,35 @@ class YueduApi : RestVerticle() {
     }
 
     suspend fun saveToWebdav(latestZipFilePath: String, userNameSpace: String): Boolean {
-        var descDir = getWorkDir("storage/data/" + userNameSpace + "/tmp")
+        var descDir = getWorkDir("storage", "data", userNameSpace, "tmp")
         var descDirFile = File(descDir)
         descDirFile.deleteRecursively()
         try {
             val userHome = getUserWebdavHome(userNameSpace)
             var legadoHome = userHome
             if (latestZipFilePath.indexOf("legado") > 0) {
-                legadoHome = userHome + "/legado"
+                legadoHome = userHome + File.separator + "legado"
             }
             var zipFile = File(latestZipFilePath)
             if (zipFile.unzip(descDir)) {
                 // 同步 书源
-                val userBookSourceFile = File(getWorkDir("storage/data/" + userNameSpace + "/bookSource.json"))
+                val userBookSourceFile = File(getWorkDir("storage", "data", userNameSpace, "bookSource.json"))
                 if (userBookSourceFile.exists()) {
-                    val bookSourceFile = File(descDir + "/bookSource.json")
+                    val bookSourceFile = File(descDir + File.separator + "bookSource.json")
                     bookSourceFile.deleteRecursively()
                     userBookSourceFile.copyRecursively(bookSourceFile)
                 }
                 // 同步 书架
-                val userBookshelfFile = File(getWorkDir("storage/data/" + userNameSpace + "/bookshelf.json"))
+                val userBookshelfFile = File(getWorkDir("storage", "data", userNameSpace, "bookshelf.json"))
                 if (userBookshelfFile.exists()) {
-                    val bookshelfFile = File(descDir + "/bookshelf.json")
+                    val bookshelfFile = File(descDir + File.separator + "bookshelf.json")
                     bookshelfFile.deleteRecursively()
                     userBookshelfFile.copyRecursively(bookshelfFile)
                 }
 
                 // 压缩
                 val today = SimpleDateFormat("yyyy-MM-dd").format(System.currentTimeMillis())
-                return descDirFile.zip(legadoHome + "/backup" + today + ".zip")
+                return descDirFile.zip(legadoHome + File.separator + "backup" + today + ".zip")
             }
         } catch(e: Exception) {
             e.printStackTrace()
@@ -2542,7 +2681,7 @@ class YueduApi : RestVerticle() {
 
     suspend fun getLastBackFileFromWebdav(userNameSpace: String): String? {
         val userHome = getUserWebdavHome(userNameSpace)
-        var legadoHome = File(userHome + "/legado")
+        var legadoHome = File(userHome + File.separator + "legado")
         if (!legadoHome.exists()) {
             legadoHome = File(userHome)
         }
@@ -2583,7 +2722,7 @@ class YueduApi : RestVerticle() {
                 // 刷新用户书架
                 if (appConfig.secure) {
                     var userMap = mutableMapOf<String, Map<String, Any>>()
-                    var userMapJson: JsonObject? = asJsonObject(getStorage("data/users"))
+                    var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
                     if (userMapJson != null) {
                         userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
                     }

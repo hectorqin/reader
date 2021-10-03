@@ -33,6 +33,7 @@ val prettyGson = GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create(
 
 var storageFinalPath = ""
 var workDirPath = ""
+var workDirInit = false
 
 fun RoutingContext.success(any: Any?) {
     val toJson: String = if (any is JsonObject) {
@@ -66,8 +67,8 @@ fun RoutingContext.error(throwable: Throwable) {
             .end(errorJson)
 }
 
-fun getWorkDir(subPath: String): String {
-    if (workDirPath.isEmpty()) {
+fun getWorkDir(subPath: String = ""): String {
+    if (!workDirInit && workDirPath.isEmpty()) {
         var osName = System.getProperty("os.name")
         var currentDir = System.getProperty("user.dir")
         logger.info("osName: {} currentDir: {}", osName, currentDir)
@@ -75,10 +76,31 @@ fun getWorkDir(subPath: String): String {
         if (osName.startsWith("Mac OS") && !currentDir.startsWith("/Users/")) {
             workDirPath = Paths.get(System.getProperty("user.home"), ".reader").toString()
         }
+        workDirInit = true
     }
     var path = Paths.get(workDirPath, subPath);
 
     return path.toString();
+}
+
+fun getWorkDir(vararg subDirFiles: String): String {
+    return getWorkDir(getRelativePath(*subDirFiles))
+}
+
+fun getRelativePath(vararg subDirFiles: String): String {
+    val path = StringBuilder("")
+    subDirFiles.forEach {
+        if (it.isNotEmpty()) {
+            path.append(File.separator).append(it)
+        }
+    }
+    return path.toString().let{
+        if (it.startsWith("/")) {
+            it.substring(1)
+        } else {
+            it
+        }
+    }
 }
 
 fun getStoragePath(): String {
@@ -101,7 +123,7 @@ fun getStoragePath(): String {
     return storagePath;
 }
 
-fun saveStorage(name: String, value: Any, pretty: Boolean = false) {
+fun saveStorage(vararg name: String, value: Any, pretty: Boolean = false) {
     val toJson: String = if (value is JsonObject || value is JsonArray) {
         value.toString()
     } else if (pretty) {
@@ -116,7 +138,9 @@ fun saveStorage(name: String, value: Any, pretty: Boolean = false) {
         storageDir.mkdirs()
     }
 
-    val file = File(storagePath + "/${name}.json")
+    val filename = name.last()
+    val file = File(getRelativePath(storagePath, *name.copyOfRange(0, name.size - 1), "${filename}.json"))
+    // val file = File(storagePath + "/${name}.json")
     logger.info("storage key: {} path: {}", name, file.absoluteFile)
 
     if (!file.parentFile.exists()) {
@@ -129,14 +153,15 @@ fun saveStorage(name: String, value: Any, pretty: Boolean = false) {
     file.writeText(toJson)
 }
 
-fun getStorage(name: String): String?  {
+fun getStorage(vararg name: String): String?  {
     var storagePath = getStoragePath()
     var storageDir = File(storagePath)
     if (!storageDir.exists()) {
         storageDir.mkdirs()
     }
 
-    val file = File(storagePath + "/${name}.json")
+    val filename = name.last()
+    val file = File(getRelativePath(storagePath, *name.copyOfRange(0, name.size - 1), "${filename}.json"))
     logger.info("storage key: {} path: {}", name, file.absoluteFile)
     if (!file.exists()) {
         return null

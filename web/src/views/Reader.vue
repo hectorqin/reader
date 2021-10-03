@@ -146,7 +146,7 @@
         class="headset-item"
         :style="popupAbsoluteBtnStyle"
         @click="showReadBar = !showReadBar"
-        v-if="speechAvalable && !isCarToon && !isAudio"
+        v-if="speechAvalable && !isEpub && !isCarToon && !isAudio"
       >
         <i class="el-icon-headset"></i>
       </div>
@@ -323,6 +323,7 @@
             @prevChapter="toLastChapter"
             @nextChapter="toNextChapter"
             @updateProgress="saveReadingPosition"
+            @iframeInited="$emit('iframeInited')"
           />
         </div>
       </div>
@@ -544,13 +545,15 @@ export default {
       };
     },
     isSlideRead() {
-      return this.showReadBar || this.isCarToon || this.isAudio
+      return this.showReadBar || this.isEpub || this.isCarToon || this.isAudio
         ? false
         : this.$store.getters.isSlideRead;
     },
     chapterClass() {
       return this.isSlideRead
         ? "slide-reader"
+        : this.isEpub
+        ? "epub"
         : this.isCarToon
         ? "cartoon"
         : this.isAudio
@@ -782,10 +785,18 @@ export default {
       }
     },
     isCarToon() {
-      return !this.error && (this.content || "").indexOf("<img") >= 0;
+      return (
+        !this.error && !this.isEpub && (this.content || "").indexOf("<img") >= 0
+      );
     },
     isAudio() {
       return !this.error && this.$store.state.readingBook.type === 1;
+    },
+    isEpub() {
+      return (
+        !this.error &&
+        this.$store.state.readingBook.bookUrl.toLowerCase().endsWith(".epub")
+      );
     }
   },
   methods: {
@@ -1719,9 +1730,14 @@ export default {
           return;
         }
         this.$refs.bookContentRef.ensureSeekTime(pos);
-      } else if (this.isCarToon) {
+      } else if (this.isEpub || this.isCarToon) {
         // 跳转
         this.scrollContent(pos, 0);
+        if (this.isEpub) {
+          this.$once("iframeInited", () => {
+            this.scrollContent(pos, 0);
+          });
+        }
       } else {
         const list = this.$refs.bookContentRef.$el.querySelectorAll("h3,p");
         for (let i = 0; i < list.length; i++) {
@@ -1746,7 +1762,7 @@ export default {
           position = this.$refs.bookContentRef
             ? this.$refs.bookContentRef.currentTime
             : 0;
-        } else if (this.isCarToon) {
+        } else if (this.isEpub || this.isCarToon) {
           position =
             document.documentElement.scrollTop || document.body.scrollTop;
         } else {
@@ -2180,6 +2196,7 @@ export default {
       .content-inner {
         min-height: calc(var(--vh, 1vh) * 80);
         padding-bottom: 25px;
+        box-sizing: border-box;
       }
     }
 

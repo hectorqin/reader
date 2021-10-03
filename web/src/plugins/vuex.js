@@ -252,6 +252,9 @@ export default new Vuex.Store({
       }
       return "//" + state.api;
     },
+    apiRoot: (state, getters) => {
+      return getters.api.replace(/\/reader3\/?/, "");
+    },
     isSlideRead: state => {
       return state.miniInterface && state.config.readMethod === "左右滑动";
     },
@@ -265,13 +268,13 @@ export default new Vuex.Store({
           state.config.contentBGImg.startsWith("https://") ||
           state.config.contentBGImg.startsWith("//")
           ? state.config.contentBGImg
-          : getters.api.replace(/\/reader3\/?/, "") + state.config.contentBGImg;
+          : getters.apiRoot + state.config.contentBGImg;
       }
       return undefined;
     },
     customCSSUrl: (_, getters) => {
       if (getters.api) {
-        return getters.api.replace(/\/reader3\/?/, "") + "/assets/reader.css";
+        return getters.apiRoot + "/assets/reader.css";
       }
       return false;
     },
