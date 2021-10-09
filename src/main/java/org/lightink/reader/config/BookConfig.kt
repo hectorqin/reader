@@ -15,7 +15,7 @@ object BookConfig {
     }
 
     var reader_style_dom = document.createElement('style');
-    head = document.head || document.getElementsByTagName('head')[0];
+    var head = document.head || document.getElementsByTagName('head')[0];
     head.appendChild(reader_style_dom);
 
     function reader_setStyle(style) {
@@ -58,7 +58,10 @@ object BookConfig {
 
     window.document.addEventListener('message', reader_listenFromParent);
     window.addEventListener('message', reader_listenFromParent);
-    window.addEventListener('load', reader_notifyHeight);
+    window.addEventListener('load', function() {
+        reader_notifyHeight();
+        reader_notify("load");
+    });
     window.addEventListener('resize', reader_notifyHeight);
     document.addEventListener('DOMNodeInserted', reader_notifyHeight, false);
     reader_notify("inited");

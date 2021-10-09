@@ -3,6 +3,7 @@ package org.lightink.reader.api
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.SearchBook
+import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.help.storage.OldRule
 import io.legado.app.model.Debug
@@ -20,7 +21,6 @@ import org.lightink.reader.utils.getStorage
 import org.lightink.reader.utils.saveStorage
 import org.lightink.reader.utils.asJsonArray
 import org.lightink.reader.utils.asJsonObject
-import org.lightink.reader.utils.serializeToMap
 import org.lightink.reader.utils.toDataClass
 import org.lightink.reader.utils.toMap
 import org.lightink.reader.utils.fillData
@@ -129,6 +129,9 @@ class YueduApi : RestVerticle() {
         router.get("/reader3/saveBookSource").coroutineHandler { saveBookSource(it) }
         router.post("/reader3/saveBookSource").coroutineHandler { saveBookSource(it) }
 
+        // 修改分组
+        router.post("/reader3/saveBookGroupId").coroutineHandler { saveBookGroupId(it) }
+
         // web界面
         router.route("/*").handler(StaticHandler.create("web").setDefaultContentEncoding("UTF-8"));
 
@@ -201,6 +204,12 @@ class YueduApi : RestVerticle() {
 
         // 导入本地文件
         router.post("/reader3/importBookPreview").coroutineHandler { importBookPreview(it) }
+
+        // 书籍分组
+        router.get("/reader3/getBookGroups").coroutineHandler { getBookGroups(it) }
+        router.post("/reader3/saveBookGroup").coroutineHandler { saveBookGroup(it) }
+        router.post("/reader3/deleteBookGroup").coroutineHandler { deleteBookGroup(it) }
+
 
         // webdav 服务
         router.route("/reader3/webdav*").handler {
@@ -1463,7 +1472,7 @@ class YueduApi : RestVerticle() {
                 logger.info("moveTo: {}", newFile)
                 if (file.copyRecursively(newFile)) {
                     val book = Book.initLocalBook(localFileUrl, localFilePath).also {
-                        it.rootDir = getWorkDir()
+                        it.setRootDir(getWorkDir())
                     }
                     val chapters = LocalBook.getChapterList(book)
                     fileList.add(mapOf("book" to book, "chapters" to chapters))
@@ -1615,6 +1624,15 @@ class YueduApi : RestVerticle() {
             }
             if (bookInfo.isEpub()) {
                 var chapterFilePath = getWorkDir(bookInfo.originName, "index", "OEBPS", chapterInfo.url)
+                if (!File(chapterFilePath).exists()) {
+                    // 解压文件 index.epub
+                    val unzipFile = File(bookInfo.originName + File.separator + "index")
+                    unzipFile.deleteRecursively()
+                    val localEpubFile = File(bookInfo.originName + File.separator + "index.epub")
+                    if (!localEpubFile.unzip(unzipFile.toString())) {
+                        return returnData.setErrorMsg("Epub书籍解压失败")
+                    }
+                }
                 if (!File(chapterFilePath).exists()) {
                     return returnData.setErrorMsg("章节文件不存在")
                 }
@@ -1852,18 +1870,17 @@ class YueduApi : RestVerticle() {
                 break;
             }
         }
-        var bookSourceMap: Map<String, Any?> = bookSource.serializeToMap()
         if (existIndex >= 0) {
             var sourceList = bookSourceList.getList()
-            sourceList.set(existIndex, bookSourceMap)
+            sourceList.set(existIndex, JsonObject.mapFrom(bookSource))
             bookSourceList = JsonArray(sourceList)
         } else {
-            bookSourceList.add(bookSourceMap)
+            bookSourceList.add(JsonObject.mapFrom(bookSource))
         }
 
         // logger.info("bookSourceList: {}", bookSourceList)
         saveUserStorage(userNameSpace, "bookSource", bookSourceList)
-        return returnData.setData(bookSourceList.getList())
+        return returnData.setData("")
     }
 
     private suspend fun saveSources(context: RoutingContext): ReturnData {
@@ -1889,13 +1906,12 @@ class YueduApi : RestVerticle() {
                     break;
                 }
             }
-            var bookSourceMap: Map<String, Any?> = bookSource.serializeToMap()
             if (existIndex >= 0) {
                 var sourceList = bookSourceList.getList()
-                sourceList.set(existIndex, bookSourceMap)
+                sourceList.set(existIndex, JsonObject.mapFrom(bookSource))
                 bookSourceList = JsonArray(sourceList)
             } else {
-                bookSourceList.add(bookSourceMap)
+                bookSourceList.add(JsonObject.mapFrom(bookSource))
             }
         }
 
@@ -2151,12 +2167,10 @@ class YueduApi : RestVerticle() {
             book.durChapterTitle = existBook.durChapterTitle
             book.durChapterTime = existBook.durChapterTime
 
-            var bookMap: Map<String, Any?> = book.serializeToMap()
-            bookList.set(existIndex, bookMap)
+            bookList.set(existIndex, JsonObject.mapFrom(book))
             bookshelf = JsonArray(bookList)
         } else {
-            var bookMap: Map<String, Any?> = book.serializeToMap()
-            bookshelf.add(bookMap)
+            bookshelf.add(JsonObject.mapFrom(book))
         }
         // logger.info("bookshelf: {}", bookshelf)
         saveUserStorage(userNameSpace, "bookshelf", bookshelf)
@@ -2226,6 +2240,46 @@ class YueduApi : RestVerticle() {
         return returnData.setData(newBookInfo)
     }
 
+    private suspend fun saveBookGroupId(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var bookUrl: String
+        var groupId: Int
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            bookUrl = context.bodyAsJson.getString("bookUrl")
+            groupId = context.bodyAsJson.getInteger("groupId", 0)
+        } else {
+            // get 请求
+            bookUrl = context.queryParam("bookUrl").firstOrNull() ?: ""
+            groupId = context.queryParam("groupId").firstOrNull()?.toInt() ?: 0
+        }
+        if (bookUrl.isNullOrEmpty()) {
+            return returnData.setErrorMsg("书籍链接不能为空")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
+        var book = getShelfBookByURL(bookUrl, userNameSpace)
+        if (book == null) {
+            return returnData.setErrorMsg("书籍信息错误")
+        }
+
+        if (groupId <= 0) {
+            return returnData.setErrorMsg("分组信息错误")
+        }
+
+        editShelfBook(book, userNameSpace) { existBook ->
+            existBook.group = groupId
+            logger.info("saveBookGroupId: {}", existBook)
+            existBook
+        }
+
+        book.group = groupId
+        return returnData.setData(book)
+    }
+
     private suspend fun deleteBook(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
@@ -2254,6 +2308,99 @@ class YueduApi : RestVerticle() {
         return returnData.setData("")
     }
 
+    private suspend fun getBookGroups(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        checkAuth(context)
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        var bookGroupList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookGroup"))
+        if (bookGroupList != null) {
+            return returnData.setData(bookGroupList.getList())
+        }
+        return returnData.setData(arrayListOf<Int>())
+    }
+
+    private suspend fun saveBookGroup(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val bookGroup = context.bodyAsJson.mapTo(BookGroup::class.java)
+        if (bookGroup.groupName.isEmpty()) {
+            return returnData.setErrorMsg("分组名称不能为空")
+        }
+
+        var userNameSpace = getUserNameSpace(context)
+        var bookGroupList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookGroup"))
+        if (bookGroupList == null) {
+            bookGroupList = JsonArray()
+        }
+        // 遍历判断书本是否存在
+        var existIndex: Int = -1
+        for (i in 0 until bookGroupList.size()) {
+            var _bookGroup = bookGroupList.getJsonObject(i).mapTo(BookGroup::class.java)
+            if (_bookGroup.groupId.equals(bookGroup.groupId)) {
+                existIndex = i
+                break;
+            }
+        }
+        if (existIndex >= 0) {
+            var groupList = bookGroupList.getList()
+            groupList.set(existIndex, JsonObject.mapFrom(bookGroup))
+            bookGroupList = JsonArray(groupList)
+        } else {
+            // 新增分组
+            var maxOrder = 0;
+            val idsSum = bookGroupList.sumBy{
+                val id = asJsonObject(it)?.getInteger("groupId", 0) ?: 0
+                val order = asJsonObject(it)?.getInteger("order", 0) ?: 0
+                maxOrder = if (order > maxOrder) order else maxOrder
+                if (id > 0) id else 0
+            }
+            var id = 1
+            while (id and idsSum != 0) {
+                id = id.shl(1)
+            }
+            bookGroup.groupId = id
+            bookGroup.order = maxOrder + 1
+            bookGroupList.add(JsonObject.mapFrom(bookGroup))
+        }
+
+        // logger.info("bookGroupList: {}", bookGroupList)
+        saveUserStorage(userNameSpace, "bookGroup", bookGroupList)
+        return returnData.setData("")
+    }
+
+
+    private suspend fun deleteBookGroup(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val bookgroup = context.bodyAsJson.mapTo(BookGroup::class.java)
+        var userNameSpace = getUserNameSpace(context)
+        var bookGroupList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookGroup"))
+        if (bookGroupList == null) {
+            bookGroupList = JsonArray()
+        }
+        // 遍历判断书本是否存在
+        var existIndex: Int = -1
+        for (i in 0 until bookGroupList.size()) {
+            var _bookGroup = bookGroupList.getJsonObject(i).mapTo(BookGroup::class.java)
+            if (_bookGroup.groupId.equals(bookgroup.groupId)) {
+                existIndex = i
+                break;
+            }
+        }
+        if (existIndex >= 0) {
+            bookGroupList.remove(existIndex)
+        }
+        // logger.info("bookGroup: {}", bookGroup)
+        saveUserStorage(userNameSpace, "bookGroup", bookGroupList)
+        return returnData.setData("")
+    }
 
 
     /**
@@ -2271,7 +2418,7 @@ class YueduApi : RestVerticle() {
         if (bookList.size > 0) {
             for (i in 0 until bookList.size) {
                 var book = bookList.get(i)
-                bookInfoCache.put(book.bookUrl, book.serializeToMap())
+                bookInfoCache.put(book.bookUrl, JsonObject.mapFrom(book).map)
             }
             saveStorage("data", "bookInfoCache", value = bookInfoCache)
         }
@@ -2328,7 +2475,7 @@ class YueduApi : RestVerticle() {
             var newChapterList: List<BookChapter>
             if (book.isLocalBook()) {
                 newChapterList = LocalBook.getChapterList(book.also{
-                    it.rootDir = getWorkDir()
+                    it.setRootDir(getWorkDir())
                 })
             } else {
                 newChapterList = WebBook(bookSource).getChapterList(book)
@@ -2472,8 +2619,7 @@ class YueduApi : RestVerticle() {
 
             logger.info("editShelfBook: {}", existBook)
 
-            var existBookMap: Map<String, Any?> = existBook.serializeToMap()
-            bookList.set(existIndex, existBookMap)
+            bookList.set(existIndex, JsonObject.mapFrom(existBook))
             bookshelf = JsonArray(bookList)
             saveUserStorage(userNameSpace, "bookshelf", bookshelf)
         }
@@ -2498,13 +2644,12 @@ class YueduApi : RestVerticle() {
                     break;
                 }
             }
-            var searchBookMap: Map<String, Any?> = searchBook.serializeToMap()
             if (existIndex >= 0) {
                 var _sourceList = bookSourceList.getList()
-                _sourceList.set(existIndex, searchBookMap)
+                _sourceList.set(existIndex, JsonObject.mapFrom(searchBook))
                 bookSourceList = JsonArray(_sourceList)
             } else {
-                bookSourceList.add(searchBookMap)
+                bookSourceList.add(JsonObject.mapFrom(searchBook))
             }
         }
 

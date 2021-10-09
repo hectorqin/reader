@@ -332,6 +332,11 @@ export default {
       border-color: #bbb;
       background-color: #bbb;
   }
+  .el-button--text:focus, .el-button--text:hover {
+      color: #66b1ff;
+      border-color: transparent;
+      background-color: transparent;
+  }
   .el-button.is-disabled, .el-button.is-disabled:focus, .el-button.is-disabled:hover {
       color: #C0C4CC;
       background-color: #333;

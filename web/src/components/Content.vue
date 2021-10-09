@@ -272,6 +272,10 @@ export default {
             setTimeout(() => {
               this.$emit("iframeInited");
             }, 10);
+          } else if (message.event === "load") {
+            setTimeout(() => {
+              this.$emit("iframeLoad");
+            }, 100);
           } else if (message.event === "setHeight") {
             this.iframeStyle = {
               ...this.iframeStyle,

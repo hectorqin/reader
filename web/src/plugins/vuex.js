@@ -3,6 +3,12 @@ import Vuex from "vuex";
 import settings from "./config";
 
 const defaultNS = [{ username: "默认", userNS: "default" }];
+const builtInBookGroup = [
+  { groupId: -1, groupName: "全部", order: -10, show: true },
+  { groupId: -2, groupName: "本地", order: -9, show: true },
+  { groupId: -3, groupName: "音频", order: -8, show: true },
+  { groupId: -4, groupName: "未分组", order: -7, show: true }
+];
 Vue.use(Vuex);
 
 export default new Vuex.Store({
@@ -43,7 +49,8 @@ export default new Vuex.Store({
     },
     autoPlay: false,
     failureIncludeTimeout: false,
-    failureBookSource: []
+    failureBookSource: [],
+    bookGroupList: []
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -57,7 +64,7 @@ export default new Vuex.Store({
           durChapterPos: v.durChapterPos,
           durChapterTime: v.durChapterTime,
           durChapterTitle: v.durChapterTitle,
-          // kind: v.kind,
+          kind: v.kind,
           intro: v.intro,
           lastCheckTime: v.lastCheckTime,
           latestChapterTitle: v.latestChapterTitle,
@@ -65,9 +72,46 @@ export default new Vuex.Store({
           origin: v.origin,
           originName: v.originName,
           totalChapterNum: v.totalChapterNum,
-          type: v.type
+          type: v.type,
+          group: v.group
         };
       });
+    },
+    updateShelfBook(state, book) {
+      const index = state.shelfBooks.findIndex(v => v.bookUrl === book.bookUrl);
+      if (index >= 0) {
+        state.shelfBooks[index] = {
+          ...state.shelfBooks[index],
+          ...{
+            author: book.author || state.shelfBooks[index].author,
+            bookUrl: book.bookUrl || state.shelfBooks[index].bookUrl,
+            coverUrl: book.coverUrl || state.shelfBooks[index].coverUrl,
+            durChapterIndex:
+              book.durChapterIndex || state.shelfBooks[index].durChapterIndex,
+            durChapterPos:
+              book.durChapterPos || state.shelfBooks[index].durChapterPos,
+            durChapterTime:
+              book.durChapterTime || state.shelfBooks[index].durChapterTime,
+            durChapterTitle:
+              book.durChapterTitle || state.shelfBooks[index].durChapterTitle,
+            kind: book.kind || state.shelfBooks[index].kind,
+            intro: book.intro || state.shelfBooks[index].intro,
+            lastCheckTime:
+              book.lastCheckTime || state.shelfBooks[index].lastCheckTime,
+            latestChapterTitle:
+              book.latestChapterTitle ||
+              state.shelfBooks[index].latestChapterTitle,
+            name: book.name || state.shelfBooks[index].name,
+            origin: book.origin || state.shelfBooks[index].origin,
+            originName: book.originName || state.shelfBooks[index].originName,
+            totalChapterNum:
+              book.totalChapterNum || state.shelfBooks[index].totalChapterNum,
+            type: book.type || state.shelfBooks[index].type,
+            group: book.group || state.shelfBooks[index].group
+          }
+        };
+        state.shelfBooks = [].concat(state.shelfBooks);
+      }
     },
     setReadingBook(state, readingBook) {
       state.readingBook = readingBook;
@@ -239,6 +283,16 @@ export default new Vuex.Store({
     },
     setFailureIncludeTimeout(state, failureIncludeTimeout) {
       state.failureIncludeTimeout = failureIncludeTimeout;
+    },
+    setBookGroupList(state, bookGroupList) {
+      const _bookGroupList = [];
+
+      builtInBookGroup.forEach(group => {
+        if (!bookGroupList.some(v => v.groupId === group.groupId)) {
+          _bookGroupList.push(group);
+        }
+      });
+      state.bookGroupList = _bookGroupList.concat(bookGroupList);
     }
   },
   getters: {
@@ -333,6 +387,12 @@ export default new Vuex.Store({
         var y = b["durChapterTime"] || 0;
         return y - x;
       });
+    },
+    builtInBookGroupMap: () => {
+      return builtInBookGroup.reduce((c, v) => {
+        c[v.groupId] = v.groupName;
+        return c;
+      }, {});
     }
   },
   actions: {

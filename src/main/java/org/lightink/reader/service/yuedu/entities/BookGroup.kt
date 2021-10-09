@@ -8,6 +8,7 @@ package io.legado.app.data.entities
 data class BookGroup(
 //        @PrimaryKey
         var groupId: Int = 0,
-        var groupName: String,
-        var order: Int = 0
+        var groupName: String = "",
+        var order: Int = 0,
+        var show: Boolean = true
 )

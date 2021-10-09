@@ -324,7 +324,7 @@
             @prevChapter="toLastChapter"
             @nextChapter="toNextChapter"
             @updateProgress="saveReadingPosition"
-            @iframeInited="$emit('iframeInited')"
+            @iframeLoad="$emit('iframeLoad')"
             @contentChange="computePages()"
           />
         </div>
@@ -434,7 +434,7 @@ export default {
         this.saveReadingPosition();
       });
       if (this.isEpub) {
-        this.$once("iframeInited", () => {
+        this.$once("iframeLoad", () => {
           this.computePages();
         });
       }
@@ -827,7 +827,12 @@ export default {
           this.autoShowPosition();
           this.loadCatalog(false, true);
         } else {
-          this.startSavePosition = true;
+          if (this.isEpub) {
+            // 跳转记住的位置
+            this.autoShowPosition(true);
+          } else {
+            this.startSavePosition = true;
+          }
           setTimeout(() => {
             // console.log("setReadingBook", this.lastReadingBook);
             this.$store.commit("setReadingBook", this.lastReadingBook);
@@ -1193,10 +1198,11 @@ export default {
         onEnd
       });
     },
-    scrollContent(moveY, duration) {
+    scrollContent(moveY, duration, isAccurate) {
       // console.log("scrollContent", moveY);
-      const lastScrollTop =
-        document.documentElement.scrollTop || document.body.scrollTop;
+      const lastScrollTop = isAccurate
+        ? 0
+        : document.documentElement.scrollTop || document.body.scrollTop;
       const onEnd = () => {
         document.documentElement.scrollTop = lastScrollTop + moveY;
         document.body.scrollTop = lastScrollTop + moveY;
@@ -1722,27 +1728,29 @@ export default {
             (this.windowSize.height - 35)
         );
       }
-      this.saveReadingPosition();
+      this.scrollTimer && clearTimeout(this.scrollTimer);
+      this.scrollTimer = setTimeout(this.saveReadingPosition, 100);
     },
     beforeReadMethodChange() {
       this.currentParagraph = this.getCurrentParagraph();
     },
-    showPosition(pos) {
+    showPosition(pos, callback) {
       if (this.isAudio) {
         // seek
         if (!this.$refs.bookContentRef) {
           setTimeout(() => {
-            this.showPosition(pos);
+            this.showPosition(pos, callback);
           }, 10);
           return;
         }
         this.$refs.bookContentRef.ensureSeekTime(pos);
       } else if (this.isEpub || this.isCarToon) {
         // 跳转
-        this.scrollContent(pos, 0);
+        this.scrollContent(pos, 0, true);
         if (this.isEpub) {
-          this.$once("iframeInited", () => {
-            this.scrollContent(pos, 0);
+          this.$once("iframeLoad", () => {
+            this.scrollContent(pos, 0, true);
+            callback && callback();
           });
         }
       } else {
@@ -1757,6 +1765,7 @@ export default {
             break;
           }
         }
+        callback && callback();
       }
     },
     saveReadingPosition() {
@@ -1789,11 +1798,11 @@ export default {
         //
       }
     },
-    autoShowPosition() {
-      this.$once("showContent", () => {
+    autoShowPosition(immediate) {
+      const handler = () => {
         setTimeout(() => {
           this.startSavePosition = true;
-        }, 200);
+        }, 2000);
         if (this.error) {
           return;
         }
@@ -1804,10 +1813,17 @@ export default {
           );
         if (+lastPosition) {
           this.$nextTick(() => {
-            this.showPosition(+lastPosition);
+            this.showPosition(+lastPosition, () => {
+              this.startSavePosition = true;
+            });
           });
         }
-      });
+      };
+      if (immediate) {
+        handler();
+      } else {
+        this.$once("showContent", handler);
+      }
     },
     wakeLock() {
       if ("WakeLock" in window && "request" in window.WakeLock) {

@@ -127,7 +127,11 @@ data class Book(
         return folderName + MD5Utils.md5Encode16(bookUrl)
     }
 
-    var rootDir: String = ""
+    private var rootDir: String = ""
+
+    fun setRootDir(root: String) {
+        rootDir = root
+    }
 
     fun getLocalFile(): File {
         if (isEpub()) {
