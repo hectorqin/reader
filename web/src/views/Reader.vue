@@ -2079,6 +2079,7 @@ export default {
         .close-btn, .collapse-btn {
           font-size: 22px;
           height: 35px;
+          cursor: pointer;
         }
 
         .center {

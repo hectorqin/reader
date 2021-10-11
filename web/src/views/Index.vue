@@ -425,6 +425,7 @@
       :width="dialogWidth"
       :top="dialogTop"
       :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg' : ''"
     >
       <div class="source-container">
         <el-checkbox-group
@@ -469,6 +470,7 @@
         showSourceGroup = '';
       "
       :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
     >
       <div class="source-container table-container">
         <div class="check-form" v-if="isShowFailureBookSource">
@@ -596,6 +598,7 @@
       :width="dialogWidth"
       :top="dialogTop"
       :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
     >
       <div class="source-container table-container">
         <el-table
@@ -671,6 +674,7 @@
       :width="dialogWidth"
       :top="dialogTop"
       :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
     >
       <div class="source-container table-container">
         <el-table
@@ -756,6 +760,7 @@
       :top="dialogTop"
       @closed="importBookDialogClosed"
       :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
     >
       <div class="source-container table-container">
         <div class="check-form">
@@ -795,6 +800,7 @@
       :width="dialogWidth"
       :top="dialogTop"
       :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @opened="$refs.bookGroupTableRef.doLayout()"
       @closed="isShowBookGroupSettingDialog = false"
     >
@@ -887,6 +893,7 @@
       :visible.sync="showBookInfoDialog"
       :width="dialogSmallWidth"
       :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
     >
       <div class="book-info-container">
         <div class="book-cover">
@@ -1161,6 +1168,7 @@ export default {
           this.loadBookSource(refresh);
           // 加载分组列表
           this.loadBookGroup(refresh);
+          this.initing = false;
           return;
         }
       }
@@ -1172,7 +1180,9 @@ export default {
           // 加载分组列表
           this.loadBookGroup(refresh);
         })
-        .catch(() => {});
+        .catch(() => {
+          this.initing = false;
+        });
     },
     setIP() {
       this.$prompt("请输入接口地址 ( 如：localhost:8080/reader3 )", "提示", {
@@ -1222,13 +1232,15 @@ export default {
         return Promise.reject(false);
       }
 
-      this.loading = this.$loading({
-        target: this.$refs.bookList,
-        lock: true,
-        text: refresh ? "正在刷新书籍信息" : "正在获取书籍信息",
-        spinner: "el-icon-loading",
-        background: this.isNight ? "#222" : "#fff"
-      });
+      if (!this.loading || !this.loading.visible) {
+        this.loading = this.$loading({
+          target: this.$refs.bookList,
+          lock: true,
+          text: refresh ? "正在刷新书籍信息" : "正在获取书籍信息",
+          spinner: "el-icon-loading",
+          background: this.isNight ? "#222" : "#fff"
+        });
+      }
 
       if (
         !api.startsWith("http://") &&
@@ -1244,10 +1256,10 @@ export default {
           this.loading.close();
           if (response.data.isSuccess) {
             // this.$store.commit("increaseBookNum", response.data.data.length);
-            this.popIntroVisible = response.data.data.reduce((c, v) => {
-              c[v.name] = false;
-              return c;
-            }, {});
+            // this.popIntroVisible = response.data.data.reduce((c, v) => {
+            //   c[v.name] = false;
+            //   return c;
+            // }, {});
             this.$store.commit("setShelfBooks", response.data.data);
             this.loadBookGroup();
           }
@@ -3204,6 +3216,13 @@ export default {
   color: #ddd !important;
 }
 .status-bar-light-bg {
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.2) 0,
+    transparent 36px
+  ) !important;
+}
+.status-bar-light-bg-dialog .el-dialog.is-fullscreen {
   background-image: linear-gradient(
     to bottom,
     rgba(0, 0, 0, 0.2) 0,

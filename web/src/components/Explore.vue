@@ -301,6 +301,7 @@ export default {
     .close-btn {
       font-size: 20px;
       vertical-align: middle;
+      cursor: pointer;
     }
     &.loading {
       color: #606266;
