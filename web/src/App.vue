@@ -407,6 +407,14 @@ export default {
 .el-message-box {
   max-width: 85vw;
 }
+.el-dialog__header {
+  position: relative;
+}
+.el-dialog.is-fullscreen {
+  padding-top: 0;
+  padding-top: constant(safe-area-inset-top) !important;
+  padding-top: env(safe-area-inset-top) !important;
+}
 .popper-component.el-popover {
   border: none;
   box-shadow: none;
