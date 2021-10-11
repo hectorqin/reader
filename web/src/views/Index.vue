@@ -293,9 +293,6 @@
       :class="isWebApp && !isNight ? 'status-bar-light-bg' : ''"
       ref="shelfWrapper"
       @click="showNavigation = false"
-      @touchstart="handleTouchStart"
-      @touchmove="handleTouchMove"
-      @touchend="handleTouchEnd"
     >
       <div class="shelf-title">
         <i
@@ -361,7 +358,13 @@
           管理
         </el-tag>
       </div>
-      <div class="books-wrapper" ref="bookList">
+      <div
+        class="books-wrapper"
+        ref="bookList"
+        @touchstart="handleTouchStart"
+        @touchmove="handleTouchMove"
+        @touchend="handleTouchEnd"
+      >
         <div class="wrapper">
           <div
             class="book"
