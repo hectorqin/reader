@@ -2764,6 +2764,13 @@ class YueduApi : RestVerticle() {
                     userBookSourceFile.deleteRecursively()
                     bookshelfFile.renameTo(userBookSourceFile)
                 }
+                // 同步 书籍分组
+                val bookGroupFile = File(descDir + File.separator + "bookGroup.json")
+                if (bookGroupFile.exists()) {
+                    val userBookGroupFile = File(getWorkDir("storage", "data", userNameSpace, "bookGroup.json"))
+                    userBookGroupFile.deleteRecursively()
+                    bookGroupFile.renameTo(userBookGroupFile)
+                }
 
                 // 同步阅读进度
                 var bookProgressDir = File(userHome + File.separator + "bookProgress")
@@ -2810,6 +2817,13 @@ class YueduApi : RestVerticle() {
                     val bookshelfFile = File(descDir + File.separator + "bookshelf.json")
                     bookshelfFile.deleteRecursively()
                     userBookshelfFile.copyRecursively(bookshelfFile)
+                }
+                // 同步 书籍分组
+                val userBookGroupFile = File(getWorkDir("storage", "data", userNameSpace, "bookGroup.json"))
+                if (userBookGroupFile.exists()) {
+                    val bookGroupFile = File(descDir + File.separator + "bookGroup.json")
+                    bookGroupFile.deleteRecursively()
+                    userBookGroupFile.renameTo(bookGroupFile)
                 }
 
                 // 压缩
