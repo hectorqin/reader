@@ -265,6 +265,22 @@
             </el-tag>
           </div>
         </div>
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            书架设置
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="book-group-btn"
+              :key="'bookGroup-manage'"
+              @click="showManageBookGroup"
+            >
+              分组管理
+            </el-tag>
+          </div>
+        </div>
       </div>
       <div class="bottom-icons">
         <a href="https://github.com/hectorqin/reader" target="_blank">
@@ -322,6 +338,7 @@
           <input
             ref="bookRef"
             type="file"
+            multiple="multiple"
             @change="onBookFileChange"
             style="display:none"
           />
@@ -340,10 +357,9 @@
           :effect="$store.getters.isNight ? 'dark' : 'light'"
           class="book-group-btn"
           :class="showBookGroup === group.groupId ? 'selected' : ''"
-          v-for="group in $store.state.bookGroupList"
+          v-for="group in bookGroupDisplayList"
           :key="'bookGroup-' + group.groupId"
           @click="showBookGroup = group.groupId"
-          v-show="getShowShelfBooks(group.groupId).length"
         >
           {{ group.groupName }}
         </el-tag>
@@ -352,7 +368,7 @@
           :effect="$store.getters.isNight ? 'dark' : 'light'"
           class="book-group-btn"
           :key="'bookGroup-manage'"
-          v-if="$store.state.bookGroupList.length"
+          v-if="bookGroupDisplayList.length"
           @click="showManageBookGroup"
         >
           管理
@@ -757,7 +773,7 @@
     </el-dialog>
 
     <el-dialog
-      title="导入本地书籍"
+      :title="'导入本地书籍' + importMultiBookTip"
       :visible.sync="showImportBookDialog"
       :width="dialogWidth"
       :top="dialogTop"
@@ -1101,13 +1117,14 @@ export default {
       importBookChapters: [],
       showImportBookDialog: false,
 
-      showBookGroup: -1,
       showBookGroupManageDialog: false,
       isShowBookGroupSettingDialog: false,
       bookGroupSelection: [],
 
       showBookInfo: {},
-      showBookInfoDialog: false
+      showBookInfoDialog: false,
+
+      importMultiBookTip: ""
     };
   },
   watch: {
@@ -1442,9 +1459,9 @@ export default {
     saveBook(book, isImport) {
       if (!book || !book.bookUrl || !book.origin) {
         this.$message.error("书籍信息错误");
-        return;
+        return Promise.reject(false);
       }
-      Axios.post(this.api + "/saveBook", book).then(
+      return Axios.post(this.api + "/saveBook", book).then(
         res => {
           if (res.data.isSuccess) {
             //
@@ -2127,33 +2144,79 @@ export default {
     importLocalBook() {
       this.$refs.bookRef.dispatchEvent(new MouseEvent("click"));
     },
-    onBookFileChange() {
-      const rawFile = event.target.files && event.target.files[0];
-      if (!rawFile) {
+    onBookFileChange(event) {
+      if (!event.target || !event.target.files || !event.target.files.length) {
         return;
       }
       let param = new FormData();
-      param.append("file", rawFile);
+      event.target.files.forEach((file, i) => {
+        param.append("file" + i, file);
+      });
       Axios.post(this.api + "/importBookPreview", param, {
         headers: { "Content-Type": "multipart/form-data" }
       }).then(
         res => {
           if (res.data.isSuccess && res.data.data.length) {
-            //
-            this.importBookInfo = res.data.data[0].book;
-            this.importBookChapters = res.data.data[0].chapters;
-            this.showImportBookDialog = true;
+            if (res.data.data.length > 1) {
+              // 批量导入
+              this.importMultiBooks(res.data.data);
+            } else {
+              //
+              this.importBookInfo = res.data.data[0].book;
+              this.importBookChapters = res.data.data[0].chapters;
+              this.showImportBookDialog = true;
+            }
           }
         },
         error => {
           this.$message.error("上传书籍 " + (error && error.toString()));
         }
       );
+      this.$refs.bookRef.value = null;
+    },
+    async importMultiBooks(books) {
+      const res = await this.$confirm(
+        `你选择导入多本书籍，请选择导入方式?`,
+        "提示",
+        {
+          confirmButtonText: "批量导入",
+          cancelButtonText: "逐一确认导入",
+          type: "warning",
+          closeOnClickModal: false,
+          closeOnPressEscape: false
+        }
+      ).catch(() => {
+        return false;
+      });
+      if (res) {
+        for (let i = 0; i < books.length; i++) {
+          const book = books[i];
+          await this.saveBook(book.book, true).catch(() => {});
+        }
+      } else {
+        for (let i = 0; i < books.length; i++) {
+          const book = books[i];
+          this.importMultiBookTip = `（${i + 1}/${books.length}）`;
+          await this.waitForImportBook(book);
+        }
+        this.importMultiBookTip = "";
+      }
+    },
+    waitForImportBook(bookInfo) {
+      return new Promise(resolve => {
+        this.importBookInfo = bookInfo.book;
+        this.importBookChapters = bookInfo.chapters;
+        this.showImportBookDialog = true;
+        this.$once("importEnd", resolve);
+      });
     },
     importBookDialogClosed() {
       const url = this.importBookInfo.bookUrl;
       this.importBookInfo = {};
       this.importBookChapters = [];
+      this.$nextTick(() => {
+        this.$emit("importEnd");
+      });
 
       Axios.post(
         this.api + "/deleteFile",
@@ -2507,11 +2570,28 @@ export default {
         )
       );
     },
+    showBookGroup: {
+      get() {
+        if (!this.bookGroupDisplayList.length) return -1;
+        return this.$store.state.shelfConfig.showBookGroup;
+      },
+      set(val) {
+        this.$store.commit("setShelfConfig", {
+          ...this.$store.state.shelfConfig,
+          showBookGroup: val
+        });
+      }
+    },
     showBookGroupList() {
       if (!this.isShowBookGroupSettingDialog) {
         return this.$store.state.bookGroupList;
       }
       return this.$store.state.bookGroupList.filter(v => v.groupId > 0);
+    },
+    bookGroupDisplayList() {
+      return this.$store.state.bookGroupList
+        .filter(v => this.getShowShelfBooks(v.groupId).length && v.show)
+        .sort((a, b) => a.order - b.order);
     },
     bookCoverBgStyle() {
       return {

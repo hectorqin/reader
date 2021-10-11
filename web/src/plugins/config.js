@@ -18,6 +18,9 @@ import content_6 from "../assets/imgs/themes/content_6.png";
 // import popup_6 from "../assets/imgs/themes/popup_6.png";
 
 const settings = {
+  shelfConfig: {
+    showBookGroup: -1
+  },
   config: {
     theme: 0,
     font: 0,

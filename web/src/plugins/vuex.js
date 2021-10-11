@@ -50,7 +50,8 @@ export default new Vuex.Store({
     autoPlay: false,
     failureIncludeTimeout: false,
     failureBookSource: [],
-    bookGroupList: []
+    bookGroupList: [],
+    shelfConfig: { ...settings.shelfConfig }
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -116,24 +117,26 @@ export default new Vuex.Store({
     setReadingBook(state, readingBook) {
       state.readingBook = readingBook;
       // 更新书架信息
-      for (let i = 0; i < state.shelfBooks.length; i++) {
-        if (state.shelfBooks[i].bookUrl === readingBook.bookUrl) {
-          const title = ((readingBook.catalog || [])[readingBook.index] || {})
-            .title;
-          state.shelfBooks[i] = {
-            ...state.shelfBooks[i],
-            durChapterTime: new Date().getTime(),
-            durChapterIndex: readingBook.index,
-            ...(title
-              ? {
-                  durChapterTitle: title
-                }
-              : {})
-          };
-          break;
+      setTimeout(() => {
+        for (let i = 0; i < state.shelfBooks.length; i++) {
+          if (state.shelfBooks[i].bookUrl === readingBook.bookUrl) {
+            const title = ((readingBook.catalog || [])[readingBook.index] || {})
+              .title;
+            state.shelfBooks[i] = {
+              ...state.shelfBooks[i],
+              durChapterTime: new Date().getTime(),
+              durChapterIndex: readingBook.index,
+              ...(title
+                ? {
+                    durChapterTitle: title
+                  }
+                : {})
+            };
+            break;
+          }
         }
-      }
-      state.shelfBooks = [].concat(state.shelfBooks);
+        state.shelfBooks = [].concat(state.shelfBooks);
+      }, 10);
       // eslint-disable-next-line no-unused-vars
       const { catalog, ...info } = readingBook;
       window.localStorage &&
@@ -293,6 +296,11 @@ export default new Vuex.Store({
         }
       });
       state.bookGroupList = _bookGroupList.concat(bookGroupList);
+    },
+    setShelfConfig(state, shelfConfig) {
+      state.shelfConfig = shelfConfig;
+      window.localStorage &&
+        window.localStorage.setItem("shelfConfig", JSON.stringify(shelfConfig));
     }
   },
   getters: {
@@ -435,6 +443,7 @@ export default new Vuex.Store({
         //
       }
       try {
+        // 获取听书配置
         const speechVoiceConfig = JSON.parse(
           window.localStorage.getItem("speechVoiceConfig")
         );
@@ -442,6 +451,20 @@ export default new Vuex.Store({
           commit("setSpeechVoiceConfig", {
             ...settings.speechVoiceConfig,
             ...speechVoiceConfig
+          });
+        }
+      } catch (error) {
+        //
+      }
+      try {
+        // 获取书架设置
+        const shelfConfig = JSON.parse(
+          window.localStorage.getItem("shelfConfig")
+        );
+        if (shelfConfig && typeof shelfConfig === "object") {
+          commit("setShelfConfig", {
+            ...settings.shelfConfig,
+            ...shelfConfig
           });
         }
       } catch (error) {

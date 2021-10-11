@@ -2305,6 +2305,11 @@ class YueduApi : RestVerticle() {
         }
         // logger.info("bookshelf: {}", bookshelf)
         saveUserStorage(userNameSpace, "bookshelf", bookshelf)
+
+        // 删除书籍目录
+        val localBookPath = File(getWorkDir("storage", "data", userNameSpace, book.name + "_" + book.author))
+        localBookPath.deleteRecursively()
+
         return returnData.setData("")
     }
 
