@@ -133,7 +133,11 @@ data class Book(
     private var rootDir: String = ""
 
     fun setRootDir(root: String) {
-        rootDir = root
+        if (root.isNotEmpty() && !root.endsWith(File.separator)) {
+            rootDir = root + File.separator
+        } else {
+            rootDir = root
+        }
     }
 
     fun getLocalFile(): File {
@@ -204,12 +208,13 @@ data class Book(
         const val imgStyleFull = "FULL"
         const val imgStyleText = "TEXT"
 
-        fun initLocalBook(bookUrl: String, localPath: String): Book {
+        fun initLocalBook(bookUrl: String, localPath: String, rootDir: String = ""): Book {
             val fileName = File(localPath).name
             val nameAuthor = LocalBook.analyzeNameAuthor(fileName)
             val book = Book(bookUrl, "", BookType.local, localPath, nameAuthor.first, nameAuthor.second).also {
                 it.canUpdate = false
             }
+            book.setRootDir(rootDir)
             if (book.isEpub()) {
                 EpubFile.upBookInfo(book)
             } else if (book.isUmd()) {

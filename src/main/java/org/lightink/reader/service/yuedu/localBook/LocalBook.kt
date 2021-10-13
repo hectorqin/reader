@@ -27,7 +27,7 @@ object LocalBook {
             }
         }
         if (chapters.isEmpty()) {
-            throw Exception("Chapterlist is empty")
+            throw Exception("Chapterlist is empty  " + book.getLocalFile())
         }
         return chapters
     }

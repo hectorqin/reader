@@ -293,6 +293,8 @@ export default {
             this.$emit("epubClick", message.data);
           } else if (message.event === "clickHash") {
             this.$emit("epubClickHash", message.data);
+          } else if (message.event === "keydown") {
+            this.$emit("epubKeydown", message.data);
           }
           // else if (message.event === "clickA") {
           //   this.$emit("locationChange", message.data);

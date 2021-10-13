@@ -1483,9 +1483,7 @@ class YueduApi : RestVerticle() {
                 }
                 logger.info("moveTo: {}", newFile)
                 if (file.copyRecursively(newFile)) {
-                    val book = Book.initLocalBook(localFileUrl, localFilePath).also {
-                        it.setRootDir(getWorkDir())
-                    }
+                    val book = Book.initLocalBook(localFileUrl, localFilePath, getWorkDir())
                     val chapters = LocalBook.getChapterList(book)
                     fileList.add(mapOf("book" to book, "chapters" to chapters))
                 }
@@ -1635,15 +1633,10 @@ class YueduApi : RestVerticle() {
                 }
             }
             if (bookInfo.isEpub()) {
-                val epubExtractDir = File(bookInfo.originName + File.separator + "index")
-                if (!epubExtractDir.exists()) {
-                    // 解压文件 index.epub
-                    epubExtractDir.deleteRecursively()
-                    val localEpubFile = File(bookInfo.originName + File.separator + "index.epub")
-                    if (!localEpubFile.unzip(epubExtractDir.toString())) {
-                        return returnData.setErrorMsg("Epub书籍解压失败")
-                    }
+                if (!extractEpub(bookInfo)) {
+                    return returnData.setErrorMsg("Epub书籍解压失败")
                 }
+
                 val epubRootDir = bookInfo.getEpubRootDir()
                 var chapterFilePath = getWorkDir(bookInfo.originName, "index", epubRootDir, chapterInfo.url)
                 logger.info("chapterFilePath: {} {}", chapterFilePath, epubRootDir)
@@ -2131,7 +2124,8 @@ class YueduApi : RestVerticle() {
                 // 临时文件，移动到书籍目录
                 // storage/assets/hector/book/《极道天魔》（校对版全本）作者：滚开.txt
                 val tempFile = File(getWorkDir("storage" + book.bookUrl))
-                val localFilePath = getWorkDir("storage", "data", userNameSpace, book.name + "_" + book.author, tempFile.name)
+                val relativeLocalFilePath = Paths.get("storage", "data", userNameSpace, book.name + "_" + book.author, tempFile.name).toString()
+                val localFilePath = getWorkDir(relativeLocalFilePath)
                 logger.info("localFilePath: {}", localFilePath)
                 var localFile = File(localFilePath)
                 localFile.deleteRecursively()
@@ -2143,17 +2137,14 @@ class YueduApi : RestVerticle() {
                 }
                 if (book.isEpub()) {
                     // 解压文件 index.epub
-                    val unzipFile = File(localFilePath + File.separator + "index")
-                    unzipFile.deleteRecursively()
-                    val localEpubFile = File(localFilePath + File.separator + "index.epub")
-                    if (!localEpubFile.unzip(unzipFile.toString())) {
+                    if (!extractEpub(book)) {
                         return returnData.setErrorMsg("导入本地Epub书籍失败")
                     }
                 }
                 tempFile.deleteRecursively()
                 // 修改书籍信息
-                book.bookUrl = localFilePath
-                book.originName = localFilePath
+                book.bookUrl = relativeLocalFilePath
+                book.originName = relativeLocalFilePath
             }
         } else if (book.tocUrl.isNullOrEmpty()) {
             // 补全书籍信息
@@ -2498,10 +2489,7 @@ class YueduApi : RestVerticle() {
             var newChapterList: List<BookChapter>
             if (book.isLocalBook()) {
                 // 重新解压epub文件
-                val epubExtractDir = File(book.originName + File.separator + "index")
-                epubExtractDir.deleteRecursively()
-                val localEpubFile = File(book.originName + File.separator + "index.epub")
-                if (!localEpubFile.unzip(epubExtractDir.toString())) {
+                if (!extractEpub(book, refresh)) {
                     throw Exception("Epub书籍解压失败")
                 }
                 newChapterList = LocalBook.getChapterList(book.also{
@@ -2931,5 +2919,17 @@ class YueduApi : RestVerticle() {
                 e.printStackTrace()
             }
         }
+    }
+
+    fun extractEpub(book: Book, force: Boolean = false): Boolean {
+        val epubExtractDir = File(getWorkDir(book.originName + File.separator + "index"))
+        if (force || !epubExtractDir.exists()) {
+            epubExtractDir.deleteRecursively()
+            val localEpubFile = File(getWorkDir(book.originName + File.separator + "index.epub"))
+            if (!localEpubFile.unzip(epubExtractDir.toString())) {
+                return false
+            }
+        }
+        return true
     }
 }

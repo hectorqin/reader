@@ -3,7 +3,7 @@ package org.lightink.reader.config
 import java.io.File
 
 object BookConfig {
-    val javascriptVersion = "reader-inject-javascript-1.0.0"
+    val javascriptVersion = "reader-inject-javascript-1.0.1"
     val epubInjectJavascript = """
     // ${javascriptVersion}
     if (!window.reader_inited) {
@@ -99,6 +99,14 @@ object BookConfig {
                     clientY: event.clientY
                 });
             }
+        });
+        window.addEventListener("keydown", function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            reader_notify("keydown", {
+                key: event.key,
+                keyCode: event.keyCode
+            });
         });
         reader_notify("inited");
 

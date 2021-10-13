@@ -329,6 +329,7 @@
             @epubClick="epubClick"
             @epubLocationChange="epubLocationChangeHandler"
             @epubClickHash="epubClickHash"
+            @epubKeydown="keydownHandler($event, true)"
           />
         </div>
       </div>
@@ -1360,6 +1361,9 @@ export default {
           let book = { ...this.$store.state.readingBook };
           book.index = newChapterIndex;
           this.$store.commit("setReadingBook", book);
+          this.title = this.$store.state.readingBook.catalog[
+            newChapterIndex
+          ].title;
         }
       }
     },
@@ -1424,7 +1428,7 @@ export default {
         }
       }
     },
-    keydownHandler(event) {
+    keydownHandler(event, force) {
       // console.log("keyup", event);
       if (
         this.popBookSourceVisible ||
@@ -1435,7 +1439,7 @@ export default {
       ) {
         return;
       }
-      if (document.activeElement !== document.body) {
+      if (!force && document.activeElement !== document.body) {
         return;
       }
       if (this.isAudio) {
@@ -1451,8 +1455,8 @@ export default {
       const eventKey = event.key || keyCodeMap[event.keyCode];
       switch (eventKey) {
         case "ArrowLeft":
-          event.preventDefault();
-          event.stopPropagation();
+          event.preventDefault && event.preventDefault();
+          event.stopPropagation && event.stopPropagation();
           this.showToolBar = false;
           if (this.isSlideRead) {
             this.prevPage();
@@ -1461,8 +1465,8 @@ export default {
           }
           break;
         case "ArrowRight":
-          event.preventDefault();
-          event.stopPropagation();
+          event.preventDefault && event.preventDefault();
+          event.stopPropagation && event.stopPropagation();
           this.showToolBar = false;
           if (this.isSlideRead) {
             this.nextPage();
@@ -1471,14 +1475,14 @@ export default {
           }
           break;
         case "ArrowUp":
-          event.preventDefault();
-          event.stopPropagation();
+          event.preventDefault && event.preventDefault();
+          event.stopPropagation && event.stopPropagation();
           this.showToolBar = false;
           this.prevPage();
           break;
         case "ArrowDown":
-          event.preventDefault();
-          event.stopPropagation();
+          event.preventDefault && event.preventDefault();
+          event.stopPropagation && event.stopPropagation();
           this.showToolBar = false;
           this.nextPage();
           break;
