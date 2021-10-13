@@ -309,8 +309,13 @@ class ReaderUIApplication: Application() {
                 stage.widthProperty().addListener{_, _, w ->
                     windowConfigMap.put("width", w)
                 }
-                stage.heightProperty().addListener{_, _, h ->
-                    windowConfigMap.put("height", h)
+                // stage.heightProperty().addListener{_, _, h ->
+                //     windowConfigMap.put("height", h)
+                // }
+                stage.sceneProperty().addListener{_, _, s ->
+                    s.heightProperty().addListener{_, _, h ->
+                        windowConfigMap.put("height", h)
+                    }
                 }
             }
             if (rememberPosition) {
