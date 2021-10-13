@@ -326,6 +326,9 @@
             @updateProgress="saveReadingPosition"
             @iframeLoad="$emit('iframeLoad')"
             @contentChange="computePages()"
+            @epubClick="epubClick"
+            @epubLocationChange="epubLocationChangeHandler"
+            @epubClickHash="epubClickHash"
           />
         </div>
       </div>
@@ -711,6 +714,9 @@ export default {
       return this.$store.state.filterRules;
     },
     filterContent() {
+      if (this.isEpub || this.isAudio) {
+        return this.content;
+      }
       let content = this.content;
       try {
         this.filterRules.forEach(rule => {
@@ -1229,6 +1235,9 @@ export default {
       });
     },
     handlerClick(e) {
+      if (this.isEpub) {
+        return;
+      }
       if (!this.lastTouch && !this.ignoreNextClick) {
         this.eventHandler(e);
       }
@@ -1240,6 +1249,9 @@ export default {
         return;
       }
       if (this.isAudio) {
+        return;
+      }
+      if (this.isEpub) {
         return;
       }
       // e.preventDefault();
@@ -1295,6 +1307,61 @@ export default {
         this.lastMoveX = false;
         this.lastMoveY = false;
       }, 300);
+    },
+    epubClick() {
+      if (
+        this.popBookSourceVisible ||
+        this.popBookShelfVisible ||
+        this.popCataVisible ||
+        this.readSettingsVisible
+      ) {
+        this.popBookSourceVisible = false;
+        this.popBookShelfVisible = false;
+        this.popCataVisible = false;
+        this.readSettingsVisible = false;
+        return;
+      }
+      if (!this.showReadBar) {
+        this.showToolBar = !this.showToolBar;
+      }
+    },
+    epubClickHash(rect) {
+      if (typeof rect.top !== "undefined") {
+        this.scrollContent(
+          rect.top -
+            30 -
+            (window.webAppDistance | 0) -
+            (this.$store.state.safeArea.top | 0),
+          0,
+          true
+        );
+      }
+    },
+    epubLocationChangeHandler(url) {
+      function getPathname(path) {
+        const a = document.createElement("a");
+        a.href = path;
+        return decodeURIComponent(a.pathname);
+      }
+      url = getPathname(url);
+      // 判断是否跳转了其他章节
+      const currentChapter = this.catalog[this.chapterIndex];
+      if (currentChapter) {
+        const chapterPrefix = this.content.replace(currentChapter.url, "");
+        const iframeUrlPath = url.replace(chapterPrefix, "");
+        let newChapterIndex = -1;
+        for (let i = 0; i < this.catalog.length; i++) {
+          if (this.catalog[i].url === iframeUrlPath) {
+            newChapterIndex = i;
+            break;
+          }
+        }
+        if (newChapterIndex >= 0) {
+          let book = { ...this.$store.state.readingBook };
+          book.index = newChapterIndex;
+          this.$store.commit("setReadingBook", book);
+        }
+      }
     },
     eventHandler(point) {
       // console.log(point);

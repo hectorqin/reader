@@ -126,6 +126,9 @@ export default {
             ? this.$store.state.config.paragraphSpace + "em"
             : null
       };
+    },
+    windowSize() {
+      return this.$store.state.windowSize;
     }
   },
   watch: {
@@ -137,6 +140,11 @@ export default {
     pStyle() {
       if (this.isEpub) {
         this.setIframeStyle();
+      }
+    },
+    windowSize() {
+      if (this.isEpub) {
+        //
       }
     }
   },
@@ -265,16 +273,15 @@ export default {
             return;
           }
           if (message.event === "inited") {
+            this.iframeStyle = {};
             // 设置iframe样式
             this.setIframeStyle();
             // 同步iframe高度
             this.syncIframeHeight();
-            setTimeout(() => {
-              this.$emit("iframeInited");
-            }, 10);
           } else if (message.event === "load") {
             setTimeout(() => {
               this.$emit("iframeLoad");
+              this.$emit("epubLocationChange", message.data);
             }, 100);
           } else if (message.event === "setHeight") {
             this.iframeStyle = {
@@ -282,7 +289,14 @@ export default {
               height: message.data + "px"
             };
             this.$emit("contentChange");
+          } else if (message.event === "click") {
+            this.$emit("epubClick", message.data);
+          } else if (message.event === "clickHash") {
+            this.$emit("epubClickHash", message.data);
           }
+          // else if (message.event === "clickA") {
+          //   this.$emit("locationChange", message.data);
+          // }
         }
       });
     },
@@ -572,7 +586,7 @@ h3.reading {
   border: none;
   width: 100%;
   min-height: calc(var(--vh, 1vh) * 50);
-  pointer-events: none;
+  // pointer-events: none;
 }
 </style>
 <style lang="stylus">

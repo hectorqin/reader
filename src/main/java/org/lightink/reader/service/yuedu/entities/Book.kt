@@ -8,10 +8,13 @@ import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.FileUtils
 import io.legado.app.localBook.LocalBook
+import io.legado.app.localBook.EpubFile
+import io.legado.app.localBook.UmdFile
 import java.nio.charset.Charset
 import java.io.File
 import kotlin.math.max
 import kotlin.math.min
+import org.jsoup.Jsoup
 
 data class Book(
         var bookUrl: String = "",                   // 详情页Url(本地书源存储完整文件路径)
@@ -162,6 +165,37 @@ data class Book(
         }
     }
 
+    fun getEpubRootDir(): String {
+        // 根据 content.opf 位置来确认root目录
+        // var contentOPF = "OEBPS/content.opf"
+
+        val defaultPath = "OEBPS"
+
+        // 根据 META-INF/container.xml 来获取 contentOPF 位置
+        val containerRes = File(originName + File.separator + "index" + File.separator + "META-INF" + File.separator + "container.xml")
+        if (containerRes.exists()) {
+            try {
+                val document = Jsoup.parse(containerRes.readText())
+                val rootFileElement = document
+                        .getElementsByTag("rootfiles").get(0)
+                        .getElementsByTag("rootfile").get(0);
+                val result = rootFileElement.attr("full-path");
+                System.out.println("result: " + result)
+                if (result != null && result.isNotEmpty()) {
+                    return File(result).parentFile?.let{
+                        it.toString()
+                    } ?: ""
+                }
+            } catch (e: Exception) {
+                e.printStackTrace();
+                // Log.e(TAG, e.getMessage(), e);
+            }
+        }
+
+        // 返回默认位置
+        return defaultPath
+    }
+
     companion object {
         const val hTag = 2L
         const val rubyTag = 4L
@@ -175,6 +209,11 @@ data class Book(
             val nameAuthor = LocalBook.analyzeNameAuthor(fileName)
             val book = Book(bookUrl, "", BookType.local, localPath, nameAuthor.first, nameAuthor.second).also {
                 it.canUpdate = false
+            }
+            if (book.isEpub()) {
+                EpubFile.upBookInfo(book)
+            } else if (book.isUmd()) {
+                UmdFile.upBookInfo(book)
             }
             return book
         }

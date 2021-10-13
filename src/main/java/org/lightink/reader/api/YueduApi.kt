@@ -150,6 +150,18 @@ class YueduApi : RestVerticle() {
 
         // epub资源
         var dataDir = getWorkDir("storage", "data");
+        router.route("/epub/*").handler {
+            var path = it.request().path().replace("/epub/", "/", true)
+            path = URLDecoder.decode(path, "UTF-8")
+            if (path.endsWith("html", true)) {
+                var filePath = File(dataDir + path)
+                if (filePath.exists()) {
+                    // 处理 js 注入脚本
+                    BookConfig.injectJavascriptToEpubChapter(filePath.toString())
+                }
+            }
+            it.next()
+        }
         router.route("/epub/*").handler(StaticHandler.create().setAllowRootFileSystemAccess(true).setWebRoot(dataDir).setDefaultContentEncoding("UTF-8"));
 
         // 上传书源文件
@@ -1623,24 +1635,30 @@ class YueduApi : RestVerticle() {
                 }
             }
             if (bookInfo.isEpub()) {
-                var chapterFilePath = getWorkDir(bookInfo.originName, "index", "OEBPS", chapterInfo.url)
-                if (!File(chapterFilePath).exists()) {
+                val epubExtractDir = File(bookInfo.originName + File.separator + "index")
+                if (!epubExtractDir.exists()) {
                     // 解压文件 index.epub
-                    val unzipFile = File(bookInfo.originName + File.separator + "index")
-                    unzipFile.deleteRecursively()
+                    epubExtractDir.deleteRecursively()
                     val localEpubFile = File(bookInfo.originName + File.separator + "index.epub")
-                    if (!localEpubFile.unzip(unzipFile.toString())) {
+                    if (!localEpubFile.unzip(epubExtractDir.toString())) {
                         return returnData.setErrorMsg("Epub书籍解压失败")
                     }
                 }
+                val epubRootDir = bookInfo.getEpubRootDir()
+                var chapterFilePath = getWorkDir(bookInfo.originName, "index", epubRootDir, chapterInfo.url)
+                logger.info("chapterFilePath: {} {}", chapterFilePath, epubRootDir)
                 if (!File(chapterFilePath).exists()) {
                     return returnData.setErrorMsg("章节文件不存在")
                 }
                 // 处理 js 注入脚本
-                BookConfig.injectJavascriptToEpubChapter(chapterFilePath);
+                // BookConfig.injectJavascriptToEpubChapter(chapterFilePath);
 
                 // 直接返回 html访问地址
-                content = bookInfo.bookUrl.replace("storage/data/", "/epub/") + "/index/OEBPS/" + chapterInfo.url
+                if (epubRootDir.isEmpty()) {
+                    content = bookInfo.bookUrl.replace("storage/data/", "/epub/") + "/index/" + chapterInfo.url
+                } else {
+                    content = bookInfo.bookUrl.replace("storage/data/", "/epub/") + "/index/" + epubRootDir + "/" + chapterInfo.url
+                }
                 return returnData.setData(content)
             }
             var bookContent = LocalBook.getContent(bookInfo, chapterInfo)
@@ -2479,6 +2497,13 @@ class YueduApi : RestVerticle() {
         if (chapterList == null || refresh) {
             var newChapterList: List<BookChapter>
             if (book.isLocalBook()) {
+                // 重新解压epub文件
+                val epubExtractDir = File(book.originName + File.separator + "index")
+                epubExtractDir.deleteRecursively()
+                val localEpubFile = File(book.originName + File.separator + "index.epub")
+                if (!localEpubFile.unzip(epubExtractDir.toString())) {
+                    throw Exception("Epub书籍解压失败")
+                }
                 newChapterList = LocalBook.getChapterList(book.also{
                     it.setRootDir(getWorkDir())
                 })

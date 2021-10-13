@@ -34,7 +34,7 @@ class EpubFile(var book: Book) {
 
         @Synchronized
         fun getChapterList(book: Book): ArrayList<BookChapter> {
-            return getEFile(book).getChapterList()
+            return getEFile(book).getChapterListBySpine()
         }
 
         @Synchronized
@@ -181,6 +181,40 @@ class EpubFile(var book: Book) {
                 book.intro = Jsoup.parse(metadata.descriptions[0]).text()
             }
         }
+    }
+
+    fun getChapterListBySpine(): ArrayList<BookChapter> {
+        val chapterList = ArrayList<BookChapter>()
+        epubBook?.spine?.spineReferences?.forEachIndexed { index, spinResource ->
+            val resource = spinResource.resource
+            var title = resource.title
+            if (title.isNullOrEmpty()) {
+                try {
+                    val doc =
+                        Jsoup.parse(String(resource.data, mCharset))
+                    val elements = doc.getElementsByTag("title")
+                    if (elements.size > 0) {
+                        title = elements[0].text()
+                    }
+                } catch (e: IOException) {
+                    e.printStackTrace()
+                }
+            }
+
+            val chapter = BookChapter()
+            chapter.index = index
+            chapter.bookUrl = book.bookUrl
+            chapter.url = resource.href
+            if (index == 0 && title.isEmpty()) {
+                chapter.title = "封面"
+            } else {
+                chapter.title = title
+            }
+            chapterList.add(chapter)
+        }
+        book.latestChapterTitle = chapterList.lastOrNull()?.title
+        book.totalChapterNum = chapterList.size
+        return chapterList
     }
 
     private fun getChapterList(): ArrayList<BookChapter> {
