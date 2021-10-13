@@ -2149,9 +2149,10 @@ export default {
         return;
       }
       let param = new FormData();
-      event.target.files.forEach((file, i) => {
+      for (let i = 0; i < event.target.files.length; i++) {
+        const file = event.target.files[i];
         param.append("file" + i, file);
-      });
+      }
       Axios.post(this.api + "/importBookPreview", param, {
         headers: { "Content-Type": "multipart/form-data" }
       }).then(

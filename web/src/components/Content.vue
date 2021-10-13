@@ -286,7 +286,8 @@ export default {
           } else if (message.event === "setHeight") {
             this.iframeStyle = {
               ...this.iframeStyle,
-              height: message.data + "px"
+              height:
+                Math.max(message.data, this.windowSize.height * 0.8) + "px"
             };
             this.$emit("contentChange");
           } else if (message.event === "click") {
@@ -330,7 +331,11 @@ export default {
         }
       }
       this.sendToIframe("setStyle", {
-        style: `body {
+        style: `
+        html {
+          min-height: 100%;
+        }
+        body {
           ${bodyStyle}
         }
         body p {

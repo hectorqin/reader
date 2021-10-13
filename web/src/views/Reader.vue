@@ -326,7 +326,7 @@
             @updateProgress="saveReadingPosition"
             @iframeLoad="$emit('iframeLoad')"
             @contentChange="computePages()"
-            @epubClick="epubClick"
+            @epubClick="eventHandler"
             @epubLocationChange="epubLocationChangeHandler"
             @epubClickHash="epubClickHash"
             @epubKeydown="keydownHandler($event, true)"
@@ -811,6 +811,17 @@ export default {
         !this.error &&
         this.$store.state.readingBook.bookUrl.toLowerCase().endsWith(".epub")
       );
+    },
+    scrollOffset() {
+      // 两行 + 两个段间距
+      return (
+        this.$store.state.config.fontSize *
+          this.$store.state.config.lineHeight *
+          2 +
+        this.$store.state.config.fontSize *
+          this.$store.state.config.paragraphSpace *
+          2
+      );
     }
   },
   methods: {
@@ -1060,7 +1071,7 @@ export default {
       } else {
         this.totalPages = Math.ceil(
           this.$refs.bookContentRef.$el.scrollHeight /
-            (this.windowSize.height - 35)
+            (this.windowSize.height - this.scrollOffset)
         );
       }
       if (this.showLastPage) {
@@ -1105,7 +1116,7 @@ export default {
           document.documentElement.scrollHeight
         ) {
           this.currentPage += 1;
-          const moveY = this.windowSize.height - 35;
+          const moveY = this.windowSize.height - this.scrollOffset;
           this.transforming = true;
           this.scrollContent(moveY, 300);
         } else {
@@ -1147,7 +1158,7 @@ export default {
           (document.documentElement.scrollTop || document.body.scrollTop) > 0
         ) {
           this.currentPage -= 1;
-          const moveY = -this.windowSize.height + 35;
+          const moveY = -this.windowSize.height + this.scrollOffset;
           this.transforming = true;
           this.scrollContent(moveY, 300);
         } else {
@@ -1309,23 +1320,6 @@ export default {
         this.lastMoveY = false;
       }, 300);
     },
-    epubClick() {
-      if (
-        this.popBookSourceVisible ||
-        this.popBookShelfVisible ||
-        this.popCataVisible ||
-        this.readSettingsVisible
-      ) {
-        this.popBookSourceVisible = false;
-        this.popBookShelfVisible = false;
-        this.popCataVisible = false;
-        this.readSettingsVisible = false;
-        return;
-      }
-      if (!this.showReadBar) {
-        this.showToolBar = !this.showToolBar;
-      }
-    },
     epubClickHash(rect) {
       if (typeof rect.top !== "undefined") {
         this.scrollContent(
@@ -1380,6 +1374,12 @@ export default {
         this.popCataVisible ||
         this.readSettingsVisible
       ) {
+        if (this.isEpub) {
+          this.popBookSourceVisible = false;
+          this.popBookShelfVisible = false;
+          this.popCataVisible = false;
+          this.readSettingsVisible = false;
+        }
         return;
       }
       if (this.isAudio) {
@@ -1393,6 +1393,12 @@ export default {
       // 根据点击位置判断操作
       const midX = this.windowSize.width / 2;
       const midY = this.windowSize.height / 2;
+      if (this.isEpub) {
+        point.clientY =
+          point.clientY +
+          45 -
+          (document.documentElement.scrollTop || document.body.scrollTop);
+      }
       if (
         Math.abs(point.clientY - midY) <= this.windowSize.height * 0.2 &&
         Math.abs(point.clientX - midX) <= this.windowSize.width * 0.2
@@ -1796,7 +1802,7 @@ export default {
         this.currentPage = Math.round(
           ((document.documentElement.scrollTop || document.body.scrollTop) +
             this.windowSize.height) /
-            (this.windowSize.height - 35)
+            (this.windowSize.height - this.scrollOffset)
         );
       }
       this.scrollTimer && clearTimeout(this.scrollTimer);
