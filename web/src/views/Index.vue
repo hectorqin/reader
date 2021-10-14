@@ -273,12 +273,26 @@
             <el-tag
               type="info"
               :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="book-group-btn"
-              :key="'bookGroup-manage'"
+              class="setting-btn"
               @click="showManageBookGroup"
             >
               分组管理
             </el-tag>
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="importLocalBook"
+            >
+              导入书籍
+            </el-tag>
+            <input
+              ref="bookRef"
+              type="file"
+              multiple="multiple"
+              @change="onBookFileChange"
+              style="display:none"
+            />
           </div>
         </div>
       </div>
@@ -333,15 +347,8 @@
           <i class="el-icon-loading" v-if="refreshLoading"></i>
           {{ refreshLoading ? "刷新中..." : "刷新" }}
         </div>
-        <div class="title-btn" v-if="!isSearchResult" @click="importLocalBook">
-          导入
-          <input
-            ref="bookRef"
-            type="file"
-            multiple="multiple"
-            @change="onBookFileChange"
-            style="display:none"
-          />
+        <div class="title-btn" v-if="!isSearchResult" @click="showRssDialog">
+          RSS
         </div>
         <div
           class="title-btn"
@@ -351,7 +358,7 @@
           书海
         </div>
       </div>
-      <div class="book-group-wrapper">
+      <div class="book-group-wrapper" v-if="!isSearchResult">
         <el-tag
           type="info"
           :effect="$store.getters.isNight ? 'dark' : 'light'"
@@ -950,6 +957,70 @@
         <div class="book-intro" v-html="renderBookIntro(showBookInfo)"></div>
       </div>
     </el-dialog>
+
+    <el-dialog
+      title="RSS订阅"
+      :visible.sync="showRssSourcesDialog"
+      :width="dialogSmallWidth"
+      :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
+    >
+      <div class="rss-source-list-container">
+        <div
+          class="rss-source"
+          v-for="(source, index) in rssSourceList"
+          :key="'rss-' + index"
+          @click="getRssArticles(source)"
+        >
+          <img v-lazy="getImage(source.sourceIcon)" class="rss-icon" />
+          <div class="rss-title">{{ source.sourceName }}</div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      title="RSS文章列表"
+      :visible.sync="showRssArticlesDialog"
+      :width="dialogSmallWidth"
+      :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
+      @closed="rssArticleList = []"
+    >
+      <div class="rss-article-list-container">
+        <div
+          class="rss-article"
+          v-for="(article, index) in rssArticleList"
+          :key="'rss-article-' + index"
+          @click="getRssArticleContent(article)"
+        >
+          <div class="rss-article-info">
+            <div class="rss-article-title">{{ article.title }}</div>
+            <div class="rss-article-date">{{ article.pubDate }}</div>
+          </div>
+          <div class="rss-article-image" v-if="article.image">
+            <div class="image-wrapper">
+              <img v-lazy="getCover(article.image)" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      :title="rssArticleInfo.title"
+      :visible.sync="showRssArticleContentDialog"
+      :width="dialogSmallWidth"
+      :fullscreen="collapseMenu"
+      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
+      @closed="rssArticleInfo = {}"
+    >
+      <div class="rss-article-info-container">
+        <div
+          class="rss-article-content"
+          v-html="rssArticleInfo.content || rssArticleInfo.description"
+        ></div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -1124,7 +1195,17 @@ export default {
       showBookInfo: {},
       showBookInfoDialog: false,
 
-      importMultiBookTip: ""
+      importMultiBookTip: "",
+
+      showRssSourcesDialog: false,
+
+      showRssArticlesDialog: false,
+      rssArticleList: [],
+      rssPage: 1,
+      rssSource: {},
+
+      showRssArticleContentDialog: false,
+      rssArticleInfo: {}
     };
   },
   watch: {
@@ -1188,6 +1269,8 @@ export default {
           this.loadBookSource(refresh);
           // 加载分组列表
           this.loadBookGroup(refresh);
+          // 加载RSS订阅列表
+          this.loadRssSources(refresh);
           this.initing = false;
           return;
         }
@@ -1199,6 +1282,8 @@ export default {
           this.loadBookSource(refresh);
           // 加载分组列表
           this.loadBookGroup(refresh);
+          // 加载RSS订阅列表
+          this.loadRssSources(refresh);
         })
         .catch(() => {
           this.initing = false;
@@ -2407,6 +2492,98 @@ export default {
           this.$message.error("设置失败" + (error && error.toString()));
         }
       );
+    },
+    loadRssSources(refresh) {
+      const cacheKey =
+        this.api +
+        "#rssSources@" +
+        (this.$store.state.isManagerMode
+          ? this.userNS
+          : (this.$store.state.userInfo || {}).username || "default");
+      const handler = data => {
+        data = data || [];
+        this.$store.commit("setRssSourceList", data);
+        window.localStorage &&
+          window.localStorage.setItem(cacheKey, JSON.stringify(data));
+      };
+      if (!refresh) {
+        // 从缓存中获取
+        try {
+          const localList = JSON.parse(
+            window.localStorage && window.localStorage.getItem(cacheKey)
+          );
+          if (Array.isArray(localList)) {
+            handler(localList);
+            return;
+          }
+        } catch (error) {
+          //
+        }
+      }
+      Axios.get(this.api + "/getRssSources").then(
+        res => {
+          if (res.data.isSuccess) {
+            handler(res.data.data);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载RSS订阅列表失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    showRssDialog() {
+      //
+      this.showRssSourcesDialog = true;
+    },
+    getRssArticles(source) {
+      //
+      Axios.post(this.api + "/getRssArticles", {
+        sourceUrl: source.sourceUrl,
+        page: this.rssPage
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            if (!res.data.data.length) {
+              this.$message.error("没有数据");
+              return;
+            }
+            this.showRssArticlesDialog = true;
+            this.rssSource = source;
+            this.rssArticleList = res.data.data;
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载RSS文章列表失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    getRssArticleContent(article) {
+      Axios.post(this.api + "/getRssContent", {
+        sourceUrl: this.rssSource.sourceUrl,
+        link: article.link,
+        origin: article.origin
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            this.showRssArticleContentDialog = true;
+            this.rssArticleInfo = {
+              ...article,
+              content: res.data.data
+            };
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载RSS文章内容失败 " + (error && error.toString())
+          );
+        }
+      );
     }
   },
   computed: {
@@ -2601,6 +2778,11 @@ export default {
           true
         )})`
       };
+    },
+    rssSourceList() {
+      return []
+        .concat(this.$store.state.rssSourceList)
+        .sort((a, b) => a.customOrder - b.customOrder);
     }
   }
 };
@@ -2761,6 +2943,10 @@ export default {
           line-height: 34px;
         }
       }
+    }
+
+    .setting-wrapper:nth-last-child(1) {
+      padding-bottom: 20px;
     }
   }
 
@@ -3171,6 +3357,85 @@ export default {
   }
 }
 
+.rss-source-list-container {
+  max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px);
+  overflow-y: auto;
+
+  .rss-source {
+    display: inline-block;
+    width: 25%;
+    box-sizing: border-box;
+    padding: 10px;
+    position: relative;
+    text-align: center;
+    vertical-align: top;
+    margin-bottom: 10px;
+    cursor: pointer;
+
+    .rss-icon {
+      display: inline-block;
+      max-width: 50px;
+      height: 50px;
+      border-radius: 5px;
+    }
+    .rss-title {
+      margin-top: 5px;
+      text-align: center;
+    }
+  }
+}
+
+.rss-article-list-container {
+  max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px);
+  overflow-y: auto;
+
+  .rss-article {
+    display: flex;
+    flex-direction: row;
+    padding: 15px 10px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+
+    .rss-article-info {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      flex: 1;
+      padding-right: 5px;
+
+      .rss-article-title {
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .rss-article-date {
+        font-size: 12px;
+        margin-top: 10px;
+      }
+    }
+    .rss-article-image {
+      width: 120px;
+
+      .image-wrapper {
+        width: 100%;
+        height: 0;
+        padding-bottom: 62.5%;
+        overflow: hidden;
+
+        img {
+          position: relative;
+          width: 100%;
+        }
+      }
+    }
+  }
+}
+
+.rss-article-info-container {
+  max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px);
+  overflow-y: auto;
+}
+
 .night {
   .source-container {
     .source-group-wrapper {
@@ -3193,6 +3458,28 @@ export default {
     .book-name {
       color: #eee;
     }
+  }
+
+  .rss-source-list-container {
+    .rss-source {
+      .rss-title {
+        color: #aaa;
+      }
+    }
+  }
+
+  .rss-article-list-container {
+    .rss-article {
+      border-color: #333;
+      color: #aaa;
+
+      .rss-article-date {
+        color: #666;
+      }
+    }
+  }
+  .rss-article-content {
+    color: #aaa;
   }
 }
 
@@ -3258,6 +3545,21 @@ export default {
     .book-intro {
       max-height: calc(var(--vh, 1vh) * 100 - 54px - 60px - 150px - 75px - 120px);
     }
+  }
+  .rss-source-list-container {
+    max-height: calc(var(--vh, 1vh) * 100 - 54px - 60px);
+  }
+  .rss-article-list-container {
+    max-height: calc(var(--vh, 1vh) * 100 - 54px - 60px);
+
+    .rss-article {
+      .rss-article-image {
+        width: 100px;
+    }
+    }
+  }
+  .rss-article-info-container {
+    max-height: calc(var(--vh, 1vh) * 100 - 54px - 60px);
   }
 }
 @media screen and (max-width: 450px) {

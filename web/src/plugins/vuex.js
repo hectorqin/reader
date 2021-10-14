@@ -51,6 +51,7 @@ export default new Vuex.Store({
     failureIncludeTimeout: false,
     failureBookSource: [],
     bookGroupList: [],
+    rssSourceList: [],
     shelfConfig: { ...settings.shelfConfig }
   },
   mutations: {
@@ -296,6 +297,9 @@ export default new Vuex.Store({
         }
       });
       state.bookGroupList = _bookGroupList.concat(bookGroupList);
+    },
+    setRssSourceList(state, rssSources) {
+      state.rssSourceList = [].concat(rssSources);
     },
     setShelfConfig(state, shelfConfig) {
       state.shelfConfig = shelfConfig;

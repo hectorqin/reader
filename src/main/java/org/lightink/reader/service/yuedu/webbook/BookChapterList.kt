@@ -54,7 +54,7 @@ object BookChapterList {
                     nextUrlList.add(nextUrl)
                     AnalyzeUrl(
                         ruleUrl = nextUrl,
-                        book = book,
+                        ruleData = book,
                         headerMapF = bookSource.getHeaderMap()
                     ).getResponseAwait()
                         .body?.let { nextBody ->
@@ -110,7 +110,7 @@ object BookChapterList {
     ) {
         val nextBody = AnalyzeUrl(
             ruleUrl = chapterData.nextUrl,
-            book = book,
+            ruleData = book,
             headerMapF = bookSource.getHeaderMap()
         ).getResponseAwait(bookSource.bookSourceUrl).body
             ?: throw Exception("${chapterData.nextUrl}, 下载失败")

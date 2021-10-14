@@ -87,7 +87,7 @@ class WebBook(val bookSource: BookSource) {
         book.originOrder = bookSource.customOrder
         book.type = bookSource.bookSourceType
         val analyzeUrl = AnalyzeUrl(
-            book = book,
+            ruleData = book,
             ruleUrl = book.bookUrl,
             baseUrl = sourceUrl,
             headerMapF = bookSource.getHeaderMap()
@@ -109,7 +109,7 @@ class WebBook(val bookSource: BookSource) {
             book.tocHtml
         } else {
             AnalyzeUrl(
-                book = book,
+                ruleData = book,
                 ruleUrl = book.tocUrl,
 //                baseUrl = book.bookUrl,
                 headerMapF = bookSource.getHeaderMap()
@@ -139,7 +139,7 @@ class WebBook(val bookSource: BookSource) {
         bookChapter.url = bookChapterUrl
         val analyzeUrl =
             AnalyzeUrl(
-                book = book,
+                ruleData = book,
                 ruleUrl = bookChapter.url,
 //                    baseUrl = book?.tocUrl,
                 headerMapF = bookSource.getHeaderMap()

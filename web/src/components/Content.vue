@@ -332,6 +332,14 @@ export default {
       }
       this.sendToIframe("setStyle", {
         style: `
+        *::-webkit-scrollbar {
+          display: none;
+          width: 0 !important;
+          height: 0 !important;
+        }
+        *:focus {
+          outline: none !important;
+        }
         html {
           min-height: 100%;
         }

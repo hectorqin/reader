@@ -62,18 +62,16 @@ data class SearchBook(
         return other.originOrder - this.originOrder
     }
 
-//    @Ignore
-//    @IgnoredOnParcel
-    override var variableMap: HashMap<String, String>? = null
-        get() {
-            if (field == null) {
-                field = GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
-            }
-            return field
-        }
+    override val variableMap by lazy {
+        GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
+    }
 
-    override fun putVariable(key: String, value: String) {
-        variableMap?.put(key, value)
+    override fun putVariable(key: String, value: String?) {
+        if (value != null) {
+            variableMap[key] = value
+        } else {
+            variableMap.remove(key)
+        }
         variable = GSON.toJson(variableMap)
     }
 

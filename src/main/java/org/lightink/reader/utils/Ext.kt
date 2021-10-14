@@ -58,17 +58,21 @@ fun File.unzip(descDir: String): Boolean {
             val zipEntry: ZipEntry = entries.nextElement() as ZipEntry
             val zipEntryName: String = zipEntry.name
 
-            inputStream = zf.getInputStream(zipEntry)
             val descFilePath: String = descDir + File.separator + zipEntryName
-            val descFile: File = createFile(descFilePath)
-            outputStream = FileOutputStream(descFile)
+            if (zipEntry.isDirectory) {
+                createDir(descFilePath)
+            } else {
+                inputStream = zf.getInputStream(zipEntry)
+                val descFile: File = createFile(descFilePath)
+                outputStream = FileOutputStream(descFile)
 
-            var len: Int
-            while (inputStream.read(buffer).also { len = it } > 0) {
-                outputStream.write(buffer, 0, len)
+                var len: Int
+                while (inputStream.read(buffer).also { len = it } > 0) {
+                    outputStream.write(buffer, 0, len)
+                }
+                inputStream.close()
+                outputStream.close()
             }
-            inputStream.close()
-            outputStream.close()
         }
         return true
     } catch(e: Exception) {
@@ -122,6 +126,14 @@ fun zip(files: List<File>, zipFilePath: String): Boolean {
         zipOutputStream?.close()
     }
     return false
+}
+
+fun createDir(filePath: String): File {
+    val file = File(filePath)
+    if (!file.exists()) {
+        file.mkdirs()
+    }
+    return file
 }
 
 fun createFile(filePath: String): File {

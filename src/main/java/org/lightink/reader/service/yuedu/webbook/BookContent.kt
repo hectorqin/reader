@@ -47,7 +47,7 @@ object BookContent {
                 nextUrlList.add(nextUrl)
                 AnalyzeUrl(
                         ruleUrl = nextUrl,
-                        book = book,
+                        ruleData = book,
                         headerMapF = bookSource.getHeaderMap()
                 ).getResponseAwait()
                         .body?.let { nextBody ->
@@ -72,7 +72,7 @@ object BookContent {
 //                withContext(coroutineScope.coroutineContext) {
                     AnalyzeUrl(
                             ruleUrl = item.nextUrl,
-                            book = book,
+                            ruleData = book,
                             headerMapF = bookSource.getHeaderMap()
                     ).getResponseAwait()
                             .body?.let {

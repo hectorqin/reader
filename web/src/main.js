@@ -6,6 +6,7 @@ import store from "./plugins/vuex.js";
 import "./plugins/md5.js";
 import { registerServiceWorker } from "./registerServiceWorker";
 import noCover from "./assets/imgs/noCover.jpeg";
+import noImage from "./assets/imgs/noImage.png";
 import VueLazyload from "vue-lazyload";
 registerServiceWorker();
 
@@ -46,6 +47,22 @@ Vue.mixin({
             };
       }
       return noCover;
+    },
+    getImage(coverUrl, normal) {
+      if (
+        coverUrl &&
+        (coverUrl.startsWith("http://") ||
+          coverUrl.startsWith("https://") ||
+          coverUrl.startsWith("//"))
+      ) {
+        return normal
+          ? this.api + "/cover?path=" + coverUrl
+          : {
+              src: this.api + "/cover?path=" + coverUrl,
+              error: noImage
+            };
+      }
+      return noImage;
     }
   }
 });

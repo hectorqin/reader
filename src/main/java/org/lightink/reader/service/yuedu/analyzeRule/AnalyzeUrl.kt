@@ -5,7 +5,7 @@ import io.legado.app.constant.AppPattern.EXP_PATTERN
 import io.legado.app.constant.AppPattern.JS_PATTERN
 import io.legado.app.data.api.IHttpGetApi
 import io.legado.app.data.api.IHttpPostApi
-import io.legado.app.data.entities.BaseBook
+import io.legado.app.data.entities.Book
 import io.legado.app.help.JsExtensions
 //import io.legado.app.help.http.AjaxWebView
 import io.legado.app.help.http.HttpHelper
@@ -25,6 +25,7 @@ import java.util.*
 import java.util.regex.Pattern
 import javax.script.SimpleBindings
 import mu.KotlinLogging
+import io.legado.app.model.analyzeRule.RuleDataInterface
 
 private val logger = KotlinLogging.logger {}
 
@@ -39,7 +40,7 @@ class AnalyzeUrl(
     page: Int? = null,
     headerMapF: Map<String, String>? = null,
     baseUrl: String? = null,
-    book: BaseBook? = null,
+    ruleData: RuleDataInterface? = null,
     var useWebView: Boolean = false
 ) : JsExtensions {
     companion object {
@@ -67,13 +68,13 @@ class AnalyzeUrl(
         }
         headerMapF?.let { headerMap.putAll(it) }
         //替换参数
-        analyzeJs(key, page, book)
-        replaceKeyPageJs(key, page, book)
+        analyzeJs(key, page, ruleData)
+        replaceKeyPageJs(key, page, ruleData)
         //处理URL
         initUrl()
     }
 
-    private fun analyzeJs(key: String?, page: Int?, book: BaseBook?) {
+    private fun analyzeJs(key: String?, page: Int?, ruleData: RuleDataInterface?) {
         val ruleList = arrayListOf<String>()
         var start = 0
         var tmp: String
@@ -100,11 +101,11 @@ class AnalyzeUrl(
             when {
                 ruleStr.startsWith("<js>") -> {
                     ruleStr = ruleStr.substring(4, ruleStr.lastIndexOf("<"))
-                    ruleUrl = evalJS(ruleStr, ruleUrl, page, key, book) as String
+                    ruleUrl = evalJS(ruleStr, ruleUrl, page, key, ruleData) as String
                 }
                 ruleStr.startsWith("@js", true) -> {
                     ruleStr = ruleStr.substring(4)
-                    ruleUrl = evalJS(ruleStr, ruleUrl, page, key, book) as String
+                    ruleUrl = evalJS(ruleStr, ruleUrl, page, key, ruleData) as String
                 }
                 else -> ruleUrl = ruleStr.replace("@result", ruleUrl)
             }
@@ -114,7 +115,7 @@ class AnalyzeUrl(
     /**
      * 替换关键字,页数,JS
      */
-    private fun replaceKeyPageJs(key: String?, page: Int?, book: BaseBook?) {
+    private fun replaceKeyPageJs(key: String?, page: Int?, ruleData: RuleDataInterface?) {
         //page
         page?.let {
             val matcher = pagePattern.matcher(ruleUrl)
@@ -136,7 +137,7 @@ class AnalyzeUrl(
             simpleBindings["baseUrl"] = baseUrl
             simpleBindings["page"] = page
             simpleBindings["key"] = key
-            simpleBindings["book"] = book
+            simpleBindings["book"] = ruleData as? Book
             val expMatcher = EXP_PATTERN.matcher(ruleUrl)
             while (expMatcher.find()) {
                 jsEval = SCRIPT_ENGINE.eval(expMatcher.group(1), simpleBindings)
@@ -232,13 +233,13 @@ class AnalyzeUrl(
         result: Any?,
         page: Int?,
         key: String?,
-        book: BaseBook?
+        ruleData: RuleDataInterface?
     ): Any {
         val bindings = SimpleBindings()
         bindings["java"] = this
         bindings["page"] = page
         bindings["key"] = key
-        bindings["book"] = book
+        bindings["book"] = ruleData as? Book
         bindings["result"] = result
         bindings["baseUrl"] = baseUrl
         return SCRIPT_ENGINE.eval(jsStr, bindings)

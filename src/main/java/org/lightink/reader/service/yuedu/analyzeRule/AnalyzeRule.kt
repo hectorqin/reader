@@ -2,7 +2,7 @@ package io.legado.app.model.analyzeRule
 
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
 import io.legado.app.constant.AppPattern.JS_PATTERN
-import io.legado.app.data.entities.BaseBook
+import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.JsExtensions
 import io.legado.app.utils.*
@@ -15,6 +15,7 @@ import java.util.regex.Pattern
 import javax.script.SimpleBindings
 import kotlin.collections.HashMap
 import mu.KotlinLogging
+import io.legado.app.model.analyzeRule.RuleDataInterface
 
 private val logger = KotlinLogging.logger {}
 
@@ -22,7 +23,7 @@ private val logger = KotlinLogging.logger {}
  * Created by REFGD.
  * 统一解析接口
  */
-class AnalyzeRule(var book: BaseBook? = null): JsExtensions {
+class AnalyzeRule(var ruleData: RuleDataInterface? = null): JsExtensions {
     var chapter: BookChapter? = null
     private var content: Any? = null
     private var baseUrl: String? = null
@@ -570,13 +571,13 @@ class AnalyzeRule(var book: BaseBook? = null): JsExtensions {
 
     fun put(key: String, value: String): String {
         chapter?.putVariable(key, value)
-            ?: book?.putVariable(key, value)
+            ?: ruleData?.putVariable(key, value)
         return value
     }
 
     fun get(key: String): String {
         return chapter?.variableMap?.get(key)
-            ?: book?.variableMap?.get(key)
+            ?: ruleData?.variableMap?.get(key)
             ?: ""
     }
 
@@ -587,7 +588,7 @@ class AnalyzeRule(var book: BaseBook? = null): JsExtensions {
     private fun evalJS(jsStr: String, result: Any?): Any? {
         val bindings = SimpleBindings()
         bindings["java"] = this
-        bindings["book"] = book
+        bindings["book"] = ruleData as? Book
         bindings["result"] = result
         bindings["baseUrl"] = baseUrl
         // logger.info("evalJS: {}", jsStr)
@@ -601,7 +602,7 @@ class AnalyzeRule(var book: BaseBook? = null): JsExtensions {
      */
     override fun ajax(urlStr: String): String? {
         return try {
-            val analyzeUrl = AnalyzeUrl(urlStr, null, null, null, baseUrl, book)
+            val analyzeUrl = AnalyzeUrl(urlStr, null, null, null, baseUrl, ruleData)
             val call = analyzeUrl.getResponse()
             val response = call.execute()
             response.body()

@@ -7,13 +7,14 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 object Debug {
+    var debugLog = true
 
     fun log(
             sourceUrl: String? = "",
             msg: String?) {
-//        if (!org.lightink.reader.config.Debug.release) {
-        logger.info("sourceUrl: {}, msg: {}", sourceUrl, msg)
-//        }
+       if (debugLog) {
+            logger.info("sourceUrl: {}, msg: {}", sourceUrl, msg)
+       }
     }
 
     suspend fun startDebug(webBook: WebBook, key: String) {

@@ -1,16 +1,14 @@
 package io.legado.app.data.entities
 
+import io.legado.app.model.analyzeRule.RuleDataInterface
 import io.legado.app.utils.splitNotBlank
 
-interface BaseBook {
-    var variableMap: HashMap<String, String>?
+interface BaseBook : RuleDataInterface {
     var kind: String?
     var wordCount: String?
 
     var infoHtml: String?
     var tocHtml: String?
-
-    fun putVariable(key: String, value: String) {}
 
     fun getKindList(): List<String> {
         val kindList = arrayListOf<String>()

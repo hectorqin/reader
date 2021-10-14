@@ -5,6 +5,8 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.RssSource
+import io.legado.app.data.entities.RssArticle
 import io.legado.app.help.storage.OldRule
 import io.legado.app.model.Debug
 import io.legado.app.model.WebBook
@@ -52,13 +54,19 @@ import org.springframework.core.env.Environment
 import java.io.File
 import java.lang.Runtime
 import kotlin.collections.mutableMapOf
+import kotlin.system.measureTimeMillis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat;
 import io.legado.app.utils.EncoderUtils
+import io.legado.app.model.rss.Rss
 import org.springframework.scheduling.annotation.Scheduled
 import io.legado.app.localBook.LocalBook
 import java.nio.file.Paths
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.CoroutineScope
 
 private val logger = KotlinLogging.logger {}
 
@@ -222,6 +230,16 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/saveBookGroup").coroutineHandler { saveBookGroup(it) }
         router.post("/reader3/deleteBookGroup").coroutineHandler { deleteBookGroup(it) }
 
+        // rss
+        router.get("/reader3/getRssSources").coroutineHandler { getRssSources(it) }
+        router.post("/reader3/saveRssSource").coroutineHandler { saveRssSource(it) }
+        router.post("/reader3/deleteRssSource").coroutineHandler { deleteRssSource(it) }
+        // rss 列表
+        router.get("/reader3/getRssArticles").coroutineHandler { getRssArticles(it) }
+        router.post("/reader3/getRssArticles").coroutineHandler { getRssArticles(it) }
+        // rss 内容
+        router.get("/reader3/getRssContent").coroutineHandler { getRssContent(it) }
+        router.post("/reader3/getRssContent").coroutineHandler { getRssContent(it) }
 
         // webdav 服务
         router.route("/reader3/webdav*").handler {
@@ -1211,7 +1229,7 @@ class YueduApi : RestVerticle() {
         return false
     }
 
-    private suspend fun checkManagerAuth(context: RoutingContext): Boolean {
+    fun checkManagerAuth(context: RoutingContext): Boolean {
         if (!appConfig.secure) {
             return true
         }
@@ -1230,7 +1248,7 @@ class YueduApi : RestVerticle() {
         return false
     }
 
-    private suspend fun getUserNameSpace(context: RoutingContext): String {
+    fun getUserNameSpace(context: RoutingContext): String {
         if (!appConfig.secure) {
             return "default"
         }
@@ -1247,7 +1265,7 @@ class YueduApi : RestVerticle() {
         return "default"
     }
 
-    private suspend fun getUserStorage(context: Any, vararg path: String): String? {
+    fun getUserStorage(context: Any, vararg path: String): String? {
         var userNameSpace = ""
         when(context) {
             is RoutingContext -> userNameSpace = getUserNameSpace(context)
@@ -1259,7 +1277,7 @@ class YueduApi : RestVerticle() {
         return getStorage("data", userNameSpace, *path)
     }
 
-    private suspend fun saveUserStorage(context: Any, path: String, value: Any) {
+    fun saveUserStorage(context: Any, path: String, value: Any) {
         var userNameSpace = ""
         when(context) {
             is RoutingContext -> userNameSpace = getUserNameSpace(context)
@@ -1756,32 +1774,76 @@ class YueduApi : RestVerticle() {
             return returnData.setErrorMsg("书籍信息错误")
         }
         logger.info { "searchBookSource" }
-        lastIndex = lastIndex + 1
         searchSize = if(searchSize > 0) searchSize else 5
         var resultList = arrayListOf<SearchBook>()
-        for (i in lastIndex until userBookSourceList.size) {
-            // logger.info("searchBookSource from Index: {}", i)
-            var bookSource = userBookSourceList.get(i)
-            try {
-                var result = saveBookInfoCache(WebBook(bookSource).searchBook(book.name, 1))
-                if (result.size > 0) {
-                    for (j in 0 until result.size) {
-                        var _book = result.get(j)
-                        if (_book.name.equals(book.name) && _book.author.equals(book.author)) {
-                            resultList.add(_book)
-                        }
-                    }
+        var concurrentCount = Math.max(searchSize * 2, 24)
+        limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, {it->
+            lastIndex = it
+            var bookSource = userBookSourceList.get(it)
+            searchBookWithSource(bookSource, book)
+        }) {list->
+            // logger.info("list: {}", list)
+            list.forEach {
+                val bookList = it as? Collection<SearchBook>
+                bookList?.let {
+                    resultList.addAll(it)
                 }
-            } catch(e: Exception) {
-                e.printStackTrace()
             }
-            if (resultList.size >= searchSize) {
-                lastIndex = i
-                break;
-            }
+            resultList.size < searchSize
         }
+        // while(true) {
+        //     var croutineCount = 0
+        //     var deferredList = arrayListOf<Deferred<ArrayList<SearchBook>>>()
+        //     lastIndex = lastIndex + 1
+        //     logger.info("Search from lastIndex: {}", lastIndex)
+        //     for (i in lastIndex until userBookSourceList.size) {
+        //         // logger.info("searchBookSource from Index: {}", i)
+        //         var bookSource = userBookSourceList.get(i)
+        //         croutineCount += 1
+        //         deferredList.add(async {
+        //             searchBookWithSource(bookSource, book)
+        //         })
+        //         if (resultList.size + croutineCount >= Math.max(searchSize * 2, 24)) {
+        //             lastIndex = i
+        //             break;
+        //         }
+        //     }
+        //     for (i in 0 until deferredList.size) {
+        //         val result = deferredList.get(i).await()
+        //         resultList.addAll(result)
+        //     }
+
+        //     if (resultList.size >= searchSize) {
+        //         break;
+        //     }
+        // }
         saveBookSources(book, resultList, userNameSpace)
         return returnData.setData(mapOf("lastIndex" to lastIndex, "list" to resultList))
+    }
+
+    private suspend fun searchBookWithSource(bookSourceString: String, book: Book): ArrayList<SearchBook> {
+        var resultList = arrayListOf<SearchBook>()
+        withContext(Dispatchers.IO) {
+            val costTime = measureTimeMillis {
+                try {
+                    Debug.debugLog = false
+                    var result = WebBook(bookSourceString).searchBook(book.name, 1)
+                    Debug.debugLog = true
+                    if (result.size > 0) {
+                        for (j in 0 until result.size) {
+                            var _book = result.get(j)
+                            if (_book.name.equals(book.name) && _book.author.equals(book.author)) {
+                                resultList.add(_book)
+                            }
+                        }
+                    }
+                } catch(e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            logger.info("searchBookWithSource in Thread: {} Cost: {}", Thread.currentThread().name, costTime)
+        }
+        return resultList;
     }
 
     private suspend fun getBookSource(context: RoutingContext): ReturnData {
@@ -2416,6 +2478,163 @@ class YueduApi : RestVerticle() {
         return returnData.setData("")
     }
 
+    private suspend fun getRssSources(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        var list: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "rssSources"))
+        if (list != null) {
+            return returnData.setData(list.getList())
+        }
+        return returnData.setData(arrayListOf<Int>())
+    }
+
+    private suspend fun saveRssSource(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val rssSource = context.bodyAsJson.mapTo(RssSource::class.java)
+        if (rssSource.sourceUrl.isEmpty()) {
+            return returnData.setErrorMsg("RSS链接不能为空")
+        }
+        if (rssSource.sourceName.isEmpty()) {
+            return returnData.setErrorMsg("RSS名称不能为空")
+        }
+
+        var userNameSpace = getUserNameSpace(context)
+        var rssSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "rssSources"))
+        if (rssSourceList == null) {
+            rssSourceList = JsonArray()
+        }
+        // 遍历判断书本是否存在
+        var existIndex: Int = -1
+        for (i in 0 until rssSourceList.size()) {
+            var _rssSource = rssSourceList.getJsonObject(i).mapTo(RssSource::class.java)
+            if (_rssSource.sourceUrl.equals(rssSource.sourceUrl)) {
+                existIndex = i
+                break;
+            }
+        }
+        if (existIndex >= 0) {
+            var list = rssSourceList.getList()
+            list.set(existIndex, JsonObject.mapFrom(rssSource))
+            rssSourceList = JsonArray(list)
+        } else {
+            // 新增rss源
+            rssSourceList.add(JsonObject.mapFrom(rssSource))
+        }
+
+        // logger.info("rssSourceList: {}", rssSourceList)
+        saveUserStorage(userNameSpace, "rssSources", rssSourceList)
+        return returnData.setData("")
+    }
+
+
+    private suspend fun deleteRssSource(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val rssSource = context.bodyAsJson.mapTo(RssSource::class.java)
+        var userNameSpace = getUserNameSpace(context)
+        var rssSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "rssSources"))
+        if (rssSourceList == null) {
+            rssSourceList = JsonArray()
+        }
+        // 遍历判断书本是否存在
+        var existIndex: Int = -1
+        for (i in 0 until rssSourceList.size()) {
+            var _rssSource = rssSourceList.getJsonObject(i).mapTo(RssSource::class.java)
+            if (_rssSource.sourceUrl.equals(rssSource.sourceUrl)) {
+                existIndex = i
+                break;
+            }
+        }
+        if (existIndex >= 0) {
+            rssSourceList.remove(existIndex)
+        }
+        // logger.info("rssSource: {}", rssSource)
+        saveUserStorage(userNameSpace, "rssSources", rssSourceList)
+        return returnData.setData("")
+    }
+
+    private suspend fun getRssArticles(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var sourceUrl: String
+        var page: Int
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            sourceUrl = context.bodyAsJson.getString("sourceUrl")
+            page = context.bodyAsJson.getInteger("page", 1)
+        } else {
+            // get 请求
+            sourceUrl = context.queryParam("sourceUrl").firstOrNull() ?: ""
+            page = context.queryParam("page").firstOrNull()?.toInt() ?: 1
+            sourceUrl = URLDecoder.decode(sourceUrl, "UTF-8")
+        }
+        if (sourceUrl.isEmpty()) {
+            return returnData.setErrorMsg("RSS链接不能为空")
+        }
+
+        var userNameSpace = getUserNameSpace(context)
+        var rssSource = getRssSourceByURL(sourceUrl, userNameSpace)
+        if (rssSource == null) {
+            return returnData.setErrorMsg("RSS源不存在")
+        }
+
+        val rssArtcles = Rss.getArticles(rssSource, page)
+
+        return returnData.setData(rssArtcles)
+    }
+
+    private suspend fun getRssContent(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var sourceUrl: String
+        var link: String
+        var origin: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            sourceUrl = context.bodyAsJson.getString("sourceUrl")
+            link = context.bodyAsJson.getString("link")
+            origin = context.bodyAsJson.getString("origin")
+        } else {
+            // get 请求
+            sourceUrl = context.queryParam("sourceUrl").firstOrNull() ?: ""
+            link = context.queryParam("link").firstOrNull() ?: ""
+            origin = context.queryParam("origin").firstOrNull() ?: ""
+            sourceUrl = URLDecoder.decode(sourceUrl, "UTF-8")
+            link = URLDecoder.decode(link, "UTF-8")
+            origin = URLDecoder.decode(origin, "UTF-8")
+        }
+        if (sourceUrl.isEmpty()) {
+            return returnData.setErrorMsg("RSS链接不能为空")
+        }
+        if (link.isEmpty()) {
+            return returnData.setErrorMsg("RSS文章链接不能为空")
+        }
+        if (origin.isEmpty()) {
+            return returnData.setErrorMsg("RSS文章来源不能为空")
+        }
+
+        var userNameSpace = getUserNameSpace(context)
+        var rssSource = getRssSourceByURL(sourceUrl, userNameSpace)
+        if (rssSource == null) {
+            return returnData.setErrorMsg("RSS源不存在")
+        }
+        val rssArticle = RssArticle(origin = origin, link = link)
+        val content = Rss.getContent(rssArticle, rssSource)
+
+        return returnData.setData(content)
+    }
 
     /**
      * 非 API
@@ -2454,22 +2673,26 @@ class YueduApi : RestVerticle() {
             return arrayListOf<Book>()
         }
         var bookList = arrayListOf<Book>()
-        for (i in 0 until bookshelf.size()) {
-            var book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
+        val concurrentCount = 16
+        Debug.debugLog = false
+        limitConcurrent(concurrentCount, 0, bookshelf.size()) {
+            var book = bookshelf.getJsonObject(it).mapTo(Book::class.java)
             if (book.canUpdate && refresh) {
                 try {
                     var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace)
                     if (bookSource != null) {
-                        var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace)
-                        if (bookChapterList.size > 0) {
-                            var bookChapter = bookChapterList.last()
-                            book.latestChapterTitle = bookChapter.title
+                        withContext(Dispatchers.IO) {
+                            var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace)
+                            if (bookChapterList.size > 0) {
+                                var bookChapter = bookChapterList.last()
+                                book.latestChapterTitle = bookChapter.title
+                            }
+                            if (bookChapterList.size - book.totalChapterNum > 0) {
+                                book.lastCheckTime = System.currentTimeMillis()
+                                book.lastCheckCount = bookChapterList.size - book.totalChapterNum
+                            }
+                            book.totalChapterNum = bookChapterList.size
                         }
-                        if (bookChapterList.size - book.totalChapterNum > 0) {
-                            book.lastCheckTime = System.currentTimeMillis()
-                            book.lastCheckCount = bookChapterList.size - book.totalChapterNum
-                        }
-                        book.totalChapterNum = bookChapterList.size
                     }
                 } catch(e: Exception) {
                     e.printStackTrace()
@@ -2477,6 +2700,30 @@ class YueduApi : RestVerticle() {
             }
             bookList.add(book)
         }
+        Debug.debugLog = true
+        // for (i in 0 until bookshelf.size()) {
+        //     var book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
+        //     if (book.canUpdate && refresh) {
+        //         try {
+        //             var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace)
+        //             if (bookSource != null) {
+        //                 var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace)
+        //                 if (bookChapterList.size > 0) {
+        //                     var bookChapter = bookChapterList.last()
+        //                     book.latestChapterTitle = bookChapter.title
+        //                 }
+        //                 if (bookChapterList.size - book.totalChapterNum > 0) {
+        //                     book.lastCheckTime = System.currentTimeMillis()
+        //                     book.lastCheckCount = bookChapterList.size - book.totalChapterNum
+        //                 }
+        //                 book.totalChapterNum = bookChapterList.size
+        //             }
+        //         } catch(e: Exception) {
+        //             e.printStackTrace()
+        //         }
+        //     }
+        //     bookList.add(book)
+        // }
         return bookList
     }
 
@@ -2535,7 +2782,7 @@ class YueduApi : RestVerticle() {
         return bookSourceString
     }
 
-    private suspend fun loadBookSourceStringList(userNameSpace: String): List<String> {
+    fun loadBookSourceStringList(userNameSpace: String): List<String> {
         var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookSource"))
         var userBookSourceList = arrayListOf<String>()
         if (bookSourceList != null) {
@@ -2546,7 +2793,7 @@ class YueduApi : RestVerticle() {
         return userBookSourceList
     }
 
-    private suspend fun getBookSourceStringBySourceURL(sourceUrl: String, userNameSpace: String): String? {
+    fun getBookSourceStringBySourceURL(sourceUrl: String, userNameSpace: String): String? {
         var bookSourceString: String? = null
         if (sourceUrl.isNullOrEmpty()) {
             return bookSourceString
@@ -2563,7 +2810,7 @@ class YueduApi : RestVerticle() {
         return bookSourceString
     }
 
-    private suspend fun getShelfBookByURL(url: String, userNameSpace: String): Book? {
+    fun getShelfBookByURL(url: String, userNameSpace: String): Book? {
         if (url.isEmpty()) {
             return null
         }
@@ -2580,19 +2827,36 @@ class YueduApi : RestVerticle() {
         return null
     }
 
-    private suspend fun saveShelfBookProgress(book: Book, bookChapter: BookChapter, userNameSpace: String) {
+    fun getRssSourceByURL(url: String, userNameSpace: String): RssSource? {
+        if (url.isEmpty()) {
+            return null
+        }
+        var list: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "rssSources"))
+        if (list == null) {
+            return null
+        }
+        for (i in 0 until list.size()) {
+            var _rssSource = list.getJsonObject(i).mapTo(RssSource::class.java)
+            if (_rssSource.sourceUrl.equals(url)) {
+                return _rssSource
+            }
+        }
+        return null
+    }
+
+    fun saveShelfBookProgress(book: Book, bookChapter: BookChapter, userNameSpace: String) {
         editShelfBook(book, userNameSpace) { existBook ->
             existBook.durChapterIndex = bookChapter.index
             existBook.durChapterTitle = bookChapter.title
             existBook.durChapterTime = System.currentTimeMillis()
 
-            logger.info("saveShelfBookProgress: {}", existBook)
+            // logger.info("saveShelfBookProgress: {}", existBook)
 
             existBook
         }
     }
 
-    private suspend fun saveShelfBookLatestChapter(book: Book, bookChapterList: List<BookChapter>, userNameSpace: String) {
+    fun saveShelfBookLatestChapter(book: Book, bookChapterList: List<BookChapter>, userNameSpace: String) {
         editShelfBook(book, userNameSpace) { existBook ->
             if (bookChapterList.size > 0) {
                 var bookChapter = bookChapterList.last()
@@ -2605,12 +2869,12 @@ class YueduApi : RestVerticle() {
             existBook.totalChapterNum = bookChapterList.size
             // TODO 最新章节更新时间
             // existBook.latestChapterTime = System.currentTimeMillis()
-            logger.info("saveShelfBookLatestChapter: {}", existBook)
+            // logger.info("saveShelfBookLatestChapter: {}", existBook)
             existBook
         }
     }
 
-    private suspend fun editShelfBook(book: Book, userNameSpace: String, handler: (Book)->Book) {
+    fun editShelfBook(book: Book, userNameSpace: String, handler: (Book)->Book) {
         var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
             bookshelf = JsonArray()
@@ -2635,7 +2899,7 @@ class YueduApi : RestVerticle() {
             var existBook = bookshelf.getJsonObject(existIndex).mapTo(Book::class.java)
             existBook = handler(existBook)
 
-            logger.info("editShelfBook: {}", existBook)
+            // logger.info("editShelfBook: {}", existBook)
 
             bookList.set(existIndex, JsonObject.mapFrom(existBook))
             bookshelf = JsonArray(bookList)
@@ -2643,7 +2907,7 @@ class YueduApi : RestVerticle() {
         }
     }
 
-    private suspend fun saveBookSources(book: Book, sourceList: List<SearchBook>, userNameSpace: String) {
+    fun saveBookSources(book: Book, sourceList: List<SearchBook>, userNameSpace: String) {
         if (book.name.isEmpty()) {
             return;
         }
@@ -2789,6 +3053,13 @@ class YueduApi : RestVerticle() {
                     userBookGroupFile.deleteRecursively()
                     bookGroupFile.renameTo(userBookGroupFile)
                 }
+                // 同步 RSS订阅
+                val rssSourcesFile = File(descDir + File.separator + "rssSources.json")
+                if (rssSourcesFile.exists()) {
+                    val userRssSourcesFile = File(getWorkDir("storage", "data", userNameSpace, "rssSources.json"))
+                    userRssSourcesFile.deleteRecursively()
+                    rssSourcesFile.renameTo(userRssSourcesFile)
+                }
 
                 // 同步阅读进度
                 var bookProgressDir = File(userHome + File.separator + "bookProgress")
@@ -2843,6 +3114,13 @@ class YueduApi : RestVerticle() {
                     bookGroupFile.deleteRecursively()
                     userBookGroupFile.renameTo(bookGroupFile)
                 }
+                // 同步 RSS订阅
+                val userRssSourcesFile = File(getWorkDir("storage", "data", userNameSpace, "rssSources.json"))
+                if (userRssSourcesFile.exists()) {
+                    val rssSourcesFile = File(descDir + File.separator + "rssSources.json")
+                    rssSourcesFile.deleteRecursively()
+                    userRssSourcesFile.renameTo(rssSourcesFile)
+                }
 
                 // 压缩
                 val today = SimpleDateFormat("yyyy-MM-dd").format(System.currentTimeMillis())
@@ -2878,6 +3156,59 @@ class YueduApi : RestVerticle() {
             }
         }
         return latestZipFile
+    }
+
+    fun extractEpub(book: Book, force: Boolean = false): Boolean {
+        val epubExtractDir = File(getWorkDir(book.originName + File.separator + "index"))
+        if (force || !epubExtractDir.exists()) {
+            epubExtractDir.deleteRecursively()
+            val localEpubFile = File(getWorkDir(book.originName + File.separator + "index.epub"))
+            if (!localEpubFile.unzip(epubExtractDir.toString())) {
+                return false
+            }
+        }
+        return true
+    }
+
+    suspend fun limitConcurrent(limit: Int, startIndex: Int, endIndex: Int, handler: suspend CoroutineScope.(Int) -> Any) {
+        limitConcurrent(limit, startIndex, endIndex, handler) {
+            true
+        }
+    }
+
+    suspend fun limitConcurrent(limit: Int, startIndex: Int, endIndex: Int, handler: suspend CoroutineScope.(Int) -> Any, needContinue: (ArrayList<Any>) -> Boolean) {
+        var lastIndex = startIndex
+        var loopCount = 0;
+        while(true) {
+            var deferredList = arrayListOf<Deferred<Any>>()
+            var croutineCount = 0;
+            for(i in lastIndex until endIndex) {
+                croutineCount += 1;
+                deferredList.add(async {
+                    handler(i)
+                })
+
+                lastIndex = i
+                if (croutineCount >= limit) {
+                    break;
+                }
+            }
+            val resultList = arrayListOf<Any>()
+            val costTime = measureTimeMillis {
+                for (i in 0 until deferredList.size) {
+                    resultList.add(deferredList.get(i).await())
+                }
+            }
+            loopCount += 1;
+            logger.info("Loop: {} lastIndex: {} costTime: {} ms", loopCount, lastIndex, costTime)
+            if (lastIndex >= endIndex) {
+                break;
+            }
+            if (!needContinue(resultList)) {
+                break;
+            }
+            lastIndex = lastIndex + 1
+        }
     }
 
     /**
@@ -2919,17 +3250,5 @@ class YueduApi : RestVerticle() {
                 e.printStackTrace()
             }
         }
-    }
-
-    fun extractEpub(book: Book, force: Boolean = false): Boolean {
-        val epubExtractDir = File(getWorkDir(book.originName + File.separator + "index"))
-        if (force || !epubExtractDir.exists()) {
-            epubExtractDir.deleteRecursively()
-            val localEpubFile = File(getWorkDir(book.originName + File.separator + "index.epub"))
-            if (!localEpubFile.unzip(epubExtractDir.toString())) {
-                return false
-            }
-        }
-        return true
     }
 }

@@ -15,6 +15,8 @@ import java.io.File
 import kotlin.math.max
 import kotlin.math.min
 import org.jsoup.Jsoup
+import com.fasterxml.jackson.annotation.JsonIgnore
+import com.google.gson.annotations.Expose
 
 data class Book(
         var bookUrl: String = "",                   // 详情页Url(本地书源存储完整文件路径)
@@ -81,23 +83,22 @@ data class Book(
         return bookUrl.hashCode()
     }
 
-    override var variableMap: HashMap<String, String>? = null
-        get() {
-            if (field == null) {
-                field = GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
-            }
-            return field
-        }
+    override val variableMap by lazy {
+        GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
+    }
 
+    override fun putVariable(key: String, value: String?) {
+        if (value != null) {
+            variableMap[key] = value
+        } else {
+            variableMap.remove(key)
+        }
+        variable = GSON.toJson(variableMap)
+    }
 
     override var infoHtml: String? = null
 
     override var tocHtml: String? = null
-
-    override fun putVariable(key: String, value: String) {
-        variableMap?.put(key, value)
-        variable = GSON.toJson(variableMap)
-    }
 
     fun getRealAuthor() = author.replace(AppPattern.authorRegex, "")
 
@@ -130,6 +131,8 @@ data class Book(
         return folderName + MD5Utils.md5Encode16(bookUrl)
     }
 
+    @JsonIgnore
+    @Expose(serialize = false)
     private var rootDir: String = ""
 
     fun setRootDir(root: String) {
