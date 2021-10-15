@@ -66,6 +66,7 @@ java {
 repositories {
     mavenCentral()
     maven("https://jitpack.io")
+    maven("https://gitlab.com/api/v4/projects/26729549/packages/maven")
     google()
     jcenter()
 }
@@ -103,7 +104,9 @@ dependencies {
     implementation("com.julienviet:retrofit-vertx:1.1.3")
     implementation("com.squareup.okhttp3:logging-interceptor:4.2.1")
 
-    implementation("xmlpull:xmlpull:1.1.3.1")
+    // implementation("xmlpull:xmlpull:1.1.3.1")
+    implementation("org.xmlpull:xmlpull:1.1.4.0")
+    implementation("com.github.stefanhaustein:kxml2:2.5.0")
 }
 
 val compileKotlin: KotlinCompile by tasks

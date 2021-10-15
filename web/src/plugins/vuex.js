@@ -52,7 +52,10 @@ export default new Vuex.Store({
     failureBookSource: [],
     bookGroupList: [],
     rssSourceList: [],
-    shelfConfig: { ...settings.shelfConfig }
+    shelfConfig: { ...settings.shelfConfig },
+    showImageViewer: false,
+    previewImageIndex: 0,
+    previewImgList: []
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -305,6 +308,19 @@ export default new Vuex.Store({
       state.shelfConfig = shelfConfig;
       window.localStorage &&
         window.localStorage.setItem("shelfConfig", JSON.stringify(shelfConfig));
+    },
+    setPreviewImageIndex(state, previewImageIndex) {
+      state.previewImageIndex = previewImageIndex;
+    },
+    setPreviewImgList(state, previewImgList) {
+      if (previewImgList === false) {
+        state.showImageViewer = false;
+        state.previewImgList = [];
+        state.previewImageIndex = 0;
+      } else {
+        state.previewImgList = previewImgList;
+        state.showImageViewer = true;
+      }
     }
   },
   getters: {

@@ -4,20 +4,25 @@ import io.legado.app.constant.RSSKeywords
 import io.legado.app.data.entities.RssArticle
 import io.legado.app.model.Debug
 import org.xmlpull.v1.XmlPullParser
-import org.xmlpull.v1.XmlPullParserException
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.IOException
 import java.io.StringReader
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 object RssParser {
 
-   @Throws(XmlPullParserException::class, IOException::class)
+   @Throws(IOException::class)
    fun parseXML(xml: String, sourceUrl: String): MutableList<RssArticle> {
 
        val articleList = mutableListOf<RssArticle>()
        var currentArticle = RssArticle()
 
-       val factory = XmlPullParserFactory.newInstance()
+       val factory = XmlPullParserFactory.newInstance("""
+org.kxml2.io.KXmlParser
+org.kxml2.io.KXmlSerializer
+       """, Thread.currentThread().getContextClassLoader().javaClass)
        factory.isNamespaceAware = false
 
        val xmlPullParser = factory.newPullParser()

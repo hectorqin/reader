@@ -296,6 +296,9 @@ export default {
             this.$emit("epubClickHash", message.data);
           } else if (message.event === "keydown") {
             this.$emit("epubKeydown", message.data);
+          } else if (message.event === "previewImageList") {
+            this.$store.commit("setPreviewImageIndex", message.data.imageIndex);
+            this.$store.commit("setPreviewImgList", message.data.imageList);
           }
           // else if (message.event === "clickA") {
           //   this.$emit("locationChange", message.data);

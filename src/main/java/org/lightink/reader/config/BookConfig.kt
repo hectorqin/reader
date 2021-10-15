@@ -3,8 +3,9 @@ package org.lightink.reader.config
 import java.io.File
 
 object BookConfig {
-    val javascriptVersion = "reader-inject-javascript-1.0.1"
+    val javascriptVersion = "reader-inject-javascript-1.1.0"
     val epubInjectJavascript = """
+    //<![CDATA[
     // ${javascriptVersion}
     if (!window.reader_inited) {
         function reader_notify(event, data, id) {
@@ -70,6 +71,15 @@ object BookConfig {
             return reader_getLinkElement(element.parentNode)
         }
 
+        function reader_getImageElement(element) {
+            if (!element || !element.nodeName) {
+                return false;
+            }
+            if (element.nodeName.toLowerCase() === "img") {
+                return element;
+            }
+        }
+
         window.document.addEventListener('message', reader_listenFromParent);
         window.addEventListener('message', reader_listenFromParent);
         window.addEventListener('load', function() {
@@ -80,6 +90,7 @@ object BookConfig {
         document.addEventListener('DOMNodeInserted', reader_notifyHeight, false);
         document.addEventListener('click', function(event) {
             var linkElement = reader_getLinkElement(event.target)
+            var imageElement = reader_getImageElement(event.target)
             if (linkElement) {
                 // 点击链接跳转
                 if (linkElement.pathname === window.location.pathname) {
@@ -91,6 +102,22 @@ object BookConfig {
                 } else {
                     // 跳转其他页面
                     reader_notify("clickA", event.target.href);
+                }
+            } else if (imageElement) {
+                var imgList = document.querySelectorAll("img");
+                if (imgList.length) {
+                    var imgUrlList = [];
+                    var index = 0;
+                    for (let i = 0; i < imgList.length; i++) {
+                        imgUrlList.push(imgList[i].src);
+                        if (imgList[i] === imageElement) {
+                            index = i;
+                        }
+                    }
+                    reader_notify("previewImageList", {
+                        imageList: imgUrlList,
+                        imageIndex: index
+                    });
                 }
             } else {
                 reader_notify("click", {
@@ -112,6 +139,7 @@ object BookConfig {
 
         window.reader_inited = true;
     }
+    //]]>
     """
 
     fun injectJavascriptToEpubChapter(filePath: String) {
@@ -119,7 +147,7 @@ object BookConfig {
         if (file.exists()) {
             var content = file.readText()
             if (content.indexOf(javascriptVersion) < 0) {
-                content = content.replace("<head>", "<head><script>${epubInjectJavascript}</script>")
+                content = content.replace("<head>", """<head><script type="text/javascript">${epubInjectJavascript}</script>""")
                 file.writeText(content)
             }
         }

@@ -36,14 +36,47 @@
         <el-button size="medium" type="primary" @click="login">确 定</el-button>
       </div>
     </el-dialog>
+
+    <el-dialog
+      :title="editorTitle"
+      :visible.sync="showEditor"
+      :width="dialogWidth"
+      :top="$store.state.miniInterface ? '0' : '10vh'"
+      :fullscreen="$store.state.miniInterface"
+    >
+      <div class="code-editor language-json" ref="editorRef"></div>
+      <div slot="footer" class="dialog-footer">
+        <el-button size="medium" @click="closeEditor">取 消</el-button>
+        <el-button size="medium" type="primary" @click="saveEditor"
+          >保 存</el-button
+        >
+      </div>
+    </el-dialog>
+
+    <ImageViewer
+      :z-index="3200"
+      :initial-index="$store.state.previewImageIndex"
+      v-if="$store.state.showImageViewer"
+      :on-close="closeViewer"
+      :url-list="$store.state.previewImgList"
+    />
   </div>
 </template>
 
 <script>
 import Axios from "./plugins/axios";
+import eventBus from "./plugins/eventBus";
+import ImageViewer from "element-ui/packages/image/src/image-viewer.vue";
+import { CodeJar } from "codejar";
+import Prism from "prismjs";
+import "prismjs/components/prism-json";
+import "prismjs/themes/prism.css";
 
 export default {
   name: "app",
+  components: {
+    ImageViewer
+  },
   data() {
     return {
       remember: true,
@@ -51,7 +84,10 @@ export default {
         username: "",
         password: "",
         code: ""
-      }
+      },
+      showEditor: false,
+      editorTitle: "编辑器",
+      editorContent: ""
     };
   },
   beforeCreate() {
@@ -116,6 +152,8 @@ export default {
   },
   beforeMount() {
     this.setTheme(this.isNight);
+    this.eventBus = eventBus;
+    eventBus.$on("showEditor", this.showEditorListener);
   },
   mounted() {
     document.documentElement.style.setProperty(
@@ -236,6 +274,54 @@ export default {
           );
         }
       );
+    },
+    showEditorListener(title, content, callback) {
+      this.editorTitle = title;
+      this.editorContent = content;
+      this.showEditor = true;
+      this.callback = callback;
+      this.$nextTick(() => {
+        this.initEditor();
+      });
+    },
+    initEditor() {
+      const editor = this.$refs.editorRef;
+      if (!editor) {
+        setTimeout(() => {
+          this.initEditor();
+        }, 10);
+      }
+      try {
+        this.jar = CodeJar(editor, Prism.highlightElement, { tab: "\t" });
+
+        // Update code
+        this.jar.updateCode(this.editorContent);
+
+        // Listen to updates
+        this.jar.onUpdate(code => {
+          // console.log(code);
+          this.editorContent = code;
+        });
+      } catch (e) {
+        //
+      }
+    },
+    closeEditor() {
+      this.jar && this.jar.destroy && this.jar.destroy();
+      this.showEditor = false;
+      this.editorTitle = "";
+      this.editorContent = "";
+      this.callback = null;
+    },
+    saveEditor() {
+      if (this.callback) {
+        this.callback(this.editorContent, () => {
+          this.closeEditor();
+        });
+      }
+    },
+    closeViewer() {
+      this.$store.commit("setPreviewImgList", false);
     }
   }
 };
@@ -301,6 +387,10 @@ export default {
 .popper-component {
   top: 0 !important;
 }
+.code-editor {
+  max-height: calc(var(--vh, 1vh) * 80 - 54px - 60px - 66px);
+  overflow-y: auto;
+}
 @media screen and (max-width: 750px) {
   .popper-component {
     top: 0 !important;
@@ -309,6 +399,9 @@ export default {
     box-sizing: border-box;
     margin: 0 !important;
     overflow-x: hidden;
+  }
+  .code-editor {
+    max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px - 66px);
   }
 }
 .night-theme {
@@ -399,6 +492,16 @@ export default {
   }
   .el-pager li.active {
     color: #409EFF;
+  }
+  .code-editor {
+    .token.operator,
+    .token.entity,
+    .token.url,
+    .language-css .token.string,
+    .style .token.string {
+      /* This background color was intended by the author of this theme. */
+      background: inherit;
+    }
   }
 }
 .el-popover:focus, .el-popover:focus:active, .el-popover__reference:focus:hover, .el-popover__reference:focus:not(.focusing) {

@@ -156,7 +156,7 @@
             <input
               ref="fileRef"
               type="file"
-              @change="onBookSourceFileChange"
+              @change="onSourceFileChange"
               style="display:none"
             />
           </div>
@@ -397,7 +397,15 @@
             @click="toDetail(book)"
           >
             <div class="cover-img" @click.stop="toggleBookIntroPop(book)">
-              <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" />
+              <!-- <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" /> -->
+              <el-image
+                class="cover"
+                :src="getCover(book.coverUrl, true)"
+                :key="book.coverUrl"
+                fit="cover"
+                lazy
+              >
+              </el-image>
             </div>
             <div class="info" @click="toDetail(book)">
               <div class="book-operation">
@@ -446,24 +454,29 @@
       </div>
     </div>
     <el-dialog
-      title="导入书源"
-      :visible.sync="showImportDialog"
+      :title="isImportRssSource ? '导入RSS源' : '导入书源'"
+      :visible.sync="showImportSourceDialog"
       :width="dialogWidth"
-      :top="dialogTop"
+      :top="this.collapseMenu ? '0' : '15vh'"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg' : ''"
     >
-      <div class="source-container">
+      <div class="source-container source-list-container">
         <el-checkbox-group
           v-model="checkedSourceIndex"
           @change="handleCheckedSourcesChange"
         >
           <el-checkbox
-            v-for="(source, index) in importBookSource"
+            v-for="(source, index) in importSourceList"
             :label="index"
             :key="index"
             class="source-checkbox"
-            >{{ source.bookSourceName }} {{ source.bookSourceUrl }}</el-checkbox
+            >{{
+              isImportRssSource ? source.sourceName : source.bookSourceName
+            }}
+            {{
+              isImportRssSource ? source.sourceUrl : source.bookSourceUrl
+            }}</el-checkbox
           >
         </el-checkbox-group>
       </div>
@@ -478,16 +491,15 @@
           >全选</el-checkbox
         >
         <span class="check-tip">已选择 {{ checkedSourceIndex.length }} 个</span>
-        <el-button size="medium" @click="showImportDialog = false"
+        <el-button size="medium" @click="showImportSourceDialog = false"
           >取消</el-button
         >
-        <el-button size="medium" type="primary" @click="saveBookSourceList"
+        <el-button size="medium" type="primary" @click="saveSourceList"
           >确定</el-button
         >
       </div>
     </el-dialog>
     <el-dialog
-      :title="isShowFailureBookSource ? '失效书源管理' : '书源管理'"
       :visible.sync="showBookSourceManageDialog"
       :width="dialogWidth"
       :top="dialogTop"
@@ -498,6 +510,14 @@
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
     >
+      <div class="custom-dialog-title" slot="title">
+        <span class="el-dialog__title"
+          >{{ isShowFailureBookSource ? "失效书源管理" : "书源管理" }}
+          <span class="float-right span-btn" @click="editBookSource(false)"
+            >新增</span
+          >
+        </span>
+      </div>
       <div class="source-container table-container">
         <div class="check-form" v-if="isShowFailureBookSource">
           <span>搜索词：</span>
@@ -578,6 +598,17 @@
           <el-table-column label="书架书籍" min-width="120">
             <template slot-scope="scope">
               <pre>{{ showSourceBook(scope.row) }}</pre>
+            </template>
+          </el-table-column>
+          <el-table-column
+            label="操作"
+            width="100px"
+            v-if="!isShowFailureBookSource"
+          >
+            <template slot-scope="scope">
+              <el-button type="text" @click="editBookSource(scope.row)"
+                >编辑</el-button
+              >
             </template>
           </el-table-column>
         </el-table>
@@ -959,12 +990,34 @@
     </el-dialog>
 
     <el-dialog
-      title="RSS订阅"
       :visible.sync="showRssSourcesDialog"
       :width="dialogSmallWidth"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
+      @closed="showRssSourceEditButton = false"
     >
+      <div class="custom-dialog-title" slot="title">
+        <span class="el-dialog__title"
+          >RSS订阅({{ rssSourceList.length }})
+          <span class="float-right span-btn" @click="uploadRssSource"
+            >导入</span
+          >
+          <span
+            class="float-right span-btn"
+            @click="showRssSourceEditButton = !showRssSourceEditButton"
+            >{{ showRssSourceEditButton ? "取消" : "编辑" }}</span
+          >
+          <span class="float-right span-btn" @click="editRssSource(false)"
+            >新增</span
+          >
+        </span>
+        <input
+          ref="rssInputRef"
+          type="file"
+          @change="onSourceFileChange($event, true)"
+          style="display:none"
+        />
+      </div>
       <div class="rss-source-list-container">
         <div
           class="rss-source"
@@ -972,6 +1025,16 @@
           :key="'rss-' + index"
           @click="getRssArticles(source)"
         >
+          <i
+            class="el-icon-close"
+            v-if="!showRssSourceEditButton"
+            @click.stop="deleteRssSource(source)"
+          ></i>
+          <i
+            class="el-icon-edit"
+            v-else
+            @click.stop="editRssSource(source)"
+          ></i>
           <img v-lazy="getImage(source.sourceIcon)" class="rss-icon" />
           <div class="rss-title">{{ source.sourceName }}</div>
         </div>
@@ -979,7 +1042,7 @@
     </el-dialog>
 
     <el-dialog
-      title="RSS文章列表"
+      :title="rssSource.sourceName"
       :visible.sync="showRssArticlesDialog"
       :width="dialogSmallWidth"
       :fullscreen="collapseMenu"
@@ -999,7 +1062,15 @@
           </div>
           <div class="rss-article-image" v-if="article.image">
             <div class="image-wrapper">
-              <img v-lazy="getCover(article.image)" />
+              <el-image
+                class="rss-article-img"
+                :src="getCover(article.image, true)"
+                :preview-src-list="rssArticleImageList"
+                fit="cover"
+                lazy
+                @click.stop="noop"
+              >
+              </el-image>
             </div>
           </div>
         </div>
@@ -1017,7 +1088,9 @@
       <div class="rss-article-info-container">
         <div
           class="rss-article-content"
+          ref="rssArticleContentRef"
           v-html="rssArticleInfo.content || rssArticleInfo.description"
+          @click="rssArticleClickHandler"
         ></div>
       </div>
     </el-dialog>
@@ -1028,6 +1101,7 @@
 import Explore from "../components/Explore.vue";
 import Axios from "../plugins/axios";
 import { errorTypeList } from "../plugins/config";
+import eventBus from "../plugins/eventBus";
 
 Date.prototype.format = function(fmt) {
   var o = {
@@ -1137,8 +1211,9 @@ export default {
       refreshLoading: false,
       popExploreVisible: false,
       loadingMore: false,
-      importBookSource: [],
-      showImportDialog: false,
+      importSourceList: [],
+      showImportSourceDialog: false,
+      isImportRssSource: false,
       checkAll: false,
       isIndeterminate: false,
       checkedSourceIndex: [],
@@ -1198,6 +1273,8 @@ export default {
       importMultiBookTip: "",
 
       showRssSourcesDialog: false,
+
+      showRssSourceEditButton: false,
 
       showRssArticlesDialog: false,
       rssArticleList: [],
@@ -1649,17 +1726,19 @@ export default {
     uploadBookSource() {
       this.$refs.fileRef.dispatchEvent(new MouseEvent("click"));
     },
-    onBookSourceFileChange(event) {
+    onSourceFileChange(event, isRssSource) {
       const rawFile = event.target.files && event.target.files[0];
       // console.log("rawFile", rawFile);
       const reader = new FileReader();
+      const sourceTypeName = isRssSource ? "RSS源" : "书源";
       reader.onload = e => {
         const data = e.target.result;
         try {
-          this.importBookSource = JSON.parse(data);
-          this.showImportDialog = true;
+          this.importSourceList = JSON.parse(data);
+          this.showImportSourceDialog = true;
+          this.isImportRssSource = !!isRssSource;
         } catch (error) {
-          this.$message.error("书源文件错误");
+          this.$message.error(sourceTypeName + "文件错误");
         }
       };
       reader.onerror = () => {
@@ -1685,36 +1764,44 @@ export default {
                 }
               });
               if (sourceList.length) {
-                this.importBookSource = sourceList;
-                this.showImportDialog = true;
+                this.importSourceList = sourceList;
+                this.showImportSourceDialog = true;
+                this.isImportRssSource = !!isRssSource;
               } else {
-                this.$message.error("书源文件错误");
+                this.$message.error(sourceTypeName + "文件错误");
               }
             }
           },
           error => {
             this.$message.error(
-              "读取书源文件内容失败 " + (error && error.toString())
+              "读取" +
+                sourceTypeName +
+                "文件内容失败 " +
+                (error && error.toString())
             );
           }
         );
       };
       reader.readAsText(rawFile);
-      this.$refs.fileRef.value = null;
+      if (this.isRssSource) {
+        this.$refs.rssInputRef.value = null;
+      } else {
+        this.$refs.fileRef.value = null;
+      }
     },
     handleCheckAllChange(val) {
       this.checkedSourceIndex = val
-        ? this.importBookSource.map((v, i) => i)
+        ? this.importSourceList.map((v, i) => i)
         : [];
       this.isIndeterminate = false;
     },
     handleCheckedSourcesChange(value) {
       let checkedCount = value.length;
-      this.checkAll = checkedCount === this.importBookSource.length;
+      this.checkAll = checkedCount === this.importSourceList.length;
       this.isIndeterminate =
-        checkedCount > 0 && checkedCount < this.importBookSource.length;
+        checkedCount > 0 && checkedCount < this.importSourceList.length;
     },
-    saveBookSourceList() {
+    saveSourceList() {
       if (!this.$store.state.connected) {
         this.$message.error("后端未连接");
         return;
@@ -1724,19 +1811,33 @@ export default {
         return;
       }
       const sourceList = this.checkedSourceIndex.map(
-        v => this.importBookSource[v]
+        v => this.importSourceList[v]
       );
-      Axios.post(this.api + "/saveSources", sourceList).then(
+      Axios.post(
+        this.api +
+          (this.isImportRssSource ? "/saveRssSources" : "/saveSources"),
+        sourceList
+      ).then(
         res => {
           if (res.data.isSuccess) {
             //
-            this.$message.success("导入书源成功");
-            this.loadBookSource(true);
-            this.showImportDialog = false;
+            this.$message.success(
+              this.isImportRssSource ? "导入RSS源成功" : "导入书源成功"
+            );
+            if (this.isImportRssSource) {
+              this.loadRssSources(true);
+            } else {
+              this.loadBookSource(true);
+            }
+            this.showImportSourceDialog = false;
+            this.isImportRssSource = false;
           }
         },
         error => {
-          this.$message.error("导入书源失败 " + (error && error.toString()));
+          this.$message.error(
+            (this.isImportRssSource ? "导入RSS源失败 " : "导入书源失败 ") +
+              (error && error.toString())
+          );
         }
       );
     },
@@ -2537,6 +2638,32 @@ export default {
       //
       this.showRssSourcesDialog = true;
     },
+    async deleteRssSource(source) {
+      const res = await this.$confirm(`确认要删除该RSS订阅源吗?`, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/deleteRssSource", source).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("删除成功");
+            this.loadRssSources(true);
+          }
+        },
+        error => {
+          this.$message.error("删除失败 " + (error && error.toString()));
+        }
+      );
+    },
+    uploadRssSource() {
+      this.$refs.rssInputRef.dispatchEvent(new MouseEvent("click"));
+    },
     getRssArticles(source) {
       //
       Axios.post(this.api + "/getRssArticles", {
@@ -2584,6 +2711,170 @@ export default {
           );
         }
       );
+    },
+    noop() {},
+    rssArticleClickHandler(e) {
+      if (
+        e.target &&
+        e.target.nodeName &&
+        e.target.nodeName.toLowerCase() === "img"
+      ) {
+        const imgList = this.$refs.rssArticleContentRef.querySelectorAll("img");
+        if (imgList.length) {
+          const imgUrlList = [];
+          let index = 0;
+          for (let i = 0; i < imgList.length; i++) {
+            imgUrlList.push(imgList[i].src);
+            if (imgList[i] === e.target) {
+              index = i;
+            }
+          }
+          this.$store.commit("setPreviewImageIndex", index);
+          this.$store.commit("setPreviewImgList", imgUrlList);
+        }
+      }
+    },
+    editBookSource(bookSource) {
+      const editHandler = data => {
+        eventBus.$emit(
+          "showEditor",
+          "编辑书源",
+          JSON.stringify(data, null, 4),
+          (content, close) => {
+            try {
+              const source = JSON.parse(content);
+              if (!source.bookSourceName) {
+                this.$message.error("书源名称不能为空");
+                return;
+              }
+              if (!source.bookSourceUrl) {
+                this.$message.error("书源链接不能为空");
+                return;
+              }
+              Axios.post(this.api + "/saveSource", source).then(
+                res => {
+                  if (res.data.isSuccess) {
+                    //
+                    close();
+                    this.$message.success("保存书源成功");
+                    this.loadBookSource(true);
+                  }
+                },
+                error => {
+                  this.$message.error(
+                    "保存书源失败 " + (error && error.toString())
+                  );
+                }
+              );
+            } catch (e) {
+              this.$message.error("书源必须是JSON格式");
+            }
+          }
+        );
+      };
+      if (!bookSource) {
+        editHandler({
+          bookSourceComment: "",
+          bookSourceGroup: "",
+          bookSourceName: "新增书源",
+          bookSourceType: 0,
+          bookSourceUrl: "",
+          bookUrlPattern: "",
+          enabled: true,
+          enabledExplore: true,
+          exploreUrl: "",
+          ruleBookInfo: {},
+          ruleContent: {
+            content: ""
+          },
+          ruleExplore: {},
+          ruleSearch: {
+            author: "",
+            bookList: "",
+            bookUrl: "",
+            coverUrl: "",
+            intro: "",
+            kind: "",
+            lastChapter: "",
+            name: ""
+          },
+          ruleToc: {
+            chapterList: "",
+            chapterName: "",
+            chapterUrl: ""
+          },
+          searchUrl: ""
+        });
+        return;
+      }
+      Axios.post(this.api + "/getSource", {
+        bookSourceUrl: bookSource.bookSourceUrl
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            editHandler(res.data.data);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载书源信息失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    editRssSource(rssSource) {
+      rssSource = rssSource || {
+        sourceName: "新增RSS源",
+        sourceUrl: "",
+        sourceIcon: "",
+        sourceGroup: "",
+        enabled: true,
+        singleUrl: true,
+        articleStyle: 0,
+        ruleArticles: "",
+        ruleTitle: "",
+        rulePubDate: "",
+        ruleImage: "",
+        ruleLink: "",
+        ruleContent: "",
+        enableJs: true
+      };
+      eventBus.$emit(
+        "showEditor",
+        "编辑RSS源",
+        JSON.stringify(rssSource, null, 4),
+        (content, close) => {
+          try {
+            const source = JSON.parse(content);
+            if (!source.sourceName) {
+              this.$message.error("RSS源名称不能为空");
+              return;
+            }
+            if (!source.sourceUrl) {
+              this.$message.error("RSS源链接不能为空");
+              return;
+            }
+            Axios.post(this.api + "/saveRssSource", source).then(
+              res => {
+                if (res.data.isSuccess) {
+                  //
+                  close();
+                  this.$message.success("保存RSS源成功");
+                  this.loadRssSources(true);
+                }
+              },
+              error => {
+                this.$message.error(
+                  "保存RSS源失败 " + (error && error.toString())
+                );
+              }
+            );
+          } catch (e) {
+            this.$message.error("RSS源必须是JSON格式");
+          }
+        }
+      );
     }
   },
   computed: {
@@ -2606,6 +2897,11 @@ export default {
     },
     bookList() {
       return this.isSearchResult ? this.searchResult : this.showShelfBooks;
+    },
+    bookCoverList() {
+      return this.bookList
+        .filter(v => v.coverUrl)
+        .map(v => this.getCover(v.coverUrl, true));
     },
     shelfBooks() {
       return this.$store.getters.shelfBooks;
@@ -2654,7 +2950,7 @@ export default {
         return this.$store.state.windowSize.height - 54 - 60 - 70;
       }
       return Math.min(
-        0.9 * this.$store.state.windowSize.height - 70 - 54 - 60,
+        0.7 * this.$store.state.windowSize.height - 70 - 54 - 60,
         400
       );
     },
@@ -2783,6 +3079,11 @@ export default {
       return []
         .concat(this.$store.state.rssSourceList)
         .sort((a, b) => a.customOrder - b.customOrder);
+    },
+    rssArticleImageList() {
+      return this.rssArticleList
+        .filter(v => v.image)
+        .map(v => this.getImage(v.image, true));
     }
   }
 };
@@ -3292,8 +3593,18 @@ export default {
   }
 }
 
+.source-list-container {
+  max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px - 66px);
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
 .float-left {
   float: left;
+}
+
+.float-right {
+  float: right;
 }
 
 .book-info-container {
@@ -3371,6 +3682,13 @@ export default {
     vertical-align: top;
     margin-bottom: 10px;
     cursor: pointer;
+    position: relative;
+
+    .el-icon-close, .el-icon-edit {
+      position: absolute;
+      right: 6px;
+      top: 0px;
+    }
 
     .rss-icon {
       display: inline-block;
@@ -3382,6 +3700,17 @@ export default {
       margin-top: 5px;
       text-align: center;
     }
+  }
+}
+
+.custom-dialog-title {
+  padding-right: 20px;
+
+  .span-btn {
+    display: inline-block;
+    cursor: pointer;
+    font-size: 15px;
+    margin-right: 10px;
   }
 }
 
@@ -3415,6 +3744,8 @@ export default {
     }
     .rss-article-image {
       width: 120px;
+      display: flex;
+      align-items: center;
 
       .image-wrapper {
         width: 100%;
@@ -3422,9 +3753,9 @@ export default {
         padding-bottom: 62.5%;
         overflow: hidden;
 
-        img {
-          position: relative;
-          width: 100%;
+        .rss-article-img {
+          width: 120px;
+          height: 75px;
         }
       }
     }
@@ -3547,19 +3878,28 @@ export default {
     }
   }
   .rss-source-list-container {
-    max-height: calc(var(--vh, 1vh) * 100 - 54px - 60px);
+    max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px);
   }
   .rss-article-list-container {
-    max-height: calc(var(--vh, 1vh) * 100 - 54px - 60px);
+    max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px);
 
     .rss-article {
+      padding: 15px 5px;
+
       .rss-article-image {
         width: 100px;
-    }
+        .rss-article-img {
+          width: 100px;
+          height: 62.5px;
+        }
+      }
     }
   }
   .rss-article-info-container {
-    max-height: calc(var(--vh, 1vh) * 100 - 54px - 60px);
+    max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px);
+  }
+  .source-list-container  {
+    max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px - 66px);
   }
 }
 @media screen and (max-width: 450px) {
@@ -3615,11 +3955,34 @@ export default {
     transparent 36px
   ) !important;
 }
-
+.rss-article-info-container img {
+  max-width: 100%;
+}
+.rss-article-info-container video {
+  max-width: 100%;
+}
 @media (hover: hover) {
   .book:hover {
     background: rgba(0, 0, 0, 0.1);
     transition-duration: 0.5s;
+  }
+  .el-icon-close:hover {
+    color: #409eff;
+  }
+  .el-icon-edit:hover {
+    color: #409eff;
+  }
+}
+
+.el-dialog__header {
+  padding: 20px 40px 10px 20px;
+}
+.el-dialog__headerbtn {
+  top: 22px;
+}
+@media screen and (max-width: 750px) {
+  .el-dialog__body {
+    padding: 15px 20px;
   }
 }
 </style>
