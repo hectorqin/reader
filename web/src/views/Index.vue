@@ -1035,7 +1035,12 @@
             v-else
             @click.stop="editRssSource(source)"
           ></i>
-          <img v-lazy="getImage(source.sourceIcon)" class="rss-icon" />
+          <el-image
+            :src="getImage(source.sourceIcon, true)"
+            class="rss-icon"
+            fit="cover"
+            lazy
+          />
           <div class="rss-title">{{ source.sourceName }}</div>
         </div>
       </div>
@@ -1049,7 +1054,7 @@
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @closed="rssArticleList = []"
     >
-      <div class="rss-article-list-container">
+      <div class="rss-article-list-container" ref="rssArticleListRef">
         <div
           class="rss-article"
           v-for="(article, index) in rssArticleList"
@@ -1064,7 +1069,7 @@
             <div class="image-wrapper">
               <el-image
                 class="rss-article-img"
-                :src="getCover(article.image, true)"
+                :src="getCover(article.image, true, true)"
                 :preview-src-list="rssArticleImageList"
                 fit="cover"
                 lazy
@@ -1073,6 +1078,12 @@
               </el-image>
             </div>
           </div>
+        </div>
+        <div
+          class="load-more-rss"
+          @click="hasMoreRssArticles && getRssArticles(rssSource, rssPage + 1)"
+        >
+          {{ hasMoreRssArticles ? "加载更多" : "没有更多啦" }}
         </div>
       </div>
     </el-dialog>
@@ -1277,6 +1288,7 @@ export default {
       showRssSourceEditButton: false,
 
       showRssArticlesDialog: false,
+      hasMoreRssArticles: true,
       rssArticleList: [],
       rssPage: 1,
       rssSource: {},
@@ -1321,6 +1333,14 @@ export default {
     },
     userNS() {
       this.init(true);
+    },
+    showRssArticlesDialog(val) {
+      if (val) {
+        this.$nextTick(() => {
+          this.$refs.rssArticleListRef &&
+            (this.$refs.rssArticleListRef.scrollTop = 0);
+        });
+      }
     }
   },
   mounted() {
@@ -2664,8 +2684,12 @@ export default {
     uploadRssSource() {
       this.$refs.rssInputRef.dispatchEvent(new MouseEvent("click"));
     },
-    getRssArticles(source) {
+    getRssArticles(source, page) {
       //
+      this.rssPage = page || 1;
+      if (this.rssPage === 1) {
+        this.hasMoreRssArticles = true;
+      }
       Axios.post(this.api + "/getRssArticles", {
         sourceUrl: source.sourceUrl,
         page: this.rssPage
@@ -2675,11 +2699,18 @@ export default {
             //
             if (!res.data.data.length) {
               this.$message.error("没有数据");
+              this.hasMoreRssArticles = false;
               return;
             }
             this.showRssArticlesDialog = true;
             this.rssSource = source;
-            this.rssArticleList = res.data.data;
+            if (this.rssPage > 1) {
+              this.rssArticleList = []
+                .concat(this.rssArticleList)
+                .concat(res.data.data);
+            } else {
+              this.rssArticleList = res.data.data;
+            }
           }
         },
         error => {
@@ -3083,7 +3114,7 @@ export default {
     rssArticleImageList() {
       return this.rssArticleList
         .filter(v => v.image)
-        .map(v => this.getImage(v.image, true));
+        .map(v => this.getImage(v.image, true, true));
     }
   }
 };
@@ -3692,7 +3723,7 @@ export default {
 
     .rss-icon {
       display: inline-block;
-      max-width: 50px;
+      width: 50px;
       height: 50px;
       border-radius: 5px;
     }
@@ -3759,6 +3790,12 @@ export default {
         }
       }
     }
+  }
+
+  .load-more-rss {
+    text-align: center;
+    padding: 10px;
+    cursor: pointer;
   }
 }
 

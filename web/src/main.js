@@ -32,34 +32,40 @@ Vue.mixin({
     }
   },
   methods: {
-    getCover(coverUrl, normal) {
+    getImagePath(url, useSW) {
       if (
-        coverUrl &&
-        (coverUrl.startsWith("http://") ||
-          coverUrl.startsWith("https://") ||
-          coverUrl.startsWith("//"))
+        url &&
+        (url.startsWith("http://") ||
+          url.startsWith("https://") ||
+          url.startsWith("//"))
       ) {
+        if (useSW && window.serviceWorkerReady) {
+          return url;
+        }
+        return this.api + "/cover?path=" + url;
+      }
+      return false;
+    },
+    getCover(coverUrl, normal, useSW) {
+      coverUrl = this.getImagePath(coverUrl, useSW);
+      if (coverUrl) {
         return normal
-          ? this.api + "/cover?path=" + coverUrl
+          ? coverUrl
           : {
-              src: this.api + "/cover?path=" + coverUrl,
+              src: coverUrl,
               error: noCover
             };
       }
       return noCover;
     },
-    getImage(coverUrl, normal) {
-      if (
-        coverUrl &&
-        (coverUrl.startsWith("http://") ||
-          coverUrl.startsWith("https://") ||
-          coverUrl.startsWith("//"))
-      ) {
+    getImage(imageUrl, normal, useSW) {
+      imageUrl = this.getImagePath(imageUrl, useSW);
+      if (imageUrl) {
         return normal
-          ? this.api + "/cover?path=" + coverUrl
+          ? imageUrl
           : {
-              src: this.api + "/cover?path=" + coverUrl,
-              error: noImage
+              src: imageUrl,
+              error: noCover
             };
       }
       return noImage;

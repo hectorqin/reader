@@ -41,11 +41,12 @@ module.exports = {
       // swSrc: "src/service-worker.js"
       // ignoreURLParametersMatching: [new RegExp("accessToken")],
       exclude: ["index.html"],
+      importScripts: ["/sw.js"],
       cleanupOutdatedCaches: true,
       runtimeCaching: [
         {
           // 首页
-          urlPattern: new RegExp("^https://.*/index.html"),
+          urlPattern: new RegExp("^https?://.*/index.html"),
           handler: "networkFirst",
           options: {
             cacheName: "home",
@@ -56,7 +57,7 @@ module.exports = {
         },
         {
           // 获取书架
-          urlPattern: new RegExp("^https://[^/]*/reader3/getBookshelf"),
+          urlPattern: new RegExp("^https?://[^/]*/reader3/getBookshelf"),
           handler: "networkFirst",
           options: {
             cacheName: "bookshelf",
@@ -67,7 +68,7 @@ module.exports = {
         },
         {
           // 获取书源
-          urlPattern: new RegExp("^https://[^/]*/reader3/getSources"),
+          urlPattern: new RegExp("^https?://[^/]*/reader3/getSources"),
           handler: "networkFirst",
           options: {
             cacheName: "bookSources",
@@ -78,7 +79,7 @@ module.exports = {
         },
         {
           // 获取书籍章节列表
-          urlPattern: new RegExp("^https://[^/]*/reader3/getChapterList"),
+          urlPattern: new RegExp("^https?://[^/]*/reader3/getChapterList"),
           handler: "networkFirst",
           options: {
             cacheName: "bookChapterList",
@@ -90,7 +91,7 @@ module.exports = {
         },
         {
           // 获取书籍内容
-          urlPattern: new RegExp("^https://[^/]*/reader3/getBookContent"),
+          urlPattern: new RegExp("^https?://[^/]*/reader3/getBookContent"),
           handler: "cacheFirst",
           options: {
             cacheName: "bookContent",
@@ -105,7 +106,7 @@ module.exports = {
         },
         {
           // 获取书籍封面
-          urlPattern: new RegExp("^https://[^/]*/reader3/cover"),
+          urlPattern: new RegExp("^https?://[^/]*/reader3/cover"),
           handler: "cacheFirst",
           options: {
             cacheName: "bookCover",
