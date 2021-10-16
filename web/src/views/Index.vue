@@ -3741,13 +3741,15 @@ export default {
     .el-icon-close {
       position: absolute;
       right: 6px;
-      top: 0px;
+      top: 8px;
+      font-size: 18px;
     }
 
     .el-icon-edit {
       position: absolute;
       right: 6px;
-      top: 20px;
+      top: 42px;
+      font-size: 18px;
     }
 
     .rss-icon {
@@ -3945,15 +3947,6 @@ export default {
   }
   .rss-source-list-container {
     max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px);
-    .rss-source {
-      .el-icon-close {
-        right: 0px;
-      }
-
-      .el-icon-edit {
-        right: 0px;
-      }
-    }
   }
   .rss-article-list-container {
     max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px);
@@ -3977,9 +3970,20 @@ export default {
     max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px - 66px);
   }
 }
-@media screen and (max-width: 450px) {
+@media screen and (max-width: 480px) {
   .source-container.table-container {
     margin: -15px -5px;
+  }
+  .rss-source-list-container {
+    .rss-source {
+      .el-icon-close {
+        right: -5px;
+      }
+
+      .el-icon-edit {
+        right: -5px;
+      }
+    }
   }
 }
 </style>
@@ -4051,13 +4055,6 @@ export default {
 
 .el-dialog__header {
   padding: 20px 40px 10px 20px;
-}
-@supports (-webkit-appearance: none) and (not (overflow: -webkit-marquee)) and
-  (not (-ms-ime-align: auto)) and (not (-moz-appearance: none)) {
-  /* chrome_only */
-  .el-dialog__headerbtn {
-    top: 22px;
-  }
 }
 @media screen and (max-width: 750px) {
   .el-dialog__body {

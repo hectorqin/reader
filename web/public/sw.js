@@ -1,5 +1,29 @@
 workbox.routing.setDefaultHandler(async ({ event }) => {
-  let { request } = event;
+  let { request, target } = event;
+
+  // 处理首页请求 networkFirst
+  try {
+    const url = new URL(request.url);
+    if (
+      url.origin === target.origin &&
+      (!url.pathname || url.pathname === "/")
+    ) {
+      const homeCache = await self.caches.open("home");
+      return fetch(request)
+        .then(fetchRes => {
+          if (fetchRes.type !== "opaque") {
+            let resClone = fetchRes.clone();
+            homeCache.put(request, fetchRes);
+            return resClone;
+          }
+        })
+        .catch(() => {
+          return homeCache.match(request);
+        });
+    }
+  } catch (error) {
+    //
+  }
 
   // 判断是否有 precache
   const precache = await self.caches.open(workbox.core.cacheNames.precache);
@@ -10,11 +34,8 @@ workbox.routing.setDefaultHandler(async ({ event }) => {
     return precacheRes;
   }
 
-  // 直接处理api请求
-  if (
-    request.url.indexOf("/index.html") !== -1 ||
-    request.url.indexOf("/reader3/") !== -1
-  ) {
+  // 处理api请求 networkOnly
+  if (request.url.indexOf("/reader3/") !== -1) {
     return fetch(request);
   }
 
@@ -33,6 +54,7 @@ workbox.routing.setDefaultHandler(async ({ event }) => {
     return false;
   };
 
+  // 通用请求，缓存 opaque 资源 和 图片资源
   const doRequest = function(request) {
     var originRequest = request;
     // 站外资源去掉 referrer

@@ -41,12 +41,12 @@ module.exports = {
       // swSrc: "src/service-worker.js"
       // ignoreURLParametersMatching: [new RegExp("accessToken")],
       exclude: ["index.html"],
-      importScripts: ["/sw.js"],
+      importScripts: ["sw.js"],
       cleanupOutdatedCaches: true,
       runtimeCaching: [
         {
           // 首页
-          urlPattern: new RegExp("^https?://.*/index.html"),
+          urlPattern: new RegExp("^https?://[^/]*/?$"),
           handler: "networkFirst",
           options: {
             cacheName: "home",
