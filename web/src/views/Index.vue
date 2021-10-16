@@ -341,9 +341,12 @@
         </div>
         <div
           class="title-btn"
-          v-else-if="!isSearchResult"
-          @click="refreshShelf"
+          v-if="!isSearchResult"
+          @click="showBookEditButton = !showBookEditButton"
         >
+          {{ showBookEditButton ? "取消" : "编辑" }}
+        </div>
+        <div class="title-btn" v-if="!isSearchResult" @click="refreshShelf">
           <i class="el-icon-loading" v-if="refreshLoading"></i>
           {{ refreshLoading ? "刷新中..." : "刷新" }}
         </div>
@@ -411,9 +414,19 @@
               <div class="book-operation">
                 <i
                   class="el-icon-close"
-                  v-if="!isSearchResult"
+                  v-if="!isSearchResult && showBookEditButton"
                   @click.stop="deleteBook(book)"
                 ></i>
+                <el-badge
+                  class="unread-num-badge"
+                  :max="99"
+                  :value="book.totalChapterNum - 1 - book.durChapterIndex"
+                  v-if="
+                    !isSearchResult &&
+                      !showBookEditButton &&
+                      book.totalChapterNum - 1 - book.durChapterIndex > 0
+                  "
+                />
               </div>
               <div class="name" slot="reference">
                 {{ book.name }}
@@ -1027,12 +1040,12 @@
         >
           <i
             class="el-icon-close"
-            v-if="!showRssSourceEditButton"
+            v-if="showRssSourceEditButton"
             @click.stop="deleteRssSource(source)"
           ></i>
           <i
             class="el-icon-edit"
-            v-else
+            v-if="showRssSourceEditButton"
             @click.stop="editRssSource(source)"
           ></i>
           <el-image
@@ -1220,8 +1233,12 @@ export default {
       searchResult: [],
       searchPage: 1,
       refreshLoading: false,
+
+      showBookEditButton: false,
+
       popExploreVisible: false,
       loadingMore: false,
+
       importSourceList: [],
       showImportSourceDialog: false,
       isImportRssSource: false,
@@ -2231,7 +2248,7 @@ export default {
     },
     async restoreFromWebdav(row) {
       const res = await this.$confirm(
-        `确认要从该压缩文件恢复书源和书架信息吗?`,
+        `确认要从该压缩文件恢复书源、书架、分组和RSS订阅数据吗?`,
         "提示",
         {
           confirmButtonText: "确定",
@@ -2260,7 +2277,7 @@ export default {
     },
     async backupToWebdav() {
       const res = await this.$confirm(
-        `确认要用当前书源和书架信息覆盖备份文件中的书源和书架信息吗?`,
+        `确认要用当前书源和书架信息覆盖备份文件中的书源、书架、分组和RSS订阅数据吗?`,
         "提示",
         {
           confirmButtonText: "确定",
@@ -2686,6 +2703,7 @@ export default {
     },
     getRssArticles(source, page) {
       //
+      this.rssSource = source;
       this.rssPage = page || 1;
       if (this.rssPage === 1) {
         this.hasMoreRssArticles = true;
@@ -2702,13 +2720,12 @@ export default {
               this.hasMoreRssArticles = false;
               return;
             }
-            this.showRssArticlesDialog = true;
-            this.rssSource = source;
             if (this.rssPage > 1) {
               this.rssArticleList = []
                 .concat(this.rssArticleList)
                 .concat(res.data.data);
             } else {
+              this.showRssArticlesDialog = true;
               this.rssArticleList = res.data.data;
             }
           }
@@ -3405,7 +3422,7 @@ export default {
               font-size: 16px;
               font-weight: 700;
               color: #33373D;
-              margin-right: 30px;
+              margin-right: 38px;
             }
 
             .sub {
@@ -3445,6 +3462,12 @@ export default {
     .books-wrapper::-webkit-scrollbar {
       width: 0 !important;
     }
+  }
+}
+
+.unread-num-badge {
+  >>>.el-badge__content {
+    border: none;
   }
 }
 
@@ -3715,10 +3738,16 @@ export default {
     cursor: pointer;
     position: relative;
 
-    .el-icon-close, .el-icon-edit {
+    .el-icon-close {
       position: absolute;
       right: 6px;
       top: 0px;
+    }
+
+    .el-icon-edit {
+      position: absolute;
+      right: 6px;
+      top: 20px;
     }
 
     .rss-icon {
@@ -3916,6 +3945,15 @@ export default {
   }
   .rss-source-list-container {
     max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px);
+    .rss-source {
+      .el-icon-close {
+        right: 0px;
+      }
+
+      .el-icon-edit {
+        right: 0px;
+      }
+    }
   }
   .rss-article-list-container {
     max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px);
@@ -4014,8 +4052,12 @@ export default {
 .el-dialog__header {
   padding: 20px 40px 10px 20px;
 }
-.el-dialog__headerbtn {
-  top: 22px;
+@supports (-webkit-appearance: none) and (not (overflow: -webkit-marquee)) and
+  (not (-ms-ime-align: auto)) and (not (-moz-appearance: none)) {
+  /* chrome_only */
+  .el-dialog__headerbtn {
+    top: 22px;
+  }
 }
 @media screen and (max-width: 750px) {
   .el-dialog__body {

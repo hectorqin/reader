@@ -29,7 +29,8 @@ import {
   RadioButton,
   Pagination,
   InputNumber,
-  Image
+  Image,
+  Badge
 } from "element-ui";
 
 Vue.use(Button);
@@ -60,6 +61,7 @@ Vue.use(RadioButton);
 Vue.use(Pagination);
 Vue.use(InputNumber);
 Vue.use(Image);
+Vue.use(Badge);
 
 Vue.prototype.$msgbox = MessageBox;
 Vue.prototype.$message = Object.assign({}, Message, {
