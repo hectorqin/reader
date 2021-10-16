@@ -32,7 +32,7 @@ data class SearchBook(
     override var wordCount: String? = null,
     var latestChapterTitle: String? = null,
     var tocUrl: String = "",                    // 目录页Url (toc=table of Contents)
-    var time: Long = System.currentTimeMillis(),
+    var time: Long = 0,
     var variable: String? = null,
     var originOrder: Int = 0
 ) :  BaseBook, Comparable<SearchBook> {

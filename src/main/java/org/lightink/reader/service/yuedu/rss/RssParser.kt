@@ -2,7 +2,7 @@ package io.legado.app.model.rss
 
 import io.legado.app.constant.RSSKeywords
 import io.legado.app.data.entities.RssArticle
-import io.legado.app.model.Debug
+import io.legado.app.model.DebugLog
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.io.IOException
@@ -14,7 +14,7 @@ private val logger = KotlinLogging.logger {}
 object RssParser {
 
    @Throws(IOException::class)
-   fun parseXML(xml: String, sourceUrl: String): MutableList<RssArticle> {
+   fun parseXML(xml: String, sourceUrl: String, debugLog: DebugLog? = null): MutableList<RssArticle> {
 
        val articleList = mutableListOf<RssArticle>()
        var currentArticle = RssArticle()
@@ -102,16 +102,16 @@ org.kxml2.io.KXmlSerializer
        for ((index: Int, item: RssArticle) in articleList.withIndex()) {
            item.order = System.currentTimeMillis() + index
            if (index == 0) {
-               Debug.log(sourceUrl, "┌获取标题")
-               Debug.log(sourceUrl, "└${item.title}")
-               Debug.log(sourceUrl, "┌获取时间")
-               Debug.log(sourceUrl, "└${item.pubDate}")
-               Debug.log(sourceUrl, "┌获取描述")
-               Debug.log(sourceUrl, "└${item.description}")
-               Debug.log(sourceUrl, "┌获取图片url")
-               Debug.log(sourceUrl, "└${item.image}")
-               Debug.log(sourceUrl, "┌获取文章链接")
-               Debug.log(sourceUrl, "└${item.link}")
+               debugLog?.log(sourceUrl, "┌获取标题")
+               debugLog?.log(sourceUrl, "└${item.title}")
+               debugLog?.log(sourceUrl, "┌获取时间")
+               debugLog?.log(sourceUrl, "└${item.pubDate}")
+               debugLog?.log(sourceUrl, "┌获取描述")
+               debugLog?.log(sourceUrl, "└${item.description}")
+               debugLog?.log(sourceUrl, "┌获取图片url")
+               debugLog?.log(sourceUrl, "└${item.image}")
+               debugLog?.log(sourceUrl, "┌获取文章链接")
+               debugLog?.log(sourceUrl, "└${item.link}")
            }
        }
        return articleList

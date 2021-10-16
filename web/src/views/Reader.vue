@@ -19,10 +19,8 @@
             ref="popBookShelf"
             class="popup"
             :visible="popBookShelfVisible"
-            @loadCatalog="loadCatalog(true, true)"
+            @changeBook="changeBook"
             @toShelf="toShelf"
-            @close="popBookShelfVisible = false"
-            @hideContent="show = false"
           />
           <div class="tool-icon" slot="reference">
             <div class="iconfont">
@@ -47,12 +45,7 @@
             @close="popBookSourceVisible = false"
           />
 
-          <div
-            class="tool-icon"
-            :class="{ 'no-point': noPoint }"
-            slot="reference"
-            style="padding-top: 9px"
-          >
+          <div class="tool-icon" slot="reference" style="padding-top: 9px">
             <i class="el-icon-menu"></i>
             <div class="icon-text">书源</div>
           </div>
@@ -74,11 +67,7 @@
             @close="popCataVisible = false"
           />
 
-          <div
-            class="tool-icon"
-            :class="{ 'no-point': noPoint }"
-            slot="reference"
-          >
+          <div class="tool-icon" slot="reference">
             <div class="iconfont">
               &#58905;
             </div>
@@ -118,23 +107,13 @@
           </div>
           <div class="icon-text">首页</div>
         </div>
-        <div
-          class="tool-icon"
-          :class="{ 'no-point': noPoint }"
-          @click="toTop"
-          v-if="!isSlideRead"
-        >
+        <div class="tool-icon" @click="toTop" v-if="!isSlideRead">
           <div class="iconfont">
             &#58914;
           </div>
           <div class="icon-text">顶部</div>
         </div>
-        <div
-          class="tool-icon"
-          :class="{ 'no-point': noPoint }"
-          @click="toBottom"
-          v-if="!isSlideRead"
-        >
+        <div class="tool-icon" @click="toBottom" v-if="!isSlideRead">
           <div class="iconfont">
             &#58915;
           </div>
@@ -179,8 +158,7 @@
         </div>
         <div
           class="tool-icon"
-          :class="{ 'no-point': noPoint }"
-          @click="toLastChapter"
+          @click="toLastChapter()"
           :style="$store.state.miniInterface ? { order: -1 } : {}"
         >
           <div class="iconfont">
@@ -188,11 +166,7 @@
           </div>
           <span v-if="$store.state.miniInterface">上一章</span>
         </div>
-        <div
-          class="tool-icon"
-          :class="{ 'no-point': noPoint }"
-          @click="toNextChapter"
-        >
+        <div class="tool-icon" @click="toNextChapter()">
           <span v-if="$store.state.miniInterface">下一章</span>
           <div class="iconfont">
             &#58913;
@@ -499,7 +473,6 @@ export default {
       title: "",
       content: "",
       error: false,
-      noPoint: true,
       popCataVisible: false,
       readSettingsVisible: false,
       popBookSourceVisible: false,
@@ -832,6 +805,7 @@ export default {
           !this.lastReadingBook ||
           this.lastReadingBook.bookUrl !== this.$store.state.readingBook.bookUrl
         ) {
+          this.title = "";
           this.show = false;
           this.loading = this.$loading({
             target: this.$refs.content,
@@ -859,6 +833,13 @@ export default {
       } else {
         this.$message.error("请在书架选择书籍");
       }
+    },
+    changeBook(book) {
+      this.$message.info("换书成功");
+      this.popBookShelfVisible = false;
+      this.show = false;
+      this.$store.commit("setReadingBook", book);
+      this.loadCatalog(true, true);
     },
     loadCatalog(refresh, init) {
       if (!this.api) {
@@ -972,7 +953,6 @@ export default {
             let data = res.data.data;
             this.content = data;
             this.loading.close();
-            this.noPoint = false;
             this.error = false;
             this.show = true;
             this.$emit("showContent");

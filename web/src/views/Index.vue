@@ -417,6 +417,16 @@
                   v-if="!isSearchResult && showBookEditButton"
                   @click.stop="deleteBook(book)"
                 ></i>
+                <i
+                  class="el-icon-edit"
+                  v-if="!isSearchResult && showBookEditButton"
+                  @click.stop="editBook(book)"
+                ></i>
+                <i
+                  class="el-icon-edit"
+                  v-if="isSearchResult"
+                  @click.stop="editBook(book, true)"
+                ></i>
                 <el-badge
                   class="unread-num-badge"
                   :max="99"
@@ -428,7 +438,11 @@
                   "
                 />
               </div>
-              <div class="name" slot="reference">
+              <div
+                class="name"
+                slot="reference"
+                :class="showBookEditButton ? 'edit' : ''"
+              >
                 {{ book.name }}
               </div>
               <div class="sub">
@@ -1655,7 +1669,7 @@ export default {
         path: "/reader"
       });
     },
-    saveBook(book, isImport) {
+    saveBook(book, isImport, isEdit) {
       if (!book || !book.bookUrl || !book.origin) {
         this.$message.error("书籍信息错误");
         return Promise.reject(false);
@@ -1667,14 +1681,23 @@ export default {
             if (isImport) {
               this.showImportBookDialog = false;
             }
-            this.$message.success(isImport ? "导入书籍成功" : "加入书架成功");
+            this.$message.success(
+              isImport
+                ? "导入书籍成功"
+                : isEdit
+                ? "修改书籍成功"
+                : "加入书架成功"
+            );
             this.loadBookshelf();
           }
         },
         error => {
           this.$message.error(
-            (isImport ? "导入书籍失败" : "加入书架失败 ") +
-              (error && error.toString())
+            (isImport
+              ? "导入书籍失败"
+              : isEdit
+              ? "修改书籍失败"
+              : "加入书架失败 ") + (error && error.toString())
           );
         }
       );
@@ -1708,6 +1731,57 @@ export default {
         },
         error => {
           this.$message.error("删除失败 " + (error && error.toString()));
+        }
+      );
+    },
+    editBook(book, isAdd) {
+      if (!book || !book.name || !book.bookUrl || !book.origin) {
+        this.$message.error("书籍信息错误");
+        return;
+      }
+      const bookInfo = { ...book };
+      delete bookInfo["variableMap$delegate"];
+      eventBus.$emit(
+        "showEditor",
+        isAdd ? "保存书籍" : "编辑书籍",
+        JSON.stringify(bookInfo, null, 4),
+        async (content, close) => {
+          try {
+            const newBook = JSON.parse(content);
+            if (!newBook.name) {
+              this.$message.error("书籍名称不能为空");
+              return;
+            }
+            if (!newBook.bookUrl) {
+              this.$message.error("书籍链接不能为空");
+              return;
+            }
+            if (!newBook.origin) {
+              this.$message.error("书籍来源不能为空");
+              return;
+            }
+            if (isAdd) {
+              const res = await this.$confirm(
+                "加入书架之后才能编辑书籍信息, 是否加入书架?",
+                "提示",
+                {
+                  confirmButtonText: "确定",
+                  cancelButtonText: "取消",
+                  type: "warning"
+                }
+              ).catch(() => {
+                return false;
+              });
+              if (!res) {
+                return;
+              }
+            }
+            this.saveBook(newBook, false, true).then(() => {
+              close();
+            });
+          } catch (e) {
+            this.$message.error("书籍信息必须是JSON格式");
+          }
         }
       );
     },
@@ -3423,6 +3497,10 @@ export default {
               font-weight: 700;
               color: #33373D;
               margin-right: 38px;
+            }
+
+            .name.edit {
+              margin-right: 62px;
             }
 
             .sub {

@@ -18,20 +18,25 @@
       ref="sourceList"
       :class="{ night: $store.getters.isNight, day: !$store.getters.isNight }"
     >
-      <div class="cata">
+      <div class="source-list">
         <div
-          class="log"
+          class="source-item"
           v-for="(searchBook, index) in bookSource"
           :class="{ selected: isSelected(searchBook) }"
           :key="index"
           @click="changeBookSource(searchBook)"
           ref="source"
         >
-          <div class="log-text">
-            {{ searchBook.latestChapterTitle }}
+          <div class="source-title">
+            <div class="source-name">
+              {{ searchBook.originName }}
+            </div>
+            <div class="source-time">
+              {{ searchBook.time ? "⏱ " + searchBook.time + "ms" : "" }}
+            </div>
           </div>
-          <div class="extra-text">
-            {{ searchBook.originName }}
+          <div class="source-latest-chapter">
+            {{ searchBook.latestChapterTitle || "无最新章节" }}
           </div>
         </div>
       </div>
@@ -132,6 +137,18 @@ export default {
             this.$store.commit("setReadingBook", book);
             this.$emit("close");
             this.$emit("loadCatalog");
+
+            // 重新加载书架
+            Axios.get(this.api + `/getBookshelf`, {}).then(
+              res => {
+                if (res.data.isSuccess) {
+                  this.$store.commit("setShelfBooks", res.data.data);
+                }
+              },
+              () => {
+                //
+              }
+            );
           }
         },
         error => {
@@ -248,40 +265,49 @@ export default {
     height: 300px;
     overflow: auto;
 
-    .cata {
-      display: flex;
-      flex-direction: row;
-      flex-wrap: wrap;
-      justify-content: space-between;
-
-      .selected {
-        color: #EB4259;
-      }
-
-      .log {
+    .source-list {
+      .source-item {
         width: 100%;
-        height: 40px;
         cursor: pointer;
-        float: left;
         display: flex;
-        flex-direction: row;
-        flex-wrap: wrap;
-        justify-content: space-between;
-        font: 16px / 40px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
+        flex-direction: column;
         max-width: 100%;
         overflow: hidden;
+        padding: 8px 0;
 
-        .log-text {
-          margin-right: 26px;
-          overflow: hidden;
-          white-space: nowrap;
-          text-overflow: ellipsis;
+        .source-title {
+          display: flex;
+          flex-direction: row;
+          flex-wrap: wrap;
+          justify-content: space-between;
+          align-items: center;
+
+          .source-name {
+            font-size: 16px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+
+          }
+          .source-time {
+            float: right;
+            font-size: 12px;
+          }
         }
 
-        .extra-text {
+        .source-latest-chapter {
           overflow: hidden;
           white-space: nowrap;
           text-overflow: ellipsis;
+          color: #888;
+          font-size: 14px;
+          margin-top: 6px;
+        }
+
+        &.selected {
+          .source-name {
+            color: #EB4259;
+          }
         }
       }
     }
@@ -292,14 +318,14 @@ export default {
   }
 
   .night {
-    >>>.log {
-      border-bottom: 1px solid #666;
+    >>>.source-item {
+      border-bottom: 1px solid #333;
     }
   }
 
   .day {
-    >>>.log {
-      border-bottom: 1px solid #f2f2f2;
+    >>>.source-item {
+      border-bottom: 1px solid #eee;
     }
   }
 }

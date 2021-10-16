@@ -6,17 +6,7 @@ import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
 
-object Debug {
-    var debugLog = true
-
-    fun log(
-            sourceUrl: String? = "",
-            msg: String?) {
-       if (debugLog) {
-            logger.info("sourceUrl: {}, msg: {}", sourceUrl, msg)
-       }
-    }
-
+object Debug : DebugLog{
     suspend fun startDebug(webBook: WebBook, key: String) {
         log(msg = "⇒开始搜索关键字:$key")
         searchDebug(webBook, key)

@@ -15,23 +15,28 @@
       ref="bookList"
       :class="{ night: $store.getters.isNight, day: !$store.getters.isNight }"
     >
-      <div class="cata">
+      <div class="shelfbook-list">
         <div
-          class="log"
+          class="book-item"
           v-for="book in shelfBooks"
           :class="{ selected: isSelected(book) }"
           :key="book.bookUrl"
           @click="changeBook(book)"
           ref="book"
         >
-          <div class="book-name">
-            {{ book.name }}
+          <div class="book-title">
+            <div class="book-name">
+              {{ book.name }}
+            </div>
+            <div
+              class="book-progress"
+              v-if="book.totalChapterNum - 1 - book.durChapterIndex"
+            >
+              {{ book.totalChapterNum - 1 - book.durChapterIndex }}
+            </div>
           </div>
           <div class="chapter-text">
             {{ book.durChapterTitle }}
-          </div>
-          <div class="extra-text">
-            {{ book.durChapterIndex + 1 }} / {{ book.totalChapterNum }}
           </div>
         </div>
       </div>
@@ -103,7 +108,6 @@ export default {
       );
     },
     changeBook(book) {
-      this.$message.info("换书成功");
       const readingBook = {
         bookName: book.name,
         bookUrl: book.bookUrl,
@@ -112,10 +116,7 @@ export default {
         coverUrl: book.coverUrl,
         author: book.author
       };
-      this.$emit("hideContent");
-      this.$store.commit("setReadingBook", readingBook);
-      this.$emit("loadCatalog");
-      this.$emit("close");
+      this.$emit("changeBook", readingBook);
     },
     refreshShelf() {
       if (this.refreshLoading) return;
@@ -132,6 +133,9 @@ export default {
           }
         });
         if (index < 0) {
+          return;
+        }
+        if (!this.$refs.book || !this.$refs.book[index]) {
           return;
         }
         let wrapper = this.$refs.bookList;
@@ -192,42 +196,49 @@ export default {
     height: 300px;
     overflow: auto;
 
-    .cata {
-      display: flex;
-      flex-direction: row;
-      flex-wrap: wrap;
-      justify-content: space-between;
+    .shelfbook-list {
 
-      .selected {
-        color: #EB4259;
-      }
-
-      .log {
+      .book-item {
         width: 100%;
-        height: 40px;
         cursor: pointer;
-        float: left;
         display: flex;
-        flex-direction: row;
-        flex-wrap: wrap;
-        font: 16px / 40px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
+        flex-direction: column;
+        max-width: 100%;
+        overflow: hidden;
+        padding: 8px 0;
 
-        .book-name {
-          margin-right: 26px;
-          overflow: hidden;
-          white-space: nowrap;
-          text-overflow: ellipsis;
-          width: 25%;
+        .book-title {
+          display: flex;
+          flex-direction: row;
+          flex-wrap: wrap;
+          justify-content: space-between;
+          align-items: center;
+
+          .book-name {
+            font-size: 16px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+          }
+          .book-progress {
+            float: right;
+            font-size: 12px;
+          }
         }
 
         .chapter-text {
           overflow: hidden;
           white-space: nowrap;
           text-overflow: ellipsis;
-          flex: 1;
+          color: #888;
+          font-size: 14px;
+          margin-top: 6px;
         }
 
-        .extra-text {
+        &.selected {
+          .book-name {
+            color: #EB4259;
+          }
         }
       }
     }
@@ -238,14 +249,24 @@ export default {
   }
 
   .night {
-    >>>.log {
-      border-bottom: 1px solid #666;
+    .shelfbook-list {
+      .book-item {
+        border-bottom: 1px solid #333;
+
+        .book-title {
+          color: #888;
+        }
+
+        .chapter-text {
+          color: #555;
+        }
+      }
     }
   }
 
   .day {
-    >>>.log {
-      border-bottom: 1px solid #f2f2f2;
+    >>>.book-item {
+      border-bottom: 1px solid #eee;
     }
   }
 }

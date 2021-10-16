@@ -140,7 +140,7 @@ export default new Vuex.Store({
           }
         }
         state.shelfBooks = [].concat(state.shelfBooks);
-      }, 10);
+      }, 100);
       // eslint-disable-next-line no-unused-vars
       const { catalog, ...info } = readingBook;
       window.localStorage &&

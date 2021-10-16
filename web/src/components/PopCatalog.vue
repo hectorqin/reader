@@ -115,6 +115,9 @@ export default {
       this.$emit("refresh");
     },
     jumpToCurrent(index) {
+      if (!this.$refs.cata || !this.$refs.cata[index]) {
+        return;
+      }
       if (typeof index === "undefined") {
         index = this.asc
           ? this.$store.state.readingBook.index
@@ -221,19 +224,23 @@ export default {
 
   .night {
     >>>.log {
-      border-bottom: 1px solid #666;
+      border-bottom: 1px solid #333;
     }
   }
 
   .day {
     >>>.log {
-      border-bottom: 1px solid #f2f2f2;
+      border-bottom: 1px solid #eee;
     }
   }
 }
 @media screen and (max-width: 500px) {
   .popup-wrapper .data-wrapper .cata .log {
     width: 100%;
+
+    .log-text {
+      margin-right: 0;
+    }
   }
 }
 </style>

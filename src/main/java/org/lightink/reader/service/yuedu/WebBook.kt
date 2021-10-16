@@ -10,13 +10,18 @@ import io.legado.app.model.webbook.BookChapterList
 import io.legado.app.model.webbook.BookContent
 import io.legado.app.model.webbook.BookInfo
 import io.legado.app.model.webbook.BookList
+import io.legado.app.model.Debug
 import mu.KotlinLogging
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val logger = KotlinLogging.logger {}
 
-class WebBook(val bookSource: BookSource) {
+class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
 
-    constructor(bookSourceString: String) : this(OldRule.jsonToBookSource(bookSourceString)!!)
+    constructor(bookSourceString: String, debugLog: Boolean = true) : this(OldRule.jsonToBookSource(bookSourceString)!!, debugLog)
 
     val sourceUrl: String
         get() = bookSource.bookSourceUrl
@@ -42,7 +47,8 @@ class WebBook(val bookSource: BookSource) {
                 bookSource,
                 analyzeUrl,
                 res.url,
-                true
+                true,
+                debugLog = if(debugLog) Debug else null
             ).map {
                 it.tocHtml = ""
                 it.infoHtml = ""
@@ -71,9 +77,9 @@ class WebBook(val bookSource: BookSource) {
             bookSource,
             analyzeUrl,
             res.url,
-            false
+            false,
+            debugLog = if(debugLog) Debug else null
         )
-
     }
 
     /**
@@ -94,7 +100,7 @@ class WebBook(val bookSource: BookSource) {
         )
         val body = analyzeUrl.getResponseAwait().body
 
-        BookInfo.analyzeBookInfo(book, body, bookSource, book.bookUrl)
+        BookInfo.analyzeBookInfo(book, body, bookSource, book.bookUrl, debugLog = if(debugLog) Debug else null)
         book.tocHtml = null
         return book
     }
@@ -115,8 +121,7 @@ class WebBook(val bookSource: BookSource) {
                 headerMapF = bookSource.getHeaderMap()
             ).getResponseAwait().body
         }
-        return BookChapterList.analyzeChapterList(book, body, bookSource, book.tocUrl)
-
+        return BookChapterList.analyzeChapterList(book, body, bookSource, book.tocUrl, debugLog = if(debugLog) Debug else null)
     }
 
     /**
@@ -157,7 +162,8 @@ class WebBook(val bookSource: BookSource) {
             bookChapter,
             bookSource,
             bookChapter.url,
-            nextChapterUrl
+            nextChapterUrl,
+            debugLog = if(debugLog) Debug else null
         )
     }
 }

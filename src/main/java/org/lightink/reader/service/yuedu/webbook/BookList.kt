@@ -3,7 +3,7 @@ package io.legado.app.model.webbook
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.BookHelp
-import io.legado.app.model.Debug
+import io.legado.app.model.DebugLog
 import io.legado.app.model.analyzeRule.AnalyzeRule
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.NetworkUtils
@@ -16,7 +16,8 @@ object BookList {
         bookSource: BookSource,
         analyzeUrl: AnalyzeUrl,
         baseUrl: String,
-        isSearch: Boolean = true
+        isSearch: Boolean = true,
+        debugLog: DebugLog? = null
     ): ArrayList<SearchBook> {
         val bookList = ArrayList<SearchBook>()
         body ?: throw Exception(
@@ -27,13 +28,13 @@ object BookList {
                 //todo getString
                 "error_get_web_content"
         )
-        Debug.log(bookSource.bookSourceUrl, "≡获取成功:${analyzeUrl.ruleUrl}")
+        debugLog?.log(bookSource.bookSourceUrl, "≡获取成功:${analyzeUrl.ruleUrl}")
         val analyzeRule = AnalyzeRule(null)
         analyzeRule.setContent(body, baseUrl)
         bookSource.bookUrlPattern?.let {
             if (baseUrl.matches(it.toRegex())) {
-                Debug.log(bookSource.bookSourceUrl, "≡链接为详情页")
-                getInfoItem(analyzeRule, bookSource, baseUrl)?.let { searchBook ->
+                debugLog?.log(bookSource.bookSourceUrl, "≡链接为详情页")
+                getInfoItem(analyzeRule, bookSource, baseUrl, debugLog = debugLog)?.let { searchBook ->
                     searchBook.infoHtml = body
                     bookList.add(searchBook)
                 }
@@ -55,11 +56,11 @@ object BookList {
         if (ruleList.startsWith("+")) {
             ruleList = ruleList.substring(1)
         }
-        Debug.log(bookSource.bookSourceUrl, "┌获取书籍列表")
+        debugLog?.log(bookSource.bookSourceUrl, "┌获取书籍列表")
         collections = analyzeRule.getElements(ruleList)
         if (collections.isEmpty() && bookSource.bookUrlPattern.isNullOrEmpty()) {
-            Debug.log(bookSource.bookSourceUrl, "└列表为空,按详情页解析")
-            getInfoItem(analyzeRule, bookSource, baseUrl)?.let { searchBook ->
+            debugLog?.log(bookSource.bookSourceUrl, "└列表为空,按详情页解析")
+            getInfoItem(analyzeRule, bookSource, baseUrl, debugLog = debugLog)?.let { searchBook ->
                 searchBook.infoHtml = body
                 bookList.add(searchBook)
             }
@@ -72,13 +73,14 @@ object BookList {
             val ruleKind = analyzeRule.splitSourceRule(bookListRule.kind)
             val ruleLastChapter = analyzeRule.splitSourceRule(bookListRule.lastChapter)
             val ruleWordCount = analyzeRule.splitSourceRule(bookListRule.wordCount)
-            Debug.log(bookSource.bookSourceUrl, "└列表大小:${collections.size}")
+            debugLog?.log(bookSource.bookSourceUrl, "└列表大小:${collections.size}")
             for ((index, item) in collections.withIndex()) {
                 getSearchItem(
                     item, analyzeRule, bookSource, baseUrl, index == 0,
                     ruleName = ruleName, ruleBookUrl = ruleBookUrl, ruleAuthor = ruleAuthor,
                     ruleCoverUrl = ruleCoverUrl, ruleIntro = ruleIntro, ruleKind = ruleKind,
-                    ruleLastChapter = ruleLastChapter, ruleWordCount = ruleWordCount
+                    ruleLastChapter = ruleLastChapter, ruleWordCount = ruleWordCount,
+                    debugLog = debugLog
                 )?.let { searchBook ->
                     if (baseUrl == searchBook.bookUrl) {
                         searchBook.infoHtml = body
@@ -96,7 +98,8 @@ object BookList {
     private fun getInfoItem(
         analyzeRule: AnalyzeRule,
         bookSource: BookSource,
-        baseUrl: String
+        baseUrl: String,
+        debugLog: DebugLog? = null
     ): SearchBook? {
         val searchBook = SearchBook()
         searchBook.bookUrl = baseUrl
@@ -108,34 +111,34 @@ object BookList {
         with(bookSource.getBookInfoRule()) {
             init?.let {
                 if (it.isNotEmpty()) {
-                    Debug.log(bookSource.bookSourceUrl, "≡执行详情页初始化规则")
+                    debugLog?.log(bookSource.bookSourceUrl, "≡执行详情页初始化规则")
                     analyzeRule.getElement(it)?.let { res ->
                         analyzeRule.setContent(res)
                     }
                 }
             }
-            Debug.log(bookSource.bookSourceUrl, "┌获取书名")
+            debugLog?.log(bookSource.bookSourceUrl, "┌获取书名")
             searchBook.name = analyzeRule.getString(name)
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.name}")
+            debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.name}")
             if (searchBook.name.isNotEmpty()) {
-                Debug.log(bookSource.bookSourceUrl, "┌获取作者")
+                debugLog?.log(bookSource.bookSourceUrl, "┌获取作者")
                 searchBook.author = BookHelp.formatAuthor(analyzeRule.getString(author))
-                Debug.log(bookSource.bookSourceUrl, "└${searchBook.author}")
-                Debug.log(bookSource.bookSourceUrl, "┌获取分类")
+                debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.author}")
+                debugLog?.log(bookSource.bookSourceUrl, "┌获取分类")
                 searchBook.kind = analyzeRule.getString(kind)
-                Debug.log(bookSource.bookSourceUrl, "└${searchBook.kind}")
-                Debug.log(bookSource.bookSourceUrl, "┌获取字数")
+                debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.kind}")
+                debugLog?.log(bookSource.bookSourceUrl, "┌获取字数")
                 searchBook.wordCount = analyzeRule.getString(wordCount)
-                Debug.log(bookSource.bookSourceUrl, "└${searchBook.wordCount}")
-                Debug.log(bookSource.bookSourceUrl, "┌获取最新章节")
+                debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.wordCount}")
+                debugLog?.log(bookSource.bookSourceUrl, "┌获取最新章节")
                 searchBook.latestChapterTitle = analyzeRule.getString(lastChapter)
-                Debug.log(bookSource.bookSourceUrl, "└${searchBook.latestChapterTitle}")
-                Debug.log(bookSource.bookSourceUrl, "┌获取简介")
+                debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.latestChapterTitle}")
+                debugLog?.log(bookSource.bookSourceUrl, "┌获取简介")
                 searchBook.intro = analyzeRule.getString(intro)
-                Debug.log(bookSource.bookSourceUrl, "└${searchBook.intro}")
-                Debug.log(bookSource.bookSourceUrl, "┌获取封面链接")
+                debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.intro}")
+                debugLog?.log(bookSource.bookSourceUrl, "┌获取封面链接")
                 searchBook.coverUrl = analyzeRule.getString(coverUrl, true)
-                Debug.log(bookSource.bookSourceUrl, "└${searchBook.coverUrl}")
+                debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.coverUrl}")
                 return searchBook
             }
         }
@@ -155,7 +158,8 @@ object BookList {
         ruleCoverUrl: List<AnalyzeRule.SourceRule>,
         ruleWordCount: List<AnalyzeRule.SourceRule>,
         ruleIntro: List<AnalyzeRule.SourceRule>,
-        ruleLastChapter: List<AnalyzeRule.SourceRule>
+        ruleLastChapter: List<AnalyzeRule.SourceRule>,
+        debugLog: DebugLog? = null
     ): SearchBook? {
         val searchBook = SearchBook()
         searchBook.origin = bookSource.bookSourceUrl
@@ -164,36 +168,36 @@ object BookList {
         searchBook.originOrder = bookSource.customOrder
         analyzeRule.ruleData = searchBook
         analyzeRule.setContent(item)
-        Debug.log(bookSource.bookSourceUrl, "┌获取书名")
+        debugLog?.log(bookSource.bookSourceUrl, "┌获取书名")
         searchBook.name = analyzeRule.getString(ruleName)
-        Debug.log(bookSource.bookSourceUrl, "└${searchBook.name}")
+        debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.name}")
         if (searchBook.name.isNotEmpty()) {
-            Debug.log(bookSource.bookSourceUrl, "┌获取作者")
+            debugLog?.log(bookSource.bookSourceUrl, "┌获取作者")
             searchBook.author = BookHelp.formatAuthor(analyzeRule.getString(ruleAuthor))
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.author}")
-            Debug.log(bookSource.bookSourceUrl, "┌获取分类")
+            debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.author}")
+            debugLog?.log(bookSource.bookSourceUrl, "┌获取分类")
             searchBook.kind = analyzeRule.getString(ruleKind)
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.kind}")
-            Debug.log(bookSource.bookSourceUrl, "┌获取字数")
+            debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.kind}")
+            debugLog?.log(bookSource.bookSourceUrl, "┌获取字数")
             searchBook.wordCount = analyzeRule.getString(ruleWordCount)
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.wordCount}")
-            Debug.log(bookSource.bookSourceUrl, "┌获取最新章节")
+            debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.wordCount}")
+            debugLog?.log(bookSource.bookSourceUrl, "┌获取最新章节")
             searchBook.latestChapterTitle = analyzeRule.getString(ruleLastChapter)
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.latestChapterTitle}")
-            Debug.log(bookSource.bookSourceUrl, "┌获取简介")
+            debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.latestChapterTitle}")
+            debugLog?.log(bookSource.bookSourceUrl, "┌获取简介")
             searchBook.intro = analyzeRule.getString(ruleIntro)
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.intro}")
-            Debug.log(bookSource.bookSourceUrl, "┌获取封面链接")
+            debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.intro}")
+            debugLog?.log(bookSource.bookSourceUrl, "┌获取封面链接")
             analyzeRule.getString(ruleCoverUrl).let {
                 if (it.isNotEmpty()) searchBook.coverUrl = NetworkUtils.getAbsoluteURL(baseUrl, it)
             }
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.coverUrl}")
-            Debug.log(bookSource.bookSourceUrl, "┌获取详情页链接")
+            debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.coverUrl}")
+            debugLog?.log(bookSource.bookSourceUrl, "┌获取详情页链接")
             searchBook.bookUrl = analyzeRule.getString(ruleBookUrl, true)
             if (searchBook.bookUrl.isEmpty()) {
                 searchBook.bookUrl = baseUrl
             }
-            Debug.log(bookSource.bookSourceUrl, "└${searchBook.bookUrl}")
+            debugLog?.log(bookSource.bookSourceUrl, "└${searchBook.bookUrl}")
             return searchBook
         }
         return null
