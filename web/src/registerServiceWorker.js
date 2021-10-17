@@ -15,10 +15,23 @@ export function registerServiceWorker() {
           //     "For more details, visit https://goo.gl/AFskqB"
           // );
           window.serviceWorkerReady = true;
+        },
+        registered(registration) {
+          // console.log("Service worker has been registered.");
+          if (window.localStorage) {
+            const currentVersion = window.localStorage.getItem(
+              "READER_APP_BUILD_VERSION"
+            );
+            const newVersion = process.env.VUE_APP_BUILD_VERSION;
+            if (currentVersion !== newVersion) {
+              registration.active.postMessage({ type: "SKIP_WAITING" });
+              window.localStorage.setItem(
+                "READER_APP_BUILD_VERSION",
+                newVersion
+              );
+            }
+          }
         }
-        // registered() {
-        //   console.log("Service worker has been registered.");
-        // },
         // cached() {
         //   console.log("Content has been cached for offline use.");
         // },

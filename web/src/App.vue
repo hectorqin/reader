@@ -382,6 +382,14 @@ export default {
 *:focus {
   outline: none !important;
 }
+.el-dialog .el-dialog__header {
+  padding: 20px 40px 10px 20px;
+}
+.el-dialog__header .el-dialog__headerbtn {
+  margin: 0;
+  font-size: 22px;
+  line-height: 24px;
+}
 </style>
 <style lang="stylus">
 .popper-component {

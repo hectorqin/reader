@@ -1,3 +1,9 @@
+self.addEventListener("message", event => {
+  if (event.data && event.data.type === "CLEAR_HOME_CACHE") {
+    self.caches.delete("home");
+  }
+});
+
 workbox.routing.setDefaultHandler(async ({ event }) => {
   let { request, target } = event;
 

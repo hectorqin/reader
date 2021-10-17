@@ -43,6 +43,7 @@ module.exports = {
       exclude: ["index.html"],
       importScripts: ["sw.js"],
       cleanupOutdatedCaches: true,
+      // skipWaiting: true,
       runtimeCaching: [
         {
           // 首页

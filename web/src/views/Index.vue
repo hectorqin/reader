@@ -20,7 +20,9 @@
       <div class="navigation-inner-wrapper">
         <div class="navigation-title">
           阅读
-          <span class="version-text">{{ $store.state.version }}</span>
+          <span class="version-text" @click="updateForce">{{
+            $store.state.version
+          }}</span>
         </div>
         <div class="navigation-sub-title">
           清风不识字，何故乱翻书
@@ -1026,13 +1028,13 @@
       <div class="custom-dialog-title" slot="title">
         <span class="el-dialog__title"
           >RSS订阅({{ rssSourceList.length }})
-          <span class="float-right span-btn" @click="uploadRssSource"
-            >导入</span
-          >
           <span
             class="float-right span-btn"
             @click="showRssSourceEditButton = !showRssSourceEditButton"
             >{{ showRssSourceEditButton ? "取消" : "编辑" }}</span
+          >
+          <span class="float-right span-btn" @click="uploadRssSource"
+            >导入</span
           >
           <span class="float-right span-btn" @click="editRssSource(false)"
             >新增</span
@@ -2997,6 +2999,39 @@ export default {
           }
         }
       );
+    },
+    updateForce() {
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker
+          .getRegistrations()
+          .then(async function(registrations) {
+            /* eslint-disable-next-line no-console */
+            console.log("registrations", registrations);
+            for (let i = 0; i < registrations.length; i++) {
+              await registrations[i].update();
+            }
+
+            /* eslint-disable-next-line no-console */
+            console.log("Try to clear home cache");
+            navigator.serviceWorker.controller &&
+              navigator.serviceWorker.controller.postMessage({
+                type: "CLEAR_HOME_CACHE"
+              });
+
+            /* eslint-disable-next-line no-console */
+            console.log("Try to skip waiting");
+            navigator.serviceWorker.controller &&
+              navigator.serviceWorker.controller.postMessage({
+                type: "SKIP_WAITING"
+              });
+
+            setTimeout(() => {
+              /* eslint-disable-next-line no-console */
+              console.log("Try to reload force");
+              window.location.reload(true);
+            }, 50);
+          });
+      }
     }
   },
   computed: {
@@ -3247,6 +3282,8 @@ export default {
         line-height: 33px;
         font-weight: 400;
         color: #b1b1b1;
+        display: inline-block;
+        cursor: pointer;
       }
     }
 
@@ -3844,8 +3881,6 @@ export default {
 }
 
 .custom-dialog-title {
-  padding-right: 20px;
-
   .span-btn {
     display: inline-block;
     cursor: pointer;
@@ -4131,9 +4166,6 @@ export default {
   }
 }
 
-.el-dialog__header {
-  padding: 20px 40px 10px 20px;
-}
 @media screen and (max-width: 750px) {
   .el-dialog__body {
     padding: 15px 20px;

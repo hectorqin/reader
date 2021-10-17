@@ -14,13 +14,13 @@ const routes = [
     path: "/",
     name: "index",
     component: () =>
-      import(/* webpackChunkName: "about" */ "../views/Index.vue")
+      import(/* webpackChunkName: "index" */ "../views/Index.vue")
   },
   {
     path: "/reader",
     name: "Reader",
     component: () =>
-      import(/* webpackChunkName: "detail" */ "../views/Reader.vue")
+      import(/* webpackChunkName: "reader" */ "../views/Reader.vue")
   }
 ];
 

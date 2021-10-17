@@ -45,8 +45,10 @@
             @close="popBookSourceVisible = false"
           />
 
-          <div class="tool-icon" slot="reference" style="padding-top: 9px">
-            <i class="el-icon-menu"></i>
+          <div class="tool-icon" slot="reference">
+            <div class="tool-el-icon">
+              <i class="el-icon-menu"></i>
+            </div>
             <div class="icon-text">书源</div>
           </div>
         </el-popover>
@@ -2008,9 +2010,21 @@ export default {
         .iconfont {
           font-family: iconfont;
           width: 16px;
-          height: 16px;
           font-size: 16px;
-          margin: 0 auto 6px;
+          margin: 0 auto;
+          height: 22px;
+          line-height: 22px;
+          vertical-align: middle;
+        }
+
+        .tool-el-icon {
+          font-size: 18px;
+          line-height: 22px;
+          height: 22px;
+
+          i {
+            line-height: 22px;
+          }
         }
 
         .icon-text {
