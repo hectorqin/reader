@@ -47,6 +47,7 @@
 <script>
 import jump from "../plugins/jump";
 import Axios from "../plugins/axios";
+
 export default {
   name: "BookSource",
   data() {
@@ -135,8 +136,7 @@ export default {
                 ? searchBook.coverUrl
                 : book.coverUrl;
             this.$store.commit("setReadingBook", book);
-            this.$emit("close");
-            this.$emit("loadCatalog");
+            this.$emit("changeBookSource");
 
             // 重新加载书架
             Axios.get(this.api + `/getBookshelf`, {}).then(

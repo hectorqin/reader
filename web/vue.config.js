@@ -15,6 +15,71 @@ process.env.VUE_APP_BUILD_VERSION =
   process.env.VUE_APP_BUILD_VERSION ||
   "v" + packageInfo.version + "-" + buildVersion();
 
+function customWorkboxPlugin(generateCacheKey, checkResponse) {
+  return {
+    generateCacheKey,
+    checkResponse,
+    // Return `response`, a different `Response` object, or `null`.
+    cacheWillUpdate: async function cacheWillUpdate({
+      request,
+      response,
+      event,
+      state
+    }) {
+      // console.log({ request, response, event, state });
+      const resCopy = response.clone();
+      if (this.checkResponse) {
+        return await this.checkResponse({
+          request,
+          response: resCopy,
+          event,
+          state
+        });
+      }
+      const body = await resCopy.json().catch(() => false);
+      if (body && body.isSuccess) {
+        // 请求成功
+        return response;
+      } else {
+        // 请求失败
+        return null;
+      }
+    },
+    cacheKeyWillBeUsed: async function cacheKeyWillBeUsed({
+      request,
+      mode,
+      params,
+      event,
+      state
+    }) {
+      // `request` is the `Request` object that would otherwise be used as the cache key.
+      // `mode` is either 'read' or 'write'.
+      // Return either a string, or a `Request` whose `url` property will be used as the cache key.
+      // Returning the original `request` will make this a no-op.
+      // 只使用 url 参数 作为缓存key
+      // console.log({
+      //   request,
+      //   mode,
+      //   params,
+      //   event,
+      //   state
+      // });
+      if (this.generateCacheKey) {
+        const cacheKey = this.generateCacheKey({
+          request,
+          mode,
+          params,
+          event,
+          state
+        });
+        return cacheKey;
+      } else {
+        return request;
+      }
+    }
+  };
+}
+
 module.exports = {
   publicPath: "./",
   productionSourceMap: false,
@@ -64,20 +129,31 @@ module.exports = {
             cacheName: "bookshelf",
             cacheableResponse: {
               statuses: [200]
-            }
+            },
+            plugins: [
+              customWorkboxPlugin(({ request }) => {
+                const searchParams = new URL(request.url).searchParams;
+                const accessToken = searchParams.get("accessToken");
+                if (!accessToken) {
+                  return request;
+                }
+                return "getBookshelf@" + accessToken.split(":")[0];
+              })
+            ]
           }
         },
-        {
-          // 获取书源
-          urlPattern: new RegExp("^https?://[^/]*/reader3/getSources"),
-          handler: "networkFirst",
-          options: {
-            cacheName: "bookSources",
-            cacheableResponse: {
-              statuses: [200]
-            }
-          }
-        },
+        // 书源手动缓存在 localStorage
+        // {
+        //   // 获取书源
+        //   urlPattern: new RegExp("^https?://[^/]*/reader3/getSources"),
+        //   handler: "networkFirst",
+        //   options: {
+        //     cacheName: "bookSources",
+        //     cacheableResponse: {
+        //       statuses: [200]
+        //     }
+        //   }
+        // },
         {
           // 获取书籍章节列表
           urlPattern: new RegExp("^https?://[^/]*/reader3/getChapterList"),
@@ -87,7 +163,13 @@ module.exports = {
             networkTimeoutSeconds: 5,
             cacheableResponse: {
               statuses: [200]
-            }
+            },
+            plugins: [
+              customWorkboxPlugin(({ request }) => {
+                const searchParams = new URL(request.url).searchParams;
+                return searchParams.get("url") + "@chapterList";
+              })
+            ]
           }
         },
         {
@@ -102,7 +184,17 @@ module.exports = {
             expiration: {
               maxAgeSeconds: 86400 * 30,
               maxEntries: 1000
-            }
+            },
+            plugins: [
+              customWorkboxPlugin(({ request }) => {
+                const searchParams = new URL(request.url).searchParams;
+                return (
+                  searchParams.get("url") +
+                  "@chapterContent-" +
+                  searchParams.get("index")
+                );
+              })
+            ]
           }
         },
         {
@@ -117,7 +209,21 @@ module.exports = {
             expiration: {
               maxAgeSeconds: 86400 * 30,
               maxEntries: 1000
-            }
+            },
+            plugins: [
+              customWorkboxPlugin(
+                ({ request }) => {
+                  const searchParams = new URL(request.url).searchParams;
+                  return searchParams.get("path");
+                },
+                ({ response }) => {
+                  if (response.status === 200) {
+                    return response;
+                  }
+                  return null;
+                }
+              )
+            ]
           }
         }
       ]

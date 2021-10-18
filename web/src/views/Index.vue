@@ -1142,100 +1142,13 @@ import Explore from "../components/Explore.vue";
 import Axios from "../plugins/axios";
 import { errorTypeList } from "../plugins/config";
 import eventBus from "../plugins/eventBus";
+import {
+  formatSize,
+  LimitResquest,
+  networkFirstRequest,
+  cacheFirstRequest
+} from "../plugins/helper";
 
-Date.prototype.format = function(fmt) {
-  var o = {
-    "M+": this.getMonth() + 1, //月份
-    "d+": this.getDate(), //日
-    "h+": this.getHours(), //小时
-    "m+": this.getMinutes(), //分
-    "s+": this.getSeconds(), //秒
-    "q+": Math.floor((this.getMonth() + 3) / 3), //季度
-    S: this.getMilliseconds() //毫秒
-  };
-  if (/(y+)/.test(fmt)) {
-    fmt = fmt.replace(
-      RegExp.$1,
-      (this.getFullYear() + "").substr(4 - RegExp.$1.length)
-    );
-  }
-  for (var k in o) {
-    if (new RegExp("(" + k + ")").test(fmt)) {
-      fmt = fmt.replace(
-        RegExp.$1,
-        RegExp.$1.length == 1 ? o[k] : ("00" + o[k]).substr(("" + o[k]).length)
-      );
-    }
-  }
-  return fmt;
-};
-const formatSize = function(value, scale) {
-  if (value == null || value == "") {
-    return "0 Bytes";
-  }
-  var unitArr = new Array(
-    "Bytes",
-    "KB",
-    "MB",
-    "GB",
-    "TB",
-    "PB",
-    "EB",
-    "ZB",
-    "YB"
-  );
-  var index = 0;
-  index = Math.floor(Math.log(value) / Math.log(1024));
-  var size = value / Math.pow(1024, index);
-  size = size.toFixed(scale || 2);
-  return size + " " + unitArr[index];
-};
-const LimitResquest = function(limit, process) {
-  let currentSum = 0;
-  let requests = [];
-
-  async function run() {
-    let err, result;
-    try {
-      ++currentSum;
-      handler.leftCount = requests.length;
-      const fn = requests.shift();
-      result = await fn();
-    } catch (error) {
-      err = error;
-      // console.log("Error", err);
-      handler.errorCount++;
-    } finally {
-      --currentSum;
-      handler.requestCount++;
-      handler.leftCount = requests.length;
-      process && process(handler, result, err);
-      if (requests.length > 0) {
-        run();
-      }
-    }
-  }
-
-  const handler = reqFn => {
-    if (!reqFn || !(reqFn instanceof Function)) {
-      return;
-    }
-    requests.push(reqFn);
-    handler.leftCount = requests.length;
-    if (currentSum < limit) {
-      run();
-    }
-  };
-
-  handler.requestCount = 0;
-  handler.leftCount = 0;
-  handler.errorCount = 0;
-  handler.cancel = () => {
-    requests = [];
-  };
-
-  return handler;
-};
 export default {
   components: {
     Explore
@@ -1485,16 +1398,17 @@ export default {
         api = "//" + api;
       }
 
-      return Axios.get(api + "/getBookshelf?refresh=" + (refresh ? 1 : 0))
+      return networkFirstRequest(
+        () => Axios.get(api + "/getBookshelf?refresh=" + (refresh ? 1 : 0)),
+        "getBookshelf@" +
+          (this.$store.state.isManagerMode
+            ? this.userNS
+            : (this.$store.state.userInfo || {}).username || "default")
+      )
         .then(response => {
           this.$store.commit("setConnected", true);
           this.loading.close();
           if (response.data.isSuccess) {
-            // this.$store.commit("increaseBookNum", response.data.data.length);
-            // this.popIntroVisible = response.data.data.reduce((c, v) => {
-            //   c[v.name] = false;
-            //   return c;
-            // }, {});
             this.$store.commit("setShelfBooks", response.data.data);
             this.loadBookGroup();
           }
@@ -1510,37 +1424,17 @@ export default {
       return this.loadBookshelf(null, true);
     },
     loadBookGroup(refresh) {
-      const cacheKey =
-        this.api +
-        "#bookGroup@" +
-        (this.$store.state.isManagerMode
-          ? this.userNS
-          : (this.$store.state.userInfo || {}).username || "default");
-      const handler = data => {
-        data = data || [];
-        this.$store.commit("setBookGroupList", data);
-        window.localStorage &&
-          window.localStorage.setItem(cacheKey, JSON.stringify(data));
-      };
-      if (!refresh) {
-        // 从缓存中获取
-        try {
-          const localGroupList = JSON.parse(
-            window.localStorage && window.localStorage.getItem(cacheKey)
-          );
-          if (Array.isArray(localGroupList)) {
-            handler(localGroupList);
-            return;
-          }
-        } catch (error) {
-          //
-        }
-      }
-      Axios.get(this.api + "/getBookGroups").then(
+      return cacheFirstRequest(
+        () => Axios.get(this.api + "/getBookGroups"),
+        "bookGroup@" +
+          (this.$store.state.isManagerMode
+            ? this.userNS
+            : (this.$store.state.userInfo || {}).username || "default"),
+        refresh
+      ).then(
         res => {
-          if (res.data.isSuccess) {
-            handler(res.data.data);
-          }
+          const data = res.data.data || [];
+          this.$store.commit("setBookGroupList", data);
         },
         error => {
           this.$message.error(
@@ -1550,50 +1444,22 @@ export default {
       );
     },
     loadBookSource(refresh) {
-      const cacheKey =
-        this.api +
-        "#bookSource@" +
-        (this.$store.state.isManagerMode
-          ? this.userNS
-          : (this.$store.state.userInfo || {}).username || "default");
-      const handler = data => {
-        data = data || [];
-        this.$store.commit("setBookSourceList", data);
-        if (this.bookSourceList.length) {
-          this.bookSourceUrl =
-            this.bookSourceUrl || this.bookSourceList[0].bookSourceUrl;
-        }
-        window.localStorage &&
-          window.localStorage.setItem(cacheKey, JSON.stringify(data));
-      };
-
-      if (!refresh) {
-        // 从缓存中获取
-        try {
-          const localSourceList = JSON.parse(
-            window.localStorage && window.localStorage.getItem(cacheKey)
-          );
-          if (Array.isArray(localSourceList)) {
-            handler(localSourceList);
-            return;
-          }
-        } catch (error) {
-          //
-        }
-      }
-      if (!this.$store.state.connected) {
-        this.$message.error("后端未连接");
-        return;
-      }
-      Axios.get(this.api + "/getSources", {
-        params: {
-          simple: 1
-        }
-      }).then(
+      return cacheFirstRequest(
+        () =>
+          Axios.get(this.api + "/getSources", {
+            params: {
+              simple: 1
+            }
+          }),
+        "bookSourceList@" +
+          (this.$store.state.isManagerMode
+            ? this.userNS
+            : (this.$store.state.userInfo || {}).username || "default"),
+        refresh
+      ).then(
         res => {
-          if (res.data.isSuccess) {
-            handler(res.data.data);
-          }
+          const data = res.data.data || [];
+          this.$store.commit("setBookSourceList", data);
         },
         error => {
           this.$message.error(
@@ -1984,7 +1850,7 @@ export default {
         handler => {
           this.checkBookSourceTip =
             handler.requestCount + "/" + this.bookSourceList.length;
-          if (!handler.leftCount) {
+          if (handler.isEnd()) {
             this.isCheckingBookSource = false;
             this.$store.commit("setFailureIncludeTimeout", false);
           }
@@ -2708,37 +2574,22 @@ export default {
       );
     },
     loadRssSources(refresh) {
-      const cacheKey =
-        this.api +
-        "#rssSources@" +
-        (this.$store.state.isManagerMode
-          ? this.userNS
-          : (this.$store.state.userInfo || {}).username || "default");
-      const handler = data => {
-        data = data || [];
-        this.$store.commit("setRssSourceList", data);
-        window.localStorage &&
-          window.localStorage.setItem(cacheKey, JSON.stringify(data));
-      };
-      if (!refresh) {
-        // 从缓存中获取
-        try {
-          const localList = JSON.parse(
-            window.localStorage && window.localStorage.getItem(cacheKey)
-          );
-          if (Array.isArray(localList)) {
-            handler(localList);
-            return;
-          }
-        } catch (error) {
-          //
-        }
-      }
-      Axios.get(this.api + "/getRssSources").then(
+      return cacheFirstRequest(
+        () =>
+          Axios.get(this.api + "/getRssSources", {
+            params: {
+              simple: 1
+            }
+          }),
+        "rssSources@" +
+          (this.$store.state.isManagerMode
+            ? this.userNS
+            : (this.$store.state.userInfo || {}).username || "default"),
+        refresh
+      ).then(
         res => {
-          if (res.data.isSuccess) {
-            handler(res.data.data);
-          }
+          const data = res.data.data || [];
+          this.$store.commit("setRssSourceList", data);
         },
         error => {
           this.$message.error(
@@ -3031,6 +2882,46 @@ export default {
               window.location.reload(true);
             }, 50);
           });
+      }
+    },
+    analyseLocalStorage() {
+      try {
+        let totalBytes = 0;
+        let cacheBytes = 0;
+        for (const key in window.localStorage) {
+          if (Object.hasOwnProperty.call(window.localStorage, key)) {
+            const data = window.localStorage[key];
+            totalBytes += data.getBytesLength();
+            if (key.startsWith("localCache@")) {
+              cacheBytes += data.getBytesLength();
+            }
+          }
+        }
+        return {
+          totalBytes: formatSize(totalBytes),
+          cacheBytes: formatSize(cacheBytes)
+        };
+      } catch (e) {
+        //
+      }
+    },
+    clearCache() {
+      try {
+        let cacheBytes = 0;
+        for (const key in window.localStorage) {
+          if (Object.hasOwnProperty.call(window.localStorage, key)) {
+            const data = window.localStorage[key];
+            if (key.startsWith("localCache@")) {
+              cacheBytes += data.getBytesLength();
+              window.localStorage.removeItem(key);
+            }
+          }
+        }
+        return {
+          cacheBytes: formatSize(cacheBytes)
+        };
+      } catch (e) {
+        //
       }
     }
   },

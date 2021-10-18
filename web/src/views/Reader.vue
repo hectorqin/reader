@@ -41,7 +41,7 @@
             ref="popBookSource"
             class="popup"
             :visible="popBookSourceVisible"
-            @loadCatalog="loadCatalog(true, true)"
+            @changeBookSource="changeBookSource()"
             @close="popBookSourceVisible = false"
           />
 
@@ -153,8 +153,41 @@
         </div>
         <span class="progress-tip">{{ formatProgressTip() }}</span>
       </div>
+      <div class="cache-content-zone" v-if="showCacheContentZone">
+        <div
+          class="cache-content-btn"
+          v-show="!isCachingContent"
+          @click="cahceChapterContent(50)"
+        >
+          后面50章
+        </div>
+        <div
+          class="cache-content-btn"
+          v-show="!isCachingContent"
+          @click="cahceChapterContent(100)"
+        >
+          后面100章
+        </div>
+        <div
+          class="cache-content-btn"
+          v-show="!isCachingContent"
+          @click="cahceChapterContent(true)"
+        >
+          后面全部
+        </div>
+        <div class="caching-tip" v-show="isCachingContent">
+          {{ cachingContentTip }}
+        </div>
+        <div
+          class="caching-cancel-btn"
+          v-show="isCachingContent"
+          @click="cancelCaching"
+        >
+          <i class="el-icon-close"></i>
+        </div>
+      </div>
       <div class="tools">
-        <div class="tool-icon progress-text">
+        <div class="tool-icon progress-text" @click="showCacheContent">
           <span v-if="$store.state.miniInterface">阅读进度: </span>
           {{ readingProgress }}
         </div>
@@ -334,6 +367,11 @@ import Content from "../components/Content.vue";
 import Axios from "../plugins/axios";
 import jump from "../plugins/jump";
 import Animate from "../plugins/animate";
+import {
+  cacheFirstRequest,
+  LimitResquest,
+  networkFirstRequest
+} from "../plugins/helper";
 
 export default {
   components: {
@@ -500,7 +538,11 @@ export default {
 
       currentParagraph: null,
 
-      startSavePosition: false
+      startSavePosition: false,
+
+      showCacheContentZone: false,
+      isCachingContent: false,
+      cachingContentTip: ""
     };
   },
   computed: {
@@ -843,6 +885,13 @@ export default {
       this.$store.commit("setReadingBook", book);
       this.loadCatalog(true, true);
     },
+    changeBookSource() {
+      this.popBookSourceVisible = false;
+      this.show = false;
+      this.tryRefresh = false;
+      // TODO 使用相似度比较，校正章节index
+      this.loadCatalog(true, true);
+    },
     loadCatalog(refresh, init) {
       if (!this.api) {
         setTimeout(() => {
@@ -852,7 +901,7 @@ export default {
         }, 1000);
         return;
       }
-      this.getCatalog(this.$store.state.readingBook.bookUrl, refresh).then(
+      this.getCatalog(refresh).then(
         res => {
           if (res.data.isSuccess) {
             var book = Object.assign({}, this.$store.state.readingBook);
@@ -879,17 +928,49 @@ export default {
         }
       );
     },
-    getCatalog(bookUrl, refresh) {
-      return Axios.get(
-        this.api +
-          "/getChapterList?url=" +
-          encodeURIComponent(bookUrl) +
-          "&refresh=" +
-          (refresh ? 1 : 0)
+    getCatalog(refresh) {
+      return networkFirstRequest(
+        () =>
+          Axios.get(
+            this.api +
+              "/getChapterList?url=" +
+              encodeURIComponent(this.$store.state.readingBook.bookUrl) +
+              "&refresh=" +
+              (refresh ? 1 : 0)
+          ),
+        this.$store.state.readingBook.bookName +
+          "_" +
+          this.$store.state.readingBook.author +
+          "@" +
+          this.$store.state.readingBook.bookUrl +
+          "@chapterList"
       );
     },
     refreshCatalog() {
       return this.loadCatalog(true);
+    },
+    async getBookContent(chapterIndex, options) {
+      return cacheFirstRequest(
+        () =>
+          Axios.get(
+            this.api +
+              "/getBookContent?url=" +
+              encodeURIComponent(this.$store.state.readingBook.bookUrl) +
+              "&index=" +
+              chapterIndex,
+            {
+              timeout: 30000,
+              ...options
+            }
+          ),
+        this.$store.state.readingBook.bookName +
+          "_" +
+          this.$store.state.readingBook.author +
+          "@" +
+          this.$store.state.readingBook.bookUrl +
+          "@chapterContent-" +
+          chapterIndex
+      );
     },
     getContent(index) {
       //展示进度条
@@ -933,16 +1014,7 @@ export default {
       let chapterName = this.$store.state.readingBook.catalog[index].title;
       let chapterIndex = this.$store.state.readingBook.catalog[index].index;
       this.title = chapterName;
-      Axios.get(
-        this.api +
-          "/getBookContent?url=" +
-          encodeURIComponent(bookUrl) +
-          "&index=" +
-          chapterIndex,
-        {
-          timeout: 30000
-        }
-      ).then(
+      this.getBookContent(chapterIndex).then(
         res => {
           if (
             bookUrl !== this.$store.state.readingBook.bookUrl ||
@@ -1850,7 +1922,10 @@ export default {
         }
         window.localStorage &&
           window.localStorage.setItem(
-            this.$store.state.readingBook.bookUrl + "@pos",
+            "bookChapterProgress@" +
+              this.$store.state.readingBook.bookName +
+              "_" +
+              this.$store.state.readingBook.author,
             position
           );
       } catch (error) {
@@ -1868,7 +1943,10 @@ export default {
         const lastPosition =
           window.localStorage &&
           window.localStorage.getItem(
-            this.$store.state.readingBook.bookUrl + "@pos"
+            "bookChapterProgress@" +
+              this.$store.state.readingBook.bookName +
+              "_" +
+              this.$store.state.readingBook.author
           );
         if (+lastPosition) {
           this.$nextTick(() => {
@@ -1966,6 +2044,60 @@ export default {
       if (!this.isAudio) {
         this.computePages();
       }
+    },
+    showCacheContent() {
+      this.showCacheContentZone = !this.showCacheContentZone;
+    },
+    cahceChapterContent(cacheCount) {
+      //
+      let cacheChapterList = [];
+      if (cacheCount === true) {
+        //
+        cacheChapterList = cacheChapterList.concat(
+          this.catalog.slice(this.chapterIndex + 1, this.catalog.length)
+        );
+      } else {
+        //
+        cacheChapterList = cacheChapterList.concat(
+          this.catalog.slice(
+            this.chapterIndex + 1,
+            Math.min(this.catalog.length, this.chapterIndex + 1 + cacheCount)
+          )
+        );
+      }
+      if (!cacheChapterList.length) {
+        this.$message.error("不需要缓存");
+        return;
+      }
+      this.isCachingContent = true;
+      this.cachingContentTip = "正在缓存章节  0/" + cacheChapterList.length;
+      this.cachingHandler = LimitResquest(2, handler => {
+        this.cachingContentTip =
+          "正在缓存章节  " +
+          handler.requestCount +
+          "/" +
+          cacheChapterList.length;
+        if (handler.isEnd()) {
+          this.$message.success("缓存完成");
+          this.isCachingContent = false;
+          this.cachingContentTip = "";
+        }
+      });
+      cacheChapterList.forEach(v => {
+        this.cachingHandler(() => {
+          return this.getBookContent(v.index, {
+            timeout: 30000,
+            silent: true
+          });
+        });
+      });
+    },
+    cancelCaching() {
+      if (this.cachingHandler && this.cachingHandler.cancel) {
+        this.cachingHandler.cancel();
+        this.isCachingContent = false;
+        this.cachingContentTip = "";
+      }
     }
   }
 };
@@ -2055,6 +2187,15 @@ export default {
         font-size: 14px;
         margin-left: 5px;
       }
+    }
+
+    .cache-content-zone {
+      padding: 10px 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      position: relative;
     }
 
     .headset-item {
@@ -2352,6 +2493,10 @@ export default {
     color: rgba(0, 0, 0, 0.4);
   }
 
+  >>>.cache-content-zone {
+    color: rgba(0, 0, 0, 0.4);
+  }
+
   >>>.reader-bar-inner {
     color: #121212;
 
@@ -2402,6 +2547,10 @@ export default {
   }
 
   >>>.progress-tip {
+    color: #666;
+  }
+
+  >>>.cache-content-zone {
     color: #666;
   }
 

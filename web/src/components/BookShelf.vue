@@ -47,6 +47,7 @@
 <script>
 import jump from "../plugins/jump";
 import Axios from "../plugins/axios";
+import { networkFirstRequest } from "../plugins/helper";
 export default {
   name: "BookShelf",
   data() {
@@ -84,11 +85,16 @@ export default {
       if (this.shelfBooks.length) {
         return;
       }
-      Axios.get(this.api + `/getBookshelf`, {
-        params: {
-          refresh: refresh ? 1 : 0
-        }
-      }).then(
+      networkFirstRequest(
+        () =>
+          Axios.get(this.api + `/getBookshelf`, {
+            params: {
+              refresh: refresh ? 1 : 0
+            }
+          }),
+        "getBookshelf" +
+          ((this.$store.state.userInfo || {}).username || "default")
+      ).then(
         res => {
           this.refreshLoading = false;
           if (res.data.isSuccess) {
@@ -136,6 +142,9 @@ export default {
           return;
         }
         if (!this.$refs.book || !this.$refs.book[index]) {
+          setTimeout(() => {
+            this.jumpToActive();
+          }, 10);
           return;
         }
         let wrapper = this.$refs.bookList;

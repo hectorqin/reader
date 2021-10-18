@@ -115,13 +115,16 @@ export default {
       this.$emit("refresh");
     },
     jumpToCurrent(index) {
-      if (!this.$refs.cata || !this.$refs.cata[index]) {
-        return;
-      }
       if (typeof index === "undefined") {
         index = this.asc
           ? this.$store.state.readingBook.index
           : this.catalog.length - 1 - this.$store.state.readingBook.index;
+      }
+      if (!this.$refs.cata || !this.$refs.cata[index]) {
+        setTimeout(() => {
+          this.jumpToCurrent(index);
+        }, 10);
+        return;
       }
       let wrapper = this.$refs.cataData;
       jump(this.$refs.cata[index], { container: wrapper, duration: 0 });
