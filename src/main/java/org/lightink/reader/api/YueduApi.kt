@@ -72,6 +72,7 @@ private val logger = KotlinLogging.logger {}
 @Component
 class YueduApi : RestVerticle() {
     var bookInfoCache = mutableMapOf<String, Map<String, Any>>()
+    var invalidBookSourceList = arrayListOf<String>()
 
     @Autowired
     private lateinit var webClient: WebClient
@@ -112,6 +113,9 @@ class YueduApi : RestVerticle() {
         // 搜索
         router.get("/reader3/searchBook").coroutineHandler { searchBook(it) }
         router.post("/reader3/searchBook").coroutineHandler { searchBook(it) }
+        router.get("/reader3/searchBookMulti").coroutineHandler { searchBookMulti(it) }
+        router.post("/reader3/searchBookMulti").coroutineHandler { searchBookMulti(it) }
+        router.get("/reader3/searchBookMultiSSE").coroutineHandlerWithoutRes { searchBookMultiSSE(it) }
 
         // 书籍详情
         router.get("/reader3/getBookInfo").coroutineHandler { getBookInfo(it) }
@@ -349,6 +353,9 @@ class YueduApi : RestVerticle() {
 
         // 加载书籍详情缓存
         loadBookCacheInfo();
+
+        // 加载失效书源列表
+        loadInvalidBookSourceList();
     }
 
     suspend fun setupPort() {
@@ -1705,7 +1712,7 @@ class YueduApi : RestVerticle() {
             ruleFindUrl = URLDecoder.decode(ruleFindUrl, "UTF-8")
         }
 
-        var result = saveBookInfoCache(WebBook(bookSource).exploreBook(ruleFindUrl, page))
+        var result = saveBookInfoCache(WebBook(bookSource, false).exploreBook(ruleFindUrl, page))
         return returnData.setData(result)
     }
 
@@ -1732,8 +1739,173 @@ class YueduApi : RestVerticle() {
             return returnData.setErrorMsg("请输入搜索关键字")
         }
         logger.info { "searchBook" }
-        var result = saveBookInfoCache(WebBook(bookSource).searchBook(key, page))
+        var result = saveBookInfoCache(WebBook(bookSource, false).searchBook(key, page))
         return returnData.setData(result)
+    }
+
+    private suspend fun searchBookMulti(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var key: String
+        var lastIndex: Int
+        var searchSize: Int
+        var bookSourceGroup: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            key = context.bodyAsJson.getString("key", "")
+            bookSourceGroup = context.bodyAsJson.getString("bookSourceGroup", "")
+            lastIndex = context.bodyAsJson.getInteger("lastIndex", -1)
+            searchSize = context.bodyAsJson.getInteger("searchSize", 20)
+        } else {
+            // get 请求
+            key = context.queryParam("key").firstOrNull() ?: ""
+            bookSourceGroup = context.queryParam("bookSourceGroup").firstOrNull() ?: ""
+            lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
+            searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 20
+        }
+        var userNameSpace = getUserNameSpace(context)
+        var userBookSourceList = loadBookSourceStringList(userNameSpace, bookSourceGroup)
+        if (userBookSourceList.size <= 0) {
+            return returnData.setErrorMsg("未配置书源")
+        }
+        if (key.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入搜索关键字")
+        }
+        if (lastIndex >= userBookSourceList.size) {
+            return returnData.setErrorMsg("没有更多了")
+        }
+
+        searchSize = if(searchSize > 0) searchSize else 20
+        logger.info("searchBookMulti from lastIndex: {} searchSize: {}", lastIndex, searchSize)
+        var resultList = arrayListOf<SearchBook>()
+        var resultMap = mutableMapOf<String, Int>()
+        var concurrentCount = 36
+        val book = Book()
+        book.name = key
+        limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, {it->
+            lastIndex = it
+            var bookSource = userBookSourceList.get(it)
+            searchBookWithSource(bookSource, book, false)
+        }) {list, loopCount ->
+            // logger.info("list: {}", list)
+            list.forEach {
+                val bookList = it as? Collection<SearchBook>
+                bookList?.forEach { book ->
+                    // 按照 书名 + 作者名 过滤
+                    val bookKey = book.name + '_' + book.author
+                    if (!resultMap.containsKey(bookKey)) {
+                        resultList.add(book)
+                        resultMap.put(bookKey, 1)
+                    }
+                }
+            }
+            logger.info("resultList.size: {}", resultList.size)
+            if (loopCount >= 10) {
+                // 超过10轮，还没满
+                true
+            } else {
+                resultList.size < searchSize
+            }
+        }
+        saveInvalidBookSourceList()
+        return returnData.setData(mapOf("lastIndex" to lastIndex, "list" to resultList))
+    }
+
+    private suspend fun searchBookMultiSSE(context: RoutingContext) {
+        val returnData = ReturnData()
+        // 返回 event-stream
+        val response = context.response().putHeader("Content-Type", "text/event-stream")
+            .putHeader("Cache-Control", "no-cache")
+            .setChunked(true);
+
+        if (!checkAuth(context)) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用"), false) + "\n\n")
+            return
+        }
+        var key: String
+        var lastIndex: Int
+        var searchSize: Int
+        var bookSourceGroup: String
+        var concurrentCount: Int
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            key = context.bodyAsJson.getString("key", "")
+            bookSourceGroup = context.bodyAsJson.getString("bookSourceGroup", "")
+            lastIndex = context.bodyAsJson.getInteger("lastIndex", -1)
+            searchSize = context.bodyAsJson.getInteger("searchSize", 100)
+            concurrentCount = context.bodyAsJson.getInteger("concurrentCount", 12)
+        } else {
+            // get 请求
+            key = context.queryParam("key").firstOrNull() ?: ""
+            bookSourceGroup = context.queryParam("bookSourceGroup").firstOrNull() ?: ""
+            lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
+            searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 100
+            concurrentCount = context.queryParam("concurrentCount").firstOrNull()?.toInt() ?: 12
+        }
+        var userNameSpace = getUserNameSpace(context)
+        var userBookSourceList = loadBookSourceStringList(userNameSpace, bookSourceGroup)
+        if (userBookSourceList.size <= 0) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("未配置书源"), false) + "\n\n")
+            return
+        }
+        if (key.isNullOrEmpty()) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("请输入搜索关键字"), false) + "\n\n")
+            return
+        }
+        if (lastIndex >= userBookSourceList.size) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("没有更多了"), false) + "\n\n")
+            return
+        }
+
+        searchSize = if(searchSize > 0) searchSize else 100
+        concurrentCount = if(concurrentCount > 0) concurrentCount else 12
+        logger.info("searchBookMulti from lastIndex: {} concurrentCount: {} searchSize: {}", lastIndex, concurrentCount, searchSize)
+        var resultList = arrayListOf<SearchBook>()
+        var resultMap = mutableMapOf<String, Int>()
+        // 并发设小一点，加快数据返回速度
+        val book = Book()
+        book.name = key
+        limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, {it->
+            lastIndex = it
+            var bookSource = userBookSourceList.get(it)
+            searchBookWithSource(bookSource, book, false)
+        }) {list, loopCount ->
+            // logger.info("list: {}", list)
+            val loopResult = arrayListOf<SearchBook>()
+            list.forEach {
+                val bookList = it as? Collection<SearchBook>
+                bookList?.forEach { book ->
+                    // 按照 书名 + 作者名 过滤
+                    val bookKey = book.name + '_' + book.author
+                    if (!resultMap.containsKey(bookKey)) {
+                        resultList.add(book)
+                        loopResult.add(book)
+                        resultMap.put(bookKey, 1)
+                    }
+                }
+            }
+            if (loopResult.size > 0) {
+                // 本轮有数据
+                response.write("data: " + jsonEncode(loopResult, false) + "\n\n")
+            }
+            logger.info("resultList.size: {}", resultList.size)
+
+            if (loopCount >= 10) {
+                // 超过10轮，还没满
+                true
+            } else {
+                resultList.size < searchSize
+            }
+        }
+        saveInvalidBookSourceList()
+        response.write("event: end\n")
+        response.end("data: " + jsonEncode(mapOf("lastIndex" to lastIndex), false) + "\n\n")
     }
 
     private suspend fun searchBookSource(context: RoutingContext): ReturnData {
@@ -1792,7 +1964,7 @@ class YueduApi : RestVerticle() {
             lastIndex = it
             var bookSource = userBookSourceList.get(it)
             searchBookWithSource(bookSource, book)
-        }) {list->
+        }) {list, _->
             // logger.info("list: {}", list)
             list.forEach {
                 val bookList = it as? Collection<SearchBook>
@@ -1803,11 +1975,15 @@ class YueduApi : RestVerticle() {
             resultList.size < searchSize
         }
         saveBookSources(book, resultList, userNameSpace)
+        saveInvalidBookSourceList()
         return returnData.setData(mapOf("lastIndex" to lastIndex, "list" to resultList))
     }
 
-    private suspend fun searchBookWithSource(bookSourceString: String, book: Book): ArrayList<SearchBook> {
+    private suspend fun searchBookWithSource(bookSourceString: String, book: Book, accurate: Boolean = false): ArrayList<SearchBook> {
         var resultList = arrayListOf<SearchBook>()
+        if (isInvalidBookSource(bookSourceString)) {
+            return resultList;
+        }
         withContext(Dispatchers.IO) {
             // val costTime = measureTimeMillis {
             try {
@@ -1817,13 +1993,18 @@ class YueduApi : RestVerticle() {
                 if (result.size > 0) {
                     for (j in 0 until result.size) {
                         var _book = result.get(j)
-                        if (_book.name.equals(book.name) && _book.author.equals(book.author)) {
+                        if (accurate && _book.name.equals(book.name) && _book.author.equals(book.author)) {
+                            _book.time = end - start
+                            resultList.add(_book)
+                        } else if (!accurate && (_book.name.indexOf(book.name, ignoreCase=true) > 0 || _book.author.indexOf(book.name, ignoreCase=true) > 0)) {
                             _book.time = end - start
                             resultList.add(_book)
                         }
                     }
                 }
             } catch(e: Exception) {
+                // 标记为失败源
+                invalidBookSourceList.add(bookSourceString)
                 e.printStackTrace()
             }
             // }
@@ -1877,7 +2058,7 @@ class YueduApi : RestVerticle() {
                 } else {
                     arrayListOf<SearchBook>()
                 }
-            }) {list->
+            }) {list, _->
                 // logger.info("list: {}", list)
                 list.forEach {
                     val bookList = it as? Collection<SearchBook>
@@ -1889,6 +2070,7 @@ class YueduApi : RestVerticle() {
             }
             // logger.info("refreshed bookSourceList: {}", resultList)
             saveBookSources(book, resultList, userNameSpace, true)
+            saveInvalidBookSourceList()
             return returnData.setData(resultList)
         }
         return returnData.setData(arrayListOf<Int>())
@@ -1912,7 +2094,11 @@ class YueduApi : RestVerticle() {
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        val bookSource = context.bodyAsJson.mapTo(BookSource::class.java)
+        val bookSource = OldRule.jsonToBookSource(context.bodyAsString)
+        if (bookSource == null) {
+            return returnData.setErrorMsg("参数错误")
+        }
+        // val bookSource = context.bodyAsJson.mapTo(BookSource::class.java)
 
         var userNameSpace = getUserNameSpace(context)
         var bookSourceList = getUserBookSourceJson(userNameSpace)
@@ -1956,7 +2142,11 @@ class YueduApi : RestVerticle() {
             bookSourceList = JsonArray()
         }
         for (k in 0 until bookSourceJsonArray.size()) {
-            var bookSource = bookSourceJsonArray.getJsonObject(k).mapTo(BookSource::class.java)
+            val bookSource = OldRule.jsonToBookSource(bookSourceJsonArray.getJsonObject(k).toString())
+            if (bookSource == null) {
+                continue
+            }
+            // var bookSource = bookSourceJsonArray.getJsonObject(k).mapTo(BookSource::class.java)
             // 遍历判断书本是否存在
             var existIndex: Int = -1
             for (i in 0 until bookSourceList!!.size()) {
@@ -2691,7 +2881,7 @@ class YueduApi : RestVerticle() {
                 var book = bookList.get(i)
                 bookInfoCache.put(book.bookUrl, JsonObject.mapFrom(book).map)
             }
-            saveStorage("data", "bookInfoCache", value = bookInfoCache)
+            saveStorage("cache", "bookInfoCache", value = bookInfoCache)
         }
         return bookList
     }
@@ -2703,6 +2893,26 @@ class YueduApi : RestVerticle() {
             return book.fillData(cacheInfo, listOf("name", "author", "coverUrl", "intro", "latestChapterTitle", "wordCount"))
         }
         return book
+    }
+
+    private suspend fun loadInvalidBookSourceList() {
+        var _invalidBookSources: JsonArray? = asJsonArray(getStorage("cache", "invalidBookSource"))
+        if (_invalidBookSources != null) {
+            invalidBookSourceList = _invalidBookSources.getList() as ArrayList<String>
+        }
+    }
+
+    private suspend fun saveInvalidBookSourceList() {
+        saveStorage("cache", "invalidBookSource", value = invalidBookSourceList)
+    }
+
+    private fun isInvalidBookSource(bookSourceString: String): Boolean {
+        for (i in 0 until invalidBookSourceList.size) {
+            if (invalidBookSourceList.get(i).equals(bookSourceString)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private suspend fun getBookShelfBooks(refresh: Boolean = false, userNameSpace: String): List<Book> {
@@ -2796,12 +3006,21 @@ class YueduApi : RestVerticle() {
         return bookSourceString
     }
 
-    fun loadBookSourceStringList(userNameSpace: String): List<String> {
+    fun loadBookSourceStringList(userNameSpace: String, bookSourceGroup: String = ""): List<String> {
         var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookSource"))
         var userBookSourceList = arrayListOf<String>()
         if (bookSourceList != null) {
             for (i in 0 until bookSourceList.size()) {
-                userBookSourceList.add(bookSourceList.getJsonObject(i).toString())
+                var isAdd = true
+                if (!bookSourceGroup.isEmpty()) {
+                    val bookSource = bookSourceList.getJsonObject(i).mapTo(BookSource::class.java)
+                    if (!bookSource.bookSourceGroup.equals(bookSourceGroup)) {
+                        isAdd = false
+                    }
+                }
+                if (isAdd) {
+                    userBookSourceList.add(bookSourceList.getJsonObject(i).toString())
+                }
             }
         }
         return userBookSourceList
@@ -3196,12 +3415,12 @@ class YueduApi : RestVerticle() {
     }
 
     suspend fun limitConcurrent(concurrentCount: Int, startIndex: Int, endIndex: Int, handler: suspend CoroutineScope.(Int) -> Any) {
-        limitConcurrent(concurrentCount, startIndex, endIndex, handler) {
+        limitConcurrent(concurrentCount, startIndex, endIndex, handler) {_, _ ->
             true
         }
     }
 
-    suspend fun limitConcurrent(concurrentCount: Int, startIndex: Int, endIndex: Int, handler: suspend CoroutineScope.(Int) -> Any, needContinue: (ArrayList<Any>) -> Boolean) {
+    suspend fun limitConcurrent(concurrentCount: Int, startIndex: Int, endIndex: Int, handler: suspend CoroutineScope.(Int) -> Any, needContinue: (ArrayList<Any>, Int) -> Boolean) {
         var lastIndex = startIndex
         var loopCount = 0;
         while(true) {
@@ -3229,7 +3448,7 @@ class YueduApi : RestVerticle() {
             if (lastIndex >= endIndex) {
                 break;
             }
-            if (!needContinue(resultList)) {
+            if (!needContinue(resultList, loopCount)) {
                 break;
             }
             lastIndex = lastIndex + 1

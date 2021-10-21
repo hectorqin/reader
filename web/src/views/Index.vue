@@ -38,6 +38,68 @@
             <i slot="prefix" class="el-input__icon el-icon-search"></i>
           </el-input>
         </div>
+        <div class="setting-wrapper search-setting">
+          <div class="setting-title">
+            搜索设置
+          </div>
+          <div class="setting-item">
+            <el-select
+              size="mini"
+              v-model="searchConfig.searchType"
+              class="setting-select"
+              filterable
+              placeholder="请选择搜索方式"
+            >
+              <el-option
+                v-for="(item, index) in searchTypeList"
+                :key="'search-type-' + index"
+                :label="item.name"
+                :value="item.value"
+              >
+              </el-option>
+            </el-select>
+          </div>
+          <div
+            class="setting-item"
+            v-show="searchConfig.searchType === 'single'"
+          >
+            <el-select
+              size="mini"
+              v-model="searchConfig.bookSourceUrl"
+              class="setting-select"
+              filterable
+              placeholder="请选择搜索书源"
+            >
+              <el-option
+                v-for="(item, index) in bookSourceList"
+                :key="'source-' + index"
+                :label="item.bookSourceName"
+                :value="item.bookSourceUrl"
+              >
+              </el-option>
+            </el-select>
+          </div>
+          <div
+            class="setting-item"
+            v-show="searchConfig.searchType !== 'single'"
+          >
+            <el-select
+              size="mini"
+              v-model="searchConfig.bookSourceGroup"
+              class="setting-select"
+              filterable
+              placeholder="请选择搜索书源分组"
+            >
+              <el-option
+                v-for="(item, index) in bookSourceGroupList"
+                :key="'source-group-' + index"
+                :label="item.name + ' (' + item.count + ')'"
+                :value="item.name"
+              >
+              </el-option>
+            </el-select>
+          </div>
+        </div>
         <div class="recent-wrapper">
           <div class="recent-title">
             最近阅读
@@ -72,24 +134,7 @@
         </div>
         <div class="setting-wrapper">
           <div class="setting-title">
-            搜索书源
-          </div>
-          <div class="setting-item">
-            <el-select
-              size="mini"
-              v-model="bookSourceUrl"
-              class="setting-select"
-              filterable
-              placeholder="请选择搜索书源"
-            >
-              <el-option
-                v-for="(item, index) in bookSourceList"
-                :key="'source-' + index"
-                :label="item.bookSourceName"
-                :value="item.bookSourceUrl"
-              >
-              </el-option>
-            </el-select>
+            书源设置
           </div>
           <div class="setting-item">
             <el-tag
@@ -392,6 +437,7 @@
         @touchstart="handleTouchStart"
         @touchmove="handleTouchMove"
         @touchend="handleTouchEnd"
+        @scroll="scrollHandler"
       >
         <div class="wrapper">
           <div
@@ -449,7 +495,7 @@
               </div>
               <div class="sub">
                 <div class="author">
-                  {{ book.author }}
+                  {{ book.author || "" }}
                 </div>
                 <div class="dot" v-if="book.totalChapterNum">•</div>
                 <div class="size" v-if="book.totalChapterNum">
@@ -1148,6 +1194,7 @@ import {
   networkFirstRequest,
   cacheFirstRequest
 } from "../plugins/helper";
+const buildURL = require("axios/lib/helpers/buildURL");
 
 export default {
   components: {
@@ -1156,12 +1203,16 @@ export default {
   data() {
     return {
       search: "",
-      bookSourceUrl: "",
+      searchTypeList: [
+        { name: "单源搜索", value: "single" },
+        { name: "多源搜索(过滤书名/作者名)", value: "multi" }
+      ],
       isSearchResult: false,
       isExploreResult: false,
       searchResult: [],
       searchPage: 1,
       refreshLoading: false,
+      searchLastIndex: -1,
 
       showBookEditButton: false,
 
@@ -1244,11 +1295,14 @@ export default {
     };
   },
   watch: {
-    bookSourceUrl(val) {
-      window.localStorage && window.localStorage.setItem("bookSourceUrl", val);
-      if (this.isSearchResult && val) {
-        this.searchBook(1);
-      }
+    searchConfig: {
+      handler(val) {
+        this.$store.commit("setSearchConfig", val);
+        if (this.isSearchResult) {
+          this.searchBook(1);
+        }
+      },
+      deep: true
     },
     searchResult(val) {
       if (this.isSearchResult && val.length) {
@@ -1291,9 +1345,6 @@ export default {
   },
   mounted() {
     document.title = "阅读";
-    this.bookSourceUrl =
-      (window.localStorage && window.localStorage.getItem("bookSourceUrl")) ||
-      "";
     this.navigationClass =
       this.collapseMenu && !this.showNavigation ? "navigation-hidden" : "";
     window.shelfPage = this;
@@ -1477,38 +1528,70 @@ export default {
         this.searchPage = page;
       }
       page = this.searchPage;
+      if (page === 1) {
+        // 重新搜索
+        this.searchLastIndex = -1;
+      }
       if (!this.search) {
         this.$message.error("请输入关键词进行搜索");
         return;
       }
-      Axios.get(this.api + "/searchBook", {
-        timeout: 30000,
-        params: {
-          key: this.search,
-          bookSourceUrl: this.bookSourceUrl,
-          page: page
+      if (
+        this.searchConfig.searchType === "single" &&
+        !this.searchConfig.bookSourceUrl
+      ) {
+        return;
+      }
+      if (this.loadingMore) {
+        return;
+      }
+      if (this.searchConfig.searchType === "multi" && window.EventSource) {
+        this.searchBookByEventStream(page);
+        return;
+      }
+      this.isSearchResult = true;
+      this.isExploreResult = false;
+      this.loadingMore = true;
+      if (page === 1) {
+        this.searchResult = [];
+      }
+      Axios.get(
+        this.api +
+          (this.searchConfig.searchType === "single"
+            ? "/searchBook"
+            : "/searchBookMulti"),
+        {
+          timeout: this.searchConfig.searchType === "single" ? 30000 : 180000,
+          params: {
+            key: this.search,
+            bookSourceUrl: this.searchConfig.bookSourceUrl,
+            bookSourceGroup: this.searchConfig.bookSourceGroup,
+            lastIndex: this.searchLastIndex, // 多源搜索时的索引
+            page: page // 单源搜索时的page
+          }
         }
-      }).then(
+      ).then(
         res => {
           this.loadingMore = false;
           if (res.data.isSuccess) {
             //
-            this.isSearchResult = true;
-            this.isExploreResult = false;
-            if (page === 1) {
-              this.searchResult = res.data.data;
+            let resultList = [];
+            if (this.searchConfig.searchType === "single") {
+              resultList = res.data.data;
             } else {
-              var data = [].concat(this.searchResult);
-              var length = data.length;
-              res.data.data.forEach(v => {
-                if (!this.searchResultMap[v.bookUrl]) {
-                  data.push(v);
-                }
-              });
-              this.searchResult = data;
-              if (data.length === length) {
-                this.$message.error("没有更多啦");
+              this.searchLastIndex = res.data.data.lastIndex;
+              resultList = res.data.data.list;
+            }
+            var data = [].concat(this.searchResult);
+            var length = data.length;
+            resultList.forEach(v => {
+              if (!this.searchResultMap[v.bookUrl]) {
+                data.push(v);
               }
+            });
+            this.searchResult = data;
+            if (data.length === length) {
+              this.$message.error("没有更多啦");
             }
           }
         },
@@ -1516,6 +1599,77 @@ export default {
           this.$message.error("搜索书籍失败 " + (error && error.toString()));
         }
       );
+    },
+    searchBookByEventStream(page) {
+      const params = {
+        accessToken: this.$store.state.token,
+        key: this.search,
+        bookSourceUrl: this.searchConfig.bookSourceUrl,
+        bookSourceGroup: this.searchConfig.bookSourceGroup,
+        lastIndex: this.searchLastIndex, // 多源搜索时的索引
+        page: page // 单源搜索时的page
+      };
+
+      this.isSearchResult = true;
+      this.isExploreResult = false;
+      this.loadingMore = true;
+      if (page === 1) {
+        this.searchResult = [];
+      }
+      const url = buildURL(this.api + "/searchBookMultiSSE", params);
+      this.searchEventSource = new EventSource(url, {
+        withCredentials: true
+      });
+      this.searchEventSource.addEventListener("error", e => {
+        this.loadingMore = false;
+        this.searchEventSource.close();
+        try {
+          if (e.data) {
+            const result = JSON.parse(e.data);
+            if (result && result.errorMsg) {
+              this.$message.error(result.errorMsg);
+            }
+          }
+        } catch (error) {
+          //
+        }
+      });
+      let oldSearchResultLength = this.searchResult.length;
+      this.searchEventSource.addEventListener("end", e => {
+        this.loadingMore = false;
+        this.searchEventSource.close();
+        try {
+          if (e.data) {
+            const result = JSON.parse(e.data);
+            if (result && result.lastIndex) {
+              this.searchLastIndex = result.lastIndex;
+            }
+          }
+          if (this.searchResult.length === oldSearchResultLength) {
+            this.$message.error("没有更多啦");
+          }
+        } catch (error) {
+          //
+        }
+      });
+      this.searchEventSource.addEventListener("message", e => {
+        try {
+          if (e.data) {
+            const resultList = JSON.parse(e.data);
+            if (resultList) {
+              var data = [].concat(this.searchResult);
+              resultList.forEach(v => {
+                if (!this.searchResultMap[v.bookUrl]) {
+                  data.push(v);
+                }
+              });
+              this.searchResult = data;
+            }
+          }
+        } catch (error) {
+          //
+        }
+      });
     },
     toDetail(book) {
       if (!book.bookUrl) {
@@ -1679,6 +1833,7 @@ export default {
       this.isSearchResult = false;
       this.isExploreResult = false;
       this.searchResult = [];
+      this.loadingMore = false;
     },
     toogleNight() {
       if (this.isNight) {
@@ -1695,8 +1850,8 @@ export default {
     },
     loadMore() {
       this.lastScrollTop = this.$refs.bookList.scrollTop;
-      this.loadingMore = true;
       if (this.isExploreResult) {
+        this.loadingMore = true;
         this.$refs.popExplore.loadMore();
       } else {
         this.searchBook(this.searchPage + 1);
@@ -2923,6 +3078,9 @@ export default {
       } catch (e) {
         //
       }
+    },
+    scrollHandler() {
+      this.lastScrollTop = this.$refs.bookList.scrollTop;
     }
   },
   computed: {
@@ -3045,6 +3203,29 @@ export default {
         ? this.$store.state.failureBookSource
         : this.bookSourceList;
     },
+    bookSourceGroupList() {
+      const groupsMap = {};
+      this.bookSourceList.forEach(v => {
+        if (v.bookSourceGroup) {
+          groupsMap[v.bookSourceGroup] = (groupsMap[v.bookSourceGroup] | 0) + 1;
+        }
+      });
+      const groups = [
+        {
+          name: "全部分组",
+          count: this.bookSourceList.length
+        }
+      ];
+      for (const i in groupsMap) {
+        if (Object.hasOwnProperty.call(groupsMap, i)) {
+          groups.push({
+            name: i,
+            count: groupsMap[i]
+          });
+        }
+      }
+      return groups;
+    },
     bookSourceShowGroup() {
       if (!this.isShowFailureBookSource) {
         const groups = new Set();
@@ -3132,6 +3313,14 @@ export default {
       return this.rssArticleList
         .filter(v => v.image)
         .map(v => this.getImage(v.image, true, true));
+    },
+    searchConfig: {
+      get() {
+        return this.$store.state.searchConfig;
+      },
+      set(val) {
+        this.$store.commit("setSearchConfig", val);
+      }
     }
   }
 };
@@ -3252,6 +3441,10 @@ export default {
       .setting-select {
         width: 100%;
       }
+    }
+
+    .search-setting {
+      margin-top: 28px;
     }
 
     .bottom-icons {
@@ -3401,7 +3594,7 @@ export default {
             position: relative;
             display: flex;
             flex-direction: column;
-            justify-content: space-around;
+            justify-content: space-between;
             align-items: left;
             height: 112px;
             margin-left: 20px;
@@ -3425,6 +3618,13 @@ export default {
               font-weight: 700;
               color: #33373D;
               margin-right: 38px;
+              max-height: 45px;
+              word-wrap: break-word;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              display: -webkit-box;
+              -webkit-box-orient: vertical;
+              -webkit-line-clamp: 2;
             }
 
             .name.edit {

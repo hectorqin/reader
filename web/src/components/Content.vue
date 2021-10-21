@@ -353,7 +353,8 @@ export default {
           ${pStyle}
         }
         img {
-          max-width: 100% !important;
+          max-width: 100vw !important;
+          height: auto !important;
         }
         body p img {
           margin-top: 5px;
@@ -611,6 +612,7 @@ h3.reading {
 .content-body {
   img {
     width: 100%;
+    max-width: 100vw;
     display: block;
   }
 }

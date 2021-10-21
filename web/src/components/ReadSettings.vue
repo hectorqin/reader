@@ -200,8 +200,11 @@
               @click="setClickMethod(method)"
               >{{ method }}</span
             >
-            <span class="font-btn" @click="showClickZone">显示翻页区域</span>
           </div>
+        </li>
+        <li class="read-width operation-zone">
+          <span class="span-btn" @click="showClickZone">显示翻页区域</span>
+          <span class="span-btn" @click="showRuleEditor">修改过滤规则</span>
         </li>
       </ul>
     </div>
@@ -212,6 +215,7 @@
 import "../assets/fonts/iconfont.css";
 import Axios from "../plugins/axios";
 import settings from "../plugins/config";
+import eventBus from "../plugins/eventBus";
 
 export default {
   name: "ReadSettings",
@@ -503,6 +507,27 @@ export default {
     showClickZone() {
       this.$emit("close");
       this.$emit("showClickZone");
+    },
+    showRuleEditor() {
+      this.$emit("close");
+      eventBus.$emit(
+        "showEditor",
+        "修改过滤规则",
+        JSON.stringify(this.$store.state.filterRules, null, 4),
+        async (content, close) => {
+          try {
+            const filterRules = JSON.parse(content);
+            if (!Array.isArray(filterRules)) {
+              this.$message.error("过滤规则必须是JSON数组格式");
+              return;
+            }
+            this.$store.commit("setFilterRules", filterRules);
+            close();
+          } catch (e) {
+            this.$message.error("过滤规则必须是JSON数组格式");
+          }
+        }
+      );
     }
   }
 };
@@ -577,11 +602,6 @@ export default {
           span {
             margin-bottom: 5px;
           }
-        }
-
-        .font-btn {
-          cursor: pointer;
-          color: #ed4259;
         }
 
         .span-item {
@@ -716,6 +736,17 @@ export default {
             height: 20px;
             vertical-align: middle;
           }
+        }
+      }
+
+      .operation-zone {
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+
+        .span-btn {
+          cursor: pointer;
+          color: #ed4259;
         }
       }
     }

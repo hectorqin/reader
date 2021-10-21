@@ -35,6 +35,7 @@ abstract class RestVerticle : CoroutineVerticle() {
             SessionHandler.create(LocalSessionStore.create(vertx))
                             .setSessionCookieName(cookieName)
                             .setSessionTimeout(7L * 86400 * 1000)
+                            .setSessionCookiePath("/")
         );
         router.route().handler {
             it.addHeadersEndHandler { _ ->

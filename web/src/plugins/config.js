@@ -21,6 +21,11 @@ const settings = {
   shelfConfig: {
     showBookGroup: -1
   },
+  searchConfig: {
+    searchType: "multi",
+    bookSourceGroup: "全部分组",
+    bookSourceUrl: ""
+  },
   config: {
     theme: 0,
     font: 0,

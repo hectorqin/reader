@@ -55,7 +55,8 @@ export default new Vuex.Store({
     shelfConfig: { ...settings.shelfConfig },
     showImageViewer: false,
     previewImageIndex: 0,
-    previewImgList: []
+    previewImgList: [],
+    searchConfig: { ...settings.searchConfig }
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -321,6 +322,14 @@ export default new Vuex.Store({
         state.previewImgList = previewImgList;
         state.showImageViewer = true;
       }
+    },
+    setSearchConfig(state, searchConfig) {
+      state.searchConfig = searchConfig;
+      window.localStorage &&
+        window.localStorage.setItem(
+          "searchConfig",
+          JSON.stringify(searchConfig)
+        );
     }
   },
   getters: {
@@ -485,6 +494,20 @@ export default new Vuex.Store({
           commit("setShelfConfig", {
             ...settings.shelfConfig,
             ...shelfConfig
+          });
+        }
+      } catch (error) {
+        //
+      }
+      try {
+        // 获取搜索设置
+        const searchConfig = JSON.parse(
+          window.localStorage.getItem("searchConfig")
+        );
+        if (searchConfig && typeof searchConfig === "object") {
+          commit("setSearchConfig", {
+            ...settings.searchConfig,
+            ...searchConfig
           });
         }
       } catch (error) {
