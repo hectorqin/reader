@@ -94,7 +94,7 @@
                 v-for="(item, index) in bookSourceGroupList"
                 :key="'source-group-' + index"
                 :label="item.name + ' (' + item.count + ')'"
-                :value="item.name"
+                :value="item.value"
               >
               </el-option>
             </el-select>
@@ -3213,6 +3213,7 @@ export default {
       const groups = [
         {
           name: "全部分组",
+          value: "",
           count: this.bookSourceList.length
         }
       ];
@@ -3220,6 +3221,7 @@ export default {
         if (Object.hasOwnProperty.call(groupsMap, i)) {
           groups.push({
             name: i,
+            value: i,
             count: groupsMap[i]
           });
         }
