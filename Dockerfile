@@ -34,5 +34,5 @@ ENV TZ=Asia/Shanghai
 EXPOSE 8080
 ENTRYPOINT ["/sbin/tini", "--"]
 # COPY --from=hengyunabc/arthas:latest /opt/arthas /opt/arthas
-COPY --from=build-env /app/build/libs/app-1.6.0.jar /app/bin/reader.jar
+COPY --from=build-env /app/build/libs/app-1.7.0.jar /app/bin/reader.jar
 CMD ["java", "-jar", "/app/bin/reader.jar" ]
