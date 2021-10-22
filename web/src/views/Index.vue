@@ -1461,7 +1461,6 @@ export default {
           this.loading.close();
           if (response.data.isSuccess) {
             this.$store.commit("setShelfBooks", response.data.data);
-            this.loadBookGroup();
           }
         })
         .catch(error => {
@@ -1481,7 +1480,8 @@ export default {
           (this.$store.state.isManagerMode
             ? this.userNS
             : (this.$store.state.userInfo || {}).username || "default"),
-        refresh
+        refresh,
+        true
       ).then(
         res => {
           const data = res.data.data || [];
@@ -1506,7 +1506,8 @@ export default {
           (this.$store.state.isManagerMode
             ? this.userNS
             : (this.$store.state.userInfo || {}).username || "default"),
-        refresh
+        refresh,
+        true
       ).then(
         res => {
           const data = res.data.data || [];
@@ -2740,7 +2741,8 @@ export default {
           (this.$store.state.isManagerMode
             ? this.userNS
             : (this.$store.state.userInfo || {}).username || "default"),
-        refresh
+        refresh,
+        true
       ).then(
         res => {
           const data = res.data.data || [];
