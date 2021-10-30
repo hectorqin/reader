@@ -1484,8 +1484,9 @@ export default {
         true
       ).then(
         res => {
-          const data = res.data.data || [];
-          this.$store.commit("setBookGroupList", data);
+          if (res.data.isSuccess) {
+            this.$store.commit("setBookGroupList", res.data.data || []);
+          }
         },
         error => {
           this.$message.error(
@@ -1510,8 +1511,9 @@ export default {
         true
       ).then(
         res => {
-          const data = res.data.data || [];
-          this.$store.commit("setBookSourceList", data);
+          if (res.data.isSuccess) {
+            this.$store.commit("setBookSourceList", res.data.data || []);
+          }
         },
         error => {
           this.$message.error(
@@ -1686,10 +1688,11 @@ export default {
         index: book.index ?? book.durChapterIndex ?? 0,
         type: book.type,
         coverUrl: book.coverUrl,
-        author: book.author
+        author: book.author,
+        origin: book.origin
       });
       this.$router.push({
-        path: "/reader"
+        path: "/reader" + (this.isSearchResult ? "?search=1" : "")
       });
     },
     saveBook(book, isImport, isEdit) {

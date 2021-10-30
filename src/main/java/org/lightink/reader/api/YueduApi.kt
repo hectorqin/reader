@@ -1345,6 +1345,8 @@ class YueduApi : RestVerticle() {
             bookInfo = mergeBookCacheInfo(WebBook(bookSource).getBookInfo(bookUrl))
         }
 
+        // 缓存书籍信息
+        saveBookInfoCache(arrayListOf<Book>(bookInfo))
         return returnData.setData(bookInfo)
     }
 
@@ -1556,6 +1558,8 @@ class YueduApi : RestVerticle() {
                 return returnData.setErrorMsg("未配置书源")
             }
             bookInfo = mergeBookCacheInfo(WebBook(bookSource).getBookInfo(bookUrl))
+            // 缓存书籍信息
+            saveBookInfoCache(arrayListOf<Book>(bookInfo))
         } else {
             bookSource = getBookSourceString(context, bookInfo.origin)
         }
@@ -1712,7 +1716,7 @@ class YueduApi : RestVerticle() {
             ruleFindUrl = URLDecoder.decode(ruleFindUrl, "UTF-8")
         }
 
-        var result = saveBookInfoCache(WebBook(bookSource, false).exploreBook(ruleFindUrl, page))
+        var result = WebBook(bookSource, false).exploreBook(ruleFindUrl, page)
         return returnData.setData(result)
     }
 
@@ -1739,7 +1743,7 @@ class YueduApi : RestVerticle() {
             return returnData.setErrorMsg("请输入搜索关键字")
         }
         logger.info { "searchBook" }
-        var result = saveBookInfoCache(WebBook(bookSource, false).searchBook(key, page))
+        var result = WebBook(bookSource, false).searchBook(key, page)
         return returnData.setData(result)
     }
 
@@ -2392,7 +2396,7 @@ class YueduApi : RestVerticle() {
                 return returnData.setErrorMsg("书源信息错误")
             }
             var newBook = WebBook(bookSource).getBookInfo(book.bookUrl)
-            book.fillData(newBook, listOf("name", "author", "coverUrl", "intro", "latestChapterTitle", "wordCount"))
+            book.fillData(newBook, listOf("name", "author", "coverUrl", "tocUrl", "intro", "latestChapterTitle", "wordCount"))
         }
         book = mergeBookCacheInfo(book)
         var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
@@ -2875,7 +2879,18 @@ class YueduApi : RestVerticle() {
         }
     }
 
-    private suspend fun saveBookInfoCache(bookList: List<SearchBook>): List<SearchBook> {
+    private suspend fun saveBookInfoCache(bookList: List<Book>): List<Book> {
+        if (bookList.size > 0) {
+            for (i in 0 until bookList.size) {
+                var book = bookList.get(i)
+                bookInfoCache.put(book.bookUrl, JsonObject.mapFrom(book).map)
+            }
+            saveStorage("cache", "bookInfoCache", value = bookInfoCache)
+        }
+        return bookList
+    }
+
+    private suspend fun saveSearchBookInfoCache(bookList: List<SearchBook>): List<SearchBook> {
         if (bookList.size > 0) {
             for (i in 0 until bookList.size) {
                 var book = bookList.get(i)
@@ -2890,7 +2905,7 @@ class YueduApi : RestVerticle() {
         var cacheInfo: Book? = bookInfoCache.get(book.bookUrl)?.toDataClass()
 
         if (cacheInfo != null) {
-            return book.fillData(cacheInfo, listOf("name", "author", "coverUrl", "intro", "latestChapterTitle", "wordCount"))
+            return book.fillData(cacheInfo, listOf("name", "author", "coverUrl", "tocUrl", "intro", "latestChapterTitle", "wordCount"))
         }
         return book
     }

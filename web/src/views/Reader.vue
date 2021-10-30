@@ -929,15 +929,19 @@ export default {
       );
     },
     getCatalog(refresh) {
+      const params = {
+        url: this.$store.state.readingBook.bookUrl,
+        refresh: refresh ? 1 : 0
+      };
+      if (this.$route.query.search) {
+        // 来自搜索结果，请求需要带上 书源链接
+        params.bookSourceUrl = this.$store.state.readingBook.origin;
+      }
       return networkFirstRequest(
         () =>
-          Axios.get(
-            this.api +
-              "/getChapterList?url=" +
-              encodeURIComponent(this.$store.state.readingBook.bookUrl) +
-              "&refresh=" +
-              (refresh ? 1 : 0)
-          ),
+          Axios.get(this.api + "/getChapterList", {
+            params
+          }),
         this.$store.state.readingBook.bookName +
           "_" +
           this.$store.state.readingBook.author +
