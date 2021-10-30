@@ -24,7 +24,8 @@ const settings = {
   searchConfig: {
     searchType: "multi",
     bookSourceGroup: "全部分组",
-    bookSourceUrl: ""
+    bookSourceUrl: "",
+    concurrentCount: 24
   },
   config: {
     theme: 0,

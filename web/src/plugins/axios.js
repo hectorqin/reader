@@ -6,7 +6,7 @@ import store from "./vuex";
 const service = Axios.create({
   baseURL: store.getters.api,
   withCredentials: true,
-  timeout: 3 * 60 * 1000
+  timeout: 5 * 60 * 1000
 });
 
 store.watch(

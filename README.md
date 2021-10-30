@@ -74,6 +74,10 @@ TG群 👉 [https://t.me/reader3](https://t.me/reader3)
 - 支持音频
 - 书源失效检测
 - 导入本地TXT、EPUB、UMD格式的书籍
+- 书籍分组
+- RSS订阅
+- 定时更新书架
+- 并发搜书
 
 ## 预览
 

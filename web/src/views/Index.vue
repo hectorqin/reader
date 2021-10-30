@@ -99,6 +99,26 @@
               </el-option>
             </el-select>
           </div>
+          <div
+            class="setting-item"
+            v-show="searchConfig.searchType !== 'single'"
+          >
+            <el-select
+              size="mini"
+              v-model="searchConfig.concurrentCount"
+              class="setting-select"
+              filterable
+              placeholder="请选择并发线程"
+            >
+              <el-option
+                v-for="(item, index) in concurrentList"
+                :key="'source-' + index"
+                :label="item"
+                :value="item"
+              >
+              </el-option>
+            </el-select>
+          </div>
         </div>
         <div class="recent-wrapper">
           <div class="recent-title">
@@ -636,6 +656,7 @@
             dialogContentHeight - 42 - 42 - (isShowFailureBookSource ? 32 : 0)
           "
           @selection-change="manageSourceSelection = $event"
+          :key="isShowFailureBookSource"
         >
           <el-table-column
             type="selection"
@@ -1291,7 +1312,8 @@ export default {
       rssSource: {},
 
       showRssArticleContentDialog: false,
-      rssArticleInfo: {}
+      rssArticleInfo: {},
+      concurrentList: [12, 18, 24, 30, 36, 42, 48, 54, 60]
     };
   },
   watch: {
@@ -1569,6 +1591,7 @@ export default {
             key: this.search,
             bookSourceUrl: this.searchConfig.bookSourceUrl,
             bookSourceGroup: this.searchConfig.bookSourceGroup,
+            concurrentCount: this.searchConfig.concurrentCount,
             lastIndex: this.searchLastIndex, // 多源搜索时的索引
             page: page // 单源搜索时的page
           }
@@ -1609,6 +1632,7 @@ export default {
         key: this.search,
         bookSourceUrl: this.searchConfig.bookSourceUrl,
         bookSourceGroup: this.searchConfig.bookSourceGroup,
+        concurrentCount: this.searchConfig.concurrentCount,
         lastIndex: this.searchLastIndex, // 多源搜索时的索引
         page: page // 单源搜索时的page
       };
@@ -1658,10 +1682,13 @@ export default {
       this.searchEventSource.addEventListener("message", e => {
         try {
           if (e.data) {
-            const resultList = JSON.parse(e.data);
-            if (resultList) {
+            const result = JSON.parse(e.data);
+            if (result && result.lastIndex) {
+              this.searchLastIndex = result.lastIndex;
+            }
+            if (result.data) {
               var data = [].concat(this.searchResult);
-              resultList.forEach(v => {
+              result.data.forEach(v => {
                 if (!this.searchResultMap[v.bookUrl]) {
                   data.push(v);
                 }
@@ -1996,6 +2023,28 @@ export default {
         }
       });
       return res.join("\n");
+    },
+    getInvalidBookSources() {
+      if (!this.$store.state.connected) {
+        this.$message.error("后端未连接");
+        return;
+      }
+      Axios.post(this.api + "/getInvalidBookSources").then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            res.data.data.forEach(v => {
+              this.$store.commit("addFailureBookSource", {
+                bookSourceUrl: v.sourceUrl,
+                errorMsg: v.error
+              });
+            });
+          }
+        },
+        () => {
+          //
+        }
+      );
     },
     async checkBookSource() {
       if (!this.checkBookSourceConfig.keyword) {
@@ -2455,6 +2504,7 @@ export default {
       }
     },
     showFailureBookSource() {
+      this.getInvalidBookSources();
       this.isShowFailureBookSource = true;
       this.showBookSourceManageDialog = true;
     },
