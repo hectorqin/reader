@@ -169,15 +169,20 @@ export default {
       this.$store.commit("setApi", api);
     }
 
-    window.webAppDistance =
-      window.navigator.userAgent.indexOf("iPhone") >= 0 &&
-      window.navigator.standalone
-        ? (window.devicePixelRatio - 1 || 1) * 20
-        : 0;
-    document.documentElement.style.setProperty(
-      "--status-bar-height",
-      `${window.webAppDistance}px`
-    );
+    if (window.navigator.userAgent.indexOf("iPhone") >= 0) {
+      document.documentElement.style.setProperty("height", "100vh");
+      document.body.style.setProperty("height", "100vh");
+    }
+
+    // window.webAppDistance =
+    //   window.navigator.userAgent.indexOf("iPhone") >= 0 &&
+    //   window.navigator.standalone
+    //     ? (window.devicePixelRatio - 1 || 1) * 20
+    //     : 0;
+    // document.documentElement.style.setProperty(
+    //   "--status-bar-height",
+    //   `${window.webAppDistance}px`
+    // );
 
     try {
       const docStyle = getComputedStyle(document.documentElement);
@@ -389,7 +394,7 @@ export default {
   color: #2c3e50;
   margin: 0;
   height: 100%;
-  height: calc(100% + var(--status-bar-height, 0px));
+  /* height: calc(100% + var(--status-bar-height, 0px)); */
   position: relative;
 }
 
@@ -467,6 +472,8 @@ export default {
   }
 }
 .night-theme {
+  background-color: #222;
+
   .el-message-box {
     background: #212121;
     border: 1px solid #212121;
