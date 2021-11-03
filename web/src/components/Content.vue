@@ -64,6 +64,7 @@ export default {
     } else if (this.isEpub) {
       this.initIframe();
     }
+    window.contentCom = this;
   },
   computed: {
     readingBook() {
@@ -186,9 +187,6 @@ export default {
                 max={this.audioDuration}
                 show-tooltip={false}
                 vOn:change={val => {
-                  this.seekTime(val);
-                }}
-                vOn:input={val => {
                   this.seekTime(val);
                 }}
               ></el-slider>
@@ -426,21 +424,23 @@ export default {
         this.stateTimer && clearInterval(this.stateTimer);
 
         this.stateTimer = setInterval(() => {
-          let duration = this.$refs.audio.duration;
-          if (
-            this.$refs.audio.readyState >= 1 &&
-            !isNaN(duration) &&
-            duration !== Infinity &&
-            duration
-          ) {
-            clearInterval(this.stateTimer);
-            this.stateTimer = null;
-            this.audioDuration = parseInt(duration);
-            this.$refs.audio.playbackRate = this.currentSpeed;
-            this.$refs.audio.currentTime = this.startTime;
-            // 有时会失败（看浏览器）
-            if (this.autoPlay) {
-              this.$refs.audio.play();
+          if (this.$refs.audio) {
+            let duration = this.$refs.audio.duration;
+            if (
+              this.$refs.audio.readyState >= 1 &&
+              !isNaN(duration) &&
+              duration !== Infinity &&
+              duration
+            ) {
+              clearInterval(this.stateTimer);
+              this.stateTimer = null;
+              this.audioDuration = parseInt(duration);
+              this.$refs.audio.playbackRate = this.currentSpeed;
+              this.$refs.audio.currentTime = this.startTime;
+              // 有时会失败（看浏览器）
+              if (this.autoPlay) {
+                this.$refs.audio.play();
+              }
             }
           }
         }, 100);
@@ -468,6 +468,7 @@ export default {
     },
     onPlay() {
       this.playing = true;
+      this.stateTimer && clearInterval(this.stateTimer);
     },
     onPause() {
       this.playing = false;
@@ -478,11 +479,13 @@ export default {
       this.audioDuration = 0;
       this.autoPlay = true;
       this.$emit("nextChapter");
+      this.stateTimer && clearInterval(this.stateTimer);
     },
     onError(event) {
       // console.log(arguments);
       this.$message.error(event.toString());
       this.playing = false;
+      this.stateTimer && clearInterval(this.stateTimer);
     },
     onSeeked() {},
     onSeeking() {},
