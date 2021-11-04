@@ -37,7 +37,8 @@ const settings = {
     readWidth: 800,
     lineHeight: 1.8, // 行高
     paragraphSpace: 0.2, // 段间距
-    autoTheme: true // 自动切换主题
+    autoTheme: true, // 自动切换主题
+    selectionAction: "过滤弹窗"
   },
   speechVoiceConfig: {
     voiceName: "",

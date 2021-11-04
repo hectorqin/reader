@@ -189,7 +189,7 @@
             >
           </div>
         </li>
-        <li class="read-width" v-if="$store.state.miniInterface">
+        <li class="read-width">
           <span class="setting-item-title">全屏点击</span>
           <div class="selection-zone">
             <span
@@ -199,6 +199,19 @@
               :class="{ selected: clickMethod == method }"
               @click="setClickMethod(method)"
               >{{ method }}</span
+            >
+          </div>
+        </li>
+        <li class="read-width">
+          <span class="setting-item-title">选择文字</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(action, index) in selectionActions"
+              :key="index"
+              :class="{ selected: selectionAction == action }"
+              @click="setSelectionAction(action)"
+              >{{ action }}</span
             >
           </div>
         </li>
@@ -268,7 +281,8 @@ export default {
       ],
       fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"],
       readMethods: ["上下滑动", "左右滑动"],
-      clickMethods: ["下一页", "自动"]
+      clickMethods: ["下一页", "自动", "不翻页"],
+      selectionActions: ["过滤弹窗", "忽略"]
     };
   },
   mounted() {},
@@ -302,6 +316,12 @@ export default {
     clickMethod() {
       return (
         this.$store.state.config.clickMethod ?? settings.config.clickMethod
+      );
+    },
+    selectionAction() {
+      return (
+        this.$store.state.config.selectionAction ??
+        settings.config.selectionAction
       );
     },
     fontSize() {
@@ -370,6 +390,11 @@ export default {
     setClickMethod(method) {
       let config = this.config;
       config.clickMethod = method;
+      this.$store.commit("setConfig", config);
+    },
+    setSelectionAction(action) {
+      let config = this.config;
+      config.selectionAction = action;
       this.$store.commit("setConfig", config);
     },
     moreFontSize() {

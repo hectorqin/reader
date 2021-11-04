@@ -1470,6 +1470,10 @@ export default {
         this.showToolBar = false;
         this.nextPage();
         return;
+      } else if (this.$store.state.config.clickMethod === "不翻页") {
+        // 全屏点击不翻页
+        this.showToolBar = !this.showToolBar;
+        return;
       } else if (this.isSlideRead) {
         if (point.clientX > midX) {
           // 点击右侧，下一页
@@ -1572,7 +1576,9 @@ export default {
       }
       if (text && show) {
         setTimeout(() => {
-          this.showTextFilterPrompt(text);
+          if (this.$store.state.config.selectionAction === "过滤弹窗") {
+            this.showTextFilterPrompt(text);
+          }
         }, 200);
       }
       return text;
