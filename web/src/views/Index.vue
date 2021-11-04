@@ -1060,7 +1060,7 @@
           </div>
         </div>
         <div class="book-name">{{ showBookInfo.name }}</div>
-        <div class="book-kind">{{ showBookInfo.kind }}</div>
+        <div class="book-kind" v-html="renderBookKind(showBookInfo.kind)"></div>
         <div class="book-props">
           <div class="book-prop book-author">
             作者： {{ showBookInfo.author || "未知" }}
@@ -2738,6 +2738,18 @@ export default {
       });
       return groupName.join(",") || unGroupName || "未分组";
     },
+    renderBookKind(value) {
+      if (!value) {
+        return "";
+      }
+      const kindList = value.split(",");
+      return kindList
+        .filter(v => v)
+        .map(v => {
+          return `<span>${v}</span>`;
+        })
+        .join("");
+    },
     getBookGroupListForBook(bookGroup) {
       const groups = [];
       this.$store.state.bookGroupList.forEach(v => {
@@ -4262,6 +4274,11 @@ export default {
 }
 .popper-intro {
   padding: 15px;
+}
+.book-kind span {
+  display: inline-block;
+  margin-left: 5px;
+  margin-right: 5px;
 }
 .night-theme .popper-intro {
   background: #121212;
