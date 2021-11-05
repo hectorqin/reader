@@ -178,6 +178,12 @@ reader:
     secure: false          # 是否需要登录鉴权，开启后将支持多用户模式
     inviteCode: ""         # 注册邀请码，为空时则开放注册，否则注册时需要输入邀请码
     secureKey: ""          # 管理密码，开启鉴权时，前端管理用户空间的管理密码
+    proxy: false           # 是否使用代理
+    proxyType: "HTTP"      # 代理类型
+    proxyHost: ""          # 代理 Host
+    proxyPort: ""          # 代理 port
+    proxyUsername: ""      # 代理鉴权 用户名
+    proxyPassword: ""      # 代理鉴权 密码
 
   server:
     port: 8080             # 监听端口

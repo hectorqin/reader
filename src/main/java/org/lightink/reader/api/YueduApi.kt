@@ -370,15 +370,17 @@ class YueduApi : RestVerticle() {
 
     suspend fun migration() {
         try {
+            var storageDir = File(getWorkDir("storage"))
             var dataDir = File(getWorkDir("storage", "data", "default"))
-            if (!dataDir.exists()) {
-                var storageDir = File(getWorkDir("storage"))
-                if (storageDir.exists()) {
-                    var backupDir = File(getWorkDir("storage-backup"))
-                    storageDir.renameTo(backupDir)
-                    dataDir.parentFile.mkdirs()
-                    backupDir.copyRecursively(dataDir)
-                }
+            if (!storageDir.exists()) {
+                // 直接使用新版本，则创建 default 目录，防止重启之后被迁移
+                dataDir.mkdirs()
+            } else if (!dataDir.exists()) {
+                // 可能存在旧版本，尝试迁移
+                var backupDir = File(getWorkDir("storage-backup"))
+                storageDir.renameTo(backupDir)
+                dataDir.parentFile.mkdirs()
+                backupDir.copyRecursively(dataDir)
             }
         } catch(e: Exception) {
             e.printStackTrace()

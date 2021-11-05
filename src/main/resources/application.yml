@@ -7,6 +7,12 @@ reader:
     secure: false
     inviteCode: ""
     secureKey: ""
+    proxy: false
+    proxyType: "HTTP"
+    proxyHost: ""
+    proxyPort: ""
+    proxyUsername: ""
+    proxyPassword: ""
 
   server:
     port: 8080

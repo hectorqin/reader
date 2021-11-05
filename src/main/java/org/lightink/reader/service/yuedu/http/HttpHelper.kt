@@ -8,6 +8,11 @@ import org.lightink.reader.ReaderApplication
 import retrofit2.Retrofit
 import java.util.*
 import java.util.concurrent.TimeUnit
+import java.net.Proxy
+import java.net.InetSocketAddress
+import java.io.IOException
+import okhttp3.Authenticator
+import okhttp3.Credentials
 
 
 object HttpHelper {
@@ -43,6 +48,52 @@ object HttpHelper {
                 .addInterceptor(getHeaderInterceptor())
                 .addInterceptor(logging)
 
+        // 支持代理设置
+        val enableProxy = System.getProperty("reader.app.proxy")
+        val proxyHost = System.getProperty("reader.app.proxyHost")
+        val proxyPort = System.getProperty("reader.app.proxyPort")
+        if (
+            enableProxy != null && enableProxy.isNotEmpty() && enableProxy != "false" &&
+            proxyHost != null && proxyHost.isNotEmpty() &&
+            proxyPort != null && proxyPort.isNotEmpty()
+        ) {
+            try {
+                val port = proxyPort.toInt()
+                if (port > 0) {
+                    //代理服务器的IP和端口号
+                    var proxyType = System.getProperty("reader.app.proxyType")
+                    var type = Proxy.Type.HTTP
+                    try {
+                        if (proxyType != null && proxyType.isNotEmpty()) {
+                            type = Proxy.Type.valueOf(proxyType.toUpperCase())
+                        }
+                    } catch(e: Exception) {
+                        e.printStackTrace()
+                    }
+                    builder.proxy(Proxy(type, InetSocketAddress(proxyHost, port)));
+                    var proxyUsername = System.getProperty("reader.app.proxyUsername")
+                    var proxyPassword = System.getProperty("reader.app.proxyPassword")
+                    if (
+                        proxyUsername != null && proxyUsername.isNotEmpty() &&
+                        proxyPassword != null && proxyPassword.isNotEmpty()
+                    ) {
+                        val proxyAuthenticator = object: Authenticator {
+                            @Throws(IOException::class)
+                            override fun authenticate(route: Route?, response: Response): Request {
+                                //设置代理服务器账号密码
+                                val credential = Credentials.basic(proxyUsername, proxyPassword);
+                                return response.request.newBuilder()
+                                       .header("Proxy-Authorization", credential)
+                                       .build();
+                            }
+                        }
+                        builder.proxyAuthenticator(proxyAuthenticator);
+                    }
+                }
+            } catch(e: Exception) {
+                e.printStackTrace()
+            }
+        }
 
         builder.build()
     }
