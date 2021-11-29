@@ -359,10 +359,10 @@ yarn sync
 ```bash
 ./gradlew assemble --info
 
-java -jar build/libs/reader-1.7.0.jar
+java -jar build/libs/reader-1.8.0.jar
 
 # 指定 storage 路径  默认为相对路径 storage
-# java -Dreader.app.storagePath=cacheStorage  -jar build/libs/reader-1.7.0.jar
+# java -Dreader.app.storagePath=cacheStorage  -jar build/libs/reader-1.8.0.jar
 
 # web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/
