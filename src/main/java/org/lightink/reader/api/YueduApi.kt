@@ -3009,7 +3009,7 @@ class YueduApi : RestVerticle() {
             var newChapterList: List<BookChapter>
             if (book.isLocalBook()) {
                 // 重新解压epub文件
-                if (!extractEpub(book, refresh)) {
+                if (book.isEpub() && !extractEpub(book, refresh)) {
                     throw Exception("Epub书籍解压失败")
                 }
                 newChapterList = LocalBook.getChapterList(book.also{
