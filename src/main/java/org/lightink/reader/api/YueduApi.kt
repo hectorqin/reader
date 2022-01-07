@@ -399,7 +399,7 @@ class YueduApi : RestVerticle() {
         val returnData = ReturnData()
         logger.error("onHandlerError: ", error)
         if (!ctx.response().headWritten()) {
-            ctx.success(returnData.setData(error).setErrorMsg(error.toString()))
+            ctx.success(returnData.setErrorMsg(error.toString()))
         } else {
             ctx.response().end(error.toString())
         }
@@ -1991,7 +1991,7 @@ class YueduApi : RestVerticle() {
         return returnData.setData(mapOf("lastIndex" to lastIndex, "list" to resultList))
     }
 
-    private suspend fun searchBookWithSource(bookSourceString: String, book: Book, accurate: Boolean = false): ArrayList<SearchBook> {
+    private suspend fun searchBookWithSource(bookSourceString: String, book: Book, accurate: Boolean = true): ArrayList<SearchBook> {
         var resultList = arrayListOf<SearchBook>()
         var bookSource = asJsonObject(bookSourceString)?.mapTo(BookSource::class.java)
         if (bookSource == null) {

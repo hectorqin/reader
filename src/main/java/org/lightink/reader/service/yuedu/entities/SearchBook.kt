@@ -4,8 +4,7 @@ package io.legado.app.data.entities
 //import androidx.room.*
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
-
-
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 //@Parcelize
 //@Entity(
@@ -18,6 +17,7 @@ import io.legado.app.utils.fromJsonObject
 //        onDelete = ForeignKey.CASCADE
 //    ))]
 //)
+@JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "origins", "kindList")
 data class SearchBook(
 //    @PrimaryKey
     var bookUrl: String = "",
@@ -62,6 +62,7 @@ data class SearchBook(
         return other.originOrder - this.originOrder
     }
 
+    @delegate:Transient
     override val variableMap by lazy {
         GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
     }

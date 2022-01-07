@@ -25,6 +25,7 @@ data class RssArticle(
         return if (other is RssArticle) origin == other.origin && link == other.link else false
     }
 
+    @delegate:Transient
     override val variableMap by lazy {
         GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
     }

@@ -20,6 +20,7 @@ data class BookChapter(
         var variable: String? = null        //变量
 ) {
 
+    @Transient
     var variableMap: HashMap<String, String>? = null
         private set
         get() {

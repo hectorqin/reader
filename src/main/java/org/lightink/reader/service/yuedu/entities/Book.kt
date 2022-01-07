@@ -15,9 +15,9 @@ import java.io.File
 import kotlin.math.max
 import kotlin.math.min
 import org.jsoup.Jsoup
-import com.fasterxml.jackson.annotation.JsonIgnore
-import com.google.gson.annotations.Expose
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+@JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "config", "rootDir", "readConfig", "localBook", "epub", "epubRootDir", "onLineTxt", "localTxt", "umd", "realAuthor", "unreadChapterNum", "folderName", "localFile", "kindList")
 data class Book(
         var bookUrl: String = "",                   // 详情页Url(本地书源存储完整文件路径)
         var tocUrl: String = "",                    // 目录页Url (toc=table of Contents)
@@ -83,6 +83,7 @@ data class Book(
         return bookUrl.hashCode()
     }
 
+    @delegate:Transient
     override val variableMap by lazy {
         GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
     }
@@ -131,8 +132,7 @@ data class Book(
         return folderName + MD5Utils.md5Encode16(bookUrl)
     }
 
-    @JsonIgnore
-    @Expose(serialize = false)
+    @Transient
     private var rootDir: String = ""
 
     fun setRootDir(root: String) {
