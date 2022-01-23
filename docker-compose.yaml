@@ -1,0 +1,55 @@
+version: '3.1'
+services:
+
+# reader 在线阅读
+# 作者GitHub : https://github.com/hectorqin/reader
+# 本人在线演示(服务器位于日本) : https://reader.nxnow.online ,账号/密码分别为guest/guest123,也可自行创建账号添加书源
+# 书源参考 : https://github.com/NZESupB/ReadSource ,书源合集下选一个合集进入网页后, Ctrl+S 保存至本地后导入网站即可
+
+#docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader
+# 多用户版
+#docker run -d --restart=always --name=reader -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader java -jar /app/bin/reader.jar --spring.profiles.active=prod --reader.app.secure=true --reader.app.secureKey=管理密码 --reader.app.inviteCode=注册邀请码
+# 多用户版 使用环境变量
+#docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -e "READER_APP_SECURE=true" -e "READER_APP_SECUREKEY=管理密码" -e "READER_APP_INVITECODE=注册邀请码" -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader
+
+# 自用版
+#  read_own:
+#    image: hectorqin/reader
+#    container_name: reader_own
+#    restart: always
+#    ports:
+#      - 4395:8080
+#    volumes:
+#      - /home/reader/log:/log
+#      - /home/reader/storage:/storage
+#    environment:
+#      - SPRING_PROFILES_ACTIVE=prod
+# 多用户版
+  read_all:
+    image: hectorqin/reader
+    container_name: reader # 容器名 可自行修改
+    restart: always
+    ports:
+      - 4396:8080 # 4396端口映射可自行修改
+    volumes:
+      - /home/reader/log:/log # log映射目录 /home/reader/log 可自行修改
+      - /home/reader/storage:/storage # 数据映射目录 /home/reader/storage 可自行修改
+    environment:
+      - SPRING_PROFILES_ACTIVE=prod
+      - READER_APP_SECURE=true
+      - READER_APP_SECUREKEY= password  # 管理员密码  可自行修改
+      # - READER_APP_INVITECODE=123456 # 注册邀请码,如需要取消注释 可自行修改
+# 自动更新docker
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: always
+    # 环境变量,设置为上海时区
+    environment:
+        - TZ=Asia/Shanghai
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: reader watchtower --cleanup --schedule "0 0 4 * * *"
+    # 仅更新reader与watchtower容器,如需其他自行添加容器名,如:reader watchtower redis
+    # --cleanup 更新后清理旧版本镜像
+    # --schedule 自动检测更新 crontab定时(限定6位crontab) 此处代表凌晨4点整

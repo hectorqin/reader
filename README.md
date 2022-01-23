@@ -320,6 +320,16 @@ docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -e
 
 # web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/
+
+# 使用docker-compose
+# 创建 /home/reader 目录，也可使用其他目录，更换目录需要编辑 docker-compose.yaml 里面的挂载目录 volumes
+# 下载项目里的 docker-compose.yaml 到 /home/reader 目录
+# 按照 docker-compose.yaml 里面的注释编辑相关配置
+# 启动 docker-compose
+docker-compose up -d
+
+# 停止 docker-compose
+docker-compose stop
 ```
 
 ## 开发编译

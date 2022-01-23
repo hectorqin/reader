@@ -345,17 +345,16 @@ export default {
           min-height: 100%;
         }
         body {
+          margin: 0 !important;
           ${bodyStyle}
         }
         body p {
           ${pStyle}
         }
         img {
+          display: block;
           max-width: 100vw !important;
           height: auto !important;
-        }
-        body p img {
-          margin-top: 5px;
         }`
       });
     },
