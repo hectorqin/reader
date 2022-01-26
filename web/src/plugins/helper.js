@@ -145,3 +145,5 @@ export const cacheFirstRequest = async function(
   }
   return res;
 };
+
+export const isMiniInterface = () => window.innerWidth <= 750;

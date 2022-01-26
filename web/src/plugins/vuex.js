@@ -148,12 +148,24 @@ export default new Vuex.Store({
         window.localStorage.setItem("readingRecent", JSON.stringify(info));
     },
     setConfig(state, config) {
+      if (
+        config.theme !== settings.defaultNightTheme &&
+        config.theme !== "custom"
+      ) {
+        config.themeType = "day";
+      } else if (config.theme === settings.defaultNightTheme) {
+        config.themeType = "night";
+      }
       state.config = config;
       window.localStorage &&
         window.localStorage.setItem("config", JSON.stringify(config));
     },
     setMiniInterface(state, mini) {
-      state.miniInterface = mini;
+      if (state.config.pageMode === "自适应") {
+        state.miniInterface = mini;
+      } else {
+        state.miniInterface = true;
+      }
     },
     setWindowSize(state, size) {
       state.windowSize = size;
@@ -233,16 +245,30 @@ export default new Vuex.Store({
     setNightTheme(state, isNight) {
       let config = { ...state.config };
       if (isNight) {
-        if (config.theme !== 6) {
+        if (
+          config.theme !== settings.defaultNightTheme &&
+          config.themeType !== "night"
+        ) {
           window.localStorage &&
             window.localStorage.setItem("lastDayTheme", config.theme);
         }
-        config.theme = 6;
-      } else if (config.theme === 6) {
+        const lastNightTheme =
+          (window.localStorage &&
+            window.localStorage.getItem("lastNightTheme")) ||
+          6;
+        config.themeType = "night";
+        config.theme = lastNightTheme;
+      } else if (
+        config.theme === settings.defaultNightTheme ||
+        config.themeType === "night"
+      ) {
+        window.localStorage &&
+          window.localStorage.setItem("lastNightTheme", config.theme);
         const lastDayTheme =
           (window.localStorage &&
             window.localStorage.getItem("lastDayTheme")) ||
           0;
+        config.themeType = "day";
         config.theme = lastDayTheme;
       }
       state.config = config;
@@ -349,8 +375,11 @@ export default new Vuex.Store({
     isSlideRead: state => {
       return state.miniInterface && state.config.readMethod === "左右滑动";
     },
+    isSystemNight: state => {
+      return state.config.theme === settings.defaultNightTheme;
+    },
     isNight: state => {
-      return state.config.theme == 6;
+      return state.config.themeType === "night";
     },
     currentContentBGImg: (state, getters) => {
       if (state.config.contentBGImg) {

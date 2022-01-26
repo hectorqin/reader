@@ -205,6 +205,14 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="loadRemoteBookSource"
+            >
+              远程书源
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
               slot="reference"
               class="setting-btn"
               @click="loadBookSource(true)"
@@ -1953,6 +1961,50 @@ export default {
       } else {
         this.$refs.fileRef.value = null;
       }
+    },
+    async loadRemoteBookSource() {
+      const res = await this.$prompt("请输入远程书源链接", "导入远程书源文件", {
+        inputValue: "",
+        confirmButtonText: "确定",
+        cancelButtonText: "取消"
+      }).catch(() => {
+        return false;
+      });
+      if (!res || !res.value) {
+        return;
+      }
+      Axios.post(this.api + "/readRemoteSourceFile", {
+        url: res.value
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            let sourceList = [];
+            res.data.data.forEach(v => {
+              try {
+                const data = JSON.parse(v);
+                if (Array.isArray(data)) {
+                  sourceList = sourceList.concat(data);
+                }
+              } catch (error) {
+                //
+              }
+            });
+            if (sourceList.length) {
+              this.importSourceList = sourceList;
+              this.showImportSourceDialog = true;
+              this.isImportRssSource = false;
+            } else {
+              this.$message.error("远程书源文件错误");
+            }
+          }
+        },
+        error => {
+          this.$message.error(
+            "读取远程书源文件内容失败 " + (error && error.toString())
+          );
+        }
+      );
     },
     handleCheckAllChange(val) {
       this.checkedSourceIndex = val
@@ -4331,9 +4383,7 @@ export default {
   }
 }
 
-@media screen and (max-width: 750px) {
-  .el-dialog__body {
-    padding: 15px 20px;
-  }
+.mini-interface .el-dialog__body {
+  padding: 15px 20px;
 }
 </style>

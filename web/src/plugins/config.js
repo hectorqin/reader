@@ -32,19 +32,22 @@ const settings = {
     font: 0,
     fontSize: 18,
     fontWeight: 400,
+    themeType: "day",
     readMethod: "上下滑动",
     clickMethod: "自动",
     readWidth: 800,
     lineHeight: 1.8, // 行高
     paragraphSpace: 0.2, // 段间距
     autoTheme: true, // 自动切换主题
-    selectionAction: "过滤弹窗"
+    selectionAction: "过滤弹窗",
+    pageMode: "自适应"
   },
   speechVoiceConfig: {
     voiceName: "",
     speechRate: 1,
     speechPitch: 1
   },
+  defaultNightTheme: 6,
   themes: [
     {
       body: "url(" + body_0 + ") repeat",

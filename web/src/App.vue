@@ -71,7 +71,7 @@ import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
 import "prismjs/themes/prism.css";
-import { networkFirstRequest } from "./plugins/helper";
+import { isMiniInterface, networkFirstRequest } from "./plugins/helper";
 
 Date.prototype.format = function(fmt) {
   var o = {
@@ -144,7 +144,7 @@ export default {
   beforeCreate() {
     this.$store.dispatch("syncFromLocalStorage");
 
-    this.$store.commit("setMiniInterface", window.innerWidth <= 750);
+    this.$store.commit("setMiniInterface", isMiniInterface());
 
     document.documentElement.style.setProperty(
       "--vh",
@@ -156,7 +156,7 @@ export default {
         "--vh",
         `${window.innerHeight * 0.01}px`
       );
-      this.$store.commit("setMiniInterface", window.innerWidth <= 750);
+      this.$store.commit("setMiniInterface", isMiniInterface());
       this.$store.commit("setWindowSize", {
         width: window.innerWidth,
         height: window.innerHeight
@@ -208,6 +208,7 @@ export default {
   },
   beforeMount() {
     this.setTheme(this.isNight);
+    this.setMiniInterfaceClass();
     this.eventBus = eventBus;
     eventBus.$on("showEditor", this.showEditorListener);
   },
@@ -224,6 +225,9 @@ export default {
     },
     autoTheme() {
       return this.$store.state.config.autoTheme;
+    },
+    miniInterface() {
+      return this.$store.state.config.miniInterface;
     },
     dialogWidth() {
       return this.$store.state.miniInterface ? "85%" : "450px";
@@ -255,6 +259,9 @@ export default {
     autoTheme(val) {
       this.autoSetTheme(val);
     },
+    miniInterface() {
+      this.setMiniInterfaceClass();
+    },
     connected(val) {
       if (val) {
         // 连接后端成功，加载自定义样式
@@ -285,6 +292,18 @@ export default {
       } else {
         document.body.className = (document.body.className || "").replace(
           "night-theme",
+          ""
+        );
+      }
+    },
+    setMiniInterfaceClass() {
+      if (this.$store.state.miniInterface) {
+        document.body.className =
+          (document.body.className || "").replace("mini-interface", "") +
+          " mini-interface";
+      } else {
+        document.body.className = (document.body.className || "").replace(
+          "mini-interface",
           ""
         );
       }
@@ -458,7 +477,7 @@ export default {
   max-height: calc(var(--vh, 1vh) * 80 - 54px - 60px - 66px);
   overflow-y: auto;
 }
-@media screen and (max-width: 750px) {
+.mini-interface {
   .popper-component {
     top: 0 !important;
     left: 0 !important;

@@ -45,6 +45,17 @@
         <li class="custom-theme-li" v-if="selectedTheme == 'custom'">
           <span class="setting-item-title">自定义</span>
           <div class="custom-theme">
+            <div class="custom-theme-title">
+              <span class="custom-theme-title">主题模式</span>
+              <span
+                class="span-item"
+                v-for="(type, index) in themeTypes"
+                :key="index"
+                :class="{ selected: themeType == type }"
+                @click="setThemeType(type)"
+                >{{ type === "day" ? "白天" : "黑夜" }}</span
+              >
+            </div>
             <span class="custom-theme-title"
               >页面背景颜色
               <el-color-picker v-model="bodyColor"></el-color-picker>
@@ -164,6 +175,19 @@
           <span class="setting-item-title font-color-title">字体颜色</span>
           <el-color-picker v-model="fontColor"></el-color-picker>
         </li>
+        <li class="read-width">
+          <span class="setting-item-title">页面模式</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(mode, index) in pageModes"
+              :key="index"
+              :class="{ selected: pageMode == mode }"
+              @click="setPageMode(mode)"
+              >{{ mode }}</span
+            >
+          </div>
+        </li>
         <li class="read-width" v-if="!$store.state.miniInterface">
           <span class="setting-item-title">页面宽度</span>
           <div class="resize">
@@ -229,6 +253,7 @@ import "../assets/fonts/iconfont.css";
 import Axios from "../plugins/axios";
 import settings from "../plugins/config";
 import eventBus from "../plugins/eventBus";
+import { isMiniInterface } from "../plugins/helper";
 
 export default {
   name: "ReadSettings",
@@ -259,7 +284,7 @@ export default {
       ],
       fontColor:
         this.$store.state.config.fontColor ||
-        (this.$store.state.config.theme != 6 ? "#262626" : "#666666"),
+        (!this.$store.getters.isNight ? "#262626" : "#666666"),
       bodyColor: this.$store.state.config.bodyColor || "#eadfca",
       contentColor: this.$store.state.config.contentColor || "#ede7da",
       popupColor: this.$store.state.config.popupColor || "#ede7da",
@@ -282,7 +307,9 @@ export default {
       fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"],
       readMethods: ["上下滑动", "左右滑动"],
       clickMethods: ["下一页", "自动", "不翻页"],
-      selectionActions: ["过滤弹窗", "忽略"]
+      selectionActions: ["过滤弹窗", "忽略"],
+      pageModes: ["自适应", "手机模式"],
+      themeTypes: ["day", "night"]
     };
   },
   mounted() {},
@@ -291,12 +318,14 @@ export default {
       return this.$store.state.config;
     },
     moonIcon() {
-      return this.$store.getters.isNight ? "" : "";
+      return this.$store.getters.isSystemNight ? "" : "";
     },
     moonIconStyle() {
       return {
         display: "inline",
-        color: this.$store.getters.isNight ? "#ed4259" : "rgba(255,255,255,0.2)"
+        color: this.$store.getters.isSystemNight
+          ? "#ed4259"
+          : "rgba(255,255,255,0.2)"
       };
     },
     popupTheme() {
@@ -309,6 +338,12 @@ export default {
     },
     selectedFont() {
       return this.$store.state.config.font;
+    },
+    pageMode() {
+      return this.$store.state.config.pageMode ?? settings.config.pageMode;
+    },
+    themeType() {
+      return this.$store.state.config.themeType ?? settings.config.themeType;
     },
     readMethod() {
       return this.$store.state.config.readMethod ?? settings.config.readMethod;
@@ -385,6 +420,22 @@ export default {
       this.$emit("readMethodChange");
       let config = this.config;
       config.readMethod = method;
+      this.$store.commit("setConfig", config);
+    },
+    setPageMode(mode) {
+      this.$emit("pageModeChange");
+      let config = this.config;
+      config.pageMode = mode;
+      this.$store.commit("setConfig", config);
+      if (mode === "手机模式") {
+        this.$store.commit("setMiniInterface", true);
+      } else {
+        this.$store.commit("setMiniInterface", isMiniInterface());
+      }
+    },
+    setThemeType(type) {
+      let config = this.config;
+      config.themeType = type;
       this.$store.commit("setConfig", config);
     },
     setClickMethod(method) {

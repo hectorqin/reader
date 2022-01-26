@@ -179,6 +179,9 @@ class YueduApi : RestVerticle() {
         // 上传书源文件
         router.post("/reader3/readSourceFile").coroutineHandler { readSourceFile(it) }
 
+        // 读取远程书源文件
+        router.post("/reader3/readRemoteSourceFile").coroutineHandlerWithoutRes { readRemoteSourceFile(it) }
+
         // 上传文件
         router.post("/reader3/uploadFile").coroutineHandler { uploadFile(it) }
 
@@ -1413,6 +1416,34 @@ class YueduApi : RestVerticle() {
             }
         }
         return returnData.setData(sourceList.getList())
+    }
+
+    private suspend fun readRemoteSourceFile(context: RoutingContext) {
+        val returnData = ReturnData()
+        var url: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            url = context.bodyAsJson.getString("url") ?: ""
+        } else {
+            // get 请求
+            url = context.queryParam("url").firstOrNull() ?: ""
+            url = URLDecoder.decode(url, "UTF-8")
+        }
+        if (url.isNullOrEmpty()) {
+            context.success(returnData.setErrorMsg("请输入远程书源链接"))
+            return
+        }
+
+        launch(Dispatchers.IO) {
+            webClient.getAbs(url).timeout(3000).send {
+                var body = it.result()?.bodyAsString()
+                if (body != null) {
+                    context.success(returnData.setData(arrayListOf(body)))
+                } else {
+                    context.success(returnData.setErrorMsg("远程书源链接错误"))
+                }
+            }
+        }
     }
 
     private suspend fun uploadFile(context: RoutingContext): ReturnData {

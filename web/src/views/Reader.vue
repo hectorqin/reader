@@ -2,7 +2,11 @@
   <div
     class="chapter-wrapper"
     :style="bodyTheme"
-    :class="{ night: isNight, day: !isNight }"
+    :class="{
+      night: isNight,
+      day: !isNight,
+      'mini-interface': $store.state.miniInterface
+    }"
     ref="chapterWrapperRef"
   >
     <div class="tool-bar" :style="leftBarTheme">
@@ -2599,151 +2603,150 @@ export default {
     color: #185798;
   }
 }
-@media screen and (max-width: 750px) {
-  .chapter-wrapper {
-    padding: 0;
-    position: relative;
-    height: 100%;
 
-    .tool-bar {
+.chapter-wrapper.mini-interface {
+  padding: 0;
+  position: relative;
+  height: 100%;
+
+  .tool-bar {
+    left: 0;
+    width: 100vw;
+    margin-left: 0 !important;
+
+    .tools {
+      flex-direction: row;
+      justify-content: space-around;
+      .tool-icon {
+        border: none;
+      }
+    }
+  }
+
+  .read-bar {
+    right: 0;
+    width: 100vw;
+    margin-right: 0 !important;
+
+    .headset-item {
+      left: auto;
+      right: 20px;
+    }
+
+    .theme-item {
+      left: auto;
+      right: 20px;
+    }
+
+    .tools {
+      flex-direction: row;
+      justify-content: space-around;
+      padding: 0 15px;
+      height: 45px;
+      .tool-icon {
+        border: none;
+        width: auto;
+        padding: 0;
+        height: 45px;
+        line-height: 45px;
+        .iconfont {
+          display: inline-block;
+        }
+        span {
+          vertical-align: middle;
+        }
+      }
+    }
+  }
+
+  .chapter {
+    width: 100vw !important;
+    padding: 0 16px;
+    box-sizing: border-box;
+    border: none;
+    text-align: justify;
+    position: relative;
+
+    .top-bar {
+      position: fixed;
+      top: 0;
       left: 0;
       width: 100vw;
-      margin-left: 0 !important;
-
-      .tools {
-        flex-direction: row;
-        justify-content: space-around;
-        .tool-icon {
-          border: none;
-        }
-      }
+      z-index: 50;
+      background: inherit;
+      height: 30px;
+      height: calc(30px + constant(safe-area-inset-top));
+      height: calc(30px + env(safe-area-inset-top));
+      padding: 6px 16px;
+      padding-top: calc(6px + constant(safe-area-inset-top));
+      padding-top: calc(6px + env(safe-area-inset-top));
+      font-size: 12px;
     }
 
-    .read-bar {
-      right: 0;
-      width: 100vw;
-      margin-right: 0 !important;
-
-      .headset-item {
-        left: auto;
-        right: 20px;
-      }
-
-      .theme-item {
-        left: auto;
-        right: 20px;
-      }
-
-      .tools {
-        flex-direction: row;
-        justify-content: space-around;
-        padding: 0 15px;
-        height: 45px;
-        .tool-icon {
-          border: none;
-          width: auto;
-          padding: 0;
-          height: 45px;
-          line-height: 45px;
-          .iconfont {
-            display: inline-block;
-          }
-          span {
-            vertical-align: middle;
-          }
-        }
-      }
+    .content-inner {
+      margin-top: 30px;
+      margin-top: calc(30px + constant(safe-area-inset-top));
+      margin-top: calc(30px + env(safe-area-inset-top));
+      padding-top: 15px;
+      padding-bottom: 15px;
     }
+  }
 
-    .chapter {
-      width: 100vw !important;
+  .chapter.cartoon {
+    padding: 0;
+
+    .content-inner {
+      padding-top: 1px;
+    }
+  }
+
+  .chapter.slide-reader {
+    padding: 0;
+    height: 100%;
+
+    .bottom-bar {
+      height: 24px;
+      position: absolute;
+      bottom: 0;
       padding: 0 16px;
-      box-sizing: border-box;
-      border: none;
-      text-align: justify;
+      padding-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    .top-bar {
       position: relative;
-
-      .top-bar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        z-index: 50;
-        background: inherit;
-        height: 30px;
-        height: calc(30px + constant(safe-area-inset-top));
-        height: calc(30px + env(safe-area-inset-top));
-        padding: 6px 16px;
-        padding-top: calc(6px + constant(safe-area-inset-top));
-        padding-top: calc(6px + env(safe-area-inset-top));
-        font-size: 12px;
-      }
-
-      .content-inner {
-        margin-top: 30px;
-        margin-top: calc(30px + constant(safe-area-inset-top));
-        margin-top: calc(30px + env(safe-area-inset-top));
-        padding-top: 15px;
-        padding-bottom: 15px;
-      }
     }
 
-    .chapter.cartoon {
-      padding: 0;
-
-      .content-inner {
-        padding-top: 1px;
-      }
+    .content {
+      position: absolute;
+      overflow: visible;
+      top: 30px;
+      top: calc(30px + constant(safe-area-inset-top));
+      top: calc(30px + env(safe-area-inset-top));
+      bottom: 24px;
     }
 
-    .chapter.slide-reader {
+    .content-inner {
+      margin: 0 16px;
+      overflow: hidden;
+      text-align: justify;
       padding: 0;
       height: 100%;
+    }
 
-      .bottom-bar {
-        height: 24px;
-        position: absolute;
-        bottom: 0;
-        padding: 0 16px;
-        padding-bottom: 6px;
-        display: flex;
-        justify-content: space-between;
-        font-size: 12px;
-      }
-
-      .top-bar {
-        position: relative;
-      }
-
-      .content {
-        position: absolute;
-        overflow: visible;
-        top: 30px;
-        top: calc(30px + constant(safe-area-inset-top));
-        top: calc(30px + env(safe-area-inset-top));
-        bottom: 24px;
-      }
-
-      .content-inner {
-        margin: 0 16px;
-        overflow: hidden;
-        text-align: justify;
-        padding: 0;
-        height: 100%;
-      }
-
-      .book-content {
-        height: 100%;
-        -webkit-columns: calc(100vw - 32px) 1;
-        -webkit-column-gap: 32px;
-        columns: calc(100vw - 16px) 1;
-        column-gap: 16px;
-      }
+    .book-content {
+      height: 100%;
+      -webkit-columns: calc(100vw - 32px) 1;
+      -webkit-column-gap: 32px;
+      columns: calc(100vw - 16px) 1;
+      column-gap: 16px;
     }
   }
-  .chapter-wrapper::-webkit-scrollbar {
-    width: 0 !important;
-  }
+}
+.chapter-wrapper.mini-interface::-webkit-scrollbar {
+  width: 0 !important;
 }
 </style>
 <style lang="stylus">
