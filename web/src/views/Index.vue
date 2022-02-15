@@ -370,6 +370,49 @@
             />
           </div>
         </div>
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            本地缓存
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="clearCache('bookSourceList')"
+            >
+              清空书源缓存
+              <span>{{ localCacheStats.bookSourceList }}</span>
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="clearCache('rssSources')"
+            >
+              清空RSS源缓存
+              <span>{{ localCacheStats.rssSources }}</span>
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="clearCache('chapterList')"
+            >
+              清空章节列表缓存
+              <span>{{ localCacheStats.chapterList }}</span>
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="clearCache('chapterContent')"
+            >
+              清空章节内容缓存
+              <span>{{ localCacheStats.chapterContent }}</span>
+            </el-tag>
+          </div>
+        </div>
       </div>
       <div class="bottom-icons">
         <a href="https://github.com/hectorqin/reader" target="_blank">
@@ -1321,7 +1364,14 @@ export default {
 
       showRssArticleContentDialog: false,
       rssArticleInfo: {},
-      concurrentList: [12, 18, 24, 30, 36, 42, 48, 54, 60]
+      concurrentList: [12, 18, 24, 30, 36, 42, 48, 54, 60],
+
+      localCacheStats: {
+        bookSourceList: "0 Bytes",
+        rssSources: "0 Bytes",
+        chapterList: "0 Bytes",
+        chapterContent: "0 Bytes"
+      }
     };
   },
   watch: {
@@ -1382,6 +1432,7 @@ export default {
   },
   activated() {
     document.title = "阅读";
+    this.scanLocalStorage();
   },
   methods: {
     init(refresh) {
@@ -3158,45 +3209,60 @@ export default {
           });
       }
     },
-    analyseLocalStorage() {
-      try {
-        let totalBytes = 0;
-        let cacheBytes = 0;
-        for (const key in window.localStorage) {
-          if (Object.hasOwnProperty.call(window.localStorage, key)) {
-            const data = window.localStorage[key];
-            totalBytes += data.getBytesLength();
-            if (key.startsWith("localCache@")) {
-              cacheBytes += data.getBytesLength();
-            }
-          }
-        }
-        return {
-          totalBytes: formatSize(totalBytes),
-          cacheBytes: formatSize(cacheBytes)
-        };
-      } catch (e) {
-        //
-      }
+    scanLocalStorage() {
+      this.localCacheStats = {
+        bookSourceList: this.analyseLocalStorage("bookSourceList").totalBytes,
+        rssSources: this.analyseLocalStorage("rssSources").totalBytes,
+        chapterList: this.analyseLocalStorage("chapterList").totalBytes,
+        chapterContent: this.analyseLocalStorage("chapterContent").totalBytes
+      };
     },
-    clearCache() {
+    analyseLocalStorage(match) {
+      let totalBytes = 0;
+      let cacheBytes = 0;
       try {
-        let cacheBytes = 0;
         for (const key in window.localStorage) {
-          if (Object.hasOwnProperty.call(window.localStorage, key)) {
-            const data = window.localStorage[key];
-            if (key.startsWith("localCache@")) {
-              cacheBytes += data.getBytesLength();
-              window.localStorage.removeItem(key);
+          if (!match || key.indexOf(match) >= 0) {
+            if (Object.hasOwnProperty.call(window.localStorage, key)) {
+              const data = window.localStorage[key];
+              totalBytes += data.getBytesLength();
+              if (key.startsWith("localCache@")) {
+                cacheBytes += data.getBytesLength();
+              }
             }
           }
         }
-        return {
-          cacheBytes: formatSize(cacheBytes)
-        };
       } catch (e) {
         //
       }
+      return {
+        totalBytes: formatSize(totalBytes),
+        cacheBytes: formatSize(cacheBytes)
+      };
+    },
+    clearCache(match) {
+      let cacheBytes = 0;
+      try {
+        for (const key in window.localStorage) {
+          if (!match || key.indexOf(match) >= 0) {
+            if (Object.hasOwnProperty.call(window.localStorage, key)) {
+              const data = window.localStorage[key];
+              if (key.startsWith("localCache@")) {
+                cacheBytes += data.getBytesLength();
+                window.localStorage.removeItem(key);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        //
+      }
+
+      this.scanLocalStorage();
+
+      return {
+        cacheBytes: formatSize(cacheBytes)
+      };
     },
     scrollHandler() {
       this.lastScrollTop = this.$refs.bookList.scrollTop;

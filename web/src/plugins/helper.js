@@ -1,3 +1,5 @@
+import { Message } from "element-ui";
+
 export const formatSize = function(value, scale) {
   if (value == null || value == "") {
     return "0 Bytes";
@@ -99,8 +101,14 @@ export const networkFirstRequest = async function(
     res.data &&
     res.data.isSuccess
   ) {
-    window.localStorage &&
-      window.localStorage.setItem(cacheKey, JSON.stringify(res.data));
+    try {
+      window.localStorage &&
+        window.localStorage.setItem(cacheKey, JSON.stringify(res.data));
+    } catch (error) {
+      setTimeout(() => {
+        Message.error("本地空间已满，请去书架页面清空缓存");
+      }, 1000);
+    }
   }
   return res;
 };
@@ -140,8 +148,14 @@ export const cacheFirstRequest = async function(
     res.data &&
     res.data.isSuccess
   ) {
-    window.localStorage &&
-      window.localStorage.setItem(cacheKey, JSON.stringify(res.data));
+    try {
+      window.localStorage &&
+        window.localStorage.setItem(cacheKey, JSON.stringify(res.data));
+    } catch (error) {
+      setTimeout(() => {
+        Message.error("本地空间已满，请去书架页面清空缓存");
+      }, 1000);
+    }
   }
   return res;
 };
