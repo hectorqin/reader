@@ -105,9 +105,13 @@ export const networkFirstRequest = async function(
       window.localStorage &&
         window.localStorage.setItem(cacheKey, JSON.stringify(res.data));
     } catch (error) {
-      setTimeout(() => {
-        Message.error("本地空间已满，请去书架页面清空缓存");
-      }, 1000);
+      Math.random() > 0.7 &&
+        setTimeout(() => {
+          Message.error({
+            message: "本地空间已满，请去书架页面清空缓存",
+            duration: 500
+          });
+        }, 1000);
     }
   }
   return res;
@@ -152,9 +156,13 @@ export const cacheFirstRequest = async function(
       window.localStorage &&
         window.localStorage.setItem(cacheKey, JSON.stringify(res.data));
     } catch (error) {
-      setTimeout(() => {
-        Message.error("本地空间已满，请去书架页面清空缓存");
-      }, 1000);
+      Math.random() > 0.7 &&
+        setTimeout(() => {
+          Message.error({
+            message: "本地空间已满，请去书架页面清空缓存",
+            duration: 500
+          });
+        }, 1000);
     }
   }
   return res;

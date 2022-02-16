@@ -373,6 +373,7 @@
         <div class="setting-wrapper">
           <div class="setting-title">
             本地缓存
+            <span class="cache-stats-total">{{ localCacheStats.total }}</span>
           </div>
           <div class="setting-item">
             <el-tag
@@ -1367,6 +1368,7 @@ export default {
       concurrentList: [12, 18, 24, 30, 36, 42, 48, 54, 60],
 
       localCacheStats: {
+        total: "0 Bytes",
         bookSourceList: "0 Bytes",
         rssSources: "0 Bytes",
         chapterList: "0 Bytes",
@@ -3211,6 +3213,7 @@ export default {
     },
     scanLocalStorage() {
       this.localCacheStats = {
+        total: this.analyseLocalStorage().totalBytes,
         bookSourceList: this.analyseLocalStorage("bookSourceList").totalBytes,
         rssSources: this.analyseLocalStorage("rssSources").totalBytes,
         chapterList: this.analyseLocalStorage("chapterList").totalBytes,
@@ -3602,6 +3605,13 @@ export default {
         font-size: 14px;
         color: #b1b1b1;
         font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
+
+        .cache-stats-total {
+          float: right;
+          display: inline-block;
+          height: 20px;
+          line-height: 20px;
+        }
       }
 
       .no-point {
