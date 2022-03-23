@@ -8,6 +8,7 @@ import me.ag2s.umdlib.umd.UmdReader
 import java.io.File
 import java.io.InputStream
 import java.util.*
+import java.nio.file.Paths
 
 class UmdFile(var book: Book) {
     companion object {
@@ -44,7 +45,10 @@ class UmdFile(var book: Book) {
 
 
         @Synchronized
-        fun upBookInfo(book: Book) {
+        fun upBookInfo(book: Book, onlyCover: Boolean = false) {
+            if (onlyCover) {
+                return getUFile(book).updateCover()
+            }
             return getUFile(book).upBookInfo()
         }
     }
@@ -94,6 +98,24 @@ class UmdFile(var book: Book) {
             book.name = hd.title
             book.author = hd.author
             book.kind = hd.bookType
+
+            updateCover()
+        }
+    }
+
+    private fun updateCover() {
+        if (umdBook == null) {
+            uFile = null
+            return
+        }
+        val coverFile = "${MD5Utils.md5Encode16(book.bookUrl)}.jpg"
+        val relativeCoverUrl = Paths.get("assets", "covers", coverFile).toString()
+        if (book.coverUrl.isNullOrEmpty()) {
+            book.coverUrl = File.separator + relativeCoverUrl
+        }
+        val coverUrl = Paths.get(book.workRoot(), "storage", relativeCoverUrl).toString()
+        if (!File(coverUrl).exists()) {
+            FileUtils.writeBytes(coverUrl, umdBook!!.cover.coverData)
         }
     }
 

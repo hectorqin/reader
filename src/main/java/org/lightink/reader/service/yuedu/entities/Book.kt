@@ -64,6 +64,10 @@ data class Book(
         return originName.endsWith(".epub", true)
     }
 
+    fun isCbz(): Boolean {
+        return originName.endsWith(".cbz", true)
+    }
+
     fun isUmd(): Boolean {
         return originName.endsWith(".umd", true)
     }
@@ -203,6 +207,22 @@ data class Book(
         return defaultPath
     }
 
+    fun updateFromLocal(onlyCover: Boolean = false) {
+        try {
+            if (isEpub()) {
+                EpubFile.upBookInfo(this, onlyCover)
+            } else if (isUmd()) {
+                UmdFile.upBookInfo(this, onlyCover)
+            }
+        } catch(e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun workRoot(): String {
+        return rootDir
+    }
+
     companion object {
         const val hTag = 2L
         const val rubyTag = 4L
@@ -218,11 +238,7 @@ data class Book(
                 it.canUpdate = false
             }
             book.setRootDir(rootDir)
-            if (book.isEpub()) {
-                EpubFile.upBookInfo(book)
-            } else if (book.isUmd()) {
-                UmdFile.upBookInfo(book)
-            }
+            book.updateFromLocal()
             return book
         }
     }

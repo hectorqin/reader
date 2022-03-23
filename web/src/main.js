@@ -44,7 +44,9 @@ Vue.mixin({
         }
         return this.api + "/cover?path=" + url;
       }
-      return false;
+      if (!url) return false;
+      // 默认是接口服务器上的资源
+      return this.$store.getters.apiRoot + url;
     },
     getCover(coverUrl, normal, useSW) {
       coverUrl = this.getImagePath(coverUrl, useSW);

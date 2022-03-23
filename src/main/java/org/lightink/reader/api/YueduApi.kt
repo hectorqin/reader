@@ -231,6 +231,7 @@ class YueduApi : RestVerticle() {
 
         // 导入本地文件
         router.post("/reader3/importBookPreview").coroutineHandler { importBookPreview(it) }
+        router.post("/reader3/refreshLocalBook").coroutineHandler { refreshLocalBook(it) }
 
         // 书籍分组
         router.get("/reader3/getBookGroups").coroutineHandler { getBookGroups(it) }
@@ -440,10 +441,12 @@ class YueduApi : RestVerticle() {
         }
         var passwordEncrypted = genEncryptedPassword(password, userInfo.salt)
         if (passwordEncrypted != userInfo.password) {
+            logger.info("user: {} password error", userInfo.username)
             return false
         }
 
         if (!userInfo.enable_webdav) {
+            logger.info("user: {} enable_webdav: false", userInfo.username)
             return false
         }
 
@@ -1554,6 +1557,40 @@ class YueduApi : RestVerticle() {
         return returnData.setData(fileList)
     }
 
+    private suspend fun refreshLocalBook(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var bookUrl: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            bookUrl = context.bodyAsJson.getString("bookUrl")
+        } else {
+            // get 请求
+            bookUrl = context.queryParam("bookUrl").firstOrNull() ?: ""
+            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
+        }
+        if (bookUrl.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入书籍链接")
+        }
+        // 根据书籍url获取书本信息
+        var userNameSpace = getUserNameSpace(context)
+        var bookInfo = getShelfBookByURL(bookUrl, userNameSpace)
+        if (bookInfo == null) {
+            return returnData.setErrorMsg("书籍信息错误")
+        }
+        bookInfo.updateFromLocal(true)
+
+        editShelfBook(bookInfo, userNameSpace) { existBook ->
+            existBook.coverUrl = bookInfo.coverUrl
+            logger.info("refreshLocalBook: {}", existBook)
+            existBook
+        }
+
+        return returnData.setData(bookInfo)
+    }
+
     private suspend fun getChapterList(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
@@ -1723,7 +1760,19 @@ class YueduApi : RestVerticle() {
             }
             content = bookContent
         } else {
-            content = WebBook(bookSource ?: "", false).getBookContent(chapterUrl)
+            try {
+                content = WebBook(bookSource ?: "", false).getBookContent(chapterUrl)
+            } catch(e: Exception) {
+                if (!bookSource.isNullOrEmpty()) {
+                    var bookSourceObject = asJsonObject(bookSource)?.mapTo(BookSource::class.java)
+                    if (bookSourceObject != null) {
+                        // 标记为失败源
+                        invalidBookSourceList.add(mutableMapOf<String, Any>("sourceUrl" to bookSourceObject.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString()))
+                        saveInvalidBookSourceList()
+                    }
+                }
+                throw e
+            }
         }
 
         return returnData.setData(content)
@@ -2426,16 +2475,17 @@ class YueduApi : RestVerticle() {
                 if (!tempFile.copyRecursively(localFile)) {
                     return returnData.setErrorMsg("导入本地书籍失败")
                 }
+                tempFile.deleteRecursively()
+                // 修改书籍信息
+                book.bookUrl = relativeLocalFilePath
+                book.originName = relativeLocalFilePath
+
                 if (book.isEpub()) {
                     // 解压文件 index.epub
                     if (!extractEpub(book)) {
                         return returnData.setErrorMsg("导入本地Epub书籍失败")
                     }
                 }
-                tempFile.deleteRecursively()
-                // 修改书籍信息
-                book.bookUrl = relativeLocalFilePath
-                book.originName = relativeLocalFilePath
             }
         } else if (book.tocUrl.isNullOrEmpty()) {
             // 补全书籍信息
@@ -3047,7 +3097,19 @@ class YueduApi : RestVerticle() {
                     it.setRootDir(getWorkDir())
                 })
             } else {
-                newChapterList = WebBook(bookSource, debugLog).getChapterList(book)
+                try {
+                    newChapterList = WebBook(bookSource, debugLog).getChapterList(book)
+                } catch(e: Exception) {
+                    if (!bookSource.isNullOrEmpty()) {
+                        var bookSourceObject = asJsonObject(bookSource)?.mapTo(BookSource::class.java)
+                        if (bookSourceObject != null) {
+                            // 标记为失败源
+                            invalidBookSourceList.add(mutableMapOf<String, Any>("sourceUrl" to bookSourceObject.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString()))
+                            saveInvalidBookSourceList()
+                        }
+                    }
+                    throw e
+                }
             }
             saveUserStorage(userNameSpace, getRelativePath(book.name + "_" + book.author, md5Encode), newChapterList)
             saveShelfBookLatestChapter(book, newChapterList, userNameSpace)

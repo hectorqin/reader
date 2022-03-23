@@ -12,6 +12,7 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.nio.charset.Charset
+import java.nio.file.Paths
 import java.util.*
 import java.util.zip.ZipFile
 
@@ -51,7 +52,10 @@ class EpubFile(var book: Book) {
         }
 
         @Synchronized
-        fun upBookInfo(book: Book) {
+        fun upBookInfo(book: Book, onlyCover: Boolean = false) {
+            if (onlyCover) {
+                return getEFile(book).updateCover()
+            }
             return getEFile(book).upBookInfo()
         }
     }
@@ -180,7 +184,31 @@ class EpubFile(var book: Book) {
             if (metadata.descriptions.size > 0) {
                 book.intro = Jsoup.parse(metadata.descriptions[0]).text()
             }
+
+            updateCover()
         }
+    }
+
+    fun updateCover() {
+        val coverFile = "${MD5Utils.md5Encode16(book.bookUrl)}.jpg"
+        val relativeCoverUrl = Paths.get("assets", "covers", coverFile).toString()
+        if (book.coverUrl.isNullOrEmpty()) {
+            book.coverUrl = File.separator + relativeCoverUrl
+        }
+        val coverUrl = Paths.get(book.workRoot(), "storage", relativeCoverUrl).toString()
+        if (!File(coverUrl).exists()) {
+            FileUtils.writeBytes(coverUrl, epubBook!!.coverImage.data)
+        }
+        // 保存 cover
+        // val cover = epubBook!!.coverImage?.href
+        // if (cover != null) {
+        //     val epubRootDir = book.getEpubRootDir()
+        //     if (epubRootDir.isEmpty()) {
+        //         book.coverUrl = book.bookUrl.replace("storage/data/", "/epub/") + "/index/" + cover
+        //     } else {
+        //         book.coverUrl = book.bookUrl.replace("storage/data/", "/epub/") + "/index/" + epubRootDir + "/" + cover
+        //     }
+        // }
     }
 
     fun getChapterListBySpine(): ArrayList<BookChapter> {

@@ -961,7 +961,7 @@
     <el-dialog
       :title="'导入本地书籍' + importMultiBookTip"
       :visible.sync="showImportBookDialog"
-      :width="dialogWidth"
+      :width="dialogSmallWidth"
       :top="dialogTop"
       @closed="importBookDialogClosed"
       :fullscreen="collapseMenu"
@@ -969,10 +969,27 @@
     >
       <div class="source-container table-container">
         <div class="check-form">
-          <span>书名：</span>
-          <el-input v-model="importBookInfo.name" size="small"> </el-input>
-          <span style="min-width: 68px;">作者：</span>
-          <el-input v-model="importBookInfo.author" size="small"> </el-input>
+          <div class="book-cover">
+            <el-image
+              class="cover"
+              :src="getCover(importBookInfo.coverUrl, true)"
+              :key="importBookInfo.coverUrl"
+              fit="cover"
+              lazy
+            >
+            </el-image>
+          </div>
+          <div class="book-info">
+            <div>
+              <span>书名：</span>
+              <el-input v-model="importBookInfo.name" size="small"> </el-input>
+            </div>
+            <div>
+              <span>作者：</span>
+              <el-input v-model="importBookInfo.author" size="small">
+              </el-input>
+            </div>
+          </div>
         </div>
         <div class="chapter-title">
           章节列表({{ importBookChapters.length }})
@@ -982,7 +999,7 @@
           :style="{ maxHeight: dialogContentHeight - 40 - 35 + 'px' }"
         >
           <p v-for="(chapter, index) in importBookChapters" :key="index">
-            {{ chapter.title }}
+            {{ index + 1 }}. {{ chapter.title }}
           </p>
         </div>
       </div>
@@ -1119,6 +1136,13 @@
           </div>
           <div class="book-prop book-origin">
             来源： {{ displayOriginName(showBookInfo.origin) }}
+            <el-button
+              type="text"
+              class="book-prop-btn"
+              v-if="showBookInfo.origin === 'loc_book'"
+              @click="refreshLocalBook()"
+              >更新</el-button
+            >
           </div>
           <div class="book-prop book-latest">
             最新： {{ showBookInfo.latestChapterTitle }}
@@ -2899,6 +2923,22 @@ export default {
         }
       );
     },
+    refreshLocalBook() {
+      Axios.post(this.api + "/refreshLocalBook", {
+        bookUrl: this.showBookInfo.bookUrl
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("更新成功");
+            this.showBookInfo = res.data.data;
+            this.$store.commit("updateShelfBook", res.data.data);
+          }
+        },
+        error => {
+          this.$message.error("更新失败" + (error && error.toString()));
+        }
+      );
+    },
     loadRssSources(refresh) {
       return cacheFirstRequest(
         () =>
@@ -3972,21 +4012,40 @@ export default {
     flex-direction: row;
     overflow-x: auto;
     align-items: center;
-    justify-content: space-between;
 
-    span {
-      display: inline-block;
-      min-width: 56px;
-      text-align-last: justify;
+    .book-cover {
+      width: 84px;
+      height: 112px;
+
+      .cover {
+        width: 84px;
+        height: 112px;
+      }
     }
-    .el-input {
-      width: auto;
-      min-width: 100px;
-      margin-right: 10px;
-    }
-    .el-input-number {
-      min-width: 130px;
-      margin-right: 10px;
+
+    .book-info {
+      display: flex;
+      flex-direction: column;
+      margin-left: 30px;
+
+      div {
+        padding: 5px;
+      }
+
+      span {
+        display: inline-block;
+        min-width: 56px;
+        text-align-last: justify;
+      }
+      .el-input {
+        width: auto;
+        min-width: 100px;
+        margin-right: 10px;
+      }
+      .el-input-number {
+        min-width: 130px;
+        margin-right: 10px;
+      }
     }
   }
 
@@ -3994,6 +4053,7 @@ export default {
     font-size: 15px;
     padding: 5px 0;
     font-weight: 600;
+    margin-top: 10px;
   }
 
   .chapter-list {
