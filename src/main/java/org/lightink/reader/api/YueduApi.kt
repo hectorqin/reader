@@ -2003,19 +2003,22 @@ class YueduApi : RestVerticle() {
         val bookUrl: String
         var lastIndex: Int
         var searchSize: Int
+        var bookSourceGroup: String
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
             bookUrl = context.bodyAsJson.getString("url")
             lastIndex = context.bodyAsJson.getInteger("lastIndex", -1)
             searchSize = context.bodyAsJson.getInteger("searchSize", 5)
+            bookSourceGroup = context.bodyAsJson.getString("bookSourceGroup", "")
         } else {
             // get 请求
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
             lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
             searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 5
+            bookSourceGroup = context.queryParam("bookSourceGroup").firstOrNull() ?: ""
         }
         var userNameSpace = getUserNameSpace(context)
-        var userBookSourceList = loadBookSourceStringList(userNameSpace)
+        var userBookSourceList = loadBookSourceStringList(userNameSpace, bookSourceGroup)
         if (userBookSourceList.size <= 0) {
             return returnData.setErrorMsg("未配置书源")
         }

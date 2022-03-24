@@ -113,7 +113,7 @@
               <el-option
                 v-for="(item, index) in concurrentList"
                 :key="'source-' + index"
-                :label="item"
+                :label="item + '并发线程'"
                 :value="item"
               >
               </el-option>
@@ -660,6 +660,9 @@
       <div class="custom-dialog-title" slot="title">
         <span class="el-dialog__title"
           >{{ isShowFailureBookSource ? "失效书源管理" : "书源管理" }}
+          <span class="float-right span-btn" @click="exportBookSource()"
+            >导出</span
+          >
           <span class="float-right span-btn" @click="editBookSource(false)"
             >新增</span
           >
@@ -1923,6 +1926,19 @@ export default {
         }
       );
     },
+    currentDateTime() {
+      const now = new Date();
+      const pad = a => (a < 10 ? "0" + a : a);
+      return (
+        now.getFullYear() +
+        pad(now.getMonth() + 1) +
+        pad(now.getDate()) +
+        "_" +
+        pad(now.getHours()) +
+        pad(now.getMinutes()) +
+        pad(now.getSeconds())
+      );
+    },
     dateFormat(t) {
       let time = new Date().getTime();
       let int = parseInt((time - t) / 1000);
@@ -3075,6 +3091,25 @@ export default {
           this.$store.commit("setPreviewImgList", imgUrlList);
         }
       }
+    },
+    exportBookSource() {
+      Axios.get(this.api + "/getSources").then(
+        res => {
+          if (res.data.isSuccess) {
+            const aEle = document.createElement("a");
+            const blob = new Blob([
+              JSON.stringify(res.data.data || [], null, 4)
+            ]);
+
+            aEle.download = "reader书源-" + this.currentDateTime() + ".json";
+            aEle.href = URL.createObjectURL(blob);
+            aEle.click();
+          }
+        },
+        error => {
+          this.$message.error("导出书源失败 " + (error && error.toString()));
+        }
+      );
     },
     editBookSource(bookSource) {
       const editHandler = data => {

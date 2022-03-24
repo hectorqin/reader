@@ -454,6 +454,31 @@ export default new Vuex.Store({
         return y - x;
       });
     },
+    bookSourceGroupList: state => {
+      const groupsMap = {};
+      state.bookSourceList.forEach(v => {
+        if (v.bookSourceGroup) {
+          groupsMap[v.bookSourceGroup] = (groupsMap[v.bookSourceGroup] | 0) + 1;
+        }
+      });
+      const groups = [
+        {
+          name: "全部分组",
+          value: "",
+          count: state.bookSourceList.length
+        }
+      ];
+      for (const i in groupsMap) {
+        if (Object.hasOwnProperty.call(groupsMap, i)) {
+          groups.push({
+            name: i,
+            value: i,
+            count: groupsMap[i]
+          });
+        }
+      }
+      return groups;
+    },
     builtInBookGroupMap: () => {
       return builtInBookGroup.reduce((c, v) => {
         c[v.groupId] = v.groupName;
