@@ -72,7 +72,7 @@ function customWorkboxPlugin(generateCacheKey, checkResponse) {
           event,
           state
         });
-        return cacheKey;
+        return cacheKey || request;
       } else {
         return request;
       }
@@ -186,8 +186,12 @@ module.exports = {
               maxEntries: 1000
             },
             plugins: [
-              customWorkboxPlugin(({ request }) => {
+              customWorkboxPlugin(({ request, mode }) => {
                 const searchParams = new URL(request.url).searchParams;
+                if (mode === "read" && searchParams.get("refresh")) {
+                  // 刷新时不读取缓存
+                  return false;
+                }
                 return (
                   searchParams.get("url") +
                   "@chapterContent-" +

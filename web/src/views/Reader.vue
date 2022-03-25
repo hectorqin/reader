@@ -129,6 +129,13 @@
     </div>
     <div class="read-bar" :style="rightBarTheme">
       <div
+        class="refresh-item"
+        :style="popupAbsoluteBtnStyle"
+        @click="refreshContent"
+      >
+        <i class="el-icon-refresh-right"></i>
+      </div>
+      <div
         class="headset-item"
         :style="popupAbsoluteBtnStyle"
         @click="showReadBar = !showReadBar"
@@ -158,6 +165,9 @@
         <span class="progress-tip">{{ formatProgressTip() }}</span>
       </div>
       <div class="cache-content-zone" v-if="showCacheContentZone">
+        <div>
+          缓存章节
+        </div>
         <div
           class="cache-content-btn"
           v-show="!isCachingContent"
@@ -957,7 +967,7 @@ export default {
     refreshCatalog() {
       return this.loadCatalog(true);
     },
-    async getBookContent(chapterIndex, options) {
+    async getBookContent(chapterIndex, options, refresh) {
       return cacheFirstRequest(
         () =>
           Axios.get(
@@ -965,7 +975,8 @@ export default {
               "/getBookContent?url=" +
               encodeURIComponent(this.$store.state.readingBook.bookUrl) +
               "&index=" +
-              chapterIndex,
+              chapterIndex +
+              (refresh ? "&refresh=1" : ""),
             {
               timeout: 30000,
               ...options
@@ -977,17 +988,21 @@ export default {
           "@" +
           this.$store.state.readingBook.bookUrl +
           "@chapterContent-" +
-          chapterIndex
+          chapterIndex,
+        refresh
       );
     },
-    getContent(index) {
+    refreshContent() {
+      this.getContent(this.$store.state.readingBook.index, true);
+    },
+    getContent(index, refresh) {
       //展示进度条
       this.show = false;
       if (!this.loading || !this.loading.visible) {
         this.loading = this.$loading({
           target: this.$refs.content,
           lock: true,
-          text: "正在获取内容",
+          text: refresh ? "正在刷新内容" : "正在获取内容",
           spinner: "el-icon-loading",
           background: "rgba(0,0,0,0)"
         });
@@ -1022,7 +1037,7 @@ export default {
       let chapterName = this.$store.state.readingBook.catalog[index].title;
       let chapterIndex = this.$store.state.readingBook.catalog[index].index;
       this.title = chapterName;
-      this.getBookContent(chapterIndex).then(
+      this.getBookContent(chapterIndex, {}, refresh).then(
         res => {
           if (
             bookUrl !== this.$store.state.readingBook.bookUrl ||
@@ -2209,7 +2224,34 @@ export default {
       justify-content: space-between;
       align-items: center;
       font-size: 14px;
-      position: relative;
+      position: absolute;
+      right: 55px;
+      width: 300px;
+      background: inherit;
+
+      .cache-content-btn {
+        cursor: pointer;
+      }
+    }
+
+    .refresh-item {
+      line-height: 32px;
+      width: 36px;
+      height: 36px;
+      border-radius: 100%;
+      display: block;
+      cursor: pointer;
+      text-align: center;
+      vertical-align: middle;
+      pointer-events: all;
+      position: absolute;
+      top: -180px;
+      left: 4px;
+      right: auto;
+
+      .el-icon-refresh-right {
+        line-height: 34px;
+      }
     }
 
     .headset-item {
@@ -2523,6 +2565,10 @@ export default {
     }
   }
 
+  >>>.refresh-item {
+    color: #121212;
+  }
+
   >>>.headset-item {
     color: #121212;
   }
@@ -2569,6 +2615,10 @@ export default {
   }
 
   >>>.reader-bar-inner {
+    color: #666;
+  }
+
+  >>>.refresh-item {
     color: #666;
   }
 
@@ -2627,6 +2677,18 @@ export default {
     right: 0;
     width: 100vw;
     margin-right: 0 !important;
+
+    .cache-content-zone {
+      position: relative;
+      width: auto;
+      right: 0;
+      background: inherit;
+    }
+
+    .refresh-item {
+      left: auto;
+      right: 20px;
+    }
 
     .headset-item {
       left: auto;
