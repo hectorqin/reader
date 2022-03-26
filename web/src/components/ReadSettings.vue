@@ -213,6 +213,18 @@
             >
           </div>
         </li>
+        <li class="font-size">
+          <span class="setting-item-title">动画时长</span>
+          <div class="resize">
+            <span class="less" @click="lessAnimateMSTime"
+              ><i class="el-icon-minus"></i></span
+            ><b></b> <span class="lang">{{ animateMSTime }}</span
+            ><b></b>
+            <span class="more" @click="moreAnimateMSTime"
+              ><i class="el-icon-plus"></i
+            ></span>
+          </div>
+        </li>
         <li class="read-width">
           <span class="setting-item-title">全屏点击</span>
           <div class="selection-zone">
@@ -376,6 +388,9 @@ export default {
     },
     readWidth() {
       return this.$store.state.config.readWidth;
+    },
+    animateMSTime() {
+      return this.$store.state.config.animateMSTime;
     }
   },
   watch: {
@@ -468,6 +483,24 @@ export default {
       let config = this.config;
       config.fontWeight = config.fontWeight || settings.config.fontWeight;
       if (config.fontWeight > 100) config.fontWeight -= 100;
+      this.$store.commit("setConfig", config);
+    },
+    moreAnimateMSTime() {
+      let config = this.config;
+      config.animateMSTime =
+        typeof config.animateMSTime !== "undefined"
+          ? config.animateMSTime
+          : settings.config.animateMSTime;
+      if (config.animateMSTime < 500) config.animateMSTime += 50;
+      this.$store.commit("setConfig", config);
+    },
+    lessAnimateMSTime() {
+      let config = this.config;
+      config.animateMSTime =
+        typeof config.animateMSTime !== "undefined"
+          ? config.animateMSTime
+          : settings.config.animateMSTime;
+      if (config.animateMSTime >= 50) config.animateMSTime -= 50;
       this.$store.commit("setConfig", config);
     },
     moreLineHeight() {

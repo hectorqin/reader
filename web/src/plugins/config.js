@@ -35,6 +35,7 @@ const settings = {
     themeType: "day",
     readMethod: "上下滑动",
     clickMethod: "自动",
+    animateMSTime: 300, // 翻页动画时长
     readWidth: 800,
     lineHeight: 1.8, // 行高
     paragraphSpace: 0.2, // 段间距

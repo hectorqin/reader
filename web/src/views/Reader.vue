@@ -578,6 +578,9 @@ export default {
     theme() {
       return this.config.theme;
     },
+    animateMSTime() {
+      return this.config.animateMSTime;
+    },
     isNight() {
       return this.$store.getters.isNight;
     },
@@ -1176,7 +1179,7 @@ export default {
             typeof moveX === "undefined"
               ? -(this.windowSize.width - 16)
               : moveX,
-            300
+            this.animateMSTime
           );
         } else {
           this.toNextChapter(() => {
@@ -1195,7 +1198,7 @@ export default {
           this.currentPage += 1;
           const moveY = this.windowSize.height - this.scrollOffset;
           this.transforming = true;
-          this.scrollContent(moveY, 300);
+          this.scrollContent(moveY, this.animateMSTime);
         } else {
           this.currentPage = 1;
           this.toNextChapter();
@@ -1219,7 +1222,7 @@ export default {
           this.transforming = true;
           this.transform(
             typeof moveX === "undefined" ? this.windowSize.width - 16 : moveX,
-            300
+            this.animateMSTime
           );
         } else {
           this.showLastPage = true;
@@ -1237,7 +1240,7 @@ export default {
           this.currentPage -= 1;
           const moveY = -this.windowSize.height + this.scrollOffset;
           this.transforming = true;
-          this.scrollContent(moveY, 300);
+          this.scrollContent(moveY, this.animateMSTime);
         } else {
           this.currentPage = 1;
           this.toLastChapter();
@@ -1253,14 +1256,17 @@ export default {
         const moveX =
           -(this.windowSize.width - 16) * (this.currentPage - 1) -
           this.transformX;
-        this.transform(moveX, typeof duration === "undefined" ? 300 : duration);
+        this.transform(
+          moveX,
+          typeof duration === "undefined" ? this.animateMSTime : duration
+        );
       } else {
         const moveY =
           (this.windowSize.height - 10) * (this.currentPage - 1) -
           (document.documentElement.scrollTop || document.body.scrollTop);
         this.scrollContent(
           moveY,
-          typeof duration === "undefined" ? 300 : duration
+          typeof duration === "undefined" ? this.animateMSTime : duration
         );
       }
     },

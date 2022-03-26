@@ -267,19 +267,19 @@ class YueduApi : RestVerticle() {
             val rawMethod = it.request().rawMethod()
             if (!checkAuthorization(it)) {
                 if (
-                    rawMethod == "PROPFIND" ||
-                    rawMethod == "MKCOL" ||
-                    rawMethod == "PUT" ||
-                    rawMethod == "GET" ||
-                    rawMethod == "DELETE" ||
-                    rawMethod == "MOVE" ||
-                    rawMethod == "COPY" ||
-                    rawMethod == "LOCK" ||
-                    rawMethod == "UNLOCK"
+                    rawMethod.equals("PROPFIND") ||
+                    rawMethod.equals("MKCOL") ||
+                    rawMethod.equals("PUT") ||
+                    rawMethod.equals("GET") ||
+                    rawMethod.equals("DELETE") ||
+                    rawMethod.equals("MOVE") ||
+                    rawMethod.equals("COPY") ||
+                    rawMethod.equals("LOCK") ||
+                    rawMethod.equals("UNLOCK")
                 ) {
                     it.response().setStatusCode(401).end()
                     return@handler
-                } else if(rawMethod == "OPTIONS") {
+                } else if(rawMethod.equals("OPTIONS")) {
                     var authorization = it.request().getHeader("Authorization")
                     if (authorization != null) {
                         it.response().setStatusCode(401).end()
@@ -3186,7 +3186,7 @@ class YueduApi : RestVerticle() {
         var userBookSourceList = bookSourceList ?: loadBookSourceStringList(userNameSpace)
         for (i in 0 until userBookSourceList.size) {
             val sourceMap = userBookSourceList.get(i).toMap()
-            if (sourceUrl == (sourceMap.get("bookSourceUrl") as String)) {
+            if (sourceUrl.equals(sourceMap.get("bookSourceUrl") as String)) {
                 bookSourceString = userBookSourceList.get(i)
                 index = i
                 break;
