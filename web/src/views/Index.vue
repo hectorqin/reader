@@ -670,10 +670,12 @@
       </div>
       <div class="source-container table-container">
         <div class="check-form" v-if="isShowFailureBookSource">
-          <span>搜索词：</span>
+          <span class="check-form-label">搜索词：</span>
           <el-input v-model="checkBookSourceConfig.keyword" size="small">
           </el-input>
-          <span style="min-width: 68px;">超时(ms)：</span>
+          <span class="check-form-label" style="min-width: 68px;">
+            超时(ms)：
+          </span>
           <el-input-number
             v-model="checkBookSourceConfig.timeout"
             :min="1000"
@@ -682,7 +684,7 @@
             size="small"
           >
           </el-input-number>
-          <span>并发数：</span>
+          <span class="check-form-label">并发数：</span>
           <el-input-number
             v-model="checkBookSourceConfig.concurrent"
             :min="3"
@@ -4047,6 +4049,21 @@ export default {
     flex-direction: row;
     overflow-x: auto;
     align-items: center;
+
+    .check-form-label {
+      min-width: 60px;
+    }
+
+    .el-input {
+      width: auto;
+      min-width: 100px;
+      margin-right: 10px;
+    }
+
+    .el-input-number {
+      min-width: 130px;
+      margin-right: 10px;
+    }
 
     .book-cover {
       width: 84px;
