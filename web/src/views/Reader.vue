@@ -444,6 +444,7 @@ export default {
     this.$Lazyload.$on("loaded", this.lazyloadHandler);
   },
   deactivated() {
+    this.saveBookProgress();
     this.startSavePosition = false;
     this.lastReadingBook = this.$store.state.readingBook;
     this.timer && clearInterval(this.timer);
@@ -970,7 +971,7 @@ export default {
     refreshCatalog() {
       return this.loadCatalog(true);
     },
-    async getBookContent(chapterIndex, options, refresh) {
+    async getBookContent(chapterIndex, options, refresh, cache) {
       return cacheFirstRequest(
         () =>
           Axios.get(
@@ -979,7 +980,8 @@ export default {
               encodeURIComponent(this.$store.state.readingBook.bookUrl) +
               "&index=" +
               chapterIndex +
-              (refresh ? "&refresh=1" : ""),
+              (refresh ? "&refresh=1" : "") +
+              (cache ? "&cache=1" : ""),
             {
               timeout: 30000,
               ...options
@@ -1040,6 +1042,7 @@ export default {
       let chapterName = this.$store.state.readingBook.catalog[index].title;
       let chapterIndex = this.$store.state.readingBook.catalog[index].index;
       this.title = chapterName;
+      const now = new Date().getTime();
       this.getBookContent(chapterIndex, {}, refresh).then(
         res => {
           if (
@@ -1048,6 +1051,10 @@ export default {
           ) {
             // 已经换书或者换章节了
             return;
+          }
+          if (now + 100 > new Date().getTime()) {
+            // 不超过 100ms 假定为获取缓存，此时发送进度保存请求
+            this.saveBookProgress();
           }
           if (res.data.isSuccess) {
             let data = res.data.data;
@@ -1083,6 +1090,18 @@ export default {
           throw error;
         }
       );
+    },
+    saveBookProgress() {
+      return Axios.post(
+        this.api + "/saveBookProgress",
+        {
+          url: this.$store.state.readingBook.bookUrl,
+          index: this.chapterIndex
+        },
+        {
+          silent: true
+        }
+      ).catch(() => {});
     },
     toTop() {
       if (this.$store.state.miniInterface) {
@@ -2120,10 +2139,15 @@ export default {
       });
       cacheChapterList.forEach(v => {
         this.cachingHandler(() => {
-          return this.getBookContent(v.index, {
-            timeout: 30000,
-            silent: true
-          });
+          return this.getBookContent(
+            v.index,
+            {
+              timeout: 30000,
+              silent: true
+            },
+            false,
+            true
+          );
         });
       });
     },

@@ -131,6 +131,9 @@ class YueduApi : RestVerticle() {
         router.get("/reader3/getBookContent").coroutineHandler { getBookContent(it) }
         router.post("/reader3/getBookContent").coroutineHandler { getBookContent(it) }
 
+        // 保存阅读进度
+        router.post("/reader3/saveBookProgress").coroutineHandler { saveBookProgress(it) }
+
         // 封面
         router.get("/reader3/cover").coroutineHandlerWithoutRes { getBookCover(it) }
 
@@ -1680,6 +1683,49 @@ class YueduApi : RestVerticle() {
         return returnData.setData(chapterList)
     }
 
+    private suspend fun saveBookProgress(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var bookUrl: String
+        var chapterIndex: Int
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("searchBook").getString("bookUrl") ?: ""
+            chapterIndex = context.bodyAsJson.getInteger("index", -1)
+        } else {
+            // get 请求
+            bookUrl = context.queryParam("url").firstOrNull() ?: ""
+            chapterIndex = context.queryParam("index").firstOrNull()?.toInt() ?: -1
+            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
+        }
+        if (bookUrl.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入书籍链接")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        // 看看有没有加入书架
+        var bookInfo = getShelfBookByURL(bookUrl, userNameSpace)
+        if (bookInfo == null || bookInfo.origin.isNullOrEmpty()) {
+            return returnData.setErrorMsg("书籍未加入书架")
+        }
+        var bookSource = getBookSourceStringBySourceURL(bookInfo.origin, userNameSpace)
+
+        if (!bookInfo.isLocalBook() && bookSource.isNullOrEmpty()) {
+            return returnData.setErrorMsg("未配置书源")
+        }
+        var chapterList = getLocalChapterList(bookInfo, bookSource ?: "", false, userNameSpace)
+        if (chapterIndex >= chapterList.size) {
+            return returnData.setErrorMsg("章节不存在")
+        }
+        var chapterInfo = chapterList.get(chapterIndex)
+        // 书架书籍保存阅读进度
+        saveShelfBookProgress(bookInfo, chapterInfo, userNameSpace)
+        // 保存到 webdav
+        saveBookProgressToWebdav(bookInfo, chapterInfo, userNameSpace)
+        return returnData.setData("")
+    }
+
     private suspend fun getBookContent(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
@@ -1688,11 +1734,13 @@ class YueduApi : RestVerticle() {
         var chapterUrl: String
         var bookUrl: String
         var chapterIndex: Int
+        var cache: Int
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
             chapterUrl = context.bodyAsJson.getString("chapterUrl") ?: context.bodyAsJson.getJsonObject("bookChapter").getString("url") ?: ""
             bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("searchBook").getString("bookUrl") ?: ""
             chapterIndex = context.bodyAsJson.getInteger("index", -1)
+            cache = context.bodyAsJson.getInteger("cache", 0)
         } else {
             // get 请求
             chapterUrl = context.queryParam("chapterUrl").firstOrNull() ?: ""
@@ -1700,6 +1748,7 @@ class YueduApi : RestVerticle() {
             chapterIndex = context.queryParam("index").firstOrNull()?.toInt() ?: -1
             bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
             chapterUrl = URLDecoder.decode(chapterUrl, "UTF-8")
+            cache = context.queryParam("cache").firstOrNull()?.toInt() ?: 0
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
@@ -1735,7 +1784,7 @@ class YueduApi : RestVerticle() {
                 if (chapterIndex <= chapterList.size) {
                     chapterInfo = chapterList.get(chapterIndex)
                     // 书架书籍保存阅读进度
-                    if (isInBookShelf) {
+                    if (isInBookShelf && cache != 1) {
                         saveShelfBookProgress(bookInfo, chapterInfo, userNameSpace)
                         // 保存到 webdav
                         saveBookProgressToWebdav(bookInfo, chapterInfo, userNameSpace)
