@@ -7,5 +7,6 @@ data class User(
         var token: String="",
         var last_login_at: Long = System.currentTimeMillis(),
         var created_at: Long = System.currentTimeMillis(),
-        var enable_webdav: Boolean = false
+        var enable_webdav: Boolean = false,
+        var token_map: Map<String, Long>? = null
 )

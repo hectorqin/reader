@@ -73,6 +73,7 @@ private val logger = KotlinLogging.logger {}
 class YueduApi : RestVerticle() {
     var bookInfoCache = mutableMapOf<String, Map<String, Any>>()
     var invalidBookSourceList = arrayListOf<Map<String, Any>>()
+    var loginExpireDays = 7
 
     @Autowired
     private lateinit var webClient: WebClient
@@ -821,6 +822,19 @@ class YueduApi : RestVerticle() {
         user.last_login_at = System.currentTimeMillis()
         if (regenerateToken) {
             user.token = genEncryptedPassword(user.username, System.currentTimeMillis().toString())
+            var tokenMap: MutableMap<String, Long>? = null
+            var expire = System.currentTimeMillis() + loginExpireDays * 86400 * 1000
+            if (user.token_map != null) {
+                tokenMap = user.token_map as? MutableMap<String, Long>
+            }
+            if (tokenMap == null) {
+                tokenMap = mutableMapOf(user.token to expire)
+            } else {
+                tokenMap.put(user.token, expire)
+            }
+            // 删除已过期token
+            tokenMap.values.removeAll { it < user.last_login_at }
+            user.token_map = tokenMap
         }
         userMap.put(user.username, user.toMap())
         saveStorage("data", "users", value = userMap)
@@ -1232,12 +1246,34 @@ class YueduApi : RestVerticle() {
                 var _username = tmp[0]
                 var token = tmp[1]
                 var existedUser: User? = userMap.getOrDefault(_username, null)?.toDataClass()
-                if (existedUser != null && existedUser.token.isNotEmpty() && token.isNotEmpty() && existedUser.token.equals(token)) {
-                    // 保存用户session
-                    saveUserSession(context, userMap, existedUser, false)
-                    context.put("username", existedUser.username)
-                    context.put("userInfo", existedUser)
-                    return true
+                if (existedUser != null && token.isNotEmpty()) {
+                    var isLogin = false
+                    if (existedUser.token.isNotEmpty() && existedUser.token.equals(token)) {
+                        isLogin = true
+                    }
+                    // 查找历史有效会话
+                    if (!isLogin && existedUser.token_map != null) {
+                        var tokenMap = existedUser.token_map as? MutableMap<String, Long>
+                        if (tokenMap != null &&
+                            tokenMap.containsKey(token)) {
+                            if (tokenMap.getOrDefault(token, 0L) > System.currentTimeMillis()) {
+                                isLogin = true
+                                // 延长有效期
+                                tokenMap.put(token, System.currentTimeMillis() + loginExpireDays * 86400 * 1000)
+                            } else {
+                                // 删除过期token
+                                tokenMap.remove(token)
+                            }
+                            existedUser.token_map = tokenMap
+                        }
+                    }
+                    if (isLogin) {
+                        // 保存用户session
+                        saveUserSession(context, userMap, existedUser, false)
+                        context.put("username", existedUser.username)
+                        context.put("userInfo", existedUser)
+                    }
+                    return isLogin
                 }
             }
         }

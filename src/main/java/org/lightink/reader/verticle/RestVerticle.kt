@@ -43,6 +43,7 @@ abstract class RestVerticle : CoroutineVerticle() {
                 if (cookie != null) {
                     // 每次访问都延长cookie有效期
                     cookie.setMaxAge(2L * 86400 * 1000)
+                    cookie.setPath("/")
                 }
             }
             it.next()
