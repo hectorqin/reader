@@ -35,11 +35,11 @@ object BookContent {
         content.append(contentData.content)
         if (contentData.nextUrl.size == 1) {
             var nextUrl = contentData.nextUrl[0]
+            // 主要是用于终止下一页的解析
             val nextChapterUrl = if (!nextChapterUrlF.isNullOrEmpty())
                 nextChapterUrlF
             else
-                //todo
-                throw RuntimeException("我在java上没有App.db啊啊啊")
+                null
             while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
                 if (!nextChapterUrl.isNullOrEmpty()
                         && NetworkUtils.getAbsoluteURL(baseUrl, nextUrl)

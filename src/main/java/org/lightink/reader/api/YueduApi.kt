@@ -1760,6 +1760,7 @@ class YueduApi : RestVerticle() {
         var isInBookShelf = false
         var bookInfo: Book? = null
         var chapterInfo: BookChapter? = null
+        var nextChapterUrl: String? = null
         if (!bookUrl.isNullOrEmpty()) {
             // 看看有没有加入书架
             bookInfo = getShelfBookByURL(bookUrl, userNameSpace)
@@ -1783,7 +1784,7 @@ class YueduApi : RestVerticle() {
                 }
                 bookInfo = bookInfo ?: mergeBookCacheInfo(WebBook(bookSource ?: "").getBookInfo(bookUrl))
                 var chapterList = getLocalChapterList(bookInfo, bookSource ?: "", false, userNameSpace)
-                if (chapterIndex <= chapterList.size) {
+                if (chapterIndex < chapterList.size) {
                     chapterInfo = chapterList.get(chapterIndex)
                     // 书架书籍保存阅读进度
                     if (isInBookShelf && cache != 1) {
@@ -1792,6 +1793,10 @@ class YueduApi : RestVerticle() {
                         saveBookProgressToWebdav(bookInfo, chapterInfo, userNameSpace)
                     }
                     chapterUrl = chapterInfo.url
+                    if (chapterIndex + 1 < chapterList.size) {
+                        var nextChapterInfo = chapterList.get(chapterIndex + 1)
+                        nextChapterUrl = nextChapterInfo.url
+                    }
                 }
             }
         }
@@ -1848,7 +1853,7 @@ class YueduApi : RestVerticle() {
             content = bookContent
         } else {
             try {
-                content = WebBook(bookSource ?: "", false).getBookContent(chapterUrl)
+                content = WebBook(bookSource ?: "", false).getBookContent(chapterUrl, nextChapterUrl)
             } catch(e: Exception) {
                 if (!bookSource.isNullOrEmpty()) {
                     var bookSourceObject = asJsonObject(bookSource)?.mapTo(BookSource::class.java)
