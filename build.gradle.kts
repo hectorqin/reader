@@ -14,7 +14,7 @@ buildscript {
     }
     dependencies {
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
-        classpath("io.github.fvarrui:javapackager:1.6.1-SNAPSHOT")
+        classpath("io.github.fvarrui:javapackager:1.6.5")
     }
 }
 plugins {

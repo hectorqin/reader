@@ -2,7 +2,16 @@
 
 oldJAVAHome=$JAVA_HOME
 
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home
+if [ -d /Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home ]; then
+    export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home
+fi
+
+javaVersion=$(java -version 2>&1 | sed -n ';s/.* version "\(.*\)\.\(.*\)\..*".*/\1\2/p;')
+
+if [[ "$javaVersion" -lt "110" ]]; then
+    echo "Java version must not lower than 11.0"
+    exit 1
+fi
 
 task=$1
 
