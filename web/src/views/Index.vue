@@ -618,12 +618,9 @@
             :label="index"
             :key="index"
             class="source-checkbox"
-            >{{
-              isImportRssSource ? source.sourceName : source.bookSourceName
-            }}
-            {{
-              isImportRssSource ? source.sourceUrl : source.bookSourceUrl
-            }}</el-checkbox
+            >{{ isImportRssSource ? source.sourceName : source.bookSourceName }}
+            {{ isImportRssSource ? source.sourceUrl : source.bookSourceUrl }}
+            {{ getSourceTag(source) }}</el-checkbox
           >
         </el-checkbox-group>
       </div>
@@ -2102,9 +2099,26 @@ export default {
       );
     },
     handleCheckAllChange(val) {
+      let hasFilterd = false;
       this.checkedSourceIndex = val
-        ? this.importSourceList.map((v, i) => i)
+        ? this.importSourceList
+            .map((v, i) => {
+              // 不勾选使用了 js，webview的书源
+              const source = JSON.stringify(v);
+              if (
+                source.indexOf("@js:") !== -1 ||
+                source.indexOf("webView:") !== -1
+              ) {
+                hasFilterd = true;
+                return false;
+              }
+              return i;
+            })
+            .filter(v => v)
         : [];
+      if (val && hasFilterd) {
+        this.$message.info("部分使用了Javascript和Webview的书源未勾选");
+      }
       this.isIndeterminate = false;
     },
     handleCheckedSourcesChange(value) {
@@ -2112,6 +2126,19 @@ export default {
       this.checkAll = checkedCount === this.importSourceList.length;
       this.isIndeterminate =
         checkedCount > 0 && checkedCount < this.importSourceList.length;
+    },
+    getSourceTag(source) {
+      const sourceStr = JSON.stringify(source);
+      const tags = [];
+      if (sourceStr.indexOf("@js:") !== -1) {
+        tags.push("@Javascript");
+      }
+
+      if (sourceStr.indexOf("webView:") !== -1) {
+        tags.push("@WebView");
+      }
+
+      return "   " + tags.join("  ");
     },
     saveSourceList() {
       if (!this.$store.state.connected) {
