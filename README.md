@@ -291,7 +291,7 @@ java -jar reader-$version.jar --reader.app.secure=true --reader.app.secureKey=�
 
 # 使用环境变量覆盖服务配置，环境变量采用大写字母，不允许使用.-符号，采用下划线“_”取代点“.”  减号“-”直接删除
 
-# docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 reader:latest
+# docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 reader:latest
 
 # 跨平台镜像
 
@@ -307,13 +307,13 @@ java -jar reader-$version.jar --reader.app.secure=true --reader.app.secureKey=�
 # 使用预编译的镜像
 
 # 自用版
-docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader
+docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 hectorqin/reader
 
 # 多用户版
-docker run -d --restart=always --name=reader -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader java -jar /app/bin/reader.jar --spring.profiles.active=prod --reader.app.secure=true --reader.app.secureKey=管理密码 --reader.app.inviteCode=注册邀请码
+docker run -d --restart=always --name=reader -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 hectorqin/reader java -jar /app/bin/reader.jar --spring.profiles.active=prod --reader.app.secure=true --reader.app.secureKey=管理密码 --reader.app.inviteCode=注册邀请码
 
 # 多用户版 使用环境变量
-docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -e "READER_APP_SECURE=true" -e "READER_APP_SECUREKEY=管理密码" -e "READER_APP_INVITECODE=注册邀请码" -v $(PWD)/logs:/logs -v $(PWD)/storage:/storage -p 8080:8080 hectorqin/reader
+docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -e "READER_APP_SECURE=true" -e "READER_APP_SECUREKEY=管理密码" -e "READER_APP_INVITECODE=注册邀请码" -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 hectorqin/reader
 
 # 更新docker镜像
 # docker pull hectorqin/reader
