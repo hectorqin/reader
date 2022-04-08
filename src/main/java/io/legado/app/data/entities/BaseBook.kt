@@ -4,6 +4,9 @@ import io.legado.app.model.analyzeRule.RuleDataInterface
 import io.legado.app.utils.splitNotBlank
 
 interface BaseBook : RuleDataInterface {
+    var name: String
+    var author: String
+    var bookUrl: String
     var kind: String?
     var wordCount: String?
 

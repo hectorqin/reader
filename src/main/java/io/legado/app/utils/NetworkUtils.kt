@@ -17,17 +17,17 @@ object NetworkUtils {
 
     private val notNeedEncoding: BitSet by lazy {
         val bitSet = BitSet(256)
-        for (i in 'a'.toInt()..'z'.toInt()) {
+        for (i in 'a'.code..'z'.code) {
             bitSet.set(i)
         }
-        for (i in 'A'.toInt()..'Z'.toInt()) {
+        for (i in 'A'.code..'Z'.code) {
             bitSet.set(i)
         }
-        for (i in '0'.toInt()..'9'.toInt()) {
+        for (i in '0'.code..'9'.code) {
             bitSet.set(i)
         }
         for (char in "+-_.$:()!*@&#,[]") {
-            bitSet.set(char.toInt())
+            bitSet.set(char.code)
         }
         return@lazy bitSet
     }
@@ -43,7 +43,7 @@ object NetworkUtils {
         var i = 0
         while (i < str.length) {
             val c = str[i]
-            if (notNeedEncoding.get(c.toInt())) {
+            if (notNeedEncoding.get(c.code)) {
                 i++
                 continue
             }
@@ -74,7 +74,7 @@ object NetworkUtils {
     /**
      * 获取绝对地址
      */
-    fun getAbsoluteURL(baseURL: String?, relativePath: String?): String? {
+    fun getAbsoluteURL(baseURL: String?, relativePath: String): String {
         if (baseURL.isNullOrEmpty()) return relativePath
         if (relativePath.isNullOrEmpty()) return baseURL
         var relativeUrl = relativePath

@@ -1,10 +1,13 @@
 package io.legado.app.data.entities
 
 import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonArray
+import io.legado.app.utils.fromJsonObject
+import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
+import io.legado.app.help.http.CookieStore
 import io.legado.app.constant.AppConst
 import javax.script.SimpleBindings
+
 data class RssSource(
     var sourceUrl: String = "",
     var sourceName: String = "",
@@ -52,6 +55,36 @@ data class RssSource(
     }
 
     override fun hashCode() = sourceUrl.hashCode()
+
+    @Throws(Exception::class)
+    fun getHeaderMap() = HashMap<String, String>().apply {
+        this[AppConst.UA_NAME] = AppConst.userAgent
+        header?.let {
+            GSON.fromJsonObject<Map<String, String>>(
+                when {
+                    it.startsWith("@js:", true) ->
+                        evalJS(it.substring(4)).toString()
+                    it.startsWith("<js>", true) ->
+                        evalJS(it.substring(4, it.lastIndexOf("<"))).toString()
+                    else -> it
+                }
+            )?.let { map ->
+                putAll(map)
+            }
+        }
+    }
+
+    /**
+     * 执行JS
+     */
+    @Throws(Exception::class)
+    private fun evalJS(jsStr: String): Any? {
+        val bindings = SimpleBindings()
+        bindings["java"] = this
+        bindings["cookie"] = CookieStore
+        bindings["cache"] = CacheManager
+        return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
+    }
 
     fun equal(source: RssSource): Boolean {
         return equal(sourceUrl, source.sourceUrl)

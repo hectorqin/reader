@@ -5,8 +5,6 @@ import io.legado.app.data.entities.Book
 import io.legado.app.utils.FileUtils
 import java.io.File
 
-//import io.legado.app.utils.getPrefInt
-//import io.legado.app.utils.getPrefString
 //import org.apache.commons.text.similarity.JaccardSimilarity
 
 object BookHelp {

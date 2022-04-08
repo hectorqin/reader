@@ -20,12 +20,12 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 @JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "origins", "kindList")
 data class SearchBook(
 //    @PrimaryKey
-    var bookUrl: String = "",
+    override var bookUrl: String = "",
     var origin: String = "",                     // 书源规则
     var originName: String = "",
     var type: Int = 0,                          // @BookType
-    var name: String = "",
-    var author: String = "",
+    override var name: String = "",
+    override var author: String = "",
     override var kind: String? = null,
     var coverUrl: String? = null,
     var intro: String? = null,

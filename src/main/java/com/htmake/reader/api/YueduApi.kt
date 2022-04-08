@@ -1806,7 +1806,7 @@ class YueduApi : RestVerticle() {
         if (!bookInfo.isLocalBook() && bookSource.isNullOrEmpty()) {
             return returnData.setErrorMsg("未配置书源")
         }
-        if (chapterUrl.isNullOrEmpty()) {
+        if (chapterInfo == null || chapterUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("获取章节链接失败")
         }
 
@@ -1853,7 +1853,7 @@ class YueduApi : RestVerticle() {
             content = bookContent
         } else {
             try {
-                content = WebBook(bookSource ?: "", false).getBookContent(chapterUrl, nextChapterUrl)
+                content = WebBook(bookSource ?: "", false).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
             } catch(e: Exception) {
                 if (!bookSource.isNullOrEmpty()) {
                     var bookSourceObject = asJsonObject(bookSource)?.mapTo(BookSource::class.java)

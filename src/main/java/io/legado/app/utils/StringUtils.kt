@@ -107,7 +107,7 @@ object StringUtils {
     }
 
     fun toFirstCapital(str: String): String {
-        return str.substring(0, 1).toUpperCase() + str.substring(1)
+        return str.substring(0, 1).uppercase() + str.substring(1)
     }
 
     /**
@@ -116,7 +116,7 @@ object StringUtils {
     fun halfToFull(input: String): String {
         val c = input.toCharArray()
         for (i in c.indices) {
-            if (c[i].toInt() == 32)
+            if (c[i].code == 32)
             //半角空格
             {
                 c[i] = 12288.toChar()
@@ -126,9 +126,9 @@ object StringUtils {
             //if (c[i] == 46) //半角点号，不转换
             // continue;
 
-            if (c[i].toInt() in 33..126)
+            if (c[i].code in 33..126)
             //其他符号都转换为全角
-                c[i] = (c[i].toInt() + 65248).toChar()
+                c[i] = (c[i].code + 65248).toChar()
         }
         return String(c)
     }
@@ -137,15 +137,15 @@ object StringUtils {
     fun fullToHalf(input: String): String {
         val c = input.toCharArray()
         for (i in c.indices) {
-            if (c[i].toInt() == 12288)
+            if (c[i].code == 12288)
             //全角空格
             {
                 c[i] = 32.toChar()
                 continue
             }
 
-            if (c[i].toInt() in 65281..65374)
-                c[i] = (c[i].toInt() - 65248).toChar()
+            if (c[i].code in 65281..65374)
+                c[i] = (c[i].code - 65248).toChar()
         }
         return String(c)
     }
@@ -223,16 +223,34 @@ object StringUtils {
         return isNum.matches()
     }
 
+    fun wordCountFormat(wc: String?): String {
+        if (wc == null) return ""
+        var wordsS = ""
+        if (isNumeric(wc)) {
+            val words: Int = wc.toInt()
+            if (words > 0) {
+                wordsS = words.toString() + "字"
+                if (words > 10000) {
+                    val df = DecimalFormat("#.#")
+                    wordsS = df.format(words * 1.0f / 10000f.toDouble()) + "万字"
+                }
+            }
+        } else {
+            wordsS = wc
+        }
+        return wordsS
+    }
+
     // 移除字符串首尾空字符的高效方法(利用ASCII值判断,包括全角空格)
    fun trim(s: String): String {
        if (s.isNullOrEmpty()) return ""
        var start = 0
        val len = s.length
        var end = len - 1
-       while (start < end && (s[start].toInt() <= 0x20 || s[start] == '　')) {
+       while (start < end && (s[start].code <= 0x20 || s[start] == '　')) {
            ++start
        }
-       while (start < end && (s[end].toInt() <= 0x20 || s[end] == '　')) {
+       while (start < end && (s[end].code <= 0x20 || s[end] == '　')) {
            --end
        }
        if (end < len) ++end
@@ -266,5 +284,32 @@ object StringUtils {
                 .replace("\\s*\\n+\\s*".toRegex(), "\n　　")// 移除空行,并增加段前缩进2个汉字
                 .replace("^[\\n\\s]+".toRegex(), "　　")//移除开头空行,并增加段前缩进2个汉字
                 .replace("[\\n\\s]+$".toRegex(), "") //移除尾部空行
+    }
+
+    fun byteToHexString(bytes: ByteArray?): String {
+        if (bytes == null) return ""
+        val sb = StringBuilder(bytes.size * 2)
+        for (b in bytes) {
+            val hex = 0xff and b.toInt()
+            if (hex < 16) {
+                sb.append('0')
+            }
+            sb.append(Integer.toHexString(hex))
+        }
+        return sb.toString()
+    }
+
+    fun hexStringToByte(hexString: String): ByteArray {
+        val hexStr = hexString.replace(" ", "")
+        val len = hexStr.length
+        val bytes = ByteArray(len / 2)
+        var i = 0
+        while (i < len) {
+            // 两位一组，表示一个字节,把这样表示的16进制字符串，还原成一个字节
+            bytes[i / 2] = ((Character.digit(hexString[i], 16) shl 4) +
+                    Character.digit(hexString[i + 1], 16)).toByte()
+            i += 2
+        }
+        return bytes
     }
 }

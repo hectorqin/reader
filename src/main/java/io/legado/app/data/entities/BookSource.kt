@@ -64,8 +64,7 @@ data class BookSource(
     @Throws(Exception::class)
     fun getHeaderMap(): Map<String, String> {
         val headerMap = HashMap<String, String>()
-//        headerMap[AppConst.UA_NAME] = App.INSTANCE.getPrefString("user_agent") ?: userAgent
-        //todo UA
+        // TODO UA
         headerMap[AppConst.UA_NAME] = userAgent
         header?.let {
             val header1 = when {

@@ -45,3 +45,24 @@ fun String.startWithIgnoreCase(start: String): Boolean {
     return if (this.isBlank()) false else startsWith(start, true)
 }
 
+fun String.cnCompare(other: String): Int {
+    // return java.text.Collator.getInstance(Locale.CHINA).compare(this, other)
+    return this.compareTo(other)
+}
+
+/**
+ * 将字符串拆分为单个字符,包含emoji
+ */
+fun String.toStringArray(): Array<String> {
+    var codePointIndex = 0
+    return try {
+        Array(codePointCount(0, length)) {
+            val start = codePointIndex
+            codePointIndex = offsetByCodePoints(start, 1)
+            substring(start, codePointIndex)
+        }
+    } catch (e: Exception) {
+        split("").toTypedArray()
+    }
+}
+

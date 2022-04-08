@@ -21,7 +21,7 @@ object DefaultData {
 
     // val rssSources by lazy {
     //     val json = String(
-    //         appCtx.assets.open("defaultData${File.separator}rssSources.json")
+    //         File("defaultData${File.separator}rssSources.json")
     //             .readBytes()
     //     )
     //     GSON.fromJsonArray<RssSource>(json)!!

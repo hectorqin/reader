@@ -3,7 +3,7 @@ name: Publish Docker Multi-Platform Images
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - 'v**'
 
 jobs:
   docker:
@@ -42,7 +42,7 @@ jobs:
           # generate Docker tags based on the following events/attributes
           tags: |
             type=semver,pattern={{version}}
-            latest
+            type=raw,value=latest,enable=${{ !contains(version, 'beta') }}
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v1

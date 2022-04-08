@@ -99,7 +99,7 @@ object Debug : DebugLog{
             nextChapterUrl: String?
     ) {
         log(webBook.sourceUrl, "︾开始解析正文页")
-        runCatching { webBook.getBookContent(bookChapter.url, nextChapterUrl) }
+        runCatching { webBook.getBookContent(book, bookChapter, nextChapterUrl) }
                 .onSuccess {
                     log(webBook.sourceUrl, "︽正文页解析完成")
                 }

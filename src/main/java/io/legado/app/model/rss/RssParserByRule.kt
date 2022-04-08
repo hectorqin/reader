@@ -4,11 +4,13 @@ import io.legado.app.data.entities.RssArticle
 import io.legado.app.data.entities.RssSource
 import io.legado.app.model.DebugLog
 import io.legado.app.model.analyzeRule.AnalyzeRule
+import io.legado.app.model.analyzeRule.RuleDataInterface
+import io.legado.app.utils.GSON
 
 object RssParserByRule {
 
    @Throws(Exception::class)
-   fun parseXML(body: String?, rssSource: RssSource, debugLog: DebugLog? = null): MutableList<RssArticle> {
+   fun parseXML(body: String?, rssSource: RssSource, ruleData: RuleDataInterface, debugLog: DebugLog? = null): MutableList<RssArticle> {
        val sourceUrl = rssSource.sourceUrl
        if (body.isNullOrBlank()) {
            throw Exception("error_get_web_content")
@@ -20,7 +22,7 @@ object RssParserByRule {
            return RssParser.parseXML(body, sourceUrl)
        } else {
            val articleList = mutableListOf<RssArticle>()
-           val analyzeRule = AnalyzeRule()
+           val analyzeRule = AnalyzeRule(ruleData)
            analyzeRule.setContent(body, rssSource.sourceUrl)
            var reverse = true
            if (ruleArticles.startsWith("-")) {
@@ -84,6 +86,7 @@ object RssParserByRule {
        debugLog?.log(sourceUrl, "┌获取文章链接")
        rssArticle.link = analyzeRule.getString(ruleLink)
        debugLog?.log(sourceUrl, "└${rssArticle.link}")
+       rssArticle.variable = GSON.toJson(analyzeRule.ruleData.variableMap)
        if (rssArticle.title.isBlank()) {
            return null
        }

@@ -33,20 +33,23 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
         key: String,
         page: Int? = 1
     ): List<SearchBook> {
+        val variableBook = SearchBook()
         return bookSource.searchUrl?.let { searchUrl ->
             val analyzeUrl = AnalyzeUrl(
                 ruleUrl = searchUrl,
                 key = key,
                 page = page,
                 baseUrl = sourceUrl,
-                headerMapF = bookSource.getHeaderMap()
+                headerMapF = bookSource.getHeaderMap(),
+                book = variableBook
             )
-            val res = analyzeUrl.getResponseAwait()
+            val res = analyzeUrl.getStrResponse(bookSource.bookSourceUrl)
             BookList.analyzeBookList(
                 res.body,
                 bookSource,
                 analyzeUrl,
                 res.url,
+                variableBook,
                 true,
                 debugLog = if(debugLog) Debug else null
             ).map {
@@ -65,18 +68,20 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
         url: String,
         page: Int? = 1
     ): List<SearchBook> {
+        val variableBook = SearchBook()
         val analyzeUrl = AnalyzeUrl(
             ruleUrl = url,
             page = page,
             baseUrl = sourceUrl,
             headerMapF = bookSource.getHeaderMap()
         )
-        val res = analyzeUrl.getResponseAwait()
+        val res = analyzeUrl.getStrResponse(bookSource.bookSourceUrl)
         return BookList.analyzeBookList(
             res.body,
             bookSource,
             analyzeUrl,
             res.url,
+            variableBook,
             false,
             debugLog = if(debugLog) Debug else null
         )
@@ -85,7 +90,27 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
     /**
      * 书籍信息
      */
-    suspend fun getBookInfo(bookUrl: String): Book {
+    suspend fun getBookInfo(book: Book, canReName: Boolean = true): Book {
+        book.type = bookSource.bookSourceType
+        if (!book.infoHtml.isNullOrEmpty()) {
+            BookInfo.analyzeBookInfo(
+                book,
+                book.infoHtml,
+                bookSource,
+                book.bookUrl,
+                book.bookUrl,
+                canReName
+            )
+            return book
+        } else {
+            return getBookInfo(book.bookUrl, canReName)
+        }
+    }
+
+    /**
+     * 书籍信息
+     */
+    suspend fun getBookInfo(bookUrl: String, canReName: Boolean = true): Book {
         val book = Book()
         book.bookUrl = bookUrl
         book.origin = bookSource.bookSourceUrl
@@ -93,14 +118,14 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
         book.originOrder = bookSource.customOrder
         book.type = bookSource.bookSourceType
         val analyzeUrl = AnalyzeUrl(
-            ruleData = book,
+            book = book,
             ruleUrl = book.bookUrl,
             baseUrl = sourceUrl,
             headerMapF = bookSource.getHeaderMap()
         )
-        val body = analyzeUrl.getResponseAwait().body
+        val res = analyzeUrl.getStrResponse(bookSource.bookSourceUrl)
 
-        BookInfo.analyzeBookInfo(book, body, bookSource, book.bookUrl, debugLog = if(debugLog) Debug else null)
+        BookInfo.analyzeBookInfo(book, res.body, bookSource, book.bookUrl, res.url, canReName, debugLog = if(debugLog) Debug else null)
         book.tocHtml = null
         return book
     }
@@ -111,57 +136,61 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
     suspend fun getChapterList(
         book: Book
     ): List<BookChapter> {
-        val body = if (book.bookUrl == book.tocUrl && !book.tocHtml.isNullOrEmpty()) {
-            book.tocHtml
+        book.type = bookSource.bookSourceType
+        return if (book.bookUrl == book.tocUrl && !book.tocHtml.isNullOrEmpty()) {
+            BookChapterList.analyzeChapterList(
+                book,
+                book.tocHtml,
+                bookSource,
+                book.tocUrl,
+                book.tocUrl
+            )
         } else {
-            AnalyzeUrl(
-                ruleData = book,
+            val res = AnalyzeUrl(
+                book = book,
                 ruleUrl = book.tocUrl,
-//                baseUrl = book.bookUrl,
+                baseUrl = book.bookUrl,
                 headerMapF = bookSource.getHeaderMap()
-            ).getResponseAwait().body
+            ).getStrResponse(bookSource.bookSourceUrl)
+            return BookChapterList.analyzeChapterList(book, res.body, bookSource, book.tocUrl, res.url, debugLog = if(debugLog) Debug else null)
         }
-        return BookChapterList.analyzeChapterList(book, body, bookSource, book.tocUrl, debugLog = if(debugLog) Debug else null)
     }
 
     /**
      * 章节内容
      */
     suspend fun getBookContent(
-//        book: Book?,
-//        bookChapter: BookChapter,
-        bookChapterUrl:String,
+       book: Book,
+       bookChapter: BookChapter,
+        // bookChapterUrl:String,
         nextChapterUrl: String? = null
     ): String {
        if (bookSource.getContentRule().content.isNullOrEmpty()) {
-           return bookChapterUrl
+            if(debugLog) Debug.log(sourceUrl, "⇒正文规则为空,使用章节链接: ${bookChapter.url}")
+            return bookChapter.url
        }
 //        val body = if (book != null && bookChapter.url == book.bookUrl && !book.tocHtml.isNullOrEmpty()) {
 //            book.tocHtml
 //        } else {
-        val book = Book()
-        val bookChapter = BookChapter()
-        bookChapter.url = bookChapterUrl
-        val analyzeUrl =
-            AnalyzeUrl(
-                ruleData = book,
-                ruleUrl = bookChapter.url,
-//                    baseUrl = book?.tocUrl,
-                headerMapF = bookSource.getHeaderMap()
-            )
-        val body = analyzeUrl.getResponseAwait(
+        logger.info("bookChapterUrl: {}", bookChapter.url, bookChapter.getAbsoluteURL())
+        val res = AnalyzeUrl(
+            ruleUrl = bookChapter.getAbsoluteURL(),
+            baseUrl = book.tocUrl,
+            headerMapF = bookSource.getHeaderMap(),
+            book = book,
+            chapter = bookChapter
+        ).getStrResponse(
             bookSource.bookSourceUrl,
             jsStr = bookSource.getContentRule().webJs,
             sourceRegex = bookSource.getContentRule().sourceRegex
-        ).body
-//        }
+        )
         return BookContent.analyzeContent(
-//                this,
-            body,
+            res.body,
             book,
             bookChapter,
             bookSource,
             bookChapter.url,
+            res.url,
             nextChapterUrl,
             debugLog = if(debugLog) Debug else null
         )
