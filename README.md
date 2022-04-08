@@ -2,8 +2,6 @@
 
 阅读3网页版(带接口服务，不需要手机)。
 
-接口从 [lightink-server](https://github.com/lightink-qingmo/lightink-server) 修改而来，网页从 [阅读3.0Web端](https://github.com/celetor/web-yuedu3) 修改而来。
-
 在线体验 👉 [https://reader.htmake.com](https://reader.htmake.com)
 
 TG群 👉 [https://t.me/reader3](https://t.me/reader3)
@@ -509,7 +507,7 @@ lastIndex 是上次搜索结果中返回的字段，默认为 0，可以传入 `
 
 ## 感谢
 
-- [lightink-小说API](https://github.com/lightink-qingmo/lightink-server)
+- 项目初期参考了 [lightink-小说API](https://github.com/lightink-qingmo/lightink-server)
 - [阅读](https://github.com/gedoor/MyBookshelf)
 - [阅读3.0](https://github.com/gedoor/legado)
-- [阅读3.0Web端](https://github.com/celetor/web-yuedu3)
+- 项目初期参考了 [阅读3.0Web端](https://github.com/celetor/web-yuedu3)

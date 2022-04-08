@@ -28,7 +28,7 @@
 
     <logger name="io.netty" level="warn"/>
     <!--    <logger name="io.vertx" level="TRACE"/>-->
-    <logger name="org.lightink.reader" level="debug"/>
+    <logger name="com.htmake.reader" level="debug"/>
 
     <springProfile name="default">
         <root level="INFO">

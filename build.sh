@@ -60,24 +60,24 @@ case $task in
         if [[ -z "$port" ]]; then
             port=8080
         fi
-        mv src/main/java/org/lightink/reader/ReaderUIApplication.kt src/main/java/org/lightink/reader/ReaderUIApplication.kt.back
+        mv src/main/java/com/htmake/reader/ReaderUIApplication.kt src/main/java/com/htmake/reader/ReaderUIApplication.kt.back
         getVersion ./cli.gradle
         ./gradlew -b cli.gradle assemble --info
         if test $? -eq 0; then
-            mv src/main/java/org/lightink/reader/ReaderUIApplication.kt.back src/main/java/org/lightink/reader/ReaderUIApplication.kt
+            mv src/main/java/com/htmake/reader/ReaderUIApplication.kt.back src/main/java/com/htmake/reader/ReaderUIApplication.kt
             java -jar build/libs/reader-$version.jar --reader.server.port=$port
         else
-            mv src/main/java/org/lightink/reader/ReaderUIApplication.kt.back src/main/java/org/lightink/reader/ReaderUIApplication.kt
+            mv src/main/java/com/htmake/reader/ReaderUIApplication.kt.back src/main/java/com/htmake/reader/ReaderUIApplication.kt
         fi
     ;;
     cli)
         # 服务端打包命令
         shift
         export JAVA_HOME=$oldJAVAHome
-        mv src/main/java/org/lightink/reader/ReaderUIApplication.kt src/main/java/org/lightink/reader/ReaderUIApplication.kt.back
+        mv src/main/java/com/htmake/reader/ReaderUIApplication.kt src/main/java/com/htmake/reader/ReaderUIApplication.kt.back
         getVersion ./cli.gradle
         ./gradlew -b cli.gradle $@
-        mv src/main/java/org/lightink/reader/ReaderUIApplication.kt.back src/main/java/org/lightink/reader/ReaderUIApplication.kt
+        mv src/main/java/com/htmake/reader/ReaderUIApplication.kt.back src/main/java/com/htmake/reader/ReaderUIApplication.kt
     ;;
     yarn)
         # yarn 快捷命令，默认 install

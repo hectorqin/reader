@@ -30,7 +30,7 @@ jobs:
       -
         name: Build Java
         run:
-          mv ./web/dist ./src/main/resources/web && rm src/main/java/org/lightink/reader/ReaderUIApplication.kt && gradle -b cli.gradle assemble --info && mv ./build/libs/*.jar ./reader.jar
+          mv ./web/dist ./src/main/resources/web && rm src/main/java/com/htmake/reader/ReaderUIApplication.kt && gradle -b cli.gradle assemble --info && mv ./build/libs/*.jar ./reader.jar
       -
         name: Docker meta
         id: meta

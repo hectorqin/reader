@@ -55,7 +55,7 @@ apply(plugin = "io.spring.dependency-management")
 apply(plugin = "kotlin")
 apply(plugin = "io.github.fvarrui.javapackager.plugin")
 
-group = "org.lightink"
+group = "com.htmake"
 version = "1.9.0"
 
 java {
@@ -121,13 +121,13 @@ compileTestKotlin.kotlinOptions {
 
 application {
     // Define the main class for the application
-    mainClassName = "org.lightink.reader.ReaderUIApplicationKt"
+    mainClassName = "com.htmake.reader.ReaderUIApplicationKt"
 }
 
 tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("buildReader"){
     dependsOn("build")
 	// mandatory
-	mainClass = "org.lightink.reader.ReaderUIApplicationKt"
+	mainClass = "com.htmake.reader.ReaderUIApplicationKt"
 	// optional
     setBundleJre(false)
     vmArgs = arrayListOf<String>("-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.packaged=true", "-Dreader.app.debug=true")
@@ -136,7 +136,7 @@ tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("buildReader"){
 tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("packageReaderMac") {
     dependsOn("build")
 	// mandatory
-	mainClass = "org.lightink.reader.ReaderUIApplicationKt"
+	mainClass = "com.htmake.reader.ReaderUIApplicationKt"
 	// optional
     setBundleJre(false)
 	// bundleJre = false
@@ -147,7 +147,7 @@ tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("packageReaderMa
 tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("packageReaderWin") {
     dependsOn("build")
 	// mandatory
-	mainClass = "org.lightink.reader.ReaderUIApplicationKt"
+	mainClass = "com.htmake.reader.ReaderUIApplicationKt"
 	// optional
     setBundleJre(false)
 	// bundleJre = true
@@ -168,7 +168,7 @@ tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("packageReaderWi
 tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("packageReaderLinux") {
     dependsOn("build")
 	// mandatory
-	mainClass = "org.lightink.reader.ReaderUIApplicationKt"
+	mainClass = "com.htmake.reader.ReaderUIApplicationKt"
 	// optional
     setBundleJre(false)
 	// bundleJre = false
