@@ -5,7 +5,7 @@ WORKDIR /app/web
 RUN yarn && yarn build
 
 # Build jar
-FROM gradle:5.2.1-jdk8-alpine AS build-env
+FROM gradle:6.1.1-jdk8 AS build-env
 ADD --chown=gradle:gradle . /app
 WORKDIR /app
 COPY --from=build-web /app/web/dist /app/src/main/resources/web

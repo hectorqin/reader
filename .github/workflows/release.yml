@@ -42,7 +42,7 @@ jobs:
           # generate Docker tags based on the following events/attributes
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest,enable=${{ !contains(version, 'beta') }}
+            type=raw,value=latest,enable=${{ !contains(github.ref, 'beta') }}
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v1
