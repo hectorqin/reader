@@ -258,7 +258,7 @@ fun genEncryptedPassword(password: String, salt: String): String {
     ).toString()
 }
 
-fun jsonEncode(value: Any, pretty: Boolean): String {
+fun jsonEncode(value: Any, pretty: Boolean = false): String {
     if (pretty) {
         return prettyGson.toJson(value)
     }

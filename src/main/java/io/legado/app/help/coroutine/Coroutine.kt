@@ -5,19 +5,19 @@ import kotlin.coroutines.CoroutineContext
 
 
 class Coroutine<T>(
-        scope: CoroutineScope,
-        context: CoroutineContext = Dispatchers.IO,
-        block: suspend CoroutineScope.() -> T
+    val scope: CoroutineScope,
+    context: CoroutineContext = Dispatchers.IO,
+    block: suspend CoroutineScope.() -> T
 ) {
 
     companion object {
 
-        val DEFAULT = MainScope()
+        private val DEFAULT = MainScope()
 
         fun <T> async(
-                scope: CoroutineScope = DEFAULT,
-                context: CoroutineContext = Dispatchers.IO,
-                block: suspend CoroutineScope.() -> T
+            scope: CoroutineScope = DEFAULT,
+            context: CoroutineContext = Dispatchers.IO,
+            block: suspend CoroutineScope.() -> T
         ): Coroutine<T> {
             return Coroutine(scope, context, block)
         }
@@ -27,9 +27,10 @@ class Coroutine<T>(
     private val job: Job
 
     private var start: VoidCallback? = null
-    private var success: Callback<T?>? = null
+    private var success: Callback<T>? = null
     private var error: Callback<Throwable>? = null
     private var finally: VoidCallback? = null
+    private var cancel: VoidCallback? = null
 
     private var timeMillis: Long? = null
     private var errorReturn: Result<T>? = null
@@ -44,7 +45,7 @@ class Coroutine<T>(
         get() = job.isCompleted
 
     init {
-        this.job = executeInternal(scope, context, block)
+        this.job = executeInternal(context, block)
     }
 
     fun timeout(timeMillis: () -> Long): Coroutine<T> {
@@ -68,40 +69,59 @@ class Coroutine<T>(
     }
 
     fun onStart(
-            context: CoroutineContext? = null,
-            block: (suspend CoroutineScope.() -> Unit)
+        context: CoroutineContext? = null,
+        block: (suspend CoroutineScope.() -> Unit)
     ): Coroutine<T> {
         this.start = VoidCallback(context, block)
         return this@Coroutine
     }
 
     fun onSuccess(
-            context: CoroutineContext? = null,
-            block: suspend CoroutineScope.(T?) -> Unit
+        context: CoroutineContext? = null,
+        block: suspend CoroutineScope.(T) -> Unit
     ): Coroutine<T> {
         this.success = Callback(context, block)
         return this@Coroutine
     }
 
     fun onError(
-            context: CoroutineContext? = null,
-            block: suspend CoroutineScope.(Throwable) -> Unit
+        context: CoroutineContext? = null,
+        block: suspend CoroutineScope.(Throwable) -> Unit
     ): Coroutine<T> {
         this.error = Callback(context, block)
         return this@Coroutine
     }
 
     fun onFinally(
-            context: CoroutineContext? = null,
-            block: suspend CoroutineScope.() -> Unit
+        context: CoroutineContext? = null,
+        block: suspend CoroutineScope.() -> Unit
     ): Coroutine<T> {
         this.finally = VoidCallback(context, block)
+        return this@Coroutine
+    }
+
+    fun onCancel(
+        context: CoroutineContext? = null,
+        block: suspend CoroutineScope.() -> Unit
+    ): Coroutine<T> {
+        this.cancel = VoidCallback(context, block)
         return this@Coroutine
     }
 
     //取消当前任务
     fun cancel(cause: CancellationException? = null) {
         job.cancel(cause)
+        cancel?.let {
+            MainScope().launch {
+                if (null == it.context) {
+                    it.block.invoke(scope)
+                } else {
+                    withContext(scope.coroutineContext.plus(it.context)) {
+                        it.block.invoke(this)
+                    }
+                }
+            }
+        }
     }
 
     fun invokeOnCompletion(handler: CompletionHandler): DisposableHandle {
@@ -109,27 +129,32 @@ class Coroutine<T>(
     }
 
     private fun executeInternal(
-            scope: CoroutineScope,
-            context: CoroutineContext,
-            block: suspend CoroutineScope.() -> T
+        context: CoroutineContext,
+        block: suspend CoroutineScope.() -> T
     ): Job {
-        return scope.plus(Dispatchers.Default).launch {
+        return scope.plus(Dispatchers.Main).launch {
             try {
                 start?.let { dispatchVoidCallback(this, it) }
                 val value = executeBlock(scope, context, timeMillis ?: 0L, block)
-                success?.let { dispatchCallback(this, value, it) }
+                if (isActive) {
+                    success?.let { dispatchCallback(this, value, it) }
+                }
             } catch (e: Throwable) {
                 e.printStackTrace()
                 val consume: Boolean = errorReturn?.value?.let { value ->
-                    success?.let { dispatchCallback(this, value, it) }
+                    if (isActive) {
+                        success?.let { dispatchCallback(this, value, it) }
+                    }
                     true
                 } ?: false
 
-                if (!consume) {
+                if (!consume && isActive) {
                     error?.let { dispatchCallback(this, e, it) }
                 }
             } finally {
-                finally?.let { dispatchVoidCallback(this, it) }
+                if (isActive) {
+                    finally?.let { dispatchVoidCallback(this, it) }
+                }
             }
         }
     }
@@ -145,10 +170,11 @@ class Coroutine<T>(
     }
 
     private suspend inline fun <R> dispatchCallback(
-            scope: CoroutineScope,
-            value: R,
-            callback: Callback<R>
+        scope: CoroutineScope,
+        value: R,
+        callback: Callback<R>
     ) {
+        if (!scope.isActive) return
         if (null == callback.context) {
             callback.block.invoke(scope, value)
         } else {
@@ -159,27 +185,29 @@ class Coroutine<T>(
     }
 
     private suspend inline fun executeBlock(
-            scope: CoroutineScope,
-            context: CoroutineContext,
-            timeMillis: Long,
-            noinline block: suspend CoroutineScope.() -> T
-    ): T? {
+        scope: CoroutineScope,
+        context: CoroutineContext,
+        timeMillis: Long,
+        noinline block: suspend CoroutineScope.() -> T
+    ): T {
         return withContext(scope.coroutineContext.plus(context)) {
             if (timeMillis > 0L) withTimeout(timeMillis) {
                 block()
-            } else block()
+            } else {
+                block()
+            }
         }
     }
 
     private data class Result<out T>(val value: T?)
 
     private inner class VoidCallback(
-            val context: CoroutineContext?,
-            val block: suspend CoroutineScope.() -> Unit
+        val context: CoroutineContext?,
+        val block: suspend CoroutineScope.() -> Unit
     )
 
     private inner class Callback<VALUE>(
-            val context: CoroutineContext?,
-            val block: suspend CoroutineScope.(VALUE) -> Unit
+        val context: CoroutineContext?,
+        val block: suspend CoroutineScope.(VALUE) -> Unit
     )
 }
