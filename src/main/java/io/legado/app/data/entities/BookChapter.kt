@@ -22,18 +22,13 @@ data class BookChapter(
         var variable: String? = null        //变量
 ) {
 
-    @Transient
-    var variableMap: HashMap<String, String>? = null
-        private set
-        get() {
-            if (field == null) {
-                field = GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
-            }
-            return field
-        }
+    @delegate:Transient
+    val variableMap by lazy {
+        GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
+    }
 
     fun putVariable(key: String, value: String) {
-        variableMap?.put(key, value)
+        variableMap.put(key, value)
         variable = GSON.toJson(variableMap)
     }
 

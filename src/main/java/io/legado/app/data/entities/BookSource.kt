@@ -6,6 +6,8 @@ import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppConst.userAgent
 import io.legado.app.data.entities.rule.*
 import io.legado.app.help.JsExtensions
+import io.legado.app.help.http.CookieStore
+import io.legado.app.help.CacheManager
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 //import io.legado.app.utils.getPrefString
@@ -62,24 +64,22 @@ data class BookSource(
     private var contentRuleV: ContentRule? = null
 
     @Throws(Exception::class)
-    fun getHeaderMap(): Map<String, String> {
-        val headerMap = HashMap<String, String>()
-        // TODO UA
-        headerMap[AppConst.UA_NAME] = userAgent
+    fun getHeaderMap() = (HashMap<String, String>().apply {
+        this[AppConst.UA_NAME] = AppConst.userAgent
         header?.let {
-            val header1 = when {
-                it.startsWith("@js:", true) ->
-                    evalJS(it.substring(4)).toString()
-                it.startsWith("<js>", true) ->
-                    evalJS(it.substring(4, it.lastIndexOf("<"))).toString()
-                else -> it
-            }
-            GSON.fromJsonObject<Map<String, String>>(header1)?.let { map ->
-                headerMap.putAll(map)
+            GSON.fromJsonObject<Map<String, String>>(
+                when {
+                    it.startsWith("@js:", true) ->
+                        evalJS(it.substring(4)).toString()
+                    it.startsWith("<js>", true) ->
+                        evalJS(it.substring(4, it.lastIndexOf("<"))).toString()
+                    else -> it
+                }
+            )?.let { map ->
+                putAll(map)
             }
         }
-        return headerMap
-    }
+    }) as Map<String, String>
 
     fun getSearchRule(): SearchRule {
         return ruleSearch ?: SearchRule()
@@ -142,6 +142,8 @@ data class BookSource(
     private fun evalJS(jsStr: String): Any {
         val bindings = SimpleBindings()
         bindings["java"] = this
+        bindings["cookie"] = CookieStore
+        bindings["cache"] = CacheManager
         return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
     }
 

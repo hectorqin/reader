@@ -138,8 +138,8 @@ data class RssSource(
         val bindings = SimpleBindings()
         bindings.apply(bindingsConfig)
         bindings["java"] = this
-        bindings["source"] = this
-        bindings["baseUrl"] = getKey()
+        bindings["cookie"] = CookieStore
+        bindings["cache"] = CacheManager
         return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
     }
 }
