@@ -22,7 +22,10 @@
           <i class="el-icon-loading" v-if="loading"></i>
           {{ loading ? "刷新中..." : "刷新" }}
         </span>
-        <span :class="{ loading: loadingMore }" @click="loadMoreSource">
+        <span
+          :class="{ loading: loadingMore }"
+          @click="searchBookSourceByEventStream"
+        >
           <i class="el-icon-loading" v-if="loadingMore"></i>
           {{ loadingMore ? "加载中..." : "加载更多" }}
         </span>
@@ -62,6 +65,7 @@
 <script>
 import jump from "../plugins/jump";
 import Axios from "../plugins/axios";
+const buildURL = require("axios/lib/helpers/buildURL");
 
 export default {
   name: "BookSource",
@@ -122,7 +126,7 @@ export default {
               );
               this.jumpToActive();
             } else {
-              this.loadMoreSource();
+              // this.loadMoreSource();
             }
           }
         },
@@ -215,6 +219,96 @@ export default {
           throw error;
         }
       );
+    },
+    searchBookSourceByEventStream() {
+      const tryClose = () => {
+        try {
+          if (
+            this.searchEventSource &&
+            this.searchEventSource.readyState != this.searchEventSource.CLOSED
+          ) {
+            this.searchEventSource.close();
+          }
+          this.searchEventSource = null;
+        } catch (error) {
+          //
+        }
+      };
+      if (this.loadingMore) {
+        tryClose();
+        this.loadingMore = false;
+        return;
+      }
+      const params = {
+        accessToken: this.$store.state.token,
+        concurrentCount: this.$store.state.searchConfig.concurrentCount,
+        url: this.$store.state.readingBook.bookUrl,
+        bookSourceGroup: this.bookSourceGroup,
+        lastIndex: this.bookSourceGroupIndexMap[this.bookSourceGroup]
+      };
+      this.loadingMore = true;
+
+      const url = buildURL(this.api + "/searchBookSourceSSE", params);
+
+      tryClose();
+
+      this.searchEventSource = new EventSource(url, {
+        withCredentials: true
+      });
+      this.searchEventSource.addEventListener("error", e => {
+        this.loadingMore = false;
+        tryClose();
+        try {
+          if (e.data) {
+            const result = JSON.parse(e.data);
+            if (result && result.errorMsg) {
+              this.$message.error(result.errorMsg);
+            }
+          }
+        } catch (error) {
+          //
+        }
+      });
+      let oldBookSourceLength = this.bookSource.length;
+      this.searchEventSource.addEventListener("end", e => {
+        this.loadingMore = false;
+        tryClose();
+        try {
+          if (e.data) {
+            const result = JSON.parse(e.data);
+            if (result && result.lastIndex) {
+              this.bookSourceGroupIndexMap[this.bookSourceGroup] =
+                result.lastIndex;
+            }
+          }
+          if (this.bookSource.length === oldBookSourceLength) {
+            this.$message.error("没有更多啦");
+          }
+        } catch (error) {
+          //
+        }
+      });
+      this.searchEventSource.addEventListener("message", e => {
+        try {
+          if (e.data) {
+            const result = JSON.parse(e.data);
+            if (result && result.lastIndex) {
+              this.bookSourceGroupIndexMap[this.bookSourceGroup] =
+                result.lastIndex;
+            }
+            if (result.data) {
+              this.bookSource = [].concat(
+                this.bookSource,
+                result.data.filter(v => {
+                  return !this.bookSourceMap[v.bookUrl];
+                })
+              );
+            }
+          }
+        } catch (error) {
+          //
+        }
+      });
     },
     jumpToActive() {
       this.$nextTick(() => {

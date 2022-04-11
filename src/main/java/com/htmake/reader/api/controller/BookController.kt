@@ -77,6 +77,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
     var bookInfoCache = ACache.get("bookInfoCache", 1000 * 1000 * 2L, 10000) // 缓存 2M 的书籍信息
     var invalidBookSourceList = arrayListOf<Map<String, Any>>()
+    val concurrentLoopCount = 8
 
     private var webClient: WebClient
 
@@ -593,8 +594,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 }
             }
             logger.info("Loog: {} resultList.size: {}", loopCount, resultList.size)
-            if (loopCount >= 10) {
-                // 超过10轮，终止执行
+            if (loopCount >= concurrentLoopCount) {
+                // 超过最大轮次，终止执行
                 false
             } else {
                 resultList.size < searchSize
@@ -626,35 +627,35 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             key = context.bodyAsJson.getString("key", "")
             bookSourceGroup = context.bodyAsJson.getString("bookSourceGroup", "")
             lastIndex = context.bodyAsJson.getInteger("lastIndex", -1)
-            searchSize = context.bodyAsJson.getInteger("searchSize", 100)
+            searchSize = context.bodyAsJson.getInteger("searchSize", 50)
             concurrentCount = context.bodyAsJson.getInteger("concurrentCount", 24)
         } else {
             // get 请求
             key = context.queryParam("key").firstOrNull() ?: ""
             bookSourceGroup = context.queryParam("bookSourceGroup").firstOrNull() ?: ""
             lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
-            searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 100
+            searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 50
             concurrentCount = context.queryParam("concurrentCount").firstOrNull()?.toInt() ?: 24
         }
         var userNameSpace = getUserNameSpace(context)
         var userBookSourceList = loadBookSourceStringList(userNameSpace, bookSourceGroup)
         if (userBookSourceList.size <= 0) {
             response.write("event: error\n")
-            response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("未配置书源"), false) + "\n\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("未配置书源"), false) + "\n\n")
             return
         }
         if (key.isNullOrEmpty()) {
             response.write("event: error\n")
-            response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("请输入搜索关键字"), false) + "\n\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("请输入搜索关键字"), false) + "\n\n")
             return
         }
         if (lastIndex >= userBookSourceList.size) {
             response.write("event: error\n")
-            response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("没有更多了"), false) + "\n\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("没有更多了"), false) + "\n\n")
             return
         }
 
-        searchSize = if(searchSize > 0) searchSize else 100
+        searchSize = if(searchSize > 0) searchSize else 50
         concurrentCount = if(concurrentCount > 0) concurrentCount else 24
         logger.info("searchBookMulti from lastIndex: {} concurrentCount: {} searchSize: {}", lastIndex, concurrentCount, searchSize)
         var resultList = arrayListOf<SearchBook>()
@@ -684,8 +685,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             response.write("data: " + jsonEncode(mapOf("lastIndex" to lastIndex, "data" to loopResult), false) + "\n\n")
             logger.info("Loog: {} resultList.size: {}", loopCount, resultList.size)
 
-            if (loopCount >= 10) {
-                // 超过10轮，终止执行
+            if (loopCount >= concurrentLoopCount) {
+                // 超过最大轮次，终止执行
                 false
             } else {
                 resultList.size < searchSize
@@ -763,8 +764,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     resultList.addAll(it)
                 }
             }
-            if (loopCount >= 10) {
-                // 超过10轮，终止执行
+            if (loopCount >= concurrentLoopCount) {
+                // 超过最大轮次，终止执行
                 false
             } else {
                 resultList.size < searchSize
@@ -773,6 +774,109 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         saveBookSources(book, resultList, userNameSpace)
         saveInvalidBookSourceList()
         return returnData.setData(mapOf("lastIndex" to lastIndex, "list" to resultList))
+    }
+
+    suspend fun searchBookSourceSSE(context: RoutingContext) {
+        val returnData = ReturnData()
+        // 返回 event-stream
+        val response = context.response().putHeader("Content-Type", "text/event-stream")
+            .putHeader("Cache-Control", "no-cache")
+            .setChunked(true);
+
+        if (!checkAuth(context)) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用"), false) + "\n\n")
+            return
+        }
+        val bookUrl: String
+        var lastIndex: Int
+        var searchSize: Int
+        var bookSourceGroup: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            bookUrl = context.bodyAsJson.getString("url")
+            lastIndex = context.bodyAsJson.getInteger("lastIndex", -1)
+            searchSize = context.bodyAsJson.getInteger("searchSize", 30)
+            bookSourceGroup = context.bodyAsJson.getString("bookSourceGroup", "")
+        } else {
+            // get 请求
+            bookUrl = context.queryParam("url").firstOrNull() ?: ""
+            lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
+            searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 30
+            bookSourceGroup = context.queryParam("bookSourceGroup").firstOrNull() ?: ""
+        }
+        var userNameSpace = getUserNameSpace(context)
+        var userBookSourceList = loadBookSourceStringList(userNameSpace, bookSourceGroup)
+        if (userBookSourceList.size <= 0) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("未配置书源"), false) + "\n\n")
+            return
+        }
+        if (bookUrl.isNullOrEmpty()) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("请输入书籍链接"), false) + "\n\n")
+            return
+        }
+        if (lastIndex >= userBookSourceList.size) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("没有更多了"), false) + "\n\n")
+            return
+        }
+
+        var book = getShelfBookByURL(bookUrl, userNameSpace)
+        if (book == null) {
+            book = bookInfoCache.getAsString(bookUrl)?.toMap()?.toDataClass()
+        }
+        if (book == null) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("书籍信息错误"), false) + "\n\n")
+            return
+        }
+        // 校正 lastIndex
+        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
+        if (bookSourceList != null && bookSourceList.size() > 0) {
+            try {
+                val lastBookSourceUrl = bookSourceList.getJsonObject(bookSourceList.size() - 1).getString("origin")
+                lastIndex = Math.max(lastIndex, getBookSourceBySourceURL(lastBookSourceUrl, userNameSpace, userBookSourceList).second)
+            } catch(e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        searchSize = if(searchSize > 0) searchSize else 30
+        var resultList = arrayListOf<SearchBook>()
+        var concurrentCount = Math.max(searchSize * 2, 24)
+        logger.info("searchBookMulti from lastIndex: {} concurrentCount: {} searchSize: {}", lastIndex, concurrentCount, searchSize)
+
+        limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, {it->
+            lastIndex = it
+            var bookSource = userBookSourceList.get(it)
+            searchBookWithSource(bookSource, book)
+        }) {list, loopCount ->
+            // logger.info("list: {}", list)
+            val loopResult = arrayListOf<SearchBook>()
+            list.forEach {
+                val bookList = it as? Collection<SearchBook>
+                bookList?.let {
+                    resultList.addAll(it)
+                    loopResult.addAll(it)
+                }
+            }
+            // 返回本轮数据
+            response.write("data: " + jsonEncode(mapOf("lastIndex" to lastIndex, "data" to loopResult), false) + "\n\n")
+            logger.info("Loog: {} resultList.size: {}", loopCount, resultList.size)
+
+            if (loopCount >= concurrentLoopCount) {
+                // 超过最大轮次，终止执行
+                false
+            } else {
+                resultList.size < searchSize
+            }
+        }
+        saveInvalidBookSourceList()
+        saveBookSources(book, resultList, userNameSpace)
+        response.write("event: end\n")
+        response.end("data: " + jsonEncode(mapOf("lastIndex" to lastIndex), false) + "\n\n")
     }
 
     suspend fun searchBookWithSource(bookSourceString: String, book: Book, accurate: Boolean = true): ArrayList<SearchBook> {

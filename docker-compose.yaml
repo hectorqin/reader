@@ -20,7 +20,7 @@ services:
 #    ports:
 #      - 4395:8080
 #    volumes:
-#      - /home/reader/log:/log
+#      - /home/reader/logs:/logs
 #      - /home/reader/storage:/storage
 #    environment:
 #      - SPRING_PROFILES_ACTIVE=prod
@@ -32,7 +32,7 @@ services:
     ports:
       - 4396:8080 # 4396端口映射可自行修改
     volumes:
-      - /home/reader/log:/log # log映射目录 /home/reader/log 可自行修改
+      - /home/reader/logs:/logs # logs映射目录 /home/reader/logs 可自行修改
       - /home/reader/storage:/storage # 数据映射目录 /home/reader/storage 可自行修改
     environment:
       - SPRING_PROFILES_ACTIVE=prod

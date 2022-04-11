@@ -194,6 +194,7 @@ class YueduApi : RestVerticle() {
         // 搜索其它来源
         router.get("/reader3/searchBookSource").coroutineHandler { bookController.searchBookSource(it) }
         router.get("/reader3/getBookSource").coroutineHandler { bookController.getBookSource(it) }
+        router.get("/reader3/searchBookSourceSSE").coroutineHandlerWithoutRes { bookController.searchBookSourceSSE(it) }
 
         // 换源
         router.get("/reader3/saveBookSource").coroutineHandler { bookController.saveBookSource(it) }

@@ -132,7 +132,7 @@ class Coroutine<T>(
         context: CoroutineContext,
         block: suspend CoroutineScope.() -> T
     ): Job {
-        return scope.plus(Dispatchers.Main).launch {
+        return scope.plus(Dispatchers.IO).launch {
             try {
                 start?.let { dispatchVoidCallback(this, it) }
                 val value = executeBlock(scope, context, timeMillis ?: 0L, block)

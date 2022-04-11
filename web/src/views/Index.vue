@@ -635,7 +635,12 @@
           >全选</el-checkbox
         >
         <span class="check-tip">已选择 {{ checkedSourceIndex.length }} 个</span>
-        <el-button size="medium" @click="showImportSourceDialog = false"
+        <el-button
+          size="medium"
+          @click="
+            showImportSourceDialog = false;
+            checkedSourceIndex = [];
+          "
           >取消</el-button
         >
         <el-button size="medium" type="primary" @click="saveSourceList"
@@ -1636,14 +1641,6 @@ export default {
         this.$message.error("后端未连接");
         return;
       }
-      if (page) {
-        this.searchPage = page;
-      }
-      page = this.searchPage;
-      if (page === 1) {
-        // 重新搜索
-        this.searchLastIndex = -1;
-      }
       if (!this.search) {
         this.$message.error("请输入关键词进行搜索");
         return;
@@ -1652,13 +1649,22 @@ export default {
         this.searchConfig.searchType === "single" &&
         !this.searchConfig.bookSourceUrl
       ) {
+        this.$message.error("请选择书源进行搜索");
         return;
       }
-      if (this.loadingMore) {
-        return;
+      if (page) {
+        this.searchPage = page;
+      }
+      page = this.searchPage;
+      if (page === 1) {
+        // 重新搜索
+        this.searchLastIndex = -1;
       }
       if (this.searchConfig.searchType === "multi" && window.EventSource) {
         this.searchBookByEventStream(page);
+        return;
+      }
+      if (this.loadingMore) {
         return;
       }
       this.isSearchResult = true;
@@ -1714,6 +1720,28 @@ export default {
       );
     },
     searchBookByEventStream(page) {
+      const tryClose = () => {
+        try {
+          if (
+            this.searchEventSource &&
+            this.searchEventSource.readyState != this.searchEventSource.CLOSED
+          ) {
+            this.searchEventSource.close();
+          }
+          this.searchEventSource = null;
+        } catch (error) {
+          //
+        }
+      };
+      if (this.loadingMore) {
+        tryClose();
+        this.loadingMore = false;
+        // page === 1 是重新搜索
+        if (page !== 1) {
+          // 停止搜索
+          return;
+        }
+      }
       const params = {
         accessToken: this.$store.state.token,
         key: this.search,
@@ -1731,12 +1759,15 @@ export default {
         this.searchResult = [];
       }
       const url = buildURL(this.api + "/searchBookMultiSSE", params);
+
+      tryClose();
+
       this.searchEventSource = new EventSource(url, {
         withCredentials: true
       });
       this.searchEventSource.addEventListener("error", e => {
         this.loadingMore = false;
-        this.searchEventSource.close();
+        tryClose();
         try {
           if (e.data) {
             const result = JSON.parse(e.data);
@@ -1751,7 +1782,7 @@ export default {
       let oldSearchResultLength = this.searchResult.length;
       this.searchEventSource.addEventListener("end", e => {
         this.loadingMore = false;
-        this.searchEventSource.close();
+        tryClose();
         try {
           if (e.data) {
             const result = JSON.parse(e.data);
@@ -2170,6 +2201,7 @@ export default {
             }
             this.showImportSourceDialog = false;
             this.isImportRssSource = false;
+            this.checkedSourceIndex = [];
           }
         },
         error => {

@@ -68,6 +68,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import io.legado.app.help.coroutine.Coroutine
 
 private val logger = KotlinLogging.logger {}
 
@@ -305,36 +307,102 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
 
     suspend fun limitConcurrent(concurrentCount: Int, startIndex: Int, endIndex: Int, handler: suspend CoroutineScope.(Int) -> Any, needContinue: (ArrayList<Any>, Int) -> Boolean) {
         var lastIndex = startIndex
-        var loopCount = 0;
+        var loopCount = 0
+        var resultCount = 0
+        var loopStart = System.currentTimeMillis()
+        var costTime = 0L
+        var deferredList = arrayListOf<Deferred<Any>>()
         while(true) {
-            var deferredList = arrayListOf<Deferred<Any>>()
-            var croutineCount = 0;
-            for(i in lastIndex until endIndex) {
-                croutineCount += 1;
-                deferredList.add(async {
-                    handler(i)
-                })
+            var croutineCount = deferredList.size;
+            if (croutineCount < concurrentCount) {
+                for(i in lastIndex until endIndex) {
+                    croutineCount += 1;
+                    deferredList.add(async {
+                        handler(i)
+                    })
 
-                lastIndex = i
-                if (croutineCount >= concurrentCount) {
+                    lastIndex = i
+                    if (croutineCount >= concurrentCount) {
+                        break;
+                    }
+                }
+            }
+            var resultList = arrayListOf<Any>()
+
+            // 等待任何一个完成
+            while (resultList.size <= 0) {
+                delay(10)
+                var stillDeferredList = arrayListOf<Deferred<Any>>()
+                for (i in 0 until deferredList.size) {
+                    try {
+                        var deferred = deferredList.get(i)
+                        if (deferred.isCompleted) {
+                            resultCount++
+                            resultList.add(deferred.getCompleted())
+                        } else if (!deferred.isCancelled) {
+                            stillDeferredList.add(deferred)
+                        } else {
+                            resultCount++
+                        }
+                    } catch(e: Exception) {
+
+                    }
+                }
+                deferredList.clear()
+                deferredList.addAll(stillDeferredList)
+            }
+
+            if (resultCount / concurrentCount > loopCount) {
+                loopCount = resultCount / concurrentCount
+                costTime = System.currentTimeMillis() - loopStart
+                logger.info("Loop: {} concurrentCount: {} lastIndex: {} endIndex: {} costTime: {} ms deferredList size: {}", loopCount, croutineCount, lastIndex, endIndex, costTime, deferredList.size)
+            }
+
+            if (lastIndex >= endIndex - 1) {
+                // 搞完了，等待所有结束
+                for (i in 0 until deferredList.size) {
+                    try {
+                        resultList.add(deferredList.get(i).await())
+                    } catch(e: Exception) {
+
+                    }
+                }
+                deferredList.clear()
+                needContinue(resultList, loopCount)
+                break;
+            }
+            if (resultList.size > 0) {
+                if (!needContinue(resultList, loopCount)) {
                     break;
                 }
             }
-            val resultList = arrayListOf<Any>()
-            val costTime = measureTimeMillis {
-                for (i in 0 until deferredList.size) {
-                    resultList.add(deferredList.get(i).await())
-                }
-            }
-            loopCount += 1;
-            logger.info("Loop: {} concurrentCount: {} lastIndex: {}  costTime: {} ms", loopCount, croutineCount, lastIndex, costTime)
-            if (lastIndex >= endIndex) {
-                break;
-            }
-            if (!needContinue(resultList, loopCount)) {
-                break;
-            }
             lastIndex = lastIndex + 1
+        }
+
+        // for (i in 0 until concurrentCount) {
+        //     runBlocking(concurrentCount, startIndex + i , endIndex, handler, needContinue)
+        // }
+    }
+
+    suspend fun runBlocking(concurrentCount: Int, startIndex: Int, endIndex: Int, handler: suspend CoroutineScope.(Int) -> Any, needContinue: (ArrayList<Any>, Int) -> Boolean) {
+        var lastIndex = startIndex
+
+        Coroutine.async(this, coroutineContext) {
+            handler(lastIndex)
+        }.timeout(30000L)
+        .onSuccess(Dispatchers.IO) {
+            if (lastIndex < endIndex - concurrentCount && needContinue(arrayListOf(it), 0)) {
+                lastIndex += concurrentCount
+                runBlocking(concurrentCount, lastIndex, endIndex, handler, needContinue)
+            }
+        }
+        .onError(Dispatchers.IO) {
+            if (lastIndex < endIndex - concurrentCount) {
+                lastIndex += concurrentCount
+                runBlocking(concurrentCount, lastIndex, endIndex, handler, needContinue)
+            } else {
+                needContinue(arrayListOf(), 0)
+            }
         }
     }
 }
