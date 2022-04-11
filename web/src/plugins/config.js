@@ -118,7 +118,9 @@ const settings = {
       // fontFamily: "STFangsong",
       // "-fx-font-family": "STFangsong"
     }
-  ]
+  ],
+  maxReadWidth: Math.floor(window.innerWidth / 160) * 160,
+  minReadWidth: Math.min(Math.floor(window.innerWidth / 160), 4) * 160
 };
 export const errorTypeList = [
   "UnknownHostException",

@@ -13,4 +13,5 @@ class AppConfig {
     var secure = false    // 是否启用登录鉴权
     var inviteCode = ""   // 注册邀请码
     var secureKey = ""    // 管理密码
+    var cacheChapterContent = false // 是否缓存章节内容
 }

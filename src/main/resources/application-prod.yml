@@ -17,6 +17,7 @@ reader:
     proxyPort: ""
     proxyUsername: ""
     proxyPassword: ""
+    cacheChapterContent: false
 
   server:
     port: 8080

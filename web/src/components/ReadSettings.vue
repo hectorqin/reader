@@ -535,12 +535,12 @@ export default {
     },
     moreReadWidth() {
       let config = this.config;
-      if (config.readWidth < 1440) config.readWidth += 160;
+      if (config.readWidth < settings.maxReadWidth) config.readWidth += 160;
       this.$store.commit("setConfig", config);
     },
     lessReadWidth() {
       let config = this.config;
-      if (config.readWidth > 640) config.readWidth -= 160;
+      if (config.readWidth > settings.minReadWidth) config.readWidth -= 160;
       this.$store.commit("setConfig", config);
     },
     getCustomBGImgURL(src) {

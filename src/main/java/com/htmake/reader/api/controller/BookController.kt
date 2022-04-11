@@ -347,12 +347,14 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var bookUrl: String
         var chapterIndex: Int
         var cache: Int
+        var refresh: Int
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
             chapterUrl = context.bodyAsJson.getString("chapterUrl") ?: context.bodyAsJson.getJsonObject("bookChapter").getString("url") ?: ""
             bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("searchBook").getString("bookUrl") ?: ""
             chapterIndex = context.bodyAsJson.getInteger("index", -1)
             cache = context.bodyAsJson.getInteger("cache", 0)
+            refresh = context.bodyAsJson.getInteger("refresh", 0)
         } else {
             // get 请求
             chapterUrl = context.queryParam("chapterUrl").firstOrNull() ?: ""
@@ -361,6 +363,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
             chapterUrl = URLDecoder.decode(chapterUrl, "UTF-8")
             cache = context.queryParam("cache").firstOrNull()?.toInt() ?: 0
+            refresh = context.queryParam("refresh").firstOrNull()?.toInt() ?: 0
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
@@ -462,8 +465,27 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             }
             content = bookContent
         } else {
+            // 查找章节缓存
+            var chapterCacheFile: File? = null
+            if (refresh <= 0 && appConfig.cacheChapterContent) {
+                val md5Encode = MD5Utils.md5Encode(bookInfo.bookUrl).toString()
+                val localCacheDirPath = getWorkDir("storage", "data", userNameSpace, bookInfo.name + "_" + bookInfo.author, md5Encode)
+                val localCacheDir = File(localCacheDirPath)
+                if (!localCacheDir.exists()) {
+                    localCacheDir.mkdirs()
+                }
+                chapterCacheFile = File(localCacheDirPath + File.separator + chapterIndex + ".txt")
+                if (chapterCacheFile.exists()) {
+                    content = chapterCacheFile.readText()
+                    logger.info("使用缓存的章节内容: {}", chapterCacheFile.toString())
+                    return returnData.setData(content)
+                }
+            }
             try {
                 content = WebBook(bookSource ?: "", false).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
+                if (appConfig.cacheChapterContent && chapterCacheFile != null) {
+                    chapterCacheFile.writeText(content)
+                }
             } catch(e: Exception) {
                 if (!bookSource.isNullOrEmpty()) {
                     var bookSourceObject = asJsonObject(bookSource)?.mapTo(BookSource::class.java)
