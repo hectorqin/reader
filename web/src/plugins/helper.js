@@ -135,7 +135,7 @@ export const cacheFirstRequest = async function(
           if (cacheResponse) {
             return cacheResponse;
           }
-          console.log("Cache not found in new cache");
+          // console.log("Cache not found in new cache");
           throw new Error("Cache not found");
         })
         .catch(() => {

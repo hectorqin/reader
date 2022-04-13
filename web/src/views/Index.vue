@@ -3400,9 +3400,9 @@ export default {
             cacheBytes: formatSize(cacheBytes)
           };
         })
-        .catch(function(err) {
+        .catch(function() {
           // 当出错时，此处代码运行
-          console.log(err);
+          // console.log(err);
         });
     },
     clearCache(match) {
@@ -3423,9 +3423,9 @@ export default {
             cacheBytes: formatSize(cacheBytes)
           };
         })
-        .catch(function(err) {
+        .catch(function() {
           // 当出错时，此处代码运行
-          console.log(err);
+          // console.log(err);
         });
     },
     scrollHandler() {
