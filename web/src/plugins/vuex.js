@@ -244,6 +244,9 @@ export default new Vuex.Store({
     },
     setNightTheme(state, isNight) {
       let config = { ...state.config };
+      if (config.theme !== "custom") {
+        config.theme = parseInt(config.theme);
+      }
       if (isNight) {
         if (
           config.theme !== settings.defaultNightTheme &&
@@ -270,6 +273,9 @@ export default new Vuex.Store({
           0;
         config.themeType = "day";
         config.theme = lastDayTheme;
+      }
+      if (config.theme !== "custom") {
+        config.theme = parseInt(config.theme);
       }
       state.config = config;
       window.localStorage &&
@@ -381,6 +387,12 @@ export default new Vuex.Store({
     isNight: state => {
       return state.config.themeType === "night";
     },
+    isKindlePage: state => {
+      return state.config.pageType === "Kindle";
+    },
+    isNormalPage: state => {
+      return state.config.pageType === "正常";
+    },
     currentContentBGImg: (state, getters) => {
       if (state.config.contentBGImg) {
         return state.config.contentBGImg.startsWith("bg/") ||
@@ -405,13 +417,13 @@ export default new Vuex.Store({
       if (state.config.theme === "custom") {
         return {
           body:
-            (state.miniInterface
+            (state.miniInterface && state.config.isNormalPage
               ? "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 56px), "
               : "") + (state.config.bodyColor || "#eadfca"),
           content: {
             backgroundImage: getters.currentContentBGImg
               ? `${
-                  state.miniInterface
+                  state.miniInterface && state.config.isNormalPage
                     ? "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 56px), "
                     : ""
                 }url(${getters.currentContentBGImg})`
@@ -424,7 +436,7 @@ export default new Vuex.Store({
           },
           popupPure: state.config.popupColor || "#ede7da",
           popup:
-            (state.miniInterface
+            (state.miniInterface && state.config.isNormalPage
               ? "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 36px), "
               : "") + (state.config.popupColor || "#ede7da")
         };
@@ -433,7 +445,7 @@ export default new Vuex.Store({
           ...settings.themes[state.config.theme]
         };
         config.popupPure = config.popup;
-        if (state.miniInterface) {
+        if (state.miniInterface && state.config.isNormalPage) {
           config.body =
             "linear-gradient(to bottom,rgba(0,0,0,.2) 0,transparent 36px), " +
             config.body;
@@ -484,6 +496,9 @@ export default new Vuex.Store({
         c[v.groupId] = v.groupName;
         return c;
       }, {});
+    },
+    config: state => {
+      return state.config;
     }
   },
   actions: {

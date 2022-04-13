@@ -8,6 +8,12 @@ import { registerServiceWorker } from "./registerServiceWorker";
 import noCover from "./assets/imgs/noCover.jpeg";
 import noImage from "./assets/imgs/noImage.png";
 import VueLazyload from "vue-lazyload";
+
+import localforage from "localforage";
+window.$cacheStorage = localforage.createInstance({
+  name: "cacheStorage"
+});
+
 registerServiceWorker();
 
 Vue.config.productionTip = false;

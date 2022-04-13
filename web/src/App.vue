@@ -212,6 +212,7 @@ export default {
   beforeMount() {
     this.setTheme(this.isNight);
     this.setMiniInterfaceClass();
+    this.setPageTypeClass();
     this.eventBus = eventBus;
     eventBus.$on("showEditor", this.showEditorListener);
   },
@@ -227,10 +228,7 @@ export default {
       return this.$store.getters.isNight;
     },
     autoTheme() {
-      return this.$store.state.config.autoTheme;
-    },
-    miniInterface() {
-      return this.$store.state.config.miniInterface;
+      return this.$store.getters.config.autoTheme;
     },
     dialogWidth() {
       return this.$store.state.miniInterface ? "85%" : "450px";
@@ -273,6 +271,9 @@ export default {
             window.customCSSLoad = true;
           });
       }
+    },
+    "$store.state.config.pageType": function() {
+      this.setPageTypeClass();
     }
   },
   methods: {
@@ -307,6 +308,18 @@ export default {
       } else {
         document.body.className = (document.body.className || "").replace(
           "mini-interface",
+          ""
+        );
+      }
+    },
+    setPageTypeClass() {
+      if (this.$store.getters.isKindlePage) {
+        document.body.className =
+          (document.body.className || "").replace("kindle-page", "") +
+          " kindle-page";
+      } else {
+        document.body.className = (document.body.className || "").replace(
+          "kindle-page",
           ""
         );
       }
@@ -612,5 +625,9 @@ export default {
 .popper-component.el-popover {
   border: none;
   box-shadow: none;
+}
+.kindle-page {
+  -webkit-tap-highlight-color: rbga(255, 255, 255, 0);
+  -webkit-user-select: none;
 }
 </style>

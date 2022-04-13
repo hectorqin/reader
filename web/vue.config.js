@@ -183,7 +183,7 @@ module.exports = {
             },
             expiration: {
               maxAgeSeconds: 86400 * 30,
-              maxEntries: 1000
+              maxEntries: 10000
             },
             plugins: [
               customWorkboxPlugin(({ request, mode }) => {

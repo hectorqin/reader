@@ -13,6 +13,7 @@
     "codejar": "^3.5.0",
     "core-js": "^3.3.2",
     "element-ui": "^2.4.5",
+    "localforage": "^1.10.0",
     "prismjs": "^1.25.0",
     "register-service-worker": "^1.7.1",
     "stylus": "^0.54.7",

@@ -81,7 +81,7 @@ export default {
       return this.$store.state.showContent;
     },
     fontSize() {
-      return this.$store.state.config.fontSize + "px";
+      return this.$store.getters.config.fontSize + "px";
     },
     autoPlay: {
       get() {
@@ -106,25 +106,25 @@ export default {
     },
     containerStyle() {
       return {
-        fontSize: this.$store.state.config.fontSize + "px",
-        fontWeight: this.$store.state.config.fontWeight || undefined,
+        fontSize: this.$store.getters.config.fontSize + "px",
+        fontWeight: this.$store.getters.config.fontWeight || undefined,
         color:
-          this.$store.state.config.fontColor ||
+          this.$store.getters.config.fontColor ||
           (this.$store.getters.isNight ? "#666" : "#262626"),
         ...this.$store.getters.currentFontFamily,
-        ...(this.$store.state.config.contentCSS || {})
+        ...(this.$store.getters.config.contentCSS || {})
       };
     },
     pStyle() {
       return {
-        lineHeight: this.$store.state.config.lineHeight,
+        lineHeight: this.$store.getters.config.lineHeight,
         marginTop:
-          typeof this.$store.state.config.paragraphSpace !== "undefined"
-            ? this.$store.state.config.paragraphSpace + "em"
+          typeof this.$store.getters.config.paragraphSpace !== "undefined"
+            ? this.$store.getters.config.paragraphSpace + "em"
             : null,
         marginBottom:
-          typeof this.$store.state.config.paragraphSpace !== "undefined"
-            ? this.$store.state.config.paragraphSpace + "em"
+          typeof this.$store.getters.config.paragraphSpace !== "undefined"
+            ? this.$store.getters.config.paragraphSpace + "em"
             : null
       };
     },

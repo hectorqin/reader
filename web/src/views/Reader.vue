@@ -574,7 +574,7 @@ export default {
       return this.$store.state.windowSize;
     },
     config() {
-      return this.$store.state.config;
+      return this.$store.getters.config;
     },
     theme() {
       return this.config.theme;
@@ -667,7 +667,7 @@ export default {
       }
     },
     readWidthConfig() {
-      var width = this.$store.state.config.readWidth;
+      var width = this.$store.getters.config.readWidth;
       while (width > this.$store.state.windowSize.width - 140) {
         width -= 20;
       }
@@ -850,11 +850,11 @@ export default {
     scrollOffset() {
       // 两行 + 两个段间距
       return (
-        this.$store.state.config.fontSize *
-          this.$store.state.config.lineHeight *
+        this.$store.getters.config.fontSize *
+          this.$store.getters.config.lineHeight *
           2 +
-        this.$store.state.config.fontSize *
-          this.$store.state.config.paragraphSpace *
+        this.$store.getters.config.fontSize *
+          this.$store.getters.config.paragraphSpace *
           2
       );
     }
@@ -1509,12 +1509,12 @@ export default {
         if (!this.showReadBar) {
           this.showToolBar = !this.showToolBar;
         }
-      } else if (this.$store.state.config.clickMethod === "下一页") {
+      } else if (this.$store.getters.config.clickMethod === "下一页") {
         // 全屏点击下一页
         this.showToolBar = false;
         this.nextPage();
         return;
-      } else if (this.$store.state.config.clickMethod === "不翻页") {
+      } else if (this.$store.getters.config.clickMethod === "不翻页") {
         // 全屏点击不翻页
         this.showToolBar = !this.showToolBar;
         return;
@@ -1620,7 +1620,7 @@ export default {
       }
       if (text && show) {
         setTimeout(() => {
-          if (this.$store.state.config.selectionAction === "过滤弹窗") {
+          if (this.$store.getters.config.selectionAction === "过滤弹窗") {
             this.showTextFilterPrompt(text);
           }
         }, 200);
@@ -2866,6 +2866,40 @@ export default {
       border-color: #185798;
       color: #fff;
       box-shadow: none;
+    }
+  }
+}
+.kindle-page {
+  .day {
+    .tool-icon {
+      border: 1px solid #fefefefe;
+
+      .icon-text {
+        color: #444;
+      }
+    }
+
+    .progress-tip {
+      color: #444;
+    }
+
+    .cache-content-zone {
+      color: #444;
+    }
+
+    .reader-bar-inner {
+
+      .setting-title {
+        color: rgba(0, 0, 0, 0.8);
+      }
+
+      .setting-value {
+        color: #444;
+      }
+    }
+
+    .bottom-bar, .top-bar {
+      color: #444;
     }
   }
 }

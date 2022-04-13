@@ -58,7 +58,7 @@ export default {
   props: ["visible"],
   computed: {
     theme() {
-      return this.$store.state.config.theme;
+      return this.$store.getters.config.theme;
     },
     popupTheme() {
       return {

@@ -41,7 +41,8 @@ const settings = {
     paragraphSpace: 0.2, // 段间距
     autoTheme: true, // 自动切换主题
     selectionAction: "过滤弹窗",
-    pageMode: "自适应"
+    pageMode: "自适应",
+    pageType: "正常"
   },
   speechVoiceConfig: {
     voiceName: "",
@@ -84,6 +85,11 @@ const settings = {
       body: "url(" + body_6 + ") repeat",
       content: "url(" + content_6 + ") repeat",
       popup: "#121212"
+    },
+    {
+      body: "#f7f7f7 repeat",
+      content: "#fff repeat",
+      popup: "#f7f7f7 repeat"
     }
   ],
   fonts: [

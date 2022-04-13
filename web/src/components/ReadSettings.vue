@@ -10,7 +10,20 @@
     </div>
     <div class="setting-list">
       <ul>
-        <li class="theme-list">
+        <li>
+          <span class="setting-item-title">特殊模式</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(type, index) in pageTypes"
+              :key="index"
+              :class="{ selected: pageType == type }"
+              @click="setPageType(type)"
+              >{{ type }}</span
+            >
+          </div>
+        </li>
+        <li>
           <span class="setting-item-title">阅读主题</span>
           <div class="selection-zone">
             <span
@@ -21,7 +34,7 @@
               ref="themes"
               @click="setTheme(index)"
               :class="{ selected: selectedTheme == index }"
-              ><em v-if="index < 6" class="iconfont">&#58980;</em
+              ><em v-if="index != 6" class="iconfont">&#58980;</em
               ><em v-else class="moon-icon">{{ moonIcon }}</em></span
             >
             <span
@@ -37,12 +50,12 @@
               :key="'autoTheme'"
               ref="themes"
               @click="setAutoTheme"
-              :class="{ selected: $store.state.config.autoTheme }"
+              :class="{ selected: $store.getters.config.autoTheme }"
               >自动切换</span
             >
           </div>
         </li>
-        <li class="custom-theme-li" v-if="selectedTheme == 'custom'">
+        <li v-if="selectedTheme == 'custom'">
           <span class="setting-item-title">自定义</span>
           <div class="custom-theme">
             <div class="custom-theme-title">
@@ -75,7 +88,7 @@
                 v-for="(item, index) in builtinBG"
                 :key="index"
                 :class="{
-                  selected: $store.state.config.contentBGImg == item.src
+                  selected: $store.getters.config.contentBGImg == item.src
                 }"
                 :src="item.src"
                 alt=""
@@ -83,10 +96,10 @@
               />
               <div
                 class="content-bg-preview"
-                v-for="item in $store.state.config.customBGImgList || []"
+                v-for="item in $store.getters.config.customBGImgList || []"
                 :key="item"
                 :class="{
-                  selected: $store.state.config.contentBGImg == item
+                  selected: $store.getters.config.contentBGImg == item
                 }"
               >
                 <img
@@ -110,7 +123,7 @@
             </span>
           </div>
         </li>
-        <li class="font-list">
+        <li>
           <span class="setting-item-title">正文字体</span>
           <div class="selection-zone">
             <span
@@ -123,7 +136,7 @@
             >
           </div>
         </li>
-        <li class="font-size">
+        <li>
           <span class="setting-item-title">字体大小</span>
           <div class="resize">
             <span class="less" @click="lessFontSize"
@@ -135,7 +148,7 @@
             >
           </div>
         </li>
-        <li class="font-size">
+        <li>
           <span class="setting-item-title">字体粗细</span>
           <div class="resize">
             <span class="less" @click="lessFontWeight"
@@ -147,7 +160,7 @@
             >
           </div>
         </li>
-        <li class="font-size">
+        <li>
           <span class="setting-item-title">段落行高</span>
           <div class="resize">
             <span class="less" @click="lessLineHeight"
@@ -159,7 +172,7 @@
             >
           </div>
         </li>
-        <li class="font-size">
+        <li>
           <span class="setting-item-title">段落间距</span>
           <div class="resize">
             <span class="less" @click="lessParagraphSpace"
@@ -171,11 +184,11 @@
             >
           </div>
         </li>
-        <li class="font-size">
+        <li>
           <span class="setting-item-title font-color-title">字体颜色</span>
           <el-color-picker v-model="fontColor"></el-color-picker>
         </li>
-        <li class="read-width">
+        <li>
           <span class="setting-item-title">页面模式</span>
           <div class="selection-zone">
             <span
@@ -188,7 +201,7 @@
             >
           </div>
         </li>
-        <li class="read-width" v-if="!$store.state.miniInterface">
+        <li v-if="!$store.state.miniInterface">
           <span class="setting-item-title">页面宽度</span>
           <div class="resize">
             <span class="less" @click="lessReadWidth"
@@ -200,7 +213,7 @@
             >
           </div>
         </li>
-        <li class="read-width" v-if="$store.state.miniInterface">
+        <li v-if="$store.state.miniInterface">
           <span class="setting-item-title">翻页方式</span>
           <div class="selection-zone">
             <span
@@ -213,7 +226,7 @@
             >
           </div>
         </li>
-        <li class="font-size">
+        <li>
           <span class="setting-item-title">动画时长</span>
           <div class="resize">
             <span class="less" @click="lessAnimateMSTime"
@@ -225,7 +238,7 @@
             ></span>
           </div>
         </li>
-        <li class="read-width">
+        <li>
           <span class="setting-item-title">全屏点击</span>
           <div class="selection-zone">
             <span
@@ -238,7 +251,7 @@
             >
           </div>
         </li>
-        <li class="read-width">
+        <li>
           <span class="setting-item-title">选择文字</span>
           <div class="selection-zone">
             <span
@@ -251,7 +264,7 @@
             >
           </div>
         </li>
-        <li class="read-width operation-zone">
+        <li class="operation-zone">
           <span class="span-btn" @click="showClickZone">显示翻页区域</span>
           <span class="span-btn" @click="showRuleEditor">修改过滤规则</span>
         </li>
@@ -292,6 +305,9 @@ export default {
         },
         {
           background: "rgba(0, 0, 0, 0.5)"
+        },
+        {
+          background: "rgba(255, 255, 255, 0.8)"
         }
       ],
       fontColor:
@@ -321,6 +337,7 @@ export default {
       clickMethods: ["下一页", "自动", "不翻页"],
       selectionActions: ["过滤弹窗", "忽略"],
       pageModes: ["自适应", "手机模式"],
+      pageTypes: ["正常", "Kindle"],
       themeTypes: ["day", "night"]
     };
   },
@@ -353,6 +370,9 @@ export default {
     },
     pageMode() {
       return this.$store.state.config.pageMode ?? settings.config.pageMode;
+    },
+    pageType() {
+      return this.$store.state.config.pageType ?? settings.config.pageType;
     },
     themeType() {
       return this.$store.state.config.themeType ?? settings.config.themeType;
@@ -443,6 +463,66 @@ export default {
       config.pageMode = mode;
       this.$store.commit("setConfig", config);
       if (mode === "手机模式") {
+        this.$store.commit("setMiniInterface", true);
+      } else {
+        this.$store.commit("setMiniInterface", isMiniInterface());
+      }
+    },
+    setPageType(type) {
+      if (type === this.config.pageType) {
+        return;
+      }
+      let lastConfig = {};
+      if (type === "Kindle") {
+        window.localStorage &&
+          window.localStorage.setItem(
+            "lastNormalConfig",
+            JSON.stringify(this.config)
+          );
+
+        try {
+          lastConfig =
+            window.localStorage &&
+            window.localStorage.getItem("lastKindleConfig");
+          if (lastConfig) {
+            lastConfig = JSON.parse(lastConfig) || {};
+          }
+        } catch (error) {
+          //
+        }
+        lastConfig = lastConfig || {
+          animateMSTime: 0,
+          fontSize: Math.min(this.fontSize, 20),
+          theme: 7,
+          readMethod: "左右滑动",
+          selectionAction: "忽略",
+          pageMode: "手机模式"
+        };
+      } else {
+        window.localStorage &&
+          window.localStorage.setItem(
+            "lastKindleConfig",
+            JSON.stringify(this.config)
+          );
+        try {
+          lastConfig =
+            window.localStorage &&
+            window.localStorage.getItem("lastNormalConfig");
+          if (lastConfig) {
+            lastConfig = JSON.parse(lastConfig) || {};
+          }
+        } catch (error) {
+          //
+        }
+      }
+
+      const config = { ...this.config, ...(lastConfig || {}) };
+      config.pageType = type;
+      this.$store.commit("setConfig", config);
+
+      this.$emit("readMethodChange");
+      this.$emit("pageModeChange");
+      if (config.pageMode === "手机模式") {
         this.$store.commit("setMiniInterface", true);
       } else {
         this.$store.commit("setMiniInterface", isMiniInterface());
@@ -685,8 +765,8 @@ export default {
       margin: 0;
       padding: 0;
 
-      .custom-theme-li {
-        margin-top: 28px;
+      li:not(:first-child) {
+        margin-top: 20px;
       }
 
       li {
@@ -802,17 +882,7 @@ export default {
         }
       }
 
-      .font-list {
-        margin-top: 28px;
-
-        .selected {
-          color: #ed4259;
-          border: 1px solid #ed4259;
-        }
-      }
-
-      .font-size, .read-width {
-        margin-top: 28px;
+      li {
 
         .resize {
           display: inline-block;
@@ -930,7 +1000,7 @@ export default {
     border: 1px solid #ed4259;
     color: #ed4259;
   }
-  .font-size, .read-width {
+  li {
     .less:hover, .more:hover {
       color: #ed4259;
     }

@@ -16,6 +16,7 @@
       @touchstart="handleTouchStart"
       @touchmove="handleTouchMove"
       @touchend="handleTouchEnd"
+      v-if="$store.getters.isNormalPage"
     >
       <div class="navigation-inner-wrapper">
         <div class="navigation-title">
@@ -446,21 +447,29 @@
       <div class="shelf-title">
         <i
           class="el-icon-menu"
-          v-if="collapseMenu"
+          v-if="$store.getters.isNormalPage && collapseMenu"
           @click.stop="toggleMenu"
         ></i>
         {{ isSearchResult ? (isExploreResult ? "探索" : "搜索") : "书架" }}
         ({{ bookList.length }})
-        <div class="title-btn" v-if="isSearchResult" @click="backToShelf">
+        <div
+          class="title-btn"
+          v-if="$store.getters.isNormalPage && isSearchResult"
+          @click="backToShelf"
+        >
           书架
         </div>
-        <div class="title-btn" v-if="isSearchResult" @click="loadMore">
+        <div
+          class="title-btn"
+          v-if="$store.getters.isNormalPage && isSearchResult"
+          @click="loadMore"
+        >
           <i class="el-icon-loading" v-if="loadingMore"></i>
           {{ loadingMore ? "加载中..." : "加载更多" }}
         </div>
         <div
           class="title-btn"
-          v-if="!isSearchResult"
+          v-if="$store.getters.isNormalPage && !isSearchResult"
           @click="showBookEditButton = !showBookEditButton"
         >
           {{ showBookEditButton ? "取消" : "编辑" }}
@@ -469,13 +478,19 @@
           <i class="el-icon-loading" v-if="refreshLoading"></i>
           {{ refreshLoading ? "刷新中..." : "刷新" }}
         </div>
-        <div class="title-btn" v-if="!isSearchResult" @click="showRssDialog">
+        <div
+          class="title-btn"
+          v-if="$store.getters.isNormalPage && !isSearchResult"
+          @click="showRssDialog"
+        >
           RSS
         </div>
         <div
           class="title-btn"
           @click="showExplorePop"
-          v-if="!(isSearchResult && !isExploreResult)"
+          v-if="
+            $store.getters.isNormalPage && !(isSearchResult && !isExploreResult)
+          "
         >
           书海
         </div>
@@ -497,7 +512,7 @@
           :effect="$store.getters.isNight ? 'dark' : 'light'"
           class="book-group-btn"
           :key="'bookGroup-manage'"
-          v-if="bookGroupDisplayList.length"
+          v-if="$store.getters.isNormalPage && bookGroupDisplayList.length"
           @click="showManageBookGroup"
         >
           管理
@@ -607,6 +622,7 @@
       :top="this.collapseMenu ? '0' : '15vh'"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg' : ''"
+      v-if="$store.getters.isNormalPage"
     >
       <div class="source-container source-list-container">
         <el-checkbox-group
@@ -658,6 +674,7 @@
       "
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
+      v-if="$store.getters.isNormalPage"
     >
       <div class="custom-dialog-title" slot="title">
         <span class="el-dialog__title"
@@ -811,6 +828,7 @@
       :top="dialogTop"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
+      v-if="$store.getters.isNormalPage"
     >
       <div class="source-container table-container">
         <el-table
@@ -887,6 +905,7 @@
       :top="dialogTop"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
+      v-if="$store.getters.isNormalPage"
     >
       <div class="source-container table-container">
         <el-table
@@ -973,6 +992,7 @@
       @closed="importBookDialogClosed"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
+      v-if="$store.getters.isNormalPage"
     >
       <div class="source-container table-container">
         <div class="check-form">
@@ -1032,6 +1052,7 @@
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @opened="$refs.bookGroupTableRef.doLayout()"
       @closed="isShowBookGroupSettingDialog = false"
+      v-if="$store.getters.isNormalPage"
     >
       <div class="source-container table-container">
         <el-table
@@ -1174,6 +1195,7 @@
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @closed="showRssSourceEditButton = false"
+      v-if="$store.getters.isNormalPage"
     >
       <div class="custom-dialog-title" slot="title">
         <span class="el-dialog__title"
@@ -1232,6 +1254,7 @@
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @closed="rssArticleList = []"
+      v-if="$store.getters.isNormalPage"
     >
       <div class="rss-article-list-container" ref="rssArticleListRef">
         <div
@@ -1274,6 +1297,7 @@
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @closed="rssArticleInfo = {}"
+      v-if="$store.getters.isNormalPage"
     >
       <div class="rss-article-info-container">
         <div
@@ -1465,7 +1489,7 @@ export default {
   },
   activated() {
     document.title = "阅读";
-    this.scanLocalStorage();
+    this.scanCacheStorage();
   },
   methods: {
     init(refresh) {
@@ -3347,61 +3371,62 @@ export default {
           });
       }
     },
-    scanLocalStorage() {
+    async scanCacheStorage() {
       this.localCacheStats = {
-        total: this.analyseLocalStorage().totalBytes,
-        bookSourceList: this.analyseLocalStorage("bookSourceList").totalBytes,
-        rssSources: this.analyseLocalStorage("rssSources").totalBytes,
-        chapterList: this.analyseLocalStorage("chapterList").totalBytes,
-        chapterContent: this.analyseLocalStorage("chapterContent").totalBytes
+        total: (await this.analyseLocalStorage()).totalBytes,
+        bookSourceList: (await this.analyseLocalStorage("bookSourceList"))
+          .totalBytes,
+        rssSources: (await this.analyseLocalStorage("rssSources")).totalBytes,
+        chapterList: (await this.analyseLocalStorage("chapterList")).totalBytes,
+        chapterContent: (await this.analyseLocalStorage("chapterContent"))
+          .totalBytes
       };
     },
     analyseLocalStorage(match) {
       let totalBytes = 0;
       let cacheBytes = 0;
-      try {
-        for (const key in window.localStorage) {
+      return window.$cacheStorage
+        .iterate(function(value, key) {
           if (!match || key.indexOf(match) >= 0) {
-            if (Object.hasOwnProperty.call(window.localStorage, key)) {
-              const data = window.localStorage[key];
-              totalBytes += data.getBytesLength();
-              if (key.startsWith("localCache@")) {
-                cacheBytes += data.getBytesLength();
-              }
+            totalBytes += JSON.stringify(value).getBytesLength();
+            if (key.startsWith("localCache@")) {
+              cacheBytes += JSON.stringify(value).getBytesLength();
             }
           }
-        }
-      } catch (e) {
-        //
-      }
-      return {
-        totalBytes: formatSize(totalBytes),
-        cacheBytes: formatSize(cacheBytes)
-      };
+        })
+        .then(() => {
+          return {
+            totalBytes: formatSize(totalBytes),
+            cacheBytes: formatSize(cacheBytes)
+          };
+        })
+        .catch(function(err) {
+          // 当出错时，此处代码运行
+          console.log(err);
+        });
     },
     clearCache(match) {
       let cacheBytes = 0;
-      try {
-        for (const key in window.localStorage) {
+      window.$cacheStorage
+        .iterate(function(value, key) {
           if (!match || key.indexOf(match) >= 0) {
-            if (Object.hasOwnProperty.call(window.localStorage, key)) {
-              const data = window.localStorage[key];
-              if (key.startsWith("localCache@")) {
-                cacheBytes += data.getBytesLength();
-                window.localStorage.removeItem(key);
-              }
+            if (key.startsWith("localCache@")) {
+              cacheBytes += JSON.stringify(value).getBytesLength();
+              window.$cacheStorage.removeItem(key);
             }
           }
-        }
-      } catch (e) {
-        //
-      }
+        })
+        .then(() => {
+          this.scanCacheStorage();
 
-      this.scanLocalStorage();
-
-      return {
-        cacheBytes: formatSize(cacheBytes)
-      };
+          return {
+            cacheBytes: formatSize(cacheBytes)
+          };
+        })
+        .catch(function(err) {
+          // 当出错时，此处代码运行
+          console.log(err);
+        });
     },
     scrollHandler() {
       this.lastScrollTop = this.$refs.bookList.scrollTop;
@@ -3409,7 +3434,7 @@ export default {
   },
   computed: {
     config() {
-      return this.$store.state.config;
+      return this.$store.getters.config;
     },
     isNight() {
       return this.$store.getters.isNight;

@@ -1,4 +1,4 @@
-import { Message } from "element-ui";
+// import { Message } from "element-ui";
 
 export const formatSize = function(value, scale) {
   if (value == null || value == "") {
@@ -81,18 +81,30 @@ export const networkFirstRequest = async function(
   const res = await requestFunc().catch(err => {
     // 请求出错，使用缓存
     if (forceCache || !window.serviceWorkerReady) {
-      try {
-        let cacheResponse =
-          window.localStorage && window.localStorage.getItem(cacheKey);
-        if (cacheResponse) {
-          cacheResponse = JSON.parse(cacheResponse);
+      // 使用新的异步存储
+      return window.$cacheStorage
+        .getItem(cacheKey)
+        .then(cacheResponse => {
           if (cacheResponse) {
             return { data: cacheResponse };
           }
-        }
-      } catch (error) {
-        //
-      }
+        })
+        .catch(err => {
+          // 兼容旧逻辑
+          try {
+            let cacheResponse =
+              window.localStorage && window.localStorage.getItem(cacheKey);
+            if (cacheResponse) {
+              cacheResponse = JSON.parse(cacheResponse);
+              if (cacheResponse) {
+                return { data: cacheResponse };
+              }
+            }
+          } catch (error) {
+            //
+          }
+          throw err;
+        });
     }
     throw err;
   });
@@ -101,18 +113,8 @@ export const networkFirstRequest = async function(
     res.data &&
     res.data.isSuccess
   ) {
-    try {
-      window.localStorage &&
-        window.localStorage.setItem(cacheKey, JSON.stringify(res.data));
-    } catch (error) {
-      Math.random() > 0.7 &&
-        setTimeout(() => {
-          Message.error({
-            message: "本地空间已满，请去书架页面清空缓存",
-            duration: 500
-          });
-        }, 1000);
-    }
+    // 使用新的异步存储
+    window.$cacheStorage.setItem(cacheKey, res.data).catch(() => {});
   }
   return res;
 };
@@ -127,22 +129,35 @@ export const cacheFirstRequest = async function(
   // validateCache === true 时，直接刷新缓存
   if (validateCache !== true) {
     if (forceCache || !window.serviceWorkerReady) {
-      try {
-        let cacheResponse =
-          window.localStorage && window.localStorage.getItem(cacheKey);
-        if (cacheResponse) {
-          cacheResponse = JSON.parse(cacheResponse);
+      let cacheResponse = await window.$cacheStorage
+        .getItem(cacheKey)
+        .then(cacheResponse => {
           if (cacheResponse) {
-            if (
-              !validateCache ||
-              (validateCache && validateCache(cacheResponse))
-            ) {
-              return { data: cacheResponse };
-            }
+            return cacheResponse;
           }
+          console.log("Cache not found in new cache");
+          throw new Error("Cache not found");
+        })
+        .catch(() => {
+          // 兼容旧逻辑
+          try {
+            let cacheResponse =
+              window.localStorage && window.localStorage.getItem(cacheKey);
+            if (cacheResponse) {
+              cacheResponse = JSON.parse(cacheResponse);
+              if (cacheResponse) {
+                return cacheResponse;
+              }
+            }
+          } catch (error) {
+            //
+          }
+          return null;
+        });
+      if (cacheResponse) {
+        if (!validateCache || (validateCache && validateCache(cacheResponse))) {
+          return { data: cacheResponse };
         }
-      } catch (error) {
-        //
       }
     }
   }
@@ -152,18 +167,8 @@ export const cacheFirstRequest = async function(
     res.data &&
     res.data.isSuccess
   ) {
-    try {
-      window.localStorage &&
-        window.localStorage.setItem(cacheKey, JSON.stringify(res.data));
-    } catch (error) {
-      Math.random() > 0.7 &&
-        setTimeout(() => {
-          Message.error({
-            message: "本地空间已满，请去书架页面清空缓存",
-            duration: 500
-          });
-        }, 1000);
-    }
+    // 使用新的异步存储
+    window.$cacheStorage.setItem(cacheKey, res.data).catch(() => {});
   }
   return res;
 };
