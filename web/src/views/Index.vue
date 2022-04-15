@@ -539,7 +539,6 @@
               <el-image
                 class="cover"
                 :src="getCover(book.coverUrl, true)"
-                :key="book.coverUrl"
                 fit="cover"
                 lazy
               >

@@ -587,7 +587,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (key.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入搜索关键字")
         }
-        if (lastIndex >= userBookSourceList.size) {
+        if (lastIndex >= userBookSourceList.size - 1) {
             return returnData.setErrorMsg("没有更多了")
         }
 
@@ -671,7 +671,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             response.end("data: " + jsonEncode(returnData.setErrorMsg("请输入搜索关键字"), false) + "\n\n")
             return
         }
-        if (lastIndex >= userBookSourceList.size) {
+        if (lastIndex >= userBookSourceList.size - 1) {
             response.write("event: error\n")
             response.end("data: " + jsonEncode(returnData.setErrorMsg("没有更多了"), false) + "\n\n")
             return
@@ -724,7 +724,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        val bookUrl: String
+        var bookUrl: String
         var lastIndex: Int
         var searchSize: Int
         var bookSourceGroup: String
@@ -740,6 +740,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
             searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 5
             bookSourceGroup = context.queryParam("bookSourceGroup").firstOrNull() ?: ""
+            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
         }
         var userNameSpace = getUserNameSpace(context)
         var userBookSourceList = loadBookSourceStringList(userNameSpace, bookSourceGroup)
@@ -749,7 +750,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
         }
-        if (lastIndex >= userBookSourceList.size) {
+        if (lastIndex >= userBookSourceList.size - 1) {
             return returnData.setErrorMsg("没有更多了")
         }
         var book = getShelfBookByURL(bookUrl, userNameSpace)
@@ -810,22 +811,27 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用"), false) + "\n\n")
             return
         }
-        val bookUrl: String
+        var bookUrl: String
         var lastIndex: Int
         var searchSize: Int
         var bookSourceGroup: String
+        var refresh: Int = 0
+
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
             bookUrl = context.bodyAsJson.getString("url")
             lastIndex = context.bodyAsJson.getInteger("lastIndex", -1)
             searchSize = context.bodyAsJson.getInteger("searchSize", 30)
             bookSourceGroup = context.bodyAsJson.getString("bookSourceGroup", "")
+            refresh = context.bodyAsJson.getInteger("refresh", 0)
         } else {
             // get 请求
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
             lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
             searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 30
             bookSourceGroup = context.queryParam("bookSourceGroup").firstOrNull() ?: ""
+            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
+            refresh = context.queryParam("refresh").firstOrNull()?.toInt() ?: 0
         }
         var userNameSpace = getUserNameSpace(context)
         var userBookSourceList = loadBookSourceStringList(userNameSpace, bookSourceGroup)
@@ -837,11 +843,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (bookUrl.isNullOrEmpty()) {
             response.write("event: error\n")
             response.end("data: " + jsonEncode(returnData.setErrorMsg("请输入书籍链接"), false) + "\n\n")
-            return
-        }
-        if (lastIndex >= userBookSourceList.size) {
-            response.write("event: error\n")
-            response.end("data: " + jsonEncode(returnData.setErrorMsg("没有更多了"), false) + "\n\n")
             return
         }
 
@@ -856,13 +857,20 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         // 校正 lastIndex
         var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
-        if (bookSourceList != null && bookSourceList.size() > 0) {
+        // refresh > 0 校验书源最后一个书源作为lastIndex的可选项
+        if (refresh <= 0 && bookSourceList != null && bookSourceList.size() > 0) {
             try {
                 val lastBookSourceUrl = bookSourceList.getJsonObject(bookSourceList.size() - 1).getString("origin")
                 lastIndex = Math.max(lastIndex, getBookSourceBySourceURL(lastBookSourceUrl, userNameSpace, userBookSourceList).second)
             } catch(e: Exception) {
                 e.printStackTrace()
             }
+        }
+
+        if (lastIndex >= userBookSourceList.size - 1) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setData(mapOf("lastIndex" to lastIndex)).setErrorMsg("没有更多了"), false) + "\n\n")
+            return
         }
 
         searchSize = if(searchSize > 0) searchSize else 30
@@ -944,7 +952,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        val bookUrl: String
+        var bookUrl: String
         var refresh: Int = 0
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
@@ -954,6 +962,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             // get 请求
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
             refresh = context.queryParam("refresh").firstOrNull()?.toInt() ?: 0
+            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")

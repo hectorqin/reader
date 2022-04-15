@@ -15,7 +15,7 @@ fi
 
 task=$1
 
-version="1.9.0"
+version="2.0.0"
 
 getVersion()
 {
