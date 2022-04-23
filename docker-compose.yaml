@@ -2,9 +2,8 @@ version: '3.1'
 services:
 
 # reader 在线阅读
-# 作者GitHub : https://github.com/hectorqin/reader
-# 本人在线演示(服务器位于日本) : https://reader.nxnow.online ,账号/密码分别为guest/guest123,也可自行创建账号添加书源
-# 书源参考 : https://github.com/NZESupB/ReadSource ,书源合集下选一个合集进入网页后, Ctrl+S 保存至本地后导入网站即可
+# 本人在线演示(服务器位于日本) : https://reader.nxnow.online(此域名7月过气)更换为 https://read.nxnow.top ,测试账号/密码分别为guest/guest123,也可自行创建账号添加书源
+# 书源参考 : https://github.com/NZESupB/ReadSource ,书源合集下选一个合集进入网页后, Ctrl+S 保存至本地后导入网站即可,或者点击远程书源,将链接导入即可
 
 #docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 hectorqin/reader
 # 多用户版
@@ -24,21 +23,23 @@ services:
 #      - /home/reader/storage:/storage
 #    environment:
 #      - SPRING_PROFILES_ACTIVE=prod
+#      - READER_APP_CACHECHAPTERCONTENT=true #是否开启缓存章节内容 V2.0
 # 多用户版
   read_all:
     image: hectorqin/reader
-    container_name: reader # 容器名 可自行修改
+    container_name: reader #容器名 可自行修改
     restart: always
     ports:
-      - 4396:8080 # 4396端口映射可自行修改
+      - 4396:8080 #4396端口映射可自行修改
     volumes:
-      - /home/reader/logs:/logs # logs映射目录 /home/reader/logs 可自行修改
-      - /home/reader/storage:/storage # 数据映射目录 /home/reader/storage 可自行修改
+      - /home/reader/logs:/logs #log映射目录 /home/reader/log 可自行修改
+      - /home/reader/storage:/storage #数据映射目录 /home/reader/storage 可自行修改
     environment:
       - SPRING_PROFILES_ACTIVE=prod
-      - READER_APP_SECURE=true
-      - READER_APP_SECUREKEY= password  # 管理员密码  可自行修改
-      # - READER_APP_INVITECODE=123456 # 注册邀请码,如需要取消注释 可自行修改
+      - READER_APP_SECURE=true #开启登录鉴权，开启后将支持多用户模式
+      - READER_APP_CACHECHAPTERCONTENT=true #是否开启缓存章节内容 V2.0
+      - READER_APP_SECUREKEY=adminpwd  #管理员密码  可自行修改
+      #- READER_APP_INVITECODE=registercode #注册邀请码,如需要取消注释 可自行修改
 # 自动更新docker
   watchtower:
     image: containrrr/watchtower
@@ -50,6 +51,6 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     command: reader watchtower --cleanup --schedule "0 0 4 * * *"
-    # 仅更新reader与watchtower容器,如需其他自行添加容器名,如:reader watchtower redis
+    # 仅更新reader与watchtower容器,如需其他自行添加 '容器名' ,如:reader watchtower redis
     # --cleanup 更新后清理旧版本镜像
     # --schedule 自动检测更新 crontab定时(限定6位crontab) 此处代表凌晨4点整
