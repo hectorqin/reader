@@ -33,8 +33,8 @@ services:
     ports:
       - 4396:8080 #4396端口映射可自行修改
     volumes:
-      - /home/reader/logs:/logs #log映射目录 /home/reader/log 可自行修改
-      - /home/reader/storage:/storage #数据映射目录 /home/reader/storage 可自行修改
+      - /home/reader/logs:/logs #log映射目录 /home/reader/logs 映射目录可自行修改
+      - /home/reader/storage:/storage #数据映射目录 /home/reader/storage 映射目录可自行修改
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - READER_APP_SECURE=true #开启登录鉴权，开启后将支持多用户模式
