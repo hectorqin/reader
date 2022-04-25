@@ -238,30 +238,87 @@ java -jar reader-$version.jar --reader.app.secure=true --reader.app.secureKey=�
 
 # 使用预编译的镜像
 
-# 自用版
+# 自用版(建议修改映射端口)
 docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 hectorqin/reader
 
-# 多用户版
+# 多用户版(建议修改映射端口)
 docker run -d --restart=always --name=reader -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 hectorqin/reader java -jar /app/bin/reader.jar --spring.profiles.active=prod --reader.app.secure=true --reader.app.secureKey=管理密码 --reader.app.inviteCode=注册邀请码
 
-# 多用户版 使用环境变量
+# 多用户版 使用环境变量(建议修改映射端口)
 docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -e "READER_APP_SECURE=true" -e "READER_APP_SECUREKEY=管理密码" -e "READER_APP_INVITECODE=注册邀请码" -v $(pwd)/logs:/logs -v $(pwd)/storage:/storage -p 8080:8080 hectorqin/reader
 
 # 更新docker镜像
 # docker pull hectorqin/reader
 
+#:后面的端口修改为映射端口
 # web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/
+```
 
-# 使用docker-compose
-# 创建 /home/reader 目录，也可使用其他目录，更换目录需要编辑 docker-compose.yaml 里面的挂载目录 volumes
-# 下载项目里的 docker-compose.yaml 到 /home/reader 目录
-# 按照 docker-compose.yaml 里面的注释编辑相关配置
+### Docker-Compose版(推荐)
+
+```bash
+#安装docker-compose
+#Debian/Ubuntu
+apt install docker-compose -y
+#CentOS
+curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+chmod +x /usr/local/bin/docker-compose
+docker-compose --version
+
+# 下载项目里的 docker-compose.yaml
+wget https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
+# 更具 docker-compose.yaml 里面的注释编辑所需配置
 # 启动 docker-compose
 docker-compose up -d
 
 # 停止 docker-compose
 docker-compose stop
+```
+
+## Nginx反向代理
+
+```nginx
+server {
+    listen 80;
+    server_name 域名;
+    #开启ssl解除注释
+    #不使用宝塔获取证书脚本  https://github.com/Misaka-blog/acme-1key  
+    #listen 443 ssl;
+    #ssl_certificate 证书.cer;
+    #ssl_certificate_key 证书.key;
+    #ssl_protocols TLSv1.1 TLSv1.2 TLSv1.3;
+    #ssl_ciphers EECDH+CHACHA20:EECDH+CHACHA20-draft:EECDH+AES128:RSA+AES128:EECDH+AES256:RSA+AES256:EECDH+3DES:RSA+3DES:!MD5;
+    #ssl_prefer_server_ciphers on;
+    #ssl_session_cache shared:SSL:10m;
+    #ssl_session_timeout 10m;
+    #if ($server_port !~ 443){
+    #    rewrite ^(/.*)$ https://$host$1 permanent;
+    #}
+    #error_page 497  https://$host$request_uri;
+
+    gzip on; #开启gzip压缩
+    gzip_min_length 1k; #设置对数据启用压缩的最少字节数
+    gzip_buffers 4 16k;
+    gzip_http_version 1.0;
+    gzip_comp_level 6; #设置数据的压缩等级,等级为1-9，压缩比从小到大
+    gzip_types text/plain text/css text/javascript application/json application/javascript application/x-javascript application/xml; #设置需要压缩的数据格式
+    gzip_vary on;
+    
+    location / {
+        proxy_pass  http://127.0.0.1:4396; #端口自行修改为映射端口
+        proxy_http_version	1.1;
+        proxy_cache_bypass	$http_upgrade;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        "upgrade";
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_set_header X-Forwarded-Port  $server_port;
+    }
+}
 ```
 
 ## 开发编译
