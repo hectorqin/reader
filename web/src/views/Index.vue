@@ -369,6 +369,18 @@
               @change="onBookFileChange"
               style="display:none"
             />
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="showLocalStoreManageDialog = true"
+              v-if="
+                !$store.state.isSecureMode ||
+                  $store.state.userInfo.enableLocalStore
+              "
+            >
+              浏览书仓
+            </el-tag>
           </div>
         </div>
         <div class="setting-wrapper">
@@ -538,7 +550,7 @@
               <!-- <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" /> -->
               <el-image
                 class="cover"
-                :src="getCover(book.coverUrl, true)"
+                :src="getCover(getBookCoverUrl(book), true)"
                 fit="cover"
                 lazy
               >
@@ -878,6 +890,24 @@
               </el-switch>
             </template>
           </el-table-column>
+          <el-table-column
+            property="enableLocalStore"
+            label="书仓"
+            min-width="80"
+          >
+            <template slot-scope="scope">
+              <el-switch
+                v-if="scope.row.userNS !== 'default'"
+                v-model="scope.row.enableLocalStore"
+                active-color="#13ce66"
+                inactive-color="#ff4949"
+                :active-value="true"
+                :inactive-value="false"
+                @change="toggleUserLocalStore(scope.row, $event)"
+              >
+              </el-switch>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
       <div slot="footer" class="dialog-footer">
@@ -998,8 +1028,8 @@
           <div class="book-cover">
             <el-image
               class="cover"
-              :src="getCover(importBookInfo.coverUrl, true)"
-              :key="importBookInfo.coverUrl"
+              :src="getCover(getBookCoverUrl(importBookInfo), true)"
+              :key="getBookCoverUrl(importBookInfo)"
               fit="cover"
               lazy
             >
@@ -1149,9 +1179,17 @@
           <div class="book-cover-bg" :style="bookCoverBgStyle"></div>
           <div class="book-cover-bg-image">
             <img
-              v-lazy="getCover(showBookInfo.coverUrl)"
+              v-lazy="getCover(getBookCoverUrl(showBookInfo))"
               :key="showBookInfo.name"
               alt=""
+              @click="triggerBookCoverRefClick"
+            />
+            <input
+              ref="bookCoverRef"
+              type="file"
+              accept="image/jpg, image/png, image/jpeg"
+              @change="onCoverFileChange"
+              style="display:none"
             />
           </div>
         </div>
@@ -1167,12 +1205,24 @@
               type="text"
               class="book-prop-btn"
               v-if="showBookInfo.origin === 'loc_book'"
-              @click="refreshLocalBook()"
+              @click="refreshLocalBook(showBookInfo)"
               >更新</el-button
             >
           </div>
           <div class="book-prop book-latest">
             最新： {{ showBookInfo.latestChapterTitle }}
+            <span class="book-prop-btn">
+              追更
+              <el-switch
+                v-model="showBookInfo.canUpdate"
+                active-color="#13ce66"
+                inactive-color="#ff4949"
+                :active-value="true"
+                :inactive-value="false"
+                @change="toggleBookCanUpdate(showBookInfo)"
+              >
+              </el-switch>
+            </span>
           </div>
           <div class="book-prop book-group" v-if="!isSearchResult">
             分组： {{ displayGroupName(showBookInfo.group) }}
@@ -1307,11 +1357,20 @@
         ></div>
       </div>
     </el-dialog>
+
+    <LocalStore
+      v-model="showLocalStoreManageDialog"
+      :dialogWidth="dialogWidth"
+      :dialogTop="dialogTop"
+      :dialogContentHeight="dialogContentHeight"
+      @importFromLocalStorePreview="importMultiBooks"
+    ></LocalStore>
   </div>
 </template>
 
 <script>
 import Explore from "../components/Explore.vue";
+import LocalStore from "../components/LocalStore.vue";
 import Axios from "../plugins/axios";
 import { errorTypeList } from "../plugins/config";
 import eventBus from "../plugins/eventBus";
@@ -1325,7 +1384,8 @@ const buildURL = require("axios/lib/helpers/buildURL");
 
 export default {
   components: {
-    Explore
+    Explore,
+    LocalStore
   },
   data() {
     return {
@@ -1427,7 +1487,9 @@ export default {
         rssSources: "0 Bytes",
         chapterList: "0 Bytes",
         chapterContent: "0 Bytes"
-      }
+      },
+
+      showLocalStoreManageDialog: false
     };
   },
   watch: {
@@ -1855,7 +1917,7 @@ export default {
         bookUrl: book.bookUrl,
         index: book.index ?? book.durChapterIndex ?? 0,
         type: book.type,
-        coverUrl: book.coverUrl,
+        coverUrl: this.getBookCoverUrl(book),
         author: book.author,
         origin: book.origin
       });
@@ -1882,7 +1944,12 @@ export default {
                 ? "修改书籍成功"
                 : "加入书架成功"
             );
-            this.loadBookshelf();
+            if (!isEdit) {
+              this.loadBookshelf();
+            } else {
+              this.$store.commit("updateShelfBook", res.data.data);
+            }
+            return res.data.data;
           }
         },
         error => {
@@ -2517,6 +2584,25 @@ export default {
         }
       );
     },
+    toggleUserLocalStore(user, enableLocalStore) {
+      Axios.post(this.api + "/updateUser", {
+        username: user.username,
+        enableLocalStore
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("修改成功");
+            this.userList = res.data.data.map(v => ({
+              ...v,
+              userNS: v.username
+            }));
+          }
+        },
+        error => {
+          this.$message.error("修改失败 " + (error && error.toString()));
+        }
+      );
+    },
     formatTableField(row, column, cellValue) {
       switch (column.property) {
         case "createdAt":
@@ -2779,6 +2865,15 @@ export default {
       this.$refs.bookRef.value = null;
     },
     async importMultiBooks(books) {
+      if (!books || !books.length) {
+        return;
+      }
+      if (books.length == 1) {
+        this.importBookInfo = books[0].book;
+        this.importBookChapters = books[0].chapters;
+        this.showImportBookDialog = true;
+        return;
+      }
       const res = await this.$confirm(
         `你选择导入多本书籍，请选择导入方式?`,
         "提示",
@@ -2787,11 +2882,15 @@ export default {
           cancelButtonText: "逐一确认导入",
           type: "warning",
           closeOnClickModal: false,
-          closeOnPressEscape: false
+          closeOnPressEscape: false,
+          distinguishCancelAndClose: true
         }
-      ).catch(() => {
-        return false;
+      ).catch(action => {
+        return action === "close" ? "close" : false;
       });
+      if (res === "close") {
+        return;
+      }
       if (res) {
         for (let i = 0; i < books.length; i++) {
           const book = books[i];
@@ -3023,9 +3122,9 @@ export default {
         }
       );
     },
-    refreshLocalBook() {
+    refreshLocalBook(book) {
       Axios.post(this.api + "/refreshLocalBook", {
-        bookUrl: this.showBookInfo.bookUrl
+        bookUrl: book.bookUrl
       }).then(
         res => {
           if (res.data.isSuccess) {
@@ -3038,6 +3137,11 @@ export default {
           this.$message.error("更新失败" + (error && error.toString()));
         }
       );
+    },
+    toggleBookCanUpdate(book) {
+      this.saveBook(book, false, true).then(res => {
+        this.showBookInfo = res;
+      });
     },
     loadRssSources(refresh) {
       return cacheFirstRequest(
@@ -3429,6 +3533,41 @@ export default {
     },
     scrollHandler() {
       this.lastScrollTop = this.$refs.bookList.scrollTop;
+    },
+    getBookCoverUrl(book) {
+      return book.customCoverUrl || book.coverUrl;
+    },
+    triggerBookCoverRefClick() {
+      this.$refs.bookCoverRef.dispatchEvent(new MouseEvent("click"));
+    },
+    onCoverFileChange(event) {
+      if (!event.target || !event.target.files || !event.target.files.length) {
+        return;
+      }
+      const rawFile = event.target.files && event.target.files[0];
+      // console.log("rawFile", rawFile);
+      let param = new FormData();
+      param.append("file", rawFile);
+      param.append("type", "covers");
+      Axios.post(this.api + "/uploadFile", param, {
+        headers: { "Content-Type": "multipart/form-data" }
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            if (!res.data.data.length) {
+              this.$message.error("上传文件失败");
+              return;
+            }
+            this.showBookInfo.customCoverUrl = res.data.data[0];
+            this.saveBook(this.showBookInfo).then(res => {
+              this.showBookInfo = res;
+            });
+          }
+        },
+        error => {
+          this.$message.error("上传文件失败 " + (error && error.toString()));
+        }
+      );
     }
   },
   computed: {
@@ -3454,8 +3593,8 @@ export default {
     },
     bookCoverList() {
       return this.bookList
-        .filter(v => v.coverUrl)
-        .map(v => this.getCover(v.coverUrl, true));
+        .filter(v => this.getBookCoverUrl(v))
+        .map(v => this.getCover(this.getBookCoverUrl(v), true));
     },
     shelfBooks() {
       return this.$store.getters.shelfBooks;
@@ -3649,7 +3788,7 @@ export default {
     bookCoverBgStyle() {
       return {
         backgroundImage: `url(${this.getCover(
-          this.showBookInfo.coverUrl,
+          this.getBookCoverUrl(this.showBookInfo),
           true
         )})`
       };

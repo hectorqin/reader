@@ -148,7 +148,8 @@ data class Book(
     }
 
     fun getLocalFile(): File {
-        if (isEpub()) {
+        if (isEpub() && originName.indexOf("localStore") < 0) {
+            // 非本地书仓的 epub文件
             return FileUtils.getFile(File(rootDir + originName), "index.epub")
         }
         return File(rootDir + originName)
@@ -183,7 +184,7 @@ data class Book(
         val defaultPath = "OEBPS"
 
         // 根据 META-INF/container.xml 来获取 contentOPF 位置
-        val containerRes = File(originName + File.separator + "index" + File.separator + "META-INF" + File.separator + "container.xml")
+        val containerRes = File(bookUrl + File.separator + "index" + File.separator + "META-INF" + File.separator + "container.xml")
         if (containerRes.exists()) {
             try {
                 val document = Jsoup.parse(containerRes.readText())

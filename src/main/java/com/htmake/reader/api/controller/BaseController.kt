@@ -267,6 +267,7 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
             "lastLoginAt" to user.last_login_at,
             "accessToken" to user.username + ":" + user.token,
             "enableWebdav" to user.enable_webdav,
+            "enableLocalStore" to user.enable_local_store,
             "createdAt" to user.created_at
         )
     }
@@ -293,7 +294,12 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         try {
             var seqs = url.split("?", ignoreCase = true, limit = 2)
             var file = seqs[0].split("/").last()
-            return file.split(".", ignoreCase = true, limit = 2).last()?.toLowerCase()
+            val dotPos = file.lastIndexOf('.')
+            return if (0 <= dotPos) {
+                file.substring(dotPos + 1)
+            } else {
+                defaultExt
+            }
         } catch (e: Exception) {
             return defaultExt
         }

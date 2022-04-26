@@ -66,6 +66,8 @@ export default new Vuex.Store({
           author: v.author,
           bookUrl: v.bookUrl,
           coverUrl: v.coverUrl,
+          customCoverUrl: v.customCoverUrl,
+          canUpdate: v.canUpdate,
           durChapterIndex: v.durChapterIndex,
           durChapterPos: v.durChapterPos,
           durChapterTime: v.durChapterTime,
@@ -92,6 +94,12 @@ export default new Vuex.Store({
             author: book.author || state.shelfBooks[index].author,
             bookUrl: book.bookUrl || state.shelfBooks[index].bookUrl,
             coverUrl: book.coverUrl || state.shelfBooks[index].coverUrl,
+            customCoverUrl:
+              book.customCoverUrl || state.shelfBooks[index].customCoverUrl,
+            canUpdate:
+              typeof book.canUpdate === "undefined"
+                ? state.shelfBooks[index].canUpdate
+                : book.canUpdate,
             durChapterIndex:
               book.durChapterIndex || state.shelfBooks[index].durChapterIndex,
             durChapterPos:

@@ -212,6 +212,18 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/saveBookGroup").coroutineHandler { bookController.saveBookGroup(it) }
         router.post("/reader3/deleteBookGroup").coroutineHandler { bookController.deleteBookGroup(it) }
 
+        // 书仓功能
+        // 获取书仓文件列表
+        router.get("/reader3/getLocalStoreFileList").coroutineHandler { bookController.getLocalStoreFileList(it) }
+        // 下载书仓文件
+        router.get("/reader3/getLocalStoreFile").coroutineHandlerWithoutRes { bookController.getLocalStoreFile(it) }
+        // 删除书仓文件
+        router.post("/reader3/deleteLocalStoreFile").coroutineHandler { bookController.deleteLocalStoreFile(it) }
+        router.post("/reader3/deleteLocalStoreFileList").coroutineHandler { bookController.deleteLocalStoreFileList(it) }
+        // 从书仓导入
+        router.post("/reader3/importFromLocalStorePreview").coroutineHandler { bookController.importFromLocalStorePreview(it) }
+        // 上传文件到书仓
+        router.post("/reader3/uploadFileToLocalStore").coroutineHandler { bookController.uploadFileToLocalStore(it) }
 
         /** 用户模块 */
         // 上传文件

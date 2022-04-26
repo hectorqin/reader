@@ -320,7 +320,8 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
         path = URLDecoder.decode(path, "UTF-8")
         var file = File(home + path)
         if (file.exists()) {
-            context.response().setStatusCode(405).end()
+            // 文件夹存在时，返回成功
+            context.response().setStatusCode(201).end()
             return
         }
         try {
