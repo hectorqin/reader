@@ -232,8 +232,10 @@ class YueduApi : RestVerticle() {
         // 删除文件
         router.post("/reader3/deleteFile").coroutineHandler { userController.deleteFile(it) }
 
-        // 登录使用自定义书架
+        // 登录
         router.post("/reader3/login").coroutineHandler { userController.login(it) }
+        // 注销登录
+        router.post("/reader3/logout").coroutineHandler { userController.logout(it) }
 
         // 获取用户信息
         router.get("/reader3/getUserInfo").coroutineHandler { userController.getUserInfo(it) }

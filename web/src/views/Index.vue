@@ -270,6 +270,12 @@
         <div class="setting-wrapper">
           <div class="setting-title">
             用户空间
+            <span
+              class="right-text"
+              v-if="$store.state.isSecureMode && $store.state.userInfo.username"
+              @click="logout()"
+              >注销</span
+            >
           </div>
           <div class="setting-item" v-if="$store.state.showManagerMode">
             <el-select
@@ -386,7 +392,7 @@
         <div class="setting-wrapper">
           <div class="setting-title">
             本地缓存
-            <span class="cache-stats-total">{{ localCacheStats.total }}</span>
+            <span class="right-text">{{ localCacheStats.total }}</span>
           </div>
           <div class="setting-item">
             <el-tag
@@ -3568,6 +3574,19 @@ export default {
           this.$message.error("上传文件失败 " + (error && error.toString()));
         }
       );
+    },
+    logout() {
+      Axios.post(this.api + "/logout").then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$store.commit("setToken", "");
+            window.location.reload(true);
+          }
+        },
+        error => {
+          this.$message.error("注销失败 " + (error && error.toString()));
+        }
+      );
     }
   },
   computed: {
@@ -3905,11 +3924,13 @@ export default {
         color: #b1b1b1;
         font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
 
-        .cache-stats-total {
+        .right-text {
           float: right;
           display: inline-block;
           height: 20px;
           line-height: 20px;
+          cursor: pointer;
+          user-select: none;
         }
       }
 

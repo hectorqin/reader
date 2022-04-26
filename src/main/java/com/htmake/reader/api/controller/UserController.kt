@@ -155,31 +155,36 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         // 清除自动登录token
         var accessToken = context.queryParam("accessToken").firstOrNull() ?: ""
         if (accessToken.isNotEmpty()) {
-            var userMap = mutableMapOf<String, MutableMap<String, Any>>()
-            var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
-            if (userMapJson != null) {
-                userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
-            }
-            var currentUser = userMap.getOrDefault(username, null)
-            if (currentUser == null) {
-                return returnData.setErrorMsg("系统错误")
-            }
-            var tokenMapVal = currentUser.getOrDefault("token_map", null)
-            if (tokenMapVal != null) {
-                var tokenMap: MutableMap<String, Long>? = tokenMapVal as MutableMap<String, Long>?
-                if (tokenMap != null) {
-                    tokenMap.remove(accessToken)
-                    currentUser.put("token_map", tokenMap)
-                }
-            }
-            if (currentUser.getOrDefault("token", "").equals(accessToken)) {
-                currentUser.put("token", "")
-            }
+            var tmp = accessToken.split(":", limit=2)
+            if (tmp.size >= 2) {
+                accessToken = tmp[1]
 
-            userMap.put(username, currentUser)
-            saveStorage("data", "users", value = userMap)
+                var userMap = mutableMapOf<String, MutableMap<String, Any>>()
+                var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
+                if (userMapJson != null) {
+                    userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
+                }
+                var currentUser = userMap.getOrDefault(username, null)
+                if (currentUser == null) {
+                    return returnData.setErrorMsg("系统错误")
+                }
+                var tokenMapVal = currentUser.getOrDefault("token_map", null)
+                if (tokenMapVal != null) {
+                    var tokenMap: MutableMap<String, Long>? = tokenMapVal as MutableMap<String, Long>?
+                    if (tokenMap != null) {
+                        tokenMap.remove(accessToken)
+                        currentUser.put("token_map", tokenMap)
+                    }
+                }
+                if (currentUser.getOrDefault("token", "").equals(accessToken)) {
+                    currentUser.put("token", "")
+                }
+
+                userMap.put(username, currentUser)
+                saveStorage("data", "users", value = userMap)
+            }
         }
-        return returnData.setData("NEED_LOGIN").setErrorMsg("请重新登录")
+        return returnData.setErrorMsg("请重新登录").setData("NEED_LOGIN")
     }
 
     suspend fun getUserList(context: RoutingContext): ReturnData {
