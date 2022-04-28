@@ -1,9 +1,13 @@
 package io.legado.app.model.analyzeRule
 
+import com.script.SimpleBindings
 import io.legado.app.constant.AppConst.SCRIPT_ENGINE
 import io.legado.app.constant.AppPattern.JS_PATTERN
 import io.legado.app.data.entities.BaseBook
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookSource
+import io.legado.app.data.entities.BaseSource
 import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
 import io.legado.app.help.http.CookieStore
@@ -14,10 +18,10 @@ import org.mozilla.javascript.NativeObject
 import java.net.URL
 import java.util.*
 import java.util.regex.Pattern
-import javax.script.SimpleBindings
 import kotlin.collections.HashMap
 import mu.KotlinLogging
 import io.legado.app.model.analyzeRule.RuleDataInterface
+import io.legado.app.model.webBook.WebBook
 
 private val logger = KotlinLogging.logger {}
 
@@ -25,15 +29,21 @@ private val logger = KotlinLogging.logger {}
  * 解析规则获取结果
  */
 @Suppress("unused", "RegExpRedundantEscape")
-class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
+class AnalyzeRule(
+    var ruleData: RuleDataInterface,
+    private val source: BaseSource? = null
+) : JsExtensions {
 
-    var book = if (ruleData is BaseBook) ruleData else null
+    val book get() = ruleData as? BaseBook
 
     var chapter: BookChapter? = null
     var nextChapterUrl: String? = null
     var content: Any? = null
+        private set
     var baseUrl: String? = null
+        private set
     var redirectUrl: URL? = null
+        private set
     private var isJSON: Boolean = false
     private var isRegex: Boolean = false
 
@@ -65,9 +75,10 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
     }
 
     fun setRedirectUrl(url: String): URL? {
-        kotlin.runCatching {
-            val urlMatcher = AnalyzeUrl.paramPattern.matcher(url)
-            redirectUrl = URL(if (urlMatcher.find()) url.substring(0, urlMatcher.start()) else url)
+        try {
+            redirectUrl = URL(url)
+        } catch (e: Exception) {
+            log("URL($url) error\n${e.localizedMessage}")
         }
         return redirectUrl
     }
@@ -121,16 +132,20 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
      * 获取文本列表
      */
     @JvmOverloads
-    fun getStringList(rule: String?, isUrl: Boolean = false): List<String>? {
+    fun getStringList(rule: String?, mContent: Any? = null, isUrl: Boolean = false): List<String>? {
         if (rule.isNullOrEmpty()) return null
-        val ruleList = splitSourceRule(rule, true)
-        return getStringList(ruleList, isUrl)
+        val ruleList = splitSourceRule(rule, false)
+        return getStringList(ruleList, mContent, isUrl)
     }
 
     @JvmOverloads
-    fun getStringList(ruleList: List<SourceRule>, isUrl: Boolean = false): List<String>? {
+    fun getStringList(
+        ruleList: List<SourceRule>,
+        mContent: Any? = null,
+        isUrl: Boolean = false
+    ): List<String>? {
         var result: Any? = null
-        val content = this.content
+        val content = mContent ?: this.content
         if (content != null && ruleList.isNotEmpty()) {
             result = content
             if (content is NativeObject) {
@@ -186,22 +201,22 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
      * 获取文本
      */
     @JvmOverloads
-    fun getString(ruleStr: String?, isUrl: Boolean = false, value: String? = null): String {
+    fun getString(ruleStr: String?, mContent: Any? = null, isUrl: Boolean = false): String {
         if (TextUtils.isEmpty(ruleStr)) return ""
         val ruleList = splitSourceRule(ruleStr)
-        return getString(ruleList, isUrl, value)
+        return getString(ruleList, mContent, isUrl)
     }
 
     @JvmOverloads
     fun getString(
         ruleList: List<SourceRule>,
-        isUrl: Boolean = false,
-        value: String? = null
+        mContent: Any? = null,
+        isUrl: Boolean = false
     ): String {
-        var result: Any? = value
-        val content = this.content
-        if ((content != null || result != null) && ruleList.isNotEmpty()) {
-            if (result == null) result = content
+        var result: Any? = null
+        val content = mContent ?: this.content
+        if (content != null && ruleList.isNotEmpty()) {
+            result = content
             if (result is NativeObject) {
                 result = result[ruleList[0].rule]?.toString()
             } else {
@@ -232,6 +247,8 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
         if (result == null) result = ""
         val str = kotlin.runCatching {
             Entities.unescape(result.toString())
+        }.onFailure {
+            log("Entities.unescape() error\n${it.localizedMessage}")
         }.getOrElse {
             result.toString()
         }
@@ -251,9 +268,10 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
     fun getElement(ruleStr: String): Any? {
         if (TextUtils.isEmpty(ruleStr)) return null
         var result: Any? = null
-        val ruleList = splitSourceRule(ruleStr)
-        content?.let { o ->
-            if (ruleList.isNotEmpty()) result = o
+        val content = this.content
+        val ruleList = splitSourceRule(ruleStr, true)
+        if (content != null && ruleList.isNotEmpty()) {
+            result = content
             for (sourceRule in ruleList) {
                 putRule(sourceRule.putMap)
                 sourceRule.makeUpRule(result)
@@ -283,9 +301,10 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
     @Suppress("UNCHECKED_CAST")
     fun getElements(ruleStr: String): List<Any> {
         var result: Any? = null
+        val content = this.content
         val ruleList = splitSourceRule(ruleStr, true)
-        content?.let { o ->
-            if (ruleList.isNotEmpty()) result = o
+        if (content != null && ruleList.isNotEmpty()) {
+            result = content
             for (sourceRule in ruleList) {
                 putRule(sourceRule.putMap)
                 result?.let {
@@ -328,8 +347,11 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
         val putMatcher = putPattern.matcher(vRuleStr)
         while (putMatcher.find()) {
             vRuleStr = vRuleStr.replace(putMatcher.group(), "")
-            val map = GSON.fromJsonObject<Map<String, String>>(putMatcher.group(1))
-            map?.let { putMap.putAll(map) }
+            GSON.fromJsonObject<Map<String, String>>(putMatcher.group(1))
+                .getOrNull()
+                ?.let {
+                    putMap.putAll(it)
+                }
         }
         return vRuleStr
     }
@@ -338,9 +360,10 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
      * 正则替换
      */
     private fun replaceRegex(result: String, rule: SourceRule): String {
+        if (rule.replaceRegex.isEmpty()) return result
         var vResult = result
-        if (rule.replaceRegex.isNotEmpty()) {
-            vResult = if (rule.replaceFirst) {
+        vResult = if (rule.replaceFirst) {
+            kotlin.runCatching {
                 val pattern = Pattern.compile(rule.replaceRegex)
                 val matcher = pattern.matcher(vResult)
                 if (matcher.find()) {
@@ -348,8 +371,14 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
                 } else {
                     ""
                 }
-            } else {
+            }.getOrElse {
+                vResult.replaceFirst(rule.replaceRegex, rule.replacement)
+            }
+        } else {
+            kotlin.runCatching {
                 vResult.replace(rule.replaceRegex.toRegex(), rule.replacement)
+            }.getOrElse {
+                vResult.replace(rule.replaceRegex, rule.replacement)
             }
         }
         return vResult
@@ -358,13 +387,13 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
     /**
      * 分解规则生成规则列表
      */
-    fun splitSourceRule(ruleStr: String?, isList: Boolean = false): List<SourceRule> {
-        if (ruleStr.isNullOrEmpty()) return ArrayList<SourceRule>()
+    fun splitSourceRule(ruleStr: String?, allInOne: Boolean = false): List<SourceRule> {
+        if (ruleStr.isNullOrEmpty()) return emptyList()
         val ruleList = ArrayList<SourceRule>()
         var mMode: Mode = Mode.Default
         var start = 0
         //仅首字符为:时为AllInOne，其实:与伪类选择器冲突，建议改成?更合理
-        if (isList && ruleStr.startsWith(":")) {
+        if (allInOne && ruleStr.startsWith(":")) {
             mMode = Mode.Regex
             isRegex = true
             start = 1
@@ -390,13 +419,13 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
                 ruleList.add(SourceRule(tmp, mMode))
             }
         }
+
         return ruleList
     }
 
     /**
      * 规则类
      */
-
     inner class SourceRule internal constructor(
         ruleStr: String,
         internal var mode: Mode = Mode.Default
@@ -427,16 +456,16 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
                     mode = Mode.XPath
                     ruleStr.substring(7)
                 }
-                ruleStr.startsWith("/") -> {//XPath特征很明显,无需配置单独的识别标头
-                    mode = Mode.XPath
-                    ruleStr
-                }
                 ruleStr.startsWith("@Json:", true) -> {
                     mode = Mode.Json
                     ruleStr.substring(6)
                 }
                 isJSON || ruleStr.startsWith("$.") || ruleStr.startsWith("$[") -> {
                     mode = Mode.Json
+                    ruleStr
+                }
+                ruleStr.startsWith("/") -> {//XPath特征很明显,无需配置单独的识别标头
+                    mode = Mode.XPath
                     ruleStr
                 }
                 else -> ruleStr
@@ -603,9 +632,9 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
                 return it.title
             }
         }
-        return chapter?.variableMap?.get(key)
-            ?: book?.variableMap?.get(key)
-            ?: ruleData.variableMap[key]
+        return chapter?.getVariable(key)
+            ?: book?.getVariable(key)
+            ?: ruleData?.getVariable(key)
             ?: ""
     }
 
@@ -617,6 +646,7 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
         bindings["java"] = this
         bindings["cookie"] = CookieStore
         bindings["cache"] = CacheManager
+        bindings["source"] = source
         bindings["book"] = book
         bindings["result"] = result
         bindings["baseUrl"] = baseUrl
@@ -627,16 +657,21 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
         return SCRIPT_ENGINE.eval(jsStr, bindings)
     }
 
+    override fun getSource(): BaseSource? {
+        return source
+    }
+
     /**
      * js实现跨域访问,不能删
      */
     override fun ajax(urlStr: String): String? {
         return runBlocking {
             kotlin.runCatching {
-                val analyzeUrl = AnalyzeUrl(urlStr, book = book)
-                analyzeUrl.getStrResponse(urlStr).body
+                val analyzeUrl = AnalyzeUrl(urlStr, source = source, ruleData = book)
+                analyzeUrl.getStrResponseAwait().body
             }.onFailure {
-                it.printStackTrace()
+                log("ajax(${urlStr}) error\n${it.stackTraceToString()}")
+                // it.printStackTrace()
             }.getOrElse {
                 it.msg
             }
@@ -653,6 +688,39 @@ class AnalyzeRule(val ruleData: RuleDataInterface) : JsExtensions {
             return "${matcher.group(1)}${StringUtils.stringToInt(matcher.group(2))}${matcher.group(3)}"
         }
         return s
+    }
+
+    /**
+     * 更新BookUrl,如果搜索结果有tocUrl也会更新,有些书源bookUrl定期更新,可以在js内调用更新
+     */
+    fun refreshBookUrl() {
+        runBlocking {
+            val bookSource = source as? BookSource
+            val book = book as? Book
+            if (bookSource == null || book == null) return@runBlocking
+            val books = WebBook(bookSource).searchBook(book.name)
+            books.forEach {
+                if (it.name == book.name && it.author == book.author) {
+                    book.bookUrl = it.bookUrl
+                    if (it.tocUrl.isNotBlank()) {
+                        book.tocUrl = it.tocUrl
+                    }
+                    return@runBlocking
+                }
+            }
+        }
+    }
+
+    /**
+     * 更新tocUrl,有些书源目录url定期更新,可以在js调用更新
+     */
+    fun refreshTocUrl() {
+        runBlocking {
+            val bookSource = source as? BookSource
+            val book = book as? Book
+            if (bookSource == null || book == null) return@runBlocking
+            WebBook(bookSource).getBookInfo(book)
+        }
     }
 
     companion object {

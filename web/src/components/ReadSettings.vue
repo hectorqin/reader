@@ -545,12 +545,12 @@ export default {
     },
     moreFontSize() {
       let config = this.config;
-      if (config.fontSize < 48) config.fontSize += 2;
+      if (config.fontSize < 60) config.fontSize += 1;
       this.$store.commit("setConfig", config);
     },
     lessFontSize() {
       let config = this.config;
-      if (config.fontSize > 12) config.fontSize -= 2;
+      if (config.fontSize > 10) config.fontSize -= 1;
       this.$store.commit("setConfig", config);
     },
     moreFontWeight() {

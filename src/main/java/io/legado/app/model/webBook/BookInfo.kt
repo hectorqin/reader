@@ -25,7 +25,7 @@ object BookInfo {
             "error_get_web_content: " + baseUrl
         )
         debugLog?.log(bookSource.bookSourceUrl, "≡获取成功:${baseUrl}")
-        val analyzeRule = AnalyzeRule(book)
+        val analyzeRule = AnalyzeRule(book, bookSource)
         analyzeRule.setContent(body).setBaseUrl(baseUrl)
         analyzeRule.setRedirectUrl(redirectUrl)
         analyzeBookInfo(book, body, analyzeRule, bookSource, baseUrl, redirectUrl, canReName, debugLog)
@@ -108,14 +108,17 @@ object BookInfo {
         debugLog?.log(bookSource.bookSourceUrl, "┌获取封面链接")
         try {
             analyzeRule.getString(infoRule.coverUrl).let {
-                if (it.isNotEmpty()) book.coverUrl = NetworkUtils.getAbsoluteURL(redirectUrl, it)
+                if (it.isNotEmpty()) {
+                    book.coverUrl =
+                        NetworkUtils.getAbsoluteURL(redirectUrl, it)
+                }
             }
             debugLog?.log(bookSource.bookSourceUrl, "└${book.coverUrl}")
         } catch (e: Exception) {
             debugLog?.log(bookSource.bookSourceUrl, "└${e.localizedMessage}")
         }
         debugLog?.log(bookSource.bookSourceUrl, "┌获取目录链接")
-        book.tocUrl = analyzeRule.getString(infoRule.tocUrl, true)
+        book.tocUrl = analyzeRule.getString(infoRule.tocUrl, isUrl = true)
         if (book.tocUrl.isEmpty()) book.tocUrl = baseUrl
         if (book.tocUrl == baseUrl) {
             book.tocHtml = body

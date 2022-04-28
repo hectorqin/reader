@@ -1,4 +1,4 @@
-package io.legado.app.help.http;
+package io.legado.app.help;
 
 //import androidx.annotation.NonNull;
 import org.jsoup.Jsoup;
@@ -34,7 +34,7 @@ import static io.legado.app.utils.TextUtils.isEmpty;
  * @version 1.0
  * @since Create on 2010-01-27 11:19:00
  */
-public class EncodingDetect {
+public class EncodingDetectHelp {
 
     public static String getHtmlEncode( byte[] bytes) {
         try {

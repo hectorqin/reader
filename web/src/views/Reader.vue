@@ -364,7 +364,7 @@
         <span
           class="bottom-btn"
           v-if="show && !isSlideRead && !error"
-          @click="toNextChapter"
+          @click="toNextChapter()"
           >加载下一章</span
         >
       </div>

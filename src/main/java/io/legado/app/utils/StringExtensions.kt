@@ -1,11 +1,17 @@
 package io.legado.app.utils
 
 // import org.apache.commons.text.StringEscapeUtils
+import io.legado.app.constant.AppPattern.dataUriRegex
 
 fun String?.safeTrim() = if (this.isNullOrBlank()) null else this.trim()
 
 fun String?.isAbsUrl() = if (this.isNullOrBlank()) false else this.startsWith("http://", true)
         || this.startsWith("https://", true)
+
+fun String?.isDataUrl() =
+    this?.let {
+        dataUriRegex.matches(it)
+    } ?: false
 
 fun String?.isJson(): Boolean = this?.run {
     val str = this.trim()
@@ -25,6 +31,19 @@ fun String?.isJsonArray(): Boolean = this?.run {
     val str = this.trim()
     str.startsWith("[") && str.endsWith("]")
 } ?: false
+
+fun String?.isXml(): Boolean =
+    this?.run {
+        val str = this.trim()
+        str.startsWith("<") && str.endsWith(">")
+    } ?: false
+
+fun String?.isTrue(nullIsTrue: Boolean = false): Boolean {
+    if (this.isNullOrBlank() || this == "null") {
+        return nullIsTrue
+    }
+    return !this.matches("\\s*(?i)(false|no|not|0)\\s*".toRegex())
+}
 
 fun String?.htmlFormat(): String = if (this.isNullOrBlank()) "" else
     this.replace("(?i)<(br[\\s/]*|/*p\\b.*?|/*div\\b.*?)>".toRegex(), "\n")// 替换特定标签为换行符

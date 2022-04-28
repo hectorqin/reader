@@ -9,14 +9,9 @@ import java.io.File
 object DefaultData {
     const val txtTocRuleFileName = "txtTocRule.json"
 
-    val txtTocRules by lazy {
+    val txtTocRules: List<TxtTocRule> by lazy {
         val json = String(DefaultData::class.java.getResource("${File.separator}defaultData${File.separator}$txtTocRuleFileName").readBytes())
-
-        // String(
-        //     File("defaultData${File.separator}$txtTocRuleFileName")
-        //         .readBytes()
-        // )
-        GSON.fromJsonArray<TxtTocRule>(json)!!
+        GSON.fromJsonArray<TxtTocRule>(json).getOrNull() ?: emptyList()
     }
 
     // val rssSources by lazy {

@@ -42,21 +42,14 @@ class AnalyzeByJSonPath(json: Any) {
                 try {
 
                     val ob = ctx.read<Any>(rule)
+                    result = if (ob is List<*>) {
+                        ob.joinToString("\n")
+                    } else {
+                        ob.toString()
+                    }
 
-                    result = (if (ob is List<*>) {
-
-                        val builder = StringBuilder()
-                        for (o in ob) {
-                            builder.append(o).append("\n")
-                        }
-
-                        builder.deleteCharAt(builder.lastIndex) //删除末尾赘余换行
-
-                        builder
-
-                    } else ob).toString()
-
-                } catch (ignored: Exception) {
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
 
             }
@@ -100,15 +93,16 @@ class AnalyzeByJSonPath(json: Any) {
 
                         for (o in obj) result.add(o.toString())
 
-                    } else result.add(obj.toString())
-
-                } catch (ignored: Exception) {
+                    } else {
+                        result.add(obj.toString())
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
-
-            } else result.add(st)
-
+            } else {
+                result.add(st)
+            }
             return result
-
         } else {
             val results = ArrayList<List<String>>()
             for (rl in rules) {
@@ -156,7 +150,6 @@ class AnalyzeByJSonPath(json: Any) {
                     e.printStackTrace()
                 }
             }
-            return null
         } else {
             val results = ArrayList<ArrayList<*>>()
             for (rl in rules) {

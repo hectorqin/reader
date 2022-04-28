@@ -1,4 +1,4 @@
-package io.legado.app.localBook
+package io.legado.app.model.localBook
 
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter

@@ -2,7 +2,7 @@ package io.legado.app.help.http
 
 import io.legado.app.utils.UTF8BOMFighter
 import okhttp3.ResponseBody
-import io.legado.app.help.http.EncodingDetect
+import io.legado.app.utils.EncodingDetect
 import retrofit2.Converter
 import retrofit2.Retrofit
 import java.lang.reflect.Type

@@ -8,7 +8,6 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssArticle
-import io.legado.app.help.storage.OldRule
 import io.legado.app.model.webBook.WebBook
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
@@ -65,7 +64,7 @@ import io.legado.app.utils.EncoderUtils
 import io.legado.app.utils.ACache
 import io.legado.app.model.rss.Rss
 import org.springframework.scheduling.annotation.Scheduled
-import io.legado.app.localBook.LocalBook
+import io.legado.app.model.localBook.LocalBook
 import java.nio.file.Paths
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -122,7 +121,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (bookSource.isNullOrEmpty()) {
                 return returnData.setErrorMsg("未配置书源")
             }
-            bookInfo = mergeBookCacheInfo(WebBook(bookSource).getBookInfo(bookUrl))
+            bookInfo = mergeBookCacheInfo(WebBook(bookSource, appConfig.debugLog).getBookInfo(bookUrl))
         }
 
         // 缓存书籍信息
@@ -286,7 +285,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (bookSource.isNullOrEmpty()) {
                 return returnData.setErrorMsg("未配置书源")
             }
-            bookInfo = mergeBookCacheInfo(WebBook(bookSource).getBookInfo(bookUrl))
+            bookInfo = mergeBookCacheInfo(WebBook(bookSource, appConfig.debugLog).getBookInfo(bookUrl))
             // 缓存书籍信息
             saveBookInfoCache(arrayListOf<Book>(bookInfo))
         } else {
@@ -408,7 +407,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 if (bookInfo != null && !bookInfo.isLocalBook() && bookSource.isNullOrEmpty()) {
                     return returnData.setErrorMsg("未配置书源")
                 }
-                bookInfo = bookInfo ?: mergeBookCacheInfo(WebBook(bookSource ?: "").getBookInfo(bookUrl))
+                bookInfo = bookInfo ?: mergeBookCacheInfo(WebBook(bookSource ?: "", appConfig.debugLog).getBookInfo(bookUrl))
                 var chapterList = getLocalChapterList(bookInfo, bookSource ?: "", false, userNameSpace)
                 if (chapterIndex < chapterList.size) {
                     chapterInfo = chapterList.get(chapterIndex)
@@ -501,7 +500,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 }
             }
             try {
-                content = WebBook(bookSource ?: "", false).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
+                content = WebBook(bookSource ?: "", appConfig.debugLog).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
                 if (appConfig.cacheChapterContent && chapterCacheFile != null) {
                     chapterCacheFile.writeText(content)
                 }
@@ -569,7 +568,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setErrorMsg("请输入搜索关键字")
         }
         logger.info { "searchBook" }
-        var result = WebBook(bookSource, false).searchBook(key, page)
+        var result = WebBook(bookSource, appConfig.debugLog).searchBook(key, page)
         return returnData.setData(result)
     }
 
@@ -1143,7 +1142,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (bookSource == null) {
                 return returnData.setErrorMsg("书源信息错误")
             }
-            var newBook = WebBook(bookSource).getBookInfo(book.bookUrl)
+            var newBook = WebBook(bookSource, appConfig.debugLog).getBookInfo(book.bookUrl)
             book.fillData(newBook, listOf("name", "author", "coverUrl", "tocUrl", "intro", "latestChapterTitle", "wordCount"))
         }
         book = mergeBookCacheInfo(book)
@@ -1224,7 +1223,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setErrorMsg("书源信息错误")
         }
 
-        var newBookInfo = WebBook(bookSourceString).getBookInfo(newBookUrl)
+        var newBookInfo = WebBook(bookSourceString, appConfig.debugLog).getBookInfo(newBookUrl)
 
         var bookSource: BookSource = bookSourceString.toMap().toDataClass()
 

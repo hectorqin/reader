@@ -7,9 +7,9 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.FileUtils
-import io.legado.app.localBook.LocalBook
-import io.legado.app.localBook.EpubFile
-import io.legado.app.localBook.UmdFile
+import io.legado.app.model.localBook.LocalBook
+import io.legado.app.model.localBook.EpubFile
+import io.legado.app.model.localBook.UmdFile
 import java.nio.charset.Charset
 import java.io.File
 import kotlin.math.max
@@ -88,8 +88,8 @@ data class Book(
     }
 
     @delegate:Transient
-    override val variableMap by lazy {
-        GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
+    override val variableMap: HashMap<String, String> by lazy {
+        GSON.fromJsonObject<HashMap<String, String>>(variable).getOrNull() ?: hashMapOf()
     }
 
     override fun putVariable(key: String, value: String?) {
@@ -153,6 +153,10 @@ data class Book(
             return FileUtils.getFile(File(rootDir + originName), "index.epub")
         }
         return File(rootDir + originName)
+    }
+
+    fun getSplitLongChapter(): Boolean {
+        return false
     }
 
     fun toSearchBook(): SearchBook {
