@@ -7,7 +7,9 @@ import io.legado.app.utils.MD5Utils
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.analyzeRule.RuleDataInterface
 import io.legado.app.utils.NetworkUtils
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 
+@JsonIgnoreProperties("variableMap")
 data class BookChapter(
         var url: String = "",               // 章节地址
         var title: String = "",              // 章节标题

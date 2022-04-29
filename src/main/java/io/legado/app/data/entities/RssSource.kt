@@ -1,6 +1,7 @@
 package io.legado.app.data.entities
 
 import com.jayway.jsonpath.DocumentContext
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
 import io.legado.app.help.http.CookieStore
@@ -8,6 +9,7 @@ import io.legado.app.constant.AppConst
 import javax.script.SimpleBindings
 import io.legado.app.utils.*
 
+@JsonIgnoreProperties("headerMap")
 data class RssSource(
     var sourceUrl: String = "",
     var sourceName: String = "",

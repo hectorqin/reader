@@ -17,12 +17,14 @@ import java.io.InputStream
 
 import java.util.*
 import javax.script.SimpleBindings
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 
 //@Parcelize
 //@Entity(
 //    tableName = "book_sources",
 //    indices = [(Index(value = ["bookSourceUrl"], unique = false))]
 //)
+@JsonIgnoreProperties("headerMap")
 data class BookSource(
     var bookSourceName: String = "",           // 名称
     var bookSourceGroup: String? = null,       // 分组
