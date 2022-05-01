@@ -303,6 +303,16 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         return returnData.setData("")
     }
 
+    suspend fun deleteAllSources(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        saveUserStorage(userNameSpace, "bookSource", JsonArray())
+        return returnData.setData("")
+    }
+
     suspend fun readSourceFile(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (context.fileUploads() == null || context.fileUploads().isEmpty()) {

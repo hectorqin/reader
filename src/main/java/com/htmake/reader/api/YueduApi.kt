@@ -143,6 +143,7 @@ class YueduApi : RestVerticle() {
 
         router.post("/reader3/deleteSource").coroutineHandler { bookSourceController.deleteSource(it) }
         router.post("/reader3/deleteSources").coroutineHandler { bookSourceController.deleteSources(it) }
+        router.post("/reader3/deleteAllSources").coroutineHandler { bookSourceController.deleteAllSources(it) }
 
         // 上传书源文件
         router.post("/reader3/readSourceFile").coroutineHandler { bookSourceController.readSourceFile(it) }

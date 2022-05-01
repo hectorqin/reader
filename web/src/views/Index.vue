@@ -696,10 +696,22 @@
       <div class="custom-dialog-title" slot="title">
         <span class="el-dialog__title"
           >{{ isShowFailureBookSource ? "失效书源管理" : "书源管理" }}
-          <span class="float-right span-btn" @click="exportBookSource()"
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="deleteAllBookSource()"
+            >清空</span
+          >
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="exportBookSource()"
             >导出</span
           >
-          <span class="float-right span-btn" @click="editBookSource(false)"
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="editBookSource(false)"
             >新增</span
           >
         </span>
@@ -3302,6 +3314,31 @@ export default {
         },
         error => {
           this.$message.error("导出书源失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async deleteAllBookSource() {
+      const res = await this.$confirm(`确认要清空所有书源吗?`, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/deleteAllSources").then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            this.loadBookSource(true);
+            this.$message.success("清空书源成功");
+            this.loadBookSource(true);
+          }
+        },
+        error => {
+          this.$message.error("清空书源失败 " + (error && error.toString()));
         }
       );
     },

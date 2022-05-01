@@ -521,6 +521,30 @@ export default {
         this.startSavePosition = false;
         this.autoShowPosition();
       }
+    },
+    currentPage(val, oldVal) {
+      // 还剩两页的时候，预读下一章节
+      if (val !== oldVal && val >= this.totalPages - 2) {
+        if (
+          this.$store.state.readingBook.index <
+          this.$store.state.readingBook.catalog.length - 1
+        ) {
+          if (!this.preCaching) {
+            this.preCaching = true;
+            this.getBookContent(
+              this.$store.state.readingBook.index + 1,
+              {
+                timeout: 30000,
+                silent: true
+              },
+              false,
+              true
+            ).then(() => {
+              this.preCaching = false;
+            });
+          }
+        }
+      }
     }
   },
   data() {
