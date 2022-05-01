@@ -24,7 +24,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 //    tableName = "book_sources",
 //    indices = [(Index(value = ["bookSourceUrl"], unique = false))]
 //)
-@JsonIgnoreProperties("headerMap")
+@JsonIgnoreProperties("headerMap", "source")
 data class BookSource(
     var bookSourceName: String = "",           // 名称
     var bookSourceGroup: String? = null,       // 分组

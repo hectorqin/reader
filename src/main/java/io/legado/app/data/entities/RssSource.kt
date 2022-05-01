@@ -9,7 +9,7 @@ import io.legado.app.constant.AppConst
 import javax.script.SimpleBindings
 import io.legado.app.utils.*
 
-@JsonIgnoreProperties("headerMap")
+@JsonIgnoreProperties("headerMap", "source")
 data class RssSource(
     var sourceUrl: String = "",
     var sourceName: String = "",
