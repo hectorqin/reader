@@ -2232,7 +2232,7 @@ export default {
         } catch (error) {
           //
         }
-        console.log(delayTime, next);
+        // console.log(delayTime, next);
         this.autoReadingTimer = setTimeout(() => {
           current.className = "";
           next.className = "reading";
