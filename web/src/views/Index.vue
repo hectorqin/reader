@@ -3927,7 +3927,7 @@ export default {
           this.importBookInfo.originName.toLowerCase().endsWith(".txt")
         );
       } catch (e) {
-        console.log(e);
+        // console.log(e);
       }
       return false;
     }
