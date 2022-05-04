@@ -56,7 +56,8 @@ export default new Vuex.Store({
     showImageViewer: false,
     previewImageIndex: 0,
     previewImgList: [],
-    searchConfig: { ...settings.searchConfig }
+    searchConfig: { ...settings.searchConfig },
+    txtTocRules: []
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -66,6 +67,7 @@ export default new Vuex.Store({
           author: v.author,
           bookUrl: v.bookUrl,
           coverUrl: v.coverUrl,
+          charset: v.charset,
           customCoverUrl: v.customCoverUrl,
           canUpdate: v.canUpdate,
           durChapterIndex: v.durChapterIndex,
@@ -94,6 +96,7 @@ export default new Vuex.Store({
             author: book.author || state.shelfBooks[index].author,
             bookUrl: book.bookUrl || state.shelfBooks[index].bookUrl,
             coverUrl: book.coverUrl || state.shelfBooks[index].coverUrl,
+            charset: book.charset || state.shelfBooks[index].charset,
             customCoverUrl:
               book.customCoverUrl || state.shelfBooks[index].customCoverUrl,
             canUpdate:
@@ -370,6 +373,9 @@ export default new Vuex.Store({
           "searchConfig",
           JSON.stringify(searchConfig)
         );
+    },
+    setTxtTocRules(state, tocRules) {
+      state.txtTocRules = [].concat(tocRules);
     }
   },
   getters: {

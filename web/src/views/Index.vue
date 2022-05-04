@@ -1063,6 +1063,38 @@
               <el-input v-model="importBookInfo.author" size="small">
               </el-input>
             </div>
+            <div v-if="isShowTocRule">
+              <span>规则：</span>
+              <el-select
+                size="mini"
+                v-model="importUsedTxtRule"
+                filterable
+                placeholder="使用内置规则"
+              >
+                <el-option
+                  v-for="(rule, index) in $store.state.txtTocRules"
+                  :key="'txtTocRule-' + index"
+                  :label="rule.name"
+                  :value="rule.rule"
+                >
+                </el-option>
+              </el-select>
+              <el-button
+                class="toc-refresh-btn"
+                type="text"
+                @click="getChapterListByRule()"
+                >刷新目录</el-button
+              >
+            </div>
+            <div v-if="isShowTocRule">
+              <el-input
+                type="textarea"
+                :rows="2"
+                v-model="importBookInfo.tocUrl"
+                size="small"
+              >
+              </el-input>
+            </div>
           </div>
         </div>
         <div class="chapter-title">
@@ -1507,7 +1539,8 @@ export default {
         chapterContent: "0 Bytes"
       },
 
-      showLocalStoreManageDialog: false
+      showLocalStoreManageDialog: false,
+      importUsedTxtRule: ""
     };
   },
   watch: {
@@ -1556,6 +1589,11 @@ export default {
           this.$refs.rssArticleListRef &&
             (this.$refs.rssArticleListRef.scrollTop = 0);
         });
+      }
+    },
+    importUsedTxtRule(val) {
+      if (val) {
+        this.importBookInfo.tocUrl = val;
       }
     }
   },
@@ -2935,6 +2973,7 @@ export default {
       const url = this.importBookInfo.bookUrl;
       this.importBookInfo = {};
       this.importBookChapters = [];
+      this.importUsedTxtRule = "";
       this.$nextTick(() => {
         this.$emit("importEnd");
       });
@@ -3624,6 +3663,19 @@ export default {
           this.$message.error("注销失败 " + (error && error.toString()));
         }
       );
+    },
+    getChapterListByRule() {
+      Axios.post("/getChapterListByRule", this.importBookInfo).then(
+        res => {
+          if (res.data.isSuccess && res.data.data.book) {
+            this.importBookInfo = res.data.data.book;
+            this.importBookChapters = res.data.data.chapters;
+          }
+        },
+        error => {
+          this.$message.error("注销失败 " + (error && error.toString()));
+        }
+      );
     }
   },
   computed: {
@@ -3866,6 +3918,18 @@ export default {
       set(val) {
         this.$store.commit("setSearchConfig", val);
       }
+    },
+    isShowTocRule() {
+      try {
+        return (
+          this.importBookInfo &&
+          this.importBookInfo.originName &&
+          this.importBookInfo.originName.toLowerCase().endsWith(".txt")
+        );
+      } catch (e) {
+        console.log(e);
+      }
+      return false;
     }
   }
 };
@@ -4359,9 +4423,11 @@ export default {
       display: flex;
       flex-direction: column;
       margin-left: 30px;
+      justify-content: space-between;
+      min-height: 100px;
 
-      div {
-        padding: 5px;
+      .toc-refresh-btn {
+        margin-left: 5px;
       }
 
       span {

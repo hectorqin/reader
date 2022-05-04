@@ -9,6 +9,7 @@ import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssArticle
 import io.legado.app.model.webBook.WebBook
+import io.legado.app.help.DefaultData
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
@@ -212,6 +213,31 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             }
         }
         return returnData.setData(fileList)
+    }
+
+    suspend fun getTxtTocRules(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        return returnData.setData(DefaultData.txtTocRules)
+    }
+
+    suspend fun getChapterListByRule(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var book = context.bodyAsJson.mapTo(Book::class.java)
+        if (book.origin.isNullOrEmpty()) {
+            return returnData.setErrorMsg("未找到书源信息")
+        }
+        if (!book.isLocalTxt()) {
+            return returnData.setErrorMsg("非本地txt书籍")
+        }
+        book.setRootDir(getWorkDir())
+        val chapters = LocalBook.getChapterList(book)
+        return returnData.setData(mapOf("book" to book, "chapters" to chapters))
     }
 
     suspend fun refreshLocalBook(context: RoutingContext): ReturnData {
@@ -1089,8 +1115,28 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setErrorMsg("书籍链接不能为空")
         }
         var userNameSpace = getUserNameSpace(context)
+        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
+        if (bookshelf == null) {
+            bookshelf = JsonArray()
+        }
+
+        // 遍历判断书本是否存在
+        var existIndex: Int = -1
+        for (i in 0 until bookshelf.size()) {
+            var _book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
+            if (_book.name.equals(book.name) && _book.author.equals(book.author)) {
+                existIndex = i
+                break;
+            }
+        }
+        if (existIndex < 0) {
+            // 判断书籍是否超过限制
+            if (bookshelf.size() >= appConfig.userBookLimit) {
+                return returnData.setErrorMsg("超过用户书籍数上限")
+            }
+        }
+        // 导入本地书籍
         if (book.isLocalBook()) {
-            // 导入本地书籍
             if (book.bookUrl.startsWith("/assets/")) {
                 // 临时文件，移动到书籍目录
                 // storage/assets/default/book/《极道天魔》（校对版全本）作者：滚开/《极道天魔》（校对版全本）作者：滚开.txt
@@ -1146,19 +1192,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             book.fillData(newBook, listOf("name", "author", "coverUrl", "tocUrl", "intro", "latestChapterTitle", "wordCount"))
         }
         book = mergeBookCacheInfo(book)
-        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
-        if (bookshelf == null) {
-            bookshelf = JsonArray()
-        }
-        // 遍历判断书本是否存在
-        var existIndex: Int = -1
-        for (i in 0 until bookshelf.size()) {
-            var _book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
-            if (_book.name.equals(book.name) && _book.author.equals(book.author)) {
-                existIndex = i
-                break;
-            }
-        }
+
         if (existIndex >= 0) {
             var bookList = bookshelf.getList()
             var existBook = bookshelf.getJsonObject(existIndex).mapTo(Book::class.java)
@@ -1169,10 +1203,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             bookList.set(existIndex, JsonObject.mapFrom(book))
             bookshelf = JsonArray(bookList)
         } else {
-            // 判断书籍是否超过限制
-            if (bookshelf.size() >= appConfig.userBookLimit) {
-                return returnData.setErrorMsg("超过用户书籍数上限")
-            }
             bookshelf.add(JsonObject.mapFrom(book))
         }
         // logger.info("bookshelf: {}", bookshelf)

@@ -13,6 +13,9 @@ import java.nio.charset.Charset
 import java.util.regex.Matcher
 import java.util.regex.Pattern
 import kotlin.math.min
+import mu.KotlinLogging
+
+private val logger = KotlinLogging.logger {}
 
 class TextFile(private val book: Book) {
 
@@ -30,6 +33,9 @@ class TextFile(private val book: Book) {
             LocalBook.getBookInputStream(book).use { bis ->
                 bis.skip(bookChapter.start!!)
                 bis.read(buffer)
+            }
+            if (book.charset == null) {
+                book.charset = EncodingDetect.getEncode(book.getLocalFile())
             }
             return String(buffer, book.fileCharset())
                 .substringAfter(bookChapter.title)

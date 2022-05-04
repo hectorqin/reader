@@ -207,6 +207,10 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/importBookPreview").coroutineHandler { bookController.importBookPreview(it) }
         router.post("/reader3/refreshLocalBook").coroutineHandler { bookController.refreshLocalBook(it) }
 
+        // 获取txt章节规则
+        router.get("/reader3/getTxtTocRules").coroutineHandler { bookController.getTxtTocRules(it) }
+        router.post("/reader3/getChapterListByRule").coroutineHandler { bookController.getChapterListByRule(it) }
+
         // 书籍分组
         router.get("/reader3/getBookGroups").coroutineHandler { bookController.getBookGroups(it) }
         router.post("/reader3/saveBookGroup").coroutineHandler { bookController.saveBookGroup(it) }
