@@ -42,7 +42,8 @@ const settings = {
     autoTheme: true, // 自动切换主题
     selectionAction: "过滤弹窗",
     pageMode: "自适应",
-    pageType: "正常"
+    pageType: "正常",
+    autoReadingLineTime: 1000
   },
   speechVoiceConfig: {
     voiceName: "",

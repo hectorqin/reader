@@ -239,6 +239,18 @@
           </div>
         </li>
         <li>
+          <span class="setting-item-title">翻页速度</span>
+          <div class="resize">
+            <span class="less" @click="lessAutoReadingLineTime"
+              ><i class="el-icon-minus"></i></span
+            ><b></b> <span class="lang">{{ config.autoReadingLineTime }}</span
+            ><b></b>
+            <span class="more" @click="moreAutoReadingLineTime"
+              ><i class="el-icon-plus"></i
+            ></span>
+          </div>
+        </li>
+        <li>
           <span class="setting-item-title">全屏点击</span>
           <div class="selection-zone">
             <span
@@ -581,6 +593,24 @@ export default {
           ? config.animateMSTime
           : settings.config.animateMSTime;
       if (config.animateMSTime >= 50) config.animateMSTime -= 50;
+      this.$store.commit("setConfig", config);
+    },
+    moreAutoReadingLineTime() {
+      let config = this.config;
+      config.autoReadingLineTime =
+        typeof config.autoReadingLineTime !== "undefined"
+          ? config.autoReadingLineTime
+          : settings.config.autoReadingLineTime;
+      if (config.autoReadingLineTime < 10000) config.autoReadingLineTime += 50;
+      this.$store.commit("setConfig", config);
+    },
+    lessAutoReadingLineTime() {
+      let config = this.config;
+      config.autoReadingLineTime =
+        typeof config.autoReadingLineTime !== "undefined"
+          ? config.autoReadingLineTime
+          : settings.config.autoReadingLineTime;
+      if (config.autoReadingLineTime >= 200) config.autoReadingLineTime -= 50;
       this.$store.commit("setConfig", config);
     },
     moreLineHeight() {
