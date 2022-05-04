@@ -1069,7 +1069,7 @@
                 size="mini"
                 v-model="importUsedTxtRule"
                 filterable
-                placeholder="使用内置规则"
+                placeholder="内置规则"
               >
                 <el-option
                   v-for="(rule, index) in $store.state.txtTocRules"

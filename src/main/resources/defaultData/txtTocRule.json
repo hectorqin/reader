@@ -98,6 +98,13 @@
         "serialNumber": 13
     },
     {
+        "id": -15,
+        "enable":false,
+        "name": "顶格标题",
+        "rule": "^\\S.{1,20}$",
+        "serialNumber": 14
+    },
+    {
         "id": -16,
         "enable":false,
         "name": "双标题(前向)",

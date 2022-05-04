@@ -356,7 +356,9 @@ class TextFile(private val book: Book) {
      * 获取启用的目录规则
      */
     private fun getTocRules(): List<TxtTocRule> {
-        return DefaultData.txtTocRules
+        return DefaultData.txtTocRules.filter {
+            it.enable
+        }
     }
 
 }
