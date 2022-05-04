@@ -994,7 +994,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setErrorMsg("书籍信息错误")
         }
         var bookSourceList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
-        if (bookSourceList != null) {
+        if (bookSourceList != null && bookSourceList.size() > 0) {
             if (refresh <= 0) {
                 return returnData.setData(bookSourceList.getList())
             }
@@ -1475,6 +1475,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
     suspend fun getBookShelfBooks(refresh: Boolean = false, userNameSpace: String): List<Book> {
         var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
+            return arrayListOf<Book>()
+        }
+        if (bookshelf.size() == 0) {
             return arrayListOf<Book>()
         }
         var bookList = arrayListOf<Book>()
