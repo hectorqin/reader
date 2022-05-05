@@ -237,36 +237,49 @@
             />
           </div>
         </div>
-        <div
-          class="setting-wrapper"
-          v-if="
-            !$store.state.isSecureMode || $store.state.userInfo.enableWebdav
-          "
-        >
+        <div class="setting-wrapper">
           <div class="setting-title">
-            WebDAV
+            书架设置
           </div>
           <div class="setting-item">
             <el-tag
               type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
               class="setting-btn"
-              @click="showWebdavFile('/')"
+              @click="showManageBookGroup"
             >
-              文件管理
+              分组管理
             </el-tag>
             <el-tag
               type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
               class="setting-btn"
-              @click="backupToWebdav"
+              @click="importLocalBook"
             >
-              保存备份
+              导入书籍
+            </el-tag>
+            <input
+              ref="bookRef"
+              type="file"
+              multiple="multiple"
+              @change="onBookFileChange"
+              style="display:none"
+            />
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="showLocalStoreManageDialog = true"
+              v-if="
+                !$store.state.isSecureMode ||
+                  $store.state.userInfo.enableLocalStore
+              "
+            >
+              浏览书仓
             </el-tag>
           </div>
         </div>
+
         <div class="setting-wrapper">
           <div class="setting-title">
             用户空间
@@ -347,45 +360,33 @@
             </el-tag>
           </div>
         </div>
-        <div class="setting-wrapper">
+        <div
+          class="setting-wrapper"
+          v-if="
+            !$store.state.isSecureMode || $store.state.userInfo.enableWebdav
+          "
+        >
           <div class="setting-title">
-            书架设置
+            WebDAV
           </div>
           <div class="setting-item">
             <el-tag
               type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
               class="setting-btn"
-              @click="showManageBookGroup"
+              @click="showWebdavFile('/')"
             >
-              分组管理
+              文件管理
             </el-tag>
             <el-tag
               type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
               class="setting-btn"
-              @click="importLocalBook"
+              @click="backupToWebdav"
             >
-              导入书籍
-            </el-tag>
-            <input
-              ref="bookRef"
-              type="file"
-              multiple="multiple"
-              @change="onBookFileChange"
-              style="display:none"
-            />
-            <el-tag
-              type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="showLocalStoreManageDialog = true"
-              v-if="
-                !$store.state.isSecureMode ||
-                  $store.state.userInfo.enableLocalStore
-              "
-            >
-              浏览书仓
+              保存备份
             </el-tag>
           </div>
         </div>
@@ -1642,6 +1643,7 @@ export default {
       this.$prompt("请输入接口地址 ( 如：localhost:8080/reader3 )", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
+        inputValue: this.api,
         // inputPattern: /^((2[0-4]\d|25[0-5]|[1]?\d\d?)\.){3}(2[0-4]\d|25[0-5]|[1]?\d\d?):([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-6][0-5][0-5][0-3][0-5])$/,
         // inputErrorMessage: "url 形式不正确",
         beforeClose: (action, instance, done) => {
@@ -3718,7 +3720,7 @@ export default {
     },
     connectStatus() {
       return this.$store.state.connected
-        ? `已连接` + this.api
+        ? `后端已连接`
         : this.connecting
         ? "正在连接后端服务器……"
         : "点击设置后端接口前缀";
