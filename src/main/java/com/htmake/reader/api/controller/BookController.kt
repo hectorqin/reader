@@ -78,16 +78,49 @@ private val logger = KotlinLogging.logger {}
 class BookController(coroutineContext: CoroutineContext): BaseController(coroutineContext) {
 
     var bookInfoCache = ACache.get("bookInfoCache", 1000 * 1000 * 2L, 10000) // 缓存 2M 的书籍信息
-    var invalidBookSourceList = arrayListOf<Map<String, Any>>()
     val concurrentLoopCount = 8
 
     private var webClient: WebClient
 
     init {
-        // 加载失效书源列表
-        loadInvalidBookSourceList();
-
         webClient = SpringContextUtils.getBean("webClient", WebClient::class.java)
+    }
+
+    private fun getInvalidBookSourceCache(userNameSpace: String): ACache {
+        val cacheDir = File(getWorkDir("storage", "cache", "invalidBookSourceCache", userNameSpace))
+        // 缓存 5M 的失效书源信息
+        var invalidBookSourceCache = ACache.get(cacheDir, 1000 * 1000 * 5L, 1000000)
+        return invalidBookSourceCache
+    }
+
+    private fun isInvalidBookSource(bookSource: BookSource, userNameSpace: String): Boolean {
+        return getInvalidBookSourceCache(userNameSpace).getAsString(bookSource.bookSourceUrl) != null
+    }
+
+    private fun addInvalidBookSource(sourceUrl: String, invalidInfo: Map<String, Any>, userNameSpace: String) {
+        // 保存600秒时间
+        getInvalidBookSourceCache(userNameSpace).put(sourceUrl, jsonEncode(invalidInfo), 600)
+    }
+
+    suspend fun getInvalidBookSources(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        val invalidBookSourceCache = getInvalidBookSourceCache(userNameSpace)
+        val cacheDir = File(getWorkDir("storage", "cache", "invalidBookSourceCache", userNameSpace))
+        val files = cacheDir.listFiles()
+        val invalidBookSourceList = arrayListOf<Map<String, Any>>()
+        if (files != null) {
+            for (f in files) {
+                invalidBookSourceCache.getByHashCode(f.name)?.let { info ->
+                    invalidBookSourceList.add(info.toMap())
+                }
+            }
+        }
+
+        return returnData.setData(invalidBookSourceList)
     }
 
     suspend fun getBookInfo(context: RoutingContext): ReturnData {
@@ -535,8 +568,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     var bookSourceObject = asJsonObject(bookSource)?.mapTo(BookSource::class.java)
                     if (bookSourceObject != null) {
                         // 标记为失败源
-                        invalidBookSourceList.add(mutableMapOf<String, Any>("sourceUrl" to bookSourceObject.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString()))
-                        saveInvalidBookSourceList()
+                        val info = mutableMapOf<String, Any>("sourceUrl" to bookSourceObject.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString())
+                        addInvalidBookSource(bookSourceObject.bookSourceUrl, info, userNameSpace)
                     }
                 }
                 throw e
@@ -645,7 +678,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, {it->
             lastIndex = it
             var bookSource = userBookSourceList.get(it)
-            searchBookWithSource(bookSource, book, false)
+            searchBookWithSource(bookSource, book, false, userNameSpace = userNameSpace)
         }) {list, loopCount ->
             // logger.info("list: {}", list)
             list.forEach {
@@ -667,7 +700,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 resultList.size < searchSize
             }
         }
-        saveInvalidBookSourceList()
         return returnData.setData(mapOf("lastIndex" to lastIndex, "list" to resultList))
     }
 
@@ -731,7 +763,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, {it->
             lastIndex = it
             var bookSource = userBookSourceList.get(it)
-            searchBookWithSource(bookSource, book, false)
+            searchBookWithSource(bookSource, book, false, userNameSpace = userNameSpace)
         }) {list, loopCount ->
             // logger.info("list: {}", list)
             val loopResult = arrayListOf<SearchBook>()
@@ -758,7 +790,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 resultList.size < searchSize
             }
         }
-        saveInvalidBookSourceList()
         response.write("event: end\n")
         response.end("data: " + jsonEncode(mapOf("lastIndex" to lastIndex), false) + "\n\n")
     }
@@ -822,7 +853,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, {it->
             lastIndex = it
             var bookSource = userBookSourceList.get(it)
-            searchBookWithSource(bookSource, book)
+            searchBookWithSource(bookSource, book, userNameSpace = userNameSpace)
         }) {list, loopCount ->
             // logger.info("list: {}", list)
             list.forEach {
@@ -839,7 +870,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             }
         }
         saveBookSources(book, resultList, userNameSpace)
-        saveInvalidBookSourceList()
         return returnData.setData(mapOf("lastIndex" to lastIndex, "list" to resultList))
     }
 
@@ -925,7 +955,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, {it->
             lastIndex = it
             var bookSource = userBookSourceList.get(it)
-            searchBookWithSource(bookSource, book)
+            searchBookWithSource(bookSource, book, userNameSpace = userNameSpace)
         }) {list, loopCount ->
             // logger.info("list: {}", list)
             val loopResult = arrayListOf<SearchBook>()
@@ -947,19 +977,18 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 resultList.size < searchSize
             }
         }
-        saveInvalidBookSourceList()
         saveBookSources(book, resultList, userNameSpace)
         response.write("event: end\n")
         response.end("data: " + jsonEncode(mapOf("lastIndex" to lastIndex), false) + "\n\n")
     }
 
-    suspend fun searchBookWithSource(bookSourceString: String, book: Book, accurate: Boolean = true): ArrayList<SearchBook> {
+    suspend fun searchBookWithSource(bookSourceString: String, book: Book, accurate: Boolean = true, userNameSpace: String = "default"): ArrayList<SearchBook> {
         var resultList = arrayListOf<SearchBook>()
         var bookSource = asJsonObject(bookSourceString)?.mapTo(BookSource::class.java)
         if (bookSource == null) {
             return resultList;
         }
-        if (isInvalidBookSource(bookSource)) {
+        if (isInvalidBookSource(bookSource, userNameSpace)) {
             return resultList;
         }
         withContext(Dispatchers.IO) {
@@ -982,7 +1011,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 }
             } catch(e: Exception) {
                 // 标记为失败源
-                invalidBookSourceList.add(mutableMapOf<String, Any>("sourceUrl" to bookSource.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString()))
+                val info = mutableMapOf<String, Any>("sourceUrl" to bookSource.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString())
+                addInvalidBookSource(bookSource.bookSourceUrl, info, userNameSpace)
+
                 e.printStackTrace()
             }
             // }
@@ -1033,7 +1064,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 var searchBook = bookSourceList.getJsonObject(it).mapTo(SearchBook::class.java)
                 var bookSource = getBookSourceStringBySourceURL(searchBook.origin, userNameSpace, userBookSourceStringList)
                 if (bookSource != null) {
-                    searchBookWithSource(bookSource, book)
+                    searchBookWithSource(bookSource, book, userNameSpace = userNameSpace)
                 } else {
                     arrayListOf<SearchBook>()
                 }
@@ -1049,15 +1080,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             }
             // logger.info("refreshed bookSourceList: {}", resultList)
             saveBookSources(book, resultList, userNameSpace, true)
-            saveInvalidBookSourceList()
             return returnData.setData(resultList)
         }
         return returnData.setData(arrayListOf<Int>())
-    }
-
-    suspend fun getInvalidBookSources(context: RoutingContext): ReturnData {
-        val returnData = ReturnData()
-        return returnData.setData(invalidBookSourceList)
     }
 
     suspend fun getBookshelf(context: RoutingContext): ReturnData {
@@ -1465,43 +1490,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         return book
     }
 
-    fun loadInvalidBookSourceList() {
-        var _invalidBookSources: JsonArray? = asJsonArray(getStorage("cache", "invalidBookSourceList"))
-        if (_invalidBookSources != null) {
-            invalidBookSourceList = _invalidBookSources.getList() as ArrayList<Map<String, Any>>
-        }
-    }
-
-    private fun saveInvalidBookSourceList() {
-        saveStorage("cache", "invalidBookSourceList", value = invalidBookSourceList)
-    }
-
-    private fun isInvalidBookSource(bookSource: BookSource): Boolean {
-        val now = System.currentTimeMillis()
-        var isInvalid = false
-        var index = -1
-        for (i in 0 until invalidBookSourceList.size) {
-            val map = asJsonObject(invalidBookSourceList.get(i))
-            if (map != null) {
-                val sourceUrl = map.getString("sourceUrl", "") ?: ""
-                val lastErrorTime = map.getLong("time", now) ?: now
-                if (sourceUrl.equals(bookSource.bookSourceUrl)) {
-                    index = i
-                    // 有效期 10分钟
-                    if (lastErrorTime > now - 600) {
-                        isInvalid = true;
-                    }
-                    break;
-                }
-            }
-        }
-        if (!isInvalid && index >= 0) {
-            invalidBookSourceList.removeAt(index);
-            saveInvalidBookSourceList();
-        }
-        return isInvalid;
-    }
-
     suspend fun getBookShelfBooks(refresh: Boolean = false, userNameSpace: String): List<Book> {
         var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
@@ -1564,8 +1552,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                         var bookSourceObject = asJsonObject(bookSource)?.mapTo(BookSource::class.java)
                         if (bookSourceObject != null) {
                             // 标记为失败源
-                            invalidBookSourceList.add(mutableMapOf<String, Any>("sourceUrl" to bookSourceObject.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString()))
-                            saveInvalidBookSourceList()
+                            val info = mutableMapOf<String, Any>("sourceUrl" to bookSourceObject.bookSourceUrl, "time" to System.currentTimeMillis(), "error" to e.toString())
+                            addInvalidBookSource(bookSourceObject.bookSourceUrl, info, userNameSpace)
                         }
                     }
                     throw e
