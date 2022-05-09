@@ -3,6 +3,7 @@
 - [文档](#文档)
   - [免责声明（Disclaimer）](#免责声明disclaimer)
   - [数据存储](#数据存储)
+    - [本地书仓](#本地书仓)
   - [自定义阅读主题](#自定义阅读主题)
   - [自定义样式](#自定义样式)
   - [接口服务配置](#接口服务配置)
@@ -13,6 +14,8 @@
     - [手机端](#手机端)
     - [服务器版](#服务器版)
     - [Docker版](#docker版)
+    - [Docker-Compose版(推荐)](#docker-compose版推荐)
+  - [Nginx反向代理](#nginx反向代理)
   - [开发编译](#开发编译)
     - [编译脚本](#编译脚本)
     - [编译前端](#编译前端)
@@ -77,8 +80,15 @@ storage
 │   │       |── 2d44d0ec2397b6c1d4010b97d914031e       # A书源章节缓存目录
 │   │       └── 2d44d0ec2397b6c1d4010b97d914031e.json  # A书源目录列表
 │   └── users.json                                # 用户列表
+├── localStore                                    # 本地书仓，所有用户共享(用户需要开启书仓权限，才能访问)
+│   |── 斗破苍穹.txt                               # 本地书仓书籍
+│   └── 斗罗大陆.txt                               # 本地书仓书籍
 └── windowConfig.json                             # 窗口配置文件
 ```
+
+### 本地书仓
+
+在 `storage/localStore` 中可以集中存放管理本地书籍，开启访问权限的用户可以在 `页面-浏览书仓` 中选择批量导入到自己的书架进行阅读。
 
 ## 自定义阅读主题
 
@@ -116,6 +126,8 @@ reader:
     proxyUsername: ""      # 代理鉴权 用户名
     proxyPassword: ""      # 代理鉴权 密码
     cacheChapterContent: false # 是否缓存章节内容
+    userLimit: 50          # 用户上限，最大 50
+    userBookLimit: 200     # 用户书籍上限，默认最大 200
 
   server:
     port: 8080             # 监听端口
@@ -283,7 +295,7 @@ server {
     listen 80;
     server_name 域名;
     #开启ssl解除注释
-    #不使用宝塔获取证书脚本  https://github.com/Misaka-blog/acme-1key  
+    #不使用宝塔获取证书脚本  https://github.com/Misaka-blog/acme-1key
     #listen 443 ssl;
     #ssl_certificate 证书.cer;
     #ssl_certificate_key 证书.key;
@@ -304,7 +316,7 @@ server {
     gzip_comp_level 6; #设置数据的压缩等级,等级为1-9，压缩比从小到大
     gzip_types text/plain text/css text/javascript application/json application/javascript application/x-javascript application/xml; #设置需要压缩的数据格式
     gzip_vary on;
-    
+
     location / {
         proxy_pass  http://127.0.0.1:4396; #端口自行修改为映射端口
         proxy_http_version	1.1;

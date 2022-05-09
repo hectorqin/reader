@@ -7,7 +7,6 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssArticle
-import io.legado.app.help.storage.OldRule
 import io.legado.app.model.webBook.WebBook
 import io.vertx.ext.web.Router
 import io.vertx.ext.web.RoutingContext
@@ -65,7 +64,7 @@ import java.text.SimpleDateFormat;
 import io.legado.app.utils.EncoderUtils
 import io.legado.app.model.rss.Rss
 import org.springframework.scheduling.annotation.Scheduled
-import io.legado.app.localBook.LocalBook
+import io.legado.app.model.localBook.LocalBook
 import java.nio.file.Paths
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -144,6 +143,7 @@ class YueduApi : RestVerticle() {
 
         router.post("/reader3/deleteSource").coroutineHandler { bookSourceController.deleteSource(it) }
         router.post("/reader3/deleteSources").coroutineHandler { bookSourceController.deleteSources(it) }
+        router.post("/reader3/deleteAllSources").coroutineHandler { bookSourceController.deleteAllSources(it) }
 
         // 上传书源文件
         router.post("/reader3/readSourceFile").coroutineHandler { bookSourceController.readSourceFile(it) }
@@ -207,11 +207,27 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/importBookPreview").coroutineHandler { bookController.importBookPreview(it) }
         router.post("/reader3/refreshLocalBook").coroutineHandler { bookController.refreshLocalBook(it) }
 
+        // 获取txt章节规则
+        router.get("/reader3/getTxtTocRules").coroutineHandler { bookController.getTxtTocRules(it) }
+        router.post("/reader3/getChapterListByRule").coroutineHandler { bookController.getChapterListByRule(it) }
+
         // 书籍分组
         router.get("/reader3/getBookGroups").coroutineHandler { bookController.getBookGroups(it) }
         router.post("/reader3/saveBookGroup").coroutineHandler { bookController.saveBookGroup(it) }
         router.post("/reader3/deleteBookGroup").coroutineHandler { bookController.deleteBookGroup(it) }
 
+        // 书仓功能
+        // 获取书仓文件列表
+        router.get("/reader3/getLocalStoreFileList").coroutineHandler { bookController.getLocalStoreFileList(it) }
+        // 下载书仓文件
+        router.get("/reader3/getLocalStoreFile").coroutineHandlerWithoutRes { bookController.getLocalStoreFile(it) }
+        // 删除书仓文件
+        router.post("/reader3/deleteLocalStoreFile").coroutineHandler { bookController.deleteLocalStoreFile(it) }
+        router.post("/reader3/deleteLocalStoreFileList").coroutineHandler { bookController.deleteLocalStoreFileList(it) }
+        // 从书仓导入
+        router.post("/reader3/importFromLocalStorePreview").coroutineHandler { bookController.importFromLocalStorePreview(it) }
+        // 上传文件到书仓
+        router.post("/reader3/uploadFileToLocalStore").coroutineHandler { bookController.uploadFileToLocalStore(it) }
 
         /** 用户模块 */
         // 上传文件
@@ -220,8 +236,10 @@ class YueduApi : RestVerticle() {
         // 删除文件
         router.post("/reader3/deleteFile").coroutineHandler { userController.deleteFile(it) }
 
-        // 登录使用自定义书架
+        // 登录
         router.post("/reader3/login").coroutineHandler { userController.login(it) }
+        // 注销登录
+        router.post("/reader3/logout").coroutineHandler { userController.logout(it) }
 
         // 获取用户信息
         router.get("/reader3/getUserInfo").coroutineHandler { userController.getUserInfo(it) }

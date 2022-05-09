@@ -3,6 +3,7 @@ package io.legado.app.model.webBook
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
+import io.legado.app.data.entities.rule.BookListRule
 import io.legado.app.help.BookHelp
 import io.legado.app.model.DebugLog
 import io.legado.app.model.analyzeRule.AnalyzeRule
@@ -33,13 +34,13 @@ object BookList {
                 "error_get_web_content"
         )
         debugLog?.log(bookSource.bookSourceUrl, "≡获取成功:${analyzeUrl.ruleUrl}")
-        val analyzeRule = AnalyzeRule(variableBook)
+        val analyzeRule = AnalyzeRule(variableBook, bookSource)
         analyzeRule.setContent(body).setBaseUrl(baseUrl)
         analyzeRule.setRedirectUrl(baseUrl)
         bookSource.bookUrlPattern?.let {
             if (baseUrl.matches(it.toRegex())) {
                 debugLog?.log(bookSource.bookSourceUrl, "≡链接为详情页")
-                getInfoItem(body, analyzeRule, bookSource, baseUrl,  variableBook.variable, debugLog = debugLog)?.let { searchBook ->
+                getInfoItem(body, analyzeRule, bookSource, analyzeUrl, baseUrl,  variableBook.variable, debugLog = debugLog)?.let { searchBook ->
                     searchBook.infoHtml = body
                     bookList.add(searchBook)
                 }
@@ -48,7 +49,7 @@ object BookList {
         }
         val collections: List<Any>
         var reverse = false
-        val bookListRule = when {
+        val bookListRule: BookListRule = when {
             isSearch -> bookSource.getSearchRule()
             bookSource.getExploreRule().bookList.isNullOrBlank() -> bookSource.getSearchRule()
             else -> bookSource.getExploreRule()
@@ -65,7 +66,7 @@ object BookList {
         collections = analyzeRule.getElements(ruleList)
         if (collections.isEmpty() && bookSource.bookUrlPattern.isNullOrEmpty()) {
             debugLog?.log(bookSource.bookSourceUrl, "└列表为空,按详情页解析")
-            getInfoItem(body, analyzeRule, bookSource, baseUrl, variableBook.variable, debugLog = debugLog)?.let { searchBook ->
+            getInfoItem(body, analyzeRule, bookSource, analyzeUrl, baseUrl, variableBook.variable, debugLog = debugLog)?.let { searchBook ->
                 searchBook.infoHtml = body
                 bookList.add(searchBook)
             }
@@ -104,17 +105,18 @@ object BookList {
         body: String,
         analyzeRule: AnalyzeRule,
         bookSource: BookSource,
+        analyzeUrl: AnalyzeUrl,
         baseUrl: String,
         variable: String?,
         debugLog: DebugLog? = null
     ): SearchBook? {
         val book = Book(variable = variable)
-        book.bookUrl = baseUrl
+        book.bookUrl = analyzeUrl.ruleUrl
         book.origin = bookSource.bookSourceUrl
         book.originName = bookSource.bookSourceName
         book.originOrder = bookSource.customOrder
         book.type = bookSource.bookSourceType
-        analyzeRule.book = book
+        analyzeRule.ruleData = book
         BookInfo.analyzeBookInfo(
             book,
             body,
@@ -153,7 +155,7 @@ object BookList {
         searchBook.originName = bookSource.bookSourceName
         searchBook.type = bookSource.bookSourceType
         searchBook.originOrder = bookSource.customOrder
-        analyzeRule.book = searchBook
+        analyzeRule.ruleData = searchBook
         analyzeRule.setContent(item)
         if (log) debugLog?.log(bookSource.bookSourceUrl, "┌获取书名")
         searchBook.name = BookHelp.formatBookName(analyzeRule.getString(ruleName))
@@ -201,7 +203,7 @@ object BookList {
                 if (log) debugLog?.log(bookSource.bookSourceUrl, "└${e.localizedMessage}")
             }
             if (log) debugLog?.log(bookSource.bookSourceUrl, "┌获取详情页链接")
-            searchBook.bookUrl = analyzeRule.getString(ruleBookUrl, true)
+            searchBook.bookUrl = analyzeRule.getString(ruleBookUrl, isUrl = true)
             if (searchBook.bookUrl.isEmpty()) {
                 searchBook.bookUrl = baseUrl
             }

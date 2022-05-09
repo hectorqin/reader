@@ -59,4 +59,16 @@ object CacheManager {
         }
         return null
     }
+
+    fun putFile(key: String, value: String, saveTime: Int = 0) {
+        ACache.get().put(key, value, saveTime)
+    }
+
+    fun getFile(key: String): String? {
+        return ACache.get().getAsString(key)
+    }
+
+    fun delete(key: String) {
+        ACache.get().remove(key)
+    }
 }

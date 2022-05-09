@@ -5,11 +5,15 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.MD5Utils
 import io.legado.app.model.analyzeRule.AnalyzeUrl
+import io.legado.app.model.analyzeRule.RuleDataInterface
 import io.legado.app.utils.NetworkUtils
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 
+@JsonIgnoreProperties("variableMap")
 data class BookChapter(
         var url: String = "",               // 章节地址
         var title: String = "",              // 章节标题
+        var isVolume: Boolean = false,      // 是否是卷名
         var baseUrl: String = "",           //用来拼接相对url
         var bookUrl: String = "",           // 书籍地址
         var index: Int = 0,                 // 章节序号
@@ -20,15 +24,19 @@ data class BookChapter(
         var startFragmentId: String? = null,  //EPUB书籍当前章节的fragmentId
         var endFragmentId: String? = null,    //EPUB书籍下一章节的fragmentId
         var variable: String? = null        //变量
-) {
+): RuleDataInterface {
 
     @delegate:Transient
-    val variableMap by lazy {
-        GSON.fromJsonObject<HashMap<String, String>>(variable) ?: HashMap()
+    override val variableMap: HashMap<String, String> by lazy {
+        GSON.fromJsonObject<HashMap<String, String>>(variable).getOrNull() ?: hashMapOf()
     }
 
-    fun putVariable(key: String, value: String) {
-        variableMap.put(key, value)
+    override fun putVariable(key: String, value: String?) {
+        if (value != null) {
+            variableMap[key] = value
+        } else {
+            variableMap.remove(key)
+        }
         variable = GSON.toJson(variableMap)
     }
 

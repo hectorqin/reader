@@ -7,7 +7,6 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssArticle
-import io.legado.app.help.storage.OldRule
 import io.legado.app.model.webBook.WebBook
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
@@ -62,7 +61,7 @@ import java.text.SimpleDateFormat;
 import io.legado.app.utils.EncoderUtils
 import io.legado.app.model.rss.Rss
 import org.springframework.scheduling.annotation.Scheduled
-import io.legado.app.localBook.LocalBook
+import io.legado.app.model.localBook.LocalBook
 import java.nio.file.Paths
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -320,7 +319,8 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
         path = URLDecoder.decode(path, "UTF-8")
         var file = File(home + path)
         if (file.exists()) {
-            context.response().setStatusCode(405).end()
+            // 文件夹存在时，返回成功
+            context.response().setStatusCode(201).end()
             return
         }
         try {

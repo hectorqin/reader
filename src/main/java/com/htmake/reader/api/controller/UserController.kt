@@ -7,7 +7,6 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssArticle
-import io.legado.app.help.storage.OldRule
 import io.legado.app.model.webBook.WebBook
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
@@ -62,7 +61,7 @@ import java.text.SimpleDateFormat;
 import io.legado.app.utils.EncoderUtils
 import io.legado.app.model.rss.Rss
 import org.springframework.scheduling.annotation.Scheduled
-import io.legado.app.localBook.LocalBook
+import io.legado.app.model.localBook.LocalBook
 import java.nio.file.Paths
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -72,6 +71,7 @@ import kotlinx.coroutines.CoroutineScope
 private val logger = KotlinLogging.logger {}
 
 class UserController(coroutineContext: CoroutineContext): BaseController(coroutineContext) {
+    val userMaxCount = 50
 
     suspend fun login(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
@@ -113,6 +113,10 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
                     return returnData.setErrorMsg("邀请码错误")
                 }
             }
+            val userLimit = Math.min(Math.max(appConfig.userLimit, 1), userMaxCount)
+            if (userMap.keys.size >= userLimit) {
+                return returnData.setErrorMsg("超过用户数上限")
+            }
 
             // 自动注册
             var salt = getRandomString(8)
@@ -134,6 +138,52 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             val loginData = saveUserSession(context, userMap, userInfo)
             return returnData.setData(loginData)
         }
+    }
+
+    suspend fun logout(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!appConfig.secure) {
+            return returnData.setErrorMsg("不支持的操作")
+        }
+        var username = context.session().get("username") as String? ?: ""
+        context.session().destroy()
+
+        // 清除自动登录token
+        var accessToken = context.queryParam("accessToken").firstOrNull() ?: ""
+        if (accessToken.isNotEmpty()) {
+            var tmp = accessToken.split(":", limit=2)
+            if (tmp.size >= 2) {
+                accessToken = tmp[1]
+
+                var userMap = mutableMapOf<String, MutableMap<String, Any>>()
+                var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
+                if (userMapJson != null) {
+                    userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
+                }
+                var currentUser = userMap.getOrDefault(username, null)
+                if (currentUser == null) {
+                    return returnData.setErrorMsg("系统错误")
+                }
+                var tokenMapVal = currentUser.getOrDefault("token_map", null)
+                if (tokenMapVal != null) {
+                    var tokenMap: MutableMap<String, Long>? = tokenMapVal as MutableMap<String, Long>?
+                    if (tokenMap != null) {
+                        tokenMap.remove(accessToken)
+                        currentUser.put("token_map", tokenMap)
+                    }
+                }
+                if (currentUser.getOrDefault("token", "").equals(accessToken)) {
+                    currentUser.put("token", "")
+                }
+
+                userMap.put(username, currentUser)
+                saveStorage("data", "users", value = userMap)
+            }
+        }
+        return returnData.setErrorMsg("请重新登录").setData("NEED_LOGIN")
     }
 
     suspend fun getUserList(context: RoutingContext): ReturnData {
@@ -212,6 +262,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         val username = context.bodyAsJson.getString("username") ?: ""
         val enableWebdav = context.bodyAsJson.getBoolean("enableWebdav")
+        val enableLocalStore = context.bodyAsJson.getBoolean("enableLocalStore")
         if (username.isEmpty()) {
             return returnData.setErrorMsg("参数错误")
         }
@@ -227,6 +278,9 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             }
             if (enableWebdav != null) {
                 existedUser.put("enable_webdav", enableWebdav)
+            }
+            if (enableLocalStore != null) {
+                existedUser.put("enable_local_store", enableLocalStore)
             }
             userMap.put(username, existedUser)
             saveStorage("data", "users", value = userMap)

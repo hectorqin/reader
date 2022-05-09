@@ -7,7 +7,6 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssArticle
-import io.legado.app.help.storage.OldRule
 import io.legado.app.model.webBook.WebBook
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
@@ -62,7 +61,7 @@ import java.text.SimpleDateFormat;
 import io.legado.app.utils.EncoderUtils
 import io.legado.app.model.rss.Rss
 import org.springframework.scheduling.annotation.Scheduled
-import io.legado.app.localBook.LocalBook
+import io.legado.app.model.localBook.LocalBook
 import java.nio.file.Paths
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -96,7 +95,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        val bookSource = OldRule.jsonToBookSource(context.bodyAsString)
+        val bookSource = BookSource.fromJson(context.bodyAsString).getOrNull()
         if (bookSource == null) {
             return returnData.setErrorMsg("参数错误")
         }
@@ -144,7 +143,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
             bookSourceList = JsonArray()
         }
         for (k in 0 until bookSourceJsonArray.size()) {
-            val bookSource = OldRule.jsonToBookSource(bookSourceJsonArray.getJsonObject(k).toString())
+            val bookSource = BookSource.fromJson(bookSourceJsonArray.getJsonObject(k).toString()).getOrNull()
             if (bookSource == null) {
                 continue
             }
@@ -301,6 +300,16 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
 
         // logger.info("bookSourceList: {}", bookSourceList)
         saveUserStorage(userNameSpace, "bookSource", bookSourceList)
+        return returnData.setData("")
+    }
+
+    suspend fun deleteAllSources(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        saveUserStorage(userNameSpace, "bookSource", JsonArray())
         return returnData.setData("")
     }
 

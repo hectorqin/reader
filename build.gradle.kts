@@ -106,7 +106,8 @@ dependencies {
     implementation("com.julienviet:retrofit-vertx:1.1.3")
 
     //JS rhino
-    implementation("com.github.gedoor:rhino-android:1.6")
+    // implementation("com.github.gedoor:rhino-android:1.6")
+    implementation(fileTree("src/lib").include("rhino-*.jar"))
 
     // 规则相关
     implementation("org.jsoup:jsoup:1.14.1")
@@ -116,6 +117,9 @@ dependencies {
     // xml
     implementation("org.xmlpull:xmlpull:1.1.4.0")
     implementation("com.github.stefanhaustein:kxml2:2.5.0")
+
+    //加解密类库
+    implementation("cn.hutool:hutool-crypto:5.8.0.M1")
 
     // 转换繁体
     // implementation("com.github.liuyueyi.quick-chinese-transfer:quick-transfer-core:0.2.1")

@@ -1,5 +1,8 @@
 package io.legado.app.help
 
+import cn.hutool.crypto.digest.DigestUtil
+import cn.hutool.crypto.symmetric.AES
+import cn.hutool.crypto.symmetric.DESede
 import io.legado.app.utils.Base64
 import io.legado.app.constant.AppConst.dateFormat
 import io.legado.app.help.http.*
@@ -7,6 +10,8 @@ import io.legado.app.model.Debug
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.model.analyzeRule.QueryTTF
 import io.legado.app.utils.*
+import io.legado.app.data.entities.BaseSource
+import io.legado.app.exception.NoStackTraceException
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
@@ -21,6 +26,7 @@ import java.nio.charset.Charset
 import java.util.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
+import java.text.SimpleDateFormat
 
 /**
  * js扩展类, 在js中通过java变量调用
@@ -30,16 +36,18 @@ import java.util.zip.ZipInputStream
 @Suppress("unused")
 interface JsExtensions {
 
+    fun getSource(): BaseSource?
+
     /**
      * 访问网络,返回String
      */
     fun ajax(urlStr: String): String? {
         return runBlocking {
             kotlin.runCatching {
-                val analyzeUrl = AnalyzeUrl(urlStr)
+                val analyzeUrl = AnalyzeUrl(urlStr, source = getSource())
                 analyzeUrl.getStrResponse(urlStr).body
             }.onFailure {
-                it.printStackTrace()
+                it.printOnDebug()
             }.getOrElse {
                 it.msg
             }
@@ -54,7 +62,7 @@ interface JsExtensions {
             val asyncArray = Array(urlList.size) {
                 async(IO) {
                     val url = urlList[it]
-                    val analyzeUrl = AnalyzeUrl(url)
+                    val analyzeUrl = AnalyzeUrl(url, source = getSource())
                     analyzeUrl.getStrResponse(url)
                 }
             }
@@ -68,16 +76,92 @@ interface JsExtensions {
     /**
      * 访问网络,返回Response<String>
      */
-    fun connect(urlStr: String): Any {
+    fun connect(urlStr: String): StrResponse {
         return runBlocking {
+            val analyzeUrl = AnalyzeUrl(urlStr, source = getSource())
             kotlin.runCatching {
-                val analyzeUrl = AnalyzeUrl(urlStr)
-                analyzeUrl.getStrResponse(urlStr)
+                analyzeUrl.getStrResponseAwait()
             }.onFailure {
-                it.printStackTrace()
+                it.printOnDebug()
             }.getOrElse {
-                it.msg
+                StrResponse(analyzeUrl.url, it.localizedMessage)
             }
+        }
+    }
+
+    fun connect(urlStr: String, header: String?): StrResponse {
+        return runBlocking {
+            val headerMap = GSON.fromJsonObject<Map<String, String>>(header).getOrNull()
+            val analyzeUrl = AnalyzeUrl(urlStr, headerMapF = headerMap, source = getSource())
+            kotlin.runCatching {
+                analyzeUrl.getStrResponseAwait()
+            }.onFailure {
+                it.printOnDebug()
+            }.getOrElse {
+                StrResponse(analyzeUrl.url, it.localizedMessage)
+            }
+        }
+    }
+
+    /**
+     * 使用webView访问网络
+     * @param html 直接用webView载入的html, 如果html为空直接访问url
+     * @param url html内如果有相对路径的资源不传入url访问不了
+     * @param js 用来取返回值的js语句, 没有就返回整个源代码
+     * @return 返回js获取的内容
+     */
+    fun webView(html: String?, url: String?, js: String?): String? {
+        return null
+    }
+
+    /**
+     * 可从网络，本地文件(阅读私有缓存目录和书籍保存位置支持相对路径)导入JavaScript脚本
+     */
+    fun importScript(path: String): String {
+        val result = when {
+            path.startsWith("http") -> cacheFile(path) ?: ""
+            path.startsWith("/storage") -> FileUtils.readText(path)
+            else -> readTxtFile(path)
+        }
+        if (result.isBlank()) throw NoStackTraceException("$path 内容获取失败或者为空")
+        return result
+    }
+
+    /**
+     * 缓存以文本方式保存的文件 如.js .txt等
+     */
+    fun cacheFile(urlStr: String): String? {
+        return cacheFile(urlStr, 0)
+    }
+
+    /**
+     * 缓存以文本方式保存的文件 如.js .txt等
+     * @param urlStr 网络文件的链接
+     * @param saveTime 缓存时间，单位：秒
+     * @return 返回缓存后的文件内容
+     */
+    fun cacheFile(urlStr: String, saveTime: Int = 0): String? {
+        val key = md5Encode16(urlStr)
+        val cache = CacheManager.getFile(key)
+        if (cache.isNullOrBlank()) {
+            log("首次下载 $urlStr")
+            val value = ajax(urlStr) ?: return null
+            CacheManager.putFile(key, value, saveTime)
+            return value
+        }
+        return cache
+    }
+
+    /**
+     *js实现读取cookie
+     */
+    fun getCookie(tag: String, key: String? = null): String {
+        val cookie = CookieStore.getCookie(tag)
+        val cookieMap = CookieStore.cookieToMap(cookie)
+        return if (key != null) {
+            cookieMap[key] ?: ""
+        } else {
+            cookie
         }
     }
 
@@ -131,19 +215,6 @@ interface JsExtensions {
     }
 
     /**
-     *js实现读取cookie
-     */
-    fun getCookie(tag: String, key: String? = null): String {
-        val cookie = CookieStore.getCookie(tag)
-        val cookieMap = CookieStore.cookieToMap(cookie)
-        return if (key != null) {
-            cookieMap[key] ?: ""
-        } else {
-            cookie
-        }
-    }
-
-    /**
      * js实现解码,不能删
      */
     fun base64Decode(str: String): String {
@@ -182,6 +253,17 @@ interface JsExtensions {
 
     fun md5Encode16(str: String): String {
         return MD5Utils.md5Encode16(str)
+    }
+
+    /**
+     * 格式化时间
+     */
+    fun timeFormatUTC(time: Long, format: String, sh: Int): String? {
+        val utc = SimpleTimeZone(sh, "UTC")
+        return SimpleDateFormat(format, Locale.getDefault()).run {
+            timeZone = utc
+            format(Date(time))
+        }
     }
 
     /**
@@ -248,7 +330,7 @@ interface JsExtensions {
     fun readTxtFile(path: String): String {
         val file = getFile(path)
         if (file.exists()) {
-            val charsetName = EncodingDetect.getJavaEncode(file)
+            val charsetName = EncodingDetect.getEncode(file)
             return String(file.readBytes(), charset(charsetName))
         }
         return ""
@@ -299,7 +381,7 @@ interface JsExtensions {
         unzipFolder.listFiles().let {
             if (it != null) {
                 for (f in it) {
-                    val charsetName = EncodingDetect.getJavaEncode(f)
+                    val charsetName = EncodingDetect.getEncode(f)
                     contents.append(String(f.readBytes(), charset(charsetName)))
                         .append("\n")
                 }
@@ -318,7 +400,7 @@ interface JsExtensions {
      */
     fun getZipStringContent(url: String, path: String): String {
         val byteArray = getZipByteArrayContent(url, path) ?: return ""
-        val charsetName = EncodingDetect.getJavaEncode(byteArray)
+        val charsetName = EncodingDetect.getEncode(byteArray)
         return String(byteArray, Charset.forName(charsetName))
     }
 
@@ -420,11 +502,43 @@ interface JsExtensions {
     }
 
     /**
+     * 弹窗提示
+     */
+    fun toast(msg: Any?) {
+        Debug.log("toast: " + msg.toString())
+    }
+
+    /**
+     * 弹窗提示 停留时间较长
+     */
+    fun longToast(msg: Any?) {
+        Debug.log("longToast: " + msg.toString())
+    }
+
+    /**
      * 输出调试日志
      */
     fun log(msg: String): String {
         Debug.log(msg)
         return msg
+    }
+
+    /**
+     * 输出对象类型
+     */
+    fun logType(any: Any?) {
+        if (any == null) {
+            log("null")
+        } else {
+            log(any.javaClass.name)
+        }
+    }
+
+    /**
+     * 生成UUID
+     */
+    fun randomUUID(): String {
+        return UUID.randomUUID().toString()
     }
 
     /**
@@ -437,12 +551,18 @@ interface JsExtensions {
     fun aesDecodeToByteArray(
         str: String, key: String, transformation: String, iv: String
     ): ByteArray? {
-        return EncoderUtils.decryptAES(
-            data = str.encodeToByteArray(),
-            key = key.encodeToByteArray(),
-            transformation,
-            iv.encodeToByteArray()
-        )
+        return try {
+            EncoderUtils.decryptAES(
+                data = str.encodeToByteArray(),
+                key = key.encodeToByteArray(),
+                transformation,
+                iv.encodeToByteArray()
+            )
+        } catch (e: Exception) {
+            e.printOnDebug()
+            log(e.localizedMessage ?: "aesDecodeToByteArrayERROR")
+            null
+        }
     }
 
     /**
@@ -470,12 +590,18 @@ interface JsExtensions {
     fun aesBase64DecodeToByteArray(
         str: String, key: String, transformation: String, iv: String
     ): ByteArray? {
-        return EncoderUtils.decryptBase64AES(
-            data = str.encodeToByteArray(),
-            key = key.encodeToByteArray(),
-            transformation,
-            iv.encodeToByteArray()
-        )
+        return try {
+            EncoderUtils.decryptBase64AES(
+                str.encodeToByteArray(),
+                key.encodeToByteArray(),
+                transformation,
+                iv.encodeToByteArray()
+            )
+        } catch (e: Exception) {
+            e.printOnDebug()
+            log(e.localizedMessage ?: "aesDecodeToByteArrayERROR")
+            null
+        }
     }
 
     /**
@@ -502,12 +628,18 @@ interface JsExtensions {
     fun aesEncodeToByteArray(
         data: String, key: String, transformation: String, iv: String
     ): ByteArray? {
-        return EncoderUtils.encryptAES(
-            data.encodeToByteArray(),
-            key = key.encodeToByteArray(),
-            transformation,
-            iv.encodeToByteArray()
-        )
+        return try {
+            EncoderUtils.encryptAES(
+                data.encodeToByteArray(),
+                key = key.encodeToByteArray(),
+                transformation,
+                iv.encodeToByteArray()
+            )
+        } catch (e: Exception) {
+            e.printOnDebug()
+            log(e.localizedMessage ?: "aesEncodeToByteArrayERROR")
+            null
+        }
     }
 
     /**
@@ -533,12 +665,18 @@ interface JsExtensions {
     fun aesEncodeToBase64ByteArray(
         data: String, key: String, transformation: String, iv: String
     ): ByteArray? {
-        return EncoderUtils.encryptAES2Base64(
-            data.encodeToByteArray(),
-            key = key.encodeToByteArray(),
-            transformation,
-            iv.encodeToByteArray()
-        )
+        return try {
+            EncoderUtils.encryptAES2Base64(
+                data.encodeToByteArray(),
+                key.encodeToByteArray(),
+                transformation,
+                iv.encodeToByteArray()
+            )
+        } catch (e: Exception) {
+            e.printOnDebug()
+            log(e.localizedMessage ?: "aesEncodeToBase64ByteArrayERROR")
+            null
+        }
     }
 
     /**
@@ -552,6 +690,178 @@ interface JsExtensions {
         data: String, key: String, transformation: String, iv: String
     ): String? {
         return aesEncodeToBase64ByteArray(data, key, transformation, iv)?.let { String(it) }
+    }
+
+    fun androidId(): String {
+        return ""
+    }
+
+    /**
+     * AES解密，算法参数经过Base64加密
+     *
+     * @param data 加密的字符串
+     * @param key Base64后的密钥
+     * @param mode 模式
+     * @param padding 补码方式
+     * @param iv Base64后的加盐
+     * @return 解密后的字符串
+     */
+    fun aesDecodeArgsBase64Str(
+        data: String,
+        key: String,
+        mode: String,
+        padding: String,
+        iv: String
+    ): String? {
+        return AES(
+            mode,
+            padding,
+            Base64.decode(key, Base64.NO_WRAP),
+            Base64.decode(iv, Base64.NO_WRAP)
+        ).decryptStr(data)
+    }
+
+    /**
+     * 3DES解密
+     *
+     * @param data 加密的字符串
+     * @param key 密钥
+     * @param mode 模式
+     * @param padding 补码方式
+     * @param iv 加盐
+     * @return 解密后的字符串
+     */
+    fun tripleDESDecodeStr(
+        data: String,
+        key: String,
+        mode: String,
+        padding: String,
+        iv: String
+    ): String? {
+        return DESede(mode, padding, key.toByteArray(), iv.toByteArray()).decryptStr(data)
+    }
+
+    /**
+     * 3DES解密，算法参数经过Base64加密
+     *
+     * @param data 加密的字符串
+     * @param key Base64后的密钥
+     * @param mode 模式
+     * @param padding 补码方式
+     * @param iv Base64后的加盐
+     * @return 解密后的字符串
+     */
+    fun tripleDESDecodeArgsBase64Str(
+        data: String,
+        key: String,
+        mode: String,
+        padding: String,
+        iv: String
+    ): String? {
+        return DESede(
+            mode,
+            padding,
+            Base64.decode(key, Base64.NO_WRAP),
+            Base64.decode(iv, Base64.NO_WRAP)
+        ).decryptStr(data)
+    }
+
+    /**
+     * AES加密并转为Base64，算法参数经过Base64加密
+     *
+     * @param data 被加密的字符串
+     * @param key Base64后的密钥
+     * @param mode 模式
+     * @param padding 补码方式
+     * @param iv Base64后的加盐
+     * @return 加密后的Base64
+     */
+    fun aesEncodeArgsBase64Str(
+        data: String,
+        key: String,
+        mode: String,
+        padding: String,
+        iv: String
+    ): String? {
+        return AES(
+            mode,
+            padding,
+            Base64.decode(key, Base64.NO_WRAP),
+            Base64.decode(iv, Base64.NO_WRAP)
+        ).encryptBase64(data)
+    }
+
+    /**
+     * 3DES加密并转为Base64
+     *
+     * @param data 被加密的字符串
+     * @param key 密钥
+     * @param mode 模式
+     * @param padding 补码方式
+     * @param iv 加盐
+     * @return 加密后的Base64
+     */
+    fun tripleDESEncodeBase64Str(
+        data: String,
+        key: String,
+        mode: String,
+        padding: String,
+        iv: String
+    ): String? {
+        return DESede(mode, padding, key.toByteArray(), iv.toByteArray()).encryptBase64(data)
+    }
+
+    /**
+     * 3DES加密并转为Base64，算法参数经过Base64加密
+     *
+     * @param data 被加密的字符串
+     * @param key Base64后的密钥
+     * @param mode 模式
+     * @param padding 补码方式
+     * @param iv Base64后的加盐
+     * @return 加密后的Base64
+     */
+    fun tripleDESEncodeArgsBase64Str(
+        data: String,
+        key: String,
+        mode: String,
+        padding: String,
+        iv: String
+    ): String? {
+        return DESede(
+            mode,
+            padding,
+            Base64.decode(key, Base64.NO_WRAP),
+            Base64.decode(iv, Base64.NO_WRAP)
+        ).encryptBase64(data)
+    }
+
+    /**
+     * 生成摘要，并转为16进制字符串
+     *
+     * @param data 被摘要数据
+     * @param algorithm 签名算法
+     * @return 16进制字符串
+     */
+    fun digestHex(
+        data: String,
+        algorithm: String,
+    ): String? {
+        return DigestUtil.digester(algorithm).digestHex(data)
+    }
+
+    /**
+     * 生成摘要，并转为Base64字符串
+     *
+     * @param data 被摘要数据
+     * @param algorithm 签名算法
+     * @return Base64字符串
+     */
+    fun digestBase64Str(
+        data: String,
+        algorithm: String,
+    ): String? {
+        return Base64.encodeToString(DigestUtil.digester(algorithm).digest(data), Base64.NO_WRAP)
     }
 
 }

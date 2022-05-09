@@ -1,13 +1,15 @@
 package io.legado.app.data.entities
 
-import io.legado.app.utils.GSON
-import io.legado.app.utils.fromJsonObject
+import com.jayway.jsonpath.DocumentContext
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import io.legado.app.help.CacheManager
 import io.legado.app.help.JsExtensions
 import io.legado.app.help.http.CookieStore
 import io.legado.app.constant.AppConst
 import javax.script.SimpleBindings
+import io.legado.app.utils.*
 
+@JsonIgnoreProperties("headerMap", "source")
 data class RssSource(
     var sourceUrl: String = "",
     var sourceName: String = "",
@@ -15,9 +17,9 @@ data class RssSource(
     var sourceGroup: String? = null,
     var sourceComment: String? = null,
     var enabled: Boolean = true,
-    var concurrentRate: String? = null,    //并发率
-    var header: String? = null,            // 请求头
-    var loginUrl: String? = null,          // 登录地址
+    override var concurrentRate: String? = null,    //并发率
+    override  var header: String? = null,            // 请求头
+    override var loginUrl: String? = null,          // 登录地址
     // var loginUi: List<RowUi>? = null,               //登录UI
     var loginCheckJs: String? = null,               //登录检测js
     var sortUrl: String? = null,
@@ -37,13 +39,13 @@ data class RssSource(
     var enableJs: Boolean = true,
     var loadWithBaseUrl: Boolean = true,
     var customOrder: Int = 0
-): JsExtensions {
+): BaseSource {
 
-    fun getTag(): String {
+    override fun getTag(): String {
         return sourceName
     }
 
-    fun getKey(): String {
+    override fun getKey(): String {
         return sourceUrl
     }
 
@@ -55,36 +57,6 @@ data class RssSource(
     }
 
     override fun hashCode() = sourceUrl.hashCode()
-
-    @Throws(Exception::class)
-    fun getHeaderMap() = HashMap<String, String>().apply {
-        this[AppConst.UA_NAME] = AppConst.userAgent
-        header?.let {
-            GSON.fromJsonObject<Map<String, String>>(
-                when {
-                    it.startsWith("@js:", true) ->
-                        evalJS(it.substring(4)).toString()
-                    it.startsWith("<js>", true) ->
-                        evalJS(it.substring(4, it.lastIndexOf("<"))).toString()
-                    else -> it
-                }
-            )?.let { map ->
-                putAll(map)
-            }
-        }
-    }
-
-    /**
-     * 执行JS
-     */
-    @Throws(Exception::class)
-    private fun evalJS(jsStr: String): Any? {
-        val bindings = SimpleBindings()
-        bindings["java"] = this
-        bindings["cookie"] = CookieStore
-        bindings["cache"] = CacheManager
-        return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
-    }
 
     fun equal(source: RssSource): Boolean {
         return equal(sourceUrl, source.sourceUrl)
@@ -130,16 +102,59 @@ data class RssSource(
         }
     }
 
-    /**
-     * 执行JS
-     */
-    @Throws(Exception::class)
-    fun evalJS(jsStr: String, bindingsConfig: SimpleBindings.() -> Unit = {}): Any? {
-        val bindings = SimpleBindings()
-        bindings.apply(bindingsConfig)
-        bindings["java"] = this
-        bindings["cookie"] = CookieStore
-        bindings["cache"] = CacheManager
-        return AppConst.SCRIPT_ENGINE.eval(jsStr, bindings)
+    @Suppress("MemberVisibilityCanBePrivate")
+    companion object {
+
+        fun fromJsonDoc(doc: DocumentContext): Result<RssSource> {
+            return kotlin.runCatching {
+                // val loginUi = doc.read<Any>("$.loginUi")
+                RssSource(
+                    sourceUrl = doc.readString("$.sourceUrl")!!,
+                    sourceName = doc.readString("$.sourceName")!!,
+                    sourceIcon = doc.readString("$.sourceIcon") ?: "",
+                    sourceGroup = doc.readString("$.sourceGroup"),
+                    sourceComment = doc.readString("$.sourceComment"),
+                    enabled = doc.readBool("$.enabled") ?: true,
+                    concurrentRate = doc.readString("$.concurrentRate"),
+                    header = doc.readString("$.header"),
+                    loginUrl = doc.readString("$.loginUrl"),
+                    // loginUi = if (loginUi is List<*>) GSON.toJson(loginUi) else loginUi?.toString(),
+                    loginCheckJs = doc.readString("$.loginCheckJs"),
+                    sortUrl = doc.readString("$.sortUrl"),
+                    singleUrl = doc.readBool("$.singleUrl") ?: false,
+                    articleStyle = doc.readInt("$.articleStyle") ?: 0,
+                    ruleArticles = doc.readString("$.ruleArticles"),
+                    ruleNextPage = doc.readString("$.ruleNextPage"),
+                    ruleTitle = doc.readString("$.ruleTitle"),
+                    rulePubDate = doc.readString("$.rulePubDate"),
+                    ruleDescription = doc.readString("$.ruleDescription"),
+                    ruleImage = doc.readString("$.ruleImage"),
+                    ruleLink = doc.readString("$.ruleLink"),
+                    ruleContent = doc.readString("$.ruleContent"),
+                    style = doc.readString("$.style"),
+                    enableJs = doc.readBool("$.enableJs") ?: true,
+                    loadWithBaseUrl = doc.readBool("$.loadWithBaseUrl") ?: true,
+                    customOrder = doc.readInt("$.customOrder") ?: 0
+                )
+            }
+        }
+
+        fun fromJson(json: String): Result<RssSource> {
+            return fromJsonDoc(jsonPath.parse(json))
+        }
+
+        fun fromJsonArray(jsonArray: String): Result<ArrayList<RssSource>> {
+            return kotlin.runCatching {
+                val sources = arrayListOf<RssSource>()
+                val doc = jsonPath.parse(jsonArray).read<List<*>>("$")
+                doc.forEach {
+                    val jsonItem = jsonPath.parse(it)
+                    fromJsonDoc(jsonItem).getOrThrow().let { source ->
+                        sources.add(source)
+                    }
+                }
+                sources
+            }
+        }
     }
 }

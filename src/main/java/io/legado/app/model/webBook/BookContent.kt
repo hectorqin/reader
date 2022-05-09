@@ -39,55 +39,57 @@ object BookContent {
             null
         }
         val content = StringBuilder()
-        val nextUrlList = arrayListOf(baseUrl)
+        val nextUrlList = arrayListOf(redirectUrl)
         val contentRule = bookSource.getContentRule()
-        val analyzeRule = AnalyzeRule(book).setContent(body, baseUrl)
-        analyzeRule.setRedirectUrl(baseUrl)
+        val analyzeRule = AnalyzeRule(book, bookSource).setContent(body, baseUrl)
+        analyzeRule.setRedirectUrl(redirectUrl)
         analyzeRule.nextChapterUrl = mNextChapterUrl
         var contentData = analyzeContent(
             book, baseUrl, redirectUrl, body, contentRule, bookChapter, bookSource, mNextChapterUrl
         )
-        content.append(contentData.content)
-        if (contentData.nextUrl.size == 1) {
-            var nextUrl = contentData.nextUrl[0]
+        content.append(contentData.first)
+        if (contentData.second.size == 1) {
+            var nextUrl = contentData.second[0]
             while (nextUrl.isNotEmpty() && !nextUrlList.contains(nextUrl)) {
                 if (!mNextChapterUrl.isNullOrEmpty()
-                    && NetworkUtils.getAbsoluteURL(baseUrl, nextUrl)
-                    == NetworkUtils.getAbsoluteURL(baseUrl, mNextChapterUrl)
+                    && NetworkUtils.getAbsoluteURL(redirectUrl, nextUrl)
+                    == NetworkUtils.getAbsoluteURL(redirectUrl, mNextChapterUrl)
                 ) break
                 nextUrlList.add(nextUrl)
                 val res = AnalyzeUrl(
-                    ruleUrl = nextUrl,
-                    book = book,
+                    mUrl = nextUrl,
+                    source = bookSource,
+                    ruleData = book,
                     headerMapF = bookSource.getHeaderMap()
-                ).getStrResponse(bookSource.bookSourceUrl)
+                ).getStrResponseAwait()
                 res.body?.let { nextBody ->
                     contentData = analyzeContent(
                         book, nextUrl, res.url, nextBody, contentRule,
                         bookChapter, bookSource, mNextChapterUrl, false
                     )
                     nextUrl =
-                        if (contentData.nextUrl.isNotEmpty()) contentData.nextUrl[0] else ""
-                    content.append("\n").append(contentData.content)
+                        if (contentData.second.isNotEmpty()) contentData.second[0] else ""
+                    content.append("\n").append(contentData.first)
                 }
             }
             debugLog?.log(bookSource.bookSourceUrl, "◇本章总页数:${nextUrlList.size}")
-        } else if (contentData.nextUrl.size > 1) {
-            debugLog?.log(bookSource.bookSourceUrl, "◇并发解析目录,总页数:${contentData.nextUrl.size}")
+        } else if (contentData.second.size > 1) {
+            debugLog?.log(bookSource.bookSourceUrl, "◇并发解析正文,总页数:${contentData.second.size}")
             withContext(IO) {
-                val asyncArray = Array(contentData.nextUrl.size) {
+                val asyncArray = Array(contentData.second.size) {
                     async(IO) {
-                        val urlStr = contentData.nextUrl[it]
+                        val urlStr = contentData.second[it]
                         val analyzeUrl = AnalyzeUrl(
-                            ruleUrl = urlStr,
-                            book = book,
+                            mUrl = urlStr,
+                            source = bookSource,
+                            ruleData = book,
                             headerMapF = bookSource.getHeaderMap()
                         )
-                        val res = analyzeUrl.getStrResponse(bookSource.bookSourceUrl)
+                        val res = analyzeUrl.getStrResponseAwait()
                         analyzeContent(
                             book, urlStr, res.url, res.body!!, contentRule,
                             bookChapter, bookSource, mNextChapterUrl, false
-                        ).content
+                        ).first
                     }
                 }
                 asyncArray.forEach { coroutine ->
@@ -98,15 +100,12 @@ object BookContent {
         var contentStr = content.toString()
         val replaceRegex = contentRule.replaceRegex
         if (!replaceRegex.isNullOrEmpty()) {
-            contentStr = analyzeRule.getString(replaceRegex, value = contentStr)
+            contentStr = analyzeRule.getString(replaceRegex, contentStr)
         }
         debugLog?.log(bookSource.bookSourceUrl, "┌获取章节名称")
         debugLog?.log(bookSource.bookSourceUrl, "└${bookChapter.title}")
-        debugLog?.log(bookSource.bookSourceUrl, "┌获取正文内容")
-        debugLog?.log(bookSource.bookSourceUrl, "└\n$contentStr")
-        // if (contentStr.isNotBlank()) {
-        //     BookHelp.saveContent(book, bookChapter, contentStr)
-        // }
+        debugLog?.log(bookSource.bookSourceUrl, "┌获取正文内容 (长度：${contentStr.length})")
+        debugLog?.log(bookSource.bookSourceUrl, "└\n${contentStr.substring(0, 50)} ... ${contentStr.substring(contentStr.length - 30, contentStr.length)}")
         return contentStr
     }
 
@@ -122,8 +121,8 @@ object BookContent {
         nextChapterUrl: String?,
         printLog: Boolean = true,
         debugLog: DebugLog? = null
-    ): ContentData<List<String>> {
-        val analyzeRule = AnalyzeRule(book)
+    ): Pair<String, List<String>> {
+        val analyzeRule = AnalyzeRule(book, bookSource)
         analyzeRule.setContent(body, baseUrl)
         val rUrl = analyzeRule.setRedirectUrl(redirectUrl)
         analyzeRule.nextChapterUrl = nextChapterUrl
@@ -136,11 +135,11 @@ object BookContent {
         val nextUrlRule = contentRule.nextContentUrl
         if (!nextUrlRule.isNullOrEmpty()) {
             if(printLog) debugLog?.log(bookSource.bookSourceUrl, "┌获取正文下一页链接")
-            analyzeRule.getStringList(nextUrlRule, true)?.let {
+            analyzeRule.getStringList(nextUrlRule, isUrl = true)?.let {
                 nextUrlList.addAll(it)
             }
             if(printLog) debugLog?.log(bookSource.bookSourceUrl, "└" + nextUrlList.joinToString("，"))
         }
-        return ContentData(content, nextUrlList)
+        return Pair(content, nextUrlList)
     }
 }

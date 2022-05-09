@@ -107,7 +107,7 @@ object StringUtils {
     }
 
     fun toFirstCapital(str: String): String {
-        return str.substring(0, 1).uppercase() + str.substring(1)
+        return str.substring(0, 1).uppercase(Locale.getDefault()) + str.substring(1)
     }
 
     /**
@@ -133,7 +133,9 @@ object StringUtils {
         return String(c)
     }
 
-    //功能：字符串全角转换为半角
+    /**
+     * 字符串全角转换为半角
+     */
     fun fullToHalf(input: String): String {
         val c = input.toCharArray()
         for (i in c.indices) {
@@ -150,6 +152,9 @@ object StringUtils {
         return String(c)
     }
 
+    /**
+     * 中文大写数字转数字
+     */
     fun chineseNumToInt(chNum: String): Int {
         var result = 0
         var tmp = 0
@@ -165,60 +170,70 @@ object StringUtils {
         }
 
         // "一千零二十五", "一千二" 形式
-        try {
+        return kotlin.runCatching {
             for (i in cn.indices) {
                 val tmpNum = ChnMap[cn[i]]!!
-                if (tmpNum == 100000000) {
-                    result += tmp
-                    result *= tmpNum
-                    billion = billion * 100000000 + result
-                    result = 0
-                    tmp = 0
-                } else if (tmpNum == 10000) {
-                    result += tmp
-                    result *= tmpNum
-                    tmp = 0
-                } else if (tmpNum >= 10) {
-                    if (tmp == 0)
-                        tmp = 1
-                    result += tmpNum * tmp
-                    tmp = 0
-                } else {
-                    tmp = if (i >= 2 && i == cn.size - 1 && ChnMap[cn[i - 1]]!! > 10)
-                        tmpNum * ChnMap[cn[i - 1]]!! / 10
-                    else
-                        tmp * 10 + tmpNum
+                when {
+                    tmpNum == 100000000 -> {
+                        result += tmp
+                        result *= tmpNum
+                        billion = billion * 100000000 + result
+                        result = 0
+                        tmp = 0
+                    }
+                    tmpNum == 10000 -> {
+                        result += tmp
+                        result *= tmpNum
+                        tmp = 0
+                    }
+                    tmpNum >= 10 -> {
+                        if (tmp == 0)
+                            tmp = 1
+                        result += tmpNum * tmp
+                        tmp = 0
+                    }
+                    else -> {
+                        tmp = if (i >= 2 && i == cn.size - 1 && ChnMap[cn[i - 1]]!! > 10)
+                            tmpNum * ChnMap[cn[i - 1]]!! / 10
+                        else
+                            tmp * 10 + tmpNum
+                    }
                 }
             }
             result += tmp + billion
-            return result
-        } catch (e: Exception) {
-            return -1
-        }
-
+            result
+        }.getOrDefault(-1)
     }
 
+    /**
+     * 字符串转数字
+     */
     fun stringToInt(str: String?): Int {
         if (str != null) {
-            val num = fullToHalf(str).replace("\\s".toRegex(), "")
-            return try {
+            val num = fullToHalf(str).replace("\\s+".toRegex(), "")
+            return kotlin.runCatching {
                 Integer.parseInt(num)
-            } catch (e: Exception) {
+            }.getOrElse {
                 chineseNumToInt(num)
             }
-
         }
         return -1
     }
 
+    /**
+     * 是否包含数字
+     */
     fun isContainNumber(company: String): Boolean {
-        val p = Pattern.compile("[0-9]")
+        val p = Pattern.compile("[0-9]+")
         val m = p.matcher(company)
         return m.find()
     }
 
+    /**
+     * 是否数字
+     */
     fun isNumeric(str: String): Boolean {
-        val pattern = Pattern.compile("[0-9]*")
+        val pattern = Pattern.compile("-?[0-9]+")
         val isNum = pattern.matcher(str)
         return isNum.matches()
     }
@@ -241,22 +256,27 @@ object StringUtils {
         return wordsS
     }
 
-    // 移除字符串首尾空字符的高效方法(利用ASCII值判断,包括全角空格)
-   fun trim(s: String): String {
-       if (s.isNullOrEmpty()) return ""
-       var start = 0
-       val len = s.length
-       var end = len - 1
-       while (start < end && (s[start].code <= 0x20 || s[start] == '　')) {
-           ++start
-       }
-       while (start < end && (s[end].code <= 0x20 || s[end] == '　')) {
-           --end
-       }
-       if (end < len) ++end
-       return if (start > 0 || end < len) s.substring(start, end) else s
-   }
+    /**
+     * 移除字符串首尾空字符的高效方法(利用ASCII值判断,包括全角空格)
+     */
+    fun trim(s: String): String {
+        if (s.isEmpty()) return ""
+        var start = 0
+        val len = s.length
+        var end = len - 1
+        while (start < end && (s[start].code <= 0x20 || s[start] == '　')) {
+            ++start
+        }
+        while (start < end && (s[end].code <= 0x20 || s[end] == '　')) {
+            --end
+        }
+        if (end < len) ++end
+        return if (start > 0 || end < len) s.substring(start, end) else s
+    }
 
+    /**
+     * 重复字符串
+     */
     fun repeat(str: String, n: Int): String {
         val stringBuilder = StringBuilder()
         for (i in 0 until n) {
@@ -265,13 +285,16 @@ object StringUtils {
         return stringBuilder.toString()
     }
 
+    /**
+     * 移除UTF头
+     */
     fun removeUTFCharacters(data: String?): String? {
         if (data == null) return null
         val p = Pattern.compile("\\\\u(\\p{XDigit}{4})")
         val m = p.matcher(data)
         val buf = StringBuffer(data.length)
         while (m.find()) {
-            val ch = Integer.parseInt(m.group(1), 16).toChar().toString()
+            val ch = Integer.parseInt(m.group(1)!!, 16).toChar().toString()
             m.appendReplacement(buf, Matcher.quoteReplacement(ch))
         }
         m.appendTail(buf)

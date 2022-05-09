@@ -237,39 +237,58 @@
             />
           </div>
         </div>
-        <div
-          class="setting-wrapper"
-          v-if="
-            !$store.state.isSecureMode || $store.state.userInfo.enableWebdav
-          "
-        >
+        <div class="setting-wrapper">
           <div class="setting-title">
-            WebDAV
+            书架设置
           </div>
           <div class="setting-item">
             <el-tag
               type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
               class="setting-btn"
-              @click="showWebdavFile('/')"
+              @click="showManageBookGroup"
             >
-              文件管理
+              分组管理
             </el-tag>
             <el-tag
               type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
               class="setting-btn"
-              @click="backupToWebdav"
+              @click="importLocalBook"
             >
-              保存备份
+              导入书籍
+            </el-tag>
+            <input
+              ref="bookRef"
+              type="file"
+              multiple="multiple"
+              @change="onBookFileChange"
+              style="display:none"
+            />
+            <el-tag
+              type="info"
+              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="showLocalStoreManageDialog = true"
+              v-if="
+                !$store.state.isSecureMode ||
+                  $store.state.userInfo.enableLocalStore
+              "
+            >
+              浏览书仓
             </el-tag>
           </div>
         </div>
+
         <div class="setting-wrapper">
           <div class="setting-title">
             用户空间
+            <span
+              class="right-text"
+              v-if="$store.state.isSecureMode && $store.state.userInfo.username"
+              @click="logout()"
+              >注销</span
+            >
           </div>
           <div class="setting-item" v-if="$store.state.showManagerMode">
             <el-select
@@ -341,40 +360,40 @@
             </el-tag>
           </div>
         </div>
-        <div class="setting-wrapper">
+        <div
+          class="setting-wrapper"
+          v-if="
+            !$store.state.isSecureMode || $store.state.userInfo.enableWebdav
+          "
+        >
           <div class="setting-title">
-            书架设置
+            WebDAV
           </div>
           <div class="setting-item">
             <el-tag
               type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
               class="setting-btn"
-              @click="showManageBookGroup"
+              @click="showWebdavFile('/')"
             >
-              分组管理
+              文件管理
             </el-tag>
             <el-tag
               type="info"
-              :effect="$store.getters.isNight ? 'dark' : 'light'"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
               class="setting-btn"
-              @click="importLocalBook"
+              @click="backupToWebdav"
             >
-              导入书籍
+              保存备份
             </el-tag>
-            <input
-              ref="bookRef"
-              type="file"
-              multiple="multiple"
-              @change="onBookFileChange"
-              style="display:none"
-            />
           </div>
         </div>
         <div class="setting-wrapper">
           <div class="setting-title">
             本地缓存
-            <span class="cache-stats-total">{{ localCacheStats.total }}</span>
+            <span class="right-text">{{ localCacheStats.total }}</span>
           </div>
           <div class="setting-item">
             <el-tag
@@ -538,7 +557,7 @@
               <!-- <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" /> -->
               <el-image
                 class="cover"
-                :src="getCover(book.coverUrl, true)"
+                :src="getCover(getBookCoverUrl(book), true)"
                 fit="cover"
                 lazy
               >
@@ -678,10 +697,22 @@
       <div class="custom-dialog-title" slot="title">
         <span class="el-dialog__title"
           >{{ isShowFailureBookSource ? "失效书源管理" : "书源管理" }}
-          <span class="float-right span-btn" @click="exportBookSource()"
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="deleteAllBookSource()"
+            >清空</span
+          >
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="exportBookSource()"
             >导出</span
           >
-          <span class="float-right span-btn" @click="editBookSource(false)"
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="editBookSource(false)"
             >新增</span
           >
         </span>
@@ -878,6 +909,24 @@
               </el-switch>
             </template>
           </el-table-column>
+          <el-table-column
+            property="enableLocalStore"
+            label="书仓"
+            min-width="80"
+          >
+            <template slot-scope="scope">
+              <el-switch
+                v-if="scope.row.userNS !== 'default'"
+                v-model="scope.row.enableLocalStore"
+                active-color="#13ce66"
+                inactive-color="#ff4949"
+                :active-value="true"
+                :inactive-value="false"
+                @change="toggleUserLocalStore(scope.row, $event)"
+              >
+              </el-switch>
+            </template>
+          </el-table-column>
         </el-table>
       </div>
       <div slot="footer" class="dialog-footer">
@@ -998,8 +1047,8 @@
           <div class="book-cover">
             <el-image
               class="cover"
-              :src="getCover(importBookInfo.coverUrl, true)"
-              :key="importBookInfo.coverUrl"
+              :src="getCover(getBookCoverUrl(importBookInfo), true)"
+              :key="getBookCoverUrl(importBookInfo)"
               fit="cover"
               lazy
             >
@@ -1013,6 +1062,38 @@
             <div>
               <span>作者：</span>
               <el-input v-model="importBookInfo.author" size="small">
+              </el-input>
+            </div>
+            <div v-if="isShowTocRule">
+              <span>规则：</span>
+              <el-select
+                size="mini"
+                v-model="importUsedTxtRule"
+                filterable
+                placeholder="内置规则"
+              >
+                <el-option
+                  v-for="(rule, index) in $store.state.txtTocRules"
+                  :key="'txtTocRule-' + index"
+                  :label="rule.name"
+                  :value="rule.rule"
+                >
+                </el-option>
+              </el-select>
+              <el-button
+                class="toc-refresh-btn"
+                type="text"
+                @click="getChapterListByRule()"
+                >刷新目录</el-button
+              >
+            </div>
+            <div v-if="isShowTocRule">
+              <el-input
+                type="textarea"
+                :rows="2"
+                v-model="importBookInfo.tocUrl"
+                size="small"
+              >
               </el-input>
             </div>
           </div>
@@ -1149,9 +1230,17 @@
           <div class="book-cover-bg" :style="bookCoverBgStyle"></div>
           <div class="book-cover-bg-image">
             <img
-              v-lazy="getCover(showBookInfo.coverUrl)"
+              v-lazy="getCover(getBookCoverUrl(showBookInfo))"
               :key="showBookInfo.name"
               alt=""
+              @click="triggerBookCoverRefClick"
+            />
+            <input
+              ref="bookCoverRef"
+              type="file"
+              accept="image/jpg, image/png, image/jpeg"
+              @change="onCoverFileChange"
+              style="display:none"
             />
           </div>
         </div>
@@ -1167,12 +1256,24 @@
               type="text"
               class="book-prop-btn"
               v-if="showBookInfo.origin === 'loc_book'"
-              @click="refreshLocalBook()"
+              @click="refreshLocalBook(showBookInfo)"
               >更新</el-button
             >
           </div>
           <div class="book-prop book-latest">
             最新： {{ showBookInfo.latestChapterTitle }}
+            <span class="book-prop-btn">
+              追更
+              <el-switch
+                v-model="showBookInfo.canUpdate"
+                active-color="#13ce66"
+                inactive-color="#ff4949"
+                :active-value="true"
+                :inactive-value="false"
+                @change="toggleBookCanUpdate(showBookInfo)"
+              >
+              </el-switch>
+            </span>
           </div>
           <div class="book-prop book-group" v-if="!isSearchResult">
             分组： {{ displayGroupName(showBookInfo.group) }}
@@ -1307,11 +1408,20 @@
         ></div>
       </div>
     </el-dialog>
+
+    <LocalStore
+      v-model="showLocalStoreManageDialog"
+      :dialogWidth="dialogWidth"
+      :dialogTop="dialogTop"
+      :dialogContentHeight="dialogContentHeight"
+      @importFromLocalStorePreview="importMultiBooks"
+    ></LocalStore>
   </div>
 </template>
 
 <script>
 import Explore from "../components/Explore.vue";
+import LocalStore from "../components/LocalStore.vue";
 import Axios from "../plugins/axios";
 import { errorTypeList } from "../plugins/config";
 import eventBus from "../plugins/eventBus";
@@ -1325,7 +1435,8 @@ const buildURL = require("axios/lib/helpers/buildURL");
 
 export default {
   components: {
-    Explore
+    Explore,
+    LocalStore
   },
   data() {
     return {
@@ -1427,7 +1538,10 @@ export default {
         rssSources: "0 Bytes",
         chapterList: "0 Bytes",
         chapterContent: "0 Bytes"
-      }
+      },
+
+      showLocalStoreManageDialog: false,
+      importUsedTxtRule: ""
     };
   },
   watch: {
@@ -1477,6 +1591,11 @@ export default {
             (this.$refs.rssArticleListRef.scrollTop = 0);
         });
       }
+    },
+    importUsedTxtRule(val) {
+      if (val) {
+        this.importBookInfo.tocUrl = val;
+      }
     }
   },
   mounted() {
@@ -1524,6 +1643,7 @@ export default {
       this.$prompt("请输入接口地址 ( 如：localhost:8080/reader3 )", "提示", {
         confirmButtonText: "确定",
         cancelButtonText: "取消",
+        inputValue: this.api,
         // inputPattern: /^((2[0-4]\d|25[0-5]|[1]?\d\d?)\.){3}(2[0-4]\d|25[0-5]|[1]?\d\d?):([1-9]|[1-9][0-9]|[1-9][0-9][0-9]|[1-9][0-9][0-9][0-9]|[1-6][0-5][0-5][0-3][0-5])$/,
         // inputErrorMessage: "url 形式不正确",
         beforeClose: (action, instance, done) => {
@@ -1855,7 +1975,7 @@ export default {
         bookUrl: book.bookUrl,
         index: book.index ?? book.durChapterIndex ?? 0,
         type: book.type,
-        coverUrl: book.coverUrl,
+        coverUrl: this.getBookCoverUrl(book),
         author: book.author,
         origin: book.origin
       });
@@ -1882,7 +2002,12 @@ export default {
                 ? "修改书籍成功"
                 : "加入书架成功"
             );
-            this.loadBookshelf();
+            if (!isEdit) {
+              this.loadBookshelf();
+            } else {
+              this.$store.commit("updateShelfBook", res.data.data);
+            }
+            return res.data.data;
           }
         },
         error => {
@@ -2517,6 +2642,25 @@ export default {
         }
       );
     },
+    toggleUserLocalStore(user, enableLocalStore) {
+      Axios.post(this.api + "/updateUser", {
+        username: user.username,
+        enableLocalStore
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("修改成功");
+            this.userList = res.data.data.map(v => ({
+              ...v,
+              userNS: v.username
+            }));
+          }
+        },
+        error => {
+          this.$message.error("修改失败 " + (error && error.toString()));
+        }
+      );
+    },
     formatTableField(row, column, cellValue) {
       switch (column.property) {
         case "createdAt":
@@ -2779,6 +2923,15 @@ export default {
       this.$refs.bookRef.value = null;
     },
     async importMultiBooks(books) {
+      if (!books || !books.length) {
+        return;
+      }
+      if (books.length == 1) {
+        this.importBookInfo = books[0].book;
+        this.importBookChapters = books[0].chapters;
+        this.showImportBookDialog = true;
+        return;
+      }
       const res = await this.$confirm(
         `你选择导入多本书籍，请选择导入方式?`,
         "提示",
@@ -2787,11 +2940,15 @@ export default {
           cancelButtonText: "逐一确认导入",
           type: "warning",
           closeOnClickModal: false,
-          closeOnPressEscape: false
+          closeOnPressEscape: false,
+          distinguishCancelAndClose: true
         }
-      ).catch(() => {
-        return false;
+      ).catch(action => {
+        return action === "close" ? "close" : false;
       });
+      if (res === "close") {
+        return;
+      }
       if (res) {
         for (let i = 0; i < books.length; i++) {
           const book = books[i];
@@ -2818,6 +2975,7 @@ export default {
       const url = this.importBookInfo.bookUrl;
       this.importBookInfo = {};
       this.importBookChapters = [];
+      this.importUsedTxtRule = "";
       this.$nextTick(() => {
         this.$emit("importEnd");
       });
@@ -3023,9 +3181,9 @@ export default {
         }
       );
     },
-    refreshLocalBook() {
+    refreshLocalBook(book) {
       Axios.post(this.api + "/refreshLocalBook", {
-        bookUrl: this.showBookInfo.bookUrl
+        bookUrl: book.bookUrl
       }).then(
         res => {
           if (res.data.isSuccess) {
@@ -3038,6 +3196,11 @@ export default {
           this.$message.error("更新失败" + (error && error.toString()));
         }
       );
+    },
+    toggleBookCanUpdate(book) {
+      this.saveBook(book, false, true).then(res => {
+        this.showBookInfo = res;
+      });
     },
     loadRssSources(refresh) {
       return cacheFirstRequest(
@@ -3192,6 +3355,31 @@ export default {
         },
         error => {
           this.$message.error("导出书源失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async deleteAllBookSource() {
+      const res = await this.$confirm(`确认要清空所有书源吗?`, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/deleteAllSources").then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            this.loadBookSource(true);
+            this.$message.success("清空书源成功");
+            this.loadBookSource(true);
+          }
+        },
+        error => {
+          this.$message.error("清空书源失败 " + (error && error.toString()));
         }
       );
     },
@@ -3429,6 +3617,67 @@ export default {
     },
     scrollHandler() {
       this.lastScrollTop = this.$refs.bookList.scrollTop;
+    },
+    getBookCoverUrl(book) {
+      return book.customCoverUrl || book.coverUrl;
+    },
+    triggerBookCoverRefClick() {
+      this.$refs.bookCoverRef.dispatchEvent(new MouseEvent("click"));
+    },
+    onCoverFileChange(event) {
+      if (!event.target || !event.target.files || !event.target.files.length) {
+        return;
+      }
+      const rawFile = event.target.files && event.target.files[0];
+      // console.log("rawFile", rawFile);
+      let param = new FormData();
+      param.append("file", rawFile);
+      param.append("type", "covers");
+      Axios.post(this.api + "/uploadFile", param, {
+        headers: { "Content-Type": "multipart/form-data" }
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            if (!res.data.data.length) {
+              this.$message.error("上传文件失败");
+              return;
+            }
+            this.showBookInfo.customCoverUrl = res.data.data[0];
+            this.saveBook(this.showBookInfo).then(res => {
+              this.showBookInfo = res;
+            });
+          }
+        },
+        error => {
+          this.$message.error("上传文件失败 " + (error && error.toString()));
+        }
+      );
+    },
+    logout() {
+      Axios.post(this.api + "/logout").then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$store.commit("setToken", "");
+            window.location.reload(true);
+          }
+        },
+        error => {
+          this.$message.error("注销失败 " + (error && error.toString()));
+        }
+      );
+    },
+    getChapterListByRule() {
+      Axios.post("/getChapterListByRule", this.importBookInfo).then(
+        res => {
+          if (res.data.isSuccess && res.data.data.book) {
+            this.importBookInfo = res.data.data.book;
+            this.importBookChapters = res.data.data.chapters;
+          }
+        },
+        error => {
+          this.$message.error("注销失败 " + (error && error.toString()));
+        }
+      );
     }
   },
   computed: {
@@ -3454,8 +3703,8 @@ export default {
     },
     bookCoverList() {
       return this.bookList
-        .filter(v => v.coverUrl)
-        .map(v => this.getCover(v.coverUrl, true));
+        .filter(v => this.getBookCoverUrl(v))
+        .map(v => this.getCover(this.getBookCoverUrl(v), true));
     },
     shelfBooks() {
       return this.$store.getters.shelfBooks;
@@ -3471,7 +3720,7 @@ export default {
     },
     connectStatus() {
       return this.$store.state.connected
-        ? `已连接` + this.api
+        ? `后端已连接`
         : this.connecting
         ? "正在连接后端服务器……"
         : "点击设置后端接口前缀";
@@ -3649,7 +3898,7 @@ export default {
     bookCoverBgStyle() {
       return {
         backgroundImage: `url(${this.getCover(
-          this.showBookInfo.coverUrl,
+          this.getBookCoverUrl(this.showBookInfo),
           true
         )})`
       };
@@ -3671,6 +3920,18 @@ export default {
       set(val) {
         this.$store.commit("setSearchConfig", val);
       }
+    },
+    isShowTocRule() {
+      try {
+        return (
+          this.importBookInfo &&
+          this.importBookInfo.originName &&
+          this.importBookInfo.originName.toLowerCase().endsWith(".txt")
+        );
+      } catch (e) {
+        // console.log(e);
+      }
+      return false;
     }
   }
 };
@@ -3766,11 +4027,13 @@ export default {
         color: #b1b1b1;
         font-family: -apple-system, "Noto Sans", "Helvetica Neue", Helvetica, "Nimbus Sans L", Arial, "Liberation Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Source Han Sans CN", "Microsoft YaHei", "Wenquanyi Micro Hei", "WenQuanYi Zen Hei", "ST Heiti", SimHei, "WenQuanYi Zen Hei Sharp", sans-serif;
 
-        .cache-stats-total {
+        .right-text {
           float: right;
           display: inline-block;
           height: 20px;
           line-height: 20px;
+          cursor: pointer;
+          user-select: none;
         }
       }
 
@@ -4162,9 +4425,11 @@ export default {
       display: flex;
       flex-direction: column;
       margin-left: 30px;
+      justify-content: space-between;
+      min-height: 100px;
 
-      div {
-        padding: 5px;
+      .toc-refresh-btn {
+        margin-left: 5px;
       }
 
       span {

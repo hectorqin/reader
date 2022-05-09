@@ -71,7 +71,11 @@ import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
 import "prismjs/themes/prism.css";
-import { isMiniInterface, networkFirstRequest } from "./plugins/helper";
+import {
+  cacheFirstRequest,
+  isMiniInterface,
+  networkFirstRequest
+} from "./plugins/helper";
 
 Date.prototype.format = function(fmt) {
   var o = {
@@ -208,6 +212,7 @@ export default {
     this.autoSetTheme(this.autoTheme);
 
     this.getUserInfo();
+    this.loadTxtTocRules();
   },
   beforeMount() {
     this.setTheme(this.isNight);
@@ -365,6 +370,19 @@ export default {
         error => {
           this.$message.error(
             "加载用户信息失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    loadTxtTocRules() {
+      cacheFirstRequest(() => Axios.get("/getTxtTocRules"), "txtTocRules").then(
+        res => {
+          const data = res.data.data || [];
+          this.$store.commit("setTxtTocRules", data);
+        },
+        error => {
+          this.$message.error(
+            "加载txt章节规则失败 " + (error && error.toString())
           );
         }
       );
@@ -557,6 +575,11 @@ export default {
     background: #bbb;
   }
   .el-input__inner {
+    background-color: #444;
+    border: 1px solid #444 !important;
+    color: #ddd;
+  }
+  .el-textarea__inner {
     background-color: #444;
     border: 1px solid #444 !important;
     color: #ddd;

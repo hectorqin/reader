@@ -127,6 +127,30 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
         return null
     }
 
+    fun getByHashCode(hashCode: String): String? {
+        mCache?.let { mCache ->
+            val file =  mCache.newFileFromHashCode(hashCode)
+
+            if (!file.exists())
+                return null
+            var removeFile = false
+            try {
+                val text = file.readText()
+                if (!Utils.isDue(text)) {
+                    return Utils.clearDateInfo(text)
+                } else {
+                    removeFile = true
+                }
+            } catch (e: IOException) {
+                e.printStackTrace()
+            } finally {
+                if (removeFile)
+                    file.delete()
+            }
+        }
+        return null
+    }
+
     // =======================================
     // ========== JSONObject 数据 读写 =========
     // =======================================
@@ -696,6 +720,10 @@ class ACache private constructor(cacheDir: File, max_size: Long, max_count: Int)
 
         fun newFile(key: String): File {
             return File(cacheDir, key.hashCode().toString() + "")
+        }
+
+        fun newFileFromHashCode(hashCode: String): File {
+            return File(cacheDir, hashCode)
         }
 
         fun remove(key: String): Boolean {

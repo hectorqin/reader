@@ -14,4 +14,7 @@ class AppConfig {
     var inviteCode = ""   // 注册邀请码
     var secureKey = ""    // 管理密码
     var cacheChapterContent = false // 是否缓存章节内容
+    var userLimit = 50    // 用户上限
+    var userBookLimit = 200    // 用户书籍上限
+    var debugLog = false  // 调试日志
 }

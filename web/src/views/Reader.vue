@@ -136,6 +136,14 @@
         <i class="el-icon-refresh-right"></i>
       </div>
       <div
+        class="auto-reading-item"
+        :style="popupAbsoluteBtnStyle"
+        @click="toggleAutoReading()"
+        v-if="!isEpub && !isCarToon && !isAudio"
+      >
+        <i class="el-icon-view"></i>
+      </div>
+      <div
         class="headset-item"
         :style="popupAbsoluteBtnStyle"
         @click="showReadBar = !showReadBar"
@@ -364,7 +372,7 @@
         <span
           class="bottom-btn"
           v-if="show && !isSlideRead && !error"
-          @click="toNextChapter"
+          @click="toNextChapter()"
           >加载下一章</span
         >
       </div>
@@ -521,6 +529,30 @@ export default {
         this.startSavePosition = false;
         this.autoShowPosition();
       }
+    },
+    currentPage(val, oldVal) {
+      // 还剩两页的时候，预读下一章节
+      if (val !== oldVal && val >= this.totalPages - 2) {
+        if (
+          this.$store.state.readingBook.index <
+          this.$store.state.readingBook.catalog.length - 1
+        ) {
+          if (!this.preCaching) {
+            this.preCaching = true;
+            this.getBookContent(
+              this.$store.state.readingBook.index + 1,
+              {
+                timeout: 30000,
+                silent: true
+              },
+              false,
+              true
+            ).then(() => {
+              this.preCaching = false;
+            });
+          }
+        }
+      }
     }
   },
   data() {
@@ -557,7 +589,9 @@ export default {
 
       showCacheContentZone: false,
       isCachingContent: false,
-      cachingContentTip: ""
+      cachingContentTip: "",
+
+      autoReading: false
     };
   },
   computed: {
@@ -591,7 +625,11 @@ export default {
       };
     },
     isSlideRead() {
-      return this.showReadBar || this.isEpub || this.isCarToon || this.isAudio
+      return this.autoReading ||
+        this.showReadBar ||
+        this.isEpub ||
+        this.isCarToon ||
+        this.isAudio
         ? false
         : this.$store.getters.isSlideRead;
     },
@@ -1426,7 +1464,7 @@ export default {
       if (typeof rect.top !== "undefined") {
         this.scrollContent(
           rect.top -
-            30 -
+            (this.$store.state.miniInterface ? 30 : 0) -
             (window.webAppDistance | 0) -
             (this.$store.state.safeArea.top | 0),
           0,
@@ -1490,6 +1528,10 @@ export default {
         if (!this.showReadBar) {
           this.showToolBar = !this.showToolBar;
         }
+        return;
+      }
+      if (this.autoReading) {
+        this.showToolBar = !this.showToolBar;
         return;
       }
       // 根据点击位置判断操作
@@ -1897,7 +1939,7 @@ export default {
           const pos = paragraph.getBoundingClientRect();
           this.scrollContent(
             pos.top -
-              30 -
+              (this.$store.state.miniInterface ? 30 : 0) -
               (window.webAppDistance | 0) -
               (this.$store.state.safeArea.top | 0),
             0
@@ -2157,6 +2199,73 @@ export default {
         this.isCachingContent = false;
         this.cachingContentTip = "";
       }
+    },
+    startAutoReading() {
+      this.showToolBar = false;
+      this.autoReading = true;
+      this.autoRead();
+    },
+    autoRead() {
+      if (!this.autoReading) {
+        return;
+      }
+      if (this.showToolBar) {
+        this.autoReadingTimer = setTimeout(() => {
+          this.autoRead();
+        }, 300);
+        return;
+      }
+      const current = this.getCurrentParagraph();
+      const next = this.getNextParagraph();
+      if (next) {
+        current.className = "reading";
+        next.className = "";
+        // 计算当前段落
+        let delayTime = this.config.autoReadingLineTime;
+        try {
+          const currentPos = current.getBoundingClientRect();
+          delayTime =
+            delayTime *
+            Math.ceil(
+              currentPos.height / this.config.fontSize / this.config.lineHeight
+            );
+        } catch (error) {
+          //
+        }
+        // console.log(delayTime, next);
+        this.autoReadingTimer = setTimeout(() => {
+          current.className = "";
+          next.className = "reading";
+          this.showParagraph(next, true);
+
+          setTimeout(() => {
+            this.autoRead();
+          }, 32);
+        }, delayTime);
+      } else {
+        // 下一章
+        this.$once("showContent", () => {
+          setTimeout(() => {
+            this.autoRead();
+          }, 100);
+        });
+        this.toNextChapter();
+      }
+    },
+    stopAutoReading() {
+      if (this.autoReadingTimer) {
+        clearInterval(this.autoReadingTimer);
+      }
+      this.autoReading = false;
+      const current = this.getCurrentParagraph();
+      current.className = "";
+    },
+    toggleAutoReading() {
+      if (this.autoReading) {
+        this.stopAutoReading();
+      } else {
+        this.startAutoReading();
+      }
     }
   }
 };
@@ -2266,6 +2375,26 @@ export default {
 
     .refresh-item {
       line-height: 32px;
+      width: 36px;
+      height: 36px;
+      border-radius: 100%;
+      display: block;
+      cursor: pointer;
+      text-align: center;
+      vertical-align: middle;
+      pointer-events: all;
+      position: absolute;
+      top: -240px;
+      left: 4px;
+      right: auto;
+
+      .el-icon-refresh-right {
+        line-height: 34px;
+      }
+    }
+
+    .auto-reading-item {
+      line-height: 36px;
       width: 36px;
       height: 36px;
       border-radius: 100%;
@@ -2599,6 +2728,10 @@ export default {
     color: #121212;
   }
 
+  >>>.auto-reading-item {
+    color: #121212;
+  }
+
   >>>.headset-item {
     color: #121212;
   }
@@ -2649,6 +2782,10 @@ export default {
   }
 
   >>>.refresh-item {
+    color: #666;
+  }
+
+  >>>.auto-reading-item {
     color: #666;
   }
 
@@ -2716,6 +2853,11 @@ export default {
     }
 
     .refresh-item {
+      left: auto;
+      right: 20px;
+    }
+
+    .auto-reading-item {
       left: auto;
       right: 20px;
     }

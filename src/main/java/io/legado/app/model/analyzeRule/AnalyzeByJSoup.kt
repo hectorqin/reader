@@ -85,11 +85,8 @@ class AnalyzeByJSoup(doc: Any) {
                     }
 
                 if (!temp.isNullOrEmpty()) {
-
-                    results.add(temp) //!temp.isNullOrEmpty()时，results.isNotEmpty()为true
-
+                    results.add(temp)
                     if (ruleAnalyzes.elementsType == "||") break
-
                 }
             }
             if (results.size > 0) {
@@ -214,71 +211,69 @@ class AnalyzeByJSoup(doc: Any) {
      */
     private fun getResultLast(elements: Elements, lastRule: String): List<String> {
         val textS = ArrayList<String>()
-        try {
-            when (lastRule) {
-                "text" -> for (element in elements) {
-                    textS.add(element.text())
-                }
-                "textNodes" -> for (element in elements) {
-                    val tn = arrayListOf<String>()
-                    val contentEs = element.textNodes()
-                    for (item in contentEs) {
-                        val temp = item.text().trim { it <= ' ' }
-                        if (temp.isNotEmpty()) {
-                            tn.add(temp)
-                        }
-                    }
-                    textS.add(tn.joinToString("\n"))
-                }
-                "ownText" -> for (element in elements) {
-                    textS.add(element.ownText())
-                }
-                "html" -> {
-                    elements.select("script").remove()
-                    elements.select("style").remove()
-                    val html = elements.outerHtml()
-                    textS.add(html)
-                }
-                "all" -> textS.add(elements.outerHtml())
-                else -> for (element in elements) {
-
-                    val url = element.attr(lastRule)
-
-                    if (url.isBlank() || textS.contains(url)) continue
-
-                    textS.add(url)
+        when (lastRule) {
+            "text" -> for (element in elements) {
+                val text = element.text()
+                if (text.isNotEmpty()) {
+                    textS.add(text)
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+            "textNodes" -> for (element in elements) {
+                val tn = arrayListOf<String>()
+                val contentEs = element.textNodes()
+                for (item in contentEs) {
+                    val text = item.text().trim { it <= ' ' }
+                    if (text.isNotEmpty()) {
+                        tn.add(text)
+                    }
+                }
+                if (tn.isNotEmpty()) {
+                    textS.add(tn.joinToString("\n"))
+                }
+            }
+            "ownText" -> for (element in elements) {
+                val text = element.ownText()
+                if (text.isNotEmpty()) {
+                    textS.add(text)
+                }
+            }
+            "html" -> {
+                elements.select("script").remove()
+                elements.select("style").remove()
+                val html = elements.outerHtml()
+                if (html.isNotEmpty()) {
+                    textS.add(html)
+                }
+            }
+            "all" -> textS.add(elements.outerHtml())
+            else -> for (element in elements) {
 
+                val url = element.attr(lastRule)
+
+                if (url.isBlank() || textS.contains(url)) continue
+
+                textS.add(url)
+            }
+        }
         return textS
     }
 
     /**
      * 1.支持阅读原有写法，':'分隔索引，!或.表示筛选方式，索引可为负数
-     *
      * 例如 tag.div.-1:10:2 或 tag.div!0:3
      *
      * 2. 支持与jsonPath类似的[]索引写法
-     *
      * 格式形如 [it,it，。。。] 或 [!it,it，。。。] 其中[!开头表示筛选方式为排除，it为单个索引或区间。
-     *
      * 区间格式为 start:end 或 start:end:step，其中start为0可省略，end为-1可省略。
-     *
      * 索引，区间两端及间隔都支持负数
-     *
      * 例如 tag.div[-1, 3:-2:-10, 2]
-     *
      * 特殊用法 tag.div[-1:0] 可在任意地方让列表反向
-     *
      * */
     data class ElementsSingle(
         var split: Char = '.',
         var beforeRule: String = "",
         val indexDefault: MutableList<Int> = mutableListOf(),
-        val indexs: MutableList<Any> = mutableListOf()
+        val indexes: MutableList<Any> = mutableListOf()
     ) {
         /**
          * 获取Elements按照一个规则
@@ -305,33 +300,32 @@ class AnalyzeByJSoup(doc: Any) {
                 }
 
             val len = elements.size
-            val lastIndexs = (indexDefault.size - 1).takeIf { it != -1 } ?: indexs.size - 1
+            val lastIndexes = (indexDefault.size - 1).takeIf { it != -1 } ?: indexes.size - 1
             val indexSet = mutableSetOf<Int>()
 
             /**
              * 获取无重且不越界的索引集合
              * */
-            if (indexs.isEmpty()) for (ix in lastIndexs downTo 0) { //indexs为空，表明是非[]式索引，集合是逆向遍历插入的，所以这里也逆向遍历，好还原顺序
+            if (indexes.isEmpty()) for (ix in lastIndexes downTo 0) { //indexes为空，表明是非[]式索引，集合是逆向遍历插入的，所以这里也逆向遍历，好还原顺序
 
                 val it = indexDefault[ix]
                 if (it in 0 until len) indexSet.add(it) //将正数不越界的索引添加到集合
                 else if (it < 0 && len >= -it) indexSet.add(it + len) //将负数不越界的索引添加到集合
 
-            } else for (ix in lastIndexs downTo 0) { //indexs不空，表明是[]式索引，集合是逆向遍历插入的，所以这里也逆向遍历，好还原顺序
+            } else for (ix in lastIndexes downTo 0) { //indexes不空，表明是[]式索引，集合是逆向遍历插入的，所以这里也逆向遍历，好还原顺序
 
-                if (indexs[ix] is Triple<*, *, *>) { //区间
+                if (indexes[ix] is Triple<*, *, *>) { //区间
+                    val (startX, endX, stepX) = indexes[ix] as Triple<Int?, Int?, Int> //还原储存时的类型
 
-                    val (startx, endx, stepx) = indexs[ix] as Triple<Int?, Int?, Int> //还原储存时的类型
+                    val start = if (startX == null) 0 //左端省略表示0
+                    else if (startX >= 0) if (startX < len) startX else len - 1 //右端越界，设置为最大索引
+                    else if (-startX <= len) len + startX /* 将负索引转正 */ else 0 //左端越界，设置为最小索引
 
-                    val start = if (startx == null) 0 //左端省略表示0
-                    else if (startx >= 0) if (startx < len) startx else len - 1 //右端越界，设置为最大索引
-                    else if (-startx <= len) len + startx /* 将负索引转正 */ else 0 //左端越界，设置为最小索引
+                    val end = if (endX == null) len - 1 //右端省略表示 len - 1
+                    else if (endX >= 0) if (endX < len) endX else len - 1 //右端越界，设置为最大索引
+                    else if (-endX <= len) len + endX /* 将负索引转正 */ else 0 //左端越界，设置为最小索引
 
-                    val end = if (endx == null) len - 1 //右端省略表示 len - 1
-                    else if (endx >= 0) if (endx < len) endx else len - 1 //右端越界，设置为最大索引
-                    else if (-endx <= len) len + endx /* 将负索引转正 */ else 0 //左端越界，设置为最小索引
-
-                    if (start == end || stepx >= len) { //两端相同，区间里只有一个数。或间隔过大，区间实际上仅有首位
+                    if (start == end || stepX >= len) { //两端相同，区间里只有一个数。或间隔过大，区间实际上仅有首位
 
                         indexSet.add(start)
                         continue
@@ -339,14 +333,14 @@ class AnalyzeByJSoup(doc: Any) {
                     }
 
                     val step =
-                        if (stepx > 0) stepx else if (-stepx < len) stepx + len else 1 //最小正数间隔为1
+                        if (stepX > 0) stepX else if (-stepX < len) stepX + len else 1 //最小正数间隔为1
 
                     //将区间展开到集合中,允许列表反向。
                     indexSet.addAll(if (end > start) start..end step step else start downTo end step step)
 
                 } else {//单个索引
 
-                    val it = indexs[ix] as Int //还原储存时的类型
+                    val it = indexes[ix] as Int //还原储存时的类型
 
                     if (it in 0 until len) indexSet.add(it) //将正数不越界的索引添加到集合
                     else if (it < 0 && len >= -it) indexSet.add(it + len) //将负数不越界的索引添加到集合
@@ -399,7 +393,7 @@ class AnalyzeByJSoup(doc: Any) {
                     var rl = rus[len]
                     if (rl == ' ') continue //跳过空格
 
-                    if (rl in '0'..'9') l += rl //将数值累接入临时字串中，遇到分界符才取出
+                    if (rl in '0'..'9') l = rl + l //将数值累接入临时字串中，遇到分界符才取出
                     else if (rl == '-') curMinus = true
                     else {
 
@@ -417,11 +411,11 @@ class AnalyzeByJSoup(doc: Any) {
 
                                     if (curInt == null) break //是jsoup选择器而非索引列表，跳出
 
-                                    indexs.add(curInt)
+                                    indexes.add(curInt)
                                 } else {
 
                                     //列表最后压入的是区间右端，若列表有两位则最先压入的是间隔
-                                    indexs.add(
+                                    indexes.add(
                                         Triple(
                                             curInt,
                                             curList.last(),
@@ -459,7 +453,7 @@ class AnalyzeByJSoup(doc: Any) {
                 val rl = rus[len]
                 if (rl == ' ') continue //跳过空格
 
-                if (rl in '0'..'9') l += rl //将数值累接入临时字串中，遇到分界符才取出
+                if (rl in '0'..'9') l = rl + l //将数值累接入临时字串中，遇到分界符才取出
                 else if (rl == '-') curMinus = true
                 else {
 

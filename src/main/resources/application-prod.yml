@@ -18,6 +18,9 @@ reader:
     proxyUsername: ""
     proxyPassword: ""
     cacheChapterContent: false
+    userLimit: 50
+    userBookLimit: 200
+    debugLog: false
 
   server:
     port: 8080

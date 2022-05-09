@@ -81,7 +81,7 @@ object RssParserByRule {
        rssArticle.description = analyzeRule.getString(ruleDescription)
        debugLog?.log(sourceUrl, "└${rssArticle.description}")
        debugLog?.log(sourceUrl, "┌获取图片url")
-       rssArticle.image = analyzeRule.getString(ruleImage, true)
+       rssArticle.image = analyzeRule.getString(ruleImage, isUrl = true)
        debugLog?.log(sourceUrl, "└${rssArticle.image}")
        debugLog?.log(sourceUrl, "┌获取文章链接")
        rssArticle.link = analyzeRule.getString(ruleLink)

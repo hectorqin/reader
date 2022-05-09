@@ -1,32 +1,88 @@
-package io.legado.app.help.storage
+package io.legado.app.help
 
+import com.jayway.jsonpath.JsonPath
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.BookType
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.rule.*
-import io.legado.app.help.storage.Restore.jsonPath
+import io.legado.app.exception.NoStackTraceException
 import io.legado.app.utils.*
+import io.legado.app.model.Debug
+import java.io.InputStream
+
 import java.util.regex.Pattern
 
-object OldRule {
+@Suppress("RegExpRedundantEscape")
+object SourceAnalyzer {
     private val headerPattern = Pattern.compile("@Header:\\{.+?\\}", Pattern.CASE_INSENSITIVE)
     private val jsPattern = Pattern.compile("\\{\\{.+?\\}\\}", Pattern.CASE_INSENSITIVE)
 
-    fun jsonToBookSource(json: String): BookSource? {
-        val source = BookSource()
-        val sourceAny = try {
-            GSON.fromJsonObject<BookSourceAny>(json.trim())
-        } catch (e: Exception) {
-            null
+    fun jsonToBookSources(json: String): Result<MutableList<BookSource>> {
+        return kotlin.runCatching {
+            val bookSources = mutableListOf<BookSource>()
+            when {
+                json.isJsonArray() -> {
+                    val items: List<Map<String, Any>> = jsonPath.parse(json).read("$")
+                    for (item in items) {
+                        val jsonItem = jsonPath.parse(item)
+                        jsonToBookSource(jsonItem.jsonString()).getOrThrow().let {
+                            bookSources.add(it)
+                        }
+                    }
+                }
+                json.isJsonObject() -> {
+                    jsonToBookSource(json).getOrThrow().let {
+                        bookSources.add(it)
+                    }
+                }
+                else -> {
+                    throw NoStackTraceException("格式不对")
+                }
+            }
+            bookSources
         }
-        runCatching {
+    }
+
+    fun jsonToBookSources(inputStream: InputStream): Result<MutableList<BookSource>> {
+        return kotlin.runCatching {
+            val bookSources = mutableListOf<BookSource>()
+            kotlin.runCatching {
+                val items: List<Map<String, Any>> = jsonPath.parse(inputStream).read("$")
+                for (item in items) {
+                    val jsonItem = jsonPath.parse(item)
+                    jsonToBookSource(jsonItem.jsonString()).getOrThrow().let {
+                        bookSources.add(it)
+                    }
+                }
+            }.onFailure {
+                val item: Map<String, Any> = jsonPath.parse(inputStream).read("$")
+                val jsonItem = jsonPath.parse(item)
+                jsonToBookSource(jsonItem.jsonString()).getOrThrow().let {
+                    bookSources.add(it)
+                }
+            }
+            bookSources
+        }
+    }
+
+    fun jsonToBookSource(json: String): Result<BookSource> {
+        val source = BookSource()
+        val sourceAny = GSON.fromJsonObject<BookSourceAny>(json.trim())
+            .onFailure {
+                Debug.log("转化书源出错", it.localizedMessage)
+            }.getOrNull()
+        return kotlin.runCatching {
             if (sourceAny?.ruleToc == null) {
                 source.apply {
                     val jsonItem = jsonPath.parse(json.trim())
-                    bookSourceUrl = jsonItem.readString("bookSourceUrl") ?: ""
+                    bookSourceUrl = jsonItem.readString("bookSourceUrl")
+                        ?: throw NoStackTraceException("格式不对")
                     bookSourceName = jsonItem.readString("bookSourceName") ?: ""
                     bookSourceGroup = jsonItem.readString("bookSourceGroup")
-                    loginUrl = jsonItem.readString("loginUrl")
+                    // loginUrl = jsonItem.readString("loginUrl")
+                    // loginUi = jsonItem.readString("loginUi")
+                    // loginCheckJs = jsonItem.readString("loginCheckJs")
+                    bookSourceComment = jsonItem.readString("bookSourceComment") ?: ""
                     bookUrlPattern = jsonItem.readString("ruleBookUrlPattern")
                     customOrder = jsonItem.readInt("serialNumber") ?: 0
                     header = uaToHeader(jsonItem.readString("httpUserAgent"))
@@ -80,6 +136,7 @@ object OldRule {
                     }
                     ruleContent = ContentRule(
                         content = content,
+                        replaceRegex = toNewRule(jsonItem.readString("ruleBookContentReplace")),
                         nextContentUrl = toNewRule(jsonItem.readString("ruleContentUrlNext"))
                     )
                 }
@@ -92,40 +149,63 @@ object OldRule {
                 source.customOrder = sourceAny.customOrder
                 source.enabled = sourceAny.enabled
                 source.enabledExplore = sourceAny.enabledExplore
+                source.concurrentRate = sourceAny.concurrentRate
                 source.header = sourceAny.header
-                source.loginUrl = sourceAny.loginUrl
+                source.loginUrl = when (sourceAny.loginUrl) {
+                    null -> null
+                    is String -> sourceAny.loginUrl.toString()
+                    else -> JsonPath.parse(sourceAny.loginUrl).readString("url")
+                }
+                // source.loginUi = if (sourceAny.loginUi is List<*>) {
+                //     GSON.toJson(sourceAny.loginUi)
+                // } else {
+                //     sourceAny.loginUi?.toString()
+                // }
+                source.loginCheckJs = sourceAny.loginCheckJs
+                source.bookSourceComment = sourceAny.bookSourceComment
                 source.lastUpdateTime = sourceAny.lastUpdateTime
+                source.respondTime = sourceAny.respondTime
                 source.weight = sourceAny.weight
                 source.exploreUrl = sourceAny.exploreUrl
                 source.ruleExplore = if (sourceAny.ruleExplore is String) {
-                    GSON.fromJsonObject(sourceAny.ruleExplore as? String)
+                    GSON.fromJsonObject<ExploreRule>(sourceAny.ruleExplore.toString())
+                        .getOrNull()
                 } else {
-                    GSON.fromJsonObject(GSON.toJson(sourceAny.ruleExplore))
+                    GSON.fromJsonObject<ExploreRule>(GSON.toJson(sourceAny.ruleExplore))
+                        .getOrNull()
                 }
                 source.searchUrl = sourceAny.searchUrl
                 source.ruleSearch = if (sourceAny.ruleSearch is String) {
-                    GSON.fromJsonObject(sourceAny.ruleSearch as? String)
+                    GSON.fromJsonObject<SearchRule>(sourceAny.ruleSearch.toString())
+                        .getOrNull()
                 } else {
-                    GSON.fromJsonObject(GSON.toJson(sourceAny.ruleSearch))
+                    GSON.fromJsonObject<SearchRule>(GSON.toJson(sourceAny.ruleSearch))
+                        .getOrNull()
                 }
                 source.ruleBookInfo = if (sourceAny.ruleBookInfo is String) {
-                    GSON.fromJsonObject(sourceAny.ruleBookInfo as? String)
+                    GSON.fromJsonObject<BookInfoRule>(sourceAny.ruleBookInfo.toString())
+                        .getOrNull()
                 } else {
-                    GSON.fromJsonObject(GSON.toJson(sourceAny.ruleBookInfo))
+                    GSON.fromJsonObject<BookInfoRule>(GSON.toJson(sourceAny.ruleBookInfo))
+                        .getOrNull()
                 }
                 source.ruleToc = if (sourceAny.ruleToc is String) {
-                    GSON.fromJsonObject(sourceAny.ruleToc as? String)
+                    GSON.fromJsonObject<TocRule>(sourceAny.ruleToc.toString())
+                        .getOrNull()
                 } else {
-                    GSON.fromJsonObject(GSON.toJson(sourceAny.ruleToc))
+                    GSON.fromJsonObject<TocRule>(GSON.toJson(sourceAny.ruleToc))
+                        .getOrNull()
                 }
                 source.ruleContent = if (sourceAny.ruleContent is String) {
-                    GSON.fromJsonObject(sourceAny.ruleContent as? String)
+                    GSON.fromJsonObject<ContentRule>(sourceAny.ruleContent.toString())
+                        .getOrNull()
                 } else {
-                    GSON.fromJsonObject(GSON.toJson(sourceAny.ruleContent))
+                    GSON.fromJsonObject<ContentRule>(GSON.toJson(sourceAny.ruleContent))
+                        .getOrNull()
                 }
             }
+            source
         }
-        return source
     }
 
     data class BookSourceAny(
@@ -137,17 +217,22 @@ object OldRule {
         var customOrder: Int = 0,                       // 手动排序编号
         var enabled: Boolean = true,                    // 是否启用
         var enabledExplore: Boolean = true,             // 启用发现
+        var concurrentRate: String? = null,             // 并发率
         var header: String? = null,                     // 请求头
-        var loginUrl: String? = null,                   // 登录地址
+        var loginUrl: Any? = null,                      // 登录规则
+        var loginUi: Any? = null,                       // 登录UI
+        var loginCheckJs: String? = null,               //登录检测js
+        var bookSourceComment: String? = "",            //书源注释
         var lastUpdateTime: Long = 0,                   // 最后更新时间，用于排序
+        var respondTime: Long = 180000L,                // 响应时间，用于排序
         var weight: Int = 0,                            // 智能排序的权重
         var exploreUrl: String? = null,                 // 发现url
-        var ruleExplore: Any? = null,           // 发现规则
+        var ruleExplore: Any? = null,                   // 发现规则
         var searchUrl: String? = null,                  // 搜索url
-        var ruleSearch: Any? = null,             // 搜索规则
-        var ruleBookInfo: Any? = null,         // 书籍信息页规则
-        var ruleToc: Any? = null,                   // 目录页规则
-        var ruleContent: Any? = null            // 正文页规则
+        var ruleSearch: Any? = null,                    // 搜索规则
+        var ruleBookInfo: Any? = null,                  // 书籍信息页规则
+        var ruleToc: Any? = null,                       // 目录页规则
+        var ruleContent: Any? = null                    // 正文页规则
     )
 
     // default规则适配
@@ -210,9 +295,12 @@ object OldRule {
 
     private fun toNewUrls(oldUrls: String?): String? {
         if (oldUrls.isNullOrBlank()) return null
-        if (!oldUrls.contains("\n") && !oldUrls.contains("&&"))
+        if (oldUrls.startsWith("@js:") || oldUrls.startsWith("<js>")) {
+            return oldUrls
+        }
+        if (!oldUrls.contains("\n") && !oldUrls.contains("&&")) {
             return toNewUrl(oldUrls)
-
+        }
         val urls = oldUrls.split("(&&|\r?\n)+".toRegex())
         return urls.map {
             toNewUrl(it)?.replace("\n\\s*".toRegex(), "")

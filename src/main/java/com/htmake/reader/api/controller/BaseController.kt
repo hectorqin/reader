@@ -7,7 +7,6 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssArticle
-import io.legado.app.help.storage.OldRule
 import io.legado.app.model.webBook.WebBook
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.Router
@@ -62,7 +61,7 @@ import java.text.SimpleDateFormat;
 import io.legado.app.utils.EncoderUtils
 import io.legado.app.model.rss.Rss
 import org.springframework.scheduling.annotation.Scheduled
-import io.legado.app.localBook.LocalBook
+import io.legado.app.model.localBook.LocalBook
 import java.nio.file.Paths
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -267,6 +266,7 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
             "lastLoginAt" to user.last_login_at,
             "accessToken" to user.username + ":" + user.token,
             "enableWebdav" to user.enable_webdav,
+            "enableLocalStore" to user.enable_local_store,
             "createdAt" to user.created_at
         )
     }
@@ -293,7 +293,12 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
         try {
             var seqs = url.split("?", ignoreCase = true, limit = 2)
             var file = seqs[0].split("/").last()
-            return file.split(".", ignoreCase = true, limit = 2).last()?.toLowerCase()
+            val dotPos = file.lastIndexOf('.')
+            return if (0 <= dotPos) {
+                file.substring(dotPos + 1)
+            } else {
+                defaultExt
+            }
         } catch (e: Exception) {
             return defaultExt
         }
