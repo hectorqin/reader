@@ -40,9 +40,13 @@ jobs:
           images: |
             hectorqin/reader
           # generate Docker tags based on the following events/attributes
+          flavor: |
+            latest=false
+            prefix=openj9-,onlatest=true
+            suffix=
           tags: |
-            type=semver,pattern=openj9-{{version}}
-            type=raw,value=openj9-latest,enable=${{ !contains(github.ref, 'beta') }}
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ !contains(github.ref, 'beta') }}
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v1
