@@ -2,6 +2,8 @@
 
 阅读3服务器版，不需要手机。
 
+🚫请不要fork，点star就好❗️❗️❗️
+
 在线体验 👉 [https://reader.htmake.com](https://reader.htmake.com)
 
 加入TG群(限时开放) 👉 [https://t.me/+pQ8HDlANPZ84ZWNl](https://t.me/+pQ8HDlANPZ84ZWNl)
@@ -9,8 +11,6 @@
 关注公众号，即将更新教程和书源👇
 
 ![](imgs/mpcode.png)
-
-> PS: 公众号稍后会更名为 假装大佬
 
 <details><summary>免责声明（Disclaimer）</summary>
 阅读是一款提供网络文学搜索的工具，为广大网络文学爱好者提供一种方便、快捷舒适的试读体验。
