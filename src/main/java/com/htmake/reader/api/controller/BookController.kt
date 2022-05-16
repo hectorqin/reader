@@ -1420,19 +1420,21 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             bookGroupList = JsonArray(groupList)
         } else {
             // 新增分组
-            var maxOrder = 0;
-            val idsSum = bookGroupList.sumBy{
-                val id = asJsonObject(it)?.getInteger("groupId", 0) ?: 0
-                val order = asJsonObject(it)?.getInteger("order", 0) ?: 0
-                maxOrder = if (order > maxOrder) order else maxOrder
-                if (id > 0) id else 0
+            if (bookGroup.groupId >= 0) {
+                var maxOrder = 0;
+                val idsSum = bookGroupList.sumBy{
+                    val id = asJsonObject(it)?.getInteger("groupId", 0) ?: 0
+                    val order = asJsonObject(it)?.getInteger("order", 0) ?: 0
+                    maxOrder = if (order > maxOrder) order else maxOrder
+                    if (id > 0) id else 0
+                }
+                var id = 1
+                while (id and idsSum != 0) {
+                    id = id.shl(1)
+                }
+                bookGroup.groupId = id
+                bookGroup.order = maxOrder + 1
             }
-            var id = 1
-            while (id and idsSum != 0) {
-                id = id.shl(1)
-            }
-            bookGroup.groupId = id
-            bookGroup.order = maxOrder + 1
             bookGroupList.add(JsonObject.mapFrom(bookGroup))
         }
 

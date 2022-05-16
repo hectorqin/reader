@@ -212,6 +212,7 @@ export default {
     this.autoSetTheme(this.autoTheme);
 
     this.getUserInfo();
+    this.init();
     this.loadTxtTocRules();
   },
   beforeMount() {
@@ -236,15 +237,10 @@ export default {
       return this.$store.getters.config.autoTheme;
     },
     dialogWidth() {
-      return this.$store.state.miniInterface ? "85%" : "450px";
+      return this.$store.getters.dialogSmallWidth;
     },
     dialogTop() {
-      return (
-        Math.max(
-          (this.$store.state.windowSize.height - 390 - 70 - 54) / 2,
-          50
-        ) + "px"
-      );
+      return this.$store.getters.dialogTop;
     },
     showLogin: {
       get() {
@@ -348,10 +344,41 @@ export default {
           this.$store.commit("setToken", res.data.data.accessToken);
         }
         this.getUserInfo();
+        this.init();
       }
     },
+    init(refresh) {
+      if (this.initing) return;
+      this.initing = true;
+      if (!refresh) {
+        if (this.$store.state.shelfBooks.length) {
+          // 加载书源列表
+          this.loadBookSource(refresh);
+          // 加载分组列表
+          this.loadBookGroup(refresh);
+          // 加载RSS订阅列表
+          this.loadRssSources(refresh);
+          this.initing = false;
+          return;
+        }
+      }
+      // 加载书架
+      this.loadBookShelf()
+        .then(() => {
+          this.initing = false;
+          // 加载书源列表
+          this.loadBookSource(refresh);
+          // 加载分组列表
+          this.loadBookGroup(refresh);
+          // 加载RSS订阅列表
+          this.loadRssSources(refresh);
+        })
+        .catch(() => {
+          this.initing = false;
+        });
+    },
     getUserInfo() {
-      networkFirstRequest(
+      return networkFirstRequest(
         () => Axios.get(this.api + "/getUserInfo"),
         "userInfo"
       ).then(
@@ -375,7 +402,10 @@ export default {
       );
     },
     loadTxtTocRules() {
-      cacheFirstRequest(() => Axios.get("/getTxtTocRules"), "txtTocRules").then(
+      return cacheFirstRequest(
+        () => Axios.get("/getTxtTocRules"),
+        "txtTocRules"
+      ).then(
         res => {
           const data = res.data.data || [];
           this.$store.commit("setTxtTocRules", data);
@@ -395,6 +425,139 @@ export default {
       this.$nextTick(() => {
         this.initEditor();
       });
+    },
+    loadBookShelf(refresh, api) {
+      api = api || this.api;
+      return networkFirstRequest(
+        () => Axios.get(api + "/getBookshelf?refresh=" + (refresh ? 1 : 0)),
+        "getBookshelf@" +
+          (this.$store.state.isManagerMode
+            ? this.$store.state.userNS
+            : (this.$store.state.userInfo || {}).username || "default")
+      )
+        .then(response => {
+          this.$store.commit("setConnected", true);
+          if (response.data.isSuccess) {
+            this.$store.commit("setShelfBooks", response.data.data);
+          }
+        })
+        .catch(error => {
+          this.$store.commit("setConnected", false);
+          this.$message.error("后端连接失败 " + (error && error.toString()));
+          throw error;
+        });
+    },
+    loadBookGroup(refresh) {
+      return cacheFirstRequest(
+        () => Axios.get(this.api + "/getBookGroups"),
+        "bookGroup@" +
+          (this.$store.state.isManagerMode
+            ? this.$store.state.userNS
+            : (this.$store.state.userInfo || {}).username || "default"),
+        refresh,
+        true
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$store.commit("setBookGroupList", res.data.data || []);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载分组列表失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    loadRssSources(refresh) {
+      return cacheFirstRequest(
+        () =>
+          Axios.get(this.api + "/getRssSources", {
+            params: {
+              simple: 1
+            }
+          }),
+        "rssSources@" +
+          (this.$store.state.isManagerMode
+            ? this.$store.state.userNS
+            : (this.$store.state.userInfo || {}).username || "default"),
+        refresh,
+        true
+      ).then(
+        res => {
+          const data = res.data.data || [];
+          this.$store.commit("setRssSourceList", data);
+        },
+        error => {
+          this.$message.error(
+            "加载RSS订阅列表失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    loadBookSource(refresh) {
+      return cacheFirstRequest(
+        () =>
+          Axios.get(this.api + "/getSources", {
+            params: {
+              simple: 1
+            }
+          }),
+        "bookSourceList@" +
+          (this.$store.state.isManagerMode
+            ? this.userNS
+            : (this.$store.state.userInfo || {}).username || "default"),
+        refresh,
+        true
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$store.commit("setBookSourceList", res.data.data || []);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载书源列表失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    async isInShelf(book, addTip) {
+      if (!book || !book.bookUrl || !book.origin) {
+        this.$message.error("书籍信息错误");
+        return false;
+      }
+      // 判断是否加入了书架
+      const isInShelf = this.$store.getters.shelfBooks.find(
+        v => v.bookUrl === book.bookUrl
+      );
+      if (!isInShelf) {
+        if (addTip) {
+          const res = await this.$confirm(addTip, "提示", {
+            confirmButtonText: "确定",
+            cancelButtonText: "取消",
+            type: "warning"
+          }).catch(() => {
+            return false;
+          });
+          if (!res) {
+            return false;
+          }
+          // 加入书架
+          return Axios.post(this.api + "/saveBook", book).then(
+            res => {
+              if (res.data.isSuccess) {
+                return true;
+              }
+            },
+            () => {
+              this.$message.error("导入书籍失败");
+              return false;
+            }
+          );
+        }
+      }
+      return !!isInShelf;
     },
     initEditor() {
       const editor = this.$refs.editorRef;

@@ -1464,7 +1464,9 @@ export default {
       if (typeof rect.top !== "undefined") {
         this.scrollContent(
           rect.top -
-            (this.$store.state.miniInterface ? 30 : 0) -
+            (this.$store.state.miniInterface
+              ? this.getFirstParagraphPos().bottom
+              : 0) -
             (window.webAppDistance | 0) -
             (this.$store.state.safeArea.top | 0),
           0,
@@ -1939,13 +1941,18 @@ export default {
           const pos = paragraph.getBoundingClientRect();
           this.scrollContent(
             pos.top -
-              (this.$store.state.miniInterface ? 30 : 0) -
+              (this.$store.state.miniInterface
+                ? this.getFirstParagraphPos().bottom
+                : 0) -
               (window.webAppDistance | 0) -
               (this.$store.state.safeArea.top | 0),
             0
           );
         });
       }
+    },
+    getFirstParagraphPos() {
+      return this.$refs.top.getBoundingClientRect();
     },
     scrollHandler() {
       if (!this.isSlideRead) {

@@ -94,6 +94,9 @@ export default {
         c[v.bookUrl] = v;
         return c;
       }, {});
+    },
+    readingBook() {
+      return this.$store.state.readingBook || {};
     }
   },
   mounted() {},
@@ -101,6 +104,11 @@ export default {
     visible(isVisible) {
       if (isVisible) {
         this.getBookSource();
+      }
+    },
+    readingBook(val, oldVal) {
+      if (val.bookUrl !== oldVal.bookUrl) {
+        this.bookSourceGroupIndexMap = {};
       }
     }
   },
@@ -139,7 +147,14 @@ export default {
         }
       );
     },
-    changeBookSource(searchBook) {
+    async changeBookSource(searchBook) {
+      const isInShelf = await this.$root.$children[0].isInShelf(
+        this.$store.state.readingBook,
+        "加入书架之后才能切换书源, 是否加入书架?"
+      );
+      if (!isInShelf) {
+        return;
+      }
       Axios.post(this.api + `/saveBookSource`, {
         bookUrl: this.$store.state.readingBook.bookUrl,
         newUrl: searchBook.bookUrl,

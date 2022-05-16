@@ -97,7 +97,7 @@
         style="display:none"
       />
       <span class="check-tip">已选择 {{ localFileSelection.length }} 个</span>
-      @<el-button size="medium" @click="cancel">取消</el-button>
+      <el-button size="medium" @click="cancel">取消</el-button>
     </div>
   </el-dialog>
 </template>
@@ -257,7 +257,7 @@ export default {
               this.$message.error("没有选择可导入的书籍");
               return;
             }
-            this.cancel();
+            // this.cancel();
             setTimeout(() => {
               this.$emit("importFromLocalStorePreview", res.data.data);
             }, 0);

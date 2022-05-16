@@ -860,6 +860,14 @@
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       v-if="$store.getters.isNormalPage"
     >
+      <div class="custom-dialog-title" slot="title">
+        <span class="el-dialog__title"
+          >用户管理
+          <span class="float-right span-btn" @click="showAddUserDialog()"
+            >新增</span
+          >
+        </span>
+      </div>
       <div class="source-container table-container">
         <el-table
           :data="userList"
@@ -927,6 +935,13 @@
               </el-switch>
             </template>
           </el-table-column>
+          <el-table-column label="操作" width="100px">
+            <template slot-scope="scope">
+              <el-button type="text" @click="resetPassword(scope.row)"
+                >重置密码</el-button
+              >
+            </template>
+          </el-table-column>
         </el-table>
       </div>
       <div slot="footer" class="dialog-footer">
@@ -942,6 +957,34 @@
         >
         <el-button size="medium" @click="showUserManageDialog = false"
           >取消</el-button
+        >
+      </div>
+    </el-dialog>
+
+    <el-dialog
+      title="新增用户"
+      :visible.sync="showAddUser"
+      :width="dialogSmallWidth"
+      :top="dialogTop"
+    >
+      <el-form :model="addUserForm">
+        <el-form-item label="用户名">
+          <el-input v-model="addUserForm.username" autocomplete="on"></el-input>
+        </el-form-item>
+        <el-form-item label="密码">
+          <el-input
+            type="password"
+            v-model="addUserForm.password"
+            autocomplete="on"
+            show-password
+            @keyup.enter.native="login"
+          ></el-input>
+        </el-form-item>
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button size="medium" @click="showAddUser = false">取 消</el-button>
+        <el-button size="medium" type="primary" @click="addUser"
+          >确 定</el-button
         >
       </div>
     </el-dialog>
@@ -1291,7 +1334,7 @@
 
     <el-dialog
       :visible.sync="showRssSourcesDialog"
-      :width="dialogSmallWidth"
+      :width="dialogWidth"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @closed="showRssSourceEditButton = false"
@@ -1350,7 +1393,7 @@
     <el-dialog
       :title="rssSource.sourceName"
       :visible.sync="showRssArticlesDialog"
-      :width="dialogSmallWidth"
+      :width="dialogWidth"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @closed="rssArticleList = []"
@@ -1393,7 +1436,7 @@
     <el-dialog
       :title="rssArticleInfo.title"
       :visible.sync="showRssArticleContentDialog"
-      :width="dialogSmallWidth"
+      :width="dialogWidth"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @closed="rssArticleInfo = {}"
@@ -1420,6 +1463,7 @@
 </template>
 
 <script>
+import { mapGetters } from "vuex";
 import Explore from "../components/Explore.vue";
 import LocalStore from "../components/LocalStore.vue";
 import Axios from "../plugins/axios";
@@ -1428,7 +1472,6 @@ import eventBus from "../plugins/eventBus";
 import {
   formatSize,
   LimitResquest,
-  networkFirstRequest,
   cacheFirstRequest
 } from "../plugins/helper";
 const buildURL = require("axios/lib/helpers/buildURL");
@@ -1541,7 +1584,13 @@ export default {
       },
 
       showLocalStoreManageDialog: false,
-      importUsedTxtRule: ""
+      importUsedTxtRule: "",
+
+      showAddUser: false,
+      addUserForm: {
+        username: "",
+        password: ""
+      }
     };
   },
   watch: {
@@ -1611,33 +1660,7 @@ export default {
   },
   methods: {
     init(refresh) {
-      if (this.initing) return;
-      this.initing = true;
-      if (!refresh) {
-        if (this.shelfBooks.length) {
-          // 加载书源列表
-          this.loadBookSource(refresh);
-          // 加载分组列表
-          this.loadBookGroup(refresh);
-          // 加载RSS订阅列表
-          this.loadRssSources(refresh);
-          this.initing = false;
-          return;
-        }
-      }
-      this.loadBookshelf()
-        .then(() => {
-          this.initing = false;
-          // 加载书源列表
-          this.loadBookSource(refresh);
-          // 加载分组列表
-          this.loadBookGroup(refresh);
-          // 加载RSS订阅列表
-          this.loadRssSources(refresh);
-        })
-        .catch(() => {
-          this.initing = false;
-        });
+      this.$root.$children[0].init(refresh);
     },
     setIP() {
       this.$prompt("请输入接口地址 ( 如：localhost:8080/reader3 )", "提示", {
@@ -1660,8 +1683,8 @@ export default {
                 window.localStorage &&
                   window.localStorage.setItem("api_prefix", inputUrl);
                 this.$store.commit("setApi", inputUrl);
-                // 加载书源列表
-                this.loadBookSource();
+                // 初始化
+                this.init();
               })
               .catch(() => {
                 instance.confirmButtonLoading = false;
@@ -1706,78 +1729,18 @@ export default {
         api = "//" + api;
       }
 
-      return networkFirstRequest(
-        () => Axios.get(api + "/getBookshelf?refresh=" + (refresh ? 1 : 0)),
-        "getBookshelf@" +
-          (this.$store.state.isManagerMode
-            ? this.userNS
-            : (this.$store.state.userInfo || {}).username || "default")
-      )
-        .then(response => {
-          this.$store.commit("setConnected", true);
-          this.loading.close();
-          if (response.data.isSuccess) {
-            this.$store.commit("setShelfBooks", response.data.data);
-          }
-        })
-        .catch(error => {
-          this.loading.close();
-          this.$store.commit("setConnected", false);
-          this.$message.error("后端连接失败 " + (error && error.toString()));
-          throw error;
-        });
+      return this.$root.$children[0].loadBookShelf(refresh, api).then(() => {
+        this.loading.close();
+      });
     },
     refreshShelf() {
       return this.loadBookshelf(null, true);
     },
     loadBookGroup(refresh) {
-      return cacheFirstRequest(
-        () => Axios.get(this.api + "/getBookGroups"),
-        "bookGroup@" +
-          (this.$store.state.isManagerMode
-            ? this.userNS
-            : (this.$store.state.userInfo || {}).username || "default"),
-        refresh,
-        true
-      ).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$store.commit("setBookGroupList", res.data.data || []);
-          }
-        },
-        error => {
-          this.$message.error(
-            "加载分组列表失败 " + (error && error.toString())
-          );
-        }
-      );
+      return this.$root.$children[0].loadBookGroup(refresh);
     },
     loadBookSource(refresh) {
-      return cacheFirstRequest(
-        () =>
-          Axios.get(this.api + "/getSources", {
-            params: {
-              simple: 1
-            }
-          }),
-        "bookSourceList@" +
-          (this.$store.state.isManagerMode
-            ? this.userNS
-            : (this.$store.state.userInfo || {}).username || "default"),
-        refresh,
-        true
-      ).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$store.commit("setBookSourceList", res.data.data || []);
-          }
-        },
-        error => {
-          this.$message.error(
-            "加载书源列表失败 " + (error && error.toString())
-          );
-        }
-      );
+      return this.$root.$children[0].loadBookSource(refresh);
     },
     searchBook(page) {
       if (!this.$store.state.connected) {
@@ -2571,6 +2534,7 @@ export default {
       Axios.get(this.api + "/getUserList").then(
         res => {
           if (res.data.isSuccess) {
+            this.userNS = this.$store.state.userInfo.username;
             this.userList = res.data.data.map(v => ({
               ...v,
               userNS: v.username
@@ -2658,6 +2622,67 @@ export default {
         },
         error => {
           this.$message.error("修改失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async resetPassword(user) {
+      const res = await this.$prompt("", "重置密码", {
+        inputValue: "",
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        inputValidator(v) {
+          if (!v) {
+            return "密码不能为空";
+          }
+          return true;
+        }
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/resetPassword", {
+        username: user.username,
+        password: res.value
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("重置密码成功");
+          }
+        },
+        error => {
+          this.$message.error("重置密码失败 " + (error && error.toString()));
+        }
+      );
+    },
+    showAddUserDialog() {
+      this.addUserForm = {
+        username: "",
+        password: ""
+      };
+      this.showAddUser = true;
+    },
+    addUser() {
+      if (!this.addUserForm.username) {
+        this.$message.success("用户名不能为空");
+      }
+      if (!this.addUserForm.password) {
+        this.$message.success("密码不能为空");
+      }
+      Axios.post(this.api + "/addUser", this.addUserForm).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("新增成功");
+            this.showAddUser = false;
+            this.userList = res.data.data.map(v => ({
+              ...v,
+              userNS: v.username
+            }));
+          }
+        },
+        error => {
+          this.$message.error("新增失败 " + (error && error.toString()));
         }
       );
     },
@@ -3063,17 +3088,21 @@ export default {
       );
     },
     async saveBookGroup(bookGroup) {
-      const res = await this.$prompt(`${bookGroup ? "编辑分组" : "添加分组"}`, {
-        inputValue: bookGroup ? bookGroup.groupName : "",
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        inputValidator(v) {
-          if (!v) {
-            return "分组名不能为空";
+      const res = await this.$prompt(
+        "",
+        `${bookGroup ? "编辑分组" : "添加分组"}`,
+        {
+          inputValue: bookGroup ? bookGroup.groupName : "",
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          inputValidator(v) {
+            if (!v) {
+              return "分组名不能为空";
+            }
+            return true;
           }
-          return true;
         }
-      }).catch(() => {
+      ).catch(() => {
         return false;
       });
       if (!res) {
@@ -3681,6 +3710,14 @@ export default {
     }
   },
   computed: {
+    ...mapGetters([
+      "collapseMenu",
+      "dialogWidth",
+      "dialogSmallWidth",
+      "dialogTop",
+      "dialogContentHeight",
+      "popupWidth"
+    ]),
     config() {
       return this.$store.getters.config;
     },
@@ -3727,38 +3764,6 @@ export default {
     },
     connectType() {
       return this.$store.state.connected ? "success" : "danger";
-    },
-    collapseMenu() {
-      return this.$store.state.miniInterface;
-    },
-    dialogWidth() {
-      return this.collapseMenu ? "85%" : "700px";
-    },
-    dialogSmallWidth() {
-      return this.collapseMenu ? "85%" : "500px";
-    },
-    dialogTop() {
-      return (
-        (this.$store.state.windowSize.height -
-          this.dialogContentHeight -
-          70 -
-          54 -
-          60) /
-          2 +
-        "px"
-      );
-    },
-    dialogContentHeight() {
-      if (this.collapseMenu) {
-        return this.$store.state.windowSize.height - 54 - 60 - 70;
-      }
-      return Math.min(
-        0.7 * this.$store.state.windowSize.height - 70 - 54 - 60,
-        400
-      );
-    },
-    popupWidth() {
-      return this.collapseMenu ? this.$store.state.windowSize.width : "600";
     },
     readingRecent() {
       return this.$store.state.readingBook &&
