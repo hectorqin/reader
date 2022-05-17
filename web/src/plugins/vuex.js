@@ -343,7 +343,9 @@ export default new Vuex.Store({
           _bookGroupList.push(group);
         }
       });
-      state.bookGroupList = _bookGroupList.concat(bookGroupList);
+      state.bookGroupList = _bookGroupList
+        .concat(bookGroupList)
+        .sort((a, b) => a.order - b.order);
     },
     setRssSourceList(state, rssSources) {
       state.rssSourceList = [].concat(rssSources);
@@ -513,6 +515,33 @@ export default new Vuex.Store({
     },
     config: state => {
       return state.config;
+    },
+    collapseMenu: state => {
+      return state.miniInterface;
+    },
+    dialogWidth: state => {
+      return state.miniInterface
+        ? "85%"
+        : Math.min(Math.max(state.windowSize.width * 0.7, 750), 1000) + "px";
+    },
+    dialogSmallWidth: state => {
+      return state.miniInterface ? "85%" : "500px";
+    },
+    dialogTop: (state, getters) => {
+      return (
+        (state.windowSize.height - getters.dialogContentHeight - 70 - 54 - 60) /
+          2 +
+        "px"
+      );
+    },
+    dialogContentHeight: state => {
+      if (state.miniInterface) {
+        return state.windowSize.height - 54 - 60 - 70;
+      }
+      return Math.min(0.7 * state.windowSize.height - 70 - 54 - 60, 400);
+    },
+    popupWidth: state => {
+      return state.miniInterface ? state.windowSize.width : "600";
     }
   },
   actions: {

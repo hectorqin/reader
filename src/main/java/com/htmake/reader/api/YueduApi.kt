@@ -256,6 +256,12 @@ class YueduApi : RestVerticle() {
         // 删除用户
         router.post("/reader3/deleteUsers").coroutineHandler { userController.deleteUsers(it) }
 
+        // 添加用户
+        router.post("/reader3/addUser").coroutineHandler { userController.addUser(it) }
+
+        // 重置用户密码
+        router.post("/reader3/resetPassword").coroutineHandler { userController.resetPassword(it) }
+
         // 更新用户
         router.post("/reader3/updateUser").coroutineHandler { userController.updateUser(it) }
 

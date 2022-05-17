@@ -21,6 +21,9 @@
               @click="setPageType(type)"
               >{{ type }}</span
             >
+            <span class="small-tip"
+              >❗️开启 Kindle 模式会关闭动画以及首页的部分功能</span
+            >
           </div>
         </li>
         <li>

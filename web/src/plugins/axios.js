@@ -33,6 +33,8 @@ service.interceptors.response.use(
   }
 );
 
+let isShowLoginTip = false;
+
 export const request = async ({
   url,
   method = "get",
@@ -88,9 +90,15 @@ export const request = async ({
       case "NEED_LOGIN":
         // 需要登录
         store.commit("setShowLogin", true);
-        setTimeout(() => {
-          errorMsg && Message.error({ message: errorMsg, duration: 2000 });
-        }, 200);
+        if (!isShowLoginTip) {
+          isShowLoginTip = true;
+          setTimeout(() => {
+            errorMsg && Message.error({ message: errorMsg, duration: 2000 });
+            setTimeout(() => {
+              isShowLoginTip = false;
+            }, 2000);
+          }, 200);
+        }
         break;
       case "NEED_SECURE_KEY":
         result = await MessageBox.prompt(
