@@ -1468,12 +1468,9 @@ import Explore from "../components/Explore.vue";
 import LocalStore from "../components/LocalStore.vue";
 import Axios from "../plugins/axios";
 import { errorTypeList } from "../plugins/config";
+import { setCache, getCache } from "../plugins/cache";
 import eventBus from "../plugins/eventBus";
-import {
-  formatSize,
-  LimitResquest,
-  cacheFirstRequest
-} from "../plugins/helper";
+import { formatSize, LimitResquest } from "../plugins/helper";
 const buildURL = require("axios/lib/helpers/buildURL");
 
 export default {
@@ -1680,8 +1677,7 @@ export default {
                 this.connecting = false;
                 instance.confirmButtonLoading = false;
                 done();
-                window.localStorage &&
-                  window.localStorage.setItem("api_prefix", inputUrl);
+                setCache("api_prefix", inputUrl);
                 this.$store.commit("setApi", inputUrl);
                 // 初始化
                 this.init();
@@ -2197,8 +2193,12 @@ export default {
       }
     },
     async loadRemoteBookSource() {
+      const lastRemoteSourceUrl = getCache(
+        this.currentUserName + "@lastRemoteSourceUrl",
+        ""
+      );
       const res = await this.$prompt("请输入远程书源链接", "导入远程书源文件", {
-        inputValue: "",
+        inputValue: lastRemoteSourceUrl || "",
         confirmButtonText: "确定",
         cancelButtonText: "取消"
       }).catch(() => {
@@ -2212,6 +2212,7 @@ export default {
       }).then(
         res => {
           if (res.data.isSuccess) {
+            setCache(this.currentUserName + "@lastRemoteSourceUrl", res.value);
             //
             let sourceList = [];
             res.data.data.forEach(v => {
@@ -2476,8 +2477,8 @@ export default {
         return;
       }
       const userConfig = {};
-      ["config", "filterRules"].forEach(key => {
-        const val = window.localStorage.getItem(key);
+      ["config", "shelfConfig", "searchConfig"].forEach(key => {
+        const val = getCache(key);
         if (val) {
           userConfig[key] = val;
         }
@@ -2513,8 +2514,7 @@ export default {
           if (res.data.isSuccess) {
             for (const key in res.data.data) {
               if (Object.hasOwnProperty.call(res.data.data, key)) {
-                window.localStorage &&
-                  window.localStorage.setItem(key, res.data.data[key]);
+                setCache(key, res.data.data[key]);
               }
             }
             this.$store.dispatch("syncFromLocalStorage");
@@ -2540,7 +2540,6 @@ export default {
               userNS: v.username
             }));
             this.$store.commit("setIsManagerMode", true);
-            this.init(true);
           }
         },
         error => {
@@ -2853,7 +2852,15 @@ export default {
       this.lastTouch = false;
       this.lastMoveX = false;
       this.touchMoveTimes = 0;
-      if (e.touches && e.touches[0]) {
+      // 边缘 20px 以内禁止触摸
+      if (
+        e.touches &&
+        e.touches[0] &&
+        e.touches[0].clientX > 20 &&
+        e.touches[0].clientX < window.innerWidth - 20 &&
+        e.touches[0].clientY > 20 &&
+        e.touches[0].clientY < window.innerHeight - 20
+      ) {
         this.lastTouch = e.touches[0];
       }
     },
@@ -3232,30 +3239,7 @@ export default {
       });
     },
     loadRssSources(refresh) {
-      return cacheFirstRequest(
-        () =>
-          Axios.get(this.api + "/getRssSources", {
-            params: {
-              simple: 1
-            }
-          }),
-        "rssSources@" +
-          (this.$store.state.isManagerMode
-            ? this.userNS
-            : (this.$store.state.userInfo || {}).username || "default"),
-        refresh,
-        true
-      ).then(
-        res => {
-          const data = res.data.data || [];
-          this.$store.commit("setRssSourceList", data);
-        },
-        error => {
-          this.$message.error(
-            "加载RSS订阅列表失败 " + (error && error.toString())
-          );
-        }
-      );
+      return this.$root.$children[0].loadRssSources(refresh);
     },
     showRssDialog() {
       //

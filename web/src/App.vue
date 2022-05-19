@@ -60,6 +60,12 @@
       :on-close="closeViewer"
       :url-list="$store.state.previewImgList"
     />
+
+    <ReplaceRuleForm
+      v-model="showReplaceRuleForm"
+      :rule="replaceRule"
+      :isAdd="isAddReplaceRule"
+    />
   </div>
 </template>
 
@@ -142,7 +148,11 @@ export default {
       },
       showEditor: false,
       editorTitle: "编辑器",
-      editorContent: ""
+      editorContent: "",
+
+      showReplaceRuleForm: false,
+      replaceRule: {},
+      isAddReplaceRule: true
     };
   },
   beforeCreate() {
@@ -211,8 +221,9 @@ export default {
       });
     this.autoSetTheme(this.autoTheme);
 
-    this.getUserInfo();
-    this.init();
+    this.getUserInfo().then(() => {
+      this.init();
+    });
     this.loadTxtTocRules();
   },
   beforeMount() {
@@ -221,6 +232,7 @@ export default {
     this.setPageTypeClass();
     this.eventBus = eventBus;
     eventBus.$on("showEditor", this.showEditorListener);
+    eventBus.$on("showReplaceRuleForm", this.showReplaceRuleFormListener);
   },
   mounted() {
     document.documentElement.style.setProperty(
@@ -275,6 +287,14 @@ export default {
     },
     "$store.state.config.pageType": function() {
       this.setPageTypeClass();
+    },
+    showReplaceRuleForm(val) {
+      if (!val) {
+        if (this.replaceRuleCallback) {
+          this.replaceRuleCallback();
+          this.replaceRuleCallback = null;
+        }
+      }
     }
   },
   methods: {
@@ -347,35 +367,32 @@ export default {
         this.init();
       }
     },
-    init(refresh) {
-      if (this.initing) return;
-      this.initing = true;
-      if (!refresh) {
-        if (this.$store.state.shelfBooks.length) {
-          // 加载书源列表
-          this.loadBookSource(refresh);
-          // 加载分组列表
-          this.loadBookGroup(refresh);
-          // 加载RSS订阅列表
-          this.loadRssSources(refresh);
-          this.initing = false;
-          return;
-        }
+    async init(refresh) {
+      if (this.initing) {
+        refresh &&
+          setTimeout(() => {
+            this.init(refresh);
+          }, 100);
+        return;
       }
-      // 加载书架
-      this.loadBookShelf()
-        .then(() => {
-          this.initing = false;
-          // 加载书源列表
-          this.loadBookSource(refresh);
-          // 加载分组列表
-          this.loadBookGroup(refresh);
-          // 加载RSS订阅列表
-          this.loadRssSources(refresh);
-        })
-        .catch(() => {
+      this.initing = true;
+      if (refresh || !this.$store.state.shelfBooks.length) {
+        await this.loadBookShelf().catch(() => {
           this.initing = false;
         });
+      }
+      await Promise.all([
+        // 加载书源列表
+        this.loadBookSource(refresh),
+        // 加载分组列表
+        this.loadBookGroup(refresh),
+        // 加载RSS订阅列表
+        this.loadRssSources(refresh),
+        // 加载替换规则
+        this.loadReplaceRules(refresh)
+      ]);
+      // 加载书架
+      this.initing = false;
     },
     getUserInfo() {
       return networkFirstRequest(
@@ -426,14 +443,17 @@ export default {
         this.initEditor();
       });
     },
+    showReplaceRuleFormListener(replaceRule, isAddReplaceRule, callback) {
+      this.replaceRule = replaceRule;
+      this.isAddReplaceRule = isAddReplaceRule;
+      this.replaceRuleCallback = callback;
+      this.showReplaceRuleForm = true;
+    },
     loadBookShelf(refresh, api) {
       api = api || this.api;
       return networkFirstRequest(
         () => Axios.get(api + "/getBookshelf?refresh=" + (refresh ? 1 : 0)),
-        "getBookshelf@" +
-          (this.$store.state.isManagerMode
-            ? this.$store.state.userNS
-            : (this.$store.state.userInfo || {}).username || "default")
+        "getBookshelf@" + this.currentUserName
       )
         .then(response => {
           this.$store.commit("setConnected", true);
@@ -450,10 +470,7 @@ export default {
     loadBookGroup(refresh) {
       return cacheFirstRequest(
         () => Axios.get(this.api + "/getBookGroups"),
-        "bookGroup@" +
-          (this.$store.state.isManagerMode
-            ? this.$store.state.userNS
-            : (this.$store.state.userInfo || {}).username || "default"),
+        "bookGroup@" + this.currentUserName,
         refresh,
         true
       ).then(
@@ -477,10 +494,7 @@ export default {
               simple: 1
             }
           }),
-        "rssSources@" +
-          (this.$store.state.isManagerMode
-            ? this.$store.state.userNS
-            : (this.$store.state.userInfo || {}).username || "default"),
+        "rssSources@" + this.currentUserName,
         refresh,
         true
       ).then(
@@ -503,10 +517,7 @@ export default {
               simple: 1
             }
           }),
-        "bookSourceList@" +
-          (this.$store.state.isManagerMode
-            ? this.userNS
-            : (this.$store.state.userInfo || {}).username || "default"),
+        "bookSourceList@" + this.currentUserName,
         refresh,
         true
       ).then(
@@ -518,6 +529,25 @@ export default {
         error => {
           this.$message.error(
             "加载书源列表失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    loadReplaceRules(refresh) {
+      return cacheFirstRequest(
+        () => Axios.get(this.api + "/getReplaceRules"),
+        "replaceRule@" + this.currentUserName,
+        refresh,
+        true
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$store.commit("setFilterRules", res.data.data || []);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载替换规则失败 " + (error && error.toString())
           );
         }
       );

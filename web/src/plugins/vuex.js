@@ -1,6 +1,8 @@
 import Vue from "vue";
 import Vuex from "vuex";
 import settings from "./config";
+import { setCache, getCache } from "../plugins/cache";
+import { config } from "vue/types/umd";
 
 const defaultNS = [{ username: "默认", userNS: "default" }];
 const builtInBookGroup = [
@@ -11,12 +13,16 @@ const builtInBookGroup = [
 ];
 Vue.use(Vuex);
 
+const getCurrentUserName = state => {
+  return state.isManagerMode
+    ? state.userNS
+    : (state.userInfo || {}).username || "default";
+};
+
 export default new Vuex.Store({
   state: {
     connected: false,
-    api:
-      (window.localStorage && window.localStorage.getItem("api_prefix")) ||
-      location.host + "/reader3",
+    api: getCache("api_prefix") || location.host + "/reader3",
     shelfBooks: [],
     readingBook: {},
     config: { ...settings.config },
@@ -28,8 +34,7 @@ export default new Vuex.Store({
     touchable: "ontouchstart" in document,
     showLogin: false,
     loginAuth: true,
-    token:
-      (window.localStorage && window.localStorage.getItem("api_token")) || "",
+    token: getCache("api_token") || "",
     bookSourceList: [],
     isSecureMode: false,
     isManagerMode: false,
@@ -57,7 +62,8 @@ export default new Vuex.Store({
     previewImageIndex: 0,
     previewImgList: [],
     searchConfig: { ...settings.searchConfig },
-    txtTocRules: []
+    txtTocRules: [],
+    customConfigList: [].concat(settings.customConfigList)
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -155,8 +161,10 @@ export default new Vuex.Store({
       }, 100);
       // eslint-disable-next-line no-unused-vars
       const { catalog, ...info } = readingBook;
-      window.localStorage &&
-        window.localStorage.setItem("readingRecent", JSON.stringify(info));
+      setCache(
+        getCurrentUserName(state) + "@readingRecent",
+        JSON.stringify(info)
+      );
     },
     setConfig(state, config) {
       if (
@@ -168,8 +176,23 @@ export default new Vuex.Store({
         config.themeType = "night";
       }
       state.config = config;
-      window.localStorage &&
-        window.localStorage.setItem("config", JSON.stringify(config));
+      // 同步设置到 customConfig
+      if (config.customConfig) {
+        const index = state.customConfigList.findIndex(
+          v => v.name === config.customConfig
+        );
+        if (index >= 0) {
+          const oldCustomConfig = { ...state.customConfigList[index] };
+          Object.keys(settings.customConfigList[0]).forEach(field => {
+            if (typeof config[field] !== "undefined") {
+              oldCustomConfig[field] = config[field];
+            }
+          });
+          state.customConfigList[index] = oldCustomConfig;
+          state.customConfigList = [].concat(state.customConfigList);
+        }
+      }
+      setCache("config", JSON.stringify(config));
     },
     setMiniInterface(state, mini) {
       if (state.config.pageMode === "自适应") {
@@ -201,7 +224,7 @@ export default new Vuex.Store({
     },
     setToken(state, token) {
       state.token = token;
-      window.localStorage && window.localStorage.setItem("api_token", token);
+      setCache("api_token", token);
     },
     setBookSourceList(state, list) {
       // 过滤一下不用的字段，省点内存
@@ -244,61 +267,70 @@ export default new Vuex.Store({
     },
     setFilterRules(state, filterRules) {
       state.filterRules = filterRules;
-      window.localStorage &&
-        window.localStorage.setItem("filterRules", JSON.stringify(filterRules));
+      setCache("filterRules", JSON.stringify(filterRules));
     },
     addFilterRule(state, rule) {
-      const filterRules = [].concat(state.filterRules).concat([rule]);
-      state.filterRules = filterRules;
-      window.localStorage &&
-        window.localStorage.setItem("filterRules", JSON.stringify(filterRules));
+      let filterRules = [].concat(state.filterRules);
+      if (typeof rule.index !== "undefined" && rule.index >= 0) {
+        filterRules[rule.index] = rule;
+        state.filterRules = filterRules;
+      } else {
+        filterRules = filterRules.concat([rule]);
+        state.filterRules = filterRules;
+      }
+      setCache("filterRules", JSON.stringify(filterRules));
     },
     setNightTheme(state, isNight) {
       let config = { ...state.config };
-      if (config.theme !== "custom") {
-        config.theme = parseInt(config.theme);
-      }
       if (isNight) {
-        if (
-          config.theme !== settings.defaultNightTheme &&
-          config.themeType !== "night"
-        ) {
-          window.localStorage &&
-            window.localStorage.setItem("lastDayTheme", config.theme);
+        // 设置为默认黑夜方案
+        const ngightConfig = state.customConfigList.find(
+          v => v.configDefaultType === "黑夜默认"
+        );
+        if (ngightConfig) {
+          config = { ...config, ...ngightConfig };
         }
-        const lastNightTheme =
-          (window.localStorage &&
-            window.localStorage.getItem("lastNightTheme")) ||
-          6;
-        config.themeType = "night";
-        config.theme = lastNightTheme;
-      } else if (
-        config.theme === settings.defaultNightTheme ||
-        config.themeType === "night"
-      ) {
-        window.localStorage &&
-          window.localStorage.setItem("lastNightTheme", config.theme);
-        const lastDayTheme =
-          (window.localStorage &&
-            window.localStorage.getItem("lastDayTheme")) ||
-          0;
-        config.themeType = "day";
-        config.theme = lastDayTheme;
+      } else {
+        // 设置为默认白天方案
+        const dayConfig = state.customConfigList.find(
+          v => v.configDefaultType === "白天默认"
+        );
+        if (dayConfig) {
+          config = { ...config, ...dayConfig };
+        }
       }
-      if (config.theme !== "custom") {
-        config.theme = parseInt(config.theme);
-      }
+      // let config = { ...state.config };
+      // if (config.theme !== "custom") {
+      //   config.theme = parseInt(config.theme);
+      // }
+      // if (isNight) {
+      //   if (
+      //     config.theme !== settings.defaultNightTheme &&
+      //     config.themeType !== "night"
+      //   ) {
+      //     setCache("lastDayTheme", config.theme);
+      //   }
+      //   const lastNightTheme = getCache("lastNightTheme") || 6;
+      //   config.themeType = "night";
+      //   config.theme = lastNightTheme;
+      // } else if (
+      //   config.theme === settings.defaultNightTheme ||
+      //   config.themeType === "night"
+      // ) {
+      //   setCache("lastNightTheme", config.theme);
+      //   const lastDayTheme = getCache("lastDayTheme") || 0;
+      //   config.themeType = "day";
+      //   config.theme = lastDayTheme;
+      // }
+      // if (config.theme !== "custom") {
+      //   config.theme = parseInt(config.theme);
+      // }
       state.config = config;
-      window.localStorage &&
-        window.localStorage.setItem("config", JSON.stringify(config));
+      setCache("config", JSON.stringify(config));
     },
     setSpeechVoiceConfig(state, voiceConfig) {
       state.speechVoiceConfig = voiceConfig;
-      window.localStorage &&
-        window.localStorage.setItem(
-          "speechVoiceConfig",
-          JSON.stringify(voiceConfig)
-        );
+      setCache("speechVoiceConfig", JSON.stringify(voiceConfig));
     },
     setSafeArea(state, safeArea) {
       state.safeArea = { ...state.safeArea, ...safeArea };
@@ -352,8 +384,7 @@ export default new Vuex.Store({
     },
     setShelfConfig(state, shelfConfig) {
       state.shelfConfig = shelfConfig;
-      window.localStorage &&
-        window.localStorage.setItem("shelfConfig", JSON.stringify(shelfConfig));
+      setCache("shelfConfig", JSON.stringify(shelfConfig));
     },
     setPreviewImageIndex(state, previewImageIndex) {
       state.previewImageIndex = previewImageIndex;
@@ -370,14 +401,13 @@ export default new Vuex.Store({
     },
     setSearchConfig(state, searchConfig) {
       state.searchConfig = searchConfig;
-      window.localStorage &&
-        window.localStorage.setItem(
-          "searchConfig",
-          JSON.stringify(searchConfig)
-        );
+      setCache("searchConfig", JSON.stringify(searchConfig));
     },
     setTxtTocRules(state, tocRules) {
       state.txtTocRules = [].concat(tocRules);
+    },
+    setCustomConfigList(state, customConfigList) {
+      state.customConfigList = [].concat(customConfigList);
     }
   },
   getters: {
@@ -542,16 +572,16 @@ export default new Vuex.Store({
     },
     popupWidth: state => {
       return state.miniInterface ? state.windowSize.width : "600";
+    },
+    currentUserName: state => {
+      return getCurrentUserName(state);
     }
   },
   actions: {
-    syncFromLocalStorage({ commit }) {
-      if (!window.localStorage) {
-        return;
-      }
+    syncFromLocalStorage({ commit, getters }) {
       try {
         // 获取配置
-        const config = JSON.parse(window.localStorage.getItem("config"));
+        const config = getCache("config");
         if (config && typeof config === "object") {
           commit("setConfig", { ...settings.config, ...config });
         }
@@ -560,8 +590,8 @@ export default new Vuex.Store({
       }
       try {
         // 获取最近阅读书籍
-        const readingRecent = JSON.parse(
-          window.localStorage.getItem("readingRecent")
+        const readingRecent = getCache(
+          getters.currentUserName + "@readingRecent"
         );
         if (readingRecent && typeof readingRecent === "object") {
           if (typeof readingRecent.index == "undefined") {
@@ -574,9 +604,7 @@ export default new Vuex.Store({
       }
       try {
         // 获取过滤规则
-        const filterRules = JSON.parse(
-          window.localStorage.getItem("filterRules")
-        );
+        const filterRules = getCache("filterRules");
         if (filterRules && Array.isArray(filterRules)) {
           commit("setFilterRules", filterRules);
         }
@@ -585,9 +613,7 @@ export default new Vuex.Store({
       }
       try {
         // 获取听书配置
-        const speechVoiceConfig = JSON.parse(
-          window.localStorage.getItem("speechVoiceConfig")
-        );
+        const speechVoiceConfig = getCache("speechVoiceConfig");
         if (speechVoiceConfig && typeof speechVoiceConfig === "object") {
           commit("setSpeechVoiceConfig", {
             ...settings.speechVoiceConfig,
@@ -599,9 +625,7 @@ export default new Vuex.Store({
       }
       try {
         // 获取书架设置
-        const shelfConfig = JSON.parse(
-          window.localStorage.getItem("shelfConfig")
-        );
+        const shelfConfig = getCache("shelfConfig");
         if (shelfConfig && typeof shelfConfig === "object") {
           commit("setShelfConfig", {
             ...settings.shelfConfig,
@@ -613,9 +637,7 @@ export default new Vuex.Store({
       }
       try {
         // 获取搜索设置
-        const searchConfig = JSON.parse(
-          window.localStorage.getItem("searchConfig")
-        );
+        const searchConfig = getCache("searchConfig");
         if (searchConfig && typeof searchConfig === "object") {
           commit("setSearchConfig", {
             ...settings.searchConfig,

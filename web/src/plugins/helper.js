@@ -1,4 +1,5 @@
 // import { Message } from "element-ui";
+import { getCache } from "../plugins/cache";
 
 export const formatSize = function(value, scale) {
   if (value == null || value == "") {
@@ -91,17 +92,9 @@ export const networkFirstRequest = async function(
         })
         .catch(err => {
           // 兼容旧逻辑
-          try {
-            let cacheResponse =
-              window.localStorage && window.localStorage.getItem(cacheKey);
-            if (cacheResponse) {
-              cacheResponse = JSON.parse(cacheResponse);
-              if (cacheResponse) {
-                return { data: cacheResponse };
-              }
-            }
-          } catch (error) {
-            //
+          const cacheResponse = getCache(cacheKey);
+          if (cacheResponse) {
+            return { data: cacheResponse };
           }
           throw err;
         });
@@ -140,19 +133,8 @@ export const cacheFirstRequest = async function(
         })
         .catch(() => {
           // 兼容旧逻辑
-          try {
-            let cacheResponse =
-              window.localStorage && window.localStorage.getItem(cacheKey);
-            if (cacheResponse) {
-              cacheResponse = JSON.parse(cacheResponse);
-              if (cacheResponse) {
-                return cacheResponse;
-              }
-            }
-          } catch (error) {
-            //
-          }
-          return null;
+          const cacheResponse = getCache(cacheKey);
+          return cacheResponse;
         });
       if (cacheResponse) {
         if (!validateCache || (validateCache && validateCache(cacheResponse))) {

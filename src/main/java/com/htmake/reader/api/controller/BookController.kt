@@ -1856,7 +1856,13 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     userRssSourcesFile.deleteRecursively()
                     rssSourcesFile.renameTo(userRssSourcesFile)
                 }
-
+                // 同步 替换规则
+                val replaceRuleFile = File(descDir + File.separator + "replaceRule.json")
+                if (replaceRuleFile.exists()) {
+                    val userReplaceRuleFile = File(getWorkDir("storage", "data", userNameSpace, "replaceRule.json"))
+                    userReplaceRuleFile.deleteRecursively()
+                    replaceRuleFile.renameTo(userReplaceRuleFile)
+                }
                 // 同步阅读进度
                 var bookProgressDir = File(userHome + File.separator + "bookProgress")
                 if (!bookProgressDir.exists()) {
@@ -1917,7 +1923,13 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     rssSourcesFile.deleteRecursively()
                     userRssSourcesFile.renameTo(rssSourcesFile)
                 }
-
+                // 同步 替换规则
+                val userReplaceRuleFile = File(getWorkDir("storage", "data", userNameSpace, "replaceRule.json"))
+                if (userReplaceRuleFile.exists()) {
+                    val replaceRuleFile = File(descDir + File.separator + "replaceRule.json")
+                    replaceRuleFile.deleteRecursively()
+                    userReplaceRuleFile.renameTo(replaceRuleFile)
+                }
                 // 压缩
                 val today = SimpleDateFormat("yyyy-MM-dd").format(System.currentTimeMillis())
                 return descDirFile.zip(legadoHome + File.separator + "backup" + today + ".zip")

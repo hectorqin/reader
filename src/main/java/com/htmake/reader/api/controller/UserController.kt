@@ -73,6 +73,13 @@ private val logger = KotlinLogging.logger {}
 class UserController(coroutineContext: CoroutineContext): BaseController(coroutineContext) {
     val userMaxCount = 50
 
+    private fun getUserLimit(context: RoutingContext): Int {
+        if (context.request().host().equals("reader.htmake.com")) {
+            return 200;
+        }
+        return Math.min(Math.max(appConfig.userLimit, 1), userMaxCount)
+    }
+
     suspend fun login(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         val username = context.bodyAsJson.getString("username") ?: ""
@@ -113,7 +120,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
                     return returnData.setErrorMsg("邀请码错误")
                 }
             }
-            val userLimit = Math.min(Math.max(appConfig.userLimit, 1), userMaxCount)
+            val userLimit = getUserLimit(context)
             if (userMap.keys.size >= userLimit) {
                 return returnData.setErrorMsg("超过用户数上限")
             }
@@ -251,7 +258,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setErrorMsg("用户已存在")
         }
 
-        val userLimit = Math.min(Math.max(appConfig.userLimit, 1), userMaxCount)
+        val userLimit = getUserLimit(context)
         if (userMap.keys.size >= userLimit) {
             return returnData.setErrorMsg("超过用户数上限")
         }
@@ -431,6 +438,8 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         if (content == null) {
             return returnData.setErrorMsg("参数错误")
         }
+        content.put("@updateTime", System.currentTimeMillis())
+
         val userNameSpace = getUserNameSpace(context)
         saveUserStorage(userNameSpace, "userConfig", content)
         return returnData.setData("")

@@ -33,6 +33,9 @@ export default {
           <h3 data-pos={0}>{this.title}</h3>
           {this.content.split(/\n+/).map(a => {
             a = a.replace(/^\s+/g, "");
+            if (!a) {
+              return null;
+            }
             const pos = wordCount;
             wordCount += a.length + 2; // 2为两个换行符
             if (a.indexOf("<img") >= 0) {

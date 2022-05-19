@@ -389,11 +389,14 @@ import Content from "../components/Content.vue";
 import Axios from "../plugins/axios";
 import jump from "../plugins/jump";
 import Animate from "../plugins/animate";
+import { setCache, getCache } from "../plugins/cache";
 import {
   cacheFirstRequest,
   LimitResquest,
   networkFirstRequest
 } from "../plugins/helper";
+import { defaultReplaceRule } from "../plugins/config.js";
+import eventBus from "../plugins/eventBus";
 
 export default {
   components: {
@@ -794,14 +797,37 @@ export default {
       let content = this.content;
       try {
         this.filterRules.forEach(rule => {
+          if (
+            typeof rule.isEnabled !== "undefined" &&
+            rule.isEnabled === false
+          ) {
+            return;
+          }
           const scope = rule.scope.split(";");
-          if (scope[0] === this.$store.state.readingBook.bookName) {
-            content = content.replace(rule.pattern, rule.replacement);
+          if (
+            scope[0] === "*" ||
+            scope[0] === this.$store.state.readingBook.bookName
+          ) {
+            if (
+              scope.length == 1 ||
+              (scope.length > 1 &&
+                scope[1] === this.$store.state.readingBook.bookUrl)
+            ) {
+              if (rule.isRegex) {
+                content = content.replace(
+                  new RegExp(rule.pattern),
+                  rule.replacement
+                );
+              } else {
+                content = content.replace(rule.pattern, rule.replacement);
+              }
+            }
           }
         });
       } catch (error) {
         //
       }
+      content.replace(/\\n+/g, "\n");
       return content;
     },
     themeBtnStyle() {
@@ -1678,49 +1704,66 @@ export default {
       if (!text.replace(/^\s+/, "").replace(/\s+$/, "")) {
         return;
       }
+
+      const replaceRule = Object.assign({}, defaultReplaceRule, {
+        name: "文本替换",
+        pattern: text,
+        replacement: "",
+        isRegex: false,
+        isEnabled: true,
+        scope:
+          this.$store.state.readingBook.bookName +
+          ";" +
+          this.$store.state.readingBook.bookUrl
+      });
       this.showTextFilterPrompting = true;
-      const h = this.$createElement;
-      const bgColor = this.isNight ? "#121212" : "#eee";
-      const preEle = h(
-        "pre",
-        {
-          key: "" + new Date().getTime(),
-          attrs: {
-            contenteditable: "true"
-          },
-          style: `margin-top: 10px;background: ${bgColor};padding: 10px;border: 1px solid ${bgColor};border-radius: 5px;white-space: pre-wrap;word-wrap: break-word;word-break: break-all;`
-        },
-        text
-      );
-      const result = await this.$prompt(
-        h("div", null, [
-          h("p", null, "是否要将下列文字替换为输入内容:"),
-          preEle
-        ]),
-        "操作确认",
-        {
-          inputPlaceholder: "留空为过滤"
-        }
-      ).catch(() => {});
-      if (result && result.action === "confirm") {
-        text = ((preEle.elm || {}).innerText || "")
-          .replace(/^\s+/, "")
-          .replace(/\s+$/, "");
-        if (text) {
-          this.$store.commit("addFilterRule", {
-            name: "文本替换",
-            pattern: text,
-            replacement: result.value || "",
-            scope:
-              this.$store.state.readingBook.bookName +
-              ";" +
-              this.$store.state.readingBook.bookUrl
-          });
-        } else {
-          this.$message.error("过滤内容为空!");
-        }
-      }
-      this.showTextFilterPrompting = false;
+      eventBus.$emit("showReplaceRuleForm", replaceRule, true, () => {
+        this.showTextFilterPrompting = false;
+      });
+      // const h = this.$createElement;
+      // const bgColor = this.isNight ? "#121212" : "#eee";
+      // const preEle = h(
+      //   "pre",
+      //   {
+      //     key: "" + new Date().getTime(),
+      //     attrs: {
+      //       contenteditable: "true"
+      //     },
+      //     style: `margin-top: 10px;background: ${bgColor};padding: 10px;border: 1px solid ${bgColor};border-radius: 5px;white-space: pre-wrap;word-wrap: break-word;word-break: break-all;`
+      //   },
+      //   text
+      // );
+      // const result = await this.$prompt(
+      //   h("div", null, [
+      //     h("p", null, "是否要将下列文字替换为输入内容:"),
+      //     preEle
+      //   ]),
+      //   "操作确认",
+      //   {
+      //     inputPlaceholder: "留空为过滤"
+      //   }
+      // ).catch(() => {});
+      // if (result && result.action === "confirm") {
+      //   text = ((preEle.elm || {}).innerText || "")
+      //     .replace(/^\s+/, "")
+      //     .replace(/\s+$/, "");
+      //   if (text) {
+      //     this.$store.commit("addFilterRule", {
+      //       name: "文本替换",
+      //       pattern: text,
+      //       replacement: result.value || "",
+      //       isRegex: false,
+      //       isEnabled: true,
+      //       scope:
+      //         this.$store.state.readingBook.bookName +
+      //         ";" +
+      //         this.$store.state.readingBook.bookUrl
+      //     });
+      //   } else {
+      //     this.$message.error("过滤内容为空!");
+      //   }
+      // }
+      // this.showTextFilterPrompting = false;
     },
     toogleNight() {
       if (this.isNight) {
@@ -2023,14 +2066,13 @@ export default {
             );
           }
         }
-        window.localStorage &&
-          window.localStorage.setItem(
-            "bookChapterProgress@" +
-              this.$store.state.readingBook.bookName +
-              "_" +
-              this.$store.state.readingBook.author,
-            position
-          );
+        setCache(
+          "bookChapterProgress@" +
+            this.$store.state.readingBook.bookName +
+            "_" +
+            this.$store.state.readingBook.author,
+          position
+        );
       } catch (error) {
         //
       }
@@ -2043,15 +2085,13 @@ export default {
         if (this.error) {
           return;
         }
-        const lastPosition =
-          window.localStorage &&
-          window.localStorage.getItem(
-            "bookChapterProgress@" +
-              this.$store.state.readingBook.bookName +
-              "_" +
-              this.$store.state.readingBook.author
-          );
-        if (+lastPosition) {
+        const lastPosition = getCache(
+          "bookChapterProgress@" +
+            this.$store.state.readingBook.bookName +
+            "_" +
+            this.$store.state.readingBook.author
+        );
+        if (lastPosition && +lastPosition) {
           this.$nextTick(() => {
             this.showPosition(+lastPosition, () => {
               this.startSavePosition = true;
