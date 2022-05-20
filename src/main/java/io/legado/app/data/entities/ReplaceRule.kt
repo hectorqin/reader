@@ -1,6 +1,6 @@
 package io.legado.app.data.entities
 
-
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 
 
@@ -17,8 +17,8 @@ data class ReplaceRule(
     var pattern: String = "",
     var replacement: String = "",
     var scope: String? = null,
-    var isEnabled: Boolean = true,
-    var isRegex: Boolean = true,
+    @get:JsonProperty("isEnabled") var isEnabled: Boolean = true,
+    @get:JsonProperty("isRegex") var isRegex: Boolean = false,
 //    @ColumnInfo(name = "sortOrder")
     var order: Int = 0
 )

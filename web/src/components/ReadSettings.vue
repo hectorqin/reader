@@ -75,7 +75,7 @@
               :key="index"
               :class="{
                 selected:
-                  currentCustomConfig.configDefaultType == configDefaultType
+                  currentCustomConfig.configDefaultType === configDefaultType
               }"
               @click="setConfigDefaultType(configDefaultType)"
               >{{ configDefaultType }}</span
@@ -264,7 +264,7 @@
             >
           </div>
         </li>
-        <li v-if="$store.state.miniInterface">
+        <li>
           <span class="setting-item-title">翻页方式</span>
           <div class="selection-zone">
             <span
@@ -273,6 +273,10 @@
               :key="index"
               :class="{ selected: readMethod == method }"
               @click="setReadMethod(method)"
+              v-show="
+                (!$store.state.miniInterface && method !== '左右滑动') ||
+                  $store.state.miniInterface
+              "
               >{{ method }}</span
             >
           </div>
@@ -330,7 +334,7 @@
         <el-divider></el-divider>
         <li class="operation-zone">
           <span class="span-btn" @click="showClickZone">显示翻页区域</span>
-          <span class="span-btn" @click="showRuleEditor">修改过滤规则</span>
+          <span class="span-btn" @click="showRuleEditor">过滤规则管理</span>
         </li>
       </ul>
     </div>
@@ -398,7 +402,7 @@ export default {
         { src: "bg/边彩画布.jpg" }
       ],
       fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"],
-      readMethods: ["上下滑动", "左右滑动"],
+      readMethods: ["上下滑动", "左右滑动", "上下滚动"],
       clickMethods: ["下一页", "自动", "不翻页"],
       selectionActions: ["过滤弹窗", "忽略"],
       pageModes: ["自适应", "手机模式"],
@@ -762,24 +766,25 @@ export default {
     },
     showRuleEditor() {
       this.$emit("close");
-      eventBus.$emit(
-        "showEditor",
-        "修改过滤规则",
-        JSON.stringify(this.$store.state.filterRules, null, 4),
-        async (content, close) => {
-          try {
-            const filterRules = JSON.parse(content);
-            if (!Array.isArray(filterRules)) {
-              this.$message.error("过滤规则必须是JSON数组格式");
-              return;
-            }
-            this.$store.commit("setFilterRules", filterRules);
-            close();
-          } catch (e) {
-            this.$message.error("过滤规则必须是JSON数组格式");
-          }
-        }
-      );
+      eventBus.$emit("showReplaceRuleDialog");
+      // eventBus.$emit(
+      //   "showEditor",
+      //   "修改过滤规则",
+      //   JSON.stringify(this.$store.state.filterRules, null, 4),
+      //   async (content, close) => {
+      //     try {
+      //       const filterRules = JSON.parse(content);
+      //       if (!Array.isArray(filterRules)) {
+      //         this.$message.error("过滤规则必须是JSON数组格式");
+      //         return;
+      //       }
+      //       this.$store.commit("setFilterRules", filterRules);
+      //       close();
+      //     } catch (e) {
+      //       this.$message.error("过滤规则必须是JSON数组格式");
+      //     }
+      //   }
+      // );
     },
     async addNewCustomConfig() {
       const res = await this.$prompt("请输入方案名称", `添加配置方案`, {
@@ -819,11 +824,10 @@ export default {
       let config = this.config;
       config.customConfig = customConfig.name;
       config = { ...config, ...customConfig };
-      delete config.configDefaultType;
-      delete config.name;
       this.$store.commit("setConfig", { ...config });
     },
-    deleteCustomConfig(index, name) {
+    async deleteCustomConfig(index, name) {
+      const customConfigList = [].concat(this.$store.state.customConfigList);
       if (index <= 1) {
         this.$message.error("内置方案不能删除");
         return;
@@ -836,7 +840,16 @@ export default {
         this.$message.error("方案正在使用，无法删除");
         return;
       }
-      const customConfigList = [].concat(this.$store.state.customConfigList);
+      const res = await this.$confirm(`确认要删除${name}方案吗？`, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
       customConfigList.splice(index, 1);
 
       this.$store.commit("setCustomConfigList", [].concat(customConfigList));
@@ -858,7 +871,7 @@ export default {
       }
       const customConfigList = [].concat(this.$store.state.customConfigList);
       customConfigList.forEach(v => {
-        if (v.name === this.$store.state.config.name) {
+        if (v.name === this.$store.state.config.customConfig) {
           v.configDefaultType = configDefaultType;
         } else if (v.configDefaultType === configDefaultType) {
           v.configDefaultType = "";
@@ -954,11 +967,14 @@ export default {
           position: relative;
 
           .delete-custom-config-icon {
+            display: inline-block;
+            cursor: pointer;
             position: absolute;
-            top: -6px;
-            right: -6px;
-            font-size: 18px;
+            top: -10px;
+            right: -10px;
+            font-size: 20px;
             color: #ed4259;
+            z-index: 10;
           }
         }
 

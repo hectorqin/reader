@@ -44,7 +44,7 @@ export default {
     prop: "show",
     event: "setShow"
   },
-  name: "ReplaceRule",
+  name: "ReplaceRuleForm",
   data() {
     return {
       ruleForm: { ...defaultReplaceRule }
@@ -97,6 +97,7 @@ export default {
               (this.isAdd ? "新增" : "编辑") + "替换规则成功"
             );
             this.$root.$children[0].loadReplaceRules(true);
+            this.cancel();
           }
         },
         error => {

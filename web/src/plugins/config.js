@@ -66,7 +66,7 @@ const settings = {
   customConfigList: [defaultDayConfig, defaultNightConfig],
   config: {
     ...defaultDayConfig,
-    customConfig: "默认白天",
+    customConfig: "内置白天",
     autoTheme: true, // 自动切换主题
     pageType: "正常"
   },

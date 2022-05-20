@@ -344,7 +344,7 @@
               slot="reference"
               class="setting-btn"
               v-if="$store.state.isManagerMode"
-              @click="showUserManageDialog = true"
+              @click="showUserManageDialog()"
             >
               管理用户空间
             </el-tag>
@@ -387,6 +387,31 @@
               @click="backupToWebdav"
             >
               保存备份
+            </el-tag>
+          </div>
+        </div>
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            其它
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="showMPCode"
+            >
+              关注公众号【假装大佬】
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="joinTGChannel"
+            >
+              加入TG频道【假装大佬】
             </el-tag>
           </div>
         </div>
@@ -553,7 +578,7 @@
             :key="book.bookUrl"
             @click="toDetail(book)"
           >
-            <div class="cover-img" @click.stop="toggleBookIntroPop(book)">
+            <div class="cover-img" @click.stop="showBookInfoDialog(book)">
               <!-- <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" /> -->
               <el-image
                 class="cover"
@@ -851,143 +876,6 @@
         >
       </div>
     </el-dialog>
-    <el-dialog
-      title="用户管理"
-      :visible.sync="showUserManageDialog"
-      :width="dialogWidth"
-      :top="dialogTop"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-      v-if="$store.getters.isNormalPage"
-    >
-      <div class="custom-dialog-title" slot="title">
-        <span class="el-dialog__title"
-          >用户管理
-          <span class="float-right span-btn" @click="showAddUserDialog()"
-            >新增</span
-          >
-        </span>
-      </div>
-      <div class="source-container table-container">
-        <el-table
-          :data="userList"
-          :height="dialogContentHeight"
-          @selection-change="manageUserSelection = $event"
-        >
-          <el-table-column
-            type="selection"
-            width="25"
-            :selectable="isUserSelectable"
-            fixed
-          >
-          </el-table-column>
-          <el-table-column
-            property="username"
-            label="用户名"
-            min-width="100"
-            fixed
-          ></el-table-column>
-          <el-table-column
-            property="lastLoginAt"
-            label="上次登录"
-            :formatter="formatTableField"
-            min-width="120"
-          ></el-table-column>
-          <el-table-column
-            property="createdAt"
-            label="注册时间"
-            :formatter="formatTableField"
-            min-width="120"
-          ></el-table-column>
-          <el-table-column
-            property="enableWebdav"
-            label="WebDAV"
-            min-width="80"
-          >
-            <template slot-scope="scope">
-              <el-switch
-                v-if="scope.row.userNS !== 'default'"
-                v-model="scope.row.enableWebdav"
-                active-color="#13ce66"
-                inactive-color="#ff4949"
-                :active-value="true"
-                :inactive-value="false"
-                @change="toggleUserWebdav(scope.row, $event)"
-              >
-              </el-switch>
-            </template>
-          </el-table-column>
-          <el-table-column
-            property="enableLocalStore"
-            label="书仓"
-            min-width="80"
-          >
-            <template slot-scope="scope">
-              <el-switch
-                v-if="scope.row.userNS !== 'default'"
-                v-model="scope.row.enableLocalStore"
-                active-color="#13ce66"
-                inactive-color="#ff4949"
-                :active-value="true"
-                :inactive-value="false"
-                @change="toggleUserLocalStore(scope.row, $event)"
-              >
-              </el-switch>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="100px">
-            <template slot-scope="scope">
-              <el-button type="text" @click="resetPassword(scope.row)"
-                >重置密码</el-button
-              >
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-      <div slot="footer" class="dialog-footer">
-        <el-button
-          type="primary"
-          size="medium"
-          class="float-left"
-          @click="deleteUserList"
-          >批量删除</el-button
-        >
-        <span class="check-tip"
-          >已选择 {{ manageUserSelection.length }} 个</span
-        >
-        <el-button size="medium" @click="showUserManageDialog = false"
-          >取消</el-button
-        >
-      </div>
-    </el-dialog>
-
-    <el-dialog
-      title="新增用户"
-      :visible.sync="showAddUser"
-      :width="dialogSmallWidth"
-      :top="dialogTop"
-    >
-      <el-form :model="addUserForm">
-        <el-form-item label="用户名">
-          <el-input v-model="addUserForm.username" autocomplete="on"></el-input>
-        </el-form-item>
-        <el-form-item label="密码">
-          <el-input
-            type="password"
-            v-model="addUserForm.password"
-            autocomplete="on"
-            show-password
-            @keyup.enter.native="login"
-          ></el-input>
-        </el-form-item>
-      </el-form>
-      <div slot="footer" class="dialog-footer">
-        <el-button size="medium" @click="showAddUser = false">取 消</el-button>
-        <el-button size="medium" type="primary" @click="addUser"
-          >确 定</el-button
-        >
-      </div>
-    </el-dialog>
 
     <el-dialog
       title="WebDAV文件管理"
@@ -1163,172 +1051,6 @@
         <el-button size="medium" @click="showImportBookDialog = false"
           >取消</el-button
         >
-      </div>
-    </el-dialog>
-
-    <el-dialog
-      :title="isShowBookGroupSettingDialog ? '设置分组' : '分组管理'"
-      :visible.sync="showBookGroupManageDialog"
-      :width="dialogWidth"
-      :top="dialogTop"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-      @opened="$refs.bookGroupTableRef.doLayout()"
-      @closed="isShowBookGroupSettingDialog = false"
-      v-if="$store.getters.isNormalPage"
-    >
-      <div class="source-container table-container">
-        <el-table
-          :data="showBookGroupList"
-          :height="dialogContentHeight"
-          @selection-change="bookGroupSelection = $event"
-          ref="bookGroupTableRef"
-          :key="isShowBookGroupSettingDialog"
-        >
-          <el-table-column
-            type="selection"
-            width="25"
-            fixed
-            v-if="isShowBookGroupSettingDialog"
-          >
-          </el-table-column>
-          <el-table-column
-            property="groupName"
-            label="分组名"
-            min-width="100"
-            fixed
-          >
-            <template slot-scope="scope">
-              <span> {{ displayBookGroupName(scope.row) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column
-            property="show"
-            label="显示"
-            min-width="80"
-            v-if="!isShowBookGroupSettingDialog"
-          >
-            <template slot-scope="scope">
-              <el-switch
-                v-model="scope.row.show"
-                active-color="#13ce66"
-                inactive-color="#ff4949"
-                :active-value="true"
-                :inactive-value="false"
-                @change="toggleBookGroupShow(scope.row, $event)"
-              >
-              </el-switch>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="100px">
-            <template slot-scope="scope">
-              <el-button type="text" @click="saveBookGroup(scope.row)"
-                >编辑</el-button
-              >
-              <el-button
-                type="text"
-                v-if="
-                  !isShowBookGroupSettingDialog &&
-                    scope.row.groupId > 0 &&
-                    !getShowShelfBooks(scope.row.groupId).length
-                "
-                @click="deleteBookGroup(scope.row)"
-                style="color: #f56c6c"
-                >删除</el-button
-              >
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-      <div slot="footer" class="dialog-footer">
-        <el-button
-          type="primary"
-          size="medium"
-          class="float-left"
-          @click="saveBookGroup()"
-          >添加分组</el-button
-        >
-        <el-button
-          type="primary"
-          size="medium"
-          @click="setBookGroup"
-          v-if="isShowBookGroupSettingDialog"
-          >确认</el-button
-        >
-        <el-button size="medium" @click="showBookGroupManageDialog = false"
-          >取消</el-button
-        >
-      </div>
-    </el-dialog>
-
-    <el-dialog
-      title="书籍信息"
-      :visible.sync="showBookInfoDialog"
-      :width="dialogSmallWidth"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-    >
-      <div class="book-info-container">
-        <div class="book-cover">
-          <div class="book-cover-bg" :style="bookCoverBgStyle"></div>
-          <div class="book-cover-bg-image">
-            <img
-              v-lazy="getCover(getBookCoverUrl(showBookInfo))"
-              :key="showBookInfo.name"
-              alt=""
-              @click="triggerBookCoverRefClick"
-            />
-            <input
-              ref="bookCoverRef"
-              type="file"
-              accept="image/jpg, image/png, image/jpeg"
-              @change="onCoverFileChange"
-              style="display:none"
-            />
-          </div>
-        </div>
-        <div class="book-name">{{ showBookInfo.name }}</div>
-        <div class="book-kind" v-html="renderBookKind(showBookInfo.kind)"></div>
-        <div class="book-props">
-          <div class="book-prop book-author">
-            作者： {{ showBookInfo.author || "未知" }}
-          </div>
-          <div class="book-prop book-origin">
-            来源： {{ displayOriginName(showBookInfo.origin) }}
-            <el-button
-              type="text"
-              class="book-prop-btn"
-              v-if="showBookInfo.origin === 'loc_book'"
-              @click="refreshLocalBook(showBookInfo)"
-              >更新</el-button
-            >
-          </div>
-          <div class="book-prop book-latest">
-            最新： {{ showBookInfo.latestChapterTitle }}
-            <span class="book-prop-btn">
-              追更
-              <el-switch
-                v-model="showBookInfo.canUpdate"
-                active-color="#13ce66"
-                inactive-color="#ff4949"
-                :active-value="true"
-                :inactive-value="false"
-                @change="toggleBookCanUpdate(showBookInfo)"
-              >
-              </el-switch>
-            </span>
-          </div>
-          <div class="book-prop book-group" v-if="!isSearchResult">
-            分组： {{ displayGroupName(showBookInfo.group) }}
-            <el-button
-              type="text"
-              class="book-prop-btn"
-              @click="showSetBookGroup()"
-              >设置分组</el-button
-            >
-          </div>
-        </div>
-        <div class="book-intro" v-html="renderBookIntro(showBookInfo)"></div>
       </div>
     </el-dialog>
 
@@ -1521,9 +1243,6 @@ export default {
 
       lastScrollTop: 0,
 
-      showUserManageDialog: false,
-      manageUserSelection: [],
-
       webdavCurrentPath: "/",
       webdavFileList: [],
 
@@ -1548,13 +1267,6 @@ export default {
       importBookInfo: {},
       importBookChapters: [],
       showImportBookDialog: false,
-
-      showBookGroupManageDialog: false,
-      isShowBookGroupSettingDialog: false,
-      bookGroupSelection: [],
-
-      showBookInfo: {},
-      showBookInfoDialog: false,
 
       importMultiBookTip: "",
 
@@ -1936,7 +1648,9 @@ export default {
         type: book.type,
         coverUrl: this.getBookCoverUrl(book),
         author: book.author,
-        origin: book.origin
+        origin: book.origin,
+        latestChapterTitle: book.latestChapterTitle,
+        intro: book.intro
       });
       this.$router.push({
         path: "/reader" + (this.isSearchResult ? "?search=1" : "")
@@ -2437,30 +2151,8 @@ export default {
         this.popExploreVisible = true;
       }, 100);
     },
-    renderBookIntro(book) {
-      const intro = (book.intro || "暂无简介").split("\n");
-      return intro
-        .map(v => {
-          return `<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${v.replace(
-            /^\s+/g,
-            ""
-          )}</p>`;
-        })
-        .join("");
-    },
-    toggleBookIntroPop(book) {
-      this.showBookInfo = book;
-      this.showBookInfoDialog = true;
-      // setTimeout(() => {
-      //   for (const i in this.popIntroVisible) {
-      //     if (Object.hasOwnProperty.call(this.popIntroVisible, i)) {
-      //       if (i !== book.name) {
-      //         this.popIntroVisible[i] = false;
-      //       }
-      //     }
-      //   }
-      //   this.popIntroVisible[book.name] = !this.popIntroVisible[book.name];
-      // }, 100);
+    showBookInfoDialog(book) {
+      eventBus.$emit("showBookInfoDialog", book);
     },
     async saveUserConfig() {
       if (!window.localStorage) {
@@ -2546,142 +2238,6 @@ export default {
           this.$message.error(
             "加载用户空间失败 " + (error && error.toString())
           );
-        }
-      );
-    },
-    isUserSelectable(user) {
-      return user.userNS !== "default";
-    },
-    async deleteUserList() {
-      if (!this.manageUserSelection.length) {
-        this.$message.error("请选择需要删除的用户");
-        return;
-      }
-      const res = await this.$confirm("确认要删除所选择的用户吗?", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning"
-      }).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(
-        this.api + "/deleteUsers",
-        this.manageUserSelection.map(v => v.username)
-      ).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.manageUserSelection = [];
-            this.$message.success("删除用户成功");
-            this.userList = res.data.data.map(v => ({
-              ...v,
-              userNS: v.username
-            }));
-          }
-        },
-        error => {
-          this.$message.error("删除用户失败 " + (error && error.toString()));
-        }
-      );
-    },
-    toggleUserWebdav(user, enableWebdav) {
-      Axios.post(this.api + "/updateUser", {
-        username: user.username,
-        enableWebdav
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("修改成功");
-            this.userList = res.data.data.map(v => ({
-              ...v,
-              userNS: v.username
-            }));
-          }
-        },
-        error => {
-          this.$message.error("修改失败 " + (error && error.toString()));
-        }
-      );
-    },
-    toggleUserLocalStore(user, enableLocalStore) {
-      Axios.post(this.api + "/updateUser", {
-        username: user.username,
-        enableLocalStore
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("修改成功");
-            this.userList = res.data.data.map(v => ({
-              ...v,
-              userNS: v.username
-            }));
-          }
-        },
-        error => {
-          this.$message.error("修改失败 " + (error && error.toString()));
-        }
-      );
-    },
-    async resetPassword(user) {
-      const res = await this.$prompt("", "重置密码", {
-        inputValue: "",
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        inputValidator(v) {
-          if (!v) {
-            return "密码不能为空";
-          }
-          return true;
-        }
-      }).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/resetPassword", {
-        username: user.username,
-        password: res.value
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("重置密码成功");
-          }
-        },
-        error => {
-          this.$message.error("重置密码失败 " + (error && error.toString()));
-        }
-      );
-    },
-    showAddUserDialog() {
-      this.addUserForm = {
-        username: "",
-        password: ""
-      };
-      this.showAddUser = true;
-    },
-    addUser() {
-      if (!this.addUserForm.username) {
-        this.$message.success("用户名不能为空");
-      }
-      if (!this.addUserForm.password) {
-        this.$message.success("密码不能为空");
-      }
-      Axios.post(this.api + "/addUser", this.addUserForm).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("新增成功");
-            this.showAddUser = false;
-            this.userList = res.data.data.map(v => ({
-              ...v,
-              userNS: v.username
-            }));
-          }
-        },
-        error => {
-          this.$message.error("新增失败 " + (error && error.toString()));
         }
       );
     },
@@ -3031,7 +2587,7 @@ export default {
     },
     showManageBookGroup() {
       this.loadBookGroup(true);
-      this.showBookGroupManageDialog = true;
+      eventBus.$emit("showBookGroupDialog", false);
     },
     getShowShelfBooks(bookGroup) {
       // 处理特殊分组
@@ -3052,191 +2608,6 @@ export default {
       return this.shelfBooks.filter(v =>
         bookGroup === 0 ? true : v.group & bookGroup
       );
-    },
-    toggleBookGroupShow(bookGroup, show) {
-      Axios.post(this.api + "/saveBookGroup", {
-        ...bookGroup,
-        show
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("修改成功");
-            this.loadBookGroup(true);
-          }
-        },
-        error => {
-          this.$message.error("修改失败 " + (error && error.toString()));
-        }
-      );
-    },
-    async deleteBookGroup(row) {
-      const res = await this.$confirm(`确认要删除该分组吗?`, "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning"
-      }).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/deleteBookGroup", {
-        groupId: row.groupId
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("删除分组成功");
-            this.loadBookGroup(true);
-          }
-        },
-        error => {
-          this.$message.error("删除分组失败 " + (error && error.toString()));
-        }
-      );
-    },
-    async saveBookGroup(bookGroup) {
-      const res = await this.$prompt(
-        "",
-        `${bookGroup ? "编辑分组" : "添加分组"}`,
-        {
-          inputValue: bookGroup ? bookGroup.groupName : "",
-          confirmButtonText: "确定",
-          cancelButtonText: "取消",
-          inputValidator(v) {
-            if (!v) {
-              return "分组名不能为空";
-            }
-            return true;
-          }
-        }
-      ).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/saveBookGroup", {
-        ...bookGroup,
-        groupName: res.value
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success(bookGroup ? "修改成功" : "添加成功");
-            this.loadBookGroup(true);
-          }
-        },
-        error => {
-          this.$message.error(
-            (bookGroup ? "修改失败" : "添加失败") + (error && error.toString())
-          );
-        }
-      );
-    },
-    displayBookGroupName(bookGroup) {
-      return (
-        bookGroup.groupName +
-        (bookGroup.groupId < 0
-          ? "(" +
-            this.$store.getters.builtInBookGroupMap[bookGroup.groupId] +
-            ")"
-          : "")
-      );
-    },
-    displayOriginName(value) {
-      if (value === "loc_book") return "本地";
-      return (
-        (this.bookSourceList.find(v => v.bookSourceUrl === value) || {})
-          .bookSourceName || "未知书源"
-      );
-    },
-    displayGroupName(value) {
-      const groupName = [];
-      let unGroupName = "";
-      this.$store.state.bookGroupList.forEach(v => {
-        if (v.groupId > 0 && (v.groupId & value) !== 0) {
-          groupName.push(v.groupName);
-        } else if (v.groupId === -4) {
-          unGroupName = v.groupName;
-        }
-      });
-      return groupName.join(",") || unGroupName || "未分组";
-    },
-    renderBookKind(value) {
-      if (!value) {
-        return "";
-      }
-      const kindList = value.split(",");
-      return kindList
-        .filter(v => v)
-        .map(v => {
-          return `<span>${v}</span>`;
-        })
-        .join("");
-    },
-    getBookGroupListForBook(bookGroup) {
-      const groups = [];
-      this.$store.state.bookGroupList.forEach(v => {
-        if (v.groupId > 0 && (v.groupId & bookGroup) !== 0) {
-          groups.push(v);
-        }
-      });
-      return groups;
-    },
-    showSetBookGroup() {
-      this.isShowBookGroupSettingDialog = true;
-      this.showBookGroupManageDialog = true;
-      this.$nextTick(() => {
-        this.$refs.bookGroupTableRef.clearSelection();
-        this.getBookGroupListForBook(this.showBookInfo.group).forEach(v => {
-          this.$refs.bookGroupTableRef.toggleRowSelection(v, true);
-        });
-      });
-    },
-    setBookGroup() {
-      if (!this.bookGroupSelection.length) {
-        this.$message.error("请选择书籍分组");
-        return;
-      }
-      Axios.post(this.api + "/saveBookGroupId", {
-        bookUrl: this.showBookInfo.bookUrl,
-        groupId: this.bookGroupSelection.reduce((c, v) => {
-          return c | v.groupId;
-        }, 0)
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("设置成功");
-            this.showBookGroupManageDialog = false;
-            this.isShowBookGroupSettingDialog = false;
-            this.showBookInfo = res.data.data;
-            this.$store.commit("updateShelfBook", res.data.data);
-          }
-        },
-        error => {
-          this.$message.error("设置失败" + (error && error.toString()));
-        }
-      );
-    },
-    refreshLocalBook(book) {
-      Axios.post(this.api + "/refreshLocalBook", {
-        bookUrl: book.bookUrl
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("更新成功");
-            this.showBookInfo = res.data.data;
-            this.$store.commit("updateShelfBook", res.data.data);
-          }
-        },
-        error => {
-          this.$message.error("更新失败" + (error && error.toString()));
-        }
-      );
-    },
-    toggleBookCanUpdate(book) {
-      this.saveBook(book, false, true).then(res => {
-        this.showBookInfo = res;
-      });
     },
     loadRssSources(refresh) {
       return this.$root.$children[0].loadRssSources(refresh);
@@ -3634,38 +3005,6 @@ export default {
     getBookCoverUrl(book) {
       return book.customCoverUrl || book.coverUrl;
     },
-    triggerBookCoverRefClick() {
-      this.$refs.bookCoverRef.dispatchEvent(new MouseEvent("click"));
-    },
-    onCoverFileChange(event) {
-      if (!event.target || !event.target.files || !event.target.files.length) {
-        return;
-      }
-      const rawFile = event.target.files && event.target.files[0];
-      // console.log("rawFile", rawFile);
-      let param = new FormData();
-      param.append("file", rawFile);
-      param.append("type", "covers");
-      Axios.post(this.api + "/uploadFile", param, {
-        headers: { "Content-Type": "multipart/form-data" }
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            if (!res.data.data.length) {
-              this.$message.error("上传文件失败");
-              return;
-            }
-            this.showBookInfo.customCoverUrl = res.data.data[0];
-            this.saveBook(this.showBookInfo).then(res => {
-              this.showBookInfo = res;
-            });
-          }
-        },
-        error => {
-          this.$message.error("上传文件失败 " + (error && error.toString()));
-        }
-      );
-    },
     logout() {
       Axios.post(this.api + "/logout").then(
         res => {
@@ -3680,7 +3019,7 @@ export default {
       );
     },
     getChapterListByRule() {
-      Axios.post("/getChapterListByRule", this.importBookInfo).then(
+      return Axios.post("/getChapterListByRule", this.importBookInfo).then(
         res => {
           if (res.data.isSuccess && res.data.data.book) {
             this.importBookInfo = res.data.data.book;
@@ -3691,6 +3030,15 @@ export default {
           this.$message.error("注销失败 " + (error && error.toString()));
         }
       );
+    },
+    showUserManageDialog() {
+      eventBus.$emit("showUserManageDialog");
+    },
+    showMPCode() {
+      eventBus.$emit("showMPCodeDialog");
+    },
+    joinTGChannel() {
+      window.open("https://t.me/facker_channel", "_target");
     }
   },
   computed: {
@@ -3873,24 +3221,10 @@ export default {
         });
       }
     },
-    showBookGroupList() {
-      if (!this.isShowBookGroupSettingDialog) {
-        return this.$store.state.bookGroupList;
-      }
-      return this.$store.state.bookGroupList.filter(v => v.groupId > 0);
-    },
     bookGroupDisplayList() {
       return this.$store.state.bookGroupList
         .filter(v => this.getShowShelfBooks(v.groupId).length && v.show)
         .sort((a, b) => a.order - b.order);
-    },
-    bookCoverBgStyle() {
-      return {
-        backgroundImage: `url(${this.getCover(
-          this.getBookCoverUrl(this.showBookInfo),
-          true
-        )})`
-      };
     },
     rssSourceList() {
       return []
@@ -4317,56 +3651,9 @@ export default {
   .book .info .intro, .book .info .dur-chapter, .book .info .last-chapter {
     color: #969ba3 !important;
   }
-  >>>.el-table {
-    background-color: transparent;
-  }
 
-  >>.el-table__expanded-cell {
-    background-color: transparent;
-  }
-  >>>.el-table th, >>>.el-table tr{
-    background-color: #222 !important;
-  }
-  >>>.el-table td {
-    border-bottom: 1px solid #555;
-  }
-  >>>.el-table th.is-leaf {
-    border-bottom: 1px solid #555;
-  }
-  >>>.el-table--border::after {
-    background-color: transparent;
-  }
-  >>>.el-table--group::after {
-    background-color: transparent;
-  }
-  >>>.el-table::before {
-    background-color: transparent;
-  }
-  >>>.el-table {
-    background-color: transparent;
-  }
-  >>>.el-table--enable-row-hover .el-table__body tr:hover>td {
-    background-color: #333;
-  }
-  >>>.el-table__fixed-right::before, >>>.el-table__fixed::before {
-    background-color: #333;
-  }
-  >>>.el-table__body tr.hover-row.current-row>td,
-  >>>.el-table__body tr.hover-row.el-table__row--striped.current-row>td,
-  >>>.el-table__body tr.hover-row.el-table__row--striped>td,
-  >>>.el-table__body tr.hover-row>td {
-    background-color: #444;
-  }
   >>>.check-tip {
     color: #bbb;
-  }
-
-  >>> .el-table__body-wrapper::-webkit-scrollbar {
-    background-color: #333 !important;
-  }
-
-  >>> .el-dialog__wrapper::-webkit-scrollbar {
-    background-color: #333 !important;
   }
 }
 
@@ -4505,75 +3792,6 @@ export default {
   overflow-x: auto;
 }
 
-.float-left {
-  float: left;
-}
-
-.float-right {
-  float: right;
-}
-
-.book-info-container {
-  .book-cover {
-    width: 100%;
-    position: relative;
-    height: 150px;
-
-    .book-cover-bg {
-      position: absolute;
-      height: 100%;
-      width: 100%;
-      filter: blur(50px);
-    }
-
-    .book-cover-bg-image {
-      position: absolute;
-      height: 100%;
-      width: 100%;
-
-      img {
-        margin: 0 auto;
-        display: block;
-        height: 150px;
-      }
-    }
-  }
-  .book-name {
-    display: block;
-    font-size: 16px;
-    font-weight: 500;
-    text-align: center;
-    padding: 10px 0;
-  }
-
-  .book-kind {
-    display: block;
-    color: red;
-    text-align: center;
-    padding: 5px 0;
-  }
-
-  .book-props {
-    padding: 5px 0;
-
-    .book-prop {
-      padding: 3px 0;
-
-      .book-prop-btn {
-        float: right;
-        height: 19px;
-        padding: 0;
-      }
-    }
-  }
-
-  .book-intro {
-    line-height: 1.6;
-    max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px - 150px - 75px - 120px);
-    overflow-y: auto;
-  }
-}
-
 .rss-source-list-container {
   max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px);
   overflow-y: auto;
@@ -4614,15 +3832,6 @@ export default {
       margin-top: 5px;
       text-align: center;
     }
-  }
-}
-
-.custom-dialog-title {
-  .span-btn {
-    display: inline-block;
-    cursor: pointer;
-    font-size: 15px;
-    margin-right: 10px;
   }
 }
 
@@ -4703,12 +3912,6 @@ export default {
     }
   }
 
-  .book-info-container {
-    .book-name {
-      color: #eee;
-    }
-  }
-
   .rss-source-list-container {
     .rss-source {
       .rss-title {
@@ -4730,14 +3933,6 @@ export default {
   .rss-article-content {
     color: #aaa;
   }
-}
-
-.check-tip {
-  display: inline-block;
-  float: left;
-  line-height: 40px;
-  margin-left: 10px;
-  font-size: 14px;
 }
 
 .source-container::-webkit-scrollbar {
@@ -4788,11 +3983,6 @@ export default {
           }
         }
       }
-    }
-  }
-  .book-info-container {
-    .book-intro {
-      max-height: calc(var(--vh, 1vh) * 100 - 54px - 60px - 150px - 75px - 120px);
     }
   }
   .rss-source-list-container {

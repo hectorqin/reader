@@ -4,16 +4,20 @@ export const setCache = (key, value) => {
 };
 
 export const getCache = (key, defaultVal = null) => {
+  let val = defaultVal;
   try {
-    let val = window.localStorage && window.localStorage.getItem(key);
+    val = window.localStorage && window.localStorage.getItem(key);
     if (val === null) {
       return defaultVal;
     }
     if (val) {
-      val = JSON.parse(val);
+      const parseVal = JSON.parse(val);
+      if (parseVal !== null) {
+        return parseVal;
+      }
     }
     return val;
   } catch (error) {
-    return defaultVal;
+    return val;
   }
 };

@@ -2,7 +2,7 @@ import Vue from "vue";
 import Vuex from "vuex";
 import settings from "./config";
 import { setCache, getCache } from "../plugins/cache";
-import { config } from "vue/types/umd";
+import { Message } from "element-ui";
 
 const defaultNS = [{ username: "默认", userNS: "default" }];
 const builtInBookGroup = [
@@ -63,7 +63,8 @@ export default new Vuex.Store({
     previewImgList: [],
     searchConfig: { ...settings.searchConfig },
     txtTocRules: [],
-    customConfigList: [].concat(settings.customConfigList)
+    customConfigList: [].concat(settings.customConfigList),
+    showBookInfo: {}
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -160,13 +161,15 @@ export default new Vuex.Store({
         state.shelfBooks = [].concat(state.shelfBooks);
       }, 100);
       // eslint-disable-next-line no-unused-vars
-      const { catalog, ...info } = readingBook;
+      const { catalog, latestChapterTitle, intro, ...info } = readingBook;
       setCache(
         getCurrentUserName(state) + "@readingRecent",
         JSON.stringify(info)
       );
     },
     setConfig(state, config) {
+      delete config.name;
+      delete config.configDefaultType;
       if (
         config.theme !== settings.defaultNightTheme &&
         config.theme !== "custom"
@@ -184,7 +187,11 @@ export default new Vuex.Store({
         if (index >= 0) {
           const oldCustomConfig = { ...state.customConfigList[index] };
           Object.keys(settings.customConfigList[0]).forEach(field => {
-            if (typeof config[field] !== "undefined") {
+            if (
+              typeof config[field] !== "undefined" &&
+              field !== "name" &&
+              field !== "configDefaultType"
+            ) {
               oldCustomConfig[field] = config[field];
             }
           });
@@ -282,23 +289,24 @@ export default new Vuex.Store({
     },
     setNightTheme(state, isNight) {
       let config = { ...state.config };
+      let themeConfig;
       if (isNight) {
         // 设置为默认黑夜方案
-        const ngightConfig = state.customConfigList.find(
+        themeConfig = state.customConfigList.find(
           v => v.configDefaultType === "黑夜默认"
         );
-        if (ngightConfig) {
-          config = { ...config, ...ngightConfig };
-        }
       } else {
         // 设置为默认白天方案
-        const dayConfig = state.customConfigList.find(
+        themeConfig = state.customConfigList.find(
           v => v.configDefaultType === "白天默认"
         );
-        if (dayConfig) {
-          config = { ...config, ...dayConfig };
-        }
       }
+      if (!themeConfig) {
+        Message.error("未配置" + (isNight ? "黑夜默认" : "白天默认") + "方案");
+        return;
+      }
+      config = { ...config, ...themeConfig };
+      config.customConfig = themeConfig.name;
       // let config = { ...state.config };
       // if (config.theme !== "custom") {
       //   config.theme = parseInt(config.theme);
@@ -408,6 +416,9 @@ export default new Vuex.Store({
     },
     setCustomConfigList(state, customConfigList) {
       state.customConfigList = [].concat(customConfigList);
+    },
+    setShowBookInfo(state, book) {
+      state.showBookInfo = book;
     }
   },
   getters: {

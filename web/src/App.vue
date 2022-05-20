@@ -66,6 +66,18 @@
       :rule="replaceRule"
       :isAdd="isAddReplaceRule"
     />
+
+    <ReplaceRule v-model="showReplaceRuleDialog" />
+
+    <MPCode v-model="showMPCodeDialog" />
+
+    <BookInfo v-model="showBookInfoDialog" />
+
+    <UserManage v-model="showUserManageDialog" />
+
+    <AddUser v-model="showAddUserDialog" />
+
+    <BookGroup v-model="showBookGroupDialog" :isSet="isSetBookGroup" />
   </div>
 </template>
 
@@ -73,6 +85,13 @@
 import Axios from "./plugins/axios";
 import eventBus from "./plugins/eventBus";
 import ImageViewer from "element-ui/packages/image/src/image-viewer.vue";
+import ReplaceRule from "./components/ReplaceRule.vue";
+import ReplaceRuleForm from "./components/ReplaceRuleForm.vue";
+import MPCode from "./components/MPCode.vue";
+import BookInfo from "./components/BookInfo.vue";
+import UserManage from "./components/UserManage.vue";
+import AddUser from "./components/AddUser.vue";
+import BookGroup from "./components/BookGroup.vue";
 import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
@@ -136,7 +155,14 @@ String.prototype.getBytesLength = function() {
 export default {
   name: "app",
   components: {
-    ImageViewer
+    ImageViewer,
+    ReplaceRule,
+    ReplaceRuleForm,
+    MPCode,
+    BookInfo,
+    UserManage,
+    AddUser,
+    BookGroup
   },
   data() {
     return {
@@ -150,9 +176,21 @@ export default {
       editorTitle: "编辑器",
       editorContent: "",
 
+      showReplaceRuleDialog: false,
+
       showReplaceRuleForm: false,
       replaceRule: {},
-      isAddReplaceRule: true
+      isAddReplaceRule: true,
+
+      showMPCodeDialog: false,
+
+      showBookInfoDialog: false,
+
+      showUserManageDialog: false,
+      showAddUserDialog: false,
+
+      showBookGroupDialog: false,
+      isSetBookGroup: false
     };
   },
   beforeCreate() {
@@ -222,6 +260,7 @@ export default {
     this.autoSetTheme(this.autoTheme);
 
     this.getUserInfo().then(() => {
+      this.$store.dispatch("syncFromLocalStorage");
       this.init();
     });
     this.loadTxtTocRules();
@@ -233,6 +272,26 @@ export default {
     this.eventBus = eventBus;
     eventBus.$on("showEditor", this.showEditorListener);
     eventBus.$on("showReplaceRuleForm", this.showReplaceRuleFormListener);
+    eventBus.$on("showReplaceRuleDialog", () => {
+      this.showReplaceRuleDialog = true;
+    });
+    eventBus.$on("showMPCodeDialog", () => {
+      this.showMPCodeDialog = true;
+    });
+    eventBus.$on("showBookInfoDialog", book => {
+      this.showBookInfo = book;
+      this.showBookInfoDialog = true;
+    });
+    eventBus.$on("showUserManageDialog", () => {
+      this.showUserManageDialog = true;
+    });
+    eventBus.$on("showAddUserDialog", () => {
+      this.showAddUserDialog = true;
+    });
+    eventBus.$on("showBookGroupDialog", isSet => {
+      this.showBookGroupDialog = true;
+      this.isSetBookGroup = !!isSet;
+    });
   },
   mounted() {
     document.documentElement.style.setProperty(
@@ -264,6 +323,14 @@ export default {
     },
     connected() {
       return this.$store.state.connected;
+    },
+    showBookInfo: {
+      get() {
+        return this.$store.state.showBookInfo;
+      },
+      set(val) {
+        this.$store.commit("setShowBookInfo", val);
+      }
     }
   },
   watch: {
@@ -823,6 +890,57 @@ export default {
       background: inherit;
     }
   }
+
+  .el-table {
+    background-color: transparent;
+  }
+  .el-table__expanded-cell {
+    background-color: transparent;
+  }
+  .el-table th, .el-table tr{
+    background-color: #222 !important;
+  }
+  .el-table td {
+    border-bottom: 1px solid #555;
+  }
+  .el-table th.is-leaf {
+    border-bottom: 1px solid #555;
+  }
+  .el-table--border::after {
+    background-color: transparent;
+  }
+  .el-table--group::after {
+    background-color: transparent;
+  }
+  .el-table::before {
+    background-color: transparent;
+  }
+  .el-table {
+    background-color: transparent;
+  }
+  .el-table--enable-row-hover .el-table__body tr:hover>td {
+    background-color: #333;
+  }
+  .el-table__fixed-right::before, .el-table__fixed::before {
+    background-color: #333;
+  }
+  .el-table__body tr.hover-row.current-row>td,
+  .el-table__body tr.hover-row.el-table__row--striped.current-row>td,
+  .el-table__body tr.hover-row.el-table__row--striped>td,
+  .el-table__body tr.hover-row>td {
+    background-color: #444;
+  }
+  .el-table__body-wrapper::-webkit-scrollbar {
+    background-color: #333 !important;
+  }
+
+  .el-dialog__wrapper::-webkit-scrollbar {
+    background-color: #333 !important;
+  }
+
+  .check-tip {
+    color: #bbb;
+  }
 }
 .el-popover:focus, .el-popover:focus:active, .el-popover__reference:focus:hover, .el-popover__reference:focus:not(.focusing) {
   outline: none;
@@ -845,5 +963,26 @@ export default {
 .kindle-page {
   -webkit-tap-highlight-color: rbga(255, 255, 255, 0);
   -webkit-user-select: none;
+}
+.check-tip {
+  display: inline-block;
+  float: left;
+  line-height: 40px;
+  margin-left: 10px;
+  font-size: 14px;
+}
+.float-left {
+  float: left;
+}
+.float-right {
+  float: right;
+}
+.custom-dialog-title {
+  .span-btn {
+    display: inline-block;
+    cursor: pointer;
+    font-size: 15px;
+    margin-right: 10px;
+  }
 }
 </style>
