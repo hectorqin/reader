@@ -12,7 +12,7 @@ COPY --from=build-web /app/web/dist /app/src/main/resources/web
 RUN \
     rm src/main/java/com/htmake/reader/ReaderUIApplication.kt; \
     gradle -b cli.gradle assemble --info; \
-    mv ./build/libs/*.jar ./reader.jar
+    mv ./build/libs/*.jar ./build/libs/reader.jar
 
 FROM openjdk:8-jdk-alpine
 # Install base packages
