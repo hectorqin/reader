@@ -416,6 +416,7 @@ export default new Vuex.Store({
     },
     setCustomConfigList(state, customConfigList) {
       state.customConfigList = [].concat(customConfigList);
+      setCache("customConfigList", JSON.stringify(customConfigList));
     },
     setShowBookInfo(state, book) {
       state.showBookInfo = book;
@@ -613,11 +614,20 @@ export default new Vuex.Store({
       } catch (error) {
         //
       }
+      // try {
+      //   // 获取过滤规则
+      //   const filterRules = getCache("filterRules");
+      //   if (filterRules && Array.isArray(filterRules)) {
+      //     commit("setFilterRules", filterRules);
+      //   }
+      // } catch (error) {
+      //   //
+      // }
       try {
-        // 获取过滤规则
-        const filterRules = getCache("filterRules");
-        if (filterRules && Array.isArray(filterRules)) {
-          commit("setFilterRules", filterRules);
+        // 获取自定义配置方案
+        const customConfigList = getCache("customConfigList");
+        if (customConfigList && Array.isArray(customConfigList)) {
+          commit("setCustomConfigList", customConfigList);
         }
       } catch (error) {
         //

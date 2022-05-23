@@ -2179,7 +2179,7 @@ export default {
         return;
       }
       const res = await this.$confirm(
-        "确认要备份当前终端的阅读配置、过滤规则吗?",
+        "确认要备份当前终端的阅读配置、书架设置、搜索设置、自定义配置方案吗?",
         "提示"
       ).catch(() => {
         return false;
@@ -2188,12 +2188,14 @@ export default {
         return;
       }
       const userConfig = {};
-      ["config", "shelfConfig", "searchConfig"].forEach(key => {
-        const val = getCache(key);
-        if (val) {
-          userConfig[key] = val;
+      ["config", "shelfConfig", "searchConfig", "customConfigList"].forEach(
+        key => {
+          const val = getCache(key);
+          if (val) {
+            userConfig[key] = val;
+          }
         }
-      });
+      );
       Axios.post(this.api + "/saveUserConfig", userConfig).then(
         res => {
           if (res.data.isSuccess) {
@@ -2211,7 +2213,7 @@ export default {
         return;
       }
       const res = await this.$confirm(
-        "确认要从备份文件中恢复当前终端的阅读配置、过滤规则吗?",
+        "确认要从备份文件中恢复当前终端的阅读配置、书架设置、搜索设置、自定义配置方案吗?",
         "提示"
       ).catch(() => {
         return false;
