@@ -540,7 +540,7 @@ export default {
     showChapterList() {
       this.$nextTick(() => {
         if (this.currentParagraph) {
-          console.log(this.currentParagraph);
+          // console.log(this.currentParagraph);
           this.showParagraph(this.currentParagraph, true);
         }
       });
@@ -2234,7 +2234,7 @@ export default {
                 this.showChapterList[this.showChapterList.length - 1].index + 1;
             }
             this.showNextChapterSize = nextIndex - this.chapterIndex;
-            console.log("到底部了，加载下一章");
+            // console.log("到底部了，加载下一章");
             this.loadShowChapter(nextIndex)
               .then(() => {
                 this.preCaching = false;

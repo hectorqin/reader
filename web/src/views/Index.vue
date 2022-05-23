@@ -582,6 +582,7 @@
               <!-- <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" /> -->
               <el-image
                 class="cover"
+                ref="bookCoverList"
                 :src="getCover(getBookCoverUrl(book), true)"
                 fit="cover"
                 lazy
@@ -1194,6 +1195,7 @@ import { setCache, getCache } from "../plugins/cache";
 import eventBus from "../plugins/eventBus";
 import { formatSize, LimitResquest } from "../plugins/helper";
 const buildURL = require("axios/lib/helpers/buildURL");
+import { isInContainer } from "element-ui/src/utils/dom";
 
 export default {
   components: {
@@ -1354,6 +1356,12 @@ export default {
       if (val) {
         this.importBookInfo.tocUrl = val;
       }
+    },
+    showBookGroup() {
+      this.$nextTick(() => {
+        // 手动处理 el-image 图片加载
+        setTimeout(this.ensureLoadBookCover);
+      });
     }
   },
   mounted() {
@@ -1881,7 +1889,18 @@ export default {
                 }
               });
               if (sourceList.length) {
-                this.importSourceList = sourceList;
+                this.importSourceList = sourceList.map(v => {
+                  if (v.headerMap) {
+                    if (!v.header) {
+                      v.header =
+                        typeof v.headerMap === "string"
+                          ? v.headerMap
+                          : JSON.stringify(v.headerMap);
+                    }
+                    delete v.headerMap;
+                  }
+                  return v;
+                });
                 this.showImportSourceDialog = true;
                 this.isImportRssSource = !!isRssSource;
               } else {
@@ -3039,6 +3058,18 @@ export default {
     },
     joinTGChannel() {
       window.open("https://t.me/facker_channel", "_target");
+    },
+    ensureLoadBookCover() {
+      // 手动触发滚动事件，显示书籍封面图片
+      this.$refs.bookList.dispatchEvent(new MouseEvent("scroll"));
+
+      // 上面一步应该能搞定，下面再确认一下
+      this.$refs.bookCoverList.forEach(v => {
+        if (!v.show && isInContainer(v.$el, this.$refs.bookList)) {
+          // console.log("not show ", v);
+          v.show = true;
+        }
+      });
     }
   },
   computed: {

@@ -431,7 +431,7 @@ export default {
           this.$store.commit("setToken", res.data.data.accessToken);
         }
         this.getUserInfo();
-        this.init();
+        this.init(true);
       }
     },
     async init(refresh) {
