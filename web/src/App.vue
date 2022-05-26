@@ -430,8 +430,10 @@ export default {
         if (this.remember && res.data.data && res.data.data.accessToken) {
           this.$store.commit("setToken", res.data.data.accessToken);
         }
-        this.getUserInfo();
-        this.init(true);
+        this.getUserInfo().then(() => {
+          this.$store.dispatch("syncFromLocalStorage");
+          this.init(true);
+        });
       }
     },
     async init(refresh) {

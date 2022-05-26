@@ -375,7 +375,7 @@
               :effect="isNight ? 'dark' : 'light'"
               slot="reference"
               class="setting-btn"
-              @click="showWebdavFile('/')"
+              @click="showWebDAVManageDialog = true"
             >
               文件管理
             </el-tag>
@@ -879,92 +879,6 @@
     </el-dialog>
 
     <el-dialog
-      title="WebDAV文件管理"
-      :visible.sync="showWebdavManageDialog"
-      :width="dialogWidth"
-      :top="dialogTop"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-      v-if="$store.getters.isNormalPage"
-    >
-      <div class="source-container table-container">
-        <el-table
-          :data="webdavFileList"
-          :height="dialogContentHeight"
-          @selection-change="webdavFileSelection = $event"
-        >
-          <el-table-column
-            type="selection"
-            width="25"
-            fixed
-            :selectable="row => !row.toParent"
-          >
-          </el-table-column>
-          <el-table-column
-            property="name"
-            min-width="150px"
-            label="文件名"
-            fixed
-          >
-            <template slot-scope="scope">
-              <span v-if="!scope.row.isDirectory">{{ scope.row.name }}</span>
-              <el-link
-                type="primary"
-                v-if="scope.row.isDirectory"
-                @click="showWebdavFile(scope.row.path)"
-                >{{ scope.row.name }}</el-link
-              >
-            </template>
-          </el-table-column>
-          <el-table-column
-            property="size"
-            label="大小"
-            :formatter="formatTableField"
-            min-width="100px"
-          ></el-table-column>
-          <el-table-column
-            property="lastModified"
-            label="修改时间"
-            :formatter="formatTableField"
-            width="120px"
-          ></el-table-column>
-          <el-table-column label="操作" width="100px">
-            <template slot-scope="scope">
-              <el-button
-                type="text"
-                @click="deleteWebdavFile(scope.row)"
-                style="color: #f56c6c"
-                v-if="!scope.row.toParent"
-                >删除</el-button
-              >
-              <el-button
-                type="text"
-                @click="restoreFromWebdav(scope.row)"
-                v-if="!scope.row.isDirectory && scope.row.name.endsWith('.zip')"
-                >还原</el-button
-              >
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-      <div slot="footer" class="dialog-footer">
-        <el-button
-          type="primary"
-          size="medium"
-          class="float-left"
-          @click="deleteWebdavFileList"
-          >批量删除</el-button
-        >
-        <span class="check-tip"
-          >已选择 {{ webdavFileSelection.length }} 个</span
-        >
-        <el-button size="medium" @click="showWebdavManageDialog = false"
-          >取消</el-button
-        >
-      </div>
-    </el-dialog>
-
-    <el-dialog
       :title="'导入本地书籍' + importMultiBookTip"
       :visible.sync="showImportBookDialog"
       :width="dialogSmallWidth"
@@ -1005,7 +919,7 @@
                 placeholder="内置规则"
               >
                 <el-option
-                  v-for="(rule, index) in $store.state.txtTocRules"
+                  v-for="(rule, index) in tocRuleList"
                   :key="'txtTocRule-' + index"
                   :label="rule.name"
                   :value="rule.rule"
@@ -1177,11 +1091,10 @@
 
     <LocalStore
       v-model="showLocalStoreManageDialog"
-      :dialogWidth="dialogWidth"
-      :dialogTop="dialogTop"
-      :dialogContentHeight="dialogContentHeight"
       @importFromLocalStorePreview="importMultiBooks"
     ></LocalStore>
+
+    <WebDAV v-model="showWebDAVManageDialog"></WebDAV>
   </div>
 </template>
 
@@ -1189,6 +1102,7 @@
 import { mapGetters } from "vuex";
 import Explore from "../components/Explore.vue";
 import LocalStore from "../components/LocalStore.vue";
+import WebDAV from "../components/WebDAV.vue";
 import Axios from "../plugins/axios";
 import { errorTypeList } from "../plugins/config";
 import { setCache, getCache } from "../plugins/cache";
@@ -1200,7 +1114,8 @@ import { isInContainer } from "element-ui/src/utils/dom";
 export default {
   components: {
     Explore,
-    LocalStore
+    LocalStore,
+    WebDAV
   },
   data() {
     return {
@@ -1244,12 +1159,6 @@ export default {
       connecting: false,
 
       lastScrollTop: 0,
-
-      webdavCurrentPath: "/",
-      webdavFileList: [],
-
-      showWebdavManageDialog: false,
-      webdavFileSelection: [],
 
       localStorageAvaliable:
         window.localStorage &&
@@ -1295,6 +1204,9 @@ export default {
       },
 
       showLocalStoreManageDialog: false,
+
+      showWebDAVManageDialog: false,
+
       importUsedTxtRule: "",
 
       showAddUser: false,
@@ -2280,125 +2192,6 @@ export default {
       this.$store.commit("setIsManagerMode", false);
       this.init(true);
     },
-    showWebdavFile(path) {
-      this.webdavCurrentPath = path || "/";
-      Axios.get(this.api + "/getWebdavFileList", {
-        params: {
-          path: this.webdavCurrentPath
-        }
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            res.data.data = res.data.data || [];
-            if (this.webdavCurrentPath !== "/") {
-              const paths = this.webdavCurrentPath.split("/").filter(v => v);
-              paths.pop();
-              res.data.data.unshift({
-                name: "..",
-                isDirectory: true,
-                toParent: true,
-                path: "/" + paths.join("/")
-              });
-            }
-            this.webdavFileList = res.data.data;
-            this.showWebdavManageDialog = true;
-          }
-        },
-        error => {
-          this.$message.error(
-            "加载WebDAV文件列表失败 " + (error && error.toString())
-          );
-        }
-      );
-    },
-    async deleteWebdavFileList() {
-      if (!this.webdavFileSelection.length) {
-        this.$message.error("请选择需要删除的文件");
-        return;
-      }
-      const res = await this.$confirm("确认要删除所选择的文件吗?", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning"
-      }).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/deleteWebdavFileList", {
-        path: this.webdavFileSelection.map(v => v.path)
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.webdavFileSelection = [];
-            this.$message.success("删除文件成功");
-            this.showWebdavFile(this.webdavCurrentPath);
-          }
-        },
-        error => {
-          this.$message.error("删除文件失败 " + (error && error.toString()));
-        }
-      );
-    },
-    async deleteWebdavFile(row) {
-      const res = await this.$confirm(
-        `确认要删除该${row.isDirectory ? "文件夹" : "文件"}吗?`,
-        "提示",
-        {
-          confirmButtonText: "确定",
-          cancelButtonText: "取消",
-          type: "warning"
-        }
-      ).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/deleteWebdavFile", {
-        path: row.path
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("删除文件成功");
-            this.showWebdavFile(this.webdavCurrentPath);
-          }
-        },
-        error => {
-          this.$message.error("删除文件失败 " + (error && error.toString()));
-        }
-      );
-    },
-    async restoreFromWebdav(row) {
-      const res = await this.$confirm(
-        `确认要从该压缩文件恢复书源、书架、分组和RSS订阅数据吗?`,
-        "提示",
-        {
-          confirmButtonText: "确定",
-          cancelButtonText: "取消",
-          type: "warning"
-        }
-      ).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/restoreFromWebdav", {
-        path: row.path
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("恢复成功");
-            this.init(true);
-          }
-        },
-        error => {
-          this.$message.error("恢复失败 " + (error && error.toString()));
-        }
-      );
-    },
     async backupToWebdav() {
       const res = await this.$confirm(
         `确认要用当前书源和书架信息覆盖备份文件中的书源、书架、分组和RSS订阅数据吗?`,
@@ -3282,12 +3075,32 @@ export default {
         return (
           this.importBookInfo &&
           this.importBookInfo.originName &&
-          this.importBookInfo.originName.toLowerCase().endsWith(".txt")
+          (this.importBookInfo.originName.toLowerCase().endsWith(".txt") ||
+            this.importBookInfo.originName.toLowerCase().endsWith(".epub"))
         );
       } catch (e) {
         // console.log(e);
       }
       return false;
+    },
+    tocRuleList() {
+      if (!this.importBookInfo || !this.importBookInfo.originName) {
+        return [];
+      }
+      if (this.importBookInfo.originName.toLowerCase().endsWith(".txt")) {
+        // txt
+        return this.$store.state.txtTocRules;
+      } else {
+        // epub
+        return [
+          { name: "根据 Spin 获取章节，使用 Toc 补充章节名", rule: "spin+toc" },
+          { name: "根据 Spin 获取章节，强制使用 Toc 章节名", rule: "spin<toc" },
+          { name: "根据 Spin 获取章节", rule: "spin" },
+          { name: "根据 Toc 获取章节，使用 Spin 补充章节名", rule: "toc+spin" },
+          { name: "根据 Toc 获取章节，强制使用 Spin 章节名", rule: "toc<spin" },
+          { name: "根据 Toc 获取章节", rule: "toc" }
+        ];
+      }
     }
   }
 };

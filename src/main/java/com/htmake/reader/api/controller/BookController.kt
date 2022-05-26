@@ -265,8 +265,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (book.origin.isNullOrEmpty()) {
             return returnData.setErrorMsg("未找到书源信息")
         }
-        if (!book.isLocalTxt()) {
-            return returnData.setErrorMsg("非本地txt书籍")
+        if (!book.isLocalTxt() && !book.isLocalEpub()) {
+            return returnData.setErrorMsg("非本地txt/epub书籍")
         }
         book.setRootDir(getWorkDir())
         val chapters = LocalBook.getChapterList(book)

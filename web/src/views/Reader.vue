@@ -115,7 +115,7 @@
         </div>
         <div
           class="tool-icon"
-          @click="toTop"
+          @click="toTop(1000)"
           v-if="!$store.state.miniInterface"
         >
           <div class="iconfont">
@@ -144,10 +144,18 @@
         >
           <i class="el-icon-info"></i>
         </div>
-        <div class="float-btn" :style="popupAbsoluteBtnStyle" @click="toTop">
+        <div
+          class="float-btn"
+          :style="popupAbsoluteBtnStyle"
+          @click="toTop(1000)"
+        >
           <i class="el-icon-top"></i>
         </div>
-        <div class="float-btn" :style="popupAbsoluteBtnStyle" @click="toBottom">
+        <div
+          class="float-btn"
+          :style="popupAbsoluteBtnStyle"
+          @click="toBottom(1000)"
+        >
           <i class="el-icon-bottom"></i>
         </div>
       </div>
@@ -537,13 +545,11 @@ export default {
         });
       });
     },
-    showChapterList() {
-      this.$nextTick(() => {
-        if (this.currentParagraph) {
-          // console.log(this.currentParagraph);
-          this.showParagraph(this.currentParagraph, true);
-        }
-      });
+    isScrollRead(val) {
+      if (val) {
+        this.scrollStartChapterIndex = this.chapterIndex;
+        this.computeShowChapterList();
+      }
     },
     windowSize() {
       this.$nextTick(() => {
@@ -641,6 +647,8 @@ export default {
 
       autoReading: false,
       showChapterList: [],
+
+      scrollStartChapterIndex: 0,
       showNextChapterSize: 1,
       showPrevChapterSize: 0
     };
@@ -689,7 +697,8 @@ export default {
         !this.isEpub &&
         !this.isAudio &&
         !this.isSlideRead &&
-        this.config.readMethod === "上下滚动"
+        (this.config.readMethod === "上下滚动" ||
+          this.config.readMethod === "上下滚动2")
       );
     },
     chapterClass() {
@@ -962,9 +971,11 @@ export default {
           this.loadCatalog(false, true);
         } else {
           if (this.isScrollRead) {
+            this.scrollStartChapterIndex = this.chapterIndex;
             this.showPrevChapterSize = 0;
-            this.computeShowChapterList();
-            this.autoShowPosition(true);
+            this.computeShowChapterList().then(() => {
+              this.autoShowPosition(true);
+            });
           } else if (this.isEpub) {
             // 跳转记住的位置
             this.autoShowPosition(true);
@@ -1009,6 +1020,7 @@ export default {
             var book = Object.assign({}, this.$store.state.readingBook);
             book.catalog = res.data.data;
             this.$store.commit("setReadingBook", book);
+            this.$emit("loadCatalog");
             var index = book.index || 0;
             this.getContent(index);
           } else {
@@ -1106,9 +1118,7 @@ export default {
         //
       }
       //强制滚回顶层
-      jump(this.$refs.top, { duration: 0 });
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
+      this.toTop(0);
       // 如果超出目录范围，尝试刷新目录
       if (!this.$store.state.readingBook.catalog[index]) {
         if (this.tryRefresh) {
@@ -1256,6 +1266,13 @@ export default {
         return Promise.resolve();
       }
       let bookUrl = this.$store.state.readingBook.bookUrl;
+      if (!this.$store.state.readingBook.catalog) {
+        return new Promise(resolve => {
+          this.$once("loadCatalog", () => {
+            this.loadShowChapter(index, refresh).then(resolve);
+          });
+        });
+      }
       // 如果超出目录范围，尝试刷新目录
       if (!this.$store.state.readingBook.catalog[index]) {
         return Promise.reject("章节不存在");
@@ -1312,29 +1329,32 @@ export default {
       ) {
         this.chapterContentCache.chapters[chapter.index] = chapter;
       }
-      if (
-        chapter.index >= this.chapterIndex - this.showPrevChapterSize &&
-        chapter.index <= this.chapterIndex + this.showNextChapterSize
-      ) {
-        this.computeShowChapterList();
-      }
     },
-    computeShowChapterList() {
+    computeShowChapterList(reset) {
       if (!this.chapterContentCache) {
-        return;
+        return new Promise(resolve => {
+          setTimeout(() => {
+            this.computeShowChapterList(reset).then(resolve);
+          }, 10);
+        });
       }
       if (!this.isScrollRead) {
-        return;
+        return Promise.resolve();
       }
       const list = [];
+      let startIndex = this.scrollStartChapterIndex || this.chapterIndex;
+      if (this.config.readMethod === "上下滚动2") {
+        startIndex = this.chapterIndex - this.showPrevChapterSize;
+      }
+      const waitPromise = [];
       for (
-        let i = this.chapterIndex - this.showPrevChapterSize;
+        let i = startIndex;
         i <= this.chapterIndex + this.showNextChapterSize;
         i++
       ) {
         if (!this.chapterContentCache.chapters[i]) {
-          this.loadShowChapter(i);
-          return;
+          waitPromise.push(this.loadShowChapter(i));
+          continue;
         }
         list.push({
           ...this.chapterContentCache.chapters[i],
@@ -1343,9 +1363,28 @@ export default {
           )
         });
       }
+      if (waitPromise.length) {
+        return Promise.all(waitPromise).then(() => {
+          this.computeShowChapterList(reset);
+        });
+      }
+      this.saveReadingPosition();
+      // 暂停记录位置
+      this.startSavePosition = false;
+      // 记录当前章节
       this.showChapterList = list;
       this.$nextTick(() => {
-        this.computePages();
+        this.computePages(() => {
+          if (reset) {
+            // 切换上下章节，滚动到顶部
+            this.toTop(0);
+            this.startSavePosition = true;
+          } else if (this.config.readMethod === "上下滚动2") {
+            this.autoShowPosition(true);
+          } else {
+            this.startSavePosition = true;
+          }
+        });
       });
     },
     saveBookProgress() {
@@ -1360,18 +1399,18 @@ export default {
         }
       ).catch(() => {});
     },
-    toTop() {
+    toTop(interval) {
       if (this.$store.state.miniInterface) {
         this.scrollContent(
           -(document.documentElement.scrollTop || document.body.scrollTop),
-          1000
+          interval
         );
       } else {
         jump(this.$refs.top);
       }
     },
-    toBottom() {
-      jump(this.$refs.bottom);
+    toBottom(interval) {
+      jump(this.$refs.bottom, { duration: interval });
     },
     toNextChapter(onError) {
       if (
@@ -1385,6 +1424,11 @@ export default {
       let index = this.$store.state.readingBook.index;
       index++;
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
+        if (this.isScrollRead) {
+          this.scrollStartChapterIndex = index;
+          this.computeShowChapterList(true);
+          return;
+        }
         this.getContent(index);
       } else {
         onError && onError();
@@ -1403,6 +1447,11 @@ export default {
       let index = this.$store.state.readingBook.index;
       index--;
       if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
+        if (this.isScrollRead) {
+          this.scrollStartChapterIndex = index;
+          this.computeShowChapterList(true);
+          return;
+        }
         this.getContent(index);
       } else {
         this.$message.error("本章是第一章");
@@ -2226,7 +2275,7 @@ export default {
           document.documentElement.scrollHeight - 2 * this.windowSize.height // 倒数第三页
         ) {
           // 往下滚动到 倒数第三页
-          if (!this.preCaching) {
+          if (!this.preCaching && this.startSavePosition) {
             this.preCaching = true;
             let nextIndex = this.chapterIndex + 1;
             if (this.showChapterList.length) {
@@ -2237,6 +2286,7 @@ export default {
             // console.log("到底部了，加载下一章");
             this.loadShowChapter(nextIndex)
               .then(() => {
+                this.computeShowChapterList();
                 this.preCaching = false;
               })
               .catch(() => {
@@ -2724,16 +2774,8 @@ export default {
         pointer-events: all;
         margin-top: 20px;
 
-        .el-icon-refresh-right, .el-icon-headset {
-          line-height: 34px;
-        }
-        .el-icon-moon {
-          color: #121212;
-          line-height: 34px;
-        }
-        .el-icon-sunny {
-          color: #666;
-          line-height: 34px;
+        .el-icon-top, .el-icon-bottom, .el-icon-info {
+          line-height: 36px;
         }
       }
     }
@@ -2758,8 +2800,8 @@ export default {
         pointer-events: all;
         margin-top: 20px;
 
-        .el-icon-refresh-right, .el-icon-headset {
-          line-height: 34px;
+        .el-icon-refresh-right, .el-icon-headset, .el-icon-view {
+          line-height: 36px;
         }
         .el-icon-moon {
           color: #121212;

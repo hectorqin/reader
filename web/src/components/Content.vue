@@ -165,7 +165,6 @@ export default {
   },
   methods: {
     renderScrollChapterList() {
-      let wordCount = this.title.length + 2; // 2为两个换行符
       return (
         <div
           class="content-body"
@@ -175,6 +174,7 @@ export default {
           }}
         >
           {this.showChapterList.map(chapter => {
+            let wordCount = chapter.title.length + 2; // 2为两个换行符
             return (
               <div
                 class={[

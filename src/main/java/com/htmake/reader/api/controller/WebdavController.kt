@@ -597,7 +597,63 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             context.success(returnData.setErrorMsg("路径不存在"))
             return
         }
-        context.response().putHeader("Cache-Control", "86400").sendFile(file.toString())
+        context.response()
+                .putHeader("Cache-Control", "86400")
+                .putHeader("Content-Disposition", "attachment; filename=" + file.name)
+                .sendFile(file.toString())
+    }
+
+    suspend fun uploadFileToWebdav(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (context.fileUploads() == null || context.fileUploads().isEmpty()) {
+            return returnData.setErrorMsg("请上传文件")
+        }
+        if (appConfig.secure) {
+            var userInfo = context.get("userInfo") as User?
+            if (userInfo == null) {
+                return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+            }
+            if (!userInfo.enable_webdav) {
+                return returnData.setErrorMsg("未开启webdav功能")
+            }
+        }
+        var path = context.request().getParam("path")
+        if (path.isNullOrEmpty()) {
+            path = "/"
+        }
+        var fileList = arrayListOf<Map<String, Any>>()
+        var home = getUserWebdavHome(context) + path + File.separator
+
+        // logger.info("type: {}", type)
+        context.fileUploads().forEach {
+            var file = File(it.uploadedFileName())
+            logger.info("uploadFile: {} {} {}", it.uploadedFileName(), it.fileName(), file)
+            if (file.exists()) {
+                var fileName = it.fileName()
+                var newFile = File(home + fileName)
+                if (!newFile.parentFile.exists()) {
+                    newFile.parentFile.mkdirs()
+                }
+                if (newFile.exists()) {
+                    newFile.delete()
+                }
+                logger.info("moveTo: {}", newFile)
+                if (file.copyRecursively(newFile)) {
+                    fileList.add(mapOf(
+                        "name" to newFile.name,
+                        "size" to newFile.length(),
+                        "path" to newFile.toString().replace(home, ""),
+                        "lastModified" to newFile.lastModified(),
+                        "isDirectory" to newFile.isDirectory()
+                    ))
+                }
+                file.deleteRecursively()
+            }
+        }
+        return returnData.setData(fileList)
     }
 
     suspend fun deleteWebdavFile(context: RoutingContext): ReturnData {
