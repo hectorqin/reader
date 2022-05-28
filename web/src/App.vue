@@ -60,6 +60,24 @@
       :on-close="closeViewer"
       :url-list="$store.state.previewImgList"
     />
+
+    <ReplaceRuleForm
+      v-model="showReplaceRuleForm"
+      :rule="replaceRule"
+      :isAdd="isAddReplaceRule"
+    />
+
+    <ReplaceRule v-model="showReplaceRuleDialog" />
+
+    <MPCode v-model="showMPCodeDialog" />
+
+    <BookInfo v-model="showBookInfoDialog" />
+
+    <UserManage v-model="showUserManageDialog" />
+
+    <AddUser v-model="showAddUserDialog" />
+
+    <BookGroup v-model="showBookGroupDialog" :isSet="isSetBookGroup" />
   </div>
 </template>
 
@@ -67,6 +85,13 @@
 import Axios from "./plugins/axios";
 import eventBus from "./plugins/eventBus";
 import ImageViewer from "element-ui/packages/image/src/image-viewer.vue";
+import ReplaceRule from "./components/ReplaceRule.vue";
+import ReplaceRuleForm from "./components/ReplaceRuleForm.vue";
+import MPCode from "./components/MPCode.vue";
+import BookInfo from "./components/BookInfo.vue";
+import UserManage from "./components/UserManage.vue";
+import AddUser from "./components/AddUser.vue";
+import BookGroup from "./components/BookGroup.vue";
 import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
@@ -130,7 +155,14 @@ String.prototype.getBytesLength = function() {
 export default {
   name: "app",
   components: {
-    ImageViewer
+    ImageViewer,
+    ReplaceRule,
+    ReplaceRuleForm,
+    MPCode,
+    BookInfo,
+    UserManage,
+    AddUser,
+    BookGroup
   },
   data() {
     return {
@@ -142,7 +174,23 @@ export default {
       },
       showEditor: false,
       editorTitle: "编辑器",
-      editorContent: ""
+      editorContent: "",
+
+      showReplaceRuleDialog: false,
+
+      showReplaceRuleForm: false,
+      replaceRule: {},
+      isAddReplaceRule: true,
+
+      showMPCodeDialog: false,
+
+      showBookInfoDialog: false,
+
+      showUserManageDialog: false,
+      showAddUserDialog: false,
+
+      showBookGroupDialog: false,
+      isSetBookGroup: false
     };
   },
   beforeCreate() {
@@ -211,7 +259,10 @@ export default {
       });
     this.autoSetTheme(this.autoTheme);
 
-    this.getUserInfo();
+    this.getUserInfo().then(() => {
+      this.$store.dispatch("syncFromLocalStorage");
+      this.init();
+    });
     this.loadTxtTocRules();
   },
   beforeMount() {
@@ -220,6 +271,27 @@ export default {
     this.setPageTypeClass();
     this.eventBus = eventBus;
     eventBus.$on("showEditor", this.showEditorListener);
+    eventBus.$on("showReplaceRuleForm", this.showReplaceRuleFormListener);
+    eventBus.$on("showReplaceRuleDialog", () => {
+      this.showReplaceRuleDialog = true;
+    });
+    eventBus.$on("showMPCodeDialog", () => {
+      this.showMPCodeDialog = true;
+    });
+    eventBus.$on("showBookInfoDialog", book => {
+      this.showBookInfo = book;
+      this.showBookInfoDialog = true;
+    });
+    eventBus.$on("showUserManageDialog", () => {
+      this.showUserManageDialog = true;
+    });
+    eventBus.$on("showAddUserDialog", () => {
+      this.showAddUserDialog = true;
+    });
+    eventBus.$on("showBookGroupDialog", isSet => {
+      this.showBookGroupDialog = true;
+      this.isSetBookGroup = !!isSet;
+    });
   },
   mounted() {
     document.documentElement.style.setProperty(
@@ -236,15 +308,10 @@ export default {
       return this.$store.getters.config.autoTheme;
     },
     dialogWidth() {
-      return this.$store.state.miniInterface ? "85%" : "450px";
+      return this.$store.getters.dialogSmallWidth;
     },
     dialogTop() {
-      return (
-        Math.max(
-          (this.$store.state.windowSize.height - 390 - 70 - 54) / 2,
-          50
-        ) + "px"
-      );
+      return this.$store.getters.dialogTop;
     },
     showLogin: {
       get() {
@@ -256,6 +323,14 @@ export default {
     },
     connected() {
       return this.$store.state.connected;
+    },
+    showBookInfo: {
+      get() {
+        return this.$store.state.showBookInfo;
+      },
+      set(val) {
+        this.$store.commit("setShowBookInfo", val);
+      }
     }
   },
   watch: {
@@ -279,6 +354,14 @@ export default {
     },
     "$store.state.config.pageType": function() {
       this.setPageTypeClass();
+    },
+    showReplaceRuleForm(val) {
+      if (!val) {
+        if (this.replaceRuleCallback) {
+          this.replaceRuleCallback();
+          this.replaceRuleCallback = null;
+        }
+      }
     }
   },
   methods: {
@@ -347,11 +430,41 @@ export default {
         if (this.remember && res.data.data && res.data.data.accessToken) {
           this.$store.commit("setToken", res.data.data.accessToken);
         }
-        this.getUserInfo();
+        this.getUserInfo().then(() => {
+          this.$store.dispatch("syncFromLocalStorage");
+          this.init(true);
+        });
       }
     },
+    async init(refresh) {
+      if (this.initing) {
+        refresh &&
+          setTimeout(() => {
+            this.init(refresh);
+          }, 100);
+        return;
+      }
+      this.initing = true;
+      if (refresh || !this.$store.state.shelfBooks.length) {
+        await this.loadBookShelf().catch(() => {
+          this.initing = false;
+        });
+      }
+      await Promise.all([
+        // 加载书源列表
+        this.loadBookSource(refresh),
+        // 加载分组列表
+        this.loadBookGroup(refresh),
+        // 加载RSS订阅列表
+        this.loadRssSources(refresh),
+        // 加载替换规则
+        this.loadReplaceRules(refresh)
+      ]);
+      // 加载书架
+      this.initing = false;
+    },
     getUserInfo() {
-      networkFirstRequest(
+      return networkFirstRequest(
         () => Axios.get(this.api + "/getUserInfo"),
         "userInfo"
       ).then(
@@ -375,7 +488,10 @@ export default {
       );
     },
     loadTxtTocRules() {
-      cacheFirstRequest(() => Axios.get("/getTxtTocRules"), "txtTocRules").then(
+      return cacheFirstRequest(
+        () => Axios.get("/getTxtTocRules"),
+        "txtTocRules"
+      ).then(
         res => {
           const data = res.data.data || [];
           this.$store.commit("setTxtTocRules", data);
@@ -395,6 +511,152 @@ export default {
       this.$nextTick(() => {
         this.initEditor();
       });
+    },
+    showReplaceRuleFormListener(replaceRule, isAddReplaceRule, callback) {
+      this.replaceRule = replaceRule;
+      this.isAddReplaceRule = isAddReplaceRule;
+      this.replaceRuleCallback = callback;
+      this.showReplaceRuleForm = true;
+    },
+    loadBookShelf(refresh, api) {
+      api = api || this.api;
+      return networkFirstRequest(
+        () => Axios.get(api + "/getBookshelf?refresh=" + (refresh ? 1 : 0)),
+        "getBookshelf@" + this.currentUserName
+      )
+        .then(response => {
+          this.$store.commit("setConnected", true);
+          if (response.data.isSuccess) {
+            this.$store.commit("setShelfBooks", response.data.data);
+          }
+        })
+        .catch(error => {
+          this.$store.commit("setConnected", false);
+          this.$message.error("后端连接失败 " + (error && error.toString()));
+          throw error;
+        });
+    },
+    loadBookGroup(refresh) {
+      return cacheFirstRequest(
+        () => Axios.get(this.api + "/getBookGroups"),
+        "bookGroup@" + this.currentUserName,
+        refresh,
+        true
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$store.commit("setBookGroupList", res.data.data || []);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载分组列表失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    loadRssSources(refresh) {
+      return cacheFirstRequest(
+        () =>
+          Axios.get(this.api + "/getRssSources", {
+            params: {
+              simple: 1
+            }
+          }),
+        "rssSources@" + this.currentUserName,
+        refresh,
+        true
+      ).then(
+        res => {
+          const data = res.data.data || [];
+          this.$store.commit("setRssSourceList", data);
+        },
+        error => {
+          this.$message.error(
+            "加载RSS订阅列表失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    loadBookSource(refresh) {
+      return cacheFirstRequest(
+        () =>
+          Axios.get(this.api + "/getSources", {
+            params: {
+              simple: 1
+            }
+          }),
+        "bookSourceList@" + this.currentUserName,
+        refresh,
+        true
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$store.commit("setBookSourceList", res.data.data || []);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载书源列表失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    loadReplaceRules(refresh) {
+      return cacheFirstRequest(
+        () => Axios.get(this.api + "/getReplaceRules"),
+        "replaceRule@" + this.currentUserName,
+        refresh,
+        true
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$store.commit("setFilterRules", res.data.data || []);
+          }
+        },
+        error => {
+          this.$message.error(
+            "加载替换规则失败 " + (error && error.toString())
+          );
+        }
+      );
+    },
+    async isInShelf(book, addTip) {
+      if (!book || !book.bookUrl || !book.origin) {
+        this.$message.error("书籍信息错误");
+        return false;
+      }
+      // 判断是否加入了书架
+      const isInShelf = this.$store.getters.shelfBooks.find(
+        v => v.bookUrl === book.bookUrl
+      );
+      if (!isInShelf) {
+        if (addTip) {
+          const res = await this.$confirm(addTip, "提示", {
+            confirmButtonText: "确定",
+            cancelButtonText: "取消",
+            type: "warning"
+          }).catch(() => {
+            return false;
+          });
+          if (!res) {
+            return false;
+          }
+          // 加入书架
+          return Axios.post(this.api + "/saveBook", book).then(
+            res => {
+              if (res.data.isSuccess) {
+                return true;
+              }
+            },
+            () => {
+              this.$message.error("导入书籍失败");
+              return false;
+            }
+          );
+        }
+      }
+      return !!isInShelf;
     },
     initEditor() {
       const editor = this.$refs.editorRef;
@@ -630,6 +892,57 @@ export default {
       background: inherit;
     }
   }
+
+  .el-table {
+    background-color: transparent;
+  }
+  .el-table__expanded-cell {
+    background-color: transparent;
+  }
+  .el-table th, .el-table tr{
+    background-color: #222 !important;
+  }
+  .el-table td {
+    border-bottom: 1px solid #555;
+  }
+  .el-table th.is-leaf {
+    border-bottom: 1px solid #555;
+  }
+  .el-table--border::after {
+    background-color: transparent;
+  }
+  .el-table--group::after {
+    background-color: transparent;
+  }
+  .el-table::before {
+    background-color: transparent;
+  }
+  .el-table {
+    background-color: transparent;
+  }
+  .el-table--enable-row-hover .el-table__body tr:hover>td {
+    background-color: #333;
+  }
+  .el-table__fixed-right::before, .el-table__fixed::before {
+    background-color: #333;
+  }
+  .el-table__body tr.hover-row.current-row>td,
+  .el-table__body tr.hover-row.el-table__row--striped.current-row>td,
+  .el-table__body tr.hover-row.el-table__row--striped>td,
+  .el-table__body tr.hover-row>td {
+    background-color: #444;
+  }
+  .el-table__body-wrapper::-webkit-scrollbar {
+    background-color: #333 !important;
+  }
+
+  .el-dialog__wrapper::-webkit-scrollbar {
+    background-color: #333 !important;
+  }
+
+  .check-tip {
+    color: #bbb;
+  }
 }
 .el-popover:focus, .el-popover:focus:active, .el-popover__reference:focus:hover, .el-popover__reference:focus:not(.focusing) {
   outline: none;
@@ -652,5 +965,26 @@ export default {
 .kindle-page {
   -webkit-tap-highlight-color: rbga(255, 255, 255, 0);
   -webkit-user-select: none;
+}
+.check-tip {
+  display: inline-block;
+  float: left;
+  line-height: 40px;
+  margin-left: 10px;
+  font-size: 14px;
+}
+.float-left {
+  float: left;
+}
+.float-right {
+  float: right;
+}
+.custom-dialog-title {
+  .span-btn {
+    display: inline-block;
+    cursor: pointer;
+    font-size: 15px;
+    margin-right: 10px;
+  }
 }
 </style>

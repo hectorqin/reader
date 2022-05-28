@@ -20,6 +20,7 @@ import com.htmake.reader.api.controller.BookSourceController
 import com.htmake.reader.api.controller.RssSourceController
 import com.htmake.reader.api.controller.UserController
 import com.htmake.reader.api.controller.WebdavController
+import com.htmake.reader.api.controller.ReplaceRuleController
 import com.htmake.reader.utils.error
 import com.htmake.reader.utils.success
 import com.htmake.reader.utils.getStorage
@@ -131,6 +132,7 @@ class YueduApi : RestVerticle() {
         val webdavController = WebdavController(coroutineContext, router) { ctx, error ->
             onHandlerError(ctx, error)
         }
+        val replaceRuleController = ReplaceRuleController(coroutineContext)
 
         /** 书源模块 */
         router.post("/reader3/saveSource").coroutineHandler { bookSourceController.saveSource(it) }
@@ -256,6 +258,12 @@ class YueduApi : RestVerticle() {
         // 删除用户
         router.post("/reader3/deleteUsers").coroutineHandler { userController.deleteUsers(it) }
 
+        // 添加用户
+        router.post("/reader3/addUser").coroutineHandler { userController.addUser(it) }
+
+        // 重置用户密码
+        router.post("/reader3/resetPassword").coroutineHandler { userController.resetPassword(it) }
+
         // 更新用户
         router.post("/reader3/updateUser").coroutineHandler { userController.updateUser(it) }
 
@@ -266,6 +274,9 @@ class YueduApi : RestVerticle() {
 
         // 下载webdav文件
         router.get("/reader3/getWebdavFile").coroutineHandlerWithoutRes { webdavController.getWebdavFile(it) }
+
+        // 上传webdav文件
+        router.post("/reader3/uploadFileToWebdav").coroutineHandler { webdavController.uploadFileToWebdav(it) }
 
         // 删除webdav文件
         router.get("/reader3/deleteWebdavFile").coroutineHandler { webdavController.deleteWebdavFile(it) }
@@ -291,6 +302,14 @@ class YueduApi : RestVerticle() {
         // rss 内容
         router.get("/reader3/getRssContent").coroutineHandler { rssSourceController.getRssContent(it) }
         router.post("/reader3/getRssContent").coroutineHandler { rssSourceController.getRssContent(it) }
+
+        /** 替换规则模块 */
+        router.get("/reader3/getReplaceRules").coroutineHandler { replaceRuleController.getReplaceRules(it) }
+        router.post("/reader3/saveReplaceRule").coroutineHandler { replaceRuleController.saveReplaceRule(it) }
+        router.post("/reader3/saveReplaceRules").coroutineHandler { replaceRuleController.saveReplaceRules(it) }
+        router.post("/reader3/deleteReplaceRule").coroutineHandler { replaceRuleController.deleteReplaceRule(it) }
+        router.post("/reader3/deleteReplaceRules").coroutineHandler { replaceRuleController.deleteReplaceRules(it) }
+
     }
 
     suspend fun setupPort() {
@@ -392,6 +411,54 @@ class YueduApi : RestVerticle() {
                     }
                 }
                 logger.info("书架书籍更新检查结束")
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    /**
+     * 每天清理不活跃用户
+     */
+    @Scheduled(cron = "0 59 23 * * ?")
+    fun clearUser()
+    {
+        if (appConfig.autoClearInactiveUser <= 0 || !appConfig.secure) {
+            return
+        }
+        launch(Dispatchers.IO) {
+            try {
+                logger.info("开始清理 {} 天未登录用户", appConfig.autoClearInactiveUser)
+
+                var userMap = mutableMapOf<String, Map<String, Any>>()
+                var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
+                if (userMapJson != null) {
+                    userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+                }
+                val expireTime = System.currentTimeMillis() - appConfig.autoClearInactiveUser * 86400L * 1000L
+                userMap.keys.forEach{
+                    try {
+                        var user = userMap.get(it)
+                        if (user != null) {
+                            var username = user.getOrDefault("username", "") as String? ?: ""
+                            var last_login_at = user.getOrDefault("last_login_at", 0) as Long? ?: 0L
+                            if (username.isNotEmpty() && last_login_at < expireTime) {
+                                logger.info("delete user: {}", user)
+                                // 删除用户信息
+                                userMap.remove(username)
+                                // 移除用户目录
+                                var userHome = File(getWorkDir("storage", "data", username))
+                                logger.info("delete userHome: {}", userHome)
+                                if (userHome.exists()) {
+                                    userHome.deleteRecursively()
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                logger.info("不活跃用户自动清理结束")
             } catch (e: Exception) {
                 e.printStackTrace()
             }

@@ -265,8 +265,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (book.origin.isNullOrEmpty()) {
             return returnData.setErrorMsg("未找到书源信息")
         }
-        if (!book.isLocalTxt()) {
-            return returnData.setErrorMsg("非本地txt书籍")
+        if (!book.isLocalTxt() && !book.isLocalEpub()) {
+            return returnData.setErrorMsg("非本地txt/epub书籍")
         }
         book.setRootDir(getWorkDir())
         val chapters = LocalBook.getChapterList(book)
@@ -1420,19 +1420,21 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             bookGroupList = JsonArray(groupList)
         } else {
             // 新增分组
-            var maxOrder = 0;
-            val idsSum = bookGroupList.sumBy{
-                val id = asJsonObject(it)?.getInteger("groupId", 0) ?: 0
-                val order = asJsonObject(it)?.getInteger("order", 0) ?: 0
-                maxOrder = if (order > maxOrder) order else maxOrder
-                if (id > 0) id else 0
+            if (bookGroup.groupId >= 0) {
+                var maxOrder = 0;
+                val idsSum = bookGroupList.sumBy{
+                    val id = asJsonObject(it)?.getInteger("groupId", 0) ?: 0
+                    val order = asJsonObject(it)?.getInteger("order", 0) ?: 0
+                    maxOrder = if (order > maxOrder) order else maxOrder
+                    if (id > 0) id else 0
+                }
+                var id = 1
+                while (id and idsSum != 0) {
+                    id = id.shl(1)
+                }
+                bookGroup.groupId = id
+                bookGroup.order = maxOrder + 1
             }
-            var id = 1
-            while (id and idsSum != 0) {
-                id = id.shl(1)
-            }
-            bookGroup.groupId = id
-            bookGroup.order = maxOrder + 1
             bookGroupList.add(JsonObject.mapFrom(bookGroup))
         }
 
@@ -1854,7 +1856,13 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     userRssSourcesFile.deleteRecursively()
                     rssSourcesFile.renameTo(userRssSourcesFile)
                 }
-
+                // 同步 替换规则
+                val replaceRuleFile = File(descDir + File.separator + "replaceRule.json")
+                if (replaceRuleFile.exists()) {
+                    val userReplaceRuleFile = File(getWorkDir("storage", "data", userNameSpace, "replaceRule.json"))
+                    userReplaceRuleFile.deleteRecursively()
+                    replaceRuleFile.renameTo(userReplaceRuleFile)
+                }
                 // 同步阅读进度
                 var bookProgressDir = File(userHome + File.separator + "bookProgress")
                 if (!bookProgressDir.exists()) {
@@ -1915,7 +1923,13 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     rssSourcesFile.deleteRecursively()
                     userRssSourcesFile.renameTo(rssSourcesFile)
                 }
-
+                // 同步 替换规则
+                val userReplaceRuleFile = File(getWorkDir("storage", "data", userNameSpace, "replaceRule.json"))
+                if (userReplaceRuleFile.exists()) {
+                    val replaceRuleFile = File(descDir + File.separator + "replaceRule.json")
+                    replaceRuleFile.deleteRecursively()
+                    userReplaceRuleFile.renameTo(replaceRuleFile)
+                }
                 // 压缩
                 val today = SimpleDateFormat("yyyy-MM-dd").format(System.currentTimeMillis())
                 return descDirFile.zip(legadoHome + File.separator + "backup" + today + ".zip")

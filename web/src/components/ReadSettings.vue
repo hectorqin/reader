@@ -21,6 +21,65 @@
               @click="setPageType(type)"
               >{{ type }}</span
             >
+            <span class="small-tip"
+              >❗️开启 Kindle 模式会关闭动画以及首页的部分功能</span
+            >
+          </div>
+        </li>
+        <el-divider></el-divider>
+        <li>
+          <span class="setting-item-title">配置方案</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(customConfig, index) in $store.state.customConfigList"
+              :key="index"
+              :class="{
+                selected:
+                  $store.getters.config.customConfig === customConfig.name
+              }"
+              @click="setCustomConfig(customConfig)"
+            >
+              <span>{{ customConfig.name }}</span>
+              <i
+                class="el-icon-close delete-custom-config-icon"
+                v-if="
+                  index > 1 &&
+                    $store.getters.config.customConfig !== customConfig.name
+                "
+                @click.stop="deleteCustomConfig(index, customConfig.name)"
+              ></i>
+            </span>
+            <span
+              class="span-item"
+              :key="'addNewCustomConfig'"
+              @click="addNewCustomConfig"
+              >新增方案</span
+            >
+            <span
+              class="span-item"
+              :key="'autoTheme'"
+              ref="themes"
+              @click="setAutoTheme"
+              :class="{ selected: $store.getters.config.autoTheme }"
+              >自动切换</span
+            >
+          </div>
+        </li>
+        <li>
+          <span class="setting-item-title">方案类型</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(configDefaultType, index) in configDefaultTypeList"
+              :key="index"
+              :class="{
+                selected:
+                  currentCustomConfig.configDefaultType === configDefaultType
+              }"
+              @click="setConfigDefaultType(configDefaultType)"
+              >{{ configDefaultType }}</span
+            >
           </div>
         </li>
         <li>
@@ -44,14 +103,6 @@
               @click="setTheme('custom')"
               :class="{ selected: selectedTheme == 'custom' }"
               >自定义</span
-            >
-            <span
-              class="span-item"
-              :key="'autoTheme'"
-              ref="themes"
-              @click="setAutoTheme"
-              :class="{ selected: $store.getters.config.autoTheme }"
-              >自动切换</span
             >
           </div>
         </li>
@@ -213,7 +264,7 @@
             >
           </div>
         </li>
-        <li v-if="$store.state.miniInterface">
+        <li>
           <span class="setting-item-title">翻页方式</span>
           <div class="selection-zone">
             <span
@@ -222,7 +273,14 @@
               :key="index"
               :class="{ selected: readMethod == method }"
               @click="setReadMethod(method)"
+              v-show="
+                (!$store.state.miniInterface && method !== '左右滑动') ||
+                  $store.state.miniInterface
+              "
               >{{ method }}</span
+            >
+            <span class="small-tip"
+              >❗️上下滚动2会自动隐藏看过的章节，但是可能会抖动</span
             >
           </div>
         </li>
@@ -276,9 +334,10 @@
             >
           </div>
         </li>
+        <el-divider></el-divider>
         <li class="operation-zone">
           <span class="span-btn" @click="showClickZone">显示翻页区域</span>
-          <span class="span-btn" @click="showRuleEditor">修改过滤规则</span>
+          <span class="span-btn" @click="showRuleEditor">过滤规则管理</span>
         </li>
       </ul>
     </div>
@@ -291,6 +350,7 @@ import Axios from "../plugins/axios";
 import settings from "../plugins/config";
 import eventBus from "../plugins/eventBus";
 import { isMiniInterface } from "../plugins/helper";
+import { setCache, getCache } from "../plugins/cache";
 
 export default {
   name: "ReadSettings",
@@ -345,12 +405,13 @@ export default {
         { src: "bg/边彩画布.jpg" }
       ],
       fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"],
-      readMethods: ["上下滑动", "左右滑动"],
+      readMethods: ["上下滑动", "左右滑动", "上下滚动", "上下滚动2"],
       clickMethods: ["下一页", "自动", "不翻页"],
       selectionActions: ["过滤弹窗", "忽略"],
       pageModes: ["自适应", "手机模式"],
       pageTypes: ["正常", "Kindle"],
-      themeTypes: ["day", "night"]
+      themeTypes: ["day", "night"],
+      configDefaultTypeList: ["白天默认", "黑夜默认"]
     };
   },
   mounted() {},
@@ -423,6 +484,11 @@ export default {
     },
     animateMSTime() {
       return this.$store.state.config.animateMSTime;
+    },
+    currentCustomConfig() {
+      return this.$store.state.customConfigList.find(
+        v => v.name === this.$store.state.config.customConfig
+      );
     }
   },
   watch: {
@@ -486,22 +552,9 @@ export default {
       }
       let lastConfig = {};
       if (type === "Kindle") {
-        window.localStorage &&
-          window.localStorage.setItem(
-            "lastNormalConfig",
-            JSON.stringify(this.config)
-          );
+        setCache("lastNormalConfig", this.config);
 
-        try {
-          lastConfig =
-            window.localStorage &&
-            window.localStorage.getItem("lastKindleConfig");
-          if (lastConfig) {
-            lastConfig = JSON.parse(lastConfig) || {};
-          }
-        } catch (error) {
-          //
-        }
+        lastConfig = getCache("lastKindleConfig");
         lastConfig = lastConfig || {
           animateMSTime: 0,
           fontSize: Math.min(this.fontSize, 20),
@@ -511,21 +564,8 @@ export default {
           pageMode: "手机模式"
         };
       } else {
-        window.localStorage &&
-          window.localStorage.setItem(
-            "lastKindleConfig",
-            JSON.stringify(this.config)
-          );
-        try {
-          lastConfig =
-            window.localStorage &&
-            window.localStorage.getItem("lastNormalConfig");
-          if (lastConfig) {
-            lastConfig = JSON.parse(lastConfig) || {};
-          }
-        } catch (error) {
-          //
-        }
+        setCache("lastKindleConfig", this.config);
+        lastConfig = getCache("lastNormalConfig") || {};
       }
 
       const config = { ...this.config, ...(lastConfig || {}) };
@@ -729,24 +769,118 @@ export default {
     },
     showRuleEditor() {
       this.$emit("close");
-      eventBus.$emit(
-        "showEditor",
-        "修改过滤规则",
-        JSON.stringify(this.$store.state.filterRules, null, 4),
-        async (content, close) => {
-          try {
-            const filterRules = JSON.parse(content);
-            if (!Array.isArray(filterRules)) {
-              this.$message.error("过滤规则必须是JSON数组格式");
-              return;
-            }
-            this.$store.commit("setFilterRules", filterRules);
-            close();
-          } catch (e) {
-            this.$message.error("过滤规则必须是JSON数组格式");
+      eventBus.$emit("showReplaceRuleDialog");
+      // eventBus.$emit(
+      //   "showEditor",
+      //   "修改过滤规则",
+      //   JSON.stringify(this.$store.state.filterRules, null, 4),
+      //   async (content, close) => {
+      //     try {
+      //       const filterRules = JSON.parse(content);
+      //       if (!Array.isArray(filterRules)) {
+      //         this.$message.error("过滤规则必须是JSON数组格式");
+      //         return;
+      //       }
+      //       this.$store.commit("setFilterRules", filterRules);
+      //       close();
+      //     } catch (e) {
+      //       this.$message.error("过滤规则必须是JSON数组格式");
+      //     }
+      //   }
+      // );
+    },
+    async addNewCustomConfig() {
+      const res = await this.$prompt("请输入方案名称", `添加配置方案`, {
+        inputValue: "",
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        inputValidator(v) {
+          if (!v) {
+            return "方案名不能为空";
           }
+          return true;
         }
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      const name = res.value.replace(/^\s+/, "").replace(/\s+$/, "");
+      if (!name) {
+        return "方案名不能为空";
+      }
+      const isExist = this.$store.state.customConfigList.find(
+        v => v.name === name
       );
+      if (isExist) {
+        return "方案名不能重复";
+      }
+      const newConfig = { ...this.$store.state.customConfigList[0] };
+      newConfig.name = name;
+      this.$store.commit(
+        "setCustomConfigList",
+        [].concat(this.$store.state.customConfigList).concat([newConfig])
+      );
+    },
+    setCustomConfig(customConfig) {
+      let config = this.config;
+      config.customConfig = customConfig.name;
+      config = { ...config, ...customConfig };
+      this.$store.commit("setConfig", { ...config });
+    },
+    async deleteCustomConfig(index, name) {
+      const customConfigList = [].concat(this.$store.state.customConfigList);
+      if (index <= 1) {
+        this.$message.error("内置方案不能删除");
+        return;
+      }
+      if (customConfigList.length <= index) {
+        this.$message.error("方案不存在");
+        return;
+      }
+      if (this.$store.state.config.customConfig === name) {
+        this.$message.error("方案正在使用，无法删除");
+        return;
+      }
+      const res = await this.$confirm(`确认要删除${name}方案吗？`, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      customConfigList.splice(index, 1);
+
+      this.$store.commit("setCustomConfigList", [].concat(customConfigList));
+    },
+    async setConfigDefaultType(configDefaultType) {
+      const res = await this.$confirm(
+        `确认要设置当前方案为${configDefaultType}吗？继续操作将替换现有的${configDefaultType}方案`,
+        "提示",
+        {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      const customConfigList = [].concat(this.$store.state.customConfigList);
+      customConfigList.forEach(v => {
+        if (v.name === this.$store.state.config.customConfig) {
+          v.configDefaultType = configDefaultType;
+        } else if (v.configDefaultType === configDefaultType) {
+          v.configDefaultType = "";
+        }
+      });
+      this.$store.commit("setCustomConfigList", customConfigList);
     }
   }
 };
@@ -833,6 +967,18 @@ export default {
           vertical-align: middle;
           display: inline-block;
           font: 14px / 34px PingFangSC-Regular, HelveticaNeue-Light, 'Helvetica Neue Light', 'Microsoft YaHei', sans-serif;
+          position: relative;
+
+          .delete-custom-config-icon {
+            display: inline-block;
+            cursor: pointer;
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 20px;
+            color: #ed4259;
+            z-index: 10;
+          }
         }
 
         .span-item.selected  {

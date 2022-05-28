@@ -73,6 +73,13 @@ private val logger = KotlinLogging.logger {}
 class UserController(coroutineContext: CoroutineContext): BaseController(coroutineContext) {
     val userMaxCount = 50
 
+    private fun getUserLimit(context: RoutingContext): Int {
+        if (context.request().host().equals("reader.htmake.com")) {
+            return 200;
+        }
+        return Math.min(Math.max(appConfig.userLimit, 1), userMaxCount)
+    }
+
     suspend fun login(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         val username = context.bodyAsJson.getString("username") ?: ""
@@ -113,7 +120,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
                     return returnData.setErrorMsg("邀请码错误")
                 }
             }
-            val userLimit = Math.min(Math.max(appConfig.userLimit, 1), userMaxCount)
+            val userLimit = getUserLimit(context)
             if (userMap.keys.size >= userLimit) {
                 return returnData.setErrorMsg("超过用户数上限")
             }
@@ -207,6 +214,113 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             userList.add(formatUser(it.value))
         }
         return returnData.setData(userList)
+    }
+
+    suspend fun addUser(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!appConfig.secure || appConfig.secureKey.isEmpty()) {
+            return returnData.setErrorMsg("不支持的操作")
+        }
+        val username = context.bodyAsJson.getString("username") ?: ""
+        val password = context.bodyAsJson.getString("password") ?: ""
+        if (username.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入用户名")
+        }
+        if (password.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入密码")
+        }
+        if (username.length < 5) {
+            return returnData.setErrorMsg("用户名不能低于5位")
+        }
+        if (password.length < 8) {
+            return returnData.setErrorMsg("密码不能低于8位")
+        }
+        if (username.equals("default")) {
+            return returnData.setErrorMsg("用户名不能为非法字符")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        }
+        val usernameReg = Regex("[a-z0-9]+", RegexOption.IGNORE_CASE)    //忽略大小写
+        if (!usernameReg.matches(username)) {
+            return returnData.setErrorMsg("用户名只能由字母和数字组成")
+        }
+        var userMap = mutableMapOf<String, Map<String, Any>>()
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
+        if (userMapJson != null) {
+            userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+        }
+        var existedUser = userMap.getOrDefault(username, null)
+        if (existedUser != null) {
+            return returnData.setErrorMsg("用户已存在")
+        }
+
+        val userLimit = getUserLimit(context)
+        if (userMap.keys.size >= userLimit) {
+            return returnData.setErrorMsg("超过用户数上限")
+        }
+
+        // 自动注册
+        var salt = getRandomString(8)
+        var passwordEncrypted = genEncryptedPassword(password, salt)
+        var newUser = User(username, passwordEncrypted, salt)
+        userMap.put(newUser.username, newUser.toMap())
+        saveStorage("data", "users", value = userMap)
+
+        var userList = arrayListOf<Map<String, Any>>()
+        userMap.forEach{
+            userList.add(formatUser(it.value))
+        }
+        return returnData.setData(userList)
+    }
+
+    suspend fun resetPassword(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!appConfig.secure || appConfig.secureKey.isEmpty()) {
+            return returnData.setErrorMsg("不支持的操作")
+        }
+        val username = context.bodyAsJson.getString("username") ?: ""
+        val password = context.bodyAsJson.getString("password") ?: ""
+        if (username.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入用户名")
+        }
+        if (password.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入密码")
+        }
+        if (password.length < 8) {
+            return returnData.setErrorMsg("密码不能低于8位")
+        }
+        if (username.equals("default")) {
+            return returnData.setErrorMsg("用户不存在")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        }
+        var userMap = mutableMapOf<String, MutableMap<String, Any>>()
+        var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
+        if (userMapJson != null) {
+            userMap = userMapJson.map as MutableMap<String, MutableMap<String, Any>>
+        }
+
+        var existedUser = userMap.getOrDefault(username, null)
+        if (existedUser == null) {
+            return returnData.setErrorMsg("用户不存在")
+        }
+
+        var salt = getRandomString(8)
+        var passwordEncrypted = genEncryptedPassword(password, salt)
+        existedUser.put("salt", salt)
+        existedUser.put("password", passwordEncrypted)
+        userMap.put(username, existedUser)
+        saveStorage("data", "users", value = userMap as MutableMap<String, Map<String, Any>>)
+
+        return returnData.setData("")
     }
 
     suspend fun deleteUsers(context: RoutingContext): ReturnData {
@@ -324,6 +438,8 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         if (content == null) {
             return returnData.setErrorMsg("参数错误")
         }
+        content.put("@updateTime", System.currentTimeMillis())
+
         val userNameSpace = getUserNameSpace(context)
         saveUserStorage(userNameSpace, "userConfig", content)
         return returnData.setData("")

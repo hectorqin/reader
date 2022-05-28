@@ -344,7 +344,7 @@
               slot="reference"
               class="setting-btn"
               v-if="$store.state.isManagerMode"
-              @click="showUserManageDialog = true"
+              @click="showUserManageDialog()"
             >
               管理用户空间
             </el-tag>
@@ -375,7 +375,7 @@
               :effect="isNight ? 'dark' : 'light'"
               slot="reference"
               class="setting-btn"
-              @click="showWebdavFile('/')"
+              @click="showWebDAVManageDialog = true"
             >
               文件管理
             </el-tag>
@@ -387,6 +387,31 @@
               @click="backupToWebdav"
             >
               保存备份
+            </el-tag>
+          </div>
+        </div>
+        <div class="setting-wrapper">
+          <div class="setting-title">
+            其它
+          </div>
+          <div class="setting-item">
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="showMPCode"
+            >
+              关注公众号【假装大佬】
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="joinTGChannel"
+            >
+              加入TG频道【假装大佬】
             </el-tag>
           </div>
         </div>
@@ -553,10 +578,11 @@
             :key="book.bookUrl"
             @click="toDetail(book)"
           >
-            <div class="cover-img" @click.stop="toggleBookIntroPop(book)">
+            <div class="cover-img" @click.stop="showBookInfoDialog(book)">
               <!-- <img class="cover" v-lazy="getCover(book.coverUrl)" alt="" /> -->
               <el-image
                 class="cover"
+                ref="bookCoverList"
                 :src="getCover(getBookCoverUrl(book), true)"
                 fit="cover"
                 lazy
@@ -851,186 +877,6 @@
         >
       </div>
     </el-dialog>
-    <el-dialog
-      title="用户管理"
-      :visible.sync="showUserManageDialog"
-      :width="dialogWidth"
-      :top="dialogTop"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-      v-if="$store.getters.isNormalPage"
-    >
-      <div class="source-container table-container">
-        <el-table
-          :data="userList"
-          :height="dialogContentHeight"
-          @selection-change="manageUserSelection = $event"
-        >
-          <el-table-column
-            type="selection"
-            width="25"
-            :selectable="isUserSelectable"
-            fixed
-          >
-          </el-table-column>
-          <el-table-column
-            property="username"
-            label="用户名"
-            min-width="100"
-            fixed
-          ></el-table-column>
-          <el-table-column
-            property="lastLoginAt"
-            label="上次登录"
-            :formatter="formatTableField"
-            min-width="120"
-          ></el-table-column>
-          <el-table-column
-            property="createdAt"
-            label="注册时间"
-            :formatter="formatTableField"
-            min-width="120"
-          ></el-table-column>
-          <el-table-column
-            property="enableWebdav"
-            label="WebDAV"
-            min-width="80"
-          >
-            <template slot-scope="scope">
-              <el-switch
-                v-if="scope.row.userNS !== 'default'"
-                v-model="scope.row.enableWebdav"
-                active-color="#13ce66"
-                inactive-color="#ff4949"
-                :active-value="true"
-                :inactive-value="false"
-                @change="toggleUserWebdav(scope.row, $event)"
-              >
-              </el-switch>
-            </template>
-          </el-table-column>
-          <el-table-column
-            property="enableLocalStore"
-            label="书仓"
-            min-width="80"
-          >
-            <template slot-scope="scope">
-              <el-switch
-                v-if="scope.row.userNS !== 'default'"
-                v-model="scope.row.enableLocalStore"
-                active-color="#13ce66"
-                inactive-color="#ff4949"
-                :active-value="true"
-                :inactive-value="false"
-                @change="toggleUserLocalStore(scope.row, $event)"
-              >
-              </el-switch>
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-      <div slot="footer" class="dialog-footer">
-        <el-button
-          type="primary"
-          size="medium"
-          class="float-left"
-          @click="deleteUserList"
-          >批量删除</el-button
-        >
-        <span class="check-tip"
-          >已选择 {{ manageUserSelection.length }} 个</span
-        >
-        <el-button size="medium" @click="showUserManageDialog = false"
-          >取消</el-button
-        >
-      </div>
-    </el-dialog>
-
-    <el-dialog
-      title="WebDAV文件管理"
-      :visible.sync="showWebdavManageDialog"
-      :width="dialogWidth"
-      :top="dialogTop"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-      v-if="$store.getters.isNormalPage"
-    >
-      <div class="source-container table-container">
-        <el-table
-          :data="webdavFileList"
-          :height="dialogContentHeight"
-          @selection-change="webdavFileSelection = $event"
-        >
-          <el-table-column
-            type="selection"
-            width="25"
-            fixed
-            :selectable="row => !row.toParent"
-          >
-          </el-table-column>
-          <el-table-column
-            property="name"
-            min-width="150px"
-            label="文件名"
-            fixed
-          >
-            <template slot-scope="scope">
-              <span v-if="!scope.row.isDirectory">{{ scope.row.name }}</span>
-              <el-link
-                type="primary"
-                v-if="scope.row.isDirectory"
-                @click="showWebdavFile(scope.row.path)"
-                >{{ scope.row.name }}</el-link
-              >
-            </template>
-          </el-table-column>
-          <el-table-column
-            property="size"
-            label="大小"
-            :formatter="formatTableField"
-            min-width="100px"
-          ></el-table-column>
-          <el-table-column
-            property="lastModified"
-            label="修改时间"
-            :formatter="formatTableField"
-            width="120px"
-          ></el-table-column>
-          <el-table-column label="操作" width="100px">
-            <template slot-scope="scope">
-              <el-button
-                type="text"
-                @click="deleteWebdavFile(scope.row)"
-                style="color: #f56c6c"
-                v-if="!scope.row.toParent"
-                >删除</el-button
-              >
-              <el-button
-                type="text"
-                @click="restoreFromWebdav(scope.row)"
-                v-if="!scope.row.isDirectory && scope.row.name.endsWith('.zip')"
-                >还原</el-button
-              >
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-      <div slot="footer" class="dialog-footer">
-        <el-button
-          type="primary"
-          size="medium"
-          class="float-left"
-          @click="deleteWebdavFileList"
-          >批量删除</el-button
-        >
-        <span class="check-tip"
-          >已选择 {{ webdavFileSelection.length }} 个</span
-        >
-        <el-button size="medium" @click="showWebdavManageDialog = false"
-          >取消</el-button
-        >
-      </div>
-    </el-dialog>
 
     <el-dialog
       :title="'导入本地书籍' + importMultiBookTip"
@@ -1073,7 +919,7 @@
                 placeholder="内置规则"
               >
                 <el-option
-                  v-for="(rule, index) in $store.state.txtTocRules"
+                  v-for="(rule, index) in tocRuleList"
                   :key="'txtTocRule-' + index"
                   :label="rule.name"
                   :value="rule.rule"
@@ -1124,174 +970,8 @@
     </el-dialog>
 
     <el-dialog
-      :title="isShowBookGroupSettingDialog ? '设置分组' : '分组管理'"
-      :visible.sync="showBookGroupManageDialog"
-      :width="dialogWidth"
-      :top="dialogTop"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-      @opened="$refs.bookGroupTableRef.doLayout()"
-      @closed="isShowBookGroupSettingDialog = false"
-      v-if="$store.getters.isNormalPage"
-    >
-      <div class="source-container table-container">
-        <el-table
-          :data="showBookGroupList"
-          :height="dialogContentHeight"
-          @selection-change="bookGroupSelection = $event"
-          ref="bookGroupTableRef"
-          :key="isShowBookGroupSettingDialog"
-        >
-          <el-table-column
-            type="selection"
-            width="25"
-            fixed
-            v-if="isShowBookGroupSettingDialog"
-          >
-          </el-table-column>
-          <el-table-column
-            property="groupName"
-            label="分组名"
-            min-width="100"
-            fixed
-          >
-            <template slot-scope="scope">
-              <span> {{ displayBookGroupName(scope.row) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column
-            property="show"
-            label="显示"
-            min-width="80"
-            v-if="!isShowBookGroupSettingDialog"
-          >
-            <template slot-scope="scope">
-              <el-switch
-                v-model="scope.row.show"
-                active-color="#13ce66"
-                inactive-color="#ff4949"
-                :active-value="true"
-                :inactive-value="false"
-                @change="toggleBookGroupShow(scope.row, $event)"
-              >
-              </el-switch>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="100px">
-            <template slot-scope="scope">
-              <el-button type="text" @click="saveBookGroup(scope.row)"
-                >编辑</el-button
-              >
-              <el-button
-                type="text"
-                v-if="
-                  !isShowBookGroupSettingDialog &&
-                    scope.row.groupId > 0 &&
-                    !getShowShelfBooks(scope.row.groupId).length
-                "
-                @click="deleteBookGroup(scope.row)"
-                style="color: #f56c6c"
-                >删除</el-button
-              >
-            </template>
-          </el-table-column>
-        </el-table>
-      </div>
-      <div slot="footer" class="dialog-footer">
-        <el-button
-          type="primary"
-          size="medium"
-          class="float-left"
-          @click="saveBookGroup()"
-          >添加分组</el-button
-        >
-        <el-button
-          type="primary"
-          size="medium"
-          @click="setBookGroup"
-          v-if="isShowBookGroupSettingDialog"
-          >确认</el-button
-        >
-        <el-button size="medium" @click="showBookGroupManageDialog = false"
-          >取消</el-button
-        >
-      </div>
-    </el-dialog>
-
-    <el-dialog
-      title="书籍信息"
-      :visible.sync="showBookInfoDialog"
-      :width="dialogSmallWidth"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-    >
-      <div class="book-info-container">
-        <div class="book-cover">
-          <div class="book-cover-bg" :style="bookCoverBgStyle"></div>
-          <div class="book-cover-bg-image">
-            <img
-              v-lazy="getCover(getBookCoverUrl(showBookInfo))"
-              :key="showBookInfo.name"
-              alt=""
-              @click="triggerBookCoverRefClick"
-            />
-            <input
-              ref="bookCoverRef"
-              type="file"
-              accept="image/jpg, image/png, image/jpeg"
-              @change="onCoverFileChange"
-              style="display:none"
-            />
-          </div>
-        </div>
-        <div class="book-name">{{ showBookInfo.name }}</div>
-        <div class="book-kind" v-html="renderBookKind(showBookInfo.kind)"></div>
-        <div class="book-props">
-          <div class="book-prop book-author">
-            作者： {{ showBookInfo.author || "未知" }}
-          </div>
-          <div class="book-prop book-origin">
-            来源： {{ displayOriginName(showBookInfo.origin) }}
-            <el-button
-              type="text"
-              class="book-prop-btn"
-              v-if="showBookInfo.origin === 'loc_book'"
-              @click="refreshLocalBook(showBookInfo)"
-              >更新</el-button
-            >
-          </div>
-          <div class="book-prop book-latest">
-            最新： {{ showBookInfo.latestChapterTitle }}
-            <span class="book-prop-btn">
-              追更
-              <el-switch
-                v-model="showBookInfo.canUpdate"
-                active-color="#13ce66"
-                inactive-color="#ff4949"
-                :active-value="true"
-                :inactive-value="false"
-                @change="toggleBookCanUpdate(showBookInfo)"
-              >
-              </el-switch>
-            </span>
-          </div>
-          <div class="book-prop book-group" v-if="!isSearchResult">
-            分组： {{ displayGroupName(showBookInfo.group) }}
-            <el-button
-              type="text"
-              class="book-prop-btn"
-              @click="showSetBookGroup()"
-              >设置分组</el-button
-            >
-          </div>
-        </div>
-        <div class="book-intro" v-html="renderBookIntro(showBookInfo)"></div>
-      </div>
-    </el-dialog>
-
-    <el-dialog
       :visible.sync="showRssSourcesDialog"
-      :width="dialogSmallWidth"
+      :width="dialogWidth"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @closed="showRssSourceEditButton = false"
@@ -1350,7 +1030,7 @@
     <el-dialog
       :title="rssSource.sourceName"
       :visible.sync="showRssArticlesDialog"
-      :width="dialogSmallWidth"
+      :width="dialogWidth"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @closed="rssArticleList = []"
@@ -1393,7 +1073,7 @@
     <el-dialog
       :title="rssArticleInfo.title"
       :visible.sync="showRssArticleContentDialog"
-      :width="dialogSmallWidth"
+      :width="dialogWidth"
       :fullscreen="collapseMenu"
       :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
       @closed="rssArticleInfo = {}"
@@ -1411,32 +1091,31 @@
 
     <LocalStore
       v-model="showLocalStoreManageDialog"
-      :dialogWidth="dialogWidth"
-      :dialogTop="dialogTop"
-      :dialogContentHeight="dialogContentHeight"
       @importFromLocalStorePreview="importMultiBooks"
     ></LocalStore>
+
+    <WebDAV v-model="showWebDAVManageDialog"></WebDAV>
   </div>
 </template>
 
 <script>
+import { mapGetters } from "vuex";
 import Explore from "../components/Explore.vue";
 import LocalStore from "../components/LocalStore.vue";
+import WebDAV from "../components/WebDAV.vue";
 import Axios from "../plugins/axios";
 import { errorTypeList } from "../plugins/config";
+import { setCache, getCache } from "../plugins/cache";
 import eventBus from "../plugins/eventBus";
-import {
-  formatSize,
-  LimitResquest,
-  networkFirstRequest,
-  cacheFirstRequest
-} from "../plugins/helper";
+import { formatSize, LimitResquest } from "../plugins/helper";
 const buildURL = require("axios/lib/helpers/buildURL");
+import { isInContainer } from "element-ui/src/utils/dom";
 
 export default {
   components: {
     Explore,
-    LocalStore
+    LocalStore,
+    WebDAV
   },
   data() {
     return {
@@ -1481,15 +1160,6 @@ export default {
 
       lastScrollTop: 0,
 
-      showUserManageDialog: false,
-      manageUserSelection: [],
-
-      webdavCurrentPath: "/",
-      webdavFileList: [],
-
-      showWebdavManageDialog: false,
-      webdavFileSelection: [],
-
       localStorageAvaliable:
         window.localStorage &&
         window.localStorage.getItem &&
@@ -1508,13 +1178,6 @@ export default {
       importBookInfo: {},
       importBookChapters: [],
       showImportBookDialog: false,
-
-      showBookGroupManageDialog: false,
-      isShowBookGroupSettingDialog: false,
-      bookGroupSelection: [],
-
-      showBookInfo: {},
-      showBookInfoDialog: false,
 
       importMultiBookTip: "",
 
@@ -1541,7 +1204,16 @@ export default {
       },
 
       showLocalStoreManageDialog: false,
-      importUsedTxtRule: ""
+
+      showWebDAVManageDialog: false,
+
+      importUsedTxtRule: "",
+
+      showAddUser: false,
+      addUserForm: {
+        username: "",
+        password: ""
+      }
     };
   },
   watch: {
@@ -1596,6 +1268,12 @@ export default {
       if (val) {
         this.importBookInfo.tocUrl = val;
       }
+    },
+    showBookGroup() {
+      this.$nextTick(() => {
+        // 手动处理 el-image 图片加载
+        setTimeout(this.ensureLoadBookCover);
+      });
     }
   },
   mounted() {
@@ -1611,33 +1289,7 @@ export default {
   },
   methods: {
     init(refresh) {
-      if (this.initing) return;
-      this.initing = true;
-      if (!refresh) {
-        if (this.shelfBooks.length) {
-          // 加载书源列表
-          this.loadBookSource(refresh);
-          // 加载分组列表
-          this.loadBookGroup(refresh);
-          // 加载RSS订阅列表
-          this.loadRssSources(refresh);
-          this.initing = false;
-          return;
-        }
-      }
-      this.loadBookshelf()
-        .then(() => {
-          this.initing = false;
-          // 加载书源列表
-          this.loadBookSource(refresh);
-          // 加载分组列表
-          this.loadBookGroup(refresh);
-          // 加载RSS订阅列表
-          this.loadRssSources(refresh);
-        })
-        .catch(() => {
-          this.initing = false;
-        });
+      this.$root.$children[0].init(refresh);
     },
     setIP() {
       this.$prompt("请输入接口地址 ( 如：localhost:8080/reader3 )", "提示", {
@@ -1657,11 +1309,10 @@ export default {
                 this.connecting = false;
                 instance.confirmButtonLoading = false;
                 done();
-                window.localStorage &&
-                  window.localStorage.setItem("api_prefix", inputUrl);
+                setCache("api_prefix", inputUrl);
                 this.$store.commit("setApi", inputUrl);
-                // 加载书源列表
-                this.loadBookSource();
+                // 初始化
+                this.init();
               })
               .catch(() => {
                 instance.confirmButtonLoading = false;
@@ -1706,78 +1357,18 @@ export default {
         api = "//" + api;
       }
 
-      return networkFirstRequest(
-        () => Axios.get(api + "/getBookshelf?refresh=" + (refresh ? 1 : 0)),
-        "getBookshelf@" +
-          (this.$store.state.isManagerMode
-            ? this.userNS
-            : (this.$store.state.userInfo || {}).username || "default")
-      )
-        .then(response => {
-          this.$store.commit("setConnected", true);
-          this.loading.close();
-          if (response.data.isSuccess) {
-            this.$store.commit("setShelfBooks", response.data.data);
-          }
-        })
-        .catch(error => {
-          this.loading.close();
-          this.$store.commit("setConnected", false);
-          this.$message.error("后端连接失败 " + (error && error.toString()));
-          throw error;
-        });
+      return this.$root.$children[0].loadBookShelf(refresh, api).then(() => {
+        this.loading.close();
+      });
     },
     refreshShelf() {
       return this.loadBookshelf(null, true);
     },
     loadBookGroup(refresh) {
-      return cacheFirstRequest(
-        () => Axios.get(this.api + "/getBookGroups"),
-        "bookGroup@" +
-          (this.$store.state.isManagerMode
-            ? this.userNS
-            : (this.$store.state.userInfo || {}).username || "default"),
-        refresh,
-        true
-      ).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$store.commit("setBookGroupList", res.data.data || []);
-          }
-        },
-        error => {
-          this.$message.error(
-            "加载分组列表失败 " + (error && error.toString())
-          );
-        }
-      );
+      return this.$root.$children[0].loadBookGroup(refresh);
     },
     loadBookSource(refresh) {
-      return cacheFirstRequest(
-        () =>
-          Axios.get(this.api + "/getSources", {
-            params: {
-              simple: 1
-            }
-          }),
-        "bookSourceList@" +
-          (this.$store.state.isManagerMode
-            ? this.userNS
-            : (this.$store.state.userInfo || {}).username || "default"),
-        refresh,
-        true
-      ).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$store.commit("setBookSourceList", res.data.data || []);
-          }
-        },
-        error => {
-          this.$message.error(
-            "加载书源列表失败 " + (error && error.toString())
-          );
-        }
-      );
+      return this.$root.$children[0].loadBookSource(refresh);
     },
     searchBook(page) {
       if (!this.$store.state.connected) {
@@ -1977,7 +1568,9 @@ export default {
         type: book.type,
         coverUrl: this.getBookCoverUrl(book),
         author: book.author,
-        origin: book.origin
+        origin: book.origin,
+        latestChapterTitle: book.latestChapterTitle,
+        intro: book.intro
       });
       this.$router.push({
         path: "/reader" + (this.isSearchResult ? "?search=1" : "")
@@ -2208,7 +1801,18 @@ export default {
                 }
               });
               if (sourceList.length) {
-                this.importSourceList = sourceList;
+                this.importSourceList = sourceList.map(v => {
+                  if (v.headerMap) {
+                    if (!v.header) {
+                      v.header =
+                        typeof v.headerMap === "string"
+                          ? v.headerMap
+                          : JSON.stringify(v.headerMap);
+                    }
+                    delete v.headerMap;
+                  }
+                  return v;
+                });
                 this.showImportSourceDialog = true;
                 this.isImportRssSource = !!isRssSource;
               } else {
@@ -2234,8 +1838,12 @@ export default {
       }
     },
     async loadRemoteBookSource() {
+      const lastRemoteSourceUrl = getCache(
+        this.currentUserName + "@lastRemoteSourceUrl",
+        ""
+      );
       const res = await this.$prompt("请输入远程书源链接", "导入远程书源文件", {
-        inputValue: "",
+        inputValue: lastRemoteSourceUrl || "",
         confirmButtonText: "确定",
         cancelButtonText: "取消"
       }).catch(() => {
@@ -2249,6 +1857,7 @@ export default {
       }).then(
         res => {
           if (res.data.isSuccess) {
+            setCache(this.currentUserName + "@lastRemoteSourceUrl", res.value);
             //
             let sourceList = [];
             res.data.data.forEach(v => {
@@ -2473,30 +2082,8 @@ export default {
         this.popExploreVisible = true;
       }, 100);
     },
-    renderBookIntro(book) {
-      const intro = (book.intro || "暂无简介").split("\n");
-      return intro
-        .map(v => {
-          return `<p>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${v.replace(
-            /^\s+/g,
-            ""
-          )}</p>`;
-        })
-        .join("");
-    },
-    toggleBookIntroPop(book) {
-      this.showBookInfo = book;
-      this.showBookInfoDialog = true;
-      // setTimeout(() => {
-      //   for (const i in this.popIntroVisible) {
-      //     if (Object.hasOwnProperty.call(this.popIntroVisible, i)) {
-      //       if (i !== book.name) {
-      //         this.popIntroVisible[i] = false;
-      //       }
-      //     }
-      //   }
-      //   this.popIntroVisible[book.name] = !this.popIntroVisible[book.name];
-      // }, 100);
+    showBookInfoDialog(book) {
+      eventBus.$emit("showBookInfoDialog", book);
     },
     async saveUserConfig() {
       if (!window.localStorage) {
@@ -2504,7 +2091,7 @@ export default {
         return;
       }
       const res = await this.$confirm(
-        "确认要备份当前终端的阅读配置、过滤规则吗?",
+        "确认要备份当前终端的阅读配置、书架设置、搜索设置、自定义配置方案吗?",
         "提示"
       ).catch(() => {
         return false;
@@ -2513,12 +2100,14 @@ export default {
         return;
       }
       const userConfig = {};
-      ["config", "filterRules"].forEach(key => {
-        const val = window.localStorage.getItem(key);
-        if (val) {
-          userConfig[key] = val;
+      ["config", "shelfConfig", "searchConfig", "customConfigList"].forEach(
+        key => {
+          const val = getCache(key);
+          if (val) {
+            userConfig[key] = val;
+          }
         }
-      });
+      );
       Axios.post(this.api + "/saveUserConfig", userConfig).then(
         res => {
           if (res.data.isSuccess) {
@@ -2536,7 +2125,7 @@ export default {
         return;
       }
       const res = await this.$confirm(
-        "确认要从备份文件中恢复当前终端的阅读配置、过滤规则吗?",
+        "确认要从备份文件中恢复当前终端的阅读配置、书架设置、搜索设置、自定义配置方案吗?",
         "提示"
       ).catch(() => {
         return false;
@@ -2550,8 +2139,7 @@ export default {
           if (res.data.isSuccess) {
             for (const key in res.data.data) {
               if (Object.hasOwnProperty.call(res.data.data, key)) {
-                window.localStorage &&
-                  window.localStorage.setItem(key, res.data.data[key]);
+                setCache(key, res.data.data[key]);
               }
             }
             this.$store.dispatch("syncFromLocalStorage");
@@ -2571,93 +2159,18 @@ export default {
       Axios.get(this.api + "/getUserList").then(
         res => {
           if (res.data.isSuccess) {
+            this.userNS = this.$store.state.userInfo.username;
             this.userList = res.data.data.map(v => ({
               ...v,
               userNS: v.username
             }));
             this.$store.commit("setIsManagerMode", true);
-            this.init(true);
           }
         },
         error => {
           this.$message.error(
             "加载用户空间失败 " + (error && error.toString())
           );
-        }
-      );
-    },
-    isUserSelectable(user) {
-      return user.userNS !== "default";
-    },
-    async deleteUserList() {
-      if (!this.manageUserSelection.length) {
-        this.$message.error("请选择需要删除的用户");
-        return;
-      }
-      const res = await this.$confirm("确认要删除所选择的用户吗?", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning"
-      }).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(
-        this.api + "/deleteUsers",
-        this.manageUserSelection.map(v => v.username)
-      ).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.manageUserSelection = [];
-            this.$message.success("删除用户成功");
-            this.userList = res.data.data.map(v => ({
-              ...v,
-              userNS: v.username
-            }));
-          }
-        },
-        error => {
-          this.$message.error("删除用户失败 " + (error && error.toString()));
-        }
-      );
-    },
-    toggleUserWebdav(user, enableWebdav) {
-      Axios.post(this.api + "/updateUser", {
-        username: user.username,
-        enableWebdav
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("修改成功");
-            this.userList = res.data.data.map(v => ({
-              ...v,
-              userNS: v.username
-            }));
-          }
-        },
-        error => {
-          this.$message.error("修改失败 " + (error && error.toString()));
-        }
-      );
-    },
-    toggleUserLocalStore(user, enableLocalStore) {
-      Axios.post(this.api + "/updateUser", {
-        username: user.username,
-        enableLocalStore
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("修改成功");
-            this.userList = res.data.data.map(v => ({
-              ...v,
-              userNS: v.username
-            }));
-          }
-        },
-        error => {
-          this.$message.error("修改失败 " + (error && error.toString()));
         }
       );
     },
@@ -2678,125 +2191,6 @@ export default {
       this.userList = [];
       this.$store.commit("setIsManagerMode", false);
       this.init(true);
-    },
-    showWebdavFile(path) {
-      this.webdavCurrentPath = path || "/";
-      Axios.get(this.api + "/getWebdavFileList", {
-        params: {
-          path: this.webdavCurrentPath
-        }
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            res.data.data = res.data.data || [];
-            if (this.webdavCurrentPath !== "/") {
-              const paths = this.webdavCurrentPath.split("/").filter(v => v);
-              paths.pop();
-              res.data.data.unshift({
-                name: "..",
-                isDirectory: true,
-                toParent: true,
-                path: "/" + paths.join("/")
-              });
-            }
-            this.webdavFileList = res.data.data;
-            this.showWebdavManageDialog = true;
-          }
-        },
-        error => {
-          this.$message.error(
-            "加载WebDAV文件列表失败 " + (error && error.toString())
-          );
-        }
-      );
-    },
-    async deleteWebdavFileList() {
-      if (!this.webdavFileSelection.length) {
-        this.$message.error("请选择需要删除的文件");
-        return;
-      }
-      const res = await this.$confirm("确认要删除所选择的文件吗?", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning"
-      }).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/deleteWebdavFileList", {
-        path: this.webdavFileSelection.map(v => v.path)
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.webdavFileSelection = [];
-            this.$message.success("删除文件成功");
-            this.showWebdavFile(this.webdavCurrentPath);
-          }
-        },
-        error => {
-          this.$message.error("删除文件失败 " + (error && error.toString()));
-        }
-      );
-    },
-    async deleteWebdavFile(row) {
-      const res = await this.$confirm(
-        `确认要删除该${row.isDirectory ? "文件夹" : "文件"}吗?`,
-        "提示",
-        {
-          confirmButtonText: "确定",
-          cancelButtonText: "取消",
-          type: "warning"
-        }
-      ).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/deleteWebdavFile", {
-        path: row.path
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("删除文件成功");
-            this.showWebdavFile(this.webdavCurrentPath);
-          }
-        },
-        error => {
-          this.$message.error("删除文件失败 " + (error && error.toString()));
-        }
-      );
-    },
-    async restoreFromWebdav(row) {
-      const res = await this.$confirm(
-        `确认要从该压缩文件恢复书源、书架、分组和RSS订阅数据吗?`,
-        "提示",
-        {
-          confirmButtonText: "确定",
-          cancelButtonText: "取消",
-          type: "warning"
-        }
-      ).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/restoreFromWebdav", {
-        path: row.path
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("恢复成功");
-            this.init(true);
-          }
-        },
-        error => {
-          this.$message.error("恢复失败 " + (error && error.toString()));
-        }
-      );
     },
     async backupToWebdav() {
       const res = await this.$confirm(
@@ -2828,7 +2222,15 @@ export default {
       this.lastTouch = false;
       this.lastMoveX = false;
       this.touchMoveTimes = 0;
-      if (e.touches && e.touches[0]) {
+      // 边缘 20px 以内禁止触摸
+      if (
+        e.touches &&
+        e.touches[0] &&
+        e.touches[0].clientX > 20 &&
+        e.touches[0].clientX < window.innerWidth - 20 &&
+        e.touches[0].clientY > 20 &&
+        e.touches[0].clientY < window.innerHeight - 20
+      ) {
         this.lastTouch = e.touches[0];
       }
     },
@@ -2999,7 +2401,7 @@ export default {
     },
     showManageBookGroup() {
       this.loadBookGroup(true);
-      this.showBookGroupManageDialog = true;
+      eventBus.$emit("showBookGroupDialog", false);
     },
     getShowShelfBooks(bookGroup) {
       // 处理特殊分组
@@ -3021,212 +2423,8 @@ export default {
         bookGroup === 0 ? true : v.group & bookGroup
       );
     },
-    toggleBookGroupShow(bookGroup, show) {
-      Axios.post(this.api + "/saveBookGroup", {
-        ...bookGroup,
-        show
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("修改成功");
-            this.loadBookGroup(true);
-          }
-        },
-        error => {
-          this.$message.error("修改失败 " + (error && error.toString()));
-        }
-      );
-    },
-    async deleteBookGroup(row) {
-      const res = await this.$confirm(`确认要删除该分组吗?`, "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning"
-      }).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/deleteBookGroup", {
-        groupId: row.groupId
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("删除分组成功");
-            this.loadBookGroup(true);
-          }
-        },
-        error => {
-          this.$message.error("删除分组失败 " + (error && error.toString()));
-        }
-      );
-    },
-    async saveBookGroup(bookGroup) {
-      const res = await this.$prompt(`${bookGroup ? "编辑分组" : "添加分组"}`, {
-        inputValue: bookGroup ? bookGroup.groupName : "",
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        inputValidator(v) {
-          if (!v) {
-            return "分组名不能为空";
-          }
-          return true;
-        }
-      }).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/saveBookGroup", {
-        ...bookGroup,
-        groupName: res.value
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success(bookGroup ? "修改成功" : "添加成功");
-            this.loadBookGroup(true);
-          }
-        },
-        error => {
-          this.$message.error(
-            (bookGroup ? "修改失败" : "添加失败") + (error && error.toString())
-          );
-        }
-      );
-    },
-    displayBookGroupName(bookGroup) {
-      return (
-        bookGroup.groupName +
-        (bookGroup.groupId < 0
-          ? "(" +
-            this.$store.getters.builtInBookGroupMap[bookGroup.groupId] +
-            ")"
-          : "")
-      );
-    },
-    displayOriginName(value) {
-      if (value === "loc_book") return "本地";
-      return (
-        (this.bookSourceList.find(v => v.bookSourceUrl === value) || {})
-          .bookSourceName || "未知书源"
-      );
-    },
-    displayGroupName(value) {
-      const groupName = [];
-      let unGroupName = "";
-      this.$store.state.bookGroupList.forEach(v => {
-        if (v.groupId > 0 && (v.groupId & value) !== 0) {
-          groupName.push(v.groupName);
-        } else if (v.groupId === -4) {
-          unGroupName = v.groupName;
-        }
-      });
-      return groupName.join(",") || unGroupName || "未分组";
-    },
-    renderBookKind(value) {
-      if (!value) {
-        return "";
-      }
-      const kindList = value.split(",");
-      return kindList
-        .filter(v => v)
-        .map(v => {
-          return `<span>${v}</span>`;
-        })
-        .join("");
-    },
-    getBookGroupListForBook(bookGroup) {
-      const groups = [];
-      this.$store.state.bookGroupList.forEach(v => {
-        if (v.groupId > 0 && (v.groupId & bookGroup) !== 0) {
-          groups.push(v);
-        }
-      });
-      return groups;
-    },
-    showSetBookGroup() {
-      this.isShowBookGroupSettingDialog = true;
-      this.showBookGroupManageDialog = true;
-      this.$nextTick(() => {
-        this.$refs.bookGroupTableRef.clearSelection();
-        this.getBookGroupListForBook(this.showBookInfo.group).forEach(v => {
-          this.$refs.bookGroupTableRef.toggleRowSelection(v, true);
-        });
-      });
-    },
-    setBookGroup() {
-      if (!this.bookGroupSelection.length) {
-        this.$message.error("请选择书籍分组");
-        return;
-      }
-      Axios.post(this.api + "/saveBookGroupId", {
-        bookUrl: this.showBookInfo.bookUrl,
-        groupId: this.bookGroupSelection.reduce((c, v) => {
-          return c | v.groupId;
-        }, 0)
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("设置成功");
-            this.showBookGroupManageDialog = false;
-            this.isShowBookGroupSettingDialog = false;
-            this.showBookInfo = res.data.data;
-            this.$store.commit("updateShelfBook", res.data.data);
-          }
-        },
-        error => {
-          this.$message.error("设置失败" + (error && error.toString()));
-        }
-      );
-    },
-    refreshLocalBook(book) {
-      Axios.post(this.api + "/refreshLocalBook", {
-        bookUrl: book.bookUrl
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("更新成功");
-            this.showBookInfo = res.data.data;
-            this.$store.commit("updateShelfBook", res.data.data);
-          }
-        },
-        error => {
-          this.$message.error("更新失败" + (error && error.toString()));
-        }
-      );
-    },
-    toggleBookCanUpdate(book) {
-      this.saveBook(book, false, true).then(res => {
-        this.showBookInfo = res;
-      });
-    },
     loadRssSources(refresh) {
-      return cacheFirstRequest(
-        () =>
-          Axios.get(this.api + "/getRssSources", {
-            params: {
-              simple: 1
-            }
-          }),
-        "rssSources@" +
-          (this.$store.state.isManagerMode
-            ? this.userNS
-            : (this.$store.state.userInfo || {}).username || "default"),
-        refresh,
-        true
-      ).then(
-        res => {
-          const data = res.data.data || [];
-          this.$store.commit("setRssSourceList", data);
-        },
-        error => {
-          this.$message.error(
-            "加载RSS订阅列表失败 " + (error && error.toString())
-          );
-        }
-      );
+      return this.$root.$children[0].loadRssSources(refresh);
     },
     showRssDialog() {
       //
@@ -3621,38 +2819,6 @@ export default {
     getBookCoverUrl(book) {
       return book.customCoverUrl || book.coverUrl;
     },
-    triggerBookCoverRefClick() {
-      this.$refs.bookCoverRef.dispatchEvent(new MouseEvent("click"));
-    },
-    onCoverFileChange(event) {
-      if (!event.target || !event.target.files || !event.target.files.length) {
-        return;
-      }
-      const rawFile = event.target.files && event.target.files[0];
-      // console.log("rawFile", rawFile);
-      let param = new FormData();
-      param.append("file", rawFile);
-      param.append("type", "covers");
-      Axios.post(this.api + "/uploadFile", param, {
-        headers: { "Content-Type": "multipart/form-data" }
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            if (!res.data.data.length) {
-              this.$message.error("上传文件失败");
-              return;
-            }
-            this.showBookInfo.customCoverUrl = res.data.data[0];
-            this.saveBook(this.showBookInfo).then(res => {
-              this.showBookInfo = res;
-            });
-          }
-        },
-        error => {
-          this.$message.error("上传文件失败 " + (error && error.toString()));
-        }
-      );
-    },
     logout() {
       Axios.post(this.api + "/logout").then(
         res => {
@@ -3667,7 +2833,7 @@ export default {
       );
     },
     getChapterListByRule() {
-      Axios.post("/getChapterListByRule", this.importBookInfo).then(
+      return Axios.post("/getChapterListByRule", this.importBookInfo).then(
         res => {
           if (res.data.isSuccess && res.data.data.book) {
             this.importBookInfo = res.data.data.book;
@@ -3678,9 +2844,38 @@ export default {
           this.$message.error("注销失败 " + (error && error.toString()));
         }
       );
+    },
+    showUserManageDialog() {
+      eventBus.$emit("showUserManageDialog");
+    },
+    showMPCode() {
+      eventBus.$emit("showMPCodeDialog");
+    },
+    joinTGChannel() {
+      window.open("https://t.me/facker_channel", "_target");
+    },
+    ensureLoadBookCover() {
+      // 手动触发滚动事件，显示书籍封面图片
+      this.$refs.bookList.dispatchEvent(new MouseEvent("scroll"));
+
+      // 上面一步应该能搞定，下面再确认一下
+      this.$refs.bookCoverList.forEach(v => {
+        if (!v.show && isInContainer(v.$el, this.$refs.bookList)) {
+          // console.log("not show ", v);
+          v.show = true;
+        }
+      });
     }
   },
   computed: {
+    ...mapGetters([
+      "collapseMenu",
+      "dialogWidth",
+      "dialogSmallWidth",
+      "dialogTop",
+      "dialogContentHeight",
+      "popupWidth"
+    ]),
     config() {
       return this.$store.getters.config;
     },
@@ -3727,38 +2922,6 @@ export default {
     },
     connectType() {
       return this.$store.state.connected ? "success" : "danger";
-    },
-    collapseMenu() {
-      return this.$store.state.miniInterface;
-    },
-    dialogWidth() {
-      return this.collapseMenu ? "85%" : "700px";
-    },
-    dialogSmallWidth() {
-      return this.collapseMenu ? "85%" : "500px";
-    },
-    dialogTop() {
-      return (
-        (this.$store.state.windowSize.height -
-          this.dialogContentHeight -
-          70 -
-          54 -
-          60) /
-          2 +
-        "px"
-      );
-    },
-    dialogContentHeight() {
-      if (this.collapseMenu) {
-        return this.$store.state.windowSize.height - 54 - 60 - 70;
-      }
-      return Math.min(
-        0.7 * this.$store.state.windowSize.height - 70 - 54 - 60,
-        400
-      );
-    },
-    popupWidth() {
-      return this.collapseMenu ? this.$store.state.windowSize.width : "600";
     },
     readingRecent() {
       return this.$store.state.readingBook &&
@@ -3884,24 +3047,10 @@ export default {
         });
       }
     },
-    showBookGroupList() {
-      if (!this.isShowBookGroupSettingDialog) {
-        return this.$store.state.bookGroupList;
-      }
-      return this.$store.state.bookGroupList.filter(v => v.groupId > 0);
-    },
     bookGroupDisplayList() {
       return this.$store.state.bookGroupList
         .filter(v => this.getShowShelfBooks(v.groupId).length && v.show)
         .sort((a, b) => a.order - b.order);
-    },
-    bookCoverBgStyle() {
-      return {
-        backgroundImage: `url(${this.getCover(
-          this.getBookCoverUrl(this.showBookInfo),
-          true
-        )})`
-      };
     },
     rssSourceList() {
       return []
@@ -3926,12 +3075,32 @@ export default {
         return (
           this.importBookInfo &&
           this.importBookInfo.originName &&
-          this.importBookInfo.originName.toLowerCase().endsWith(".txt")
+          (this.importBookInfo.originName.toLowerCase().endsWith(".txt") ||
+            this.importBookInfo.originName.toLowerCase().endsWith(".epub"))
         );
       } catch (e) {
         // console.log(e);
       }
       return false;
+    },
+    tocRuleList() {
+      if (!this.importBookInfo || !this.importBookInfo.originName) {
+        return [];
+      }
+      if (this.importBookInfo.originName.toLowerCase().endsWith(".txt")) {
+        // txt
+        return this.$store.state.txtTocRules;
+      } else {
+        // epub
+        return [
+          { name: "根据 Spin 获取章节，使用 Toc 补充章节名", rule: "spin+toc" },
+          { name: "根据 Spin 获取章节，强制使用 Toc 章节名", rule: "spin<toc" },
+          { name: "根据 Spin 获取章节", rule: "spin" },
+          { name: "根据 Toc 获取章节，使用 Spin 补充章节名", rule: "toc+spin" },
+          { name: "根据 Toc 获取章节，强制使用 Spin 章节名", rule: "toc<spin" },
+          { name: "根据 Toc 获取章节", rule: "toc" }
+        ];
+      }
     }
   }
 };
@@ -4328,56 +3497,9 @@ export default {
   .book .info .intro, .book .info .dur-chapter, .book .info .last-chapter {
     color: #969ba3 !important;
   }
-  >>>.el-table {
-    background-color: transparent;
-  }
 
-  >>.el-table__expanded-cell {
-    background-color: transparent;
-  }
-  >>>.el-table th, >>>.el-table tr{
-    background-color: #222 !important;
-  }
-  >>>.el-table td {
-    border-bottom: 1px solid #555;
-  }
-  >>>.el-table th.is-leaf {
-    border-bottom: 1px solid #555;
-  }
-  >>>.el-table--border::after {
-    background-color: transparent;
-  }
-  >>>.el-table--group::after {
-    background-color: transparent;
-  }
-  >>>.el-table::before {
-    background-color: transparent;
-  }
-  >>>.el-table {
-    background-color: transparent;
-  }
-  >>>.el-table--enable-row-hover .el-table__body tr:hover>td {
-    background-color: #333;
-  }
-  >>>.el-table__fixed-right::before, >>>.el-table__fixed::before {
-    background-color: #333;
-  }
-  >>>.el-table__body tr.hover-row.current-row>td,
-  >>>.el-table__body tr.hover-row.el-table__row--striped.current-row>td,
-  >>>.el-table__body tr.hover-row.el-table__row--striped>td,
-  >>>.el-table__body tr.hover-row>td {
-    background-color: #444;
-  }
   >>>.check-tip {
     color: #bbb;
-  }
-
-  >>> .el-table__body-wrapper::-webkit-scrollbar {
-    background-color: #333 !important;
-  }
-
-  >>> .el-dialog__wrapper::-webkit-scrollbar {
-    background-color: #333 !important;
   }
 }
 
@@ -4516,75 +3638,6 @@ export default {
   overflow-x: auto;
 }
 
-.float-left {
-  float: left;
-}
-
-.float-right {
-  float: right;
-}
-
-.book-info-container {
-  .book-cover {
-    width: 100%;
-    position: relative;
-    height: 150px;
-
-    .book-cover-bg {
-      position: absolute;
-      height: 100%;
-      width: 100%;
-      filter: blur(50px);
-    }
-
-    .book-cover-bg-image {
-      position: absolute;
-      height: 100%;
-      width: 100%;
-
-      img {
-        margin: 0 auto;
-        display: block;
-        height: 150px;
-      }
-    }
-  }
-  .book-name {
-    display: block;
-    font-size: 16px;
-    font-weight: 500;
-    text-align: center;
-    padding: 10px 0;
-  }
-
-  .book-kind {
-    display: block;
-    color: red;
-    text-align: center;
-    padding: 5px 0;
-  }
-
-  .book-props {
-    padding: 5px 0;
-
-    .book-prop {
-      padding: 3px 0;
-
-      .book-prop-btn {
-        float: right;
-        height: 19px;
-        padding: 0;
-      }
-    }
-  }
-
-  .book-intro {
-    line-height: 1.6;
-    max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px - 150px - 75px - 120px);
-    overflow-y: auto;
-  }
-}
-
 .rss-source-list-container {
   max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px);
   overflow-y: auto;
@@ -4625,15 +3678,6 @@ export default {
       margin-top: 5px;
       text-align: center;
     }
-  }
-}
-
-.custom-dialog-title {
-  .span-btn {
-    display: inline-block;
-    cursor: pointer;
-    font-size: 15px;
-    margin-right: 10px;
   }
 }
 
@@ -4714,12 +3758,6 @@ export default {
     }
   }
 
-  .book-info-container {
-    .book-name {
-      color: #eee;
-    }
-  }
-
   .rss-source-list-container {
     .rss-source {
       .rss-title {
@@ -4741,14 +3779,6 @@ export default {
   .rss-article-content {
     color: #aaa;
   }
-}
-
-.check-tip {
-  display: inline-block;
-  float: left;
-  line-height: 40px;
-  margin-left: 10px;
-  font-size: 14px;
 }
 
 .source-container::-webkit-scrollbar {
@@ -4799,11 +3829,6 @@ export default {
           }
         }
       }
-    }
-  }
-  .book-info-container {
-    .book-intro {
-      max-height: calc(var(--vh, 1vh) * 100 - 54px - 60px - 150px - 75px - 120px);
     }
   }
   .rss-source-list-container {
