@@ -115,7 +115,7 @@
         </div>
         <div
           class="tool-icon"
-          @click="toTop(1000)"
+          @click="toTop(0)"
           v-if="!$store.state.miniInterface"
         >
           <div class="iconfont">
@@ -125,7 +125,7 @@
         </div>
         <div
           class="tool-icon"
-          @click="toBottom"
+          @click="toBottom(0)"
           v-if="!$store.state.miniInterface"
         >
           <div class="iconfont">
@@ -144,17 +144,13 @@
         >
           <i class="el-icon-info"></i>
         </div>
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="toTop(1000)"
-        >
+        <div class="float-btn" :style="popupAbsoluteBtnStyle" @click="toTop(0)">
           <i class="el-icon-top"></i>
         </div>
         <div
           class="float-btn"
           :style="popupAbsoluteBtnStyle"
-          @click="toBottom(1000)"
+          @click="toBottom(0)"
         >
           <i class="el-icon-bottom"></i>
         </div>
@@ -1406,7 +1402,7 @@ export default {
           interval
         );
       } else {
-        jump(this.$refs.top);
+        jump(this.$refs.top, { duration: interval });
       }
     },
     toBottom(interval) {
