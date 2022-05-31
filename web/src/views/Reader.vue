@@ -1231,7 +1231,7 @@ export default {
             ) {
               if (rule.isRegex) {
                 content = content.replace(
-                  new RegExp(rule.pattern),
+                  new RegExp(rule.pattern, "ig"),
                   rule.replacement
                 );
               } else {
