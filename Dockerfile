@@ -14,7 +14,7 @@ RUN \
     gradle -b cli.gradle assemble --info; \
     mv ./build/libs/*.jar ./build/libs/reader.jar
 
-FROM openjdk:8-jdk-alpine
+FROM amazoncorretto:8u332-alpine3.14-jre
 # Install base packages
 RUN \
     # apk update; \
