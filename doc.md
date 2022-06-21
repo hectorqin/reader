@@ -265,6 +265,9 @@ docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -e
 #:后面的端口修改为映射端口
 # web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/
+
+# 通过watchtower手动更新
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --cleanup --run-once reader
 ```
 
 ### Docker-Compose版(推荐)
@@ -280,17 +283,24 @@ docker-compose --version
 
 # 下载项目里的 docker-compose.yaml
 wget https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
-# 更具 docker-compose.yaml 里面的注释编辑所需配置
+# 根据 docker-compose.yaml 里面的注释编辑所需配置
 # 启动 docker-compose
 docker-compose up -d
 
 # 停止 docker-compose
 docker-compose stop
+
+# 查看实时日志
+docker logs -f reader
+
+# 手动更新
+docker-compose pull && docker-compose up -d
 ```
 
 ## Nginx反向代理
 
 ```nginx
+# 此文件放入 conf.d目录下,一般可用 touch /etc/nginx/conf.d/reader.conf 创建
 server {
     listen 80;
     server_name 域名;
