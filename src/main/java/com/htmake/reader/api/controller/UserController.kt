@@ -75,7 +75,7 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
 
     private fun getUserLimit(context: RoutingContext): Int {
         if (context.request().host().equals("reader.htmake.com")) {
-            return 200;
+            return 500;
         }
         return Math.min(Math.max(appConfig.userLimit, 1), userMaxCount)
     }

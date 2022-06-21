@@ -55,6 +55,8 @@ export const request = async ({
     params.secureKey = store.state.secureKey;
     params.userNS = store.state.userNS;
   }
+  // 防止 ie 缓存 GET 请求
+  params.v = new Date().getTime();
   const query = {
     url,
     method,

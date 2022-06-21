@@ -22,6 +22,7 @@ const defaultDayConfig = {
   name: "内置白天",
   theme: 0,
   font: 0,
+  chineseFont: "简体",
   fontSize: 18,
   fontWeight: 400,
   themeType: "day",
@@ -31,6 +32,8 @@ const defaultDayConfig = {
   readWidth: 800,
   lineHeight: 1.8, // 行高
   paragraphSpace: 0.2, // 段间距
+  autoReadingMethod: "像素滚动",
+  autoReadingPixel: 1,
   autoReadingLineTime: 1000,
   pageMode: "自适应",
   selectionAction: "过滤弹窗"
@@ -40,6 +43,7 @@ const defaultNightConfig = {
   name: "内置黑夜",
   theme: 6,
   font: 0,
+  chineseFont: "简体",
   fontSize: 18,
   fontWeight: 400,
   themeType: "night",
@@ -49,6 +53,8 @@ const defaultNightConfig = {
   readWidth: 800,
   lineHeight: 1.8, // 行高
   paragraphSpace: 0.2, // 段间距
+  autoReadingMethod: "像素滚动",
+  autoReadingPixel: 1,
   autoReadingLineTime: 1000,
   pageMode: "自适应",
   selectionAction: "过滤弹窗"

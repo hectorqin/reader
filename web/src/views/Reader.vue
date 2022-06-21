@@ -421,6 +421,7 @@ import Axios from "../plugins/axios";
 import jump from "../plugins/jump";
 import Animate from "../plugins/animate";
 import { setCache, getCache } from "../plugins/cache";
+import { simplized, traditionalized } from "../plugins/chinese";
 import {
   cacheFirstRequest,
   LimitResquest,
@@ -603,6 +604,11 @@ export default {
       } else {
         this.content = this.filterContent(this.content);
       }
+    },
+    chineseFont() {
+      this.title = this.title;
+      this.content = this.content;
+      this.computeShowChapterList();
     }
   },
   data() {
@@ -942,6 +948,12 @@ export default {
           this.$store.getters.config.paragraphSpace *
           2
       );
+    },
+    formatedTitle() {
+      return this.formatChinese(this.title);
+    },
+    chineseFont() {
+      return this.config.chineseFont;
     }
   },
   methods: {
@@ -1244,6 +1256,7 @@ export default {
         //
       }
       content.replace(/\\n+/g, "\n");
+      content = this.formatChinese(content);
       return content;
     },
     loadShowChapter(index, refresh) {
@@ -2582,6 +2595,10 @@ export default {
         }, 300);
         return;
       }
+      if (this.config.autoReadingMethod === "像素滚动") {
+        this.autoReadByPixel();
+        return;
+      }
       const current = this.getCurrentParagraph();
       const next = this.getNextParagraph();
       if (next) {
@@ -2621,6 +2638,44 @@ export default {
         });
       }
     },
+    autoReadByPixel() {
+      if (!this.autoReading) {
+        return;
+      }
+      if (this.showToolBar) {
+        this.autoReadingTimer = setTimeout(() => {
+          this.autoRead();
+        }, 300);
+        return;
+      }
+      if (this.config.autoReadingMethod !== "像素滚动") {
+        this.autoRead();
+        return;
+      }
+      const scrollTop =
+        document.documentElement.scrollTop || document.body.scrollTop;
+      if (
+        scrollTop + this.windowSize.height <
+        document.documentElement.scrollHeight
+      ) {
+        // console.log(delayTime, next);
+        this.autoReadingTimer = setTimeout(() => {
+          // 滚动
+          this.scrollContent(this.config.autoReadingPixel, 0);
+          this.autoReadByPixel();
+        }, this.config.autoReadingLineTime);
+      } else {
+        // 下一章
+        this.$once("showContent", () => {
+          setTimeout(() => {
+            this.autoReadByPixel();
+          }, 100);
+        });
+        this.toNextChapter(() => {
+          this.autoReading = false;
+        });
+      }
+    },
     stopAutoReading() {
       if (this.autoReadingTimer) {
         clearInterval(this.autoReadingTimer);
@@ -2643,6 +2698,13 @@ export default {
       );
       book = Object.assign(book, shelfBook || {});
       eventBus.$emit("showBookInfoDialog", book);
+    },
+    formatChinese(text) {
+      if (this.config.chineseFont === "简体") {
+        return simplized(text);
+      } else {
+        return traditionalized(text);
+      }
     }
   }
 };

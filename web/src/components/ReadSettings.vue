@@ -188,6 +188,19 @@
           </div>
         </li>
         <li>
+          <span class="setting-item-title">简繁转换</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(chineseFont, index) in chineseFonts"
+              :key="index"
+              :class="{ selected: config.chineseFont == chineseFont }"
+              @click="setChineseFont(chineseFont)"
+              >{{ chineseFont }}</span
+            >
+          </div>
+        </li>
+        <li>
           <span class="setting-item-title">字体大小</span>
           <div class="resize">
             <span class="less" @click="lessFontSize"
@@ -292,6 +305,37 @@
             ><b></b> <span class="lang">{{ animateMSTime }}</span
             ><b></b>
             <span class="more" @click="moreAnimateMSTime"
+              ><i class="el-icon-plus"></i
+            ></span>
+          </div>
+        </li>
+        <li>
+          <span class="setting-item-title">自动翻页</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(method, index) in autoReadingMethods"
+              :key="index"
+              :class="{ selected: config.autoReadingMethod === method }"
+              @click="setAutoReadingMethod(method)"
+              >{{ method }}</span
+            >
+          </div>
+        </li>
+        <li v-if="config.autoReadingMethod === '像素滚动'">
+          <span class="setting-item-title">滚动像素</span>
+          <div class="resize">
+            <span class="less" @click="lessAutoReadingPixel"
+              ><i class="el-icon-minus"></i></span
+            ><b></b>
+            <span class="lang">
+              <el-input
+                class="setting-input"
+                v-model="autoReadingPixel"
+                size="mini"
+              ></el-input> </span
+            ><b></b>
+            <span class="more" @click="moreAutoReadingPixel"
               ><i class="el-icon-plus"></i
             ></span>
           </div>
@@ -411,7 +455,12 @@ export default {
       pageModes: ["自适应", "手机模式"],
       pageTypes: ["正常", "Kindle"],
       themeTypes: ["day", "night"],
-      configDefaultTypeList: ["白天默认", "黑夜默认"]
+      configDefaultTypeList: ["白天默认", "黑夜默认"],
+      autoReadingMethods: ["像素滚动", "段落滚动"],
+      chineseFonts: ["简体", "繁体"],
+      autoReadingPixel:
+        this.$store.state.config.autoReadingPixel ||
+        settings.config.autoReadingPixel
     };
   },
   mounted() {},
@@ -511,6 +560,11 @@ export default {
       let config = this.config;
       config.contentColor = color;
       this.$store.commit("setConfig", { ...config });
+    },
+    autoReadingPixel(val) {
+      let config = this.config;
+      config.autoReadingPixel = +val;
+      this.$store.commit("setConfig", { ...config });
     }
   },
   methods: {
@@ -533,6 +587,16 @@ export default {
       this.$emit("readMethodChange");
       let config = this.config;
       config.readMethod = method;
+      this.$store.commit("setConfig", config);
+    },
+    setAutoReadingMethod(method) {
+      let config = this.config;
+      config.autoReadingMethod = method;
+      this.$store.commit("setConfig", config);
+    },
+    setChineseFont(chineseFont) {
+      let config = this.config;
+      config.chineseFont = chineseFont;
       this.$store.commit("setConfig", config);
     },
     setPageMode(mode) {
@@ -635,6 +699,26 @@ export default {
       if (config.animateMSTime >= 50) config.animateMSTime -= 50;
       this.$store.commit("setConfig", config);
     },
+    moreAutoReadingPixel() {
+      let config = this.config;
+      config.autoReadingPixel =
+        typeof config.autoReadingPixel !== "undefined"
+          ? config.autoReadingPixel
+          : settings.config.autoReadingPixel;
+      if (config.autoReadingPixel < 100) config.autoReadingPixel += 5;
+      this.autoReadingPixel = config.autoReadingPixel;
+      this.$store.commit("setConfig", config);
+    },
+    lessAutoReadingPixel() {
+      let config = this.config;
+      config.autoReadingPixel =
+        typeof config.autoReadingPixel !== "undefined"
+          ? config.autoReadingPixel
+          : settings.config.autoReadingPixel;
+      if (config.autoReadingPixel >= 6) config.autoReadingPixel -= 5;
+      this.autoReadingPixel = config.autoReadingPixel;
+      this.$store.commit("setConfig", config);
+    },
     moreAutoReadingLineTime() {
       let config = this.config;
       config.autoReadingLineTime =
@@ -650,7 +734,7 @@ export default {
         typeof config.autoReadingLineTime !== "undefined"
           ? config.autoReadingLineTime
           : settings.config.autoReadingLineTime;
-      if (config.autoReadingLineTime >= 200) config.autoReadingLineTime -= 50;
+      if (config.autoReadingLineTime >= 100) config.autoReadingLineTime -= 50;
       this.$store.commit("setConfig", config);
     },
     moreLineHeight() {
@@ -1180,6 +1264,18 @@ export default {
     .less:hover, .more:hover {
       color: #ed4259;
     }
+  }
+}
+</style>
+<style lang="stylus">
+.setting-input {
+  .el-input__inner {
+    background: transparent;
+    border: none !important;
+    text-align: center;
+    width: 72px;
+    font-size: 14px;
+    color: #a6a6a6;
   }
 }
 </style>

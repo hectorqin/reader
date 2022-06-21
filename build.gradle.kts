@@ -90,7 +90,7 @@ dependencies {
 
     // json
     implementation("com.google.code.gson:gson:2.8.5")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.+")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.+")
 
     // log
     implementation("io.github.microutils:kotlin-logging:1.6.24")

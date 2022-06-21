@@ -153,6 +153,8 @@ class YueduApi : RestVerticle() {
         // 读取远程书源文件
         router.post("/reader3/readRemoteSourceFile").coroutineHandlerWithoutRes { bookSourceController.readRemoteSourceFile(it) }
 
+        // 设置默认书源
+        router.post("/reader3/setAsDefaultSources").coroutineHandler { bookSourceController.setAsDefaultSources(it) }
 
         /** 书籍模块 */
         // 书架

@@ -354,8 +354,11 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setErrorMsg("未配置书源")
         }
         if (bookInfo.isLocalBook()) {
-            val localFile = bookInfo.getLocalFile()
+            val localFile = bookInfo.also{
+                it.setRootDir(getWorkDir())
+            }.getLocalFile()
             if (!localFile.exists()) {
+                logger.info("localFile: {} not exists", localFile)
                 return returnData.setErrorMsg("本地书籍源文件不存在")
             }
         }
@@ -497,7 +500,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var content = ""
         if (bookInfo.isLocalBook()) {
             if (bookInfo.isLocalBook()) {
-                val localFile = bookInfo.getLocalFile()
+                val localFile = bookInfo.also{
+                    it.setRootDir(getWorkDir())
+                }.getLocalFile()
                 if (!localFile.exists()) {
                     return returnData.setErrorMsg("本地源书籍文件不存在")
                 }
@@ -1348,7 +1353,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
-        val book = context.bodyAsJson.mapTo(Book::class.java)
+        var book = context.bodyAsJson.mapTo(Book::class.java)
         var userNameSpace = getUserNameSpace(context)
         var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
         if (bookshelf == null) {
@@ -1358,14 +1363,21 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var existIndex: Int = -1
         for (i in 0 until bookshelf.size()) {
             var _book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
-            if (_book.name.equals(book.name)) {
+            if (_book.bookUrl.equals(book.bookUrl)) {
                 existIndex = i
+                book = _book
+                break;
+            }
+            if (_book.name.equals(book.name) && _book.author.equals(book.author)) {
+                existIndex = i
+                book = _book
                 break;
             }
         }
-        if (existIndex >= 0) {
-            bookshelf.remove(existIndex)
+        if (existIndex < 0) {
+            return returnData.setErrorMsg("书架书籍不存在")
         }
+        bookshelf.remove(existIndex)
         // logger.info("bookshelf: {}", bookshelf)
         saveUserStorage(userNameSpace, "bookshelf", bookshelf)
 
@@ -1373,7 +1385,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         val localBookPath = File(getWorkDir("storage", "data", userNameSpace, book.name + "_" + book.author))
         localBookPath.deleteRecursively()
 
-        return returnData.setData("")
+        return returnData.setData("删除书籍成功")
     }
 
     suspend fun getBookGroups(context: RoutingContext): ReturnData {

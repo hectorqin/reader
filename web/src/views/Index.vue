@@ -216,15 +216,6 @@
               :effect="isNight ? 'dark' : 'light'"
               slot="reference"
               class="setting-btn"
-              @click="loadBookSource(true)"
-            >
-              缓存书源
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
-              class="setting-btn"
               @click="showFailureBookSource()"
             >
               失效书源
@@ -276,6 +267,15 @@
               "
             >
               浏览书仓
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              slot="reference"
+              class="setting-btn"
+              @click="init(true)"
+            >
+              刷新缓存
             </el-tag>
           </div>
         </div>
@@ -1771,9 +1771,25 @@ export default {
       reader.onload = e => {
         const data = e.target.result;
         try {
-          this.importSourceList = JSON.parse(data);
-          this.showImportSourceDialog = true;
-          this.isImportRssSource = !!isRssSource;
+          const sourceList = JSON.parse(data);
+          if (Array.isArray(sourceList) && sourceList.length) {
+            this.importSourceList = sourceList.map(v => {
+              if (v.headerMap) {
+                if (!v.header) {
+                  v.header =
+                    typeof v.headerMap === "string"
+                      ? v.headerMap
+                      : JSON.stringify(v.headerMap);
+                }
+                delete v.headerMap;
+              }
+              return v;
+            });
+            this.showImportSourceDialog = true;
+            this.isImportRssSource = !!isRssSource;
+          } else {
+            this.$message.error(sourceTypeName + "文件错误");
+          }
         } catch (error) {
           this.$message.error(sourceTypeName + "文件错误");
         }
