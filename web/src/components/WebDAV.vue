@@ -1,6 +1,6 @@
 <template>
   <el-dialog
-    title="书仓文件管理"
+    title="WebDAV文件管理"
     :visible.sync="show"
     :width="dialogWidth"
     :top="dialogTop"
@@ -13,9 +13,9 @@
   >
     <div class="source-container table-container">
       <el-table
-        :data="localFileList"
+        :data="fileList"
         :height="dialogContentHeight"
-        @selection-change="localFileSelection = $event"
+        @selection-change="fileSelection = $event"
       >
         <el-table-column
           type="selection"
@@ -30,7 +30,7 @@
             <el-link
               type="primary"
               v-if="scope.row.isDirectory"
-              @click="showLocalStoreFile(scope.row.path)"
+              @click="showWebdavFile(scope.row.path)"
               >{{ scope.row.name }}</el-link
             >
           </template>
@@ -51,16 +51,22 @@
           <template slot-scope="scope">
             <el-button
               type="text"
-              @click="deleteLocalStoreFile(scope.row)"
-              style="color: #f56c6c"
-              v-if="!scope.row.toParent"
-              >删除</el-button
+              @click="restoreFromWebdav(scope.row)"
+              v-if="!scope.row.isDirectory && scope.row.name.endsWith('.zip')"
+              >还原</el-button
             >
             <el-button
               type="text"
-              @click="importFromLocalStore(scope.row)"
-              v-if="canImport(scope.row)"
-              >加入书架</el-button
+              @click="downloadFromWebdav(scope.row)"
+              v-if="!scope.row.isDirectory"
+              >下载</el-button
+            >
+            <el-button
+              type="text"
+              @click="deleteWebdavFile(scope.row)"
+              style="color: #f56c6c"
+              v-if="!scope.row.toParent"
+              >删除</el-button
             >
           </template>
         </el-table-column>
@@ -71,32 +77,25 @@
         type="primary"
         size="medium"
         class="float-left"
-        @click="deleteLocalStoreFileList"
+        @click="deleteWebdavFileList"
         >批量删除</el-button
       >
       <el-button
         type="primary"
         size="medium"
         class="float-left"
-        @click="importFromLocalStore(true)"
-        >批量加入书架</el-button
+        @click="uploadToWebDAV"
       >
-      <el-button
-        type="primary"
-        size="medium"
-        class="float-left"
-        @click="uploadToLocalStore"
-      >
-        上传书籍
+        上传备份文件
       </el-button>
       <input
         ref="bookRef"
         type="file"
         multiple="multiple"
-        @change="onBookFileChange"
+        @change="onFileChange"
         style="display:none"
       />
-      <span class="check-tip">已选择 {{ localFileSelection.length }} 个</span>
+      <span class="check-tip">已选择 {{ fileSelection.length }} 个</span>
       <el-button size="medium" @click="cancel">取消</el-button>
     </div>
   </el-dialog>
@@ -112,13 +111,13 @@ export default {
     prop: "show",
     event: "setShow"
   },
-  name: "LocalStore",
+  name: "WebDAV",
   data() {
     return {
-      localCurrentPath: "/",
-      localFileList: [],
+      currentPath: "/",
+      fileList: [],
 
-      localFileSelection: []
+      fileSelection: []
     };
   },
   props: ["show"],
@@ -128,7 +127,7 @@ export default {
   watch: {
     show(isVisible) {
       if (isVisible) {
-        this.showLocalStoreFile("/");
+        this.showWebdavFile("/");
       }
     }
   },
@@ -154,18 +153,18 @@ export default {
     cancel() {
       this.$emit("setShow", false);
     },
-    showLocalStoreFile(path) {
-      this.localCurrentPath = path || "/";
-      Axios.get(this.api + "/getLocalStoreFileList", {
+    showWebdavFile(path) {
+      this.currentPath = path || "/";
+      Axios.get(this.api + "/getWebdavFileList", {
         params: {
-          path: this.localCurrentPath
+          path: this.currentPath
         }
       }).then(
         res => {
           if (res.data.isSuccess) {
             res.data.data = res.data.data || [];
-            if (this.localCurrentPath !== "/") {
-              const paths = this.localCurrentPath.split("/").filter(v => v);
+            if (this.currentPath !== "/") {
+              const paths = this.currentPath.split("/").filter(v => v);
               paths.pop();
               res.data.data.unshift({
                 name: "..",
@@ -174,19 +173,18 @@ export default {
                 path: "/" + paths.join("/")
               });
             }
-            this.localFileList = res.data.data;
-            this.showLocalStoreManageDialog = true;
+            this.fileList = res.data.data;
           }
         },
         error => {
           this.$message.error(
-            "加载书仓文件列表失败 " + (error && error.toString())
+            "加载 WebDAV 文件列表失败 " + (error && error.toString())
           );
         }
       );
     },
-    async deleteLocalStoreFileList() {
-      if (!this.localFileSelection.length) {
+    async deleteWebdavFileList() {
+      if (!this.fileSelection.length) {
         this.$message.error("请选择需要删除的文件");
         return;
       }
@@ -200,14 +198,14 @@ export default {
       if (!res) {
         return;
       }
-      Axios.post(this.api + "/deleteLocalStoreFileList", {
-        path: this.localFileSelection.map(v => v.path)
+      Axios.post(this.api + "/deleteWebdavFileList", {
+        path: this.fileSelection.map(v => v.path)
       }).then(
         res => {
           if (res.data.isSuccess) {
-            this.localFileSelection = [];
+            this.fileSelection = [];
             this.$message.success("删除文件成功");
-            this.showLocalStoreFile(this.localCurrentPath);
+            this.showWebdavFile(this.currentPath);
           }
         },
         error => {
@@ -215,7 +213,7 @@ export default {
         }
       );
     },
-    async deleteLocalStoreFile(row) {
+    async deleteWebdavFile(row) {
       const res = await this.$confirm(
         `确认要删除该${row.isDirectory ? "文件夹" : "文件"}吗?`,
         "提示",
@@ -230,13 +228,13 @@ export default {
       if (!res) {
         return;
       }
-      Axios.post(this.api + "/deleteLocalStoreFile", {
+      Axios.post(this.api + "/deleteWebdavFile", {
         path: row.path
       }).then(
         res => {
           if (res.data.isSuccess) {
             this.$message.success("删除文件成功");
-            this.showLocalStoreFile(this.localCurrentPath);
+            this.showWebdavFile(this.currentPath);
           }
         },
         error => {
@@ -244,38 +242,49 @@ export default {
         }
       );
     },
-    async importFromLocalStore(row) {
-      if (row === true) {
-        if (!this.localFileSelection.length) {
-          this.$message.error("请选择需要加入书架的书籍");
-          return;
+    async restoreFromWebdav(row) {
+      const res = await this.$confirm(
+        `确认要从该压缩文件恢复书源、书架、分组和RSS订阅数据吗?`,
+        "提示",
+        {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
         }
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
       }
-      Axios.post(this.api + "/importFromLocalStorePreview", {
-        path:
-          row === true ? this.localFileSelection.map(v => v.path) : [row.path]
+      Axios.post(this.api + "/restoreFromWebdav", {
+        path: row.path
       }).then(
         res => {
           if (res.data.isSuccess) {
-            if (!res.data.data || !res.data.data.length) {
-              this.$message.error("没有选择可导入的书籍");
-              return;
-            }
-            // this.cancel();
-            setTimeout(() => {
-              this.$emit("importFromLocalStorePreview", res.data.data);
-            }, 0);
+            this.$message.success("恢复成功");
+            this.init(true);
           }
         },
         error => {
-          this.$message.error("请求失败 " + (error && error.toString()));
+          this.$message.error("恢复失败 " + (error && error.toString()));
         }
       );
     },
-    uploadToLocalStore() {
+    downloadFromWebdav(row) {
+      window.open(
+        this.api +
+          "/getWebdavFile?path=" +
+          escape(row.path) +
+          "&accessToken=" +
+          this.$store.state.token,
+        "__blank"
+      );
+    },
+    uploadToWebDAV() {
       this.$refs.bookRef.dispatchEvent(new MouseEvent("click"));
     },
-    onBookFileChange(event) {
+    onFileChange(event) {
       if (!event.target || !event.target.files || !event.target.files.length) {
         return;
       }
@@ -284,18 +293,18 @@ export default {
         const file = event.target.files[i];
         param.append("file" + i, file);
       }
-      param.append("path", this.localCurrentPath);
-      Axios.post(this.api + "/uploadFileToLocalStore", param, {
+      param.append("path", this.currentPath);
+      Axios.post(this.api + "/uploadFileToWebdav", param, {
         headers: { "Content-Type": "multipart/form-data" }
       }).then(
         res => {
           if (res.data.isSuccess) {
-            this.$message.success("上传书籍成功");
-            this.showLocalStoreFile(this.localCurrentPath);
+            this.$message.success("上传文件成功");
+            this.showWebdavFile(this.currentPath);
           }
         },
         error => {
-          this.$message.error("上传书籍 " + (error && error.toString()));
+          this.$message.error("上传文件失败 " + (error && error.toString()));
         }
       );
       this.$refs.bookRef.value = null;

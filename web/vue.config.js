@@ -86,6 +86,8 @@ module.exports = {
   devServer: {
     port: 8081
   },
+  // 编译依赖为 es5
+  transpileDependencies: ["element-ui", "codejar"],
   pwa: {
     name: "阅读",
     themeColor: "#ffffff",
@@ -131,8 +133,12 @@ module.exports = {
               statuses: [200]
             },
             plugins: [
-              customWorkboxPlugin(({ request }) => {
+              customWorkboxPlugin(({ request, mode }) => {
                 const searchParams = new URL(request.url).searchParams;
+                if (mode === "read" && searchParams.get("refresh")) {
+                  // 刷新时不读取缓存
+                  return false;
+                }
                 const accessToken = searchParams.get("accessToken");
                 if (!accessToken) {
                   return request;
@@ -165,8 +171,12 @@ module.exports = {
               statuses: [200]
             },
             plugins: [
-              customWorkboxPlugin(({ request }) => {
+              customWorkboxPlugin(({ request, mode }) => {
                 const searchParams = new URL(request.url).searchParams;
+                if (mode === "read" && searchParams.get("refresh")) {
+                  // 刷新时不读取缓存
+                  return false;
+                }
                 return searchParams.get("url") + "@chapterList";
               })
             ]

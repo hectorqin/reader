@@ -11,9 +11,10 @@ WORKDIR /app
 COPY --from=build-web /app/web/dist /app/src/main/resources/web
 RUN \
     rm src/main/java/com/htmake/reader/ReaderUIApplication.kt; \
-    gradle -b cli.gradle assemble --info;
+    gradle -b cli.gradle assemble --info; \
+    mv ./build/libs/*.jar ./build/libs/reader.jar
 
-FROM openjdk:8-jdk-alpine
+FROM amazoncorretto:8u332-alpine3.14-jre
 # Install base packages
 RUN \
     # apk update; \
@@ -34,5 +35,5 @@ ENV TZ=Asia/Shanghai
 EXPOSE 8080
 ENTRYPOINT ["/sbin/tini", "--"]
 # COPY --from=hengyunabc/arthas:latest /opt/arthas /opt/arthas
-COPY --from=build-env /app/build/libs/app-2.0.0.jar /app/bin/reader.jar
+COPY --from=build-env /app/build/libs/reader.jar /app/bin/reader.jar
 CMD ["java", "-jar", "/app/bin/reader.jar" ]

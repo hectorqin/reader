@@ -17,6 +17,48 @@ import body_6 from "../assets/imgs/themes/body_6.png";
 import content_6 from "../assets/imgs/themes/content_6.png";
 // import popup_6 from "../assets/imgs/themes/popup_6.png";
 
+const defaultDayConfig = {
+  configDefaultType: "白天默认",
+  name: "内置白天",
+  theme: 0,
+  font: 0,
+  chineseFont: "简体",
+  fontSize: 18,
+  fontWeight: 400,
+  themeType: "day",
+  readMethod: "上下滑动",
+  clickMethod: "自动",
+  animateMSTime: 300, // 翻页动画时长
+  readWidth: 800,
+  lineHeight: 1.8, // 行高
+  paragraphSpace: 0.2, // 段间距
+  autoReadingMethod: "像素滚动",
+  autoReadingPixel: 1,
+  autoReadingLineTime: 1000,
+  pageMode: "自适应",
+  selectionAction: "过滤弹窗"
+};
+const defaultNightConfig = {
+  configDefaultType: "黑夜默认",
+  name: "内置黑夜",
+  theme: 6,
+  font: 0,
+  chineseFont: "简体",
+  fontSize: 18,
+  fontWeight: 400,
+  themeType: "night",
+  readMethod: "上下滑动",
+  clickMethod: "自动",
+  animateMSTime: 300, // 翻页动画时长
+  readWidth: 800,
+  lineHeight: 1.8, // 行高
+  paragraphSpace: 0.2, // 段间距
+  autoReadingMethod: "像素滚动",
+  autoReadingPixel: 1,
+  autoReadingLineTime: 1000,
+  pageMode: "自适应",
+  selectionAction: "过滤弹窗"
+};
 const settings = {
   shelfConfig: {
     showBookGroup: -1
@@ -27,23 +69,12 @@ const settings = {
     bookSourceUrl: "",
     concurrentCount: 24
   },
+  customConfigList: [defaultDayConfig, defaultNightConfig],
   config: {
-    theme: 0,
-    font: 0,
-    fontSize: 18,
-    fontWeight: 400,
-    themeType: "day",
-    readMethod: "上下滑动",
-    clickMethod: "自动",
-    animateMSTime: 300, // 翻页动画时长
-    readWidth: 800,
-    lineHeight: 1.8, // 行高
-    paragraphSpace: 0.2, // 段间距
+    ...defaultDayConfig,
+    customConfig: "内置白天",
     autoTheme: true, // 自动切换主题
-    selectionAction: "过滤弹窗",
-    pageMode: "自适应",
-    pageType: "正常",
-    autoReadingLineTime: 1000
+    pageType: "正常"
   },
   speechVoiceConfig: {
     voiceName: "",
@@ -144,4 +175,12 @@ export const errorTypeList = [
   "responseCode: 504",
   "responseCode: 513"
 ];
+export const defaultReplaceRule = {
+  name: "",
+  pattern: "",
+  replacement: "",
+  scope: "",
+  isRegex: false,
+  isEnabled: true
+};
 export default settings;

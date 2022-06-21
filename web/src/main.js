@@ -66,6 +66,12 @@ try {
           displayMode =>
             window.matchMedia("(display-mode: " + displayMode + ")").matches
         );
+      },
+      isNightTheme() {
+        return this.$store.getters.isNight;
+      },
+      currentUserName() {
+        return this.$store.getters.currentUserName;
       }
     },
     methods: {

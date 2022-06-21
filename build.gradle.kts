@@ -56,7 +56,7 @@ apply(plugin = "kotlin")
 apply(plugin = "io.github.fvarrui.javapackager.plugin")
 
 group = "com.htmake"
-version = "2.0.0"
+version = "2.3.0"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
@@ -90,7 +90,7 @@ dependencies {
 
     // json
     implementation("com.google.code.gson:gson:2.8.5")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.+")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.+")
 
     // log
     implementation("io.github.microutils:kotlin-logging:1.6.24")

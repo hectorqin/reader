@@ -313,6 +313,25 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         return returnData.setData("")
     }
 
+    suspend fun setAsDefaultSources(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        }
+        var username = context.bodyAsJson.getString("username")
+        var bookSourceList: JsonArray? = asJsonArray(getUserStorage(username, "bookSource"))
+        if (bookSourceList == null) {
+            return returnData.setErrorMsg("用户书源不存在")
+        }
+
+        // 保存为默认书源
+        saveUserStorage("default", "bookSource", bookSourceList.getList())
+        return returnData.setData("设置默认书源成功")
+    }
+
     suspend fun readSourceFile(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (context.fileUploads() == null || context.fileUploads().isEmpty()) {

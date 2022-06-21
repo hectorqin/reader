@@ -15,6 +15,8 @@ import java.nio.charset.Charset
 import java.nio.file.Paths
 import java.util.*
 import java.util.zip.ZipFile
+import mu.KotlinLogging
+private val logger = KotlinLogging.logger {}
 
 class EpubFile(var book: Book) {
 
@@ -35,7 +37,40 @@ class EpubFile(var book: Book) {
 
         @Synchronized
         fun getChapterList(book: Book): ArrayList<BookChapter> {
-            return getEFile(book).getChapterListBySpine()
+            if (book.tocUrl.isEmpty()) {
+                book.tocUrl = "spin+toc"
+            }
+            val epubFile = getEFile(book)
+            return when (book.tocUrl) {
+                "toc" -> {
+                    logger.info("epubFile.getChapterList")
+                    epubFile.getChapterList()
+                }
+                "spin" -> {
+                    logger.info("epubFile.getChapterListBySpine")
+                    epubFile.getChapterListBySpine()
+                }
+                "spin<toc" -> {
+                    logger.info("epubFile.getChapterListBySpinAndToc true")
+                    epubFile.getChapterListBySpinAndToc(true)
+                }
+                "spin+toc" -> {
+                    logger.info("epubFile.getChapterListBySpinAndToc")
+                    epubFile.getChapterListBySpinAndToc()
+                }
+                "toc+spin" -> {
+                    logger.info("epubFile.getChapterListByTocAndSpin")
+                    epubFile.getChapterListByTocAndSpin()
+                }
+                "toc<spin" -> {
+                    logger.info("epubFile.getChapterListByTocAndSpin true")
+                    epubFile.getChapterListByTocAndSpin(true)
+                }
+                else -> {
+                    logger.info("epubFile.getChapterListBySpinAndToc")
+                    epubFile.getChapterListBySpinAndToc()
+                }
+            }
         }
 
         @Synchronized
@@ -245,7 +280,7 @@ class EpubFile(var book: Book) {
         return chapterList
     }
 
-    private fun getChapterList(): ArrayList<BookChapter> {
+    fun getChapterList(): ArrayList<BookChapter> {
         val chapterList = ArrayList<BookChapter>()
         epubBook?.tableOfContents?.allUniqueResources?.forEachIndexed { index, resource ->
             var title = resource.title
@@ -277,4 +312,71 @@ class EpubFile(var book: Book) {
         return chapterList
     }
 
+    fun getChapterListBySpinAndToc(useTocTitle: Boolean = false): ArrayList<BookChapter> {
+        // 如果读取了 toc，那么 spin 就会使用 toc 的章节名
+        val tocChapterList = getChapterList()
+        val spinChapterList = getChapterListBySpine()
+
+        if (spinChapterList.size == 0) {
+            return tocChapterList;
+        }
+
+        if (tocChapterList.size == 0) {
+            return spinChapterList;
+        }
+
+        val titleMap: MutableMap<String, BookChapter> = mutableMapOf();
+
+        for (i in 0 until tocChapterList.size) {
+            titleMap.put(tocChapterList.get(i).url, tocChapterList.get(i))
+        }
+
+        for (i in 0 until spinChapterList.size) {
+            val chapter = spinChapterList.get(i)
+            val tocChapter = titleMap.get(chapter.url)
+            if (tocChapter != null && tocChapter.title.isNotEmpty()) {
+                if (useTocTitle || chapter.title.isEmpty()) {
+                    chapter.title = tocChapter.title
+                }
+            }
+        }
+
+        book.latestChapterTitle = spinChapterList.lastOrNull()?.title
+        book.totalChapterNum = spinChapterList.size
+        return spinChapterList
+    }
+
+    fun getChapterListByTocAndSpin(useSpinTitle: Boolean = false): ArrayList<BookChapter> {
+        // 如果读取了 toc，那么 spin 就会使用 toc 的章节名
+        val tocChapterList = getChapterList()
+        val spinChapterList = getChapterListBySpine()
+
+        if (tocChapterList.size == 0) {
+            return spinChapterList;
+        }
+
+        if (spinChapterList.size == 0) {
+            return tocChapterList;
+        }
+
+        val titleMap: MutableMap<String, BookChapter> = mutableMapOf();
+
+        for (i in 0 until spinChapterList.size) {
+            titleMap.put(spinChapterList.get(i).url, spinChapterList.get(i))
+        }
+
+        for (i in 0 until tocChapterList.size) {
+            val chapter = tocChapterList.get(i)
+            val tocChapter = titleMap.get(chapter.url)
+            if (tocChapter != null && tocChapter.title.isNotEmpty()) {
+                if (useSpinTitle || chapter.title.isEmpty()) {
+                    chapter.title = tocChapter.title
+                }
+            }
+        }
+
+        book.latestChapterTitle = tocChapterList.lastOrNull()?.title
+        book.totalChapterNum = tocChapterList.size
+        return tocChapterList
+    }
 }

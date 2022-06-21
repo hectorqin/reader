@@ -11,7 +11,15 @@ export default {
       iframeStyle: {}
     };
   },
-  props: ["content", "error", "title", "showContent"],
+  props: [
+    "content",
+    "error",
+    "title",
+    "showContent",
+    "isScrollRead",
+    "showChapterList",
+    "currentShowChapter"
+  ],
   render() {
     if (this.showContent) {
       if (this.isAudio) {
@@ -21,10 +29,13 @@ export default {
         // epub
         return this.renderEpub();
       }
+      if (this.isScrollRead) {
+        return this.renderScrollChapterList();
+      }
       let wordCount = this.title.length + 2; // 2为两个换行符
       return (
         <div
-          class="content-body"
+          class="content-body chapter-content reading-chapter"
           style={this.containerStyle}
           v-lazy-container={{
             selector: "img"
@@ -33,6 +44,9 @@ export default {
           <h3 data-pos={0}>{this.title}</h3>
           {this.content.split(/\n+/).map(a => {
             a = a.replace(/^\s+/g, "");
+            if (!a) {
+              return null;
+            }
             const pos = wordCount;
             wordCount += a.length + 2; // 2为两个换行符
             if (a.indexOf("<img") >= 0) {
@@ -150,6 +164,62 @@ export default {
     }
   },
   methods: {
+    renderScrollChapterList() {
+      return (
+        <div
+          class="content-body"
+          style={this.containerStyle}
+          v-lazy-container={{
+            selector: "img"
+          }}
+        >
+          {this.showChapterList.map(chapter => {
+            let wordCount = chapter.title.length + 2; // 2为两个换行符
+            return (
+              <div
+                class={[
+                  "chapter-content",
+                  this.readingBook.index === chapter.index
+                    ? "reading-chapter"
+                    : ""
+                ]}
+                data-index={chapter.index}
+              >
+                <h3 data-pos={0}>{chapter.title}</h3>;
+                {chapter.content.split(/\n+/).map(a => {
+                  a = a.replace(/^\s+/g, "");
+                  if (!a) {
+                    return null;
+                  }
+                  const pos = wordCount;
+                  wordCount += a.length + 2; // 2为两个换行符
+                  if (a.indexOf("<img") >= 0) {
+                    // 漫画
+                    // 将 src 替换为 data-src 懒加载
+                    a = a.replace(/src=/g, "data-src=");
+                    return (
+                      <div
+                        style={this.containerStyle}
+                        domPropsInnerHTML={a}
+                        data-pos={pos}
+                      ></div>
+                    );
+                  }
+                  // 文本内容
+                  return (
+                    <p
+                      style={this.pStyle}
+                      domPropsInnerHTML={a}
+                      data-pos={pos}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      );
+    },
     renderAudio() {
       return (
         <div class="content-audio">
