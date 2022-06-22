@@ -87,7 +87,7 @@ module.exports = {
     port: 8081
   },
   // 编译依赖为 es5
-  transpileDependencies: ["element-ui", "codejar"],
+  transpileDependencies: ["element-ui", "codejar", "vue-lazyload"],
   pwa: {
     name: "阅读",
     themeColor: "#ffffff",
