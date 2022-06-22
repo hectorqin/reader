@@ -1615,7 +1615,7 @@ export default {
       );
     },
     async deleteBook(book) {
-      if (!book || !book.name || !book.bookUrl || !book.origin) {
+      if (!book || (!book.name && !book.bookUrl)) {
         this.$message.error("书籍信息错误");
         return;
       }
