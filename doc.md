@@ -265,6 +265,9 @@ docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -e
 #:后面的端口修改为映射端口
 # web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/
+
+# 通过watchtower手动更新
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --cleanup --run-once reader
 ```
 
 ### Docker-Compose版(推荐)
@@ -280,17 +283,24 @@ docker-compose --version
 
 # 下载项目里的 docker-compose.yaml
 wget https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
-# 更具 docker-compose.yaml 里面的注释编辑所需配置
+# 根据 docker-compose.yaml 里面的注释编辑所需配置
 # 启动 docker-compose
 docker-compose up -d
 
 # 停止 docker-compose
 docker-compose stop
+
+# 查看实时日志
+docker logs -f reader
+
+# 手动更新
+docker-compose pull && docker-compose up -d
 ```
 
 ## Nginx反向代理
 
 ```nginx
+# 此文件放入 conf.d目录下,一般可用 touch /etc/nginx/conf.d/reader.conf 创建
 server {
     listen 80;
     server_name 域名;
@@ -316,6 +326,8 @@ server {
     gzip_comp_level 6; #设置数据的压缩等级,等级为1-9，压缩比从小到大
     gzip_types text/plain text/css text/javascript application/json application/javascript application/x-javascript application/xml; #设置需要压缩的数据格式
     gzip_vary on;
+    
+    client_max_body_size   50m; #允许上传50MB文件,上传本地书籍需要修改此项大小.如nginx主配置文件已添加,删除此行并修改主配置即可
 
     location / {
         proxy_pass  http://127.0.0.1:4396; #端口自行修改为映射端口
