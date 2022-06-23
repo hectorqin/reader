@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ES5测试</title>
+    <style>
+        .name {
+            display: inline-block;
+            width: 300px;
+        }
+        .result {
+            display: inline-block;
+            margin-left: 100px;
+        }
+        span.success {
+            color: green;
+        }
+        span.error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <p><span class="name">ES5 特性测试结果：</span><span id="result" class="result"></span></p>
+    </div>
+    <div id="log">
+
+    </div>
+    <script>
+        var global = (typeof global != "undefined") ? global : runIt("return this");
+
+        function runIt(code) {
+	        return (new Function(code))();
+        }
+
+        function tryPassFail(code) {
+            try {
+                runIt(code);
+                return true;
+            }
+            catch (err) {
+                return false;
+            }
+        }
+
+        function tryReturn(code) {
+            try {
+                return runIt(code);
+            }
+            catch (err) {
+                return false;
+            }
+        }
+
+        function runTests(tests) {
+            var res = {}, all_passed = true;
+
+            // run the tests
+            for (var key in tests) {
+                if (tests[key].passes) {
+                    res[key] = tryPassFail(tests[key].passes);
+                }
+                else if (tests[key].fails) {
+                    res[key] = !tryPassFail(tests[key].fails);
+                }
+                else if (tests[key].is) {
+                    res[key] = tryReturn(tests[key].is);
+                }
+                else if (tests[key].not) {
+                    res[key] = !tryReturn(tests[key].not);
+                }
+            }
+
+            // re-run to check for dependency failures
+            for (var key in tests) {
+                if (tests[key].dependencies) {
+                    // did any of the listed dependencies already fail?
+                    var isTrue = true;
+                    for (var dep in tests[key].dependencies) {
+                        if (!tests[dep]) {
+                            isTrue = false;
+                            break;
+                        }
+                    }
+
+                    if (!isTrue) {
+                        res[key] = false;
+                    }
+                }
+
+                if (!res[key]) all_passed = false;
+            }
+
+            res.everything = all_passed;
+
+            return res;
+        }
+        var logDom = document.getElementById("log");
+        var resultDom = document.getElementById("result");
+
+        try {
+            window.onerror = function(event, source, lineno, colno, error) {
+                window.alert(
+                    "event: " + event +
+                    "   source: " + source +
+                    "   lineno: " + lineno +
+                    "   colno: " + colno +
+                    "   error: " + error);
+            };
+
+            var html = "";
+            var es5 = {
+                "Object.defineProperties": {
+                    is: 'return ("defineProperties" in Object)'
+                },
+                "Object.create": {
+                    is: 'return ("create" in Object)'
+                },
+                "Object.getOwnPropertyNames": {
+                    is: 'return ("getOwnPropertyNames" in Object)'
+                },
+                "Object.getPrototypeOf": {
+                    is: 'return ("getPrototypeOf" in Object)'
+                },
+                "Object.getOwnPropertyDescriptor": {
+                    is: 'return ("getOwnPropertyDescriptor" in Object)'
+                },
+                "Object.preventExtensions": {
+                    is: 'return ("preventExtensions" in Object)'
+                },
+                "Object.isExtensible": {
+                    is: 'return ("isExtensible" in Object)'
+                },
+                "Object.seal": {
+                    is: 'return ("seal" in Object)'
+                },
+                "Object.isSealed": {
+                    is: 'return ("isSealed" in Object)'
+                },
+                "Object.freeze": {
+                    is: 'return ("freeze" in Object)'
+                },
+                "Object.isFrozen": {
+                    is: 'return ("isFrozen" in Object)'
+                },
+                "Object.keys": {
+                    is: 'return ("keys" in Object)'
+                },
+                "function.bind": {
+                    is: 'return ("bind" in function(){})'
+                },
+                "Array.prototype.indexOf": {
+                    is: 'return ("indexOf" in Array.prototype)'
+                },
+                "Array.prototype.lastIndexOf": {
+                    is: 'return ("lastIndexOf" in Array.prototype)'
+                },
+                "Array.prototype.every": {
+                    is: 'return ("every" in Array.prototype)'
+                },
+                "Array.prototype.some": {
+                    is: 'return ("some" in Array.prototype)'
+                },
+                "Array.prototype.forEach": {
+                    is: 'return ("forEach" in Array.prototype)'
+                },
+                "Array.prototype.map": {
+                    is: 'return ("map" in Array.prototype)'
+                },
+                "Array.prototype.filter": {
+                    is: 'return ("filter" in Array.prototype)'
+                },
+                "Array.prototype.reduce": {
+                    is: 'return ("reduce" in Array.prototype)'
+                },
+                "Array.prototype.reduceRight": {
+                    is: 'return ("reduceRight" in Array.prototype)'
+                },
+                "JSON": {
+                    is: 'return ("JSON" in global) && ("stringify" in JSON) && ("parse" in JSON)'
+                },
+                "Strict Mode": {
+                    fails: '"use strict"; var module = { x: 42, getX: function() { return this.x;}}; var unboundGetX = module.getX;console.log(unboundGetX());'
+                },
+                "Getter Setter": {
+                    passes: 'var o = (function(){ var age = 0; return { get age (){return age;}, set age (v){ age = v; }}})();console.log(o.age);o.age =12;console.log(o.age);'
+                }
+            }
+
+            var result = runTests(es5);
+
+            var totalTest = 0;
+            var passedTest = 0;
+            for (var test in result) {
+                if (test != 'everything') {
+                    totalTest++;
+                    if (result[test]) {
+                        passedTest++;
+                    }
+                    html += "<p><span class='name'>" + test + "</span><span class='result " + (result[test] ? "success" : "error") + "'>" + (result[test] ? "YES" : "NO") + "</span></p>";
+                }
+            }
+
+            logDom.innerHTML = html;
+
+            resultDom.innerHTML = "<span class='" + (result.everything ? 'success' : 'error') + "'>" + passedTest + "/" + totalTest + "</span>";
+        } catch (error) {
+            // window.alert(error);
+            resultDom.innerHTML = "<span class='error'>检测出错: " + error + "</span>";
+        }
+    </script>
+</body>
+</html>

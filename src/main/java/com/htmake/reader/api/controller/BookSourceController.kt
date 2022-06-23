@@ -90,7 +90,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         return bookSourceList
     }
 
-    suspend fun saveSource(context: RoutingContext): ReturnData {
+    suspend fun saveBookSource(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
@@ -128,7 +128,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         return returnData.setData("")
     }
 
-    suspend fun saveSources(context: RoutingContext): ReturnData {
+    suspend fun saveBookSources(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
@@ -171,7 +171,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         return returnData.setData("")
     }
 
-    suspend fun getSource(context: RoutingContext): ReturnData {
+    suspend fun getBookSource(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         checkAuth(context)
         var bookSourceUrl: String
@@ -208,7 +208,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         return returnData.setData(bookSourceList.getJsonObject(existIndex).map)
     }
 
-    suspend fun getSources(context: RoutingContext): ReturnData {
+    suspend fun getBookSources(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         checkAuth(context)
         var simple: Int = 0
@@ -240,7 +240,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         return returnData.setData(arrayListOf<Int>())
     }
 
-    suspend fun deleteSource(context: RoutingContext): ReturnData {
+    suspend fun deleteBookSource(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
@@ -270,7 +270,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         return returnData.setData("")
     }
 
-    suspend fun deleteSources(context: RoutingContext): ReturnData {
+    suspend fun deleteBookSources(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
@@ -303,7 +303,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         return returnData.setData("")
     }
 
-    suspend fun deleteAllSources(context: RoutingContext): ReturnData {
+    suspend fun deleteAllBookSources(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
@@ -313,7 +313,7 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         return returnData.setData("")
     }
 
-    suspend fun setAsDefaultSources(context: RoutingContext): ReturnData {
+    suspend fun setAsDefaultBookSources(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")

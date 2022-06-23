@@ -540,8 +540,7 @@ export default {
       return cacheFirstRequest(
         () => Axios.get(this.api + "/getBookGroups"),
         "bookGroup@" + this.currentUserName,
-        refresh,
-        true
+        refresh
       ).then(
         res => {
           if (res.data.isSuccess) {
@@ -564,8 +563,7 @@ export default {
             }
           }),
         "rssSources@" + this.currentUserName,
-        refresh,
-        true
+        refresh
       ).then(
         res => {
           const data = res.data.data || [];
@@ -581,14 +579,13 @@ export default {
     loadBookSource(refresh) {
       return cacheFirstRequest(
         () =>
-          Axios.get(this.api + "/getSources", {
+          Axios.get(this.api + "/getBookSources", {
             params: {
               simple: 1
             }
           }),
         "bookSourceList@" + this.currentUserName,
-        refresh,
-        true
+        refresh
       ).then(
         res => {
           if (res.data.isSuccess) {
@@ -606,8 +603,7 @@ export default {
       return cacheFirstRequest(
         () => Axios.get(this.api + "/getReplaceRules"),
         "replaceRule@" + this.currentUserName,
-        refresh,
-        true
+        refresh
       ).then(
         res => {
           if (res.data.isSuccess) {

@@ -7,8 +7,11 @@ import mu.KotlinLogging
 private val logger = KotlinLogging.logger {}
 
 interface DebugLog {
-
-    fun log(sourceUrl: String? = "", msg: String? = "") {
+    fun log(
+        sourceUrl: String? = "",
+        msg: String? = "",
+        isHtml: Boolean = false
+    ) {
         logger.info("sourceUrl: {}, msg: {}", sourceUrl, msg)
     }
 }

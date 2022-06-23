@@ -64,6 +64,7 @@ import java.text.SimpleDateFormat;
 import io.legado.app.utils.EncoderUtils
 import io.legado.app.utils.ACache
 import io.legado.app.model.rss.Rss
+import io.legado.app.model.Debugger
 import org.springframework.scheduling.annotation.Scheduled
 import io.legado.app.model.localBook.LocalBook
 import java.nio.file.Paths
@@ -1240,7 +1241,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         return returnData.setData(book)
     }
 
-    suspend fun saveBookSource(context: RoutingContext): ReturnData {
+    suspend fun setBookSource(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
@@ -2235,5 +2236,53 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             }
         }
         return returnData.setData("")
+    }
+
+    suspend fun bookSourceDebugSSE(context: RoutingContext) {
+        val returnData = ReturnData()
+        // 返回 event-stream
+        val response = context.response().putHeader("Content-Type", "text/event-stream")
+            .putHeader("Cache-Control", "no-cache")
+            .setChunked(true);
+
+        if (!checkAuth(context)) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用"), false) + "\n\n")
+            return
+        }
+        var bookSourceUrl = context.queryParam("bookSourceUrl").firstOrNull() ?: ""
+        var keyword = context.queryParam("keyword").firstOrNull() ?: ""
+
+        if (bookSourceUrl.isNullOrEmpty()) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("未配置书源"), false) + "\n\n")
+            return
+        }
+        if (keyword.isNullOrEmpty()) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("请输入搜索关键词"), false) + "\n\n")
+            return
+        }
+
+        var userNameSpace = getUserNameSpace(context)
+        var bookSourceString = getBookSourceBySourceURL(bookSourceUrl, userNameSpace).first
+        if (bookSourceString.isNullOrEmpty()) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("未配置书源"), false) + "\n\n")
+            return
+        }
+
+        logger.info("bookSourceDebugSSE bookSource: {} keyword: {}", bookSourceString, keyword)
+
+        val debugger = Debugger { msg ->
+            response.write("data: " + jsonEncode(mapOf("msg" to msg), false) + "\n\n")
+        }
+
+        val webBook = WebBook(bookSourceString)
+
+        debugger.startDebug(webBook, keyword)
+
+        response.write("event: end\n")
+        response.end("data: " + jsonEncode(mapOf("end" to true), false) + "\n\n")
     }
 }

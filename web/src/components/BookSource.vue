@@ -155,7 +155,7 @@ export default {
       if (!isInShelf) {
         return;
       }
-      Axios.post(this.api + `/saveBookSource`, {
+      Axios.post(this.api + `/setBookSource`, {
         bookUrl: this.$store.state.readingBook.bookUrl,
         newUrl: searchBook.bookUrl,
         bookSourceUrl: searchBook.origin

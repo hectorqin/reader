@@ -32,11 +32,16 @@
           class="log"
           v-for="(note, index) in cataList"
           :class="{ selected: isSelected(index) }"
-          :key="note.durChapterIndex"
+          :key="note.index"
           @click="gotoChapter(note)"
           ref="cata"
         >
-          <div class="log-text">
+          <div
+            :class="{
+              'log-text': true,
+              cached: cachedCataMap[note.index]
+            }"
+          >
             {{ note.title }}
           </div>
         </div>
@@ -52,7 +57,8 @@ export default {
   data() {
     return {
       refreshLoading: false,
-      asc: true
+      asc: true,
+      cachedCataMap: {}
     };
   },
   props: ["visible"],
@@ -83,6 +89,7 @@ export default {
   watch: {
     visible(isVisible) {
       if (isVisible) {
+        this.computeCachedCata();
         this.$nextTick(() => {
           this.jumpToCurrent();
         });
@@ -90,6 +97,10 @@ export default {
     },
     catalog() {
       this.refreshLoading = false;
+      this.computeCachedCata();
+    },
+    index() {
+      this.computeCachedCata();
     },
     asc() {
       this.jumpToCurrent();
@@ -134,6 +145,33 @@ export default {
     },
     toBottom() {
       this.jumpToCurrent(this.catalog.length - 1);
+    },
+    computeCachedCata() {
+      const cacheMap = {};
+      const cachePrefix =
+        "localCache@" +
+        this.$store.state.readingBook.bookName +
+        "_" +
+        this.$store.state.readingBook.author +
+        "@" +
+        this.$store.state.readingBook.bookUrl +
+        "@chapterContent-";
+      window.$cacheStorage
+        .iterate(function(value, key) {
+          if (key.startsWith(cachePrefix)) {
+            try {
+              let index = parseInt(key.replace(cachePrefix, ""));
+              cacheMap[index] = true;
+            } catch (error) {
+              //
+              // console.error(error);
+            }
+          }
+        })
+        .then(() => {
+          this.cachedCataMap = cacheMap;
+        })
+        .catch(function() {});
     }
   }
 };
@@ -200,8 +238,12 @@ export default {
       flex-wrap: wrap;
       justify-content: space-between;
 
-      .selected {
-        color: #EB4259;
+      .cached {
+        color: #444;
+      }
+
+      .selected .log-text {
+        color: #EB4259 !important;
       }
 
       .log {
@@ -234,6 +276,10 @@ export default {
   .day {
     >>>.log {
       border-bottom: 1px solid #eee;
+    }
+
+    >>>.cached {
+      color: #bbb !important;
     }
   }
 }

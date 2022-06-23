@@ -161,7 +161,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="showBookSourceManageDialog = true"
             >
@@ -197,7 +196,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="uploadBookSource"
             >
@@ -214,11 +212,18 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="showFailureBookSource()"
             >
               失效书源
+            </el-tag>
+            <el-tag
+              type="info"
+              :effect="isNight ? 'dark' : 'light'"
+              class="setting-btn"
+              @click="debugBookSource()"
+            >
+              调试书源
             </el-tag>
             <input
               ref="fileRef"
@@ -271,7 +276,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="init(true)"
             >
@@ -311,7 +315,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="saveUserConfig"
               v-if="localStorageAvaliable"
@@ -321,7 +324,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="restoreUserConfig"
               v-if="localStorageAvaliable"
@@ -331,7 +333,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="loadUserList"
               v-if="$store.state.showManagerMode"
@@ -341,7 +342,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               v-if="$store.state.isManagerMode"
               @click="showUserManageDialog()"
@@ -351,7 +351,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               v-if="$store.state.isManagerMode"
               @click="exitSecureMode"
@@ -373,7 +372,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="showWebDAVManageDialog = true"
             >
@@ -382,7 +380,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="backupToWebdav"
             >
@@ -398,7 +395,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="showMPCode"
             >
@@ -407,7 +403,6 @@
             <el-tag
               type="info"
               :effect="isNight ? 'dark' : 'light'"
-              slot="reference"
               class="setting-btn"
               @click="joinTGChannel"
             >
@@ -1958,7 +1953,7 @@ export default {
       );
       Axios.post(
         this.api +
-          (this.isImportRssSource ? "/saveRssSources" : "/saveSources"),
+          (this.isImportRssSource ? "/saveRssSources" : "/saveBookSources"),
         sourceList
       ).then(
         res => {
@@ -2071,7 +2066,10 @@ export default {
       if (!res) {
         return;
       }
-      Axios.post(this.api + "/deleteSources", this.manageSourceSelection).then(
+      Axios.post(
+        this.api + "/deleteBookSources",
+        this.manageSourceSelection
+      ).then(
         res => {
           if (res.data.isSuccess) {
             this.$store.commit(
@@ -2298,6 +2296,15 @@ export default {
       this.getInvalidBookSources();
       this.isShowFailureBookSource = true;
       this.showBookSourceManageDialog = true;
+    },
+    debugBookSource() {
+      window.open(
+        window.location.origin +
+          window.location.pathname +
+          "bookSourceDebug/#domain=" +
+          this.api,
+        "_target"
+      );
     },
     setShowSourceGroup(group) {
       if (this.showSourceGroup === group) {
@@ -2554,7 +2561,7 @@ export default {
       }
     },
     exportBookSource() {
-      Axios.get(this.api + "/getSources").then(
+      Axios.get(this.api + "/getBookSources").then(
         res => {
           if (res.data.isSuccess) {
             const aEle = document.createElement("a");
@@ -2583,7 +2590,7 @@ export default {
       if (!res) {
         return;
       }
-      Axios.post(this.api + "/deleteAllSources").then(
+      Axios.post(this.api + "/deleteAllBookSources").then(
         res => {
           if (res.data.isSuccess) {
             //
@@ -2614,7 +2621,7 @@ export default {
                 this.$message.error("书源链接不能为空");
                 return;
               }
-              Axios.post(this.api + "/saveSource", source).then(
+              Axios.post(this.api + "/saveBookSource", source).then(
                 res => {
                   if (res.data.isSuccess) {
                     //
@@ -2670,7 +2677,7 @@ export default {
         });
         return;
       }
-      Axios.post(this.api + "/getSource", {
+      Axios.post(this.api + "/getBookSource", {
         bookSourceUrl: bookSource.bookSourceUrl
       }).then(
         res => {

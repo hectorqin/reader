@@ -87,7 +87,7 @@
             <el-button type="text" @click="resetPassword(scope.row)"
               >重置密码</el-button
             >
-            <el-button type="text" @click="setAsDefaultSources(scope.row)"
+            <el-button type="text" @click="setAsDefaultBookSources(scope.row)"
               >设为默认书源</el-button
             >
           </template>
@@ -238,7 +238,7 @@ export default {
         }
       );
     },
-    async setAsDefaultSources(user) {
+    async setAsDefaultBookSources(user) {
       const res = await this.$confirm(
         `确认要将用户${user.username}的书源设为默认书源（新用户有效）吗?`,
         "提示",
@@ -253,7 +253,7 @@ export default {
       if (!res) {
         return;
       }
-      return Axios.post(this.api + "/setAsDefaultSources", {
+      return Axios.post(this.api + "/setAsDefaultBookSources", {
         username: user.username
       }).then(
         res => {

@@ -155,24 +155,51 @@ export default {
       }
       const result = [];
       let zone = [];
-      bookSource.exploreUrl
-        .replace(/\r\n/g, "\n")
-        .split("\n")
-        .forEach(v => {
-          if (!v) {
-            if (zone.length) {
-              // 出现空行，分割为一块
+      try {
+        // [{\"title\":\"玄幻奇幻\",\"url\":\"\/xuanhuan\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"武侠仙侠\",\"url\":\"\/wuxia\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"都市生活\",\"url\":\"\/dushi\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"历史军事\",\"url\":\"\/lishi\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"游戏竞技\",\"url\":\"\/youxi\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"科幻未来\",\"url\":\"\/kehuan\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"幻想奇缘\",\"url\":\"\/huanxiang\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"古代言情\",\"url\":\"\/gudai\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"二次い元\",\"url\":\"\/erciyuan\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"现代言情\",\"url\":\"\/xiandai\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"浪漫青春\",\"url\":\"\/qingchun\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"其他类型\",\"url\":\"\/qita\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}}]
+        // 尝试解析为 JSON
+        const exploreUrl = JSON.parse(bookSource.exploreUrl);
+        if (Array.isArray(exploreUrl) && exploreUrl.length) {
+          let grow = 0;
+          exploreUrl.forEach(v => {
+            // 只考虑 layout_flexGrow 样式
+            zone.push({
+              name: v.title,
+              url: v.url
+            });
+            if (v.style && v.style.layout_flexGrow) {
+              grow += v.style.layout_flexGrow;
+            }
+            if (grow >= 1) {
+              // grow 超过1, 分割为一块
               result.push(zone);
               zone = [];
+              grow = 0;
             }
-          } else {
-            v = v.split("::");
-            zone.push({
-              name: v[0],
-              url: v[1]
-            });
-          }
-        });
+          });
+        }
+      } catch (error) {
+        // 解析为 字符串
+        bookSource.exploreUrl
+          .replace(/\r\n/g, "\n")
+          .split("\n")
+          .forEach(v => {
+            if (!v) {
+              if (zone.length) {
+                // 出现空行，分割为一块
+                result.push(zone);
+                zone = [];
+              }
+            } else {
+              v = v.split("::");
+              zone.push({
+                name: v[0],
+                url: v[1]
+              });
+            }
+          });
+      }
+
       if (zone.length) {
         result.push(zone);
       }
