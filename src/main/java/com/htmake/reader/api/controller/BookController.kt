@@ -215,7 +215,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             if (file.exists()) {
                 var fileName = it.fileName()
                 val ext = getFileExt(fileName)
-                if (ext != "txt" && ext != "epub" && ext != "umd") {
+                if (ext != "txt" && ext != "epub" && ext != "umd" && ext != "cbz") {
                     file.deleteRecursively()
                     return returnData.setErrorMsg("不支持导入" + ext + "格式的书籍文件")
                 }
@@ -229,6 +229,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 var filePath = localFilePath
                 if (fileName.endsWith(".epub", true)) {
                     filePath = filePath + File.separator + "index.epub"
+                }
+                if (fileName.endsWith(".cbz", true)) {
+                    filePath = filePath + File.separator + "index.cbz"
                 }
                 var newFile = File(getWorkDir(filePath))
                 if (!newFile.parentFile.exists()) {
@@ -425,8 +428,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var refresh: Int
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
-            chapterUrl = context.bodyAsJson.getString("chapterUrl") ?: context.bodyAsJson.getJsonObject("bookChapter").getString("url") ?: ""
-            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("searchBook").getString("bookUrl") ?: ""
+            chapterUrl = context.bodyAsJson.getString("chapterUrl") ?: context.bodyAsJson.getJsonObject("bookChapter")?.getString("url") ?: ""
+            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("searchBook")?.getString("bookUrl") ?: ""
             chapterIndex = context.bodyAsJson.getInteger("index", -1)
             cache = context.bodyAsJson.getInteger("cache", 0)
             refresh = context.bodyAsJson.getInteger("refresh", 0)
@@ -540,6 +543,24 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 } else {
                     content = bookInfo.bookUrl.replace("storage/data/", "/epub/") + "/index/" + epubRootDir + "/" + chapterInfo.url
                 }
+                return returnData.setData(content)
+            } else if (bookInfo.isCbz()) {
+                if (!extractCbz(bookInfo)) {
+                    return returnData.setErrorMsg("CBZ书籍解压失败")
+                }
+                var chapterFilePath = getWorkDir(bookInfo.bookUrl, "index", chapterInfo.url)
+                logger.info("chapterFilePath: {}", chapterFilePath)
+                val chapterFile = File(chapterFilePath)
+                if (!chapterFile.exists()) {
+                    return returnData.setErrorMsg("章节文件不存在")
+                }
+                val ext = getFileExt(chapterFile.name).lowercase()
+                val imageExt = listOf("jpg", "jpeg", "gif", "png", "bmp", "webp", "svg")
+                val fileUrl = "__API_ROOT__" + bookInfo.bookUrl.replace("storage/data/", "/epub/") + "/index/" + chapterInfo.url
+                if (!imageExt.contains(ext)) {
+                    return returnData.setData(fileUrl)
+                }
+                content = "<img src='" + fileUrl + "' />"
                 return returnData.setData(content)
             }
             var bookContent = LocalBook.getContent(bookInfo, chapterInfo)
@@ -1028,7 +1049,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         return resultList;
     }
 
-    suspend fun getBookSource(context: RoutingContext): ReturnData {
+    suspend fun getAvailableBookSource(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
@@ -1196,6 +1217,11 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     if (!extractEpub(book)) {
                         return returnData.setErrorMsg("导入本地Epub书籍失败")
                     }
+                } else if (book.isCbz()) {
+                    // 解压文件 index.cbz
+                    if (!extractCbz(book)) {
+                        return returnData.setErrorMsg("导入本地CBZ书籍失败")
+                    }
                 }
             } else if (book.bookUrl.indexOf("storage/localStore") >= 0) {
                 // 本地书仓，不用移动书籍
@@ -1210,6 +1236,11 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     // 解压文件 index.epub
                     if (!extractEpub(book)) {
                         return returnData.setErrorMsg("导入本地Epub书籍失败")
+                    }
+                } else if (book.isCbz()) {
+                    // 解压文件 index.cbz
+                    if (!extractCbz(book)) {
+                        return returnData.setErrorMsg("导入本地CBZ书籍失败")
                     }
                 }
             }
@@ -1556,6 +1587,10 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 if (book.isEpub() && !extractEpub(book, refresh)) {
                     throw Exception("Epub书籍解压失败")
                 }
+                // 重新解压cbz文件
+                if (book.isCbz() && !extractCbz(book, refresh)) {
+                    throw Exception("CBZ书籍解压失败")
+                }
                 newChapterList = LocalBook.getChapterList(book.also{
                     it.setRootDir(getWorkDir())
                 })
@@ -1787,6 +1822,22 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         return true
     }
 
+    fun extractCbz(book: Book, force: Boolean = false): Boolean {
+        val extractDir = File(getWorkDir(book.bookUrl + File.separator + "index"))
+        if (force || !extractDir.exists()) {
+            extractDir.deleteRecursively()
+            var localFile = File(getWorkDir(book.originName + File.separator + "index.cbz"))
+            if (book.originName.indexOf("localStore") > 0) {
+                // 本地书仓的源文件
+                localFile = File(getWorkDir(book.originName))
+            }
+            if (!localFile.unzip(extractDir.toString())) {
+                return false
+            }
+        }
+        return true
+    }
+
     suspend fun syncBookProgressFromWebdav(progressFilePath: Any, userNameSpace: String) {
         var progressFile: File? = null
         when (progressFilePath) {
@@ -2009,7 +2060,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 if (file.exists()) {
                     val fileName = file.name
                     val ext = getFileExt(fileName)
-                    if (ext != "txt" && ext != "epub" && ext != "umd") {
+                    if (ext != "txt" && ext != "epub" && ext != "umd" && ext != "cbz") {
                         return returnData.setErrorMsg("不支持导入" + ext + "格式的书籍文件")
                     }
                     val book = Book.initLocalBook(path, path, getWorkDir())

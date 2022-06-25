@@ -1402,21 +1402,21 @@ export default {
       if (page === 1) {
         this.searchResult = [];
       }
-      Axios.get(
+      Axios.post(
         this.api +
           (this.searchConfig.searchType === "single"
             ? "/searchBook"
             : "/searchBookMulti"),
         {
-          timeout: this.searchConfig.searchType === "single" ? 30000 : 180000,
-          params: {
-            key: this.search,
-            bookSourceUrl: this.searchConfig.bookSourceUrl,
-            bookSourceGroup: this.searchConfig.bookSourceGroup,
-            concurrentCount: this.searchConfig.concurrentCount,
-            lastIndex: this.searchLastIndex, // 多源搜索时的索引
-            page: page // 单源搜索时的page
-          }
+          key: this.search,
+          bookSourceUrl: this.searchConfig.bookSourceUrl,
+          bookSourceGroup: this.searchConfig.bookSourceGroup,
+          concurrentCount: this.searchConfig.concurrentCount,
+          lastIndex: this.searchLastIndex, // 多源搜索时的索引
+          page: page // 单源搜索时的page
+        },
+        {
+          timeout: this.searchConfig.searchType === "single" ? 30000 : 180000
         }
       ).then(
         res => {
@@ -2040,14 +2040,17 @@ export default {
       );
       this.bookSourceList.forEach(v => {
         limitFunc(() => {
-          return Axios.get(this.api + "/searchBook", {
-            timeout: this.checkBookSourceConfig.timeout,
-            params: {
+          return Axios.post(
+            this.api + "/searchBook",
+            {
               key: this.checkBookSourceConfig.keyword,
               bookSourceUrl: v.bookSourceUrl
             },
-            silent: true
-          });
+            {
+              timeout: this.checkBookSourceConfig.timeout,
+              silent: true
+            }
+          );
         });
       });
     },

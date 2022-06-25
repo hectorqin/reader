@@ -35,6 +35,7 @@ import com.htmake.reader.utils.unzip
 import com.htmake.reader.utils.zip
 import com.htmake.reader.utils.jsonEncode
 import com.htmake.reader.utils.getRelativePath
+import com.htmake.reader.utils.getFileExtetion
 import com.htmake.reader.verticle.RestVerticle
 import com.htmake.reader.SpringEvent
 import org.springframework.stereotype.Component
@@ -290,18 +291,7 @@ open class BaseController(override val coroutineContext: CoroutineContext): Coro
     }
 
     fun getFileExt(url: String, defaultExt: String=""): String {
-        try {
-            var seqs = url.split("?", ignoreCase = true, limit = 2)
-            var file = seqs[0].split("/").last()
-            val dotPos = file.lastIndexOf('.')
-            return if (0 <= dotPos) {
-                file.substring(dotPos + 1)
-            } else {
-                defaultExt
-            }
-        } catch (e: Exception) {
-            return defaultExt
-        }
+        return getFileExtetion(url, defaultExt)
     }
 
     suspend fun limitConcurrent(concurrentCount: Int, startIndex: Int, endIndex: Int, handler: suspend CoroutineScope.(Int) -> Any) {

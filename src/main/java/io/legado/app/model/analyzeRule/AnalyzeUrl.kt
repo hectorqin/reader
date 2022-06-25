@@ -20,6 +20,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.net.URLEncoder
 import java.util.regex.Pattern
+import io.legado.app.model.DebugLog
 
 /**
  * Created by GKF on 2018/1/24.
@@ -339,6 +340,7 @@ class AnalyzeUrl(
         jsStr: String? = null,
         sourceRegex: String? = null,
         useWebView: Boolean = true,
+        debugLog: DebugLog? = null
     ): StrResponse {
         if (type != null) {
             return StrResponse(url, StringUtils.byteToHexString(getByteArrayAwait()))
@@ -349,7 +351,7 @@ class AnalyzeUrl(
         if (this.useWebView && useWebView) {
             throw Exception("不支持webview")
         } else {
-            strResponse = getProxyClient(proxy).newCallStrResponse(retry) {
+            strResponse = getProxyClient(proxy, debugLog).newCallStrResponse(retry) {
                 addHeaders(headerMap)
                 when (method) {
                     RequestMethod.POST -> {
@@ -378,9 +380,10 @@ class AnalyzeUrl(
         jsStr: String? = null,
         sourceRegex: String? = null,
         useWebView: Boolean = true,
+        debugLog: DebugLog? = null
     ): StrResponse {
         return runBlocking {
-            getStrResponseAwait(jsStr, sourceRegex, useWebView)
+            getStrResponseAwait(jsStr, sourceRegex, useWebView, debugLog)
         }
     }
 

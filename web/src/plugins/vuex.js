@@ -587,6 +587,11 @@ export default new Vuex.Store({
     },
     currentUserName: state => {
       return getCurrentUserName(state);
+    },
+    currentChapter: state => {
+      return state.readingBook && state.readingBook.catalog
+        ? state.readingBook.catalog[state.readingBook.index]
+        : {};
     }
   },
   actions: {

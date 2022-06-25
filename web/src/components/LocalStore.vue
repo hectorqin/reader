@@ -148,7 +148,10 @@ export default {
     canImport(row) {
       const path = row.path.toLowerCase();
       return (
-        path.endsWith(".txt") || path.endsWith(".epub") || path.endsWith(".umd")
+        path.endsWith(".txt") ||
+        path.endsWith(".epub") ||
+        path.endsWith(".umd") ||
+        path.endsWith(".cbz")
       );
     },
     cancel() {

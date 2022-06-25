@@ -23,6 +23,11 @@ class Debugger(val logMsg: (String) -> Unit) : DebugLog {
         log(sourceUrl, msg, false)
     }
 
+    override fun log(message: String) {
+        val time = debugTimeFormat.format(Date(System.currentTimeMillis() - startTime))
+        logMsg("$time $message")
+    }
+
     override fun log(
         sourceUrl: String?,
         msg: String?,
@@ -96,7 +101,7 @@ class Debugger(val logMsg: (String) -> Unit) : DebugLog {
                 }
             }
         }.onFailure {
-            log(webBook.sourceUrl, it.localizedMessage)
+            log(webBook.sourceUrl, "Error: " + it.localizedMessage)
             throw it
         }
    }
@@ -116,7 +121,7 @@ class Debugger(val logMsg: (String) -> Unit) : DebugLog {
                 }
             }
         }.onFailure {
-            log(webBook.sourceUrl, it.localizedMessage)
+            log(webBook.sourceUrl, "Error: " + it.localizedMessage)
             throw it
         }
     }
@@ -130,7 +135,7 @@ class Debugger(val logMsg: (String) -> Unit) : DebugLog {
                     tocDebug(webBook, it)
                 }
                 .onFailure {
-                    log(webBook.sourceUrl, it.localizedMessage)
+                    log(webBook.sourceUrl, "Error: " + it.localizedMessage)
                     throw it
                 }
     }
@@ -153,7 +158,7 @@ class Debugger(val logMsg: (String) -> Unit) : DebugLog {
                     }
                 }
                 .onFailure {
-                    log(webBook.sourceUrl, it.localizedMessage)
+                    log(webBook.sourceUrl, "Error: " + it.localizedMessage)
                     throw it
                 }
     }
@@ -171,7 +176,7 @@ class Debugger(val logMsg: (String) -> Unit) : DebugLog {
                     log(webBook.sourceUrl, "︽正文页解析完成")
                 }
                 .onFailure {
-                    log(webBook.sourceUrl, it.localizedMessage)
+                    log(webBook.sourceUrl, "Error: " + it.localizedMessage)
                 }
     }
 }

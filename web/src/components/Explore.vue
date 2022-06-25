@@ -210,12 +210,10 @@ export default {
       this.page = page || 1;
       this.ruleFindUrl = url;
       this.bookSourceUrl = sourceUrl;
-      Axios.get(this.api + `/exploreBook`, {
-        params: {
-          ruleFindUrl: url,
-          bookSourceUrl: sourceUrl,
-          page
-        }
+      Axios.post(this.api + `/exploreBook`, {
+        ruleFindUrl: url,
+        bookSourceUrl: sourceUrl,
+        page
       }).then(
         res => {
           if (res.data.isSuccess) {

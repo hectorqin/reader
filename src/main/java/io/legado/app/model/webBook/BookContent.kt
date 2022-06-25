@@ -61,7 +61,7 @@ object BookContent {
                     source = bookSource,
                     ruleData = book,
                     headerMapF = bookSource.getHeaderMap()
-                ).getStrResponseAwait()
+                ).getStrResponseAwait(debugLog = debugLog)
                 res.body?.let { nextBody ->
                     contentData = analyzeContent(
                         book, nextUrl, res.url, nextBody, contentRule,
@@ -85,7 +85,7 @@ object BookContent {
                             ruleData = book,
                             headerMapF = bookSource.getHeaderMap()
                         )
-                        val res = analyzeUrl.getStrResponseAwait()
+                        val res = analyzeUrl.getStrResponseAwait(debugLog = debugLog)
                         analyzeContent(
                             book, urlStr, res.url, res.body!!, contentRule,
                             bookChapter, bookSource, mNextChapterUrl, false
@@ -105,7 +105,11 @@ object BookContent {
         debugLog?.log(bookSource.bookSourceUrl, "┌获取章节名称")
         debugLog?.log(bookSource.bookSourceUrl, "└${bookChapter.title}")
         debugLog?.log(bookSource.bookSourceUrl, "┌获取正文内容 (长度：${contentStr.length})")
-        debugLog?.log(bookSource.bookSourceUrl, "└\n${contentStr.substring(0, 50)} ... ${contentStr.substring(contentStr.length - 30, contentStr.length)}")
+        if (contentStr.length > 300) {
+            debugLog?.log(bookSource.bookSourceUrl, "└\n${contentStr.substring(0, 50)} ... ${contentStr.substring(contentStr.length - 30, contentStr.length)}")
+        } else {
+            debugLog?.log(bookSource.bookSourceUrl, "└\n${contentStr}")
+        }
         return contentStr
     }
 

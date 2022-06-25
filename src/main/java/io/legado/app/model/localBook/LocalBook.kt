@@ -41,6 +41,9 @@ object LocalBook {
             book.isUmd() -> {
                 UmdFile.getChapterList(book)
             }
+            book.isCbz() -> {
+                CbzFile.getChapterList(book)
+            }
             else -> {
                 TextFile.getChapterList(book)
             }
@@ -58,6 +61,9 @@ object LocalBook {
             }
             book.isUmd() -> {
                 UmdFile.getContent(book, chapter)
+            }
+            book.isCbz() -> {
+                CbzFile.getContent(book, chapter)
             }
             else -> {
                 TextFile.getContent(book, chapter)

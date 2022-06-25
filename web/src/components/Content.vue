@@ -22,6 +22,22 @@ export default {
   ],
   render() {
     if (this.showContent) {
+      if (
+        this.$store.getters.currentChapter &&
+        this.$store.getters.currentChapter.isVolume
+      ) {
+        return (
+          <div
+            class="content-body chapter-content reading-chapter volume-chapter"
+            style={this.containerStyle}
+          >
+            <div class="volume-content">
+              <h3 data-pos={0}>{this.title}</h3>
+              <p class="volume-tag">{this.content}</p>
+            </div>
+          </div>
+        );
+      }
       if (this.isAudio) {
         // 音频
         return this.renderAudio();
@@ -41,7 +57,7 @@ export default {
             selector: "img"
           }}
         >
-          <h3 data-pos={0}>{this.title}</h3>
+          {this.isCbz ? null : <h3 data-pos={0}>{this.title}</h3>}
           {this.content.split(/\n+/).map(a => {
             a = a.replace(/^\s+/g, "");
             if (!a) {
@@ -52,7 +68,9 @@ export default {
             if (a.indexOf("<img") >= 0) {
               // 漫画
               // 将 src 替换为 data-src 懒加载
-              a = a.replace(/src=/g, "data-src=");
+              a = a
+                .replace(/src=/g, "data-src=")
+                .replace("__API_ROOT__", this.$store.getters.apiRoot);
               return (
                 <div
                   style={this.containerStyle}
@@ -118,6 +136,11 @@ export default {
         !this.error && this.readingBook.bookUrl.toLowerCase().endsWith(".epub")
       );
     },
+    isCbz() {
+      return (
+        !this.error && this.readingBook.bookUrl.toLowerCase().endsWith(".cbz")
+      );
+    },
     containerStyle() {
       return {
         fontSize: this.$store.getters.config.fontSize + "px",
@@ -174,6 +197,16 @@ export default {
           }}
         >
           {this.showChapterList.map(chapter => {
+            if (chapter.isVolume) {
+              return (
+                <div class="content-body chapter-content reading-chapter volume-chapter">
+                  <div class="volume-content">
+                    <h3 data-pos={0}>{chapter.title}</h3>
+                    <p class="volume-tag">{chapter.content}</p>
+                  </div>
+                </div>
+              );
+            }
             let wordCount = chapter.title.length + 2; // 2为两个换行符
             return (
               <div
@@ -185,7 +218,7 @@ export default {
                 ]}
                 data-index={chapter.index}
               >
-                <h3 data-pos={0}>{chapter.title}</h3>;
+                {this.isCbz ? null : <h3 data-pos={0}>{chapter.title}</h3>}
                 {chapter.content.split(/\n+/).map(a => {
                   a = a.replace(/^\s+/g, "");
                   if (!a) {
@@ -196,7 +229,9 @@ export default {
                   if (a.indexOf("<img") >= 0) {
                     // 漫画
                     // 将 src 替换为 data-src 懒加载
-                    a = a.replace(/src=/g, "data-src=");
+                    a = a
+                      .replace(/src=/g, "data-src=")
+                      .replace("__API_ROOT__", this.$store.getters.apiRoot);
                     return (
                       <div
                         style={this.containerStyle}
@@ -592,6 +627,20 @@ h3 {
 }
 h3.reading {
   color: red !important;
+}
+.volume-chapter {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  .volume-content {
+    text-align: center;
+  }
+
+  .volume-tag {
+    text-align: right;
+  }
 }
 .content-audio {
   margin: 0 auto;

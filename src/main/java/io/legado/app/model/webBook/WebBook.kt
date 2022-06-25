@@ -56,7 +56,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
                 ruleData = variableBook,
                 headerMapF = bookSource.getHeaderMap(true),
             )
-            var res = analyzeUrl.getStrResponseAwait()
+            var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
@@ -96,7 +96,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
             ruleData = variableBook,
             headerMapF = bookSource.getHeaderMap(true)
         )
-        var res = analyzeUrl.getStrResponseAwait()
+        var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
         //检测书源是否已登录
         bookSource.loginCheckJs?.let { checkJs ->
             if (checkJs.isNotBlank()) {
@@ -151,7 +151,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
             ruleData = book,
             headerMapF = bookSource.getHeaderMap(true)
         )
-        var res = analyzeUrl.getStrResponseAwait()
+        var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
         //检测书源是否已登录
         bookSource.loginCheckJs?.let { checkJs ->
             if (checkJs.isNotBlank()) {
@@ -187,7 +187,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
                 ruleData = book,
                 headerMapF = bookSource.getHeaderMap(true)
             )
-            var res = analyzeUrl.getStrResponseAwait()
+            var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
@@ -208,9 +208,13 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
         nextChapterUrl: String? = null
     ): String {
        if (bookSource.getContentRule().content.isNullOrEmpty()) {
-            if(debugLog) Debug.log(bookSource.bookSourceUrl, "⇒正文规则为空,使用章节链接: ${bookChapter.url}")
+            debugger?.log(bookSource.bookSourceUrl, "⇒正文规则为空,使用章节链接: ${bookChapter.url}")
             return bookChapter.url
        }
+       if (bookChapter.isVolume && bookChapter.url.startsWith(bookChapter.title)) {
+            debugger?.log(bookSource.bookSourceUrl, "⇒一级目录正文不解析规则")
+            return bookChapter.tag ?: ""
+        }
 //        val body = if (book != null && bookChapter.url == book.bookUrl && !book.tocHtml.isNullOrEmpty()) {
 //            book.tocHtml
 //        } else {
@@ -225,7 +229,8 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debu
         )
         var res = analyzeUrl.getStrResponseAwait(
             jsStr = bookSource.getContentRule().webJs,
-            sourceRegex = bookSource.getContentRule().sourceRegex
+            sourceRegex = bookSource.getContentRule().sourceRegex,
+            debugLog = debugger
         )
         return BookContent.analyzeContent(
             res.body,

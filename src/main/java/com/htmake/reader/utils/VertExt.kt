@@ -26,7 +26,7 @@ import io.legado.app.utils.MD5Utils
  * @Date: 2019-05-21 16:17
  * @Description:
  */
-private val logger = KotlinLogging.logger {}
+val logger = KotlinLogging.logger {}
 
 val gson = GsonBuilder().disableHtmlEscaping().create()
 val prettyGson = GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create()

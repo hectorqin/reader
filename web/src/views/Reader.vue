@@ -926,7 +926,10 @@ export default {
     },
     isCarToon() {
       return (
-        !this.error && !this.isEpub && (this.content || "").indexOf("<img") >= 0
+        !this.error &&
+        !this.isEpub &&
+        !this.isCbz &&
+        (this.content || "").indexOf("<img") >= 0
       );
     },
     isAudio() {
@@ -936,6 +939,12 @@ export default {
       return (
         !this.error &&
         this.$store.state.readingBook.bookUrl.toLowerCase().endsWith(".epub")
+      );
+    },
+    isCbz() {
+      return (
+        !this.error &&
+        this.$store.state.readingBook.bookUrl.toLowerCase().endsWith(".cbz")
       );
     },
     scrollOffset() {
@@ -1060,10 +1069,7 @@ export default {
         params.bookSourceUrl = this.$store.state.readingBook.origin;
       }
       return networkFirstRequest(
-        () =>
-          Axios.get(this.api + "/getChapterList", {
-            params
-          }),
+        () => Axios.post(this.api + "/getChapterList", params),
         this.$store.state.readingBook.bookName +
           "_" +
           this.$store.state.readingBook.author +
@@ -1076,21 +1082,22 @@ export default {
       return this.loadCatalog(true);
     },
     async getBookContent(chapterIndex, options, refresh, cache) {
+      const params = {
+        url: this.$store.state.readingBook.bookUrl,
+        index: chapterIndex
+      };
+      if (refresh) {
+        params.refresh = 1;
+      }
+      if (cache) {
+        params.cache = 1;
+      }
       return cacheFirstRequest(
         () =>
-          Axios.get(
-            this.api +
-              "/getBookContent?url=" +
-              encodeURIComponent(this.$store.state.readingBook.bookUrl) +
-              "&index=" +
-              chapterIndex +
-              (refresh ? "&refresh=1" : "") +
-              (cache ? "&cache=1" : ""),
-            {
-              timeout: 30000,
-              ...options
-            }
-          ),
+          Axios.post(this.api + "/getBookContent", params, {
+            timeout: 30000,
+            ...options
+          }),
         this.$store.state.readingBook.bookName +
           "_" +
           this.$store.state.readingBook.author +
@@ -1188,6 +1195,9 @@ export default {
             this.$emit("showContent");
             this.loading.close();
           }
+          if (this.isScrollRead) {
+            this.computeShowChapterList();
+          }
         },
         error => {
           if (
@@ -1212,6 +1222,9 @@ export default {
           this.$message.error(
             "获取章节内容失败 " + (error && error.toString())
           );
+          if (this.isScrollRead) {
+            this.computeShowChapterList();
+          }
           throw error;
         }
       );
@@ -1336,6 +1349,9 @@ export default {
         !chapter.error || // 当前内容正确
         this.chapterContentCache.chapters[chapter.index].error // 缓存内容错误
       ) {
+        // 查询是否卷名
+        chapter.isVolume = !!(this.readingBook.catalog[chapter.index] || {})
+          .isVolume;
         this.chapterContentCache.chapters[chapter.index] = chapter;
       }
     },
@@ -2700,6 +2716,9 @@ export default {
       eventBus.$emit("showBookInfoDialog", book);
     },
     formatChinese(text) {
+      if (this.isEpub || this.isAudio || this.isCbz || this.isCarToon) {
+        return text;
+      }
       if (this.config.chineseFont === "简体") {
         return simplized(text);
       } else {

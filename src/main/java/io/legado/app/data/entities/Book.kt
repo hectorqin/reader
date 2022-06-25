@@ -10,6 +10,7 @@ import io.legado.app.utils.FileUtils
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.localBook.EpubFile
 import io.legado.app.model.localBook.UmdFile
+import io.legado.app.model.localBook.CbzFile
 import java.nio.charset.Charset
 import java.io.File
 import kotlin.math.max
@@ -222,6 +223,8 @@ data class Book(
                 EpubFile.upBookInfo(this, onlyCover)
             } else if (isUmd()) {
                 UmdFile.upBookInfo(this, onlyCover)
+            } else if (isCbz()) {
+                CbzFile.upBookInfo(this, onlyCover)
             }
         } catch(e: Exception) {
             e.printStackTrace()
