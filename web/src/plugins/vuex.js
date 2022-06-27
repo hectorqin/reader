@@ -197,6 +197,7 @@ export default new Vuex.Store({
           });
           state.customConfigList[index] = oldCustomConfig;
           state.customConfigList = [].concat(state.customConfigList);
+          setCache("customConfigList", JSON.stringify(state.customConfigList));
         }
       }
       setCache("config", JSON.stringify(config));
