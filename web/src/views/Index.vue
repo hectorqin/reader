@@ -964,126 +964,6 @@
       </div>
     </el-dialog>
 
-    <el-dialog
-      :visible.sync="showRssSourcesDialog"
-      :width="dialogWidth"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-      @closed="showRssSourceEditButton = false"
-      v-if="$store.getters.isNormalPage"
-    >
-      <div class="custom-dialog-title" slot="title">
-        <span class="el-dialog__title"
-          >RSS订阅({{ rssSourceList.length }})
-          <span
-            class="float-right span-btn"
-            @click="showRssSourceEditButton = !showRssSourceEditButton"
-            >{{ showRssSourceEditButton ? "取消" : "编辑" }}</span
-          >
-          <span class="float-right span-btn" @click="uploadRssSource"
-            >导入</span
-          >
-          <span class="float-right span-btn" @click="editRssSource(false)"
-            >新增</span
-          >
-        </span>
-        <input
-          ref="rssInputRef"
-          type="file"
-          @change="onSourceFileChange($event, true)"
-          style="display:none"
-        />
-      </div>
-      <div class="rss-source-list-container">
-        <div
-          class="rss-source"
-          v-for="(source, index) in rssSourceList"
-          :key="'rss-' + index"
-          @click="getRssArticles(source)"
-        >
-          <i
-            class="el-icon-close"
-            v-if="showRssSourceEditButton"
-            @click.stop="deleteRssSource(source)"
-          ></i>
-          <i
-            class="el-icon-edit"
-            v-if="showRssSourceEditButton"
-            @click.stop="editRssSource(source)"
-          ></i>
-          <el-image
-            :src="getImage(source.sourceIcon, true)"
-            class="rss-icon"
-            fit="cover"
-            lazy
-          />
-          <div class="rss-title">{{ source.sourceName }}</div>
-        </div>
-      </div>
-    </el-dialog>
-
-    <el-dialog
-      :title="rssSource.sourceName"
-      :visible.sync="showRssArticlesDialog"
-      :width="dialogWidth"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-      @closed="rssArticleList = []"
-      v-if="$store.getters.isNormalPage"
-    >
-      <div class="rss-article-list-container" ref="rssArticleListRef">
-        <div
-          class="rss-article"
-          v-for="(article, index) in rssArticleList"
-          :key="'rss-article-' + index"
-          @click="getRssArticleContent(article)"
-        >
-          <div class="rss-article-info">
-            <div class="rss-article-title">{{ article.title }}</div>
-            <div class="rss-article-date">{{ article.pubDate }}</div>
-          </div>
-          <div class="rss-article-image" v-if="article.image">
-            <div class="image-wrapper">
-              <el-image
-                class="rss-article-img"
-                :src="getCover(article.image, true, true)"
-                :preview-src-list="rssArticleImageList"
-                fit="cover"
-                lazy
-                @click.stop="noop"
-              >
-              </el-image>
-            </div>
-          </div>
-        </div>
-        <div
-          class="load-more-rss"
-          @click="hasMoreRssArticles && getRssArticles(rssSource, rssPage + 1)"
-        >
-          {{ hasMoreRssArticles ? "加载更多" : "没有更多啦" }}
-        </div>
-      </div>
-    </el-dialog>
-
-    <el-dialog
-      :title="rssArticleInfo.title"
-      :visible.sync="showRssArticleContentDialog"
-      :width="dialogWidth"
-      :fullscreen="collapseMenu"
-      :class="isWebApp && !isNight ? 'status-bar-light-bg-dialog' : ''"
-      @closed="rssArticleInfo = {}"
-      v-if="$store.getters.isNormalPage"
-    >
-      <div class="rss-article-info-container">
-        <div
-          class="rss-article-content"
-          ref="rssArticleContentRef"
-          v-html="rssArticleInfo.content || rssArticleInfo.description"
-          @click="rssArticleClickHandler"
-        ></div>
-      </div>
-    </el-dialog>
-
     <LocalStore
       v-model="showLocalStoreManageDialog"
       @importFromLocalStorePreview="importMultiBooks"
@@ -1176,18 +1056,8 @@ export default {
 
       importMultiBookTip: "",
 
-      showRssSourcesDialog: false,
-
-      showRssSourceEditButton: false,
-
-      showRssArticlesDialog: false,
-      hasMoreRssArticles: true,
-      rssArticleList: [],
-      rssPage: 1,
       rssSource: {},
 
-      showRssArticleContentDialog: false,
-      rssArticleInfo: {},
       concurrentList: [12, 18, 24, 30, 36, 42, 48, 54, 60],
 
       localCacheStats: {
@@ -1251,14 +1121,6 @@ export default {
     userNS() {
       this.init(true);
     },
-    showRssArticlesDialog(val) {
-      if (val) {
-        this.$nextTick(() => {
-          this.$refs.rssArticleListRef &&
-            (this.$refs.rssArticleListRef.scrollTop = 0);
-        });
-      }
-    },
     importUsedTxtRule(val) {
       if (val) {
         this.importBookInfo.tocUrl = val;
@@ -1277,6 +1139,9 @@ export default {
       this.collapseMenu && !this.showNavigation ? "navigation-hidden" : "";
     window.shelfPage = this;
     this.init();
+    eventBus.$on("onSourceFileChange", (event, isRssSource) => {
+      this.onSourceFileChange(event, isRssSource);
+    });
   },
   activated() {
     document.title = "阅读";
@@ -2453,116 +2318,12 @@ export default {
       return this.$root.$children[0].loadRssSources(refresh);
     },
     showRssDialog() {
-      //
-      this.showRssSourcesDialog = true;
+      eventBus.$emit("showRssSourceListDialog");
     },
-    async deleteRssSource(source) {
-      const res = await this.$confirm(`确认要删除该RSS订阅源吗?`, "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
-        type: "warning"
-      }).catch(() => {
-        return false;
-      });
-      if (!res) {
-        return;
-      }
-      Axios.post(this.api + "/deleteRssSource", source).then(
-        res => {
-          if (res.data.isSuccess) {
-            this.$message.success("删除成功");
-            this.loadRssSources(true);
-          }
-        },
-        error => {
-          this.$message.error("删除失败 " + (error && error.toString()));
-        }
-      );
-    },
-    uploadRssSource() {
-      this.$refs.rssInputRef.dispatchEvent(new MouseEvent("click"));
-    },
-    getRssArticles(source, page) {
-      //
-      this.rssSource = source;
-      this.rssPage = page || 1;
-      if (this.rssPage === 1) {
-        this.hasMoreRssArticles = true;
-      }
-      Axios.post(this.api + "/getRssArticles", {
-        sourceUrl: source.sourceUrl,
-        page: this.rssPage
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            //
-            if (!res.data.data.length) {
-              this.$message.error("没有数据");
-              this.hasMoreRssArticles = false;
-              return;
-            }
-            if (this.rssPage > 1) {
-              this.rssArticleList = []
-                .concat(this.rssArticleList)
-                .concat(res.data.data);
-            } else {
-              this.showRssArticlesDialog = true;
-              this.rssArticleList = res.data.data;
-            }
-          }
-        },
-        error => {
-          this.$message.error(
-            "加载RSS文章列表失败 " + (error && error.toString())
-          );
-        }
-      );
-    },
-    getRssArticleContent(article) {
-      Axios.post(this.api + "/getRssContent", {
-        sourceUrl: this.rssSource.sourceUrl,
-        link: article.link,
-        origin: article.origin
-      }).then(
-        res => {
-          if (res.data.isSuccess) {
-            //
-            this.showRssArticleContentDialog = true;
-            this.rssArticleInfo = {
-              ...article,
-              content: res.data.data
-            };
-          }
-        },
-        error => {
-          this.$message.error(
-            "加载RSS文章内容失败 " + (error && error.toString())
-          );
-        }
-      );
+    showRssArticleListDialog(source) {
+      eventBus.$emit("showRssArticleListDialog", source);
     },
     noop() {},
-    rssArticleClickHandler(e) {
-      if (
-        e.target &&
-        e.target.nodeName &&
-        e.target.nodeName.toLowerCase() === "img"
-      ) {
-        const imgList = this.$refs.rssArticleContentRef.querySelectorAll("img");
-        if (imgList.length) {
-          const imgUrlList = [];
-          let index = 0;
-          for (let i = 0; i < imgList.length; i++) {
-            imgUrlList.push(imgList[i].src);
-            if (imgList[i] === e.target) {
-              index = i;
-            }
-          }
-          this.$store.commit("setPreviewImageIndex", index);
-          this.$store.commit("setPreviewImgList", imgUrlList);
-        }
-      }
-    },
     exportBookSource() {
       Axios.get(this.api + "/getBookSources").then(
         res => {
@@ -2693,59 +2454,6 @@ export default {
           this.$message.error(
             "加载书源信息失败 " + (error && error.toString())
           );
-        }
-      );
-    },
-    editRssSource(rssSource) {
-      rssSource = rssSource || {
-        sourceName: "新增RSS源",
-        sourceUrl: "",
-        sourceIcon: "",
-        sourceGroup: "",
-        enabled: true,
-        singleUrl: true,
-        articleStyle: 0,
-        ruleArticles: "",
-        ruleTitle: "",
-        rulePubDate: "",
-        ruleImage: "",
-        ruleLink: "",
-        ruleContent: "",
-        enableJs: true
-      };
-      eventBus.$emit(
-        "showEditor",
-        "编辑RSS源",
-        JSON.stringify(rssSource, null, 4),
-        (content, close) => {
-          try {
-            const source = JSON.parse(content);
-            if (!source.sourceName) {
-              this.$message.error("RSS源名称不能为空");
-              return;
-            }
-            if (!source.sourceUrl) {
-              this.$message.error("RSS源链接不能为空");
-              return;
-            }
-            Axios.post(this.api + "/saveRssSource", source).then(
-              res => {
-                if (res.data.isSuccess) {
-                  //
-                  close();
-                  this.$message.success("保存RSS源成功");
-                  this.loadRssSources(true);
-                }
-              },
-              error => {
-                this.$message.error(
-                  "保存RSS源失败 " + (error && error.toString())
-                );
-              }
-            );
-          } catch (e) {
-            this.$message.error("RSS源必须是JSON格式");
-          }
         }
       );
     },
@@ -3077,16 +2785,6 @@ export default {
       return this.$store.state.bookGroupList
         .filter(v => this.getShowShelfBooks(v.groupId).length && v.show)
         .sort((a, b) => a.order - b.order);
-    },
-    rssSourceList() {
-      return []
-        .concat(this.$store.state.rssSourceList)
-        .sort((a, b) => a.customOrder - b.customOrder);
-    },
-    rssArticleImageList() {
-      return this.rssArticleList
-        .filter(v => v.image)
-        .map(v => this.getImage(v.image, true, true));
     },
     searchConfig: {
       get() {
@@ -3664,108 +3362,6 @@ export default {
   overflow-x: auto;
 }
 
-.rss-source-list-container {
-  max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px);
-  overflow-y: auto;
-
-  .rss-source {
-    display: inline-block;
-    width: 25%;
-    box-sizing: border-box;
-    padding: 10px;
-    position: relative;
-    text-align: center;
-    vertical-align: top;
-    margin-bottom: 10px;
-    cursor: pointer;
-    position: relative;
-
-    .el-icon-close {
-      position: absolute;
-      right: 6px;
-      top: 8px;
-      font-size: 18px;
-    }
-
-    .el-icon-edit {
-      position: absolute;
-      right: 6px;
-      top: 42px;
-      font-size: 18px;
-    }
-
-    .rss-icon {
-      display: inline-block;
-      width: 50px;
-      height: 50px;
-      border-radius: 5px;
-    }
-    .rss-title {
-      margin-top: 5px;
-      text-align: center;
-    }
-  }
-}
-
-.rss-article-list-container {
-  max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px);
-  overflow-y: auto;
-
-  .rss-article {
-    display: flex;
-    flex-direction: row;
-    padding: 15px 10px;
-    border-bottom: 1px solid #eee;
-    cursor: pointer;
-
-    .rss-article-info {
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      flex: 1;
-      padding-right: 5px;
-
-      .rss-article-title {
-        font-weight: 600;
-        font-size: 14px;
-      }
-
-      .rss-article-date {
-        font-size: 12px;
-        margin-top: 10px;
-      }
-    }
-    .rss-article-image {
-      width: 120px;
-      display: flex;
-      align-items: center;
-
-      .image-wrapper {
-        width: 100%;
-        height: 0;
-        padding-bottom: 62.5%;
-        overflow: hidden;
-
-        .rss-article-img {
-          width: 120px;
-          height: 75px;
-        }
-      }
-    }
-  }
-
-  .load-more-rss {
-    text-align: center;
-    padding: 10px;
-    cursor: pointer;
-  }
-}
-
-.rss-article-info-container {
-  max-height: calc(var(--vh, 1vh) * 70 - 54px - 60px);
-  overflow-y: auto;
-}
-
 .night {
   .source-container {
     .source-group-wrapper {
@@ -3782,28 +3378,6 @@ export default {
       background: #185798 !important;
       border-color: #185798 !important;
     }
-  }
-
-  .rss-source-list-container {
-    .rss-source {
-      .rss-title {
-        color: #aaa;
-      }
-    }
-  }
-
-  .rss-article-list-container {
-    .rss-article {
-      border-color: #333;
-      color: #aaa;
-
-      .rss-article-date {
-        color: #666;
-      }
-    }
-  }
-  .rss-article-content {
-    color: #aaa;
   }
 }
 
@@ -3857,27 +3431,6 @@ export default {
       }
     }
   }
-  .rss-source-list-container {
-    max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px);
-  }
-  .rss-article-list-container {
-    max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px);
-
-    .rss-article {
-      padding: 15px 5px;
-
-      .rss-article-image {
-        width: 100px;
-        .rss-article-img {
-          width: 100px;
-          height: 62.5px;
-        }
-      }
-    }
-  }
-  .rss-article-info-container {
-    max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px);
-  }
   .source-list-container  {
     max-height: calc(var(--vh, 1vh) * 100 - 54px - 40px - 66px);
   }
@@ -3885,17 +3438,6 @@ export default {
 @media screen and (max-width: 480px) {
   .source-container.table-container {
     margin: -15px -5px;
-  }
-  .rss-source-list-container {
-    .rss-source {
-      .el-icon-close {
-        right: -5px;
-      }
-
-      .el-icon-edit {
-        right: -5px;
-      }
-    }
   }
 }
 </style>
@@ -3950,12 +3492,6 @@ export default {
     rgba(0, 0, 0, 0.2) 0,
     transparent 36px
   ) !important;
-}
-.rss-article-info-container img {
-  max-width: 100%;
-}
-.rss-article-info-container video {
-  max-width: 100%;
 }
 @media (hover: hover) {
   .book:hover {

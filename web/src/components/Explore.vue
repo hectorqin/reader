@@ -156,6 +156,7 @@ export default {
       const result = [];
       let zone = [];
       try {
+        // 由于是在客户端解析，所以不支持解析 <js> 和 @js: 开头的 exploreUrl
         // [{\"title\":\"玄幻奇幻\",\"url\":\"\/xuanhuan\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"武侠仙侠\",\"url\":\"\/wuxia\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"都市生活\",\"url\":\"\/dushi\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"历史军事\",\"url\":\"\/lishi\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"游戏竞技\",\"url\":\"\/youxi\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"科幻未来\",\"url\":\"\/kehuan\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"幻想奇缘\",\"url\":\"\/huanxiang\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"古代言情\",\"url\":\"\/gudai\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"二次い元\",\"url\":\"\/erciyuan\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"现代言情\",\"url\":\"\/xiandai\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"浪漫青春\",\"url\":\"\/qingchun\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"其他类型\",\"url\":\"\/qita\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}}]
         // 尝试解析为 JSON
         const exploreUrl = JSON.parse(bookSource.exploreUrl);

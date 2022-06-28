@@ -78,6 +78,13 @@
     <AddUser v-model="showAddUserDialog" />
 
     <BookGroup v-model="showBookGroupDialog" :isSet="isSetBookGroup" />
+
+    <RssSourceList v-model="showRssSourceListDialog" />
+    <RssArticleList v-model="showRssArticleListDialog" :rssSource="rssSource" />
+    <RssArticle
+      v-model="showRssArticleDialog"
+      :rssArticleInfo="rssArticleInfo"
+    />
   </div>
 </template>
 
@@ -92,6 +99,9 @@ import BookInfo from "./components/BookInfo.vue";
 import UserManage from "./components/UserManage.vue";
 import AddUser from "./components/AddUser.vue";
 import BookGroup from "./components/BookGroup.vue";
+import RssSourceList from "./components/RssSourceList.vue";
+import RssArticleList from "./components/RssArticleList.vue";
+import RssArticle from "./components/RssArticle.vue";
 import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
@@ -162,7 +172,10 @@ export default {
     BookInfo,
     UserManage,
     AddUser,
-    BookGroup
+    BookGroup,
+    RssSourceList,
+    RssArticleList,
+    RssArticle
   },
   data() {
     return {
@@ -190,7 +203,13 @@ export default {
       showAddUserDialog: false,
 
       showBookGroupDialog: false,
-      isSetBookGroup: false
+      isSetBookGroup: false,
+
+      showRssSourceListDialog: false,
+      showRssArticleListDialog: false,
+      rssSource: {},
+      showRssArticleDialog: false,
+      rssArticleInfo: {}
     };
   },
   beforeCreate() {
@@ -291,6 +310,17 @@ export default {
     eventBus.$on("showBookGroupDialog", isSet => {
       this.showBookGroupDialog = true;
       this.isSetBookGroup = !!isSet;
+    });
+    eventBus.$on("showRssArticleListDialog", rssSource => {
+      this.showRssArticleListDialog = true;
+      this.rssSource = rssSource;
+    });
+    eventBus.$on("showRssSourceListDialog", () => {
+      this.showRssSourceListDialog = true;
+    });
+    eventBus.$on("showRssArticleDialog", rssArticleInfo => {
+      this.showRssArticleDialog = true;
+      this.rssArticleInfo = rssArticleInfo;
     });
   },
   mounted() {
@@ -841,6 +871,15 @@ export default {
     background-color: #444;
     border: 1px solid #444 !important;
     color: #ddd;
+  }
+  .el-tabs__item {
+    color: #ddd;
+  }
+  .el-tabs__nav-next, .el-tabs__nav-prev {
+    color: #aaa;
+  }
+  .el-tabs__nav-wrap::after {
+    background-color: #444;
   }
   .el-select-dropdown {
     background-color: #333;
