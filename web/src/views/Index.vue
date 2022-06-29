@@ -391,24 +391,6 @@
           <div class="setting-title">
             其它
           </div>
-          <div class="setting-item">
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="showMPCode"
-            >
-              
-            </el-tag>
-            <el-tag
-              type="info"
-              :effect="isNight ? 'dark' : 'light'"
-              class="setting-btn"
-              @click="joinTGChannel"
-            >
-              加入TG频道【假装大佬】
-            </el-tag>
-          </div>
         </div>
         <div class="setting-wrapper">
           <div class="setting-title">
