@@ -398,7 +398,7 @@
               class="setting-btn"
               @click="showMPCode"
             >
-              关注公众号【假装大佬】
+              
             </el-tag>
             <el-tag
               type="info"
