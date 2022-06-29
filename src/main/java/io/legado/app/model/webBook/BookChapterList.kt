@@ -65,7 +65,7 @@ object BookChapterList {
                     ).getStrResponseAwait(debugLog = debugLog).body?.let { nextBody ->
                         chapterData = analyzeChapterList(
                             book, nextUrl, nextUrl,
-                            nextBody, tocRule, listRule, bookSource, false, false, debugLog
+                            nextBody, tocRule, listRule, bookSource, true, false, debugLog
                         )
                         nextUrl = chapterData.second.firstOrNull() ?: ""
                         chapterList.addAll(chapterData.first)
