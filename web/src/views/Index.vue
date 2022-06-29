@@ -398,7 +398,7 @@
               class="setting-btn"
               @click="showMPCode"
             >
-              关注公众号【假装大佬】
+              晴天QQ【1605615621】
             </el-tag>
             <el-tag
               type="info"
@@ -406,7 +406,7 @@
               class="setting-btn"
               @click="joinTGChannel"
             >
-              加入TG频道【假装大佬】
+              
             </el-tag>
           </div>
         </div>
