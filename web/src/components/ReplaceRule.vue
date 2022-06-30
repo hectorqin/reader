@@ -29,12 +29,17 @@
         :height="dialogContentHeight"
         @selection-change="localSelection = $event"
       >
-        <el-table-column type="selection" width="25" fixed> </el-table-column>
+        <el-table-column
+          type="selection"
+          width="25"
+          :fixed="$store.state.miniInterface"
+        >
+        </el-table-column>
         <el-table-column
           property="name"
           min-width="150px"
           label="规则名称"
-          fixed
+          :fixed="$store.state.miniInterface"
         >
         </el-table-column>
         <el-table-column property="scope" label="替换范围" min-width="150px">

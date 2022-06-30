@@ -20,11 +20,16 @@
         <el-table-column
           type="selection"
           width="25"
-          fixed
+          :fixed="$store.state.miniInterface"
           :selectable="row => !row.toParent"
         >
         </el-table-column>
-        <el-table-column property="name" min-width="150px" label="文件名" fixed>
+        <el-table-column
+          property="name"
+          min-width="150px"
+          label="文件名"
+          :fixed="$store.state.miniInterface"
+        >
           <template slot-scope="scope">
             <span v-if="!scope.row.isDirectory">{{ scope.row.name }}</span>
             <el-link

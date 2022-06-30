@@ -162,6 +162,7 @@ class YueduApi : RestVerticle() {
         router.get("/reader3/getShelfBook").coroutineHandler { bookController.getShelfBook(it) }
         router.post("/reader3/saveBook").coroutineHandler { bookController.saveBook(it) }
         router.post("/reader3/deleteBook").coroutineHandler { bookController.deleteBook(it) }
+        router.post("/reader3/deleteBooks").coroutineHandler { bookController.deleteBooks(it) }
 
         // 失效书源
         router.post("/reader3/getInvalidBookSources").coroutineHandler { bookController.getInvalidBookSources(it) }
@@ -208,6 +209,8 @@ class YueduApi : RestVerticle() {
 
         // 修改分组
         router.post("/reader3/saveBookGroupId").coroutineHandler { bookController.saveBookGroupId(it) }
+        router.post("/reader3/addBookGroupMulti").coroutineHandler { bookController.addBookGroupMulti(it) }
+        router.post("/reader3/removeBookGroupMulti").coroutineHandler { bookController.removeBookGroupMulti(it) }
 
         // 导入本地文件
         router.post("/reader3/importBookPreview").coroutineHandler { bookController.importBookPreview(it) }
@@ -237,6 +240,17 @@ class YueduApi : RestVerticle() {
 
         // 调试书源
         router.get("/reader3/bookSourceDebugSSE").coroutineHandlerWithoutRes { bookController.bookSourceDebugSSE(it) }
+
+        // 缓存书籍章节
+        router.get("/reader3/cacheBookSSE").coroutineHandlerWithoutRes { bookController.cacheBookSSE(it) }
+        // 获取书籍缓存信息
+        router.get("/reader3/getShelfBookWithCacheInfo").coroutineHandler { bookController.getShelfBookWithCacheInfo(it) }
+        // 删除书籍章节缓存
+        router.post("/reader3/deleteBookCache").coroutineHandler { bookController.deleteBookCache(it) }
+
+        // 导出书籍
+        router.post("/reader3/exportBook").coroutineHandlerWithoutRes { bookController.exportBook(it) }
+        router.get("/reader3/exportBook").coroutineHandlerWithoutRes { bookController.exportBook(it) }
 
         /** 用户模块 */
         // 上传文件

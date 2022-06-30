@@ -373,7 +373,9 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
             context.response().setStatusCode(405).end()
             return
         }
-        context.response().putHeader("Cache-Control", "86400").sendFile(file.toString())
+        context.response().putHeader("Cache-Control", "86400")
+                        .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(file.name, "UTF-8"))
+                        .sendFile(file.toString())
     }
 
     suspend fun webdavDelete(context: RoutingContext) {
@@ -599,7 +601,7 @@ class WebdavController(coroutineContext: CoroutineContext, router: Router, onHan
         }
         context.response()
                 .putHeader("Cache-Control", "86400")
-                .putHeader("Content-Disposition", "attachment; filename=" + file.name)
+                .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(file.name, "UTF-8"))
                 .sendFile(file.toString())
     }
 

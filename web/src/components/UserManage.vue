@@ -29,14 +29,14 @@
           type="selection"
           width="25"
           :selectable="isUserSelectable"
-          fixed
+          :fixed="$store.state.miniInterface"
         >
         </el-table-column>
         <el-table-column
           property="username"
           label="用户名"
           min-width="100"
-          fixed
+          :fixed="$store.state.miniInterface"
         ></el-table-column>
         <el-table-column
           property="lastLoginAt"
@@ -125,7 +125,7 @@ export default {
       manageUserSelection: []
     };
   },
-  props: ["show", "rule", "isAdd"],
+  props: ["show"],
   computed: {
     ...mapGetters(["dialogWidth", "dialogTop", "dialogContentHeight"]),
     userList: {

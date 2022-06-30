@@ -208,21 +208,21 @@
         <div
           class="cache-content-btn"
           v-show="!isCachingContent"
-          @click="cahceChapterContent(50)"
+          @click="cacheChapterContent(50)"
         >
           后面50章
         </div>
         <div
           class="cache-content-btn"
           v-show="!isCachingContent"
-          @click="cahceChapterContent(100)"
+          @click="cacheChapterContent(100)"
         >
           后面100章
         </div>
         <div
           class="cache-content-btn"
           v-show="!isCachingContent"
-          @click="cahceChapterContent(true)"
+          @click="cacheChapterContent(true)"
         >
           后面全部
         </div>
@@ -422,11 +422,7 @@ import jump from "../plugins/jump";
 import Animate from "../plugins/animate";
 import { setCache, getCache } from "../plugins/cache";
 import { simplized, traditionalized } from "../plugins/chinese";
-import {
-  cacheFirstRequest,
-  LimitResquest,
-  networkFirstRequest
-} from "../plugins/helper";
+import { LimitResquest, networkFirstRequest } from "../plugins/helper";
 import { defaultReplaceRule } from "../plugins/config.js";
 import eventBus from "../plugins/eventBus";
 
@@ -1081,31 +1077,12 @@ export default {
     refreshCatalog() {
       return this.loadCatalog(true);
     },
-    async getBookContent(chapterIndex, options, refresh, cache) {
-      const params = {
-        url: this.$store.state.readingBook.bookUrl,
-        index: chapterIndex
-      };
-      if (refresh) {
-        params.refresh = 1;
-      }
-      if (cache) {
-        params.cache = 1;
-      }
-      return cacheFirstRequest(
-        () =>
-          Axios.post(this.api + "/getBookContent", params, {
-            timeout: 30000,
-            ...options
-          }),
-        this.$store.state.readingBook.bookName +
-          "_" +
-          this.$store.state.readingBook.author +
-          "@" +
-          this.$store.state.readingBook.bookUrl +
-          "@chapterContent-" +
-          chapterIndex,
-        refresh
+    getBookContent(chapterIndex, options, refresh, cache) {
+      return this.$root.$children[0].getBookContent(
+        chapterIndex,
+        options,
+        refresh,
+        cache
       );
     },
     refreshContent() {
@@ -2540,7 +2517,7 @@ export default {
     showCacheContent() {
       this.showCacheContentZone = !this.showCacheContentZone;
     },
-    cahceChapterContent(cacheCount) {
+    cacheChapterContent(cacheCount) {
       //
       let cacheChapterList = [];
       if (cacheCount === true) {

@@ -181,7 +181,6 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         } else {
             // get 请求
             bookSourceUrl = context.queryParam("bookSourceUrl").firstOrNull() ?: ""
-            bookSourceUrl = URLDecoder.decode(bookSourceUrl, "UTF-8")
         }
         if (bookSourceUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("书源链接不能为空")
@@ -358,7 +357,6 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         } else {
             // get 请求
             url = context.queryParam("url").firstOrNull() ?: ""
-            url = URLDecoder.decode(url, "UTF-8")
         }
         if (url.isNullOrEmpty()) {
             context.success(returnData.setErrorMsg("请输入远程书源链接"))

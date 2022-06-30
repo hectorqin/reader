@@ -64,7 +64,8 @@ export default new Vuex.Store({
     searchConfig: { ...settings.searchConfig },
     txtTocRules: [],
     customConfigList: [].concat(settings.customConfigList),
-    showBookInfo: {}
+    showBookInfo: {},
+    cachingBookList: []
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -421,6 +422,9 @@ export default new Vuex.Store({
     },
     setShowBookInfo(state, book) {
       state.showBookInfo = book;
+    },
+    setCachingBookList(state, cachingBookList) {
+      state.cachingBookList = [].concat(cachingBookList);
     }
   },
   getters: {

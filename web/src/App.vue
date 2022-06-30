@@ -71,6 +71,8 @@
 
     <MPCode v-model="showMPCodeDialog" />
 
+    <BookManage v-model="showBookManageDialog" />
+
     <BookInfo v-model="showBookInfoDialog" />
 
     <UserManage v-model="showUserManageDialog" />
@@ -95,6 +97,7 @@ import ImageViewer from "element-ui/packages/image/src/image-viewer.vue";
 import ReplaceRule from "./components/ReplaceRule.vue";
 import ReplaceRuleForm from "./components/ReplaceRuleForm.vue";
 import MPCode from "./components/MPCode.vue";
+import BookManage from "./components/BookManage.vue";
 import BookInfo from "./components/BookInfo.vue";
 import UserManage from "./components/UserManage.vue";
 import AddUser from "./components/AddUser.vue";
@@ -169,6 +172,7 @@ export default {
     ReplaceRule,
     ReplaceRuleForm,
     MPCode,
+    BookManage,
     BookInfo,
     UserManage,
     AddUser,
@@ -196,6 +200,8 @@ export default {
       isAddReplaceRule: true,
 
       showMPCodeDialog: false,
+
+      showBookManageDialog: false,
 
       showBookInfoDialog: false,
 
@@ -296,6 +302,9 @@ export default {
     });
     eventBus.$on("showMPCodeDialog", () => {
       this.showMPCodeDialog = true;
+    });
+    eventBus.$on("showBookManageDialog", () => {
+      this.showBookManageDialog = true;
     });
     eventBus.$on("showBookInfoDialog", book => {
       this.showBookInfo = book;
@@ -684,6 +693,38 @@ export default {
       }
       return !!isInShelf;
     },
+    getBookContent(chapterIndex, options, refresh, cache, book) {
+      book = book || {
+        name: this.$store.state.readingBook.bookName,
+        author: this.$store.state.readingBook.author,
+        bookUrl: this.$store.state.readingBook.bookUrl
+      };
+      const params = {
+        url: book.bookUrl,
+        index: chapterIndex
+      };
+      if (refresh) {
+        params.refresh = 1;
+      }
+      if (cache) {
+        params.cache = 1;
+      }
+      return cacheFirstRequest(
+        () =>
+          Axios.post(this.api + "/getBookContent", params, {
+            timeout: 30000,
+            ...options
+          }),
+        book.name +
+          "_" +
+          book.author +
+          "@" +
+          book.bookUrl +
+          "@chapterContent-" +
+          chapterIndex,
+        refresh
+      );
+    },
     initEditor() {
       const editor = this.$refs.editorRef;
       if (!editor) {
@@ -841,9 +882,7 @@ export default {
       background-color: transparent;
   }
   .el-button.is-disabled, .el-button.is-disabled:focus, .el-button.is-disabled:hover {
-      color: #C0C4CC;
-      background-color: #333;
-      border-color: #333;
+      color: #666;
   }
   .el-button--primary {
     background: #185798;
@@ -889,6 +928,18 @@ export default {
     color: #ddd;
   }
   .el-select-dropdown__item.hover, .el-select-dropdown__item:hover {
+    background-color: #444;
+  }
+  .el-select .el-tag.el-tag--info {
+    background-color: #777;
+    border-color: #777;
+    color: #ddd;
+  }
+  .el-select-dropdown.is-multiple .el-select-dropdown__item.selected.hover,
+  .el-select-dropdown.is-multiple .el-select-dropdown__item.hover {
+    background-color: #555;
+  }
+  .el-select-dropdown.is-multiple .el-select-dropdown__item.selected {
     background-color: #444;
   }
   .el-popper[x-placement^="bottom"] .popper__arrow, .el-popper[x-placement^="bottom"] .popper__arrow::after {
@@ -943,6 +994,20 @@ export default {
   .el-table th.is-leaf {
     border-bottom: 1px solid #555;
   }
+  .el-table td.el-table__cell, .el-table th.el-table__cell.is-leaf {
+    border-bottom: 1px solid #555;
+  }
+  .el-dropdown-menu {
+    background-color: #444 !important;
+    border-color: #444;
+  }
+  .el-dropdown-menu__item:focus, .el-dropdown-menu__item:not(.is-disabled):hover {
+    background-color: #666 !important;
+    border-color: #666;
+  }
+  .el-dropdown-menu__item {
+    color: #bbb;
+  }
   .el-table--border::after {
     background-color: transparent;
   }
@@ -953,6 +1018,7 @@ export default {
     background-color: transparent;
   }
   .el-table {
+    color: #888;
     background-color: transparent;
   }
   .el-table--enable-row-hover .el-table__body tr:hover>td {
@@ -966,6 +1032,17 @@ export default {
   .el-table__body tr.hover-row.el-table__row--striped>td,
   .el-table__body tr.hover-row>td {
     background-color: #444;
+  }
+  .el-table__body tr.hover-row.current-row>td.el-table__cell,
+  .el-table__body tr.hover-row.el-table__row--striped.current-row>td.el-table__cell,
+  .el-table__body tr.hover-row.el-table__row--striped>td.el-table__cell,
+  .el-table__body tr.hover-row>td.el-table__cell {
+    background-color: #444;
+    color: #ccc;
+  }
+  .el-table--enable-row-hover .el-table__body tr:hover>td.el-table__cell {
+    background-color: #444;
+    color: #ccc;
   }
   .el-table__body-wrapper::-webkit-scrollbar {
     background-color: #333 !important;

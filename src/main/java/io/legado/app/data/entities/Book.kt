@@ -18,7 +18,7 @@ import kotlin.math.min
 import org.jsoup.Jsoup
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
-@JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "config", "rootDir", "readConfig", "localBook", "epub", "epubRootDir", "onLineTxt", "localTxt", "umd", "realAuthor", "unreadChapterNum", "folderName", "localFile", "kindList")
+@JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "config", "rootDir", "readConfig", "localBook", "epub", "epubRootDir", "onLineTxt", "localTxt", "umd", "realAuthor", "unreadChapterNum", "folderName", "localFile", "kindList", "_bookDir", "bookDir")
 data class Book(
         override var bookUrl: String = "",                   // 详情页Url(本地书源存储完整文件路径)
         var tocUrl: String = "",                    // 目录页Url (toc=table of Contents)
@@ -114,6 +114,10 @@ data class Book(
 
     fun getUnreadChapterNum() = max(totalChapterNum - durChapterIndex - 1, 0)
 
+    fun getDisplayCover() = if (customCoverUrl.isNullOrEmpty()) coverUrl else customCoverUrl
+
+    fun getDisplayIntro() = if (customIntro.isNullOrEmpty()) intro else customIntro
+
     fun fileCharset(): Charset {
         return charset(charset ?: "UTF-8")
     }
@@ -157,7 +161,26 @@ data class Book(
             // 非本地书仓的 epub文件
             return FileUtils.getFile(File(rootDir + originName), "index.epub")
         }
+        if (isCbz() && originName.indexOf("localStore") < 0) {
+            // 非本地书仓的 cbz文件
+            return FileUtils.getFile(File(rootDir + originName), "index.cbz")
+        }
         return File(rootDir + originName)
+    }
+
+    @Transient
+    private var _bookDir: String = ""
+
+    fun setBookDir(dir: String) {
+        if (dir.isNotEmpty() && !dir.endsWith(File.separator)) {
+            _bookDir = dir + File.separator
+        } else {
+            _bookDir = dir
+        }
+    }
+
+    fun getBookDir(): String {
+        return _bookDir
     }
 
     fun getSplitLongChapter(): Boolean {

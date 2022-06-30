@@ -23,7 +23,7 @@
         <el-table-column
           type="selection"
           width="25"
-          fixed
+          :fixed="$store.state.miniInterface"
           v-if="isShowBookGroupSettingDialog"
         >
         </el-table-column>
@@ -31,7 +31,7 @@
           property="groupName"
           label="分组名"
           min-width="100"
-          fixed
+          :fixed="$store.state.miniInterface"
         >
           <template slot-scope="scope">
             <span> {{ displayBookGroupName(scope.row) }}</span>

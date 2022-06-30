@@ -49,11 +49,13 @@ import io.legado.app.utils.FileUtils
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.net.URL;
+import java.nio.charset.Charset
 import java.util.UUID;
 import io.vertx.ext.web.client.WebClient
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.core.env.Environment
 import java.io.File
+import java.io.FileOutputStream
 import java.lang.Runtime
 import kotlin.collections.mutableMapOf
 import kotlin.system.measureTimeMillis
@@ -63,8 +65,11 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat;
 import io.legado.app.utils.EncoderUtils
 import io.legado.app.utils.ACache
+import io.legado.app.utils.HtmlFormatter
+import io.legado.app.utils.NetworkUtils
 import io.legado.app.model.rss.Rss
 import io.legado.app.model.Debugger
+import io.legado.app.help.BookHelp
 import org.springframework.scheduling.annotation.Scheduled
 import io.legado.app.model.localBook.LocalBook
 import java.nio.file.Paths
@@ -72,6 +77,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CoroutineScope
+import me.ag2s.epublib.domain.*
+import me.ag2s.epublib.epub.EpubWriter
+import me.ag2s.epublib.util.ResourceUtil
 // import io.legado.app.help.coroutine.Coroutine
 
 private val logger = KotlinLogging.logger {}
@@ -133,7 +141,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         } else {
             // get 请求
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
-            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
@@ -170,7 +177,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             context.response().setStatusCode(404).end()
             return
         }
-        coverUrl = URLDecoder.decode(coverUrl, "UTF-8")
         var ext = getFileExt(coverUrl, "png")
         val md5Encode = MD5Utils.md5Encode(coverUrl).toString()
         var cachePath = getWorkDir("storage", "cache", md5Encode + "." + ext)
@@ -289,7 +295,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         } else {
             // get 请求
             bookUrl = context.queryParam("bookUrl").firstOrNull() ?: ""
-            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
@@ -326,7 +331,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             // get 请求
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
             refresh = context.queryParam("refresh").firstOrNull()?.toInt() ?: 0
-            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
@@ -388,7 +392,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             // get 请求
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
             chapterIndex = context.queryParam("index").firstOrNull()?.toInt() ?: -1
-            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
@@ -438,8 +441,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             chapterUrl = context.queryParam("chapterUrl").firstOrNull() ?: ""
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
             chapterIndex = context.queryParam("index").firstOrNull()?.toInt() ?: -1
-            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
-            chapterUrl = URLDecoder.decode(chapterUrl, "UTF-8")
             cache = context.queryParam("cache").firstOrNull()?.toInt() ?: 0
             refresh = context.queryParam("refresh").firstOrNull()?.toInt() ?: 0
         }
@@ -572,13 +573,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             // 查找章节缓存
             var chapterCacheFile: File? = null
             if (refresh <= 0 && appConfig.cacheChapterContent) {
-                val md5Encode = MD5Utils.md5Encode(bookInfo.bookUrl).toString()
-                val localCacheDirPath = getWorkDir("storage", "data", userNameSpace, bookInfo.name + "_" + bookInfo.author, md5Encode)
-                val localCacheDir = File(localCacheDirPath)
-                if (!localCacheDir.exists()) {
-                    localCacheDir.mkdirs()
-                }
-                chapterCacheFile = File(localCacheDirPath + File.separator + chapterIndex + ".txt")
+                val localCacheDir = getChapterCacheDir(bookInfo, userNameSpace)
+                chapterCacheFile = File(localCacheDir.absolutePath + File.separator + chapterIndex + ".txt")
                 if (chapterCacheFile.exists()) {
                     content = chapterCacheFile.readText()
                     logger.info("使用缓存的章节内容: {}", chapterCacheFile.toString())
@@ -589,6 +585,15 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 content = WebBook(bookSource ?: "", appConfig.debugLog).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
                 if (appConfig.cacheChapterContent && chapterCacheFile != null) {
                     chapterCacheFile.writeText(content)
+                    bookInfo.setBookDir(getWorkDir("storage", "data", userNameSpace, bookInfo.name + "_" + bookInfo.author))
+                    // 保存图片
+                    BookHelp.saveImages(
+                        this,
+                        BookSource.fromJson(bookSource ?: "").getOrNull() ?: BookSource(),
+                        bookInfo,
+                        chapterInfo,
+                        content
+                    )
                 }
             } catch(e: Exception) {
                 if (!bookSource.isNullOrEmpty()) {
@@ -624,7 +629,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             // get 请求
             ruleFindUrl = context.queryParam("ruleFindUrl").firstOrNull() ?: ""
             page = context.queryParam("page").firstOrNull()?.toInt() ?: 1
-            ruleFindUrl = URLDecoder.decode(ruleFindUrl, "UTF-8")
         }
 
         var result = WebBook(bookSource, false).exploreBook(ruleFindUrl, page)
@@ -698,6 +702,11 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         searchSize = if(searchSize > 0) searchSize else 20
         concurrentCount = if(concurrentCount > 0) concurrentCount else 36
         logger.info("searchBookMulti from lastIndex: {} searchSize: {}", lastIndex, searchSize)
+        var isEnd = false
+        context.request().connection().closeHandler{
+            logger.info("客户端已断开链接，停止 searchBookMulti")
+            isEnd = true
+        }
         var resultList = arrayListOf<SearchBook>()
         var resultMap = mutableMapOf<String, Int>()
         val book = Book()
@@ -720,7 +729,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 }
             }
             logger.info("Loog: {} resultList.size: {}", loopCount, resultList.size)
-            if (loopCount >= concurrentLoopCount) {
+            if (isEnd || loopCount >= concurrentLoopCount) {
                 // 超过最大轮次，终止执行
                 false
             } else {
@@ -783,6 +792,12 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         searchSize = if(searchSize > 0) searchSize else 50
         concurrentCount = if(concurrentCount > 0) concurrentCount else 24
         logger.info("searchBookMulti from lastIndex: {} concurrentCount: {} searchSize: {}", lastIndex, concurrentCount, searchSize)
+
+        var isEnd = false
+        context.request().connection().closeHandler{
+            logger.info("客户端已断开链接，停止 searchBookMultiSSE")
+            isEnd = true
+        }
         var resultList = arrayListOf<SearchBook>()
         var resultMap = mutableMapOf<String, Int>()
         val book = Book()
@@ -810,7 +825,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             response.write("data: " + jsonEncode(mapOf("lastIndex" to lastIndex, "data" to loopResult), false) + "\n\n")
             logger.info("Loog: {} resultList.size: {}", loopCount, resultList.size)
 
-            if (loopCount >= concurrentLoopCount) {
+            if (isEnd || loopCount >= concurrentLoopCount) {
                 // 超过最大轮次，终止执行
                 false
             } else {
@@ -842,7 +857,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
             searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 5
             bookSourceGroup = context.queryParam("bookSourceGroup").firstOrNull() ?: ""
-            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
         }
         var userNameSpace = getUserNameSpace(context)
         var userBookSourceList = loadBookSourceStringList(userNameSpace, bookSourceGroup)
@@ -874,6 +888,11 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
 
         logger.info("searchBookSource from lastIndex: {}", lastIndex)
+        var isEnd = false
+        context.request().connection().closeHandler{
+            logger.info("客户端已断开链接，停止 searchBookSource")
+            isEnd = true
+        }
         searchSize = if(searchSize > 0) searchSize else 5
         var resultList = arrayListOf<SearchBook>()
         var concurrentCount = Math.max(searchSize * 2, 24)
@@ -889,7 +908,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     resultList.addAll(it)
                 }
             }
-            if (loopCount >= concurrentLoopCount) {
+            if (isEnd || loopCount >= concurrentLoopCount) {
                 // 超过最大轮次，终止执行
                 false
             } else {
@@ -931,7 +950,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: -1
             searchSize = context.queryParam("searchSize").firstOrNull()?.toInt() ?: 30
             bookSourceGroup = context.queryParam("bookSourceGroup").firstOrNull() ?: ""
-            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
             refresh = context.queryParam("refresh").firstOrNull()?.toInt() ?: 0
         }
         var userNameSpace = getUserNameSpace(context)
@@ -978,6 +996,11 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var resultList = arrayListOf<SearchBook>()
         var concurrentCount = Math.max(searchSize * 2, 24)
         logger.info("searchBookMulti from lastIndex: {} concurrentCount: {} searchSize: {}", lastIndex, concurrentCount, searchSize)
+        var isEnd = false
+        context.request().connection().closeHandler{
+            logger.info("客户端已断开链接，停止 searchBookSourceSSE")
+            isEnd = true
+        }
 
         limitConcurrent(concurrentCount, lastIndex + 1, userBookSourceList.size, {it->
             lastIndex = it
@@ -997,7 +1020,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             response.write("data: " + jsonEncode(mapOf("lastIndex" to lastIndex, "data" to loopResult), false) + "\n\n")
             logger.info("Loog: {} resultList.size: {}", loopCount, resultList.size)
 
-            if (loopCount >= concurrentLoopCount) {
+            if (isEnd || loopCount >= concurrentLoopCount) {
                 // 超过最大轮次，终止执行
                 false
             } else {
@@ -1064,7 +1087,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             // get 请求
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
             refresh = context.queryParam("refresh").firstOrNull()?.toInt() ?: 0
-            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
@@ -1141,7 +1163,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         } else {
             // get 请求
             url = context.queryParam("url").firstOrNull() ?: ""
-            url = URLDecoder.decode(url, "UTF-8")
         }
         if (url.isNullOrEmpty()) {
             return returnData.setErrorMsg("书源链接不能为空")
@@ -1290,9 +1311,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             bookUrl = context.queryParam("bookUrl").firstOrNull() ?: ""
             newBookUrl = context.queryParam("newUrl").firstOrNull() ?: ""
             bookSourceUrl = context.queryParam("bookSourceUrl").firstOrNull() ?: ""
-            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
-            bookSourceUrl = URLDecoder.decode(bookSourceUrl, "UTF-8")
-            newBookUrl = URLDecoder.decode(newBookUrl, "UTF-8")
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("书籍链接不能为空")
@@ -1355,7 +1373,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             // get 请求
             bookUrl = context.queryParam("bookUrl").firstOrNull() ?: ""
             groupId = context.queryParam("groupId").firstOrNull()?.toInt() ?: 0
-            bookUrl = URLDecoder.decode(bookUrl, "UTF-8")
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("书籍链接不能为空")
@@ -1378,6 +1395,52 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
         book.group = groupId
         return returnData.setData(book)
+    }
+
+    suspend fun addBookGroupMulti(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val groupId: Int = context.bodyAsJson.getInteger("groupId", 0)
+        if (groupId <= 0) {
+            return returnData.setErrorMsg("分组信息错误")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        val bookJsonArray = context.bodyAsJson.getJsonArray("bookList", JsonArray())
+        for (k in 0 until bookJsonArray.size()) {
+            var book = bookJsonArray.getJsonObject(k).mapTo(Book::class.java)
+            editShelfBook(book, userNameSpace) { existBook ->
+                existBook.group = existBook.group or groupId
+                logger.info("saveBookGroupId: {}", existBook)
+                existBook
+            }
+        }
+
+        return returnData.setData("")
+    }
+
+    suspend fun removeBookGroupMulti(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val groupId: Int = context.bodyAsJson.getInteger("groupId", 0)
+        if (groupId <= 0) {
+            return returnData.setErrorMsg("分组信息错误")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        val bookJsonArray = context.bodyAsJson.getJsonArray("bookList", JsonArray())
+        for (k in 0 until bookJsonArray.size()) {
+            var book = bookJsonArray.getJsonObject(k).mapTo(Book::class.java)
+            editShelfBook(book, userNameSpace) { existBook ->
+                existBook.group = existBook.group xor groupId
+                logger.info("saveBookGroupId: {}", existBook)
+                existBook
+            }
+        }
+
+        return returnData.setData("")
     }
 
     suspend fun deleteBook(context: RoutingContext): ReturnData {
@@ -1418,6 +1481,47 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         localBookPath.deleteRecursively()
 
         return returnData.setData("删除书籍成功")
+    }
+
+    suspend fun deleteBooks(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val bookJsonArray = context.bodyAsJsonArray
+
+        var userNameSpace = getUserNameSpace(context)
+        var bookshelf: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookshelf"))
+        if (bookshelf == null) {
+            bookshelf = JsonArray()
+        }
+        for (k in 0 until bookJsonArray.size()) {
+            var book = bookJsonArray.getJsonObject(k).mapTo(Book::class.java)
+            // 遍历判断书本是否存在
+            var existIndex: Int = -1
+            for (i in 0 until bookshelf.size()) {
+                var _book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
+                if (_book.bookUrl.equals(book.bookUrl)) {
+                    existIndex = i
+                    book = _book
+                    break;
+                }
+                if (_book.name.equals(book.name) && _book.author.equals(book.author)) {
+                    existIndex = i
+                    book = _book
+                    break;
+                }
+            }
+            if (existIndex >= 0) {
+                bookshelf.remove(existIndex)
+            }
+            // 删除书籍目录
+            val localBookPath = File(getWorkDir("storage", "data", userNameSpace, book.name + "_" + book.author))
+            localBookPath.deleteRecursively()
+        }
+
+        saveUserStorage(userNameSpace, "bookshelf", bookshelf)
+        return returnData.setData("")
     }
 
     suspend fun getBookGroups(context: RoutingContext): ReturnData {
@@ -1636,7 +1740,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 bookSourceUrl = context.bodyAsJson.getString("bookSourceUrl", "")
             } else {
                 bookSourceUrl = context.queryParam("bookSourceUrl").firstOrNull() ?: ""
-                bookSourceUrl = URLDecoder.decode(bookSourceUrl, "UTF-8")
             }
             bookSourceString = getBookSourceStringBySourceURL(bookSourceUrl, userNameSpace)
         }
@@ -2149,7 +2252,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         } else {
             // get 请求
             path = context.queryParam("path").firstOrNull() ?: ""
-            path = URLDecoder.decode(path, "UTF-8")
         }
         if (path.isEmpty()) {
             path = "/"
@@ -2202,7 +2304,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         } else {
             // get 请求
             path = context.queryParam("path").firstOrNull() ?: ""
-            path = URLDecoder.decode(path, "UTF-8")
         }
         if (path.isEmpty()) {
             context.success(returnData.setErrorMsg("参数错误"))
@@ -2215,7 +2316,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             context.success(returnData.setErrorMsg("路径不存在"))
             return
         }
-        context.response().putHeader("Cache-Control", "86400").sendFile(file.toString())
+        context.response().putHeader("Cache-Control", "86400")
+                        .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(file.name, "UTF-8"))
+                        .sendFile(file.toString())
     }
 
     suspend fun deleteLocalStoreFile(context: RoutingContext): ReturnData {
@@ -2242,7 +2345,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         } else {
             // get 请求
             path = context.queryParam("path").firstOrNull() ?: ""
-            path = URLDecoder.decode(path, "UTF-8")
         }
         if (path.isEmpty()) {
             return returnData.setErrorMsg("参数错误")
@@ -2280,7 +2382,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         var home = getWorkDir("storage", "localStore")
         path.forEach {
-            var filePath = URLDecoder.decode(it as String? ?: "", "UTF-8")
+            var filePath = it as String? ?: ""
             if (filePath.isNotEmpty()) {
                 var file = File(home + filePath)
                 file.deleteRecursively()
@@ -2336,4 +2438,521 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         response.write("event: end\n")
         response.end("data: " + jsonEncode(mapOf("end" to true), false) + "\n\n")
     }
+
+    suspend fun cacheBookSSE(context: RoutingContext) {
+        val returnData = ReturnData()
+        // 返回 event-stream
+        val response = context.response().putHeader("Content-Type", "text/event-stream")
+            .putHeader("Cache-Control", "no-cache")
+            .setChunked(true);
+
+        if (!checkAuth(context)) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用"), false) + "\n\n")
+            return
+        }
+        var bookUrl: String
+        var refresh: Int
+        var concurrentCount: Int
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getString("bookUrl") ?: ""
+            refresh = context.bodyAsJson.getInteger("refresh", 0)
+            concurrentCount = context.bodyAsJson.getInteger("concurrentCount", 24)
+        } else {
+            // get 请求
+            bookUrl = context.queryParam("url").firstOrNull() ?: ""
+            refresh = context.queryParam("refresh").firstOrNull()?.toInt() ?: 0
+            concurrentCount = context.queryParam("concurrentCount").firstOrNull()?.toInt() ?: 24
+        }
+        if (bookUrl.isNullOrEmpty()) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("请输入书籍链接"), false) + "\n\n")
+            return
+        }
+
+        var userNameSpace = getUserNameSpace(context)
+        val bookInfo = getShelfBookByURL(bookUrl, userNameSpace)
+        if (bookInfo == null) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("请先加入书架"), false) + "\n\n")
+            return
+        }
+        if (bookInfo.isLocalBook()) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("本地书籍无需缓存"), false) + "\n\n")
+            return
+        }
+        var bookSource = getBookSourceString(context, bookInfo.origin)
+        if (bookSource.isNullOrEmpty()) {
+            response.write("event: error\n")
+            response.end("data: " + jsonEncode(returnData.setErrorMsg("未配置书源"), false) + "\n\n")
+            return
+        }
+
+        var chapterList = getLocalChapterList(bookInfo, bookSource, false, userNameSpace)
+        var cachedChapterContentSet = mutableSetOf<Int>()
+        if (refresh <= 0) {
+            cachedChapterContentSet = getCachedChapterContentSet(bookInfo, userNameSpace)
+        }
+        val localCacheDir = getChapterCacheDir(bookInfo, userNameSpace)
+        var isEnd = false
+        var successCount = 0;
+        var failedCount = 0;
+
+        context.request().connection().closeHandler{
+            logger.info("客户端已断开链接，停止 cacheBookSSE")
+            isEnd = true
+        }
+
+        bookInfo.setBookDir(getWorkDir("storage", "data", userNameSpace, bookInfo.name + "_" + bookInfo.author))
+
+        concurrentCount = if(concurrentCount > 0) concurrentCount else 24
+        logger.info("cacheBookSSE concurrentCount: {} refresh: {}", concurrentCount, refresh)
+        limitConcurrent(concurrentCount, 0, chapterList.size, {it->
+            if (!cachedChapterContentSet.contains(it)) {
+                val chapterIndex = it
+                var chapterInfo = chapterList.get(it)
+                try {
+                    var nextChapterUrl: String? = null
+                    if (chapterIndex + 1 < chapterList.size) {
+                        var nextChapterInfo = chapterList.get(chapterIndex + 1)
+                        nextChapterUrl = nextChapterInfo.url
+                    }
+                    var content = WebBook(bookSource, appConfig.debugLog).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
+                    var chapterCacheFile = File(localCacheDir.absolutePath + File.separator + chapterIndex + ".txt")
+                    chapterCacheFile.writeText(content)
+                    // 保存图片
+                    BookHelp.saveImages(
+                        this,
+                        BookSource.fromJson(bookSource).getOrNull() ?: BookSource(),
+                        bookInfo,
+                        chapterInfo,
+                        content
+                    )
+                    successCount++;
+                    cachedChapterContentSet.add(chapterIndex)
+                } catch(e: Exception) {
+                    isEnd = true
+                    failedCount++
+                }
+            }
+            it
+        }) {list, loopCount ->
+            if (isEnd) {
+                false
+            } else {
+                // 返回本轮数据
+                val result = mapOf(
+                    "cachedCount" to cachedChapterContentSet.size,
+                    "successCount" to successCount,
+                    "failedCount" to failedCount
+                )
+                response.write("data: " + jsonEncode(result, false) + "\n\n")
+                logger.info("Loog: {} list.size: {} result: {}", loopCount, list.size, result)
+                true
+            }
+        }
+        response.write("event: end\n")
+        response.end("data: " + jsonEncode(mapOf(
+            "cachedCount" to cachedChapterContentSet.size,
+            "successCount" to successCount,
+            "failedCount" to failedCount
+        ), false) + "\n\n")
+    }
+
+    suspend fun deleteBookCache(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var bookUrl: String
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getString("bookUrl") ?: ""
+        } else {
+            // get 请求
+            bookUrl = context.queryParam("url").firstOrNull() ?: ""
+        }
+        if (bookUrl.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入书籍链接")
+        }
+
+        var userNameSpace = getUserNameSpace(context)
+        val bookInfo = getShelfBookByURL(bookUrl, userNameSpace)
+        if (bookInfo == null) {
+            return returnData.setErrorMsg("请先加入书架")
+        }
+        if (bookInfo.isLocalBook()) {
+            return returnData.setErrorMsg("本地书籍无需删除缓存")
+        }
+        val localCacheDir = getChapterCacheDir(bookInfo, userNameSpace)
+        localCacheDir.deleteRecursively()
+
+        return returnData.setData("")
+    }
+
+    fun getChapterCacheDir(bookInfo: Book, userNameSpace: String): File {
+        val md5Encode = MD5Utils.md5Encode(bookInfo.bookUrl).toString()
+        val localCacheDirPath = getWorkDir("storage", "data", userNameSpace, bookInfo.name + "_" + bookInfo.author, md5Encode)
+        val localCacheDir = File(localCacheDirPath)
+        if (!localCacheDir.exists()) {
+            localCacheDir.mkdirs()
+        }
+        return localCacheDir
+    }
+
+    fun getCachedChapterContentSet(bookInfo: Book, userNameSpace: String): MutableSet<Int> {
+        val localCacheDir = getChapterCacheDir(bookInfo, userNameSpace)
+        val cachedChapterContentSet = mutableSetOf<Int>()
+        localCacheDir.listFiles().forEach{
+            if (!it.name.startsWith(".") && it.name.endsWith(".txt")) {
+                cachedChapterContentSet.add(it.name.replace(".txt", "").toInt())
+            }
+        }
+        return cachedChapterContentSet
+    }
+
+    suspend fun getShelfBookWithCacheInfo(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val userNameSpace = getUserNameSpace(context)
+        var bookList = getBookShelfBooks(false, userNameSpace)
+        var result = mutableListOf<Any>()
+        for (i in 0 until bookList.size) {
+            val bookInfo = bookList.get(i)
+            if (!bookInfo.isLocalBook()) {
+                val cachedSet = getCachedChapterContentSet(bookInfo, userNameSpace)
+                val bookInfoMap = bookInfo.toMap() as MutableMap<String, Any>
+                bookInfoMap.put("cachedChapterCount", cachedSet.size)
+                result.add(bookInfoMap)
+            } else {
+                result.add(bookInfo)
+            }
+        }
+        return returnData.setData(result)
+    }
+
+    suspend fun exportBook(context: RoutingContext) {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            context.success(returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用"))
+            return
+        }
+        var bookUrl: String
+        var isEpub: Int
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getString("bookUrl") ?: ""
+            isEpub = context.bodyAsJson.getInteger("isEpub", 0)
+        } else {
+            // get 请求
+            bookUrl = context.queryParam("url").firstOrNull() ?: ""
+            isEpub = context.queryParam("isEpub").firstOrNull()?.toInt() ?: 0
+        }
+
+        if (bookUrl.isNullOrEmpty()) {
+            context.success(returnData.setErrorMsg("请输入书籍链接"))
+            return
+        }
+
+        var userNameSpace = getUserNameSpace(context)
+        val bookInfo = getShelfBookByURL(bookUrl, userNameSpace)
+        if (bookInfo == null) {
+            context.success(returnData.setErrorMsg("请先加入书架"))
+            return
+        }
+        if (bookInfo.isLocalBook()) {
+            bookInfo.setRootDir(getWorkDir())
+            val localFile = bookInfo.getLocalFile()
+            context.response().putHeader("Cache-Control", "300")
+                            .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(localFile.name, "UTF-8"))
+                            .sendFile(localFile.toString())
+            return
+        }
+        var bookSource = getBookSourceString(context, bookInfo.origin)
+        if (bookSource.isNullOrEmpty()) {
+            context.success(returnData.setErrorMsg("未配置书源"))
+            return
+        }
+        var exportDir = File(getWorkDir("storage", "assets", userNameSpace, "export"))
+
+        bookInfo.setBookDir(getWorkDir("storage", "data", userNameSpace, bookInfo.name + "_" + bookInfo.author))
+
+        val bookFile = if (isEpub > 0) {
+            exportToEpub(exportDir, bookInfo, bookSource, userNameSpace)
+        } else {
+            exportToTxt(exportDir, bookInfo, bookSource, userNameSpace)
+        }
+        context.response().putHeader("Cache-Control", "300")
+                        .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(bookFile.name, "UTF-8"))
+                        .sendFile(bookFile.toString())
+    }
+
+    suspend fun exportToTxt(exportDir: File, bookInfo: Book, bookSource: String, userNameSpace: String): File {
+        val filename = "《${bookInfo.name}》作者：${bookInfo.getRealAuthor()}.txt"
+        val bookPath = FileUtils.getPath(exportDir, filename)
+        val bookFile = FileUtils.createFileWithReplace(bookPath)
+        // val stringBuilder = StringBuilder()
+        getAllContents(bookInfo, bookSource, userNameSpace) { text, srcList ->
+            bookFile.appendText(text, Charset.forName(appConfig.exportCharset))
+            // stringBuilder.append(text)
+            // srcList?.forEach {
+            //     val vFile = BookHelp.getImage(bookInfo, it.third)
+            //     if (vFile.exists()) {
+            //         FileUtils.createFileIfNotExist(
+            //             exportDir,
+            //             "${book.name}_${book.author}",
+            //             "images",
+            //             it.first,
+            //             "${it.second}-${MD5Utils.md5Encode16(it.third)}.jpg"
+            //         ).writeBytes(vFile.readBytes())
+            //     }
+            // }
+        }
+        return bookFile
+    }
+
+    private suspend fun getAllContents(
+        book: Book,
+        bookSourceString: String,
+        userNameSpace: String,
+        append: (text: String, srcList: ArrayList<Triple<String, Int, String>>?) -> Unit
+    ) {
+        // val useReplace = appConfig.exportUseReplace && book.getUseReplaceRule()
+        // val contentProcessor = ContentProcessor.get(book.name, book.origin)
+        val qy = "${book.name}\n作者：${
+            book.getRealAuthor()
+        }\n简介：${
+            HtmlFormatter.format(book.getDisplayIntro())
+        }"
+
+        append(qy, null)
+        var chapterList = getLocalChapterList(book, bookSourceString, false, userNameSpace)
+        val localCacheDir = getChapterCacheDir(book, userNameSpace)
+
+        chapterList.forEachIndexed { index, chapter ->
+            var chapterCacheFile = File(localCacheDir.absolutePath + File.separator + index + ".txt")
+            var content = ""
+            if (!appConfig.exportNoChapterName) {
+                content += chapter.title + "\n"
+            }
+            if (chapterCacheFile.exists()) {
+                content += chapterCacheFile.readText() + "\n"
+            } else {
+                content += "暂无缓存内容。\n"
+            }
+
+            append.invoke("\n\n$content", null)
+
+            // BookHelp.getContent(book, chapter).let { content ->
+            //     val content1 = contentProcessor
+            //         .getContent(
+            //             book,
+            //             chapter,
+            //             content ?: "null",
+            //             includeTitle = !appConfig.exportNoChapterName,
+            //             useReplace = useReplace,
+            //             chineseConvert = false,
+            //             reSegment = false
+            //         ).joinToString("\n")
+            //     if (appConfig.exportPictureFile) {
+            //         //txt导出图片文件
+            //         val srcList = arrayListOf<Triple<String, Int, String>>()
+            //         content?.split("\n")?.forEachIndexed { index, text ->
+            //             val matcher = AppPattern.imgPattern.matcher(text)
+            //             while (matcher.find()) {
+            //                 matcher.group(1)?.let {
+            //                     val src = NetworkUtils.getAbsoluteURL(chapter.url, it)
+            //                     srcList.add(Triple(chapter.title, index, src))
+            //                 }
+            //             }
+            //         }
+            //         append.invoke("\n\n$content1", srcList)
+            //     } else {
+            //         append.invoke("\n\n$content1", null)
+            //     }
+            // }
+        }
+    }
+
+    private suspend fun exportToEpub(exportDir: File, book: Book, bookSource: String, userNameSpace: String): File {
+        val filename = "《${book.name}》作者：${book.getRealAuthor()}.epub"
+        val bookPath = FileUtils.getPath(exportDir, filename)
+        val bookFile = FileUtils.createFileWithReplace(bookPath)
+
+        val epubBook = EpubBook()
+        epubBook.version = "2.0"
+        //set metadata
+        setEpubMetadata(book, epubBook)
+        //set cover
+        setCover(book, epubBook)
+        //set css
+        val contentModel = setAssets(book, epubBook)
+
+        //设置正文
+        setEpubContent(contentModel, book, epubBook, bookSource, userNameSpace)
+        EpubWriter().write(epubBook, FileOutputStream(bookFile))
+
+        return bookFile
+    }
+
+    private fun setAssets(book: Book, epubBook: EpubBook): String {
+        epubBook.resources.add(
+            Resource(
+                BookController::class.java.getResource("${File.separator}epub${File.separator}fonts.css").readBytes(),
+                "Styles/fonts.css"
+            )
+        )
+        epubBook.resources.add(
+            Resource(
+                BookController::class.java.getResource("${File.separator}epub${File.separator}main.css").readBytes(),
+                "Styles/main.css"
+            )
+        )
+        epubBook.resources.add(
+            Resource(
+                BookController::class.java.getResource("${File.separator}epub${File.separator}logo.png").readBytes(),
+                "Images/logo.png"
+            )
+        )
+        epubBook.addSection(
+            "封面",
+            ResourceUtil.createPublicResource(
+                book.name,
+                book.getRealAuthor(),
+                book.getDisplayIntro(),
+                book.kind,
+                book.wordCount,
+                String(BookController::class.java.getResource("${File.separator}epub${File.separator}cover.html").readBytes()),
+                "Text/cover.html"
+            )
+        )
+        epubBook.addSection(
+            "简介",
+            ResourceUtil.createPublicResource(
+                book.name,
+                book.getRealAuthor(),
+                book.getDisplayIntro(),
+                book.kind,
+                book.wordCount,
+                String(BookController::class.java.getResource("${File.separator}epub${File.separator}intro.html").readBytes()),
+                "Text/intro.html"
+            )
+        )
+
+        return String(BookController::class.java.getResource("${File.separator}epub${File.separator}chapter.html").readBytes())
+    }
+
+    private fun setCover(book: Book, epubBook: EpubBook) {
+        val coverUrl = book.getDisplayCover()
+        if (coverUrl == null) {
+            // TODO 默认封面
+
+        } else if (coverUrl.startsWith("/")) {
+            // 本地 /assets 封面
+            val coverFile = File(getWorkDir("storage", coverUrl.substring(1)))
+            val byteArray: ByteArray = coverFile.readBytes()
+            epubBook.coverImage = Resource(byteArray, "Images/cover.jpg")
+        } else {
+            webClient.getAbs(coverUrl).timeout(3000).send {
+                var bodyBytes = it.result()?.bodyAsBuffer()?.getBytes()
+                if (bodyBytes != null) {
+                    epubBook.coverImage = Resource(bodyBytes, "Images/cover.jpg")
+                }
+            }
+        }
+    }
+
+    private suspend fun setEpubContent(
+        contentModel: String,
+        book: Book,
+        epubBook: EpubBook,
+        bookSourceString: String,
+        userNameSpace: String
+    ) {
+        //正文
+        var chapterList = getLocalChapterList(book, bookSourceString, false, userNameSpace)
+        val localCacheDir = getChapterCacheDir(book, userNameSpace)
+
+        chapterList.forEachIndexed { index, chapter ->
+            var chapterCacheFile = File(localCacheDir.absolutePath + File.separator + index + ".txt")
+            var content = ""
+            if (!appConfig.exportNoChapterName) {
+                content += chapter.title + "\n"
+            }
+            if (chapterCacheFile.exists()) {
+                content += chapterCacheFile.readText() + "\n"
+            } else {
+                content += "暂无缓存内容。\n"
+            }
+
+            var content1 = fixPic(epubBook, book, content, chapter)
+            // content1 = contentProcessor
+            //     .getContent(
+            //         book,
+            //         chapter,
+            //         content1,
+            //         includeTitle = false,
+            //         useReplace = useReplace,
+            //         chineseConvert = false,
+            //         reSegment = false
+            //     )
+            //     .joinToString("\n")
+            val title = chapter.title
+            epubBook.addSection(
+                title,
+                ResourceUtil.createChapterResource(
+                    title.replace("\uD83D\uDD12", ""),
+                    content1,
+                    contentModel,
+                    "Text/chapter_${index}.html"
+                )
+            )
+        }
+    }
+
+    private fun fixPic(
+        epubBook: EpubBook,
+        book: Book,
+        content: String,
+        chapter: BookChapter
+    ): String {
+        val data = StringBuilder("")
+        content.split("\n").forEach { text ->
+            var text1 = text
+            val matcher = AppPattern.imgPattern.matcher(text)
+            while (matcher.find()) {
+                matcher.group(1)?.let {
+                    val src = NetworkUtils.getAbsoluteURL(chapter.url, it)
+                    val originalHref = "${MD5Utils.md5Encode16(src)}.${BookHelp.getImageSuffix(src)}"
+                    val href = "Images/${MD5Utils.md5Encode16(src)}.${BookHelp.getImageSuffix(src)}"
+                    val vFile = BookHelp.getImage(book, src)
+                    val fp = FileResourceProvider(vFile.parent)
+                    if (vFile.exists()) {
+                        val img = LazyResource(fp, href, originalHref)
+                        epubBook.resources.add(img)
+                    }
+                    text1 = text1.replace(src, "../${href}")
+                }
+            }
+            data.append(text1).append("\n")
+        }
+        return data.toString()
+    }
+
+    private fun setEpubMetadata(book: Book, epubBook: EpubBook) {
+        val metadata = Metadata()
+        metadata.titles.add(book.name)//书籍的名称
+        metadata.authors.add(Author(book.getRealAuthor()))//书籍的作者
+        metadata.language = "zh"//数据的语言
+        metadata.dates.add(Date())//数据的创建日期
+        metadata.publishers.add("Legado")//数据的创建者
+        metadata.descriptions.add(book.getDisplayIntro())//书籍的简介
+        //metadata.subjects.add("")//书籍的主题，在静读天下里面有使用这个分类书籍
+        epubBook.metadata = metadata
+    }
+
 }

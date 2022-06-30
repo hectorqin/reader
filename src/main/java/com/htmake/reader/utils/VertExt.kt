@@ -47,7 +47,7 @@ fun RoutingContext.success(any: Any?) {
 }
 
 fun RoutingContext.error(throwable: Throwable) {
-    val path = URLDecoder.decode(this.request().absoluteURI())
+    val path = URLDecoder.decode(this.request().absoluteURI(), "UTF-8")
     val basicError = BasicError(
             "Internal Server Error",
             throwable.toString(),

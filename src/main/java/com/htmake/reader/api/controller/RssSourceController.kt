@@ -239,8 +239,6 @@ class RssSourceController(coroutineContext: CoroutineContext): BaseController(co
             sortName = context.queryParam("sortName").firstOrNull() ?: ""
             sortUrl = context.queryParam("sortUrl").firstOrNull() ?: ""
             page = context.queryParam("page").firstOrNull()?.toInt() ?: 1
-            sourceUrl = URLDecoder.decode(sourceUrl, "UTF-8")
-            sortUrl = URLDecoder.decode(sortUrl, "UTF-8")
         }
         if (sourceUrl.isEmpty()) {
             return returnData.setErrorMsg("RSS源链接不能为空")
@@ -278,9 +276,6 @@ class RssSourceController(coroutineContext: CoroutineContext): BaseController(co
             sourceUrl = context.queryParam("sourceUrl").firstOrNull() ?: ""
             link = context.queryParam("link").firstOrNull() ?: ""
             origin = context.queryParam("origin").firstOrNull() ?: ""
-            sourceUrl = URLDecoder.decode(sourceUrl, "UTF-8")
-            link = URLDecoder.decode(link, "UTF-8")
-            origin = URLDecoder.decode(origin, "UTF-8")
         }
         if (sourceUrl.isEmpty()) {
             return returnData.setErrorMsg("RSS链接不能为空")
