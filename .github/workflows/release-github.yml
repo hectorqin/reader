@@ -10,7 +10,7 @@ on:
 jobs:
   buildRelease:
     name: "Pre Release"
-    runs-on: ubuntu-latest
+    runs-on: macos-11
     steps:
       -
         name: Checkout
