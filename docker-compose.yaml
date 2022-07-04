@@ -2,6 +2,7 @@ version: '3.1'
 services:
 # reader 在线阅读
 # 第三方在线演示(服务器位于日本)：[https://reader.nxnow.top](https://reader.nxnow.top) 测试账号/密码分别为guest/guest123，也可自行创建账号添加书源，不定期删除长期未登录账号
+# 源仓库书源 : yckceo.com/yuedu/shuyuan/index.html
 # 阅读官方书源 : https://www.legado.top/blog/book-source
 # 喵公子书源 : http://shuyuan.miaogongzi.net/shuyuan/1623355431.json
 # 手动更新方式 : docker-compose pull && docker-compose up -d
