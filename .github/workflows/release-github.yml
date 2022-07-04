@@ -8,7 +8,7 @@ on:
       - master
 
 jobs:
-  pre-release:
+  buildRelease:
     name: "Pre Release"
     runs-on: ubuntu-latest
     steps:
@@ -56,13 +56,25 @@ jobs:
           echo Showing ./target directory:
           ls ./build/libs
       -
-        name: Auto release
+        name: "Pre Release"
+        if: ${{contains(github.ref, 'master')}}
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
           repo_token: "${{ secrets.GITHUB_TOKEN }}"
           automatic_release_tag: "latest"
           prerelease: true
           title: "Development Build"
+          files: |
+            ./build/*.pkg
+            ./build/*.zip
+            ./build/libs/*.jar
+      -
+        name: Tagged release
+        if: ${{contains(github.ref, 'v')}}
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: false
           files: |
             ./build/*.pkg
             ./build/*.zip
