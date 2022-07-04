@@ -22,7 +22,7 @@ jobs:
           node-version: '14'
       -
         name: Build web
-        run: cd web && npm install && npm run build && cd .. && mv ./web/dist ./src/main/resources/web && mv src/main/java/com/htmake/reader/ReaderApplication.kt src/main/java/com/htmake/reader/ReaderApplication.kt.back
+        run: cd web && npm install && npm run build && mv ./dist ../src/main/resources/web
       -
         name: Setup Java
         uses: actions/setup-java@v2
@@ -45,7 +45,7 @@ jobs:
       -
         name: Build Server jar
         run:
-          rm src/main/java/com/htmake/reader/ReaderUIApplication.kt &&  mv src/main/java/com/htmake/reader/ReaderApplication.kt.back src/main/java/com/htmake/reader/ReaderApplication.kt && gradle -b cli.gradle assemble --info
+          rm src/main/java/com/htmake/reader/ReaderUIApplication.kt && gradle -b cli.gradle assemble --info
       -
         name: Show files.
         run: |
