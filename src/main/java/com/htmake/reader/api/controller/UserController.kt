@@ -82,8 +82,9 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
 
     suspend fun login(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
-        val username = context.bodyAsJson.getString("username") ?: ""
-        val password = context.bodyAsJson.getString("password") ?: ""
+        val username = context.bodyAsJson.getString("username", "") ?: ""
+        val password = context.bodyAsJson.getString("password", "") ?: ""
+        val isLogin = context.bodyAsJson.getBoolean("isLogin", false) ?: false
         if (username.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入用户名")
         }
@@ -97,6 +98,10 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         var existedUser = userMap.getOrDefault(username, null)
         if (existedUser == null) {
+            if (isLogin) {
+                // 登录返回用户不存在
+                return returnData.setErrorMsg("用户不存在")
+            }
             if (username.length < 5) {
                 return returnData.setErrorMsg("用户名不能低于5位")
             }
@@ -133,6 +138,10 @@ class UserController(coroutineContext: CoroutineContext): BaseController(corouti
             val loginData = saveUserSession(context, userMap, newUser)
             return returnData.setData(loginData)
         } else {
+            if (!isLogin) {
+                // 注册时返回用户名已被占用
+                return returnData.setErrorMsg("用户名已被占用")
+            }
             // 登录
             var userInfo: User? = existedUser.toDataClass()
             if (userInfo == null) {

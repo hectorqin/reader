@@ -301,6 +301,12 @@
               @click="logout()"
               >注销</span
             >
+            <span
+              class="right-text"
+              v-else
+              @click="$store.commit('setShowLogin', true)"
+              >登录</span
+            >
           </div>
           <div class="setting-item" v-if="$store.state.showManagerMode">
             <el-select
@@ -718,6 +724,12 @@
             class="float-right span-btn"
             @click="deleteAllBookSource()"
             >清空</span
+          >
+          <span
+            v-if="!isShowFailureBookSource"
+            class="float-right span-btn"
+            @click="deleteBookSourceFile()"
+            >恢复默认</span
           >
           <span
             v-if="!isShowFailureBookSource"
@@ -2475,13 +2487,36 @@ export default {
         res => {
           if (res.data.isSuccess) {
             //
-            this.loadBookSource(true);
             this.$message.success("清空书源成功");
             this.loadBookSource(true);
           }
         },
         error => {
           this.$message.error("清空书源失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async deleteBookSourceFile() {
+      const res = await this.$confirm(`确认要恢复默认书源吗?`, "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/deleteBookSourcesFile").then(
+        res => {
+          if (res.data.isSuccess) {
+            //
+            this.$message.success("恢复默认书源成功");
+            this.loadBookSource(true);
+          }
+        },
+        error => {
+          this.$message.error("操作失败 " + (error && error.toString()));
         }
       );
     },

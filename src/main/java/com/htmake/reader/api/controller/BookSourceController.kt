@@ -375,4 +375,37 @@ class BookSourceController(coroutineContext: CoroutineContext): BaseController(c
         }
     }
 
+    suspend fun deleteUserBookSource(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        }
+        val userJsonArray = context.bodyAsJsonArray
+        for (i in 0 until userJsonArray.size()) {
+            var username = userJsonArray.getString(i)
+            var userBookSourceFile = File(getWorkDir("storage", "data", username, "bookSource.json"))
+            // 删除用户书源文件，恢复默认书源
+            if (userBookSourceFile.exists()) {
+                userBookSourceFile.deleteRecursively()
+            }
+        }
+        return returnData.setData("删除书源成功")
+    }
+
+    suspend fun deleteBookSourcesFile(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var userNameSpace = getUserNameSpace(context)
+        var userBookSourceFile = File(getWorkDir("storage", "data", userNameSpace, "bookSource.json"))
+        // 删除用户书源文件，恢复默认书源
+        if (userBookSourceFile.exists()) {
+            userBookSourceFile.deleteRecursively()
+        }
+        return returnData.setData("")
+    }
 }

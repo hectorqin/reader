@@ -3,12 +3,15 @@
     <keep-alive>
       <router-view></router-view>
     </keep-alive>
-    <el-dialog
-      title="登录"
-      :visible.sync="showLogin"
-      :width="dialogWidth"
-      :top="dialogTop"
-    >
+    <el-dialog :visible.sync="showLogin" :width="dialogWidth" :top="dialogTop">
+      <div class="custom-dialog-title" slot="title">
+        <span class="el-dialog__title"
+          >{{ isLogin ? "登录" : "注册" }}
+          <span class="float-right span-btn" @click="isLogin = !isLogin">{{
+            isLogin ? "注册" : "登录"
+          }}</span>
+        </span>
+      </div>
       <el-form :model="loginForm">
         <el-form-item label="用户名">
           <el-input v-model="loginForm.username" autocomplete="on"></el-input>
@@ -22,7 +25,7 @@
             @keyup.enter.native="login"
           ></el-input>
         </el-form-item>
-        <el-form-item label="邀请码(没有则不填)">
+        <el-form-item label="邀请码(没有则不填)" v-if="!isLogin">
           <el-input
             v-model="loginForm.code"
             autocomplete="off"
@@ -215,7 +218,9 @@ export default {
       showRssArticleListDialog: false,
       rssSource: {},
       showRssArticleDialog: false,
-      rssArticleInfo: {}
+      rssArticleInfo: {},
+
+      isLogin: true
     };
   },
   beforeCreate() {
@@ -401,6 +406,11 @@ export default {
           this.replaceRuleCallback = null;
         }
       }
+    },
+    showLogin(val) {
+      if (!val) {
+        this.isLogin = true;
+      }
     }
   },
   methods: {
@@ -460,7 +470,10 @@ export default {
       };
     },
     async login() {
-      const res = await Axios.post("/login", this.loginForm);
+      const res = await Axios.post("/login", {
+        ...this.loginForm,
+        isLogin: this.isLogin
+      });
       if (res.data.isSuccess) {
         this.$store.commit("setShowLogin", false);
         this.$nextTick(() => {

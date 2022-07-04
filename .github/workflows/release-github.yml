@@ -1,0 +1,69 @@
+name: Publish Github Releases
+
+on:
+  push:
+    tags:
+      - 'v**'
+    branches:
+      - master
+
+jobs:
+  pre-release:
+    name: "Pre Release"
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Setup node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      -
+        name: Build web
+        run: cd web && npm install && npm run build && mv ./web/dist ./src/main/resources/web && mv src/main/java/com/htmake/reader/ReaderApplication.kt src/main/java/com/htmake/reader/ReaderApplication.kt.back
+      -
+        name: Setup Java
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'temurin'
+          java-version: '8'
+          cache: 'gradle'
+      -
+        name: Build MacOS package
+        run:
+          JAVAFX_PLATFORM=mac ./gradlew packageReaderMac
+      -
+        name: Build Linux package
+        run:
+          JAVAFX_PLATFORM=linux ./gradlew packageReaderLinux
+      -
+        name: Build Windows package
+        run:
+          JAVAFX_PLATFORM=win ./gradlew packageReaderWin
+      -
+        name: Build Server jar
+        run:
+          rm src/main/java/com/htmake/reader/ReaderUIApplication.kt &&  mv src/main/java/com/htmake/reader/ReaderApplication.kt.back src/main/java/com/htmake/reader/ReaderApplication.kt && gradle -b cli.gradle assemble --info
+      -
+        name: Show files.
+        run: |
+          echo Showing current directory:
+          ls
+          echo Showing ./target directory:
+          ls ./build
+          echo Showing ./target directory:
+          ls ./build/libs
+      -
+        name: Auto release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Development Build"
+          files: |
+            ./build/*.pkg
+            ./build/*.zip
+            ./build/libs/*.jar
