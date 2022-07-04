@@ -22,7 +22,7 @@ jobs:
           node-version: '14'
       -
         name: Build web
-        run: cd web && npm install && npm run build && mv ./web/dist ./src/main/resources/web && mv src/main/java/com/htmake/reader/ReaderApplication.kt src/main/java/com/htmake/reader/ReaderApplication.kt.back
+        run: cd web && npm install && npm run build && cd .. && mv ./web/dist ./src/main/resources/web && mv src/main/java/com/htmake/reader/ReaderApplication.kt src/main/java/com/htmake/reader/ReaderApplication.kt.back
       -
         name: Setup Java
         uses: actions/setup-java@v2
