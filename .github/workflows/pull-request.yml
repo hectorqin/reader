@@ -16,6 +16,7 @@ defaults:
 
 jobs:
   docker:
+    if: github.repository == 'hectorqin/reader'
     runs-on: ubuntu-latest
     steps:
       -

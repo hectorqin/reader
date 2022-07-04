@@ -9,7 +9,8 @@ on:
 
 jobs:
   buildRelease:
-    name: "Pre Release"
+    if: github.repository == 'hectorqin/reader'
+    name: "Build And Release"
     runs-on: macos-11
     steps:
       -
@@ -43,7 +44,7 @@ jobs:
         run:
           JAVAFX_PLATFORM=win ./gradlew packageReaderWin
       -
-        name: Build Server jar
+        name: Build server jar
         run:
           rm src/main/java/com/htmake/reader/ReaderUIApplication.kt && gradle -b cli.gradle assemble --info
       -
@@ -56,7 +57,7 @@ jobs:
           echo Showing ./target directory:
           ls ./build/libs
       -
-        name: "Pre Release"
+        name: Pre Release
         if: ${{contains(github.ref, 'master')}}
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
@@ -69,7 +70,7 @@ jobs:
             ./build/*.zip
             ./build/libs/*.jar
       -
-        name: Tagged release
+        name: Tagged Release
         if: ${{contains(github.ref, 'v')}}
         uses: "marvinpinto/action-automatic-releases@latest"
         with:
