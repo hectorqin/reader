@@ -9,6 +9,7 @@ import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.getFile
 import io.legado.app.model.analyzeRule.AnalyzeUrl
+import io.legado.app.model.localBook.LocalBook
 import java.io.File
 import java.util.concurrent.CopyOnWriteArraySet
 import kotlinx.coroutines.Deferred
@@ -64,6 +65,36 @@ object BookHelp {
             localCacheDir.mkdirs()
         }
         return localCacheDir
+    }
+
+    /**
+     * 读取章节内容
+     */
+    fun getContent(book: Book, bookChapter: BookChapter): String? {
+        val file = getBookCacheDir(book).getFile(
+            String.format("%d.txt", bookChapter.index)
+        )
+        if (file.exists()) {
+            return file.readText()
+        }
+        if (book.isLocalBook()) {
+            val content = LocalBook.getContent(book, bookChapter)
+            if (content != null && book.isEpub()) {
+                saveText(book, bookChapter, content)
+            }
+            return content
+        }
+        return null
+    }
+
+    /**
+     * 删除章节内容
+     */
+    fun delContent(book: Book, bookChapter: BookChapter) {
+        FileUtils.createFileIfNotExist(
+            getBookCacheDir(book),
+            String.format("%d.txt", bookChapter.index)
+        ).delete()
     }
 
     suspend fun saveContent(

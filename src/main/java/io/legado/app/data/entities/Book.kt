@@ -18,7 +18,7 @@ import kotlin.math.min
 import org.jsoup.Jsoup
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
-@JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "config", "rootDir", "readConfig", "localBook", "epub", "epubRootDir", "onLineTxt", "localTxt", "umd", "realAuthor", "unreadChapterNum", "folderName", "localFile", "kindList", "_bookDir", "bookDir")
+@JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "config", "rootDir", "readConfig", "localBook", "epub", "epubRootDir", "onLineTxt", "localTxt", "umd", "realAuthor", "unreadChapterNum", "folderName", "localFile", "kindList", "_userNameSpace", "bookDir", "userNameSpace")
 data class Book(
         override var bookUrl: String = "",                   // 详情页Url(本地书源存储完整文件路径)
         var tocUrl: String = "",                    // 目录页Url (toc=table of Contents)
@@ -169,18 +169,18 @@ data class Book(
     }
 
     @Transient
-    private var _bookDir: String = ""
+    private var _userNameSpace: String = ""
 
-    fun setBookDir(dir: String) {
-        if (dir.isNotEmpty() && !dir.endsWith(File.separator)) {
-            _bookDir = dir + File.separator
-        } else {
-            _bookDir = dir
-        }
+    fun setUserNameSpace(nameSpace: String) {
+        _userNameSpace = nameSpace
+    }
+
+    fun getUserNameSpace(): String {
+        return _userNameSpace
     }
 
     fun getBookDir(): String {
-        return _bookDir
+        return FileUtils.getPath(File(rootDir), "storage", "data", _userNameSpace, name + "_" + author)
     }
 
     fun getSplitLongChapter(): Boolean {

@@ -136,56 +136,71 @@
       </div>
     </div>
     <div class="read-bar" :style="rightBarTheme">
-      <div class="float-left-btn-zone">
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="showReadingBookInfo"
-        >
-          <i class="el-icon-info"></i>
+      <div class="float-btn-zone">
+        <div class="float-left-btn-zone">
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="showSearchBookContentDialog"
+          >
+            <i class="el-icon-search"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="showReadingBookInfo"
+          >
+            <i class="el-icon-info"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="toTop(0)"
+            v-if="$store.state.miniInterface"
+          >
+            <i class="el-icon-top"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="toBottom(0)"
+            v-if="$store.state.miniInterface"
+          >
+            <i class="el-icon-bottom"></i>
+          </div>
         </div>
-        <div class="float-btn" :style="popupAbsoluteBtnStyle" @click="toTop(0)">
-          <i class="el-icon-top"></i>
-        </div>
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="toBottom(0)"
-        >
-          <i class="el-icon-bottom"></i>
-        </div>
-      </div>
-      <div class="float-right-btn-zone">
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="refreshContent"
-        >
-          <i class="el-icon-refresh-right"></i>
-        </div>
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="toggleAutoReading()"
-          v-if="!isEpub && !isCarToon && !isAudio"
-        >
-          <i class="el-icon-view"></i>
-        </div>
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="showReadBar = !showReadBar"
-          v-if="speechAvalable && !isEpub && !isCarToon && !isAudio"
-        >
-          <i class="el-icon-headset"></i>
-        </div>
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="toogleNight"
-        >
-          <i class="el-icon-moon" v-if="!isNight"></i>
-          <i class="el-icon-sunny" v-else></i>
+        <div class="float-right-btn-zone">
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="refreshContent"
+          >
+            <i class="el-icon-refresh-right"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="toggleAutoReading()"
+            v-if="!isEpub && !isCarToon && !isAudio"
+          >
+            <i class="el-icon-view"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="showReadBar = !showReadBar"
+            v-if="speechAvalable && !isEpub && !isCarToon && !isAudio"
+          >
+            <i class="el-icon-headset"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="toogleNight"
+          >
+            <i class="el-icon-moon" v-if="!isNight"></i>
+            <i class="el-icon-sunny" v-else></i>
+          </div>
         </div>
       </div>
       <div class="progress" v-if="$store.state.miniInterface && !isAudio">
@@ -445,6 +460,19 @@ export default {
       }
     }
     window.addEventListener("unload", this.saveReadingPosition);
+    eventBus.$on("showSearchContent", data => {
+      if (this.isScrollRead) {
+        this.scrollStartChapterIndex = data.chapterIndex;
+        this.computeShowChapterList().then(() => {
+          this.showMatchKeyword(data);
+        });
+        return;
+      }
+      this.$once("showContent", () => {
+        this.showMatchKeyword(data);
+      });
+      this.getContent(data.chapterIndex);
+    });
   },
   activated() {
     this.init();
@@ -2325,6 +2353,12 @@ export default {
           });
         }
       } else {
+        if (!this.$refs.bookContentRef) {
+          setTimeout(() => {
+            this.showPosition(pos, callback);
+          }, 10);
+          return;
+        }
         const list = this.$refs.bookContentRef.$el.querySelectorAll(
           ".reading-chapter h3,p"
         );
@@ -2701,6 +2735,52 @@ export default {
       } else {
         return traditionalized(text);
       }
+    },
+    showSearchBookContentDialog() {
+      let book = { ...this.$store.state.readingBook };
+      const shelfBook = this.$store.getters.shelfBooks.find(
+        v => v.bookUrl === book.bookUrl
+      );
+      book = Object.assign(book, shelfBook || {});
+      eventBus.$emit("showSearchBookContentDialog", book);
+    },
+    showMatchKeyword(data) {
+      if (!this.$refs.bookContentRef) {
+        setTimeout(() => {
+          this.showMatchKeyword(data);
+        }, 10);
+        return;
+      }
+      try {
+        const list = this.$refs.bookContentRef.$el.querySelectorAll(
+          ".reading-chapter h3,p"
+        );
+        let matchCount = 0;
+        for (let i = 0; i < list.length; i++) {
+          const pContent = list[i].innerText;
+          let startIndex = -1;
+          let isFound = false;
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            startIndex = pContent.indexOf(data.query, startIndex + 1);
+            if (startIndex >= 0) {
+              matchCount++;
+              if (matchCount === data.resultCountWithinChapter + 1) {
+                isFound = true;
+                this.showParagraph(list[i], true);
+                break;
+              }
+            } else {
+              break;
+            }
+          }
+          if (isFound) {
+            break;
+          }
+        }
+      } catch (error) {
+        // console.error(error);
+      }
     }
   }
 };
@@ -2828,7 +2908,7 @@ export default {
         pointer-events: all;
         margin-top: 20px;
 
-        .el-icon-top, .el-icon-bottom, .el-icon-info {
+        .el-icon-top, .el-icon-bottom, .el-icon-info, .el-icon-search {
           line-height: 36px;
         }
       }
@@ -3223,6 +3303,30 @@ export default {
   }
 }
 
+.chapter-wrapper {
+  .read-bar {
+    .float-btn-zone {
+      position: absolute;
+      bottom: 135px;
+      left: 4px;
+
+      .float-left-btn-zone {
+        position: relative;
+        left: auto;
+        bottom: auto;
+      }
+
+      .float-right-btn-zone {
+        position: relative;
+        left: auto;
+        bottom: auto;
+        margin-bottom: 20px;
+      }
+    }
+
+  }
+}
+
 .chapter-wrapper.mini-interface {
   padding: 0;
   position: relative;
@@ -3254,13 +3358,21 @@ export default {
       background: inherit;
     }
 
+    .float-btn-zone {
+      position: static;
+      bottom: 0;
+      left: 0;
+    }
+
     .float-left-btn-zone {
+      position: absolute;
       right: auto;
       left: 20px;
       bottom: 135px;
     }
 
     .float-right-btn-zone {
+      position: absolute;
       left: auto;
       right: 20px;
       bottom: 135px;

@@ -90,6 +90,11 @@
       v-model="showRssArticleDialog"
       :rssArticleInfo="rssArticleInfo"
     />
+
+    <SearchBookContent
+      v-model="showSearchBookContentDialog"
+      :book="searchBook"
+    />
   </div>
 </template>
 
@@ -108,6 +113,7 @@ import BookGroup from "./components/BookGroup.vue";
 import RssSourceList from "./components/RssSourceList.vue";
 import RssArticleList from "./components/RssArticleList.vue";
 import RssArticle from "./components/RssArticle.vue";
+import SearchBookContent from "./components/SearchBookContent.vue";
 import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
@@ -182,7 +188,8 @@ export default {
     BookGroup,
     RssSourceList,
     RssArticleList,
-    RssArticle
+    RssArticle,
+    SearchBookContent
   },
   data() {
     return {
@@ -219,6 +226,9 @@ export default {
       rssSource: {},
       showRssArticleDialog: false,
       rssArticleInfo: {},
+
+      showSearchBookContentDialog: false,
+      searchBook: {},
 
       isLogin: true
     };
@@ -335,6 +345,10 @@ export default {
     eventBus.$on("showRssArticleDialog", rssArticleInfo => {
       this.showRssArticleDialog = true;
       this.rssArticleInfo = rssArticleInfo;
+    });
+    eventBus.$on("showSearchBookContentDialog", searchBook => {
+      this.showSearchBookContentDialog = true;
+      this.searchBook = searchBook;
     });
   },
   mounted() {

@@ -8,6 +8,8 @@ import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssArticle
+import io.legado.app.data.entities.SearchResult
+import io.legado.app.exception.TocEmptyException
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.help.DefaultData
 import io.vertx.ext.web.Route
@@ -249,8 +251,13 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 logger.info("moveTo: {}", newFile)
                 if (file.copyRecursively(newFile)) {
                     val book = Book.initLocalBook(localFileUrl, localFilePath, getWorkDir())
-                    val chapters = LocalBook.getChapterList(book)
-                    fileList.add(mapOf("book" to book, "chapters" to chapters))
+                    book.setUserNameSpace(userNameSpace)
+                    try {
+                        val chapters = LocalBook.getChapterList(book)
+                        fileList.add(mapOf("book" to book, "chapters" to chapters))
+                    } catch(e: TocEmptyException) {
+                        fileList.add(mapOf("book" to book, "chapters" to arrayListOf<Int>()))
+                    }
                 }
                 file.deleteRecursively()
             }
@@ -279,6 +286,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return returnData.setErrorMsg("非本地txt/epub书籍")
         }
         book.setRootDir(getWorkDir())
+        book.setUserNameSpace(getUserNameSpace(context))
         val chapters = LocalBook.getChapterList(book)
         return returnData.setData(mapOf("book" to book, "chapters" to chapters))
     }
@@ -361,10 +369,10 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (!bookInfo.isLocalBook() && bookSource.isNullOrEmpty()) {
             return returnData.setErrorMsg("未配置书源")
         }
+        bookInfo.setRootDir(getWorkDir())
+        bookInfo.setUserNameSpace(userNameSpace)
         if (bookInfo.isLocalBook()) {
-            val localFile = bookInfo.also{
-                it.setRootDir(getWorkDir())
-            }.getLocalFile()
+            val localFile = bookInfo.getLocalFile()
             if (!localFile.exists()) {
                 logger.info("localFile: {} not exists", localFile)
                 return returnData.setErrorMsg("本地书籍源文件不存在")
@@ -503,14 +511,12 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
 
         var content = ""
+        bookInfo.setRootDir(getWorkDir())
+        bookInfo.setUserNameSpace(userNameSpace)
         if (bookInfo.isLocalBook()) {
-            if (bookInfo.isLocalBook()) {
-                val localFile = bookInfo.also{
-                    it.setRootDir(getWorkDir())
-                }.getLocalFile()
-                if (!localFile.exists()) {
-                    return returnData.setErrorMsg("本地源书籍文件不存在")
-                }
+            val localFile = bookInfo.getLocalFile()
+            if (!localFile.exists()) {
+                return returnData.setErrorMsg("本地源书籍文件不存在")
             }
             if (chapterInfo == null) {
                 var chapterList = getLocalChapterList(bookInfo, bookSource ?: "", false, userNameSpace)
@@ -585,7 +591,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 content = WebBook(bookSource ?: "", appConfig.debugLog).getBookContent(bookInfo, chapterInfo, nextChapterUrl)
                 if (appConfig.cacheChapterContent && chapterCacheFile != null) {
                     chapterCacheFile.writeText(content)
-                    bookInfo.setBookDir(getWorkDir("storage", "data", userNameSpace, bookInfo.name + "_" + bookInfo.author))
                     // 保存图片
                     BookHelp.saveImages(
                         this,
@@ -1686,6 +1691,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
         if (chapterList == null || refresh) {
             var newChapterList: List<BookChapter>
+            book.setRootDir(getWorkDir())
+            book.setUserNameSpace(userNameSpace)
             if (book.isLocalBook()) {
                 // 重新解压epub文件
                 if (book.isEpub() && !extractEpub(book, refresh)) {
@@ -1695,9 +1702,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 if (book.isCbz() && !extractCbz(book, refresh)) {
                     throw Exception("CBZ书籍解压失败")
                 }
-                newChapterList = LocalBook.getChapterList(book.also{
-                    it.setRootDir(getWorkDir())
-                })
+                newChapterList = LocalBook.getChapterList(book)
             } else {
                 try {
                     newChapterList = WebBook(bookSource, debugLog).getChapterList(book)
@@ -1804,6 +1809,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         for (i in 0 until bookshelf.size()) {
             var _book = bookshelf.getJsonObject(i).mapTo(Book::class.java)
             if (_book.bookUrl.equals(url)) {
+                _book.setRootDir(getWorkDir())
+                _book.setUserNameSpace(userNameSpace)
                 return _book
             }
         }
@@ -2152,6 +2159,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 return returnData.setErrorMsg("未开启本地书仓功能")
             }
         }
+        var userNameSpace = getUserNameSpace(context)
         var home = getWorkDir("storage", "localStore")
         var fileList = arrayListOf<Map<String, Any>>()
         paths.forEach {
@@ -2167,8 +2175,13 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                         return returnData.setErrorMsg("不支持导入" + ext + "格式的书籍文件")
                     }
                     val book = Book.initLocalBook(path, path, getWorkDir())
-                    val chapters = LocalBook.getChapterList(book)
-                    fileList.add(mapOf("book" to book, "chapters" to chapters))
+                    book.setUserNameSpace(userNameSpace)
+                    try {
+                        val chapters = LocalBook.getChapterList(book)
+                        fileList.add(mapOf("book" to book, "chapters" to chapters))
+                    } catch(e: TocEmptyException) {
+                        fileList.add(mapOf("book" to book, "chapters" to arrayListOf<Int>()))
+                    }
                 }
             }
         }
@@ -2505,8 +2518,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             isEnd = true
         }
 
-        bookInfo.setBookDir(getWorkDir("storage", "data", userNameSpace, bookInfo.name + "_" + bookInfo.author))
-
         concurrentCount = if(concurrentCount > 0) concurrentCount else 24
         logger.info("cacheBookSSE concurrentCount: {} refresh: {}", concurrentCount, refresh)
         limitConcurrent(concurrentCount, 0, chapterList.size, {it->
@@ -2664,8 +2675,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             context.success(returnData.setErrorMsg("请先加入书架"))
             return
         }
+
         if (bookInfo.isLocalBook()) {
-            bookInfo.setRootDir(getWorkDir())
             val localFile = bookInfo.getLocalFile()
             context.response().putHeader("Cache-Control", "300")
                             .putHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(localFile.name, "UTF-8"))
@@ -2678,8 +2689,6 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             return
         }
         var exportDir = File(getWorkDir("storage", "assets", userNameSpace, "export"))
-
-        bookInfo.setBookDir(getWorkDir("storage", "data", userNameSpace, bookInfo.name + "_" + bookInfo.author))
 
         val bookFile = if (isEpub > 0) {
             exportToEpub(exportDir, bookInfo, bookSource, userNameSpace)
@@ -2955,4 +2964,152 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         epubBook.metadata = metadata
     }
 
+    suspend fun searchBookContent(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        var bookUrl: String
+        var keyword: String
+        var lastIndex: Int
+        var size: Int
+        if (context.request().method() == HttpMethod.POST) {
+            // post 请求
+            bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getString("bookUrl") ?: ""
+            keyword = context.bodyAsJson.getString("keyword") ?: ""
+            lastIndex = context.bodyAsJson.getInteger("lastIndex", 0)
+            size = context.bodyAsJson.getInteger("size", 20)
+        } else {
+            // get 请求
+            bookUrl = context.queryParam("url").firstOrNull() ?: ""
+            keyword = context.queryParam("keyword").firstOrNull() ?: ""
+            lastIndex = context.queryParam("lastIndex").firstOrNull()?.toInt() ?: 0
+            size = context.queryParam("size").firstOrNull()?.toInt() ?: 20
+        }
+        if (bookUrl.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入书籍链接")
+        }
+        if (keyword.isNullOrEmpty()) {
+            return returnData.setErrorMsg("请输入搜索关键词")
+        }
+
+        var userNameSpace = getUserNameSpace(context)
+        val bookInfo = getShelfBookByURL(bookUrl, userNameSpace)
+        if (bookInfo == null) {
+            return returnData.setErrorMsg("请先加入书架")
+        }
+        var bookSource: String? = null
+        if (!bookInfo.isLocalBook()) {
+            bookSource = getBookSourceString(context, bookInfo.origin)
+            if (bookSource.isNullOrEmpty()) {
+                return returnData.setErrorMsg("未配置书源")
+            }
+        }
+
+        var chapterList = getLocalChapterList(bookInfo, bookSource ?: "", false, userNameSpace)
+        if (lastIndex >= chapterList.size) {
+            return returnData.setErrorMsg("没有更多了")
+        }
+
+        var isEnd = false
+        context.request().connection().closeHandler{
+            logger.info("客户端已断开链接，停止 searchBookContent")
+            isEnd = true
+        }
+
+        logger.info("searchBookContent keyword: {} lastIndex: {}", keyword, lastIndex)
+        var resultList = mutableListOf<SearchResult>();
+        lastIndex += 1
+        var currentIndex = lastIndex
+        for (chapterIndex in lastIndex until chapterList.size) {
+            currentIndex = chapterIndex
+            var chapter = chapterList.get(chapterIndex)
+            var chapterResult = searchChapter(bookInfo, chapter, keyword)
+            if (chapterResult.size > 0) {
+                resultList.addAll(chapterResult)
+            }
+
+            if (resultList.size >= size || isEnd) {
+                break;
+            }
+        }
+        return returnData.setData(mapOf("list" to resultList, "lastIndex" to currentIndex))
+    }
+
+    suspend fun searchChapter(book: Book, chapter: BookChapter, query: String): List<SearchResult> {
+        val searchResultsWithinChapter: MutableList<SearchResult> = mutableListOf()
+        val chapterContent = BookHelp.getContent(book, chapter)
+        if (chapterContent != null) {
+            // withContext(Dispatchers.IO) {
+            //     chapter.title = when (AppConfig.chineseConverterType) {
+            //         1 -> ChineseUtils.t2s(chapter.title)
+            //         2 -> ChineseUtils.s2t(chapter.title)
+            //         else -> chapter.title
+            //     }
+            //     mContent = contentProcessor!!.getContent(
+            //         book, chapter, chapterContent,
+            //         chineseConvert = true,
+            //         reSegment = false,
+            //         useReplace = false
+            //     ).joinToString("")
+            // }
+            val positions = searchPosition(chapterContent, query)
+            logger.info("positions: {}", positions)
+            positions.forEachIndexed { index, position ->
+                val construct = getResultAndQueryIndex(chapterContent, position, query)
+                val result = SearchResult(
+                    resultCountWithinChapter = index,
+                    resultText = construct.second,
+                    chapterTitle = chapter.title,
+                    query = query,
+                    chapterIndex = chapter.index,
+                    queryIndexInResult = construct.first,
+                    queryIndexInChapter = position
+                )
+                searchResultsWithinChapter.add(result)
+            }
+        }
+        return searchResultsWithinChapter
+    }
+
+    private suspend fun searchPosition(mContent: String, pattern: String): List<Int> {
+        val position: MutableList<Int> = mutableListOf()
+        var index = mContent.indexOf(pattern)
+        if (index >= 0) {
+            //搜索到内容允许净化
+            // if (book!!.getUseReplaceRule()) {
+            //     mContent = contentProcessor!!.replaceContent(mContent)
+            //     index = mContent.indexOf(pattern)
+            // }
+            while (index >= 0) {
+                position.add(index)
+                index = mContent.indexOf(pattern, index + 1)
+            }
+        }
+        return position
+    }
+
+    private fun getResultAndQueryIndex(
+        content: String,
+        queryIndexInContent: Int,
+        query: String
+    ): Pair<Int, String> {
+        // 左右移动20个字符，构建关键词周边文字，在搜索结果里显示
+        // todo: 判断段落，只在关键词所在段落内分割
+        // todo: 利用标点符号分割完整的句
+        // todo: length和设置结合，自由调整周边文字长度
+        val length = 20
+        var po1 = queryIndexInContent - length
+        var po2 = queryIndexInContent + query.length + length
+        if (po1 < 0) {
+            po1 = 0
+        }
+        if (po2 > content.length) {
+            po2 = content.length
+        }
+        val queryIndexInResult = queryIndexInContent - po1
+        val newText = content.substring(po1, po2)
+        return queryIndexInResult to newText
+    }
 }

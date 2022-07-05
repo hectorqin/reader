@@ -6,6 +6,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.BookHelp
 import io.legado.app.utils.*
+import io.legado.app.exception.TocEmptyException
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
@@ -49,7 +50,7 @@ object LocalBook {
             }
         }
         if (chapters.isEmpty()) {
-            throw Exception("Chapterlist is empty  " + book.getLocalFile())
+            throw TocEmptyException("Chapterlist is empty  " + book.getLocalFile())
         }
         return chapters
     }

@@ -109,10 +109,8 @@ class UmdFile(var book: Book) {
             return
         }
         val coverFile = "${MD5Utils.md5Encode16(book.bookUrl)}.jpg"
-        val relativeCoverUrl = Paths.get("assets", "covers", coverFile).toString()
-        if (book.coverUrl.isNullOrEmpty()) {
-            book.coverUrl = File.separator + relativeCoverUrl
-        }
+        val relativeCoverUrl = Paths.get("assets", book.getUserNameSpace(), "covers", coverFile).toString()
+        book.coverUrl = "/" + relativeCoverUrl
         val coverUrl = Paths.get(book.workRoot(), "storage", relativeCoverUrl).toString()
         if (!File(coverUrl).exists()) {
             FileUtils.writeBytes(coverUrl, umdBook!!.cover.coverData)

@@ -423,7 +423,7 @@ export default {
             i.replace(/([A-Z])/g, v => "-" + v.toLowerCase()) +
             ":" +
             this.containerStyle[i] +
-            ";";
+            " !important;";
         }
       }
       let pStyle = "";
@@ -433,9 +433,16 @@ export default {
             i.replace(/([A-Z])/g, v => "-" + v.toLowerCase()) +
             ":" +
             this.pStyle[i] +
-            ";";
+            " !important;";
         }
       }
+      pStyle +=
+        "font-family: " + this.containerStyle.fontFamily + " !important;";
+      pStyle += "font-size: " + this.containerStyle.fontSize + " !important;";
+      pStyle +=
+        "font-weight: " + this.containerStyle.fontWeight + " !important;";
+      pStyle += "color: " + this.containerStyle.color + " !important;";
+
       this.sendToIframe("setStyle", {
         style: `
         *::-webkit-scrollbar {

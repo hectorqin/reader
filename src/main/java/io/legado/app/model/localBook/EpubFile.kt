@@ -5,8 +5,11 @@ import io.legado.app.data.entities.BookChapter
 import io.legado.app.help.BookHelp
 import io.legado.app.utils.*
 import me.ag2s.epublib.domain.EpubBook
+import me.ag2s.epublib.domain.Resource
 import me.ag2s.epublib.epub.EpubReader
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Element
+import org.jsoup.select.Elements
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -144,56 +147,78 @@ class EpubFile(var book: Book) {
     }
 
     private fun getContent(chapter: BookChapter): String? {
-        /*获取当前章节文本*/
-        return getChildChapter(chapter, chapter.url)
-    }
+        /**
+         * <image width="1038" height="670" xlink:href="..."/>
+         * ...titlepage.xhtml
+         */
+       if (chapter.url.contains("titlepage.xhtml")) {
+           return "<img src=\"cover.jpeg\" />"
+       }
+       /*获取当前章节文本*/
+       epubBook?.let { epubBook ->
+           val nextUrl = chapter.getVariable("nextUrl")
+           val startFragmentId = chapter.startFragmentId
+           val endFragmentId = chapter.endFragmentId
+           val elements = Elements()
+           var isChapter = false
+           /*一些书籍依靠href索引的resource会包含多个章节，需要依靠fragmentId来截取到当前章节的内容*/
+           /*注:这里较大增加了内容加载的时间，所以首次获取内容后可存储到本地cache，减少重复加载*/
+           for (res in epubBook.contents) {
+               if (chapter.url.substringBeforeLast("#") == res.href) {
+                   elements.add(getBody(res, startFragmentId, endFragmentId))
+                   isChapter = true
+                  /**
+                   * fix https://github.com/gedoor/legado/issues/1927 加载全部内容的bug
+                   * content src text/000001.html（当前章节）
+-                   * content src text/000001.html#toc_id_x (下一章节）
+                    */
+                   if (res.href == nextUrl?.substringBeforeLast("#")) break
+               } else if (isChapter) {
+                   // fix 最后一章存在多个html时 内容缺失
+                   if (res.href == nextUrl?.substringBeforeLast("#")) {
+                       break
+                   }
+                   elements.add(getBody(res, startFragmentId, endFragmentId))
+               }
+           }
+           var html = elements.outerHtml()
+           val tag = Book.rubyTag
+           if (book.getDelTag(tag)) {
+               html = html.replace("<ruby>\\s?([\\u4e00-\\u9fa5])\\s?.*?</ruby>".toRegex(), "$1")
+           }
+           return HtmlFormatter.formatKeepImg(html)
+       }
+       return null
+   }
 
-    private fun getChildChapter(chapter: BookChapter, href: String): String? {
-        epubBook?.let {
-            val body = Jsoup.parse(String(it.resources.getByHref(href).data, mCharset)).body()
+   private fun getBody(res: Resource, startFragmentId: String?, endFragmentId: String?): Element {
+       val body = Jsoup.parse(String(res.data, mCharset)).body()
+       if (!startFragmentId.isNullOrBlank()) {
+           body.getElementById(startFragmentId)?.previousElementSiblings()?.remove()
+       }
+       if (!endFragmentId.isNullOrBlank() && endFragmentId != startFragmentId) {
+           body.getElementById(endFragmentId)?.run {
+               nextElementSiblings().remove()
+               remove()
+           }
+       }
+       /*选择去除正文中的H标签，部分书籍标题与阅读标题重复待优化*/
+       val tag = Book.hTag
+       if (book.getDelTag(tag)) {
+           body.getElementsByTag("h1").remove()
+           body.getElementsByTag("h2").remove()
+           body.getElementsByTag("h3").remove()
+           body.getElementsByTag("h4").remove()
+           body.getElementsByTag("h5").remove()
+           body.getElementsByTag("h6").remove()
+           //body.getElementsMatchingOwnText(chapter.title)?.remove()
+       }
 
-            if (chapter.url == href) {
-                val startFragmentId = chapter.startFragmentId
-                val endFragmentId = chapter.endFragmentId
-                /*一些书籍依靠href索引的resource会包含多个章节，需要依靠fragmentId来截取到当前章节的内容*/
-                /*注:这里较大增加了内容加载的时间，所以首次获取内容后可存储到本地cache，减少重复加载*/
-                if (!startFragmentId.isNullOrBlank())
-                    body.getElementById(startFragmentId)?.previousElementSiblings()?.remove()
-                if (!endFragmentId.isNullOrBlank() && endFragmentId != startFragmentId)
-                    body.getElementById(endFragmentId)?.nextElementSiblings()?.remove()
-            }
-
-            /*选择去除正文中的H标签，部分书籍标题与阅读标题重复待优化*/
-            var tag = Book.hTag
-            if (book.getDelTag(tag)) {
-                body.getElementsByTag("h1").remove()
-                body.getElementsByTag("h2").remove()
-                body.getElementsByTag("h3").remove()
-                body.getElementsByTag("h4").remove()
-                body.getElementsByTag("h5").remove()
-                body.getElementsByTag("h6").remove()
-                //body.getElementsMatchingOwnText(chapter.title)?.remove()
-            }
-
-            /*选择去除正文中的img标签，目前图片支持效果待优化*/
-            tag = Book.imgTag
-            if (book.getDelTag(tag)) {
-                body.getElementsByTag("img").remove()
-            }
-
-            val elements = body.children()
-            elements.select("script").remove()
-            elements.select("style").remove()
-            /*选择去除正文中的ruby标签，目前注释支持效果待优化*/
-            tag = Book.rubyTag
-            var html = elements.outerHtml()
-            if (book.getDelTag(tag)) {
-                html = html.replace("<ruby>\\s?([\\u4e00-\\u9fa5])\\s?.*?</ruby>".toRegex(), "$1")
-            }
-            return HtmlFormatter.formatKeepImg(html)
-        }
-        return null
-    }
+       val children = body.children()
+       children.select("script").remove()
+       children.select("style").remove()
+       return body
+   }
 
     private fun getImage(href: String): InputStream? {
         val abHref = href.replace("../", "")
@@ -226,10 +251,8 @@ class EpubFile(var book: Book) {
 
     fun updateCover() {
         val coverFile = "${MD5Utils.md5Encode16(book.bookUrl)}.jpg"
-        val relativeCoverUrl = Paths.get("assets", "covers", coverFile).toString()
-        if (book.coverUrl.isNullOrEmpty()) {
-            book.coverUrl = File.separator + relativeCoverUrl
-        }
+        val relativeCoverUrl = Paths.get("assets", book.getUserNameSpace(), "covers", coverFile).toString()
+        book.coverUrl = "/" + relativeCoverUrl
         val coverUrl = Paths.get(book.workRoot(), "storage", relativeCoverUrl).toString()
         if (!File(coverUrl).exists()) {
             FileUtils.writeBytes(coverUrl, epubBook!!.coverImage.data)

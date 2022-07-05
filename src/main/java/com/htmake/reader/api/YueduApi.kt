@@ -254,6 +254,10 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/exportBook").coroutineHandlerWithoutRes { bookController.exportBook(it) }
         router.get("/reader3/exportBook").coroutineHandlerWithoutRes { bookController.exportBook(it) }
 
+        // 全文搜索
+        router.get("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
+        router.post("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
+
         /** 用户模块 */
         // 上传文件
         router.post("/reader3/uploadFile").coroutineHandler { userController.uploadFile(it) }
