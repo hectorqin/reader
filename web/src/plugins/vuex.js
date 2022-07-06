@@ -65,7 +65,8 @@ export default new Vuex.Store({
     txtTocRules: [],
     customConfigList: [].concat(settings.customConfigList),
     showBookInfo: {},
-    cachingBookList: []
+    cachingBookList: [],
+    bookmarks: []
   },
   mutations: {
     setShelfBooks(state, books) {
@@ -287,7 +288,7 @@ export default new Vuex.Store({
         filterRules = filterRules.concat([rule]);
         state.filterRules = filterRules;
       }
-      setCache("filterRules", JSON.stringify(filterRules));
+      // setCache("filterRules", JSON.stringify(filterRules));
     },
     setNightTheme(state, isNight) {
       let config = { ...state.config };
@@ -425,6 +426,9 @@ export default new Vuex.Store({
     },
     setCachingBookList(state, cachingBookList) {
       state.cachingBookList = [].concat(cachingBookList);
+    },
+    setBookmarks(state, bookmarks) {
+      state.bookmarks = bookmarks;
     }
   },
   getters: {

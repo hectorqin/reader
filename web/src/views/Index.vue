@@ -1176,9 +1176,15 @@ export default {
     window.shelfPage = this;
     this.init();
     eventBus.$on("onSourceFileChange", (event, isRssSource) => {
+      if (this._inactive) {
+        return;
+      }
       this.onSourceFileChange(event, isRssSource);
     });
     eventBus.$on("editBook", (book, isAdd, onSuccess) => {
+      if (this._inactive) {
+        return;
+      }
       this.editBook(book, isAdd, onSuccess);
     });
   },

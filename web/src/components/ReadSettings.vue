@@ -451,7 +451,7 @@ export default {
       fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"],
       readMethods: ["上下滑动", "左右滑动", "上下滚动", "上下滚动2"],
       clickMethods: ["下一页", "自动", "不翻页"],
-      selectionActions: ["过滤弹窗", "忽略"],
+      selectionActions: ["操作弹窗", "忽略"],
       pageModes: ["自适应", "手机模式"],
       pageTypes: ["正常", "Kindle"],
       themeTypes: ["day", "night"],
@@ -463,7 +463,11 @@ export default {
         settings.config.autoReadingPixel
     };
   },
-  mounted() {},
+  mounted() {
+    if (this.config.selectionAction === "过滤弹窗") {
+      this.setSelectionAction("操作弹窗");
+    }
+  },
   computed: {
     config() {
       return this.$store.state.config;

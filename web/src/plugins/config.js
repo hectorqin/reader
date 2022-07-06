@@ -36,7 +36,7 @@ const defaultDayConfig = {
   autoReadingPixel: 1,
   autoReadingLineTime: 1000,
   pageMode: "自适应",
-  selectionAction: "过滤弹窗"
+  selectionAction: "操作弹窗"
 };
 const defaultNightConfig = {
   configDefaultType: "黑夜默认",
@@ -57,7 +57,7 @@ const defaultNightConfig = {
   autoReadingPixel: 1,
   autoReadingLineTime: 1000,
   pageMode: "自适应",
-  selectionAction: "过滤弹窗"
+  selectionAction: "操作弹窗"
 };
 const settings = {
   shelfConfig: {
@@ -182,5 +182,14 @@ export const defaultReplaceRule = {
   scope: "",
   isRegex: false,
   isEnabled: true
+};
+export const defaultBookmark = {
+  bookName: "",
+  bookAuthor: "",
+  chapterIndex: 0,
+  chapterPos: 0,
+  chapterName: "",
+  bookText: "",
+  content: ""
 };
 export default settings;
