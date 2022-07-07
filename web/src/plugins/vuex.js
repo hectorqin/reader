@@ -1,6 +1,6 @@
 import Vue from "vue";
 import Vuex from "vuex";
-import settings from "./config";
+import settings, { customFonts, syncConfigFiled } from "./config";
 import { setCache, getCache } from "../plugins/cache";
 import { Message } from "element-ui";
 
@@ -188,7 +188,7 @@ export default new Vuex.Store({
         );
         if (index >= 0) {
           const oldCustomConfig = { ...state.customConfigList[index] };
-          Object.keys(settings.customConfigList[0]).forEach(field => {
+          syncConfigFiled.forEach(field => {
             if (
               typeof config[field] !== "undefined" &&
               field !== "name" &&
@@ -479,6 +479,25 @@ export default new Vuex.Store({
     },
     currentFontFamily: state => {
       return settings.fonts[state.config.font];
+    },
+    currentCustomFontFamily: (state, getters) => {
+      const customFontName = customFonts[state.config.font];
+      if (
+        state.config.customFontsMap &&
+        state.config.customFontsMap[customFontName]
+      ) {
+        let url = state.config.customFontsMap[customFontName];
+        return {
+          name: customFontName,
+          url:
+            url.startsWith("http://") ||
+            url.startsWith("https://") ||
+            url.startsWith("//")
+              ? url
+              : getters.apiRoot + url
+        };
+      }
+      return null;
     },
     currentThemeConfig: (state, getters) => {
       if (state.config.theme === "custom") {

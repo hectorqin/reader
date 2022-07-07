@@ -171,3 +171,32 @@ export const editDistance = function(strA, strB) {
   }
   return 1 - arr[strA.length][strB.length] / Math.max(strA.length, strB.length);
 };
+
+export const loadFont = function(fontName, fontUrl) {
+  window.customFonts = window.customFonts || {};
+  if (
+    !window.customFonts[fontName] ||
+    window.customFonts[fontName] !== fontUrl
+  ) {
+    // 动态插入CSS
+    const style = document.createElement("style");
+    style.textContent = `
+    @font-face {
+      font-family: "${fontName}";
+      src: url("${fontUrl}");
+    }`;
+    style.id = "custom-font-" + fontName;
+    document.head.appendChild(style);
+    window.customFonts[fontName] = fontUrl;
+  }
+};
+
+export const removeFont = function(fontName) {
+  window.customFonts = window.customFonts || {};
+  delete window.customFonts[fontName];
+  const nodeList = document.querySelectorAll("#custom-font-" + fontName);
+  for (let i = 0; i < nodeList.length; i++) {
+    const node = nodeList[i];
+    node.remove();
+  }
+};

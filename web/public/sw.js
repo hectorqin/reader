@@ -45,7 +45,7 @@ workbox.routing.setDefaultHandler(async ({ event }) => {
     return fetch(request);
   }
 
-  const imageCache = await self.caches.open("IMAGE_CAHCE");
+  const siteCache = await self.caches.open("SITE_CAHCE");
   const opaqueCache = await self.caches.open("OPAQUE_CAHCE");
 
   /**
@@ -55,6 +55,18 @@ workbox.routing.setDefaultHandler(async ({ event }) => {
   const isImage = function(res) {
     const contentType = res.headers.get("Content-Type");
     if (contentType && contentType.indexOf("image/") !== -1) {
+      return true;
+    }
+    return false;
+  };
+
+  /**
+   *
+   * @param {Response} res
+   */
+  const isFont = function(res) {
+    const contentType = res.headers.get("Content-Type");
+    if (contentType && contentType.indexOf("application/x-font") !== -1) {
       return true;
     }
     return false;
@@ -84,10 +96,10 @@ workbox.routing.setDefaultHandler(async ({ event }) => {
         return fetchRes;
       }
 
-      // 只能缓存同源的图片，跨域的资源都访问不了
+      // 只能缓存同源的图片、字体，跨域的资源都访问不了
       let resClone = fetchRes.clone();
-      if (isImage(fetchRes)) {
-        imageCache.put(originRequest, fetchRes);
+      if (isImage(fetchRes) || isFont(fetchRes)) {
+        siteCache.put(originRequest, fetchRes);
       }
 
       return resClone;
@@ -99,7 +111,7 @@ workbox.routing.setDefaultHandler(async ({ event }) => {
     if (res) {
       return res;
     }
-    return imageCache.match(request).then(res => {
+    return siteCache.match(request).then(res => {
       if (res) {
         return res;
       }
