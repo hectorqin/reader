@@ -1,4 +1,5 @@
 <script>
+import { loadFont } from "../plugins/helper";
 export default {
   name: "Content",
   data() {
@@ -97,6 +98,7 @@ export default {
       this.initIframe();
     }
     window.contentCom = this;
+    this.loadCustomFontFamil();
   },
   computed: {
     readingBook() {
@@ -167,6 +169,9 @@ export default {
     },
     windowSize() {
       return this.$store.state.windowSize;
+    },
+    currentCustomFontFamily() {
+      return this.$store.getters.currentCustomFontFamily;
     }
   },
   watch: {
@@ -184,6 +189,9 @@ export default {
       if (this.isEpub) {
         //
       }
+    },
+    currentCustomFontFamily() {
+      this.loadCustomFontFamil();
     }
   },
   methods: {
@@ -611,6 +619,14 @@ export default {
     },
     onWaiting() {
       // console.log("onWaiting", arguments);
+    },
+    loadCustomFontFamil() {
+      if (this.currentCustomFontFamily) {
+        loadFont(
+          this.currentCustomFontFamily.name,
+          this.currentCustomFontFamily.url
+        );
+      }
     }
   }
 };

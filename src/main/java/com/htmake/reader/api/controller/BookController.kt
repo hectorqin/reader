@@ -2037,6 +2037,13 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     userReplaceRuleFile.deleteRecursively()
                     replaceRuleFile.renameTo(userReplaceRuleFile)
                 }
+                // 同步 书签
+                val bookmarkFile = File(descDir + File.separator + "bookmark.json")
+                if (bookmarkFile.exists()) {
+                    val userBookmarkFile = File(getWorkDir("storage", "data", userNameSpace, "bookmark.json"))
+                    userBookmarkFile.deleteRecursively()
+                    bookmarkFile.renameTo(userBookmarkFile)
+                }
                 // 同步阅读进度
                 var bookProgressDir = File(userHome + File.separator + "bookProgress")
                 if (!bookProgressDir.exists()) {
@@ -2103,6 +2110,13 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     val replaceRuleFile = File(descDir + File.separator + "replaceRule.json")
                     replaceRuleFile.deleteRecursively()
                     userReplaceRuleFile.renameTo(replaceRuleFile)
+                }
+                // 同步 书签
+                val userBookmarkFile = File(getWorkDir("storage", "data", userNameSpace, "bookmark.json"))
+                if (userBookmarkFile.exists()) {
+                    val bookmarkFile = File(descDir + File.separator + "bookmark.json")
+                    bookmarkFile.deleteRecursively()
+                    userBookmarkFile.renameTo(bookmarkFile)
                 }
                 // 压缩
                 val today = SimpleDateFormat("yyyy-MM-dd").format(System.currentTimeMillis())
