@@ -102,12 +102,12 @@ export default {
   },
   computed: {
     readingBook() {
-      return this.$store.state.readingBook;
+      return this.$store.getters.readingBook;
     },
     chapter() {
       return (
-        this.$store.state.readingBook.catalog[
-          this.$store.state.readingBook.index
+        this.$store.getters.readingBook.catalog[
+          this.$store.getters.readingBook.index
         ] || {}
       );
     },
@@ -351,7 +351,7 @@ export default {
             <div class="book-intro">
               <div class="title">{this.title}</div>
               <div class="subtitle">
-                {this.readingBook.bookName}
+                {this.readingBook.name}
                 {this.readingBook.author ? "•" : ""}
                 {this.readingBook.author}
               </div>

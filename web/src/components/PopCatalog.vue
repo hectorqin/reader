@@ -14,6 +14,13 @@
           >底部</span
         >
         <span
+          class="span-btn"
+          v-if="book.origin === 'loc_book'"
+          @click="changeRule"
+        >
+          修改规则
+        </span>
+        <span
           :class="{ loading: refreshLoading, 'refresh-btn': true }"
           @click="refreshChapter"
         >
@@ -52,22 +59,29 @@
 
 <script>
 import jump from "../plugins/jump";
+import Axios from "../plugins/axios";
+import Vue from "vue";
+
 export default {
   name: "PopCata",
   data() {
     return {
       refreshLoading: false,
       asc: true,
-      cachedCataMap: {}
+      cachedCataMap: {},
+      tocUrl: ""
     };
   },
   props: ["visible"],
   computed: {
+    book() {
+      return this.$store.getters.readingBook;
+    },
     index() {
-      return this.$store.state.readingBook.index;
+      return this.$store.getters.readingBook.index;
     },
     catalog() {
-      return this.$store.state.readingBook.catalog || [];
+      return this.$store.getters.readingBook.catalog || [];
     },
     cataList() {
       if (this.asc) {
@@ -83,9 +97,30 @@ export default {
       return {
         background: this.$store.getters.currentThemeConfig.popup
       };
+    },
+    tocRuleList() {
+      if (!this.book || !this.book.originName) {
+        return [];
+      }
+      if (this.book.originName.toLowerCase().endsWith(".txt")) {
+        // txt
+        return this.$store.state.txtTocRules;
+      } else {
+        // epub
+        return [
+          { name: "根据 Spin 获取章节，使用 Toc 补充章节名", rule: "spin+toc" },
+          { name: "根据 Spin 获取章节，强制使用 Toc 章节名", rule: "spin<toc" },
+          { name: "根据 Spin 获取章节", rule: "spin" },
+          { name: "根据 Toc 获取章节，使用 Spin 补充章节名", rule: "toc+spin" },
+          { name: "根据 Toc 获取章节，强制使用 Spin 章节名", rule: "toc<spin" },
+          { name: "根据 Toc 获取章节", rule: "toc" }
+        ];
+      }
     }
   },
-  mounted() {},
+  mounted() {
+    window.popcatalogComp = this;
+  },
   watch: {
     visible(isVisible) {
       if (isVisible) {
@@ -109,10 +144,11 @@ export default {
   methods: {
     isSelected(index) {
       if (this.asc) {
-        return index == this.$store.state.readingBook.index;
+        return index == this.$store.getters.readingBook.index;
       } else {
         return (
-          this.catalog.length - 1 - index == this.$store.state.readingBook.index
+          this.catalog.length - 1 - index ==
+          this.$store.getters.readingBook.index
         );
       }
     },
@@ -125,11 +161,100 @@ export default {
       this.refreshLoading = true;
       this.$emit("refresh");
     },
+    async changeRule() {
+      const res = await this.$msgbox({
+        title: "修改目录规则",
+        message: this.renderComp(),
+        showCancelButton: true,
+        confirmButtonText: "确定",
+        cancelButtonText: "取消"
+      }).catch(action => {
+        return action === "close" ? "close" : false;
+      });
+      if (res === "confirm") {
+        //
+        if (this.tocUrl === this.book.tocUrl) {
+          this.$message.error("未修改规则");
+          return;
+        }
+        const shelfBook = this.$store.getters.shelfBooks.find(
+          v => v.bookUrl === this.book.bookUrl
+        );
+        shelfBook.tocUrl = this.tocUrl;
+        return Axios.post(this.api + "/saveBook", shelfBook).then(
+          res => {
+            if (res.data.isSuccess) {
+              this.$message.success("操作成功");
+              this.$store.commit("updateShelfBook", res.data.data);
+              this.refreshLoading = true;
+              this.$emit("refresh");
+            }
+          },
+          error => {
+            this.$message.error("操作失败" + (error && error.toString()));
+          }
+        );
+      } else {
+        return false;
+      }
+    },
+    renderComp() {
+      var tocRuleList = this.tocRuleList;
+      this.tocUrl = this.book.tocUrl;
+      var catalog = this;
+      Vue.component("custComp2", {
+        render() {
+          window.custComp2 = this;
+          return (
+            <div style={{ textAlign: "center" }}>
+              <span>请选择规则：</span>
+              <el-select
+                size="mini"
+                vModel={this.selectedRule}
+                filterable={true}
+                placeholder="未分组"
+                vOn:change={this.change}
+              >
+                {tocRuleList.map((rule, index) => {
+                  return (
+                    <el-option
+                      key={"rule-" + index}
+                      label={rule.name}
+                      value={rule.rule}
+                    ></el-option>
+                  );
+                })}
+              </el-select>
+              <el-input
+                type="textarea"
+                rows={3}
+                style={{ marginTop: "10px" }}
+                vModel={this.selectedRule}
+                size="small"
+                vOn:change={this.change}
+              />
+            </div>
+          );
+        },
+        data() {
+          return {
+            selectedRule: catalog.tocUrl
+          };
+        },
+        methods: {
+          change() {
+            catalog.tocUrl = this.selectedRule;
+          }
+        }
+      });
+      var custComp2 = Vue.component("custComp2");
+      return this.$createElement(custComp2);
+    },
     jumpToCurrent(index) {
       if (typeof index === "undefined") {
         index = this.asc
-          ? this.$store.state.readingBook.index
-          : this.catalog.length - 1 - this.$store.state.readingBook.index;
+          ? this.$store.getters.readingBook.index
+          : this.catalog.length - 1 - this.$store.getters.readingBook.index;
       }
       if (!this.$refs.cata || !this.$refs.cata[index]) {
         setTimeout(() => {
@@ -150,11 +275,11 @@ export default {
       const cacheMap = {};
       const cachePrefix =
         "localCache@" +
-        this.$store.state.readingBook.bookName +
+        this.$store.getters.readingBook.name +
         "_" +
-        this.$store.state.readingBook.author +
+        this.$store.getters.readingBook.author +
         "@" +
-        this.$store.state.readingBook.bookUrl +
+        this.$store.getters.readingBook.bookUrl +
         "@chapterContent-";
       window.$cacheStorage
         .iterate(function(value, key) {

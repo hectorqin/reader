@@ -133,7 +133,7 @@
               @click="toDetail(readingRecent)"
               :class="{ 'no-point': readingRecent.bookUrl == '' }"
             >
-              {{ readingRecent.bookName }}
+              {{ readingRecent.name }}
             </el-tag>
           </div>
         </div>
@@ -991,10 +991,13 @@
 
     <LocalStore
       v-model="showLocalStoreManageDialog"
-      @importFromLocalStorePreview="importMultiBooks"
+      @importFromLocalPathPreview="importMultiBooks"
     ></LocalStore>
 
-    <WebDAV v-model="showWebDAVManageDialog"></WebDAV>
+    <WebDAV
+      v-model="showWebDAVManageDialog"
+      @importFromLocalPathPreview="importMultiBooks"
+    ></WebDAV>
   </div>
 </template>
 
@@ -1467,13 +1470,15 @@ export default {
         // return;
       }
       this.$store.commit("setReadingBook", {
-        bookName: book.bookName || book.name,
+        name: book.name,
         bookUrl: book.bookUrl,
         index: book.index ?? book.durChapterIndex ?? 0,
         type: book.type,
         coverUrl: this.getBookCoverUrl(book),
+        tocUrl: book.tocUrl,
         author: book.author,
         origin: book.origin,
+        originName: book.originName,
         latestChapterTitle: book.latestChapterTitle,
         intro: book.intro
       });
@@ -2816,11 +2821,11 @@ export default {
       return this.$store.state.connected ? "success" : "danger";
     },
     readingRecent() {
-      return this.$store.state.readingBook &&
-        this.$store.state.readingBook.bookName
-        ? this.$store.state.readingBook
+      return this.$store.getters.readingBook &&
+        this.$store.getters.readingBook.name
+        ? this.$store.getters.readingBook
         : {
-            bookName: "尚无阅读记录",
+            name: "尚无阅读记录",
             bookUrl: "",
             index: 0
           };

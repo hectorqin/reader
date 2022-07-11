@@ -68,6 +68,12 @@
             >
             <el-button
               type="text"
+              @click="importFromWebdav(scope.row)"
+              v-if="canImport(scope.row)"
+              >加入书架</el-button
+            >
+            <el-button
+              type="text"
               @click="deleteWebdavFile(scope.row)"
               style="color: #f56c6c"
               v-if="!scope.row.toParent"
@@ -89,12 +95,19 @@
         type="primary"
         size="medium"
         class="float-left"
+        @click="importFromWebdav(true)"
+        >批量加入书架</el-button
+      >
+      <el-button
+        type="primary"
+        size="medium"
+        class="float-left"
         @click="uploadToWebDAV"
       >
-        上传备份文件
+        上传文件
       </el-button>
       <input
-        ref="bookRef"
+        ref="fileRef"
         type="file"
         multiple="multiple"
         @change="onFileChange"
@@ -287,7 +300,7 @@ export default {
       );
     },
     uploadToWebDAV() {
-      this.$refs.bookRef.dispatchEvent(new MouseEvent("click"));
+      this.$refs.fileRef.dispatchEvent(new MouseEvent("click"));
     },
     onFileChange(event) {
       if (!event.target || !event.target.files || !event.target.files.length) {
@@ -312,7 +325,35 @@ export default {
           this.$message.error("上传文件失败 " + (error && error.toString()));
         }
       );
-      this.$refs.bookRef.value = null;
+      this.$refs.fileRef.value = null;
+    },
+    async importFromWebdav(row) {
+      if (row === true) {
+        if (!this.fileSelection.length) {
+          this.$message.error("请选择需要加入书架的书籍");
+          return;
+        }
+      }
+      Axios.post(this.api + "/importFromLocalPathPreview", {
+        path: row === true ? this.fileSelection.map(v => v.path) : [row.path],
+        webdav: true
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            if (!res.data.data || !res.data.data.length) {
+              this.$message.error("没有选择可导入的书籍");
+              return;
+            }
+            // this.cancel();
+            setTimeout(() => {
+              this.$emit("importFromLocalPathPreview", res.data.data);
+            }, 0);
+          }
+        },
+        error => {
+          this.$message.error("请求失败 " + (error && error.toString()));
+        }
+      );
     }
   }
 };

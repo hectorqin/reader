@@ -71,11 +71,13 @@ export default new Vuex.Store({
   mutations: {
     setShelfBooks(state, books) {
       // 过滤一下不用的字段，省点内存
+      window.shelfBooks = books;
       state.shelfBooks = books.map(v => {
         return {
           author: v.author,
           bookUrl: v.bookUrl,
           coverUrl: v.coverUrl,
+          tocUrl: v.tocUrl,
           charset: v.charset,
           customCoverUrl: v.customCoverUrl,
           canUpdate: v.canUpdate,
@@ -105,6 +107,7 @@ export default new Vuex.Store({
             author: book.author || state.shelfBooks[index].author,
             bookUrl: book.bookUrl || state.shelfBooks[index].bookUrl,
             coverUrl: book.coverUrl || state.shelfBooks[index].coverUrl,
+            tocUrl: book.tocUrl || state.shelfBooks[index].tocUrl,
             charset: book.charset || state.shelfBooks[index].charset,
             customCoverUrl:
               book.customCoverUrl || state.shelfBooks[index].customCoverUrl,
@@ -620,6 +623,14 @@ export default new Vuex.Store({
       return state.readingBook && state.readingBook.catalog
         ? state.readingBook.catalog[state.readingBook.index]
         : {};
+    },
+    readingBook: state => {
+      return {
+        ...state.readingBook,
+        ...(state.shelfBooks.find(
+          v => v.bookUrl === state.readingBook.bookUrl
+        ) || {})
+      };
     }
   },
   actions: {

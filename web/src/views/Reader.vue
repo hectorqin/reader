@@ -520,9 +520,9 @@ export default {
     window.addEventListener("keydown", this.keydownHandler);
     if (this.title) {
       document.title =
-        this.$store.state.readingBook.bookName + " - " + this.title;
+        this.$store.getters.readingBook.name + " - " + this.title;
     } else {
-      document.title = this.$store.state.readingBook.bookName;
+      document.title = this.$store.getters.readingBook.name;
     }
     this.formatTime();
     this.timer = setInterval(() => {
@@ -554,7 +554,7 @@ export default {
   deactivated() {
     this.saveBookProgress();
     this.startSavePosition = false;
-    this.lastReadingBook = this.$store.state.readingBook;
+    this.lastReadingBook = this.$store.getters.readingBook;
     this.timer && clearInterval(this.timer);
     window.removeEventListener("keydown", this.keydownHandler);
     window.removeEventListener("scroll", this.scrollHandler);
@@ -587,9 +587,9 @@ export default {
     },
     title(title) {
       if (title) {
-        document.title = this.$store.state.readingBook.bookName + " - " + title;
+        document.title = this.$store.getters.readingBook.name + " - " + title;
       } else {
-        document.title = this.$store.state.readingBook.bookName;
+        document.title = this.$store.getters.readingBook.name;
       }
     },
     isSlideRead(val) {
@@ -640,14 +640,14 @@ export default {
       // 还剩两页的时候，预读下一章节
       if (val !== oldVal && val >= this.totalPages - 2) {
         if (
-          this.$store.state.readingBook.index <
-          this.$store.state.readingBook.catalog.length - 1
+          this.$store.getters.readingBook.index <
+          this.$store.getters.readingBook.catalog.length - 1
         ) {
           if (!this.isScrollRead) {
             if (!this.preCaching) {
               this.preCaching = true;
               this.getBookContent(
-                this.$store.state.readingBook.index + 1,
+                this.$store.getters.readingBook.index + 1,
                 {
                   timeout: 30000,
                   silent: true
@@ -722,13 +722,13 @@ export default {
   },
   computed: {
     readingBook() {
-      return this.$store.state.readingBook || {};
+      return this.$store.getters.readingBook || {};
     },
     catalog() {
-      return (this.$store.state.readingBook || {}).catalog || [];
+      return (this.$store.getters.readingBook || {}).catalog || [];
     },
     chapterIndex() {
-      return ((this.$store.state.readingBook || {}).index || 0) | 0;
+      return ((this.$store.getters.readingBook || {}).index || 0) | 0;
     },
     windowSize() {
       return this.$store.state.windowSize;
@@ -998,18 +998,18 @@ export default {
       );
     },
     isAudio() {
-      return !this.error && this.$store.state.readingBook.type === 1;
+      return !this.error && this.$store.getters.readingBook.type === 1;
     },
     isEpub() {
       return (
         !this.error &&
-        this.$store.state.readingBook.bookUrl.toLowerCase().endsWith(".epub")
+        this.$store.getters.readingBook.bookUrl.toLowerCase().endsWith(".epub")
       );
     },
     isCbz() {
       return (
         !this.error &&
-        this.$store.state.readingBook.bookUrl.toLowerCase().endsWith(".cbz")
+        this.$store.getters.readingBook.bookUrl.toLowerCase().endsWith(".cbz")
       );
     },
     scrollOffset() {
@@ -1032,11 +1032,12 @@ export default {
   },
   methods: {
     init(refresh) {
-      if (this.$store.state.readingBook) {
+      if (this.$store.getters.readingBook) {
         if (
           refresh ||
           !this.lastReadingBook ||
-          this.lastReadingBook.bookUrl !== this.$store.state.readingBook.bookUrl
+          this.lastReadingBook.bookUrl !==
+            this.$store.getters.readingBook.bookUrl
         ) {
           this.title = "";
           this.show = false;
@@ -1047,7 +1048,7 @@ export default {
             spinner: "el-icon-loading",
             background: "rgba(0,0,0,0)"
           });
-          this.lastReadingBook = this.$store.state.readingBook;
+          this.lastReadingBook = this.$store.getters.readingBook;
           // 跳转记住的位置
           this.autoShowPosition();
           this.loadCatalog(false, true);
@@ -1099,7 +1100,7 @@ export default {
       this.getCatalog(refresh).then(
         res => {
           if (res.data.isSuccess) {
-            var book = Object.assign({}, this.$store.state.readingBook);
+            var book = Object.assign({}, this.$store.getters.readingBook);
             book.catalog = res.data.data;
             this.$store.commit("setReadingBook", book);
             this.$emit("loadCatalog");
@@ -1126,20 +1127,20 @@ export default {
     },
     getCatalog(refresh) {
       const params = {
-        url: this.$store.state.readingBook.bookUrl,
+        url: this.$store.getters.readingBook.bookUrl,
         refresh: refresh ? 1 : 0
       };
       if (this.$route.query.search) {
         // 来自搜索结果，请求需要带上 书源链接
-        params.bookSourceUrl = this.$store.state.readingBook.origin;
+        params.bookSourceUrl = this.$store.getters.readingBook.origin;
       }
       return networkFirstRequest(
         () => Axios.post(this.api + "/getChapterList", params),
-        this.$store.state.readingBook.bookName +
+        this.$store.getters.readingBook.name +
           "_" +
-          this.$store.state.readingBook.author +
+          this.$store.getters.readingBook.author +
           "@" +
-          this.$store.state.readingBook.bookUrl +
+          this.$store.getters.readingBook.bookUrl +
           "@chapterList"
       );
     },
@@ -1155,7 +1156,7 @@ export default {
       );
     },
     refreshContent() {
-      this.getContent(this.$store.state.readingBook.index, true);
+      this.getContent(this.$store.getters.readingBook.index, true);
     },
     getContent(index, refresh) {
       //展示进度条
@@ -1169,10 +1170,10 @@ export default {
           background: "rgba(0,0,0,0)"
         });
       }
-      let bookUrl = this.$store.state.readingBook.bookUrl;
+      let bookUrl = this.$store.getters.readingBook.bookUrl;
       try {
         // 保存阅读进度
-        let book = { ...this.$store.state.readingBook };
+        let book = { ...this.$store.getters.readingBook };
         book.index = index;
         this.$store.commit("setReadingBook", book);
       } catch (error) {
@@ -1182,7 +1183,7 @@ export default {
       //强制滚回顶层
       this.toTop(0);
       // 如果超出目录范围，尝试刷新目录
-      if (!this.$store.state.readingBook.catalog[index]) {
+      if (!this.$store.getters.readingBook.catalog[index]) {
         if (this.tryRefresh) {
           this.tryRefresh = false;
           this.content = "获取章节内容失败，请更新目录！";
@@ -1196,16 +1197,16 @@ export default {
         }
         return;
       }
-      //let chapterUrl = this.$store.state.readingBook.catalog[index].url;
-      let chapterName = this.$store.state.readingBook.catalog[index].title;
-      let chapterIndex = this.$store.state.readingBook.catalog[index].index;
+      //let chapterUrl = this.$store.getters.readingBook.catalog[index].url;
+      let chapterName = this.$store.getters.readingBook.catalog[index].title;
+      let chapterIndex = this.$store.getters.readingBook.catalog[index].index;
       this.title = chapterName;
       const now = new Date().getTime();
       this.getBookContent(chapterIndex, {}, refresh).then(
         res => {
           if (
-            bookUrl !== this.$store.state.readingBook.bookUrl ||
-            index !== this.$store.state.readingBook.index
+            bookUrl !== this.$store.getters.readingBook.bookUrl ||
+            index !== this.$store.getters.readingBook.index
           ) {
             // 已经换书或者换章节了
             return;
@@ -1248,8 +1249,8 @@ export default {
         },
         error => {
           if (
-            bookUrl !== this.$store.state.readingBook.bookUrl ||
-            index !== this.$store.state.readingBook.index
+            bookUrl !== this.$store.getters.readingBook.bookUrl ||
+            index !== this.$store.getters.readingBook.index
           ) {
             // 已经换书或者换章节了
             return;
@@ -1294,12 +1295,12 @@ export default {
           const scope = rule.scope.split(";");
           if (
             scope[0] === "*" ||
-            scope[0] === this.$store.state.readingBook.bookName
+            scope[0] === this.$store.getters.readingBook.name
           ) {
             if (
               scope.length == 1 ||
               (scope.length > 1 &&
-                scope[1] === this.$store.state.readingBook.bookUrl)
+                scope[1] === this.$store.getters.readingBook.bookUrl)
             ) {
               if (rule.isRegex) {
                 content = content.replace(
@@ -1334,8 +1335,8 @@ export default {
         }
         return Promise.resolve();
       }
-      let bookUrl = this.$store.state.readingBook.bookUrl;
-      if (!this.$store.state.readingBook.catalog) {
+      let bookUrl = this.$store.getters.readingBook.bookUrl;
+      if (!this.$store.getters.readingBook.catalog) {
         return new Promise(resolve => {
           this.$once("loadCatalog", () => {
             this.loadShowChapter(index, refresh).then(resolve);
@@ -1343,11 +1344,11 @@ export default {
         });
       }
       // 如果超出目录范围，尝试刷新目录
-      if (!this.$store.state.readingBook.catalog[index]) {
+      if (!this.$store.getters.readingBook.catalog[index]) {
         return Promise.reject("章节不存在");
       }
-      let chapterName = this.$store.state.readingBook.catalog[index].title;
-      let chapterIndex = this.$store.state.readingBook.catalog[index].index;
+      let chapterName = this.$store.getters.readingBook.catalog[index].title;
+      let chapterIndex = this.$store.getters.readingBook.catalog[index].index;
       return this.getBookContent(chapterIndex, {}, refresh, true).then(
         res => {
           if (res.data.isSuccess) {
@@ -1463,7 +1464,7 @@ export default {
       return Axios.post(
         this.api + "/saveBookProgress",
         {
-          url: this.$store.state.readingBook.bookUrl,
+          url: this.$store.getters.readingBook.bookUrl,
           index: this.chapterIndex
         },
         {
@@ -1486,16 +1487,18 @@ export default {
     },
     toNextChapter(onError) {
       if (
-        !this.$store.state.readingBook ||
-        !this.$store.state.readingBook.bookUrl ||
-        !this.$store.state.readingBook.catalog
+        !this.$store.getters.readingBook ||
+        !this.$store.getters.readingBook.bookUrl ||
+        !this.$store.getters.readingBook.catalog
       ) {
         onError && onError();
         return;
       }
-      let index = this.$store.state.readingBook.index;
+      let index = this.$store.getters.readingBook.index;
       index++;
-      if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
+      if (
+        typeof this.$store.getters.readingBook.catalog[index] !== "undefined"
+      ) {
         if (this.isScrollRead) {
           this.scrollStartChapterIndex = index;
           this.computeShowChapterList(true);
@@ -1509,16 +1512,18 @@ export default {
     },
     toLastChapter(onError) {
       if (
-        !this.$store.state.readingBook ||
-        !this.$store.state.readingBook.bookUrl ||
-        !this.$store.state.readingBook.catalog
+        !this.$store.getters.readingBook ||
+        !this.$store.getters.readingBook.bookUrl ||
+        !this.$store.getters.readingBook.catalog
       ) {
         onError && onError();
         return;
       }
-      let index = this.$store.state.readingBook.index;
+      let index = this.$store.getters.readingBook.index;
       index--;
-      if (typeof this.$store.state.readingBook.catalog[index] !== "undefined") {
+      if (
+        typeof this.$store.getters.readingBook.catalog[index] !== "undefined"
+      ) {
         if (this.isScrollRead) {
           this.scrollStartChapterIndex = index;
           this.computeShowChapterList(true);
@@ -1834,10 +1839,10 @@ export default {
           }
         }
         if (newChapterIndex >= 0) {
-          let book = { ...this.$store.state.readingBook };
+          let book = { ...this.$store.getters.readingBook };
           book.index = newChapterIndex;
           this.$store.commit("setReadingBook", book);
-          this.title = this.$store.state.readingBook.catalog[
+          this.title = this.$store.getters.readingBook.catalog[
             newChapterIndex
           ].title;
         }
@@ -2049,9 +2054,9 @@ export default {
         isRegex: false,
         isEnabled: true,
         scope:
-          this.$store.state.readingBook.bookName +
+          this.$store.getters.readingBook.name +
           ";" +
-          this.$store.state.readingBook.bookUrl
+          this.$store.getters.readingBook.bookUrl
       });
       this.showTextFilterPrompting = true;
       eventBus.$emit("showReplaceRuleForm", replaceRule, true, () => {
@@ -2092,9 +2097,9 @@ export default {
       //       isRegex: false,
       //       isEnabled: true,
       //       scope:
-      //         this.$store.state.readingBook.bookName +
+      //         this.$store.getters.readingBook.name +
       //         ";" +
-      //         this.$store.state.readingBook.bookUrl
+      //         this.$store.getters.readingBook.bookUrl
       //     });
       //   } else {
       //     this.$message.error("过滤内容为空!");
@@ -2143,8 +2148,8 @@ export default {
       bookText = bookText.replace(/\\n*$/, "");
 
       const bookmark = Object.assign({}, defaultBookmark, {
-        bookName: this.$store.state.readingBook.bookName,
-        bookAuthor: this.$store.state.readingBook.author,
+        bookName: this.$store.getters.readingBook.name,
+        bookAuthor: this.$store.getters.readingBook.author,
         chapterIndex: this.chapterIndex,
         chapterPos: this.currentPage,
         chapterName: this.title,
@@ -2528,13 +2533,13 @@ export default {
                 typeof currentChapter.dataset.index !== "undefined"
               ) {
                 const chapterIndex = +currentChapter.dataset.index;
-                if (chapterIndex != this.$store.state.readingBook.index) {
-                  let book = { ...this.$store.state.readingBook };
+                if (chapterIndex != this.$store.getters.readingBook.index) {
+                  let book = { ...this.$store.getters.readingBook };
                   book.index = chapterIndex;
                   this.$store.commit("setReadingBook", book);
                   // 保存阅读进度
                   this.saveBookProgress();
-                  this.title = this.$store.state.readingBook.catalog[
+                  this.title = this.$store.getters.readingBook.catalog[
                     chapterIndex
                   ].title;
                 }
@@ -2547,9 +2552,9 @@ export default {
         }
         setCache(
           "bookChapterProgress@" +
-            this.$store.state.readingBook.bookName +
+            this.$store.getters.readingBook.name +
             "_" +
-            this.$store.state.readingBook.author,
+            this.$store.getters.readingBook.author,
           position
         );
       } catch (error) {
@@ -2566,9 +2571,9 @@ export default {
         }
         const lastPosition = getCache(
           "bookChapterProgress@" +
-            this.$store.state.readingBook.bookName +
+            this.$store.getters.readingBook.name +
             "_" +
-            this.$store.state.readingBook.author
+            this.$store.getters.readingBook.author
         );
         if (lastPosition && +lastPosition) {
           this.$nextTick(() => {
@@ -2838,7 +2843,7 @@ export default {
       }
     },
     showReadingBookInfo() {
-      let book = { ...this.$store.state.readingBook };
+      let book = { ...this.$store.getters.readingBook };
       const shelfBook = this.$store.getters.shelfBooks.find(
         v => v.bookUrl === book.bookUrl
       );
@@ -2856,7 +2861,7 @@ export default {
       }
     },
     showSearchBookContentDialog() {
-      let book = { ...this.$store.state.readingBook };
+      let book = { ...this.$store.getters.readingBook };
       const shelfBook = this.$store.getters.shelfBooks.find(
         v => v.bookUrl === book.bookUrl
       );
@@ -2932,7 +2937,7 @@ export default {
       return paragraphList;
     },
     showBookmarkDialog() {
-      let book = { ...this.$store.state.readingBook };
+      let book = { ...this.$store.getters.readingBook };
       const shelfBook = this.$store.getters.shelfBooks.find(
         v => v.bookUrl === book.bookUrl
       );

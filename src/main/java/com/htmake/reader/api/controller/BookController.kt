@@ -1117,11 +1117,15 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             val userBookSourceStringList = loadBookSourceStringList(userNameSpace)
             limitConcurrent(concurrentCount, 0, bookSourceList.size(), {it ->
                 var searchBook = bookSourceList.getJsonObject(it).mapTo(SearchBook::class.java)
-                var bookSource = getBookSourceStringBySourceURL(searchBook.origin, userNameSpace, userBookSourceStringList)
-                if (bookSource != null) {
-                    searchBookWithSource(bookSource, book, userNameSpace = userNameSpace)
+                if (searchBook.origin.equals("loc_book")) {
+                    arrayListOf(searchBook)
                 } else {
-                    arrayListOf<SearchBook>()
+                    var bookSource = getBookSourceStringBySourceURL(searchBook.origin, userNameSpace, userBookSourceStringList)
+                    if (bookSource != null) {
+                        searchBookWithSource(bookSource, book, userNameSpace = userNameSpace)
+                    } else {
+                        arrayListOf<SearchBook>()
+                    }
                 }
             }) {list, _->
                 // logger.info("list: {}", list)
@@ -1270,6 +1274,26 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                         return returnData.setErrorMsg("导入本地CBZ书籍失败")
                     }
                 }
+            } else if (book.bookUrl.indexOf("webdav/") >= 0) {
+                // webdav书仓，不用移动书籍
+                val tempFile = File(getWorkDir(book.bookUrl))
+                if (!tempFile.exists()) {
+                    return returnData.setErrorMsg("webdav书仓书籍不存在")
+                }
+                val relativeLocalFilePath = Paths.get("storage", "data", userNameSpace, book.name + "_" + book.author, tempFile.name).toString()
+                book.bookUrl = relativeLocalFilePath
+
+                if (book.isEpub()) {
+                    // 解压文件 index.epub
+                    if (!extractEpub(book)) {
+                        return returnData.setErrorMsg("导入本地Epub书籍失败")
+                    }
+                } else if (book.isCbz()) {
+                    // 解压文件 index.cbz
+                    if (!extractCbz(book)) {
+                        return returnData.setErrorMsg("导入本地CBZ书籍失败")
+                    }
+                }
             }
         } else if (book.tocUrl.isNullOrEmpty()) {
             // 补全书籍信息
@@ -1294,6 +1318,10 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         } else {
             bookshelf.add(JsonObject.mapFrom(book))
         }
+        // 保存书源信息
+        val sourceList = listOf(book.toSearchBook())
+        saveBookSources(book, sourceList, userNameSpace)
+
         // logger.info("bookshelf: {}", bookshelf)
         saveUserStorage(userNameSpace, "bookshelf", bookshelf)
         return returnData.setData(book)
@@ -1335,24 +1363,45 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         // 查找是否存在该书源
         var bookSourceString = getBookSourceStringBySourceURL(bookSourceUrl, userNameSpace)
 
+        var searchBook: Book? = null
         if (bookSourceString.isNullOrEmpty()) {
-            return returnData.setErrorMsg("书源信息错误")
+            // 判断是不是本地书籍
+            val localBookSourceList = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, "bookSource"))
+
+            // 遍历判断书本是否存在
+            if (localBookSourceList != null) {
+                for (i in 0 until localBookSourceList.size()) {
+                    var _searchBook = localBookSourceList.getJsonObject(i).mapTo(SearchBook::class.java)
+                    if (_searchBook.bookUrl.equals(newBookUrl)) {
+                        searchBook = _searchBook.toBook()
+                        break;
+                    }
+                }
+            }
+            if (searchBook == null) {
+                return returnData.setErrorMsg("书源信息错误")
+            }
         }
 
-        var newBookInfo = WebBook(bookSourceString, appConfig.debugLog).getBookInfo(newBookUrl)
-
-        var bookSource: BookSource = bookSourceString.toMap().toDataClass()
+        var newBookInfo = if (searchBook != null) {
+            searchBook
+        } else {
+            if (bookSourceString.isNullOrEmpty()) {
+                return returnData.setErrorMsg("书源信息错误")
+            }
+            WebBook(bookSourceString, appConfig.debugLog).getBookInfo(newBookUrl)
+        }
 
         editShelfBook(book, userNameSpace) { existBook ->
-            existBook.origin = bookSource.bookSourceUrl
-            existBook.originName = bookSource.bookSourceName
-            existBook.bookUrl = newBookUrl
+            existBook.origin = newBookInfo.origin
+            existBook.originName = newBookInfo.originName
+            existBook.bookUrl = newBookInfo.bookUrl
             existBook.tocUrl = newBookInfo.tocUrl
             if (existBook.coverUrl.isNullOrEmpty() && !newBookInfo.coverUrl.isNullOrEmpty()) {
                 existBook.coverUrl = newBookInfo.coverUrl
             }
 
-            logger.info("saveBookSource: {}", existBook)
+            logger.info("setBookSource: {}", existBook)
 
             newBookInfo = existBook
 
@@ -1360,7 +1409,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
 
         // 更新目录
-        getLocalChapterList(newBookInfo, bookSourceString, true, userNameSpace)
+        getLocalChapterList(newBookInfo, bookSourceString ?: "", true, userNameSpace)
         return returnData.setData(newBookInfo)
     }
 
@@ -1926,6 +1975,10 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 // 本地书仓的源文件
                 localEpubFile = File(getWorkDir(book.originName))
             }
+            if (book.originName.indexOf("webdav") > 0) {
+                // webdav 书仓的源文件
+                localEpubFile = File(getWorkDir(book.originName))
+            }
             if (!localEpubFile.unzip(epubExtractDir.toString())) {
                 return false
             }
@@ -1940,6 +1993,10 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             var localFile = File(getWorkDir(book.originName + File.separator + "index.cbz"))
             if (book.originName.indexOf("localStore") > 0) {
                 // 本地书仓的源文件
+                localFile = File(getWorkDir(book.originName))
+            }
+            if (book.originName.indexOf("webdav") > 0) {
+                // webdav 书仓的源文件
                 localFile = File(getWorkDir(book.originName))
             }
             if (!localFile.unzip(extractDir.toString())) {
@@ -2155,8 +2212,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         return latestZipFile
     }
 
-    // 本地书仓功能
-    suspend fun importFromLocalStorePreview(context: RoutingContext): ReturnData {
+    // 从本地导入文件预览
+    suspend fun importFromLocalPathPreview(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
         if (!checkAuth(context)) {
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
@@ -2165,17 +2222,24 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (paths == null) {
             return returnData.setErrorMsg("参数错误")
         }
+        var webdav = context.bodyAsJson.getBoolean("webdav", false)
         if (appConfig.secure) {
             var userInfo = context.get("userInfo") as User?
             if (userInfo == null) {
                 return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
             }
-            if (!userInfo.enable_local_store) {
+            if (webdav && !userInfo.enable_webdav) {
+                return returnData.setErrorMsg("未开启 Webdav 功能")
+            } else if (!userInfo.enable_local_store) {
                 return returnData.setErrorMsg("未开启本地书仓功能")
             }
         }
         var userNameSpace = getUserNameSpace(context)
-        var home = getWorkDir("storage", "localStore")
+        var home = if (webdav) {
+            getUserWebdavHome(context)
+        } else {
+            getWorkDir("storage", "localStore")
+        }
         var fileList = arrayListOf<Map<String, Any>>()
         paths.forEach {
             var path = it as String? ?: ""
