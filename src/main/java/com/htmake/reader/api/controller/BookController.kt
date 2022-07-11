@@ -74,6 +74,7 @@ import io.legado.app.model.Debugger
 import io.legado.app.help.BookHelp
 import org.springframework.scheduling.annotation.Scheduled
 import io.legado.app.model.localBook.LocalBook
+import io.legado.app.model.analyzeRule.AnalyzeUrl
 import java.nio.file.Paths
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -2811,7 +2812,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         //set metadata
         setEpubMetadata(book, epubBook)
         //set cover
-        setCover(book, epubBook)
+        setCover(book, epubBook, bookSource)
         //set css
         val contentModel = setAssets(book, epubBook)
 
@@ -2869,7 +2870,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         return String(BookController::class.java.getResource("${File.separator}epub${File.separator}chapter.html").readBytes())
     }
 
-    private fun setCover(book: Book, epubBook: EpubBook) {
+    private suspend fun setCover(book: Book, epubBook: EpubBook, bookSourceString: String) {
         val coverUrl = book.getDisplayCover()
         if (coverUrl == null) {
             // TODO 默认封面
@@ -2880,12 +2881,32 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             val byteArray: ByteArray = coverFile.readBytes()
             epubBook.coverImage = Resource(byteArray, "Images/cover.jpg")
         } else {
-            webClient.getAbs(coverUrl).timeout(3000).send {
-                var bodyBytes = it.result()?.bodyAsBuffer()?.getBytes()
-                if (bodyBytes != null) {
-                    epubBook.coverImage = Resource(bodyBytes, "Images/cover.jpg")
-                }
+            var ext = getFileExt(coverUrl, "jpg")
+            val md5Encode = MD5Utils.md5Encode(coverUrl).toString()
+            var cachePath = getWorkDir("storage", "cache", md5Encode + "." + ext)
+            var cacheFile = File(cachePath)
+            if (cacheFile.exists()) {
+                val byteArray: ByteArray = cacheFile.readBytes()
+                epubBook.coverImage = Resource(byteArray, "Images/cover.jpg")
+                return;
             }
+            val analyzeUrl = AnalyzeUrl(coverUrl, source = BookSource.fromJson(bookSourceString).getOrNull())
+            try {
+                analyzeUrl.getByteArrayAwait().let {
+                    epubBook.coverImage = Resource(it, "Images/cover.jpg")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+
+            }
+            // webClient.getAbs(coverUrl).timeout(3000).send
+            // webClient.getAbs(coverUrl).timeout(3000).send {
+            //     var bodyBytes = it.result()?.bodyAsBuffer()?.getBytes()
+            //     if (bodyBytes != null) {
+            //         epubBook.coverImage = Resource(bodyBytes, "Images/cover.jpg")
+            //     }
+            // }
         }
     }
 

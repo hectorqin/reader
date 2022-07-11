@@ -2,20 +2,23 @@
 
 oldJAVAHome=$JAVA_HOME
 
-if [ -d /Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home ]; then
-    export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home
-fi
-
-javaVersion=$(java -version 2>&1 | sed -n ';s/.* version "\(.*\)\.\(.*\)\..*".*/\1\2/p;')
-
-if [[ "$javaVersion" -lt "110" ]]; then
-    echo "Java version must not lower than 11.0"
-    exit 1
-fi
-
 task=$1
 
 version=""
+
+checkJava()
+{
+    if [ -d /Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home ]; then
+        export JAVA_HOME=/Library/Java/JavaVirtualMachines/openjdk-11.jdk/Contents/Home
+    fi
+
+    javaVersion=$(java -version 2>&1 | sed -n ';s/.* version "\(.*\)\.\(.*\)\..*".*/\1\2/p;')
+
+    if [[ "$javaVersion" -lt "110" ]]; then
+        echo "Java version must not lower than 11.0"
+        exit 1
+    fi
+}
 
 getVersion()
 {
@@ -26,10 +29,12 @@ getVersion ./build.gradle.kts
 
 case $task in
     build)
+        checkJava
         # 调试打包
         ./gradlew buildReader
     ;;
     run)
+        checkJava
         # 运行 javafx UI
         port=$2
         if [[ -z "$port" ]]; then
@@ -43,14 +48,17 @@ case $task in
         fi
     ;;
     win)
+        checkJava
         # 打包 windows 安装包
         JAVAFX_PLATFORM=win ./gradlew packageReaderWin
     ;;
     linux)
+        checkJava
         # 打包 linux 安装包
         JAVAFX_PLATFORM=linux ./gradlew packageReaderLinux
     ;;
     mac)
+        checkJava
         # 打包 mac 安装包
         JAVAFX_PLATFORM=mac ./gradlew packageReaderMac
     ;;
@@ -64,8 +72,10 @@ case $task in
         getVersion ./cli.gradle
         ./gradlew -b cli.gradle assemble --info
         if test $? -eq 0; then
+            shift
+            shift
             mv src/main/java/com/htmake/reader/ReaderUIApplication.kt.back src/main/java/com/htmake/reader/ReaderUIApplication.kt
-            java -jar build/libs/reader-$version.jar --reader.server.port=$port
+            java -jar build/libs/reader-$version.jar --reader.server.port=$port $@
         else
             mv src/main/java/com/htmake/reader/ReaderUIApplication.kt.back src/main/java/com/htmake/reader/ReaderUIApplication.kt
         fi
