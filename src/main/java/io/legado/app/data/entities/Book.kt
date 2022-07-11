@@ -157,12 +157,12 @@ data class Book(
     }
 
     fun getLocalFile(): File {
-        if (isEpub() && originName.indexOf("localStore") < 0) {
-            // 非本地书仓的 epub文件
+        if (isEpub() && originName.indexOf("localStore") < 0 && originName.indexOf("webdav") < 0) {
+            // 非本地/webdav书仓的 epub文件
             return FileUtils.getFile(File(rootDir + originName), "index.epub")
         }
-        if (isCbz() && originName.indexOf("localStore") < 0) {
-            // 非本地书仓的 cbz文件
+        if (isCbz() && originName.indexOf("localStore") < 0 && originName.indexOf("webdav") < 0) {
+            // 非本地/webdav书仓的 cbz文件
             return FileUtils.getFile(File(rootDir + originName), "index.cbz")
         }
         return File(rootDir + originName)

@@ -259,7 +259,7 @@ export default {
           return;
         }
       }
-      Axios.post(this.api + "/importFromLocalStorePreview", {
+      Axios.post(this.api + "/importFromLocalPathPreview", {
         path:
           row === true ? this.localFileSelection.map(v => v.path) : [row.path]
       }).then(
@@ -271,7 +271,7 @@ export default {
             }
             // this.cancel();
             setTimeout(() => {
-              this.$emit("importFromLocalStorePreview", res.data.data);
+              this.$emit("importFromLocalPathPreview", res.data.data);
             }, 0);
           }
         },
