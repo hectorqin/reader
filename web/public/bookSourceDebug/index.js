@@ -173,9 +173,8 @@ function rule2json() {
   RuleJSON.customOrder =
     RuleJSON.customOrder == "" ? 0 : parseInt(RuleJSON.customOrder);
   RuleJSON.weight = RuleJSON.weight == "" ? 0 : parseInt(RuleJSON.weight);
-  (RuleJSON.bookSourceType == RuleJSON.bookSourceType) == ""
-    ? 0
-    : parseInt(RuleJSON.bookSourceType);
+  RuleJSON.bookSourceType =
+    RuleJSON.bookSourceType == "" ? 0 : parseInt(RuleJSON.bookSourceType);
   RuleJSON.enabled =
     RuleJSON.enabled == "" ||
     String(RuleJSON.enabled)

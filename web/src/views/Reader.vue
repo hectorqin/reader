@@ -364,6 +364,20 @@
                 >重置</span
               >
             </div>
+            <div class="progress">
+              <span class="progress-tip">定时</span>
+              <div class="progress-bar">
+                <el-slider
+                  v-model="speechMinutes"
+                  :min="0"
+                  :max="180"
+                  :step="1"
+                  :show-tooltip="false"
+                  @change="changeSpeechMinutes"
+                ></el-slider>
+              </div>
+              <span class="setting-btn">{{ speechMinutes }}分钟</span>
+            </div>
           </div>
         </div>
       </div>
@@ -717,7 +731,10 @@ export default {
 
       scrollStartChapterIndex: 0,
       showNextChapterSize: 1,
-      showPrevChapterSize: 0
+      showPrevChapterSize: 0,
+
+      speechMinutes: 0,
+      speechEndTime: 0
     };
   },
   computed: {
@@ -2186,6 +2203,14 @@ export default {
     changeSpeechPitch(pitch) {
       this.speechPitch = pitch;
     },
+    changeSpeechMinutes(minute) {
+      this.speechMinutes = minute;
+      if (minute) {
+        this.speechEndTime = new Date().getTime() + minute * 60 * 1000;
+      } else {
+        this.speechEndTime = 0;
+      }
+    },
     startSpeech() {
       if (this.error) {
         return;
@@ -2200,6 +2225,16 @@ export default {
 
       if (window.speechSynthesis.speaking) {
         return;
+      }
+
+      if (this.speechSpeaking) {
+        if (
+          this.speechEndTime > 0 &&
+          new Date().getTime() > this.speechEndTime
+        ) {
+          this.$message.info("定时关闭朗读");
+          return;
+        }
       }
 
       const paragraph = this.getCurrentParagraph();

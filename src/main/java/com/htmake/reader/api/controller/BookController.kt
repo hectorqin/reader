@@ -78,6 +78,7 @@ import io.legado.app.model.analyzeRule.AnalyzeUrl
 import java.nio.file.Paths
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CoroutineScope
 import me.ag2s.epublib.domain.*
@@ -1587,10 +1588,16 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         var userNameSpace = getUserNameSpace(context)
         var bookGroupList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookGroup"))
-        if (bookGroupList != null) {
-            return returnData.setData(bookGroupList.getList())
+        if (bookGroupList == null) {
+            bookGroupList = asJsonArray("""
+            [{"groupId":-1,"groupName":"全部","order":-10,"show":true},{"groupId":-2,"groupName":"本地","order":-9,"show":true},{"groupId":-3,"groupName":"音频","order":-8,"show":true},{"groupId":-4,"groupName":"未分组","order":-7,"show":true}]
+            """)
+            if (bookGroupList == null) {
+                return returnData.setData(arrayListOf<Int>())
+            }
+            saveUserStorage(userNameSpace, "bookGroup", bookGroupList)
         }
-        return returnData.setData(arrayListOf<Int>())
+        return returnData.setData(bookGroupList.getList())
     }
 
     suspend fun saveBookGroup(context: RoutingContext): ReturnData {
@@ -1646,6 +1653,40 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         return returnData.setData("")
     }
 
+    suspend fun saveBookGroupOrder(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        val bookGroupOrder = context.bodyAsJson.getJsonArray("order", null)
+        if (bookGroupOrder == null) {
+            return returnData.setErrorMsg("参数错误")
+        }
+
+        var userNameSpace = getUserNameSpace(context)
+        var bookGroupList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, "bookGroup"))
+        if (bookGroupList == null) {
+            bookGroupList = JsonArray()
+        }
+        var orderMap: MutableMap<Int, Int> = mutableMapOf()
+        for (i in 0 until bookGroupOrder.size()) {
+            orderMap.put(bookGroupOrder.getJsonObject(i).getInteger("groupId"), bookGroupOrder.getJsonObject(i).getInteger("order"))
+        }
+        // 遍历判断书本是否存在
+        var groupList = bookGroupList.getList()
+        for (i in 0 until bookGroupList.size()) {
+            var bookGroup = bookGroupList.getJsonObject(i).mapTo(BookGroup::class.java)
+            if (orderMap.containsKey(bookGroup.groupId)) {
+                bookGroup.order = orderMap.get(bookGroup.groupId) as? Int ?: bookGroup.order
+                groupList.set(i, JsonObject.mapFrom(bookGroup))
+            }
+        }
+        bookGroupList = JsonArray(groupList)
+
+        // logger.info("bookGroupList: {}", bookGroupList)
+        saveUserStorage(userNameSpace, "bookGroup", bookGroupList)
+        return returnData.setData("")
+    }
 
     suspend fun deleteBookGroup(context: RoutingContext): ReturnData {
         val returnData = ReturnData()
@@ -1658,7 +1699,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         if (bookGroupList == null) {
             bookGroupList = JsonArray()
         }
-        // 遍历判断书本是否存在
+        // 遍历判断分组是否存在
         var existIndex: Int = -1
         for (i in 0 until bookGroupList.size()) {
             var _bookGroup = bookGroupList.getJsonObject(i).mapTo(BookGroup::class.java)
@@ -1706,6 +1747,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         var bookList = arrayListOf<Book>()
         val concurrentCount = 16
         val userBookSourceStringList = loadBookSourceStringList(userNameSpace)
+        val mutex = Mutex()
         limitConcurrent(concurrentCount, 0, bookshelf.size()) {
             var book = bookshelf.getJsonObject(it).mapTo(Book::class.java)
             if (!book.isLocalBook() && book.canUpdate && refresh) {
@@ -1713,7 +1755,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     var bookSource = getBookSourceStringBySourceURL(book.origin, userNameSpace, userBookSourceStringList)
                     if (bookSource != null) {
                         withContext(Dispatchers.IO) {
-                            var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace, false)
+                            var bookChapterList = getLocalChapterList(book, bookSource, refresh, userNameSpace, false, mutex)
                             if (bookChapterList.size > 0) {
                                 var bookChapter = bookChapterList.last()
                                 book.latestChapterTitle = bookChapter.title
@@ -1735,7 +1777,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
     }
 
 
-    suspend fun getLocalChapterList(book: Book, bookSource: String, refresh: Boolean = false, userNameSpace: String, debugLog: Boolean = true): List<BookChapter> {
+    suspend fun getLocalChapterList(book: Book, bookSource: String, refresh: Boolean = false, userNameSpace: String, debugLog: Boolean = true, mutex: Mutex? = null): List<BookChapter> {
         val md5Encode = MD5Utils.md5Encode(book.bookUrl).toString()
         var chapterList: JsonArray? = asJsonArray(getUserStorage(userNameSpace, book.name + "_" + book.author, md5Encode))
 
@@ -1769,7 +1811,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 }
             }
             saveUserStorage(userNameSpace, getRelativePath(book.name + "_" + book.author, md5Encode), newChapterList)
-            saveShelfBookLatestChapter(book, newChapterList, userNameSpace)
+            saveShelfBookLatestChapter(book, newChapterList, userNameSpace, mutex)
             return newChapterList
         }
         var localChapterList = arrayListOf<BookChapter>()
@@ -1879,21 +1921,26 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
     }
 
-    fun saveShelfBookLatestChapter(book: Book, bookChapterList: List<BookChapter>, userNameSpace: String) {
-        editShelfBook(book, userNameSpace) { existBook ->
-            if (bookChapterList.size > 0) {
-                var bookChapter = bookChapterList.last()
-                existBook.latestChapterTitle = bookChapter.title
+    suspend fun saveShelfBookLatestChapter(book: Book, bookChapterList: List<BookChapter>, userNameSpace: String, mutex: Mutex? = null) {
+        try {
+            mutex?.lock()
+            editShelfBook(book, userNameSpace) { existBook ->
+                if (bookChapterList.size > 0) {
+                    var bookChapter = bookChapterList.last()
+                    existBook.latestChapterTitle = bookChapter.title
+                }
+                if (bookChapterList.size - existBook.totalChapterNum > 0) {
+                    existBook.lastCheckCount = bookChapterList.size - existBook.totalChapterNum
+                    existBook.lastCheckTime = System.currentTimeMillis()
+                }
+                existBook.totalChapterNum = bookChapterList.size
+                // TODO 最新章节更新时间
+                // existBook.latestChapterTime = System.currentTimeMillis()
+                // logger.info("saveShelfBookLatestChapter: {}", existBook)
+                existBook
             }
-            if (bookChapterList.size - existBook.totalChapterNum > 0) {
-                existBook.lastCheckCount = bookChapterList.size - existBook.totalChapterNum
-                existBook.lastCheckTime = System.currentTimeMillis()
-            }
-            existBook.totalChapterNum = bookChapterList.size
-            // TODO 最新章节更新时间
-            // existBook.latestChapterTime = System.currentTimeMillis()
-            // logger.info("saveShelfBookLatestChapter: {}", existBook)
-            existBook
+        } finally {
+            mutex?.unlock()
         }
     }
 
@@ -2890,19 +2937,19 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
     private fun setAssets(book: Book, epubBook: EpubBook): String {
         epubBook.resources.add(
             Resource(
-                BookController::class.java.getResource("${File.separator}epub${File.separator}fonts.css").readBytes(),
+                BookController::class.java.getResource("/epub/fonts.css").readBytes(),
                 "Styles/fonts.css"
             )
         )
         epubBook.resources.add(
             Resource(
-                BookController::class.java.getResource("${File.separator}epub${File.separator}main.css").readBytes(),
+                BookController::class.java.getResource("/epub/main.css").readBytes(),
                 "Styles/main.css"
             )
         )
         epubBook.resources.add(
             Resource(
-                BookController::class.java.getResource("${File.separator}epub${File.separator}logo.png").readBytes(),
+                BookController::class.java.getResource("/epub/logo.png").readBytes(),
                 "Images/logo.png"
             )
         )
@@ -2914,7 +2961,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 book.getDisplayIntro(),
                 book.kind,
                 book.wordCount,
-                String(BookController::class.java.getResource("${File.separator}epub${File.separator}cover.html").readBytes()),
+                String(BookController::class.java.getResource("/epub/cover.html").readBytes()),
                 "Text/cover.html"
             )
         )
@@ -2926,12 +2973,12 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 book.getDisplayIntro(),
                 book.kind,
                 book.wordCount,
-                String(BookController::class.java.getResource("${File.separator}epub${File.separator}intro.html").readBytes()),
+                String(BookController::class.java.getResource("/epub/intro.html").readBytes()),
                 "Text/intro.html"
             )
         )
 
-        return String(BookController::class.java.getResource("${File.separator}epub${File.separator}chapter.html").readBytes())
+        return String(BookController::class.java.getResource("/epub/chapter.html").readBytes())
     }
 
     private suspend fun setCover(book: Book, epubBook: EpubBook, bookSourceString: String) {

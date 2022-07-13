@@ -228,6 +228,7 @@ class YueduApi : RestVerticle() {
         router.get("/reader3/getBookGroups").coroutineHandler { bookController.getBookGroups(it) }
         router.post("/reader3/saveBookGroup").coroutineHandler { bookController.saveBookGroup(it) }
         router.post("/reader3/deleteBookGroup").coroutineHandler { bookController.deleteBookGroup(it) }
+        router.post("/reader3/saveBookGroupOrder").coroutineHandler { bookController.saveBookGroupOrder(it) }
 
         // 书仓功能
         // 获取书仓文件列表

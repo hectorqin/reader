@@ -441,7 +441,6 @@
 </template>
 
 <script>
-import "../assets/fonts/iconfont.css";
 import Axios from "../plugins/axios";
 import settings from "../plugins/config";
 import eventBus from "../plugins/eventBus";

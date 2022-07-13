@@ -48,6 +48,7 @@ class Debugger(val logMsg: (String) -> Unit) : DebugLog {
     suspend fun startDebug(webBook: WebBook, key: String) {
         val bookSource = webBook.bookSource
         webBook.debugLogger = this@Debugger
+        startTime = System.currentTimeMillis()
         when {
             key.isAbsUrl() -> {
                 val book = Book()

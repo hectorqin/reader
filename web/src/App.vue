@@ -128,6 +128,7 @@ import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
 import "prismjs/themes/prism.css";
+import "./assets/fonts/iconfont.css";
 import {
   cacheFirstRequest,
   isMiniInterface,
