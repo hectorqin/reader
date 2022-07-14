@@ -158,7 +158,7 @@ data class Book(
 
     fun getLocalFile(): File {
         if (originName.startsWith(rootDir)) {
-            originName = originName.replace(rootDir, "")
+            originName = originName.replace(Regex("^${rootDir}"), "")
         }
         if (isEpub() && originName.indexOf("localStore") < 0 && originName.indexOf("webdav") < 0) {
             // 非本地/webdav书仓的 epub文件
@@ -280,8 +280,8 @@ data class Book(
             if (!rootPath.endsWith(File.separator)) {
                 rootPath = rootPath + File.separator
             }
-            book.bookUrl = book.bookUrl.replace(rootPath, "")
-            book.originName = book.originName.replace(rootPath, "")
+            book.bookUrl = book.bookUrl.replace(Regex("^${rootPath}"), "")
+            book.originName = book.originName.replace(Regex("^${rootPath}"), "")
             book.setRootDir(rootDir)
             book.updateFromLocal()
             return book
