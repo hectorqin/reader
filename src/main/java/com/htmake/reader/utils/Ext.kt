@@ -31,6 +31,17 @@ fun String.url(): String {
     return this
 }
 
+fun String.toDir(absolute: Boolean = false): String {
+    var path = this
+    if (path.endsWith("/")) {
+        path = path.substring(0, path.length - 1)
+    }
+    if (absolute && !path.startsWith("/")) {
+        path = "/" + path
+    }
+    return path
+}
+
 fun WebClient.getEncodeAbs(absoluteURI: String): HttpRequest<Buffer> {
     return this.getAbs(absoluteURI.toHttpUrl().toString())
 }

@@ -157,6 +157,9 @@ data class Book(
     }
 
     fun getLocalFile(): File {
+        if (originName.startsWith(rootDir)) {
+            originName = originName.replace(rootDir, "")
+        }
         if (isEpub() && originName.indexOf("localStore") < 0 && originName.indexOf("webdav") < 0) {
             // 非本地/webdav书仓的 epub文件
             return FileUtils.getFile(File(rootDir + originName), "index.epub")
@@ -272,6 +275,13 @@ data class Book(
             val book = Book(bookUrl, "", BookType.local, localPath, nameAuthor.first, nameAuthor.second).also {
                 it.canUpdate = false
             }
+            // 保存为相对路径
+            var rootPath = rootDir
+            if (!rootPath.endsWith(File.separator)) {
+                rootPath = rootPath + File.separator
+            }
+            book.bookUrl = book.bookUrl.replace(rootPath, "")
+            book.originName = book.originName.replace(rootPath, "")
             book.setRootDir(rootDir)
             book.updateFromLocal()
             return book

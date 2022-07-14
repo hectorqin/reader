@@ -257,16 +257,6 @@ class EpubFile(var book: Book) {
         if (!File(coverUrl).exists()) {
             FileUtils.writeBytes(coverUrl, epubBook!!.coverImage.data)
         }
-        // 保存 cover
-        // val cover = epubBook!!.coverImage?.href
-        // if (cover != null) {
-        //     val epubRootDir = book.getEpubRootDir()
-        //     if (epubRootDir.isEmpty()) {
-        //         book.coverUrl = book.bookUrl.replace("storage/data/", "/epub/") + "/index/" + cover
-        //     } else {
-        //         book.coverUrl = book.bookUrl.replace("storage/data/", "/epub/") + "/index/" + epubRootDir + "/" + cover
-        //     }
-        // }
     }
 
     fun getChapterListBySpine(): ArrayList<BookChapter> {
