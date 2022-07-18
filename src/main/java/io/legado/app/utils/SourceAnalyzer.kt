@@ -88,8 +88,19 @@ object SourceAnalyzer {
                     header = uaToHeader(jsonItem.readString("httpUserAgent"))
                     searchUrl = toNewUrl(jsonItem.readString("ruleSearchUrl"))
                     exploreUrl = toNewUrls(jsonItem.readString("ruleFindUrl"))
-                    bookSourceType =
-                        if (jsonItem.readString("bookSourceType") == "AUDIO") BookType.audio else BookType.default
+                    val sourceType = jsonItem.readString("bookSourceType")
+                    bookSourceType = when(sourceType) {
+                        "AUDIO" -> BookType.audio
+                        "audio" -> BookType.audio
+                        "1" -> BookType.audio
+                        "IMAGE" -> BookType.image
+                        "image" -> BookType.image
+                        "2" -> BookType.image
+                        "FILE" -> BookType.file
+                        "file" -> BookType.file
+                        "3" -> BookType.file
+                        else -> BookType.default
+                    }
                     enabled = jsonItem.readBool("enable") ?: true
                     if (exploreUrl.isNullOrBlank()) {
                         enabledExplore = false

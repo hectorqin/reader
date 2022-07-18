@@ -50,7 +50,8 @@ data class Book(
        var originOrder: Int = 0,                   //书源排序
         var useReplaceRule: Boolean = true,         // 正文使用净化替换规则
         var variable: String? = null,                // 自定义书籍变量信息(用于书源规则检索书籍信息)
-        var readConfig: ReadConfig? = null
+        var readConfig: ReadConfig? = null,
+        var isInShelf: Boolean = false               // 是否加入到书架
     ) : BaseBook {
 
     fun isLocalBook(): Boolean {
@@ -157,12 +158,15 @@ data class Book(
     }
 
     fun getLocalFile(): File {
-        if (isEpub() && originName.indexOf("localStore") < 0) {
-            // 非本地书仓的 epub文件
+        if (originName.startsWith(rootDir)) {
+            originName = originName.replace(Regex("^${rootDir}"), "")
+        }
+        if (isEpub() && originName.indexOf("localStore") < 0 && originName.indexOf("webdav") < 0) {
+            // 非本地/webdav书仓的 epub文件
             return FileUtils.getFile(File(rootDir + originName), "index.epub")
         }
-        if (isCbz() && originName.indexOf("localStore") < 0) {
-            // 非本地书仓的 cbz文件
+        if (isCbz() && originName.indexOf("localStore") < 0 && originName.indexOf("webdav") < 0) {
+            // 非本地/webdav书仓的 cbz文件
             return FileUtils.getFile(File(rootDir + originName), "index.cbz")
         }
         return File(rootDir + originName)
@@ -272,6 +276,13 @@ data class Book(
             val book = Book(bookUrl, "", BookType.local, localPath, nameAuthor.first, nameAuthor.second).also {
                 it.canUpdate = false
             }
+            // 保存为相对路径
+            var rootPath = rootDir
+            if (!rootPath.endsWith(File.separator)) {
+                rootPath = rootPath + File.separator
+            }
+            book.bookUrl = book.bookUrl.replace(Regex("^${rootPath}"), "")
+            book.originName = book.originName.replace(Regex("^${rootPath}"), "")
             book.setRootDir(rootDir)
             book.updateFromLocal()
             return book

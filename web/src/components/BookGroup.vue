@@ -8,7 +8,7 @@
     :class="
       isWebApp && !$store.getters.isNight ? 'status-bar-light-bg-dialog' : ''
     "
-    @opened="$refs.bookGroupTableRef.doLayout()"
+    @opened="opened"
     v-if="$store.getters.isNormalPage"
     :before-close="cancel"
   >
@@ -23,17 +23,14 @@
         <el-table-column
           type="selection"
           width="25"
-          :fixed="$store.state.miniInterface"
           v-if="isShowBookGroupSettingDialog"
         >
         </el-table-column>
-        <el-table-column
-          property="groupName"
-          label="分组名"
-          min-width="100"
-          :fixed="$store.state.miniInterface"
-        >
+        <el-table-column property="groupName" label="分组名" min-width="100">
           <template slot-scope="scope">
+            <div class="drag-icon">
+              <i class="el-icon-rank"></i>
+            </div>
             <span> {{ displayBookGroupName(scope.row) }}</span>
           </template>
         </el-table-column>
@@ -86,6 +83,14 @@
       <el-button
         type="primary"
         size="medium"
+        class="float-left"
+        @click="saveOrder()"
+        v-if="isShowSaveOrderButton"
+        >保存排序</el-button
+      >
+      <el-button
+        type="primary"
+        size="medium"
         @click="setBookGroup"
         v-if="isShowBookGroupSettingDialog"
         >确认</el-button
@@ -98,6 +103,7 @@
 <script>
 import Axios from "../plugins/axios";
 import { mapGetters } from "vuex";
+import Dragable from "sortablejs";
 
 export default {
   model: {
@@ -108,17 +114,17 @@ export default {
   data() {
     return {
       isShowBookGroupSettingDialog: false,
+      showBookGroupList: [],
+      sortedBookGroupList: [],
+      refreshCounter: 0,
       bookGroupSelection: []
     };
   },
   props: ["show", "isSet"],
   computed: {
     ...mapGetters(["dialogWidth", "dialogTop", "dialogContentHeight"]),
-    showBookGroupList() {
-      if (!this.isShowBookGroupSettingDialog) {
-        return this.$store.state.bookGroupList;
-      }
-      return this.$store.state.bookGroupList.filter(v => v.groupId > 0);
+    bookGroupList() {
+      return this.$store.state.bookGroupList;
     },
     shelfBooks() {
       return this.$store.getters.shelfBooks;
@@ -130,6 +136,12 @@ export default {
       set(val) {
         this.$store.commit("setShowBookInfo", val);
       }
+    },
+    isShowSaveOrderButton() {
+      return (
+        this.showBookGroupList.reduce((p, c) => p + "" + c.groupId, "") !==
+        this.sortedBookGroupList.reduce((p, c) => p + "" + c.groupId, "")
+      );
     }
   },
   watch: {
@@ -137,6 +149,7 @@ export default {
       if (isVisible) {
         this.isShowBookGroupSettingDialog = this.isSet;
         this.bookGroupSelection = [];
+        this.computeBookGroupList();
         if (this.isSet) {
           this.$nextTick(() => {
             this.$refs.bookGroupTableRef.clearSelection();
@@ -146,12 +159,33 @@ export default {
           });
         }
       }
+    },
+    isSet(value) {
+      if (this.dragableElement) {
+        this.dragableElement.option("disabled", value);
+      }
+    },
+    bookGroupList() {
+      this.computeBookGroupList();
     }
   },
   methods: {
     cancel() {
       this.isShowBookGroupSettingDialog = false;
       this.$emit("setShow", false);
+    },
+    computeBookGroupList() {
+      this.showBookGroupList = [];
+      this.$nextTick(() => {
+        this.showBookGroupList = this.isSet
+          ? this.$store.state.bookGroupList.filter(v => v.groupId > 0)
+          : this.$store.state.bookGroupList;
+        this.sortedBookGroupList = this.showBookGroupList;
+      });
+    },
+    opened() {
+      this.$refs.bookGroupTableRef.doLayout();
+      this.setDragable();
     },
     loadBookGroup(refresh) {
       return this.$root.$children[0].loadBookGroup(refresh);
@@ -297,6 +331,44 @@ export default {
         }
       });
       return groups;
+    },
+    setDragable() {
+      const el = this.$el.querySelectorAll(
+        ".el-table__body-wrapper > table > tbody"
+      )[0];
+      this.dragableElement = Dragable.create(el, {
+        handler: ".drag-icon",
+        setData: function(dataTransfer) {
+          dataTransfer.setData("Text", "");
+        },
+        onEnd: evt => {
+          if (evt.oldIndex === evt.newIndex) return;
+          const list = [...this.showBookGroupList];
+          const targetRow = list.splice(evt.oldIndex, 1)[0];
+          list.splice(evt.newIndex, 0, targetRow);
+          this.sortedBookGroupList = list;
+        }
+      });
+      window.bookGroupComp = this;
+      this.dragableElement.option("disabled", this.isSet);
+    },
+    async saveOrder() {
+      Axios.post(this.api + "/saveBookGroupOrder", {
+        order: this.sortedBookGroupList.map((v, index) => ({
+          groupId: v.groupId,
+          order: index
+        }))
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("保存成功");
+            this.loadBookGroup(true);
+          }
+        },
+        error => {
+          this.$message.error("保存失败" + (error && error.toString()));
+        }
+      );
     }
   }
 };
@@ -305,5 +377,11 @@ export default {
 .qrcode-img {
   display: block;
   margin: 0 auto;
+}
+.drag-icon {
+  cursor: move;
+  display: inline-block;
+  margin-right: 5px;
+  user-select: none;
 }
 </style>

@@ -103,6 +103,12 @@
     />
 
     <Bookmark v-model="showBookmarkDialog" :book="bookmarkInBook" />
+
+    <FileManager
+      v-model="showFileManager"
+      :title="fileManagerTitle"
+      :home="fileManagerHome"
+    />
   </div>
 </template>
 
@@ -124,10 +130,12 @@ import RssArticle from "./components/RssArticle.vue";
 import SearchBookContent from "./components/SearchBookContent.vue";
 import Bookmark from "./components/Bookmark.vue";
 import BookmarkForm from "./components/BookmarkForm.vue";
+import FileManager from "./components/FileManager.vue";
 import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
 import "prismjs/themes/prism.css";
+import "./assets/fonts/iconfont.css";
 import {
   cacheFirstRequest,
   isMiniInterface,
@@ -201,7 +209,8 @@ export default {
     RssArticle,
     SearchBookContent,
     Bookmark,
-    BookmarkForm
+    BookmarkForm,
+    FileManager
   },
   data() {
     return {
@@ -249,7 +258,11 @@ export default {
       showBookmarkForm: false,
       bookmark: {},
       isAddBookmark: true,
-      bookmarkInBook: {}
+      bookmarkInBook: {},
+
+      showFileManager: false,
+      fileManagerHome: "",
+      fileManagerTitle: "文件管理"
     };
   },
   beforeCreate() {
@@ -378,6 +391,11 @@ export default {
     eventBus.$on("showBookmarkDialog", book => {
       this.showBookmarkDialog = true;
       this.bookmarkInBook = book;
+    });
+    eventBus.$on("showFileManagerDialog", (home, title) => {
+      this.fileManagerHome = home;
+      this.fileManagerTitle = title;
+      this.showFileManager = true;
     });
   },
   mounted() {
@@ -777,9 +795,9 @@ export default {
     },
     getBookContent(chapterIndex, options, refresh, cache, book) {
       book = book || {
-        name: this.$store.state.readingBook.bookName,
-        author: this.$store.state.readingBook.author,
-        bookUrl: this.$store.state.readingBook.bookUrl
+        name: this.$store.getters.readingBook.name,
+        author: this.$store.getters.readingBook.author,
+        bookUrl: this.$store.getters.readingBook.bookUrl
       };
       const params = {
         url: book.bookUrl,
