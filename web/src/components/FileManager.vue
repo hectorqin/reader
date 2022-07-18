@@ -57,6 +57,7 @@
         <el-table-column label="操作" width="100px">
           <template slot-scope="scope">
             <el-dropdown
+              :trigger="$store.state.touchable ? 'click' : 'hover'"
               @command="operateFile(scope.row, $event)"
               v-if="!scope.row.isDirectory"
             >
@@ -102,7 +103,11 @@
       </el-table>
     </div>
     <div slot="footer" class="dialog-footer">
-      <el-dropdown class="float-left" @command="operate">
+      <el-dropdown
+        :trigger="$store.state.touchable ? 'click' : 'hover'"
+        class="float-left"
+        @command="operate"
+      >
         <el-button type="primary" size="medium">
           操作<i class="el-icon-arrow-down el-icon--right"></i>
         </el-button>
