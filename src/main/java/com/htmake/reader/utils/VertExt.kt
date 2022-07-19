@@ -1,5 +1,8 @@
 package com.htmake.reader.utils
 
+import com.mongodb.client.model.Filters.eq;
+import com.mongodb.client.model.ReplaceOptions;
+import com.mongodb.client.MongoCollection
 import com.google.common.base.Throwables
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -9,6 +12,7 @@ import io.vertx.core.json.JsonArray
 import io.vertx.ext.web.RoutingContext
 import mu.KotlinLogging
 import com.htmake.reader.entity.BasicError
+import com.htmake.reader.entity.MongoFile
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.io.File
@@ -141,8 +145,8 @@ fun saveStorage(vararg name: String, value: Any, pretty: Boolean = false) {
     }
 
     val filename = name.last()
-    val file = File(getRelativePath(storagePath, *name.copyOfRange(0, name.size - 1), "${filename}.json"))
-    // val file = File(storagePath + "/${name}.json")
+    val path = getRelativePath(*name.copyOfRange(0, name.size - 1), "${filename}.json")
+    val file = File(storagePath + File.separator + path)
     logger.info("Save file to storage name: {} path: {}", name, file.absoluteFile)
 
     if (!file.parentFile.exists()) {
@@ -153,6 +157,7 @@ fun saveStorage(vararg name: String, value: Any, pretty: Boolean = false) {
         file.createNewFile()
     }
     file.writeText(toJson)
+    saveMongoFile(path, toJson)
 }
 
 fun getStorage(vararg name: String): String?  {
@@ -163,12 +168,56 @@ fun getStorage(vararg name: String): String?  {
     }
 
     val filename = name.last()
-    val file = File(getRelativePath(storagePath, *name.copyOfRange(0, name.size - 1), "${filename}.json"))
+    val path = getRelativePath(*name.copyOfRange(0, name.size - 1), "${filename}.json")
+    val file = File(storagePath + File.separator + path)
     logger.info("Read file from storage name: {} path: {}", name, file.absoluteFile)
     if (!file.exists()) {
-        return null
+        return readMongoFile(path)
     }
-    return file.readText()
+    val content = file.readText()
+    if (content.isEmpty()) {
+        return readMongoFile(path) ?: content
+    }
+    return content
+}
+
+fun getMongoFileStorage(): MongoCollection<MongoFile>? {
+    var appConfig = SpringContextUtils.getBean("appConfig", AppConfig::class.java)
+    return MongoManager.fileStorage(appConfig.mongoDbName, "storage")
+}
+
+fun readMongoFile(path: String): String? {
+    if (MongoManager.isInit()) {
+        logger.info("Get mongoFile {}", path)
+        val doc = getMongoFileStorage()?.find(eq("path", path))?.first();
+        if (doc != null) {
+            return doc.content
+        }
+    }
+    return null
+}
+
+fun saveMongoFile(path: String, content: String): Boolean {
+    if (MongoManager.isInit()) {
+        logger.info("Save mongoFile {}", path)
+        var doc = getMongoFileStorage()?.find(eq("path", path))?.first();
+        if (doc != null) {
+            doc.content = content
+            doc.updated_at = System.currentTimeMillis()
+            val result = getMongoFileStorage()?.replaceOne(eq("path", path), doc, ReplaceOptions().upsert(true));
+            return if(result != null && result.getModifiedCount() > 0) true else false
+        } else {
+            doc = MongoFile(path, content)
+            try {
+                getMongoFileStorage()?.insertOne(doc)
+                return true
+            } catch(e: Exception) {
+                logger.info("Save mongoFile {} failed", path)
+                e.printStackTrace()
+            }
+        }
+    }
+    return false
 }
 
 fun asJsonArray(value: Any?): JsonArray? {

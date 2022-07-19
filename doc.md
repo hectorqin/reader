@@ -126,6 +126,10 @@ reader:
     cacheChapterContent: false # 是否缓存章节内容
     userLimit: 50          # 用户上限，最大 50
     userBookLimit: 200     # 用户书籍上限，默认最大 200
+    debugLog: false        # 是否打开调试日志
+    autoClearInactiveUser: 0 # 是否自动清理不活跃用户，为0不清理，大于0为清理超过 autoClearInactiveUser 天未登录的用户
+    mongoUri: ""           # mongodb uri 用于备份数据
+    mongoDbName: "reader"  # mongodb 数据库名称
 
   server:
     port: 8080             # 监听端口

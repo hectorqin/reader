@@ -56,7 +56,7 @@ apply(plugin = "kotlin")
 apply(plugin = "io.github.fvarrui.javapackager.plugin")
 
 group = "com.htmake"
-version = "2.5.6"
+version = "2.5.7"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
@@ -125,6 +125,9 @@ dependencies {
 
     // 转换繁体
     // implementation("com.github.liuyueyi.quick-chinese-transfer:quick-transfer-core:0.2.1")
+
+    // database
+    implementation("org.mongodb:mongodb-driver-sync:3.8.2")
 }
 
 // val compileKotlin: KotlinCompile by tasks

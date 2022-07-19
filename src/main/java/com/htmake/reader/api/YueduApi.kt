@@ -42,6 +42,7 @@ import com.htmake.reader.utils.unzip
 import com.htmake.reader.utils.zip
 import com.htmake.reader.utils.jsonEncode
 import com.htmake.reader.utils.getRelativePath
+import com.htmake.reader.utils.MongoManager
 import com.htmake.reader.verticle.RestVerticle
 import com.htmake.reader.SpringEvent
 import org.springframework.stereotype.Component
@@ -86,6 +87,11 @@ class YueduApi : RestVerticle() {
 
     override suspend fun initRouter(router: Router) {
         setupPort()
+
+        // 连接 mongodDb
+        if (appConfig.mongoUri.isNotEmpty()) {
+            MongoManager.connect(appConfig.mongoUri)
+        }
 
         // 旧版数据迁移
         migration()

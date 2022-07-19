@@ -18,6 +18,8 @@ reader:
     userBookLimit: 200
     debugLog: false
     autoClearInactiveUser: 0
+    mongoUri: ""
+    mongoDbName: "reader"
 
   server:
     port: 8080
