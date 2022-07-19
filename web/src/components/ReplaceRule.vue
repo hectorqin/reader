@@ -11,18 +11,35 @@
     v-if="$store.getters.isNormalPage"
     :before-close="cancel"
   >
+    <div class="custom-dialog-title" slot="title">
+      <span class="el-dialog__title"
+        >替换规则管理
+        <span class="float-right span-btn" @click="uploadFile">导入</span>
+        <input
+          ref="fileRef"
+          type="file"
+          @change="onFileChange($event)"
+          style="display:none"
+        />
+      </span>
+    </div>
     <div class="source-container table-container">
       <el-table
         :data="$store.state.filterRules"
         :height="dialogContentHeight"
         @selection-change="localSelection = $event"
       >
-        <el-table-column type="selection" width="25" fixed> </el-table-column>
+        <el-table-column
+          type="selection"
+          width="25"
+          :fixed="$store.state.miniInterface"
+        >
+        </el-table-column>
         <el-table-column
           property="name"
           min-width="150px"
           label="规则名称"
-          fixed
+          :fixed="$store.state.miniInterface"
         >
         </el-table-column>
         <el-table-column property="scope" label="替换范围" min-width="150px">
@@ -145,6 +162,92 @@ export default {
     },
     editReplaceRule(row) {
       eventBus.$emit("showReplaceRuleForm", { ...row }, false);
+    },
+    uploadFile() {
+      this.$refs.fileRef.dispatchEvent(new MouseEvent("click"));
+    },
+    onFileChange(event) {
+      const rawFile = event.target.files && event.target.files[0];
+      // console.log("rawFile", rawFile);
+      const reader = new FileReader();
+      reader.onload = e => {
+        const data = e.target.result;
+        try {
+          const ruleList = JSON.parse(data);
+          if (Array.isArray(ruleList) && ruleList.length) {
+            this.comfirmImport(ruleList);
+          }
+        } catch (error) {
+          this.$message.error("替换规则文件错误");
+        }
+      };
+      reader.onerror = () => {
+        // console.log("FileReader error", e);
+        // FileReader 读取出错，只能上传读取了
+        let param = new FormData();
+        param.append("file", rawFile);
+        Axios.post(this.api + "/readSourceFile", param, {
+          headers: { "Content-Type": "multipart/form-data" }
+        }).then(
+          res => {
+            if (res.data.isSuccess) {
+              //
+              let ruleList = [];
+              res.data.data.forEach(v => {
+                try {
+                  const data = JSON.parse(v);
+                  if (Array.isArray(data)) {
+                    ruleList = ruleList.concat(data);
+                  }
+                } catch (error) {
+                  //
+                }
+              });
+              if (ruleList.length) {
+                this.comfirmImport(ruleList);
+              } else {
+                this.$message.error("替换规则文件错误");
+              }
+            }
+          },
+          error => {
+            this.$message.error(
+              "读取替换规则文件内容失败 " + (error && error.toString())
+            );
+          }
+        );
+      };
+      reader.readAsText(rawFile);
+      this.$refs.fileRef.value = null;
+    },
+    async comfirmImport(ruleList) {
+      const res = await this.$confirm(
+        `确认要导入文件中的${ruleList.length}条替换规则吗?`,
+        "提示",
+        {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(this.api + "/saveReplaceRules", ruleList).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("导入替换规则成功");
+            this.$root.$children[0].loadReplaceRules(true);
+          }
+        },
+        error => {
+          this.$message.error(
+            "导入替换规则失败 " + (error && error.toString())
+          );
+        }
+      );
     }
   }
 };

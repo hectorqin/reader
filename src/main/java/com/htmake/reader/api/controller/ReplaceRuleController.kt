@@ -115,7 +115,7 @@ class ReplaceRuleController(coroutineContext: CoroutineContext): BaseController(
             list.set(existIndex, JsonObject.mapFrom(replaceRule))
             replaceRuleList = JsonArray(list)
         } else {
-            // 新增rss源
+            // 新增替换规则
             replaceRuleList.add(JsonObject.mapFrom(replaceRule))
         }
 
@@ -160,7 +160,7 @@ class ReplaceRuleController(coroutineContext: CoroutineContext): BaseController(
                 list.set(existIndex, JsonObject.mapFrom(replaceRule))
                 replaceRuleList = JsonArray(list)
             } else {
-                // 新增rss源
+                // 新增替换规则
                 replaceRuleList.add(JsonObject.mapFrom(replaceRule))
             }
         }

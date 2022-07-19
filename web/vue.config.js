@@ -86,6 +86,8 @@ module.exports = {
   devServer: {
     port: 8081
   },
+  // 编译依赖为 es5
+  transpileDependencies: ["element-ui", "codejar", "vue-lazyload"],
   pwa: {
     name: "阅读",
     themeColor: "#ffffff",
@@ -121,31 +123,35 @@ module.exports = {
             }
           }
         },
-        {
-          // 获取书架
-          urlPattern: new RegExp("^https?://[^/]*/reader3/getBookshelf"),
-          handler: "networkFirst",
-          options: {
-            cacheName: "bookshelf",
-            cacheableResponse: {
-              statuses: [200]
-            },
-            plugins: [
-              customWorkboxPlugin(({ request }) => {
-                const searchParams = new URL(request.url).searchParams;
-                const accessToken = searchParams.get("accessToken");
-                if (!accessToken) {
-                  return request;
-                }
-                return "getBookshelf@" + accessToken.split(":")[0];
-              })
-            ]
-          }
-        },
+        // {
+        //   // 获取书架
+        //   urlPattern: new RegExp("^https?://[^/]*/reader3/getBookshelf"),
+        //   handler: "networkFirst",
+        //   options: {
+        //     cacheName: "bookshelf",
+        //     cacheableResponse: {
+        //       statuses: [200]
+        //     },
+        //     plugins: [
+        //       customWorkboxPlugin(({ request, mode }) => {
+        //         const searchParams = new URL(request.url).searchParams;
+        //         if (mode === "read" && searchParams.get("refresh")) {
+        //           // 刷新时不读取缓存
+        //           return false;
+        //         }
+        //         const accessToken = searchParams.get("accessToken");
+        //         if (!accessToken) {
+        //           return request;
+        //         }
+        //         return "getBookshelf@" + accessToken.split(":")[0];
+        //       })
+        //     ]
+        //   }
+        // },
         // 书源手动缓存在 localStorage
         // {
         //   // 获取书源
-        //   urlPattern: new RegExp("^https?://[^/]*/reader3/getSources"),
+        //   urlPattern: new RegExp("^https?://[^/]*/reader3/getBookSources"),
         //   handler: "networkFirst",
         //   options: {
         //     cacheName: "bookSources",
@@ -154,53 +160,57 @@ module.exports = {
         //     }
         //   }
         // },
-        {
-          // 获取书籍章节列表
-          urlPattern: new RegExp("^https?://[^/]*/reader3/getChapterList"),
-          handler: "networkFirst",
-          options: {
-            cacheName: "bookChapterList",
-            networkTimeoutSeconds: 5,
-            cacheableResponse: {
-              statuses: [200]
-            },
-            plugins: [
-              customWorkboxPlugin(({ request }) => {
-                const searchParams = new URL(request.url).searchParams;
-                return searchParams.get("url") + "@chapterList";
-              })
-            ]
-          }
-        },
-        {
-          // 获取书籍内容
-          urlPattern: new RegExp("^https?://[^/]*/reader3/getBookContent"),
-          handler: "cacheFirst",
-          options: {
-            cacheName: "bookContent",
-            cacheableResponse: {
-              statuses: [200]
-            },
-            expiration: {
-              maxAgeSeconds: 86400 * 30,
-              maxEntries: 10000
-            },
-            plugins: [
-              customWorkboxPlugin(({ request, mode }) => {
-                const searchParams = new URL(request.url).searchParams;
-                if (mode === "read" && searchParams.get("refresh")) {
-                  // 刷新时不读取缓存
-                  return false;
-                }
-                return (
-                  searchParams.get("url") +
-                  "@chapterContent-" +
-                  searchParams.get("index")
-                );
-              })
-            ]
-          }
-        },
+        // {
+        //   // 获取书籍章节列表
+        //   urlPattern: new RegExp("^https?://[^/]*/reader3/getChapterList"),
+        //   handler: "networkFirst",
+        //   options: {
+        //     cacheName: "bookChapterList",
+        //     networkTimeoutSeconds: 5,
+        //     cacheableResponse: {
+        //       statuses: [200]
+        //     },
+        //     plugins: [
+        //       customWorkboxPlugin(({ request, mode }) => {
+        //         const searchParams = new URL(request.url).searchParams;
+        //         if (mode === "read" && searchParams.get("refresh")) {
+        //           // 刷新时不读取缓存
+        //           return false;
+        //         }
+        //         return searchParams.get("url") + "@chapterList";
+        //       })
+        //     ]
+        //   }
+        // },
+        // {
+        //   // 获取书籍内容
+        //   urlPattern: new RegExp("^https?://[^/]*/reader3/getBookContent"),
+        //   handler: "cacheFirst",
+        //   options: {
+        //     cacheName: "bookContent",
+        //     cacheableResponse: {
+        //       statuses: [200]
+        //     },
+        //     expiration: {
+        //       maxAgeSeconds: 86400 * 30,
+        //       maxEntries: 10000
+        //     },
+        //     plugins: [
+        //       customWorkboxPlugin(({ request, mode }) => {
+        //         const searchParams = new URL(request.url).searchParams;
+        //         if (mode === "read" && searchParams.get("refresh")) {
+        //           // 刷新时不读取缓存
+        //           return false;
+        //         }
+        //         return (
+        //           searchParams.get("url") +
+        //           "@chapterContent-" +
+        //           searchParams.get("index")
+        //         );
+        //       })
+        //     ]
+        //   }
+        // },
         {
           // 获取书籍封面
           urlPattern: new RegExp("^https?://[^/]*/reader3/cover"),

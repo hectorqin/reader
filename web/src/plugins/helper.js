@@ -73,39 +73,28 @@ export const LimitResquest = function(limit, process) {
   return handler;
 };
 
-export const networkFirstRequest = async function(
-  requestFunc,
-  cacheKey,
-  forceCache
-) {
+export const networkFirstRequest = async function(requestFunc, cacheKey) {
   cacheKey = "localCache@" + cacheKey;
-  const res = await requestFunc().catch(err => {
+  const res = await requestFunc().catch(() => {
     // 请求出错，使用缓存
-    if (forceCache || !window.serviceWorkerReady) {
-      // 使用新的异步存储
-      return window.$cacheStorage
-        .getItem(cacheKey)
-        .then(cacheResponse => {
-          if (cacheResponse) {
-            return { data: cacheResponse };
-          }
-        })
-        .catch(err => {
-          // 兼容旧逻辑
-          const cacheResponse = getCache(cacheKey);
-          if (cacheResponse) {
-            return { data: cacheResponse };
-          }
-          throw err;
-        });
-    }
-    throw err;
+    // 使用新的异步存储
+    return window.$cacheStorage
+      .getItem(cacheKey)
+      .then(cacheResponse => {
+        if (cacheResponse) {
+          return { data: cacheResponse };
+        }
+      })
+      .catch(err => {
+        // 兼容旧逻辑
+        const cacheResponse = getCache(cacheKey);
+        if (cacheResponse) {
+          return { data: cacheResponse };
+        }
+        throw err;
+      });
   });
-  if (
-    (forceCache || !window.serviceWorkerReady) &&
-    res.data &&
-    res.data.isSuccess
-  ) {
+  if (res.data && res.data.isSuccess) {
     // 使用新的异步存储
     window.$cacheStorage.setItem(cacheKey, res.data).catch(() => {});
   }
@@ -115,40 +104,33 @@ export const networkFirstRequest = async function(
 export const cacheFirstRequest = async function(
   requestFunc,
   cacheKey,
-  validateCache,
-  forceCache
+  validateCache
 ) {
   cacheKey = "localCache@" + cacheKey;
   // validateCache === true 时，直接刷新缓存
   if (validateCache !== true) {
-    if (forceCache || !window.serviceWorkerReady) {
-      let cacheResponse = await window.$cacheStorage
-        .getItem(cacheKey)
-        .then(cacheResponse => {
-          if (cacheResponse) {
-            return cacheResponse;
-          }
-          // console.log("Cache not found in new cache");
-          throw new Error("Cache not found");
-        })
-        .catch(() => {
-          // 兼容旧逻辑
-          const cacheResponse = getCache(cacheKey);
+    let cacheResponse = await window.$cacheStorage
+      .getItem(cacheKey)
+      .then(cacheResponse => {
+        if (cacheResponse) {
           return cacheResponse;
-        });
-      if (cacheResponse) {
-        if (!validateCache || (validateCache && validateCache(cacheResponse))) {
-          return { data: cacheResponse };
         }
+        // console.log("Cache not found in new cache");
+        throw new Error("Cache not found");
+      })
+      .catch(() => {
+        // 兼容旧逻辑
+        const cacheResponse = getCache(cacheKey);
+        return cacheResponse;
+      });
+    if (cacheResponse) {
+      if (!validateCache || (validateCache && validateCache(cacheResponse))) {
+        return { data: cacheResponse };
       }
     }
   }
   const res = await requestFunc();
-  if (
-    (forceCache || !window.serviceWorkerReady) &&
-    res.data &&
-    res.data.isSuccess
-  ) {
+  if (res.data && res.data.isSuccess) {
     // 使用新的异步存储
     window.$cacheStorage.setItem(cacheKey, res.data).catch(() => {});
   }
@@ -156,3 +138,65 @@ export const cacheFirstRequest = async function(
 };
 
 export const isMiniInterface = () => window.innerWidth <= 750;
+
+export const editDistance = function(strA, strB) {
+  // Levenshtein Edit Distance
+  if (strA === strB) {
+    return 1.0;
+  }
+  if (!strA || !strB) {
+    return 0.0;
+  }
+  const arr = new Array(strA.length + 1);
+  for (let i1 = 0; i1 <= strA.length; i1++) {
+    arr[i1] = new Array(strB.length + 1);
+  }
+  for (let i1 = 0; i1 <= strA.length; i1++) {
+    for (let i2 = 0; i2 <= strB.length; i2++) {
+      if (i1 === 0) {
+        arr[0][i2] = i2;
+      } else if (i2 === 0) {
+        arr[i1][0] = i1;
+      } else if (strA.charAt(i1 - 1) === strB.charAt(i2 - 1)) {
+        arr[i1][i2] = arr[i1 - 1][i2 - 1];
+      } else {
+        arr[i1][i2] =
+          1 +
+          Math.min(
+            arr[i1 - 1][i2 - 1],
+            Math.min(arr[i1][i2 - 1], arr[i1 - 1][i2])
+          );
+      }
+    }
+  }
+  return 1 - arr[strA.length][strB.length] / Math.max(strA.length, strB.length);
+};
+
+export const loadFont = function(fontName, fontUrl) {
+  window.customFonts = window.customFonts || {};
+  if (
+    !window.customFonts[fontName] ||
+    window.customFonts[fontName] !== fontUrl
+  ) {
+    // 动态插入CSS
+    const style = document.createElement("style");
+    style.textContent = `
+    @font-face {
+      font-family: "${fontName}";
+      src: url("${fontUrl}");
+    }`;
+    style.id = "custom-font-" + fontName;
+    document.head.appendChild(style);
+    window.customFonts[fontName] = fontUrl;
+  }
+};
+
+export const removeFont = function(fontName) {
+  window.customFonts = window.customFonts || {};
+  delete window.customFonts[fontName];
+  const nodeList = document.querySelectorAll("#custom-font-" + fontName);
+  for (let i = 0; i < nodeList.length; i++) {
+    const node = nodeList[i];
+    node.remove();
+  }
+};

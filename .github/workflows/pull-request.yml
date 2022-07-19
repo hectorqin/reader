@@ -1,0 +1,46 @@
+name: Pull Request Check
+
+on:
+  pull_request:
+    types: [synchronize, reopened, labeled]
+    branches:
+      - master
+
+concurrency:
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  docker:
+    if: github.repository == 'hectorqin/reader'
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          clean: false
+      -
+        name: Setup node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      -
+        name: Build web
+        run: cd web && npm install && npm run build
+      -
+        name: Setup Java
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'temurin'
+          java-version: '8'
+          cache: 'gradle'
+      -
+        name: Build Java
+        run:
+          mv ./web/dist ./src/main/resources/web && rm src/main/java/com/htmake/reader/ReaderUIApplication.kt && gradle -b cli.gradle assemble --info && mv ./build/libs/*.jar ./reader.jar

@@ -29,14 +29,14 @@
           type="selection"
           width="25"
           :selectable="isUserSelectable"
-          fixed
+          :fixed="$store.state.miniInterface"
         >
         </el-table-column>
         <el-table-column
           property="username"
           label="用户名"
           min-width="100"
-          fixed
+          :fixed="$store.state.miniInterface"
         ></el-table-column>
         <el-table-column
           property="lastLoginAt"
@@ -87,6 +87,9 @@
             <el-button type="text" @click="resetPassword(scope.row)"
               >重置密码</el-button
             >
+            <el-button type="text" @click="setAsDefaultBookSources(scope.row)"
+              >设为默认书源</el-button
+            >
           </template>
         </el-table-column>
       </el-table>
@@ -98,6 +101,13 @@
         class="float-left"
         @click="deleteUserList"
         >批量删除</el-button
+      >
+      <el-button
+        type="primary"
+        size="medium"
+        class="float-left"
+        @click="deleteUserBookSource"
+        >删除用户书源</el-button
       >
       <span class="check-tip">已选择 {{ manageUserSelection.length }} 个</span>
       <el-button size="medium" @click="cancel">取消</el-button>
@@ -122,7 +132,7 @@ export default {
       manageUserSelection: []
     };
   },
-  props: ["show", "rule", "isAdd"],
+  props: ["show"],
   computed: {
     ...mapGetters(["dialogWidth", "dialogTop", "dialogContentHeight"]),
     userList: {
@@ -197,6 +207,36 @@ export default {
         }
       );
     },
+    async deleteUserBookSource() {
+      if (!this.manageUserSelection.length) {
+        this.$message.error("请选择需要删除书源的用户");
+        return;
+      }
+      const res = await this.$confirm("确认要删除所选择的用户书源吗?", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning"
+      }).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      Axios.post(
+        this.api + "/deleteUserBookSource",
+        this.manageUserSelection.map(v => v.username)
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.manageUserSelection = [];
+            this.$message.success("操作成功");
+          }
+        },
+        error => {
+          this.$message.error("操作失败 " + (error && error.toString()));
+        }
+      );
+    },
     toggleUserWebdav(user, enableWebdav) {
       Axios.post(this.api + "/updateUser", {
         username: user.username,
@@ -232,6 +272,34 @@ export default {
         },
         error => {
           this.$message.error("修改失败 " + (error && error.toString()));
+        }
+      );
+    },
+    async setAsDefaultBookSources(user) {
+      const res = await this.$confirm(
+        `确认要将用户${user.username}的书源设为默认书源（新用户有效）吗?`,
+        "提示",
+        {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }
+      ).catch(() => {
+        return false;
+      });
+      if (!res) {
+        return;
+      }
+      return Axios.post(this.api + "/setAsDefaultBookSources", {
+        username: user.username
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$message.success("设置成功");
+          }
+        },
+        error => {
+          this.$message.error("设置失败 " + (error && error.toString()));
         }
       );
     },

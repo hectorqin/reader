@@ -17,11 +17,13 @@ reader:
     proxyPort: ""
     proxyUsername: ""
     proxyPassword: ""
-    cacheChapterContent: false
+    cacheChapterContent: true
     userLimit: 50
     userBookLimit: 200
     debugLog: false
     autoClearInactiveUser: 0
+    mongoUri: ""
+    mongoDbName: "reader"
 
   server:
     port: 8080

@@ -11,6 +11,7 @@ import io.legado.app.model.webBook.BookContent
 import io.legado.app.model.webBook.BookInfo
 import io.legado.app.model.webBook.BookList
 import io.legado.app.model.Debug
+import io.legado.app.model.DebugLog
 import mu.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
@@ -19,12 +20,23 @@ import kotlinx.coroutines.withContext
 
 private val logger = KotlinLogging.logger {}
 
-class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
+class WebBook(val bookSource: BookSource, val debugLog: Boolean = true, var debugLogger: DebugLog? = null) {
 
     constructor(bookSourceString: String, debugLog: Boolean = true) : this(BookSource.fromJson(bookSourceString).getOrNull() ?: BookSource(), debugLog)
 
     val sourceUrl: String
         get() = bookSource.bookSourceUrl
+
+    val debugger: DebugLog?
+        get() {
+            if (debugLogger != null) {
+                return debugLogger
+            }
+            if (debugLog) {
+                return Debug
+            }
+            return null
+        }
 
     /**
      * 搜索
@@ -44,7 +56,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
                 ruleData = variableBook,
                 headerMapF = bookSource.getHeaderMap(true),
             )
-            var res = analyzeUrl.getStrResponseAwait()
+            var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
@@ -58,7 +70,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
                 res.url,
                 variableBook,
                 true,
-                debugLog = if(debugLog) Debug else null
+                debugLog = debugger
             ).map {
                 it.tocHtml = ""
                 it.infoHtml = ""
@@ -84,7 +96,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
             ruleData = variableBook,
             headerMapF = bookSource.getHeaderMap(true)
         )
-        var res = analyzeUrl.getStrResponseAwait()
+        var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
         //检测书源是否已登录
         bookSource.loginCheckJs?.let { checkJs ->
             if (checkJs.isNotBlank()) {
@@ -98,7 +110,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
             res.url,
             variableBook,
             false,
-            debugLog = if(debugLog) Debug else null
+            debugLog = debugger
         )
     }
 
@@ -139,7 +151,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
             ruleData = book,
             headerMapF = bookSource.getHeaderMap(true)
         )
-        var res = analyzeUrl.getStrResponseAwait()
+        var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
         //检测书源是否已登录
         bookSource.loginCheckJs?.let { checkJs ->
             if (checkJs.isNotBlank()) {
@@ -147,7 +159,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
             }
         }
 
-        BookInfo.analyzeBookInfo(book, res.body, bookSource, book.bookUrl, res.url, canReName, debugLog = if(debugLog) Debug else null)
+        BookInfo.analyzeBookInfo(book, res.body, bookSource, book.bookUrl, res.url, canReName, debugLog = debugger)
         book.tocHtml = null
         return book
     }
@@ -175,14 +187,14 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
                 ruleData = book,
                 headerMapF = bookSource.getHeaderMap(true)
             )
-            var res = analyzeUrl.getStrResponseAwait()
+            var res = analyzeUrl.getStrResponseAwait(debugLog = debugger)
             //检测书源是否已登录
             bookSource.loginCheckJs?.let { checkJs ->
                 if (checkJs.isNotBlank()) {
                     res = analyzeUrl.evalJS(checkJs, result = res) as StrResponse
                 }
             }
-            return BookChapterList.analyzeChapterList(book, res.body, bookSource, book.tocUrl, res.url, debugLog = if(debugLog) Debug else null)
+            return BookChapterList.analyzeChapterList(book, res.body, bookSource, book.tocUrl, res.url, debugLog = debugger)
         }
     }
 
@@ -196,9 +208,13 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
         nextChapterUrl: String? = null
     ): String {
        if (bookSource.getContentRule().content.isNullOrEmpty()) {
-            if(debugLog) Debug.log(bookSource.bookSourceUrl, "⇒正文规则为空,使用章节链接: ${bookChapter.url}")
+            debugger?.log(bookSource.bookSourceUrl, "⇒正文规则为空,使用章节链接: ${bookChapter.url}")
             return bookChapter.url
        }
+       if (bookChapter.isVolume && bookChapter.url.startsWith(bookChapter.title)) {
+            debugger?.log(bookSource.bookSourceUrl, "⇒一级目录正文不解析规则")
+            return bookChapter.tag ?: ""
+        }
 //        val body = if (book != null && bookChapter.url == book.bookUrl && !book.tocHtml.isNullOrEmpty()) {
 //            book.tocHtml
 //        } else {
@@ -213,7 +229,8 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
         )
         var res = analyzeUrl.getStrResponseAwait(
             jsStr = bookSource.getContentRule().webJs,
-            sourceRegex = bookSource.getContentRule().sourceRegex
+            sourceRegex = bookSource.getContentRule().sourceRegex,
+            debugLog = debugger
         )
         return BookContent.analyzeContent(
             res.body,
@@ -223,7 +240,7 @@ class WebBook(val bookSource: BookSource, val debugLog: Boolean = true) {
             bookChapter.url,
             res.url,
             nextChapterUrl,
-            debugLog = if(debugLog) Debug else null
+            debugLog = debugger
         )
     }
 }

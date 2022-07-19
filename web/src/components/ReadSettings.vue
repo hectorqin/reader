@@ -17,12 +17,12 @@
               class="span-item"
               v-for="(type, index) in pageTypes"
               :key="index"
-              :class="{ selected: pageType == type }"
+              :class="{ selected: config.pageType == type }"
               @click="setPageType(type)"
-              >{{ type }}</span
+              >{{ type === "Kindle" ? "简洁" : "正常" }}</span
             >
             <span class="small-tip"
-              >❗️开启 Kindle 模式会关闭动画以及首页的部分功能</span
+              >❗️开启简洁模式会关闭动画以及首页的部分功能</span
             >
           </div>
         </li>
@@ -91,8 +91,8 @@
               :key="index"
               :style="themeColor"
               ref="themes"
-              @click="setTheme(index)"
-              :class="{ selected: selectedTheme == index }"
+              @click="setConfig('theme', index)"
+              :class="{ selected: config.theme === index }"
               ><em v-if="index != 6" class="iconfont">&#58980;</em
               ><em v-else class="moon-icon">{{ moonIcon }}</em></span
             >
@@ -100,13 +100,13 @@
               class="span-item"
               :key="'custom'"
               ref="themes"
-              @click="setTheme('custom')"
-              :class="{ selected: selectedTheme == 'custom' }"
+              @click="setConfig('theme', 'custom')"
+              :class="{ selected: config.theme === 'custom' }"
               >自定义</span
             >
           </div>
         </li>
-        <li v-if="selectedTheme == 'custom'">
+        <li v-if="config.theme === 'custom'">
           <span class="setting-item-title">自定义</span>
           <div class="custom-theme">
             <div class="custom-theme-title">
@@ -116,21 +116,21 @@
                 v-for="(type, index) in themeTypes"
                 :key="index"
                 :class="{ selected: themeType == type }"
-                @click="setThemeType(type)"
+                @click="setConfig('themeType', type)"
                 >{{ type === "day" ? "白天" : "黑夜" }}</span
               >
             </div>
             <span class="custom-theme-title"
               >页面背景颜色
-              <el-color-picker v-model="bodyColor"></el-color-picker>
+              <el-color-picker v-model="config.bodyColor"></el-color-picker>
             </span>
             <span class="custom-theme-title"
               >浮窗背景颜色
-              <el-color-picker v-model="popupColor"></el-color-picker
+              <el-color-picker v-model="config.popupColor"></el-color-picker
             ></span>
             <span class="custom-theme-title"
               >阅读背景颜色
-              <el-color-picker v-model="contentColor"></el-color-picker
+              <el-color-picker v-model="config.contentColor"></el-color-picker
             ></span>
             <span class="custom-theme-title"
               >阅读背景图片
@@ -181,20 +181,55 @@
               class="span-item"
               v-for="(font, index) in fonts"
               :key="index"
-              :class="{ selected: selectedFont == index }"
-              @click="setFont(index)"
-              >{{ font }}</span
+              :class="{ selected: config.font == index }"
+              @click="setConfig('font', index)"
+              >{{ font }}
+              <i
+                :class="{
+                  'el-icon-upload': true,
+                  'upload-font-icon': true,
+                  active:
+                    config.customFontsMap &&
+                    config.customFontsMap[customFonts[index]]
+                }"
+                @click.stop="uploadFontFile(customFonts[index], font)"
+              ></i>
+            </span>
+            <input
+              ref="fontFileRef"
+              type="file"
+              @change="onFontFileChange"
+              style="display:none"
+            />
+          </div>
+        </li>
+        <li>
+          <span class="setting-item-title">简繁转换</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(chineseFont, index) in chineseFonts"
+              :key="index"
+              :class="{ selected: config.chineseFont == chineseFont }"
+              @click="setConfig('chineseFont', chineseFont)"
+              >{{ chineseFont }}</span
             >
           </div>
         </li>
         <li>
           <span class="setting-item-title">字体大小</span>
           <div class="resize">
-            <span class="less" @click="lessFontSize"
+            <span class="less" @click="decConfig('fontSize')"
               ><em class="iconfont">&#58966;</em></span
-            ><b></b> <span class="lang">{{ fontSize }}</span
             ><b></b>
-            <span class="more" @click="moreFontSize"
+            <span class="lang">
+              <el-input
+                class="setting-input"
+                v-model="config.fontSize"
+                size="mini"
+              ></el-input></span
+            ><b></b>
+            <span class="more" @click="incConfig('fontSize')"
               ><em class="iconfont">&#58976;</em></span
             >
           </div>
@@ -202,42 +237,60 @@
         <li>
           <span class="setting-item-title">字体粗细</span>
           <div class="resize">
-            <span class="less" @click="lessFontWeight"
-              ><em class="iconfont">&#58966;</em></span
-            ><b></b> <span class="lang">{{ fontWeight }}</span
+            <span class="less" @click="decConfig('fontWeight')"
+              ><i class="el-icon-minus"></i></span
             ><b></b>
-            <span class="more" @click="moreFontWeight"
-              ><em class="iconfont">&#58976;</em></span
-            >
+            <span class="lang">
+              <el-input
+                class="setting-input"
+                v-model="config.fontWeight"
+                size="mini"
+              ></el-input></span
+            ><b></b>
+            <span class="less" @click="incConfig('fontWeight')"
+              ><i class="el-icon-plus"></i
+            ></span>
           </div>
         </li>
         <li>
           <span class="setting-item-title">段落行高</span>
           <div class="resize">
-            <span class="less" @click="lessLineHeight"
-              ><em class="iconfont">&#58966;</em></span
-            ><b></b> <span class="lang">{{ lineHeight }}</span
+            <span class="less" @click="decConfig('lineHeight')"
+              ><i class="el-icon-minus"></i></span
             ><b></b>
-            <span class="more" @click="moreLineHeight"
-              ><em class="iconfont">&#58976;</em></span
-            >
+            <span class="lang">
+              <el-input
+                class="setting-input"
+                v-model="config.lineHeight"
+                size="mini"
+              ></el-input></span
+            ><b></b>
+            <span class="less" @click="incConfig('lineHeight')"
+              ><i class="el-icon-plus"></i
+            ></span>
           </div>
         </li>
         <li>
           <span class="setting-item-title">段落间距</span>
           <div class="resize">
-            <span class="less" @click="lessParagraphSpace"
-              ><em class="iconfont">&#58966;</em></span
-            ><b></b> <span class="lang">{{ paragraphSpace }}</span
+            <span class="less" @click="decConfig('paragraphSpace')"
+              ><i class="el-icon-minus"></i></span
             ><b></b>
-            <span class="more" @click="moreParagraphSpace"
-              ><em class="iconfont">&#58976;</em></span
-            >
+            <span class="lang">
+              <el-input
+                class="setting-input"
+                v-model="config.paragraphSpace"
+                size="mini"
+              ></el-input></span
+            ><b></b>
+            <span class="less" @click="incConfig('paragraphSpace')"
+              ><i class="el-icon-plus"></i
+            ></span>
           </div>
         </li>
         <li>
           <span class="setting-item-title font-color-title">字体颜色</span>
-          <el-color-picker v-model="fontColor"></el-color-picker>
+          <el-color-picker v-model="config.fontColor"></el-color-picker>
         </li>
         <li>
           <span class="setting-item-title">页面模式</span>
@@ -246,7 +299,7 @@
               class="span-item"
               v-for="(mode, index) in pageModes"
               :key="index"
-              :class="{ selected: pageMode == mode }"
+              :class="{ selected: config.pageMode == mode }"
               @click="setPageMode(mode)"
               >{{ mode }}</span
             >
@@ -255,11 +308,11 @@
         <li v-if="!$store.state.miniInterface">
           <span class="setting-item-title">页面宽度</span>
           <div class="resize">
-            <span class="less" @click="lessReadWidth"
+            <span class="less" @click="decConfig('readWidth')"
               ><em class="iconfont">&#58965;</em></span
-            ><b></b> <span class="lang">{{ readWidth }}</span
+            ><b></b> <span class="lang">{{ config.readWidth }}</span
             ><b></b>
-            <span class="more" @click="moreReadWidth"
+            <span class="more" @click="incConfig('readWidth')"
               ><em class="iconfont">&#58975;</em></span
             >
           </div>
@@ -271,7 +324,7 @@
               class="span-item"
               v-for="(method, index) in readMethods"
               :key="index"
-              :class="{ selected: readMethod == method }"
+              :class="{ selected: config.readMethod == method }"
               @click="setReadMethod(method)"
               v-show="
                 (!$store.state.miniInterface && method !== '左右滑动') ||
@@ -287,11 +340,48 @@
         <li>
           <span class="setting-item-title">动画时长</span>
           <div class="resize">
-            <span class="less" @click="lessAnimateMSTime"
+            <span class="less" @click="decConfig('animateMSTime')"
               ><i class="el-icon-minus"></i></span
-            ><b></b> <span class="lang">{{ animateMSTime }}</span
             ><b></b>
-            <span class="more" @click="moreAnimateMSTime"
+            <span class="lang">
+              <el-input
+                class="setting-input"
+                v-model="config.animateMSTime"
+                size="mini"
+              ></el-input></span
+            ><b></b>
+            <span class="less" @click="incConfig('animateMSTime')"
+              ><i class="el-icon-plus"></i
+            ></span>
+          </div>
+        </li>
+        <li>
+          <span class="setting-item-title">自动翻页</span>
+          <div class="selection-zone">
+            <span
+              class="span-item"
+              v-for="(method, index) in autoReadingMethods"
+              :key="index"
+              :class="{ selected: config.autoReadingMethod === method }"
+              @click="setConfig('autoReadingMethod', method)"
+              >{{ method }}</span
+            >
+          </div>
+        </li>
+        <li v-if="config.autoReadingMethod === '像素滚动'">
+          <span class="setting-item-title">滚动像素</span>
+          <div class="resize">
+            <span class="less" @click="decConfig('autoReadingPixel')"
+              ><i class="el-icon-minus"></i></span
+            ><b></b>
+            <span class="lang">
+              <el-input
+                class="setting-input"
+                v-model="config.autoReadingPixel"
+                size="mini"
+              ></el-input> </span
+            ><b></b>
+            <span class="less" @click="incConfig('autoReadingPixel')"
               ><i class="el-icon-plus"></i
             ></span>
           </div>
@@ -299,11 +389,17 @@
         <li>
           <span class="setting-item-title">翻页速度</span>
           <div class="resize">
-            <span class="less" @click="lessAutoReadingLineTime"
+            <span class="less" @click="decConfig('autoReadingLineTime')"
               ><i class="el-icon-minus"></i></span
-            ><b></b> <span class="lang">{{ config.autoReadingLineTime }}</span
             ><b></b>
-            <span class="more" @click="moreAutoReadingLineTime"
+            <span class="lang"
+              ><el-input
+                class="setting-input"
+                v-model="config.autoReadingLineTime"
+                size="mini"
+              ></el-input></span
+            ><b></b>
+            <span class="less" @click="incConfig('autoReadingLineTime')"
               ><i class="el-icon-plus"></i
             ></span>
           </div>
@@ -315,8 +411,8 @@
               class="span-item"
               v-for="(method, index) in clickMethods"
               :key="index"
-              :class="{ selected: clickMethod == method }"
-              @click="setClickMethod(method)"
+              :class="{ selected: config.clickMethod == method }"
+              @click="setConfig('clickMethod', method)"
               >{{ method }}</span
             >
           </div>
@@ -328,8 +424,8 @@
               class="span-item"
               v-for="(action, index) in selectionActions"
               :key="index"
-              :class="{ selected: selectionAction == action }"
-              @click="setSelectionAction(action)"
+              :class="{ selected: config.selectionAction == action }"
+              @click="setConfig('selectionAction', action)"
               >{{ action }}</span
             >
           </div>
@@ -345,12 +441,12 @@
 </template>
 
 <script>
-import "../assets/fonts/iconfont.css";
 import Axios from "../plugins/axios";
 import settings from "../plugins/config";
 import eventBus from "../plugins/eventBus";
-import { isMiniInterface } from "../plugins/helper";
+import { isMiniInterface, removeFont } from "../plugins/helper";
 import { setCache, getCache } from "../plugins/cache";
+import { customFonts } from "../plugins/config";
 
 export default {
   name: "ReadSettings",
@@ -382,12 +478,6 @@ export default {
           background: "rgba(255, 255, 255, 0.8)"
         }
       ],
-      fontColor:
-        this.$store.state.config.fontColor ||
-        (!this.$store.getters.isNight ? "#262626" : "#666666"),
-      bodyColor: this.$store.state.config.bodyColor || "#eadfca",
-      contentColor: this.$store.state.config.contentColor || "#ede7da",
-      popupColor: this.$store.state.config.popupColor || "#ede7da",
       builtinBG: [
         { src: "bg/山水画.jpg" },
         { src: "bg/山水墨影.jpg" },
@@ -407,83 +497,53 @@ export default {
       fonts: ["系统", "黑体", "楷体", "宋体", "仿宋"],
       readMethods: ["上下滑动", "左右滑动", "上下滚动", "上下滚动2"],
       clickMethods: ["下一页", "自动", "不翻页"],
-      selectionActions: ["过滤弹窗", "忽略"],
+      selectionActions: ["操作弹窗", "忽略"],
       pageModes: ["自适应", "手机模式"],
       pageTypes: ["正常", "Kindle"],
       themeTypes: ["day", "night"],
-      configDefaultTypeList: ["白天默认", "黑夜默认"]
+      configDefaultTypeList: ["白天默认", "黑夜默认"],
+      autoReadingMethods: ["像素滚动", "段落滚动"],
+      chineseFonts: ["简体", "繁体"],
+
+      customFontName: "",
+      customFonts: customFonts,
+
+      config: this.$store.state.config,
+
+      configRules: {
+        fontSize: { min: 8, delta: 1 },
+        fontWeight: { min: 100, max: 900, delta: 100 },
+        animateMSTime: { min: 0, max: 500, delta: 50 },
+        autoReadingPixel: { min: 1, delta: 5 },
+        autoReadingLineTime: { min: 10, delta: 50 },
+        lineHeight: { min: 1, max: 5, delta: 0.2 },
+        paragraphSpace: { min: 0, max: 5, delta: 0.2 },
+        readWidth: {
+          min: Math.min(Math.floor(window.innerWidth / 160), 4) * 160,
+          max: Math.floor(window.innerWidth / 160) * 160,
+          delta: 160
+        }
+      }
     };
   },
-  mounted() {},
+  mounted() {
+    this.config = {
+      ...settings.config,
+      ...this.config,
+      selectionAction:
+        this.$store.state.config.selectionAction === "过滤弹窗"
+          ? "操作弹窗"
+          : "忽略"
+    };
+  },
   computed: {
-    config() {
-      return this.$store.state.config;
-    },
     moonIcon() {
       return this.$store.getters.isSystemNight ? "" : "";
-    },
-    moonIconStyle() {
-      return {
-        display: "inline",
-        color: this.$store.getters.isSystemNight
-          ? "#ed4259"
-          : "rgba(255,255,255,0.2)"
-      };
     },
     popupTheme() {
       return {
         background: this.$store.getters.currentThemeConfig.popup
       };
-    },
-    selectedTheme() {
-      return this.$store.state.config.theme;
-    },
-    selectedFont() {
-      return this.$store.state.config.font;
-    },
-    pageMode() {
-      return this.$store.state.config.pageMode ?? settings.config.pageMode;
-    },
-    pageType() {
-      return this.$store.state.config.pageType ?? settings.config.pageType;
-    },
-    themeType() {
-      return this.$store.state.config.themeType ?? settings.config.themeType;
-    },
-    readMethod() {
-      return this.$store.state.config.readMethod ?? settings.config.readMethod;
-    },
-    clickMethod() {
-      return (
-        this.$store.state.config.clickMethod ?? settings.config.clickMethod
-      );
-    },
-    selectionAction() {
-      return (
-        this.$store.state.config.selectionAction ??
-        settings.config.selectionAction
-      );
-    },
-    fontSize() {
-      return this.$store.state.config.fontSize;
-    },
-    fontWeight() {
-      return this.$store.state.config.fontWeight ?? settings.config.fontWeight;
-    },
-    lineHeight() {
-      return this.$store.state.config.lineHeight ?? settings.config.lineHeight;
-    },
-    paragraphSpace() {
-      return (
-        this.$store.state.config.paragraphSpace ??
-        settings.config.paragraphSpace
-      );
-    },
-    readWidth() {
-      return this.$store.state.config.readWidth;
-    },
-    animateMSTime() {
-      return this.$store.state.config.animateMSTime;
     },
     currentCustomConfig() {
       return this.$store.state.customConfigList.find(
@@ -492,60 +552,14 @@ export default {
     }
   },
   watch: {
-    fontColor(color) {
-      let config = this.config;
-      config.fontColor = color;
-      this.$store.commit("setConfig", { ...config });
-    },
-    bodyColor(color) {
-      let config = this.config;
-      config.bodyColor = color;
-      this.$store.commit("setConfig", { ...config });
-    },
-    popupColor(color) {
-      let config = this.config;
-      config.popupColor = color;
-      this.$store.commit("setConfig", { ...config });
-    },
-    contentColor(color) {
-      let config = this.config;
-      config.contentColor = color;
-      this.$store.commit("setConfig", { ...config });
+    config: {
+      deep: true,
+      handler(val) {
+        this.$store.commit("setConfig", { ...val });
+      }
     }
   },
   methods: {
-    setTheme(theme) {
-      let config = this.config;
-      config.theme = theme;
-      this.$store.commit("setConfig", config);
-    },
-    setAutoTheme() {
-      let config = this.config;
-      config.autoTheme = !config.autoTheme;
-      this.$store.commit("setConfig", config);
-    },
-    setFont(font) {
-      let config = this.config;
-      config.font = font;
-      this.$store.commit("setConfig", config);
-    },
-    setReadMethod(method) {
-      this.$emit("readMethodChange");
-      let config = this.config;
-      config.readMethod = method;
-      this.$store.commit("setConfig", config);
-    },
-    setPageMode(mode) {
-      this.$emit("pageModeChange");
-      let config = this.config;
-      config.pageMode = mode;
-      this.$store.commit("setConfig", config);
-      if (mode === "手机模式") {
-        this.$store.commit("setMiniInterface", true);
-      } else {
-        this.$store.commit("setMiniInterface", isMiniInterface());
-      }
-    },
     setPageType(type) {
       if (type === this.config.pageType) {
         return;
@@ -568,142 +582,70 @@ export default {
         lastConfig = getCache("lastNormalConfig") || {};
       }
 
-      const config = { ...this.config, ...(lastConfig || {}) };
-      config.pageType = type;
-      this.$store.commit("setConfig", config);
+      this.config = { ...this.config, ...(lastConfig || {}), pageType: type };
 
       this.$emit("readMethodChange");
       this.$emit("pageModeChange");
-      if (config.pageMode === "手机模式") {
+      if (this.config.pageMode === "手机模式") {
         this.$store.commit("setMiniInterface", true);
       } else {
         this.$store.commit("setMiniInterface", isMiniInterface());
       }
     },
-    setThemeType(type) {
-      let config = this.config;
-      config.themeType = type;
-      this.$store.commit("setConfig", config);
+    setPageMode(pageMode) {
+      this.$emit("pageModeChange");
+      this.config = { ...this.config, pageMode };
+      if (this.config.pageMode === "手机模式") {
+        this.$store.commit("setMiniInterface", true);
+      } else {
+        this.$store.commit("setMiniInterface", isMiniInterface());
+      }
     },
-    setClickMethod(method) {
-      let config = this.config;
-      config.clickMethod = method;
-      this.$store.commit("setConfig", config);
+    setReadMethod(readMethod) {
+      this.$emit("readMethodChange");
+      this.config = { ...this.config, readMethod };
     },
-    setSelectionAction(action) {
-      let config = this.config;
-      config.selectionAction = action;
-      this.$store.commit("setConfig", config);
+    setConfig(name, value) {
+      const data = {};
+      data[name] = value;
+      this.config = { ...this.config, ...data };
     },
-    moreFontSize() {
-      let config = this.config;
-      if (config.fontSize < 60) config.fontSize += 1;
-      this.$store.commit("setConfig", config);
+    setAutoTheme() {
+      this.config = { ...this.config, autoTheme: !this.config.autoTheme };
     },
-    lessFontSize() {
-      let config = this.config;
-      if (config.fontSize > 10) config.fontSize -= 1;
-      this.$store.commit("setConfig", config);
+    incConfig(name) {
+      const data = {};
+      const rule = this.configRules[name];
+      const val = +this.config[name];
+      data[name] =
+        "max" in rule ? Math.min(rule.max, val + rule.delta) : val + rule.delta;
+      this.config = {
+        ...this.config,
+        ...data
+      };
     },
-    moreFontWeight() {
-      let config = this.config;
-      config.fontWeight = config.fontWeight || settings.config.fontWeight;
-      if (config.fontWeight < 900) config.fontWeight += 100;
-      this.$store.commit("setConfig", config);
-    },
-    lessFontWeight() {
-      let config = this.config;
-      config.fontWeight = config.fontWeight || settings.config.fontWeight;
-      if (config.fontWeight > 100) config.fontWeight -= 100;
-      this.$store.commit("setConfig", config);
-    },
-    moreAnimateMSTime() {
-      let config = this.config;
-      config.animateMSTime =
-        typeof config.animateMSTime !== "undefined"
-          ? config.animateMSTime
-          : settings.config.animateMSTime;
-      if (config.animateMSTime < 500) config.animateMSTime += 50;
-      this.$store.commit("setConfig", config);
-    },
-    lessAnimateMSTime() {
-      let config = this.config;
-      config.animateMSTime =
-        typeof config.animateMSTime !== "undefined"
-          ? config.animateMSTime
-          : settings.config.animateMSTime;
-      if (config.animateMSTime >= 50) config.animateMSTime -= 50;
-      this.$store.commit("setConfig", config);
-    },
-    moreAutoReadingLineTime() {
-      let config = this.config;
-      config.autoReadingLineTime =
-        typeof config.autoReadingLineTime !== "undefined"
-          ? config.autoReadingLineTime
-          : settings.config.autoReadingLineTime;
-      if (config.autoReadingLineTime < 10000) config.autoReadingLineTime += 50;
-      this.$store.commit("setConfig", config);
-    },
-    lessAutoReadingLineTime() {
-      let config = this.config;
-      config.autoReadingLineTime =
-        typeof config.autoReadingLineTime !== "undefined"
-          ? config.autoReadingLineTime
-          : settings.config.autoReadingLineTime;
-      if (config.autoReadingLineTime >= 200) config.autoReadingLineTime -= 50;
-      this.$store.commit("setConfig", config);
-    },
-    moreLineHeight() {
-      let config = this.config;
-      config.lineHeight = config.lineHeight || settings.config.lineHeight;
-      if (config.lineHeight < 3) config.lineHeight += 0.2;
-      config.lineHeight = +config.lineHeight.toFixed(1);
-      this.$store.commit("setConfig", config);
-    },
-    lessLineHeight() {
-      let config = this.config;
-      config.lineHeight = config.lineHeight || settings.config.lineHeight;
-      if (config.lineHeight > 1) config.lineHeight -= 0.2;
-      config.lineHeight = +config.lineHeight.toFixed(1);
-      this.$store.commit("setConfig", config);
-    },
-    moreParagraphSpace() {
-      let config = this.config;
-      config.paragraphSpace =
-        config.paragraphSpace ?? settings.config.paragraphSpace;
-      if (config.paragraphSpace < 3) config.paragraphSpace += 0.2;
-      config.paragraphSpace = +config.paragraphSpace.toFixed(1);
-      this.$store.commit("setConfig", config);
-    },
-    lessParagraphSpace() {
-      let config = this.config;
-      config.paragraphSpace =
-        config.paragraphSpace ?? settings.config.paragraphSpace;
-      if (config.paragraphSpace > 0) config.paragraphSpace -= 0.2;
-      config.paragraphSpace = +config.paragraphSpace.toFixed(1);
-      this.$store.commit("setConfig", config);
-    },
-    moreReadWidth() {
-      let config = this.config;
-      if (config.readWidth < settings.maxReadWidth) config.readWidth += 160;
-      this.$store.commit("setConfig", config);
-    },
-    lessReadWidth() {
-      let config = this.config;
-      if (config.readWidth > settings.minReadWidth) config.readWidth -= 160;
-      this.$store.commit("setConfig", config);
+    decConfig(name) {
+      const data = {};
+      const rule = this.configRules[name];
+      const val = +this.config[name];
+      data[name] =
+        "min" in rule ? Math.max(rule.min, val - rule.delta) : val - rule.delta;
+      this.config = {
+        ...this.config,
+        ...data
+      };
     },
     getCustomBGImgURL(src) {
       return this.api.replace(/\/reader3\/?/, "") + src;
     },
     setBGImg(src) {
-      let config = this.config;
+      let config = { ...this.config };
       if (config.contentBGImg === src) {
         delete config.contentBGImg;
       } else {
         config.contentBGImg = src;
       }
-      this.$store.commit("setConfig", { ...config });
+      this.config = config;
     },
     uploadBGFile() {
       this.$refs.bgFileRef.dispatchEvent(new MouseEvent("click"));
@@ -723,19 +665,97 @@ export default {
               this.$message.error("上传文件失败");
               return;
             }
-            let config = this.config;
+            let config = { ...this.config };
             config.customBGImgList = config.customBGImgList || [];
             if (!config.customBGImgList.includes(res.data.data[0])) {
               config.customBGImgList.push(res.data.data[0]);
             }
             config.contentBGImg = res.data.data[0];
-            this.$store.commit("setConfig", { ...config });
+            this.config = config;
           }
         },
         error => {
           this.$message.error("上传文件失败 " + (error && error.toString()));
         }
       );
+      this.$refs.bgFileRef.value = null;
+    },
+    async uploadFontFile(customFontName, fontName) {
+      if (
+        this.config.customFontsMap &&
+        this.config.customFontsMap[customFontName]
+      ) {
+        const res = await this.$confirm(
+          `已上传自定义的${fontName}字体?`,
+          "提示",
+          {
+            confirmButtonText: "继续上传",
+            cancelButtonText: "恢复默认",
+            type: "warning",
+            closeOnClickModal: false,
+            closeOnPressEscape: false,
+            distinguishCancelAndClose: true
+          }
+        ).catch(action => {
+          return action === "close" ? "close" : false;
+        });
+        if (res === "close") {
+          return;
+        }
+        if (!res) {
+          Axios.post(this.api + "/deleteFile", {
+            url: this.config.customFontsMap[customFontName]
+          }).then(
+            res => {
+              if (res.data.isSuccess) {
+                let config = { ...this.config };
+                delete config.customFontsMap[customFontName];
+                this.config = config;
+                removeFont(customFontName);
+              }
+            },
+            error => {
+              this.$message.error(
+                "删除自定义字体文件失败 " + (error && error.toString())
+              );
+            }
+          );
+          return;
+        }
+      }
+      this.customFontName = customFontName;
+      this.$refs.fontFileRef.dispatchEvent(new MouseEvent("click"));
+    },
+    onFontFileChange(event) {
+      const rawFile = event.target.files && event.target.files[0];
+      // console.log("rawFile", rawFile);
+      if (!rawFile.name.toLowerCase().endsWith(".ttf")) {
+        this.$message.error("只支持 TTF 字体文件");
+        return;
+      }
+      let param = new FormData();
+      param.append("file", rawFile);
+      param.append("type", "fonts");
+      Axios.post(this.api + "/uploadFile", param, {
+        headers: { "Content-Type": "multipart/form-data" }
+      }).then(
+        res => {
+          if (res.data.isSuccess) {
+            if (!res.data.data.length) {
+              this.$message.error("上传文件失败");
+              return;
+            }
+            let config = { ...this.config };
+            config.customFontsMap = config.customFontsMap || {};
+            config.customFontsMap[this.customFontName] = res.data.data[0];
+            this.config = config;
+          }
+        },
+        error => {
+          this.$message.error("上传文件失败 " + (error && error.toString()));
+        }
+      );
+      this.$refs.fontFileRef.value = null;
     },
     deleteCustomBGImg(src) {
       Axios.post(this.api + "/deleteFile", {
@@ -743,7 +763,7 @@ export default {
       }).then(
         res => {
           if (res.data.isSuccess) {
-            let config = this.config;
+            let config = { ...this.config };
             config.customBGImgList = config.customBGImgList || [];
             var index = config.customBGImgList.indexOf(src);
             if (index != -1) {
@@ -752,7 +772,7 @@ export default {
             if (config.contentBGImg === src) {
               config.contentBGImg = this.builtinBG[0].src;
             }
-            this.$store.commit("setConfig", { ...config });
+            this.config = config;
           }
         },
         error => {
@@ -761,7 +781,7 @@ export default {
       );
     },
     resetConfig() {
-      this.$store.commit("setConfig", { ...settings.config });
+      this.config = { ...settings.config };
     },
     showClickZone() {
       this.$emit("close");
@@ -770,24 +790,6 @@ export default {
     showRuleEditor() {
       this.$emit("close");
       eventBus.$emit("showReplaceRuleDialog");
-      // eventBus.$emit(
-      //   "showEditor",
-      //   "修改过滤规则",
-      //   JSON.stringify(this.$store.state.filterRules, null, 4),
-      //   async (content, close) => {
-      //     try {
-      //       const filterRules = JSON.parse(content);
-      //       if (!Array.isArray(filterRules)) {
-      //         this.$message.error("过滤规则必须是JSON数组格式");
-      //         return;
-      //       }
-      //       this.$store.commit("setFilterRules", filterRules);
-      //       close();
-      //     } catch (e) {
-      //       this.$message.error("过滤规则必须是JSON数组格式");
-      //     }
-      //   }
-      // );
     },
     async addNewCustomConfig() {
       const res = await this.$prompt("请输入方案名称", `添加配置方案`, {
@@ -824,10 +826,11 @@ export default {
       );
     },
     setCustomConfig(customConfig) {
-      let config = this.config;
-      config.customConfig = customConfig.name;
-      config = { ...config, ...customConfig };
-      this.$store.commit("setConfig", { ...config });
+      this.config = {
+        ...this.config,
+        customConfig: customConfig.name,
+        ...customConfig
+      };
     },
     async deleteCustomConfig(index, name) {
       const customConfigList = [].concat(this.$store.state.customConfigList);
@@ -978,6 +981,21 @@ export default {
             font-size: 20px;
             color: #ed4259;
             z-index: 10;
+          }
+
+          .upload-font-icon {
+            display: inline-block;
+            cursor: pointer;
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            font-size: 20px;
+            z-index: 10;
+            color: #606266;
+
+            &.active {
+              color: #ed4259;
+            }
           }
         }
 
@@ -1180,6 +1198,18 @@ export default {
     .less:hover, .more:hover {
       color: #ed4259;
     }
+  }
+}
+</style>
+<style lang="stylus">
+.setting-input {
+  .el-input__inner {
+    background: transparent;
+    border: none !important;
+    text-align: center;
+    width: 72px;
+    font-size: 14px;
+    color: #a6a6a6;
   }
 }
 </style>

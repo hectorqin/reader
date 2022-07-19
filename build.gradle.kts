@@ -56,7 +56,7 @@ apply(plugin = "kotlin")
 apply(plugin = "io.github.fvarrui.javapackager.plugin")
 
 group = "com.htmake"
-version = "2.2.2"
+version = "2.5.7"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
@@ -90,7 +90,7 @@ dependencies {
 
     // json
     implementation("com.google.code.gson:gson:2.8.5")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.9.+")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.+")
 
     // log
     implementation("io.github.microutils:kotlin-logging:1.6.24")
@@ -115,14 +115,19 @@ dependencies {
     implementation("com.jayway.jsonpath:json-path:2.6.0")
 
     // xml
-    implementation("org.xmlpull:xmlpull:1.1.4.0")
-    implementation("com.github.stefanhaustein:kxml2:2.5.0")
+    // 弃用 xmlpull-1.1.4.0，因为它需要 Java9
+    // implementation("org.xmlpull:xmlpull:1.1.4.0")
+    implementation(fileTree("src/lib").include("xmlpull-*.jar"))
+    // implementation("com.github.stefanhaustein:kxml2:2.5.0")
 
     //加解密类库
     implementation("cn.hutool:hutool-crypto:5.8.0.M1")
 
     // 转换繁体
     // implementation("com.github.liuyueyi.quick-chinese-transfer:quick-transfer-core:0.2.1")
+
+    // database
+    implementation("org.mongodb:mongodb-driver-sync:3.8.2")
 }
 
 // val compileKotlin: KotlinCompile by tasks
@@ -161,6 +166,7 @@ tasks.create<io.github.fvarrui.javapackager.gradle.PackageTask>("packageReaderMa
     setBundleJre(false)
 	// bundleJre = false
     // setCreateZipball(true)
+    platform = Platform.mac
     vmArgs = arrayListOf<String>("-Dreader.app.showUI=true", "-Dspring.profiles.active=prod", "-Dreader.app.packaged=true", "-Dreader.app.debug=false", "-Dlogging.path=\$HOME/.reader/logs")
 }
 

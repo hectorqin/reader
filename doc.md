@@ -45,13 +45,11 @@
 
 数据存储目录结构如下：
 
-> 书籍缓存目录由 `书名` 变为 `书名_作者名`，这个变动需要手动编辑，否则书籍书源列表缓存信息无法使用
-
 ```bash
 storage
 ├── assets                                        # 静态资源
-│   |── covers                                    # 本地 epub 书籍的封面图片目录
 │   ├── hector                                    # 用户 hector 的资源目录
+│   |   |── covers                                # 本地 epub 书籍的封面图片目录
 │   │   ├── background                            # 自定义阅读背景图片保存目录
 │   │   │   └── 6.jpg
 │   └── reader.css                                # 自定义CSS样式文件
@@ -128,6 +126,10 @@ reader:
     cacheChapterContent: false # 是否缓存章节内容
     userLimit: 50          # 用户上限，最大 50
     userBookLimit: 200     # 用户书籍上限，默认最大 200
+    debugLog: false        # 是否打开调试日志
+    autoClearInactiveUser: 0 # 是否自动清理不活跃用户，为0不清理，大于0为清理超过 autoClearInactiveUser 天未登录的用户
+    mongoUri: ""           # mongodb uri 用于备份数据
+    mongoDbName: "reader"  # mongodb 数据库名称
 
   server:
     port: 8080             # 监听端口
@@ -265,6 +267,9 @@ docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -e
 #:后面的端口修改为映射端口
 # web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/
+
+# 通过watchtower手动更新
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --cleanup --run-once reader
 ```
 
 ### Docker-Compose版(推荐)
@@ -280,17 +285,24 @@ docker-compose --version
 
 # 下载项目里的 docker-compose.yaml
 wget https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
-# 更具 docker-compose.yaml 里面的注释编辑所需配置
+# 根据 docker-compose.yaml 里面的注释编辑所需配置
 # 启动 docker-compose
 docker-compose up -d
 
 # 停止 docker-compose
 docker-compose stop
+
+# 查看实时日志
+docker logs -f reader
+
+# 手动更新
+docker-compose pull && docker-compose up -d
 ```
 
 ## Nginx反向代理
 
 ```nginx
+# 此文件放入 conf.d目录下,一般可用 touch /etc/nginx/conf.d/reader.conf 创建
 server {
     listen 80;
     server_name 域名;
@@ -317,10 +329,12 @@ server {
     gzip_types text/plain text/css text/javascript application/json application/javascript application/x-javascript application/xml; #设置需要压缩的数据格式
     gzip_vary on;
 
+    client_max_body_size   50m; #允许上传50MB文件,上传本地书籍需要修改此项大小.如nginx主配置文件已添加,删除此行并修改主配置即可
+
     location / {
         proxy_pass  http://127.0.0.1:4396; #端口自行修改为映射端口
-        proxy_http_version	1.1;
-        proxy_cache_bypass	$http_upgrade;
+        proxy_http_version 1.1;
+        proxy_cache_bypass $http_upgrade;
         proxy_set_header Upgrade           $http_upgrade;
         proxy_set_header Connection        "upgrade";
         proxy_set_header Host              $host;
@@ -465,7 +479,7 @@ lastIndex 是上次搜索结果中返回的字段，默认为 0，可以传入 `
 
 #### 书籍换源
 
-- URL `http://localhost:8080/reader3/saveBookSource`
+- URL `http://localhost:8080/reader3/setBookSource`
 - Method `POST`
 - Body `json 格式`
 

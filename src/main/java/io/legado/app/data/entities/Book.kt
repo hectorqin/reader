@@ -10,6 +10,7 @@ import io.legado.app.utils.FileUtils
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.localBook.EpubFile
 import io.legado.app.model.localBook.UmdFile
+import io.legado.app.model.localBook.CbzFile
 import java.nio.charset.Charset
 import java.io.File
 import kotlin.math.max
@@ -17,7 +18,7 @@ import kotlin.math.min
 import org.jsoup.Jsoup
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
-@JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "config", "rootDir", "readConfig", "localBook", "epub", "epubRootDir", "onLineTxt", "localTxt", "umd", "realAuthor", "unreadChapterNum", "folderName", "localFile", "kindList")
+@JsonIgnoreProperties("variableMap", "infoHtml", "tocHtml", "config", "rootDir", "readConfig", "localBook", "epub", "epubRootDir", "onLineTxt", "localTxt", "umd", "realAuthor", "unreadChapterNum", "folderName", "localFile", "kindList", "_userNameSpace", "bookDir", "userNameSpace")
 data class Book(
         override var bookUrl: String = "",                   // 详情页Url(本地书源存储完整文件路径)
         var tocUrl: String = "",                    // 目录页Url (toc=table of Contents)
@@ -49,7 +50,8 @@ data class Book(
        var originOrder: Int = 0,                   //书源排序
         var useReplaceRule: Boolean = true,         // 正文使用净化替换规则
         var variable: String? = null,                // 自定义书籍变量信息(用于书源规则检索书籍信息)
-        var readConfig: ReadConfig? = null
+        var readConfig: ReadConfig? = null,
+        var isInShelf: Boolean = false               // 是否加入到书架
     ) : BaseBook {
 
     fun isLocalBook(): Boolean {
@@ -113,6 +115,10 @@ data class Book(
 
     fun getUnreadChapterNum() = max(totalChapterNum - durChapterIndex - 1, 0)
 
+    fun getDisplayCover() = if (customCoverUrl.isNullOrEmpty()) coverUrl else customCoverUrl
+
+    fun getDisplayIntro() = if (customIntro.isNullOrEmpty()) intro else customIntro
+
     fun fileCharset(): Charset {
         return charset(charset ?: "UTF-8")
     }
@@ -152,11 +158,33 @@ data class Book(
     }
 
     fun getLocalFile(): File {
-        if (isEpub() && originName.indexOf("localStore") < 0) {
-            // 非本地书仓的 epub文件
+        if (originName.startsWith(rootDir)) {
+            originName = originName.replace(Regex("^${rootDir}"), "")
+        }
+        if (isEpub() && originName.indexOf("localStore") < 0 && originName.indexOf("webdav") < 0) {
+            // 非本地/webdav书仓的 epub文件
             return FileUtils.getFile(File(rootDir + originName), "index.epub")
         }
+        if (isCbz() && originName.indexOf("localStore") < 0 && originName.indexOf("webdav") < 0) {
+            // 非本地/webdav书仓的 cbz文件
+            return FileUtils.getFile(File(rootDir + originName), "index.cbz")
+        }
         return File(rootDir + originName)
+    }
+
+    @Transient
+    private var _userNameSpace: String = ""
+
+    fun setUserNameSpace(nameSpace: String) {
+        _userNameSpace = nameSpace
+    }
+
+    fun getUserNameSpace(): String {
+        return _userNameSpace
+    }
+
+    fun getBookDir(): String {
+        return FileUtils.getPath(File(rootDir), "storage", "data", _userNameSpace, name + "_" + author)
     }
 
     fun getSplitLongChapter(): Boolean {
@@ -222,6 +250,8 @@ data class Book(
                 EpubFile.upBookInfo(this, onlyCover)
             } else if (isUmd()) {
                 UmdFile.upBookInfo(this, onlyCover)
+            } else if (isCbz()) {
+                CbzFile.upBookInfo(this, onlyCover)
             }
         } catch(e: Exception) {
             e.printStackTrace()
@@ -246,6 +276,13 @@ data class Book(
             val book = Book(bookUrl, "", BookType.local, localPath, nameAuthor.first, nameAuthor.second).also {
                 it.canUpdate = false
             }
+            // 保存为相对路径
+            var rootPath = rootDir
+            if (!rootPath.endsWith(File.separator)) {
+                rootPath = rootPath + File.separator
+            }
+            book.bookUrl = book.bookUrl.replace(Regex("^${rootPath}"), "")
+            book.originName = book.originName.replace(Regex("^${rootPath}"), "")
             book.setRootDir(rootDir)
             book.updateFromLocal()
             return book

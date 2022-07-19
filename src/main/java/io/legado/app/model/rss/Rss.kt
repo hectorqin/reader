@@ -12,43 +12,47 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.CoroutineContext
 
-@Suppress("MemberVisibilityCanBePrivate")
 object Rss {
-
     suspend fun getArticles(
+        sortName: String,
+        sortUrl: String,
         rssSource: RssSource,
         page: Int,
-        debugLog: DebugLog? = null
-    ): MutableList<RssArticle> {
+        debugLog: DebugLog?
+    ): Pair<MutableList<RssArticle>, String?> {
         val ruleData = RuleData()
         val analyzeUrl = AnalyzeUrl(
-            rssSource.sourceUrl,
-            source = rssSource,
+            sortUrl,
             page = page,
+            source = rssSource,
             ruleData = ruleData,
-            // headerMapF = rssSource.getHeaderMap()
+            headerMapF = rssSource.getHeaderMap()
         )
-        val body = analyzeUrl.getStrResponse(rssSource.sourceUrl).body
-        return RssParserByRule.parseXML(body, rssSource, ruleData, debugLog)
+        val body = analyzeUrl.getStrResponseAwait(debugLog = debugLog).body
+        // debugLog?.log(rssSource.sourceUrl, "┌获取链接内容:${sortUrl}")
+        // debugLog?.log(rssSource.sourceUrl, "└\n${body}")
+        return RssParserByRule.parseXML(sortName, sortUrl, body, rssSource, ruleData, debugLog)
     }
 
     suspend fun getContent(
         rssArticle: RssArticle,
+        ruleContent: String,
         rssSource: RssSource,
-        debugLog: DebugLog? = null
+        debugLog: DebugLog?
     ): String {
         val analyzeUrl = AnalyzeUrl(
             rssArticle.link,
-            source = rssSource,
             baseUrl = rssArticle.origin,
+            source = rssSource,
             ruleData = rssArticle,
-            // headerMapF = rssSource.getHeaderMap()
+            headerMapF = rssSource.getHeaderMap()
         )
-        val body = analyzeUrl.getStrResponse(rssSource.sourceUrl).body
-        debugLog?.log(rssSource.sourceUrl, "≡获取成功:${rssSource.sourceUrl}")
-        debugLog?.log(rssSource.sourceUrl, body)
-        val analyzeRule = AnalyzeRule(rssArticle)
-        analyzeRule.setContent(body, NetworkUtils.getAbsoluteURL(rssArticle.origin, rssArticle.link))
-        return analyzeRule.getString(rssSource.ruleContent)
+        val body = analyzeUrl.getStrResponseAwait(debugLog = debugLog).body
+        // debugLog?.log(rssSource.sourceUrl, "┌获取链接内容:${rssArticle.link}")
+        // debugLog?.log(rssSource.sourceUrl, "└\n${body}")
+        val analyzeRule = AnalyzeRule(rssArticle, rssSource)
+        analyzeRule.setContent(body)
+            .setBaseUrl(NetworkUtils.getAbsoluteURL(rssArticle.origin, rssArticle.link))
+        return analyzeRule.getString(ruleContent)
     }
 }

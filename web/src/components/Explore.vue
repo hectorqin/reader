@@ -155,24 +155,61 @@ export default {
       }
       const result = [];
       let zone = [];
-      bookSource.exploreUrl
-        .replace(/\r\n/g, "\n")
-        .split("\n")
-        .forEach(v => {
-          if (!v) {
-            if (zone.length) {
-              // 出现空行，分割为一块
-              result.push(zone);
-              zone = [];
-            }
-          } else {
-            v = v.split("::");
-            zone.push({
-              name: v[0],
-              url: v[1]
-            });
+      let exploreUrlList = [];
+      try {
+        // 由于是在客户端解析，所以不支持解析 <js> 和 @js: 开头的 exploreUrl
+        // [{\"title\":\"玄幻奇幻\",\"url\":\"\/xuanhuan\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"武侠仙侠\",\"url\":\"\/wuxia\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"都市生活\",\"url\":\"\/dushi\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"历史军事\",\"url\":\"\/lishi\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"游戏竞技\",\"url\":\"\/youxi\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"科幻未来\",\"url\":\"\/kehuan\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"幻想奇缘\",\"url\":\"\/huanxiang\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"古代言情\",\"url\":\"\/gudai\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"二次い元\",\"url\":\"\/erciyuan\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"现代言情\",\"url\":\"\/xiandai\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"浪漫青春\",\"url\":\"\/qingchun\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}},{\"title\":\"其他类型\",\"url\":\"\/qita\/{{page}}.html\",\"style\":{\"layout_flexGrow\":0.25}}]
+        // 尝试解析为 JSON
+        exploreUrlList = JSON.parse(bookSource.exploreUrl);
+      } catch (error) {
+        // 有些源的 key 是单引号的，尝试用 JS 解析
+        try {
+          exploreUrlList = new Function("return " + bookSource.exploreUrl)();
+        } catch (error) {
+          //
+          // console.log(error);
+        }
+      }
+      if (Array.isArray(exploreUrlList) && exploreUrlList.length) {
+        let percent = 0;
+        exploreUrlList.forEach(v => {
+          // 只考虑 layout_flexBasisPercent 样式
+          const basisPercent =
+            (v.style && v.style.layout_flexBasisPercent) || 0.25;
+          zone.push({
+            name: v.title,
+            url: v.url
+          });
+          percent += basisPercent;
+          if (percent >= 1) {
+            // percent 超过1, 分割为一块
+            result.push(zone);
+            zone = [];
+            percent = 0;
           }
         });
+      } else {
+        // 解析为 字符串
+        bookSource.exploreUrl
+          .replace(/\r\n/g, "\n")
+          .split("\n")
+          .forEach(v => {
+            if (!v) {
+              if (zone.length) {
+                // 出现空行，分割为一块
+                result.push(zone);
+                zone = [];
+              }
+            } else {
+              v = v.split("::");
+              zone.push({
+                name: v[0],
+                url: v[1]
+              });
+            }
+          });
+      }
+
       if (zone.length) {
         result.push(zone);
       }
@@ -183,12 +220,10 @@ export default {
       this.page = page || 1;
       this.ruleFindUrl = url;
       this.bookSourceUrl = sourceUrl;
-      Axios.get(this.api + `/exploreBook`, {
-        params: {
-          ruleFindUrl: url,
-          bookSourceUrl: sourceUrl,
-          page
-        }
+      Axios.post(this.api + `/exploreBook`, {
+        ruleFindUrl: url,
+        bookSourceUrl: sourceUrl,
+        page
       }).then(
         res => {
           if (res.data.isSuccess) {

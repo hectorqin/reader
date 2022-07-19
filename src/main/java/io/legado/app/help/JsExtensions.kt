@@ -790,7 +790,50 @@ interface JsExtensions {
             Base64.decode(iv, Base64.NO_WRAP)
         ).encryptBase64(data)
     }
+    /////DES
+    fun desDecodeToString(
+        data: String, key: String, transformation: String, iv: String
+    ): String? {
+        return EncoderUtils.decryptDES(
+            data.encodeToByteArray(),
+            key.encodeToByteArray(),
+            transformation,
+            iv.encodeToByteArray()
+        )?.let { String(it) }
+    }
 
+    fun desBase64DecodeToString(
+       data: String, key: String, transformation: String, iv: String
+    ): String? {
+        return EncoderUtils.decryptBase64DES(
+            data.encodeToByteArray(),
+            key.encodeToByteArray(),
+            transformation,
+            iv.encodeToByteArray()
+        )?.let { String(it) }
+    }
+
+    fun desEncodeToString(
+        data: String, key: String, transformation: String, iv: String
+    ): String? {
+        return EncoderUtils.encryptDES(
+            data.encodeToByteArray(),
+            key.encodeToByteArray(),
+            transformation,
+            iv.encodeToByteArray()
+        )?.let { String(it) }
+    }
+
+    fun desEncodeToBase64String(
+        data: String, key: String, transformation: String, iv: String
+    ): String? {
+        return EncoderUtils.encryptDES2Base64(
+            data.encodeToByteArray(),
+            key.encodeToByteArray(),
+            transformation,
+            iv.encodeToByteArray()
+        )?.let { String(it) }
+    }
     /**
      * 3DES加密并转为Base64
      *

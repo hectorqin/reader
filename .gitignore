@@ -31,7 +31,6 @@ out/
 ### VS Code ###
 .vscode/
 
-
 .vertx
 out
 
@@ -44,3 +43,6 @@ out
 /bin
 /file-uploads
 /reader-assets
+/.lh/
+
+/simple-web/

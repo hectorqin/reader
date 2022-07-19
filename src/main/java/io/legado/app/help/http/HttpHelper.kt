@@ -10,12 +10,14 @@ import okhttp3.Route
 import okhttp3.Authenticator
 import okhttp3.Response
 import okhttp3.Request
+import okhttp3.logging.HttpLoggingInterceptor
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import java.io.IOException
+import io.legado.app.model.DebugLog
 
 private val proxyClientCache: ConcurrentHashMap<String, OkHttpClient> by lazy {
     ConcurrentHashMap()
@@ -57,12 +59,22 @@ val okHttpClient: OkHttpClient by lazy {
 /**
  * 缓存代理okHttp
  */
-fun getProxyClient(proxy: String? = null): OkHttpClient {
+fun getProxyClient(proxy: String? = null, debugLog: DebugLog? = null): OkHttpClient {
     if (proxy.isNullOrBlank()) {
-        return okHttpClient
+        if (debugLog == null) {
+            return okHttpClient
+        }
+        val builder = okHttpClient.newBuilder()
+        val logInterceptor = HttpLoggingInterceptor(debugLog);//创建拦截对象
+        logInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);//这一句一定要记得写，否则没有数据输出
+
+        builder.addNetworkInterceptor(logInterceptor)  //设置打印拦截日志
+        return builder.build()
     }
-    proxyClientCache[proxy]?.let {
-        return it
+    if (debugLog == null) {
+        proxyClientCache[proxy]?.let {
+            return it
+        }
     }
     val r = Regex("(http|socks4|socks5)://(.*):(\\d{2,5})(@.*@.*)?")
     val ms = r.findAll(proxy)
@@ -101,6 +113,13 @@ fun getProxyClient(proxy: String? = null): OkHttpClient {
             //         .header("Proxy-Authorization", credential)
             //         .build()
             // }
+        }
+        if (debugLog != null) {
+            val logInterceptor = HttpLoggingInterceptor(debugLog);//创建拦截对象
+            logInterceptor.setLevel(HttpLoggingInterceptor.Level.BODY);//这一句一定要记得写，否则没有数据输出
+
+            builder.addNetworkInterceptor(logInterceptor)  //设置打印拦截日志
+            return builder.build()
         }
         val proxyClient = builder.build()
         proxyClientCache[proxy] = proxyClient

@@ -51,7 +51,6 @@ suspend fun OkHttpClient.newCall(
     builder: Request.Builder.() -> Unit
 ): ResponseBody {
     val requestBuilder = Request.Builder()
-    requestBuilder.header(AppConst.UA_NAME, AppConst.userAgent)
     requestBuilder.apply(builder)
     var response: Response? = null
     for (i in 0..retry) {
@@ -68,7 +67,6 @@ suspend fun OkHttpClient.newCallStrResponse(
     builder: Request.Builder.() -> Unit
 ): StrResponse {
     val requestBuilder = Request.Builder()
-    requestBuilder.header(AppConst.UA_NAME, AppConst.userAgent)
     requestBuilder.apply(builder)
     var response: Response? = null
     for (i in 0..retry) {

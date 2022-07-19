@@ -250,7 +250,7 @@ export default {
         },
         error => {
           this.$message.error(
-            (isAdd ? "加入书架成功" : "操作成功") + (error && error.toString())
+            (isAdd ? "加入书架失败" : "操作失败") + (error && error.toString())
           );
         }
       );

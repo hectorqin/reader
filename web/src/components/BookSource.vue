@@ -71,7 +71,7 @@ export default {
   name: "BookSource",
   data() {
     return {
-      index: this.$store.state.readingBook.index,
+      index: this.$store.getters.readingBook.index,
       bookSource: [],
       bookSourceGroup: "",
       bookSourceGroupIndexMap: {},
@@ -96,7 +96,7 @@ export default {
       }, {});
     },
     readingBook() {
-      return this.$store.state.readingBook || {};
+      return this.$store.getters.readingBook || {};
     }
   },
   mounted() {},
@@ -114,14 +114,12 @@ export default {
   },
   methods: {
     isSelected(searchBook) {
-      return searchBook.bookUrl == this.$store.state.readingBook.bookUrl;
+      return searchBook.bookUrl == this.$store.getters.readingBook.bookUrl;
     },
     getBookSource(refresh) {
-      Axios.get(this.api + `/getBookSource`, {
-        params: {
-          url: this.$store.state.readingBook.bookUrl,
-          refresh: refresh ? 1 : 0
-        }
+      Axios.post(this.api + `/getAvailableBookSource`, {
+        url: this.$store.getters.readingBook.bookUrl,
+        refresh: refresh ? 1 : 0
       }).then(
         res => {
           this.loading = false;
@@ -149,21 +147,21 @@ export default {
     },
     async changeBookSource(searchBook) {
       const isInShelf = await this.$root.$children[0].isInShelf(
-        this.$store.state.readingBook,
+        this.$store.getters.readingBook,
         "加入书架之后才能切换书源, 是否加入书架?"
       );
       if (!isInShelf) {
         return;
       }
-      Axios.post(this.api + `/saveBookSource`, {
-        bookUrl: this.$store.state.readingBook.bookUrl,
+      Axios.post(this.api + `/setBookSource`, {
+        bookUrl: this.$store.getters.readingBook.bookUrl,
         newUrl: searchBook.bookUrl,
         bookSourceUrl: searchBook.origin
       }).then(
         res => {
           if (res.data.isSuccess) {
             this.$message.info("换源成功");
-            var book = Object.assign({}, this.$store.state.readingBook);
+            var book = Object.assign({}, this.$store.getters.readingBook);
             book.bookUrl = searchBook.bookUrl;
             book.type =
               typeof searchBook.type !== "undefined"
@@ -203,12 +201,10 @@ export default {
     loadMoreSource() {
       if (this.loadingMore) return;
       this.loadingMore = true;
-      Axios.get(this.api + `/searchBookSource`, {
-        params: {
-          url: this.$store.state.readingBook.bookUrl,
-          bookSourceGroup: this.bookSourceGroup,
-          lastIndex: this.bookSourceGroupIndexMap[this.bookSourceGroup]
-        }
+      Axios.post(this.api + `/searchBookSource`, {
+        url: this.$store.getters.readingBook.bookUrl,
+        bookSourceGroup: this.bookSourceGroup,
+        lastIndex: this.bookSourceGroupIndexMap[this.bookSourceGroup]
       }).then(
         res => {
           this.loadingMore = false;
@@ -257,7 +253,7 @@ export default {
       const params = {
         accessToken: this.$store.state.token,
         concurrentCount: this.$store.state.searchConfig.concurrentCount,
-        url: this.$store.state.readingBook.bookUrl,
+        url: this.$store.getters.readingBook.bookUrl,
         bookSourceGroup: this.bookSourceGroup,
         lastIndex: this.bookSourceGroupIndexMap[this.bookSourceGroup]
       };
@@ -329,7 +325,7 @@ export default {
       this.$nextTick(() => {
         let index = -1;
         this.bookSource.some((v, i) => {
-          if (v.bookUrl == this.$store.state.readingBook.bookUrl) {
+          if (v.bookUrl == this.$store.getters.readingBook.bookUrl) {
             index = i;
             return true;
           }

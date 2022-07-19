@@ -63,6 +63,7 @@ abstract class RestVerticle : CoroutineVerticle() {
             }
             val origin = it.request().getHeader("Origin")
             if (origin != null && origin.isNotEmpty() && it.request().method() == HttpMethod.OPTIONS) {
+                it.removeCookie(cookieName)
                 it.success("")
             } else {
                 it.next()

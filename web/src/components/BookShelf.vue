@@ -79,7 +79,7 @@ export default {
   },
   methods: {
     isSelected(book) {
-      return book.bookUrl == this.$store.state.readingBook.bookUrl;
+      return book.bookUrl == this.$store.getters.readingBook.bookUrl;
     },
     getBookshelf(refresh) {
       if (this.shelfBooks.length) {
@@ -115,12 +115,17 @@ export default {
     },
     changeBook(book) {
       const readingBook = {
-        bookName: book.name,
+        name: book.name,
         bookUrl: book.bookUrl,
-        index: book.durChapterIndex,
+        index: book.index ?? book.durChapterIndex ?? 0,
         type: book.type,
-        coverUrl: book.coverUrl,
-        author: book.author
+        coverUrl: book.customCoverUrl || book.coverUrl,
+        tocUrl: book.tocUrl,
+        author: book.author,
+        origin: book.origin,
+        originName: book.originName,
+        latestChapterTitle: book.latestChapterTitle,
+        intro: book.intro
       };
       this.$emit("changeBook", readingBook);
     },
@@ -133,7 +138,7 @@ export default {
       this.$nextTick(() => {
         let index = -1;
         this.shelfBooks.some((v, i) => {
-          if (v.bookUrl == this.$store.state.readingBook.bookUrl) {
+          if (v.bookUrl == this.$store.getters.readingBook.bookUrl) {
             index = i;
             return true;
           }

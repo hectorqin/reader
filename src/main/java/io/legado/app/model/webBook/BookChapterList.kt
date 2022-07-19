@@ -62,10 +62,10 @@ object BookChapterList {
                         source = bookSource,
                         ruleData = book,
                         headerMapF = bookSource.getHeaderMap()
-                    ).getStrResponseAwait().body?.let { nextBody ->
+                    ).getStrResponseAwait(debugLog = debugLog).body?.let { nextBody ->
                         chapterData = analyzeChapterList(
                             book, nextUrl, nextUrl,
-                            nextBody, tocRule, listRule, bookSource, false, false, debugLog
+                            nextBody, tocRule, listRule, bookSource, true, false, debugLog
                         )
                         nextUrl = chapterData.second.firstOrNull() ?: ""
                         chapterList.addAll(chapterData.first)
@@ -85,7 +85,7 @@ object BookChapterList {
                                 ruleData = book,
                                 headerMapF = bookSource.getHeaderMap()
                             )
-                            val res = analyzeUrl.getStrResponseAwait()
+                            val res = analyzeUrl.getStrResponseAwait(debugLog = debugLog)
                             analyzeChapterList(
                                 book, urlStr, res.url,
                                 res.body!!, tocRule, listRule, bookSource, false, false, debugLog
@@ -168,7 +168,7 @@ object BookChapterList {
             val urlRule = analyzeRule.splitSourceRule(tocRule.chapterUrl)
             val vipRule = analyzeRule.splitSourceRule(tocRule.isVip)
             val upTimeRule = analyzeRule.splitSourceRule(tocRule.updateTime)
-            // val isVolumeRule = analyzeRule.splitSourceRule(tocRule.isVolume)
+            val isVolumeRule = analyzeRule.splitSourceRule(tocRule.isVolume)
             elements.forEachIndexed { index, item ->
                 analyzeRule.setContent(item)
                 val bookChapter = BookChapter(bookUrl = book.bookUrl, baseUrl = redirectUrl)
@@ -176,6 +176,11 @@ object BookChapterList {
                 bookChapter.title = analyzeRule.getString(nameRule)
                 bookChapter.url = analyzeRule.getString(urlRule)
                 bookChapter.tag = analyzeRule.getString(upTimeRule)
+                val isVolume = analyzeRule.getString(isVolumeRule)
+                bookChapter.isVolume = false
+                if (isVolume.isTrue()) {
+                    bookChapter.isVolume = true
+                }
                 if (bookChapter.url.isEmpty()) {
                     if (bookChapter.isVolume) {
                         bookChapter.url = bookChapter.title + index
@@ -194,12 +199,11 @@ object BookChapterList {
                 }
             }
             if(log) debugLog?.log(bookSource.bookSourceUrl, "└目录列表解析完成")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "┌获取首章名称")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "└${chapterList[0].title}")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "┌获取首章链接")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "└${chapterList[0].url}")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "┌获取首章信息")
-            if(log) debugLog?.log(bookSource.bookSourceUrl, "└${chapterList[0].tag}")
+            if(log) debugLog?.log(bookSource.bookSourceUrl, "≡首章信息")
+            if(log) debugLog?.log(bookSource.bookSourceUrl, "◇章节名称:${chapterList[0].title}")
+            if(log) debugLog?.log(bookSource.bookSourceUrl, "◇章节链接:${chapterList[0].url}")
+            if(log) debugLog?.log(bookSource.bookSourceUrl, "◇章节信息:${chapterList[0].tag}")
+            if(log) debugLog?.log(bookSource.bookSourceUrl, "◇是否卷名:${chapterList[0].isVolume}")
         }
         return Pair(chapterList, nextUrlList)
     }

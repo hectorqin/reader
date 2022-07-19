@@ -62,6 +62,7 @@ import io.legado.app.utils.EncoderUtils
 import io.legado.app.model.rss.Rss
 import org.springframework.scheduling.annotation.Scheduled
 import io.legado.app.model.localBook.LocalBook
+import io.legado.app.model.Debug
 import java.nio.file.Paths
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.async
@@ -223,19 +224,27 @@ class RssSourceController(coroutineContext: CoroutineContext): BaseController(co
             return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
         }
         var sourceUrl: String
+        var sortName: String
+        var sortUrl: String
         var page: Int
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
             sourceUrl = context.bodyAsJson.getString("sourceUrl")
+            sortName = context.bodyAsJson.getString("sortName", "")
+            sortUrl = context.bodyAsJson.getString("sortUrl", "")
             page = context.bodyAsJson.getInteger("page", 1)
         } else {
             // get 请求
             sourceUrl = context.queryParam("sourceUrl").firstOrNull() ?: ""
+            sortName = context.queryParam("sortName").firstOrNull() ?: ""
+            sortUrl = context.queryParam("sortUrl").firstOrNull() ?: ""
             page = context.queryParam("page").firstOrNull()?.toInt() ?: 1
-            sourceUrl = URLDecoder.decode(sourceUrl, "UTF-8")
         }
         if (sourceUrl.isEmpty()) {
-            return returnData.setErrorMsg("RSS链接不能为空")
+            return returnData.setErrorMsg("RSS源链接不能为空")
+        }
+        if (sortUrl.isEmpty()) {
+            sortUrl = sourceUrl
         }
 
         var userNameSpace = getUserNameSpace(context)
@@ -244,7 +253,7 @@ class RssSourceController(coroutineContext: CoroutineContext): BaseController(co
             return returnData.setErrorMsg("RSS源不存在")
         }
 
-        val rssArtcles = Rss.getArticles(rssSource, page)
+        val rssArtcles = Rss.getArticles(sortName, sortUrl, rssSource, page, Debug)
 
         return returnData.setData(rssArtcles)
     }
@@ -267,9 +276,6 @@ class RssSourceController(coroutineContext: CoroutineContext): BaseController(co
             sourceUrl = context.queryParam("sourceUrl").firstOrNull() ?: ""
             link = context.queryParam("link").firstOrNull() ?: ""
             origin = context.queryParam("origin").firstOrNull() ?: ""
-            sourceUrl = URLDecoder.decode(sourceUrl, "UTF-8")
-            link = URLDecoder.decode(link, "UTF-8")
-            origin = URLDecoder.decode(origin, "UTF-8")
         }
         if (sourceUrl.isEmpty()) {
             return returnData.setErrorMsg("RSS链接不能为空")
@@ -287,7 +293,10 @@ class RssSourceController(coroutineContext: CoroutineContext): BaseController(co
             return returnData.setErrorMsg("RSS源不存在")
         }
         val rssArticle = RssArticle(origin = origin, link = link)
-        val content = Rss.getContent(rssArticle, rssSource)
+        var content = ""
+        if (rssSource.ruleContent != null) {
+            content = Rss.getContent(rssArticle, rssSource.ruleContent as String, rssSource, Debug)
+        }
 
         return returnData.setData(content)
     }

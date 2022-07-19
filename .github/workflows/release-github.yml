@@ -1,0 +1,82 @@
+name: Publish Github Releases
+
+on:
+  push:
+    tags:
+      - 'v**'
+    branches:
+      - master
+
+jobs:
+  buildRelease:
+    if: github.repository == 'hectorqin/reader'
+    name: "Build And Release"
+    runs-on: macos-11
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Setup node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      -
+        name: Build web
+        run: cd web && npm install && npm run build && mv ./dist ../src/main/resources/web
+      -
+        name: Setup Java
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: 'gradle'
+      -
+        name: Build MacOS package
+        run:
+          JAVAFX_PLATFORM=mac ./gradlew packageReaderMac
+      -
+        name: Build Linux package
+        run:
+          JAVAFX_PLATFORM=linux ./gradlew packageReaderLinux
+      -
+        name: Build Windows package
+        run:
+          JAVAFX_PLATFORM=win ./gradlew packageReaderWin
+      -
+        name: Build server jar
+        run:
+          rm src/main/java/com/htmake/reader/ReaderUIApplication.kt && gradle -b cli.gradle assemble --info
+      -
+        name: Show files.
+        run: |
+          echo Showing current directory:
+          ls
+          echo Showing ./target directory:
+          ls ./build
+          echo Showing ./target directory:
+          ls ./build/libs
+      -
+        name: Pre Release
+        if: ${{contains(github.ref, 'master')}}
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Development Build"
+          files: |
+            ./build/*.pkg
+            ./build/*.zip
+            ./build/libs/*.jar
+      -
+        name: Tagged Release
+        if: ${{contains(github.ref, 'v')}}
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: false
+          files: |
+            ./build/*.pkg
+            ./build/*.zip
+            ./build/libs/*.jar

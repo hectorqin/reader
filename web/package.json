@@ -1,6 +1,6 @@
 {
   "name": "reader",
-  "version": "2.2.2",
+  "version": "2.5.7",
   "private": true,
   "scripts": {
     "serve": "vue-cli-service serve",
@@ -12,10 +12,11 @@
     "axios": "^0.21.1",
     "codejar": "^3.5.0",
     "core-js": "^3.3.2",
-    "element-ui": "^2.4.5",
+    "element-ui": "^2.15.9",
     "localforage": "^1.10.0",
     "prismjs": "^1.25.0",
     "register-service-worker": "^1.7.1",
+    "sortablejs": "^1.15.0",
     "stylus": "^0.54.7",
     "stylus-loader": "^3.0.2",
     "vue": "^2.6.10",

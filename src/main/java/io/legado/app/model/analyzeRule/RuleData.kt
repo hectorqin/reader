@@ -1,5 +1,7 @@
 package io.legado.app.model.analyzeRule
 
+import io.legado.app.utils.GSON
+
 class RuleData : RuleDataInterface {
 
     override val variableMap by lazy {
@@ -14,4 +16,10 @@ class RuleData : RuleDataInterface {
         }
     }
 
+    fun getVariable(): String? {
+        if (variableMap.isEmpty()) {
+            return null
+        }
+        return GSON.toJson(variableMap)
+    }
 }
