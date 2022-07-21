@@ -24,6 +24,7 @@ import kotlin.reflect.KMutableProperty
 import kotlin.reflect.full.memberProperties
 import io.legado.app.data.entities.Book
 import io.legado.app.utils.MD5Utils
+import io.legado.app.utils.FileUtils
 
 /**
  * @Auther: zoharSoul
@@ -73,15 +74,31 @@ fun RoutingContext.error(throwable: Throwable) {
 
 fun getWorkDir(subPath: String = ""): String {
     if (!workDirInit && workDirPath.isEmpty()) {
-        var osName = System.getProperty("os.name")
-        var currentDir = System.getProperty("user.dir")
-        logger.info("osName: {} currentDir: {}", osName, currentDir)
-        // MacOS 存放目录为用户目录
-        if (osName.startsWith("Mac OS", true) && !currentDir.startsWith("/Users/")) {
-            workDirPath = Paths.get(System.getProperty("user.home"), ".reader").toString()
-        } else {
-            workDirPath = currentDir
+        var appConfig = SpringContextUtils.getBean("appConfig", AppConfig::class.java)
+        if (appConfig != null && appConfig.workDir.isNotEmpty() && !appConfig.workDir.equals(".")) {
+            val workDirFile = File(appConfig.workDir)
+            if (workDirFile.exists() && !workDirFile.isDirectory()) {
+                logger.error("reader.app.workDir={} is not a directory", appConfig.workDir)
+            } else {
+                if(!workDirFile.exists()) {
+                    logger.info("reader.app.workDir={} not exists, creating", appConfig.workDir)
+                    workDirFile.mkdirs()
+                }
+                workDirPath = workDirFile.absolutePath
+            }
         }
+        if (workDirPath.isEmpty()) {
+            var osName = System.getProperty("os.name")
+            var currentDir = System.getProperty("user.dir")
+            logger.info("osName: {} currentDir: {}", osName, currentDir)
+            // MacOS 存放目录为用户目录
+            if (osName.startsWith("Mac OS", true) && !currentDir.startsWith("/Users/")) {
+                workDirPath = Paths.get(System.getProperty("user.home"), ".reader").toString()
+            } else {
+                workDirPath = currentDir
+            }
+        }
+        logger.info("Using workdir: {}", workDirPath)
         workDirInit = true
     }
     var path = Paths.get(workDirPath, subPath);
@@ -113,19 +130,18 @@ fun getStoragePath(): String {
     if (storageFinalPath.isNotEmpty()) {
         return storageFinalPath;
     }
+    var storagePath = ""
     var appConfig = SpringContextUtils.getBean("appConfig", AppConfig::class.java)
-    var storageDir = File("storage")
     if (appConfig != null) {
-        // logger.info("storagePath from appConfig: {}", appConfig.storagePath)
-        storageDir = File(appConfig.storagePath)
-    }
-    if (storageDir.isAbsolute()) {
-        return storageDir.toString();
-    }
-    var storagePath = getWorkDir(storageDir.toString())
-    if (appConfig != null) {
+        storagePath = getWorkDir("storage")
         storageFinalPath = storagePath
+    } else {
+        // 实际上不会访问到这里
+        // app 还没初始化完成，配置还没加载完成 使用当前路径的 storage
+        storagePath = File("storage").path
     }
+
+    logger.info("Using storagePath: {}", storagePath)
     return storagePath;
 }
 
@@ -172,11 +188,21 @@ fun getStorage(vararg name: String): String?  {
     val file = File(storagePath + File.separator + path)
     logger.info("Read file from storage name: {} path: {}", name, file.absoluteFile)
     if (!file.exists()) {
-        return readMongoFile(path)
+        return readMongoFile(path)?.also { content ->
+            if (content.isNotEmpty()) {
+                file.createNewFile()
+                file.writeText(content)
+            }
+        }
     }
     val content = file.readText()
     if (content.isEmpty()) {
-        return readMongoFile(path) ?: content
+        return readMongoFile(path)?.also { content ->
+            if (content.isNotEmpty()) {
+                file.createNewFile()
+                file.writeText(content)
+            }
+        } ?: content
     }
     return content
 }
@@ -314,4 +340,24 @@ fun jsonEncode(value: Any, pretty: Boolean = false): String {
         return prettyGson.toJson(value)
     }
     return gson.toJson(value)
+}
+
+/**
+ * 列出指定目录下的所有文件
+ */
+fun File.deepListFiles(allowExtensions: Array<String>?): List<File> {
+    val fileList = arrayListOf<File>()
+    this.listFiles().forEach { it ->
+        //返回当前目录所有以某些扩展名结尾的文件
+        if (it.isDirectory()) {
+            fileList.addAll(it.deepListFiles(allowExtensions))
+        } else {
+            val extension = FileUtils.getExtension(it.name)
+            if(allowExtensions?.contentDeepToString()?.contains(extension) == true
+                || allowExtensions == null) {
+                fileList.add(it)
+            }
+        }
+    }
+    return fileList
 }

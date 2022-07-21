@@ -39,6 +39,7 @@ import com.htmake.reader.utils.unzip
 import com.htmake.reader.utils.zip
 import com.htmake.reader.utils.jsonEncode
 import com.htmake.reader.utils.getRelativePath
+import com.htmake.reader.utils.MongoManager
 import com.htmake.reader.verticle.RestVerticle
 import com.htmake.reader.SpringEvent
 import org.springframework.stereotype.Component
@@ -3022,5 +3023,103 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         val queryIndexInResult = queryIndexInContent - po1
         val newText = content.substring(po1, po2)
         return queryIndexInResult to newText
+    }
+
+    suspend fun backupToMongodb(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!MongoManager.isInit()) {
+            return returnData.setErrorMsg("请先设置 mongoUri")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        }
+
+        val syncDataFileList = arrayListOf(*backupFileNames)
+
+        val handler = { userNameSpace: String ->
+            syncDataFileList.forEach {
+                getUserStorage(userNameSpace, it)?.let { content ->
+                    saveUserStorage(userNameSpace, it, content)
+                }
+            }
+        }
+
+        handler("default")
+
+        if (appConfig.secure) {
+            var userMap = mutableMapOf<String, Map<String, Any>>()
+            var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
+            if (userMapJson != null) {
+                userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+            }
+            userMap.forEach {
+                try {
+                    var ns = it.value.getOrDefault("username", "") as String? ?: ""
+                    if (ns.isNotEmpty()) {
+                        handler(ns)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        getStorage("users")?.let { content ->
+            saveStorage("users", value = content)
+        }
+        return returnData.setData("")
+    }
+
+    suspend fun restoreFromMongodb(context: RoutingContext): ReturnData {
+        val returnData = ReturnData()
+        if (!checkAuth(context)) {
+            return returnData.setData("NEED_LOGIN").setErrorMsg("请登录后使用")
+        }
+        if (!MongoManager.isInit()) {
+            return returnData.setErrorMsg("请先设置 mongoUri")
+        }
+        if (!checkManagerAuth(context)) {
+            return returnData.setData("NEED_SECURE_KEY").setErrorMsg("请输入管理密码")
+        }
+        val syncDataFileList = arrayListOf(*backupFileNames)
+        val handler = { userNameSpace: String ->
+            syncDataFileList.forEach {
+                var file = File(getWorkDir("storage", "data", userNameSpace, it + ".json"))
+                if (file.exists()) {
+                    file.delete()
+                }
+            }
+        }
+
+        handler("default")
+
+        if (appConfig.secure) {
+            var userMap = mutableMapOf<String, Map<String, Any>>()
+            var userMapJson: JsonObject? = asJsonObject(getStorage("data", "users"))
+            if (userMapJson != null) {
+                userMap = userMapJson.map as MutableMap<String, Map<String, Any>>
+            }
+            userMap.forEach {
+                try {
+                    var ns = it.value.getOrDefault("username", "") as String? ?: ""
+                    if (ns.isNotEmpty()) {
+                        handler(ns)
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        var usersFile = File(getWorkDir("storage", "users.json"))
+        if (usersFile.exists()) {
+            usersFile.delete()
+            getStorage("users")
+        }
+
+        return returnData.setData("")
     }
 }

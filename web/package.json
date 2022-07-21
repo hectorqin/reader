@@ -6,7 +6,8 @@
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "lint": "vue-cli-service lint",
-    "sync": "yarn build && rm -rf ../src/main/resources/web && mv dist ../src/main/resources/web"
+    "sync": "yarn build && rm -rf ../src/main/resources/web && mv dist ../src/main/resources/web",
+    "sync-tauri": "yarn build && rm -rf ../tauri/dist && mv dist ../tauri/dist"
   },
   "dependencies": {
     "axios": "^0.21.1",
