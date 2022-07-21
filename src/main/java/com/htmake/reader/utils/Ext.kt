@@ -144,6 +144,7 @@ fun zip(files: List<File>, zipFilePath: String): Boolean {
 }
 
 fun createDir(filePath: String): File {
+    logger.debug("createDir filePath {}", filePath)
     val file = File(filePath)
     if (!file.exists()) {
         file.mkdirs()
@@ -152,6 +153,7 @@ fun createDir(filePath: String): File {
 }
 
 fun createFile(filePath: String): File {
+    logger.debug("createFile filePath {}", filePath)
     val file = File(filePath)
     val parentFile = file.parentFile!!
     if (!parentFile.exists()) {

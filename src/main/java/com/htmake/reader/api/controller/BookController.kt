@@ -578,9 +578,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
                 // 直接返回 html访问地址
                 if (epubRootDir.isEmpty()) {
-                    content = bookInfo.bookUrl.replace("storage/data/", "/book-assets/") + "/index/" + chapterInfo.url
+                    content = bookInfo.bookUrl.replace("\\", "/").replace("storage/data/", "/book-assets/") + "/index/" + chapterInfo.url
                 } else {
-                    content = bookInfo.bookUrl.replace("storage/data/", "/book-assets/") + "/index/" + epubRootDir + "/" + chapterInfo.url
+                    content = bookInfo.bookUrl.replace("\\", "/").replace("storage/data/", "/book-assets/") + "/index/" + epubRootDir + "/" + chapterInfo.url
                 }
                 return returnData.setData(content)
             } else if (bookInfo.isCbz()) {
@@ -595,7 +595,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 }
                 val ext = getFileExt(chapterFile.name).lowercase()
                 val imageExt = listOf("jpg", "jpeg", "gif", "png", "bmp", "webp", "svg")
-                val fileUrl = "__API_ROOT__" + bookInfo.bookUrl.replace("storage/data/", "/book-assets/") + "/index/" + chapterInfo.url
+                val fileUrl = "__API_ROOT__" + bookInfo.bookUrl.replace("\\", "/").replace("storage/data/", "/book-assets/") + "/index/" + chapterInfo.url
                 if (!imageExt.contains(ext)) {
                     return returnData.setData(fileUrl)
                 }
@@ -670,7 +670,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                         val src = NetworkUtils.getAbsoluteURL(chapter.url, it)
                         val imageFile = BookHelp.getImage(book, src)
                         if (imageFile.exists()) {
-                            val imageUrl = "__API_ROOT__" + imageFile.path.replace(dataDir, "/book-assets")
+                            val imageUrl = "__API_ROOT__" + imageFile.path.replace("\\", "/").replace(dataDir, "/book-assets")
                             text1 = text1.replace(it, imageUrl)
                         }
                     }
@@ -1284,9 +1284,8 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         // 导入本地书籍
         if (book.isLocalBook()) {
-            if (book.bookUrl.startsWith("/assets/")) {
+            if (book.bookUrl.startsWith("/assets/") || book.bookUrl.startsWith("\\assets\\")) {
                 // 临时文件，移动到书籍目录
-                // storage/assets/default/book/《极道天魔》（校对版全本）作者：滚开/《极道天魔》（校对版全本）作者：滚开.txt
                 val tempFile = File(getWorkDir("storage" + book.bookUrl))
                 if (!tempFile.exists()) {
                     return returnData.setErrorMsg("上传书籍不存在")
@@ -1318,7 +1317,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                         return returnData.setErrorMsg("导入本地CBZ书籍失败")
                     }
                 }
-            } else if (book.bookUrl.indexOf("storage/localStore") >= 0) {
+            } else if (book.bookUrl.indexOf("localStore") >= 0) {
                 // 本地书仓，不用移动书籍
                 val tempFile = File(getWorkDir(book.bookUrl))
                 if (!tempFile.exists()) {
@@ -1338,7 +1337,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                         return returnData.setErrorMsg("导入本地CBZ书籍失败")
                     }
                 }
-            } else if (book.bookUrl.indexOf("webdav/") >= 0) {
+            } else if (book.bookUrl.indexOf("webdav") >= 0) {
                 // webdav书仓，不用移动书籍
                 val tempFile = File(getWorkDir(book.bookUrl))
                 if (!tempFile.exists()) {
@@ -2107,6 +2106,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                 // webdav 书仓的源文件
                 localEpubFile = File(getWorkDir(book.originName))
             }
+            logger.info("extractEpub from {} to {}", localEpubFile, epubExtractDir)
             if (!localEpubFile.unzip(epubExtractDir.toString())) {
                 return false
             }
@@ -2754,7 +2754,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
 
         } else if (coverUrl.startsWith("/")) {
             // 本地 /assets 封面
-            val coverFile = File(getWorkDir("storage", coverUrl.substring(1)))
+            val coverFile = File(getWorkDir("storage", coverUrl.replace("/", File.separator).substring(1)))
             val byteArray: ByteArray = coverFile.readBytes()
             epubBook.coverImage = Resource(byteArray, "Images/cover.jpg")
         } else {

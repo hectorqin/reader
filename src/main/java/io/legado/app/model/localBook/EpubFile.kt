@@ -252,7 +252,7 @@ class EpubFile(var book: Book) {
     fun updateCover() {
         val coverFile = "${MD5Utils.md5Encode16(book.bookUrl)}.jpg"
         val relativeCoverUrl = Paths.get("assets", book.getUserNameSpace(), "covers", coverFile).toString()
-        book.coverUrl = "/" + relativeCoverUrl
+        book.coverUrl = "/" + relativeCoverUrl.replace("\\", "/")
         val coverUrl = Paths.get(book.workRoot(), "storage", relativeCoverUrl).toString()
         if (!File(coverUrl).exists()) {
             FileUtils.writeBytes(coverUrl, epubBook!!.coverImage.data)
