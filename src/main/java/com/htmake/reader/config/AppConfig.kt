@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component
 @Component
 @ConfigurationProperties(prefix = "reader.app")
 class AppConfig {
-    lateinit var storagePath: String // 存储路径
+    var workDir = "" // 工作目录
     var showUI = false // 是否显示UI
     var debug = false  // 是否调试web
     var packaged = false  // 是否打包为app
@@ -23,4 +23,7 @@ class AppConfig {
     var exportCharset = "UTF-8" // 导出字符集
     var exportNoChapterName = false // 不添加章节名
     var exportPictureFile = false // 导出图片
+
+    var mongoUri = "" // mongodb 链接
+    var mongoDbName = "reader" // mongodb 数据库名称
 }

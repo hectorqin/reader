@@ -39,7 +39,7 @@
 
 ## 数据存储
 
-接口服务使用文件存储书源及目录等信息，存储位置为 storage 目录(可通过运行时添加 `-Dreader.app.storagePath=/path/to/storage` 修改)。
+接口服务使用文件存储书源及目录等信息，存储位置为 storage 目录(可通过运行时添加 `-Dreader.app.workDir=/path/to/workDir` 修改工作目录，storage 为工作目录的子目录，名称不可更改)。
 
 > MacOS客户端的存储目录是 `~/.reader/storage`，Window和Linux客户端为 `运行目录/storage`
 
@@ -110,7 +110,7 @@ storage
 ```yml
 reader:
   app:
-    storagePath: storage   # 数据存储目录
+    workDir: ""            # 工作目录
     showUI: false          # 是否显示UI
     debug: false           # 是否调试模式
     packaged: false        # 是否打包为客户端
@@ -126,6 +126,10 @@ reader:
     cacheChapterContent: false # 是否缓存章节内容
     userLimit: 50          # 用户上限，最大 50
     userBookLimit: 200     # 用户书籍上限，默认最大 200
+    debugLog: false        # 是否打开调试日志
+    autoClearInactiveUser: 0 # 是否自动清理不活跃用户，为0不清理，大于0为清理超过 autoClearInactiveUser 天未登录的用户
+    mongoUri: ""           # mongodb uri 用于备份数据
+    mongoDbName: "reader"  # mongodb 数据库名称
 
   server:
     port: 8080             # 监听端口
@@ -382,8 +386,8 @@ yarn sync
 
 java -jar build/libs/reader-${version}.jar
 
-# 指定 storage 路径  默认为相对路径 storage
-# java -Dreader.app.storagePath=cacheStorage  -jar build/libs/reader-${version}.jar
+# 指定 工作目录 路径  默认为当前目录
+# java -jar build/libs/reader-${version}.jar --reader.app.workDir=reader
 
 # web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/

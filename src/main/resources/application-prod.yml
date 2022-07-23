@@ -4,7 +4,7 @@ spring:
 
 reader:
   app:
-    storagePath: 'storage'
+    workDir: "."
     showUI: false
     debug: false
     packaged: false
@@ -22,10 +22,12 @@ reader:
     userBookLimit: 200
     debugLog: false
     autoClearInactiveUser: 0
+    mongoUri: ""
+    mongoDbName: "reader"
 
   server:
     port: 8080
     webUrl: http://localhost:${reader.server.port}
 
 logging:
-  path: "./logs"
+  path: "${reader.app.workDir}/logs"
