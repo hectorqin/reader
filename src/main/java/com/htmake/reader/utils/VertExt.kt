@@ -190,6 +190,9 @@ fun getStorage(vararg name: String): String?  {
     if (!file.exists()) {
         return readMongoFile(path)?.also { content ->
             if (content.isNotEmpty()) {
+                if (!file.parentFile.exists()) {
+                    file.parentFile.mkdirs()
+                }
                 file.createNewFile()
                 file.writeText(content)
             }
@@ -199,6 +202,9 @@ fun getStorage(vararg name: String): String?  {
     if (content.isEmpty()) {
         return readMongoFile(path)?.also { content ->
             if (content.isNotEmpty()) {
+                if (!file.parentFile.exists()) {
+                    file.parentFile.mkdirs()
+                }
                 file.createNewFile()
                 file.writeText(content)
             }
