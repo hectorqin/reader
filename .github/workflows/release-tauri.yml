@@ -25,7 +25,7 @@ jobs:
           cache: 'gradle'
       -
         name: Build server jar
-        run:
+        run: |
           mkdir -p src/main/resources/web
           touch src/main/resources/web/index.html
           echo "<html><body><h3>Tauri客户端未内置静态资源</h3></body></html>" > src/main/resources/web/index.html
