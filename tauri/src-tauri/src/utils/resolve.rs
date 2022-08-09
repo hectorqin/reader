@@ -26,11 +26,6 @@ use url::Url;
 static READER_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
 static READER_SERVER_FAILED: AtomicBool = AtomicBool::new(false);
 
-#[cfg(debug_assertions)]
-static INDEX_URI: &str = "http://localhost:8081/index.html";
-#[cfg(not(debug_assertions))]
-static INDEX_URI: &str = "tauri://localhost/index.html";
-
 /// handle something when start app
 pub fn resolve_setup(app: &App) {
   // setup a simple http server for singleton
@@ -163,64 +158,64 @@ fn create_main_window(app: &App, config: &ReaderConfig) {
 }
 
 /// create main window
-pub fn create_window(app_handle: &AppHandle, name: &str, title: &str, url: tauri::WindowUrl) {
-  if let Some(window) = app_handle.get_window(name) {
-    let _ = window.unminimize();
-    let _ = window.show();
-    let _ = window.set_focus();
-    return;
-  }
+// pub fn create_window(app_handle: &AppHandle, name: &str, title: &str, url: tauri::WindowUrl) {
+//   if let Some(window) = app_handle.get_window(name) {
+//     let _ = window.unminimize();
+//     let _ = window.show();
+//     let _ = window.set_focus();
+//     return;
+//   }
 
-  log::info!("url {}", url);
-  let builder = tauri::window::WindowBuilder::new(app_handle, name, url)
-    .title(title)
-    .center()
-    .fullscreen(false);
-  // .min_inner_size(600.0, 520.0);
+//   log::info!("url {}", url);
+//   let builder = tauri::window::WindowBuilder::new(app_handle, name, url)
+//     .title(title)
+//     .center()
+//     .fullscreen(false);
+//   // .min_inner_size(600.0, 520.0);
 
-  #[cfg(target_os = "windows")]
-  {
-    use crate::utils::winhelp;
-    use window_shadows::set_shadow;
-    use window_vibrancy::apply_blur;
+//   #[cfg(target_os = "windows")]
+//   {
+//     use crate::utils::winhelp;
+//     use window_shadows::set_shadow;
+//     use window_vibrancy::apply_blur;
 
-    match builder
-      .decorations(false)
-      .transparent(true)
-      // .inner_size(800.0, 636.0)
-      .build()
-    {
-      Ok(_) => {
-        let app_handle = app_handle.clone();
+//     match builder
+//       .decorations(false)
+//       .transparent(true)
+//       // .inner_size(800.0, 636.0)
+//       .build()
+//     {
+//       Ok(_) => {
+//         let app_handle = app_handle.clone();
 
-        tauri::async_runtime::spawn(async move {
-          if let Some(window) = app_handle.get_window("main") {
-            let _ = window.show();
-            let _ = set_shadow(&window, true);
+//         tauri::async_runtime::spawn(async move {
+//           if let Some(window) = app_handle.get_window("main") {
+//             let _ = window.show();
+//             let _ = set_shadow(&window, true);
 
-            if !winhelp::is_win11() {
-              let _ = apply_blur(&window, None);
-            }
-          }
-        });
-      }
-      Err(err) => log::error!(target: "app", "{err}"),
-    }
-  }
+//             if !winhelp::is_win11() {
+//               let _ = apply_blur(&window, None);
+//             }
+//           }
+//         });
+//       }
+//       Err(err) => log::error!(target: "app", "{err}"),
+//     }
+//   }
 
-  #[cfg(target_os = "macos")]
-  crate::log_if_err!(builder
-    .decorations(true)
-    // .inner_size(800.0, 620.0)
-    .build());
+//   #[cfg(target_os = "macos")]
+//   crate::log_if_err!(builder
+//     .decorations(true)
+//     // .inner_size(800.0, 620.0)
+//     .build());
 
-  #[cfg(target_os = "linux")]
-  crate::log_if_err!(builder
-    .decorations(false)
-    .transparent(true)
-    // .inner_size(800.0, 636.0)
-    .build());
-}
+//   #[cfg(target_os = "linux")]
+//   crate::log_if_err!(builder
+//     .decorations(false)
+//     .transparent(true)
+//     // .inner_size(800.0, 636.0)
+//     .build());
+// }
 
 fn start_server(app: &App, reader_config: &ReaderConfig) {
   let mut java_path = String::from("");
