@@ -1,12 +1,16 @@
 {
   "name": "reader",
   "scripts": {
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "updater": "node scripts/updater.mjs",
+    "publish": "node scripts/publish.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^1.0.2"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^1.0.4"
-  }
+    "@tauri-apps/cli": "^1.0.4",
+    "fs-extra": "^10.0.0"
+  },
+  "version": "2.5.7"
 }

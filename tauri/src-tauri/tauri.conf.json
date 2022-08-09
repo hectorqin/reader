@@ -8,8 +8,8 @@
     "withGlobalTauri": true
   },
   "package": {
-    "productName": "reader",
-    "version": "0.1.0"
+    "productName": "Reader Desktop",
+    "version": "2.5.7"
   },
   "tauri": {
     "allowlist": {
@@ -81,9 +81,14 @@
       "csp": null
     },
     "updater": {
-      "active": false
+      "active": true,
+      "endpoints": [
+        "https://github.com/hectorqin/reader/releases/download/updater/update.json",
+        "https://hub.fastgit.xyz/hectorqin/reader/releases/download/updater/update-proxy.json"
+      ],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhBRjE2RTgxNUU4RkE0MjEKUldRaHBJOWVnVzd4aXYwdEpuOE9FbHA3MFJJL2FGWk9zSmlZMVhwU2Vaek9JSWxoOGFMT0VaRWwK"
     },
-    "windows": [
-    ]
+    "windows": []
   }
 }

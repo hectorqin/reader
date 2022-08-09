@@ -8,23 +8,14 @@ on:
       - master
 
 jobs:
-  build-jar:
+  build-resources:
     if: github.repository == 'hectorqin/reader'
-    name: "Build jar"
+    name: "Build resources"
     runs-on: ubuntu-latest
     steps:
       -
         name: Checkout
         uses: actions/checkout@v2
-      -
-        name: Setup node
-        uses: actions/setup-node@v2
-        with:
-          node-version: '14'
-      -
-        name: Build web
-        working-directory: web
-        run: yarn install && yarn run build
       -
         name: Setup Java
         uses: actions/setup-java@v2
@@ -35,7 +26,18 @@ jobs:
       -
         name: Build server jar
         run:
+          mkdir -p src/main/resources/web
+          echo "<html><body><h3>Tauri客户端未内置静态资源</h3></body></html>" > src/main/resources/web/index.html
           rm src/main/java/com/htmake/reader/ReaderUIApplication.kt && gradle -b cli.gradle assemble --info && mv ./build/libs/*.jar ./reader.jar
+      -
+        name: Setup node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      -
+        name: Build web
+        working-directory: web
+        run: yarn install && yarn run build
       -
         name: 'Upload Artifact'
         uses: actions/upload-artifact@v3
@@ -46,7 +48,7 @@ jobs:
             web/dist
 
   build-tauri:
-    needs: build-jar
+    needs: build-resources
     name: 'Build tauri app'
     strategy:
       matrix:
@@ -65,9 +67,9 @@ jobs:
       - name: Show files.
         shell: bash
         run: |
-          echo Showing current directory:
+          echo "> Showing current directory:"
           ls
-          echo Showing web directory:
+          echo "> Showing web directory:"
           ls web
 
       - name: Install resources
@@ -81,11 +83,11 @@ jobs:
       - name: Show files.
         shell: bash
         run: |
-          echo Showing current directory:
+          echo "> Showing current directory:"
           ls
-          echo Showing tauri directory:
+          echo "> Showing tauri directory:"
           ls tauri
-          echo Showing tauri/src-tauri directory:
+          echo "> Showing tauri/src-tauri directory:"
           ls tauri/src-tauri
 
       - name: Install Rust
@@ -98,7 +100,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@ce325b60658c1b38465c06cc965b79baf32c1e72
         with:
-          working-directory: src-tauri
+          working-directory: tauri/src-tauri
 
       - name: Install Dependencies (ubuntu only)
         if: matrix.os == 'ubuntu-latest'
@@ -117,8 +119,8 @@ jobs:
         # continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          # TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
         with:
           projectPath: ./tauri
           tagName: tauri_v__VERSION__
@@ -126,3 +128,24 @@ jobs:
           releaseBody: "More new features are now supported."
           releaseDraft: false
           prerelease: true
+
+  release-update:
+    needs: build-tauri
+    runs-on: macos-latest
+    if: |
+      startsWith(github.repository, 'hectorqin') &&
+      startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Yarn install
+        working-directory: tauri
+        run: |
+          yarn install
+
+      - name: Release updater file
+        working-directory: tauri
+        run: yarn run updater
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

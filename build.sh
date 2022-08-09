@@ -127,6 +127,11 @@ case $task in
         cd $rootDir/tauri
         yarn tauri $@
     ;;
+    tyarn)
+        shift
+        cd $rootDir/tauri
+        yarn $@
+    ;;
     *)
         echo "
 USAGE: $0 build|run|win|linux|mac|serve|cli|yarn|web|sync

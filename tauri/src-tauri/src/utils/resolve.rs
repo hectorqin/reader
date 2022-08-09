@@ -336,20 +336,26 @@ fn launch_server(app: &App, java_path: String, reader_config: &ReaderConfig) -> 
       .spawn()
       .expect("Failed to spawn reader server");
     while let Some(event) = rx.recv().await {
-      if let CommandEvent::Terminated(payload) = event {
-        log::info!("Reader server exit with code {}", payload.code.unwrap_or_default());
-        READER_SERVER_FAILED.fetch_or(true, Ordering::Relaxed);
-        break;
-      }
-      if let CommandEvent::Stdout(line) = event {
-        log::info!("[SERVER] {}", line);
-        if let Some(_index) = line.find("Started ReaderApplication") {
-          log::info!(
-            "find Started ReaderApplication {} set result {}",
-            _index,
-            READER_SERVER_STARTED.fetch_or(true, Ordering::Relaxed)
-          );
+      match event {
+        CommandEvent::Stdout(line) | CommandEvent::Stderr(line) => {
+          log::info!("[SERVER] {}", line);
+          if let Some(_index) = line.find("Started ReaderApplication") {
+            log::info!(
+              "find Started ReaderApplication {} set result {}",
+              _index,
+              READER_SERVER_STARTED.fetch_or(true, Ordering::Relaxed)
+            );
+          }
         }
+        CommandEvent::Terminated(payload) => {
+          log::info!("Reader server exit with code {}", payload.code.unwrap_or_default());
+          READER_SERVER_FAILED.fetch_or(true, Ordering::Relaxed);
+          break;
+        }
+        CommandEvent::Error(error) => {
+          log::error!("Reader server error {}", error);
+        }
+        _ => {}
       }
     }
   });
