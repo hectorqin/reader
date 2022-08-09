@@ -92,7 +92,7 @@ jobs:
           path: reader.jar
 
   release-tauri:
-    needs: release
+    needs: buildRelease
     name: 'Build tauri app'
     strategy:
       matrix:
