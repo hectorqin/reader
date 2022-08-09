@@ -67,6 +67,7 @@ class ReaderApplication {
 }
 
 fun main(args: Array<String>) {
+    logger.info("Starting application with args: {}", args)
     SpringApplication.run(ReaderApplication::class.java, *args)
 }
 

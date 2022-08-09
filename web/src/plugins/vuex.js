@@ -436,12 +436,18 @@ export default new Vuex.Store({
   },
   getters: {
     api: state => {
-      if (
-        state.api.startsWith("http://") ||
-        state.api.startsWith("https://") ||
-        state.api.startsWith("//")
-      ) {
+      if (state.api.startsWith("http://") || state.api.startsWith("https://")) {
         return state.api;
+      }
+      if (state.api.startsWith("//")) {
+        if (!window.location.protocol.startsWith("http")) {
+          return "http:" + state.api;
+        } else {
+          return state.api;
+        }
+      }
+      if (!window.location.protocol.startsWith("http")) {
+        return "http://" + state.api;
       }
       return "//" + state.api;
     },

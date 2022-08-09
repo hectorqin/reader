@@ -6,7 +6,9 @@ task=$1
 
 version=""
 
-rootDir=$(dirname $0)
+rootDir=$(cd "$(dirname "$0")";pwd)
+
+cd $rootDir
 
 checkJava()
 {
@@ -106,6 +108,24 @@ case $task in
         # 编译同步web资源
         cd $rootDir/web
         yarn sync
+    ;;
+    sync-tauri)
+        cd $rootDir
+        mv src/main/java/com/htmake/reader/ReaderUIApplication.kt src/main/java/com/htmake/reader/ReaderUIApplication.kt.back
+        getVersion $rootDir/cli.gradle
+        $rootDir/gradlew -b cli.gradle assemble --info
+        if test $? -eq 0; then
+            cp -f build/libs/reader-$version.jar tauri/src-tauri/resources/reader.jar
+        fi
+        mv src/main/java/com/htmake/reader/ReaderUIApplication.kt.back src/main/java/com/htmake/reader/ReaderUIApplication.kt
+
+        cd $rootDir/web
+        yarn sync-tauri
+    ;;
+    tauri)
+        shift
+        cd $rootDir/tauri
+        yarn tauri $@
     ;;
     *)
         echo "

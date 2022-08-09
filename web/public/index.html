@@ -51,7 +51,7 @@
 
       // 获取单个查询参数
       function getQueryString(sVar, first) {
-        return decodeURI(window.location.search.replace(new RegExp('^(?:.*' + (first ? '?' : '') + '[&\\?]' + encodeURI(sVar).replace(/[\.\+\*]/g, '\\$&') + '(?:\\=([^&]*))?)?.*$', 'i'), '$1'));
+        return decodeURIComponent(window.location.search.replace(new RegExp('^(?:.*' + (first ? '?' : '') + '[&\\?]' + encodeURI(sVar).replace(/[\.\+\*]/g, '\\$&') + '(?:\\=([^&]*))?)?.*$', 'i'), '$1'));
       }
 
       window.onerror = function() {
