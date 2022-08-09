@@ -1,0 +1,118 @@
+name: Publish Tauri App
+
+on:
+  push:
+    tags:
+      - 'v**'
+    branches:
+      - master
+
+jobs:
+  build-jar:
+    if: github.repository == 'hectorqin/reader'
+    name: "Build And Release"
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Setup Java
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: 'gradle'
+      -
+        name: Build server jar
+        run:
+          rm src/main/java/com/htmake/reader/ReaderUIApplication.kt && gradle -b cli.gradle assemble --info && mv ./build/libs/*.jar ./reader.jar
+      -
+        name: 'Upload Artifact'
+        uses: actions/upload-artifact@v3
+        with:
+          name: my-artifact
+          path: reader.jar
+
+  build-tauri:
+    needs: build-jar
+    name: 'Build tauri app'
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    if: |
+      startsWith(github.repository, 'hectorqin')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: my-artifact
+
+      - name: Show files.
+        shell: bash
+        run: |
+          node -e "var fs = require('fs');console.log(fs.readdirSync('.'));"
+
+      - name: Show files.
+        shell: bash
+        run: |
+          mkdir -p tauri/src-tauri/resources
+          mv reader.jar tauri/src-tauri/resources/reader.jar
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@ce325b60658c1b38465c06cc965b79baf32c1e72
+        with:
+          working-directory: src-tauri
+
+      - name: Install Node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+
+      - name: Install Dependencies (ubuntu only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev build-essential curl wget libssl-dev libgtk-3-dev libappindicator3-dev librsvg2-dev libayatana-appindicator3-dev
+
+      - name: Build web
+        working-directory: web
+        run: |
+          yarn install
+          yarn run sync-tauri
+
+      - name: Show files.
+        shell: bash
+        run: |
+          node -e "var fs = require('fs');console.log(fs.readdirSync('.'));console.log(fs.readdirSync('./tauri'));console.log(fs.readdirSync('./tauri/dist'));"
+
+      - name: Yarn install
+        working-directory: tauri
+        run: |
+          yarn install
+
+      - name: Tauri build
+        uses: tauri-apps/tauri-action@0e558392ccadcb49bcc89e7df15a400e8f0c954d
+        # enable cache even though failed
+        # continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          # TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        with:
+          projectPath: ./tauri
+          tagName: tauri_v__VERSION__
+          releaseName: "Reader Desktop v__VERSION__"
+          releaseBody: "More new features are now supported."
+          releaseDraft: false
+          prerelease: true
