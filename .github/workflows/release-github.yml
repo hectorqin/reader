@@ -108,6 +108,10 @@ jobs:
         with:
           name: my-artifact
 
+      - name: Show files.
+        run: |
+          node -e "var fs = require('fs');console.log(fs.readdirSync('.'));"
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -140,19 +144,24 @@ jobs:
         id: yarn-cache
         with:
           path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/package.json') }}
           restore-keys: |
             ${{ runner.os }}-yarn-
 
-      - name: Yarn install and check
+      - name: Yarn install and build web
         working-directory: web
         run: |
-          yarn install --network-timeout 1000000
+          yarn install
           yarn run sync-tauri
 
       - name: Show files.
         run: |
           node -e "var fs = require('fs');console.log(fs.readdirSync('.'));console.log(fs.readdirSync('./tauri'));console.log(fs.readdirSync('./tauri/dist'));"
+
+      - name: Yarn install and build web
+        working-directory: tauri
+        run: |
+          yarn install
 
       - name: Tauri build
         uses: tauri-apps/tauri-action@0e558392ccadcb49bcc89e7df15a400e8f0c954d
