@@ -322,9 +322,7 @@ pub fn check_java_version(java_path: String) -> Result<()> {
 
 fn launch_server(app: &App, java_path: String, reader_config: &ReaderConfig) -> Result<()> {
   let jar_path = dirs::reader_jar_path()
-    .into_os_string()
-    .into_string()
-    .unwrap();
+      .display().to_string();
   log::info!("jar path {}", jar_path);
 
   let args = prepare_args(jar_path, reader_config);

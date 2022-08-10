@@ -23,7 +23,7 @@ async function resolveUpdater() {
   });
 
   // get the latest publish tag
-  const tag = tags.find((t) => t.name.startsWith("v"));
+  const tag = tags.find((t) => t.name.startsWith("tauri_v"));
 
   const { data: latestRelease } = await github.rest.repos.getReleaseByTag({
     ...options,

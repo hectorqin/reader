@@ -12,5 +12,5 @@
     "@tauri-apps/cli": "^1.0.4",
     "fs-extra": "^10.0.0"
   },
-  "version": "2.5.7"
+  "version": "2.5.8"
 }
