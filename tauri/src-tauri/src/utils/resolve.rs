@@ -1,27 +1,17 @@
 use crate::log_if_err;
-use crate::utils::config;
 use crate::utils::dirs;
 use crate::utils::init;
 use crate::utils::help;
 use crate::utils::reader_config::*;
 
 use anyhow::{bail, Result};
-use std::path;
-use std::process::Output;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::Duration;
 use tauri::api::process::{Command, CommandEvent};
-use tauri::LogicalPosition;
-use tauri::LogicalSize;
-use tauri::PhysicalSize;
-use tauri::Position::Logical as ToLogicalPostion;
-use tauri::Size::Logical;
-use tauri::Size::Physical;
-use tauri::{App, AppHandle, Manager, Window};
+use tauri::{App, Manager};
 use tauri::utils::config::AppUrl;
-use url::Url;
 
 static READER_SERVER_STARTED: AtomicBool = AtomicBool::new(false);
 static READER_SERVER_FAILED: AtomicBool = AtomicBool::new(false);
@@ -52,6 +42,7 @@ fn create_main_window(app: &App, config: &ReaderConfig) {
 
   let api = format!("//localhost:{}/reader3", server_port);
   let default_window_url = tauri::WindowUrl::App(format!("index.html?api={}", api).into());
+  #[allow(unused_assignments)]
   let mut window_url = default_window_url.clone();
 
   #[cfg(debug_assertions)] {
@@ -328,7 +319,7 @@ fn launch_server(app: &App, java_path: String, reader_config: &ReaderConfig) -> 
   let args = prepare_args(jar_path, reader_config);
 
   tauri::async_runtime::spawn(async move {
-    let (mut rx, mut child) = Command::new(java_path)
+    let (mut rx, _child) = Command::new(java_path)
       .args(args)
       .current_dir(dirs::app_home_dir())
       .spawn()

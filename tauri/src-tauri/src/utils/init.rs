@@ -92,7 +92,13 @@ pub fn init_app(package_info: &PackageInfo) {
     log::error!(target: "app", "{err}");
   }
 
-  log::info!("res_dir: {} {} {} {}", res_dir.as_os_str().to_str().unwrap().to_string(), res_dir.clone().into_os_string().into_string().unwrap(), res_dir.display(), res_dir.display().to_string());
+  log::info!("res_dir: {} {} {} {} {}",
+    res_dir.as_os_str().to_str().unwrap().to_string(),
+    res_dir.clone().into_os_string().into_string().unwrap(),
+    res_dir.display(),
+    res_dir.display().to_string(),
+    res_dir.as_os_str().to_string_lossy().to_string()
+  );
 
   // copy the resource file
   // let jar_path = dirs::reader_jar_path();

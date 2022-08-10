@@ -1,13 +1,9 @@
 use crate::{
-  utils::{dirs, help},
   utils::resolve::{check_installed_java, check_java_version}
 };
-use crate::{log_if_err, ret_err, wrap_err};
+use crate::log_if_err;
 use anyhow::Result;
-use serde_yaml::Mapping;
-use tauri::{api, State};
 use crate::utils::reader_config::*;
-use std::path;
 
 type CmdResult<T = ()> = Result<T, String>;
 
@@ -27,7 +23,7 @@ pub fn get_config() -> CmdResult<ReaderConfig> {
 pub fn save_config(config: Option<ReaderConfig>) -> CmdResult<bool> {
   let mut reader_config = ReaderConfig::new();
   if let Some(config) = config {
-    reader_config.patch_config(config);
+    log_if_err!(reader_config.patch_config(config));
   }
   Ok(true)
 }

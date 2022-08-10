@@ -17,7 +17,7 @@ fn prepare_menu() -> Menu {
   let mut menu_items = Vec::<MenuEntry>::new();
   for item in menu.items {
     match item {
-      MenuEntry::Submenu(mut sub) => {
+      MenuEntry::Submenu(sub) => {
         // 隐藏 Edit 和 File 菜单
         menu_items.push(MenuEntry::Submenu(sub));
         // if !sub.title.eq("Edit") {
@@ -99,17 +99,17 @@ fn main() {
     .build(tauri::generate_context!())
     .expect("error while building tauri application");
 
-  app.run(|app_handle, e| match e {
+  app.run(|_app_handle, e| match e {
     tauri::RunEvent::Ready { .. } => {}
-    tauri::RunEvent::WindowEvent { label, event, .. } => {
+    tauri::RunEvent::WindowEvent { label: _, event, .. } => {
       match event {
-        tauri::WindowEvent::CloseRequested { api, .. } => {
+        tauri::WindowEvent::CloseRequested { api: _, .. } => {
           // api.prevent_close();
         }
         _ => {}
       };
     }
-    tauri::RunEvent::ExitRequested { api, .. } => {
+    tauri::RunEvent::ExitRequested { api: _, .. } => {
       // api.prevent_exit();
     }
     tauri::RunEvent::Exit => {

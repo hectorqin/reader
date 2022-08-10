@@ -1,7 +1,7 @@
 use crate::utils::{config, dirs, tmpl};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use serde_yaml::{Mapping, Value};
+use serde_yaml::Mapping;
 
 /// ### `config.yaml` schema
 #[derive(Default, Debug, Clone, Deserialize, Serialize)]

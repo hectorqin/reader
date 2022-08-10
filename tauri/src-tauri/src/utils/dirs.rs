@@ -31,14 +31,14 @@ pub fn app_home_dir() -> PathBuf {
   // }
 
   // #[cfg(not(target_os = "windows"))]
-  home_dir().unwrap().join(".config").join(APP_DIR)
+  dunce::canonicalize(home_dir().unwrap().join(".config").join(APP_DIR)).unwrap()
 }
 
 /// get the resources dir
 pub fn app_resources_dir(package_info: &PackageInfo) -> PathBuf {
-  let res_dir = resource_dir(package_info, &Env::default())
+  let res_dir = dunce::canonicalize(resource_dir(package_info, &Env::default())
     .unwrap()
-    .join("resources");
+    .join("resources")).unwrap();
 
   unsafe {
     RESOURCE_DIR = Some(res_dir.clone());
@@ -47,10 +47,10 @@ pub fn app_resources_dir(package_info: &PackageInfo) -> PathBuf {
   res_dir
 }
 
-/// profiles dir
-pub fn app_profiles_dir() -> PathBuf {
-  app_home_dir().join("profiles")
-}
+// /// profiles dir
+// pub fn app_profiles_dir() -> PathBuf {
+//   app_home_dir().join("profiles")
+// }
 
 /// logs dir
 pub fn app_logs_dir() -> PathBuf {
