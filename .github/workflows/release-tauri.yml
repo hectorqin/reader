@@ -114,6 +114,12 @@ jobs:
         run: |
           yarn install
 
+      - name: Build Changelog
+        id: github_release_changelog
+        uses: mikepenz/release-changelog-builder-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Tauri build
         uses: tauri-apps/tauri-action@0e558392ccadcb49bcc89e7df15a400e8f0c954d
         # enable cache even though failed
@@ -126,7 +132,7 @@ jobs:
           projectPath: ./tauri
           tagName: tauri_v__VERSION__
           releaseName: "Reader Desktop v__VERSION__"
-          releaseBody: "More new features are now supported."
+          releaseBody: ${{steps.github_release_changelog.outputs.changelog}}
           releaseDraft: false
           prerelease: true
 

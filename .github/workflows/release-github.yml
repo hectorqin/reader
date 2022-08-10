@@ -1,11 +1,12 @@
 name: Publish Github Releases
 
-on:
-  push:
-    tags:
-      - 'v**'
-    branches:
-      - master
+# on:
+#   push:
+#     tags:
+#       - 'v**'
+#     branches:
+#       - master
+on: workflow_dispatch
 
 jobs:
   buildRelease:
