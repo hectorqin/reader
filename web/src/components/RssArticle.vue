@@ -52,6 +52,7 @@ export default {
     show(isVisible) {
       if (isVisible) {
         //
+        this.$nextTick(this.runScript);
       }
     }
   },
@@ -78,6 +79,21 @@ export default {
           this.$store.commit("setPreviewImageIndex", index);
           this.$store.commit("setPreviewImgList", imgUrlList);
         }
+      }
+    },
+    runScript() {
+      try {
+        const scriptList = this.$refs.rssArticleContentRef.querySelectorAll(
+          "script"
+        );
+        if (scriptList.length) {
+          for (let i = 0; i < scriptList.length; i++) {
+            const code = scriptList[i].innerText;
+            new Function(code)();
+          }
+        }
+      } catch (error) {
+        this.$message.error("执行脚本出错: " + error);
       }
     }
   }

@@ -281,8 +281,8 @@ data class Book(
             if (!rootPath.endsWith(File.separator)) {
                 rootPath = rootPath + File.separator
             }
-            book.bookUrl = book.bookUrl.replace(Regex("^${rootPath}"), "")
-            book.originName = book.originName.replace(Regex("^${rootPath}"), "")
+            book.bookUrl = book.bookUrl.replaceFirst(rootPath, "")
+            book.originName = book.originName.replaceFirst(rootPath, "")
             book.setRootDir(rootDir)
             book.updateFromLocal()
             return book

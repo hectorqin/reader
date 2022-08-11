@@ -1,0 +1,158 @@
+name: Publish Tauri App
+
+on:
+  push:
+    tags:
+      - 'v**'
+    branches:
+      - master
+
+jobs:
+  build-resources:
+    if: github.repository == 'hectorqin/reader'
+    name: "Build resources"
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Setup Java
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'temurin'
+          java-version: '11'
+          cache: 'gradle'
+      -
+        name: Build server jar
+        run: |
+          mkdir -p src/main/resources/web
+          touch src/main/resources/web/index.html
+          echo "<html><body><h3>Tauri客户端未内置静态资源</h3></body></html>" > src/main/resources/web/index.html
+          rm src/main/java/com/htmake/reader/ReaderUIApplication.kt && gradle -b cli.gradle assemble --info && mv ./build/libs/*.jar ./reader.jar
+      -
+        name: Setup node
+        uses: actions/setup-node@v2
+        with:
+          node-version: '14'
+      -
+        name: Build web
+        working-directory: web
+        run: yarn install && yarn run build
+      -
+        name: 'Upload Artifact'
+        uses: actions/upload-artifact@v3
+        with:
+          name: my-artifact
+          path: |
+            reader.jar
+            web/dist
+
+  build-tauri:
+    needs: build-resources
+    name: 'Build tauri app'
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    if: |
+      startsWith(github.repository, 'hectorqin')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: my-artifact
+
+      - name: Show files.
+        shell: bash
+        run: |
+          echo "> Showing current directory:"
+          ls
+          echo "> Showing web directory:"
+          ls web
+
+      - name: Install resources
+        shell: bash
+        run: |
+          mkdir -p tauri/src-tauri/resources
+          mv reader.jar tauri/src-tauri/resources/reader.jar
+          rm -rf tauri/dist
+          mv web/dist tauri/dist
+
+      - name: Show files.
+        shell: bash
+        run: |
+          echo "> Showing current directory:"
+          ls
+          echo "> Showing tauri directory:"
+          ls tauri
+          echo "> Showing tauri/src-tauri directory:"
+          ls tauri/src-tauri
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@ce325b60658c1b38465c06cc965b79baf32c1e72
+        with:
+          working-directory: tauri/src-tauri
+
+      - name: Install Dependencies (ubuntu only)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev build-essential curl wget libssl-dev libgtk-3-dev libappindicator3-dev librsvg2-dev libayatana-appindicator3-dev
+
+      - name: Yarn install
+        working-directory: tauri
+        run: |
+          yarn install
+
+      - name: Build Changelog
+        id: github_release_changelog
+        uses: mikepenz/release-changelog-builder-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tauri build
+        uses: tauri-apps/tauri-action@0e558392ccadcb49bcc89e7df15a400e8f0c954d
+        # enable cache even though failed
+        # continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+        with:
+          projectPath: ./tauri
+          tagName: tauri_v__VERSION__
+          releaseName: "Reader Desktop v__VERSION__"
+          releaseBody: ${{steps.github_release_changelog.outputs.changelog}}
+          releaseDraft: false
+          prerelease: true
+
+  release-update:
+    needs: build-tauri
+    runs-on: macos-latest
+    if: |
+      startsWith(github.repository, 'hectorqin') &&
+      startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Yarn install
+        working-directory: tauri
+        run: |
+          yarn install
+
+      - name: Release updater file
+        working-directory: tauri
+        run: yarn run updater
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

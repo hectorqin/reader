@@ -50,7 +50,8 @@ try {
   Vue.config.productionTip = false;
 
   Vue.use(VueLazyload, {
-    observer: true
+    observer: true,
+    preLoad: 1.8
   });
 
   Vue.mixin({

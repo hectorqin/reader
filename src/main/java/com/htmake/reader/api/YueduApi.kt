@@ -271,6 +271,11 @@ class YueduApi : RestVerticle() {
         router.get("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
         router.post("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
 
+        // mongodb 备份
+        router.post("/reader3/backupToMongodb").coroutineHandler { bookController.backupToMongodb(it) }
+        router.post("/reader3/restoreFromMongodb").coroutineHandler { bookController.restoreFromMongodb(it) }
+
+
         /** 用户模块 */
         // 上传文件
         router.post("/reader3/uploadFile").coroutineHandler { userController.uploadFile(it) }

@@ -46,3 +46,7 @@ out
 /.lh/
 
 /simple-web/
+/tauri/dist/
+/tauri/src-tauri/logs
+/tauri/src-tauri/storage
+/tauri/src-tauri/resources/reader.jar

@@ -1,6 +1,6 @@
 reader:
   app:
-    storagePath: storage
+    workDir: "."
     showUI: false
     debug: false
     packaged: false
@@ -26,4 +26,4 @@ reader:
     webUrl: http://localhost:${reader.server.port}
 
 logging:
-  path: "./logs"
+  path: "${reader.app.workDir}/logs"

@@ -137,6 +137,50 @@ export const cacheFirstRequest = async function(
   return res;
 };
 
+export const staleWhileRevalidateRequest = async function(
+  requestFunc,
+  cacheKey,
+  validateCache,
+  onUpdate
+) {
+  cacheKey = "localCache@" + cacheKey;
+
+  const requestHandler = async () => {
+    const res = await requestFunc();
+    if (res.data && res.data.isSuccess) {
+      // 使用新的异步存储
+      window.$cacheStorage.setItem(cacheKey, res.data).catch(() => {});
+    }
+    return res;
+  };
+
+  // validateCache === true 时，直接刷新缓存
+  if (validateCache !== true) {
+    let cacheResponse = await window.$cacheStorage
+      .getItem(cacheKey)
+      .then(cacheResponse => {
+        if (cacheResponse) {
+          return cacheResponse;
+        }
+        // console.log("Cache not found in new cache");
+        throw new Error("Cache not found");
+      })
+      .catch(() => {
+        // 兼容旧逻辑
+        const cacheResponse = getCache(cacheKey);
+        return cacheResponse;
+      });
+    if (cacheResponse) {
+      if (!validateCache || (validateCache && validateCache(cacheResponse))) {
+        // 更新缓存
+        requestHandler().then(onUpdate || (() => {}));
+        return { data: cacheResponse };
+      }
+    }
+  }
+  return await requestHandler();
+};
+
 export const isMiniInterface = () => window.innerWidth <= 750;
 
 export const editDistance = function(strA, strB) {

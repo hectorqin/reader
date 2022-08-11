@@ -18,9 +18,9 @@ import com.htmake.reader.verticle.RestVerticle
 import com.htmake.reader.utils.SpringContextUtils
 import com.htmake.reader.SpringEvent
 
-import com.htmake.reader.utils.getStorage
-import com.htmake.reader.utils.saveStorage
 import com.htmake.reader.utils.asJsonObject
+import com.htmake.reader.utils.jsonEncode
+import com.htmake.reader.utils.getRelativePath
 
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.SpringApplication
@@ -63,6 +63,7 @@ import org.springframework.core.env.ConfigurableEnvironment
 import org.springframework.core.env.MapPropertySource
 
 import java.util.concurrent.CompletableFuture
+import java.io.File
 
 private val logger = KotlinLogging.logger {}
 private var launchArgs = arrayOf<String>()
@@ -79,6 +80,7 @@ class ReaderUIApplication: Application() {
     var isSpringBootLaunched = false
     var springBootError = ""
     var showUI = false
+    var workDir = ""
 
     var defaultIcons = arrayOf<Image>();
 
@@ -92,6 +94,12 @@ class ReaderUIApplication: Application() {
             var envListener = object: ApplicationListener<ApplicationEnvironmentPreparedEvent> {
                 override fun onApplicationEvent(event: ApplicationEnvironmentPreparedEvent) {
                     env = event.getEnvironment()
+                    // 读取工作目录 命令行参数 > 环境变量
+                    workDir = env.getProperty("reader.app.workDir", String::class.java) ?: ""
+                    if (workDir.isEmpty()) {
+                        workDir = env.getProperty("READER_APP_WORKDIR", String::class.java) ?: ""
+                    }
+                    logger.info("workDir: {}", workDir)
                     // 加载 windowConfig
                     var windowConfigSource = loadPropertySourceFromWindowConfig()
                     env.getPropertySources().addFirst(windowConfigSource)
@@ -260,8 +268,10 @@ class ReaderUIApplication: Application() {
                     windowConfigSource.put("reader.server.port", windowConfigPort)
                 }
             }
-            val showUI = windowConfigMap.getOrDefault("showUI", true) as Boolean? ?: true
-            windowConfigSource.put("reader.app.showUI", showUI)
+            val showUI = windowConfigMap.getOrDefault("showUI", null)
+            if (showUI != null) {
+                windowConfigSource.put("reader.app.showUI", showUI as Boolean)
+            }
             val debug = windowConfigMap.getOrDefault("debug", null)
             if (debug != null) {
                 windowConfigSource.put("reader.app.debug", debug as Boolean)
@@ -274,10 +284,21 @@ class ReaderUIApplication: Application() {
         return MapPropertySource("windowConfig", windowConfigSource)
     }
 
+    fun getWorkDirFile(vararg subDirFiles: String): File {
+        if (workDir.isNotEmpty()) {
+            return File(workDir + File.separator + getRelativePath(*subDirFiles))
+        } else {
+            return File(getRelativePath(*subDirFiles))
+        }
+    }
+
     fun loadWindowConfig() {
-        val windowConfigObject = asJsonObject(getStorage("windowConfig"))
-        if (windowConfigObject != null) {
-            windowConfigMap = windowConfigObject.map
+        val windowConfigFile = getWorkDirFile("storage", "windowConfig.json")
+        if (windowConfigFile.exists()) {
+            val windowConfigObject = asJsonObject(windowConfigFile.readText())
+            if (windowConfigObject != null) {
+                windowConfigMap = windowConfigObject.map
+            }
         }
         logger.info("windowConfigMap: {}", windowConfigMap)
     }
@@ -381,7 +402,11 @@ class ReaderUIApplication: Application() {
     }
 
     override fun stop() {
-        saveStorage("windowConfig", value = windowConfigMap, pretty = true)
+        val windowConfigFile = getWorkDirFile("storage", "windowConfig.json")
+        if (!windowConfigFile.parentFile.exists()) {
+            windowConfigFile.parentFile.mkdirs()
+        }
+        windowConfigFile.writeText(jsonEncode(windowConfigMap, true))
         super.stop()
         var context = SpringContextUtils.getApplicationContext()
         logger.info("application stop: {}", context)

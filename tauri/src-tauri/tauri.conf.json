@@ -1,0 +1,94 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": "",
+    "devPath": "../dist",
+    "distDir": "../dist",
+    "withGlobalTauri": true
+  },
+  "package": {
+    "productName": "Reader Desktop",
+    "version": "2.5.8"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": true
+      },
+      "window": {
+        "all": true
+      },
+      "process": {
+        "all": true
+      },
+      "dialog": {
+        "all": true
+      },
+      "clipboard": {
+        "all": true
+      },
+      "globalShortcut": {
+        "all": true
+      },
+      "http": {
+        "all": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "category": "DeveloperTool",
+      "copyright": "© 2021 hectorqin All Rights Reserved",
+      "deb": {
+        "depends": []
+      },
+      "externalBin": [],
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ],
+      "identifier": "com.htmake.reader",
+      "longDescription": "",
+      "macOS": {
+        "entitlements": null,
+        "exceptionDomain": "",
+        "frameworks": [],
+        "providerShortName": null,
+        "signingIdentity": null
+      },
+      "resources": [
+        "resources"
+      ],
+      "shortDescription": "",
+      "targets": "all",
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "timestampUrl": "",
+        "wix": {
+          "language": [
+            "zh-CN",
+            "en-US"
+          ]
+        }
+      }
+    },
+    "security": {
+      "csp": null
+    },
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/hectorqin/reader/releases/download/updater/update.json",
+        "https://hub.fastgit.xyz/hectorqin/reader/releases/download/updater/update-proxy.json"
+      ],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhBRjE2RTgxNUU4RkE0MjEKUldRaHBJOWVnVzd4aXYwdEpuOE9FbHA3MFJJL2FGWk9zSmlZMVhwU2Vaek9JSWxoOGFMT0VaRWwK"
+    },
+    "windows": []
+  }
+}
