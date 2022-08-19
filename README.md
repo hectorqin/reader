@@ -59,7 +59,6 @@
 - [x] 并发搜索书籍来源
 - [x] WebDav同步
 - [x] 导入本地书籍，支持epub
-- [ ] 完善接口文档
 - [x] 阅读3核心兼容。已最大可能兼容，不支持使用webview，不支持使用cookie、cache及调用原生java等高级Javascript功能
 - [x] 支持RSS订阅
 
