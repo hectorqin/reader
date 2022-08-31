@@ -65,7 +65,7 @@
 ## 问题
 
 - 部分使用了 `Javascript` 的书源可能会报错，不支持 `cookie` 和 `cache` 功能
-- 不支持使用了 `webview` 的书源
+- `webview` 功能需要另外部署接口，不支持 `sourceRegex` 匹配资源响应
 - 不支持书源登录功能
 
 ## 感谢
