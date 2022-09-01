@@ -270,6 +270,14 @@ docker run -d --restart=always --name=reader -e "SPRING_PROFILES_ACTIVE=prod" -e
 
 # 通过watchtower手动更新
 docker run --rm -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtower --cleanup --run-once reader
+
+# 使用 remote-webview 功能
+# 1.创建 remote-webview 容器
+docker run -d --network host --restart=always hectorqin/remote-webview
+# 2.重建 reader 容器
+reader使用宿主机网络：--network host
+reader添加环境变量：-e "READER_APP_REMOTEWEBVIEWAPI=http://localhost:8050"
+获取reader添加参数：--reader.app.remoteWebviewApi=http://localhost:8050"
 ```
 
 ### Docker-Compose版(推荐)
