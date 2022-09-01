@@ -269,7 +269,7 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock containrrr/watchtow
 
 # 使用 remote-webview 功能
 # 1.创建 remote-webview 容器
-docker run -d --network host --restart=always scrapinghub/splash
+docker run -d --network host --restart=always hectorqin/remote-webview
 # 2.重建 reader 容器
 reader使用宿主机网络：--network host
 reader添加环境变量：-e "READER_APP_REMOTEWEBVIEWAPI=http://localhost:8050"

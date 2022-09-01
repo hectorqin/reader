@@ -30,7 +30,7 @@ services:
       - READER_APP_SECUREKEY=adminpwd  #管理员密码  建议修改
       - READER_APP_INVITECODE=registercode #注册邀请码 建议修改,如不需要可注释或删除
   # remote-webview:
-  #   image: scrapinghub/splash
+  #   image: hectorqin/remote-webview
   #   container_name: remote-webview #容器名 可自行修改
   #   restart: always
   #   ports:
