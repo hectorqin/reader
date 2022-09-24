@@ -3135,6 +3135,9 @@ export default {
   .read-bar {
     position: fixed;
     bottom: 0;
+    padding-bottom: 0;
+    padding-bottom: constant(safe-area-inset-bottom) !important;
+    padding-bottom: env(safe-area-inset-bottom) !important;
     right: 50%;
     z-index: 100;
 
@@ -3652,6 +3655,8 @@ export default {
       right: auto;
       left: 20px;
       bottom: 135px;
+      bottom: calc(135px + constant(safe-area-inset-bottom));
+      bottom: calc(135px + env(safe-area-inset-bottom));
     }
 
     .float-right-btn-zone {
@@ -3659,6 +3664,8 @@ export default {
       left: auto;
       right: 20px;
       bottom: 135px;
+      bottom: calc(135px + constant(safe-area-inset-bottom));
+      bottom: calc(135px + env(safe-area-inset-bottom));
     }
 
     .tools {
