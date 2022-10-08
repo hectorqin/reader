@@ -59,12 +59,12 @@
 - [x] 并发搜索书籍来源
 - [x] WebDav同步
 - [x] 导入本地书籍，支持epub
-- [x] 阅读3核心兼容。已最大可能兼容，不支持使用webview，不支持使用cookie、cache及调用原生java等高级Javascript功能
+- [x] 阅读3核心兼容。已最大可能兼容，支持使用webview，支持使用javascript。
 - [x] 支持RSS订阅
 
 ## 问题
 
-- 部分使用了 `Javascript` 的书源可能会报错，不支持 `cookie` 和 `cache` 功能
+- 部分使用了 `Javascript` 的书源可能会报错，如调用原生java等高级Javascript功能
 - `webview` 功能需要另外部署接口，不支持 `sourceRegex` 匹配资源响应
 - 不支持书源登录功能
 
