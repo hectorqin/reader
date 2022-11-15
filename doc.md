@@ -278,18 +278,23 @@ reader添加环境变量：-e "READER_APP_REMOTEWEBVIEWAPI=http://localhost:8050
 
 ### Docker-Compose版(推荐)
 
-```bash
-#安装docker-compose
+```shell
+#腾讯云，阿里云，华为云，甲骨文等服务器提供商需在控制台面板手动关闭防火墙并放行端口
+#安装docker 及 docker-compose
 #Debian/Ubuntu
 apt install docker-compose -y
 #CentOS
-curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+yum install docker -y
+curl -L "https://ghproxy.com/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 chmod +x /usr/local/bin/docker-compose
-docker-compose --version
 
 # 下载项目里的 docker-compose.yaml
-wget https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
+wget https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
 # 根据 docker-compose.yaml 里面的注释编辑所需配置
+vim docker-compose.yaml
+# 保存
+esc
+:wq
 # 启动 docker-compose
 docker-compose up -d
 
@@ -303,10 +308,28 @@ docker logs -f reader
 docker-compose pull && docker-compose up -d
 ```
 
-## Nginx反向代理
+### 通过脚本一键部署
+
+```shell
+bash <(wget -qO- --no-check-certificate https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
+```
+
+## Nginx反向代理(如果有域名可以考虑80端口复用)
+
+```shell
+# 此教程仅限非宝塔等各种面板使用
+# Debian/Ubuntu
+apt install nginx -y
+# CentOS
+yum install nginx -y
+vim /etc/nginx/conf.d/reader.conf
+将下面代码复制进reader.conf后，修改域名输入
+esc
+:wq
+保持即可
+```
 
 ```nginx
-# 此文件放入 conf.d目录下,一般可用 touch /etc/nginx/conf.d/reader.conf 创建
 server {
     listen 80;
     server_name 域名;
