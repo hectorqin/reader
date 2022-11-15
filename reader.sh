@@ -63,7 +63,7 @@ fi
 install_dockercompose() {
     if [[ x"${release}" == x"centos" ]]; then
         yum update && yum install wget curl docker -y 
-        curl -L "https://ghproxy.com/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
+        curl -L "https://ghproxy.com/https://ghproxy.com/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
     else
         apt update && apt install wget curl docker-compose -y
     fi
