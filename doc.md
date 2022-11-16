@@ -15,6 +15,7 @@
     - [服务器版](#服务器版)
     - [Docker版](#docker版)
     - [Docker-Compose版(推荐)](#docker-compose版推荐)
+    - [脚本部署(CentOS&甲骨文非Ubuntu可能不支持)](#通过脚本一键部署)
   - [Nginx反向代理](#nginx反向代理)
   - [开发编译](#开发编译)
     - [编译脚本](#编译脚本)
@@ -283,10 +284,9 @@ reader添加环境变量：-e "READER_APP_REMOTEWEBVIEWAPI=http://localhost:8050
 #安装docker 及 docker-compose
 #Debian/Ubuntu
 apt install docker-compose -y
-#CentOS
-yum install docker -y
-curl -L "https://ghproxy.com/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-chmod +x /usr/local/bin/docker-compose
+#CentOS 建议修改为Debian/Ubuntu，或者网上搜索Docker/Docker-compose安装教程
+curl -fsSL https://get.docker.com | bash -s docker #国外服务器
+curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun #国内服务器
 
 # 下载项目里的 docker-compose.yaml
 wget https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
@@ -304,6 +304,9 @@ docker-compose stop
 # 查看实时日志
 docker logs -f reader
 
+# 自行导入远程书源(打开链接后复制网址导入即可)
+https://legado.pages.dev
+
 # 手动更新
 docker-compose pull && docker-compose up -d
 ```
@@ -311,6 +314,7 @@ docker-compose pull && docker-compose up -d
 ### 通过脚本一键部署
 
 ```shell
+# 此脚本对甲骨文非Ubuntu以及CentOS支持程度极低。此两系统建议网上手动搜索
 bash <(wget -qO- --no-check-certificate https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
 ```
 

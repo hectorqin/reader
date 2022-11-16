@@ -5,10 +5,6 @@ services:
 # 阅读官方书源 : [https://legado.pages.dev](https://legado.pages.dev) 或者 [http://legado.git.llc](https://legado.pages.dev) 点击打开连接，添加远程书源即可
 # 公众号汇总 : [https://mp.weixin.qq.com/s/5t8nfSnRfHjJNAvT76fA_A](https://mp.weixin.qq.com/s/5t8nfSnRfHjJNAvT76fA_A)
 # 手动更新方式 : 在此文件所在的目录下执行 docker-compose pull && docker-compose up -d
-# Debian 10+/Ubuntu18+ 一键安装命令 浏览器打开ip:4396即可，国内服务器需手动放行映射端口(默认为4396
-# cd /home && wget https://raw.nxnow.top/NZESupB/Profile/main/dockercompose/reader/docker-compose.yml && apt update && apt install docker-compose -y && docker-compose up -d
-# CentOS7+ 一键安装命令 (未测试)
-# cd /home && wget https://raw.nxnow.top/NZESupB/Profile/main/dockercompose/reader/docker-compose.yml && yum update && yum install docker && curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose && docker-compose up -d
   reader:
     #image: hectorqin/reader # 普通镜像
     image: hectorqin/reader:openj9-latest # Openj9镜像，arm64架构或小内存机器优先使用
