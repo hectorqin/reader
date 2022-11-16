@@ -67,8 +67,14 @@ fi
 
 install_dockercompose() {
     if [[ x"${release}" == x"centos" ]]; then
-        yum update -y && yum install wget curl docker -y 
-        systemctl restart docker
+        yum install wget curl -y 
+        yum remove docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine -y
+        yum install -y yum-utils device-mapper-persistent-data lvm2 -yaml
+        yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
+        yum install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
+        yum install docker-ce-20.10.18 -y
+        systemctl start docker
+        systemctl enable docker
         curl -L "https://ghproxy.com/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
     else
         apt update && apt install wget curl docker-compose -y
@@ -79,7 +85,7 @@ install_reader() {
     mkdir -p ${orgin_file_dir}/storage/data/default
     cd ${orgin_file_dir}
     rm docker-compose*
-    wget https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
+    wget https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yml
     echo -e "${green} 正在下载默认书源 ${plain}"
     wget https://legado.pages.dev/sy-yc.json -O storage/data/default/bookSource.json
     echo -e "${green} 正在配置docker变量 ${plain}"
@@ -159,13 +165,43 @@ getDockerImages () {
 }
 
 Server_IP=''
+Public_IP=''
 getIpaddr () {
-    Server_IP=`ip addr | grep 'state UP' -A2 | grep inet | egrep -v '(127.0.0.1|inet6|docker)' | awk '{print $2}' | tr -d "addr:" | head -n 1 | cut -d / -f1`
+    # Server_IP=`ip addr | grep 'state UP' -A2 | grep inet | egrep -v '(127.0.0.1|inet6|docker)' | awk '{print $2}' | tr -d "addr:" | head -n 1 | cut -d / -f1`
+    Server_IP=$(hostname -I | awk -F " " '{printf $1}')
+    Public_IP=$(curl http://pv.sohu.com/cityjson 2>> /dev/null | awk -F '"' '{print $4}')
+    # hosts=("checkip.amazonaws.com" "api.ipify.org" "ifconfig.me/ip" "icanhazip.com" "ipinfo.io/ip" "ipecho.net/plain" "checkipv4.dedyn.io")
+
+    # CURL=`which curl`
+    # DIG=`which dig`
+
+    # Public_IP=$($DIG +short myip.opendns.com @resolver1.opendns.com A) 
+
+    # if [ ! $? -eq 0 ] || [ -z "$Public_IP" ] || [[ ! $Public_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    #     echo "Unable to get your public IP address by OpenDNS service, try to another way."
+    #     count=${#hosts[@]}
+
+    #     while [ -z "$Public_IP" ] && [[ $count -ne 0 ]]; do
+    #         selectedhost=${hosts[ $RANDOM % ${#hosts[@]} ]}
+    #         Public_IP=$($CURL -4s https://$selectedhost | grep '[^[:blank:]]') && {
+    #             if [ -n "$Public_IP" ] && [[ $Public_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    #                 break
+    #             else
+    #                 Public_IP=""
+    #                 count=$(expr $count - 1)
+    #                 echo "The host $selectedhost returned an invalid IP address."
+    #             fi
+    #         } || {
+    #             Public_IP=""
+    #             count=$(expr $count - 1)
+    #             echo "The host $selectedhost did not respond."
+    #         }
+    #     done
+    # fi
 }
 
 echo -e "${green}开始安装${plain}"
-echo -e "${green}甲骨文系统可能需要手动安装docker,本脚本仅测试CentOS7,Ubuntu20+,Debian10+${plain}"
-echo -e "${green}建议放弃CentOS,此脚本不对该系统继续适配,不会写${plain}"
+echo -e "${green}甲骨文系统可能需要手动安装docker,本脚本仅测试CentOS7,8,Ubuntu20+,Debian10+${plain}"
 install_dockercompose
 getfileDir
 getRemotePort
@@ -178,7 +214,12 @@ install_reader
 getIpaddr
 
 echo -e "${green}初步部署完成,国内服务器请在控制台打开端口${remotePort}${plain}"
-echo -e "${green}浏览器打开网页${plain} http://${Server_IP}:${remotePort}"
+if [ $Server_IP == $Public_IP ];then
+    echo -e "${green}网址:${plain} http://${Server_IP}:${remotePort}"
+else
+    echo -e "${green}网址:${plain} http://${Public_IP}:${remotePort}"
+fi
+
 echo -e "${green}如需修改其他配置请前往 cd${orgin_file_dir} 根据注释修改 vim docker-compose.yml文件后${plain}"
 echo -e "${green}先自行学习vim用法,否者建议使用sftp或WindTerm等ssh自带sftp的软件直接打开编辑${plain}"
 echo -e "${green}通过命令docker-compose up -d 重启即可${plain}"
