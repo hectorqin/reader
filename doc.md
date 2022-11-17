@@ -316,7 +316,7 @@ docker-compose pull && docker-compose up -d
 ```shell
 # 此脚本对甲骨文非Ubuntu系统,CentOS9可能不兼容。建议网上手动搜索
 #curl 
-bash <(curl -L -s https://ghproxy.com/https://raw.githubusercontent.com/NZESupB/reader/master/reader.sh)
+bash <(curl -L -s https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
 
 #wget 
 bash <(wget -qO- --no-check-certificate https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
