@@ -68,15 +68,20 @@ fi
 install_dockercompose() {
     if [[ x"${release}" == x"centos" ]]; then
         yum install wget curl -y 
+        echo -e "${green} 正在移除CentOS遗留无效Docker文件 ${plain}"
         yum remove docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine -y
-        yum install -y yum-utils device-mapper-persistent-data lvm2 -yaml
+        echo -e "${green} 正在安装Docker ${plain}"
+        yum install yum-utils device-mapper-persistent-data lvm2 -y
         yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
         yum install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
+        echo -e "${green} 正在启动Docker ${plain}"
         systemctl start docker
         systemctl restart docker
         systemctl enable docker
+        echo -e "${green} 正在安装docker-compose ${plain}"
         curl -L "https://ghproxy.com/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
     else
+        echo -e "${green} 正在安装docker-compose ${plain}"
         apt update && apt install wget curl docker-compose -y
     fi
 }
@@ -86,7 +91,7 @@ install_reader() {
     cd ${orgin_file_dir}
     rm docker-compose*
     wget https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yml
-    echo -e "${green} 正在下载默认书源 ${plain}"
+    echo -e "${green} 正在配置默认书源 ${plain}"
     wget https://legado.pages.dev/sy-yc.json -O storage/data/default/bookSource.json
     echo -e "${green} 正在配置docker变量 ${plain}"
     sed -i "s/\/home\/reader/${file_dir}/" docker-compose.yml
@@ -109,12 +114,12 @@ getRemotePort () {
     fi
     if [ "$remotePort" -gt 0 ] 2>/dev/null;then
 		if [[ $remotePort -lt 0 || $remotePort -gt 65535 ]];then
-		 echo -e "端口号不正确,请输入0-65535"
+		 echo -e "${red} 端口号不正确,请输入0-65535${plain}"
 		 getRemotePort
 		 exit 0
 		fi
 	else
-        echo -e "端口号不正确,请输入0-65535"
+        echo -e "${red} 端口号不正确,请输入0-65535${plain}"
 	    getRemotePort
 	    exit 0
     fi
@@ -171,8 +176,8 @@ getIpaddr () {
     Public_IP=$(curl http://pv.sohu.com/cityjson 2>> /dev/null | awk -F '"' '{print $4}')
 }
 
-echo -e "${green}开始安装${plain}"
-echo -e "${green}甲骨文系统可能需要手动安装docker,本脚本仅测试CentOS7,8,Ubuntu20+,Debian10+${plain}"
+echo -e "${green}准备部署reader${plain}"
+echo -e "${green}甲骨文官方系统可能并不适用此脚本,本脚本仅测试CentOS7,8,Ubuntu20+,Debian10+${plain}"
 install_dockercompose
 getfileDir
 getRemotePort
@@ -184,14 +189,14 @@ getDockerImages
 install_reader
 getIpaddr
 
-echo -e "${green}初步部署完成,国内服务器请在控制台打开端口${remotePort}${plain}"
+echo -e "${green}初步部署完成,已配置默认书源,国内服务器等有控制台面板的服务器厂商请手动在控制台打开reader所需的端口${remotePort}${plain}"
 if [ $Server_IP == $Public_IP ];then
     echo -e "${green}网址:${plain} http://${Server_IP}:${remotePort}"
 else
-    echo -e "${green}网址:${plain} http://${Server_IP}:${remotePort}"
-    echo -e "http://${Public_IP}:${remotePort}"
+    echo -e "${green}内网网址:${plain} http://${Server_IP}:${remotePort}"
+    echo -e "${green}公网网址:${plain} http://${Public_IP}:${remotePort}"
 fi
 
 echo -e "${green}如需修改其他配置请前往 cd${orgin_file_dir} 根据注释修改 vim docker-compose.yml文件后${plain}"
 echo -e "${green}先自行学习vim用法,否者建议使用sftp或WindTerm等ssh自带sftp的软件直接打开编辑${plain}"
-echo -e "${green}通过命令docker-compose up -d 重启即可${plain}"
+echo -e "${green}修改后前往 cd${orgin_file_dir} 后通过命令docker-compose up -d 重启即可${plain}"
