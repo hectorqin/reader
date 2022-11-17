@@ -73,6 +73,7 @@ install_dockercompose() {
         yum-config-manager --add-repo http://mirrors.aliyun.com/docker-ce/linux/centos/docker-ce.repo
         yum install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
         systemctl start docker
+        systemctl restart docker
         systemctl enable docker
         curl -L "https://ghproxy.com/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
     else
