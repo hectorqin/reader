@@ -321,7 +321,7 @@ bash <(wget -qO- --no-check-certificate https://ghproxy.com/https://raw.githubus
 ## Nginx反向代理(如果有域名可以考虑80端口复用)
 
 ```shell
-# 此教程仅限非宝塔等各种面板使用
+# 宝塔等各种面板不适用下列教程
 # Debian/Ubuntu
 apt install nginx -y
 # CentOS
@@ -338,7 +338,8 @@ server {
     listen 80;
     server_name 域名;
     #开启ssl解除注释
-    #不使用宝塔获取证书脚本  https://github.com/Misaka-blog/acme-1key
+    # SSL证书获取
+    # https://github.com/acmesh-official/acme.sh/wiki/%E8%AF%B4%E6%98%8E
     #listen 443 ssl;
     #ssl_certificate 证书.cer;
     #ssl_certificate_key 证书.key;
