@@ -15,6 +15,7 @@
     - [服务器版](#服务器版)
     - [Docker版](#docker版)
     - [Docker-Compose版(推荐)](#docker-compose版推荐)
+    - [脚本部署(甲骨文非Ubuntu可能不支持)](#通过脚本一键部署)
   - [Nginx反向代理](#nginx反向代理)
   - [开发编译](#开发编译)
     - [编译脚本](#编译脚本)
@@ -284,9 +285,8 @@ reader添加环境变量：-e "READER_APP_REMOTEWEBVIEWAPI=http://localhost:8050
 #Debian/Ubuntu
 apt install docker-compose -y
 #CentOS
-yum install docker -y
-curl -L "https://ghproxy.com/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-chmod +x /usr/local/bin/docker-compose
+curl -fsSL https://get.docker.com | bash -s docker #国外服务器
+curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun #国内服务器
 
 # 下载项目里的 docker-compose.yaml
 wget https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
@@ -304,6 +304,9 @@ docker-compose stop
 # 查看实时日志
 docker logs -f reader
 
+# 自行导入远程书源(打开链接后复制网址导入即可)
+https://legado.pages.dev
+
 # 手动更新
 docker-compose pull && docker-compose up -d
 ```
@@ -311,13 +314,19 @@ docker-compose pull && docker-compose up -d
 ### 通过脚本一键部署
 
 ```shell
+# 此脚本对甲骨文非Ubuntu系统,CentOS9可能不兼容。建议网上手动搜索
+#curl 
+bash <(curl -L -s https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
+
+#wget 
 bash <(wget -qO- --no-check-certificate https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
+
 ```
 
 ## Nginx反向代理(如果有域名可以考虑80端口复用)
 
 ```shell
-# 此教程仅限非宝塔等各种面板使用
+# 宝塔等各种面板不适用下列教程
 # Debian/Ubuntu
 apt install nginx -y
 # CentOS
@@ -334,7 +343,8 @@ server {
     listen 80;
     server_name 域名;
     #开启ssl解除注释
-    #不使用宝塔获取证书脚本  https://github.com/Misaka-blog/acme-1key
+    # SSL证书获取
+    # https://github.com/acmesh-official/acme.sh/wiki/%E8%AF%B4%E6%98%8E
     #listen 443 ssl;
     #ssl_certificate 证书.cer;
     #ssl_certificate_key 证书.key;
