@@ -56,7 +56,7 @@ apply(plugin = "kotlin")
 apply(plugin = "io.github.fvarrui.javapackager.plugin")
 
 group = "com.htmake"
-version = "2.5.1"
+version = "2.5.4"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
@@ -115,8 +115,10 @@ dependencies {
     implementation("com.jayway.jsonpath:json-path:2.6.0")
 
     // xml
-    implementation("org.xmlpull:xmlpull:1.1.4.0")
-    implementation("com.github.stefanhaustein:kxml2:2.5.0")
+    // 弃用 xmlpull-1.1.4.0，因为它需要 Java9
+    // implementation("org.xmlpull:xmlpull:1.1.4.0")
+    implementation(fileTree("src/lib").include("xmlpull-*.jar"))
+    // implementation("com.github.stefanhaustein:kxml2:2.5.0")
 
     //加解密类库
     implementation("cn.hutool:hutool-crypto:5.8.0.M1")

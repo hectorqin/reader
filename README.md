@@ -10,6 +10,10 @@
 
 ![](imgs/mpcode.png)
 
+> 注意❗️
+>
+> Reader 完整源码仅开放到 v2.5.4，新版本当前仅开放部分开源源码，见 https://github.com/hectorqin/reader-legado.
+
 <details><summary>免责声明（Disclaimer）</summary>
 阅读是一款提供网络文学搜索的工具，为广大网络文学爱好者提供一种方便、快捷舒适的试读体验。
 
@@ -59,14 +63,13 @@
 - [x] 并发搜索书籍来源
 - [x] WebDav同步
 - [x] 导入本地书籍，支持epub
-- [ ] 完善接口文档
-- [x] 阅读3核心兼容。已最大可能兼容，不支持使用webview，不支持使用cookie、cache及调用原生java等高级Javascript功能
+- [x] 阅读3核心兼容。已最大可能兼容，支持使用webview，支持使用javascript。
 - [x] 支持RSS订阅
 
 ## 问题
 
-- 部分使用了 `Javascript` 的书源可能会报错，不支持 `cookie` 和 `cache` 功能
-- 不支持使用了 `webview` 的书源
+- 部分使用了 `Javascript` 的书源可能会报错，如调用原生java等高级Javascript功能
+- `webview` 功能需要另外部署接口，不支持 `sourceRegex` 匹配资源响应
 - 不支持书源登录功能
 
 ## 感谢

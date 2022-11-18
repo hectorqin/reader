@@ -228,6 +228,7 @@ class YueduApi : RestVerticle() {
         router.get("/reader3/getBookGroups").coroutineHandler { bookController.getBookGroups(it) }
         router.post("/reader3/saveBookGroup").coroutineHandler { bookController.saveBookGroup(it) }
         router.post("/reader3/deleteBookGroup").coroutineHandler { bookController.deleteBookGroup(it) }
+        router.post("/reader3/saveBookGroupOrder").coroutineHandler { bookController.saveBookGroupOrder(it) }
 
         // 书仓功能
         // 获取书仓文件列表
@@ -237,8 +238,8 @@ class YueduApi : RestVerticle() {
         // 删除书仓文件
         router.post("/reader3/deleteLocalStoreFile").coroutineHandler { bookController.deleteLocalStoreFile(it) }
         router.post("/reader3/deleteLocalStoreFileList").coroutineHandler { bookController.deleteLocalStoreFileList(it) }
-        // 从书仓导入
-        router.post("/reader3/importFromLocalStorePreview").coroutineHandler { bookController.importFromLocalStorePreview(it) }
+        // 从本地书仓/webdav导入
+        router.post("/reader3/importFromLocalPathPreview").coroutineHandler { bookController.importFromLocalPathPreview(it) }
         // 上传文件到书仓
         router.post("/reader3/uploadFileToLocalStore").coroutineHandler { bookController.uploadFileToLocalStore(it) }
 

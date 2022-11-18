@@ -1,9 +1,10 @@
 name: Publish Docker Multi-Platform Images
 
 on:
-  push:
-    tags:
-      - 'v**'
+  # push:
+  #   tags:
+  #     - 'v**'
+  workflow_dispatch:
 
 jobs:
   docker:
@@ -39,7 +40,7 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            hectorqin/reader
+            hectorqin/reader-basic
           # generate Docker tags based on the following events/attributes
           tags: |
             type=semver,pattern={{version}}

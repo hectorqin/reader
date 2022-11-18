@@ -128,6 +128,7 @@ import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
 import "prismjs/themes/prism.css";
+import "./assets/fonts/iconfont.css";
 import {
   cacheFirstRequest,
   isMiniInterface,
@@ -777,9 +778,9 @@ export default {
     },
     getBookContent(chapterIndex, options, refresh, cache, book) {
       book = book || {
-        name: this.$store.state.readingBook.bookName,
-        author: this.$store.state.readingBook.author,
-        bookUrl: this.$store.state.readingBook.bookUrl
+        name: this.$store.getters.readingBook.name,
+        author: this.$store.getters.readingBook.author,
+        bookUrl: this.$store.getters.readingBook.bookUrl
       };
       const params = {
         url: book.bookUrl,
