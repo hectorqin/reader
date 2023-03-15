@@ -198,5 +198,5 @@ else
 fi
 
 echo -e "${green}如需修改其他配置请前往 cd${orgin_file_dir} 根据注释修改 vim docker-compose.yml文件后${plain}"
-echo -e "${green}先自行学习vim用法,否者建议使用sftp或WindTerm等ssh自带sftp的软件直接打开编辑${plain}"
+echo -e "${green}先自行学习vim用法,否则建议使用sftp或WindTerm等ssh自带sftp的软件直接打开编辑${plain}"
 echo -e "${green}修改后前往 cd${orgin_file_dir} 后通过命令docker-compose up -d 重启即可${plain}"
