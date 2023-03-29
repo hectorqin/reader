@@ -1,0 +1,7 @@
+[phases.build]
+cmds = ['railway run']
+
+[start]
+runImage = 'hectorqin/reader'
+onlyIncludeFiles = ['Dockerfile']
+cmd = ['/sbin/tini --']
