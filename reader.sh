@@ -67,7 +67,7 @@ fi
 
 install_dockercompose() {
     if [[ x"${release}" == x"centos" ]]; then
-        yum install wget curl -y 
+        yum install wget curl -y
         echo -e "${green} 正在移除CentOS遗留无效Docker文件 ${plain}"
         yum remove docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine -y
         echo -e "${green} 正在安装Docker ${plain}"
@@ -92,7 +92,15 @@ install_reader() {
     rm docker-compose*
     wget https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yml
     echo -e "${green} 正在配置默认书源 ${plain}"
-    wget https://legado.pages.dev/sy-yc.json -O storage/data/default/bookSource.json
+    wget https://jihulab.com/aoaostar/legado/-/raw/release/cache/6c35d84798ddbf4aad3fe3f0fd6cec53dd788be8.json -O storage/data/default/bookSource.json
+    # 判断是否合法json
+    local first_character=$(head -c 1 "storage/data/default/bookSource.json")
+    if [[ x"$first_character" == x"[" ]] then
+    #
+    else
+        echo -e "${red} 书源错误，已为您删除，请自行导入书源 ${plain}"
+        echo "[]" > storage/data/default/bookSource.json
+    fi
     echo -e "${green} 正在配置docker变量 ${plain}"
     sed -i "s/\/home\/reader/${file_dir}/" docker-compose.yml
     sed -i "s/4396/${remotePort}/" docker-compose.yml

@@ -4,6 +4,9 @@
   - [免责声明（Disclaimer）](#免责声明disclaimer)
   - [数据存储](#数据存储)
     - [本地书仓](#本地书仓)
+  - [阅读页面地址](#阅读页面地址)
+    - [全功能web端](#全功能web端)
+    - [适配kindle的 `simple-web`](#适配kindle的-simple-web)
   - [自定义阅读主题](#自定义阅读主题)
   - [自定义样式](#自定义样式)
   - [接口服务配置](#接口服务配置)
@@ -15,8 +18,8 @@
     - [服务器版](#服务器版)
     - [Docker版](#docker版)
     - [Docker-Compose版(推荐)](#docker-compose版推荐)
-    - [脚本部署(甲骨文非Ubuntu可能不支持)](#通过脚本一键部署)
-  - [Nginx反向代理](#nginx反向代理)
+    - [通过脚本一键部署](#通过脚本一键部署)
+  - [Nginx反向代理(如果有域名可以考虑80端口复用)](#nginx反向代理如果有域名可以考虑80端口复用)
   - [开发编译](#开发编译)
     - [编译脚本](#编译脚本)
     - [编译前端](#编译前端)
@@ -89,6 +92,18 @@ storage
 
 在 `storage/localStore` 中可以集中存放管理本地书籍，开启访问权限的用户可以在 `页面-浏览书仓` 中选择批量导入到自己的书架进行阅读。
 
+## 阅读页面地址
+
+### 全功能web端
+
+`http://ip:端口/`
+
+### 适配kindle的 `simple-web`
+
+`http://ip:端口/simple-web`
+
+> 注意，需要另外购买授权才能使用，加入TG群了解详情
+
 ## 自定义阅读主题
 
 书架页面仅支持白天模式和黑夜模式。
@@ -111,7 +126,7 @@ storage
 ```yml
 reader:
   app:
-    storagePath: storage   # 数据存储目录
+    workDir: ""            # 工作目录
     showUI: false          # 是否显示UI
     debug: false           # 是否调试模式
     packaged: false        # 是否打包为客户端
@@ -125,8 +140,21 @@ reader:
     proxyUsername: ""      # 代理鉴权 用户名
     proxyPassword: ""      # 代理鉴权 密码
     cacheChapterContent: false # 是否缓存章节内容
-    userLimit: 50          # 用户上限，最大 50
-    userBookLimit: 200     # 用户书籍上限，默认最大 200
+    # userBookLimit: 200     # 用户书籍上限，默认最大 200  !! v3.0.5版本开始弃用这个选项
+    debugLog: false        # 是否打开调试日志
+    autoClearInactiveUser: 0 # 是否自动清理不活跃用户，为0不清理，大于0为清理超过 autoClearInactiveUser 天未登录的用户
+    mongoUri: ""           # mongodb uri 用于备份数据
+    mongoDbName: "reader"  # mongodb 数据库名称
+    shelfUpdateInteval: 10 # 书架自动更新间隔时间，单位分钟，必须是10的倍数
+    userLimit: 15          # 用户上限，最大 15
+    remoteWebviewApi: ""   # remote-webview 地址
+    defaultUserEnableWebdav: true  # 新用户是否默认启用webdav
+    defaultUserEnableLocalStore: true # 新用户是否默认启用localStore
+    defaultUserEnableBookSource: true # 新用户是否默认可编辑书源，如果为false，则只能使用默认书源，不能新增/修改/删除
+    defaultUserEnableRssSource: true # 新用户是否默认可编辑RSS源
+    defaultUserBookSourceLimit: 100  # 新用户默认书源上限
+    defaultUserBookLimit: 200 # 新用户默认书籍上限
+    autoBackupUserData: false # 是否自动备份用户数据
 
   server:
     port: 8080             # 监听端口
@@ -305,7 +333,7 @@ docker-compose stop
 docker logs -f reader
 
 # 自行导入远程书源(打开链接后复制网址导入即可)
-https://legado.pages.dev
+https://legado.aoaostar.com/
 
 # 手动更新
 docker-compose pull && docker-compose up -d
@@ -315,10 +343,10 @@ docker-compose pull && docker-compose up -d
 
 ```shell
 # 此脚本对甲骨文非Ubuntu系统,CentOS9可能不兼容。建议网上手动搜索
-#curl 
+#curl
 bash <(curl -L -s https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
 
-#wget 
+#wget
 bash <(wget -qO- --no-check-certificate https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
 
 ```

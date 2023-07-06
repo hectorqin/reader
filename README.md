@@ -27,6 +27,7 @@
 <details><summary>功能说明</summary>
   书源管理 <br/>
 - 书架管理 <br/>
+- 书架布局 <br/>
 - 搜索 <br/>
 - 书海 <br/>
 - 看书 <br/>
@@ -43,12 +44,13 @@
 - 支持漫画 <br/>
 - 支持音频 <br/>
 - 书源失效检测 <br/>
-- 导入本地TXT、EPUB、UMD格式的书籍 <br/>
+- 导入本地TXT、EPUB、UMD、PDF格式的书籍 <br/>
 - 书籍分组 <br/>
 - RSS订阅 <br/>
 - 定时更新书架 <br/>
 - 并发搜书 <br/>
 - 本地书仓 <br/>
+- 支持kindle阅读 <br/>
 </details>
 
 ## 下载与安装
