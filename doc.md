@@ -158,6 +158,7 @@ reader:
 
   server:
     port: 8080             # 监听端口
+    contextPath: ""        # 二级目录，为空则不使用二级目录
     webUrl: http://localhost:${reader.server.port}    # web链接
 
 ```
