@@ -11,7 +11,20 @@ rem distributed under the License is distributed on an "AS IS" BASIS,
 rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 rem See the License for the specific language governing permissions and
 rem limitations under the License.
-if not exist "%JAVA_HOME%\bin\jps.exe" echo "Please set the JAVA_HOME variable in your environment, We need  jdk8 or later!\n请设置 JAVA_HOME 环境变量，需要jdk8及以上的java环境！" & EXIT /B 1
+
+if not exist "%JAVA_HOME%\bin\java.exe" (
+    rem find java_home from reg
+    for /f "tokens=2*" %%i in ('reg query "HKLM\SOFTWARE\JavaSoft\Java Runtime Environment" /s ^| findstr "JavaHome"') do (
+        set "JAVA_HOME=%%j"
+    )
+)
+if exist "%JAVA_HOME%\bin\java.exe" (
+    set "JAVA=%JAVA_HOME%\bin\java.exe"
+) else (
+    echo Please set the JAVA_HOME variable in your environment, We need jdk8 or later!
+    pause
+    EXIT /B 1
+)
 
 setlocal
 

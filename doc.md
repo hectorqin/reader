@@ -236,10 +236,10 @@ cd reader-server-$version
 # windows 上直接点击 bin/startup.cmd 文件，直接点击运行会运行单用户模式
 
 # startup 脚本支持以下选项，并且这些选项无法在配置文件修改，只能使用命令行参数修改
-# -m single|multi 选择单用户/多用户模式，默认单用户
+# -m single|multi 选择单用户/多用户模式，默认 以配置文件 conf/application.properties 为准
 # -s reader-xx 选择 jar 文件名(不含.jar后缀)，默认使用target目录里最新的jar
-# -i inviteCode 设置多用户模式下的邀请码，默认 reader666
-# -k secureKey 设置多用户模式下的管理密码，默认 readersk
+# -i inviteCode 设置多用户模式下的邀请码，默认 以配置文件 conf/application.properties 为准
+# -k secureKey 设置多用户模式下的管理密码，默认 以配置文件 conf/application.properties 为准
 
 # 注意！！！startup 脚本在单用户模式下 默认占用 256m 内存，在多用户模式下 默认占用 1g 内存，如果内存不够，请自行修改脚本
 

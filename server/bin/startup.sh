@@ -59,10 +59,9 @@ if [ -n "$NEWEST_JAR" ]; then
   SERVER=${NEWEST_JAR/.jar/}
 fi
 
-export SERVER
-export MODE="single"
-export INVITE_CODE="reader666"
-export SECURE_KEY="readersk"
+MODE=""
+INVITE_CODE=""
+SECURE_KEY=""
 while getopts ":m:s:i:k:" opt
 do
     case $opt in
@@ -87,13 +86,34 @@ export CUSTOM_SEARCH_LOCATIONS=file:${BASE_DIR}/conf/
 #===========================================================================================
 # JVM Configuration
 #===========================================================================================
-if [[ "${MODE}" == "single" ]]; then
+if [[ "${MODE}" == "" ]]; then
+    echo "Reader 的运行模式以配置文件 conf/application.properties 为准。注意，当前未限制jvm内存"
+elif [[ "${MODE}" == "single" ]]; then
     JAVA_OPT="${JAVA_OPT} -Xms256m -Xmx256m -Xmn128m"
+    JAVA_OPT="${JAVA_OPT} -Dreader.app.secure=false"
+    echo "Reader 将以单用户模式运行。注意，当前内存限制为256m"
 else
     JAVA_OPT="${JAVA_OPT} -server -Xms1g -Xmx1g -Xmn512m -XX:MetaspaceSize=64m -XX:MaxMetaspaceSize=160m"
     JAVA_OPT="${JAVA_OPT} -XX:-OmitStackTraceInFastThrow -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=${BASE_DIR}/logs/java_heapdump.hprof"
     JAVA_OPT="${JAVA_OPT} -XX:-UseLargePages"
-    JAVA_OPT="${JAVA_OPT} -Dreader.app.secure=true -Dreader.app.inviteCode=${INVITE_CODE} -Dreader.app.secureKey=${SECURE_KEY}"
+    JAVA_OPT="${JAVA_OPT} -Dreader.app.secure=true"
+
+    TIPS=""
+    if [[ "${INVITE_CODE}" != "" ]]; then
+      JAVA_OPT="${JAVA_OPT} -Dreader.app.inviteCode=${INVITE_CODE}"
+      TIPS="${TIPS} 邀请码：${INVITE_CODE}"
+    fi
+
+    if [[ "${SECURE_KEY}" != "" ]]; then
+      JAVA_OPT="${JAVA_OPT} -Dreader.app.secureKey=${SECURE_KEY}"
+      TIPS="${TIPS} 管理员密码：${SECURE_KEY}"
+    fi
+
+    if [[ "${TIPS}" == "" ]]; then
+      TIPS="邀请码和管理员密码以配置文件 conf/application.properties 为准"
+    fi
+    TIPS="${TIPS}。注意，当前内存限制为1g"
+    echo "Reader 将以多用户模式运行。${TIPS}"
 fi
 
 JAVA_MAJOR_VERSION=$($JAVA -version 2>&1 | sed -E -n 's/.* version "([0-9]*).*$/\1/p')
@@ -105,7 +125,7 @@ else
 fi
 
 # JAVA_OPT="${JAVA_OPT} -Dloader.path=${BASE_DIR}/plugins,${BASE_DIR}/plugins/health,${BASE_DIR}/plugins/cmdb,${BASE_DIR}/plugins/selector"
-JAVA_OPT="${JAVA_OPT} -Dreader.app.workDir=${BASE_DIR}"
+JAVA_OPT="${JAVA_OPT} -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -Dreader.app.workDir=${BASE_DIR}"
 JAVA_OPT="${JAVA_OPT} -jar ${BASE_DIR}/target/${SERVER}.jar"
 JAVA_OPT="${JAVA_OPT} ${JAVA_OPT_EXT}"
 JAVA_OPT="${JAVA_OPT} --spring.config.additional-location=${CUSTOM_SEARCH_LOCATIONS}"
@@ -116,13 +136,9 @@ if [ ! -d "${BASE_DIR}/logs" ]; then
   mkdir ${BASE_DIR}/logs
 fi
 
+echo "启动命令："
 echo "$JAVA $JAVA_OPT_EXT_FIX ${JAVA_OPT}"
-
-if [[ "${MODE}" == "single" ]]; then
-    echo "Reader 将以单用户模式运行"
-else
-    echo "Reader 将以多用户模式运行。邀请码：${INVITE_CODE}，管理员密码：${SECURE_KEY}"
-fi
+echo
 
 # check the start.out log output file
 if [ ! -f "${BASE_DIR}/logs/start.out" ]; then
