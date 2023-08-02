@@ -233,7 +233,7 @@ unzip reader-server-$version.zip
 cd reader-server-$version
 
 ./bin/startup.sh
-# windows 上直接点击 bin/startup.cmd 文件，直接点击运行会运行单用户模式
+# windows 上直接点击 bin/startup.cmd 文件
 
 # startup 脚本支持以下选项，这些选项如果使用命令行参数修改，则会覆盖配置文件的设置
 # -m single|multi 选择单用户/多用户模式，默认 以配置文件 conf/application.properties 为准
