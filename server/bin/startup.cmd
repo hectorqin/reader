@@ -52,7 +52,7 @@ if not "%NEWEST_JAR%"=="" (
   set SERVER=%NEWEST_JAR:.jar=%
 )
 
-set MODE="single"
+set MODE=""
 set INVITE_CODE=""
 set SECURE_KEY=""
 set MODE_INDEX=-1
@@ -114,7 +114,7 @@ if not %MODE% == "" if not %MODE% == "single" (
 
 rem set reader options
 @REM set "READER_OPTS=%READER_OPTS% -Dloader.path=%BASE_DIR%/plugins,%BASE_DIR%/plugins/health,%BASE_DIR%/plugins/cmdb,%BASE_DIR%/plugins/selector"
-set "READER_OPTS=%READER_OPTS% -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -Dreader.app.workDir=%BASE_DIR%"
+set "READER_OPTS=%READER_OPTS% -Dfile.encoding=UTF-8 -Dsun.jnu.encoding=UTF-8 -Dspring.profiles.active=prod -Dreader.app.workDir=%BASE_DIR%"
 set "READER_OPTS=%READER_OPTS% -jar %BASE_DIR%\target\%SERVER%.jar"
 
 rem set reader spring config location
@@ -130,7 +130,7 @@ echo Run command:
 echo %COMMAND%
 echo
 
-echo Reader is starting, you can check the ${BASE_DIR}/logs/start.out
+echo Reader is starting, you can check the %BASE_DIR%\logs
 
 rem start reader command
 %COMMAND%
