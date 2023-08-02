@@ -46,3 +46,7 @@ out
 /.lh/
 
 /simple-web/
+
+/server/logs
+/server/storage
+/server/target

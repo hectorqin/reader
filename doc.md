@@ -127,20 +127,10 @@ storage
 reader:
   app:
     workDir: ""            # 工作目录
-    showUI: false          # 是否显示UI
-    debug: false           # 是否调试模式
-    packaged: false        # 是否打包为客户端
     secure: false          # 是否需要登录鉴权，开启后将支持多用户模式
     inviteCode: ""         # 注册邀请码，为空时则开放注册，否则注册时需要输入邀请码
     secureKey: ""          # 管理密码，开启鉴权时，前端管理用户空间的管理密码
-    proxy: false           # 是否使用代理
-    proxyType: "HTTP"      # 代理类型
-    proxyHost: ""          # 代理 Host
-    proxyPort: ""          # 代理 port
-    proxyUsername: ""      # 代理鉴权 用户名
-    proxyPassword: ""      # 代理鉴权 密码
     cacheChapterContent: false # 是否缓存章节内容
-    # userBookLimit: 200     # 用户书籍上限，默认最大 200  !! v3.0.5版本开始弃用这个选项
     debugLog: false        # 是否打开调试日志
     autoClearInactiveUser: 0 # 是否自动清理不活跃用户，为0不清理，大于0为清理超过 autoClearInactiveUser 天未登录的用户
     mongoUri: ""           # mongodb uri 用于备份数据
@@ -190,7 +180,7 @@ reader:
 
 ### Windows / MacOS / Linux
 
-从 [releases](https://github.com/hectorqin/reader/releases) 下载对应平台安装包安装即可，需要安装java10以上环境
+从 [releases](https://github.com/hectorqin/reader/releases) 下载对应平台安装包安装即可，需要安装java8及以上环境
 
 MacOS 版 `storage` 默认是 `用户目录/.reader/storage`，其它版本 `storage` 默认是 `程序目录/storage`
 
@@ -231,25 +221,27 @@ MacOS 版 `storage` 默认是 `用户目录/.reader/storage`，其它版本 `sto
 
 ### 服务器版
 
-从 [releases](https://github.com/hectorqin/reader/releases) 下载 `reader-$version.jar` 运行即可，需要安装java10以上环境
+从 [releases](https://github.com/hectorqin/reader/releases) 下载 `reader-server-$version.zip` 解压后运行即可，需要安装java8及以上环境
 
 ```bash
-# 创建目录
-mkdir reader3
-cd reader3
-
-# 下载 jar
-wget "xxxx"
-
 # 安装jdk10以上环境...
 
+# 解压文件
+unzip reader-server-$version.zip
+
 # 运行
+cd reader-server-$version
 
-# 自用版
-java -jar reader-$version.jar
+./bin/startup.sh
+# windows 上直接点击 bin/startup.cmd 文件，直接点击运行会运行单用户模式
 
-# 多用户版
-java -jar reader-$version.jar --reader.app.secure=true --reader.app.secureKey=管理密码 --reader.app.inviteCode=注册邀请码
+# startup 脚本支持以下选项，并且这些选项无法在配置文件修改，只能使用命令行参数修改
+# -m single|multi 选择单用户/多用户模式，默认单用户
+# -s reader-xx 选择 jar 文件名(不含.jar后缀)，默认使用target目录里最新的jar
+# -i inviteCode 设置多用户模式下的邀请码，默认 reader666
+# -k secureKey 设置多用户模式下的管理密码，默认 readersk
+
+# 注意！！！startup 脚本在单用户模式下 默认占用 256m 内存，在多用户模式下 默认占用 1g 内存，如果内存不够，请自行修改脚本
 
 # web端 http://localhost:8080/
 # 接口地址 http://localhost:8080/reader3/
