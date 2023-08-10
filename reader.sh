@@ -95,8 +95,9 @@ install_reader() {
     wget https://jihulab.com/aoaostar/legado/-/raw/release/cache/6c35d84798ddbf4aad3fe3f0fd6cec53dd788be8.json -O storage/data/default/bookSource.json
     # 判断是否合法json
     local first_character=$(head -c 1 "storage/data/default/bookSource.json")
-    if [[ x"$first_character" == x"[" ]] then
+    if [[ x"$first_character" == x"[" ]]; then
     #
+        echo ""
     else
         echo -e "${red} 书源错误，已为您删除，请自行导入书源 ${plain}"
         echo "[]" > storage/data/default/bookSource.json
