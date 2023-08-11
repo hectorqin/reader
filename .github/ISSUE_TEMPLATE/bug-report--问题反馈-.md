@@ -10,7 +10,7 @@ assignees: ''
 **为避免无效问题和冗余问题，提问前请确认**
 1. 你确定Google不能解决你的问题
 2. 你确定已有的issue不能解决你的问题
-3. 你确定issue的title按照格式如下：[tutorial-code]：description
+3. 你确定issue的title按照格式如下：[web/simple-web/server]：description
 
 **Describe the bug 描述你遇到的问题**
 A clear and concise description of what the bug is.  简洁有效的说明。
