@@ -79,7 +79,7 @@ install_dockercompose() {
         systemctl restart docker
         systemctl enable docker
         echo -e "${green} 正在安装docker-compose ${plain}"
-        curl -L "https://ghproxy.com/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
+        curl -L "https://mirror.ghproxy.com/https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose && chmod +x /usr/local/bin/docker-compose
     else
         echo -e "${green} 正在安装docker-compose ${plain}"
         apt update && apt install wget curl docker-compose -y
@@ -90,7 +90,7 @@ install_reader() {
     mkdir -p ${orgin_file_dir}/storage/data/default
     cd ${orgin_file_dir}
     rm docker-compose*
-    wget https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yml
+    wget https://mirror.ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yml
     echo -e "${green} 正在配置默认书源 ${plain}"
     wget https://jihulab.com/aoaostar/legado/-/raw/release/cache/6c35d84798ddbf4aad3fe3f0fd6cec53dd788be8.json -O storage/data/default/bookSource.json
     # 判断是否合法json

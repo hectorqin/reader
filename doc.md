@@ -310,7 +310,7 @@ curl -fsSL https://get.docker.com | bash -s docker #国外服务器
 curl -fsSL https://get.docker.com | bash -s docker --mirror Aliyun #国内服务器
 
 # 下载项目里的 docker-compose.yaml
-wget https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
+wget https://mirror.ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/docker-compose.yaml
 # 根据 docker-compose.yaml 里面的注释编辑所需配置
 vim docker-compose.yaml
 # 保存
@@ -337,10 +337,10 @@ docker-compose pull && docker-compose up -d
 ```shell
 # 此脚本对甲骨文非Ubuntu系统,CentOS9可能不兼容。建议网上手动搜索
 #curl
-bash <(curl -L -s https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
+bash <(curl -L -s https://mirror.ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
 
 #wget
-bash <(wget -qO- --no-check-certificate https://ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
+bash <(wget -qO- --no-check-certificate https://mirror.ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
 
 ```
 
