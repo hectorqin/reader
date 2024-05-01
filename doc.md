@@ -145,6 +145,8 @@ reader:
     defaultUserBookSourceLimit: 100  # 新用户默认书源上限
     defaultUserBookLimit: 200 # 新用户默认书籍上限
     autoBackupUserData: false # 是否自动备份用户数据
+    minUserPasswordLength: 8  # 用户密码最小长度
+    remoteBookSourceUpdateInterval: 720   # 远程书源定时更新间隔时间，单位分钟，必须是10的倍数
 
   server:
     port: 8080             # 监听端口
