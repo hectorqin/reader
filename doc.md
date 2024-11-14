@@ -13,6 +13,7 @@
   - [WebDAV同步配置](#webdav同步配置)
   - [客户端](#客户端)
     - [Windows / MacOS / Linux](#windows--macos--linux)
+    - [Arch Linux 安装](#Arch-Linux-安装)
       - [配置文件](#配置文件)
     - [手机端](#手机端)
     - [服务器版](#服务器版)
@@ -185,6 +186,35 @@ reader:
 从 [releases](https://github.com/hectorqin/reader/releases) 下载对应平台安装包安装即可，需要安装java8及以上环境
 
 MacOS 版 `storage` 默认是 `用户目录/.reader/storage`，其它版本 `storage` 默认是 `程序目录/storage`
+
+### Arch Linux 安装
+
+从 [AUR 仓库](https://aur.archlinux.org/packages/reader-pro-bin)安装或[自建软件源](https://github.com/taotieren/aur-repo)
+
+
+```bash
+yay -Syu reader-pro
+# 开启开机自启
+sudo systemctl enable reader-pro-single
+sudo systemctl enable reader-pro-multi
+# 运行
+sudo systemctl start reader-pro-single
+sudo systemctl start reader-pro-multi
+# 状态
+sudo systemctl status reader-pro-single
+sudo systemctl status reader-pro-multi
+# 停止
+sudo systemctl stop reader-pro-single
+sudo systemctl stop reader-pro-multi
+# 停止开机自启
+sudo systemctl disable reader-pro-single
+sudo systemctl disable reader-pro-multi
+```
+
+> Arch Linux 的存储目录是 `/var/lib/reader-pro/`
+
+> Arch Linux 的配置文件是 `/usr/share/java/reader-pro/conf/application.properties`
+
 
 #### 配置文件
 
