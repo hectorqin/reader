@@ -54,7 +54,7 @@ fi
 export BASE_DIR=`cd $(dirname $0)/..; pwd`
 
 SERVER="reader"
-NEWEST_JAR=$(ls $BASE_DIR/target | grep -EO 'reader.*\.jar' | sort -nr | head -1)
+NEWEST_JAR=$(ls $BASE_DIR/target | grep -Eo 'reader.*\.jar' | sort -nr | head -1)
 if [ -n "$NEWEST_JAR" ]; then
   SERVER=${NEWEST_JAR/.jar/}
 fi
