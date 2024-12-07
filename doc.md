@@ -13,13 +13,13 @@
   - [WebDAV同步配置](#webdav同步配置)
   - [客户端](#客户端)
     - [Windows / MacOS / Linux](#windows--macos--linux)
-    - [Arch Linux 安装](#Arch-Linux-安装)
-      - [配置文件](#配置文件)
     - [手机端](#手机端)
     - [服务器版](#服务器版)
     - [Docker版](#docker版)
     - [Docker-Compose版(推荐)](#docker-compose版推荐)
     - [通过脚本一键部署](#通过脚本一键部署)
+    - [Arch Linux 安装](#Arch-Linux-安装)
+      - [配置文件](#配置文件)
   - [Nginx反向代理(如果有域名可以考虑80端口复用)](#nginx反向代理如果有域名可以考虑80端口复用)
   - [开发编译](#开发编译)
     - [编译脚本](#编译脚本)
@@ -103,7 +103,7 @@ storage
 
 `http://ip:端口/simple-web`
 
-> 注意，需要另外购买授权才能使用，加入TG群了解详情
+> 注意，加入TG群了解详情
 
 ## 自定义阅读主题
 
@@ -186,35 +186,6 @@ reader:
 从 [releases](https://github.com/hectorqin/reader/releases) 下载对应平台安装包安装即可，需要安装java8及以上环境
 
 MacOS 版 `storage` 默认是 `用户目录/.reader/storage`，其它版本 `storage` 默认是 `程序目录/storage`
-
-### Arch Linux 安装
-
-从 [AUR 仓库](https://aur.archlinux.org/packages/reader-pro-bin)安装或[自建软件源](https://github.com/taotieren/aur-repo)
-
-
-```bash
-yay -Syu reader-pro
-# 开启开机自启
-sudo systemctl enable reader-pro-single
-sudo systemctl enable reader-pro-multi
-# 运行
-sudo systemctl start reader-pro-single
-sudo systemctl start reader-pro-multi
-# 状态
-sudo systemctl status reader-pro-single
-sudo systemctl status reader-pro-multi
-# 停止
-sudo systemctl stop reader-pro-single
-sudo systemctl stop reader-pro-multi
-# 停止开机自启
-sudo systemctl disable reader-pro-single
-sudo systemctl disable reader-pro-multi
-```
-
-> Arch Linux 的存储目录是 `/var/lib/reader-pro/`
-
-> Arch Linux 的配置文件是 `/usr/share/java/reader-pro/conf/application.properties`
-
 
 #### 配置文件
 
@@ -375,6 +346,36 @@ bash <(curl -L -s https://mirror.ghproxy.com/https://raw.githubusercontent.com/h
 bash <(wget -qO- --no-check-certificate https://mirror.ghproxy.com/https://raw.githubusercontent.com/hectorqin/reader/master/reader.sh)
 
 ```
+
+### Arch Linux 安装
+
+> 注意，此软件源并非官方提供，后果自负
+
+从 [AUR 仓库](https://aur.archlinux.org/packages/reader-pro-bin)安装或[自建软件源](https://github.com/taotieren/aur-repo)
+
+
+```bash
+yay -Syu reader-pro
+# 开启开机自启
+sudo systemctl enable reader-pro-single
+sudo systemctl enable reader-pro-multi
+# 运行
+sudo systemctl start reader-pro-single
+sudo systemctl start reader-pro-multi
+# 状态
+sudo systemctl status reader-pro-single
+sudo systemctl status reader-pro-multi
+# 停止
+sudo systemctl stop reader-pro-single
+sudo systemctl stop reader-pro-multi
+# 停止开机自启
+sudo systemctl disable reader-pro-single
+sudo systemctl disable reader-pro-multi
+```
+
+> Arch Linux 的存储目录是 `/var/lib/reader-pro/`
+
+> Arch Linux 的配置文件是 `/usr/share/java/reader-pro/conf/application.properties`
 
 ## Nginx反向代理(如果有域名可以考虑80端口复用)
 
