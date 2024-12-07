@@ -2,8 +2,6 @@
 
 阅读3服务器版，不需要手机。
 
-在线体验 👉 [https://reader.htmake.com](https://reader.htmake.com)
-
 加入TG群(限时开放) 👉 [https://t.me/+pQ8HDlANPZ84ZWNl](https://t.me/+pQ8HDlANPZ84ZWNl)
 
 关注公众号，查看教程和书源👇
@@ -56,17 +54,6 @@
 ## 下载与安装
 
 详见[文档](https://github.com/hectorqin/reader/blob/master/doc.md)
-
-## TODO
-
-- [x] 定时更新书架书籍章节
-- [x] 多源并发搜索书籍
-- [x] 并发更新书架章节
-- [x] 并发搜索书籍来源
-- [x] WebDav同步
-- [x] 导入本地书籍，支持epub
-- [x] 阅读3核心兼容。已最大可能兼容，支持使用webview，支持使用javascript。
-- [x] 支持RSS订阅
 
 ## 问题
 
