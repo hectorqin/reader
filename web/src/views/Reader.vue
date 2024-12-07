@@ -685,8 +685,8 @@ export default {
       }
     },
     chineseFont() {
-      this.title = this.title;
-      this.content = this.content;
+      this.title = this.filterContent(this.title);
+      this.content = this.filterContent(this.content);
       this.computeShowChapterList();
     }
   },
