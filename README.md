@@ -8,6 +8,8 @@
 
 ![](imgs/mpcode.png)
 
+[<img src="https://api.gitsponsors.com/api/badge/img?id=395543217" height="40">](https://api.gitsponsors.com/api/badge/link?p=ppZ0zuTTgsLoYQZH8aJTvqFzbdqOfet2ItxePkp+K+q79G0KPQbeQUm0SVxwD/bIqN/LFXUiCwlns0uh7N5HGA==)
+
 > 注意❗️
 >
 > Reader 完整源码仅开放到 v2.5.4，新版本当前仅开放部分开源源码，见 https://github.com/hectorqin/reader-legado.
