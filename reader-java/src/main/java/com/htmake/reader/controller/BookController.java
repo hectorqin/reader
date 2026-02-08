@@ -161,10 +161,37 @@ public class BookController {
     @RequestMapping(value = "/getBookshelf", method = { RequestMethod.GET, RequestMethod.POST })
     public ReturnData getBookshelf(@RequestParam(value = "refresh", required = false) Integer refresh,
             @RequestBody(required = false) Map<String, Object> body,
-            @RequestParam(value = "username", defaultValue = "default") String username) {
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "userNS", required = false) String userNS) {
         try {
+            // 从 accessToken 中解析用户名
+            String finalAccessToken = accessToken;
+            if ((finalAccessToken == null || finalAccessToken.isEmpty()) && body != null
+                    && body.get("accessToken") != null) {
+                finalAccessToken = String.valueOf(body.get("accessToken"));
+            }
+
+            if (Boolean.TRUE.equals(readerConfig.getSecure())
+                    && (finalAccessToken == null || finalAccessToken.isEmpty())) {
+                return new ReturnData(false, "请登录后使用", "NEED_LOGIN");
+            }
+
+            String finalUser = (userNS != null && !userNS.isEmpty()) ? userNS
+                    : (username != null && !username.isEmpty()) ? username : null;
+            if ((finalUser == null || finalUser.isEmpty()) && finalAccessToken != null
+                    && !finalAccessToken.isEmpty()) {
+                String[] parts = finalAccessToken.split(":", 2);
+                if (parts.length >= 1 && !parts[0].isEmpty()) {
+                    finalUser = parts[0];
+                }
+            }
+            if (finalUser == null || finalUser.isEmpty()) {
+                finalUser = "default";
+            }
+
             // refresh 参数仅用于兼容（不论是否传入，都返回当前书架列表）
-            List<Book> bookList = bookService.getShelfBookList(username);
+            List<Book> bookList = bookService.getShelfBookList(finalUser);
             return ReturnData.success(bookList);
         } catch (Exception e) {
             log.error("获取书架列表失败", e);
