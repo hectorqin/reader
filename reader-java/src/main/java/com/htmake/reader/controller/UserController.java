@@ -27,40 +27,114 @@ public class UserController {
     private ReaderConfig readerConfig;
 
     /**
-     * 用户登录
+     * 用户登录/注册
+     * 通过 isLogin 参数区分：
+     * - isLogin = true: 登录模式
+     * - isLogin = false: 注册模式
      */
     @PostMapping("/login")
-    public ReturnData login(@RequestBody Map<String, String> loginData) {
+    public ReturnData login(@RequestBody Map<String, Object> loginData) {
         try {
-            String username = loginData.get("username");
-            String password = loginData.get("password");
+            String username = loginData.get("username") != null ? String.valueOf(loginData.get("username")) : "";
+            String password = loginData.get("password") != null ? String.valueOf(loginData.get("password")) : "";
+            Boolean isLogin = loginData.get("isLogin") != null ? Boolean.valueOf(String.valueOf(loginData.get("isLogin"))) : false;
+            String code = loginData.get("code") != null ? String.valueOf(loginData.get("code")) : "";
 
-            if (username == null || username.isEmpty()) {
-                return ReturnData.error("用户名不能为空");
+            if (username.isEmpty()) {
+                return ReturnData.error("请输入用户名");
             }
-            if (password == null || password.isEmpty()) {
-                return ReturnData.error("密码不能为空");
-            }
-
-            User user = userService.login(username, password);
-            if (user == null) {
-                return ReturnData.error("用户名或密码错误");
+            if (password.isEmpty()) {
+                return ReturnData.error("请输入密码");
             }
 
-            // 返回用户信息（不包含密码）
-            Map<String, Object> result = new HashMap<>();
+            // 检查用户是否存在
+            User existedUser = userService.getUserByUsername(username);
+
+            if (existedUser == null) {
+                // 用户不存在
+                if (isLogin) {
+                    // 登录模式：返回用户不存在
+                    return ReturnData.error("用户不存在");
+                }
+
+                // 注册模式：创建新用户
+                if (username.length() < 5) {
+                    return ReturnData.error("用户名不能低于5位");
+                }
+                if (password.length() < 8) {
+                    return ReturnData.error("密码不能低于8位");
+                }
+                if ("default".equals(username)) {
+                    return ReturnData.error("用户名不能为非法字符");
+                }
+                // 用户名只能由字母和数字组成
+                if (!username.matches("[a-zA-Z0-9]+")) {
+                    return ReturnData.error("用户名只能由字母和数字组成");
+                }
+
+                // 检查邀请码
+                String inviteCode = readerConfig.getInviteCode();
+                if (inviteCode != null && !inviteCode.isEmpty()) {
+                    if (code.isEmpty()) {
+                        return ReturnData.error("请输入邀请码");
+                    }
+                    if (!inviteCode.equals(code)) {
+                        return ReturnData.error("邀请码错误");
+                    }
+                }
+
+                // 检查用户数量限制
+                int userLimit = readerConfig.getUserLimit() != null ? readerConfig.getUserLimit() : 50;
+                userLimit = Math.min(Math.max(userLimit, 1), 50);
+                if (userService.getUserCount() >= userLimit) {
+                    return ReturnData.error("超过用户数上限");
+                }
+
+                // 注册新用户
+                boolean success = userService.register(username, password);
+                if (!success) {
+                    return ReturnData.error("注册失败");
+                }
+
+                // 获取新注册的用户并返回
+                User newUser = userService.getUserByUsername(username);
+                return ReturnData.success(buildUserResult(newUser));
+            } else {
+                // 用户已存在
+                if (!isLogin) {
+                    // 注册模式：返回用户名已被占用
+                    return ReturnData.error("用户名已被占用");
+                }
+
+                // 登录模式：验证密码
+                User user = userService.login(username, password);
+                if (user == null) {
+                    return ReturnData.error("密码错误");
+                }
+
+                return ReturnData.success(buildUserResult(user));
+            }
+        } catch (Exception e) {
+            log.error("用户登录/注册失败", e);
+            return ReturnData.error("操作失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 构建用户返回结果
+     */
+    private Map<String, Object> buildUserResult(User user) {
+        Map<String, Object> result = new HashMap<>();
+        if (user != null) {
             result.put("username", user.getUsername());
+            result.put("accessToken", user.getUsername() + ":" + System.currentTimeMillis());
             result.put("isAdmin", user.getIsAdmin());
             result.put("enableWebdav", user.getEnableWebdav());
             result.put("enableLocalStore", user.getEnableLocalStore());
             result.put("enableBookSource", user.getEnableBookSource());
             result.put("enableRssSource", user.getEnableRssSource());
-
-            return ReturnData.success(result);
-        } catch (Exception e) {
-            log.error("用户登录失败", e);
-            return ReturnData.error("登录失败: " + e.getMessage());
         }
+        return result;
     }
 
     /**

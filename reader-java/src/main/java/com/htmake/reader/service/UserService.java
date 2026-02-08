@@ -60,6 +60,13 @@ public class UserService {
     }
 
     /**
+     * 获取用户数量
+     */
+    public int getUserCount() {
+        return getAllUsers().size();
+    }
+
+    /**
      * 根据用户名获取用户
      */
     public User getUserByUsername(String username) {
