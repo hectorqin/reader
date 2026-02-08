@@ -75,7 +75,8 @@ public class BookController {
             @RequestBody(required = false) Map<String, Object> body) {
         try {
             String finalAccessToken = accessToken;
-            if ((finalAccessToken == null || finalAccessToken.isEmpty()) && body != null && body.get("accessToken") != null) {
+            if ((finalAccessToken == null || finalAccessToken.isEmpty()) && body != null
+                    && body.get("accessToken") != null) {
                 finalAccessToken = String.valueOf(body.get("accessToken"));
             }
 
@@ -119,7 +120,8 @@ public class BookController {
             if (DEFAULT_TXT_TOC_RULES != null) {
                 return DEFAULT_TXT_TOC_RULES;
             }
-            try (InputStream is = BookController.class.getClassLoader().getResourceAsStream("defaultData/txtTocRule.json")) {
+            try (InputStream is = BookController.class.getClassLoader()
+                    .getResourceAsStream("defaultData/txtTocRule.json")) {
                 if (is == null) {
                     DEFAULT_TXT_TOC_RULES = new ArrayList<>();
                     return DEFAULT_TXT_TOC_RULES;
@@ -179,7 +181,8 @@ public class BookController {
             @RequestParam(value = "userNS", required = false) String userNS) {
         try {
             String finalAccessToken = accessToken;
-            if ((finalAccessToken == null || finalAccessToken.isEmpty()) && body != null && body.get("accessToken") != null) {
+            if ((finalAccessToken == null || finalAccessToken.isEmpty()) && body != null
+                    && body.get("accessToken") != null) {
                 finalAccessToken = String.valueOf(body.get("accessToken"));
             }
 
@@ -1396,7 +1399,8 @@ public class BookController {
         try {
             // 权限验证
             String finalAccessToken = accessToken;
-            if ((finalAccessToken == null || finalAccessToken.isEmpty()) && body != null && body.get("accessToken") != null) {
+            if ((finalAccessToken == null || finalAccessToken.isEmpty()) && body != null
+                    && body.get("accessToken") != null) {
                 finalAccessToken = String.valueOf(body.get("accessToken"));
             }
 
@@ -1530,7 +1534,8 @@ public class BookController {
                 return null;
             }
 
-            Type listType = new TypeToken<List<SearchBook>>() {}.getType();
+            Type listType = new TypeToken<List<SearchBook>>() {
+            }.getType();
             List<SearchBook> searchBooks = GSON.fromJson(json, listType);
 
             if (searchBooks != null) {
@@ -1597,7 +1602,8 @@ public class BookController {
                 if (finalBookUrl == null || finalBookUrl.isEmpty()) {
                     ReturnData rd = ReturnData.error("请输入书籍链接");
                     try {
-                        emitter.send(SseEmitter.event().name("error").data(GSON.toJson(rd), MediaType.APPLICATION_JSON));
+                        emitter.send(
+                                SseEmitter.event().name("error").data(GSON.toJson(rd), MediaType.APPLICATION_JSON));
                     } catch (Exception ignore) {
                     }
                     emitter.complete();
@@ -1608,7 +1614,8 @@ public class BookController {
                 if (bookInfo == null) {
                     ReturnData rd = ReturnData.error("请先加入书架");
                     try {
-                        emitter.send(SseEmitter.event().name("error").data(GSON.toJson(rd), MediaType.APPLICATION_JSON));
+                        emitter.send(
+                                SseEmitter.event().name("error").data(GSON.toJson(rd), MediaType.APPLICATION_JSON));
                     } catch (Exception ignore) {
                     }
                     emitter.complete();
@@ -1617,7 +1624,8 @@ public class BookController {
                 if (bookInfo.isLocalBook() || "loc_book".equals(bookInfo.getOrigin())) {
                     ReturnData rd = ReturnData.error("本地书籍无需缓存");
                     try {
-                        emitter.send(SseEmitter.event().name("error").data(GSON.toJson(rd), MediaType.APPLICATION_JSON));
+                        emitter.send(
+                                SseEmitter.event().name("error").data(GSON.toJson(rd), MediaType.APPLICATION_JSON));
                     } catch (Exception ignore) {
                     }
                     emitter.complete();
@@ -1628,7 +1636,8 @@ public class BookController {
                 if (bookSource == null) {
                     ReturnData rd = ReturnData.error("未配置书源");
                     try {
-                        emitter.send(SseEmitter.event().name("error").data(GSON.toJson(rd), MediaType.APPLICATION_JSON));
+                        emitter.send(
+                                SseEmitter.event().name("error").data(GSON.toJson(rd), MediaType.APPLICATION_JSON));
                     } catch (Exception ignore) {
                     }
                     emitter.complete();
@@ -1648,7 +1657,8 @@ public class BookController {
                 if (chapterList.isEmpty()) {
                     ReturnData rd = ReturnData.error("章节列表为空");
                     try {
-                        emitter.send(SseEmitter.event().name("error").data(GSON.toJson(rd), MediaType.APPLICATION_JSON));
+                        emitter.send(
+                                SseEmitter.event().name("error").data(GSON.toJson(rd), MediaType.APPLICATION_JSON));
                     } catch (Exception ignore) {
                     }
                     emitter.complete();
@@ -1954,7 +1964,8 @@ public class BookController {
                     Map<String, Object> payload = new HashMap<>();
                     payload.put("lastIndex", currentIndex);
                     payload.put("data", loopResult);
-                    emitter.send(SseEmitter.event().name("message").data(GSON.toJson(payload), MediaType.APPLICATION_JSON));
+                    emitter.send(
+                            SseEmitter.event().name("message").data(GSON.toJson(payload), MediaType.APPLICATION_JSON));
                 }
 
                 Map<String, Object> end = new HashMap<>();
@@ -2244,7 +2255,8 @@ public class BookController {
                         int existIndex = -1;
                         for (int i = 0; i < merged.size(); i++) {
                             SearchBook exist = merged.get(i);
-                            if (exist != null && exist.getBookUrl() != null && exist.getBookUrl().equals(sb.getBookUrl())) {
+                            if (exist != null && exist.getBookUrl() != null
+                                    && exist.getBookUrl().equals(sb.getBookUrl())) {
                                 existIndex = i;
                                 break;
                             }
@@ -2385,7 +2397,8 @@ public class BookController {
     }
 
     @RequestMapping(value = "/getShelfBookWithCacheInfo", method = { RequestMethod.GET, RequestMethod.POST })
-    public ReturnData getShelfBookWithCacheInfo(@RequestParam(value = "accessToken", required = false) String accessToken,
+    public ReturnData getShelfBookWithCacheInfo(
+            @RequestParam(value = "accessToken", required = false) String accessToken,
             @RequestParam(value = "username", required = false) String username,
             @RequestParam(value = "userNS", required = false) String userNS) {
         try {
@@ -3169,7 +3182,7 @@ public class BookController {
     /**
      * 获取章节内容
      */
-    @RequestMapping(value = "/getBookContent",method = { RequestMethod.GET, RequestMethod.POST })
+    @RequestMapping(value = "/getBookContent", method = { RequestMethod.GET, RequestMethod.POST })
     public ReturnData getBookContent(@RequestParam(value = "url", required = false) String url,
             @RequestParam(value = "bookUrl", required = false) String bookUrl,
             @RequestParam(value = "index", required = false) Integer index,
