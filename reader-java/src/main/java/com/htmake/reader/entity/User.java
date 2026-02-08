@@ -44,4 +44,10 @@ public class User {
 
     /** 是否为管理员 */
     private Boolean isAdmin = false;
+
+    /** 当前登录 token */
+    private String token;
+
+    /** 历史有效 token 及其过期时间 (token -> expireTime) */
+    private java.util.Map<String, Long> tokenMap;
 }

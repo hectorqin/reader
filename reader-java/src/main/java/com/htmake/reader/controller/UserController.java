@@ -20,6 +20,9 @@ import java.util.Map;
 @RequestMapping("/reader3")
 public class UserController {
 
+    /** 登录 token 过期天数 */
+    private static final int LOGIN_EXPIRE_DAYS = 7;
+
     @Autowired
     private UserService userService;
 
@@ -37,7 +40,9 @@ public class UserController {
         try {
             String username = loginData.get("username") != null ? String.valueOf(loginData.get("username")) : "";
             String password = loginData.get("password") != null ? String.valueOf(loginData.get("password")) : "";
-            Boolean isLogin = loginData.get("isLogin") != null ? Boolean.valueOf(String.valueOf(loginData.get("isLogin"))) : false;
+            Boolean isLogin = loginData.get("isLogin") != null
+                    ? Boolean.valueOf(String.valueOf(loginData.get("isLogin")))
+                    : false;
             String code = loginData.get("code") != null ? String.valueOf(loginData.get("code")) : "";
 
             if (username.isEmpty()) {
@@ -121,13 +126,44 @@ public class UserController {
     }
 
     /**
-     * 构建用户返回结果
+     * 生成加密 token（参考 Kotlin 源版 genEncryptedPassword）
+     */
+    private String genEncryptedToken(String username, String salt) {
+        String firstMd5 = com.htmake.reader.utils.MD5Utils.md5Encode(username + salt);
+        return com.htmake.reader.utils.MD5Utils.md5Encode(firstMd5 + salt);
+    }
+
+    /**
+     * 构建用户返回结果（生成并保存 token）
      */
     private Map<String, Object> buildUserResult(User user) {
         Map<String, Object> result = new HashMap<>();
         if (user != null) {
+            // 生成加密 token
+            String timestamp = String.valueOf(System.currentTimeMillis());
+            String token = genEncryptedToken(user.getUsername(), timestamp);
+            long expireTime = System.currentTimeMillis() + LOGIN_EXPIRE_DAYS * 86400L * 1000L;
+
+            // 更新用户 token
+            user.setToken(token);
+            user.setLastLoginTime(System.currentTimeMillis());
+
+            // 更新 tokenMap
+            java.util.Map<String, Long> tokenMap = user.getTokenMap();
+            if (tokenMap == null) {
+                tokenMap = new HashMap<>();
+            }
+            tokenMap.put(token, expireTime);
+            // 清理过期 token
+            long now = System.currentTimeMillis();
+            tokenMap.entrySet().removeIf(entry -> entry.getValue() < now);
+            user.setTokenMap(tokenMap);
+
+            // 保存用户
+            userService.saveUser(user);
+
             result.put("username", user.getUsername());
-            result.put("accessToken", user.getUsername() + ":" + System.currentTimeMillis());
+            result.put("accessToken", user.getUsername() + ":" + token);
             result.put("isAdmin", user.getIsAdmin());
             result.put("enableWebdav", user.getEnableWebdav());
             result.put("enableLocalStore", user.getEnableLocalStore());
@@ -195,17 +231,22 @@ public class UserController {
     public ReturnData getUserInfo(@RequestParam(value = "username", required = false) String username,
             @RequestParam(value = "accessToken", required = false) String accessToken) {
         try {
-            String finalUsername = username;
-            if ((finalUsername == null || finalUsername.isEmpty()) && accessToken != null && !accessToken.isEmpty()) {
-                String[] parts = accessToken.split(":", 2);
-                if (parts.length >= 1) {
-                    finalUsername = parts[0];
-                }
-            }
-
             Map<String, Object> result = new HashMap<>();
             result.put("secure", readerConfig.getSecure());
             result.put("secureKey", readerConfig.getSecureKey() != null && !readerConfig.getSecureKey().isEmpty());
+
+            // 解析 accessToken
+            String finalUsername = username;
+            String token = null;
+            if (accessToken != null && !accessToken.isEmpty()) {
+                String[] parts = accessToken.split(":", 2);
+                if (parts.length >= 2) {
+                    finalUsername = parts[0];
+                    token = parts[1];
+                } else if (parts.length == 1) {
+                    finalUsername = parts[0];
+                }
+            }
 
             if (finalUsername == null || finalUsername.isEmpty()) {
                 result.put("userInfo", null);
@@ -214,6 +255,31 @@ public class UserController {
 
             User user = userService.getUserByUsername(finalUsername);
             if (user == null) {
+                result.put("userInfo", null);
+                return ReturnData.success(result);
+            }
+
+            // 验证 token 有效性
+            boolean isValidToken = false;
+            if (token != null && !token.isEmpty()) {
+                // 检查是否与当前 token 匹配
+                if (token.equals(user.getToken())) {
+                    isValidToken = true;
+                }
+                // 检查历史 tokenMap
+                if (!isValidToken && user.getTokenMap() != null) {
+                    Long expireTime = user.getTokenMap().get(token);
+                    if (expireTime != null && expireTime > System.currentTimeMillis()) {
+                        isValidToken = true;
+                        // 延长 token 有效期
+                        user.getTokenMap().put(token, System.currentTimeMillis() + LOGIN_EXPIRE_DAYS * 86400L * 1000L);
+                        userService.saveUser(user);
+                    }
+                }
+            }
+
+            // 如果启用了安全模式且 token 无效，返回空 userInfo
+            if (readerConfig.getSecure() != null && readerConfig.getSecure() && !isValidToken) {
                 result.put("userInfo", null);
                 return ReturnData.success(result);
             }
@@ -339,6 +405,80 @@ public class UserController {
         } catch (Exception e) {
             log.error("修改密码失败", e);
             return ReturnData.error("修改密码失败: " + e.getMessage());
+        }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.htmake.reader.utils.StorageHelper storageHelper;
+
+    /**
+     * 获取用户命名空间（用于存储隔离）
+     */
+    private String getUserNameSpace(String accessToken) {
+        if (readerConfig.getSecure() == null || !readerConfig.getSecure()) {
+            return "default";
+        }
+        if (accessToken != null && !accessToken.isEmpty()) {
+            String[] parts = accessToken.split(":", 2);
+            if (parts.length >= 1 && !parts[0].isEmpty()) {
+                return parts[0];
+            }
+        }
+        return "default";
+    }
+
+    /**
+     * 保存用户配置
+     */
+    @PostMapping("/saveUserConfig")
+    public ReturnData saveUserConfig(@RequestParam(value = "accessToken", required = false) String accessToken,
+            @RequestBody Map<String, Object> config) {
+        try {
+            String userNameSpace = getUserNameSpace(accessToken);
+
+            // 添加更新时间
+            config.put("@updateTime", System.currentTimeMillis());
+
+            // 保存到用户目录
+            String configPath = storageHelper.getUserDataPath(userNameSpace) + java.io.File.separator
+                    + "userConfig.json";
+            String json = new com.google.gson.Gson().toJson(config);
+            boolean success = storageHelper.writeFile(configPath, json);
+
+            if (success) {
+                return ReturnData.success("");
+            } else {
+                return ReturnData.error("保存配置失败");
+            }
+        } catch (Exception e) {
+            log.error("保存用户配置失败", e);
+            return ReturnData.error("保存用户配置失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取用户配置
+     */
+    @RequestMapping(value = "/getUserConfig", method = { RequestMethod.GET, RequestMethod.POST })
+    public ReturnData getUserConfig(@RequestParam(value = "accessToken", required = false) String accessToken) {
+        try {
+            String userNameSpace = getUserNameSpace(accessToken);
+
+            String configPath = storageHelper.getUserDataPath(userNameSpace) + java.io.File.separator
+                    + "userConfig.json";
+            String json = storageHelper.readFile(configPath);
+
+            if (json != null && !json.isEmpty()) {
+                Map<String, Object> config = new com.google.gson.Gson().fromJson(json,
+                        new com.google.gson.reflect.TypeToken<Map<String, Object>>() {
+                        }.getType());
+                return ReturnData.success(config);
+            } else {
+                return ReturnData.success(new HashMap<>());
+            }
+        } catch (Exception e) {
+            log.error("获取用户配置失败", e);
+            return ReturnData.error("获取用户配置失败: " + e.getMessage());
         }
     }
 }
