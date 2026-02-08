@@ -1385,6 +1385,167 @@ public class BookController {
         }
     }
 
+    @RequestMapping(value = "/setBookSource", method = { RequestMethod.GET, RequestMethod.POST })
+    public ReturnData setBookSource(@RequestParam(value = "bookUrl", required = false) String bookUrl,
+            @RequestParam(value = "newUrl", required = false) String newUrl,
+            @RequestParam(value = "bookSourceUrl", required = false) String bookSourceUrl,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "userNS", required = false) String userNS,
+            @RequestBody(required = false) Map<String, Object> body) {
+        try {
+            // 权限验证
+            String finalAccessToken = accessToken;
+            if ((finalAccessToken == null || finalAccessToken.isEmpty()) && body != null && body.get("accessToken") != null) {
+                finalAccessToken = String.valueOf(body.get("accessToken"));
+            }
+
+            if (Boolean.TRUE.equals(readerConfig.getSecure())
+                    && (finalAccessToken == null || finalAccessToken.isEmpty())) {
+                return new ReturnData(false, "请登录后使用", "NEED_LOGIN");
+            }
+
+            // 获取用户命名空间
+            String finalUser = (userNS != null && !userNS.isEmpty()) ? userNS
+                    : (username != null && !username.isEmpty()) ? username : null;
+            if ((finalUser == null || finalUser.isEmpty()) && finalAccessToken != null && !finalAccessToken.isEmpty()) {
+                String[] parts = finalAccessToken.split(":", 2);
+                if (parts.length >= 1 && !parts[0].isEmpty()) {
+                    finalUser = parts[0];
+                }
+            }
+            if (finalUser == null || finalUser.isEmpty()) {
+                finalUser = "default";
+            }
+
+            if (Boolean.TRUE.equals(readerConfig.getSecure())) {
+                User user = userService.getUserByUsername(finalUser);
+                if (user == null) {
+                    return new ReturnData(false, "请登录后使用", "NEED_LOGIN");
+                }
+            }
+
+            // 参数获取
+            String finalBookUrl = bookUrl;
+            String finalNewUrl = newUrl;
+            String finalBookSourceUrl = bookSourceUrl;
+
+            if (body != null) {
+                if (finalBookUrl == null || finalBookUrl.isEmpty()) {
+                    finalBookUrl = (String) body.get("bookUrl");
+                }
+                if (finalNewUrl == null || finalNewUrl.isEmpty()) {
+                    finalNewUrl = (String) body.get("newUrl");
+                }
+                if (finalBookSourceUrl == null || finalBookSourceUrl.isEmpty()) {
+                    finalBookSourceUrl = (String) body.get("bookSourceUrl");
+                }
+            }
+
+            // 参数验证
+            if (finalBookUrl == null || finalBookUrl.isEmpty()) {
+                return ReturnData.error("书籍链接不能为空");
+            }
+            if (finalNewUrl == null || finalNewUrl.isEmpty()) {
+                return ReturnData.error("新源书籍链接不能为空");
+            }
+            if (finalBookSourceUrl == null || finalBookSourceUrl.isEmpty()) {
+                return ReturnData.error("书源链接不能为空");
+            }
+
+            // 获取书架上的书籍
+            Book book = bookService.getShelfBookByURL(finalBookUrl, finalUser);
+            if (book == null) {
+                return ReturnData.error("书籍信息错误");
+            }
+
+            // 查找书源
+            BookSource bookSource = bookSourceService.getBookSourceByUrl(finalBookSourceUrl, finalUser);
+            Book newBookInfo = null;
+
+            if (bookSource == null) {
+                // 书源不存在于用户书源列表，尝试从本地搜索缓存中查找
+                SearchBook searchBook = findSearchBookFromLocalCache(
+                        book.getName(), book.getAuthor(), finalNewUrl, finalUser);
+                if (searchBook == null) {
+                    return ReturnData.error("书源信息错误");
+                }
+                newBookInfo = searchBook.toBook();
+            } else {
+                // 从书源获取书籍详情
+                newBookInfo = webBookService.getBookInfo(bookSource, finalNewUrl);
+            }
+
+            // 更新书籍信息
+            book.setOrigin(newBookInfo.getOrigin());
+            book.setOriginName(newBookInfo.getOriginName());
+            book.setBookUrl(newBookInfo.getBookUrl());
+            book.setTocUrl(newBookInfo.getTocUrl());
+
+            // 仅在原封面为空时更新封面
+            if ((book.getCoverUrl() == null || book.getCoverUrl().isEmpty())
+                    && newBookInfo.getCoverUrl() != null && !newBookInfo.getCoverUrl().isEmpty()) {
+                book.setCoverUrl(newBookInfo.getCoverUrl());
+            }
+
+            log.info("setBookSource: {}", book);
+
+            // 保存更新后的书籍
+            bookService.saveBook(book, finalUser);
+
+            // 更新章节目录
+            if (bookSource != null) {
+                try {
+                    List<BookChapter> chapterList = webBookService.getChapterList(bookSource, book);
+                    if (chapterList != null && !chapterList.isEmpty()) {
+                        for (BookChapter ch : chapterList) {
+                            ch.setBookUrl(book.getBookUrl());
+                        }
+                        bookService.saveChapterList(book.getBookUrl(), chapterList, finalUser);
+                    }
+                } catch (Exception e) {
+                    log.warn("更新章节列表失败: {}", e.getMessage());
+                }
+            }
+
+            return ReturnData.success(book);
+        } catch (Exception e) {
+            log.error("设置书源失败", e);
+            return ReturnData.error("设置书源失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 从本地缓存中查找搜索书籍
+     */
+    private SearchBook findSearchBookFromLocalCache(String bookName, String bookAuthor,
+            String targetBookUrl, String username) {
+        try {
+            String key = bookName + "_" + bookAuthor;
+            String cachePath = storageHelper.getUserDataPath(username)
+                    + File.separator + key + File.separator + "bookSource.json";
+
+            String json = storageHelper.readFile(cachePath);
+            if (json == null || json.isEmpty()) {
+                return null;
+            }
+
+            Type listType = new TypeToken<List<SearchBook>>() {}.getType();
+            List<SearchBook> searchBooks = GSON.fromJson(json, listType);
+
+            if (searchBooks != null) {
+                for (SearchBook sb : searchBooks) {
+                    if (targetBookUrl.equals(sb.getBookUrl())) {
+                        return sb;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("从本地缓存查找搜索书籍失败: {}", e.getMessage());
+        }
+        return null;
+    }
+
     @GetMapping(value = "/cacheBookSSE", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter cacheBookSSE(@RequestParam(value = "url", required = false) String url,
             @RequestParam(value = "bookUrl", required = false) String bookUrl,
@@ -1775,6 +1936,9 @@ public class BookController {
                             if (book == null) {
                                 continue;
                             }
+                            // 缓存搜索到的书籍信息
+                            bookService.cacheBookInfo(book.toBook());
+
                             String author = book.getAuthor() == null ? "" : book.getAuthor();
                             String name = book.getName() == null ? "" : book.getName();
                             String bookKey = name + "_" + author;
@@ -2039,6 +2203,9 @@ public class BookController {
                             if (sb == null) {
                                 continue;
                             }
+                            // 缓存搜索到的书籍信息
+                            bookService.cacheBookInfo(sb.toBook());
+
                             resultList.add(sb);
                             loopResult.add(sb);
                         }
@@ -2557,14 +2724,72 @@ public class BookController {
             }
 
             Book bookInfo = bookService.getShelfBookByURL(finalBookUrl, finalUser);
+            BookSource bookSource = null;
+            boolean isInShelf = (bookInfo != null);
+
             if (bookInfo == null) {
-                return ReturnData.error("请先加入书架");
+                // 书籍未加入书架，尝试从缓存获取书籍信息
+                Book cachedBook = bookService.getCachedBookInfo(finalBookUrl);
+
+                String bookSourceUrl = null;
+
+                // 优先从缓存的书籍信息中获取书源
+                if (cachedBook != null && cachedBook.getOrigin() != null && !cachedBook.getOrigin().isEmpty()) {
+                    bookSourceUrl = cachedBook.getOrigin();
+                    bookInfo = cachedBook;
+                }
+
+                // 如果缓存中没有，尝试从请求中获取书源信息
+                if (bookSourceUrl == null || bookSourceUrl.isEmpty()) {
+                    if (body != null) {
+                        if (body.get("bookSourceUrl") != null) {
+                            bookSourceUrl = String.valueOf(body.get("bookSourceUrl"));
+                        } else if (body.get("origin") != null) {
+                            bookSourceUrl = String.valueOf(body.get("origin"));
+                        } else if (body.get("searchBook") instanceof Map<?, ?>) {
+                            Object origin = ((Map<?, ?>) body.get("searchBook")).get("origin");
+                            if (origin != null) {
+                                bookSourceUrl = String.valueOf(origin);
+                            }
+                        }
+                    }
+                }
+
+                if (bookSourceUrl == null || bookSourceUrl.isEmpty()) {
+                    return ReturnData.error("未配置书源");
+                }
+
+                bookSource = bookSourceService.getBookSourceByUrl(bookSourceUrl, finalUser);
+                if (bookSource == null) {
+                    return ReturnData.error("书源不存在");
+                }
+
+                // 如果缓存中没有书籍信息，通过书源获取
+                if (bookInfo == null) {
+                    bookInfo = webBookService.getBookInfo(bookSource, finalBookUrl);
+                    if (bookInfo == null) {
+                        return ReturnData.error("获取书籍信息失败");
+                    }
+                    // 缓存书籍信息
+                    bookService.cacheBookInfo(bookInfo);
+                }
+            } else {
+                // 书籍在书架上，获取对应书源
+                if (!bookInfo.isLocalBook() && !"loc_book".equals(bookInfo.getOrigin())) {
+                    bookSource = bookSourceService.getBookSourceByUrl(bookInfo.getOrigin(), finalUser);
+                }
             }
 
-            List<BookChapter> chapterList = bookService.getChapterList(finalBookUrl, finalUser);
+            List<BookChapter> chapterList = null;
+
+            // 如果书籍在书架上，先尝试从本地缓存获取章节列表
+            if (isInShelf) {
+                chapterList = bookService.getChapterList(finalBookUrl, finalUser);
+            }
+
+            // 如果需要刷新或章节列表为空，从网络获取
             if (finalRefresh > 0 || chapterList == null || chapterList.isEmpty()) {
                 if (!bookInfo.isLocalBook() && !"loc_book".equals(bookInfo.getOrigin())) {
-                    BookSource bookSource = bookSourceService.getBookSourceByUrl(bookInfo.getOrigin(), finalUser);
                     if (bookSource == null) {
                         return ReturnData.error("未配置书源");
                     }
@@ -2576,7 +2801,8 @@ public class BookController {
                             }
                         }
                     }
-                    if (chapterList != null && !chapterList.isEmpty()) {
+                    // 只有在书架上的书籍才保存章节缓存
+                    if (isInShelf && chapterList != null && !chapterList.isEmpty()) {
                         bookService.saveChapterList(finalBookUrl, chapterList, finalUser);
                     }
                 }
@@ -3028,7 +3254,117 @@ public class BookController {
                 }
             }
 
-            String content = bookService.getChapterContent(finalBookUrl, finalChapterIndex, finalUser, refreshFlag);
+            // 检查书籍是否在书架上
+            Book bookInfo = bookService.getShelfBookByURL(finalBookUrl, finalUser);
+            BookSource bookSource = null;
+            boolean isInShelf = (bookInfo != null);
+
+            if (bookInfo == null) {
+                // 书籍未加入书架，尝试从缓存获取书籍信息
+                Book cachedBook = bookService.getCachedBookInfo(finalBookUrl);
+
+                String bookSourceUrl = null;
+
+                // 优先从缓存的书籍信息中获取书源
+                if (cachedBook != null && cachedBook.getOrigin() != null && !cachedBook.getOrigin().isEmpty()) {
+                    bookSourceUrl = cachedBook.getOrigin();
+                    bookInfo = cachedBook;
+                }
+
+                // 如果缓存中没有，尝试从请求中获取书源信息
+                if (bookSourceUrl == null || bookSourceUrl.isEmpty()) {
+                    if (body != null) {
+                        if (body.get("bookSourceUrl") != null) {
+                            bookSourceUrl = String.valueOf(body.get("bookSourceUrl"));
+                        } else if (body.get("origin") != null) {
+                            bookSourceUrl = String.valueOf(body.get("origin"));
+                        } else if (body.get("searchBook") instanceof Map<?, ?>) {
+                            Object origin = ((Map<?, ?>) body.get("searchBook")).get("origin");
+                            if (origin != null) {
+                                bookSourceUrl = String.valueOf(origin);
+                            }
+                        }
+                    }
+                }
+
+                if (bookSourceUrl == null || bookSourceUrl.isEmpty()) {
+                    return ReturnData.error("未配置书源");
+                }
+
+                bookSource = bookSourceService.getBookSourceByUrl(bookSourceUrl, finalUser);
+                if (bookSource == null) {
+                    return ReturnData.error("书源不存在");
+                }
+
+                // 如果缓存中没有书籍信息，通过书源获取
+                if (bookInfo == null) {
+                    bookInfo = webBookService.getBookInfo(bookSource, finalBookUrl);
+                    if (bookInfo == null) {
+                        return ReturnData.error("获取书籍信息失败");
+                    }
+                    // 缓存书籍信息
+                    bookService.cacheBookInfo(bookInfo);
+                }
+            } else {
+                // 书籍在书架上，获取对应书源
+                if (!bookInfo.isLocalBook() && !"loc_book".equals(bookInfo.getOrigin())) {
+                    bookSource = bookSourceService.getBookSourceByUrl(bookInfo.getOrigin(), finalUser);
+                }
+            }
+
+            if (!bookInfo.isLocalBook() && bookSource == null) {
+                return ReturnData.error("未配置书源");
+            }
+
+            // 获取章节列表
+            List<BookChapter> chapterList = null;
+            if (isInShelf) {
+                chapterList = bookService.getChapterList(finalBookUrl, finalUser);
+            }
+            if (chapterList == null || chapterList.isEmpty()) {
+                if (bookSource != null) {
+                    chapterList = webBookService.getChapterList(bookSource, bookInfo);
+                    if (chapterList != null) {
+                        for (BookChapter ch : chapterList) {
+                            if (ch != null) {
+                                ch.setBookUrl(finalBookUrl);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (chapterList == null || chapterList.isEmpty()) {
+                return ReturnData.error("获取章节列表失败");
+            }
+
+            if (finalChapterIndex < 0 || finalChapterIndex >= chapterList.size()) {
+                return ReturnData.error("章节索引超出范围");
+            }
+
+            BookChapter chapter = chapterList.get(finalChapterIndex);
+            if (chapter == null || chapter.getUrl() == null || chapter.getUrl().isEmpty()) {
+                return ReturnData.error("获取章节信息失败");
+            }
+
+            // 如果在书架上，先尝试从缓存获取
+            String content = null;
+            if (isInShelf && !refreshFlag) {
+                content = bookService.getCachedContent(finalBookUrl, finalChapterIndex, finalUser);
+            }
+
+            // 从网络获取章节内容
+            if (content == null || content.isEmpty()) {
+                content = webBookService.getChapterContent(bookSource, chapter);
+                // 只有在书架上的书籍才保存缓存
+                if (isInShelf && content != null && !content.isEmpty()) {
+                    bookService.saveChapterContent(finalBookUrl, finalChapterIndex, content, finalUser);
+                }
+            }
+
+            if (content == null) {
+                content = "";
+            }
             return ReturnData.success(content);
         } catch (Exception e) {
             log.error("获取章节内容失败", e);

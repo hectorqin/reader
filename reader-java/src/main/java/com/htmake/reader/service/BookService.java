@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 书籍服务
@@ -24,6 +26,9 @@ import java.util.List;
 public class BookService {
 
     private static final Gson GSON = new Gson();
+
+    // 书籍信息缓存，用于存储搜索/浏览过的书籍信息（包含书源）
+    private final Map<String, Book> bookInfoCache = new ConcurrentHashMap<>();
 
     @Autowired
     private StorageHelper storageHelper;
@@ -36,6 +41,37 @@ public class BookService {
 
     @Autowired
     private WebBookService webBookService;
+
+    /**
+     * 缓存书籍信息
+     */
+    public void cacheBookInfo(Book book) {
+        if (book != null && book.getBookUrl() != null && !book.getBookUrl().isEmpty()) {
+            bookInfoCache.put(book.getBookUrl(), book);
+            log.debug("缓存书籍信息: {}", book.getBookUrl());
+        }
+    }
+
+    /**
+     * 批量缓存书籍信息
+     */
+    public void cacheBookInfoList(List<Book> bookList) {
+        if (bookList != null) {
+            for (Book book : bookList) {
+                cacheBookInfo(book);
+            }
+        }
+    }
+
+    /**
+     * 从缓存获取书籍信息
+     */
+    public Book getCachedBookInfo(String bookUrl) {
+        if (bookUrl == null || bookUrl.isEmpty()) {
+            return null;
+        }
+        return bookInfoCache.get(bookUrl);
+    }
 
     /**
      * 获取书架列表
@@ -376,7 +412,7 @@ public class BookService {
     /**
      * 获取缓存的章节内容
      */
-    private String getCachedContent(String bookUrl, int chapterIndex, String username) {
+    public String getCachedContent(String bookUrl, int chapterIndex, String username) {
         String bookDir = getBookDir(bookUrl, username);
         File contentFile = new File(bookDir, "content_" + chapterIndex + ".txt");
 
