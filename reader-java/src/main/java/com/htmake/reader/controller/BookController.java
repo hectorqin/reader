@@ -15,6 +15,8 @@ import com.htmake.reader.service.UserService;
 import com.htmake.reader.service.WebBookService;
 import com.htmake.reader.utils.MD5Utils;
 import com.htmake.reader.utils.StorageHelper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
@@ -67,6 +69,37 @@ public class BookController {
 
     @Autowired
     private UserService userService;
+
+    /**
+     * 从请求中获取用户名（参考 BookSourceController）
+     * 优先级：1. session  2. accessToken  3. username 参数
+     */
+    private String getUsernameFromRequest(HttpServletRequest request, String username, String accessToken) {
+        // 第一优先级：从 session 中获取用户名
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            Object sessionUser = session.getAttribute("username");
+            if (sessionUser != null && !sessionUser.toString().isEmpty()) {
+                return sessionUser.toString();
+            }
+        }
+
+        // 第二优先级：从 accessToken 参数中解析用户名
+        if (accessToken != null && !accessToken.isEmpty()) {
+            String[] parts = accessToken.split(":", 2);
+            if (parts.length >= 1 && !parts[0].isEmpty()) {
+                return parts[0];
+            }
+        }
+
+        // 第三优先级：使用 username 参数
+        if (username != null && !username.isEmpty()) {
+            return username;
+        }
+
+        // 默认使用 "default" 用户
+        return "default";
+    }
 
     @RequestMapping(value = "/getTxtTocRules", method = { RequestMethod.GET, RequestMethod.POST })
     public ReturnData getTxtTocRules(@RequestParam(value = "accessToken", required = false) String accessToken,
@@ -143,9 +176,12 @@ public class BookController {
      * 获取书架列表
      */
     @GetMapping("/getShelfBooks")
-    public ReturnData getShelfBooks(@RequestParam(value = "username", defaultValue = "default") String username) {
+    public ReturnData getShelfBooks(@RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
-            List<Book> bookList = bookService.getShelfBookList(username);
+            String finalUsername = getUsernameFromRequest(request, username, accessToken);
+            List<Book> bookList = bookService.getShelfBookList(finalUsername);
             return ReturnData.success(bookList);
         } catch (Exception e) {
             log.error("获取书架列表失败", e);
@@ -2546,13 +2582,16 @@ public class BookController {
      */
     @PostMapping("/saveBook")
     public ReturnData saveBook(@RequestBody Book book,
-            @RequestParam(value = "username", defaultValue = "default") String username) {
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
             if (book == null || book.getBookUrl() == null || book.getBookUrl().isEmpty()) {
                 return ReturnData.error("书籍信息不完整");
             }
 
-            boolean success = bookService.saveBook(book, username);
+            String finalUsername = getUsernameFromRequest(request, username, accessToken);
+            boolean success = bookService.saveBook(book, finalUsername);
             if (success) {
                 return ReturnData.success(book);
             } else {
@@ -2864,13 +2903,16 @@ public class BookController {
     @PostMapping("/saveProgress")
     public ReturnData saveProgress(@RequestParam("bookUrl") String bookUrl,
             @RequestParam("chapterIndex") int chapterIndex,
-            @RequestParam(value = "username", defaultValue = "default") String username) {
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
             if (bookUrl == null || bookUrl.isEmpty()) {
                 return ReturnData.error("书籍URL不能为空");
             }
 
-            boolean success = bookService.saveProgress(bookUrl, chapterIndex, username);
+            String finalUsername = getUsernameFromRequest(request, username, accessToken);
+            boolean success = bookService.saveProgress(bookUrl, chapterIndex, finalUsername);
             if (success) {
                 return ReturnData.success("保存成功");
             } else {
@@ -2895,8 +2937,12 @@ public class BookController {
             @RequestParam(value = "index", required = false) Integer index,
             @RequestParam(value = "chapterIndex", required = false) Integer chapterIndex,
             @RequestBody(required = false) Map<String, Object> body,
-            @RequestParam(value = "username", defaultValue = "default") String username) {
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
+            String finalUsername = getUsernameFromRequest(request, username, accessToken);
+
             // 优先使用 query 参数（GET/POST 都可能带 query），其次再从 body 里兜底
             String finalBookUrl = url != null && !url.isEmpty() ? url : bookUrl;
             Integer finalIndex = index != null ? index : chapterIndex;
@@ -3124,14 +3170,17 @@ public class BookController {
     public ReturnData searchBook(@RequestParam("key") String keyword,
             @RequestParam(value = "sourceUrl", required = false) String sourceUrl,
             @RequestParam(value = "page", defaultValue = "1") int page,
-            @RequestParam(value = "username", defaultValue = "default") String username) {
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
             if (keyword == null || keyword.isEmpty()) {
                 return ReturnData.error("关键词不能为空");
             }
 
+            String finalUsername = getUsernameFromRequest(request, username, accessToken);
             // 调用搜索服务
-            var result = bookService.searchBooks(keyword, sourceUrl, page, username);
+            var result = bookService.searchBooks(keyword, sourceUrl, page, finalUsername);
             return ReturnData.success(result);
         } catch (Exception e) {
             log.error("搜索书籍失败", e);
@@ -3147,8 +3196,12 @@ public class BookController {
             @RequestBody(required = false) Map<String, Object> body,
             @RequestParam(value = "page", defaultValue = "1") int page,
             @RequestParam(value = "bookSourceUrl", required = false) String sourceUrl,
-            @RequestParam(value = "username", defaultValue = "default") String username) {
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
+            String finalUsername = getUsernameFromRequest(request, username, accessToken);
+
             String finalUrl = ruleFindUrl;
             int finalPage = page;
 
@@ -3188,13 +3241,16 @@ public class BookController {
     @GetMapping("/getBookInfo")
     public ReturnData getBookInfo(@RequestParam("bookUrl") String bookUrl,
             @RequestParam(value = "sourceUrl", required = false) String sourceUrl,
-            @RequestParam(value = "username", defaultValue = "default") String username) {
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
             if (bookUrl == null || bookUrl.isEmpty()) {
                 return ReturnData.error("书籍URL不能为空");
             }
 
-            Book book = bookService.getBookInfo(bookUrl, sourceUrl, username);
+            String finalUsername = getUsernameFromRequest(request, username, accessToken);
+            Book book = bookService.getBookInfo(bookUrl, sourceUrl, finalUsername);
             if (book != null) {
                 return ReturnData.success(book);
             } else {
@@ -3417,13 +3473,16 @@ public class BookController {
      */
     @PostMapping("/refreshChapterList")
     public ReturnData refreshChapterList(@RequestParam("bookUrl") String bookUrl,
-            @RequestParam(value = "username", defaultValue = "default") String username) {
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
             if (bookUrl == null || bookUrl.isEmpty()) {
                 return ReturnData.error("书籍URL不能为空");
             }
 
-            List<BookChapter> chapters = bookService.refreshChapterList(bookUrl, username);
+            String finalUsername = getUsernameFromRequest(request, username, accessToken);
+            List<BookChapter> chapters = bookService.refreshChapterList(bookUrl, finalUsername);
             return ReturnData.success(chapters);
         } catch (Exception e) {
             log.error("刷新章节列表失败", e);

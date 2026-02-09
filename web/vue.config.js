@@ -88,7 +88,22 @@ module.exports = {
     proxy: {
       "/reader3": {
         target: "http://localhost:8080",
-        changeOrigin: true
+        changeOrigin: true,
+        // 确保 cookie 能正确传递（参考源项目开发环境配置）
+        cookieDomainRewrite: {
+          "*": "localhost"
+        },
+        // 保持 cookie 路径不变
+        cookiePathRewrite: {
+          "*": "/"
+        },
+        // 允许携带 cookie
+        onProxyReq: function(proxyReq, req, res) {
+          // 确保代理请求携带原始请求的 cookie
+          if (req.headers.cookie) {
+            proxyReq.setHeader('cookie', req.headers.cookie);
+          }
+        }
       }
     }
   },

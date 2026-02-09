@@ -6,6 +6,21 @@ server:
       charset: UTF-8
       enabled: true
       force: true
+    # Session 配置（参考源项目 Vert.x session 配置）
+    session:
+      # Session 超时时间（7天，与 LOGIN_EXPIRE_DAYS 一致）
+      timeout: 604800s
+      cookie:
+        # Cookie 名称
+        name: JSESSIONID
+        # Cookie 路径
+        path: /
+        # 允许跨域携带 cookie（开发环境）
+        same-site: lax
+        # 生产环境建议设置为 true（需要 HTTPS）
+        secure: false
+        # 允许 JavaScript 访问 cookie
+        http-only: false
 
 spring:
   application:
@@ -29,7 +44,7 @@ reader:
     # 存储路径
     storage-path: storage
     # 是否需要登录鉴权，开启后将支持多用户模式
-    secure: false
+    secure: true
     # 注册邀请码，为空时则开放注册，否则注册时需要输入邀请码
     invite-code: ""
     # 管理密码，开启鉴权时，前端管理用户空间的管理密码

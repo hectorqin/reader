@@ -6,6 +6,8 @@ import com.htmake.reader.entity.BookSource;
 import com.htmake.reader.entity.ReturnData;
 import com.htmake.reader.service.BookSourceService;
 import com.htmake.reader.utils.StorageHelper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -34,13 +36,49 @@ public class BookSourceController {
     private StorageHelper storageHelper;
 
     /**
+     * 从请求中获取用户名（参考 BookController.getBookshelf 方法）
+     * 优先级：1. session  2. accessToken  3. username 参数
+     */
+    private String getUsernameFromRequest(HttpServletRequest request, String username, String accessToken) {
+        // 第一优先级：从 session 中获取用户名
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            Object sessionUser = session.getAttribute("username");
+            if (sessionUser != null && !sessionUser.toString().isEmpty()) {
+                return sessionUser.toString();
+            }
+        }
+
+        // 第二优先级：从 accessToken 参数中解析用户名
+        if (accessToken != null && !accessToken.isEmpty()) {
+            String[] parts = accessToken.split(":", 2);
+            if (parts.length >= 1 && !parts[0].isEmpty()) {
+                return parts[0];
+            }
+        }
+
+        // 第三优先级：使用 username 参数
+        if (username != null && !username.isEmpty()) {
+            return username;
+        }
+
+        // 默认使用 "default" 用户
+        return "default";
+    }
+
+    /**
      * 获取所有书源
      */
     @RequestMapping(value = "/getBookSources", method = { RequestMethod.GET, RequestMethod.POST })
     public ReturnData getBookSources(@RequestParam(value = "simple", required = false) Integer simple,
             @RequestBody(required = false) Map<String, Object> body,
-            @RequestParam(value = "username", defaultValue = "default") String username) {
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
+            // 从 session/accessToken/username 获取当前用户
+            String finalUsername = getUsernameFromRequest(request, username, accessToken);
+
             int finalSimple = simple != null ? simple : 0;
             if (body != null && body.get("simple") != null) {
                 Object v = body.get("simple");
@@ -55,7 +93,7 @@ public class BookSourceController {
                 }
             }
 
-            List<BookSource> sources = bookSourceService.getAllBookSources(username);
+            List<BookSource> sources = bookSourceService.getAllBookSources(finalUsername);
             if (finalSimple > 0) {
                 List<Map<String, Object>> list = new ArrayList<>();
                 for (BookSource source : sources) {
@@ -79,8 +117,13 @@ public class BookSourceController {
     @RequestMapping(value = "/getBookSource", method = { RequestMethod.GET, RequestMethod.POST })
     public ReturnData getBookSource(@RequestParam(value = "bookSourceUrl", required = false) String bookSourceUrl,
             @RequestBody(required = false) Map<String, Object> body,
-            @RequestParam(value = "username", defaultValue = "default") String username) {
+            @RequestParam(value = "username", required = false) String username,
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
+            // 从 session/accessToken/username 获取当前用户
+            String finalUsername = getUsernameFromRequest(request, username, accessToken);
+
             String finalUrl = bookSourceUrl;
             if ((finalUrl == null || finalUrl.isEmpty()) && body != null && body.get("bookSourceUrl") != null) {
                 finalUrl = String.valueOf(body.get("bookSourceUrl"));
@@ -90,7 +133,7 @@ public class BookSourceController {
                 return ReturnData.error("书源链接不能为空");
             }
 
-            BookSource source = bookSourceService.getBookSourceByUrl(finalUrl, username);
+            BookSource source = bookSourceService.getBookSourceByUrl(finalUrl, finalUsername);
             if (source == null) {
                 return ReturnData.error("书源信息不存在");
             }

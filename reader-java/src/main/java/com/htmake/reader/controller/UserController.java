@@ -4,6 +4,8 @@ import com.htmake.reader.entity.ReturnData;
 import com.htmake.reader.entity.User;
 import com.htmake.reader.service.UserService;
 import com.htmake.reader.config.ReaderConfig;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -30,13 +32,18 @@ public class UserController {
     private ReaderConfig readerConfig;
 
     /**
-     * 用户登录/注册
-     * 通过 isLogin 参数区分：
-     * - isLogin = true: 登录模式
-     * - isLogin = false: 注册模式
+     * 用户登录/注册（参考源项目 UserController.kt login 方法）
+     * <p>
+     * 通过 isLogin 参数区分登录和注册：
+     * - isLogin = true: 登录模式，用户不存在则报错
+     * - isLogin = false: 注册模式，用户已存在则报错
+     * <p>
+     * 登录/注册成功后，将用户名保存到 HttpSession 中，
+     * 后续请求（如 getUserInfo）通过 session 自动识别当前登录用户。
      */
     @PostMapping("/login")
-    public ReturnData login(@RequestBody Map<String, Object> loginData) {
+    public ReturnData login(@RequestBody Map<String, Object> loginData,
+            HttpServletRequest request) {
         try {
             String username = loginData.get("username") != null ? String.valueOf(loginData.get("username")) : "";
             String password = loginData.get("password") != null ? String.valueOf(loginData.get("password")) : "";
@@ -103,6 +110,10 @@ public class UserController {
 
                 // 获取新注册的用户并返回
                 User newUser = userService.getUserByUsername(username);
+                // 保存用户名到 session，后续请求通过 session 识别用户（参考源项目 saveUserSession）
+                HttpSession session = request.getSession(true);
+                session.setAttribute("username", username);
+                log.info("登录成功，保存 session: username={}, sessionId={}", username, session.getId());
                 return ReturnData.success(buildUserResult(newUser));
             } else {
                 // 用户已存在
@@ -117,6 +128,10 @@ public class UserController {
                     return ReturnData.error("密码错误");
                 }
 
+                // 保存用户名到 session，后续请求通过 session 识别用户（参考源项目 saveUserSession）
+                HttpSession session = request.getSession(true);
+                session.setAttribute("username", username);
+                log.info("登录成功，保存 session: username={}, sessionId={}", username, session.getId());
                 return ReturnData.success(buildUserResult(user));
             }
         } catch (Exception e) {
@@ -174,12 +189,17 @@ public class UserController {
     }
 
     /**
-     * 注销登录（兼容原项目接口名：logout）
+     * 注销登录（参考源项目 UserController.kt logout 方法）
      * <p>
-     * 当前 Java 版本未实现基于 Session 的登录态，前端仅依赖该接口返回 isSuccess=true 后清理本地 token。
+     * 销毁当前 HttpSession，前端收到 isSuccess=true 后清理本地 token。
      */
     @RequestMapping(value = "/logout", method = { RequestMethod.GET, RequestMethod.POST })
-    public ReturnData logout() {
+    public ReturnData logout(HttpServletRequest request) {
+        // 销毁 session，清除服务端登录状态
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
         return ReturnData.success("");
     }
 
@@ -222,23 +242,44 @@ public class UserController {
     }
 
     /**
-     * 获取用户信息
+     * 获取用户信息（参考源项目 UserController.kt getUserInfo 方法）
      * <p>
      * 返回结构与前端保持一致：data 中包含 userInfo、secure、secureKey。
-     * userInfo 为空表示当前未登录或无法识别用户。
+     * <p>
+     * 用户识别优先级（与源项目 checkAuth 逻辑一致）：
+     * 1. 从 HttpSession 中获取用户名（登录时已保存）
+     * 2. 从 accessToken 参数中解析用户名并验证 token 有效性（自动登录场景）
+     * <p>
+     * 前端调用此接口时不传参数（Axios.get("/getUserInfo")），
+     * 依赖 cookie 携带的 session 来识别当前登录用户。
      */
     @RequestMapping(value = "/getUserInfo", method = { RequestMethod.GET, RequestMethod.POST })
     public ReturnData getUserInfo(@RequestParam(value = "username", required = false) String username,
-            @RequestParam(value = "accessToken", required = false) String accessToken) {
+            @RequestParam(value = "accessToken", required = false) String accessToken,
+            HttpServletRequest request) {
         try {
             Map<String, Object> result = new HashMap<>();
             result.put("secure", readerConfig.getSecure());
             result.put("secureKey", readerConfig.getSecureKey() != null && !readerConfig.getSecureKey().isEmpty());
 
-            // 解析 accessToken
-            String finalUsername = username;
+            // 第一优先级：从 session 中获取用户名（参考源项目 checkAuth 中 context.session().get("username")）
+            String finalUsername = null;
+            HttpSession session = request.getSession(false);
+            if (session != null) {
+                Object sessionUser = session.getAttribute("username");
+                if (sessionUser != null && !sessionUser.toString().isEmpty()) {
+                    finalUsername = sessionUser.toString();
+                    log.info("getUserInfo: 从 session 获取用户名: username={}, sessionId={}", finalUsername, session.getId());
+                } else {
+                    log.info("getUserInfo: session 存在但没有 username 属性, sessionId={}", session.getId());
+                }
+            } else {
+                log.info("getUserInfo: session 不存在");
+            }
+
+            // 第二优先级：从 accessToken 参数中解析用户名（自动登录场景，参考源项目 checkAuth 中 accessToken 解析逻辑）
             String token = null;
-            if (accessToken != null && !accessToken.isEmpty()) {
+            if (finalUsername == null && accessToken != null && !accessToken.isEmpty()) {
                 String[] parts = accessToken.split(":", 2);
                 if (parts.length >= 2) {
                     finalUsername = parts[0];
@@ -248,6 +289,12 @@ public class UserController {
                 }
             }
 
+            // 第三优先级：从 username 参数获取
+            if (finalUsername == null && username != null && !username.isEmpty()) {
+                finalUsername = username;
+            }
+
+            // 未能识别用户，返回空 userInfo
             if (finalUsername == null || finalUsername.isEmpty()) {
                 result.put("userInfo", null);
                 return ReturnData.success(result);
@@ -259,31 +306,43 @@ public class UserController {
                 return ReturnData.success(result);
             }
 
-            // 验证 token 有效性
-            boolean isValidToken = false;
-            if (token != null && !token.isEmpty()) {
-                // 检查是否与当前 token 匹配
-                if (token.equals(user.getToken())) {
-                    isValidToken = true;
-                }
-                // 检查历史 tokenMap
-                if (!isValidToken && user.getTokenMap() != null) {
-                    Long expireTime = user.getTokenMap().get(token);
-                    if (expireTime != null && expireTime > System.currentTimeMillis()) {
+            // 如果是通过 accessToken 自动登录，需要验证 token 有效性
+            // 验证通过后恢复 session（参考源项目 checkAuth 中 saveUserSession(context, userMap, existedUser, false)）
+            if (session == null || session.getAttribute("username") == null) {
+                if (token != null && !token.isEmpty()) {
+                    boolean isValidToken = false;
+                    // 检查是否与当前 token 匹配
+                    if (token.equals(user.getToken())) {
                         isValidToken = true;
-                        // 延长 token 有效期
-                        user.getTokenMap().put(token, System.currentTimeMillis() + LOGIN_EXPIRE_DAYS * 86400L * 1000L);
-                        userService.saveUser(user);
                     }
+                    // 检查历史 tokenMap（参考源项目 checkAuth 中 tokenMap 验证逻辑）
+                    if (!isValidToken && user.getTokenMap() != null) {
+                        Long expireTime = user.getTokenMap().get(token);
+                        if (expireTime != null && expireTime > System.currentTimeMillis()) {
+                            isValidToken = true;
+                            // 延长 token 有效期
+                            user.getTokenMap().put(token, System.currentTimeMillis() + LOGIN_EXPIRE_DAYS * 86400L * 1000L);
+                            userService.saveUser(user);
+                        }
+                    }
+
+                    if (isValidToken) {
+                        // token 验证通过，恢复 session
+                        HttpSession newSession = request.getSession(true);
+                        newSession.setAttribute("username", finalUsername);
+                    } else if (readerConfig.getSecure() != null && readerConfig.getSecure()) {
+                        // 安全模式下 token 无效，返回空 userInfo
+                        result.put("userInfo", null);
+                        return ReturnData.success(result);
+                    }
+                } else if (readerConfig.getSecure() != null && readerConfig.getSecure()) {
+                    // 安全模式下没有 session 也没有 token，返回空 userInfo
+                    result.put("userInfo", null);
+                    return ReturnData.success(result);
                 }
             }
 
-            // 如果启用了安全模式且 token 无效，返回空 userInfo
-            if (readerConfig.getSecure() != null && readerConfig.getSecure() && !isValidToken) {
-                result.put("userInfo", null);
-                return ReturnData.success(result);
-            }
-
+            // 构建 userInfo 返回（参考源项目 formatUser 方法的返回字段）
             Map<String, Object> userInfo = new HashMap<>();
             userInfo.put("username", user.getUsername());
             userInfo.put("isAdmin", user.getIsAdmin());
@@ -297,6 +356,8 @@ public class UserController {
             userInfo.put("lastLoginTime", user.getLastLoginTime());
             result.put("userInfo", userInfo);
 
+            log.info("getUserInfo 返回数据: secure={}, userInfo.username={}, 完整结果={}",
+                result.get("secure"), userInfo.get("username"), result);
             return ReturnData.success(result);
         } catch (Exception e) {
             log.error("获取用户信息失败", e);
