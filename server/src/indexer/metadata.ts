@@ -6,7 +6,14 @@ import { XMLParser } from 'fast-xml-parser';
 import { stripNullBytes } from '../lib/text.ts';
 import { parseFilename } from './filename.ts';
 
-export type BookFormat = 'epub' | 'pdf' | 'unknown';
+/**
+ * Format identifier as stored in `books.format`.
+ *
+ * Deliberately an open string rather than a union: the supported set is defined
+ * by the handler registry in `./formats`, and a closed union here would mean
+ * every new format needs edits in three unrelated files.
+ */
+export type BookFormat = string;
 
 export interface ExtractedMetadata {
   title: string;
@@ -24,18 +31,6 @@ export interface ExtractedMetadata {
   source: 'embedded' | 'filename' | 'unknown';
   /** Raw extracted fields, kept for round-tripping and manual completion UI. */
   raw: Record<string, unknown>;
-}
-
-export interface ParsedBookFile {
-  format: BookFormat;
-  contentHash: string;
-  size: number;
-  pageCount: number | null;
-  /** Cover bytes, written into DATA_DIR by the caller. Never into BOOKS_DIR. */
-  cover?: { data: Buffer; contentType: string };
-  /** Set by the scanner once the cover is persisted under DATA_DIR. */
-  coverPath?: string | null;
-  metadata: ExtractedMetadata;
 }
 
 const xmlParser = new XMLParser({
@@ -203,63 +198,6 @@ export async function parseEpub(buf: Buffer, relPath: string): Promise<Extracted
     identifier,
     source: 'embedded',
     raw: { metadata, opfPath, identifiers },
-  };
-}
-
-function pdfInfo(buf: Buffer): { title: string; author: string; pageCount: number | null } {
-  const head = buf.subarray(0, Math.min(buf.length, 2 * 1024 * 1024)).toString('latin1');
-  const readField = (key: string): string => {
-    const match = new RegExp(`/${key}\\s*\\(((?:[^()\\\\]|\\\\.)*)\\)`).exec(head);
-    return match ? stripNullBytes(match[1]!).trim() : '';
-  };
-  let pageCount: number | null = null;
-  const countMatch = /\/Type\s*\/Pages[\s\S]{0,200}?\/Count\s+(\d+)/.exec(head);
-  if (countMatch) {
-    const parsed = Number.parseInt(countMatch[1]!, 10);
-    if (Number.isFinite(parsed)) pageCount = parsed;
-  }
-  return { title: readField('Title'), author: readField('Author'), pageCount };
-}
-
-/**
- * Parse an arbitrary library file. Never writes to disk.
- */
-export async function parseBookFile(buf: Buffer, relPath: string): Promise<ParsedBookFile> {
-  const contentHash = sha256(buf);
-  const size = buf.byteLength;
-  const lower = relPath.toLowerCase();
-
-  if (lower.endsWith('.epub')) {
-    try {
-      const metadata = await parseEpub(buf, relPath);
-      // A broken or huge cover must never fail the whole book.
-      const cover = await extractEpubCover(buf).catch(() => undefined);
-      return { format: 'epub', contentHash, size, pageCount: null, metadata, cover };
-    } catch (err) {
-      const fallback = filenameMetadata(relPath);
-      fallback.raw = { parseError: err instanceof Error ? err.message : String(err) };
-      return { format: 'epub', contentHash, size, pageCount: null, metadata: fallback };
-    }
-  }
-
-  if (lower.endsWith('.pdf')) {
-    const info = pdfInfo(buf);
-    const fallback = filenameMetadata(relPath);
-    const metadata: ExtractedMetadata = {
-      ...fallback,
-      title: info.title || fallback.title,
-      author: info.author || fallback.author,
-      source: info.title || info.author ? 'embedded' : fallback.source,
-    };
-    return { format: 'pdf', contentHash, size, pageCount: info.pageCount, metadata };
-  }
-
-  return {
-    format: 'unknown',
-    contentHash,
-    size,
-    pageCount: null,
-    metadata: filenameMetadata(relPath),
   };
 }
 

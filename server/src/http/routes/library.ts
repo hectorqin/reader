@@ -1,16 +1,78 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AppContext } from '../context.ts';
 import { authenticate, currentUser, requireAdmin } from '../auth.ts';
 import { badRequest, notFound } from '../../lib/errors.ts';
 import { assertSafeRel, resolveInside } from '../../lib/paths.ts';
 import { createReadStream, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { stat } from 'node:fs/promises';
-import { extname, join } from 'node:path';
+import { extname } from 'node:path';
+import {
+  capabilities,
+  contentTypeFor,
+  directoryHandlerForFormat,
+  fileHandlerForFormat,
+  type AssetPayload,
+} from '../../indexer/formats/index.ts';
 
-const MIME_BY_EXT: Record<string, string> = {
-  '.epub': 'application/epub+zip',
-  '.pdf': 'application/pdf',
-};
+
+/** The single live path backing a book, if it is file-backed. */
+function resolveBookSource(
+  ctx: AppContext,
+  bookId: string,
+  format: string,
+): { relPath: string; isDirectory: boolean } | null {
+  const file = ctx.db.get<{ rel_path: string }>(
+    'SELECT rel_path FROM book_files WHERE book_id = ? AND missing = 0 ORDER BY rel_path LIMIT 1',
+    bookId,
+  );
+  if (!file) return null;
+  // Directory books are recorded under a path with no extension; a file handler
+  // for the format means the path is a real file.
+  const isDirectory = format === 'comic-dir' || fileHandlerForFormat(format) === null;
+  return { relPath: file.rel_path, isDirectory };
+}
+
+/** The handler that owns a book, resolved from its recorded format. */
+function resolveHandler(ctx: AppContext, bookId: string, format: string) {
+  const source = resolveBookSource(ctx, bookId, format);
+  // A missing file still has a handler; only the manifest/asset calls fail.
+  void source;
+  void ctx;
+  void bookId;
+  return fileHandlerForFormat(format) ?? directoryHandlerForFormat(format) ?? null;
+}
+
+/** Absolute path plus library-relative path for a book's backing store. */
+function sourceContext(ctx: AppContext, bookId: string, format: string) {
+  const file = ctx.db.get<{ rel_path: string }>(
+    'SELECT rel_path FROM book_files WHERE book_id = ? AND missing = 0 ORDER BY rel_path LIMIT 1',
+    bookId,
+  );
+  if (!file) throw notFound('no available file for this book', 'FILE_MISSING');
+  const relPath = assertSafeRel(file.rel_path);
+  void format;
+  return { relPath, absPath: resolveInside(ctx.config.booksDir, relPath) };
+}
+
+/** Offset of the first item belonging to a group, computed from group counts. */
+function groupOffset(groups: Array<{ count: number }>, index: number): number {
+  let offset = 0;
+  for (let i = 0; i < index; i += 1) offset += groups[i]?.count ?? 0;
+  return offset;
+}
+
+/** Serialise an asset payload with caching headers suited to immutable content. */
+function sendAsset(reply: FastifyReply, payload: AssetPayload) {
+  reply.header('content-type', payload.contentType);
+  // Assets are addressed by book id, which is derived from content, so they can
+  // never change under the same URL.
+  reply.header('cache-control', 'private, max-age=31536000, immutable');
+  if (payload.filename) {
+    reply.header('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(payload.filename)}`);
+  }
+  return reply.send(payload.data);
+}
 
 export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): void {
   const auth = authenticate(ctx);
@@ -65,29 +127,95 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     };
   });
 
-  /** Streams the book file. Path traversal is blocked by resolveInside. */
+  /**
+   * Streams the whole book file.
+   *
+   * Kept as the "give me the bytes" endpoint for offline caching, and widened so
+   * every format can be downloaded for local reading: a comic archive or a PDF
+   * is exactly what the client wants to store on device.
+   */
   app.get('/api/v1/books/:id/content', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request);
     const { id } = request.params as { id: string };
-    ctx.shelf.get(user.id, id); // authorises access
-    const file = ctx.db.get<{ rel_path: string }>(
-      'SELECT rel_path FROM book_files WHERE book_id = ? AND missing = 0 ORDER BY rel_path LIMIT 1',
-      id,
-    );
-    if (!file) throw notFound('no available file for this book', 'FILE_MISSING');
+    const book = ctx.shelf.get(user.id, id);
+    const source = resolveBookSource(ctx, id, book.format);
+    if (!source) throw notFound('no available file for this book', 'FILE_MISSING');
 
-    const abs = resolveInside(ctx.config.booksDir, assertSafeRel(file.rel_path));
+    // Directory books have no file to stream; the client caches page by page.
+    if (source.isDirectory) {
+      throw badRequest(
+        'this book is backed by a directory; fetch pages from the manifest instead',
+        'DIRECTORY_BOOK',
+      );
+    }
+
+    const abs = resolveInside(ctx.config.booksDir, assertSafeRel(source.relPath));
     if (!existsSync(abs)) throw notFound('file is no longer on disk', 'FILE_MISSING');
     const info = await stat(abs);
 
-    reply.header('content-type', MIME_BY_EXT[extname(abs).toLowerCase()] ?? 'application/octet-stream');
+    reply.header('content-type', contentTypeFor(source.relPath));
     reply.header('content-length', String(info.size));
     // Progress and notes are the only synced state, so a book body is immutable
     // per hash and can be cached aggressively by the client.
     reply.header('etag', `"${id}"`);
     reply.header('accept-ranges', 'none');
-    reply.header('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.rel_path.split('/').pop() ?? 'book')}`);
+    reply.header(
+      'content-disposition',
+      `inline; filename*=UTF-8''${encodeURIComponent(source.relPath.split('/').pop() ?? 'book')}`,
+    );
     return reply.send(createReadStream(abs));
+  });
+
+  /**
+   * The addressable structure of a book: chapters, pages, volumes.
+   *
+   * Format-neutral on purpose. The client asks every book the same question and
+   * gets the same shape back; `kind` tells it whether to expect reflowable text
+   * or fixed pages. Adding a format does not change this contract.
+   */
+  app.get('/api/v1/books/:id/items', { preHandler: auth }, async (request) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    const book = ctx.shelf.get(user.id, id);
+    const handler = resolveHandler(ctx, id, book.format);
+    if (!handler) throw badRequest(`format ${book.format} does not expose items`, 'UNSUPPORTED_FORMAT');
+
+    const manifest = await handler.manifest({ ...sourceContext(ctx, id, book.format), bookId: id });
+    const query = request.query as Record<string, string | undefined>;
+    const groupIndex = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
+
+    // Filtering by group lets the client fetch one comic volume at a time
+    // instead of a 2000-entry manifest for the whole series.
+    if (groupIndex !== null && Number.isFinite(groupIndex) && manifest.groups[groupIndex]) {
+      const group = manifest.groups[groupIndex]!;
+      const items = manifest.items.filter((item) => item.seq >= groupOffset(manifest.groups, groupIndex));
+      const limited = items.slice(0, group.count);
+      return { ...manifest, items: limited, group: groupIndex };
+    }
+
+    return manifest;
+  });
+
+  /**
+   * A single addressable resource: a chapter document, a page image, a font.
+   *
+   * `ref` is opaque and format specific (`chapter:2`, `page:17`), which keeps the
+   * route stable as formats evolve and lets each handler decide how to address
+   * its own contents.
+   */
+  app.get('/api/v1/books/:id/assets', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    const book = ctx.shelf.get(user.id, id);
+    const ref = (request.query as Record<string, string | undefined>).ref;
+    if (!ref) throw badRequest('ref is required');
+    if (ref.length > 512) throw badRequest('ref is too long');
+
+    const handler = resolveHandler(ctx, id, book.format);
+    if (!handler) throw badRequest(`format ${book.format} has no assets`, 'UNSUPPORTED_FORMAT');
+
+    const payload = await handler.asset({ ...sourceContext(ctx, id, book.format), bookId: id }, { ref });
+    return sendAsset(reply, payload);
   });
 
   app.get('/api/v1/books/:id/cover', { preHandler: auth }, async (request, reply) => {
@@ -147,6 +275,15 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
   app.get('/api/v1/library/scan', { preHandler: auth }, async () => {
     return { progress: ctx.scanner.getProgress() };
   });
+
+  /**
+   * What this instance can read. Clients use it to decide which entry points to
+   * show, and the README points at it as the authoritative list, so it is built
+   * from the registry rather than a hand-maintained array.
+   */
+  app.get('/api/v1/library/formats', { preHandler: auth }, async () => ({
+    formats: capabilities(),
+  }));
 
   app.get('/api/v1/library/stats', { preHandler: auth }, async (request) => {
     const user = currentUser(request);

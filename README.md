@@ -53,10 +53,37 @@ volumes:
 
 ## 支持格式
 
-| 格式 | 第一版状态 |
-| --- | --- |
-| EPUB | 精排支持（内嵌元数据、封面、calibre 系列、dc:identifier） |
-| PDF | 保底可读（页数、基础内嵌元数据） |
+| 格式 | 扩展名 | 状态 | 客户端怎么读 |
+| --- | --- | --- | --- |
+| EPUB | `.epub` | 精排支持（内嵌元数据、封面、calibre 系列、dc:identifier） | 按章节流式加载，章节内资源自动重写为可访问地址 |
+| 漫画压缩包 | `.cbz` `.zip` | 按页序翻页，磁盘上不解压 | 逐页取图；页序按自然序（`page10` 排在 `page2` 之后） |
+| 漫画目录 | 目录 | 一个目录一本书，子目录为卷 | 卷/页两级寻址，`manifest?group=N` 单取一卷 |
+| 纯文本 | `.txt` | 自动识别编码并分章 | 按「第X章」跳转，或按字节偏移流式读 |
+| 单张图片 | `.jpg` `.png` `.webp` … | 按单页读物 | 直接取图 |
+| PDF | `.pdf` | 保底可读，原样下发 | 交给客户端自己的 PDF 渲染 |
+
+**不支持**：`.cbr` / `.rar`。RAR 需要非自由的解压实现或外部二进制，两者都会破坏
+「单容器、零原生依赖」这条约束。遇到 `.rar` 会明确提示，而不是解出损坏的页面。
+
+### 书库可以长这样
+
+```
+/books
+├── 三体 - 刘慈欣.epub            → 书名《三体》 作者「刘慈欣」
+├── 长篇小说 - 张三.txt            → 按「第X章」自动分章
+├── 海贼王 Vol.1.cbz              → 漫画，按包内页序排列
+├── 进击的巨人/                   → 一本漫画，第01卷/第02卷 是它的卷
+│   ├── 第01卷/ 001.jpg 002.jpg ...
+│   └── 第02卷/ 001.jpg 002.jpg ...
+└── 技术手册.pdf                  → 原样下发
+```
+
+整理建议：
+
+- **文件名带作者**能显著提升元数据质量，`书名 - 作者.epub` 是最推荐的命名。
+- EPUB 内嵌元数据优先级最高，文件名只在字段空缺时兜底。
+- 漫画**一个目录一本书**：`进击的巨人/` 是一本书，里面的子目录是卷。
+- `.md` 不入库（书库里的 README 太多，会污染列表）。
 
 ---
 
@@ -200,8 +227,19 @@ server/src/
   indexer/
     identity.ts   书籍主键：dc:identifier + 内容哈希
     filename.ts   文件名解析（保守策略，宁可留空不猜错）
-    metadata.ts   EPUB/PDF 元数据与封面提取
+    metadata.ts   EPUB 元数据与封面提取
     scanner.ts    增量扫描、变更检测、清理
+    formats/      格式处理器注册表（新增格式只动这里）
+      registry.ts       handler 契约 + 扩展名路由
+      epub.ts           EPUB：spine、章节资源重写
+      pdf.ts            PDF：原样下发
+      comic-archive.ts  .cbz / .zip 按页翻
+      comic-directory.ts 图片目录按卷组织
+      text.ts           TXT：编码探测 + 分章
+      image.ts          单张图片
+      zip-reader.ts     自研只读 ZIP（只用 node:zlib）
+      natural-sort.ts   页序/卷序的自然排序
+      image-types.ts    图片扩展名与 content-type 单一来源
   providers/   可插拔刮削 provider 接口
   services/
     users.ts     账号、角色、令牌
@@ -210,6 +248,28 @@ server/src/
     merge.ts     元数据优先级链
   http/        Fastify 路由
 ```
+
+### 新增一种格式
+
+写一个 handler 并注册即可，扫描器与 HTTP 层不用改：
+
+```ts
+// server/src/indexer/formats/mobi.ts
+import { registerFileHandler } from './registry.ts';
+
+export const mobiHandler = registerFileHandler({
+  format: 'mobi',
+  kind: 'document',
+  extensions: ['mobi', 'azw3'],
+  label: 'Mobipocket',
+  async parse(ctx, buf) { /* 返回 metadata / pageCount / cover */ },
+  async manifest(ctx) { /* 返回 groups 与 items */ },
+  async asset(ctx, { ref }) { /* 返回 data / contentType */ },
+});
+```
+
+然后在 `server/src/indexer/formats/index.ts` 里 `import './mobi.ts'`。
+扩展名列表、`/capabilities` 声明、扫描时的文件过滤都会自动跟上。
 
 ### 技术选型说明
 
@@ -247,6 +307,9 @@ server/src/
 - `GET  /api/v1/books` — 书架列表，支持 `search` `author` `series` `tag` `format` `sort` `page`
 - `GET  /api/v1/books/:id`
 - `GET  /api/v1/books/:id/manifest` — 渲染器需要的清单
+- `GET  /api/v1/books/:id/items` — 可寻址结构（章节/页/卷），`?group=N` 取单卷
+- `GET  /api/v1/books/:id/assets?ref=<ref>` — 单个资源（章节文档、页图、字体）
+- `GET  /api/v1/library/formats` — 本实例支持的格式清单
 - `GET  /api/v1/books/:id/content` — 书文件流
 - `GET  /api/v1/books/:id/cover` — 封面
 - `PATCH  /api/v1/books/:id/metadata` — 手动补全元数据
@@ -271,9 +334,22 @@ server/src/
 
 ## 范围边界（第一版）
 
-**做**：目录挂载扫描、元数据刮削、两级权限、同步 API、Docker 单容器、Android 客户端、EPUB 精排、PDF 保底、按书离线缓存。
+**做**：目录挂载扫描、元数据刮削、两级权限、同步 API、Docker 单容器、Android 客户端、
+EPUB 精排、TXT / 漫画（CBZ、图片目录）支持、PDF 保底、按书离线缓存。
 
-**不做**：在线书城、iOS、桌面端、社交、AI 问答、全格式转换、移动端批注输入。
+**不做**：在线书城、iOS、桌面端、社交、AI 问答、全格式转换、移动端批注输入、`.cbr`/`.rar`。
+
+### 已知边界
+
+写在明处，避免预期错位：
+
+- **PDF 只做保底可读**：不解析页数、书签，也不重排。页数上报 `null` 而不是猜一个数字 ——
+  猜错会让客户端的进度条错乱，比没有更糟。
+- **文本不做精品排版**：TXT 按行渲染，不折行重排、不调字号。精品排版是 EPUB 的承诺。
+- **不做全格式转换**：不把 epub 转 pdf、不把 txt 转 epub。
+- **ZIP 不支持 ZIP64 / 加密 / 分卷**：超限会明确报错，不会静默解出坏数据。
+- **漫画目录只认一层嵌套**：再深会把一个杂乱目录变成几千页的巨型漫画。
+- **没有内置 HTTPS 与限流**：给反向代理留位置，不重复造轮子。
 
 ---
 
