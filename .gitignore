@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# build output
+server/dist/
+
+# runtime data: sqlite db, covers, token secret
+data/
+server/data/
+
+# logs and local env
+*.log
+.env
+.env.local
+
+# editor / OS
+.DS_Store
+.idea/
+.vscode/

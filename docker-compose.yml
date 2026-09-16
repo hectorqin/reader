@@ -1,0 +1,40 @@
+# One command to get running:
+#
+#   docker compose up -d
+#
+# Then open http://<your-host>:8080 and register the first account, which
+# automatically becomes the instance admin.
+services:
+  reader:
+    image: cnb.cool/hectorqin/reader:latest
+    # To build from source instead of pulling the published image:
+    # build: ./server
+    container_name: reader
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Polling intervals in seconds. Set to 0 to disable (a manual scan is
+      # still available from the admin API).
+      SCAN_INTERVAL: "1800"
+      WATCH_INTERVAL: "60"
+      LOG_LEVEL: "info"
+      # Set this to the address you actually reach the server on, so download
+      # links work behind a reverse proxy.
+      # PUBLIC_URL: "https://reader.example.com"
+      # Uncomment to allow family members to self-register instead of the admin
+      # creating their accounts:
+      # ALLOW_REGISTRATION: "true"
+    volumes:
+      # --- your books, mounted READ-ONLY ---
+      # The server NEVER writes to this directory. Replace the left-hand side
+      # with the path to your own library.
+      - /path/to/your/books:/books:ro
+      # --- everything the server writes lives here ---
+      # SQLite database, cover cache, scan journal.
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
