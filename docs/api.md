@@ -141,6 +141,12 @@
 | `paged` | 固定页序的图片 | cbz、漫画目录、单图 |
 | `text` | 连续文本，可能带章节 | txt |
 | `document` | 不透明文档，客户端自己渲染 | pdf |
+| `single-image` | 单页图片 | 单个图片文件 |
+
+**章节按包内路径寻址，不按下标。** `items[].href` 是不透明的格式私有引用
+（`xhtml:OEBPS/ch1.xhtml`、`page:17`、`chapter:4`），客户端原样回传即可。
+下标只在一个窗口内成立：分窗返回的是 spine 的前缀，所以按下标算出的章节
+在完整 spine 里指向另一章。
 
 ```json
 { "kind": "paged", "total": 6,
@@ -155,6 +161,22 @@
 
 `total` 在格式无法廉价得知时为 `0`，`groups` 为空 —— 例如没有标题的纯文本。
 不要把它当作错误。
+
+### `GET /books/:id/toc`
+
+书的目录。**与 `/items` 分开**，因为两者要的性质相反：`/items` 是传输边界，
+一次给一点；目录必须完整，否则跳转是残的。合成一个接口会让目录显示成
+「第 1 章 – 第 40 章」——服务端的分页边界漏进 UI。
+
+```json
+{ "toc": [ { "href": "xhtml:OEBPS/text/ch1.xhtml", "title": "第一章", "level": 0, "spine": 0 } ] }
+```
+
+`spine` 是全书下标，`/items?group=N` 的每个 group 都带 `offset`，所以客户端
+拿到单窗也能把跳转落到正确章节，不需要把前面的 count 加一遍。
+
+按格式：epub 取 spine 标题（NCX / nav），txt 取分章结果，漫画目录取卷，
+pdf / 单图没有独立目录，回落到 items。
 
 ### `GET /books/:id/assets?ref=<ref>`
 
@@ -171,6 +193,22 @@
 
 响应带 `Cache-Control: private, max-age=31536000, immutable`：资源由书籍主键寻址，
 而主键来自内容哈希，所以同一个 URL 的内容永不改变。
+
+**流式下发，支持 Range。** 响应带 `Accept-Ranges: bytes` 时可以用
+`Range: bytes=0-1023` 取片段（PDF 跳页、漫画跳卷、断点续传）。压缩方式为
+`deflate` 的 zip 条目无法字节定位，会诚实上报 `Accept-Ranges: none` ——
+让客户端知道，而不是白跑一次再发现。
+
+**子资源可以带 `?access_token=`。** 章节里的 `<img src>`、`<link href>` 是浏览器
+自己发起的，没法带 `Authorization` 头。这类请求允许把令牌放进 query，
+但**仅限** `GET` + 下列端点：
+
+- `/api/v1/books/:id/assets`
+- `/api/v1/books/:id/cover`
+- `/api/v1/books/:id/content`
+
+其他任何端点（含触发扫描、写元数据）都不接受 URL 里的令牌 —— URL 会进日志、
+进历史、进 `Referer`，能改状态的令牌不该走那条路。
 
 **epub 章节返回的是重写过的 HTML。** 章节内的相对资源引用（`images/pic.png`）已经被
 服务端改写成指向本端点的绝对地址。客户端直接把 HTML 交给 WebView 即可，不需要自己
@@ -191,7 +229,11 @@
 
 流式返回书文件，`Content-Type` 按格式给 `application/epub+zip` 或 `application/pdf`。
 
-书内容按哈希不可变，所以带 `ETag`，客户端可以放心长缓存。
+书内容按哈希不可变，所以带 `ETag`，客户端可以放心长缓存。支持
+`Range: bytes=`，所以**离线下载可以续传**。
+
+目录型书籍（漫画目录）没有单一文件，返回 `400 DIRECTORY_BOOK`；
+这类书按 `items?group=N` 逐卷取图。
 
 ### `GET /books/:id/cover`
 
@@ -363,6 +405,9 @@
 | `ACCOUNT_DISABLED` | 403 | 账号被停用 |
 | `FORBIDDEN` | 403 | 越权访问 |
 | `PATH_TRAVERSAL` | 403 | 路径逃逸出挂载点 |
+| `DIRECTORY_BOOK` | 400 | 这本书由目录承载，按页取而不是整本下载 |
+| `UNSUPPORTED_FORMAT` | 400 | 该格式不提供可寻址结构 |
+| `EMPTY_ASSET` | 400 | 资源既没有数据也没有流 |
 | `ADMIN_REQUIRED` | 403 | 需要管理员权限 |
 | `NOT_FOUND` | 404 | 资源不存在 |
 | `NO_COVER` | 404 | 这本书没有封面 |

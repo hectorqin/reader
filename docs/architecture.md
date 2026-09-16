@@ -183,22 +183,81 @@ id = sha256( (dc:identifier ?? '').toLowerCase() + '\0' + sha256(fileBytes) )
 
 ---
 
-## 8. 客户端渲染（尚未实现）
+## 8. 客户端渲染
 
-产品设计里的关键决策：**不要直接套 Readium Mobile**。
+产品设计里的关键决策：**不要直接套 Readium Mobile**。Readium 用 Readium CSS
+主动接管排版、覆盖出版方样式，这与本产品「忠实还原精排书设计」的核心差异化
+直接冲突。实现落在 `web/`，没有框架 —— 渲染热路径是命令式 DOM 操作，
+引框架只会把「最小覆盖」的策略搞复杂。产物 38KB（gzip 12KB）。
 
-Readium 用 Readium CSS 主动接管排版、覆盖出版方样式，这与本产品
-「忠实还原精排书设计」的核心差异化直接冲突。
+### 谁渲染什么
 
-计划方案（下一轮）：
+| `kind` | H5 | Android |
+| --- | --- | --- |
+| `reflowable`（epub） | iframe | WebView（同一份代码） |
+| `text`（txt） | iframe | WebView |
+| `paged`（cbz / 漫画目录 / 单图） | `<img>` 翻页器 | 原生 Pager |
+| `document`（pdf） | iframe | 系统查看器 |
 
-- 原生外壳（Kotlin）只负责：文件与缓存、手势、书架、账号
-- 渲染层用 WebView + 自研 CSS 干预策略，参考 foliate-js 的「保留作者样式 + 最小覆盖」
-- 参考 readium-css 的变量组织方式，但**不引入它的默认接管行为**
+分工的依据是内存而不是速度。一页漫画是一个 JPEG：原生 `ImageView` 走硬件解码
+并复用 bitmap，WebView 每页一个合成层、在主线程解码 —— 300MB 的画册在
+WebView 里是中端机 OOM，在原生里没事。反过来，可重排文本只有 WebView 实现了
+CSS 多栏、内嵌字体、竖排、振假名，原生文本栈重做一遍只会更差。
 
-服务端为此准备的是格式中立的清单契约：`GET /api/v1/books/:id/items` 返回
-可寻址结构（章节 / 页 / 卷），`assets?ref=` 取单个资源。`kind` 字段告诉客户端
-该按可重排文本还是固定页来渲染，所以 PDF、漫画和 EPUB 可以复用同一套客户端骨架。
+### 为什么外壳用 Shadow DOM、书用 iframe
+
+这两个问题的答案不同，混为一谈是错的。
+
+**Shadow DOM 挡的不是出版方样式。** 出版方的 CSS 是章节资源，必须进到 root
+里才能生效，进去之后它照常给书排版 —— 书本来就该给自己排版。它挡的是反方向：
+客户端自身的规则不会漏进书里，`all: unset` / `!important` 影响不到脚注和引用。
+
+**书必须是真文档。** 章节里的 `<img src>` 和 `<link rel=stylesheet>` 是浏览器
+自己去请求的，没法带 `Authorization` 头。把章节注入宿主文档的结果是每个插图、
+每个样式表都 401 —— 书渲染成无样式无图。iframe 是真浏览上下文，子资源请求是
+普通导航，URL 里带什么就发什么。
+
+代价是每次请求要带 token（服务端的 `queryTokenAllowed` 是白名单：仅 GET、
+仅 `books/*/assets|cover|content`，触发扫描之类一律不接受 URL 里的 token）。
+收益是章节由渲染了三十年文档的引擎渲染，而不是我们祈祷等价的片段。
+
+`srcdoc` 而不是 Blob URL：Blob URL 的 origin 是 opaque，frame 的请求会变成
+跨源而被拒。`srcdoc` 继承父文档 origin，改写后的绝对 URL 才能用。
+
+### 分页：`column-fill: auto` 需要确定高度
+
+这是实测才发现的，值得记一笔。多栏布局只在容器高度**确定**时才分栏：
+不设高度的 `body` 会撑到内容高度，整章排成一列，`scrollWidth` 等于
+`clientWidth` —— 翻页手势完全无效，一章只显示一页。
+
+所以文档被钉在 frame 的视口高度（`100vh` 在 iframe 里就是 frame 自己的视口）。
+`body` 上**不能**加 `overflow: hidden`：那会把它自己生成的列也裁掉，第一页之后
+的内容永远滚不到。
+
+`scroll-snap` 也去掉了：吸附目标是列边缘，不是我们算出来的页边界，
+会让 `scrollLeft` 落在两页之间甚至一次跳两页。
+
+### 服务端为此准备的契约
+
+- `GET /books/:id/manifest` — 打开一本书的**全部**信息，一次往返。
+  客户端不必先拿书、再拿结构。
+- `GET /books/:id/items?group=N` — 分窗的可寻址结构。`kind` 告诉客户端按
+  可重排文本还是固定页渲染。
+- `GET /books/:id/toc` — 真正的目录，与分窗分离（见下）。
+- `GET /books/:id/assets?ref=<opaque>` — 单个资源，流式，支持 Range。
+
+### 分窗与目录为什么是两个接口
+
+一开始它们是一个。`items` 按窗口返回（epub 40 章、漫画一卷），而客户端要目录时
+也去读它，结果是目录显示成「第 1 章 – 第 40 章」—— 服务端的传输边界漏进了 UI。
+
+两者要的性质本来就相反：**分窗**是传输边界，一次只给一点，因为客户端要逐段
+下载；**目录**必须完整，否则跳转就是残的。合成一个接口，其中一个必然做错。
+
+分窗还有一个约束值得写下来：**章节不能按下标寻址**。分窗返回的是 spine 的前缀，
+所以按窗口内下标算出来的章节，在完整 spine 里指向的是另一章。items 一律按
+包内路径寻址（`xhtml:OEBPS/ch1.xhtml`）。这是第一版契约的真实缺陷，改对了
+之后客户端的「恢复到上次位置」才稳定。
 
 ## 格式层：为什么是注册表
 
@@ -230,6 +289,17 @@ epub.ts  pdf.ts  comic-archive.ts  comic-directory.ts  text.ts  image.ts
 「系列 + 每卷 + 每页」的形式重复出现。外层优先符合人手动归档的习惯：
 外层目录是系列，子目录是卷。
 
+### 章节流式读取
+
+EPUB 与漫画此前每次请求都整包解压（EPUB 走 JSZip）。一本 50MB 画册的每次翻章
+都会把整个压缩包读进内存，扫全库时更糟。现在两者都走项目自研的 `ZipArchive`：
+只读中央目录，按需解压单个条目，`openStream()` 让 stored 直接读、deflate 走
+流式 inflate。
+
+`openBuffer()` 给扫描器用（它刚读完文件算哈希，不必再按路径打开一次）。
+内存态和文件态共用 `parseCentralDirectory` —— 两个路径对条目偏移的理解一旦
+分叉，表现是某一本书的页面从错误位置读起，只在那个用户那里复现。
+
 ### 各格式的取舍
 
 **ZIP 自己实现**（`zip-reader.ts`，只用 `node:zlib`）。项目已有的 JSZip 会把整个
@@ -248,6 +318,22 @@ epub.ts  pdf.ts  comic-archive.ts  comic-directory.ts  text.ts  image.ts
 客户端是从资源端点取到这份文档的，原样交给 WebView 会让图片、字体、样式表全部 404。
 服务端在返回前把这些相对引用改写成指向自己的绝对地址，同时跳过绝对 URL、
 `data:` URI 和文内锚点 —— 改写脚注链接会把脚注弄坏。
+
+## 解析器版本：修复怎么到达已入库的书
+
+变更检测是内容哈希驱动的，这带来一个不明显的后果：**解析器的修复不会改变任何
+字节**，所以扫描恰好会跳过最需要重读的那些文件。坏结果永久留存 —— 这不是
+假设，EPUB 页数一度因为内存态 zip 的读取缺陷全是 `null`，而重跑扫描修不回来。
+
+修法是给解析结果带上版本号：`book_files.parse_version` 记录是哪一版解析器写下
+的，`PARSE_VERSION` 提升时强制重解析一次。自部署用户不会按时升级，所以版本
+必须跟着数据行走，不能只活在进程里。
+
+配套加了可重复执行的增量迁移。SQLite 不支持 `ADD COLUMN IF NOT EXISTS`，
+靠 `duplicate column name` 错误判断已执行过；旧库原地升级，不丢数据。
+
+新增的 `lib/log.ts` 是同一件事的另一半：扫描器和解析器跑在定时器里，没有请求
+可以借 logger，于是失败是静默的 —— 静默正是上面那个 bug 得以存在的原因。
 
 ## 书籍主键的补充规则
 
