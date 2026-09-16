@@ -2,7 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.ts';
 import { authenticate, currentUser, requireAdmin } from '../auth.ts';
 import { badRequest, notFound } from '../../lib/errors.ts';
-import { assertSafeRel, resolveInside } from '../../lib/paths.ts';
+import { assertSafeRel, normalizeRel, resolveInside } from '../../lib/paths.ts';
+import { createHash } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { extname, join } from 'node:path';
@@ -10,6 +11,16 @@ import { extname, join } from 'node:path';
 const MIME_BY_EXT: Record<string, string> = {
   '.epub': 'application/epub+zip',
   '.pdf': 'application/pdf',
+  '.txt': 'text/plain; charset=utf-8',
+  '.cbz': 'application/vnd.comicbook+zip',
+  '.zip': 'application/zip',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
+  '.bmp': 'image/bmp',
 };
 
 export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): void {
@@ -87,6 +98,51 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     reply.header('etag', `"${id}"`);
     reply.header('accept-ranges', 'none');
     reply.header('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.rel_path.split('/').pop() ?? 'book')}`);
+    return reply.send(createReadStream(abs));
+  });
+
+  /**
+   * Streams one file of a multi-file book.
+   *
+   * Needed for the one format that is not a single file: a comic stored as a
+   * folder of images. Compositing those into an archive server-side would mean
+   * writing into DATA_DIR on demand and re-doing the work whenever the folder
+   * changes, so the client fetches pages individually instead and caches them
+   * per page.
+   *
+   * Authorisation is the same as `/content`: the caller must be able to see the
+   * book, and the requested path must be one of that book's *known* files. The
+   * lookup is by `book_files.rel_path`, never by constructing a path from the
+   * query, so a traversal attempt simply matches no row.
+   */
+  app.get('/api/v1/books/:id/file', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    const query = request.query as { path?: string };
+    ctx.shelf.get(user.id, id); // authorises access
+    if (!query.path) throw badRequest('path is required');
+
+    const row = ctx.db.get<{ rel_path: string; size: number }>(
+      'SELECT rel_path, size FROM book_files WHERE book_id = ? AND rel_path = ? AND missing = 0',
+      id,
+      normalizeRel(query.path),
+    );
+    if (!row) throw notFound('no such file for this book', 'FILE_MISSING');
+
+    const abs = resolveInside(ctx.config.booksDir, assertSafeRel(row.rel_path));
+    if (!existsSync(abs)) throw notFound('file is no longer on disk', 'FILE_MISSING');
+
+    reply.header('content-type', MIME_BY_EXT[extname(abs).toLowerCase()] ?? 'application/octet-stream');
+    reply.header('content-length', String(row.size));
+    // Unlike `/content`, this is one page of many, so the ETag is per file rather
+    // than per book.
+    //
+    // Hashed rather than embedding the path: an HTTP header value must be
+    // ISO-8859-1, and a comic page's path is routinely Chinese or Japanese. Putting
+    // the raw path in the header throws `ERR_INVALID_CHAR` and turns a page request
+    // into a 500 — which is exactly what happened the first time this was written.
+    reply.header('etag', `"${id}:${createHash('sha256').update(row.rel_path).digest('hex').slice(0, 16)}"`);
+    reply.header('cache-control', 'private, max-age=86400');
     return reply.send(createReadStream(abs));
   });
 

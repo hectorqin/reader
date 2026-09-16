@@ -4,6 +4,8 @@ import { registerErrorHandler } from './errors.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerLibraryRoutes } from './routes/library.ts';
 import { registerSyncRoutes } from './routes/sync.ts';
+import { registerWebRoutes } from './routes/web.ts';
+import { isOriginAllowed, resolveCorsOrigin } from './cors.ts';
 
 export function buildApp(ctx: AppContext): FastifyInstance {
   const app = Fastify({
@@ -16,14 +18,17 @@ export function buildApp(ctx: AppContext): FastifyInstance {
 
   registerErrorHandler(app);
 
-  // Permissive CORS by default: a self-hosted reader is expected to be reached
-  // from a LAN address, a reverse proxy and possibly a local file origin. There
-  // are no cookies in the design, so this does not widen the attack surface to
-  // the extent a cookie-based session would.
   app.addHook('onRequest', async (request, reply) => {
-    reply.header('access-control-allow-origin', request.headers.origin ?? '*');
+    if (!isOriginAllowed(ctx.config, request)) {
+      reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'origin not allowed' } });
+      return;
+    }
+    reply.header('access-control-allow-origin', resolveCorsOrigin(ctx.config, request));
     reply.header('access-control-allow-headers', 'authorization, content-type');
     reply.header('access-control-allow-methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+    // `vary: origin` is required whenever the allowed origin is reflected rather
+    // than fixed, otherwise a shared cache will serve one origin's response to
+    // another.
     reply.header('vary', 'origin');
   });
 
@@ -32,6 +37,8 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerAuthRoutes(app, ctx);
   registerLibraryRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
+  // Registered last: the SPA fallback must not shadow an API route.
+  registerWebRoutes(app, ctx);
 
   return app;
 }

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches --reader-paper in web/src/styles/reader.css. -->
+    <color name="paper">#FBFBF7</color>
+    <color name="paper_dark">#16171A</color>
+</resources>
