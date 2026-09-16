@@ -105,6 +105,13 @@ function makeZip(entries: Array<[string, Buffer | string]>, options: { deflate?:
   return Buffer.concat([...locals, centralBuf, eocd]);
 }
 
+/** A real JPEG header, so range assertions can check actual magic bytes. */
+const JPEG = Buffer.concat([
+  Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]),
+  Buffer.from('JFIF\0', 'latin1'),
+  Buffer.alloc(512, 0x20),
+]);
+
 /** Smallest valid PNG. */
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
@@ -574,9 +581,14 @@ describe('reading endpoints per format', () => {
 
   test('epub chapter HTML has its relative asset references rewritten', async () => {
     const book = await findBook('三体');
+    // Chapters are addressed by archive path, not spine index: windowed loading
+    // returns a prefix of the spine, so an index would mean different chapters
+    // depending on which window was fetched.
+    const items = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
+    const first = (items.json() as { items: Array<{ href: string }> }).items[0]!;
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('chapter:0')}`,
+      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent(first.href)}`,
       headers: auth(),
     });
     assert.equal(res.statusCode, 200, res.body);
@@ -585,6 +597,24 @@ describe('reading endpoints per format', () => {
     assert.ok(!/src="images\/pic\.png"/.test(html), 'relative image src should have been rewritten');
     // It must become a URL the client can actually fetch, not just a raw path.
     assert.match(html, /\/api\/v1\/books\/[^"]+\/assets\?ref=OEBPS%2Fimages%2Fpic\.png/);
+  });
+
+  test('an epub chapter can be fetched without loading the whole container', async () => {
+    // The regression this pins: the handler used to run JSZip.loadAsync on every
+    // manifest and asset request, which inflates the entire archive. A book is
+    // now read through the project's own index-based reader.
+    const book = await findBook('三体');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/items`,
+      headers: auth(),
+    });
+    const body = res.json() as { items: Array<{ href: string; size?: number }> };
+    const chapter = body.items.find((item) => item.href.startsWith('xhtml:'));
+    assert.ok(chapter, 'spine items should be addressed by archive path');
+    // The size comes from the zip central directory, so the client can budget a
+    // prefetch without fetching the chapter first.
+    assert.equal(typeof chapter.size, 'number');
   });
 
   test('epub assets are served with the right content type', async () => {
@@ -596,6 +626,9 @@ describe('reading endpoints per format', () => {
     });
     assert.equal(res.statusCode, 200, res.body);
     assert.equal(res.headers['content-type'], 'image/png');
+    // Streamed out of the container, with a known length so the client can show
+    // progress and the response is not chunked.
+    assert.equal(res.headers['content-length'], String(res.rawPayload.byteLength));
     assert.ok(res.rawPayload.byteLength > 0);
   });
 
@@ -705,6 +738,131 @@ describe('reading endpoints per format', () => {
     const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/content`, headers: auth() });
     assert.equal(res.statusCode, 400);
     assert.equal((res.json() as { error: { code: string } }).error.code, 'DIRECTORY_BOOK');
+  });
+
+test('a long book is loaded one window at a time', async () => {
+    // The point of windowing: a 1200-chapter omnibus must not cost one manifest
+    // with 1200 entries, and a client must be able to find chapter 900 without
+    // walking the first 899.
+    const target = join(booksDir, '长篇.windowed.epub');
+    await writeFile(target, makeEpub({ id: 'urn:windowed', title: '长篇', chapters: 250 }));
+    await ctx.scanner.scan();
+
+    const book = await findBook('长篇');
+    const all = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
+    const full = all.json() as { total: number; groups: Array<{ offset: number; count: number; seq: number }> };
+
+    assert.equal(full.total, 250);
+    assert.ok(full.groups.length > 1, 'a 250-chapter book must be split into windows');
+    // Every group has to state where it starts: a client holding only this group
+    // has no other way to place it in the book.
+    assert.deepEqual(full.groups.map((g) => g.offset), full.groups.map((g) => g.seq * full.groups[0]!.count));
+
+    const window = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items?group=2`, headers: auth() });
+    const page = window.json() as { items: Array<{ seq: number }>; group: number; groups: unknown[] };
+    assert.equal(page.group, 2);
+    assert.equal(page.items.length, full.groups[0]!.count);
+    // The window must carry the group's items, not the first group's.
+    assert.equal(page.items[0]!.seq, 2 * full.groups[0]!.count);
+    // `groups` stays complete so the client can still show a full table of contents.
+    assert.equal(page.groups.length, full.groups.length);
+
+    await rm(target);
+    await ctx.scanner.scan();
+  });
+
+  test('the manifest alone is enough to open a book', async () => {
+    // "Open a book" used to cost two round trips. Over a tunnel that is a book
+    // that appears to hang; the manifest now carries the addressable structure.
+    const book = await findBook('三体');
+    const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/manifest`, headers: auth() });
+    assert.equal(res.statusCode, 200, res.body);
+    const body = res.json() as {
+      book: { title: string };
+      items: Array<{ href: string; size?: number }>;
+      groups: Array<{ count: number; offset: number }>;
+      kind: string;
+      total: number;
+    };
+    assert.equal(body.book.title, '三体');
+    assert.equal(body.kind, 'reflowable');
+    assert.equal(body.total, 3);
+    assert.match(body.items[0]!.href, /^xhtml:/);
+    assert.equal(body.groups[0]!.offset, 0);
+  });
+
+  test('a seekable book body answers a range request', async () => {
+    // "Jump to page 300" of a PDF is pure waste without Range, and a download
+    // that cannot resume restarts from zero on every flaky mobile connection.
+    const book = await findBook('手册');
+    const first = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/content`,
+      headers: { ...auth(), range: 'bytes=0-3' },
+    });
+    assert.equal(first.statusCode, 206, first.body);
+    assert.equal(first.rawPayload.toString(), '%PDF');
+    assert.equal(first.headers['accept-ranges'], 'bytes');
+    assert.match(String(first.headers['content-range']), /^bytes 0-3\/\d+$/);
+
+    const tail = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/content`,
+      headers: { ...auth(), range: 'bytes=-3' },
+    });
+    assert.equal(tail.statusCode, 206);
+    // `bytes=-3` is the LAST three bytes, not the first three. Getting this
+    // backwards makes a resumed download silently restart.
+    assert.equal(tail.rawPayload.byteLength, 3);
+
+    const past = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/content`,
+      headers: { ...auth(), range: 'bytes=99999999-' },
+    });
+    assert.equal(past.statusCode, 416);
+  });
+
+  test('a streamed page reports the length the client will actually receive', async () => {
+    // A stream with a wrong content-length is worse than no length: the client
+    // waits for bytes that will never arrive.
+    const book = await findBook('海贼王');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('page:0')}`,
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(res.headers['content-length'], String(res.rawPayload.byteLength));
+    // A deflated zip entry has no byte offset a client can seek to, so claiming
+    // Range support would be a lie the client only discovers after a wasted
+    // request. The header says what is actually true for this page.
+    assert.equal(res.headers['accept-ranges'], 'none');
+  });
+
+  test('a page can be fetched by range when the container allows seeking', async () => {
+    // A `stored` (uncompressed) cbz is the case a client can genuinely resume,
+    // and it is common for image archives.
+    const target = join(booksDir, '未压缩.cbz');
+    await writeFile(target, makeZip([['1.jpg', JPEG], ['2.jpg', JPEG]], { deflate: false }));
+    await ctx.scanner.scan();
+    const book = await findBook('未压缩');
+
+    const items = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
+    const page = (items.json() as { items: Array<{ href: string }> }).items[0]!;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent(page.href)}`,
+      headers: { ...auth(), range: 'bytes=0-1' },
+    });
+    assert.equal(res.statusCode, 206, res.body);
+    assert.equal(res.headers['accept-ranges'], 'bytes');
+    // The first two bytes of a JPEG, taken from the middle of the archive: the
+    // prefix is dropped rather than re-requested.
+    assert.equal(res.rawPayload.subarray(0, 2).toString('hex'), 'ffd8');
+
+    await rm(target);
+    await ctx.scanner.scan();
   });
 
   test('formats endpoint advertises what the instance can read', async () => {

@@ -271,7 +271,60 @@ export async function extractEpubCover(buf: Buffer): Promise<{ data: Buffer; con
   return { data, contentType };
 }
 
-async function findOpfPath(zip: JSZip): Promise<string> {
+/**
+ * Cover location without reading the image.
+ *
+ * `extractEpubCover` eagerly decodes the cover for the scanner, which is right
+ * when a book is being indexed. It is wasteful for a request that only wants to
+ * hand the bytes to a client — for a large art book the cover can be several
+ * megabytes. This returns the archive path and media type so the caller can
+ * stream it out of the container instead.
+ *
+ * The item-picking order matches `extractEpubCover` on purpose: two code paths
+ * that disagree about which image is the cover would serve a different picture
+ * depending on which endpoint the client hit.
+ */
+export async function findEpubCoverTarget(
+  zip: JSZip,
+  opfPath?: string,
+): Promise<{ path: string; contentType: string } | undefined> {
+  const opf = opfPath ?? (await findOpfPath(zip));
+  if (!opf) return undefined;
+  const opfFile = zip.file(opf);
+  if (!opfFile) return undefined;
+  const parsed = xmlParser.parse(await opfFile.async('string')) as Record<string, any>;
+  const metadata = parsed?.package?.metadata ?? {};
+  const manifest = asArray(parsed?.package?.manifest?.item);
+
+  const coverId = asArray(metadata.meta)
+    .map((entry) => (typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>) : {}))
+    .find((entry) => String(entry['@_name'] ?? '') === 'cover')?.['@_content'];
+
+  const isImage = (item: Record<string, any>) => String(item['@_media-type'] ?? '').startsWith('image/');
+
+  let item = coverId ? manifest.find((entry) => entry?.['@_id'] === coverId) : undefined;
+  if (!item) {
+    item = manifest.find(
+      (entry) => isImage(entry) && /cover/i.test(String(entry?.['@_id'] ?? entry?.['@_href'] ?? '')),
+    );
+  }
+  if (!item) {
+    item = manifest.find(
+      (entry) => isImage(entry) && /\.(jpe?g|png|gif|webp)$/i.test(String(entry?.['@_href'] ?? '')),
+    );
+  }
+  if (!item) return undefined;
+
+  const href = String(item['@_href'] ?? '');
+  const baseDir = opf.includes('/') ? opf.slice(0, opf.lastIndexOf('/') + 1) : '';
+  const path = decodeURIComponent(`${baseDir}${href}`);
+  return {
+    path: zip.file(path) ? path : href,
+    contentType: String(item['@_media-type'] ?? 'image/jpeg'),
+  };
+}
+
+export async function findOpfPath(zip: JSZip): Promise<string> {
   const containerFile = zip.file('META-INF/container.xml');
   if (containerFile) {
     const container = xmlParser.parse(await containerFile.async('string')) as Record<string, any>;

@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import {
   registerFileHandler,
@@ -21,6 +22,11 @@ import { filenameMetadata } from '../metadata.ts';
  * regex happily matched an unrelated `/Count` and reported wrong page counts,
  * which corrupts the reader's progress display. Reporting `null` is honest: the
  * client learns the real count once it opens the document.
+ *
+ * The body is streamed and marked seekable. A scanned manual is easily 100MB;
+ * reading it into a Buffer per request would put a handful of concurrent
+ * readers on the edge of the heap limit, and Range support is what lets a PDF
+ * viewer jump to page 300 without downloading everything before it.
  */
 export const pdfHandler = registerFileHandler({
   format: 'pdf',
@@ -44,7 +50,7 @@ export const pdfHandler = registerFileHandler({
     return {
       kind: 'document',
       total: 1,
-      groups: [{ id: 'document', seq: 0, title: '文档', count: 1 }],
+      groups: [{ id: 'document', seq: 0, title: '文档', count: 1, offset: 0 }],
       items: [
         {
           id: 'doc',
@@ -59,10 +65,14 @@ export const pdfHandler = registerFileHandler({
   },
 
   async asset(ctx: HandlerContext): Promise<AssetPayload> {
+    const info = await stat(ctx.absPath);
     return {
-      data: await readFile(ctx.absPath),
+      stream: createReadStream(ctx.absPath),
       contentType: 'application/pdf',
       filename: ctx.relPath.slice(ctx.relPath.lastIndexOf('/') + 1),
+      size: info.size,
+      seekable: true,
+      lastModified: info.mtimeMs,
     };
   },
 });

@@ -21,6 +21,12 @@ import { filenameMetadata } from '../metadata.ts';
  * `.cbr`/`.rar` are deliberately absent. RAR needs a non-free decompressor or
  * an external binary, either of which breaks the single-container promise, and
  * a half-working RAR reader would corrupt pages silently.
+ *
+ * Pages are streamed straight out of the archive. A single volume of a real
+ * collection is routinely 200-400MB; buffering a page request would put a few
+ * concurrent readers on the edge of the heap limit, and the page a client jumps
+ * to is usually not the first one, so Range support keeps a "jump to page 180"
+ * from downloading the 179 pages before it.
  */
 
 /** Refuse absurd page counts rather than building a huge manifest for a broken zip. */
@@ -146,7 +152,7 @@ export const comicArchiveHandler = registerFileHandler({
     return {
       kind: 'paged',
       total: pages.length,
-      groups: [{ id: 'pages', seq: 0, title, count: pages.length }],
+      groups: [{ id: 'pages', seq: 0, title, count: pages.length, offset: 0 }],
       items: pages.map((entry, index) => ({
         id: `p${index}`,
         seq: index,
@@ -154,6 +160,9 @@ export const comicArchiveHandler = registerFileHandler({
         kind: 'page' as const,
         mediaType: imageContentType(entry.name),
         href: `page:${index}`,
+        // Uncompressed size: a ZIP entry that is already `stored` has a real
+        // byte offset a client can Range against.
+        size: entry.uncompressedSize,
       })),
     };
   },
@@ -162,24 +171,31 @@ export const comicArchiveHandler = registerFileHandler({
     const archive = await ZipArchive.open(ctx.absPath);
     const pages = pageEntries(archive);
 
+    // Index-based references are the contract for pages: they keep working when
+    // the archive is re-packed with renamed entries, which is exactly what a
+    // cbz author does between volumes.
     let name: string | null = null;
     if (/^page:\d+$/.test(req.ref)) {
-      // Index-based references are the contract: they keep working when the
-      // archive is re-packed with renamed entries.
       const index = Number.parseInt(req.ref.slice('page:'.length), 10);
       name = pages[index]?.name ?? null;
       if (!name) throw new Error(`page ${index} is out of range`);
     } else {
+      // A bare archive path is still accepted, because styles and fonts are
+      // legitimately addressed that way from a chapter document.
       const decoded = safeDecode(req.ref);
       if (archive.has(req.ref)) name = req.ref;
       else if (archive.has(decoded)) name = decoded;
       if (!name) throw new Error(`entry not found: ${req.ref}`);
     }
 
+    const entry = archive.get(name);
     return {
-      data: await archive.read(name),
+      stream: await archive.openStream(name),
       contentType: imageContentType(name),
       filename: name.slice(name.lastIndexOf('/') + 1),
+      size: entry?.uncompressedSize,
+      seekable: entry?.method === 0,
+      etag: ctx.bookId,
     };
   },
 });

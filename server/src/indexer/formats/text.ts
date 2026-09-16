@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { contentTypeFor } from './image-types.ts';
 import {
@@ -161,7 +162,9 @@ export const textHandler = registerFileHandler({
     return {
       kind: 'text',
       total: chapters.length,
-      groups: chapters.length > 0 ? [{ id: 'chapters', seq: 0, title: '章节', count: chapters.length }] : [],
+      groups: chapters.length > 0
+        ? [{ id: 'chapters', seq: 0, title: '章节', count: chapters.length, offset: 0 }]
+        : [],
       items: chapters.map((chapter, index) => ({
         id: `c${index}`,
         seq: index,
@@ -188,21 +191,37 @@ export const textHandler = registerFileHandler({
       const chapter = chapters[index];
       if (!chapter) throw new Error(`chapter ${index} is out of range`);
       const body = lines.slice(chapter.startLine, chapter.endLine + 1).join('\n').slice(0, size);
-      return { data: Buffer.from(body, 'utf8'), contentType: 'text/plain; charset=utf-8' };
-    }
-
-    if (req.ref.startsWith('chunk:')) {
-      const offset = Math.max(0, Number.parseInt(req.ref.slice('chunk:'.length), 10) || 0);
       return {
-        data: Buffer.from(text.slice(offset, offset + size), 'utf8'),
+        data: Buffer.from(body, 'utf8'),
         contentType: 'text/plain; charset=utf-8',
+        size: Buffer.byteLength(body, 'utf8'),
       };
     }
 
-    // Whole file, used by the download path for offline caching.
+    if (req.ref.startsWith('chunk:')) {
+      // Offsets are character offsets, which is what the client can count as it
+      // appends text. `size` is the BODY's byte length, not the character count:
+      // a chunk of Chinese is three bytes per character, and reporting the
+      // character count as a content-length would truncate the response.
+      const offset = Math.max(0, Number.parseInt(req.ref.slice('chunk:'.length), 10) || 0);
+      const body = text.slice(offset, offset + size);
+      return {
+        data: Buffer.from(body, 'utf8'),
+        contentType: 'text/plain; charset=utf-8',
+        size: Buffer.byteLength(body, 'utf8'),
+      };
+    }
+
+    // Whole file. Streamed and seekable: a 20MB novel is fine in memory, but the
+    // download path is also what a client uses to cache a book for offline
+    // reading, and Range support makes a resumed download possible.
+    const info = await stat(ctx.absPath);
     return {
-      data: Buffer.from(text, 'utf8'),
+      stream: createReadStream(ctx.absPath),
       contentType: contentTypeFor(ctx.relPath, 'text/plain; charset=utf-8'),
+      size: info.size,
+      seekable: true,
+      lastModified: info.mtimeMs,
     };
   },
 });

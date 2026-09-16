@@ -1,4 +1,5 @@
-import { readFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { imageContentType, isImageExtension } from './image-types.ts';
 import {
@@ -53,7 +54,7 @@ export const imageHandler = registerFileHandler({
     return {
       kind: 'single-image',
       total: 1,
-      groups: [{ id: 'page', seq: 0, title: '第 1 页', count: 1 }],
+      groups: [{ id: 'page', seq: 0, title: '第 1 页', count: 1, offset: 0 }],
       items: [
         {
           id: 'p0',
@@ -68,10 +69,14 @@ export const imageHandler = registerFileHandler({
   },
 
   async asset(ctx: HandlerContext): Promise<AssetPayload> {
+    const info = await stat(ctx.absPath);
     return {
-      data: await readFile(ctx.absPath),
+      stream: createReadStream(ctx.absPath),
       contentType: imageContentType(ctx.relPath),
       filename: ctx.relPath.slice(ctx.relPath.lastIndexOf('/') + 1),
+      size: info.size,
+      seekable: true,
+      lastModified: info.mtimeMs,
     };
   },
 });

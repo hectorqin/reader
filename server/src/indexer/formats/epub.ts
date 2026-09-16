@@ -1,7 +1,8 @@
-import JSZip from 'jszip';
 import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 import { posix } from 'node:path';
-import { contentTypeFor, imageContentType } from './image-types.ts';
+import { contentTypeFor } from './image-types.ts';
+import { ZipArchive } from './zip-reader.ts';
 import {
   registerFileHandler,
   type AssetPayload,
@@ -10,25 +11,51 @@ import {
   type ParsedSource,
 } from './registry.ts';
 import { parseEpub, extractEpubCover } from '../metadata.ts';
+import { XMLParser } from 'fast-xml-parser';
 
 /**
  * EPUB 2/3.
  *
- * This handler is deliberately thin — `metadata.ts` already parses the package
- * document for the scanner, and duplicating that here would give the two code
- * paths a chance to disagree about a book's identity.
+ * The container reader here is the project's own `ZipArchive`, not JSZip. That
+ * matters more than it looks: JSZip decompresses the entire archive into memory,
+ * and the original version of this handler did that on *every* manifest and
+ * asset request — a reader paging through a 50MB art book inflated the whole
+ * container on every chapter turn, and a first scan of a real library could
+ * hold every book in RAM at once.
  *
- * The one non-trivial job is rewriting resource URLs inside chapters. A chapter
- * arrives as XHTML with relative references (`images/pic1.png`, `../style.css`).
- * Sent to a WebView as-is those all 404, because the client fetched the chapter
- * from `/api/v1/books/:id/content`, not from inside the archive. So every
- * relative URL is rewritten to point back at our asset endpoint before the
- * chapter leaves the server.
+ * What this handler keeps from the original design:
  *
- * We deliberately do NOT inject any CSS or restructure the document. Preserving
- * the publisher's own layout is the product's core differentiator; the client's
- * WebView applies only minimal overrides on top.
+ *  - It stays thin on metadata: `metadata.ts` already parses the package
+ *    document for the scanner, and duplicating that here would give the two
+ *    code paths a chance to disagree about a book's identity.
+ *  - It rewrites relative resource URLs inside chapters. A chapter arrives as
+ *    XHTML with references relative to the OPF directory (`images/pic1.png`).
+ *    Sent to a WebView as-is those all 404, because the client fetched the
+ *    chapter from the asset endpoint, not from inside the archive.
+ *  - It injects no layout CSS and restructures nothing. Preserving the
+ *    publisher's own layout is the product's core differentiator; the client
+ *    applies only minimal overrides on top.
+ *
+ * One rule is load-bearing and easy to get wrong: **never address a chapter by
+ * spine index**. Windowed loading means the server returns a prefix of the spine
+ * when the client asks for a group, so an index computed against that prefix
+ * would point at a different chapter in the full spine. Items are addressed by
+ * archive path (`xhtml:OEBPS/ch1.xhtml`) instead.
  */
+
+/** How many spine entries one manifest window may describe. */
+export const CHAPTER_WINDOW = 40;
+
+/** A chapter document is XHTML; anything larger is not something we serve. */
+const MAX_CHAPTER_BYTES = 32 * 1024 * 1024;
+
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  trimValues: true,
+  parseTagValue: false,
+  parseAttributeValue: false,
+});
 
 export const epubHandler = registerFileHandler({
   format: 'epub',
@@ -61,66 +88,83 @@ export const epubHandler = registerFileHandler({
     };
   },
 
+  /**
+   * The spine, described as windows of chapters.
+   *
+   * `?group=N` on the items endpoint is not just a comic-volume thing: for a
+   * reflowable book it means "chapters N*40 .. N*40+39". That is what lets the
+   * client open a 1200-chapter omnibus without a 400KB manifest, and it is why
+   * the chapter count of a window is a constant rather than a per-book choice —
+   * a client that knows the window size can jump straight to the chapter holding
+   * a saved position.
+   */
   async manifest(ctx: HandlerContext): Promise<Manifest> {
-    const zip = await JSZip.loadAsync(await readAll(ctx.absPath));
-    const { spine, titles } = await readSpine(zip, ctx.relPath);
+    const archive = await ZipArchive.open(ctx.absPath);
+    const pkg = await readPackage(archive);
+    const spines = pkg.spine;
+    const total = spines.length;
+    const titles = pkg.titles;
 
     return {
       kind: 'reflowable',
-      total: spine.length,
-      groups: [{ id: 'spine', seq: 0, title: '正文', count: spine.length }],
-      items: spine.map((item, index) => ({
-        id: `s${index}`,
+      total,
+      groups: buildGroups(spines, titles),
+      items: spines.map((item, index) => ({
+        id: item.path,
         seq: index,
-        title: titles.get(item.href.split('#')[0]!) ?? item.title ?? `第 ${index + 1} 章`,
+        title: titles.get(item.path) ?? `第 ${index + 1} 章`,
         kind: 'chapter' as const,
         mediaType: 'application/xhtml+xml',
-        href: `chapter:${index}`,
+        // Path-addressed, never index-addressed: see the module comment.
+        href: `xhtml:${item.path}`,
+        size: archive.get(item.path)?.uncompressedSize ?? undefined,
       })),
     };
   },
 
   async asset(ctx: HandlerContext, req): Promise<AssetPayload> {
-    const zip = await JSZip.loadAsync(await readAll(ctx.absPath));
+    const archive = await ZipArchive.open(ctx.absPath);
 
-    if (req.ref.startsWith('chapter:')) {
-      const index = Number.parseInt(req.ref.slice('chapter:'.length), 10);
-      const { spine } = await readSpine(zip, ctx.relPath);
-      const item = spine[index];
-      if (!item) throw new Error(`chapter ${index} is out of range`);
+    if (req.ref.startsWith('xhtml:')) {
+      const path = safeDecode(req.ref.slice('xhtml:'.length));
+      const entry = archive.get(path);
+      if (!entry) throw new Error(`chapter not found: ${path}`);
 
-      const file = zip.file(item.href);
-      if (!file) throw new Error(`missing chapter file: ${item.href}`);
-
-      const xhtml = await file.async('string');
-      // Rewrite relative references so a WebView can resolve them.
-      const rewritten = rewriteRelativeReferences(
-        xhtml,
-        posix.dirname(item.href),
-        // Point back at this same endpoint, keyed by the archive path. Using the
-        // manifest id instead would need a lookup map that goes stale whenever
-        // the container is repacked.
-        (archivePath, fragment) =>
+      const xhtml = await archive.read(path, MAX_CHAPTER_BYTES);
+      const rewritten = rewriteChapterDocument(xhtml.toString('utf8'), {
+        path,
+        baseDir: posix.dirname(path),
+        assetUrl: (archivePath, fragment) =>
           `${assetBase(ctx)}?ref=${encodeURIComponent(archivePath)}${fragment ? `#${fragment}` : ''}`,
-        (resolved) => Boolean(zip.file(resolved)),
-      );
+        exists: (archivePath) => archive.has(archivePath),
+      });
+
+      const body = Buffer.from(rewritten, 'utf8');
       return {
-        data: Buffer.from(rewritten, 'utf8'),
+        // A chapter is a text document; streaming it would buy nothing and cost
+        // a second pass over the container.
+        data: body,
         contentType: 'application/xhtml+xml; charset=utf-8',
-        filename: posix.basename(item.href),
+        filename: posix.basename(path),
+        size: body.byteLength,
       };
     }
 
     // Everything else is addressed by its archive path, percent-encoded by the
-    // client when it needs to. The OPF, images, fonts and styles all land here.
+    // client when it needs to. Styles, fonts, images and the OPF land here.
     const name = safeDecode(req.ref);
-    const file = zip.file(name);
-    if (!file) throw new Error(`resource not found: ${req.ref}`);
+    const entry = archive.get(name);
+    if (!entry) throw new Error(`resource not found: ${req.ref}`);
 
     return {
-      data: await file.async('nodebuffer'),
+      // Streamed, not buffered: an illustrated EPUB's images are exactly the
+      // case where "just read it into a Buffer" stops being free.
+      stream: await archive.openStream(name),
       contentType: contentTypeFor(name),
       filename: posix.basename(name),
+      size: entry.uncompressedSize,
+      seekable: true,
+      etag: ctx.bookId,
     };
   },
 });
@@ -135,88 +179,117 @@ function assetBase(ctx: HandlerContext): string {
   return `/api/v1/books/${encodeURIComponent(ctx.bookId)}/assets`;
 }
 
-async function readAll(absPath: string): Promise<Buffer> {
-  const { readFile } = await import('node:fs/promises');
-  return readFile(absPath);
-}
-
 interface SpineItem {
-  id: string;
-  href: string;
-  title?: string;
+  /** Archive path of the document. This is the identity of a chapter. */
+  path: string;
 }
 
-/** Read the OPF spine: the reading order of the book. */
-async function readSpine(zip: JSZip, relPath: string): Promise<{ spine: SpineItem[]; titles: Map<string, string> }> {
-  const empty = { spine: [] as SpineItem[], titles: new Map<string, string>() };
-  const container = zip.file('META-INF/container.xml');
-  if (!container) return empty;
+interface Package {
+  spine: SpineItem[];
+  titles: Map<string, string>;
+}
 
-  const containerXml = await container.async('string');
-  const opfPath =
-    /full-path\s*=\s*"([^"]+)"/i.exec(containerXml)?.[1] ??
-    Object.keys(zip.files).find((name) => name.toLowerCase().endsWith('.opf'));
-  if (!opfPath) return empty;
+/**
+ * Read the OPF through the project's own ZIP reader.
+ *
+ * The parsing is deliberately the same shape as the JSZip version it replaces —
+ * the OPF grammar does not care which container library opened the file — but it
+ * now reads only the package document instead of the whole archive.
+ */
+async function readPackage(archive: ZipArchive): Promise<Package> {
+  const empty: Package = { spine: [], titles: new Map() };
+  const containerEntry = archive.get('META-INF/container.xml');
+  let opfPath = '';
+  if (containerEntry) {
+    const container = xmlParser.parse((await archive.read('META-INF/container.xml')).toString('utf8')) as Record<string, any>;
+    const rootfile = asArray(container?.container?.rootfiles?.rootfile).find(
+      (entry) => typeof entry?.['@_full-path'] === 'string',
+    );
+    opfPath = String(rootfile?.['@_full-path'] ?? '');
+  }
+  if (!opfPath) {
+    opfPath = archive.entries.find((entry) => entry.name.toLowerCase().endsWith('.opf'))?.name ?? '';
+  }
+  if (!opfPath || !archive.get(opfPath)) return empty;
 
-  const opfFile = zip.file(opfPath);
-  if (!opfFile) return empty;
-  const opf = await opfFile.async('string');
-
+  const opf = xmlParser.parse((await archive.read(opfPath)).toString('utf8')) as Record<string, any>;
+  const pkg = opf?.package ?? {};
   const base = posix.dirname(opfPath);
+
   const manifest = new Map<string, string>();
-  for (const match of opf.matchAll(/<item\b[^>]*>/gi)) {
-    const tag = match[0];
-    const id = /\bid\s*=\s*"([^"]+)"/i.exec(tag)?.[1];
-    const href = /\bhref\s*=\s*"([^"]+)"/i.exec(tag)?.[1];
-    if (id && href) {
-      // Resolve against the OPF location: hrefs are relative to the package
-      // document, not to the archive root.
-      manifest.set(id, base === '.' ? href : posix.normalize(`${base}/${href}`));
-    }
+  for (const item of asArray(pkg?.manifest?.item)) {
+    const id = String(item?.['@_id'] ?? '');
+    const href = String(item?.['@_href'] ?? '');
+    if (!id || !href) continue;
+    // hrefs are relative to the package document, not to the archive root.
+    manifest.set(id, resolveHref(base, href));
   }
 
   const spine: SpineItem[] = [];
-  const spineBlock = /<spine\b[^>]*>([\s\S]*?)<\/spine>/i.exec(opf)?.[1] ?? '';
-  for (const match of spineBlock.matchAll(/<itemref\b[^>]*>/gi)) {
-    const idref = /\bidref\s*=\s*"([^"]+)"/i.exec(match[0])?.[1];
-    const href = idref ? manifest.get(idref) : undefined;
-    if (idref && href) spine.push({ id: idref, href });
+  for (const ref of asArray(pkg?.spine?.itemref)) {
+    const target = manifest.get(String(ref?.['@_idref'] ?? ''));
+    if (target) spine.push({ path: target });
   }
 
-  return { spine, titles: await readTitles(zip, base) };
+  return { spine, titles: await readTitles(archive, base) };
+}
+
+/**
+ * Groups of at most `CHAPTER_WINDOW` spine entries.
+ *
+ * Encoding `offset` in the group matters: a client that fetched one window must
+ * be able to tell where it belongs in the whole book. Deriving it by summing the
+ * previous `count`s works only if the client has every group, which is exactly
+ * what windowed loading avoids.
+ */
+function buildGroups(spine: SpineItem[], titles: Map<string, string>): Manifest['groups'] {
+  if (spine.length === 0) return [];
+  const groups: Manifest['groups'] = [];
+  for (let offset = 0; offset < spine.length; offset += CHAPTER_WINDOW) {
+    const count = Math.min(CHAPTER_WINDOW, spine.length - offset);
+    const label = (index: number): string =>
+      titles.get(spine[index]!.path) ?? `第 ${index + 1} 章`;
+    groups.push({
+      id: `spine:${offset}`,
+      seq: groups.length,
+      // A window is not a chapter, so it is labelled by the range it covers
+      // rather than pretending to be one.
+      title: count === 1 ? label(offset) : `${label(offset)} – ${label(offset + count - 1)}`,
+      count,
+      offset,
+    });
+  }
+  return groups;
 }
 
 /** Best-effort chapter titles from the NCX or nav document. */
-async function readTitles(zip: JSZip, base: string): Promise<Map<string, string>> {
+async function readTitles(archive: ZipArchive, base: string): Promise<Map<string, string>> {
   const titles = new Map<string, string>();
 
-  const ncxName = Object.keys(zip.files).find((name) => name.toLowerCase().endsWith('.ncx'));
+  const ncxName = archive.entries.find((entry) => entry.name.toLowerCase().endsWith('.ncx'))?.name;
   if (ncxName) {
-    const ncx = await zip.file(ncxName)?.async('string');
+    const ncx = await archive.read(ncxName).catch(() => null);
     if (ncx) {
-      for (const match of ncx.matchAll(/<navPoint\b[\s\S]*?<\/navPoint>/gi)) {
+      for (const match of ncx.toString('utf8').matchAll(/<navPoint\b[\s\S]*?<\/navPoint>/gi)) {
         const block = match[0];
         const label = /<text>([\s\S]*?)<\/text>/i.exec(block)?.[1]?.trim();
         const src = /<content\b[^>]*\bsrc\s*=\s*"([^"]+)"/i.exec(block)?.[1];
         if (!label || !src) continue;
-        const resolved = posix.normalize(base === '.' ? src.split('#')[0]! : `${base}/${src.split('#')[0]!}`);
+        const resolved = resolveHref(base, src.split('#')[0]!);
         if (!titles.has(resolved)) titles.set(resolved, decodeEntities(label));
       }
     }
   }
 
-  const navName = Object.keys(zip.files).find((name) => /nav\.x?html?$/i.test(name));
+  const navName = archive.entries.find((entry) => /nav\.x?html?$/i.test(entry.name))?.name;
   if (navName) {
-    const nav = await zip.file(navName)?.async('string');
+    const nav = await archive.read(navName).catch(() => null);
     if (nav) {
-      for (const match of nav.matchAll(/<a\b[^>]*href\s*=\s*"([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)) {
+      for (const match of nav.toString('utf8').matchAll(/<a\b[^>]*href\s*=\s*"([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)) {
         const raw = match[1]!;
         const label = decodeEntities(match[2]!.replace(/<[^>]*>/g, '').trim());
         if (!label) continue;
-        const href = raw.split('#')[0]!;
-        const resolved = posix.normalize(
-          base === '.' ? posix.normalize(href) : posix.normalize(`${base}/${href}`),
-        );
+        const resolved = resolveHref(base, raw.split('#')[0]!);
         if (!titles.has(resolved)) titles.set(resolved, label);
       }
     }
@@ -225,14 +298,24 @@ async function readTitles(zip: JSZip, base: string): Promise<Map<string, string>
   return titles;
 }
 
+function resolveHref(base: string, href: string): string {
+  const decoded = safeDecode(href);
+  return base === '.' ? posix.normalize(decoded) : posix.normalize(`${base}/${decoded}`);
+}
+
 async function spineLength(buf: Buffer): Promise<number | null> {
   try {
-    const zip = await JSZip.loadAsync(buf);
-    const { spine } = await readSpine(zip, '');
+    const archive = await ZipArchive.openBuffer(buf);
+    const { spine } = await readPackage(archive);
     return spine.length || null;
   } catch {
     return null;
   }
+}
+
+function asArray<T>(value: T | T[] | undefined): T[] {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
 function decodeEntities(value: string): string {
@@ -242,6 +325,64 @@ function decodeEntities(value: string): string {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&amp;/g, '&');
+}
+
+interface ChapterContext {
+  /** Archive path of the chapter being served. */
+  path: string;
+  /** Directory the chapter's relative references resolve against. */
+  baseDir: string;
+  assetUrl: (archivePath: string, fragment: string) => string;
+  exists: (archivePath: string) => boolean;
+}
+
+/**
+ * Turn an archive chapter into a document a WebView can render standalone.
+ *
+ * Two transforms, both about the same problem — the document is being served
+ * from outside the container, so anything it refers to relatively is broken:
+ *
+ *  1. Rewrite relative `src`/`href` to absolute asset URLs.
+ *  2. Publish the chapter's own URLs as CSS custom properties. The container
+ *     image is displayed in a Shadow DOM, where `:root` is not the element that
+ *     ends up holding the CSS variables, so a publisher's
+ *     `background-image: var(--reader-chapter-dir)` would silently do nothing
+ *     without a `<style>` inside the container to anchor them.
+ *
+ * `exists` guards transform 1: absolute URLs, `data:` URIs, in-document anchors
+ * and mail links are skipped, which is what keeps footnotes and outbound links
+ * alive instead of turning them into dead asset requests.
+ */
+export function rewriteChapterDocument(xhtml: string, chapter: ChapterContext): string {
+  const withAssets = rewriteRelativeReferences(
+    xhtml,
+    chapter.baseDir,
+    chapter.assetUrl,
+    chapter.exists,
+  );
+  return injectReaderAssets(withAssets, chapter);
+}
+
+/**
+ * The only markup the server adds to a book.
+ *
+ * Deliberately declarative: two variable definitions a publisher's stylesheet
+ * may consume, and nothing else. No layout rule, no font choice, no margin
+ * override — those would flatten exactly the typography this product exists to
+ * preserve.
+ */
+function injectReaderAssets(xhtml: string, chapter: ChapterContext): string {
+  const vars = [
+    '--reader-chapter-url: url("' + escapeAttribute(chapter.assetUrl(chapter.path, '')) + '");',
+    '--reader-parent-url: url("' + escapeAttribute(chapter.assetUrl(chapter.baseDir, '')) + '");',
+  ].join('');
+  const style = `<style id="reader-vars">:root{${vars}}</style>`;
+  // Appended at the end of the document so it follows the publisher's own
+  // stylesheets in source order and wins on equal specificity, without needing
+  // `!important` gymnastics.
+  if (/<\/body>/i.test(xhtml)) return xhtml.replace(/<\/body>/i, `${style}</body>`);
+  if (/<\/html>/i.test(xhtml)) return xhtml.replace(/<\/html>/i, `${style}</html>`);
+  return `${xhtml}${style}`;
 }
 
 /**
@@ -301,4 +442,4 @@ function safeDecode(value: string): string {
   }
 }
 
-void imageContentType;
+void Readable;

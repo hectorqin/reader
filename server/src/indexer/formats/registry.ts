@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream';
 import type { ExtractedMetadata } from '../metadata.ts';
 
 /**
@@ -57,6 +58,12 @@ export interface ContentItem {
   mediaType: string;
   /** Where the bytes come from. Opaque to the HTTP layer. */
   href: string;
+  /**
+   * Byte length when the format knows it cheaply. Sent with the manifest so a
+   * client can estimate a download or prefetch budget instead of discovering
+   * the size one request at a time. Absent means unknown.
+   */
+  size?: number;
 }
 
 /** A named group of items; volumes for comics, or a single implicit one. */
@@ -65,6 +72,12 @@ export interface ContentGroup {
   seq: number;
   title: string;
   count: number;
+  /**
+   * Global `seq` of this group's first item. Lets a client splice a single
+   * group fetched with `?group=N` back into the whole-book ordering without
+   * re-reading every previous group's count.
+   */
+  offset: number;
 }
 
 export interface Manifest {
@@ -80,9 +93,31 @@ export interface AssetRequest {
 }
 
 export interface AssetPayload {
-  data: Buffer;
+  /**
+   * In-memory bytes. Right for anything small and already parsed (a chapter
+   * document, a font, a single page of an archive that fits comfortably).
+   */
+  data?: Buffer;
+  /**
+   * Lazily produced bytes. Required for anything whose size is the user's, not
+   * ours — a comic archive page, a PDF. Handing the HTTP layer a stream is what
+   * keeps "read one page of a 300MB cbz" from costing 300MB of heap, and what
+   * lets the client cancel a download without the server finishing it.
+   */
+  stream?: Readable;
   contentType: string;
   filename?: string;
+  /**
+   * Total byte length when known up front, so a client gets a real progress
+   * bar. `undefined` means "unknown"; the response is then chunked.
+   */
+  size?: number;
+  /** Supports HTTP Range requests. Only set this when the bytes are seekable. */
+  seekable?: boolean;
+  /** Trusted validator for the payload, e.g. the book's content hash. */
+  etag?: string;
+  /** Last-modified time in milliseconds, when the source has one. */
+  lastModified?: number;
 }
 
 export type ProgressReporter = (scanned: number) => void;

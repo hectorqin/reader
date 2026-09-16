@@ -1,4 +1,5 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import {
@@ -29,6 +30,10 @@ import { filenameMetadata } from '../metadata.ts';
  *
  * Only one level of nesting is considered. Going deeper turns a messy folder
  * into a thousands-page book, and the reader cannot navigate that.
+ *
+ * Pages are streamed from disk. A volume is a directory of 20MB scans, so the
+ * difference between buffering one page and buffering a volume is the
+ * difference between a reader that works on a NAS and one that gets OOM-killed.
  */
 
 const MIN_IMAGES = 2;
@@ -204,8 +209,19 @@ export const comicDirectoryHandler = registerDirectoryHandler({
   async manifest(ctx: HandlerContext): Promise<Manifest> {
     const volumes = await collectVolumes(ctx.absPath);
     const items = [];
+    const groups: Manifest['groups'] = [];
 
     for (const [volumeIndex, volume] of volumes.entries()) {
+      // `offset` is recorded here rather than derived from the running item
+      // count: a client that fetched one volume with `?group=N` must be able to
+      // place its pages in the whole-book ordering without holding the others.
+      groups.push({
+        id: `v${padded(volumeIndex)}`,
+        seq: volumeIndex,
+        title: volume.title,
+        count: volume.pages.length,
+        offset: items.length,
+      });
       for (const [pageIndex, page] of volume.pages.entries()) {
         items.push({
           id: `${volumeIndex}:${pageIndex}`,
@@ -218,17 +234,7 @@ export const comicDirectoryHandler = registerDirectoryHandler({
       }
     }
 
-    return {
-      kind: 'paged',
-      total: items.length,
-      groups: volumes.map((volume, index) => ({
-        id: `v${index}`,
-        seq: index,
-        title: volume.title,
-        count: volume.pages.length,
-      })),
-      items,
-    };
+    return { kind: 'paged', total: items.length, groups, items };
   },
 
   async asset(ctx: HandlerContext, req): Promise<AssetPayload> {
@@ -240,11 +246,7 @@ export const comicDirectoryHandler = registerDirectoryHandler({
     const page = volume?.pages[Number.parseInt(match[2]!, 10)];
     if (!page) throw new Error(`page is out of range: ${req.ref}`);
 
-    return {
-      data: await readPage(ctx.absPath, page),
-      contentType: imageContentType(page.name),
-      filename: page.name,
-    };
+    return await streamPage(ctx.absPath, page);
   },
 });
 
@@ -253,13 +255,54 @@ async function readPage(bookDir: string, page: Page): Promise<Buffer> {
   const abs = join(bookDir, page.relPath);
   if (page.source === 'file') return readFile(abs);
 
-  // An embedded archive counts as a single page and shows its first image.
   const archive = await ZipArchive.open(abs);
-  const images = naturalSortBy(
-    archive.files().filter((entry) => isImageExtension(entry.name.slice(entry.name.lastIndexOf('.') + 1))),
-    (entry) => entry.name,
-  );
-  const first = images[0];
+  const first = firstImage(archive);
   if (!first) throw new Error(`no images inside ${page.name}`);
   return archive.read(first.name);
+}
+
+/**
+ * Stream one page without buffering it.
+ *
+ * A loose image is streamed straight off disk and marked seekable; an embedded
+ * archive is streamed out of its container. In both cases the response never
+ * holds more than a chunk of the page.
+ */
+async function streamPage(bookDir: string, page: Page): Promise<AssetPayload> {
+  const abs = join(bookDir, page.relPath);
+  if (page.source === 'file') {
+    const info = await stat(abs);
+    return {
+      stream: createReadStream(abs),
+      contentType: imageContentType(page.name),
+      filename: page.name,
+      size: info.size,
+      seekable: true,
+      lastModified: info.mtimeMs,
+    };
+  }
+
+  const archive = await ZipArchive.open(abs);
+  const first = firstImage(archive);
+  if (!first) throw new Error(`no images inside ${page.name}`);
+  return {
+    stream: await archive.openStream(first.name),
+    contentType: imageContentType(first.name),
+    filename: page.name,
+    size: first.uncompressedSize,
+    seekable: first.method === 0,
+  };
+}
+
+/** The first image of an embedded archive, in natural page order. */
+function firstImage(archive: ZipArchive): ReturnType<ZipArchive['files']>[number] | undefined {
+  return naturalSortBy(
+    archive.files().filter((entry) => isImageExtension(entry.name.slice(entry.name.lastIndexOf('.') + 1))),
+    (entry) => entry.name,
+  )[0];
+}
+
+/** Volume ids are zero-padded so they sort correctly as strings. */
+function padded(value: number): string {
+  return String(value).padStart(4, '0');
 }

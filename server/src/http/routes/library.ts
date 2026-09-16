@@ -4,16 +4,16 @@ import { authenticate, currentUser, requireAdmin } from '../auth.ts';
 import { badRequest, notFound } from '../../lib/errors.ts';
 import { assertSafeRel, resolveInside } from '../../lib/paths.ts';
 import { createReadStream, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, extname } from 'node:path';
 import { stat } from 'node:fs/promises';
-import { extname } from 'node:path';
 import {
   capabilities,
   contentTypeFor,
   directoryHandlerForFormat,
   fileHandlerForFormat,
-  type AssetPayload,
+  type ContentGroup,
 } from '../../indexer/formats/index.ts';
+import { sendAssetPayload } from '../assets.ts';
 
 
 /** The single live path backing a book, if it is file-backed. */
@@ -29,15 +29,13 @@ function resolveBookSource(
   if (!file) return null;
   // Directory books are recorded under a path with no extension; a file handler
   // for the format means the path is a real file.
-  const isDirectory = format === 'comic-dir' || fileHandlerForFormat(format) === null;
+  const isDirectory = fileHandlerForFormat(format) === null;
   return { relPath: file.rel_path, isDirectory };
 }
 
 /** The handler that owns a book, resolved from its recorded format. */
 function resolveHandler(ctx: AppContext, bookId: string, format: string) {
-  const source = resolveBookSource(ctx, bookId, format);
   // A missing file still has a handler; only the manifest/asset calls fail.
-  void source;
   void ctx;
   void bookId;
   return fileHandlerForFormat(format) ?? directoryHandlerForFormat(format) ?? null;
@@ -45,33 +43,23 @@ function resolveHandler(ctx: AppContext, bookId: string, format: string) {
 
 /** Absolute path plus library-relative path for a book's backing store. */
 function sourceContext(ctx: AppContext, bookId: string, format: string) {
-  const file = ctx.db.get<{ rel_path: string }>(
-    'SELECT rel_path FROM book_files WHERE book_id = ? AND missing = 0 ORDER BY rel_path LIMIT 1',
-    bookId,
-  );
-  if (!file) throw notFound('no available file for this book', 'FILE_MISSING');
-  const relPath = assertSafeRel(file.rel_path);
+  const source = resolveBookSource(ctx, bookId, format);
+  if (!source) throw notFound('no available file for this book', 'FILE_MISSING');
+  const relPath = assertSafeRel(source.relPath);
   void format;
   return { relPath, absPath: resolveInside(ctx.config.booksDir, relPath) };
 }
 
-/** Offset of the first item belonging to a group, computed from group counts. */
-function groupOffset(groups: Array<{ count: number }>, index: number): number {
-  let offset = 0;
-  for (let i = 0; i < index; i += 1) offset += groups[i]?.count ?? 0;
-  return offset;
-}
-
-/** Serialise an asset payload with caching headers suited to immutable content. */
-function sendAsset(reply: FastifyReply, payload: AssetPayload) {
-  reply.header('content-type', payload.contentType);
-  // Assets are addressed by book id, which is derived from content, so they can
-  // never change under the same URL.
-  reply.header('cache-control', 'private, max-age=31536000, immutable');
-  if (payload.filename) {
-    reply.header('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(payload.filename)}`);
-  }
-  return reply.send(payload.data);
+/**
+ * Offset of the first item in a group.
+ *
+ * Read from the group itself rather than summed from the preceding counts: a
+ * client that fetched one group with `?group=N` has no preceding counts, and a
+ * chapter jump that lands on the wrong chapter because of an off-by-one in that
+ * sum is a bug the reader feels immediately.
+ */
+function groupOffset(groups: ContentGroup[], index: number): number {
+  return groups[index]?.offset ?? 0;
 }
 
 export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): void {
@@ -107,13 +95,42 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
   });
 
   /**
-   * The manifest a renderer needs before it can lay out a chapter. Kept
-   * deliberately format-neutral so PDF support can reuse the same contract.
+   * Everything a renderer needs before it can lay out the first screen, in one
+   * round trip.
+   *
+   * This used to be a book summary plus a file list, which meant a client had to
+   * make a second call to `/items` before it could draw anything. On a LAN that
+   * is invisible; over a tunnel it is the difference between a book opening and
+   * a book appearing to hang. It now carries the addressable structure too, so
+   * "open a book" is one request.
+   *
+   * The items are still windowed: `?group=N` narrows the items to one group
+   * while `groups` stays complete, so opening a 40-volume comic transfers one
+   * volume's worth of entries.
    */
   app.get('/api/v1/books/:id/manifest', { preHandler: auth }, async (request) => {
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
+    const handler = resolveHandler(ctx, id, book.format);
+    const query = request.query as Record<string, string | undefined>;
+    const groupIndex = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
+
+    const content = handler
+      ? await handler.manifest({ ...sourceContext(ctx, id, book.format), bookId: id })
+      : null;
+
+    const windowed = content && groupIndex !== null && Number.isFinite(groupIndex) && content.groups[groupIndex]
+      ? {
+          ...content,
+          items: content.items.slice(
+            groupOffset(content.groups, groupIndex),
+            groupOffset(content.groups, groupIndex) + content.groups[groupIndex]!.count,
+          ),
+          group: groupIndex,
+        }
+      : content;
+
     return {
       book,
       contentUrl: `/api/v1/books/${id}/content`,
@@ -124,6 +141,10 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
         'SELECT rel_path, size, missing FROM book_files WHERE book_id = ? ORDER BY rel_path',
         id,
       ),
+      // `content` is null only for a book whose format exposes no addressable
+      // structure at all; the client then falls back to the raw file.
+      content: windowed,
+      ...(windowed ? { items: windowed.items, groups: windowed.groups, kind: windowed.kind, total: windowed.total } : {}),
     };
   });
 
@@ -151,19 +172,16 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
 
     const abs = resolveInside(ctx.config.booksDir, assertSafeRel(source.relPath));
     if (!existsSync(abs)) throw notFound('file is no longer on disk', 'FILE_MISSING');
-    const info = await stat(abs);
 
-    reply.header('content-type', contentTypeFor(source.relPath));
-    reply.header('content-length', String(info.size));
-    // Progress and notes are the only synced state, so a book body is immutable
-    // per hash and can be cached aggressively by the client.
-    reply.header('etag', `"${id}"`);
-    reply.header('accept-ranges', 'none');
-    reply.header(
-      'content-disposition',
-      `inline; filename*=UTF-8''${encodeURIComponent(source.relPath.split('/').pop() ?? 'book')}`,
-    );
-    return reply.send(createReadStream(abs));
+    return sendAssetPayload(request, reply, {
+      stream: createReadStream(abs),
+      contentType: contentTypeFor(source.relPath),
+      filename: source.relPath.split('/').pop() ?? 'book',
+      size: (await stat(abs)).size,
+      seekable: true,
+      etag: id,
+      lastModified: (await stat(abs)).mtimeMs,
+    });
   });
 
   /**
@@ -184,13 +202,18 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const query = request.query as Record<string, string | undefined>;
     const groupIndex = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
 
-    // Filtering by group lets the client fetch one comic volume at a time
-    // instead of a 2000-entry manifest for the whole series.
+    // Windowing is what makes a long book openable: a 1200-chapter omnibus or a
+    // 40-volume comic must not cost one manifest with thousands of entries, and
+    // must not cost the client the whole archive either. The response keeps the
+    // full `groups` list so the client can still render a complete table of
+    // contents, but only the requested group's items are materialised.
     if (groupIndex !== null && Number.isFinite(groupIndex) && manifest.groups[groupIndex]) {
-      const group = manifest.groups[groupIndex]!;
-      const items = manifest.items.filter((item) => item.seq >= groupOffset(manifest.groups, groupIndex));
-      const limited = items.slice(0, group.count);
-      return { ...manifest, items: limited, group: groupIndex };
+      const offset = groupOffset(manifest.groups, groupIndex);
+      return {
+        ...manifest,
+        items: manifest.items.slice(offset, offset + manifest.groups[groupIndex]!.count),
+        group: groupIndex,
+      };
     }
 
     return manifest;
@@ -215,7 +238,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     if (!handler) throw badRequest(`format ${book.format} has no assets`, 'UNSUPPORTED_FORMAT');
 
     const payload = await handler.asset({ ...sourceContext(ctx, id, book.format), bookId: id }, { ref });
-    return sendAsset(reply, payload);
+    return sendAssetPayload(request, reply, payload);
   });
 
   app.get('/api/v1/books/:id/cover', { preHandler: auth }, async (request, reply) => {
