@@ -47,6 +47,10 @@
    */
   --reader-font-scale: 1;
   --reader-line-height: inherit;
+  --reader-font-family: inherit;
+  --reader-text-align: inherit;
+  --reader-page-margin: 1.5rem;
+  --reader-brightness: 1;
   --reader-measure: 42rem;
 
   --reader-page-padding-inline: 1.5rem;
@@ -151,13 +155,50 @@ body {
  * `p` and `div`.
  */
 .book-flow {
+  position: relative;
   max-inline-size: var(--reader-measure);
   margin-inline: auto;
   padding-block: var(--reader-page-padding-block);
-  padding-inline: var(--reader-page-padding-inline);
+  /*
+   * The margin control is a *variable* rather than a fixed padding, and the
+   * reader's value rides on the left/right pair only: the block padding is set by
+   * the shell because vertical whitespace on a phone is a different decision
+   * (safe areas) from the measure.
+   */
+  padding-inline: var(--reader-page-margin);
   /* The size control scales the root of the injected document only. */
   font-size: calc(1em * var(--reader-font-scale));
   line-height: var(--reader-line-height);
+  /*
+   * Both of these are set as inheriting values on the container, never as rules
+   * on the book's own elements. `inherit` is the default in both cases, so "off"
+   * means the author's typography is untouched — which is the whole contract of
+   * this stylesheet. Where the book ships an absolute font stack, this is prefixed
+   * rather than replaced: the book's stack stays first.
+   */
+  font-family: var(--reader-font-family);
+  text-align: var(--reader-text-align);
+}
+
+/*
+ * Brightness.
+ *
+ * A dimming bed-time overlay rather than a change to the palette: the reader's
+ * theme is the author's colours, and darkening them keeps the relationship
+ * between paper and ink. An overlay *on top* would darken the text as much as the
+ * paper, which is what makes a "brightness" slider feel broken. Applied with
+ * `mix-blend-mode: multiply` on a pseudo-element so it costs no extra DOM and
+ * cannot be reached by the book.
+ */
+.book-host[data-layout='reflowable']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  background: #000;
+  opacity: calc(1 - var(--reader-brightness));
+  mix-blend-mode: multiply;
 }
 
 .book-host[data-paginated='true'] .book-flow {
@@ -374,8 +415,16 @@ book-content ::selection {
   animation: slide-next 180ms ease-out;
 }
 
-.book-host[data-animating='slide-prev'] .book-flow {
-  animation: slide-prev 180ms ease-out;
+.book-host[data-animating='slide-previous'] .book-flow {
+  animation: slide-previous 180ms ease-out;
+}
+
+.book-host[data-animating='fade-next'] .book-flow {
+  animation: fade-next 160ms ease-out;
+}
+
+.book-host[data-animating='fade-previous'] .book-flow {
+  animation: fade-previous 160ms ease-out;
 }
 
 @keyframes slide-next {
@@ -389,7 +438,7 @@ book-content ::selection {
   }
 }
 
-@keyframes slide-prev {
+@keyframes slide-previous {
   from {
     transform: translateX(-6%);
     opacity: 0.6;
@@ -400,9 +449,60 @@ book-content ::selection {
   }
 }
 
+@keyframes fade-next {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-previous {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .book-host[data-animating] .book-flow {
     animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Read-aloud helpers
+ * ------------------------------------------------------------------ */
+
+/*
+ * The sentence being spoken.
+ *
+ * Drawn as a translucent block *behind* the text, positioned from a `Range`'s
+ * client rect. The alternative — wrapping the sentence in a `<span>` — would edit
+ * the publisher's markup and, worse, change the line box metrics for that phrase,
+ * which repaginates the chapter the moment playback starts.
+ */
+.reader-speech-highlight {
+  position: absolute;
+  pointer-events: none;
+  z-index: -1;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--reader-accent) 34%, transparent);
+  transition: top 120ms linear, left 120ms linear, width 120ms linear, height 120ms linear;
+}
+
+/* The overlay needs a stacking context that puts it under the text but above the
+   page background; `z-index: -1` alone would fall behind an opaque body. */
+.book-flow {
+  isolation: isolate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reader-speech-highlight {
+    transition: none;
   }
 }
 
@@ -748,6 +848,78 @@ book-content ::selection {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+}
+
+/* ---- read-aloud bar ---- */
+
+/*
+ * The bar sits above the footer and, unlike the footer, is *not* hidden with the
+ * chrome: a reader listening while walking needs the play/pause without the
+ * header covering the sentence being read.
+ */
+.tts-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  padding-bottom: calc(0.35rem + env(safe-area-inset-bottom));
+  background: var(--reader-surface);
+  border-top: 1px solid var(--reader-line);
+}
+
+.tts-bar[hidden] {
+  display: none;
+}
+
+.tts-bar .tts-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.tts-bar .tts-text {
+  font-size: 0.78rem;
+  color: var(--reader-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tts-range {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--reader-accent);
+}
+
+.chip {
+  appearance: none;
+  border: 1px solid var(--reader-line);
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* ---- settings panel structure ---- */
+
+.section-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--reader-muted);
+  margin: 1.1rem 0 0.5rem;
+}
+
+.section-title:first-child {
+  margin-top: 0;
+}
+
+.field[hidden] {
+  display: none;
 }
 
 /* ---- status ---- */

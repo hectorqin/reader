@@ -2,6 +2,7 @@ import type { BookDoc, Section } from '../formats/types.ts';
 import { ResourceResolver, hydrateResources } from './resources.ts';
 import { createBookHost, extractBody, extractInlineStyles, sanitiseInjectedContent, type BookShadowHost } from './shadow.ts';
 import { bookPercentage, formatLocator, parseLocator } from './locator.ts';
+import { collectSpokenChunks, type SpokenChunk } from '../render/tts-text.ts';
 
 export interface ReaderViewOptions {
   container: HTMLElement;
@@ -20,6 +21,10 @@ export interface Position {
   chapterTitle: string;
 }
 
+export type TextAlign = 'inherit' | 'start' | 'justify';
+export type PageAnimation = 'none' | 'slide' | 'fade';
+export type TapZone = 'standard' | 'reversed';
+
 export interface ViewSettings {
   /** 'scroll' keeps the author's continuous flow; 'paged' paginates by column. */
   mode: 'scroll' | 'paged';
@@ -29,6 +34,23 @@ export interface ViewSettings {
   /** Fixed-layout only. */
   fit: 'contain' | 'width';
   direction: 'ltr' | 'rtl';
+  /** A font stack offered before the book's own, for books that ship no stack. */
+  fontFamily: string;
+  /**
+   * Horizontal padding inside the reading column, in rem.
+   *
+   * A number rather than a keyword because the useful range differs per device:
+   * a phone wants 0.75rem to fit a sentence per line, a tablet wants 3rem to stop
+   * the line becoming unreadably long.
+   */
+  pageMargin: number;
+  /** `inherit` keeps whatever the book asked for. */
+  textAlign: TextAlign;
+  /** Darkens the page without changing the theme; for reading in bed. */
+  brightness: number;
+  pageAnimation: PageAnimation;
+  /** Which side of the screen turns forward; handedness is a real preference. */
+  tapZone: TapZone;
 }
 
 const DEFAULT_SETTINGS: ViewSettings = {
@@ -38,6 +60,12 @@ const DEFAULT_SETTINGS: ViewSettings = {
   theme: 'light',
   fit: 'contain',
   direction: 'ltr',
+  fontFamily: 'inherit',
+  pageMargin: 1.5,
+  textAlign: 'inherit',
+  brightness: 1,
+  pageAnimation: 'slide',
+  tapZone: 'standard',
 };
 
 /**
@@ -61,6 +89,9 @@ export class ReaderView {
   private readonly options: ReaderViewOptions;
   private resizeObserver: ResizeObserver | null = null;
   private currentObjectUrl: string | null = null;
+  private animationTimer: ReturnType<typeof setTimeout> | null = null;
+  private spokenChunks: SpokenChunk[] = [];
+  private speechHighlight: HTMLElement | null = null;
 
   constructor(options: ReaderViewOptions) {
     this.options = options;
@@ -92,6 +123,7 @@ export class ReaderView {
   }
 
   applySettings(next?: Partial<ViewSettings>): void {
+    const previous = this.settings;
     if (next) this.settings = { ...this.settings, ...next };
     document.documentElement.dataset['theme'] = this.settings.theme;
     this.host.setAttribute('data-paginated', String(this.settings.mode === 'paged'));
@@ -99,10 +131,42 @@ export class ReaderView {
     // `inherit` is what keeps the author's line-height; only an explicit user
     // choice replaces it.
     this.container.style.setProperty('--reader-line-height', this.settings.lineHeight);
+    // Same reasoning for the font stack: the default is `inherit`, so a book
+    // that ships its own stack keeps it. The reader's choice is offered first so
+    // a book that ships *nothing* looks like the rest of their library.
+    this.container.style.setProperty('--reader-font-family', this.settings.fontFamily);
+    this.container.style.setProperty('--reader-text-align', this.settings.textAlign);
+    this.container.style.setProperty('--reader-page-margin', `${this.settings.pageMargin}rem`);
+    this.container.style.setProperty('--reader-brightness', String(this.settings.brightness));
     this.host.style.direction = this.settings.direction;
     // Toggling pagination changes the column count, so the stored offset has to
     // be re-applied after the browser has laid out the new column box.
     requestAnimationFrame(() => this.restoreOffset());
+
+    // A page turn is the only place an animation is wanted, and only the two
+    // settings that change where a page *is* can start one.
+    if (next && previous.mode !== this.settings.mode) this.animatePage('none');
+  }
+
+  /**
+   * Flashes a page-turn animation.
+   *
+   * On the host rather than on the flow, because the flow's own transform would
+   * fight the column layout in paged mode. `data-animating` is cleared by a
+   * timer rather than by `animationend`: the same animation may be requested
+   * twice in a row (a fast double tap), and `animationend` would then never fire
+   * for the second one, leaving the host stuck in an animating state.
+   */
+  animatePage(direction: 'next' | 'previous' | 'none'): void {
+    if (this.settings.pageAnimation === 'none' || direction === 'none') return;
+    if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const value = `${this.settings.pageAnimation}-${direction}`;
+    this.host.setAttribute('data-animating', value);
+    if (this.animationTimer !== null) clearTimeout(this.animationTimer);
+    this.animationTimer = setTimeout(() => {
+      this.animationTimer = null;
+      this.host.removeAttribute('data-animating');
+    }, 220);
   }
 
   /** Opens a section by index, optionally at a fractional offset within it. */
@@ -119,6 +183,7 @@ export class ReaderView {
       await this.renderReflowable(section);
     }
     this.options.onChapterChange?.(index, section);
+    this.refreshSpokenChunks();
     this.restoreOffset();
     this.emitPosition();
     this.attachResizeObserver();
@@ -193,6 +258,9 @@ export class ReaderView {
   dispose(): void {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
+    if (this.animationTimer !== null) clearTimeout(this.animationTimer);
+    this.animationTimer = null;
+    this.clearSpeechHighlight();
     this.releaseObjectUrl();
     this.resolver.dispose();
     this.host.remove();
@@ -214,6 +282,7 @@ export class ReaderView {
     // any offset measured before they arrive.
     this.waitForImages().then(() => {
       this.restoreOffset();
+      this.refreshSpokenChunks();
       this.emitPosition();
     });
   }
@@ -333,6 +402,198 @@ export class ReaderView {
     return true;
   }
 
+  // ---- read aloud ----
+
+  /**
+   * Refreshes the speakable sentence list for the chapter on screen.
+   *
+   * Called after every render rather than on demand, because the caller (the TTS
+   * panel) may be opened *while* a chapter is loading, and a queue built from the
+   * previous chapter would highlight the wrong paragraph.
+   */
+  refreshSpokenChunks(): SpokenChunk[] {
+    this.spokenChunks = collectSpokenChunks(this.host.flow, (node) => this.blockIndexOf(node));
+    return this.spokenChunks;
+  }
+
+  get speechChunks(): readonly SpokenChunk[] {
+    return this.spokenChunks;
+  }
+
+  /**
+   * Paints the sentence being spoken and scrolls it into view.
+   *
+   * A `Range` is used instead of wrapping the sentence in a `<span>`: wrapping
+   * would rewrite the publisher's markup, and it is exactly the kind of edit that
+   * makes an author's stylesheet stop applying to a phrase in the middle of a
+   * paragraph. A range is painted into an overlay that sits *behind* the text, so
+   * line boxes do not move and pagination does not change when playback starts.
+   */
+  highlightSpokenChunk(chunk: SpokenChunk | null): void {
+    this.clearSpeechHighlight();
+    if (!chunk || !chunk.node || !chunk.node.isConnected) return;
+    const shadow = this.host.shadow;
+    const range = shadow.ownerDocument.createRange();
+    const end = Math.min(chunk.node.data.length, chunk.start + chunk.text.length);
+    try {
+      range.setStart(chunk.node, chunk.start);
+      range.setEnd(chunk.node, end);
+    } catch {
+      return;
+    }
+    const rect = rangeRect(range);
+    if (!rect) return;
+    const hostRect = this.host.flow.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
+
+    const mark = document.createElement('div');
+    mark.className = 'reader-speech-highlight';
+    mark.style.cssText = [
+      'position:absolute',
+      `left:${rect.left - hostRect.left + this.host.flow.scrollLeft}px`,
+      `top:${rect.top - hostRect.top + this.host.flow.scrollTop}px`,
+      `width:${rect.width}px`,
+      `height:${rect.height}px`,
+    ].join(';');
+    // The overlay lives inside the shadow root's flow so it scrolls with the
+    // text; `position: relative` on the flow is what anchors it.
+    this.host.flow.append(mark);
+    this.speechHighlight = mark;
+    this.scrollIntoView(chunk);
+  }
+
+  /**
+   * The first sentence inside the reader's current text selection.
+   *
+   * A selected paragraph is how a reader says "this bit" on a phone: tapping to
+   * place a caret is not reliable over a shadow root, and long-press selection
+   * already exists for copying. Reading the selection is therefore the natural
+   * "read this paragraph" gesture, and it costs one call to `getSelection`.
+   */
+  speechAnchorFromSelection(): SpokenChunk | null {
+    // `ShadowRoot.getSelection` exists on the Chromium/WebKit that ships on
+    // Android but is not in the DOM typings, hence the structural check rather
+    // than a direct call the type system would reject.
+    const shadowSelection = (this.host.shadow as ShadowRoot & { getSelection?: () => Selection | null }).getSelection;
+    const selection = typeof shadowSelection === 'function' ? shadowSelection.call(this.host.shadow) : null;
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
+    const range = selection.getRangeAt(0);
+    for (const chunk of this.spokenChunks) {
+      if (!chunk.node) continue;
+      // A sentence starts inside the selection. `intersectsNode` on the sentence
+      // range would also match a sentence that merely *ends* in the selection,
+      // which would make a one-word selection read the preceding sentence too.
+      if (range.comparePoint(chunk.node, chunk.start) === 0 || this.rangeContains(range, chunk)) return chunk;
+    }
+    return null;
+  }
+
+  private rangeContains(selection: Range, chunk: SpokenChunk): boolean {
+    if (!chunk.node) return false;
+    const start = this.host.shadow.ownerDocument.createRange();
+    try {
+      start.setStart(chunk.node, chunk.start);
+      start.setEnd(chunk.node, Math.min(chunk.node.data.length, chunk.start + Math.max(1, chunk.text.length)));
+    } catch {
+      return false;
+    }
+    return selection.isPointInRange(start.startContainer, start.startOffset);
+  }
+
+  /** Brings the spoken sentence back on screen, one screen at a time. */
+  scrollIntoView(chunk: SpokenChunk): void {
+    if (!chunk.node || !chunk.node.isConnected) return;
+    const flow = this.host.flow;
+    const range = this.host.shadow.ownerDocument.createRange();
+    try {
+      range.setStart(chunk.node, chunk.start);
+      range.setEnd(chunk.node, Math.min(chunk.node.data.length, chunk.start + Math.max(1, chunk.text.length)));
+    } catch {
+      return;
+    }
+    const rect = rangeRect(range);
+    if (!rect) return;
+    if (this.settings.mode === 'paged') {
+      // In paged mode the page is found by measurement, not by `scrollIntoView`,
+      // because the browser's idea of "into view" is a horizontal jump to a
+      // column boundary that ignores the chapter's own padding.
+      const target = flow.scrollLeft + rect.left - flow.getBoundingClientRect().left - flow.clientWidth / 2;
+      flow.scrollLeft = Math.max(0, target);
+      return;
+    }
+    const hostRect = flow.getBoundingClientRect();
+    if (rect.top < hostRect.top + 8 || rect.bottom > hostRect.bottom - 8) {
+      flow.scrollTop += rect.top - hostRect.top - hostRect.height / 3;
+    }
+  }
+
+  clearSpeechHighlight(): void {
+    this.speechHighlight?.remove();
+    this.speechHighlight = null;
+  }
+
+  /**
+   * The sentence to start reading from, for "read from here".
+   *
+   * Found by asking the flow which block is at the top of the reading area and
+   * then taking the first sentence inside it. Measuring the viewport rather than
+   * scaling the position fraction matters: in paged mode the leading edge of a
+   * page is a column boundary, and a fraction of the chapter maps to a sentence
+   * that can be a whole paragraph away from what the reader is looking at.
+   */
+  speechAnchor(): SpokenChunk | null {
+    if (this.spokenChunks.length === 0) return null;
+    const flow = this.host.flow;
+    const hostRect = flow.getBoundingClientRect();
+    if (hostRect.width === 0 && hostRect.height === 0) return this.spokenChunks[0] ?? null;
+    const edge = this.settings.mode === 'paged' ? hostRect.left + 4 : hostRect.top + 4;
+    const first = this.spokenChunks[0] ?? null;
+    for (const chunk of this.spokenChunks) {
+      const rect = this.chunkRect(chunk);
+      if (!rect) return first;
+      const start = this.settings.mode === 'paged' ? rect.left : rect.top;
+      if (start >= edge) return chunk;
+    }
+    return this.spokenChunks[this.spokenChunks.length - 1] ?? first;
+  }
+
+  /** Bounding box of a sentence, measured through a Range rather than a wrapper. */
+  private chunkRect(chunk: SpokenChunk): DOMRect | null {
+    if (!chunk.node || !chunk.node.isConnected) return null;
+    const range = this.host.shadow.ownerDocument.createRange();
+    try {
+      range.setStart(chunk.node, chunk.start);
+      range.setEnd(chunk.node, Math.min(chunk.node.data.length, chunk.start + Math.max(1, chunk.text.length)));
+    } catch {
+      return null;
+    }
+    return rangeRect(range);
+  }
+
+  /** Index of the top-level block containing a node, for sentence addressing. */
+  private blockIndexOf(node: Node): number {
+    const children = [...this.host.flow.children];
+    let current: Node | null = node;
+    while (current && current.parentNode !== this.host.flow) current = current.parentNode;
+    return current ? children.indexOf(current as Element) : 0;
+  }
+
+  /**
+   * Scrolls to a top-level block, used when resuming aloud after a chapter jump.
+   */
+  revealBlock(index: number): void {
+    const block = this.host.flow.children[index];
+    if (!(block instanceof HTMLElement)) return;
+    if (this.settings.mode === 'paged') {
+      const flow = this.host.flow;
+      flow.scrollLeft = Math.max(0, block.offsetLeft - flow.clientWidth / 2);
+      return;
+    }
+    const flow = this.host.flow;
+    const target = block.offsetTop - flow.clientHeight / 3;
+    flow.scrollTop = Math.max(0, target);
+  }
+
   private objectUrl(bytes: Uint8Array, mediaType: string): string {
     const copy = new Uint8Array(bytes.byteLength);
     copy.set(bytes);
@@ -376,5 +637,22 @@ export class ReaderView {
           }),
       ),
     );
+  }
+}
+
+/**
+ * A range's client rect, or null when the host cannot measure one.
+ *
+ * `Range.getBoundingClientRect` is missing in jsdom and in an embedded WebView
+ * whose document has no layout box yet. Returning null rather than throwing keeps
+ * read-aloud working as *audio* on such a host — the highlight is an enhancement,
+ * and an enhancement that takes the feature down with it is not one.
+ */
+function rangeRect(range: Range): DOMRect | null {
+  if (typeof range.getBoundingClientRect !== 'function') return null;
+  try {
+    return range.getBoundingClientRect();
+  } catch {
+    return null;
   }
 }
