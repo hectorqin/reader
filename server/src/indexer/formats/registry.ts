@@ -80,6 +80,30 @@ export interface ContentGroup {
   offset: number;
 }
 
+/**
+ * One file backing a book, as reported by `/books/:id/manifest`.
+ *
+ * For a single-file book this mirrors its row in the file table. A directory book
+ * has no row of its own, so the handler supplies the list instead — and that list
+ * is a contract, not a description: the manifest tells the client which paths
+ * make up the book, and `/books/:id/file` will serve exactly those paths.
+ */
+export interface BookFileEntry {
+  relPath: string;
+  /**
+   * The handler's own reference for this file's bytes.
+   *
+   * Opaque, like every other ref: a directory book addresses pages as
+   * `page:<volume>:<page>`, and only the handler knows where its volumes begin. A
+   * caller that needs the bytes passes this back verbatim rather than assuming an
+   * index — that assumption is what once turned a request for a page into a
+   * request for the archive containing it.
+   */
+  ref: string;
+  size: number;
+  missing: number;
+}
+
 export interface Manifest {
   kind: BookKind;
   total: number;
@@ -197,6 +221,14 @@ export interface DirectoryFormatHandler {
   matches(ctx: HandlerContext, entries: DirectoryEntry[]): Promise<boolean> | boolean;
   parse(ctx: HandlerContext, entries: DirectoryEntry[]): Promise<ParsedSource>;
   manifest(ctx: HandlerContext): Promise<Manifest>;
+  /**
+   * The files this directory book is made of.
+   *
+   * Optional, because a directory handler may one day describe a book that is not
+   * a list of files at all; when it is absent the API reports the folder itself and
+   * offers no per-file access.
+   */
+  files?(ctx: HandlerContext): Promise<BookFileEntry[]>;
   asset(ctx: HandlerContext, req: AssetRequest): Promise<AssetPayload>;
 }
 

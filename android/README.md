@@ -27,8 +27,18 @@ JDK 与 Android SDK，写一个编译不过、跑不起来的 APK 只是往仓�
 
 ```
 GET /api/v1/books/:id/manifest
-→ { content: { kind: "reflowable" | "paged" | "text" | "document" | "single-image", ... } }
+→ { content: { kind: "reflowable" | "paged" | "text" | "document" | "single-image", ... },
+    kind: "reflowable" | ...,      // 与 content.kind 相同，冗余保留给旧客户端
+    files: [ { rel_path, size, missing } ] }
 ```
+
+`kind` 同时出现在 `content.kind` 和顶层，两边永远是同一个值。外壳读哪个都行，
+但**不要**改用扩展名或 UA 去猜——`kind` 就是那个唯一开关。
+
+`files` 对 `paged` 的书是**逐页下载的路径清单**：漫画目录没有单一的书文件，
+外壳按这份清单取页。清单同时是 `/books/:id/file?path=` 的契约——
+manifest 列出的路径就是这个端点会服务的路径，多一条也没有。压缩包里的页面按压缩包
+自己的路径列出，包内页码走 `/assets?ref=page:卷:页`，不是文件路径。
 
 H5 侧在没有外壳时的降级路径也已实测通过（`paged` → 内置翻页器、
 `document` → iframe），所以外壳缺失或被停用不会让 App 白屏。

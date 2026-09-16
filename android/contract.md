@@ -64,6 +64,17 @@ GET /api/v1/books/:id/content
   → 中断后用 Range: bytes=<已收字节>- 续传
 ```
 
+目录书（漫画目录）没有单一文件，`/content` 会返回 `400 DIRECTORY_BOOK`。
+这类书要缓存的是 manifest 里 `files` 列出的**每一页**：
+
+```
+GET /api/v1/books/:id/file?path=<manifest 里列出的 rel_path>
+  → 200，一张图；ETag 按文件算
+```
+
+`path` 只能取 `files` 里出现过的值。服务端只按这份契约匹配，不会用 query 拼路径，
+所以乱填只会拿到 404，不会拿到别的书的东西。
+
 `/data` 里的书架元数据由客户端自己缓存（`GET /api/v1/books` 的响应）。
 服务端离线时，外壳读本地缓存渲染书架，并静默降级 —— 设计文档 §8.2
 要求「客户端必须优雅处理服务端不可达」，这条不能靠报错弹窗实现。

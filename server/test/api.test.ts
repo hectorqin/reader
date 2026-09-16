@@ -466,6 +466,31 @@ test('a folder holding a real book is a shelf, not a comic', async () => {
   assert.equal(comics.items.length, 0);
 });
 
+test('a series filed as one archive beside volume folders is one book', async () => {
+  // The layout that made a whole series invisible: `第01卷.cbz` next to
+  // `第02卷/`. The archive cleared the "holds a book file" test, so the enclosing
+  // folder was declared a shelf and never offered to the comic-directory handler;
+  // the volume folders inside it held pages, so they were not books either. Not a
+  // comic by one rule, not a book by another, and nothing on the shelf to explain
+  // the absence. A volume archive is page material, not a shelf neighbour.
+  const session = await createUser('mixedvolumes');
+  const dir = join(booksDir, '混合卷漫画');
+  await mkdir(join(dir, '第02卷'), { recursive: true });
+  await writeFile(join(dir, '第01卷.cbz'), await makeCbz(['001.png']));
+  await writeFile(join(dir, '第02卷', '001.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1]));
+  await writeFile(join(dir, '第02卷', '002.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 2]));
+  await ctx.scanner.scan();
+
+  const res = await app.inject({
+    method: 'GET', url: '/api/v1/books?search=' + encodeURIComponent('混合卷漫画'), headers: auth(session.token),
+  });
+  const body = res.json() as { items: Array<{ format: string; pageCount: number | null }> };
+  assert.equal(body.items.length, 1, 'the series must be one book, not one book per volume');
+  assert.equal(body.items[0]!.format, 'comic-dir');
+  // Two pages in the folder plus the archive's own page.
+  assert.equal(body.items[0]!.pageCount, 3);
+});
+
 test('a nested shelf inside a comic folder keeps its own books', async () => {
   // The same rule one level down. The enclosing folder is discovered first and
   // would otherwise absorb everything under it, including real books.
@@ -573,6 +598,69 @@ test('a folder of EPUBs is not mistaken for a comic', async () => {
   assert.equal(body.items[0]!.format, 'epub');
 });
 
+test('every page of a comic folder is listed and served by the paths the manifest names', async () => {
+  // The two halves of the directory-book contract. The manifest names the paths
+  // that make up the book; `/file` serves exactly those paths. They used to be
+  // built by two different walkers: the manifest listed an archive's *page title*
+  // — a bare file name with no folder — so every page of a volume answered 404
+  // and the book opened blank. Both sides now come from the handler's own page
+  // walk, which is what makes the two lists equal by construction.
+  const session = await createUser('comicvol');
+  const dir = join(booksDir, '压缩包漫画');
+  await mkdir(join(dir, '第02卷'), { recursive: true });
+  // Volumes laid out the two ways a real collection is filed: a folder of pages,
+  // and an archive of pages.
+  await writeFile(join(dir, '第02卷', '001.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1]));
+  await writeFile(join(dir, '第02卷', '002.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 2]));
+  await writeFile(join(dir, '第01卷.cbz'), await makeCbz(['001.png', '002.png']));
+  await ctx.scanner.scan();
+
+  const list = (await app.inject({
+    method: 'GET', url: '/api/v1/books?search=压缩包漫画', headers: auth(session.token),
+  })).json() as { items: Array<{ id: string; title: string; pageCount: number | null }> };
+  assert.equal(list.items.length, 1, 'the folder must be one book, not one book per volume');
+  // Three pages: one archive plus two loose images. A page inside an archive is
+  // addressed by ref, which is why the archive is one entry in the list below.
+  assert.equal(list.items[0]!.pageCount, 3);
+
+  const manifest = (await app.inject({
+    method: 'GET', url: `/api/v1/books/${list.items[0]!.id}/manifest`, headers: auth(session.token),
+  })).json() as { files: Array<{ rel_path: string; missing: number }> };
+
+  const paths = manifest.files.filter((file) => file.missing === 0).map((file) => file.rel_path).sort();
+  assert.deepEqual(paths, ['压缩包漫画/第01卷.cbz', '压缩包漫画/第02卷/001.jpg', '压缩包漫画/第02卷/002.jpg']);
+
+  // Every path the manifest offered must actually serve. This is the assertion
+  // that would have caught the broken list: it is not enough for the manifest to
+  // be plausible, the two sides have to agree.
+  for (const relPath of paths) {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${list.items[0]!.id}/file?path=${encodeURIComponent(relPath)}`,
+      headers: auth(session.token),
+    });
+    assert.equal(res.statusCode, 200, `manifest promised ${relPath} but /file answered ${res.statusCode}`);
+    assert.ok(res.rawPayload.byteLength > 0, 'a promised page must come back with real bytes');
+  }
+
+  // A path that was never published stays refused: the list is the contract.
+  const invented = await app.inject({
+    method: 'GET',
+    url: `/api/v1/books/${list.items[0]!.id}/file?path=${encodeURIComponent('压缩包漫画/第01卷.cbz/001.png')}`,
+    headers: auth(session.token),
+  });
+  assert.equal(invented.statusCode, 404, 'a path inside an archive is not a library path');
+
+  // And the ref route reaches a page through the manifest's own ref, which is how
+  // the reader fetches a page inside an archive.
+  const assets = await app.inject({
+    method: 'GET', url: `/api/v1/books/${list.items[0]!.id}/assets?ref=${encodeURIComponent('page:0:0')}`,
+    headers: auth(session.token),
+  });
+  assert.equal(assets.statusCode, 200);
+  assert.equal(assets.headers['content-type'], 'image/jpeg', 'page:0:0 is the first page of the first volume, whichever kind of source it is');
+});
+
 test('one page of a comic folder can be fetched by path', async () => {
   const session = await createUser('comicfetch');
   const dir = join(booksDir, '取图漫画');
@@ -661,4 +749,105 @@ test('the H5 client bundle is served when present and absent otherwise', async (
   assert.equal(health.statusCode, 200);
   const root = await app.inject({ method: 'GET', url: '/' });
   assert.equal(root.statusCode, 404);
+});
+
+test('an embedded archive is served out of the archive, and a page request is not off by one', async () => {
+  // Two shapes whose paths a client fetches one at a time, and the trap between
+  // them: a loose image is addressed with `page:<volume>:<page>` while a
+  // directory book's handler addresses pages by *index* over its own walk. Both
+  // lists contain a page 0 of some kind, so serving one through the other's branch
+  // answers a request for page 1 with page 2 — a silent off-by-one that no status
+  // code would reveal. A loose page therefore always comes off disk, and only an
+  // archive's bytes come from the handler.
+  const session = await createUser('archivedpage');
+  const dir = join(booksDir, '单卷系列');
+  await mkdir(dir, { recursive: true });
+  // Bytes chosen so each page is distinguishable, including inside the archive.
+  const looseBytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x11, 0x22, 0x33]);
+  await writeFile(join(dir, '001.jpg'), looseBytes);
+  await writeFile(join(dir, '第01卷.cbz'), await makeCbz(['a.png', 'b.png']));
+  await ctx.scanner.scan();
+
+  const list = (await app.inject({
+    method: 'GET', url: '/api/v1/books?search=单卷系列', headers: auth(session.token),
+  })).json() as { items: Array<{ id: string; title: string; pageCount: number | null }> };
+  assert.equal(list.items.length, 1, 'one archive beside one loose page is one book, not two');
+  const id = list.items[0]!.id;
+
+  const manifest = (await app.inject({
+    method: 'GET', url: `/api/v1/books/${id}/manifest`, headers: auth(session.token),
+  })).json() as { files: Array<{ rel_path: string; missing: number }> };
+  const paths = manifest.files.filter((file) => file.missing === 0).map((file) => file.rel_path).sort();
+  assert.deepEqual(paths, ['单卷系列/001.jpg', '单卷系列/第01卷.cbz']);
+
+  const loose = await app.inject({
+    method: 'GET', url: `/api/v1/books/${id}/file?path=${encodeURIComponent('单卷系列/001.jpg')}`,
+    headers: auth(session.token),
+  });
+  assert.equal(loose.statusCode, 200);
+  assert.deepEqual(
+    Buffer.from(loose.rawPayload),
+    looseBytes,
+    'a loose page must be the file on disk, never another page of the book',
+  );
+
+  const archive = await app.inject({
+    method: 'GET', url: `/api/v1/books/${id}/file?path=${encodeURIComponent('单卷系列/第01卷.cbz')}`,
+    headers: auth(session.token),
+  });
+  assert.equal(archive.statusCode, 200);
+  assert.equal(archive.headers['content-type'], 'image/png', 'an archive page is served as its image, not as a zip');
+  assert.ok(archive.rawPayload.byteLength > 0, 'an archive page must come back with real bytes');
+});
+
+test('a volume archive beside volume folders stays on the shelf and serves its pages', async () => {
+  // The layout the README calls "整卷系列": volume archives and volume folders side
+  // by side. Every rule that decides whether a folder is a book was asked about
+  // this shape before, and it failed two of them at once — `.cbz` registered as a
+  // book of its own made the folder look like a shelf, and the volume test asked
+  // for `images === 0` while a loose cover image sits right there. Either one
+  // alone made the whole series disappear from the shelf with nothing in the log.
+  const session = await createUser('volumemix');
+  const dir = join(booksDir, '整卷系列');
+  await mkdir(join(dir, '第02卷'), { recursive: true });
+  await writeFile(join(dir, '第02卷', '001.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1]));
+  await writeFile(join(dir, '第02卷', '002.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 2]));
+  await writeFile(join(dir, '第01卷.cbz'), await makeCbz(['001.png', '002.png']));
+  // A loose cover scan, which is exactly what the old `images === 0` guard saw.
+  await writeFile(join(dir, 'cover.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9]));
+  await ctx.scanner.scan();
+
+  const list = (await app.inject({
+    method: 'GET', url: '/api/v1/books?search=整卷系列', headers: auth(session.token),
+  })).json() as { items: Array<{ id: string; pageCount: number | null }> };
+  assert.equal(list.items.length, 1, 'the series must stay on the shelf as one book');
+  const id = list.items[0]!.id;
+
+  const manifest = (await app.inject({
+    method: 'GET', url: `/api/v1/books/${id}/manifest`, headers: auth(session.token),
+  })).json() as { files: Array<{ rel_path: string; ref?: string; missing: number }> };
+  const paths = manifest.files.filter((file) => file.missing === 0).map((file) => file.rel_path).sort();
+  assert.deepEqual(paths, [
+    '整卷系列/cover.jpg',
+    '整卷系列/第01卷.cbz',
+    '整卷系列/第02卷/001.jpg',
+    '整卷系列/第02卷/002.jpg',
+  ]);
+
+  for (const file of manifest.files.filter((candidate) => candidate.missing === 0)) {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${id}/file?path=${encodeURIComponent(file.rel_path)}`,
+      headers: auth(session.token),
+    });
+    assert.equal(res.statusCode, 200, `manifest promised ${file.rel_path} but /file answered ${res.statusCode}`);
+    assert.ok(res.rawPayload.byteLength > 0);
+    // A page is always an image, whichever container it came out of. Serving the
+    // archive itself here would hand the reader a zip where a page belongs.
+    assert.match(
+      String(res.headers['content-type']),
+      /^image\//,
+      `${file.rel_path} came back as ${String(res.headers['content-type'])}`,
+    );
+  }
 });

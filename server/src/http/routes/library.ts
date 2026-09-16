@@ -61,6 +61,18 @@ function sourceContext(ctx: AppContext, bookId: string) {
 }
 
 /**
+ * The path of the folder a library path lives in, or `null` for a top-level path.
+ *
+ * Used to answer "is this file inside that directory book's folder" without a
+ * prefix match, which cannot tell `第01卷.cbz` inside `整卷系列/` apart from a
+ * sibling file that merely starts with the same characters.
+ */
+function parentPath(relPath: string): string | null {
+  const cut = relPath.lastIndexOf('/');
+  return cut < 0 ? null : relPath.slice(0, cut);
+}
+
+/**
  * Offset of the first item belonging to a group.
  *
  * Taken from the declared group sizes rather than from the items themselves, so
@@ -171,18 +183,27 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       // The list of files backing this book, so a client can tell a duplicate
       // copy apart from a genuinely missing file.
       //
-      // Directory books are the exception, and they are the reason this is
-      // derived rather than read straight from `book_files`. Their recorded file
+      // Directory books are the exception, and they are the reason this is asked
+      // of the handler rather than read straight from `book_files`. Their recorded
       // row is the *folder*, because that is the path the scanner discovers; the
-      // pages that actually make up the book live inside it, and a client
-      // fetching pages one by one (the only way to read a 20GB scan collection)
-      // needs their paths. The manifest already knows them, so the list is built
-      // from it instead of from the row.
-      files: content && book.format === 'comic-dir'
-        ? content.items.map((item: ContentItem) => ({
-            rel_path: `${sourceContext(ctx, id).relPath}/${item.title}`,
-            size: item.size ?? 0,
-            missing: 0,
+      // pages that make up the book live inside it, and a client fetching pages
+      // one by one (the only way to read a 20GB scan collection) needs their
+      // paths. Whoever owns the page walk owns this list: a second implementation
+      // here listed the *titles* of pages inside an embedded archive, which are
+      // not paths at all, and every page of such a comic answered 404.
+      //
+      // This is a contract, not an inventory: `/books/:id/file` serves exactly the
+      // paths named here, and nothing else.
+      files: content && handler && 'files' in handler && handler.files
+        ? (await handler.files({ ...sourceContext(ctx, id), bookId: id })).map((file) => ({
+            rel_path: file.relPath,
+            // The handler's own reference, passed through untouched. It is what
+            // makes the listed path fetchable: a directory book addresses a page
+            // as `page:<volume>:<page>`, and only its handler knows where the
+            // volumes begin.
+            ref: file.ref,
+            size: file.size,
+            missing: file.missing,
           }))
         : ctx.db.all<{ rel_path: string; size: number; missing: number }>(
             'SELECT rel_path, size, missing FROM book_files WHERE book_id = ? ORDER BY rel_path',
@@ -346,30 +367,70 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     // Two shapes of book, and each owns a different set of paths.
     //
     // A single-file book owns exactly the paths recorded against it — normally
-    // one. A directory book (a comic stored as a folder of images) owns the
-    // *folder*, because that is what the scanner discovers; its pages are not
-    // rows at all, so requiring a row would make every page request 404 and the
-    // book unreadable. A directory book therefore also owns everything under its
-    // folder, and the traversal check is simply "is the recorded folder a prefix
-    // of the request".
-    const isDirectoryBook = fileHandlerForFormat(book.format) === null;
+    // one. A directory book (a comic stored as a folder of images) has no book
+    // file of its own: the scanner records the *folder*, and the pages that make
+    // it up are not rows at all. Its handler therefore answers with the page
+    // paths, and that answer is the whole contract — the manifest publishes the
+    // same list, so anything refused here was never offered to a client.
+    //
+    // A directory book also needs its *own* path to resolve, because a page may
+    // live inside an embedded archive: `第01卷/vol.cbz` is the archive, and
+    // serving that *path* is how a client fetches the volume's pages out of it.
+    const dirHandler = directoryHandlerForFormat(book.format);
+    const owned = dirHandler?.files
+      ? await dirHandler.files({ ...sourceContext(ctx, id), bookId: id })
+      : null;
     const rows = ctx.db.all<{ rel_path: string; size: number }>(
       'SELECT rel_path, size FROM book_files WHERE book_id = ? AND missing = 0',
       id,
     );
     const row = rows.find((candidate) => candidate.rel_path === wanted);
-    const owner = isDirectoryBook
-      ? rows.find((candidate) => wanted.startsWith(`${candidate.rel_path}/`))
-      : undefined;
-    if (!row && !owner) throw notFound('no such file for this book', 'FILE_MISSING');
+    const entry = owned?.find((candidate) => candidate.relPath === wanted);
+    // A directory book records its *folder*, so every page path under that folder
+    // belongs to this book. `owned` is the authoritative list — it is the same
+    // walk the manifest published — but a path directly under the folder that the
+    // walk skips (or an older client asking for one) still resolves here.
+    const folderRow = rows.find(
+      (candidate) => normalizeRel(candidate.rel_path) === parentPath(wanted),
+    );
+    const ownsFolder = dirHandler !== null && folderRow !== undefined;
+    if (!row && !entry && !ownsFolder) throw notFound('no such file for this book', 'FILE_MISSING');
+
+    // The registry owns the extension -> content-type mapping, so a page image
+    // served here and the same image listed in a manifest can never disagree.
+    const contentType = contentTypeFor(wanted);
+    const size = row?.size ?? entry?.size ?? 0;
+
+    // An embedded page is served out of its archive, not off disk. The database
+    // refuses to call this a file of the library — it is not one — so the bytes
+    // come from the handler that knows how to open the container, addressed by
+    // the reference that came with the list entry.
+    //
+    // Gated on the path carrying the folder. The handler's references are only
+    // meaningful inside a directory book: a folder candidate answers with one
+    // entry per volume and per loose page (`page:0:0`), while the same file as a
+    // book of its own is addressed as `page:0` by a different handler. Asking one
+    // through the other's branch answers a request for a page with a different
+    // page — a silent off-by-one. A row-backed file therefore always goes to disk
+    // below, and only a page inside an archive is asked of the handler.
+    if (!row && entry && ownsFolder) {
+      const absOwner = resolveInside(ctx.config.booksDir, assertSafeRel(wanted));
+      if (!existsSync(absOwner)) throw notFound('file is no longer on disk', 'FILE_MISSING');
+      const payload = await dirHandler?.asset(
+        { ...sourceContext(ctx, id), bookId: id },
+        { ref: entry.ref },
+      );
+      if (!payload) throw notFound('no such file for this book', 'FILE_MISSING');
+      reply.header('etag', `"${id}:${createHash('sha256').update(wanted).digest('hex').slice(0, 16)}"`);
+      reply.header('cache-control', 'private, max-age=86400');
+      return sendAssetPayload(request, reply, payload);
+    }
 
     const abs = resolveInside(ctx.config.booksDir, assertSafeRel(wanted));
     if (!existsSync(abs)) throw notFound('file is no longer on disk', 'FILE_MISSING');
 
-    // The registry owns the extension -> content-type mapping, so a page image
-    // served here and the same image listed in a manifest can never disagree.
-    reply.header('content-type', contentTypeFor(wanted));
-    reply.header('content-length', String(row?.size ?? (await stat(abs)).size));
+    reply.header('content-type', contentType);
+    reply.header('content-length', String(size || (await stat(abs)).size));
     // Unlike `/content`, this is one page of many, so the ETag is per file rather
     // than per book.
     //
