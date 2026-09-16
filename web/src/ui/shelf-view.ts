@@ -24,6 +24,8 @@ export interface ShelfHost {
 export class ShelfView {
   private readonly root: HTMLElement;
   private readonly grid: HTMLElement;
+  /** Built once, mounted on demand. */
+  private built = false;
   private search = '';
   private page = 1;
   private total = 0;
@@ -68,7 +70,6 @@ export class ShelfView {
     this.grid.className = 'shelf__grid';
 
     this.root.append(header, input, this.grid);
-    host.replaceChildren(this.root);
 
     // Infinite scroll: a library is browsed by scrolling, and paging controls on
     // a phone are a tax on every visit.
@@ -77,6 +78,24 @@ export class ShelfView {
       const remaining = this.root.scrollHeight - this.root.scrollTop - this.root.clientHeight;
       if (remaining < 600) void this.load(false);
     });
+  }
+
+  /**
+   * Take over the host element.
+   *
+   * Mounting is separate from construction because the view is built once, at
+   * startup, while the auth screen may still own the host. Replacing the host's
+   * children in the constructor meant the shelf's markup was installed and then
+   * covered by the dialog that mounted after it — so a successful sign-in left
+   * the login form on screen with the loaded shelf hidden underneath.
+   */
+  mount(): void {
+    this.host.replaceChildren(this.root);
+    this.built = true;
+  }
+
+  get mounted(): boolean {
+    return this.built;
   }
 
   async load(reset: boolean): Promise<void> {
@@ -121,7 +140,9 @@ export class ShelfView {
     // that is already scrolling.
     cover.loading = 'lazy';
     cover.decoding = 'async';
-    if (book.coverUrl) cover.src = this.api.url(book.coverUrl);
+    // The DTO carries the server's own path; the token has to come from the
+    // client, because an `<img src>` cannot send an Authorization header.
+    if (book.coverUrl) cover.src = this.api.coverUrl(book.id);
     cover.addEventListener('error', () => {
       cover.removeAttribute('src');
     });

@@ -973,3 +973,59 @@ describe('directory detection', () => {
     assert.equal(await looksLikeComicDirectory(dir), false);
   });
 });
+
+describe('query-string tokens', () => {
+  test('an asset can be fetched with a query token, because an img tag cannot send a header', async () => {
+    // A chapter document is rendered by the browser, which fetches its images
+    // and stylesheets itself. Without this, every illustration in a book 401s.
+    const book = await findBook('三体');
+    const token = ctx.users.login('owner', 'password123', 'test');
+    const issued = (await token).accessToken;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('OEBPS/images/pic.png')}&access_token=${encodeURIComponent(issued)}`,
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal(res.headers['content-type'], 'image/png');
+  });
+
+  test('the same token is refused on a state-changing endpoint', async () => {
+    // A token in a URL leaks into logs, history and Referer headers. It is
+    // accepted only where a browser forces our hand: a GET for immutable
+    // content. A scan trigger must never be reachable that way.
+    const admin = await ctx.users.login('owner', 'password123', 'test');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/v1/library/scan?access_token=${encodeURIComponent(admin.accessToken)}`,
+    });
+    assert.equal(res.statusCode, 401, 'a query token must not authorise a POST');
+  });
+
+  test('a query token on a metadata write is refused', async () => {
+    const admin = await ctx.users.login('owner', 'password123', 'test');
+    const book = await findBook('三体');
+    const res = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/books/${book.id}/metadata?access_token=${encodeURIComponent(admin.accessToken)}`,
+      payload: { title: 'x' },
+    });
+    assert.equal(res.statusCode, 401);
+  });
+
+  test('a query token is refused on a collection endpoint', async () => {
+    // Only per-book asset reads accept it. A shelf listing carries the whole
+    // library and has no reason to be fetchable from a URL someone could paste.
+    const admin = await ctx.users.login('owner', 'password123', 'test');
+    const res = await app.inject({ method: 'GET', url: `/api/v1/books?access_token=${encodeURIComponent(admin.accessToken)}` });
+    assert.equal(res.statusCode, 401);
+  });
+
+  test('an invalid query token is refused like any other', async () => {
+    const book = await findBook('三体');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/assets?ref=OEBPS%2Fimages%2Fpic.png&access_token=not-a-token`,
+    });
+    assert.equal(res.statusCode, 401);
+  });
+});

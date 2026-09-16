@@ -65,7 +65,7 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
  * whereas a book whose text stays dark on a "dark" background is one the reader
  * can see and judge.
  */
-const PALETTES: Record<ThemeMode, { background: string; text: string; muted: string }> = {
+export const PALETTES: Record<ThemeMode, { background: string; text: string; muted: string }> = {
   light: { background: '#ffffff', text: '#111111', muted: '#6b7280' },
   sepia: { background: '#f6f0e4', text: '#3b3121', muted: '#8a7c63' },
   dark: { background: '#14161a', text: '#c9cdd4', muted: '#7c828c' },

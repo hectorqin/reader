@@ -8,6 +8,7 @@ import {
   type HandlerContext,
   type Manifest,
   type ParsedSource,
+  type TocEntry,
 } from './registry.ts';
 import { filenameMetadata } from '../metadata.ts';
 
@@ -174,6 +175,17 @@ export const textHandler = registerFileHandler({
         href: `chapter:${index}`,
       })),
     };
+  },
+
+  /** The chapters the heading scan found, in order. */
+  async toc(ctx: HandlerContext): Promise<TocEntry[]> {
+    const { text } = await readTextFile(ctx.absPath);
+    return splitChapters(text).chapters.map((chapter, index) => ({
+      href: `chapter:${index}`,
+      title: chapter.title,
+      level: 0,
+      spine: index,
+    }));
   },
 
   /**

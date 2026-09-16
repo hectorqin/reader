@@ -9,6 +9,7 @@ import {
   type HandlerContext,
   type Manifest,
   type ParsedSource,
+  type TocEntry,
 } from './registry.ts';
 import { ZipArchive } from './zip-reader.ts';
 import { imageContentType, isImageExtension } from './image-types.ts';
@@ -204,6 +205,17 @@ export const comicDirectoryHandler = registerDirectoryHandler({
         },
       },
     };
+  },
+
+  /** One entry per volume: a comic's table of contents is its volumes. */
+  async toc(ctx: HandlerContext): Promise<TocEntry[]> {
+    const volumes = await collectVolumes(ctx.absPath);
+    return volumes.map((volume, index) => ({
+      href: `page:${index}:0`,
+      title: `${volume.title}（${volume.pages.length} 页）`,
+      level: 0,
+      spine: index,
+    }));
   },
 
   async manifest(ctx: HandlerContext): Promise<Manifest> {

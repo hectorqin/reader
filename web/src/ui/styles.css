@@ -225,10 +225,27 @@ body {
   transition: width 120ms linear;
 }
 
-/* A page is a horizontal scroll target; the reader moves it by scrollLeft. The
-   transition is what makes the movement read as a page turn rather than a jump. */
-.reader__stage .reader-viewport {
-  transition: scroll-left 160ms ease-out;
+/*
+ * The chapter frame.
+ *
+ * Zero border and `display: block` are not cosmetic: an iframe's default is
+ * `display: inline` with a 2px inset border, which sizes it to its content box
+ * rather than to the stage. The symptom is a 304x154 frame in the corner of a
+ * 390-wide screen with the book laid out for the wrong width — the pagination
+ * then computes one page for the entire chapter and every page turn does nothing.
+ */
+.reader-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+}
+
+/* The reader drives the frame's scroll position, so the stage must not also
+   intercept horizontal pans. */
+.reader__stage.is-reflowable {
+  touch-action: pan-y;
 }
 
 .reader__page {

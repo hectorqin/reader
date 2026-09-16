@@ -87,6 +87,24 @@ export interface Manifest {
   items: ContentItem[];
 }
 
+/**
+ * A table of contents entry.
+ *
+ * Deliberately not a `ContentItem`: a TOC is a list of *names*, and a client
+ * rendering one needs a title and somewhere to jump to. Shipping sizes, media
+ * types and per-item ids for a 1200-chapter book would be several times the
+ * payload for fields the TOC never reads.
+ */
+export interface TocEntry {
+  /** Addressable reference; the same value `ContentItem.href` carries. */
+  href: string;
+  title: string;
+  /** Depth for nested navigation, 0 for a flat list. */
+  level: number;
+  /** Whole-book index, when the format has one. */
+  spine?: number;
+}
+
 export interface AssetRequest {
   /** Item id from the manifest, or a format specific reference. */
   ref: string;
@@ -143,6 +161,15 @@ export interface FileFormatHandler {
   /** Human readable, surfaced in /capabilities so clients can show support. */
   readonly label: string;
   /**
+   * The book's own navigation, when it has one.
+   *
+   * Optional because not every format does: a single image has no chapters, and
+   * a TXT file only has headings when its author wrote them. A handler that
+   * omits this gets the default, which is one entry per manifest item — correct
+   * for anything whose items already are the table of contents.
+   */
+  toc?(ctx: HandlerContext): Promise<TocEntry[]>;
+  /**
    * Optional cheap check that the file really is this format. Used when the
    * extension is ambiguous (a .zip that may or may not be a comic).
    */
@@ -156,6 +183,7 @@ export interface DirectoryFormatHandler {
   readonly format: string;
   readonly kind: BookKind;
   readonly label: string;
+  toc?(ctx: HandlerContext): Promise<TocEntry[]>;
   /** Decide whether this directory is one book of this format. */
   matches(ctx: HandlerContext, entries: DirectoryEntry[]): Promise<boolean> | boolean;
   parse(ctx: HandlerContext, entries: DirectoryEntry[]): Promise<ParsedSource>;

@@ -220,6 +220,34 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
   });
 
   /**
+   * The book's table of contents.
+   *
+   * Separate from `/items` on purpose. `/items` is a *transfer* window: it is
+   * windowed, and it carries everything a renderer needs to lay out a page. A
+   * table of contents is a list of names, it must be complete to be useful, and
+   * it is a few kilobytes even for a 1200-chapter book. Making one endpoint do
+   * both jobs gave the reader a "table of contents" reading
+   * 「第 1 章 – 第 40 章」, which is the server's pagination leaking into the UI.
+   */
+  app.get('/api/v1/books/:id/toc', { preHandler: auth }, async (request) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    const book = ctx.shelf.get(user.id, id);
+    const handler = resolveHandler(ctx, id, book.format);
+    if (!handler) return { toc: [] };
+
+    const context = { ...sourceContext(ctx, id, book.format), bookId: id };
+    if (handler.toc) return { toc: await handler.toc(context) };
+
+    // Default: the format has no navigation of its own, so its items are its
+    // table of contents. `pdf` and `image` land here.
+    const manifest = await handler.manifest(context);
+    return {
+      toc: manifest.items.map((item) => ({ href: item.href, title: item.title, level: 0, spine: item.seq })),
+    };
+  });
+
+  /**
    * A single addressable resource: a chapter document, a page image, a font.
    *
    * `ref` is opaque and format specific (`chapter:2`, `page:17`), which keeps the

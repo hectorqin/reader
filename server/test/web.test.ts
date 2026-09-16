@@ -57,6 +57,25 @@ describe('static client hosting', () => {
     assert.match(res.headers['cache-control'] as string, /immutable/);
   });
 
+test('an asset is served with its real bytes, not an empty second send', async () => {
+    // This was a 200 with `content-length: 0` for every asset. The cause was a
+    // `reply.send(stream)` followed by a bare `return` in an async handler:
+    // Fastify sends the response twice, the second send is empty, and the
+    // client's module never loads — a blank page with no error anywhere except
+    // a "stream closed prematurely" log line.
+    const res = await app.inject({ method: 'GET', url: '/assets/index-abc123.js' });
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.rawPayload.byteLength > 0, 'a streamed asset must not be empty');
+    assert.equal(res.body, 'console.log(1)');
+  });
+
+  test('index.html is served with its real bytes', async () => {
+    const res = await app.inject({ method: 'GET', url: '/' });
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.rawPayload.byteLength > 0);
+    assert.match(res.body, /<title>reader<\/title>/);
+  });
+
   test('a client-side route falls back to index.html instead of 404', async () => {
     // A single-page app's deep links are not files; returning 404 would break a
     // reload on any screen but the shelf.

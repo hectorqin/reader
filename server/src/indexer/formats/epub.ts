@@ -9,6 +9,7 @@ import {
   type HandlerContext,
   type Manifest,
   type ParsedSource,
+  type TocEntry,
 } from './registry.ts';
 import { parseEpub, extractEpubCover } from '../metadata.ts';
 import { XMLParser } from 'fast-xml-parser';
@@ -43,7 +44,19 @@ import { XMLParser } from 'fast-xml-parser';
  * archive path (`xhtml:OEBPS/ch1.xhtml`) instead.
  */
 
-/** How many spine entries one manifest window may describe. */
+/**
+ * How many spine entries one manifest window may describe.
+ *
+ * This is a *transfer* boundary, not a table of contents. The two were the same
+ * thing in the first version of this contract, which made a book's TOC read
+ * "第 1 章 – 第 40 章" instead of listing its chapters — the reader asked for a
+ * table of contents and got the server's pagination.
+ *
+ * A client that wants the chapter list asks for it with `toc=1`, which returns
+ * every spine entry's title without its per-item detail. A long book's TOC is
+ * therefore a few kilobytes of strings rather than a manifest with sizes and
+ * media types for every chapter.
+ */
 export const CHAPTER_WINDOW = 40;
 
 /** A chapter document is XHTML; anything larger is not something we serve. */
@@ -120,6 +133,24 @@ export const epubHandler = registerFileHandler({
         size: archive.get(item.path)?.uncompressedSize ?? undefined,
       })),
     };
+  },
+
+  /**
+   * Every chapter, by name.
+   *
+   * This is the book's table of contents, not the manifest's windows. It exists
+   * because windowing made the two groups in the manifest (`第 1 章 – 第 40 章`)
+   * look like a table of contents, which no reader wants to see.
+   */
+  async toc(ctx: HandlerContext): Promise<TocEntry[]> {
+    const archive = await ZipArchive.open(ctx.absPath);
+    const pkg = await readPackage(archive);
+    return pkg.spine.map((item, index) => ({
+      href: `xhtml:${item.path}`,
+      title: pkg.titles.get(item.path) ?? `第 ${index + 1} 章`,
+      level: 0,
+      spine: index,
+    }));
   },
 
   async asset(ctx: HandlerContext, req): Promise<AssetPayload> {

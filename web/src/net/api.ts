@@ -42,6 +42,14 @@ export interface BookContent {
   group?: number;
 }
 
+/** One entry of a book's own navigation. */
+export interface TocEntry {
+  href: string;
+  title: string;
+  level: number;
+  spine?: number;
+}
+
 export interface BookDto {
   id: string;
   title: string;
@@ -126,7 +134,8 @@ export class ApiClient {
   private refreshInFlight: Promise<Session | null> | null = null;
   private inflight = 0;
   private queue: Array<() => void> = [];
-  private readonly baseUrl: string;
+  /** Server origin, without a trailing slash. Empty means same origin. */
+  readonly baseUrl: string;
 
   constructor(private readonly options: ApiClientOptions = {}) {
     this.baseUrl = (options.baseUrl ?? '').replace(/\/$/, '');
@@ -183,6 +192,19 @@ export class ApiClient {
     return this.request('GET', `/api/v1/books/${encodeURIComponent(bookId)}/manifest${query}`);
   }
 
+  /**
+   * The book's table of contents.
+   *
+   * A separate call from `manifest` because a TOC has to be complete to be
+   * useful, while the manifest is deliberately windowed. Fetching the manifest
+   * of a 1200-chapter book to show its contents would be the one thing windowing
+   * exists to prevent.
+   */
+  async toc(bookId: string): Promise<TocEntry[]> {
+    const result = await this.request<{ toc: TocEntry[] }>('GET', `/api/v1/books/${encodeURIComponent(bookId)}/toc`);
+    return result.toc;
+  }
+
   /** One window of items, for a book already open. */
   async items(bookId: string, group?: number): Promise<BookContent> {
     const query = group === undefined ? '' : `?group=${group}`;
@@ -211,9 +233,23 @@ export class ApiClient {
     return this.url(`/api/v1/books/${encodeURIComponent(bookId)}/content`);
   }
 
-  /** A URL a plain `<img>` can load. Cover images are per-book and immutable. */
+  /**
+   * A URL a plain `<img>` can load.
+   *
+   * The token travels in the query because an `<img src>` cannot carry a header —
+   * the same constraint that shapes `render/asset-url.ts`, and the same bounded
+   * exposure: the server only accepts a query token on read endpoints for
+   * immutable content, and a cover is addressed by content hash.
+   *
+   * Fetching the cover in JavaScript and handing over a Blob URL would keep the
+   * token out of the URL, at the cost of buffering every cover of a 2000-book
+   * shelf before any of them can render — which is exactly what lazy loading
+   * exists to avoid.
+   */
   coverUrl(bookId: string): string {
-    return this.url(`/api/v1/books/${encodeURIComponent(bookId)}/cover`);
+    const token = this.session?.accessToken;
+    const path = `/api/v1/books/${encodeURIComponent(bookId)}/cover`;
+    return this.url(token ? `${path}?access_token=${encodeURIComponent(token)}` : path);
   }
 
   async shelf(params: { search?: string; page?: number; pageSize?: number } = {}): Promise<{

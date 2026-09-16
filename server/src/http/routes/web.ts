@@ -80,16 +80,15 @@ export function registerWebRoutes(app: FastifyInstance, ctx: AppContext): void {
     const path = decodeURIComponent(url.pathname);
 
     if (path.startsWith('/api/')) {
-      reply.status(404).send({
+      return reply.status(404).send({
         error: { code: 'NOT_FOUND', message: `no route for GET ${request.url}` },
       });
-      return;
     }
 
     if (!build) {
-      reply.header('content-type', 'text/html; charset=utf-8');
-      reply.send(landingPage(roots));
-      return;
+      return reply
+        .header('content-type', 'text/html; charset=utf-8')
+        .send(landingPage(roots));
     }
 
     // `normalize` collapses `..` before the prefix check; comparing the resolved
@@ -98,6 +97,7 @@ export function registerWebRoutes(app: FastifyInstance, ctx: AppContext): void {
     const relative = normalize(path).replace(/^([/\\])+/, '');
     const candidate = resolve(build, relative);
     if (candidate.startsWith(build + sep) && isFile(candidate)) {
+      const body = createReadStream(candidate);
       reply.header('content-type', CONTENT_TYPES[extname(candidate).toLowerCase()] ?? 'application/octet-stream');
       // Hashed asset names are immutable; `index.html` must not be, or a client
       // keeps loading a bundle that was replaced by an upgrade.
@@ -105,13 +105,18 @@ export function registerWebRoutes(app: FastifyInstance, ctx: AppContext): void {
         'cache-control',
         relative.startsWith('assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
       );
-      reply.send(createReadStream(candidate));
-      return;
+      // The stream must be the handler's RETURN value, not a `reply.send()`
+      // followed by a bare `return`. The latter makes Fastify send the response
+      // twice: the second send is empty, so every asset arrives as a 200 with
+      // `content-length: 0` and the client parses nothing. It fails silently —
+      // the log line is "stream closed prematurely" and the page just stays
+      // blank, which is a genuinely confusing way to lose an afternoon.
+      return reply.send(body);
     }
 
     reply.header('content-type', 'text/html; charset=utf-8');
     reply.header('cache-control', 'no-cache');
-    reply.send(readFileSync(join(build, 'index.html')));
+    return reply.send(readFileSync(join(build, 'index.html')));
   });
 }
 

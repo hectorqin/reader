@@ -32,6 +32,8 @@ import { PagedReader } from '../render/paged.ts';
 import { TextReader } from '../render/text.ts';
 import { PdfReader } from '../render/pdf.ts';
 import { applyTheme, loadSettings, saveSettings, type ReaderSettings } from './settings.ts';
+import type { ReaderStyle } from '../render/container.ts';
+import { PALETTES } from '../render/theme.ts';
 
 /**
  * Which renderer handles what, per platform.
@@ -135,6 +137,7 @@ export class ReaderView {
     if (kind === 'reflowable') {
       const reader = new BookReader(this.containerFor('webview'), this.api, this.book, {
         platform,
+        style: this.readerStyle(),
         ...(this.options.device !== undefined ? { device: this.options.device } : {}),
       });
       this.reader = reader;
@@ -156,10 +159,27 @@ export class ReaderView {
       return;
     }
 
+    // A PDF is a `document`: an opaque file the client does not interpret. It
+    // must be routed BEFORE the paged branch, or a `.pdf` lands in the image
+    // pager and the reader sees a broken image instead of the viewer.
+    if (kind === 'document') {
+      const pdf = new PdfReader(this.stage, this.api, this.book, {
+        ...(this.options.device !== undefined ? { device: this.options.device } : {}),
+      });
+      this.reader = pdf;
+      this.stage.classList.add('is-paged');
+      const state = await pdf.open(this.book.id);
+      this.pageLabel.textContent = `${this.book.format.toUpperCase()} · 第 ${state.page} 页`;
+      return;
+    }
+
+    // Comics and single images: paged content. On Android the shell takes this
+    // over (see `capabilities`), because a native pager decodes and recycles a
+    // bitmap where a WebView holds a compositing layer per page.
     if (caps.paged === 'native') {
-      // The shell renders it; this view only reports the hand-off so the H5
-      // bundle does not silently mount a renderer the shell will replace.
-      this.host.dispatchEvent(new CustomEvent('reader:native-page', { detail: { bookId: this.book.id } }));
+      this.host.dispatchEvent(
+        new CustomEvent('reader:native-page', { detail: { bookId: this.book.id, kind } }),
+      );
       return;
     }
 
@@ -196,12 +216,29 @@ export class ReaderView {
     }
   }
 
-  /** Re-apply the reader's settings and repaginate. */
+  /**
+   * Re-apply the reader's settings.
+   *
+   * A type-size change is not a CSS variable update: the chapter document was
+   * styled when it loaded, so it has to be rendered again. That is why this
+   * awaits — but the chapter comes out of the prefetch cache, so it is a
+   * re-layout rather than a network round trip. A page-width change is the same,
+   * because the column geometry lives in that document too.
+   */
   applySettings(): void {
     applyTheme(document.documentElement, this.settings.theme);
-    this.root.style.setProperty('--reader-font-size', `${this.settings.fontSize}px`);
-    this.root.style.setProperty('--reader-page-width', `${this.settings.pageWidth}px`);
-    if (this.reader instanceof BookReader) this.reader.relayout();
+    if (this.reader instanceof BookReader) void this.reader.restyle(this.readerStyle());
+  }
+
+  /** The type settings a chapter document is rendered with. */
+  private readerStyle(): ReaderStyle {
+    return {
+      fontSize: this.settings.fontSize,
+      pageWidth: this.settings.pageWidth,
+      columnGap: this.settings.columnGap,
+      pagePadding: this.settings.pagePadding,
+      ...PALETTES[this.settings.theme],
+    };
   }
 
   updateSettings(patch: Partial<ReaderSettings>): void {
@@ -322,39 +359,59 @@ export class ReaderView {
     return holder;
   }
 
+  /**
+   * The book's own table of contents.
+   *
+   * Fetched from `/toc`, not derived from the manifest's groups. The manifest is
+   * windowed, so its groups are a transfer boundary: showing them gave the reader
+   * 「第 1 章 – 第 40 章」 where a chapter list belongs.
+   */
   private async openToc(): Promise<void> {
-    const groups = await this.api
-      .manifest(this.book.id)
-      .then((manifest) => manifest.groups ?? [])
-      .catch(() => []);
+    const entries = await this.api.toc(this.book.id).catch(() => []);
 
     const list = document.createElement('ul');
     list.className = 'toc';
-    if (groups.length === 0) {
+    if (entries.length === 0) {
       const empty = document.createElement('div');
       empty.className = 'toc__empty';
       empty.textContent = '这本书没有可跳转的章节';
       list.append(empty);
     } else {
-      groups.forEach((group, index) => {
+      entries.forEach((entry) => {
         const item = document.createElement('li');
         item.className = 'toc__item';
-        item.textContent = `${group.title}（${group.count}）`;
-        // The group's `offset` is a whole-book index, which is exactly what
-        // `goToSpine` accepts — no summing of previous counts on the client, so no
-        // drift when a window was never fetched.
+        item.textContent = entry.title;
+        item.style.paddingLeft = `${4 + entry.level * 14}px`;
         item.addEventListener('click', () => {
           this.closeDialog();
-          const reader = this.reader;
-          if (reader instanceof BookReader) void reader.goToSpine(group.offset);
-          else if (reader instanceof PagedReader) void reader.goTo(0);
-          else if (reader instanceof TextReader) void reader.goToChapter(index, this.book.id);
-          else void reader?.setPage(this.book.id, group.offset + 1);
+          void this.jumpTo(entry);
         });
         list.append(item);
       });
     }
-    this.showDialog('目录', list);
+    this.showDialog(`目录 · ${this.book.title}`, list);
+  }
+
+  /** Jump to a table-of-contents entry with whichever reader is loaded. */
+  private async jumpTo(entry: { href: string; spine?: number }): Promise<void> {
+    const reader = this.reader;
+    if (reader instanceof BookReader) {
+      // `spine` is the whole-book index the server computed, so a jump lands on
+      // the right chapter even when the window holding it has not been fetched.
+      if (entry.spine !== undefined) await reader.goToSpine(entry.spine);
+      else await reader.goToSpineOfHref(entry.href);
+      return;
+    }
+    if (reader instanceof PagedReader) {
+      await reader.goTo(entry.spine ?? 0);
+      return;
+    }
+    if (reader instanceof TextReader) {
+      const index = Number.parseInt(entry.href.replace('chapter:', ''), 10);
+      await reader.goToChapter(Number.isFinite(index) ? index : 0, this.book.id);
+      return;
+    }
+    void reader?.setPage(this.book.id, (entry.spine ?? 0) + 1);
   }
 
   private openSettings(): void {

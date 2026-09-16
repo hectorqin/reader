@@ -46,11 +46,12 @@ import {
   toWindow,
   type Window,
 } from './window.ts';
-import { ChapterContainer } from './container.ts';
+import { ChapterContainer, type ReaderStyle } from './container.ts';
 import { Paginator, capturePosition, pageFraction, restorePosition } from './paginator.ts';
 import { PrefetchCache } from './prefetch.ts';
 import { Emitter } from '../lib/events.ts';
 import { bookPercent, parseLocator, serializeLocator, type Locator } from '../lib/locator.ts';
+import { withAssetToken } from '../net/asset-url.ts';
 
 export interface ReaderState {
   book: BookDto;
@@ -74,6 +75,8 @@ export interface ReaderOptions {
   progressDebounceMs?: number;
   /** Host platform, so the reader can adapt gesture expectations. */
   platform?: 'web' | 'android';
+  /** Type size and page width, mirrored into each chapter document. */
+  style: ReaderStyle;
 }
 
 export class BookReader {
@@ -88,15 +91,21 @@ export class BookReader {
   private cancelPrefetch: (() => void) | null = null;
   private readonly device: string;
 
+  private style: ReaderStyle;
+
   constructor(
     private readonly host: HTMLElement,
     private readonly api: ApiClient,
     private readonly book: BookDto,
-    private readonly options: ReaderOptions = {},
+    private readonly options: ReaderOptions,
   ) {
     this.device = options.device ?? 'web';
+    this.style = options.style;
     this.container = new ChapterContainer(host);
-    this.paginator = new Paginator(this.container.viewport);
+    this.paginator = new Paginator(null, {
+      columnGap: options.style.columnGap,
+      pagePadding: options.style.pagePadding,
+    });
   }
 
   /**
@@ -131,9 +140,9 @@ export class BookReader {
     return this.current!;
   }
 
-  /** The container the reader mounted into, exposed for highlight integration. */
-  get chapterElement(): HTMLElement | null {
-    return this.container.content;
+  /** The chapter's document, for highlight and search integration. */
+  get chapterDocument(): Document | null {
+    return this.container.document();
   }
 
   /** Turn pages; a spill at either end moves to the neighbouring chapter. */
@@ -191,11 +200,41 @@ export class BookReader {
   /** Recompute geometry after a resize, keeping the reader's place. */
   relayout(): void {
     if (!this.current) return;
-    const stride = this.paginator.layout().stride;
-    const position = capturePosition(this.container.viewport, this.paginator.index, stride);
-    const stride2 = this.paginator.layout().stride;
-    this.paginator.goTo(restorePosition(this.container.viewport, position, stride2));
+    const geometry = this.paginator.layout(this.container.width());
+    const position = capturePosition(this.container.scroller(), this.paginator.index, geometry.stride);
+    const after = this.paginator.layout(this.container.width());
+    this.paginator.goTo(restorePosition(this.container.scroller(), position, after.stride));
     this.publish();
+  }
+
+  /** Update the type size and repaginate, keeping the reader's place. */
+  async restyle(style: ReaderStyle): Promise<void> {
+    this.style = style;
+    if (!this.current) return;
+    await this.reshow();
+  }
+
+  /**
+   * Re-render the current chapter from the cache.
+   *
+   * Used after a type-size change: a chapter document is styled at load time, and
+   * the only way to re-style it is to load it again. Reading it from the prefetch
+   * cache makes this a re-layout rather than a network round trip.
+   */
+  private async reshow(): Promise<void> {
+    const state = this.current;
+    if (!state) return;
+    const item = this.window?.items[state.index];
+    if (!item) return;
+    const stride = this.paginator.layout(this.container.width()).stride;
+    const position = capturePosition(this.container.scroller(), this.paginator.index, stride);
+    await this.show(state.index, {
+      chapter: item.href,
+      spine: toSpineIndex(this.window!, state.index),
+      block: position.blockIndex,
+      ratio: position.offsetRatio,
+      percent: state.pageCount > 1 ? state.page / state.pageCount : 0,
+    });
   }
 
   /**
@@ -216,7 +255,7 @@ export class BookReader {
   destroy(): void {
     this.cancelPrefetch?.();
     this.cache.clear();
-    this.container.clear();
+    this.container.destroy();
     this.state.clear();
   }
 
@@ -232,14 +271,20 @@ export class BookReader {
       .get(item.href, () => this.api.asset(this.book.id, item.href))
       .then((blob) => blob.text());
 
-    const mounted = this.container.mount(xml);
-    const geometry = this.paginator.layout();
+    // The chapter's own images and stylesheets are fetched by the browser, not by
+    // us, so their URLs have to be self-authenticating before the document is
+    // handed to the frame.
+    await this.container.mount(withAssetToken(xml, this.api), this.style);
+    // The scroller belongs to the chapter's own document, so the paginator is
+    // pointed at it after the frame has loaded and laid out.
+    this.paginator.attach(this.container.scroller());
+    const geometry = this.paginator.layout(this.container.width());
 
     // Restoring an intra-chapter position is only meaningful for the chapter it
     // was captured in. Landing in a different chapter uses its first page.
     const target =
       restore && restore.chapter === item.href
-        ? restorePosition(this.container.viewport, { blockIndex: restore.block, offsetRatio: restore.ratio }, geometry.stride)
+        ? restorePosition(this.container.scroller(), { blockIndex: restore.block, offsetRatio: restore.ratio }, geometry.stride)
         : 0;
     this.paginator.goTo(Math.min(target, geometry.pageCount - 1));
 
@@ -251,7 +296,7 @@ export class BookReader {
       total: window.total,
       page: this.paginator.index,
       pageCount: this.paginator.total,
-      warnings: mounted.warnings,
+      warnings: [],
     };
     this.scheduleProgress();
     this.prefetchFrom(index);
@@ -289,8 +334,8 @@ export class BookReader {
     const item = window.items[state.index];
     if (!item) return;
 
-    const stride = this.paginator.layout().stride;
-    const position = capturePosition(this.container.viewport, this.paginator.index, stride);
+    const stride = this.paginator.layout(this.container.width()).stride;
+    const position = capturePosition(this.container.scroller(), this.paginator.index, stride);
     const fraction = pageFraction(this.paginator.index, this.paginator.total);
     // The spine index is derived from the loaded window's group, never from the
     // window's own array offset: `items` holds one window, so `index` is local.

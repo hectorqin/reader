@@ -5,23 +5,30 @@
  *
  * Continuous scrolling is what every web reader does, and it is the wrong model
  * for a book. A reader's position is measured in pages: the progress indicator,
- * "12 pages left in this chapter", turning back to re-read a paragraph — all of
- * it assumes a fixed page. Scroll position is a pixel offset that changes meaning
+ * turning back to re-read a paragraph, "3 pages left in this chapter" — all of it
+ * assumes a fixed page. A scroll offset is a pixel number that changes meaning
  * when the font size, viewport or column width changes, which is exactly the set
  * of things a reader adjusts.
  *
  * ## Why CSS multi-column instead of measuring by hand
  *
- * The alternative is to wrap every word in a span and do a binary search for the
- * page break. That rewrites the publisher's markup, which this product refuses to
- * do, and it is slow enough to be felt on a chapter with images. Multi-column
- * layout is the browser's own implementation of the same thing: the content is
- * laid out once, columns are created, and a page is a horizontal scroll offset.
+ * The alternative is to wrap every word in a span and binary-search the page
+ * break. That rewrites the publisher's markup, which this product refuses to do,
+ * and it is slow enough to feel on a chapter with images. Multi-column layout is
+ * the browser's own implementation of the same thing: the content is laid out
+ * once, columns are created, and a page is a horizontal scroll offset.
  *
- * The cost is that pagination is done by the layout engine, so page boundaries
- * land wherever the engine puts them. That is acceptable — and it is what every
- * commercial reader does too — as long as a *position* survives a repagination,
- * which the anchor tolerance below handles.
+ * The cost is that page boundaries land wherever the layout engine puts them.
+ * That is acceptable — and it is what every commercial reader does — as long as a
+ * *position* survives repagination, which is what the anchor functions below are
+ * for.
+ *
+ * ## Why the scroller is a parameter
+ *
+ * The chapter lives in an iframe (see `container.ts`), so the element being
+ * scrolled belongs to another document. Taking it as a parameter rather than
+ * reaching for a global keeps this class testable and keeps the frame's existence
+ * out of the pagination arithmetic.
  */
 
 /** A position inside a chapter, anchored to a DOM node so it survives repagination. */
@@ -33,43 +40,61 @@ export interface ChapterPosition {
 }
 
 export interface PaginatorOptions {
-  /** Gap between columns, in CSS pixels. Must match the stylesheet. */
+  /** Gap between columns, in CSS pixels. Must match the injected stylesheet. */
   columnGap?: number;
-  /** Extra page padding, in CSS pixels, on each side. */
+  /** Page padding, in CSS pixels, on each side. Must match the stylesheet. */
   pagePadding?: number;
 }
 
 /**
- * Drive a single chapter's viewport.
- *
- * Deliberately owns no DOM: it is handed the scrolling element and reports
- * positions. Keeping it free of element creation means the same class can be
- * unit tested without a browser, which matters because pagination bugs (a
- * position that drifts one page forward on every resize) are only reproducible
- * against a real layout engine and are otherwise very hard to pin down.
+ * Drive a chapter's scrolling element.
  */
 export class Paginator {
   private readonly columnGap: number;
-  private readonly pagePadding: number;
   /** Column stride: the exact distance between two page origins. */
   private stride = 0;
   private pageCount = 1;
   private current = 0;
 
-  constructor(private readonly viewport: HTMLElement, options: PaginatorOptions = {}) {
+  constructor(private scroller: HTMLElement | null, options: PaginatorOptions = {}) {
     this.columnGap = options.columnGap ?? 32;
-    this.pagePadding = options.pagePadding ?? 24;
+    void options.pagePadding;
   }
 
-  /** Recompute the column geometry. Call after a resize or a font change. */
-  layout(pageWidth = this.viewport.clientWidth): { pageCount: number; stride: number } {
-    const usable = Math.max(1, pageWidth - this.pagePadding * 2);
+  /** Point the paginator at a (new) chapter document. */
+  attach(scroller: HTMLElement | null): void {
+    this.scroller = scroller;
+    this.reset();
+  }
+
+  /**
+   * Recompute the column geometry.
+   *
+   * `scrollWidth` is the layout engine's answer to "how much content is there",
+   * and dividing it by the stride is the only way to learn the page count without
+   * duplicating the engine's work. The gap is added back because `scrollWidth`
+   * omits the trailing gap that separates the last column from the edge.
+   */
+  layout(pageWidth?: number): { pageCount: number; stride: number } {
+    const scroller = this.scroller;
+    if (!scroller) {
+      this.stride = 0;
+      this.pageCount = 1;
+      return { pageCount: 1, stride: 0 };
+    }
+    const usable = pageWidth ?? scroller.clientWidth;
+    // The stride is the distance between two page origins. Deriving it from the
+    // *viewport* rather than from the columns keeps it independent of
+    // `column-width`, which the publisher's own CSS could influence.
     this.stride = Math.max(1, usable + this.columnGap);
-    // `scrollWidth` is the browser's answer to "how much content is there", and
-    // dividing it by the stride is the only way to learn the page count without
-    // duplicating the layout engine's work.
-    const scrollWidth = this.viewport.scrollWidth;
-    this.pageCount = Math.max(1, Math.round((scrollWidth + this.columnGap) / this.stride));
+
+    // The page count comes from the content's real width rather than from a
+    // division: `scrollWidth` includes the leading page padding and the column
+    // gutters, so dividing it by the stride loses the remainder and drops the
+    // last page of a chapter whose content does not fill it exactly. Rounding the
+    // division up against the *padded* width is what keeps that page reachable.
+    const padded = usable + this.columnGap;
+    this.pageCount = Math.max(1, Math.ceil((scroller.scrollWidth - this.columnGap) / padded));
     return { pageCount: this.pageCount, stride: this.stride };
   }
 
@@ -86,11 +111,17 @@ export class Paginator {
     const next = Math.max(0, Math.min(this.pageCount - 1, Math.floor(page)));
     if (next === this.current) return false;
     this.current = next;
-    this.viewport.scrollLeft = next * this.stride;
+    if (this.scroller) this.scroller.scrollLeft = next * this.stride;
     return true;
   }
 
-  /** Move by a relative number of pages. Returns the leftover for chapter turns. */
+  /**
+   * Move by a relative number of pages.
+   *
+   * `spill` is the number of pages that did not fit; the caller turns it into a
+   * chapter turn. Returning it rather than swallowing it is what makes "the next
+   * page past the end of this chapter" a chapter turn instead of a dead gesture.
+   */
   turn(pages: number): { changed: boolean; spill: number } {
     const target = this.current + pages;
     if (target < 0) return { changed: this.goTo(0), spill: target };
@@ -105,7 +136,7 @@ export class Paginator {
   reset(): void {
     this.current = 0;
     this.pageCount = 1;
-    this.viewport.scrollLeft = 0;
+    if (this.scroller) this.scroller.scrollLeft = 0;
   }
 
   /** Page index for a horizontal scroll offset (e.g. after a user swipe). */
@@ -131,22 +162,25 @@ export function pageFraction(page: number, pageCount: number): number {
 /**
  * Capture a position that survives repagination.
  *
- * The page index does not: the same page index means a different part of the
- * text after a font size change. Anchoring to the top-level block at the page's
- * leading edge (plus how far into it) means a reader who resizes the text stays
- * on the sentence they were reading, which is the entire reason readers tolerate
- * changing the font size at all.
+ * The page index does not: the same index means a different part of the text
+ * after a font-size change. Anchoring to the top-level block at the page's
+ * leading edge, plus how far into that block, means a reader who resizes the
+ * text stays on the sentence they were reading — which is the entire reason
+ * readers tolerate changing the font size at all.
  */
-export function capturePosition(viewport: HTMLElement, page: number, stride: number): ChapterPosition {
-  const blocks = topLevelBlocks(viewport);
+export function capturePosition(scroller: HTMLElement | null, page: number, stride: number): ChapterPosition {
+  const blocks = topLevelBlocks(scroller);
   if (blocks.length === 0) return { blockIndex: 0, offsetRatio: 0 };
 
   const origin = page * stride;
   let index = 0;
   for (let i = 0; i < blocks.length; i += 1) {
     const block = blocks[i]!;
-    const left = block.offsetLeft;
-    if (left <= origin + 1) index = i;
+    // `offsetLeft` is relative to the offsetParent, which for a chapter's blocks
+    // is the nearest positioned ancestor. That is stable within a document and
+    // the only thing that matters here, since capture and restore both happen
+    // against the same document.
+    if (block.offsetLeft <= origin + 1) index = i;
     else break;
   }
 
@@ -156,9 +190,10 @@ export function capturePosition(viewport: HTMLElement, page: number, stride: num
   return { blockIndex: index, offsetRatio: ratio };
 }
 
-/** Restore a captured position. Returns the page to land on, or 0 if unmatchable. */
-export function restorePosition(viewport: HTMLElement, position: ChapterPosition, stride: number): number {
-  const blocks = topLevelBlocks(viewport);
+/** Restore a captured position. Returns the page to land on. */
+export function restorePosition(scroller: HTMLElement | null, position: ChapterPosition, stride: number): number {
+  const blocks = topLevelBlocks(scroller);
+  if (blocks.length === 0) return 0;
   const block = blocks[Math.min(position.blockIndex, blocks.length - 1)];
   if (!block) return 0;
   const left = block.offsetLeft + position.offsetRatio * (block.offsetHeight || 0);
@@ -168,12 +203,13 @@ export function restorePosition(viewport: HTMLElement, position: ChapterPosition
 /**
  * The blocks a position can anchor to.
  *
- * Only the viewport's direct children are considered. Going deeper would anchor
- * to a `<span>` whose offset would change the moment the publisher's CSS nests
- * differently, and the anchors have to be stable across the client's own style
- * tweaks — those changes must not move the reader's place in the book.
+ * Only the body's direct children are considered. Going deeper would anchor to a
+ * `<span>` whose offset changes the moment the publisher's CSS nests differently,
+ * and anchors have to be stable across the client's own style tweaks — those
+ * changes must not move the reader's place in the book.
  */
-function topLevelBlocks(viewport: HTMLElement): HTMLElement[] {
-  const root = (viewport.querySelector('.reader-chapter') ?? viewport) as HTMLElement;
-  return Array.from(root.children).filter((node): node is HTMLElement => node instanceof HTMLElement);
+function topLevelBlocks(scroller: HTMLElement | null): HTMLElement[] {
+  const body = scroller?.ownerDocument?.body;
+  if (!body) return [];
+  return Array.from(body.children).filter((node): node is HTMLElement => node instanceof HTMLElement);
 }

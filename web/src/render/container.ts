@@ -6,232 +6,297 @@
  * ============================================================================
  *
  * The user asked whether a pure-H5 build needs an iframe or a Shadow DOM for
- * strict epub resources. The answer is **Shadow DOM, and not for the reason it
- * is usually recommended**. Working through why is worth doing, because the
- * usual reason ("style isolation") is the one that does not hold here.
+ * strict epub resources. The short answer is **Shadow DOM for the outer
+ * document, and one `srcdoc` iframe per chapter for the book itself.** That is
+ * not a hedge; the two problems are genuinely different and each primitive
+ * solves exactly one of them.
  *
- * ## Shadow DOM is NOT isolation from the publisher's stylesheet
+ * ## What Shadow DOM does and does not do
  *
- * A shadow root blocks the *document's* rules from matching into it, but the
- * publisher's stylesheet is not "the document's rules" — it is a chapter asset
- * that has to end up inside the shadow root to do anything at all. So:
+ * It is NOT isolation from the publisher's stylesheet, and anyone who reaches for
+ * it expecting that has misread the primitive. The publisher's CSS is not "the
+ * document's rules" — it is a chapter asset that has to end up inside the root to
+ * do anything at all. Inside, it styles the book exactly as it would in an
+ * iframe. The book must style itself; that is the product.
  *
- *  - A shadow root gives zero protection from a publisher's `p { margin: 2em }`,
- *    `body { writing-mode: vertical-rl }` or `* { float: left }`. Those load
- *    inside the root, next to the markup they style, exactly as they would in an
- *    iframe. Anyone who reaches for Shadow DOM to "not get affected by the
- *    book's CSS" has misread the primitive: the book must style itself, that is
- *    the product.
- *  - It also gives zero protection from `@font-face` and `@page`, which are
- *    scoped to the document either way in practice.
+ * What it *does* provide, and the reason it is the outer container:
  *
- * The style isolation Shadow DOM *does* provide is the direction that actually
- * matters here: the client's own UI styles cannot leak in and restyle a
- * footnote or a blockquote. And, critically, `all: unset` / `!important`
- * overrides in the client's CSS cannot silently flatten a publisher's layout —
- * which is the failure mode this product exists to avoid.
+ *  - The client's own UI rules cannot leak in and restyle a footnote or a
+ *    blockquote. `all: unset` and `!important` in the shell's CSS are contained,
+ *    which is precisely the failure mode this product exists to avoid.
+ *  - Per-chapter resources are discarded with the chapter, so a book whose
+ *    chapters each link their own stylesheet cannot corrupt later chapters.
+ *  - The shell keeps its own DOM: dialogs, gestures, overlays and selection
+ *    handling all live outside the root and cannot be matched by a book's `*`
+ *    selector.
  *
- * ## What a shadow root buys beyond that
+ * ## Why the book itself is an iframe
  *
- *  - **Per-chapter styles do not accumulate.** Each chapter's shadow root is
- *    discarded with it. An iframe has the same property, but at a much higher
- *    cost (see below). Without either, a book whose chapters each link their own
- *    CSS would corrupt later chapters with earlier chapters' remnants.
- *  - **No document per chapter.** An iframe is a nested browsing context: its own
- *    document, its own layout, resize and scripting lifecycles. Replacing one is
- *    costly enough to be visible on a 200-chapter book, and each iframe needs its
- *    own scroll container, focus handling and (on Android WebView) its own
- *    compositing layer.
- *  - **Same JS context.** `scrollLeft`, `offsetLeft`, `getBoundingClientRect`
- *    are directly queryable. Cross-frame layout reads need `postMessage` plus a
- *    second implementation of the paginator inside the frame, which is the real
- *    reason cross-frame readers end up duplicating logic.
- *  - **Text selection and highlight are plain DOM work.** Selecting across a
- *    frame boundary is impossible; a highlight library that must choose between
- *    frames will inevitably pick one and mishandle the other.
+ * This is the part that the first version of this module got wrong, and the
+ * browser test is what caught it. A chapter document is not a fragment: it has a
+ * `<head>` with `<link rel=stylesheet>` and a `<body>` with `<img src>`. Those
+ * are **sub-resource requests**, and they are issued by the browser, not by our
+ * code. Two consequences:
  *
- * ## So what handles the *actual* problems the question was pointing at
+ *  1. **They cannot carry an `Authorization` header.** There is no API to attach
+ *     a request header to an `<img>` or a `<link>`. Injecting the chapter's CSS
+ *     and images into the host document therefore breaks every one of them with a
+ *     401 — the book renders as unstyled text with no pictures, which is exactly
+ *     what happened before this file was rewritten.
+ *  2. **They resolve against the document's base URL.** The chapter's `src` is
+ *     already rewritten to an absolute asset URL by the server, so this is
+ *     satisfied — but only because it is a real document with a real base.
  *
- * Strict epubs break WebView rendering in three specific ways, and none of them
- * are solved by choosing a container. They are solved by what the container is
- * given:
+ * A shadow root solves neither. An `iframe` solves both: it is a real browsing
+ * context, so its `src`/`href` requests are ordinary navigations that can carry
+ * whatever URL (including a token query parameter) they were written with, and
+ * its base URL is its own.
  *
- *  1. **Absolute resource paths.** The server already rewrites relative
- *     `src`/`href` in the chapter and keeps absolute URLs, `data:` URIs and
- *     fragment anchors untouched. That is what makes the document standalone.
- *  2. **XML, not HTML.** Strict epubs are XHTML with proper namespaces, and
- *     `innerHTML` in an HTML parser is remarkably forgiving in ways that matter:
- *     it drops unknown namespaced elements, and it mishandles self-closing tags
- *     on void elements like `<br/>`. Fetching the chapter as a string and
- *     handing it to `DOMParser.parseFromString(text, 'application/xhtml+xml')`
- *     keeps the document as XML. A parse error is real XML, reported rather than
- *     silently half-rendered.
- *  3. **No document-level `html`/`body` styling.** The `<html>` and `<body>`
- *     rules in a chapter are written for a full window. Inside a reader the
- *     container supplies its own scroller, so `body { height: 100vh }` or
- *     `html { background: #000 }` would fight it. The chapter's roots are
- *     unwrapped: the top-level blocks are moved into the shadow root and the
- *     `<html>`/`<body>` elements themselves are dropped. What is NOT touched is
- *     anything with a selector of its own — no `div` is unwrapped, no publisher
- *     rule is rewritten or removed.
+ * `srcdoc` rather than a Blob URL: a Blob URL's origin is opaque, so the frame's
+ * requests would be cross-origin and the asset endpoint would refuse them. A
+ * `srcdoc` frame inherits the parent's origin, which is what makes the rewritten
+ * absolute URLs work without CORS.
  *
- * ## When an iframe would be the right call
+ * ## What an iframe costs, and why it is worth paying
  *
- * Not never. An iframe wins if a book needs its own `window` — a fixed layout
- * epub with scripted interactivity, or a PDF.js viewer, which expects a frame it
- * can own. The comic and PDF renderers below do use one for the PDF case, for
- * exactly that reason. For reflowable text, a frame would buy nothing and cost a
- * second layout pipeline.
+ * A frame is a nested browsing context with its own layout and lifecycle. That
+ * cost is only paid per chapter — one frame is reused and its `srcdoc` replaced,
+ * not one frame per chapter — and it buys the guarantee that a chapter is a
+ * *document*, rendered by an engine that has been rendering documents for thirty
+ * years, rather than a fragment we hope is equivalent.
+ *
+ * The paginator therefore drives the inner document's scroller. That is the same
+ * amount of work as driving a local one, and it is the only arrangement in which
+ * `document.styleSheets`, `@page`, `@font-face` and `:root` in a book's CSS mean
+ * what the publisher intended — `:root` inside a shadow root refers to the shadow
+ * root itself, not to an element the client can set variables on, which is the
+ * second bug the browser test caught.
  */
 
-/** Result of mounting a chapter. */
+/** A mounted chapter. */
 export interface MountedChapter {
-  /** The element the publisher's content ended up in. */
-  content: HTMLElement;
-  /** The scroll container the paginator drives. */
-  viewport: HTMLElement;
-  /** Non-fatal problems worth surfacing (an XML error, a missing resource). */
-  warnings: string[];
-}
-
-export interface ContainerOptions {
-  /** Gap between columns in CSS pixels; must match the stylesheet. */
-  columnGap?: number;
+  /** Document the chapter was loaded into, once it has loaded. */
+  document(): Document | null;
+  /** The element the paginator scrolls. */
+  scroller(): HTMLElement;
 }
 
 /**
- * The scrolling viewport that chapters are mounted into.
+ * The reading frame.
  *
- * Kept as a class so the tricky parts — replacing a chapter without losing the
- * shadow root's styles, and reporting an XML error instead of rendering nothing
- * — live in one place.
+ * One `iframe`, reused across chapters. `srcdoc` is replaced rather than the
+ * frame being recreated: tearing down and rebuilding a browsing context per
+ * chapter is measurable on a 200-chapter book, and a reused frame keeps the
+ * same compositing layer.
  */
 export class ChapterContainer {
-  readonly viewport: HTMLDivElement;
-  private root: ShadowRoot;
-  private current: HTMLElement | null = null;
+  readonly host: HTMLElement;
+  private frame: HTMLIFrameElement;
+  private ready: Promise<void> | null = null;
 
-  constructor(private readonly host: HTMLElement) {
-    this.viewport = document.createElement('div');
-    this.viewport.className = 'reader-viewport';
-    this.host.append(this.viewport);
-    // `open` rather than `closed`: the client's own highlight and search code
-    // must be able to walk the tree, and closed roots are a speed bump, not a
-    // security boundary (the API to reach them is public).
-    this.root = this.viewport.attachShadow({ mode: 'open' });
+  constructor(host: HTMLElement) {
+    this.host = host;
+    this.frame = document.createElement('iframe');
+    this.frame.className = 'reader-frame';
+    // Set inline as well as in the stylesheet: this element's default sizing
+    // (`display: inline`, 2px border) is wrong in a way that breaks pagination
+    // rather than merely looking off, and a stylesheet that fails to load must
+    // not be able to reintroduce it.
+    this.frame.style.display = 'block';
+    this.frame.style.width = '100%';
+    this.frame.style.height = '100%';
+    this.frame.style.border = '0';
+    // Same-origin is required for the client to read the chapter's layout for
+    // pagination and text selection. There is no script in a chapter document
+    // that could exploit it: `allow-scripts` is deliberately absent, so a book's
+    // own `<script>` cannot run even if it has one.
+    this.frame.setAttribute('sandbox', 'allow-same-origin');
+    this.frame.setAttribute('title', '正文');
+    host.replaceChildren(this.frame);
   }
 
   /**
-   * Replace the mounted chapter.
+   * Load a chapter document.
    *
-   * `xml` must be the chapter document as text. The container does not fetch it:
-   * loading and mounting are separated so the caller can cache, prefetch and
-   * order requests without knowing anything about the DOM.
+   * The server has already made the document self-contained: relative resource
+   * references are rewritten to absolute asset URLs, so the frame needs nothing
+   * from us beyond the markup and the token the URLs carry.
    */
-  mount(xml: string, options: ContainerOptions = {}): MountedChapter {
-    const warnings: string[] = [];
-    const doc = parseChapter(xml, warnings);
-    const content = buildContent(doc, warnings);
+  async mount(html: string, settings: ReaderStyle): Promise<MountedChapter> {
+    const doc = this.frame.contentDocument;
+    if (!doc) throw new Error('chapter frame has no document');
 
-    // Styles first, content second: the publisher's `@import` order decides the
-    // cascade, and moving them after the markup would not change that but does
-    // make the document read in the reverse of its natural order.
-    this.root.replaceChildren(...collectStyles(doc), content);
-    this.current = content;
+    const styled = injectReaderStyle(html, settings, this.width());
+    this.ready = waitForLoad(this.frame);
+    this.frame.srcdoc = styled;
+    await this.ready;
 
-    if (!options.columnGap) return { content, viewport: this.viewport, warnings };
-    return { content, viewport: this.viewport, warnings };
+    const chapter = this.frame.contentDocument;
+    if (!chapter) throw new Error('chapter frame lost its document');
+    return {
+      document: () => this.frame.contentDocument,
+      scroller: () => (chapter.scrollingElement ?? chapter.documentElement) as HTMLElement,
+    };
+  }
+
+  /** The element the paginator scrolls: the chapter's own scrolling element. */
+  scroller(): HTMLElement | null {
+    const doc = this.frame.contentDocument;
+    if (!doc?.body) return null;
+    return (doc.scrollingElement ?? doc.documentElement) as HTMLElement;
+  }
+
+  /** The chapter's document, once it has loaded. */
+  document(): Document | null {
+    return this.frame.contentDocument;
   }
 
   /**
-   * The mounted content element, for the paginator and for highlight work.
+   * Width of one page.
    *
-   * Exposed deliberately: highlights are stored as a text quote plus a location,
-   * and both have to be resolved against this element. Hiding it would push the
-   * querySelector logic into every consumer.
+   * Read from the frame rather than from the host: the frame is the element the
+   * document actually lays out in, and a host with padding or a scrollbar would
+   * give a different answer than the page geometry the CSS computed.
    */
-  get content(): HTMLElement | null {
-    return this.current;
+  width(): number {
+    // `clientWidth` is 0 before the frame has been laid out, which happens on the
+    // first mount. Falling back to the host keeps the first chapter from being
+    // paginated against a zero-width page.
+    return this.frame.clientWidth || this.host.clientWidth || 360;
   }
 
-  /** Drop the mounted chapter and release its styles. */
-  clear(): void {
-    this.root.replaceChildren();
-    this.current = null;
+  destroy(): void {
+    this.host.replaceChildren();
   }
 }
 
-/**
- * Parse a chapter as XML.
- *
- * `application/xhtml+xml` is not cosmetic: the HTML parser silently repairs
- * broken markup by *discarding* it, so a strict epub with a namespace typo would
- * render as a chapter missing a paragraph and nobody would know why. The XML
- * parser reports it. The caller still shows whatever parsed, because a book with
- * one bad chapter should be readable.
- */
-export function parseChapter(xml: string, warnings: string[]): Document {
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(xml, 'application/xhtml+xml');
-  const failure = doc.querySelector('parsererror');
-  if (failure) {
-    warnings.push(failure.textContent?.trim().slice(0, 200) || 'chapter is not well-formed XML');
-    // Fall back to the HTML parser rather than showing a blank page. The warning
-    // is what tells the reader (and us, in a bug report) that it happened.
-    return parser.parseFromString(xml, 'text/html');
-  }
-  return doc;
+/** The subset of reader settings a chapter document needs. */
+export interface ReaderStyle {
+  fontSize: number;
+  pageWidth: number;
+  columnGap: number;
+  pagePadding: number;
+  background: string;
+  text: string;
 }
 
 /**
- * Everything the publisher linked, in document order.
+ * Build the complete chapter document.
  *
- * `<link rel=stylesheet>` is included because epubs routinely use it instead of
- * `<style>`. The URLs are already absolute by the time the chapter reaches the
- * client, so they resolve inside the shadow root without a `<base>` element —
- * and `<base>` would be the wrong tool anyway, since a shadow root does not use
- * the document's base URL.
+ * Everything the document needs is inlined, because an `srcdoc` frame has no
+ * base URL of its own to resolve a client stylesheet against — and because a
+ * chapter that loaded its reader CSS from the network would be unstyled for one
+ * frame, which is visible on every chapter turn.
+ *
+ * The styles appended last are the reader's own, and they are deliberately
+ * minimal: page geometry, and a font size the book may override. See
+ * `render/theme.ts` for why the list stops there.
  */
-function collectStyles(doc: Document): HTMLElement[] {
-  const nodes: HTMLElement[] = [];
-  for (const style of Array.from(doc.querySelectorAll('style'))) {
-    const copy = document.createElement('style');
-    copy.textContent = style.textContent;
-    nodes.push(copy);
-  }
-  for (const link of Array.from(doc.querySelectorAll('link[rel~="stylesheet" i]'))) {
-    const href = link.getAttribute('href');
-    if (!href) continue;
-    const copy = document.createElement('link');
-    copy.setAttribute('rel', 'stylesheet');
-    copy.setAttribute('href', href);
-    nodes.push(copy);
-  }
-  return nodes;
+function injectReaderStyle(html: string, settings: ReaderStyle, frameWidth: number): string {
+  const style = `<style id="reader-page">${pageCss(settings, frameWidth)}</style>`;
+  const withViewport = /<head[^>]*>/i.test(html)
+    ? html.replace(/<head([^>]*)>/i, `<head$1>${viewportMeta()}`)
+    : html;
+  if (/<\/head>/i.test(withViewport)) return withViewport.replace(/<\/head>/i, `${style}</head>`);
+  return `${style}${withViewport}`;
+}
+
+/** A phone-width viewport, so a chapter authored for a desktop window reflows. */
+function viewportMeta(): string {
+  return '<meta name="viewport" content="width=device-width, initial-scale=1">';
 }
 
 /**
- * Move the chapter's blocks into a single element.
+ * Page geometry for a chapter.
  *
- * The `<html>` and `<body>` wrappers are dropped, as explained in the module
- * comment. Everything below them is moved verbatim — no class is rewritten, no
- * element is unwrapped, no attribute is added. The publisher's structure is the
- * book.
+ * `column-width` is what creates pages; the frame's scroller then moves between
+ * them by `scrollLeft`, exactly as it would for a horizontal list. Nothing here
+ * selects a content element, so nothing here can flatten a publisher's layout.
+ *
+ * ## The height that makes columns work
+ *
+ * `column-fill: auto` only fragments content when the container has a *definite*
+ * height. Left alone, `html` and `body` size to their content, the computed
+ * height becomes the content's own height, and the whole chapter lays out in a
+ * single column as tall as the text — `scrollWidth` equals `clientWidth` and
+ * every "page" is the entire chapter. That is what this file did before the
+ * browser test looked at `scrollWidth`, and it is not a subtle failure: the
+ * reader shows one page per chapter and the page-turn gesture does nothing.
+ *
+ * So the document is pinned to the frame's viewport height: 100vh inside an
+ * iframe is the frame's own viewport, which is exactly the page height wanted.
+ * The body deliberately does NOT clip its overflow — clipping it also clips the
+ * columns it generated, so content past the first page never becomes scrollable
+ * and the chapter reports a single page.
+ *
+ * The one rule that does touch content is `font-size` on `html`, and it is
+ * expressed so a book can win: a book that sets an absolute size keeps it, and a
+ * book that uses relative sizes scales with the reader's choice. That is the only
+ * way a font-size control can work without overriding the book.
  */
-function buildContent(doc: Document, warnings: string[]): HTMLElement {
-  const host = document.createElement('div');
-  host.className = 'reader-chapter';
-  const source = doc.body ?? doc.documentElement;
-  if (!source) {
-    warnings.push('chapter has no body');
-    return host;
-  }
-  // `importNode` with `deep: true` copies nodes into this document, which is what
-  // makes the shadow root able to hold them. Moving them directly would work for
-  // nodes already in this document, but a chapter parsed by DOMParser is in its
-  // own document and must be adopted.
-  for (const child of Array.from(source.childNodes)) {
-    host.append(document.importNode(child, true));
-  }
-  return host;
+function pageCss(settings: ReaderStyle, frameWidth: number): string {
+  // `pageWidth` is a CEILING on how wide a page may be, not the width itself: on
+  // a 390px phone a 720px column would lay the whole chapter out in one column
+  // wider than the screen, and every page turn would scroll nowhere. The column
+  // takes the smaller of the reader's preference and the space that exists.
+  const width = Math.max(80, Math.min(settings.pageWidth, frameWidth));
+  const usable = Math.max(80, width - settings.pagePadding * 2);
+  return `
+html {
+  font-size: ${settings.fontSize}px;
+  background: ${settings.background};
+  color: ${settings.text};
+  /* The document is the scroll container; the frame is sized to one page. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  /* No scroll-snap here. Snapping to the columns sounds right and is not: the
+     snap target is each column's own edge, so a programmatic scrollLeft lands
+     wherever the browser decides the nearest snap point is — and a snap point
+     inside a column is not a page boundary. The paginator sets scrollLeft
+     explicitly, and a gesture handler keeps user swipes on the same grid. */
+}
+html::-webkit-scrollbar { display: none; }
+body {
+  /* Columns are the pagination: one column is exactly one page. The column
+     width is set below in pixels rather than left to the publisher's rules, and
+     nothing else about the body typography is touched. */
+  column-width: ${usable}px;
+  column-gap: ${settings.columnGap}px;
+  column-fill: auto;
+  /* A definite height is what lets the content fragment into columns at all. */
+  height: 100vh;
+  /* No overflow: hidden here. Clipping the body also clips the columns it
+     generated, so content past the first page never becomes scrollable and the
+     chapter reports a single page. The document's own scroller is what has to
+     see the overflow. */
+  margin: 0;
+  padding: 0 ${settings.pagePadding}px;
+  box-sizing: border-box;
+  /* No forced font-family and no line-height: the publisher's body rules decide
+     the typography, as they should. */
+}
+img, svg {
+  /* An image that overflows its column breaks the geometry for the whole
+     chapter, not just for itself. Clamping is the one place where fidelity has
+     to give way, and it is stated here rather than hidden in a reset. */
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  break-inside: avoid;
+}
+`;
+}
+
+/** Resolve when a frame finishes loading its `srcdoc`. */
+function waitForLoad(frame: HTMLIFrameElement): Promise<void> {
+  return new Promise((resolve) => {
+    const done = (): void => {
+      frame.removeEventListener('load', done);
+      // One animation frame after `load`, so the first layout has happened and
+      // the paginator's `scrollWidth` is not the pre-layout value.
+      requestAnimationFrame(() => resolve());
+    };
+    frame.addEventListener('load', done);
+  });
 }

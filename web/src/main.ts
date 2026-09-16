@@ -50,6 +50,7 @@ function showAuth(): void {
 }
 
 async function showShelf(): Promise<void> {
+  shelf.mount();
   await shelf.load(true);
 }
 
