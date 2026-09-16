@@ -59,8 +59,15 @@ import { XMLParser } from 'fast-xml-parser';
  */
 export const CHAPTER_WINDOW = 40;
 
-/** A chapter document is XHTML; anything larger is not something we serve. */
-const MAX_CHAPTER_BYTES = 32 * 1024 * 1024;
+/**
+ * Cap on one chapter document.
+ *
+ * A chapter is a text file: 32MB of XHTML is not a book, it is either a corrupt
+ * archive or a single-file EPUB that someone flattened. Capping it means one bad
+ * book fails with a clear error instead of a 200MB allocation, and it costs
+ * nothing for the real case, where a chapter is tens of kilobytes.
+ */
+export const MAX_CHAPTER_BYTES = 32 * 1024 * 1024;
 
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
@@ -145,12 +152,51 @@ export const epubHandler = registerFileHandler({
   async toc(ctx: HandlerContext): Promise<TocEntry[]> {
     const archive = await ZipArchive.open(ctx.absPath);
     const pkg = await readPackage(archive);
-    return pkg.spine.map((item, index) => ({
-      href: `xhtml:${item.path}`,
-      title: pkg.titles.get(item.path) ?? `第 ${index + 1} 章`,
-      level: 0,
-      spine: index,
-    }));
+    const headingCache = new Map<string, string>();
+
+    /**
+     * A chapter's own first heading, read only when the package gave no title.
+     *
+     * This is the difference between a usable table of contents and a useless
+     * one for the many hand-made EPUBs whose OPF has no title map: without it,
+     * a 300-chapter book reads "第 1 章 … 第 300 章", which tells the reader
+     * nothing about where they are going. The read is per chapter *and only for
+     * chapters that need it*, and it is bounded, so a TOC request stays one
+     * central-directory read plus one small entry read per unnamed chapter.
+     */
+    const headingFor = async (path: string): Promise<string | null> => {
+      const cached = headingCache.get(path);
+      if (cached !== undefined) return cached || null;
+      let heading: string | null = null;
+      try {
+        const entry = archive.get(path);
+        // Only pay for documents small enough to be a plausible chapter; a 32MB
+        // single-file book would otherwise be read in full to name one entry.
+        if (entry && entry.uncompressedSize <= CHAPTER_PROBE_BYTES) {
+          const raw = (await archive.read(path, CHAPTER_PROBE_BYTES)).toString('utf8');
+          heading = firstHeading(raw);
+        }
+      } catch {
+        // A chapter that cannot be read still gets a positional label; a broken
+        // document must not take the whole table of contents down.
+        heading = null;
+      }
+      headingCache.set(path, heading ?? '');
+      return heading;
+    };
+
+    const entries: TocEntry[] = [];
+    for (const [index, item] of pkg.spine.entries()) {
+      let title = pkg.titles.get(item.path);
+      if (!title) title = (await headingFor(item.path)) ?? undefined;
+      entries.push({
+        href: `xhtml:${item.path}`,
+        title: title ?? `第 ${index + 1} 章`,
+        level: 0,
+        spine: index,
+      });
+    }
+    return entries;
   },
 
   async asset(ctx: HandlerContext, req): Promise<AssetPayload> {
@@ -200,6 +246,37 @@ export const epubHandler = registerFileHandler({
   },
 });
 
+/**
+ * First heading in a chapter document, for a book whose OPF has no titles.
+ *
+ * Deliberately reads a prefix rather than parsing the document: the tag is
+ * within the first few kilobytes in every real book, and running the XHTML
+ * parser per chapter to extract one string would make the TOC of a long book
+ * the most expensive request in the API.
+ */
+export function firstHeading(html: string): string | null {
+  const match = /<h[1-3]\b[^>]*>([\s\S]{0,200}?)<\/h[1-3]>/i.exec(html);
+  const label = match?.[1] ? stripMarkup(match[1]) : '';
+  if (label) return label;
+  const title = /<title\b[^>]*>([\s\S]{0,200}?)<\/title>/i.exec(html)?.[1];
+  const fromTitle = title ? stripMarkup(title) : '';
+  return fromTitle || null;
+}
+
+function stripMarkup(value: string): string {
+  return value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&(?:#\d+|#x[0-9a-f]+);/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
+}
+
 /** Base URL of this book's asset endpoint, used when rewriting chapter links. */
 function assetBase(ctx: HandlerContext): string {
   if (!ctx.bookId) {
@@ -209,6 +286,9 @@ function assetBase(ctx: HandlerContext): string {
   }
   return `/api/v1/books/${encodeURIComponent(ctx.bookId)}/assets`;
 }
+
+/** Cap on how much of a chapter is read just to find its heading. */
+const CHAPTER_PROBE_BYTES = 256 * 1024;
 
 interface SpineItem {
   /** Archive path of the document. This is the identity of a chapter. */
@@ -228,6 +308,20 @@ interface Package {
  * now reads only the package document instead of the whole archive.
  */
 async function readPackage(archive: ZipArchive): Promise<Package> {
+  return readPackageWith(archive, true);
+}
+
+/**
+ * Read the package document, optionally skipping the table of contents.
+ *
+ * `spineLength` runs during a scan, for every EPUB in the library, and it only
+ * needs the spine. Reading the NCX and the nav document as well means parsing
+ * two more XML documents per book per scan, and on a large library the scan is
+ * the one operation where that adds up to something the user notices. The
+ * scanner's answers do not change: `titles` is empty only where it was already
+ * being used as a fallback.
+ */
+async function readPackageWith(archive: ZipArchive, withTitles: boolean): Promise<Package> {
   const empty: Package = { spine: [], titles: new Map() };
   const containerEntry = archive.get('META-INF/container.xml');
   let opfPath = '';
@@ -262,7 +356,18 @@ async function readPackage(archive: ZipArchive): Promise<Package> {
     if (target) spine.push({ path: target });
   }
 
-  return { spine, titles: await readTitles(archive, base) };
+  /**
+   * The titles map is a convenience, not a prerequisite.
+   *
+   * It is used for real metadata: `displayTitle` falls back to the TOC entry
+   * that matches the book's own href, so a package without an NCX or nav must
+   * still yield a title, a spine and a page count. Returning `empty` here (which
+   * is what this did) threw all three away for any book whose titles could not
+   * be read.
+   */
+  if (!withTitles) return { spine, titles: new Map() };
+  const titles = await readTitles(archive, base).catch(() => new Map<string, string>());
+  return { spine, titles };
 }
 
 /**
@@ -337,7 +442,9 @@ function resolveHref(base: string, href: string): string {
 async function spineLength(buf: Buffer): Promise<number | null> {
   try {
     const archive = await ZipArchive.openBuffer(buf);
-    const { spine } = await readPackage(archive);
+    // No titles: the spine is the only thing a scan needs, and skipping the NCX
+    // and nav parse is the difference between one document per book and three.
+    const { spine } = await readPackageWith(archive, false);
     return spine.length || null;
   } catch (err) {
     // Returning null silently here was how the spine length went missing for

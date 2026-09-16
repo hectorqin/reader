@@ -14,15 +14,44 @@ import type { BookFormat } from './types.ts';
 
 const ZIP_MAGIC = [0x50, 0x4b]; // "PK"
 const PDF_MAGIC = [0x25, 0x50, 0x44, 0x46]; // "%PDF"
+/** "GIF8", and the two variants of the PNG signature's first half. */
+const IMAGE_MAGIC: Array<{ magic: number[]; label: BookFormat }> = [
+  { magic: [0x89, 0x50, 0x4e, 0x47], label: 'image' }, // PNG
+  { magic: [0xff, 0xd8, 0xff], label: 'image' }, // JPEG
+  { magic: [0x47, 0x49, 0x46, 0x38], label: 'image' }, // GIF
+  { magic: [0x42, 0x4d], label: 'image' }, // BMP
+];
+/** MP3/MP4-family containers are audio/video, never a book. Detected to refuse. */
+const MEDIA_MAGIC: number[][] = [
+  [0x49, 0x44, 0x33], // ID3
+  [0x1a, 0x45, 0xdf, 0xa3], // Matroska / WebM
+];
 
 export function detectFormat(fileName: string, bytes?: Uint8Array): BookFormat {
   const extension = extensionOf(fileName);
 
   if (bytes && bytes.length >= 4) {
+    // Magic bytes first, and *only* magic bytes for the formats that are
+    // unambiguous. Self-hosted libraries are full of misnamed files — a `.txt`
+    // that is really an EPUB from a batch conversion tool, a `.cbz` that is
+    // actually a JPEG somebody renamed, an `.epub` that is a PDF. Being
+    // confident about a format whose signature admits no alternative is how
+    // those files become readable instead of producing a confusing parse error.
     if (matches(bytes, PDF_MAGIC)) return 'pdf';
+    for (const entry of IMAGE_MAGIC) {
+      if (matches(bytes, entry.magic)) return entry.label;
+    }
+    if (MEDIA_MAGIC.some((magic) => matches(bytes, magic))) {
+      // Not a book at all. Naming it `unknown` is the honest answer: the reader
+      // gets "this file is not a book" rather than a text decoder chewing on an
+      // MP3 and producing fifty thousand replacement characters.
+      return 'unknown';
+    }
     if (matches(bytes, ZIP_MAGIC)) {
-      // A ZIP can be an EPUB or a CBZ. The extension decides, and when it does
-      // not, the presence of the EPUB container document does.
+      // A ZIP admits two answers, so here the extension does get a vote — but
+      // only as the tie-breaker between two formats that are both plausible for
+      // the same bytes. When the extension is neither, the container document
+      // inside decides.
       if (extension === 'cbz' || extension === 'cbr') return 'cbz';
       if (extension === 'epub') return 'epub';
       return looksLikeEpub(bytes) ? 'epub' : 'cbz';

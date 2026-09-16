@@ -179,6 +179,35 @@ export function gb18030Bytes(text: string): Uint8Array {
   return new Uint8Array(bytes);
 }
 
+/**
+ * Big5 byte sequences for the same reason, and for one more.
+ *
+ * Big5 is not a curiosity here: it is the encoding of a real share of
+ * Traditional-Chinese libraries, and — unlike GB18030 — its byte sequences
+ * usually *also* decode as valid GB18030. That overlap is exactly what the
+ * detection heuristic has to resolve, so these bytes are the test.
+ */
+export const BIG5_SAMPLES: Record<string, number[]> = {
+  // 第一章 起始
+  '第一章 起始': [0xb2, 0xc4, 0xa4, 0x40, 0xb3, 0xb9, 0x20, 0xb0, 0x5f, 0xa9, 0x6c],
+  // 測試
+  測試: [0xb4, 0xfa, 0xb8, 0xd5],
+  // 中文內容
+  中文內容: [0xa4, 0xa4, 0xa4, 0xe5, 0xa4, 0xba, 0xae, 0x65],
+  // 第一章 測試內容這是一段中文文本用來判斷亂碼
+  '第一章 測試內容這是一段中文文本用來判斷亂碼': [
+    0xb2, 0xc4, 0xa4, 0x40, 0xb3, 0xb9, 0x20, 0xb4, 0xfa, 0xb8, 0xd5, 0xa4, 0xba, 0xae, 0x65, 0xb3, 0x6f,
+    0xac, 0x4f, 0xa4, 0x40, 0xac, 0x71, 0xa4, 0xa4, 0xa4, 0xe5, 0xa4, 0xe5, 0xa5, 0xbb, 0xa5, 0xce, 0xa8,
+    0xd3, 0xa7, 0x50, 0xc2, 0x5f, 0xb6, 0xc3, 0xbd, 0x58,
+  ],
+};
+
+export function big5Bytes(text: string): Uint8Array {
+  const bytes = BIG5_SAMPLES[text];
+  if (!bytes) throw new Error(`no Big5 fixture for ${text}`);
+  return new Uint8Array(bytes);
+}
+
 export function utf8(text: string): Uint8Array {
   return new TextEncoder().encode(text);
 }

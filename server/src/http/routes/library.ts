@@ -61,6 +61,18 @@ function sourceContext(ctx: AppContext, bookId: string) {
 }
 
 /**
+ * The path of the folder a library path lives in, or `null` for a top-level path.
+ *
+ * Used to answer "is this file inside that directory book's folder" without a
+ * prefix match, which cannot tell `第01卷.cbz` inside `整卷系列/` apart from a
+ * sibling file that merely starts with the same characters.
+ */
+function parentPath(relPath: string): string | null {
+  const cut = relPath.lastIndexOf('/');
+  return cut < 0 ? null : relPath.slice(0, cut);
+}
+
+/**
  * Offset of the first item belonging to a group.
  *
  * Taken from the declared group sizes rather than from the items themselves, so
@@ -124,22 +136,45 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const book = ctx.shelf.get(user.id, id);
     const handler = resolveHandler(ctx, id, book.format);
     const query = request.query as Record<string, string | undefined>;
-    const groupIndex = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
+    const requested = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
 
     const content = handler
       ? await handler.manifest({ ...sourceContext(ctx, id), bookId: id })
       : null;
 
-    const windowed = content && groupIndex !== null && Number.isFinite(groupIndex) && content.groups[groupIndex]
-      ? {
-          ...content,
-          items: content.items.slice(
-            groupOffset(content.groups, groupIndex),
-            groupOffset(content.groups, groupIndex) + content.groups[groupIndex]!.count,
-          ),
-          group: groupIndex,
-        }
-      : content;
+    /**
+     * One window, chosen by the client or by the server.
+     *
+     * `?group=N` asks for a specific one. Omitting it used to mean "send every
+     * item", which quietly defeated the point of windowing: a 1200-chapter
+     * omnibus answered its *first* request — the one that has to be fast — with
+     * 1200 entries, and a 40-volume comic with every page of every volume. The
+     * default is therefore window 0, and a client that genuinely wants the whole
+     * structure asks for it with `?group=all`.
+     *
+     * This is an additive change to a documented contract: a client that passed
+     * no `group` received more than it needed and now receives exactly what it
+     * needs to draw the first screen, which is what that parameter-less call was
+     * always for.
+     */
+    const wantsAll = query.group === 'all';
+    const groupIndex = wantsAll
+      ? null
+      : requested !== null && Number.isFinite(requested)
+        ? requested
+        : 0;
+
+    const windowed =
+      content && !wantsAll && groupIndex !== null && content.groups[groupIndex]
+        ? {
+            ...content,
+            items: content.items.slice(
+              groupOffset(content.groups, groupIndex),
+              groupOffset(content.groups, groupIndex) + content.groups[groupIndex]!.count,
+            ),
+            group: groupIndex,
+          }
+        : content;
 
     return {
       book,
@@ -162,6 +197,11 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       files: content && handler && 'files' in handler && handler.files
         ? (await handler.files({ ...sourceContext(ctx, id), bookId: id })).map((file) => ({
             rel_path: file.relPath,
+            // The handler's own reference, passed through untouched. It is what
+            // makes the listed path fetchable: a directory book addresses a page
+            // as `page:<volume>:<page>`, and only its handler knows where the
+            // volumes begin.
+            ref: file.ref,
             size: file.size,
             missing: file.missing,
           }))
@@ -335,7 +375,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     //
     // A directory book also needs its *own* path to resolve, because a page may
     // live inside an embedded archive: `第01卷/vol.cbz` is the archive, and
-    // `第01卷/vol.cbz` as `page:0:0` is the page served out of it.
+    // serving that *path* is how a client fetches the volume's pages out of it.
     const dirHandler = directoryHandlerForFormat(book.format);
     const owned = dirHandler?.files
       ? await dirHandler.files({ ...sourceContext(ctx, id), bookId: id })
@@ -346,7 +386,14 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     );
     const row = rows.find((candidate) => candidate.rel_path === wanted);
     const entry = owned?.find((candidate) => candidate.relPath === wanted);
-    const ownsFolder = dirHandler !== null && rows.some((candidate) => candidate.rel_path === wanted);
+    // A directory book records its *folder*, so every page path under that folder
+    // belongs to this book. `owned` is the authoritative list — it is the same
+    // walk the manifest published — but a path directly under the folder that the
+    // walk skips (or an older client asking for one) still resolves here.
+    const folderRow = rows.find(
+      (candidate) => normalizeRel(candidate.rel_path) === parentPath(wanted),
+    );
+    const ownsFolder = dirHandler !== null && folderRow !== undefined;
     if (!row && !entry && !ownsFolder) throw notFound('no such file for this book', 'FILE_MISSING');
 
     // The registry owns the extension -> content-type mapping, so a page image
@@ -356,13 +403,22 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
 
     // An embedded page is served out of its archive, not off disk. The database
     // refuses to call this a file of the library — it is not one — so the bytes
-    // come from the handler that knows how to open the container.
+    // come from the handler that knows how to open the container, addressed by
+    // the reference that came with the list entry.
+    //
+    // Gated on the path carrying the folder. The handler's references are only
+    // meaningful inside a directory book: a folder candidate answers with one
+    // entry per volume and per loose page (`page:0:0`), while the same file as a
+    // book of its own is addressed as `page:0` by a different handler. Asking one
+    // through the other's branch answers a request for a page with a different
+    // page — a silent off-by-one. A row-backed file therefore always goes to disk
+    // below, and only a page inside an archive is asked of the handler.
     if (!row && entry && ownsFolder) {
       const absOwner = resolveInside(ctx.config.booksDir, assertSafeRel(wanted));
       if (!existsSync(absOwner)) throw notFound('file is no longer on disk', 'FILE_MISSING');
       const payload = await dirHandler?.asset(
         { ...sourceContext(ctx, id), bookId: id },
-        { ref: `page:${entry.index}` },
+        { ref: entry.ref },
       );
       if (!payload) throw notFound('no such file for this book', 'FILE_MISSING');
       reply.header('etag', `"${id}:${createHash('sha256').update(wanted).digest('hex').slice(0, 16)}"`);

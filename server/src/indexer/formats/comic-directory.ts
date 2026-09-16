@@ -127,10 +127,8 @@ export async function looksLikeComicDirectory(absDir: string): Promise<boolean> 
   const dirs = entries.filter((entry) => entry.isDirectory);
   const images = entries.filter((entry) => entry.isImage).length;
   const archives = entries.filter((entry) => entry.isArchive).length;
-  const volumes = dirs.length + archives;
 
-  // Flat or volume-folder layout: enough pages at this level to be a book on its
-  // own.
+  // Flat layout: enough pages at this level to be a book on its own.
   if (images >= MIN_IMAGES || archives >= MIN_IMAGES) return true;
 
   // Volume layout: subdirectories (and possibly an archive or two) alongside each
@@ -140,12 +138,19 @@ export async function looksLikeComicDirectory(absDir: string): Promise<boolean> 
   // anything": a collection file is routinely `第01卷.cbz` next to `第02卷/`, and
   // requiring two loose archives made that folder invisible — not a comic by this
   // test, not a book by any other format's, so the whole series silently
-  // disappeared from the shelf. The probe recurses, because "one level of
-  // nesting" describes how the reader navigates while a volume directory may hold
-  // its pages one level further down.
-  if (volumes >= 1 && images === 0) {
-    return hasPagesBelow(absDir);
-  }
+  // disappeared from the shelf.
+  //
+  // A loose image must not veto the layout, which is why this is asked per entry
+  // below rather than guarded with `images === 0` here: a cover scan beside
+  // `第01卷.cbz` and `第02卷/` is ordinary, and treating it as "this level is the
+  // book" made the series vanish for exactly the same reason as before. A loose
+  // image that *is* the only page source is kept out by `MIN_IMAGES` above.
+  //
+  // A subdirectory counts as a volume only when it holds pages, but the archive
+  // beside it is a volume by the same definition — its pages are inside it, which
+  // is what this format reads. So the count is split: an archive settles the
+  // question on its own, a subdirectory has to be looked into.
+  if (archives >= 1 || (dirs.length >= 1 && (await hasPagesBelow(absDir)))) return true;
   return false;
 }
 
@@ -168,11 +173,15 @@ async function isBookCollection(absDir: string): Promise<boolean> {
  * already evidence here — the sibling folders are what make it a collection. The
  * MIN_IMAGES threshold belongs to a folder whose images are the book itself, not
  * to one of its volumes.
+ *
+ * Only *directories* are looked into, because an archive at this level has
+ * already been counted as a volume by the caller. Descending into one would read
+ * a sibling's bytes to answer a question about the parent — the same answer the
+ * caller already has, at the cost of opening a 500MB scan collection.
  */
 async function hasPagesBelow(absDir: string): Promise<boolean> {
   const entries = await listEntries(absDir);
   for (const entry of entries) {
-    if (entry.isArchive) return true;
     if (!entry.isDirectory) continue;
     if (entry.isBookFile) continue;
     const nested = await listEntries(join(absDir, entry.name));
@@ -256,25 +265,6 @@ async function collectVolumes(absDir: string): Promise<Volume[]> {
     volumes.push({ title: filenameMetadata(absDir).title || '单页', pages: own });
   }
   return volumes;
-}
-
-/**
- * Every page of a directory book, as a library-relative path.
- *
- * The manifest and the per-file endpoint must agree on this list exactly: the
- * manifest tells a client which paths make up the book, and the endpoint decides
- * which paths it will serve. Two hand-written walkers drifted apart once already
- * — the manifest listed page titles inside an embedded archive, which are not
- * paths on disk — and the result was a comic that opened to 404 on every page.
- *
- * An archive counts as one page here, addressed by the archive's own path:
- * that is what a per-file request for it can actually be served with.
- */
-export async function comicDirectoryPagePaths(absDir: string, relPrefix: string): Promise<string[]> {
-  const volumes = await collectVolumes(absDir);
-  return volumes.flatMap((volume) =>
-    volume.pages.map((page) => (relPrefix ? `${relPrefix}/${page.relPath}` : page.relPath)),
-  );
 }
 
 export const comicDirectoryHandler = registerDirectoryHandler({
@@ -368,16 +358,36 @@ export const comicDirectoryHandler = registerDirectoryHandler({
   },
 
   /**
-   * The files this book is made of.
+   * The files this book is made of, each with the reference that fetches its
+   * bytes.
    *
    * A directory book has no file of its own — the scanner records the folder —
    * so the API layer cannot answer "which files back this book" from the file
    * table. It asks the handler instead, which keeps one implementation of the
    * page walk.
+   *
+   * The reference comes from this walk rather than from the path, because the
+   * handler addresses pages as `page:<volume>:<page>` and the volume boundaries
+   * are known only here. Reconstructing it downstream would be a second
+   * implementation of the same shape, which is the failure this method exists to
+   * remove: an archive page would be asked for as `page:<index>`, which is not a
+   * reference at all, and the request would fall through to serving the archive
+   * itself.
    */
   async files(ctx: HandlerContext): Promise<BookFileEntry[]> {
-    const paths = await comicDirectoryPagePaths(ctx.absPath, ctx.relPath);
-    return paths.map((relPath, index) => ({ relPath, index, size: 0, missing: 0 }));
+    const volumes = await collectVolumes(ctx.absPath);
+    const files: BookFileEntry[] = [];
+    for (const [volumeIndex, volume] of volumes.entries()) {
+      for (const [pageIndex, page] of volume.pages.entries()) {
+        files.push({
+          relPath: ctx.relPath ? `${ctx.relPath}/${page.relPath}` : page.relPath,
+          ref: `page:${volumeIndex}:${pageIndex}`,
+          size: 0,
+          missing: 0,
+        });
+      }
+    }
+    return files;
   },
 
   async asset(ctx: HandlerContext, req): Promise<AssetPayload> {

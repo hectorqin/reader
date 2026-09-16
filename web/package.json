@@ -9,7 +9,7 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run && tsx --test test/api.test.ts test/asset-url.test.ts test/paginator.test.ts test/window.test.ts",
+    "test": "vitest run && tsx --test test/api.test.ts test/asset-url.test.ts test/paginator.test.ts test/window.test.ts test/windowed-toc.test.ts",
     "test:watch": "vitest"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 import { BookArchive, extensionOf } from './zip.ts';
 import { sortByName } from './natural-sort.ts';
-import type { BookDoc, LoadContext, Section } from './types.ts';
+import type { BookDoc, LoadContext, RenderMode, Section } from './types.ts';
 
 /**
  * Comic loader: CBZ archives and loose image directories.
@@ -64,12 +64,17 @@ export async function buildComicDoc(
       label: pageLabel(sections.length + 1, path),
       image: { mediaType, bytes },
       depth: 0,
+      render: 'image',
+      // The page's own address, so a native host can fetch and decode it
+      // directly instead of receiving a buffer it has to be handed.
+      path,
     });
   }
 
   return {
     format,
     layout: 'fixed',
+    render: comicRenderMode(),
     // Manga is right-to-left, but detecting it from the archive is unreliable
     // and guessing wrong reverses the book. Default left-to-right and expose a
     // toggle; the reader can fix it in one tap, and the setting persists.
@@ -114,4 +119,16 @@ export function mediaTypeForImage(path: string): string {
 
 export function isImagePath(path: string): boolean {
   return IMAGE_EXTENSIONS.has(extensionOf(path));
+}
+
+/**
+ * Render mode for a comic document. Always `image`.
+ *
+ * A comic page is a picture, so a host with a native image pipeline should use
+ * it: a WebView would decode the same bytes into a renderer-process bitmap and
+ * run a layout pass to place it, for a result that is identical on screen and
+ * worse in memory.
+ */
+export function comicRenderMode(): RenderMode {
+  return 'image';
 }

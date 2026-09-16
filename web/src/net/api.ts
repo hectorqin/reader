@@ -68,11 +68,28 @@ export interface BookDto {
   updatedAt: number;
 }
 
+/**
+ * One file backing a book, as the manifest lists it.
+ *
+ * `ref` is the server's opaque reference for this file's bytes, and it is what a
+ * client passes back to `/assets?ref=`. It matters for a directory book: a page
+ * inside a volume archive is addressed as `page:<volume>:<page>`, and only the
+ * server knows where its volumes begin. Deriving it from the path or from the
+ * position in this array asks for a different page — a wrong page with a 200,
+ * which is worse than an error.
+ */
+export interface ManifestFile {
+  rel_path: string;
+  ref?: string;
+  size: number;
+  missing: number;
+}
+
 export interface ManifestResponse {
   book: BookDto;
   contentUrl: string;
   coverUrl: string | null;
-  files: Array<{ rel_path: string; size: number; missing: number }>;
+  files: ManifestFile[];
   kind?: BookContent['kind'];
   total?: number;
   groups?: ContentGroup[];

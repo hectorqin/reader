@@ -57,6 +57,36 @@ for method in $consumed; do
   fi
 done
 
+# 4. The render-mode split has to agree with itself across three languages.
+#
+#    The whole "EPUB in the WebView, fixed pages natively" decision rests on the
+#    client labelling a page as `image`/`document`/`reflowable` and the shell
+#    accepting exactly the ones it can draw. Nothing type-checks that, and a
+#    mismatch fails in the worst way: every page silently falls back to the slow
+#    path, or a page is handed to a view that cannot decode it.
+note "==> checking the render-mode vocabulary matches"
+web_modes=$(sed -n "s/^export type RenderMode = \(.*\);/\1/p" "$repo_dir/web/src/formats/types.ts" \
+  | tr -d "'" | tr -d ' ' | tr '|' '\n' | sort -u)
+shell_modes=$(sed -n 's/.*mode != "\([a-z]*\)".*/\1/p' \
+  "$android_dir/app/src/main/java/cool/cnb/reader/bridge/ReaderBridge.kt" | sort -u)
+if [ -z "$web_modes" ]; then
+  err "cannot read RenderMode from web/src/formats/types.ts"
+fi
+for mode in $shell_modes; do
+  if ! printf '%s\n' "$web_modes" | grep -qx "$mode"; then
+    err "ReaderBridge.kt branches on render mode '$mode' which RenderMode does not define"
+  fi
+done
+# The shell draws images natively, so it must know the client's image vocabulary.
+decodable=$(sed -n '/private val DECODABLE = setOf(/,/)/p' \
+  "$android_dir/app/src/main/java/cool/cnb/reader/web/NativePageView.kt" \
+  | sed -n 's/.*"\(image\/[a-z]*\)".*/\1/p' | sort -u)
+for mediaType in "image/jpeg" "image/png" "image/webp"; do
+  if ! printf '%s\n' "$decodable" | grep -qx "$mediaType"; then
+    err "NativePageView cannot decode $mediaType, which the client routinely produces"
+  fi
+done
+
 # Every bridge method must also appear in the client-facing declaration, or the
 # next person writing client code will not know it is available.
 missing_from_types=0

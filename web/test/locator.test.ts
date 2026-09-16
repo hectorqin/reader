@@ -6,6 +6,7 @@ function doc(sections: Array<Partial<Section>>): BookDoc {
   return {
     format: 'epub',
     layout: 'reflowable',
+    render: 'reflowable',
     direction: 'ltr',
     sections: sections.map((section, index) => ({
       id: section.id ?? `s${index}`,
