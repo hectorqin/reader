@@ -17,6 +17,13 @@ export interface AppSettings extends ViewSettings {
   txtEncoding: string;
   /** Only meaningful for fixed-layout books. */
   comicDirection: 'ltr' | 'rtl';
+  /** Read-aloud preferences. The voice itself is per device, like the rest. */
+  ttsRate: number;
+  ttsPitch: number;
+  ttsVolume: number;
+  ttsVoice: string;
+  /** Keep reading into the next chapter when the current one runs out. */
+  ttsAutoAdvance: boolean;
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -26,8 +33,19 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   theme: 'light',
   fit: 'contain',
   direction: 'ltr',
+  fontFamily: 'inherit',
+  pageMargin: 1.5,
+  textAlign: 'inherit',
+  brightness: 1,
+  pageAnimation: 'slide',
+  tapZone: 'standard',
   txtEncoding: '',
   comicDirection: 'ltr',
+  ttsRate: 1,
+  ttsPitch: 1,
+  ttsVolume: 1,
+  ttsVoice: '',
+  ttsAutoAdvance: true,
 };
 
 export class SettingsStore {

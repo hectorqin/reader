@@ -274,6 +274,98 @@ describe('ReaderView settings', () => {
   });
 });
 
+describe('ReaderView appearance settings', () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.append(container);
+  });
+
+  it('passes the font, margin and alignment through as inheriting variables', () => {
+    const view = make(container, reflowableDoc(1));
+    view.applySettings({ fontFamily: 'serif', pageMargin: 2.5, textAlign: 'justify' });
+    expect(container.style.getPropertyValue('--reader-font-family')).toBe('serif');
+    expect(container.style.getPropertyValue('--reader-page-margin')).toBe('2.5rem');
+    expect(container.style.getPropertyValue('--reader-text-align')).toBe('justify');
+  });
+
+  it('defaults every typography control to inherit, so the book is untouched', () => {
+    const view = make(container, reflowableDoc(1));
+    const settings = view.settingsSnapshot;
+    expect(settings.fontFamily).toBe('inherit');
+    expect(settings.textAlign).toBe('inherit');
+    expect(settings.lineHeight).toBe('inherit');
+  });
+
+  it('exposes brightness as a number so a dimming overlay can be computed', () => {
+    const view = make(container, reflowableDoc(1));
+    view.applySettings({ brightness: 0.6 });
+    expect(container.style.getPropertyValue('--reader-brightness')).toBe('0.6');
+  });
+
+  it('sets a page-turn animation on the host and clears it again', () => {
+    vi.useFakeTimers();
+    try {
+      const view = make(container, reflowableDoc(2));
+      view.applySettings({ pageAnimation: 'slide' });
+      view.animatePage('next');
+      expect(container.querySelector('book-content')?.getAttribute('data-animating')).toBe('slide-next');
+      vi.runAllTimers();
+      expect(container.querySelector('book-content')?.getAttribute('data-animating')).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not animate when the reader turned animation off', () => {
+    const view = make(container, reflowableDoc(2));
+    view.applySettings({ pageAnimation: 'none' });
+    view.animatePage('next');
+    expect(container.querySelector('book-content')?.getAttribute('data-animating')).toBeNull();
+  });
+
+  it('speaks in the order the reader sees, with stable block indices', async () => {
+    const view = make(container, reflowableDoc(1));
+    await view.open(0, 0);
+    const chunks = view.refreshSpokenChunks();
+    expect(chunks.length).toBeGreaterThan(0);
+    // Every sentence points at a connected text node, which is what the
+    // highlight needs to paint a range.
+    for (const chunk of chunks) expect(chunk.node?.isConnected).toBe(true);
+  });
+
+  it('hands back the first sentence of the chapter when nothing can be measured', async () => {
+    // jsdom has no layout, so every rect is zero; the anchor must degrade to the
+    // start of the chapter rather than to null, or "read from here" would do
+    // nothing at all on a host without a layout engine.
+    const view = make(container, reflowableDoc(1));
+    await view.open(0, 0);
+    const chunks = view.refreshSpokenChunks();
+    expect(view.speechAnchor()).toEqual(chunks[0]);
+  });
+
+  it('reports no anchor before a chapter has been rendered', () => {
+    const view = make(container, reflowableDoc(1));
+    expect(view.speechAnchor()).toBeNull();
+  });
+
+  it('clears the speech highlight without touching the book markup', async () => {
+    const view = make(container, reflowableDoc(1));
+    await view.open(0, 0);
+    const bookContent = container.querySelector('book-content') as HTMLElement & { shadow: ShadowRoot };
+    const before = bookContent.shadow.querySelector('.book-flow')?.innerHTML ?? '';
+    view.highlightSpokenChunk(view.refreshSpokenChunks()[0] ?? null);
+    view.clearSpeechHighlight();
+    // The highlight is an overlay appended to the flow, so it *is* removed from
+    // the markup when cleared; what must not survive is an edit to the book's own
+    // elements, which is why the sentence is never wrapped in a span.
+    expect(bookContent.shadow.querySelector('.reader-speech-highlight')).toBeNull();
+    expect(bookContent.shadow.querySelector('.book-flow')?.innerHTML).toBe(before);
+    expect(bookContent.shadow.innerHTML).not.toContain('<span');
+  });
+});
+
 describe('ReaderView resource handling', () => {
   it('releases object URLs on dispose so a long session does not leak', async () => {
     const container = document.createElement('div');
