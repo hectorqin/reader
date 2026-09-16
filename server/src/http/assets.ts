@@ -28,11 +28,29 @@ import type { AssetPayload } from '../indexer/formats/index.ts';
 /** Cap on how much of a book body one response may serve as a range. */
 const DEFAULT_CHUNK = 2 * 1024 * 1024;
 
+/**
+ * Maximum length of a range whose bytes are held in memory before being sent.
+ *
+ * A suffix range (`bytes=-500`) needs the file's *tail*, which a forward-only
+ * stream cannot produce by skipping, so that one case falls back to reading the
+ * bytes. The bound exists because "read the last 4GB" is a request anyone can
+ * make and nobody wants to serve.
+ */
+const MAX_SUFFIX_RANGE = 8 * 1024 * 1024;
+
 const RANGE_RE = /^bytes=(\d*)-(\d*)$/;
 
 interface Range {
   start: number;
   end: number;
+  /**
+   * True when the client asked for a trailing window (`bytes=-500`).
+   *
+   * Worth carrying out of the parser: a suffix range is the only one that cannot
+   * be produced by skipping forward in a stream, so the sender has to decide
+   * between reading the file and declaring that it cannot.
+   */
+  suffix?: boolean;
 }
 
 /**
@@ -59,6 +77,7 @@ export function parseRange(header: string | undefined, total: number): Range | n
     if (!Number.isFinite(suffix) || suffix <= 0) return 'unsatisfiable';
     start = Math.max(0, total - suffix);
     end = total - 1;
+    return { start, end, suffix: true };
   } else {
     start = Number.parseInt(rawStart, 10);
     end = !rawEnd ? Math.min(total - 1, start + DEFAULT_CHUNK - 1) : Number.parseInt(rawEnd, 10);
@@ -135,6 +154,23 @@ function sendStream(
   reply.header('accept-ranges', 'bytes');
   reply.header('content-range', `bytes ${range.start}-${range.end}/${total}`);
   reply.header('content-length', String(length));
+
+  // A *suffix* range is the one that cannot be produced by skipping. The stream
+  // is forward-only, and `start` is `total - suffix`, so surviving it means
+  // walking the whole file: for a 400MB comic that is the entire download, held
+  // open, for the two bytes of the ZIP end-of-central-directory record the
+  // client actually wants. Saying `none` is the honest answer there — the
+  // client's fallback is a full download it can plan for, rather than one it
+  // discovers halfway through.
+  if (range.suffix && length > MAX_SUFFIX_RANGE) {
+    reply.removeHeader('accept-ranges');
+    reply.header('accept-ranges', 'none');
+    reply.removeHeader('content-length');
+    reply.removeHeader('content-range');
+    void stream.destroy();
+    return reply.status(200).send(payload.stream ?? stream);
+  }
+
   return sendWithRelease(request, reply, stream, { skip: range.start, take: length });
 }
 

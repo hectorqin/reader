@@ -1,7 +1,7 @@
 import { ApiError } from '../api/errors.ts';
 import type { ReaderApi } from '../api/client.ts';
 import type { Book, Manifest, Note } from '../api/types.ts';
-import { loadBook, isImagePath, extensionOf, type BookDoc } from '../formats/index.ts';
+import { loadBook, isImagePath, extensionOf } from '../formats/index.ts';
 import type { OfflineStore } from '../store/offline.ts';
 import type { SyncEngine } from '../core/sync.ts';
 import type { Platform } from '../core/platform.ts';
@@ -9,8 +9,23 @@ import { ReaderView, type Position, type ViewSettings } from './reader-view.ts';
 import { attachGestures } from './gestures.ts';
 import { clear, el, percent } from './dom.ts';
 import type { AppSettings } from '../store/settings.ts';
+import { createStagedDoc, isStagedKind } from '../formats/windowed.ts';
+import type { BookDoc } from '../formats/types.ts';
+import type { TocEntry } from '../api/types.ts';
+import type { NativePageHost } from './native-page.ts';
 import { TtsEngine, type TtsSnapshot } from '../render/tts.ts';
 import type { SpokenChunk } from '../render/tts-text.ts';
+
+/**
+ * Chapters per window, matching the server's own constant.
+ *
+ * Duplicated rather than fetched because the client needs it to *compute* which
+ * window holds a chapter, and a round trip to learn a constant would defeat the
+ * purpose. It matches `CHAPTER_WINDOW` in the server's epub handler; a mismatch
+ * costs one extra request, never a wrong chapter, because the response is always
+ * the authority on what it contains.
+ */
+const CHAPTER_WINDOW = 40;
 
 export interface ReaderScreenOptions {
   api: ReaderApi;
@@ -18,6 +33,14 @@ export interface ReaderScreenOptions {
   sync: SyncEngine;
   platform: Platform;
   settings: AppSettings;
+  /**
+   * Native renderer for fixed-layout pages, when the host provides one.
+   *
+   * Optional because the browser has none and must not be given a stub that
+   * pretends otherwise: `undefined` means "draw everything here", which is the
+   * behaviour the H5 build has always had.
+   */
+  pageHost?: NativePageHost;
   onBack(): void;
   onSettingsChange(patch: Partial<AppSettings>): void;
   onSignedOut(): void;
@@ -164,6 +187,21 @@ export class ReaderScreen {
 
     try {
       this.manifest = await this.options.api.manifest(book.id);
+      if (token !== this.loadingToken) return;
+
+      // A staged book is read through the windowed contract and never downloads
+      // the file. That is the whole answer to "客户端需要下载完整的书籍，那消耗太大":
+      // this manifest already carries the first window, so opening the book has
+      // cost exactly one window of metadata.
+      const staged = await this.openStaged(book, token);
+      if (staged) {
+        this.doc = staged.doc;
+        this.buildView();
+        this.hideStatus();
+        await this.restorePosition(book, token);
+        return;
+      }
+
       const bytes = await this.fetchBookBytes(book, this.manifest);
       if (token !== this.loadingToken) return;
 
@@ -182,6 +220,80 @@ export class ReaderScreen {
     }
   }
 
+  /**
+   * Open the book through the windowed contract, when the server offers one.
+   *
+   * Returns null when the book has no addressable structure (an old server, a
+   * format that exposes none), and the caller falls back to downloading the
+   * file. That fallback is not a courtesy: it is what keeps this client working
+   * against a server that predates the endpoint, which self-hosted users do not
+   * upgrade on time.
+   *
+   * An EPUB is the case where the window is worth the most — a 1200-chapter
+   * omnibus would otherwise be a 50MB download to show one page of chapter one.
+   */
+  private async openStaged(book: Book, token: number): Promise<{ doc: BookDoc } | null> {
+    const manifest = this.manifest;
+    const content = manifest?.content;
+    if (!content || !isStagedKind(content.kind)) return null;
+
+    let toc: TocEntry[];
+    try {
+      toc = await this.options.api.toc(book.id);
+    } catch {
+      // The manifest's own items are a worse table of contents but a usable one,
+      // and refusing to open the book because a contents list failed would be
+      // the wrong trade.
+      toc = (content.items ?? []).map((item) => ({
+        href: item.href,
+        title: item.title,
+        level: 0,
+        spine: item.seq,
+      }));
+    }
+    if (token !== this.loadingToken) return null;
+
+    const doc = createStagedDoc({
+      kind: content.kind,
+      toc: toc.map((entry) => ({ id: entry.href, label: entry.title, depth: entry.level })),
+      content,
+      orderedByBook: true,
+      loader: {
+        read: (item) => this.readStagedSection(book, item),
+      },
+    });
+
+    // The view drives window changes through this hook, so a jump to chapter 900
+    // of a 1200-chapter book loads window 22 rather than doing nothing.
+    (doc as BookDoc & { staged?: unknown }).staged = doc;
+    return { doc };
+  }
+
+  /**
+   * One section's bytes, by the server's own reference.
+   *
+   * `ref` is opaque and passed through unchanged: the client must not build it
+   * from an index, because the whole reason it is a reference is that indices
+   * mean different chapters in different windows.
+   */
+  private async readStagedSection(
+    book: Book,
+    item: { href: string; kind: string; mediaType: string },
+  ): Promise<{ html?: string; image?: { mediaType: string; bytes: Uint8Array } }> {
+    const cacheKey = `section:${book.id}:${item.href}`;
+    const cached = await this.options.platform.blobs.get(cacheKey);
+    const blob = cached ? new Blob([toArrayBuffer(cached)]) : await this.options.api.asset(book.id, item.href);
+    if (!cached) {
+      // Cached per section, not per book, so a partially read book is partially
+      // readable offline and re-opening one does not re-fetch what was read.
+      await this.options.platform.blobs.put(cacheKey, new Uint8Array(await blob.arrayBuffer()));
+    }
+    if (item.kind === 'page') {
+      return { image: { mediaType: item.mediaType, bytes: new Uint8Array(await blob.arrayBuffer()) } };
+    }
+    return { html: await blob.text() };
+  }
+
   dispose(): void {
     this.loadingToken += 1;
     this.tts?.dispose();
@@ -197,6 +309,10 @@ export class ReaderScreen {
     this.view = null;
     this.doc = null;
     this.manifest = null;
+    // A native page view is a sibling of the WebView's content, so it does not
+    // go away with the DOM this screen owns. Leaving it would put a comic page
+    // on top of the shelf.
+    this.options.pageHost?.hide();
     this.element.remove();
   }
 
@@ -281,6 +397,7 @@ export class ReaderScreen {
     this.view = new ReaderView({
       container: this.stage,
       doc,
+      ...(this.options.pageHost ? { pageHost: this.options.pageHost } : {}),
       onPositionChange: (position) => this.onPosition(position),
       onChapterChange: (index, section) => {
         this.chapterLabel.textContent = section.label;
@@ -551,16 +668,42 @@ export class ReaderScreen {
     }
   }
 
+  /**
+   * The contents panel.
+   *
+   * Fetched from `/toc` rather than read off the manifest, because the manifest
+   * is windowed and a table of contents assembled from one window lists exactly
+   * that window — a 1200-chapter book showed "第 1 章 – 第 40 章". The server
+   * keeps the two apart on purpose (see docs/api.md); this is the client half of
+   * that arrangement.
+   *
+   * A book whose TOC cannot be fetched falls back to the window's own labels,
+   * which is worse but not useless, and never leaves the panel empty when the
+   * book does have chapters.
+   */
   private async renderToc(): Promise<void> {
     clear(this.tocList);
-    const entries = this.view?.chapterLabels() ?? [];
+    const book = this.book;
+    if (!book) return;
+
+    let entries: Array<{ id: string; label: string; depth: number }> = [];
+    try {
+      const toc = await this.options.api.toc(book.id);
+      entries = toc.map((entry) => ({ id: entry.href, label: entry.title, depth: entry.level }));
+    } catch {
+      entries = this.view?.chapterLabels() ?? [];
+    }
+    if (entries.length === 0) entries = this.view?.chapterLabels() ?? [];
     for (const entry of entries) {
       const button = el('button', {
         text: entry.label,
         attrs: { type: 'button', 'data-section': entry.id },
         on: {
           click: () => {
-            void this.view?.openLocator(`${entry.id}:0`);
+            // A contents entry may point at a chapter outside the loaded
+            // window, so the jump has to go through the whole-book path rather
+            // than resolve a local index — that is what `goToChapterRef` adds.
+            void this.goToChapterRef(entry.id);
             this.tocPanel.hidden = true;
             this.setChromeVisible(false);
           },
@@ -573,6 +716,36 @@ export class ReaderScreen {
     }
     if (entries.length === 0) {
       this.tocList.append(el('li', { children: [el('div', { className: 'empty-state', text: '这本书没有目录' })] }));
+    }
+  }
+
+  /**
+   * Jump to a contents entry, loading the window that holds it when necessary.
+   *
+   * A position inside the loaded window is a local index change; one outside it
+   * means fetching that window first. Without this, tapping chapter 900 of a
+   * 1200-chapter book does nothing at all, which is how a windowed reader turns
+   * from fast into broken.
+   */
+  private async goToChapterRef(ref: string): Promise<void> {
+    if (this.view?.openLocator(`${ref}:0`)) {
+      await this.view.openLocator(`${ref}:0`);
+      return;
+    }
+    const book = this.book;
+    if (!book) return;
+    try {
+      // The TOC's `spine` is the whole-book index the windowing is keyed on.
+      const toc = await this.options.api.toc(book.id);
+      const spine = toc.find((entry) => entry.href === ref)?.spine;
+      if (spine === undefined) return;
+      const group = Math.floor(spine / CHAPTER_WINDOW);
+      const content = await this.options.api.items(book.id, group);
+      if (this.view?.loadWindow(content, spine)) {
+        await this.view.openLocator(`${ref}:0`);
+      }
+    } catch {
+      this.setStatus('error', '无法跳到这一章');
     }
   }
 
@@ -1158,6 +1331,19 @@ function bindKeys(target: HTMLElement, handler: (key: string) => void): () => vo
   };
   target.addEventListener('keydown', onKeyDown);
   return () => target.removeEventListener('keydown', onKeyDown);
+}
+
+/**
+ * Copies bytes into a fresh ArrayBuffer.
+ *
+ * `Blob` will not take a `Uint8Array` view over a larger buffer, and a fetch
+ * response's bytes are exactly that — passing the view directly would store the
+ * whole response behind a section-sized slice.
+ */
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  return copy;
 }
 
 function hasTextSelection(root: HTMLElement): boolean {

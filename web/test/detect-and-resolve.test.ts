@@ -98,4 +98,36 @@ describe('detectFormat edge cases', () => {
   it('detects an image by extension when there are no bytes yet', () => {
     expect(detectFormat('scan.JPG')).toBe('image');
   });
+
+  it('believes the bytes over an extension that cannot be right', () => {
+    // The realistic case, not a hypothetical one: a batch conversion tool writes
+    // a JPEG and names it after the source page. Trusting the extension means the
+    // PNG loader runs on JPEG bytes and the reader sees a broken image.
+    expect(detectFormat('page-012.png', jpeg())).toBe('image');
+    expect(detectFormat('chapter.xhtml', png())).toBe('image');
+  });
+
+  it('refuses a non-book that happens to have a book extension', () => {
+    // An audio file named `.txt` used to be handed to the text decoder, which
+    // produced fifty thousand replacement characters rather than "this is not a
+    // book". Naming it unknown is the honest answer.
+    expect(detectFormat('track.txt', new Uint8Array([0x49, 0x44, 0x33, 0x03]))).toBe('unknown');
+    expect(detectFormat('video.epub', new Uint8Array([0x1a, 0x45, 0xdf, 0xa3]))).toBe('unknown');
+  });
+
+  it('still lets the extension break the tie between two plausible zip formats', () => {
+    // The ZIP signature admits EPUB and CBZ, so this is the one case where the
+    // name is still evidence rather than noise.
+    const zipMagic = new Uint8Array([0x50, 0x4b, 0x03, 0x04]);
+    expect(detectFormat('some-comic.cbz', zipMagic)).toBe('cbz');
+    expect(detectFormat('some-book.epub', zipMagic)).toBe('epub');
+  });
 });
+
+function png(): Uint8Array {
+  return new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+}
+
+function jpeg(): Uint8Array {
+  return new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
+}

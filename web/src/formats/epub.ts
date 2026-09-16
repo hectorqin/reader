@@ -103,6 +103,9 @@ export async function loadEpub(ctx: LoadContext): Promise<BookDoc> {
   return {
     format: 'epub',
     layout: 'reflowable',
+    // Reflow cannot be delegated: the WebView is the only engine here that can
+    // lay out the book's own CSS, and that is the product's core claim.
+    render: 'reflowable',
     direction: pkg.direction,
     sections,
     toc,

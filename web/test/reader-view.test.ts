@@ -34,6 +34,7 @@ function reflowableDoc(sectionCount: number): BookDoc {
   return {
     format: 'epub',
     layout: 'reflowable',
+    render: 'reflowable',
     direction: 'ltr',
     sections: Array.from({ length: sectionCount }, (_value, index) => ({
       id: `ch${index}.xhtml`,
@@ -56,6 +57,7 @@ function fixedDoc(pageCount: number): BookDoc {
   return {
     format: 'cbz',
     layout: 'fixed',
+    render: 'image',
     direction: 'ltr',
     sections: Array.from({ length: pageCount }, (_value, index) => ({
       id: `p${index}.png`,

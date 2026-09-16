@@ -127,6 +127,7 @@ export function loadTxt(ctx: LoadContext, options: TxtOptions = {}): TxtSplitRes
     doc: {
       format: 'txt',
       layout: 'reflowable',
+      render: 'reflowable',
       direction: 'ltr',
       sections,
       toc,

@@ -2,7 +2,8 @@ import { ReaderApi, type SessionStore } from './api/client.ts';
 import { ApiError } from './api/errors.ts';
 import type { Book, Session } from './api/types.ts';
 import { createWebPlatform } from './core/web-platform.ts';
-import { createAndroidPlatform, detectAndroidBridge } from './core/android-platform.ts';
+import { androidPageHost, createAndroidPlatform, detectAndroidBridge } from './core/android-platform.ts';
+import type { NativePageHost } from './ui/native-page.ts';
 import type { Platform } from './core/platform.ts';
 import { SyncEngine, type SyncStatus } from './core/sync.ts';
 import { OfflineStore } from './store/offline.ts';
@@ -42,6 +43,14 @@ export class App {
 
   private shelf: ShelfScreen | null = null;
   private reader: ReaderScreen | null = null;
+  /**
+   * Native fixed-layout renderer, present only in the Android shell.
+   *
+   * Held here rather than inside ReaderScreen so that the desktop of it — the
+   * bridge object — is touched in one place, and so that a reader screen can be
+   * constructed with or without one without either path special-casing.
+   */
+  private pageHost: NativePageHost | null = null;
   private screen: string | null = null;
   private pendingBook: Book | null = null;
 
@@ -98,6 +107,9 @@ export class App {
   private async createPlatform(): Promise<Platform> {
     const bridge = detectAndroidBridge();
     if (!bridge) return createWebPlatform(this.options.defaultServerUrl ?? '');
+    // The native page renderer is resolved here, once, alongside the bridge that
+    // provides it, so no screen has to ask whether it is running on Android.
+    this.pageHost = androidPageHost(bridge);
     return createAndroidPlatform(this.options.defaultServerUrl ?? '', bridge);
   }
 
@@ -151,6 +163,7 @@ export class App {
       sync: this.sync,
       platform: this.platform,
       settings: this.settings,
+      ...(this.pageHost ? { pageHost: this.pageHost } : {}),
       onBack: () => this.showShelf(),
       onSettingsChange: (patch) => {
         void this.settingsStore.update(patch);

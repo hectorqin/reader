@@ -212,6 +212,50 @@ describe('OfflineStore', () => {
     expect(snapshot.serverTime).toBe(0);
   });
 
+  it('keeps a position written while its own push was in flight', async () => {
+    // The failure this guards against is the one this product cannot have: a lost
+    // reading position. It happens with a "send everything, clear everything"
+    // outbox — the reader turns a page between the request going out and the
+    // response arriving, the response clears the whole set, and the new position
+    // is silently never sent. A dirty-set plus a timestamp check on the way back
+    // is what makes the window not exist.
+    const store = new OfflineStore(new MemoryKv());
+    const first = { bookId: 'b1', locator: 'r1:0.10:c1', percentage: 0.1, chapterTitle: 'c1', device: 'a', updatedAt: 1000 };
+    await store.setProgress(first);
+
+    // The batch that the engine is about to send.
+    const batch = store.outbox();
+
+    // In flight: the reader turns the page.
+    await store.setProgress({ ...first, locator: 'r1:0.20:c1', percentage: 0.2, updatedAt: 1100 });
+
+    await store.markDelivered(batch, 5000);
+
+    expect(store.current.dirtyProgress).toContain('b1');
+    expect(store.outbox().progress[0]!.percentage).toBe(0.2);
+    // The cursor is still adopted, so the next pull stays incremental.
+    expect(store.current.serverTime).toBe(5000);
+  });
+
+  it('clears a position that was not touched while in flight', async () => {
+    const store = new OfflineStore(new MemoryKv());
+    await store.setProgress({ bookId: 'b1', locator: 'r1:0.5:c1', percentage: 0.5, chapterTitle: 'c1', device: 'a', updatedAt: 1000 });
+    await store.markDelivered(store.outbox(), 1);
+    expect(store.current.dirtyProgress).toEqual([]);
+    expect(isOutboxEmpty(store.current)).toBe(true);
+  });
+
+  it('does not let a delivered batch clear a different book', async () => {
+    // Clearing by "the batch's ids" rather than by timestamps would still be
+    // wrong here if the ids were taken from the wrong side of the call.
+    const store = new OfflineStore(new MemoryKv());
+    await store.setProgress({ bookId: 'b1', locator: 'x', percentage: 0.1, chapterTitle: 'c', device: 'a', updatedAt: 1000 });
+    const batch = store.outbox();
+    await store.setProgress({ bookId: 'b2', locator: 'x', percentage: 0.2, chapterTitle: 'c', device: 'a', updatedAt: 1000 });
+    await store.markDelivered(batch, 1);
+    expect(store.current.dirtyProgress).toEqual(['b2']);
+  });
+
   it('serialises concurrent writes so a fast reader does not lose a position', async () => {
     const store = new OfflineStore(new MemoryKv());
     await Promise.all(

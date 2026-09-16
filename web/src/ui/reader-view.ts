@@ -1,4 +1,6 @@
-import type { BookDoc, Section } from '../formats/types.ts';
+import type { BookDoc, Section, StagedBook } from '../formats/types.ts';
+import type { BookContent } from '../net/api.ts';
+import type { NativePageHost } from './native-page.ts';
 import { ResourceResolver, hydrateResources } from './resources.ts';
 import { createBookHost, extractBody, extractInlineStyles, sanitiseInjectedContent, type BookShadowHost } from './shadow.ts';
 import { bookPercentage, formatLocator, parseLocator } from './locator.ts';
@@ -10,6 +12,15 @@ export interface ReaderViewOptions {
   /** Called on every position change, throttled by the caller via the view. */
   onPositionChange?: (position: Position) => void;
   onChapterChange?: (index: number, section: Section) => void;
+  /**
+   * Native renderer for fixed-layout pages, when the host has one.
+   *
+   * Absent in a browser, where the WebView *is* the only renderer. Present on
+   * Android, where a comic page or a PDF is better drawn by the platform. The
+   * view does not care which: it asks the host to draw a section and falls back
+   * to its own DOM path whenever the host declines.
+   */
+  pageHost?: NativePageHost;
 }
 
 export interface Position {
@@ -82,6 +93,8 @@ export class ReaderView {
   private readonly container: HTMLElement;
   private readonly host: BookShadowHost;
   private readonly resolver: ResourceResolver;
+  /** Set when the book is read a window at a time; see `loadWindow`. */
+  private readonly staged: StagedBook | null;
   private settings: ViewSettings;
   private sectionIndex = 0;
   private sectionOffset = 0;
@@ -96,6 +109,9 @@ export class ReaderView {
   constructor(options: ReaderViewOptions) {
     this.options = options;
     this.doc = options.doc;
+    // Set by the reader screen once it has built a staged document; absent for a
+    // book that is read whole.
+    this.staged = (options.doc as BookDoc & { staged?: StagedBook }).staged ?? null;
     this.container = options.container;
     this.settings = { ...DEFAULT_SETTINGS, direction: options.doc.direction };
     this.host = createBookHost();
@@ -108,6 +124,17 @@ export class ReaderView {
 
   get settingsSnapshot(): ViewSettings {
     return { ...this.settings };
+  }
+
+  /**
+   * The shadow host holding the book's content.
+   *
+   * Exposed for tests and for the host that wants to measure the reading
+   * surface; the content itself stays inside the shadow root, which is the
+   * point.
+   */
+  get elementHost(): BookShadowHost {
+    return this.host;
   }
 
   get sectionCount(): number {
@@ -169,10 +196,28 @@ export class ReaderView {
     }, 220);
   }
 
+  /**
+   * Replace the loaded window of a staged book.
+   *
+   * Optional: a book read whole (the fallback when a server has no addressable
+   * structure) simply never calls it. Returns false when the book is not staged
+   * or the new window does not hold `spine`, so a caller can report honestly
+   * rather than silently landing on the wrong chapter.
+   */
+  loadWindow(content: BookContent, spine: number): boolean {
+    if (!this.staged) return false;
+    return this.staged.loadWindow(content, spine) >= 0;
+  }
+
   /** Opens a section by index, optionally at a fractional offset within it. */
   async open(index: number, offset = 0): Promise<void> {
     const section = this.doc.sections[index];
     if (!section) return;
+
+    // A staged section has no body until it is asked for. Doing it here, rather
+    // than in the loader, is what keeps "opening a book" and "showing a chapter"
+    // from both needing to know about windows.
+    if (this.staged) await this.staged.loadSection(index).catch(() => null);
     this.sectionIndex = index;
     this.sectionOffset = Math.min(1, Math.max(0, offset));
     this.releaseObjectUrl();
@@ -269,6 +314,7 @@ export class ReaderView {
   // ---- rendering per layout ----
 
   private async renderReflowable(section: Section): Promise<void> {
+    this.options.pageHost?.hide();
     const raw = section.html ?? '';
     const body = extractBody(raw);
     const inlineStyles = extractInlineStyles(raw);
@@ -288,6 +334,33 @@ export class ReaderView {
   }
 
   private async renderFixed(section: Section): Promise<void> {
+    // A native host is offered the page first. It declines for PDF (the platform
+    // viewer is a separate screen, not an embeddable view) and for anything it
+    // cannot decode, and then the DOM path below runs unchanged.
+    // `fit width` is a request to fill the viewport horizontally, which a
+    // centred native image cannot do without cropping or scrolling. Both of
+    // those are worse than the WebView path, so it is not offered.
+    if (this.options.pageHost && this.settings.fit === 'contain') {
+      const mode = section.render ?? this.doc.render;
+      const drawn = await this.options.pageHost.show({
+        sectionId: section.id,
+        mode,
+        ...(section.path ? { path: section.path } : {}),
+        ...(section.image ? { mediaType: section.image.mediaType } : {}),
+        ...(section.image ? { bytes: section.image.bytes } : {}),
+        fit: this.settings.fit,
+      });
+      if (drawn) {
+        // The native view is a sibling of the book host, not inside it, so the
+        // flow has to be emptied or the previous page stays behind it.
+        this.host.setContent('', []);
+        this.host.flow.replaceChildren();
+        return;
+      }
+    }
+
+    this.options.pageHost?.hide();
+
     const wrapper = document.createElement('div');
     wrapper.className = 'fixed-page';
     wrapper.setAttribute('data-fit', this.settings.fit);

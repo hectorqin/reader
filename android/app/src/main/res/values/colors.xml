@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Matches --reader-paper in web/src/styles/reader.css. -->
+    <!--
+      Matches the `reader-paper` custom property in web/src/styles/reader.css.
+
+      Note the spelling: XML forbids a double hyphen inside a comment, so the
+      CSS custom property's leading dashes cannot be written here. AAPT rejects
+      the file outright, which is how this was found — the Android shell had
+      never been compiled until the build was run for real.
+    -->
     <color name="paper">#FBFBF7</color>
     <color name="paper_dark">#16171A</color>
 </resources>

@@ -64,11 +64,79 @@ export interface BookFile {
   missing: number;
 }
 
+/** One addressable unit of a book: a chapter, a page, a volume. */
+export interface ContentItem {
+  id: string;
+  seq: number;
+  title: string;
+  kind: 'chapter' | 'page';
+  mediaType: string;
+  /** Opaque, format-specific reference. Pass it back unchanged. */
+  href: string;
+  /** Byte length when the format knows it cheaply. */
+  size?: number;
+}
+
+/** A group of items: a comic volume, or a window of chapters. */
+export interface ContentGroup {
+  id: string;
+  seq: number;
+  title: string;
+  count: number;
+  /**
+   * Global `seq` of this group's first item.
+   *
+   * Present so a client holding one window can place it in the whole-book
+   * ordering without re-reading every previous group's count — which is exactly
+   * how a jump lands on the wrong chapter.
+   */
+  offset: number;
+}
+
+/**
+ * The addressable structure of a book.
+ *
+ * `kind` tells the client how to render it; `group` is present only when the
+ * request narrowed the items to one window.
+ */
+export interface BookContent {
+  kind: 'reflowable' | 'paged' | 'text' | 'document' | 'single-image';
+  total: number;
+  groups: ContentGroup[];
+  items: ContentItem[];
+  group?: number;
+}
+
+/**
+ * One entry of a book's own navigation.
+ *
+ * `href` is the same opaque reference the manifest's items carry, so a jump from
+ * the contents panel is addressed the same way a saved position is.
+ */
+export interface TocEntry {
+  href: string;
+  title: string;
+  level: number;
+  spine?: number;
+}
+
 export interface Manifest {
   book: Book;
   contentUrl: string;
   coverUrl: string | null;
   files: BookFile[];
+  /**
+   * The addressable structure, already narrowed to the first window.
+   *
+   * Present since the manifest took over `/items`, which is what makes opening a
+   * book one round trip. Absent only for a format that exposes no structure at
+   * all, in which case the client downloads the file.
+   */
+  content?: BookContent | null;
+  kind?: BookContent['kind'];
+  total?: number;
+  groups?: ContentGroup[];
+  items?: ContentItem[];
 }
 
 export interface Progress {

@@ -90,8 +90,16 @@ export interface ContentGroup {
  */
 export interface BookFileEntry {
   relPath: string;
-  /** Position in the book, so a handler can serve the file from its own addressing. */
-  index: number;
+  /**
+   * The handler's own reference for this file's bytes.
+   *
+   * Opaque, like every other ref: a directory book addresses pages as
+   * `page:<volume>:<page>`, and only the handler knows where its volumes begin. A
+   * caller that needs the bytes passes this back verbatim rather than assuming an
+   * index — that assumption is what once turned a request for a page into a
+   * request for the archive containing it.
+   */
+  ref: string;
   size: number;
   missing: number;
 }
