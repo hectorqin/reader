@@ -865,6 +865,69 @@ test('a long book is loaded one window at a time', async () => {
     await ctx.scanner.scan();
   });
 
+test('an epub reports its spine length during the scan', async () => {
+    // This was silently null for every book: the parse stage opens the archive
+    // from memory (the scanner already has the bytes) but the package reader
+    // insisted on a file path. The symptom was a missing progress denominator,
+    // which is invisible until a reader notices the percentage bar stays empty.
+    const row = ctx.db.get<{ page_count: number | null }>(
+      'SELECT b.page_count FROM books b WHERE b.title = ?',
+      '三体',
+    );
+    assert.equal(row!.page_count, 3);
+  });
+
+test('a parser fix reaches books whose bytes never changed', async () => {
+    // Change detection is content-based, so a parser fix touches nothing it can
+    // detect. Without the parse version, a book indexed by a broken parser keeps
+    // its bad result forever and re-running the scan skips exactly that book.
+    const book = await findBook('三体');
+    const file = ctx.db.get<{ id: string }>('SELECT id FROM book_files WHERE book_id = ?', book.id);
+
+    // Simulate a library written by an older, broken build.
+    ctx.db.run('UPDATE books SET page_count = NULL WHERE id = ?', book.id);
+    ctx.db.run('UPDATE book_files SET parse_version = 0 WHERE id = ?', file!.id);
+    assert.equal(ctx.db.get<{ page_count: number | null }>('SELECT page_count FROM books WHERE id = ?', book.id)!.page_count, null);
+
+    const result = await ctx.scanner.scan();
+    assert.ok(result.updated >= 1, 'the book must be reparsed once');
+    assert.equal(
+      ctx.db.get<{ page_count: number | null }>('SELECT page_count FROM books WHERE id = ?', book.id)!.page_count,
+      3,
+    );
+
+    // And then it settles: the version bump is a one-time cost, not a slow scan.
+    const second = await ctx.scanner.scan();
+    assert.equal(second.updated, 0, 'a repeat scan must not reparse anything');
+  });
+
+  test('the schema migration is additive, so an existing database still opens', async () => {
+    // `CREATE TABLE IF NOT EXISTS` does nothing to a table that already exists,
+    // so a column added to the schema is invisible to a running instance. An
+    // existing database is built without the column here and then reopened.
+    const { openDatabase } = await import('../src/db/index.ts');
+    const dir = await mkdtemp(join(tmpdir(), 'migrate-'));
+    const config = { ...ctx.config, dataDir: dir } as typeof ctx.config;
+
+    const first = openDatabase(config);
+    first.close();
+
+    // Drop the column and reopen: the migration must put it back without losing
+    // the rows, which is what a self-hosted user's database looks like after an
+    // upgrade.
+    const { DatabaseSync } = await import('node:sqlite');
+    const raw = new DatabaseSync(join(dir, 'reader.db'));
+    raw.exec('ALTER TABLE book_files DROP COLUMN parse_version');
+    raw.exec("INSERT INTO users (id, username, display_name, password_hash, role, disabled, created_at, updated_at) VALUES ('u1','a','','x','admin',0,0,0)");
+    raw.close();
+
+    const second = openDatabase(config);
+    const columns = second.all<{ name: string }>("SELECT name FROM pragma_table_info('book_files')");
+    assert.ok(columns.some((column) => column.name === 'parse_version'), 'the column must be restored');
+    assert.equal(second.get<{ n: number }>('SELECT COUNT(*) AS n FROM users')!.n, 1, 'existing rows must survive');
+    second.close();
+  });
+
   test('formats endpoint advertises what the instance can read', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/v1/library/formats', headers: auth() });
     assert.equal(res.statusCode, 200);

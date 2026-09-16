@@ -56,7 +56,24 @@ interface StoredFile {
   missing: number;
   book_content_hash: string;
   book_identifier: string | null;
+  parse_version: number;
 }
+
+/**
+ * Version of the format parsers.
+ *
+ * Bump this whenever a parser starts producing a *different* result for the same
+ * bytes — a fix, a new extracted field, a corrected count. It is the only
+ * mechanism by which such a change can reach books that were already indexed,
+ * because change detection is content-based and a parser fix does not touch the
+ * content. Raising it costs one full reparse of the library, so it is for real
+ * changes rather than for every commit.
+ *
+ * 1: initial version. Everything indexed before this carries version 0 and is
+ *    reparsed once, which repairs libraries whose EPUB page counts were lost to
+ *    the memory-backed archive reader.
+ */
+const PARSE_VERSION = 1;
 
 /** Directories that never contain books, or contain only tooling noise. */
 const SKIP_DIRS = new Set(['.git', '@eaDir', '#recycle', '.DS_Store', 'lost+found', '__MACOSX']);
@@ -377,7 +394,7 @@ export class Scanner {
 
   private loadStoredFiles(): StoredFile[] {
     return this.db.all<StoredFile>(
-      `SELECT f.id, f.book_id, f.rel_path, f.size, f.mtime_ms, f.missing,
+      `SELECT f.id, f.book_id, f.rel_path, f.size, f.mtime_ms, f.missing, f.parse_version,
               b.content_hash AS book_content_hash, b.identifier AS book_identifier
        FROM book_files f JOIN books b ON b.id = f.book_id`,
     );
@@ -389,7 +406,7 @@ export class Scanner {
    *   2. content hash  -> authoritative, confirms the bytes really changed
    */
   private async indexFile(entry: FileEntry, previous: StoredFile | undefined): Promise<void> {
-    if (previous && previous.size === entry.size && previous.mtime_ms === entry.mtimeMs) {
+    if (previous && previous.size === entry.size && previous.mtime_ms === entry.mtimeMs && !this.needsReparse(previous)) {
       this.progress.unchanged += 1;
       return;
     }
@@ -414,9 +431,9 @@ export class Scanner {
     const parsed = await handler.parse({ relPath: entry.relPath, absPath: abs }, buf);
 
     // Stage 2: identical bytes with a touched mtime is not a real change.
-    if (previous && previous.book_content_hash === parsed.contentHash) {
-      this.db.run('UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0 WHERE id = ?',
-        entry.size, entry.mtimeMs, previous.id);
+    if (previous && previous.book_content_hash === parsed.contentHash && !this.needsReparse(previous)) {
+      this.db.run('UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0, parse_version = ? WHERE id = ?',
+        entry.size, entry.mtimeMs, PARSE_VERSION, previous.id);
       this.progress.unchanged += 1;
       return;
     }
@@ -443,9 +460,14 @@ export class Scanner {
 
     const parsed = await owner.parse({ relPath: candidate.relPath, absPath: candidate.absPath }, []);
 
-    if (previous && previous.size === parsed.size && previous.book_content_hash === parsed.contentHash) {
-      this.db.run('UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0 WHERE id = ?',
-        parsed.size, Date.now(), previous.id);
+    if (
+      previous &&
+      previous.size === parsed.size &&
+      previous.book_content_hash === parsed.contentHash &&
+      !this.needsReparse(previous)
+    ) {
+      this.db.run('UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0, parse_version = ? WHERE id = ?',
+        parsed.size, Date.now(), PARSE_VERSION, previous.id);
       this.progress.unchanged += 1;
       return;
     }
@@ -520,16 +542,17 @@ export class Scanner {
     const fileId = computeFileId(relPath);
     if (previous) {
       this.db.run(
-        'UPDATE book_files SET book_id = ?, size = ?, mtime_ms = ?, missing = 0, last_seen = ? WHERE id = ?',
-        bookId, stat.size, stat.mtimeMs, now, previous.id,
+        'UPDATE book_files SET book_id = ?, size = ?, mtime_ms = ?, missing = 0, last_seen = ?, parse_version = ? WHERE id = ?',
+        bookId, stat.size, stat.mtimeMs, now, PARSE_VERSION, previous.id,
       );
     } else {
       this.db.run(
-        `INSERT INTO book_files (id, book_id, rel_path, size, mtime_ms, inode, missing, first_seen, last_seen)
-         VALUES (?, ?, ?, ?, ?, '', 0, ?, ?)
+        `INSERT INTO book_files (id, book_id, rel_path, size, mtime_ms, inode, missing, first_seen, last_seen, parse_version)
+         VALUES (?, ?, ?, ?, ?, '', 0, ?, ?, ?)
          ON CONFLICT(rel_path) DO UPDATE SET book_id = excluded.book_id, size = excluded.size,
-           mtime_ms = excluded.mtime_ms, missing = 0, last_seen = excluded.last_seen`,
-        fileId, bookId, relPath, stat.size, stat.mtimeMs, now, now,
+           mtime_ms = excluded.mtime_ms, missing = 0, last_seen = excluded.last_seen,
+           parse_version = excluded.parse_version`,
+        fileId, bookId, relPath, stat.size, stat.mtimeMs, now, now, PARSE_VERSION,
       );
     }
   }
@@ -577,6 +600,24 @@ export class Scanner {
       parsed.pageCount, parsed.size, JSON.stringify({ ...m.raw, kind: parsed.kind }),
       coverPath ?? null, m.source, now, bookId,
     );
+  }
+
+  /**
+   * Whether a stored book was written by a version of the parser that is now
+   * known to have been wrong.
+   *
+   * Without this, a parser fix cannot reach the books it was written for. The
+   * change detection is content-based, and a fix changes nothing about the bytes
+   * — so the scan skips exactly the files that need re-reading, and a book
+   * indexed with a null page count keeps it forever. That is not hypothetical:
+   * it is what the broken EPUB spine reader did to every book in a library.
+   *
+   * Bumping `PARSE_VERSION` invalidates the shortcut once, for every book, at the
+   * cost of one full reparse. Self-hosted users do not upgrade on a schedule, so
+   * the version has to travel with the row rather than with the process.
+   */
+  private needsReparse(previous: StoredFile): boolean {
+    return previous.parse_version !== PARSE_VERSION;
   }
 
   /** Persists an extracted cover. Must be called outside the DB transaction. */

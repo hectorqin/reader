@@ -3,6 +3,21 @@
  * backward compatible (product design §8.3: self-hosted users do not upgrade
  * promptly, so the on-disk format must stay additive).
  */
+/**
+ * Additive migrations applied after `SCHEMA_SQL`.
+ *
+ * `CREATE TABLE IF NOT EXISTS` does nothing to a table that already exists, so a
+ * column added to the schema is invisible to an existing instance — and
+ * self-hosted users do not upgrade on a schedule, so "recreate the database" is
+ * not an option. Each statement is applied only when the column is missing.
+ *
+ * Every migration here is additive: a column with a default, never a rewrite, so
+ * that an instance running an older build against a newer database still works.
+ */
+export const MIGRATIONS_SQL = `
+ALTER TABLE book_files ADD COLUMN parse_version INTEGER NOT NULL DEFAULT 0;
+`;
+
 export const SCHEMA_SQL = `
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
@@ -75,6 +90,11 @@ CREATE TABLE IF NOT EXISTS book_files (
   mtime_ms   INTEGER NOT NULL,
   inode      TEXT NOT NULL DEFAULT '',
   missing    INTEGER NOT NULL DEFAULT 0,
+  -- Which version of the format parsers produced this row. Change detection is
+  -- content-based, so a parser fix cannot invalidate anything on its own: the
+  -- bytes are identical, the scan skips the file, and a book indexed with a
+  -- broken parser keeps the bad result forever. Bumping this forces one reparse.
+  parse_version INTEGER NOT NULL DEFAULT 0,
   first_seen INTEGER NOT NULL,
   last_seen  INTEGER NOT NULL
 );

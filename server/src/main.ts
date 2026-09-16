@@ -5,6 +5,7 @@ import { UserService } from './services/users.ts';
 import { ShelfService } from './services/shelf.ts';
 import { SyncService } from './services/sync.ts';
 import { buildApp } from './http/app.ts';
+import { setLogger } from './lib/log.ts';
 import type { AppContext } from './http/context.ts';
 
 interface Schedulers {
@@ -30,6 +31,13 @@ async function main(): Promise<void> {
 
   const app = buildApp(ctx);
   ctx.log = app.log;
+  // Code that runs outside a request (the scanner, the format parsers) has no
+  // request to borrow a logger from, so it gets the app's.
+  setLogger({
+    warn: (context, message) => app.log.warn(context, message),
+    info: (context, message) => app.log.info(context, message),
+    error: (context, message) => app.log.error(context, message),
+  });
   ctx.scanner = new Scanner(db, config, {
     info: (o, m) => app.log.info(o as object, m),
     warn: (o, m) => app.log.warn(o as object, m),

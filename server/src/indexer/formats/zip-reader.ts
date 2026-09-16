@@ -62,6 +62,8 @@ export class ZipArchive {
     private readonly path: string,
     private readonly index: Map<string, ZipEntry>,
     readonly entries: readonly ZipEntry[],
+    /** Set only for `openBuffer`, where the container is already in memory. */
+    private readonly memory: Buffer | null = null,
   ) {}
 
   /**
@@ -72,7 +74,7 @@ export class ZipArchive {
    */
   static async openBuffer(buf: Buffer): Promise<ZipArchive> {
     const entries = readCentralDirectoryFromBuffer(buf);
-    return new ZipArchive('', new Map(entries.map((entry) => [entry.name, entry])), entries);
+    return new ZipArchive('', new Map(entries.map((entry) => [entry.name, entry])), entries, buf);
   }
 
   static async open(absPath: string): Promise<ZipArchive> {
@@ -146,18 +148,18 @@ export class ZipArchive {
 
   /** Inflate one entry. Only the requested bytes are ever held in memory. */
   async read(name: string, maxBytes = MAX_ENTRY_BYTES): Promise<Buffer> {
-    if (!this.path) {
-      // The buffer-backed form exists so the scanner can avoid re-reading a file
-      // it already has; serving requests from it never happens, and silently
-      // returning wrong bytes would be worse than saying so.
-      throw new ZipError('this archive was opened from memory and has no file to read', 'NO_PATH');
-    }
     const entry = this.index.get(name);
     if (!entry) throw new ZipError(`entry not found: ${name}`, 'ENTRY_NOT_FOUND');
     if (entry.encrypted) throw new ZipError('encrypted entries are not supported', 'ENCRYPTED_UNSUPPORTED');
     if (entry.uncompressedSize > maxBytes) {
       throw new ZipError(`entry is too large: ${entry.uncompressedSize} bytes`, 'ENTRY_TOO_LARGE');
     }
+
+    // The buffer-backed form exists so the scanner can avoid re-reading a file it
+    // already hashed. There is no reason for it to be read-only: the same archive
+    // is later served over HTTP from its path, and a read path here keeps the two
+    // from disagreeing about an entry's bytes.
+    if (this.memory) return inflateEntry(entry, this.memory, maxBytes);
 
     const handle = await open(this.path, 'r');
     try {
@@ -431,4 +433,24 @@ function readCentralDirectoryFromBuffer(buf: Buffer): ZipEntry[] {
     throw new ZipError('central directory is out of bounds', 'INVALID');
   }
   return parseCentralDirectory(buf.subarray(centralOffset, centralOffset + centralSize), entryCount);
+}
+
+/** Inflate one entry out of an in-memory container. */
+function inflateEntry(entry: ZipEntry, buffer: Buffer, maxBytes: number): Buffer {
+  if (entry.encrypted) throw new ZipError('encrypted entries are not supported', 'ENCRYPTED_UNSUPPORTED');
+  const nameLength = buffer.readUInt16LE(entry.localHeaderOffset + 26);
+  const extraLength = buffer.readUInt16LE(entry.localHeaderOffset + 28);
+  if (buffer.readUInt32LE(entry.localHeaderOffset) !== LOCAL_SIGNATURE) {
+    throw new ZipError('corrupt local header', 'INVALID');
+  }
+  const start = entry.localHeaderOffset + 30 + nameLength + extraLength;
+  const payload = buffer.subarray(start, start + entry.compressedSize);
+
+  if (entry.method === 0) return payload;
+  if (entry.method === 8) {
+    const inflated = inflateRawSync(payload);
+    if (inflated.byteLength > maxBytes) throw new ZipError('inflated entry is too large', 'ENTRY_TOO_LARGE');
+    return inflated;
+  }
+  throw new ZipError(`unsupported compression method: ${entry.method}`, 'METHOD_UNSUPPORTED');
 }

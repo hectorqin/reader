@@ -308,7 +308,13 @@ async function spineLength(buf: Buffer): Promise<number | null> {
     const archive = await ZipArchive.openBuffer(buf);
     const { spine } = await readPackage(archive);
     return spine.length || null;
-  } catch {
+  } catch (err) {
+    // Returning null silently here was how the spine length went missing for
+    // every book while the test suite stayed green: `null` is also the legitimate
+    // answer for a format that cannot know its length, so the two are
+    // indistinguishable downstream. Log it so a real failure is visible.
+    const { log } = await import('../../lib/log.ts');
+    log.warn({ err: err instanceof Error ? err.message : String(err) }, 'could not read the epub spine');
     return null;
   }
 }
