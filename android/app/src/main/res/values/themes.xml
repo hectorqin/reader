@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The native theme exists only for the split second before the WebView has
+      painted. It matches the web client's default paper colour so there is no
+      flash of a different background on launch.
+    -->
+    <style name="Theme.Reader" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+        <item name="android:statusBarColor">@color/paper</item>
+        <item name="android:navigationBarColor">@color/paper</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

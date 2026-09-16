@@ -1,40 +1,87 @@
-# 服务端 CI：类型检查、测试、构建。
-# 忽略文档改动，避免改 README 也跑一遍 Node。
+# CI：服务端（Node/TypeScript）、客户端（Web/TypeScript）、Android 壳（Kotlin）。
+#
+# 每个任务都用 ifModify 限定到自己那部分，避免改一行 README 就把三条流水线
+# 全跑一遍。
+
+# 服务端与客户端都是 Node 生态，共用同一个镜像锚点。
 .node-env: &node-env
   docker:
     image: node:24
-  ifModify:
-    - server/**
 
-# 推送：完整检查
+.server-check: &server-check
+  - name: install
+    script: cd server && npm ci
+  - name: typecheck
+    script: cd server && npm run typecheck
+  - name: test
+    script: cd server && npm test
+  - name: build
+    script: cd server && npm run build
+
+.client-check: &client-check
+  - name: install
+    script: cd web && npm ci
+  - name: typecheck
+    script: cd web && npm run typecheck
+  - name: test
+    script: cd web && npm test
+  - name: build
+    script: cd web && npm run build
+
 main:
   push:
     - name: server-ci
       <<: *node-env
+      ifModify:
+        - server/**
       stages:
-        - name: install
-          script: cd server && npm ci
-        - name: typecheck
-          script: cd server && npm run typecheck
-        - name: test
-          script: cd server && npm test
-        - name: build
-          script: cd server && npm run build
+        - *server-check
       failStages:
         - name: report-failure
-          script: echo "CI 失败：$CNB_BUILD_FAILED_MSG"
+          script: echo "服务端 CI 失败：$CNB_BUILD_FAILED_MSG"
 
-# PR：同样的检查，作为评审依据
+    - name: client-ci
+      <<: *node-env
+      ifModify:
+        - web/**
+      stages:
+        - *client-check
+      failStages:
+        - name: report-failure
+          script: echo "客户端 CI 失败：$CNB_BUILD_FAILED_MSG"
+
+    # Android 壳。
+    #
+    # 先跑一个不依赖 JDK 的静态检查（秒级），再编译。原因是桥接契约的两半分别
+    # 用 Kotlin 和 TypeScript 写，互相没法类型检查：客户端调用一个壳里没有的
+    # 方法是最容易出、也最难在本地发现的错误。静态检查把它提前到这里。
+    - name: android-ci
+      docker:
+        image: docker.cnb.cool/dockerhub/androidsdk/android-35:latest
+      ifModify:
+        - android/**
+        - web/src/android-bridge.d.ts
+      stages:
+        - name: shell-contract
+          script: sh android/scripts/check-shell.sh
+        - name: assemble
+          script: cd android && ./gradlew --no-daemon :app:assembleDebug
+      failStages:
+        - name: report-failure
+          script: echo "Android 构建失败：$CNB_BUILD_FAILED_MSG"
+
 "**":
   pull_request:
     - name: server-checks
       <<: *node-env
+      ifModify:
+        - server/**
       stages:
-        - name: install
-          script: cd server && npm ci
-        - name: typecheck
-          script: cd server && npm run typecheck
-        - name: test
-          script: cd server && npm test
-        - name: build
-          script: cd server && npm run build
+        - *server-check
+
+    - name: client-checks
+      <<: *node-env
+      ifModify:
+        - web/**
+      stages:
+        - *client-check

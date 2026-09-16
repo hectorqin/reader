@@ -4,12 +4,51 @@ import { join } from 'node:path';
 import type { Db } from '../db/index.ts';
 import type { AppConfig } from '../config/index.ts';
 import { computeBookId, computeFileId } from './identity.ts';
-import { parseBookFile, saveCover, type ExtractedMetadata, type ParsedBookFile } from './metadata.ts';
+import {
+  comicDirectoryMetadata,
+  parseBookFile,
+  saveCover,
+  type ExtractedMetadata,
+  type ParsedBookFile,
+} from './metadata.ts';
+import { naturalCompare } from './natural-sort.ts';
 import { toRelative } from '../lib/paths.ts';
 import { collapseWhitespace, safeJsonParse } from '../lib/text.ts';
 
-export const SUPPORTED_EXTENSIONS = new Set(['.epub', '.pdf']);
-const SKIP_DIRS = new Set(['.git', '@eaDir', '#recycle', '.DS_Store', 'lost+found']);
+/**
+ * Formats the scanner will index.
+ *
+ * Deliberately broader than "the formats the server can parse". For most of these
+ * the server's job is only to record that a file exists and extract whatever
+ * metadata is cheap to get; *rendering* is the client's business (see
+ * docs/architecture.md §8). A TXT novel or a comic archive that the server
+ * ignored would simply be invisible on the shelf, which is the one outcome a
+ * self-hosted library must not have.
+ */
+export const SUPPORTED_EXTENSIONS = new Set([
+  '.epub',
+  '.pdf',
+  '.txt',
+  '.cbz',
+  '.zip',
+]);
+
+/**
+ * Image formats, used to recognise a comic stored as a folder of pages.
+ *
+ * Such a book is not a file at all — the group of images *is* the book — so it is
+ * handled by a separate pass (see `collectComicDirectories`) rather than through
+ * `indexFile`.
+ */
+export const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp']);
+
+/** Files inside a comic folder that are not pages. */
+const NON_PAGE_PATTERNS = [/^\._/, /\.ds_store$/i, /thumbs\.db$/i, /comicinfo\.xml$/i];
+
+/** Below this many images, a folder is treated as loose images rather than a book. */
+const MIN_COMIC_PAGES = 2;
+
+const SKIP_DIRS = new Set(['.git', '@eaDir', '#recycle', '.DS_Store', 'lost+found', '__MACOSX']);
 
 export interface ScanProgress {
   running: boolean;
@@ -32,6 +71,17 @@ interface FileEntry {
   relPath: string;
   size: number;
   mtimeMs: number;
+}
+
+/** A folder of images that is treated as one book. */
+interface ComicDirectory {
+  relDir: string;
+  pages: Array<{ relPath: string; size: number; mtimeMs: number }>;
+  totalBytes: number;
+  /** Digest of the folder path plus its page set; used as the content hash. */
+  /** Stable content hash derived from the folder path; see the note at its use. */
+  identityHash: string;
+  identifier: string;
 }
 
 interface StoredFile {
@@ -97,16 +147,31 @@ export class Scanner {
 
     try {
       const found = await this.walk(this.config.booksDir);
+      // Comic folders have no file to walk over, so they are collected in a
+      // second pass. Their pages are registered as files of the folder's book.
+      const comics = await this.collectComicDirectories(this.config.booksDir);
+      for (const comic of comics) {
+        for (const page of comic.pages) {
+          found.push({ relPath: page.relPath, size: page.size, mtimeMs: page.mtimeMs });
+        }
+      }
       const stored = this.loadStoredFiles();
       const storedByPath = new Map(stored.map((row) => [row.rel_path, row]));
       const seen = new Set<string>();
+
+      const pagesByDir = new Map(comics.map((comic) => [comic.relDir, comic]));
 
       for (const entry of found) {
         seen.add(entry.relPath);
         this.progress.scanned += 1;
         const previous = storedByPath.get(entry.relPath);
         try {
-          await this.indexFile(entry, previous);
+          const owner = comicOf(entry.relPath, pagesByDir);
+          if (owner) {
+            await this.indexComicDirectory(owner, entry, previous);
+          } else {
+            await this.indexFile(entry, previous);
+          }
         } catch (err) {
           this.progress.failed += 1;
           this.progress.lastError = err instanceof Error ? err.message : String(err);
@@ -209,6 +274,161 @@ export class Scanner {
               b.content_hash AS book_content_hash, b.identifier AS book_identifier
        FROM book_files f JOIN books b ON b.id = f.book_id`,
     );
+  }
+
+  /**
+   * Indexes one page of a comic stored as a folder.
+   *
+   * Every page resolves to the *same* book id, so the folder appears as one book
+   * with many files rather than as N separate entries. The id is deliberately
+   * derived from the folder path rather than from page contents: adding a page to
+   * a folder should not create a second book and orphan the reader's progress.
+   */
+  private async indexComicDirectory(owner: ComicDirectory, entry: FileEntry, previous: StoredFile | undefined): Promise<void> {
+    if (previous && previous.size === entry.size && previous.mtime_ms === entry.mtimeMs && previous.book_identifier === owner.identifier) {
+      this.progress.unchanged += 1;
+      return;
+    }
+
+    const metadata = comicDirectoryMetadata(owner.relDir, owner.pages.map((page) => page.relPath), owner.totalBytes);
+    const bookId = computeBookId(metadata.identifier, owner.identityHash);
+    const existing = this.db.get<{ id: string }>('SELECT id FROM books WHERE id = ?', bookId);
+    const now = Date.now();
+
+    // Only the first page becomes the cover: it is what the reader would pick,
+    // and extracting every page to look for a better one would mean inflating the
+    // whole archive on every scan.
+    const coverPath = entry.relPath === owner.pages[0]?.relPath
+      ? await this.persistComicCover(bookId, join(this.config.booksDir, entry.relPath), entry.relPath)
+      : undefined;
+
+    const parsed = {
+      format: 'comic-dir' as const,
+      contentHash: owner.identityHash,
+      size: owner.totalBytes,
+      pageCount: owner.pages.length,
+      metadata,
+      ...(coverPath !== undefined ? { coverPath } : {}),
+    };
+
+    if (!existing) {
+      this.insertBook(bookId, parsed, now);
+      this.progress.added += 1;
+      this.db.run(
+        `INSERT OR IGNORE INTO user_books (user_id, book_id, added_at)
+         SELECT id, ?, ? FROM users`,
+        bookId, now,
+      );
+    } else {
+      this.progress.updated += 1;
+      this.updateBook(bookId, parsed, now);
+    }
+
+    const fileId = computeFileId(entry.relPath);
+    if (previous) {
+      this.db.run(
+        'UPDATE book_files SET book_id = ?, size = ?, mtime_ms = ?, missing = 0, last_seen = ? WHERE id = ?',
+        bookId, entry.size, entry.mtimeMs, now, previous.id,
+      );
+    } else {
+      this.db.run(
+        `INSERT INTO book_files (id, book_id, rel_path, size, mtime_ms, inode, missing, first_seen, last_seen)
+         VALUES (?, ?, ?, ?, ?, '', 0, ?, ?)
+         ON CONFLICT(rel_path) DO UPDATE SET book_id = excluded.book_id, size = excluded.size,
+           mtime_ms = excluded.mtime_ms, missing = 0, last_seen = excluded.last_seen`,
+        fileId, bookId, entry.relPath, entry.size, entry.mtimeMs, now, now,
+      );
+    }
+  }
+
+  private async persistComicCover(bookId: string, absPage: string, relPath: string): Promise<string | undefined> {
+    try {
+      const data = await readFile(absPage);
+      return await saveCover(this.config.dataDir, bookId, { data, contentType: contentTypeFor(relPath) });
+    } catch (err) {
+      this.log.warn({ err, relPath }, 'comic cover extraction failed');
+      return undefined;
+    }
+  }
+
+  /**
+   * Finds folders that are comics.
+   *
+   * A folder counts when it holds at least two images and no archives or books of
+   * its own: a `books/` directory full of EPUBs plus a stray `cover.jpg` is not a
+   * comic, and treating it as one would hide every book inside it.
+   */
+  private async collectComicDirectories(root: string): Promise<ComicDirectory[]> {
+    const out: ComicDirectory[] = [];
+
+    const visit = async (dir: string): Promise<void> => {
+      let entries;
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch (err) {
+        this.log.warn({ err, dir }, 'unreadable directory, skipping');
+        return;
+      }
+
+      const images: Array<{ relPath: string; size: number; mtimeMs: number }> = [];
+      let hasBookFile = false;
+      const subdirs: string[] = [];
+
+      for (const entry of entries) {
+        if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
+        if (NON_PAGE_PATTERNS.some((pattern) => pattern.test(entry.name))) continue;
+        const abs = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          subdirs.push(abs);
+          continue;
+        }
+        if (!entry.isFile()) continue;
+        const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase();
+        if (SUPPORTED_EXTENSIONS.has(ext)) {
+          hasBookFile = true;
+          continue;
+        }
+        if (!IMAGE_EXTENSIONS.has(ext)) continue;
+        try {
+          const info = await stat(abs);
+          images.push({ relPath: toRelative(root, abs), size: info.size, mtimeMs: Math.floor(info.mtimeMs) });
+        } catch {
+          // A file that vanished mid-walk is not worth reporting.
+        }
+      }
+
+      if (dir !== root && !hasBookFile && images.length >= MIN_COMIC_PAGES) {
+        const sorted = [...images].sort((a, b) => naturalCompare(a.relPath, b.relPath));
+        const relDir = toRelative(root, dir);
+        const totalBytes = sorted.reduce((sum, page) => sum + page.size, 0);
+        out.push({
+          relDir,
+          pages: sorted,
+          totalBytes,
+          // Identity is the *folder*, not its contents.
+          //
+          // The tempting alternative — hashing the page set — is wrong for the
+          // same reason hashing a file's bytes is wrong for a single book: the
+          // reader adds one page to a folder and their progress and bookmarks for
+          // that comic are gone. A folder path is the stable anchor here, exactly
+          // as `dc:identifier` is for an EPUB, and the page set is allowed to
+          // change underneath it.
+          //
+          // The consequence is accepted deliberately: renaming the folder makes a
+          // new book. That is visible and recoverable, whereas silently losing the
+          // reading position is not.
+          identityHash: createHash('sha256').update(`comic-dir\u0000${relDir}`).digest('hex'),
+          identifier: `comic-dir:${relDir}`,
+        });
+      }
+
+      // Subfolders are still walked even when this folder was claimed as a comic:
+      // a comic folder containing a `bonus/` subfolder would otherwise hide it.
+      for (const subdir of subdirs) await visit(subdir);
+    };
+
+    await visit(root);
+    return out;
   }
 
   /**
@@ -343,3 +563,30 @@ export function parseTags(value: string): string[] {
 }
 
 export type { ExtractedMetadata };
+
+/** Which comic folder a path belongs to, if any. */
+function comicOf(relPath: string, comics: Map<string, ComicDirectory>): ComicDirectory | undefined {
+  for (const [relDir, comic] of comics) {
+    if (relPath.startsWith(`${relDir}/`)) return comic;
+  }
+  return undefined;
+}
+
+/** MIME type for a cover image, derived from its extension. */
+function contentTypeFor(relPath: string): string {
+  const ext = relPath.slice(relPath.lastIndexOf('.')).toLowerCase();
+  switch (ext) {
+    case '.png':
+      return 'image/png';
+    case '.gif':
+      return 'image/gif';
+    case '.webp':
+      return 'image/webp';
+    case '.avif':
+      return 'image/avif';
+    case '.bmp':
+      return 'image/bmp';
+    default:
+      return 'image/jpeg';
+  }
+}

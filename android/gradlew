@@ -1,0 +1,17 @@
+#!/bin/sh
+# Gradle wrapper launcher.
+#
+# Committed so a contributor (and CI) can build without installing Gradle. It
+# downloads the distribution named in gradle/wrapper/gradle-wrapper.properties on
+# first use and caches it.
+set -eu
+
+APP_HOME=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+JAVA_CMD=${JAVA_HOME:+$JAVA_HOME/bin/java}
+JAVA_CMD=${JAVA_CMD:-java}
+
+exec "$JAVA_CMD" \
+  -Xmx2048m \
+  -classpath "$APP_HOME/gradle/wrapper/gradle-wrapper.jar" \
+  org.gradle.wrapper.GradleWrapperMain \
+  "$@"

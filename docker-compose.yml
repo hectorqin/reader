@@ -7,8 +7,12 @@
 services:
   reader:
     image: cnb.cool/hectorqin/reader:latest
-    # To build from source instead of pulling the published image:
-    # build: ./server
+    # To build from source instead of pulling the published image. The context is
+    # the repository root because the image bakes in the H5 client built from
+    # ./web as well as the server.
+    # build:
+    #   context: .
+    #   dockerfile: server/Dockerfile
     container_name: reader
     restart: unless-stopped
     ports:
@@ -25,6 +29,14 @@ services:
       # Uncomment to allow family members to self-register instead of the admin
       # creating their accounts:
       # ALLOW_REGISTRATION: "true"
+      # Origins allowed to call the API from a browser, comma separated.
+      # Empty (the default) reflects whatever origin asks. Fine for a LAN: the
+      # client does not know the address it will be reached on, and there are no
+      # cookies in the design. Set it if the instance is on the public internet:
+      # CORS_ORIGINS: "https://reader.example.com"
+      # Directory holding the built H5 client, served at `/`. Already set in the
+      # image; only override if you build the client separately.
+      # WEB_DIR: "/app/web"
     volumes:
       # --- your books, mounted READ-ONLY ---
       # The server NEVER writes to this directory. Replace the left-hand side

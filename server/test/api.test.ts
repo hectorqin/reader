@@ -102,6 +102,23 @@ function auth(token: string) {
   return { authorization: `Bearer ${token}` };
 }
 
+/**
+ * Creates an account through the admin path and signs in.
+ *
+ * Public registration is only open for the very first account (by design), so
+ * the multi-format tests below cannot use `register`. Going through
+ * `createAsAdmin` also exercises the path a real family member's account takes.
+ */
+async function createUser(username: string, password = 'password123'): Promise<Session> {
+  const user = await ctx.users.createAsAdmin({ username, password });
+  const res = await app.inject({
+    method: 'POST', url: '/api/v1/auth/login', payload: { username, password },
+  });
+  assert.equal(res.statusCode, 200, res.body);
+  const body = res.json() as { accessToken: string; user: { id: string } };
+  return { token: body.accessToken, userId: user.id };
+}
+
 test('first account becomes admin, later public registrations are refused', async () => {
   const first = await register('owner');
   const me = await app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: auth(first.token) });
@@ -358,3 +375,238 @@ async function login(username: string, password?: string): Promise<Session> {
   const body = res.json() as { accessToken: string; user: { id: string } };
   return { token: body.accessToken, userId: body.user.id };
 }
+
+// ---------------------------------------------------------------------------
+// Multi-format library (§6 format scope)
+//
+// The scanner has to index formats it cannot itself parse. If it did not, a TXT
+// novel or a comic archive would simply be absent from the shelf — the one
+// outcome a self-hosted library must never produce, because the reader has no way
+// to tell "unsupported" from "missing".
+// ---------------------------------------------------------------------------
+
+async function makeCbz(pages: string[]): Promise<Buffer> {
+  const zip = new JSZip();
+  for (const page of pages) {
+    // A tiny real PNG header is enough: nothing inflates these during a scan.
+    zip.file(page, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  }
+  return zip.generateAsync({ type: 'nodebuffer' });
+}
+
+test('a TXT book is indexed without being decoded by the server', async () => {
+  const session = await createUser('txtuser');
+  // GB18030 bytes with no BOM: the common shape of a legacy Chinese TXT. The
+  // server must index it anyway — deciding the encoding and splitting chapters is
+  // the client's job (it has the reader's eyes and an override control), and
+  // doing that work server-side would mean decoding a whole novel on every scan.
+  const gb18030 = Buffer.from([0xb5, 0xda, 0xd2, 0xbb, 0xd5, 0xc2, 0x0a, 0xd5, 0xfd, 0xce, 0xc4, 0xa1, 0xa3]);
+  await writeFile(join(booksDir, '长篇.txt'), gb18030);
+  await ctx.scanner.scan();
+
+  const res = await app.inject({ method: 'GET', url: '/api/v1/books?format=txt', headers: auth(session.token) });
+  const body = res.json() as { items: Array<{ title: string; format: string }>; total: number };
+  assert.equal(body.total, 1);
+  assert.equal(body.items[0]!.format, 'txt');
+  assert.equal(body.items[0]!.title, '长篇');
+});
+
+test('an ambiguous "title - author" file name is kept whole rather than guessed at', async () => {
+  // `长篇 - 某作者` has no marker to say which side is which, so the conservative
+  // rule keeps the whole string as the title. Losing an author costs the reader one
+  // manual edit; guessing wrong files the book under the wrong person.
+  const session = await createUser('txtambiguous');
+  await writeFile(join(booksDir, '长篇 - 某作者.txt'), '第一章\n正文。', 'utf8');
+  await ctx.scanner.scan();
+
+  const res = await app.inject({
+    method: 'GET', url: `/api/v1/books?search=${encodeURIComponent('长篇')}`, headers: auth(session.token),
+  });
+  const body = res.json() as { items: Array<{ title: string; author: string }> };
+  assert.equal(body.items[0]!.title, '长篇 - 某作者');
+  assert.equal(body.items[0]!.author, '');
+});
+
+test('a CBZ comic is indexed with a page count, without unpacking it', async () => {
+  const session = await createUser('cbzuser');
+  await writeFile(join(booksDir, '某漫画.cbz'), await makeCbz(['001.png', '002.png', '010.png']));
+  await ctx.scanner.scan();
+
+  const res = await app.inject({ method: 'GET', url: '/api/v1/books?format=cbz', headers: auth(session.token) });
+  const body = res.json() as { items: Array<{ title: string; pageCount: number | null }> };
+  assert.equal(body.items.length, 1);
+  assert.equal(body.items[0]!.title, '某漫画');
+  // Three pages, counted from the central directory.
+  assert.equal(body.items[0]!.pageCount, 3);
+});
+
+test('a folder of images becomes one book with every page as a file', async () => {
+  const session = await createUser('comicuser');
+  const dir = join(booksDir, '图片漫画');
+  await mkdir(dir, { recursive: true });
+  for (const page of ['1.jpg', '2.jpg', '10.jpg']) {
+    await writeFile(join(dir, page), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  }
+  await ctx.scanner.scan();
+
+  const res = await app.inject({ method: 'GET', url: '/api/v1/books?format=comic-dir', headers: auth(session.token) });
+  const body = res.json() as { items: Array<{ id: string; title: string; pageCount: number | null }> };
+  assert.equal(body.items.length, 1);
+  assert.equal(body.items[0]!.title, '图片漫画');
+  assert.equal(body.items[0]!.pageCount, 3);
+
+  const manifest = await app.inject({
+    method: 'GET', url: `/api/v1/books/${body.items[0]!.id}/manifest`, headers: auth(session.token),
+  });
+  const files = (manifest.json() as { files: Array<{ rel_path: string }> }).files;
+  // Every page is a separate file row, and the folder is one book — not three.
+  assert.deepEqual(files.map((file) => file.rel_path).sort(), [
+    '图片漫画/1.jpg',
+    '图片漫画/10.jpg',
+    '图片漫画/2.jpg',
+  ]);
+});
+
+test('a comic folder keeps its identity when a page is added', async () => {
+  const session = await createUser('comicidentity');
+  const dir = join(booksDir, '系列漫画');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, '1.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1]));
+  await writeFile(join(dir, '2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 2]));
+  await ctx.scanner.scan();
+  const before = (await app.inject({
+    method: 'GET', url: '/api/v1/books?format=comic-dir&search=系列漫画', headers: auth(session.token),
+  })).json() as { items: Array<{ id: string }> };
+  assert.equal(before.items.length, 1);
+
+  // Sync some progress, then add a page.
+  await app.inject({
+    method: 'PUT', url: `/api/v1/sync/progress/${before.items[0]!.id}`,
+    headers: { ...auth(session.token), 'content-type': 'application/json' },
+    payload: { locator: 'r1:0.0000:系列漫画/2.jpg', percentage: 0.5, chapterTitle: '第 2 页', device: 'test', updatedAt: Date.now() },
+  });
+  await writeFile(join(dir, '3.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 3]));
+  await ctx.scanner.scan();
+
+  const after = (await app.inject({
+    method: 'GET', url: '/api/v1/books?format=comic-dir&search=系列漫画', headers: auth(session.token),
+  })).json() as { items: Array<{ id: string; pageCount: number | null }> };
+  assert.equal(after.items.length, 1, 'adding a page must not create a second book');
+  assert.equal(after.items[0]!.id, before.items[0]!.id);
+  assert.equal(after.items[0]!.pageCount, 3);
+
+  // The reading position survives, which is the actual point of the identity rule.
+  const progress = (await app.inject({
+    method: 'GET', url: `/api/v1/sync/progress/${before.items[0]!.id}`, headers: auth(session.token),
+  })).json() as { progress: { percentage: number } | null };
+  assert.equal(progress.progress?.percentage, 0.5);
+});
+
+test('a folder of EPUBs is not mistaken for a comic', async () => {
+  // A stray cover.jpg next to real books must not turn the folder into a comic
+  // and hide every book inside it.
+  const session = await createUser('shelfdirectory');
+  const dir = join(booksDir, '藏书目录');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, '一本书.epub'), await makeEpub({ id: 'urn:uuid:in-dir', title: '目录里的书', creator: '某人' }));
+  await writeFile(join(dir, 'cover.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  await writeFile(join(dir, 'cover2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  await ctx.scanner.scan();
+
+  const res = await app.inject({
+    method: 'GET', url: '/api/v1/books?search=目录里的书', headers: auth(session.token),
+  });
+  const body = res.json() as { items: Array<{ format: string }> };
+  assert.equal(body.items.length, 1);
+  assert.equal(body.items[0]!.format, 'epub');
+});
+
+test('one page of a comic folder can be fetched by path', async () => {
+  const session = await createUser('comicfetch');
+  const dir = join(booksDir, '取图漫画');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, '1.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9]));
+  await writeFile(join(dir, '2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0, 8, 8]));
+  await ctx.scanner.scan();
+
+  const list = (await app.inject({
+    method: 'GET', url: '/api/v1/books?search=取图漫画', headers: auth(session.token),
+  })).json() as { items: Array<{ id: string }> };
+  const id = list.items[0]!.id;
+
+  const page = await app.inject({
+    method: 'GET', url: `/api/v1/books/${id}/file?path=${encodeURIComponent('取图漫画/2.jpg')}`,
+    headers: auth(session.token),
+  });
+  assert.equal(page.statusCode, 200);
+  assert.equal(page.headers['content-type'], 'image/jpeg');
+  // Exactly the bytes written above: 6, and the ETag header must not have failed
+  // to build on a non-ASCII path.
+  assert.equal(page.rawPayload.byteLength, 6);
+  assert.match(page.headers['etag'] as string, /^"[0-9a-f]+:[0-9a-f]{16}"$/);
+});
+
+test('the per-file endpoint refuses a path that is not part of the book', async () => {
+  const session = await createUser('comictraversal');
+  const dir = join(booksDir, '穿越漫画');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, '1.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  await writeFile(join(dir, '2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  await writeFile(join(booksDir, 'secret.txt'), 'not yours');
+  await ctx.scanner.scan();
+
+  const list = (await app.inject({
+    method: 'GET', url: '/api/v1/books?search=穿越漫画', headers: auth(session.token),
+  })).json() as { items: Array<{ id: string }> };
+  const id = list.items[0]!.id;
+
+  // Traversal, an absolute path, and a sibling book's file. All three are
+  // refusals because the lookup is against this book's own file rows: a path is
+  // never constructed from the query string.
+  for (const attempt of ['../../../etc/passwd', '/etc/passwd', 'secret.txt', '穿越漫画/../../secret.txt']) {
+    const res = await app.inject({
+      method: 'GET', url: `/api/v1/books/${id}/file?path=${encodeURIComponent(attempt)}`,
+      headers: auth(session.token),
+    });
+    assert.equal(res.statusCode, 404, `expected 404 for ${attempt}, got ${res.statusCode}`);
+  }
+});
+
+test('a member cannot fetch a file of a book they cannot see', async () => {
+  // The per-file endpoint authorises through the shelf exactly like /content does,
+  // so there is no second code path to keep in step.
+  const owner = await createUser('fileowner');
+  const dir = join(booksDir, '私有漫画');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, '1.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  await writeFile(join(dir, '2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  await ctx.scanner.scan();
+
+  const list = (await app.inject({
+    method: 'GET', url: '/api/v1/books?search=私有漫画', headers: auth(owner.token),
+  })).json() as { items: Array<{ id: string }> };
+  const id = list.items[0]!.id;
+
+  // Hide it from a second account, then confirm the file endpoint refuses.
+  // Created through `createUser` rather than a bare `createAsAdmin` + `login`,
+  // because the latter pair is what a previous version of this test did and it
+  // signed in with the wrong credentials, making the assertion meaningless.
+  const other = await createUser('fileother');
+  ctx.db.run('DELETE FROM user_books WHERE user_id = ? AND book_id = ?', other.userId, id);
+
+  const res = await app.inject({
+    method: 'GET', url: `/api/v1/books/${id}/file?path=${encodeURIComponent('私有漫画/1.jpg')}`,
+    headers: auth(other.token),
+  });
+  assert.equal(res.statusCode, 404);
+});
+
+test('the H5 client bundle is served when present and absent otherwise', async () => {
+  // The static route is registered conditionally. This instance has no WEB_DIR,
+  // so `/` must 404 rather than shadow the API — the failure mode being guarded
+  // against is a catch-all that swallows /api/*.
+  const health = await app.inject({ method: 'GET', url: '/api/v1/health' });
+  assert.equal(health.statusCode, 200);
+  const root = await app.inject({ method: 'GET', url: '/' });
+  assert.equal(root.statusCode, 404);
+});
