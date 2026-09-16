@@ -29,6 +29,28 @@ export interface AppConfig {
   logLevel: string;
   /** Public base URL advertised to clients (used by download links). */
   publicUrl: string;
+  /**
+   * Origins allowed to call the API from a browser.
+   *
+   * Empty means "reflect any origin", which is the right default for a
+   * self-hosted server on a LAN: the reader does not know the IP it will be
+   * reached on, and there are no cookies in the design, so a permissive policy
+   * does not hand out ambient authority the way it would for a session-cookie
+   * API.
+   *
+   * Set it when the instance is on the public internet and is meant to be used
+   * only by a specific H5 deployment.
+   */
+  corsOrigins: string[];
+  /**
+   * Directory containing the built H5 client, served at `/`.
+   *
+   * Optional: the client can also be hosted separately (or loaded from
+   * `file://` inside the Android shell). When present, `GET /` returns the app,
+   * which is what makes "open the NAS IP in a browser" work with no extra
+   * setup.
+   */
+  webDir: string;
 }
 
 const DATA_DIR_DEFAULT_NAME = 'data';
@@ -81,5 +103,13 @@ export function loadConfig(): AppConfig {
     watchInterval: envInt('WATCH_INTERVAL', 60),
     logLevel: process.env.LOG_LEVEL ?? 'info',
     publicUrl: process.env.PUBLIC_URL ?? '',
+    corsOrigins: (process.env.CORS_ORIGINS ?? '')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter((origin) => origin.length > 0),
+    // The built H5 bundle. `WEB_DIR` is unset in a server-only deployment, and
+    // when it is also absent on disk the static routes are simply not registered
+    // (see `registerWebRoutes`), so /api/* is never shadowed by a fallback.
+    webDir: resolve(process.env.WEB_DIR ?? join(process.cwd(), 'web')),
   };
 }

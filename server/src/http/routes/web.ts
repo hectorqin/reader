@@ -1,50 +1,29 @@
-import type { FastifyInstance } from 'fastify';
-import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AppContext } from '../context.ts';
 
 /**
- * The H5 client, served by the same process as the API.
+ * Serves the built H5 client, when one is present.
  *
- * This is what makes 「H5 是一个完整的客户端」 actually true rather than a claim in
- * a README: the server the user just started with `docker compose up` also serves
- * a complete reading client at `/`. There is no second deployment, no CORS
- * configuration, no separate static host to keep in sync, and no app store.
+ * Why the server hosts it at all: the product's deployment constraint is "one
+ * command and it runs" (§8.1), and telling a NAS owner to stand up a second
+ * container for the web client would break that. If the bundle is absent the
+ * routes are simply not registered, so a server-only deployment is unaffected.
  *
- * The build is looked up in two places, in order:
- *
- *  1. `WEB_DIR` / `server/public` — a build copied in by the Docker image.
- *  2. `web/dist` — a developer's `npm run build` in the sibling directory.
- *
- * The second exists so `npm run dev` in `server/` and `vite build` in `web/` work
- * together without a copy step, which is what keeps the iteration loop short
- * enough that client work actually happens.
- *
- * If neither exists, the server does not fail. It serves a page that says so and
- * points at the API documentation. A self-hosted server that refuses to start
- * because a frontend bundle is missing would be a worse failure than one that
- * boots and explains itself — the API is genuinely usable on its own, and several
- * clients (the Android shell among them) never load this bundle at all.
+ * Everything here is unauthenticated on purpose: these are static assets. The
+ * API behind them still requires a token, so serving the shell to an anonymous
+ * request reveals nothing. It does mean the *existence* of an instance is
+ * visible to anyone who can reach the port — which is already true of
+ * `GET /api/v1/instance`.
  */
 
-/** Where a built client may live, most specific first. */
-function webRoots(config: AppContext['config']): string[] {
-  const roots: string[] = [];
-  if (process.env.WEB_DIR) roots.push(resolve(process.env.WEB_DIR));
-  roots.push(resolve(process.cwd(), 'public'));
-  roots.push(resolve(process.cwd(), 'web/dist'));
-  roots.push(resolve(process.cwd(), '../web/dist'));
-  void config;
-  return roots;
-}
-
-const CONTENT_TYPES: Record<string, string> = {
+const MIME_BY_EXT: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
-  '.map': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -53,117 +32,69 @@ const CONTENT_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.map': 'application/json; charset=utf-8',
   '.txt': 'text/plain; charset=utf-8',
+  '.webmanifest': 'application/manifest+json',
 };
 
 export function registerWebRoutes(app: FastifyInstance, ctx: AppContext): void {
-  const roots = webRoots(ctx.config);
-  const build = roots.find((root) => existsSync(join(root, 'index.html'))) ?? null;
-
-  if (build) {
-    app.log.info({ webRoot: build }, 'serving H5 client');
-  } else {
-    app.log.warn({ searched: roots }, 'no H5 build found; serving API-only landing page');
+  // WEB_DIR is read from the environment when the context was built without a
+  // resolved config (tests, embedding), because the bundle location is a
+  // deployment concern rather than application state.
+  const webDir = ctx.config?.webDir ?? resolve(process.env.WEB_DIR ?? join(process.cwd(), 'web'));
+  const indexFile = join(webDir, 'index.html');
+  if (!existsSync(indexFile)) {
+    ctx.log?.info?.({ webDir }, 'no web client bundle found, serving API only');
+    return;
   }
 
-  /**
-   * Everything that is not the API.
-   *
-   * Registered as a catch-all rather than as a static directory because the
-   * client is a single-page app: a request for `/books/abc` that is not a file
-   * must return `index.html`, not a 404. The API prefix is excluded explicitly so
-   * an unknown endpoint still gets the API's own JSON 404 instead of an HTML
-   * page that a client would fail to parse.
-   */
+  const sendFile = (filePath: string, reply: FastifyReply, cacheControl: string): FastifyReply => {
+    reply.header('content-type', MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream');
+    reply.header('cache-control', cacheControl);
+    // A bundle served from disk can never change under the same name unless a
+    // deployment replaced it, and the file handle is released when the response
+    // ends — so a stream is safe here, but it must be handed to `send` exactly
+    // once. An earlier version sent the stream and then returned nothing from an
+    // async handler, which made Fastify send a second, empty response.
+    return reply.send(createReadStream(filePath));
+  };
+
+  app.get('/', async (_request, reply) => sendFile(indexFile, reply, 'no-cache'));
+
   app.get('/*', async (request, reply) => {
-    const url = new URL(request.url, 'http://localhost');
-    const path = decodeURIComponent(url.pathname);
-
-    if (path.startsWith('/api/')) {
-      return reply.status(404).send({
-        error: { code: 'NOT_FOUND', message: `no route for GET ${request.url}` },
+    const raw = (request.params as { '*': string })['*'] ?? '';
+    // The API keeps its own 404 shape. Without this the catch-all SPA fallback
+    // swallows `/api/...` misses and answers with HTML, so a client that parses
+    // `error.code` reports "server broken" instead of "not found".
+    if (raw === 'api' || raw.startsWith('api/')) {
+      reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: `no route for ${request.method} ${request.url}` },
       });
+      return;
     }
-
-    if (!build) {
-      return reply
-        .header('content-type', 'text/html; charset=utf-8')
-        .send(landingPage(roots));
+    // Resolve under webDir and refuse anything that escapes it: `..%2f..%2f`
+    // would otherwise turn the static handler into an arbitrary file read.
+    const candidate = resolve(webDir, normalize(raw).replace(/^(\.\.[/\\])+/, ''));
+    if (candidate !== webDir && !candidate.startsWith(`${webDir}${sep}`)) {
+      reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'not found' } });
+      return;
     }
-
-    // `normalize` collapses `..` before the prefix check; comparing the resolved
-    // path against the root afterwards is what keeps a traversal attempt from
-    // reading a file outside the build.
-    const relative = normalize(path).replace(/^([/\\])+/, '');
-    const candidate = resolve(build, relative);
-    if (candidate.startsWith(build + sep) && isFile(candidate)) {
-      const body = createReadStream(candidate);
-      reply.header('content-type', CONTENT_TYPES[extname(candidate).toLowerCase()] ?? 'application/octet-stream');
-      // Hashed asset names are immutable; `index.html` must not be, or a client
-      // keeps loading a bundle that was replaced by an upgrade.
-      reply.header(
-        'cache-control',
-        relative.startsWith('assets/') ? 'public, max-age=31536000, immutable' : 'no-cache',
+    if (existsSync(candidate) && statSync(candidate).isFile()) {
+      // Vite writes content-hashed file names, so a JS/CSS asset is immutable:
+      // its bytes cannot change without the name changing too. `index.html` is
+      // the one file whose name never changes, so it must never be cached or a
+      // deployment would never pick up a new bundle.
+      const immutable = extname(candidate) !== '.html';
+      return sendFile(
+        candidate,
+        reply,
+        immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
       );
-      // The stream must be the handler's RETURN value, not a `reply.send()`
-      // followed by a bare `return`. The latter makes Fastify send the response
-      // twice: the second send is empty, so every asset arrives as a 200 with
-      // `content-length: 0` and the client parses nothing. It fails silently —
-      // the log line is "stream closed prematurely" and the page just stays
-      // blank, which is a genuinely confusing way to lose an afternoon.
-      return reply.send(body);
     }
 
-    reply.header('content-type', 'text/html; charset=utf-8');
-    reply.header('cache-control', 'no-cache');
-    return reply.send(readFileSync(join(build, 'index.html')));
+    // SPA fallback: the client routes by hash, but serving index.html for an
+    // unknown path is the safer default than a 404 for a deep link.
+    return sendFile(indexFile, reply, 'no-cache');
   });
-}
-
-function isFile(path: string): boolean {
-  try {
-    return statSync(path).isFile();
-  } catch {
-    return false;
-  }
-}
-
-/**
- * What a user sees when the server has no bundled client.
- *
- * Written for the person who just ran `docker compose up` and opened the port:
- * it says the server works, says where the API is, and says how to get a client.
- * An empty page or a stack trace would be the difference between "it's working"
- * and "it's broken" for someone who has not read the README yet.
- */
-function landingPage(searched: string[]): string {
-  const paths = searched.map((path) => `<code>${escapeHtml(path)}</code>`).join('、');
-  return `<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>书库服务端</title>
-<style>
-  body { font-family: system-ui, -apple-system, 'Noto Sans SC', sans-serif; line-height: 1.7;
-         max-width: 40rem; margin: 3rem auto; padding: 0 1.25rem; color: #1f2328; }
-  code { background: #f3f4f6; padding: .15em .4em; border-radius: 4px; font-size: .9em; }
-  h1 { font-size: 1.4rem; }
-  .ok { color: #15803d; }
-</style>
-</head>
-<body>
-<h1>服务端在运行 <span class="ok">✓</span></h1>
-<p>这个实例的 API 可用，但没有找到 H5 客户端构建产物。</p>
-<p>已查找的位置：${paths}</p>
-<p>要自己构建：<code>cd web &amp;&amp; npm install &amp;&amp; npm run build</code>，
-然后重启服务端，或者用 <code>WEB_DIR</code> 指向构建目录。</p>
-<p>只用 API 的话，端点清单在 <code>docs/api.md</code>，健康检查在
-<a href="/api/v1/health"><code>/api/v1/health</code></a>。</p>
-</body>
-</html>`;
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!);
 }

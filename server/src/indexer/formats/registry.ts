@@ -158,6 +158,15 @@ export interface FileFormatHandler {
   readonly kind: BookKind;
   /** Lowercase, no dot. Empty for directory handlers. */
   readonly extensions: readonly string[];
+  /**
+   * Extensions whose files are *pages* rather than books of their own.
+   *
+   * Only meaningful for a handler that also owns a directory format — the image
+   * handler owns loose images, but inside a comic folder the same `.jpg` is a
+   * page. Without this distinction "is this folder a book collection" could not
+   * be answered: a folder of scans would look like a folder of books.
+   */
+  readonly pageExtensions?: readonly string[];
   /** Human readable, surfaced in /capabilities so clients can show support. */
   readonly label: string;
   /**
@@ -201,6 +210,7 @@ export interface DirectoryEntry {
 const handlers: FileFormatHandler[] = [];
 const directoryHandlers: DirectoryFormatHandler[] = [];
 const byExtension = new Map<string, FileFormatHandler>();
+const pageExtensions = new Set<string>();
 
 /**
  * Registration order is precedence: the first handler to claim an extension
@@ -212,6 +222,9 @@ export function registerFileHandler(handler: FileFormatHandler): FileFormatHandl
   for (const ext of handler.extensions) {
     const key = ext.replace(/^\./, '').toLowerCase();
     if (!byExtension.has(key)) byExtension.set(key, handler);
+  }
+  for (const ext of handler.pageExtensions ?? []) {
+    pageExtensions.add(ext.replace(/^\./, '').toLowerCase());
   }
   return handler;
 }
@@ -248,6 +261,18 @@ export function allDirectoryHandlers(): readonly DirectoryFormatHandler[] {
  */
 export function supportedExtensions(): Set<string> {
   return new Set([...byExtension.keys()].map((e) => `.${e}`));
+}
+
+/**
+ * Whether an extension names a *page* inside a book rather than a book.
+ *
+ * Asked as a question about extensions, not as a lookup of the winning handler,
+ * because the two are not the same: `.jpg` is registered as a single-image book
+ * so a loose scan is still reachable, and is simultaneously a page inside a
+ * comic folder.
+ */
+export function isPageExtension(ext: string): boolean {
+  return pageExtensions.has(ext.replace(/^\./, '').toLowerCase());
 }
 
 export interface FormatCapability {

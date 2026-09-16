@@ -86,7 +86,6 @@ export class BookReader {
   private readonly cache = new PrefetchCache();
   private window: Window | null = null;
   private current: ReaderState | null = null;
-  private locator: Locator | null = null;
   private progressTimer: ReturnType<typeof setTimeout> | null = null;
   private cancelPrefetch: (() => void) | null = null;
   private readonly device: string;
@@ -94,7 +93,7 @@ export class BookReader {
   private style: ReaderStyle;
 
   constructor(
-    private readonly host: HTMLElement,
+    host: HTMLElement,
     private readonly api: ApiClient,
     private readonly book: BookDto,
     private readonly options: ReaderOptions,
@@ -128,7 +127,6 @@ export class BookReader {
     const saved = parseLocator(
       (await this.api.progress(bookId).catch(() => ({ progress: null }))).progress?.locator ?? '',
     );
-    this.locator = saved;
 
     // A saved chapter is matched by its `href`, which is the only identifier
     // that survives a window boundary. Falling back to the window's first item
@@ -347,7 +345,6 @@ export class BookReader {
       ratio: position.offsetRatio,
       percent: bookPercent(spine, window.total, fraction),
     };
-    this.locator = locator;
 
     await this.api
       .putProgress(this.book.id, {

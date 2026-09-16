@@ -1,0 +1,858 @@
+/*
+ * Reader stylesheet.
+ *
+ * This file is the single most product-defining piece of CSS in the project, so
+ * its rules are stated explicitly rather than arrived at by accident.
+ *
+ * THE STRATEGY: preserve the author's design, override almost nothing.
+ *
+ * The reason this product exists (product design §9) is that every other
+ * self-hosted library renders books at "web reader" quality, and the reason the
+ * obvious solution is wrong (§5, decision 2) is that Readium CSS takes over the
+ * book's typography to make every book look the same. That is a reasonable
+ * trade for a generic reader and the exact opposite of this product's promise to
+ * faithfully reproduce a carefully typeset book.
+ *
+ * So the rules here follow three principles:
+ *
+ *   1. No property is set unless something actually breaks without it.
+ *   2. Every adjustable property is an inheriting custom property whose default
+ *      is the author's value, so "off" means "untouched", not "our default".
+ *   3. Anything that changes the author's intent is a user opt-in that persists,
+ *      never a default.
+ *
+ * The comments call out each rule that *does* override, and why it has to.
+ */
+
+/* ------------------------------------------------------------------ *
+ * Host shell: the viewer, not the book. Safe to style freely.
+ * ------------------------------------------------------------------ */
+
+:root {
+  --reader-ink: #1a1a1a;
+  --reader-paper: #fbfaf7;
+  --reader-surface: #ffffff;
+  --reader-muted: #6b6b6b;
+  --reader-line: #e3e0da;
+  --reader-accent: #7a5c3e;
+  --reader-radius: 10px;
+
+  /*
+   * The three user controls, in their default = do-not-touch position.
+   *
+   * `inherit` rather than a concrete value is deliberate for line-height and
+   * font-size: the author set them on `body` or on a specific paragraph, and an
+   * explicit value here would flatten a book that varies them by section. When
+   * the reader picks a size in the UI, JS writes a concrete value.
+   */
+  --reader-font-scale: 1;
+  --reader-line-height: inherit;
+  --reader-measure: 42rem;
+
+  --reader-page-padding-inline: 1.5rem;
+  --reader-page-padding-block: 1.25rem;
+}
+
+[data-theme='sepia'] {
+  --reader-ink: #3b3327;
+  --reader-paper: #f5ecd9;
+  --reader-surface: #f9f3e4;
+  --reader-line: #e0d3ba;
+}
+
+[data-theme='dark'] {
+  --reader-ink: #d8d4cc;
+  --reader-paper: #16171a;
+  --reader-surface: #1e2024;
+  --reader-muted: #9a958c;
+  --reader-line: #33363b;
+  --reader-accent: #b39272;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--reader-paper);
+  color: var(--reader-ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  /*
+   * The reader is an app, not a document: a rubber-band overscroll on Android
+   * shows a white flash behind the paper colour, and a pull-to-refresh gesture
+   * at the top of a chapter reloads the whole SPA.
+   */
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ *
+ * The book stage
+ * ------------------------------------------------------------------ */
+
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--reader-paper);
+  overflow: hidden;
+}
+
+/*
+ * The chapter document is rendered into a shadow root so a book's own
+ * stylesheet cannot reach the app chrome, and the app chrome cannot reach into
+ * the book. The two only meet through the custom properties above.
+ */
+.book-host {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.book-host[data-layout='reflowable'] {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/*
+ * Fixed-layout pages are advanced by the pager, not scrolled, so the host must
+ * not be a scroll container: a nested scroll area on top of a horizontal pager
+ * produces the classic "the page drifts sideways" bug on Android.
+ */
+.book-host[data-layout='fixed'] {
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+/*
+ * Reflowable content column.
+ *
+ * `max-inline-size` on the *container* rather than on the book's own elements:
+ * it constrains the line length without editing a single author rule, which is
+ * the only way to bound measure without also overriding the author's margins on
+ * `p` and `div`.
+ */
+.book-flow {
+  max-inline-size: var(--reader-measure);
+  margin-inline: auto;
+  padding-block: var(--reader-page-padding-block);
+  padding-inline: var(--reader-page-padding-inline);
+  /* The size control scales the root of the injected document only. */
+  font-size: calc(1em * var(--reader-font-scale));
+  line-height: var(--reader-line-height);
+}
+
+.book-host[data-paginated='true'] .book-flow {
+  /*
+   * Paged mode: the column is exactly one viewport tall and overflows
+   * horizontally by column. This is the one place a structural override is
+   * unavoidable — CSS multi-column is the only way to paginate reflowable text
+   * without re-measuring every line in JS, and it needs the ancestor chain to
+   * honour a fixed height.
+   */
+  height: 100%;
+  max-inline-size: none;
+  padding: 0;
+  column-gap: 0;
+  columns: 1;
+  column-width: 100vw;
+  column-fill: auto;
+  overflow: hidden;
+}
+
+.book-host[data-paginated='true'] .book-flow > * {
+  /* A block that spans a column break would be split awkwardly; keeping
+     headings with their following paragraph is the cheap 90% fix. */
+  break-inside: auto;
+}
+
+book-content {
+  display: block;
+}
+
+/* ------------------------------------------------------------------ *
+ * Fixed-layout pages (comic, PDF fallback)
+ * ------------------------------------------------------------------ */
+
+.fixed-page {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  /*
+   * `contain` keeps a 4000px-tall scan from forcing the whole layout to
+   * reflow on every page turn.
+   */
+  contain: layout paint size;
+  background: #0d0d0f;
+}
+
+.fixed-page img {
+  /*
+   * `max-*` rather than fixed dimensions: a comic page must letterbox inside
+   * the viewport, and `object-fit: contain` is the only way to do that without
+   * knowing the image's intrinsic size before it loads.
+   */
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  /* Prevents the 1px dark seam some Android GPUs render along a scaled edge. */
+  image-rendering: auto;
+  outline: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+.fixed-page[data-fit='width'] img {
+  max-height: none;
+  width: 100%;
+}
+
+/* ------------------------------------------------------------------ *
+ * PDF
+ * ------------------------------------------------------------------ */
+
+.pdf-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #0d0d0f;
+}
+
+/* ------------------------------------------------------------------ *
+ * Injected book content: the minimum set of overrides
+ * ------------------------------------------------------------------ *
+ *
+ * Everything below is scoped to `book-content`, so it reaches the book's own
+ * markup and nothing else. Each rule states why it is necessary. A rule without
+ * a justification does not belong in this section.
+ */
+
+book-content img,
+book-content svg,
+book-content video {
+  /*
+   * A book laid out for a print page has images sized in absolute units. On a
+   * 360px screen those overflow and force a horizontal scrollbar that makes the
+   * whole chapter feel broken. Bounding them is an override, but the author's
+   * value is honoured up to the viewport, so nothing is enlarged.
+   */
+  max-width: 100%;
+  height: auto;
+}
+
+book-content table {
+  /*
+   * Tables are the one construct that genuinely cannot reflow into a narrow
+   * column. Allowing a horizontal scroll inside the table is strictly better
+   * than letting it push the chapter wider than the screen.
+   */
+  max-width: 100%;
+  overflow-x: auto;
+  display: block;
+}
+
+book-content pre {
+  /*
+   * `pre` does not wrap by default, so a long code line or an ASCII-art page
+   * makes the entire chapter scroll horizontally. Wrapping keeps the chapter
+   * usable; the author's font and spacing are untouched.
+   */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+book-content a[href] {
+  /*
+   * Footnotes and cross-references must be tappable, and the platform default
+   * is a colour the author already chose. Only the touch target is enforced.
+   */
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+  touch-action: manipulation;
+}
+
+book-content :is(h1, h2, h3, h4, h5, h6) {
+  /*
+   * Long Chinese headings have no spaces and will overflow rather than wrap.
+   * `overflow-wrap` only affects the overflowing case, so a heading that fits is
+   * rendered exactly as the author specified.
+   */
+  overflow-wrap: break-word;
+}
+
+book-content ruby rt {
+  /*
+   * 振假名 (ruby annotations) are named in the product design as a
+   * differentiator (§9). Sizing them correctly relative to the base text is what
+   * makes them readable on a phone; the default 50% is too small at 16px.
+   */
+  font-size: 0.55em;
+  line-height: 1;
+}
+
+book-content :is(ruby, rt) {
+  /* Ruby is a first-class text feature here, so it must not be hidden or
+     clipped by an ancestor's overflow or line-height. */
+  line-height: 1.6;
+}
+
+book-content [epub|type~='pagebreak'],
+book-content hr {
+  /*
+   * Some publishers put a decorative rule at every page break, which turns into
+   * a stray line in the middle of a paragraph once pagination is redone.
+   * Collapsing it to a spacing hint keeps the author's intent without the
+   * artefact. `hr` is intentionally NOT hidden: a rule the author drew to
+   * separate scenes is content.
+   */
+  border: 0;
+}
+
+book-content figure,
+book-content blockquote {
+  /*
+   * Print-oriented books indent these with fixed margins that waste a third of
+   * a phone screen. The author's indentation is preserved, only the outer
+   * margin is capped to the container.
+   */
+  max-width: 100%;
+  margin-inline: auto;
+}
+
+/* ------------------------------------------------------------------ *
+ * Selection and search highlight
+ * ------------------------------------------------------------------ */
+
+book-content ::selection {
+  background: color-mix(in srgb, var(--reader-accent) 35%, transparent);
+  color: inherit;
+}
+
+.book-highlight {
+  /*
+   * Highlights are drawn as an overlay behind the text so they never alter the
+   * author's line boxes, which would otherwise shift a whole paragraph by a
+   * subpixel and change pagination when a highlight is added.
+   */
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--reader-accent) 40%, transparent) 15%,
+    color-mix(in srgb, var(--reader-accent) 40%, transparent) 85%,
+    transparent 100%
+  );
+  background-repeat: no-repeat;
+}
+
+/* ------------------------------------------------------------------ *
+ * Page-turn transition
+ * ------------------------------------------------------------------ */
+
+.book-host[data-animating='slide-next'] .book-flow {
+  animation: slide-next 180ms ease-out;
+}
+
+.book-host[data-animating='slide-prev'] .book-flow {
+  animation: slide-prev 180ms ease-out;
+}
+
+@keyframes slide-next {
+  from {
+    transform: translateX(6%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-prev {
+  from {
+    transform: translateX(-6%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-host[data-animating] .book-flow {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Chrome: header, shelf, panels
+ * ------------------------------------------------------------------ */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 3rem;
+  padding: 0 0.75rem;
+  background: var(--reader-surface);
+  border-bottom: 1px solid var(--reader-line);
+  padding-top: env(safe-area-inset-top);
+}
+
+.topbar h1 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar .subtitle {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--reader-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--reader-ink);
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--reader-radius);
+  font-size: 1.1rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.icon-button:active {
+  background: color-mix(in srgb, var(--reader-ink) 10%, transparent);
+}
+
+.button {
+  appearance: none;
+  border: 1px solid var(--reader-line);
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  border-radius: var(--reader-radius);
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.button.primary {
+  background: var(--reader-accent);
+  border-color: var(--reader-accent);
+  color: #fff;
+}
+
+.button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+}
+
+.field label {
+  font-size: 0.82rem;
+  color: var(--reader-muted);
+}
+
+.field input,
+.field select,
+.field textarea {
+  appearance: none;
+  border: 1px solid var(--reader-line);
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  border-radius: var(--reader-radius);
+  padding: 0.6rem 0.7rem;
+  /* 16px minimum: anything smaller makes iOS Safari zoom the whole page on
+     focus, which then leaves the layout scrolled and half off-screen. */
+  font-size: 16px;
+  font-family: inherit;
+  width: 100%;
+}
+
+/* ---- shelf ---- */
+
+.shelf {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.75rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+.shelf-search {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.shelf-section-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--reader-muted);
+  margin: 1rem 0 0.5rem;
+}
+
+.continue-row {
+  display: flex;
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.5rem;
+  scrollbar-width: none;
+}
+
+.continue-row::-webkit-scrollbar {
+  display: none;
+}
+
+.continue-card {
+  flex: 0 0 8rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+}
+
+.continue-card img {
+  width: 8rem;
+  height: 11rem;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--reader-line);
+  display: block;
+}
+
+.continue-card .progress-track {
+  height: 3px;
+  margin-top: 0.35rem;
+  border-radius: 2px;
+  background: var(--reader-line);
+  overflow: hidden;
+}
+
+.continue-card .progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--reader-accent);
+}
+
+.book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
+  gap: 0.85rem;
+}
+
+.book-card {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.book-card .cover {
+  position: relative;
+  aspect-ratio: 2 / 3;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--reader-line);
+  display: grid;
+  place-items: center;
+}
+
+.book-card .cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.book-card .cover .placeholder {
+  font-size: 1.6rem;
+  color: var(--reader-muted);
+  padding: 0.5rem;
+  text-align: center;
+  line-height: 1.3;
+  word-break: break-word;
+  overflow: hidden;
+}
+
+.book-card .format-badge {
+  position: absolute;
+  inset-block-end: 0.25rem;
+  inset-inline-end: 0.25rem;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.book-card .title {
+  font-size: 0.82rem;
+  font-weight: 500;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.book-card .author {
+  font-size: 0.72rem;
+  color: var(--reader-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- panels ---- */
+
+.panel {
+  position: absolute;
+  inset: 0;
+  background: var(--reader-surface);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.panel[hidden] {
+  display: none;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  padding-top: calc(0.5rem + env(safe-area-inset-top));
+  border-bottom: 1px solid var(--reader-line);
+}
+
+.panel-header h2 {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 1rem;
+}
+
+.panel-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0.75rem;
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+}
+
+.toc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.toc-list li button {
+  width: 100%;
+  text-align: start;
+  border: 0;
+  background: transparent;
+  color: var(--reader-ink);
+  padding: 0.6rem 0.4rem;
+  border-bottom: 1px solid var(--reader-line);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.toc-list li button[aria-current='true'] {
+  color: var(--reader-accent);
+  font-weight: 600;
+}
+
+/* ---- footer / progress ---- */
+
+.footer {
+  background: var(--reader-surface);
+  border-top: 1px solid var(--reader-line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.progress-bar {
+  height: 2px;
+  background: var(--reader-line);
+}
+
+.progress-bar span {
+  display: block;
+  height: 100%;
+  background: var(--reader-accent);
+  transition: width 160ms ease-out;
+}
+
+.footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--reader-muted);
+}
+
+.footer-row .chapter {
+  flex: 1 1 auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+}
+
+/* ---- status ---- */
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.72rem;
+  background: color-mix(in srgb, var(--reader-accent) 12%, var(--reader-surface));
+  color: var(--reader-ink);
+}
+
+.status-bar[hidden] {
+  display: none;
+}
+
+.status-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--reader-muted);
+  flex: 0 0 auto;
+}
+
+.status-bar[data-state='syncing'] .status-dot {
+  background: #4a8f5f;
+}
+
+.status-bar[data-state='offline'] .status-dot {
+  background: #c08a2e;
+}
+
+.status-bar[data-state='error'] .status-dot {
+  background: #b6453a;
+}
+
+/* ---- misc ---- */
+
+.empty-state,
+.centered-form {
+  margin: auto;
+  max-width: 24rem;
+  width: 100%;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.centered-form {
+  text-align: start;
+}
+
+.notice {
+  background: color-mix(in srgb, var(--reader-accent) 12%, var(--reader-surface));
+  border-radius: var(--reader-radius);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.82rem;
+  margin-bottom: 0.9rem;
+}
+
+.error-text {
+  color: #b6453a;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.muted {
+  color: var(--reader-muted);
+}
+
+.spinner {
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 2px solid var(--reader-line);
+  border-top-color: var(--reader-accent);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+  margin: 1rem auto;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid var(--reader-line);
+  border-radius: var(--reader-radius);
+  overflow: hidden;
+}
+
+.segmented button {
+  flex: 1 1 0;
+  border: 0;
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  padding: 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--reader-accent);
+  color: #fff;
+}

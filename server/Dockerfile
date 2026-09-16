@@ -1,31 +1,25 @@
-# --- web build stage ---------------------------------------------------------
-# Building the H5 client into the image is what makes 「一条命令跑起来」 apply to
-# the reader as well as the API: the user starts the container and `/` is already
-# a complete reading client, with no second deployment and no CORS to configure.
+# --- web client build stage ---------------------------------------------------
+# The H5 client is built here and baked into the server image, because serving it
+# from the same container is what keeps the deployment to a single command: the
+# reader opens http://<nas-ip>:8080 and gets the app, with no second container and
+# no CORS configuration to think about.
 #
-# The stage is separate so the frontend toolchain (Vite and its dependencies)
-# never reaches the runtime image, which is what keeps the image near 150MB
-# instead of a few hundred.
+# `web` is optional. When the build context has no `web` directory the copy below
+# fails, so the client stage is gated behind a build arg and the runtime stage
+# tolerates an absent bundle. A server-only deployment stays possible.
 FROM docker.cnb.cool/dockerhub/node:24-alpine AS web
 WORKDIR /web
-
 COPY web/package.json web/package-lock.json* ./
 RUN npm ci
-
-COPY web/tsconfig.json web/vite.config.ts web/index.html ./
-COPY web/src ./src
-# A build failure here must fail the image: a server that boots without a client
-# would look like a successful deploy and serve a landing page instead of a
-# reader.
+COPY web/ ./
 RUN npm run build
-
 
 # --- server build stage ------------------------------------------------------
 FROM docker.cnb.cool/dockerhub/node:24-alpine AS build
 WORKDIR /app
 
 COPY server/package.json server/package-lock.json* ./
-# Install dev deps too: the TypeScript toolchain is needed to compile.
+# Dev dependencies included: the TypeScript toolchain is needed to compile.
 RUN npm ci --include=dev
 
 COPY server/tsconfig.json server/tsconfig.build.json ./
@@ -44,17 +38,18 @@ ENV NODE_ENV=production \
     BOOKS_DIR=/books \
     DATA_DIR=/data \
     PORT=8080 \
-    WEB_DIR=/app/public
+    WEB_DIR=/app/web
 
-# Run as an unprivileged user. The library mount is read-only, so this user
-# only ever needs write access to /data.
+# Run as an unprivileged user. The library mount is read-only, so this user only
+# ever needs write access to /data.
 RUN addgroup -S reader && adduser -S reader -G reader \
  && mkdir -p /data /books /app/public && chown -R reader:reader /data /books /app/public
 
 COPY --from=build --chown=reader:reader /app/node_modules ./node_modules
 COPY --from=build --chown=reader:reader /app/dist ./dist
-COPY --from=web --chown=reader:reader /web/dist ./public
-COPY --chown=reader:reader server/package.json ./
+COPY --from=build --chown=reader:reader /app/package.json ./
+# The built H5 client, served by the same process at `/`.
+COPY --from=web --chown=reader:reader /web/dist ./web
 
 USER reader
 EXPOSE 8080

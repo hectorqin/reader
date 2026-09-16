@@ -972,6 +972,30 @@ describe('directory detection', () => {
     const dir = await mkdtemp(join(tmpdir(), 'empty-'));
     assert.equal(await looksLikeComicDirectory(dir), false);
   });
+
+  test('a shelf of EPUBs with a stray cover image is not a comic', async () => {
+    // The ratio rule alone calls this a comic: two JPEGs out of three entries
+    // clears any threshold. Claiming it would delete the book inside from the
+    // shelf, and the reader has no way to tell it was ever there.
+    const dir = await mkdtemp(join(tmpdir(), 'shelf-'));
+    await writeFile(join(dir, '一本书.epub'), await makeEpub({ id: 'urn:uuid:in-dir', title: '目录里的书' }));
+    await writeFile(join(dir, 'cover.jpg'), PNG);
+    await writeFile(join(dir, 'cover2.jpg'), PNG);
+    assert.equal(await looksLikeComicDirectory(dir), false);
+  });
+
+  test('a volume whose pages sit one level deeper is still a comic', async () => {
+    // `第01话/001.jpg` is how a lot of scan collections are filed. The check
+    // that decides whether the folder is a book has to look at least as deep as
+    // the manifest does, or it concludes "not a comic" about a folder whose
+    // pages it would happily serve.
+    const dir = await mkdtemp(join(tmpdir(), 'deep-vols-'));
+    await mkdir(join(dir, '第01卷', '第01话'), { recursive: true });
+    await mkdir(join(dir, '第02卷', '第01话'), { recursive: true });
+    for (let i = 1; i <= 2; i += 1) await writeFile(join(dir, '第01卷', '第01话', `${i}.jpg`), PNG);
+    for (let i = 1; i <= 2; i += 1) await writeFile(join(dir, '第02卷', '第01话', `${i}.jpg`), PNG);
+    assert.equal(await looksLikeComicDirectory(dir), true);
+  });
 });
 
 describe('query-string tokens', () => {

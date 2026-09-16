@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      Reading is the one thing this app does with the network, and it has to reach
+      a server on the LAN, on a VPN address, or over the public internet. There is
+      no manifest way to express "any of those".
+
+      Note what is NOT requested: no location, no storage permission (the app
+      writes only inside its own private directory), no account access, no
+      analytics. A reader that asks for the camera is a reader nobody trusts with
+      their library.
+    -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Declared so the app still installs on a device without a touchscreen and
+         so an app store listing is honest about what it needs. -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!--
+      Cleartext HTTP is allowed.
+
+      This is a deliberate, product-relevant exception rather than an oversight.
+      The primary deployment is a LAN address like http://192.168.1.10:8080, and
+      requiring HTTPS would make the app unusable for exactly the users it is for:
+      there is no certificate authority for a private IP, and telling a NAS owner
+      to run their own CA before they can read a book is the deployment friction
+      the product is trying to remove.
+
+      The exposure is bounded — reading your own book from your own NAS over your
+      own Wi-Fi. The README instructs users to put HTTPS in front of the server
+      before exposing it to the internet.
+    -->
+    <application
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Reader"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode|smallestScreenSize|density"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

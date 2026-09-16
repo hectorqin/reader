@@ -20,7 +20,7 @@ export class AuthView {
   private readonly root: HTMLElement;
 
   constructor(
-    private readonly host: HTMLElement,
+    host: HTMLElement,
     private readonly api: ApiClient,
     private readonly options: AuthHost = {},
   ) {

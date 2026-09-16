@@ -6,11 +6,12 @@ import type { AppConfig } from '../config/index.ts';
 import { computeFileId, resolveBookId } from './identity.ts';
 import { saveCover, type ExtractedMetadata } from './metadata.ts';
 import { toRelative } from '../lib/paths.ts';
-import { naturalCompare } from './formats/index.ts';
 import { collapseWhitespace, safeJsonParse } from '../lib/text.ts';
+import { naturalCompare } from './formats/index.ts';
 import {
   allDirectoryHandlers,
   fileHandlerForExtension,
+  isPageExtension,
   supportedExtensions,
   type BookKind,
   type DirectoryEntry,
@@ -40,6 +41,7 @@ interface FileEntry {
   mtimeMs: number;
 }
 
+/** A directory that a format handler claims as one book. */
 interface DirectoryCandidate {
   relPath: string;
   absPath: string;
@@ -77,9 +79,6 @@ const PARSE_VERSION = 1;
 
 /** Directories that never contain books, or contain only tooling noise. */
 const SKIP_DIRS = new Set(['.git', '@eaDir', '#recycle', '.DS_Store', 'lost+found', '__MACOSX']);
-
-/** A directory book is only claimed if it holds at least this many pages. */
-const MIN_DIRECTORY_PAGES = 2;
 
 /**
  * Library scanner.
@@ -152,10 +151,15 @@ export class Scanner {
       // every page image first and then deleting them, which shows up as a
       // visible add-then-remove churn in the scan counters.
       const directoryBooks = await this.discoverDirectoryBooks(storedByPath);
-      const claimed: string[] = [];
+      // A folder that holds a real book is a shelf. The book inside it is what
+      // the reader is looking for; the loose scans and cover art sitting next to
+      // it are not separate books, and listing them as such buries the actual
+      // book in a shelf full of covers.
+      const shelfDirectories = await this.directoriesHoldingBooks();
+
+      const claimed = new Set<string>();
       for (const candidate of directoryBooks) {
         seen.add(candidate.relPath);
-        claimed.push(candidate.relPath);
         this.progress.scanned += 1;
         const previous = storedByPath.get(candidate.relPath);
         try {
@@ -165,31 +169,25 @@ export class Scanner {
           this.progress.lastError = err instanceof Error ? err.message : String(err);
           this.log.warn({ err, relPath: candidate.relPath }, 'failed to index directory');
         }
-      }
-
-      const ownedByDirectoryBook = (relPath: string): boolean =>
-        claimed.some((dir) => relPath.startsWith(`${dir}/`));
-
-      // Files inside a directory book belong to it, not to the shelf.
-      if (claimed.length > 0) {
-        const owned = stored.filter((row) => ownedByDirectoryBook(row.rel_path));
-        this.db.transaction(() => {
-          for (const row of owned) {
-            if (row.missing === 0) this.progress.removed += 1;
-            this.db.run('DELETE FROM book_files WHERE id = ?', row.id);
-          }
-        });
-        const ownedIds = new Set(owned.map((row) => row.id));
-        for (let i = stored.length - 1; i >= 0; i -= 1) {
-          if (ownedIds.has(stored[i]!.id)) stored.splice(i, 1);
+        // Every page inside a claimed directory belongs to that book, so it must
+        // not be indexed a second time as a standalone book of its own. Files the
+        // library would index as books are deliberately left out: a shelf nested
+        // inside a comic folder is still a shelf, and its books are what the
+        // reader is looking for.
+        for (const owned of await this.listFilesUnder(candidate.absPath)) {
+          const rel = toRelative(this.config.booksDir, owned);
+          if (isBookFileExtension(rel)) continue;
+          claimed.add(rel);
         }
       }
 
       const found = await this.walk(this.config.booksDir);
-
       for (const entry of found) {
-        if (ownedByDirectoryBook(entry.relPath)) {
-          this.progress.scanned += 1;
+        // A page of a claimed directory book, or a stray page sitting in a shelf
+        // that already has a real book in it.
+        const insideShelf = isInsideAny(entry.relPath, shelfDirectories);
+        if (claimed.has(entry.relPath) || (insideShelf && !isBookFileExtension(entry.relPath))) {
+          seen.add(entry.relPath);
           continue;
         }
         seen.add(entry.relPath);
@@ -328,7 +326,7 @@ export class Scanner {
     if (handlers.length === 0) return [];
 
     const directories = await this.listDirectories(this.config.booksDir);
-    const shallowestFirst = directories.sort((a, b) => {
+    const shallowestFirst = [...directories].sort((a, b) => {
       const depth = a.split('/').length - b.split('/').length;
       return depth !== 0 ? depth : naturalCompare(a, b);
     });
@@ -337,10 +335,25 @@ export class Scanner {
     const out: DirectoryCandidate[] = [];
 
     for (const relPath of shallowestFirst) {
-      if (claimed.some((owner) => relPath === owner || relPath.startsWith(`${owner}/`))) continue;
+      // A volume folder inside a claimed series belongs to the series — unless
+      // that folder is itself a shelf of books, which the walk already refused to
+      // enter. Absorbing it here would undo that decision one layer up.
+      if (
+        claimed.some((owner) => relPath.startsWith(`${owner}/`)) &&
+        !(await this.holdsBookFile(join(this.config.booksDir, relPath)))
+      ) {
+        continue;
+      }
 
       const absPath = join(this.config.booksDir, relPath);
       const entries = await this.listDirectoryEntries(absPath);
+
+      // A directory holding book files is a shelf, never a book: one `cover.jpg`
+      // next to an EPUB must not turn the folder into a comic and hide the book
+      // inside it. Asked in the same pass as the handler, from the very entries
+      // the handler sees, so the two can never disagree about the same directory.
+      const holdsBookFile = entries.some((entry) => !entry.isDirectory && isBookFileExtension(entry.name));
+      if (holdsBookFile) continue;
 
       for (const handler of handlers) {
         let matched = false;
@@ -373,7 +386,13 @@ export class Scanner {
         if (!entry.isDirectory()) continue;
         if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
         const abs = join(dir, entry.name);
-        out.push(toRelative(root, abs));
+        const relPath = toRelative(root, abs);
+        out.push(relPath);
+        // A directory that holds a book is a shelf, and the scanner's own rule
+        // says its contents are indexed as they are. Looking inside it for a
+        // directory book would let an enclosing comic folder swallow the books
+        // nested within, so the walk stops here just like discovery does.
+        if (await this.holdsBookFile(abs)) continue;
         await visit(abs);
       }
     };
@@ -381,12 +400,103 @@ export class Scanner {
     return out;
   }
 
+  /** Whether a directory directly holds a file the server indexes as a book. */
+  private async holdsBookFile(absDir: string): Promise<boolean> {
+    let entries;
+    try {
+      entries = await readdir(absDir, { withFileTypes: true });
+    } catch {
+      return false;
+    }
+    return entries.some(
+      (entry) => entry.isFile() && !entry.name.startsWith('.') && isBookFileExtension(entry.name),
+    );
+  }
+
+  /**
+   * Directories that hold a real book file, directly.
+   *
+   * Used to absorb the page images sitting next to it: a `cover.jpg` beside an
+   * EPUB is cover art, not a one-page book. Deliberately only images are
+   * absorbed — a second EPUB next to the first is a second book.
+   */
+  private async directoriesHoldingBooks(): Promise<string[]> {
+    const directories = await this.listDirectories(this.config.booksDir);
+    const out: string[] = [];
+    for (const relDir of directories) {
+      let entries;
+      try {
+        entries = await readdir(join(this.config.booksDir, relDir), { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      const hasBook = entries.some(
+        (entry) => entry.isFile() && !entry.name.startsWith('.') && isBookFileExtension(entry.name),
+      );
+      if (hasBook) out.push(relDir);
+    }
+    return out;
+  }
+
+  /**
+   * Every file under a claimed directory, recursively.
+   *
+   * Used to exclude a directory book's own contents from the file walk: a page
+   * image is part of its book, not a book of its own.
+   */
+  private async listFilesUnder(absDir: string): Promise<string[]> {
+    const out: string[] = [];
+    const visit = async (dir: string): Promise<void> => {
+      let entries;
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
+        const abs = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await visit(abs);
+          continue;
+        }
+        if (entry.isFile()) out.push(abs);
+      }
+    };
+    await visit(absDir);
+    return out;
+  }
+
+  /**
+   * The entries of a directory, with sizes.
+   *
+   * Sizes are stat'd rather than left at 0 because the decision "is this folder a
+   * book of this format" belongs to the handler, and the handler compares the
+   * size of the files it can read against the size of the ones it cannot. Without
+   * a size, a folder of EPUBs next to two loose scans looks like a folder of two
+   * images, and a real book inside it disappears from the shelf.
+   */
   private async listDirectoryEntries(absDir: string): Promise<DirectoryEntry[]> {
     try {
       const dirents = await readdir(absDir, { withFileTypes: true });
-      return dirents
-        .filter((dirent) => !dirent.name.startsWith('.'))
-        .map((dirent) => ({ name: dirent.name, isDirectory: dirent.isDirectory(), size: 0 }));
+      const out: DirectoryEntry[] = [];
+      for (const dirent of dirents) {
+        if (dirent.name.startsWith('.')) continue;
+        // Symlinks are not followed here either: a link out of the mount would
+        // let the size probe read a file the operator never shared.
+        if (dirent.isFile()) {
+          let size = 0;
+          try {
+            size = (await stat(join(absDir, dirent.name))).size;
+          } catch {
+            size = 0;
+          }
+          out.push({ name: dirent.name, isDirectory: false, size });
+          continue;
+        }
+        if (dirent.isDirectory()) out.push({ name: dirent.name, isDirectory: true, size: 0 });
+      }
+      return out;
     } catch {
       return [];
     }
@@ -626,6 +736,27 @@ export class Scanner {
   }
 }
 
+/** Whether a library-relative path is inside any of the given directories. */
+function isInsideAny(relPath: string, directories: string[]): boolean {
+  return directories.some((dir) => relPath.startsWith(`${dir}/`));
+}
+
+/**
+ * Whether a file name is one the server would index as a book of its own.
+ *
+ * Two registry questions, not one, because a single extension can be both: a
+ * loose `.jpg` is a one-page book, while the same `.jpg` inside a comic folder
+ * is a page. Answering this from `supportedExtensions()` alone classified every
+ * folder of scans as a shelf of books and made comic directories unreachable.
+ */
+function isBookFileExtension(name: string): boolean {
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return false;
+  const ext = name.slice(dot).toLowerCase();
+  if (!supportedExtensions().has(ext)) return false;
+  return !isPageExtension(ext);
+}
+
 /**
  * Coarse change key for a directory book.
  *
@@ -658,4 +789,4 @@ export function parseTags(value: string): string[] {
   return safeJsonParse<string[]>(value, []);
 }
 
-export type { ExtractedMetadata, BookKind };
+export type { ExtractedMetadata };

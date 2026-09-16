@@ -58,17 +58,19 @@ export interface TextOptions {
 export class TextReader {
   readonly state = new Emitter<TextState>();
   private offset = 0;
-  private lastLength = 0;
   private loading = false;
   private finished = false;
   private readonly scroll: HTMLElement;
 
+  private readonly host: HTMLElement;
+
   constructor(
-    private readonly host: HTMLElement,
+    host: HTMLElement,
     private readonly api: ApiClient,
     private readonly book: BookDto,
     private readonly options: TextOptions = {},
   ) {
+    this.host = host;
     this.scroll = document.createElement('div');
     this.scroll.className = 'reader-text';
     this.host.replaceChildren(this.scroll);
@@ -83,7 +85,7 @@ export class TextReader {
    * Chinese novel in the middle of a character every 256KB — a visible defect
    * roughly every few pages.
    */
-  async open(bookId: string): Promise<void> {
+  async open(): Promise<void> {
     await this.append();
     this.scroll.addEventListener('scroll', () => this.maybeAppend());
   }

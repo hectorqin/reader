@@ -3,7 +3,6 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
-import { stripNullBytes } from '../lib/text.ts';
 import { parseFilename } from './filename.ts';
 
 /**
@@ -44,6 +43,107 @@ const xmlParser = new XMLParser({
 
 export function sha256(buf: Buffer): string {
   return createHash('sha256').update(buf).digest('hex');
+}
+
+/**
+ * Text encoding detection for TXT books.
+ *
+ * The same validate-then-fallback approach the client uses, and for the same
+ * reason: a strict UTF-8 check is reliable in the direction that matters. It is
+ * duplicated rather than shared because the server and the client are separate
+ * build targets with no common module, and a wrong answer on either side is
+ * merely a hint — the client re-decodes from the bytes it downloads.
+ */
+export function detectTextEncoding(buf: Buffer): string {
+  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) return 'utf-8';
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) return 'utf-16le';
+  if (buf.length >= 2 && buf[0] === 0xfe && buf[1] === 0xff) return 'utf-16be';
+  const sample = buf.subarray(0, Math.min(buf.length, 64 * 1024));
+  if (isStrictUtf8(sample)) return 'utf-8';
+  // GB18030 is a superset of GBK/GB2312, which is what almost every legacy
+  // Chinese TXT in a personal library is.
+  return 'gb18030';
+}
+
+/** Strict UTF-8 validation: returns false if any replacement would occur. */
+export function isStrictUtf8(bytes: Buffer): boolean {
+  let index = 0;
+  while (index < bytes.length) {
+    const byte = bytes[index]!;
+    if (byte <= 0x7f) {
+      index += 1;
+      continue;
+    }
+    let needed: number;
+    let min: number;
+    let code: number;
+    if ((byte & 0xe0) === 0xc0) {
+      needed = 1; min = 0x80; code = byte & 0x1f;
+    } else if ((byte & 0xf0) === 0xe0) {
+      needed = 2; min = 0x800; code = byte & 0x0f;
+    } else if ((byte & 0xf8) === 0xf0) {
+      needed = 3; min = 0x10000; code = byte & 0x07;
+    } else {
+      return false;
+    }
+    if (index + needed >= bytes.length) return false;
+    for (let offset = 1; offset <= needed; offset += 1) {
+      const next = bytes[index + offset]!;
+      if ((next & 0xc0) !== 0x80) return false;
+      code = (code << 6) | (next & 0x3f);
+    }
+    if (code < min || code > 0x10ffff) return false;
+    if (code >= 0xd800 && code <= 0xdfff) return false;
+    index += needed + 1;
+  }
+  return true;
+}
+
+/**
+ * Counts image entries in a ZIP without extracting them.
+ *
+ * Reads the end-of-central-directory record and walks the central directory
+ * names, which is metadata only: no entry is inflated. That keeps a scan of a
+ * hundred 200MB comic archives cheap, which matters because the scanner runs
+ * every minute (see docs/architecture.md §3).
+ */
+export async function countZipImages(buf: Buffer): Promise<number | null> {
+  const eocd = findEndOfCentralDirectory(buf);
+  if (!eocd) return null;
+  const entryCount = buf.readUInt16LE(eocd + 10);
+  let offset = buf.readUInt32LE(eocd + 16);
+  let pages = 0;
+  for (let index = 0; index < entryCount; index += 1) {
+    // Each central directory header is at least 46 bytes.
+    if (offset + 46 > buf.length) break;
+    if (buf.readUInt32LE(offset) !== 0x02014b50) break;
+    const nameLength = buf.readUInt16LE(offset + 28);
+    const extraLength = buf.readUInt16LE(offset + 30);
+    const commentLength = buf.readUInt16LE(offset + 32);
+    const name = buf.subarray(offset + 46, offset + 46 + nameLength).toString('latin1');
+    if (name.endsWith('/')) {
+      // directory entry
+    } else {
+      const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
+      if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.avif', '.bmp'].includes(ext)) pages += 1;
+    }
+    offset += 46 + nameLength + extraLength + commentLength;
+  }
+  return pages;
+}
+
+/**
+ * Locates the end-of-central-directory record.
+ *
+ * Scanned backwards because the comment field after it may be up to 64KB, and it
+ * is not at a fixed offset. The signature is checked rather than the position.
+ */
+function findEndOfCentralDirectory(buf: Buffer): number | null {
+  const minimum = Math.max(0, buf.length - 22 - 0xffff);
+  for (let index = buf.length - 22; index >= minimum; index -= 1) {
+    if (buf.readUInt32LE(index) === 0x06054b50) return index;
+  }
+  return null;
 }
 
 function asArray<T>(value: T | T[] | undefined): T[] {
@@ -221,6 +321,34 @@ export function filenameMetadata(relPath: string): ExtractedMetadata {
     identifier: null,
     source: 'filename',
     raw: { filename: relPath, parsed },
+  };
+}
+
+/**
+ * Metadata for a comic stored as a folder of images.
+ *
+ * Unlike every other format there is no single file to hash, so the identity is
+ * built from the folder path plus the page count: the folder *is* the book, and
+ * the reader expects it to stay one book when they add a page.
+ */
+export function comicDirectoryMetadata(relDir: string, pages: string[], totalBytes: number): ExtractedMetadata {
+  const parsed = parseFilename(relDir);
+  return {
+    title: parsed.title,
+    author: parsed.author,
+    publisher: '',
+    language: parsed.language,
+    isbn: '',
+    description: '',
+    series: parsed.series,
+    seriesIndex: parsed.seriesIndex,
+    tags: [],
+    pubdate: '',
+    // The identifier anchors identity on the folder name rather than on the
+    // contents, so adding a page does not create a second book.
+    identifier: `comic-dir:${relDir}`,
+    source: 'filename',
+    raw: { directory: relDir, pages: pages.length, bytes: totalBytes },
   };
 }
 

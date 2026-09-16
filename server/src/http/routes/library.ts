@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { AppContext } from '../context.ts';
 import { authenticate, currentUser, requireAdmin } from '../auth.ts';
 import { badRequest, notFound } from '../../lib/errors.ts';
-import { assertSafeRel, resolveInside } from '../../lib/paths.ts';
+import { assertSafeRel, normalizeRel, resolveInside } from '../../lib/paths.ts';
+import { createHash } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { stat } from 'node:fs/promises';
@@ -11,12 +12,16 @@ import {
   contentTypeFor,
   directoryHandlerForFormat,
   fileHandlerForFormat,
-  type ContentGroup,
+  type ContentItem,
 } from '../../indexer/formats/index.ts';
 import { sendAssetPayload } from '../assets.ts';
 
-
-/** The single live path backing a book, if it is file-backed. */
+/**
+ * The single live path backing a book, if it is file-backed.
+ *
+ * A directory book has no file to stream, so the caller is told which of the two
+ * shapes it is rather than being handed a path that may not exist.
+ */
 function resolveBookSource(
   ctx: AppContext,
   bookId: string,
@@ -29,37 +34,42 @@ function resolveBookSource(
   if (!file) return null;
   // Directory books are recorded under a path with no extension; a file handler
   // for the format means the path is a real file.
-  const isDirectory = fileHandlerForFormat(format) === null;
+  const isDirectory = format === 'comic-dir' || fileHandlerForFormat(format) === null;
   return { relPath: file.rel_path, isDirectory };
 }
 
-/** The handler that owns a book, resolved from its recorded format. */
+/**
+ * The handler that owns a book, resolved from its recorded format.
+ *
+ * A missing file still has a handler; only the manifest and asset calls fail.
+ */
 function resolveHandler(ctx: AppContext, bookId: string, format: string) {
-  // A missing file still has a handler; only the manifest/asset calls fail.
   void ctx;
   void bookId;
   return fileHandlerForFormat(format) ?? directoryHandlerForFormat(format) ?? null;
 }
 
 /** Absolute path plus library-relative path for a book's backing store. */
-function sourceContext(ctx: AppContext, bookId: string, format: string) {
-  const source = resolveBookSource(ctx, bookId, format);
-  if (!source) throw notFound('no available file for this book', 'FILE_MISSING');
-  const relPath = assertSafeRel(source.relPath);
-  void format;
+function sourceContext(ctx: AppContext, bookId: string) {
+  const file = ctx.db.get<{ rel_path: string }>(
+    'SELECT rel_path FROM book_files WHERE book_id = ? AND missing = 0 ORDER BY rel_path LIMIT 1',
+    bookId,
+  );
+  if (!file) throw notFound('no available file for this book', 'FILE_MISSING');
+  const relPath = assertSafeRel(file.rel_path);
   return { relPath, absPath: resolveInside(ctx.config.booksDir, relPath) };
 }
 
 /**
- * Offset of the first item in a group.
+ * Offset of the first item belonging to a group.
  *
- * Read from the group itself rather than summed from the preceding counts: a
- * client that fetched one group with `?group=N` has no preceding counts, and a
- * chapter jump that lands on the wrong chapter because of an off-by-one in that
- * sum is a bug the reader feels immediately.
+ * Taken from the declared group sizes rather than from the items themselves, so
+ * a client that only fetched one group still gets the right global offset.
  */
-function groupOffset(groups: ContentGroup[], index: number): number {
-  return groups[index]?.offset ?? 0;
+function groupOffset(groups: Array<{ count: number }>, index: number): number {
+  let offset = 0;
+  for (let i = 0; i < index; i += 1) offset += groups[i]?.count ?? 0;
+  return offset;
 }
 
 export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): void {
@@ -117,7 +127,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const groupIndex = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
 
     const content = handler
-      ? await handler.manifest({ ...sourceContext(ctx, id, book.format), bookId: id })
+      ? await handler.manifest({ ...sourceContext(ctx, id), bookId: id })
       : null;
 
     const windowed = content && groupIndex !== null && Number.isFinite(groupIndex) && content.groups[groupIndex]
@@ -137,10 +147,24 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       coverUrl: book.coverUrl,
       // The list of files backing this book, so a client can tell a duplicate
       // copy apart from a genuinely missing file.
-      files: ctx.db.all<{ rel_path: string; size: number; missing: number }>(
-        'SELECT rel_path, size, missing FROM book_files WHERE book_id = ? ORDER BY rel_path',
-        id,
-      ),
+      //
+      // Directory books are the exception, and they are the reason this is
+      // derived rather than read straight from `book_files`. Their recorded file
+      // row is the *folder*, because that is the path the scanner discovers; the
+      // pages that actually make up the book live inside it, and a client
+      // fetching pages one by one (the only way to read a 20GB scan collection)
+      // needs their paths. The manifest already knows them, so the list is built
+      // from it instead of from the row.
+      files: content && book.format === 'comic-dir'
+        ? content.items.map((item: ContentItem) => ({
+            rel_path: `${sourceContext(ctx, id).relPath}/${item.title}`,
+            size: item.size ?? 0,
+            missing: 0,
+          }))
+        : ctx.db.all<{ rel_path: string; size: number; missing: number }>(
+            'SELECT rel_path, size, missing FROM book_files WHERE book_id = ? ORDER BY rel_path',
+            id,
+          ),
       // `content` is null only for a book whose format exposes no addressable
       // structure at all; the client then falls back to the raw file.
       content: windowed,
@@ -198,7 +222,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const handler = resolveHandler(ctx, id, book.format);
     if (!handler) throw badRequest(`format ${book.format} does not expose items`, 'UNSUPPORTED_FORMAT');
 
-    const manifest = await handler.manifest({ ...sourceContext(ctx, id, book.format), bookId: id });
+    const manifest = await handler.manifest({ ...sourceContext(ctx, id), bookId: id });
     const query = request.query as Record<string, string | undefined>;
     const groupIndex = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
 
@@ -236,14 +260,14 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const handler = resolveHandler(ctx, id, book.format);
     if (!handler) return { toc: [] };
 
-    const context = { ...sourceContext(ctx, id, book.format), bookId: id };
+    const context = { ...sourceContext(ctx, id), bookId: id };
     if (handler.toc) return { toc: await handler.toc(context) };
 
     // Default: the format has no navigation of its own, so its items are its
     // table of contents. `pdf` and `image` land here.
     const manifest = await handler.manifest(context);
     return {
-      toc: manifest.items.map((item) => ({ href: item.href, title: item.title, level: 0, spine: item.seq })),
+      toc: manifest.items.map((item: ContentItem) => ({ href: item.href, title: item.title, level: 0, spine: item.seq })),
     };
   });
 
@@ -265,8 +289,74 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const handler = resolveHandler(ctx, id, book.format);
     if (!handler) throw badRequest(`format ${book.format} has no assets`, 'UNSUPPORTED_FORMAT');
 
-    const payload = await handler.asset({ ...sourceContext(ctx, id, book.format), bookId: id }, { ref });
+    const payload = await handler.asset({ ...sourceContext(ctx, id), bookId: id }, { ref });
     return sendAssetPayload(request, reply, payload);
+  });
+
+  /**
+   * Streams one file of a multi-file book.
+   *
+   * Needed for the one format that is not a single file: a comic stored as a
+   * folder of images. Compositing those into an archive server-side would mean
+   * writing into DATA_DIR on demand and re-doing the work whenever the folder
+   * changes, so the client fetches pages individually instead and caches them
+   * per page.
+   *
+   * Authorisation is the same as `/content`: the caller must be able to see the
+   * book, and the requested path must be one of that book's *known* files. The
+   * lookup is by `book_files.rel_path`, never by constructing a path from the
+   * query, so a traversal attempt simply matches no row.
+   */
+  app.get('/api/v1/books/:id/file', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    const query = request.query as { path?: string };
+    const book = ctx.shelf.get(user.id, id); // authorises access
+    if (!query.path) throw badRequest('path is required');
+
+    // Normalised first, so `穿越漫画/../../secret.txt` collapses to `secret.txt`
+    // and is judged as the path it really names rather than as the prefix of a
+    // legitimate one. Without this a traversal inside a directory book passes the
+    // "is it under the folder" test.
+    const wanted = normalizeRel(query.path);
+
+    // Two shapes of book, and each owns a different set of paths.
+    //
+    // A single-file book owns exactly the paths recorded against it — normally
+    // one. A directory book (a comic stored as a folder of images) owns the
+    // *folder*, because that is what the scanner discovers; its pages are not
+    // rows at all, so requiring a row would make every page request 404 and the
+    // book unreadable. A directory book therefore also owns everything under its
+    // folder, and the traversal check is simply "is the recorded folder a prefix
+    // of the request".
+    const isDirectoryBook = fileHandlerForFormat(book.format) === null;
+    const rows = ctx.db.all<{ rel_path: string; size: number }>(
+      'SELECT rel_path, size FROM book_files WHERE book_id = ? AND missing = 0',
+      id,
+    );
+    const row = rows.find((candidate) => candidate.rel_path === wanted);
+    const owner = isDirectoryBook
+      ? rows.find((candidate) => wanted.startsWith(`${candidate.rel_path}/`))
+      : undefined;
+    if (!row && !owner) throw notFound('no such file for this book', 'FILE_MISSING');
+
+    const abs = resolveInside(ctx.config.booksDir, assertSafeRel(wanted));
+    if (!existsSync(abs)) throw notFound('file is no longer on disk', 'FILE_MISSING');
+
+    // The registry owns the extension -> content-type mapping, so a page image
+    // served here and the same image listed in a manifest can never disagree.
+    reply.header('content-type', contentTypeFor(wanted));
+    reply.header('content-length', String(row?.size ?? (await stat(abs)).size));
+    // Unlike `/content`, this is one page of many, so the ETag is per file rather
+    // than per book.
+    //
+    // Hashed rather than embedding the path: an HTTP header value must be
+    // ISO-8859-1, and a comic page's path is routinely Chinese or Japanese. Putting
+    // the raw path in the header throws `ERR_INVALID_CHAR` and turns a page request
+    // into a 500 — which is exactly what happened the first time this was written.
+    reply.header('etag', `"${id}:${createHash('sha256').update(wanted).digest('hex').slice(0, 16)}"`);
+    reply.header('cache-control', 'private, max-age=86400');
+    return reply.send(createReadStream(abs));
   });
 
   app.get('/api/v1/books/:id/cover', { preHandler: auth }, async (request, reply) => {

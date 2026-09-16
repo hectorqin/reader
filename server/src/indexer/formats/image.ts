@@ -36,6 +36,14 @@ export const imageHandler = registerFileHandler({
     'jxl',
   ],
   label: '单张图片（按单页读物处理）',
+  /**
+   * Inside a comic folder the same extensions are pages, not books.
+   *
+   * Declared here rather than in the comic handler because this is the one
+   * registry entry that knows these extensions, and the scanner has to be able
+   * to ask one place whether a folder holds books or pages.
+   */
+  pageExtensions: ['jpg', 'jpeg', 'jpe', 'png', 'gif', 'webp', 'bmp', 'avif', 'tif', 'tiff', 'jxl'],
 
   async parse(ctx: HandlerContext, buf: Buffer): Promise<ParsedSource> {
     const fallback = filenameMetadata(ctx.relPath);

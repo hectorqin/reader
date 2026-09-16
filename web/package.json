@@ -1,23 +1,27 @@
 {
-  "name": "reader-web",
+  "name": "reader-client",
   "version": "0.1.0",
   "private": true,
-  "description": "H5 客户端：同一份构建产物既作为纯 H5 客户端独立部署，也被 Android 外壳打进 assets 复用。",
+  "description": "Reader client: shared rendering layer for the H5 build and the Android WebView shell.",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json && vite build",
-    "typecheck": "tsc -p tsconfig.json",
-    "test": "tsx --test test/*.test.ts",
-    "preview": "vite preview"
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run && tsx --test test/api.test.ts test/asset-url.test.ts test/paginator.test.ts test/window.test.ts",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
+    "@types/node": "^22.20.3",
     "jsdom": "^30.0.1",
-    "playwright": "^1.63.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
   }
 }

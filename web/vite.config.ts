@@ -1,38 +1,46 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
-/**
- * The renderer is a plain TypeScript library with one entry point, built to a
- * static bundle. There is no framework here on purpose:
- *
- *  - The hot path is imperative DOM work (splicing chapter documents into a
- *    container, sizing pages, keeping scroll position across a chapter swap).
- *    React's model would force the book's own DOM through a reconciler that must
- *    not touch it.
- *  - The same bundle is served by the server to browsers and packaged into the
- *    Android app's assets. A framework runtime would be dead weight in both.
- *
- * `base: './'` is what makes the second use case work: the Android shell loads
- * the files from `file:///android_asset/`, where an absolute `/assets/...` path
- * resolves to the filesystem root.
- */
+// The build output is consumed twice:
+//   - served directly by the server for the browser/H5 build
+//   - copied into the Android app's assets and loaded from file:// in a WebView
+//
+// Because of the second consumer the build is a single self-contained bundle
+// with relative asset URLs (base: './') and no code-splitting: a WebView loading
+// from file:// cannot fetch sibling chunks over the network, and every extra
+// request through the file protocol is a chance to meet a platform quirk.
 export default defineConfig({
   base: './',
   build: {
     outDir: 'dist',
     emptyOutDir: true,
-    target: 'es2022',
-    sourcemap: true,
+    target: 'es2020',
+    assetsInlineLimit: 0,
     rollupOptions: {
-      input: 'index.html',
+      output: {
+        inlineDynamicImports: true,
+        entryFileNames: 'assets/client.js',
+        chunkFileNames: 'assets/[name].js',
+        assetFileNames: 'assets/[name][extname]',
+      },
     },
+    modulePreload: { polyfill: false },
   },
   server: {
-    port: 5173,
+    port: 5174,
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8080',
+        target: process.env.READER_SERVER ?? 'http://127.0.0.1:8080',
         changeOrigin: true,
       },
     },
+  },
+  test: {
+    environment: 'node',
+    // The `node:test` files are run by `tsx --test` (see package.json), because
+    // they were written for the Node test runner and importing a vitest test
+    // file from one process, or vice versa, silently produces "no test suite
+    // found". Excluding them here keeps each runner to the files it can actually
+    // execute, instead of a green-looking run that quietly skipped half the suite.
+    exclude: ['test/api.test.ts', 'test/asset-url.test.ts', 'test/paginator.test.ts', 'test/window.test.ts', 'node_modules/**'],
   },
 });

@@ -15,6 +15,7 @@ import { ZipArchive } from './zip-reader.ts';
 import { imageContentType, isImageExtension } from './image-types.ts';
 import { naturalCompare, naturalSortBy } from './natural-sort.ts';
 import { filenameMetadata } from '../metadata.ts';
+import { fileHandlerForExtension } from './registry.ts';
 
 /**
  * Comic directories: a folder of images, optionally split into volumes.
@@ -46,6 +47,33 @@ interface LocalEntry {
   isDirectory: boolean;
   isImage: boolean;
   isArchive: boolean;
+  /** A file another registered format would index as a book of its own. */
+  isBookFile: boolean;
+}
+
+/**
+ * Whether a file name belongs to a format the registry treats as a book.
+ *
+ * `.epub` and `.pdf` are the ones that matter here: a shelf directory full of
+ * them must never be claimed as a comic. Written as "a handler owns this
+ * extension" rather than as a list, so newly registered formats are covered
+ * automatically.
+ */
+function isBookFormatExtension(name: string): boolean {
+  const dot = name.lastIndexOf('.');
+  if (dot < 0) return false;
+  return fileHandlerForExtension(name.slice(dot)) !== null;
+}
+
+/**
+ * Archive extensions that may hold pages.
+ *
+ * `.epub` deliberately stays out of this set even though it is a zip: an EPUB is
+ * a book collection, and treating it as a container of pages would turn a shelf
+ * directory into one "comic" with hundreds of pages.
+ */
+function isArchiveName(name: string): boolean {
+  return /\.(cbz|zip)$/i.test(name);
 }
 
 /** List a directory, ignoring the cruft that accumulates on real disks. */
@@ -62,46 +90,76 @@ async function listEntries(absDir: string): Promise<LocalEntry[]> {
     if (dirent.name.startsWith('.')) continue;
     const ext = dirent.name.slice(dirent.name.lastIndexOf('.') + 1);
     if (dirent.isDirectory()) {
-      out.push({ name: dirent.name, isDirectory: true, isImage: false, isArchive: false });
+      out.push({ name: dirent.name, isDirectory: true, isImage: false, isArchive: false, isBookFile: false });
     } else if (dirent.isFile()) {
+      const image = isImageExtension(ext);
+      const archive = isArchiveName(dirent.name);
       out.push({
         name: dirent.name,
         isDirectory: false,
-        isImage: isImageExtension(ext),
-        isArchive: /\.(cbz|zip)$/i.test(dirent.name),
+        isImage: image,
+        isArchive: archive,
+        isBookFile: !image && !archive && isBookFormatExtension(dirent.name),
       });
     }
   }
   return out.sort((a, b) => naturalCompare(a.name, b.name));
 }
 
-export function toDirectoryEntries(entries: LocalEntry[]): DirectoryEntry[] {
-  return entries.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory, size: 0 }));
-}
-
 /**
  * Decide whether a directory is one comic book.
  *
- * Intentionally conservative. A music or video folder that happens to contain
- * two stray JPEGs must not become a comic, so both the absolute count and the
- * ratio have to clear their thresholds, and a volume layout is only accepted
- * when the first subdirectory really holds images.
+ * Intentionally conservative: an image COUNT alone is not evidence, because
+ * covers, thumbnails and stray scans sit inside every real book collection. What
+ * makes a comic is that the folder holds nothing this server would index as a
+ * book of another format.
  */
 export async function looksLikeComicDirectory(absDir: string): Promise<boolean> {
   const entries = await listEntries(absDir);
   if (entries.length === 0) return false;
 
+  const dirs = entries.filter((entry) => entry.isDirectory);
   const images = entries.filter((entry) => entry.isImage).length;
   const archives = entries.filter((entry) => entry.isArchive).length;
-  const dirs = entries.filter((entry) => entry.isDirectory);
 
-  if (images >= MIN_IMAGES && images >= entries.length * IMAGE_RATIO) return true;
-  if (archives >= MIN_IMAGES && archives >= entries.length * IMAGE_RATIO) return true;
+  if (images >= MIN_IMAGES || archives >= MIN_IMAGES) {
+    return !entries.some((entry) => entry.isBookFile);
+  }
 
-  if (dirs.length > 0 && images === 0 && archives === 0 && dirs.length >= entries.length * IMAGE_RATIO) {
-    const probe = await listEntries(join(absDir, dirs[0]!.name));
-    const subImages = probe.filter((entry) => entry.isImage).length;
-    return subImages >= MIN_IMAGES && subImages >= probe.length * IMAGE_RATIO;
+  // Volume layout: subdirectories only, and the first one really holds pages.
+  // The probe recurses because "one level of nesting" describes how the reader
+  // navigates, while a volume directory may hold its pages one level further
+  // down — and this scan is what decides whether the folder is a book at all, so
+  // it must not conclude "not a comic" about a folder the manifest reads happily.
+  if (images === 0 && archives === 0 && dirs.length === entries.length) {
+    return hasImagesBelow(join(absDir, dirs[0]!.name), 0);
+  }
+  return false;
+}
+
+/**
+ * Whether a subdirectory is a book collection rather than a volume.
+ *
+ * Pages are never taken out of a folder that has book files in it, so a
+ * `藏书目录/` nested inside a comic folder cannot silently swallow the books
+ * inside it.
+ */
+async function isBookCollection(absDir: string): Promise<boolean> {
+  const entries = await listEntries(absDir);
+  return entries.some((entry) => !entry.isDirectory && !entry.isImage && !entry.isArchive);
+}
+
+/** How deep the "is this a comic" probe may look before giving up. */
+const MAX_PROBE_DEPTH = 2;
+
+/** Whether a directory holds at least MIN_IMAGES images within MAX_PROBE_DEPTH levels. */
+async function hasImagesBelow(absDir: string, depth: number): Promise<boolean> {
+  const entries = await listEntries(absDir);
+  const images = entries.filter((entry) => entry.isImage).length;
+  if (images >= MIN_IMAGES) return true;
+  if (depth >= MAX_PROBE_DEPTH) return false;
+  for (const dir of entries.filter((entry) => entry.isDirectory)) {
+    if (await hasImagesBelow(join(absDir, dir.name), depth + 1)) return true;
   }
   return false;
 }
@@ -119,16 +177,39 @@ interface Volume {
   pages: Page[];
 }
 
-/** Collect the pages of one directory level (images plus embedded archives). */
-async function collectPages(absDir: string, prefix: string): Promise<Page[]> {
+/** How deep a volume may nest before its pages stop being collected. */
+const MAX_PAGE_DEPTH = 3;
+
+/**
+ * Collect the pages of a volume: images and embedded archives, in natural order.
+ *
+ * Recurses into subdirectories, because scans of one volume are routinely split
+ * into `第01话/`, `第02话/` folders. A single level of nesting is enough in
+ * practice and keeps a stray `extras/` folder from turning into a thousand-page
+ * book.
+ */
+async function collectPages(absDir: string, prefix: string, depth = 0): Promise<Page[]> {
   const entries = await listEntries(absDir);
-  return entries
-    .filter((entry) => entry.isImage || entry.isArchive)
-    .map((entry) => ({
-      relPath: prefix ? `${prefix}/${entry.name}` : entry.name,
-      name: entry.name,
-      source: entry.isArchive ? ('archive' as const) : ('file' as const),
-    }));
+  const pages: Page[] = [];
+  for (const entry of entries) {
+    if (entry.isImage || entry.isArchive) {
+      pages.push({
+        relPath: prefix ? `${prefix}/${entry.name}` : entry.name,
+        name: entry.name,
+        source: entry.isArchive ? ('archive' as const) : ('file' as const),
+      });
+      continue;
+    }
+    if (entry.isDirectory && depth < MAX_PAGE_DEPTH && !isBookCollection(join(absDir, entry.name))) {
+      const nested = await collectPages(
+        join(absDir, entry.name),
+        prefix ? `${prefix}/${entry.name}` : entry.name,
+        depth + 1,
+      );
+      pages.push(...nested);
+    }
+  }
+  return pages.sort((a, b) => naturalCompare(a.relPath, b.relPath));
 }
 
 /** Build the volume list: subdirectories first, then any loose images. */
