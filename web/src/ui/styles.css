@@ -1,0 +1,376 @@
+/*
+ * The client's own UI.
+ *
+ * Kept rigidly separate from the book's styles: everything here is scoped to the
+ * shell's own classes, and nothing here selects a content element. That boundary
+ * is the reason the reader does not need `!important` anywhere — client rules and
+ * publisher rules never compete, because they never meet.
+ *
+ * The book's own layer lives in `render/theme.ts`, split between rules that
+ * belong outside the shadow root (page geometry, theme variables) and knowledge
+ * of what a publisher's stylesheet is allowed to win.
+ */
+
+:root {
+  --ui-bg: #ffffff;
+  --ui-fg: #111111;
+  --ui-muted: #6b7280;
+  --ui-border: #e5e7eb;
+  --ui-accent: #2563eb;
+  --ui-danger: #dc2626;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+}
+
+:root[data-theme='dark'] {
+  --ui-bg: #14161a;
+  --ui-fg: #e5e7eb;
+  --ui-muted: #9ca3af;
+  --ui-border: #2a2e35;
+  --ui-accent: #60a5fa;
+  --ui-danger: #f87171;
+}
+
+:root[data-theme='sepia'] {
+  --ui-bg: #f6f0e4;
+  --ui-fg: #3b3121;
+  --ui-muted: #8a7c63;
+  --ui-border: #e0d6c2;
+  --ui-accent: #a16207;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  /* Text selection is disabled on the shell so a long press on a button does not
+     start selecting the UI. The book's own content re-enables it explicitly. */
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ shelf */
+
+.shelf {
+  height: 100%;
+  overflow-y: auto;
+  padding: calc(12px + var(--safe-top)) calc(16px + var(--safe-right)) calc(24px + var(--safe-bottom))
+    calc(16px + var(--safe-left));
+}
+
+.shelf__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.shelf__title {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+}
+
+.shelf__search {
+  width: 100%;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  font-size: 15px;
+}
+
+.shelf__grid {
+  display: grid;
+  /* Fixed minimum with `auto-fill`: the number of columns follows the viewport,
+     which is what makes the same markup work on a phone and on a tablet without
+     a media query per breakpoint. */
+  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  gap: 16px 12px;
+}
+
+.book-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+
+.book-card__cover {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--ui-border);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+}
+
+.book-card__title {
+  font-size: 13px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.book-card__meta {
+  font-size: 11px;
+  color: var(--ui-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ------------------------------------------------------------------ reader */
+
+.reader {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.reader__stage {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  touch-action: pan-y;
+}
+
+.reader__stage.is-paged {
+  touch-action: none;
+}
+
+.reader__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px calc(10px + var(--safe-right)) 6px calc(10px + var(--safe-left));
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-bg);
+  padding-top: calc(6px + var(--safe-top));
+  font-size: 13px;
+}
+
+.reader__toolbar-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader__button {
+  border: 0;
+  background: none;
+  color: var(--ui-fg);
+  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.reader__button:disabled {
+  color: var(--ui-muted);
+  cursor: default;
+}
+
+.reader__footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px calc(12px + var(--safe-right)) calc(4px + var(--safe-bottom)) calc(12px + var(--safe-left));
+  border-top: 1px solid var(--ui-border);
+  font-size: 12px;
+  color: var(--ui-muted);
+  background: var(--ui-bg);
+}
+
+.reader__progress {
+  flex: 1;
+  height: 3px;
+  background: var(--ui-border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.reader__progress-fill {
+  height: 100%;
+  width: 0;
+  background: var(--ui-accent);
+  transition: width 120ms linear;
+}
+
+/* A page is a horizontal scroll target; the reader moves it by scrollLeft. The
+   transition is what makes the movement read as a page turn rather than a jump. */
+.reader__stage .reader-viewport {
+  transition: scroll-left 160ms ease-out;
+}
+
+.reader__page {
+  display: block;
+  margin: 0 auto;
+  width: auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.reader-text {
+  height: 100%;
+  overflow-y: auto;
+  padding: 16px calc(16px + var(--safe-right)) calc(24px + var(--safe-bottom)) calc(16px + var(--safe-left));
+  /* Text selection is the whole point of a text reader. */
+  user-select: text;
+  line-height: 1.8;
+  font-size: 17px;
+}
+
+.reader-text p {
+  margin: 0 0 0.9em;
+}
+
+.reader-pdf {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: var(--ui-bg);
+}
+
+.reader__warning {
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--ui-danger) 12%, transparent);
+  color: var(--ui-danger);
+  font-size: 12px;
+}
+
+.spinner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--ui-muted);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ dialog */
+
+.dialog {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.5);
+  padding: 20px;
+  z-index: 20;
+}
+
+.dialog__panel {
+  width: min(420px, 100%);
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--ui-bg);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 0.25);
+}
+
+.dialog__title {
+  margin: 0 0 14px;
+  font-size: 17px;
+}
+
+.dialog__row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--ui-muted);
+}
+
+.dialog__row input,
+.dialog__row select {
+  padding: 9px 10px;
+  font-size: 15px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+}
+
+.dialog__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.dialog__button {
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--ui-border);
+  background: none;
+  color: var(--ui-fg);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.dialog__button--primary {
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+  color: #fff;
+}
+
+.toc {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.toc__item {
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--ui-border);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.toc__item--current {
+  color: var(--ui-accent);
+  font-weight: 600;
+}
+
+.toc__empty,
+.shelf__empty {
+  color: var(--ui-muted);
+  font-size: 14px;
+  text-align: center;
+  padding: 40px 0;
+}

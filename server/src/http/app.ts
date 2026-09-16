@@ -4,6 +4,7 @@ import { registerErrorHandler } from './errors.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerLibraryRoutes } from './routes/library.ts';
 import { registerSyncRoutes } from './routes/sync.ts';
+import { registerWebRoutes } from './routes/web.ts';
 
 export function buildApp(ctx: AppContext): FastifyInstance {
   const app = Fastify({
@@ -32,6 +33,10 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerAuthRoutes(app, ctx);
   registerLibraryRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
+  // Registered last: it is the catch-all that serves the H5 client, and the API
+  // routes above must win. Fastify matches in registration order, so this order
+  // is load-bearing rather than stylistic.
+  registerWebRoutes(app, ctx);
 
   return app;
 }

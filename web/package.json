@@ -1,0 +1,22 @@
+{
+  "name": "reader-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "H5 客户端：同一份构建产物既作为纯 H5 客户端独立部署，也被 Android 外壳打进 assets 复用。",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json && vite build",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "jsdom": "^30.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  }
+}
