@@ -129,6 +129,64 @@
 
 `files` 让客户端能区分「另一份副本」和「文件真的没了」。
 
+### `GET /books/:id/items?group=N`
+
+书里有哪些**可寻址的单元**：章节、页、卷。这是客户端构建目录和分页的地方。
+
+契约对所有格式一致，`kind` 字段告诉客户端该按什么方式渲染：
+
+| `kind` | 含义 | 典型格式 |
+| --- | --- | --- |
+| `reflowable` | 可重排文本，按章节加载 | epub |
+| `paged` | 固定页序的图片 | cbz、漫画目录、单图 |
+| `text` | 连续文本，可能带章节 | txt |
+| `document` | 不透明文档，客户端自己渲染 | pdf |
+
+```json
+{ "kind": "paged", "total": 6,
+  "groups": [ { "id": "v0", "seq": 0, "title": "第01卷", "count": 3 },
+              { "id": "v1", "seq": 1, "title": "第02卷", "count": 3 } ],
+  "items": [ { "id": "0:0", "seq": 0, "title": "001.jpg", "kind": "page",
+               "mediaType": "image/jpeg", "href": "page:0:0" } ] }
+```
+
+`groups` 是卷（漫画）或单一隐式分组（epub/txt）。`?group=N` 只返回第 N 组，
+让客户端一次只取一卷而不是整个系列的几千页清单。
+
+`total` 在格式无法廉价得知时为 `0`，`groups` 为空 —— 例如没有标题的纯文本。
+不要把它当作错误。
+
+### `GET /books/:id/assets?ref=<ref>`
+
+取单个资源。`ref` 是**不透明**的格式私有引用，客户端只应把它从 `items[].href`
+原样回传，不要自己拼。
+
+| 格式 | ref 形态 |
+| --- | --- |
+| epub | `chapter:2`（第 3 章）、或包内资源路径 `OEBPS/images/pic.png` |
+| cbz | `page:17` |
+| 漫画目录 | `page:1:2`（第 2 卷的第 3 页） |
+| txt | `chapter:4` 或 `chunk:262144`（字节偏移） |
+| pdf | `document` |
+
+响应带 `Cache-Control: private, max-age=31536000, immutable`：资源由书籍主键寻址，
+而主键来自内容哈希，所以同一个 URL 的内容永不改变。
+
+**epub 章节返回的是重写过的 HTML。** 章节内的相对资源引用（`images/pic.png`）已经被
+服务端改写成指向本端点的绝对地址。客户端直接把 HTML 交给 WebView 即可，不需要自己
+解析路径。绝对 URL、`data:` URI 和文内锚点（`#note7`）保持原样，所以脚注和外链仍然可用。
+
+### `GET /library/formats`
+
+本实例支持的格式清单，由格式注册表生成：
+
+```json
+{ "formats": [ { "format": "epub", "kind": "reflowable", "label": "EPUB（精排渲染，保留出版方样式）",
+                 "extensions": ["epub"], "directory": false } ] }
+```
+
+客户端用它决定显示哪些入口，不必硬编码格式列表。
+
 ### `GET /books/:id/content`
 
 流式返回书文件，`Content-Type` 按格式给 `application/epub+zip` 或 `application/pdf`。

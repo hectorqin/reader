@@ -3,13 +3,19 @@ import { readdir, stat, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Db } from '../db/index.ts';
 import type { AppConfig } from '../config/index.ts';
-import { computeBookId, computeFileId } from './identity.ts';
-import { parseBookFile, saveCover, type ExtractedMetadata, type ParsedBookFile } from './metadata.ts';
+import { computeFileId, resolveBookId } from './identity.ts';
+import { saveCover, type ExtractedMetadata } from './metadata.ts';
 import { toRelative } from '../lib/paths.ts';
+import { naturalCompare } from './formats/index.ts';
 import { collapseWhitespace, safeJsonParse } from '../lib/text.ts';
-
-export const SUPPORTED_EXTENSIONS = new Set(['.epub', '.pdf']);
-const SKIP_DIRS = new Set(['.git', '@eaDir', '#recycle', '.DS_Store', 'lost+found']);
+import {
+  allDirectoryHandlers,
+  fileHandlerForExtension,
+  supportedExtensions,
+  type BookKind,
+  type DirectoryEntry,
+  type ParsedSource,
+} from './formats/index.ts';
 
 export interface ScanProgress {
   running: boolean;
@@ -34,6 +40,13 @@ interface FileEntry {
   mtimeMs: number;
 }
 
+interface DirectoryCandidate {
+  relPath: string;
+  absPath: string;
+  /** Coarse change key: child count plus the newest child mtime. */
+  signature: string;
+}
+
 interface StoredFile {
   id: string;
   book_id: string;
@@ -45,6 +58,23 @@ interface StoredFile {
   book_identifier: string | null;
 }
 
+/** Directories that never contain books, or contain only tooling noise. */
+const SKIP_DIRS = new Set(['.git', '@eaDir', '#recycle', '.DS_Store', 'lost+found', '__MACOSX']);
+
+/** A directory book is only claimed if it holds at least this many pages. */
+const MIN_DIRECTORY_PAGES = 2;
+
+/**
+ * Library scanner.
+ *
+ * Responsibilities:
+ *  - walk the read-only mount and decide which format owns each path
+ *  - detect changes cheaply (size + mtime) before hashing anything
+ *  - write the index into DATA_DIR, never into the library
+ *
+ * All format knowledge lives behind `./formats`. This file only knows that a
+ * handler can parse something and how to record the result.
+ */
 export class Scanner {
   private progress: ScanProgress = {
     running: false,
@@ -96,12 +126,55 @@ export class Scanner {
     };
 
     try {
-      const found = await this.walk(this.config.booksDir);
       const stored = this.loadStoredFiles();
       const storedByPath = new Map(stored.map((row) => [row.rel_path, row]));
       const seen = new Set<string>();
 
+      // Directory books are discovered BEFORE the file walk so their contents
+      // can be excluded from it. Doing it the other way round means indexing
+      // every page image first and then deleting them, which shows up as a
+      // visible add-then-remove churn in the scan counters.
+      const directoryBooks = await this.discoverDirectoryBooks(storedByPath);
+      const claimed: string[] = [];
+      for (const candidate of directoryBooks) {
+        seen.add(candidate.relPath);
+        claimed.push(candidate.relPath);
+        this.progress.scanned += 1;
+        const previous = storedByPath.get(candidate.relPath);
+        try {
+          await this.indexDirectory(candidate, previous);
+        } catch (err) {
+          this.progress.failed += 1;
+          this.progress.lastError = err instanceof Error ? err.message : String(err);
+          this.log.warn({ err, relPath: candidate.relPath }, 'failed to index directory');
+        }
+      }
+
+      const ownedByDirectoryBook = (relPath: string): boolean =>
+        claimed.some((dir) => relPath.startsWith(`${dir}/`));
+
+      // Files inside a directory book belong to it, not to the shelf.
+      if (claimed.length > 0) {
+        const owned = stored.filter((row) => ownedByDirectoryBook(row.rel_path));
+        this.db.transaction(() => {
+          for (const row of owned) {
+            if (row.missing === 0) this.progress.removed += 1;
+            this.db.run('DELETE FROM book_files WHERE id = ?', row.id);
+          }
+        });
+        const ownedIds = new Set(owned.map((row) => row.id));
+        for (let i = stored.length - 1; i >= 0; i -= 1) {
+          if (ownedIds.has(stored[i]!.id)) stored.splice(i, 1);
+        }
+      }
+
+      const found = await this.walk(this.config.booksDir);
+
       for (const entry of found) {
+        if (ownedByDirectoryBook(entry.relPath)) {
+          this.progress.scanned += 1;
+          continue;
+        }
         seen.add(entry.relPath);
         this.progress.scanned += 1;
         const previous = storedByPath.get(entry.relPath);
@@ -168,9 +241,17 @@ export class Scanner {
     }
   }
 
-  /** Recursive walk that never follows symlinks out of the library root. */
+  /**
+   * Recursive walk that never follows symlinks out of the library root, and
+   * only descends into directories that can yield a book.
+   *
+   * The extension set comes from the format registry rather than a hardcoded
+   * list, so registering a handler is all it takes for its files to be walked.
+   */
   private async walk(root: string): Promise<FileEntry[]> {
     const out: FileEntry[] = [];
+    const extensions = supportedExtensions();
+
     const visit = async (dir: string): Promise<void> => {
       let entries;
       try {
@@ -189,8 +270,13 @@ export class Scanner {
         // Symlinks are not followed: a link pointing outside the mount would
         // let the server read files the operator never shared with it.
         if (!entry.isFile()) continue;
-        const ext = entry.name.slice(entry.name.lastIndexOf('.')).toLowerCase();
-        if (!SUPPORTED_EXTENSIONS.has(ext)) continue;
+        const dot = entry.name.lastIndexOf('.');
+        if (dot <= 0) continue;
+        if (!extensions.has(entry.name.slice(dot).toLowerCase())) continue;
+
+        // Dirent carries no size or mtime, so a stat is unavoidable. Getting
+        // this wrong (reading `entry.size`) makes every file look unchanged and
+        // silently freezes the index — see the regression test.
         try {
           const info = await stat(abs);
           out.push({ relPath: toRelative(root, abs), size: info.size, mtimeMs: Math.floor(info.mtimeMs) });
@@ -199,8 +285,94 @@ export class Scanner {
         }
       }
     };
+
     await visit(root);
     return out;
+  }
+
+  /**
+   * Find directories that are themselves books (comic series, image folders).
+   *
+   * Shallowest first, and a claimed directory absorbs its descendants. Both
+   * directions were tried against real libraries:
+   *
+   *  - Deepest first turns `进击的巨人/第01卷/` into its own book, so the series
+   *    shows up as N separate volumes instead of one book with N volumes, and
+   *    the reader has to hunt for the next volume in a different shelf entry.
+   *  - Shallowest first matches how the books were filed by hand: the outer
+   *    folder is the series, its subfolders are the volumes.
+   *
+   * The cost is that a genuinely nested pair (a series folder inside a folder of
+   * unrelated scans) collapses into the outer one. That is visible and fixable
+   * by the user moving files; N near-duplicate shelf entries is not.
+   */
+  private async discoverDirectoryBooks(storedByPath: Map<string, StoredFile>): Promise<DirectoryCandidate[]> {
+    const handlers = allDirectoryHandlers();
+    if (handlers.length === 0) return [];
+
+    const directories = await this.listDirectories(this.config.booksDir);
+    const shallowestFirst = directories.sort((a, b) => {
+      const depth = a.split('/').length - b.split('/').length;
+      return depth !== 0 ? depth : naturalCompare(a, b);
+    });
+
+    const claimed: string[] = [];
+    const out: DirectoryCandidate[] = [];
+
+    for (const relPath of shallowestFirst) {
+      if (claimed.some((owner) => relPath === owner || relPath.startsWith(`${owner}/`))) continue;
+
+      const absPath = join(this.config.booksDir, relPath);
+      const entries = await this.listDirectoryEntries(absPath);
+
+      for (const handler of handlers) {
+        let matched = false;
+        try {
+          matched = await handler.matches({ relPath, absPath }, entries);
+        } catch {
+          matched = false;
+        }
+        if (!matched) continue;
+
+        claimed.push(relPath);
+        out.push({ relPath, absPath, signature: directorySignature(entries, storedByPath, relPath) });
+        break;
+      }
+    }
+
+    return out;
+  }
+
+  private async listDirectories(root: string): Promise<string[]> {
+    const out: string[] = [];
+    const visit = async (dir: string): Promise<void> => {
+      let entries;
+      try {
+        entries = await readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
+        const abs = join(dir, entry.name);
+        out.push(toRelative(root, abs));
+        await visit(abs);
+      }
+    };
+    await visit(root);
+    return out;
+  }
+
+  private async listDirectoryEntries(absDir: string): Promise<DirectoryEntry[]> {
+    try {
+      const dirents = await readdir(absDir, { withFileTypes: true });
+      return dirents
+        .filter((dirent) => !dirent.name.startsWith('.'))
+        .map((dirent) => ({ name: dirent.name, isDirectory: dirent.isDirectory(), size: 0 }));
+    } catch {
+      return [];
+    }
   }
 
   private loadStoredFiles(): StoredFile[] {
@@ -222,9 +394,24 @@ export class Scanner {
       return;
     }
 
+    const dot = entry.relPath.lastIndexOf('.');
+    const handler = fileHandlerForExtension(entry.relPath.slice(dot));
+    if (!handler) {
+      // The walk only visits registered extensions, so this is a registry/index
+      // mismatch rather than user data. Skip quietly instead of failing the scan.
+      this.progress.unchanged += 1;
+      return;
+    }
+
     const abs = join(this.config.booksDir, entry.relPath);
     const buf = await readFile(abs);
-    const parsed = await parseBookFile(buf, entry.relPath);
+    // A supported extension is not proof of format: a `.zip` may hold documents.
+    if (handler.matches && !(await handler.matches({ relPath: entry.relPath, absPath: abs }, buf.subarray(0, 4096)))) {
+      this.progress.unchanged += 1;
+      return;
+    }
+
+    const parsed = await handler.parse({ relPath: entry.relPath, absPath: abs }, buf);
 
     // Stage 2: identical bytes with a touched mtime is not a real change.
     if (previous && previous.book_content_hash === parsed.contentHash) {
@@ -234,18 +421,87 @@ export class Scanner {
       return;
     }
 
-    const bookId = computeBookId(parsed.metadata.identifier, parsed.contentHash);
+    await this.record(entry.relPath, parsed, previous, {
+      size: entry.size,
+      mtimeMs: entry.mtimeMs,
+    });
+  }
+
+  /** Index a directory book. Its change key is derived from its contents. */
+  private async indexDirectory(candidate: DirectoryCandidate, previous: StoredFile | undefined): Promise<void> {
+    const handler = allDirectoryHandlers().find((h) =>
+      h.matches({ relPath: candidate.relPath, absPath: candidate.absPath }, []),
+    );
+
+    // `matches` is async and was already evaluated during discovery; re-resolve
+    // the handler that claimed this path by asking each one again.
+    const owner = handler ?? (await this.resolveDirectoryHandler(candidate));
+    if (!owner) {
+      this.progress.unchanged += 1;
+      return;
+    }
+
+    const parsed = await owner.parse({ relPath: candidate.relPath, absPath: candidate.absPath }, []);
+
+    if (previous && previous.size === parsed.size && previous.book_content_hash === parsed.contentHash) {
+      this.db.run('UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0 WHERE id = ?',
+        parsed.size, Date.now(), previous.id);
+      this.progress.unchanged += 1;
+      return;
+    }
+
+    await this.record(candidate.relPath, parsed, previous, {
+      size: parsed.size,
+      mtimeMs: Date.now(),
+    });
+  }
+
+  private async resolveDirectoryHandler(candidate: DirectoryCandidate) {
+    const entries = await this.listDirectoryEntries(candidate.absPath);
+    for (const handler of allDirectoryHandlers()) {
+      try {
+        if (await handler.matches({ relPath: candidate.relPath, absPath: candidate.absPath }, entries)) {
+          return handler;
+        }
+      } catch {
+        // A handler that cannot inspect this directory simply does not claim it.
+      }
+    }
+    return null;
+  }
+
+  /** Shared book/file bookkeeping for both file and directory books. */
+  private async record(
+    relPath: string,
+    parsed: ParsedSource,
+    previous: StoredFile | undefined,
+    stat: { size: number; mtimeMs: number },
+  ): Promise<void> {
+    // Reuse the identity this path already had, so an in-place edit updates the
+    // book instead of creating a second one and orphaning the reader's progress.
+    // A source that carries an identifier of its own (epub) keeps the
+    // content-anchored rule, because there the identifier is authoritative.
+    const storedIdentifier = previous
+      ? this.db.get<{ identifier: string | null }>('SELECT identifier FROM books WHERE id = ?', previous.book_id)
+          ?.identifier ?? null
+      : undefined;
+    const bookId = resolveBookId({
+      identifier: parsed.metadata.identifier,
+      contentHash: parsed.contentHash,
+      previousId: previous?.book_id,
+      previousIdentifier: storedIdentifier,
+    });
     const existing = this.db.get<{ id: string }>('SELECT id FROM books WHERE id = ?', bookId);
     const now = Date.now();
 
-    // Write the cover into DATA_DIR before recording its path. Covers are
-    // cached, never mirrored back into the read-only library mount.
+    let coverPath: string | undefined;
     if (parsed.cover) {
-      parsed.coverPath = await this.persistCover(bookId, parsed.cover);
+      // Covers are cached in DATA_DIR, never mirrored into the read-only mount.
+      coverPath = await this.persistCover(bookId, parsed.cover);
     }
 
     if (!existing) {
-      this.insertBook(bookId, parsed, now);
+      this.insertBook(bookId, parsed, coverPath, now);
       this.progress.added += 1;
       // Every existing user gets the new book on their shelf, so the library
       // feels shared rather than something each member must curate by hand.
@@ -258,14 +514,14 @@ export class Scanner {
       this.progress.updated += 1;
       // Embedded metadata is never allowed to overwrite manual edits; the
       // override layer is applied on read, so refreshing base values is safe.
-      this.updateBook(bookId, parsed, now);
+      this.updateBook(bookId, parsed, coverPath, now);
     }
 
-    const fileId = computeFileId(entry.relPath);
+    const fileId = computeFileId(relPath);
     if (previous) {
       this.db.run(
         'UPDATE book_files SET book_id = ?, size = ?, mtime_ms = ?, missing = 0, last_seen = ? WHERE id = ?',
-        bookId, entry.size, entry.mtimeMs, now, previous.id,
+        bookId, stat.size, stat.mtimeMs, now, previous.id,
       );
     } else {
       this.db.run(
@@ -273,14 +529,13 @@ export class Scanner {
          VALUES (?, ?, ?, ?, ?, '', 0, ?, ?)
          ON CONFLICT(rel_path) DO UPDATE SET book_id = excluded.book_id, size = excluded.size,
            mtime_ms = excluded.mtime_ms, missing = 0, last_seen = excluded.last_seen`,
-        fileId, bookId, entry.relPath, entry.size, entry.mtimeMs, now, now,
+        fileId, bookId, relPath, stat.size, stat.mtimeMs, now, now,
       );
     }
   }
 
-  private insertBook(bookId: string, parsed: ParsedBookFile, now: number): void {
+  private insertBook(bookId: string, parsed: ParsedSource, coverPath: string | undefined, now: number): void {
     const m = parsed.metadata;
-    const coverPath = parsed.coverPath ?? null;
     this.db.run(
       `INSERT INTO books (id, identifier, content_hash, format, title, author, publisher, language, isbn,
         description, series, series_index, tags, pubdate, cover_path, file_size, page_count, meta_json,
@@ -300,17 +555,17 @@ export class Scanner {
       m.seriesIndex,
       JSON.stringify(m.tags),
       m.pubdate,
-      coverPath,
+      coverPath ?? null,
       parsed.size,
       parsed.pageCount,
-      JSON.stringify(m.raw),
+      JSON.stringify({ ...m.raw, kind: parsed.kind }),
       m.source,
       now,
       now,
     );
   }
 
-  private updateBook(bookId: string, parsed: ParsedBookFile, now: number): void {
+  private updateBook(bookId: string, parsed: ParsedSource, coverPath: string | undefined, now: number): void {
     const m = parsed.metadata;
     this.db.run(
       `UPDATE books SET title = ?, author = ?, publisher = ?, language = ?, isbn = ?, description = ?,
@@ -319,8 +574,8 @@ export class Scanner {
       collapseWhitespace(m.title) || fallbackTitle(parsed),
       m.author, m.publisher, m.language, m.isbn, m.description,
       m.series, m.seriesIndex, JSON.stringify(m.tags), m.pubdate,
-      parsed.pageCount, parsed.size, JSON.stringify(m.raw),
-      parsed.coverPath ?? null, m.source, now, bookId,
+      parsed.pageCount, parsed.size, JSON.stringify({ ...m.raw, kind: parsed.kind }),
+      coverPath ?? null, m.source, now, bookId,
     );
   }
 
@@ -330,7 +585,27 @@ export class Scanner {
   }
 }
 
-function fallbackTitle(parsed: Awaited<ReturnType<typeof parseBookFile>>): string {
+/**
+ * Coarse change key for a directory book.
+ *
+ * mtime of a directory does not change when a file deep inside is replaced, so
+ * we combine the child count with the newest child mtime. It is a heuristic, and
+ * `parse()` still compares the content hash before declaring a real change.
+ */
+function directorySignature(
+  entries: DirectoryEntry[],
+  storedByPath: Map<string, StoredFile>,
+  relPath: string,
+): string {
+  let newest = 0;
+  for (const entry of entries) {
+    const child = storedByPath.get(`${relPath}/${entry.name}`);
+    if (child) newest = Math.max(newest, child.mtime_ms);
+  }
+  return `${entries.length}:${newest}`;
+}
+
+function fallbackTitle(parsed: { contentHash: string }): string {
   return `未命名 (${parsed.contentHash.slice(0, 8)})`;
 }
 
@@ -342,4 +617,4 @@ export function parseTags(value: string): string[] {
   return safeJsonParse<string[]>(value, []);
 }
 
-export type { ExtractedMetadata };
+export type { ExtractedMetadata, BookKind };
