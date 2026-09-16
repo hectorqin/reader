@@ -1,16 +1,17 @@
-# 服务端 CI：类型检查、测试、构建。
-# 忽略文档改动，避免改 README 也跑一遍 Node。
+# CI：服务端与 H5 客户端各自类型检查、测试、构建。
+#
+# 两侧分开定义，因为它们的失败模式不同：服务端坏掉意味着读不了书，客户端
+# 坏掉意味着打开是白屏。合成一个 stage 只会让「谁挂了」变得不清楚。
 .node-env: &node-env
   docker:
     image: node:24
-  ifModify:
-    - server/**
 
-# 推送：完整检查
 main:
   push:
     - name: server-ci
       <<: *node-env
+      ifModify:
+        - server/**
       stages:
         - name: install
           script: cd server && npm ci
@@ -22,9 +23,25 @@ main:
           script: cd server && npm run build
       failStages:
         - name: report-failure
-          script: echo "CI 失败：$CNB_BUILD_FAILED_MSG"
+          script: echo "服务端 CI 失败：$CNB_BUILD_FAILED_MSG"
 
-# PR：同样的检查，作为评审依据
+    - name: web-ci
+      <<: *node-env
+      ifModify:
+        - web/**
+      stages:
+        - name: install
+          script: cd web && npm ci
+        - name: typecheck
+          script: cd web && npm run typecheck
+        - name: test
+          script: cd web && npm test
+        - name: build
+          script: cd web && npm run build
+      failStages:
+        - name: report-failure
+          script: echo "H5 CI 失败：$CNB_BUILD_FAILED_MSG"
+
 "**":
   pull_request:
     - name: server-checks
@@ -38,3 +55,15 @@ main:
           script: cd server && npm test
         - name: build
           script: cd server && npm run build
+
+    - name: web-checks
+      <<: *node-env
+      stages:
+        - name: install
+          script: cd web && npm ci
+        - name: typecheck
+          script: cd web && npm run typecheck
+        - name: test
+          script: cd web && npm test
+        - name: build
+          script: cd web && npm run build

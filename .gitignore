@@ -3,6 +3,7 @@ node_modules/
 
 # build output
 server/dist/
+web/dist/
 
 # runtime data: sqlite db, covers, token secret
 data/
@@ -17,3 +18,8 @@ server/data/
 .DS_Store
 .idea/
 .vscode/
+
+# android build output (once the shell exists)
+android/**/build/
+android/.gradle/
+android/local.properties

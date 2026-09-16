@@ -7,8 +7,13 @@
 services:
   reader:
     image: cnb.cool/hectorqin/reader:latest
-    # To build from source instead of pulling the published image:
-    # build: ./server
+    # To build from source instead of pulling the published image. The build
+    # context is the repository root, because the image now contains the H5
+    # client as well as the API — building from `./server` alone would produce a
+    # server with no reading client.
+    build:
+      context: .
+      dockerfile: server/Dockerfile
     container_name: reader
     restart: unless-stopped
     ports:

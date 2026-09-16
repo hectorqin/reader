@@ -85,10 +85,21 @@ export class PdfReader {
 
     const frame = document.createElement('iframe');
     frame.className = 'reader-pdf';
-    // `allow-scripts` is not granted: the document is the user's own file, but
-    // there is no feature the viewer needs that requires it, and withholding it
-    // costs nothing.
-    frame.setAttribute('sandbox', 'allow-same-origin allow-popups allow-forms');
+    // No `sandbox` attribute at all, and that is a deliberate reversal of the
+    // first version of this code, which granted `allow-same-origin` and nothing
+    // else on the reasoning that the viewer needed no scripting.
+    //
+    // It does. The browser's built-in PDF viewer is implemented *as a script
+    // inside the frame*, so a sandbox without `allow-scripts` makes Chromium
+    // refuse the navigation outright — the request is aborted and the reader sees
+    // an empty box with no error. Since the alternative is granting
+    // `allow-scripts` to a sandbox that already has `allow-same-origin` (which is
+    // a documented escape from the sandbox, and therefore theatre), there is no
+    // sandbox setting that both works and means anything here.
+    //
+    // The frame's content is the user's own PDF, served from their own server, so
+    // the exposure is their own file. Framing it is the same trust decision as
+    // opening it.
     frame.title = this.book.title;
     this.frame = frame;
     this.host.replaceChildren(frame);

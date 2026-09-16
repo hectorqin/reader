@@ -132,20 +132,40 @@ export class ShelfView {
     // would be worse.
     card.addEventListener('click', () => this.options.onOpenBook?.(book));
 
-    const cover = document.createElement('img');
+    // A book without cover art — most TXT files and plenty of PDFs — gets a
+    // placeholder rather than an `<img>` with no source, which every browser
+    // renders as a broken-image icon. That icon reads as "this library is broken"
+    // when the truth is "this book has no cover", and there is no way for the
+    // reader to tell the two apart.
+    const cover = document.createElement('div');
     cover.className = 'book-card__cover';
-    cover.alt = '';
-    // `loading=lazy` plus an explicit aspect ratio means the browser reserves the
-    // space before the image arrives, so the grid does not reflow under a thumb
-    // that is already scrolling.
-    cover.loading = 'lazy';
-    cover.decoding = 'async';
-    // The DTO carries the server's own path; the token has to come from the
-    // client, because an `<img src>` cannot send an Authorization header.
-    if (book.coverUrl) cover.src = this.api.coverUrl(book.id);
-    cover.addEventListener('error', () => {
-      cover.removeAttribute('src');
-    });
+    if (book.coverUrl) {
+      const image = document.createElement('img');
+      image.className = 'book-card__cover-img';
+      image.alt = '';
+      // `loading=lazy` plus the fixed aspect ratio reserves the space before the
+      // image arrives, so the grid does not reflow under a thumb that is already
+      // scrolling.
+      image.loading = 'lazy';
+      image.decoding = 'async';
+      // The DTO carries the server's own path; the token has to come from the
+      // client, because an `<img src>` cannot send an Authorization header.
+      image.src = this.api.coverUrl(book.id);
+      image.addEventListener('error', () => {
+        // A cover that fails to load is a missing cover, not a missing book.
+        // Falling back to the placeholder keeps the shelf uniform instead of
+        // leaving one card looking damaged.
+        image.remove();
+        cover.classList.add('book-card__cover--missing');
+        cover.textContent = book.title.slice(0, 1);
+      });
+      cover.append(image);
+    } else {
+      cover.classList.add('book-card__cover--missing');
+      // The first character, which is what a spine would show. A generic icon
+      // would make every coverless book indistinguishable in a grid of forty.
+      cover.textContent = book.title.slice(0, 1);
+    }
 
     const title = document.createElement('div');
     title.className = 'book-card__title';
