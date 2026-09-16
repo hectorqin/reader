@@ -176,7 +176,11 @@ export class Scanner {
         // reader is looking for.
         for (const owned of await this.listFilesUnder(candidate.absPath)) {
           const rel = toRelative(this.config.booksDir, owned);
-          if (isBookFileExtension(rel)) continue;
+          // A book of another format nested inside a comic folder is still a book
+          // (`藏书目录/` holds real books). An archive is not: it is this book's own
+          // page source, and indexing it separately would put the same volume on
+          // the shelf twice — once inside the series and once on its own.
+          if (isBookFileExtension(rel, true)) continue;
           claimed.add(rel);
         }
       }
@@ -352,7 +356,13 @@ export class Scanner {
       // next to an EPUB must not turn the folder into a comic and hide the book
       // inside it. Asked in the same pass as the handler, from the very entries
       // the handler sees, so the two can never disagree about the same directory.
-      const holdsBookFile = entries.some((entry) => !entry.isDirectory && isBookFileExtension(entry.name));
+      //
+      // An archive is judged with `insideDirectoryBook`, because this pass only
+      // runs over folders that could become a directory book: `第01卷.cbz` beside
+      // `第02卷/` is a volume, not a book on a shelf.
+      const holdsBookFile = entries.some(
+        (entry) => !entry.isDirectory && isBookFileExtension(entry.name, true),
+      );
       if (holdsBookFile) continue;
 
       for (const handler of handlers) {
@@ -748,13 +758,32 @@ function isInsideAny(relPath: string, directories: string[]): boolean {
  * loose `.jpg` is a one-page book, while the same `.jpg` inside a comic folder
  * is a page. Answering this from `supportedExtensions()` alone classified every
  * folder of scans as a shelf of books and made comic directories unreachable.
+ *
+ * `insideDirectoryBook` is the third case, and it is the one that made a whole
+ * volume layout disappear. `.cbz` is registered as a book of its own, and it
+ * genuinely is one when it sits alone in a folder — but `第01卷.cbz` next to
+ * `第02卷/` is a volume of a larger series, not a book beside a shelf. Treating
+ * it as a shelf told the scanner the folder held books, so the folder was never
+ * offered to the comic-directory handler: not a comic by that rule, not a book by
+ * any other format's, and the series vanished from the shelf with no trace.
+ *
+ * The caller knows the context, so the decision is passed in rather than guessed
+ * here. A shelf is a folder that holds books *of another kind*; an archive whose
+ * pages this format can read is page material.
  */
-function isBookFileExtension(name: string): boolean {
+function isBookFileExtension(name: string, insideDirectoryBook = false): boolean {
   const dot = name.lastIndexOf('.');
   if (dot <= 0) return false;
   const ext = name.slice(dot).toLowerCase();
   if (!supportedExtensions().has(ext)) return false;
-  return !isPageExtension(ext);
+  if (isPageExtension(ext)) return false;
+  if (insideDirectoryBook && isArchiveExtension(ext)) return false;
+  return true;
+}
+
+/** Archive extensions a directory book reads its pages out of. */
+function isArchiveExtension(ext: string): boolean {
+  return ext === '.cbz' || ext === '.zip';
 }
 
 /**

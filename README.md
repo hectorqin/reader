@@ -69,7 +69,7 @@ volumes:
 | EPUB | 精排 | 保留出版方样式、嵌入字体、脚注跳转、图文混排、竖排、振假名 |
 | TXT | 支持 | 自动识别 UTF-8 / GB18030 / Big5 / UTF-16，按章节标题切分 |
 | CBZ / ZIP | 支持 | 按页自然排序，逐页铺满屏幕 |
-| 图片目录 | 支持 | 一个文件夹里全是图片时，按文件夹当一本书 |
+| 图片目录 | 支持 | 一个文件夹（可含卷子目录与卷压缩包）当一本书，逐页取图 |
 | PDF | 保底可读 | 用浏览器自带阅读器，页数与进度照常上报，服务端不解析内容 |
 
 > TXT 是本地书库里最容易被忽视的一块。相当一部分中文 TXT 没有 BOM、没有编码声明，
@@ -85,6 +85,19 @@ volumes:
 - **目录挂载**：递归扫描挂载目录，自动跳过 `.git`、`@eaDir`、`#recycle` 等目录，不跟随符号链接。
 - **自动扫描**：默认每 30 分钟全量、每 60 秒增量轮询。设 `SCAN_INTERVAL=0` / `WATCH_INTERVAL=0` 可关闭。
 - **手动触发**：`POST /api/v1/library/scan`（管理员）。
+
+### 一个文件夹什么时候是一本书
+
+漫画在 NAS 上的常见存放方式是「一个系列一个文件夹，下面按卷分」。判定规则很短，
+但它决定了一本书会不会**从书架上消失**：
+
+- 文件夹里**有别的格式的书文件**（epub / pdf / txt / 单张图）→ 这是**书架**，不是漫画。
+  夹着一本书的目录绝不会因为图片多就把那本书吞掉；这条规则会递归到嵌套层级。
+- 否则，有**两页以上的散图或压缩包** → 这个文件夹就是一本漫画。
+- 或者，卷子目录与卷压缩包**并列**（`第01卷.cbz` 与 `第02卷/` 同时存在）→ 整卷系列，算一本。
+
+卷压缩包里的页按「一个压缩包一页」计，包内页码由 `/assets?ref=page:卷:页` 寻址；
+`/books/:id/file` 服务的路径与 manifest 列出的完全一致。
 
 ### 书籍主键：为什么不按文件路径
 
@@ -268,7 +281,7 @@ cd android
 # 服务端
 cd server
 npm install
-npm test            # 114 个测试用例
+npm test            # 130 个测试用例
 npm run typecheck
 npm run dev         # 开发模式，热重载
 
@@ -280,7 +293,7 @@ BOOKS_DIR=/tmp/books DATA_DIR=/tmp/data npm run dev
 # 客户端（另开一个终端）
 cd web
 npm install
-npm test            # 147 个测试用例
+npm test            # 173 个测试用例（vitest 147 + node:test 26，两个运行器各管一半）
 npm run dev         # http://localhost:5174，自动把 /api 代理到 8080
 npm run build       # 产出 web/dist，服务端会在 / 上直接托管
 ```
@@ -367,7 +380,7 @@ export const mobiHandler = registerFileHandler({
 
 ### 技术选型说明
 
-- **Node.js 24 + TypeScript + Fastify**：单容器体积可控（约 150MB），迭代最快，
+- **Node.js 22+（`engines: >=22`，内置 `node:sqlite` 与 `scrypt` 所在的最低版本）+ TypeScript + Fastify**：单容器体积可控（约 150MB），迭代最快，
   `node:sqlite` 与 `scrypt` 都是内置模块，**没有原生编译依赖**——这让镜像构建稳定，
   也兑现了「一条命令跑起来」。
 - **不用 better-sqlite3 / argon2 / bcrypt**：它们需要构建时工具链（`make`、`gcc`），
@@ -378,7 +391,7 @@ export const mobiHandler = registerFileHandler({
 
 - **不用框架**：渲染层是命令式 DOM 操作——分页、注入文档、shadow root、量测列宽。
   引一个虚拟 DOM 只在代码和它要量测的布局之间多加一层，而这一层恰好是这个产品最不该
-  透过它去调试的东西。产物是一个 169KB 的单文件 bundle。
+  透过它去调试的东西。产物是一个 171KB（gzip 54KB）的单文件 bundle。
 - **单文件 bundle、相对路径**：产物要被两个宿主消费——服务端托管给浏览器、Android 打进
   assets。`file://` 或 WebView 里加载同源分片会踩平台特异性，所以 `inlineDynamicImports`
   打成一份，`base: './'`。
@@ -418,9 +431,11 @@ export const mobiHandler = registerFileHandler({
 - `POST /api/v1/auth/logout`
 - `GET  /api/v1/books` — 书架列表，支持 `search` `author` `series` `tag` `format` `sort` `page`
 - `GET  /api/v1/books/:id`
-- `GET  /api/v1/books/:id/manifest` — 渲染器需要的清单
+- `GET  /api/v1/books/:id/manifest` — 打开一本书的全部所需：文件清单 + 可寻址结构，一次请求
 - `GET  /api/v1/books/:id/items` — 可寻址结构（章节/页/卷），`?group=N` 取单卷
+- `GET  /api/v1/books/:id/toc` — 完整目录，与分窗分开
 - `GET  /api/v1/books/:id/assets?ref=<ref>` — 单个资源（章节文档、页图、字体）
+- `GET  /api/v1/books/:id/file?path=<rel_path>` — 目录书的单页，只认 manifest 列出的路径
 - `GET  /api/v1/library/formats` — 本实例支持的格式清单
 - `GET  /api/v1/books/:id/content` — 书文件流
 - `GET  /api/v1/books/:id/cover` — 封面
@@ -460,7 +475,9 @@ EPUB 精排、TXT / 漫画（CBZ、图片目录）支持、PDF 保底、按书�
 - **文本不做精品排版**：TXT 按行渲染，不折行重排、不调字号。精品排版是 EPUB 的承诺。
 - **不做全格式转换**：不把 epub 转 pdf、不把 txt 转 epub。
 - **ZIP 不支持 ZIP64 / 加密 / 分卷**：超限会明确报错，不会静默解出坏数据。
-- **漫画目录只认一层嵌套**：再深会把一个杂乱目录变成几千页的巨型漫画。
+- **漫画目录的嵌套有深度上限**：卷目录下面还有目录时会继续往下收页，但到第 4 层为止 ——
+  再深会把一个杂乱目录变成几千页的巨型漫画。页序是真自然序（`1, 2, 10`，不是 `1, 10, 2`），
+  排错不是观感问题，是故事被静默打乱。
 - **没有内置 HTTPS 与限流**：给反向代理留位置，不重复造轮子。
 
 ---
