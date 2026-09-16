@@ -39,22 +39,40 @@ const MIME_BY_EXT: Record<string, string> = {
 };
 
 export function registerWebRoutes(app: FastifyInstance, ctx: AppContext): void {
-  const webDir = ctx.config.webDir;
+  // WEB_DIR is read from the environment when the context was built without a
+  // resolved config (tests, embedding), because the bundle location is a
+  // deployment concern rather than application state.
+  const webDir = ctx.config?.webDir ?? resolve(process.env.WEB_DIR ?? join(process.cwd(), 'web'));
   const indexFile = join(webDir, 'index.html');
   if (!existsSync(indexFile)) {
     ctx.log?.info?.({ webDir }, 'no web client bundle found, serving API only');
     return;
   }
 
-  const sendFile = (filePath: string, reply: FastifyReply): FastifyReply => {
+  const sendFile = (filePath: string, reply: FastifyReply, cacheControl: string): FastifyReply => {
     reply.header('content-type', MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream');
+    reply.header('cache-control', cacheControl);
+    // A bundle served from disk can never change under the same name unless a
+    // deployment replaced it, and the file handle is released when the response
+    // ends — so a stream is safe here, but it must be handed to `send` exactly
+    // once. An earlier version sent the stream and then returned nothing from an
+    // async handler, which made Fastify send a second, empty response.
     return reply.send(createReadStream(filePath));
   };
 
-  app.get('/', async (_request, reply) => sendFile(indexFile, reply));
+  app.get('/', async (_request, reply) => sendFile(indexFile, reply, 'no-cache'));
 
   app.get('/*', async (request, reply) => {
     const raw = (request.params as { '*': string })['*'] ?? '';
+    // The API keeps its own 404 shape. Without this the catch-all SPA fallback
+    // swallows `/api/...` misses and answers with HTML, so a client that parses
+    // `error.code` reports "server broken" instead of "not found".
+    if (raw === 'api' || raw.startsWith('api/')) {
+      reply.status(404).send({
+        error: { code: 'NOT_FOUND', message: `no route for ${request.method} ${request.url}` },
+      });
+      return;
+    }
     // Resolve under webDir and refuse anything that escapes it: `..%2f..%2f`
     // would otherwise turn the static handler into an arbitrary file read.
     const candidate = resolve(webDir, normalize(raw).replace(/^(\.\.[/\\])+/, ''));
@@ -63,21 +81,20 @@ export function registerWebRoutes(app: FastifyInstance, ctx: AppContext): void {
       return;
     }
     if (existsSync(candidate) && statSync(candidate).isFile()) {
-      // Hashed-ish asset names change with each build, and the API promises
-      // additive changes only, so a client can hold a bundle across server
-      // upgrades without harm. `index.html` itself must never be cached or a
+      // Vite writes content-hashed file names, so a JS/CSS asset is immutable:
+      // its bytes cannot change without the name changing too. `index.html` is
+      // the one file whose name never changes, so it must never be cached or a
       // deployment would never pick up a new bundle.
-      if (extname(candidate) !== '.html') {
-        reply.header('cache-control', 'public, max-age=3600');
-      } else {
-        reply.header('cache-control', 'no-cache');
-      }
-      return sendFile(candidate, reply);
+      const immutable = extname(candidate) !== '.html';
+      return sendFile(
+        candidate,
+        reply,
+        immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
+      );
     }
 
     // SPA fallback: the client routes by hash, but serving index.html for an
     // unknown path is the safer default than a 404 for a deep link.
-    reply.header('cache-control', 'no-cache');
-    return sendFile(indexFile, reply);
+    return sendFile(indexFile, reply, 'no-cache');
   });
 }

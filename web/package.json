@@ -9,15 +9,17 @@
     "dev": "vite",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && tsx --test test/api.test.ts test/asset-url.test.ts test/paginator.test.ts test/window.test.ts",
     "test:watch": "vitest"
   },
   "dependencies": {
     "jszip": "^3.10.1"
   },
   "devDependencies": {
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^22.20.3",
     "jsdom": "^30.0.1",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
     "vitest": "^2.1.8"

@@ -107,6 +107,9 @@ export function loadConfig(): AppConfig {
       .split(',')
       .map((origin) => origin.trim())
       .filter((origin) => origin.length > 0),
+    // The built H5 bundle. `WEB_DIR` is unset in a server-only deployment, and
+    // when it is also absent on disk the static routes are simply not registered
+    // (see `registerWebRoutes`), so /api/* is never shadowed by a fallback.
     webDir: resolve(process.env.WEB_DIR ?? join(process.cwd(), 'web')),
   };
 }

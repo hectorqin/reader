@@ -36,6 +36,11 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['test/**/*.test.ts'],
+    // The `node:test` files are run by `tsx --test` (see package.json), because
+    // they were written for the Node test runner and importing a vitest test
+    // file from one process, or vice versa, silently produces "no test suite
+    // found". Excluding them here keeps each runner to the files it can actually
+    // execute, instead of a green-looking run that quietly skipped half the suite.
+    exclude: ['test/api.test.ts', 'test/asset-url.test.ts', 'test/paginator.test.ts', 'test/window.test.ts', 'node_modules/**'],
   },
 });

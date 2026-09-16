@@ -21,9 +21,32 @@ export function toRelative(root: string, abs: string): string {
   return relative(root, abs).split(sep).join('/');
 }
 
-/** Normalises a client supplied relative path to forward slashes. */
+/**
+ * Normalise a client supplied, library-relative path.
+ *
+ * Backslashes and leading/trailing slashes are stripped, and `.`/`..` segments
+ * are *resolved* rather than refused.
+ *
+ *
+ * Resolving rather than refusing matters because a client may legitimately pass
+ * back a path the API gave it, joined onto something else. The caller still has
+ * to check containment: `a/../../secret` becomes `../secret`, which is not inside
+ * anything, and `assertSafeRel` rejects it.
+ */
 export function normalizeRel(relPath: string): string {
-  return relPath.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+  const parts: string[] = [];
+  for (const part of relPath.replace(/\\/g, '/').split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') {
+      // Popping past the root keeps the `..`, so an escape attempt stays visible
+      // to `assertSafeRel` instead of silently collapsing to an inside path.
+      if (parts.length > 0 && parts[parts.length - 1] !== '..') parts.pop();
+      else parts.push('..');
+      continue;
+    }
+    parts.push(part);
+  }
+  return parts.join('/');
 }
 
 export function assertSafeRel(relPath: string): string {

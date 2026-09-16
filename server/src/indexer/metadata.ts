@@ -3,10 +3,16 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import JSZip from 'jszip';
 import { XMLParser } from 'fast-xml-parser';
-import { stripNullBytes } from '../lib/text.ts';
 import { parseFilename } from './filename.ts';
 
-export type BookFormat = 'epub' | 'pdf' | 'txt' | 'cbz' | 'comic-dir' | 'unknown';
+/**
+ * Format identifier as stored in `books.format`.
+ *
+ * Deliberately an open string rather than a union: the supported set is defined
+ * by the handler registry in `./formats`, and a closed union here would mean
+ * every new format needs edits in three unrelated files.
+ */
+export type BookFormat = string;
 
 export interface ExtractedMetadata {
   title: string;
@@ -24,18 +30,6 @@ export interface ExtractedMetadata {
   source: 'embedded' | 'filename' | 'unknown';
   /** Raw extracted fields, kept for round-tripping and manual completion UI. */
   raw: Record<string, unknown>;
-}
-
-export interface ParsedBookFile {
-  format: BookFormat;
-  contentHash: string;
-  size: number;
-  pageCount: number | null;
-  /** Cover bytes, written into DATA_DIR by the caller. Never into BOOKS_DIR. */
-  cover?: { data: Buffer; contentType: string };
-  /** Set by the scanner once the cover is persisted under DATA_DIR. */
-  coverPath?: string | null;
-  metadata: ExtractedMetadata;
 }
 
 const xmlParser = new XMLParser({
@@ -307,105 +301,6 @@ export async function parseEpub(buf: Buffer, relPath: string): Promise<Extracted
   };
 }
 
-function pdfInfo(buf: Buffer): { title: string; author: string; pageCount: number | null } {
-  const head = buf.subarray(0, Math.min(buf.length, 2 * 1024 * 1024)).toString('latin1');
-  const readField = (key: string): string => {
-    const match = new RegExp(`/${key}\\s*\\(((?:[^()\\\\]|\\\\.)*)\\)`).exec(head);
-    return match ? stripNullBytes(match[1]!).trim() : '';
-  };
-  let pageCount: number | null = null;
-  const countMatch = /\/Type\s*\/Pages[\s\S]{0,200}?\/Count\s+(\d+)/.exec(head);
-  if (countMatch) {
-    const parsed = Number.parseInt(countMatch[1]!, 10);
-    if (Number.isFinite(parsed)) pageCount = parsed;
-  }
-  return { title: readField('Title'), author: readField('Author'), pageCount };
-}
-
-/**
- * Parse an arbitrary library file. Never writes to disk.
- */
-export async function parseBookFile(buf: Buffer, relPath: string): Promise<ParsedBookFile> {
-  const contentHash = sha256(buf);
-  const size = buf.byteLength;
-  const lower = relPath.toLowerCase();
-
-  if (lower.endsWith('.epub')) {
-    try {
-      const metadata = await parseEpub(buf, relPath);
-      // A broken or huge cover must never fail the whole book.
-      const cover = await extractEpubCover(buf).catch(() => undefined);
-      return { format: 'epub', contentHash, size, pageCount: null, metadata, cover };
-    } catch (err) {
-      const fallback = filenameMetadata(relPath);
-      fallback.raw = { parseError: err instanceof Error ? err.message : String(err) };
-      return { format: 'epub', contentHash, size, pageCount: null, metadata: fallback };
-    }
-  }
-
-  if (lower.endsWith('.pdf')) {
-    const info = pdfInfo(buf);
-    const fallback = filenameMetadata(relPath);
-    const metadata: ExtractedMetadata = {
-      ...fallback,
-      title: info.title || fallback.title,
-      author: info.author || fallback.author,
-      source: info.title || info.author ? 'embedded' : fallback.source,
-    };
-    return { format: 'pdf', contentHash, size, pageCount: info.pageCount, metadata };
-  }
-
-  if (lower.endsWith('.txt')) {
-    // Only cheap facts are extracted here: the encoding decision and the chapter
-    // split are the *client's* to make, because they depend on what the reader
-    // sees and can be overridden per book in the UI. Trying to do them server-side
-    // would mean decoding a whole novel on every scan for information the client
-    // is going to recompute anyway.
-    const fallback = filenameMetadata(relPath);
-    const encoding = detectTextEncoding(buf);
-    return {
-      format: 'txt',
-      contentHash,
-      size,
-      pageCount: null,
-      metadata: {
-        ...fallback,
-        publisher: '',
-        raw: { filename: relPath, encoding, bytes: buf.byteLength },
-      },
-    };
-  }
-
-  if (lower.endsWith('.cbz') || lower.endsWith('.zip')) {
-    // A CBZ is a ZIP of images. Reading the central directory for a page count is
-    // cheap and gives the shelf a usable "N 页" label without unpacking anything.
-    const pageCount = await countZipImages(buf).catch(() => null);
-    const fallback = filenameMetadata(relPath);
-    const isZip = lower.endsWith('.zip');
-    return {
-      format: 'cbz',
-      contentHash,
-      size,
-      pageCount,
-      metadata: {
-        ...fallback,
-        // A `.zip` that contains images is a comic by content. Naming it as one
-        // lets the client pick the comic renderer without re-sniffing.
-        title: fallback.title,
-        raw: { filename: relPath, pages: pageCount, container: isZip ? 'zip' : 'cbz' },
-      },
-    };
-  }
-
-  return {
-    format: 'unknown',
-    contentHash,
-    size,
-    pageCount: null,
-    metadata: filenameMetadata(relPath),
-  };
-}
-
 /**
  * Filename parsing. Only used to fill gaps left by embedded metadata, and it is
  * always the weakest layer of the priority chain.
@@ -504,7 +399,60 @@ export async function extractEpubCover(buf: Buffer): Promise<{ data: Buffer; con
   return { data, contentType };
 }
 
-async function findOpfPath(zip: JSZip): Promise<string> {
+/**
+ * Cover location without reading the image.
+ *
+ * `extractEpubCover` eagerly decodes the cover for the scanner, which is right
+ * when a book is being indexed. It is wasteful for a request that only wants to
+ * hand the bytes to a client — for a large art book the cover can be several
+ * megabytes. This returns the archive path and media type so the caller can
+ * stream it out of the container instead.
+ *
+ * The item-picking order matches `extractEpubCover` on purpose: two code paths
+ * that disagree about which image is the cover would serve a different picture
+ * depending on which endpoint the client hit.
+ */
+export async function findEpubCoverTarget(
+  zip: JSZip,
+  opfPath?: string,
+): Promise<{ path: string; contentType: string } | undefined> {
+  const opf = opfPath ?? (await findOpfPath(zip));
+  if (!opf) return undefined;
+  const opfFile = zip.file(opf);
+  if (!opfFile) return undefined;
+  const parsed = xmlParser.parse(await opfFile.async('string')) as Record<string, any>;
+  const metadata = parsed?.package?.metadata ?? {};
+  const manifest = asArray(parsed?.package?.manifest?.item);
+
+  const coverId = asArray(metadata.meta)
+    .map((entry) => (typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>) : {}))
+    .find((entry) => String(entry['@_name'] ?? '') === 'cover')?.['@_content'];
+
+  const isImage = (item: Record<string, any>) => String(item['@_media-type'] ?? '').startsWith('image/');
+
+  let item = coverId ? manifest.find((entry) => entry?.['@_id'] === coverId) : undefined;
+  if (!item) {
+    item = manifest.find(
+      (entry) => isImage(entry) && /cover/i.test(String(entry?.['@_id'] ?? entry?.['@_href'] ?? '')),
+    );
+  }
+  if (!item) {
+    item = manifest.find(
+      (entry) => isImage(entry) && /\.(jpe?g|png|gif|webp)$/i.test(String(entry?.['@_href'] ?? '')),
+    );
+  }
+  if (!item) return undefined;
+
+  const href = String(item['@_href'] ?? '');
+  const baseDir = opf.includes('/') ? opf.slice(0, opf.lastIndexOf('/') + 1) : '';
+  const path = decodeURIComponent(`${baseDir}${href}`);
+  return {
+    path: zip.file(path) ? path : href,
+    contentType: String(item['@_media-type'] ?? 'image/jpeg'),
+  };
+}
+
+export async function findOpfPath(zip: JSZip): Promise<string> {
   const containerFile = zip.file('META-INF/container.xml');
   if (containerFile) {
     const container = xmlParser.parse(await containerFile.async('string')) as Record<string, any>;

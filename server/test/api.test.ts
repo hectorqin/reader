@@ -440,6 +440,51 @@ test('a CBZ comic is indexed with a page count, without unpacking it', async () 
   assert.equal(body.items[0]!.pageCount, 3);
 });
 
+test('a folder holding a real book is a shelf, not a comic', async () => {
+  // The dangerous direction of the directory-book rule. A shelf directory with
+  // one book in it and two loose scans clears every ratio threshold, so a
+  // size-based rule claims the folder as a comic — and the book inside it
+  // disappears from the shelf with no trace instead of showing up as a book.
+  const session = await createUser('shelfwithbook');
+  const dir = join(booksDir, '混合目录');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, '架上的书.epub'), await makeEpub({ id: 'urn:uuid:shelf', title: '架上的书' }));
+  await writeFile(join(dir, 'cover.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  await writeFile(join(dir, 'cover2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  await ctx.scanner.scan();
+
+  const shelf = (await app.inject({
+    method: 'GET', url: '/api/v1/books?format=epub&search=架上的书', headers: auth(session.token),
+  })).json() as { items: Array<{ format: string }> };
+  assert.equal(shelf.items.length, 1, 'the book inside the folder must stay on the shelf');
+  assert.equal(shelf.items[0]!.format, 'epub');
+
+  // And the folder itself must NOT be one giant comic.
+  const comics = (await app.inject({
+    method: 'GET', url: '/api/v1/books?format=comic-dir&search=混合目录', headers: auth(session.token),
+  })).json() as { items: unknown[] };
+  assert.equal(comics.items.length, 0);
+});
+
+test('a nested shelf inside a comic folder keeps its own books', async () => {
+  // The same rule one level down. The enclosing folder is discovered first and
+  // would otherwise absorb everything under it, including real books.
+  const session = await createUser('nestedbooks');
+  const outer = join(booksDir, '嵌套漫画');
+  const dir = join(outer, '藏书目录');
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, '深处的书.epub'), await makeEpub({ id: 'urn:uuid:deep', title: '深处的书' }));
+  await writeFile(join(outer, '1.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  await writeFile(join(outer, '2.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xe0]));
+  await ctx.scanner.scan();
+
+  const deep = (await app.inject({
+    method: 'GET', url: '/api/v1/books?search=深处的书', headers: auth(session.token),
+  })).json() as { items: Array<{ format: string }> };
+  assert.equal(deep.items.length, 1, 'a book nested inside a comic folder must still be indexed');
+  assert.equal(deep.items[0]!.format, 'epub');
+});
+
 test('a folder of images becomes one book with every page as a file', async () => {
   const session = await createUser('comicuser');
   const dir = join(booksDir, '图片漫画');
@@ -449,7 +494,14 @@ test('a folder of images becomes one book with every page as a file', async () =
   }
   await ctx.scanner.scan();
 
-  const res = await app.inject({ method: 'GET', url: '/api/v1/books?format=comic-dir', headers: auth(session.token) });
+  // Scoped by search rather than asserted as a library-wide count: every test in
+  // this file shares one library, so a global count silently turns any other
+  // fixture into a failure of this test.
+  const res = await app.inject({
+    method: 'GET',
+    url: `/api/v1/books?format=comic-dir&search=${encodeURIComponent('图片漫画')}`,
+    headers: auth(session.token),
+  });
   const body = res.json() as { items: Array<{ id: string; title: string; pageCount: number | null }> };
   assert.equal(body.items.length, 1);
   assert.equal(body.items[0]!.title, '图片漫画');

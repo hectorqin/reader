@@ -3,6 +3,7 @@ node_modules/
 
 # build output
 server/dist/
+web/dist/
 
 # runtime data: sqlite db, covers, token secret
 data/

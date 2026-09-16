@@ -29,6 +29,7 @@ RUN npm run build
 # Strip dev dependencies for the runtime image.
 RUN npm prune --omit=dev
 
+
 # --- runtime stage -----------------------------------------------------------
 FROM docker.cnb.cool/dockerhub/node:24-alpine AS runtime
 WORKDIR /app
@@ -42,7 +43,7 @@ ENV NODE_ENV=production \
 # Run as an unprivileged user. The library mount is read-only, so this user only
 # ever needs write access to /data.
 RUN addgroup -S reader && adduser -S reader -G reader \
- && mkdir -p /data /books && chown -R reader:reader /data /books
+ && mkdir -p /data /books /app/public && chown -R reader:reader /data /books /app/public
 
 COPY --from=build --chown=reader:reader /app/node_modules ./node_modules
 COPY --from=build --chown=reader:reader /app/dist ./dist
