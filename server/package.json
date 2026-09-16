@@ -1,0 +1,31 @@
+{
+  "name": "reader-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted精品书库 server: mount your own book directory read-only, sync shelves/progress/notes across clients.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@fastify/multipart": "^9.0.3",
+    "epub2": "^3.0.2",
+    "fast-xml-parser": "^4.5.1",
+    "fastify": "^5.2.1",
+    "jszip": "^3.10.1",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

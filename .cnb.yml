@@ -1,0 +1,40 @@
+# 服务端 CI：类型检查、测试、构建。
+# 忽略文档改动，避免改 README 也跑一遍 Node。
+.node-env: &node-env
+  docker:
+    image: node:24
+  ifModify:
+    - server/**
+
+# 推送：完整检查
+main:
+  push:
+    - name: server-ci
+      <<: *node-env
+      stages:
+        - name: install
+          script: cd server && npm ci
+        - name: typecheck
+          script: cd server && npm run typecheck
+        - name: test
+          script: cd server && npm test
+        - name: build
+          script: cd server && npm run build
+      failStages:
+        - name: report-failure
+          script: echo "CI 失败：$CNB_BUILD_FAILED_MSG"
+
+# PR：同样的检查，作为评审依据
+"**":
+  pull_request:
+    - name: server-checks
+      <<: *node-env
+      stages:
+        - name: install
+          script: cd server && npm ci
+        - name: typecheck
+          script: cd server && npm run typecheck
+        - name: test
+          script: cd server && npm test
+        - name: build
+          script: cd server && npm run build
