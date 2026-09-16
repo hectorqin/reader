@@ -41,6 +41,13 @@ export default defineConfig({
     // file from one process, or vice versa, silently produces "no test suite
     // found". Excluding them here keeps each runner to the files it can actually
     // execute, instead of a green-looking run that quietly skipped half the suite.
-    exclude: ['test/api.test.ts', 'test/asset-url.test.ts', 'test/paginator.test.ts', 'test/window.test.ts', 'node_modules/**'],
+    exclude: [
+      'test/api.test.ts',
+      'test/asset-url.test.ts',
+      'test/paginator.test.ts',
+      'test/window.test.ts',
+      'test/windowed-toc.test.ts',
+      'node_modules/**',
+    ],
   },
 });

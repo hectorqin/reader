@@ -1,6 +1,7 @@
 import { ApiError, errorForStatus, parseErrorBody } from './errors.ts';
 import type {
   Book,
+  BookContent,
   BookListPage,
   ContinueReadingItem,
   Facets,
@@ -12,6 +13,7 @@ import type {
   Session,
   SyncPull,
   SyncPushResult,
+  TocEntry,
   User,
 } from './types.ts';
 import type { Platform } from '../core/platform.ts';
@@ -178,6 +180,64 @@ export class ReaderApi {
 
   async manifest(id: string, options: RequestOptions = {}): Promise<Manifest> {
     return this.get<Manifest>(`/api/v1/books/${encodeURIComponent(id)}/manifest`, options);
+  }
+
+  /**
+   * One addressable resource, as bytes.
+   *
+   * `ref` is opaque and must be passed through unchanged: it is whatever the
+   * manifest handed out (`xhtml:OEBPS/ch1.xhtml`, `page:17`), and a chapter is
+   * never addressed by index because an index means a different chapter in a
+   * different window.
+   */
+  async asset(id: string, ref: string, options: RequestOptions = {}): Promise<Blob> {
+    const response = await this.platform.transport.send({
+      url: `/api/v1/books/${encodeURIComponent(id)}/assets?ref=${encodeURIComponent(ref)}`,
+      method: 'GET',
+      headers: {
+        accept: '*/*',
+        ...(this.session ? { authorization: `Bearer ${this.session.accessToken}` } : {}),
+      },
+      binary: true,
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    if (response.status >= 400) {
+      throw new ApiError(errorForStatus(response.status), 'resource request failed', 'ASSET_FAILED', response.status);
+    }
+    const bytes = response.bytes ?? new Uint8Array();
+    // A Blob rather than the raw view: callers hand chapters to a frame as text
+    // and pages to an `<img>` as bytes, and the copy is what makes that safe.
+    const copy = new Uint8Array(bytes.byteLength);
+    copy.set(bytes);
+    return new Blob([copy.buffer]);
+  }
+
+  /**
+   * One window of a book's addressable structure.
+   *
+   * Used to jump to a chapter that is not in the loaded window: the response
+   * carries both the items and the group metadata, so the client can splice it
+   * into the whole-book ordering without re-reading every earlier window.
+   */
+  async items(id: string, group?: number, options: RequestOptions = {}): Promise<BookContent> {
+    const query = group === undefined ? '' : `?group=${group}`;
+    return this.get<BookContent>(`/api/v1/books/${encodeURIComponent(id)}/items${query}`, options);
+  }
+
+  /**
+   * The book's complete table of contents.
+   *
+   * A separate call from `manifest` because the two want opposite things: a
+   * manifest is windowed so opening a 1200-chapter book is cheap, and a table of
+   * contents has to be whole to be worth showing. Reading the contents off a
+   * manifest is the mistake this endpoint exists to prevent.
+   */
+  async toc(id: string, options: RequestOptions = {}): Promise<TocEntry[]> {
+    const result = await this.get<{ toc: TocEntry[] }>(
+      `/api/v1/books/${encodeURIComponent(id)}/toc`,
+      options,
+    );
+    return result.toc;
   }
 
   async facets(options: RequestOptions = {}): Promise<Facets> {

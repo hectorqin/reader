@@ -7,6 +7,7 @@ import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.Toast
+import cool.cnb.reader.web.NativePageView
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -29,6 +30,11 @@ import java.util.Locale
  *  - a way for the client to ask about its host, so it can adapt rather than
  *    guess.
  *
+ * And one that is a performance decision rather than a capability: drawing a
+ * whole-page image (`renderPage`). See NativePageView for why, and for the rule
+ * that keeps it from being a second renderer — it either draws the page or
+ * returns false, and a false puts the page back in the WebView.
+ *
  * Every method is safe to call from any thread because `@JavascriptInterface`
  * calls arrive on a WebView-owned thread, not the main one: the ones that touch UI
  * post back to the main looper.
@@ -37,9 +43,45 @@ class ReaderBridge(
     private val context: Context,
     private val webView: WebView,
     private val connectivity: ConnectivityMonitor,
+    /**
+     * Native renderer for fixed-layout pages.
+     *
+     * A parameter rather than something this class constructs, because the page
+     * view has to live in the activity's view hierarchy, and a bridge that
+     * created views would be a bridge that owns layout. It stays optional so a
+     * unit test can construct a bridge without a window.
+     */
+    private val pageView: NativePageView? = null,
+    /** Current image fit preference, mirrored from the client (`contain`/`width`). */
+    private val fitPreference: () -> String = { "contain" },
 ) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
+
+    /**
+     * Runs a UI-thread block and waits for its result.
+     *
+     * `renderPage` must be synchronous from the client's point of view — it
+     * returns whether the page was drawn, and the client acts on that answer
+     * immediately — but `@JavascriptInterface` calls arrive on a WebView-owned
+     * thread and a View cannot be touched from there. The wait is bounded by the
+     * work itself: a decode already sized to the viewport.
+     */
+    private fun <T> Handler.postAndWait(block: () -> T): T {
+        if (Looper.myLooper() == Looper.getMainLooper()) return block()
+        var result: T? = null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        post {
+            try {
+                result = block()
+            } finally {
+                latch.countDown()
+            }
+        }
+        latch.await(PAGE_DRAW_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+        @Suppress("UNCHECKED_CAST")
+        return result as T
+    }
 
     /**
      * Shell version.
@@ -157,6 +199,67 @@ class ReaderBridge(
         return info.toString()
     }
 
+    /**
+     * Draws one fixed-layout page natively and returns whether it did.
+     *
+     * `false` is a normal answer, not a failure: the client then renders the
+     * page in the WebView exactly as a browser would, so an unsupported image
+     * format or a malformed payload degrades to the behaviour of every other
+     * host instead of leaving the reader on a blank screen.
+     *
+     * The request is a JSON string because a `@JavascriptInterface` method can
+     * only take primitives, and page bytes are not one. The bytes are base64
+     * inside it; that copy is the price of skipping a WebView layout pass, and
+     * for a full-page image it is still the cheaper side of the trade.
+     */
+    @JavascriptInterface
+    fun renderPage(request: String): Boolean {
+        val view = pageView ?: return false
+        val payload = runCatching { JSONObject(request) }.getOrNull() ?: return false
+        // The client is trusted here (it is our own bundle, served from the asset
+        // loader), but a bridge that parses input should still refuse the shapes
+        // it does not expect rather than pass them down.
+        val mode = payload.optString("mode")
+        if (mode != "image") return false
+        val sectionId = payload.optString("sectionId")
+        if (sectionId.isEmpty()) return false
+
+        val encoded = payload.optString("bytes")
+        val bytes = if (encoded.isEmpty()) null else NativePageView.decodeBase64(encoded)
+        val mediaType = payload.optString("mediaType").ifEmpty { null }
+        // Only `contain` reaches here: the client declines to offer a page while
+        // the reader has "fit width" selected, because a cropped page loses
+        // panels and a native scrolling surface would be a second renderer.
+        // The field is read so a future renderer can act on it.
+        val fit = payload.optString("fit").ifEmpty { fitPreference() }
+        if (fit != "contain") return false
+
+        return mainHandler.postAndWait { view.show(sectionId, bytes, mediaType) }
+    }
+
+    /** Removes the native page, restoring the WebView underneath. */
+    @JavascriptInterface
+    fun hidePage() {
+        val view = pageView ?: return
+        mainHandler.post { view.hide() }
+    }
+
+    /**
+     * Reports whether the shell will open a document of this media type itself.
+     *
+     * Always false, and deliberately so. The platform PDF viewer is a separate
+     * activity, so "opening" a document would take the reader out of the reading
+     * session — which is the one thing the client must never do behind the
+     * reader's back. The method exists as part of the contract so the client can
+     * ask instead of assuming, and so a future in-process renderer has a place
+     * to say yes.
+     */
+    @JavascriptInterface
+    fun canOpenDocument(mediaType: String): Boolean {
+        if (mediaType.isBlank()) return false
+        return false
+    }
+
     private fun appVersion(): String = runCatching {
         val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
         packageInfo.versionName ?: "unknown"
@@ -182,14 +285,29 @@ class ReaderBridge(
     }
 
     companion object {
+        /**
+         * How long `renderPage` will block waiting for the UI thread.
+         *
+         * A page decode is bounded by the viewport, so this is a safety valve for
+         * a wedged main thread rather than a real budget. Timing out returns
+         * `false`, which puts the page back in the WebView — the reader still
+         * reads the page, just through the slower path.
+         */
+        private const val PAGE_DRAW_TIMEOUT_MS = 2_000L
+
         /** Name the web client looks for on `window`. */
         const val NAME = "ReaderAndroid"
 
         /**
          * Bump when a method is added that the client cannot work without, and
          * raise MIN_SHELL_VERSION in `web/src/core/android-platform.ts` to match.
+         *
+         * 2 added `renderPage`/`hidePage`/`canOpenDocument`. The client treats a
+         * shell below 2 as "no native page renderer" and draws everything in the
+         * WebView, so the version check is how an old APK degrades instead of
+         * calling a method that does not exist.
          */
-        const val SHELL_VERSION = 1
+        const val SHELL_VERSION = 2
 
         /**
          * Callback names must be plain identifiers.

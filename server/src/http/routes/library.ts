@@ -124,22 +124,45 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const book = ctx.shelf.get(user.id, id);
     const handler = resolveHandler(ctx, id, book.format);
     const query = request.query as Record<string, string | undefined>;
-    const groupIndex = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
+    const requested = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
 
     const content = handler
       ? await handler.manifest({ ...sourceContext(ctx, id), bookId: id })
       : null;
 
-    const windowed = content && groupIndex !== null && Number.isFinite(groupIndex) && content.groups[groupIndex]
-      ? {
-          ...content,
-          items: content.items.slice(
-            groupOffset(content.groups, groupIndex),
-            groupOffset(content.groups, groupIndex) + content.groups[groupIndex]!.count,
-          ),
-          group: groupIndex,
-        }
-      : content;
+    /**
+     * One window, chosen by the client or by the server.
+     *
+     * `?group=N` asks for a specific one. Omitting it used to mean "send every
+     * item", which quietly defeated the point of windowing: a 1200-chapter
+     * omnibus answered its *first* request — the one that has to be fast — with
+     * 1200 entries, and a 40-volume comic with every page of every volume. The
+     * default is therefore window 0, and a client that genuinely wants the whole
+     * structure asks for it with `?group=all`.
+     *
+     * This is an additive change to a documented contract: a client that passed
+     * no `group` received more than it needed and now receives exactly what it
+     * needs to draw the first screen, which is what that parameter-less call was
+     * always for.
+     */
+    const wantsAll = query.group === 'all';
+    const groupIndex = wantsAll
+      ? null
+      : requested !== null && Number.isFinite(requested)
+        ? requested
+        : 0;
+
+    const windowed =
+      content && !wantsAll && groupIndex !== null && content.groups[groupIndex]
+        ? {
+            ...content,
+            items: content.items.slice(
+              groupOffset(content.groups, groupIndex),
+              groupOffset(content.groups, groupIndex) + content.groups[groupIndex]!.count,
+            ),
+            group: groupIndex,
+          }
+        : content;
 
     return {
       book,

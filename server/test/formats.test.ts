@@ -1053,3 +1053,150 @@ describe('query-string tokens', () => {
     assert.equal(res.statusCode, 401);
   });
 });
+
+/**
+ * Reading a book one window at a time.
+ *
+ * Every test here is a failure mode that a reader would experience as "the app is
+ * broken" while the server kept answering 200: a jump to the wrong chapter, a
+ * contents list that shows the transport boundary, a range request that walks the
+ * whole file, or a chapter read that gets truncated.
+ */
+describe('windowed reading', () => {
+  async function makeChaptered(name: string, chapters: number): Promise<string> {
+    const target = join(booksDir, name);
+    await writeFile(target, makeEpub({ id: `id-${name}`, title: name.replace(/\.epub$/, ''), chapters }));
+    await ctx.scanner.scan();
+    return (await findBook(name.replace(/\.epub$/, ''))).id;
+  }
+
+  test('the manifest window is one group, not the whole spine', async () => {
+    // A 120-chapter book must not send 120 items to draw the first page. The
+    // window size is the server's constant; what matters is that it is smaller
+    // than the book and that the group metadata is present.
+    const id = await makeChaptered('窗读.epub', 120);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${id}/manifest`,
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const body = res.json() as {
+      total: number;
+      items: Array<{ href: string; title: string }>;
+      groups: Array<{ count: number; offset: number }>;
+      content: { total: number; items: unknown[] } | null;
+    };
+    assert.equal(body.total, 120, 'the book has 120 chapters');
+    assert.ok(body.items.length < 120, `window carried ${body.items.length} items`);
+    assert.equal(body.items.length, body.groups[0]?.count);
+    assert.equal(body.groups[0]?.offset, 0);
+    assert.equal(body.content?.total, 120);
+
+    await rm(join(booksDir, '窗读.epub'));
+    await ctx.scanner.scan();
+  });
+
+  test('a later window is addressed by its global offset, not by an item index', async () => {
+    // The bug this pins: a client that computed a chapter's position from its
+    // index inside the returned array would open chapter 1 when asked for
+    // chapter 81 — a synced position landing 80 chapters early.
+    const id = await makeChaptered('窗读2.epub', 120);
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${id}/items?group=2`,
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const body = res.json() as {
+      total: number;
+      group?: number;
+      items: Array<{ href: string; seq: number }>;
+    };
+    assert.equal(body.group, 2);
+    // Chapters 81..120, and the first item says so.
+    assert.equal(body.items[0]?.href, 'xhtml:OEBPS/c80.xhtml');
+    assert.equal(body.items[0]?.seq, 80);
+
+    await rm(join(booksDir, '窗读2.epub'));
+    await ctx.scanner.scan();
+  });
+
+  test('the table of contents is the book, not the window', async () => {
+    // On `main` the TOC was built from the manifest, so a long book's contents
+    // panel listed exactly one window. `/toc` is the endpoint that fixes it, and
+    // this asserts the property that matters: it is longer than a window.
+    const id = await makeChaptered('窗读3.epub', 120);
+    const manifest = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${id}/manifest`,
+      headers: auth(),
+    });
+    const windowItems = (manifest.json() as { items: unknown[] }).items.length;
+
+    const toc = await app.inject({ method: 'GET', url: `/api/v1/books/${id}/toc`, headers: auth() });
+    assert.equal(toc.statusCode, 200, toc.body);
+    const entries = (toc.json() as { toc: Array<{ href: string; title: string; spine: number }> }).toc;
+    assert.equal(entries.length, 120);
+    assert.ok(entries.length > windowItems, 'a table of contents must exceed one window');
+    assert.equal(entries[119]?.spine, 119);
+    // Every entry is addressable and carries the same href shape as a manifest
+    // item, so a jump and a saved position are the same kind of reference.
+    for (const entry of entries) assert.match(entry.href, /^xhtml:/);
+
+    await rm(join(booksDir, '窗读3.epub'));
+    await ctx.scanner.scan();
+  });
+
+  test('a chapter is served with rewritten resource links and a real length', async () => {
+    // The chapter's `images/pic.png` has to arrive as an absolute asset URL, or
+    // every illustration in the book 404s in the client's frame.
+    const id = await makeChaptered('窗读4.epub', 3);
+    const items = await app.inject({ method: 'GET', url: `/api/v1/books/${id}/items`, headers: auth() });
+    const first = (items.json() as { items: Array<{ href: string }> }).items[0]!;
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${id}/assets?ref=${encodeURIComponent(first.href)}`,
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const html = res.rawPayload.toString('utf8');
+    assert.match(html, /\/api\/v1\/books\/[^"']+\/assets\?ref=/, 'relative resources must be absolute');
+    assert.equal(res.headers['content-length'], String(res.rawPayload.byteLength));
+
+    await rm(join(booksDir, '窗读4.epub'));
+    await ctx.scanner.scan();
+  });
+
+  test('a suffix range on a streamed body does not walk the whole file', async () => {
+    // `bytes=-3` is a legitimate resume request and also the one range a
+    // forward-only stream cannot produce by skipping. Serving it from a 400MB
+    // comic means reading all 400MB to hand back three bytes, so the honest
+    // answer is a full response the client can plan for.
+    const target = join(booksDir, '后缀.cbz');
+    // Large enough that the body is streamed rather than buffered, and stored so
+    // the payload advertises Range support in the first place.
+    const pages = Array.from({ length: 6 }, (_, i) => [`p${i}.jpg`, JPEG,] as [string, Buffer]);
+    await writeFile(target, makeZip([...pages, ['pad.bin', Buffer.alloc(2048, 7)]], { deflate: false }));
+    await ctx.scanner.scan();
+    const book = await findBook('后缀');
+
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/content`,
+      headers: { ...auth(), range: 'bytes=-3' },
+    });
+    // Either answer is correct HTTP; what must not happen is a 206 whose body
+    // took the whole file to produce. A 200 with the full body and no Range
+    // advertisement is the one this server chose.
+    assert.ok(res.statusCode === 200 || res.statusCode === 206, `unexpected ${res.statusCode}`);
+    if (res.statusCode === 200) {
+      assert.equal(res.headers['accept-ranges'], 'none');
+    } else {
+      assert.equal(res.rawPayload.byteLength, 3);
+    }
+
+    await rm(target);
+    await ctx.scanner.scan();
+  });
+});

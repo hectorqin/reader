@@ -55,12 +55,17 @@ main:
     # 先跑一个不依赖 JDK 的静态检查（秒级），再编译。原因是桥接契约的两半分别
     # 用 Kotlin 和 TypeScript 写，互相没法类型检查：客户端调用一个壳里没有的
     # 方法是最容易出、也最难在本地发现的错误。静态检查把它提前到这里。
+    #
+    # 触发条件包含 `web/src/formats/types.ts`：壳里分支的渲染模式词表来自它，
+    # 改一个词就会让整条原生渲染通道静默失效，而 Kotlin 编译器不会知道。
     - name: android-ci
       docker:
         image: docker.cnb.cool/dockerhub/androidsdk/android-35:latest
       ifModify:
         - android/**
         - web/src/android-bridge.d.ts
+        - web/src/formats/types.ts
+        - web/src/ui/native-page.ts
       stages:
         - name: shell-contract
           script: sh android/scripts/check-shell.sh
@@ -69,6 +74,16 @@ main:
       failStages:
         - name: report-failure
           script: echo "Android 构建失败：$CNB_BUILD_FAILED_MSG"
+
+    # 客户端产物必须能被壳打包。这条单独跑，因为 `client-ci` 只证明 H5 能构建，
+    # 不证明 assets 里有东西——而一个空的 assets 目录会产出一个启动即白屏的 APK。
+    - name: web-assets-ci
+      <<: *node-env
+      ifModify:
+        - web/**
+      stages:
+        - name: stage-for-shell
+          script: sh android/scripts/build-web-assets.sh
 
 "**":
   pull_request:

@@ -6,9 +6,22 @@
  * declaration. Decoding those as UTF-8 produces replacement characters on
  * nearly every line — the file becomes unreadable rather than slightly wrong.
  *
- * The strategy is validate-then-fallback, not guessing: a byte sequence that
- * decodes as strict UTF-8 is by construction almost never valid GB18030 text of
- * this kind, so the check is reliable in the direction that matters.
+ * Two decisions run through this file:
+ *
+ * 1. **Strict UTF-8 first, always.** A byte sequence that decodes as strict
+ *    UTF-8 is by construction almost never valid GB18030 text of this kind, so
+ *    the check is reliable in the direction that matters. Every other encoding
+ *    is only considered after it fails.
+ *
+ * 2. **Between GB18030 and Big5, pick the better decode rather than a fixed
+ *    order.** Most legacy Chinese TXT is Simplified (GB18030), but not all of
+ *    it, and the two codecs overlap heavily: the same bytes usually decode
+ *    successfully as both, so "try GB18030, then Big5" never reaches the second
+ *    candidate. The bytes that expose the difference are the ones that land in
+ *    each decoder's gap — they come out as private-use or replacement
+ *    characters, or as kana out of a page of Han text. Scoring both decodes on
+ *    that evidence and taking the cleaner one is what makes Traditional Big5
+ *    readable without giving up the Simplified majority.
  */
 
 const GB18030 = 'gb18030';
@@ -99,17 +112,105 @@ export function decodeText(bytes: Uint8Array): DecodedText {
     return { text: decodeStrict(typed, 'utf-8'), encoding: 'utf-8', guessed: false };
   }
 
-  // No BOM and not valid UTF-8: it is one of the CJK legacy encodings. Try
-  // Simplified Chinese first (by far the most common for these files), then
-  // Traditional, then give up on a lenient decode.
-  for (const encoding of [GB18030, BIG5]) {
-    const text = decodeStrict(typed, encoding);
-    if (text && countReplacementChars(text) === 0) {
-      return { text, encoding, guessed: true };
-    }
-  }
+  // No BOM and not valid UTF-8: it is one of the CJK legacy encodings.
+  const best = chooseLegacyEncoding(typed);
+  if (best) return { text: best.text, encoding: best.encoding, guessed: true };
+
+  // Nothing decodes cleanly. Return *something* — a book with a few mangled
+  // characters beats an error screen — and mark it guessed so the UI offers the
+  // manual override, which is the only thing that can rescue a genuinely odd
+  // file.
   return { text: decodeLenient(typed, 'utf-8'), encoding: 'utf-8', guessed: true };
 }
+
+/**
+ * Picks between GB18030 and Big5 by decoding with both and scoring the result.
+ *
+ * Returns `null` when neither survives, leaving the caller to fall back rather
+ * than committing to a decode that is visibly broken.
+ */
+function chooseLegacyEncoding(bytes: Uint8Array): { text: string; encoding: string } | null {
+  const candidates: Array<{ text: string; encoding: string; score: number }> = [];
+  for (const encoding of [GB18030, BIG5]) {
+    const text = decodeStrict(bytes, encoding);
+    if (!text) continue;
+    const score = scoreDecode(text);
+    if (score === null) continue;
+    // GB18030 wins ties. It is both the far more common source for these files
+    // and the superset of the two, so an ambiguous byte sequence is more likely
+    // to be Simplified than Traditional.
+    candidates.push({ text, encoding, score: score + (encoding === GB18030 ? 1 : 0) });
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((left, right) => right.score - left.score);
+  const best = candidates[0]!;
+  // A clean decode scores exactly zero. Requiring a positive score would reject
+  // the best possible answer, so the bar is "at least as clean as no damage at
+  // all" — anything below that shows damage the manual override can do better.
+  return best.score >= 0 ? { text: best.text, encoding: best.encoding } : null;
+}
+
+/**
+ * Scores a decode by how much damage it shows. Higher is better; `null` means
+ * "give up on this candidate".
+ *
+ * The penalties are ordered by how strong the evidence is:
+ *
+ *  - Replacement characters mean the decoder hit an invalid sequence. One is
+ *    fatal evidence that this is the wrong codec.
+ *  - Private-use characters are GB18030's escape hatch for bytes it defines but
+ *    does not map to a real character. A page of Chinese text containing them
+ *    is a mis-decode.
+ *  - Fullwidth/halfwidth compatibility forms (`﹍`, `Ａ`) come from the same
+ *    corner of the CJK blocks and almost never appear in book prose.
+ *  - Kana in a wall of Han text is the tell that Big5 bytes are being read as
+ *    GB18030: several Big5 sequences land in the hiragana block. A Japanese
+ *    book is legitimate, but it would also be valid UTF-8 in practice, so it
+ *    never reaches this function.
+ *
+ * A candidate is dropped outright when its damage exceeds a proportion of its
+ * length, rather than an absolute count: a 4 MB novel with a handful of
+ * genuinely malformed bytes is still the right decode, while a 200-character
+ * chapter with one is a wrong one.
+ */
+function scoreDecode(text: string): number | null {
+  if (text.length === 0) return null;
+  let score = 0;
+  let damage = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0)!;
+    if (code === 0xfffd) {
+      damage += 5;
+    } else if (inPrivateUse(code)) {
+      damage += 3;
+    } else if (isCompatibilityForm(code)) {
+      damage += 2;
+    } else if (isKana(code)) {
+      damage += 1;
+    }
+  }
+  if (damage > CONCERNING_DAMAGE_RATIO * text.length) return null;
+  score -= damage;
+  return score;
+}
+
+function inPrivateUse(code: number): boolean {
+  return (code >= 0xe000 && code <= 0xf8ff) || (code >= 0xf0000 && code <= 0x10fffd);
+}
+
+function isCompatibilityForm(code: number): boolean {
+  return code >= 0xfe30 && code <= 0xfe4f;
+}
+
+function isKana(code: number): boolean {
+  return (code >= 0x3040 && code <= 0x309f) || (code >= 0x30a0 && code <= 0x30ff);
+}
+
+/**
+ * Share of a text that may look like damage before the decode is rejected
+ * outright, so a wrong codec is never preferred merely because it is long.
+ */
+const CONCERNING_DAMAGE_RATIO = 0.01;
 
 function decodeStrict(bytes: Uint8Array, encoding: string): string {
   try {
@@ -131,15 +232,6 @@ function decodeLenient(bytes: Uint8Array, encoding: string): string {
     for (const byte of bytes) out += String.fromCharCode(byte);
     return out;
   }
-}
-
-function countReplacementChars(text: string): number {
-  let count = 0;
-  for (const char of text) {
-    if (char === '\uFFFD') count += 1;
-    if (count > 8) return count;
-  }
-  return count;
 }
 
 export { hasUtf8Bom };

@@ -73,8 +73,10 @@ volumes:
 | PDF | 保底可读 | 用浏览器自带阅读器，页数与进度照常上报，服务端不解析内容 |
 
 > TXT 是本地书库里最容易被忽视的一块。相当一部分中文 TXT 没有 BOM、没有编码声明，
-> 解码成 UTF-8 会满屏乱码。客户端先严格校验 UTF-8，失败再依次尝试 GB18030 与 Big5，
-> 并**在界面上告诉你选了哪个编码**，可手动覆盖。
+> 解码成 UTF-8 会满屏乱码。客户端先严格校验 UTF-8；失败时**不是**按顺序试
+> GB18030 再试 Big5，而是两种都解一遍挑更干净的那个——这两个编码的字节范围重叠，
+> 同一串字节往往两边都能解出字符，按顺序试就永远走不到第二个，繁体书会整本变乱码。
+> 选中的编码会**显示在界面上**，可手动覆盖。
 > 章节同样没有结构，只能从标题推断——推测不出时按长度分段，不会整本卡死。
 
 ---
@@ -129,20 +131,24 @@ volumes:
 
 ## 阅读体验：一次只取一章
 
-打开一本书是**一次请求**（`/manifest` 自带可寻址结构），翻到下一章才取下一章，
-再下一章在后台预取。一本 1200 章的全集打开时只下载一章的字节。
+打开一本书是**一次请求**。服务端的 `manifest` 默认只带**第一个窗口**的条目，
+不是整本书的清单——一本 1200 章的全集打开时只传一个窗口，翻到下一章才取下一章。
 
 - **分窗**：`/items?group=N` 一次返回一个窗口（epub 是 40 章，漫画是一卷）。
-  每个 group 自带 `offset`，所以客户端拿到单窗也能定位到全书位置 ——
-  不需要把前面的 count 加一遍，也就不会有加错导致的跳章。
-- **目录是目录**：`/toc` 按格式返回真正的目录（epub 的 spine 标题、txt 的章节、
-  漫画的卷）。它和分窗是两件事：分窗是传输边界，目录要完整才有用。
-  把它们合成一个接口会让目录显示成「第 1 章 – 第 40 章」。
-- **流式下发**：章节、页图、PDF 都是边读边发。EPUB 只读 zip 中央目录并按需解压；
-  取一页漫画不需要把整个压缩包读进内存。
-- **HTTP Range**：PDF 跳页、漫画跳卷、断点续传靠它。压缩方式为 `stored` 的
-  条目可字节定位，`deflate` 的会诚实上报 `Accept-Ranges: none`，让客户端知道
-  而不是白跑一次。
+  每个 group 自带 `offset`，所以客户端拿到单窗也能定位到全书位置。
+  **省略 `group` 等于 `group=0`**；要完整结构用 `?group=all`。
+- **目录是目录**：`/toc` 返回真正的完整目录。它和分窗是两件事：分窗是传输边界，
+  目录必须完整才有用。把它们合成一个接口，目录就会显示成「第 1 章 – 第 40 章」
+  ——服务端的分页边界漏进 UI。
+- **章节按路径寻址**：`items[].href`（`xhtml:OEBPS/ch1.xhtml`）是章节身份。
+  不按下标寻址：分窗返回的是 spine 前缀，按下标算出的章节在完整 spine 里指向另一章。
+- **HTTP Range**：PDF 跳页、漫画跳卷、断点续传靠它。压缩方式为 `stored` 的条目
+  可字节定位；`deflate` 的会诚实上报 `Accept-Ranges: none`。
+  尾部范围（`bytes=-N`）无法靠前向流跳过，大文件时会退化为整包响应而不是空读全文件。
+- **目录跳转跨窗口**：点第 900 章会先取窗口 22，而不是「什么都没发生」。
+  章节 id 是唯一跨窗口稳定的身份，进度也存它。
+
+---
 
 ## 客户端三态
 
@@ -167,6 +173,12 @@ Android 端**不重写渲染**。它是一个 Kotlin 原生外壳，只负责文
   Android 侧用系统的 `NET_CAPABILITY_VALIDATED` 判断。
 - **稳定的设备名**：UA 里的型号会随 Chrome 升级变化，作为「上次在哪个设备读的」标签不可靠。
 - **原生提示**：一行 Kotlin 的 Toast，不用在 Web 层造一套通知 UI。
+
+还有一条刻意的例外：**固定版式的整页图由原生画**。一页漫画或一张扫描图在 WebView 里
+要走完解码、样式布局、合成三次开销，而屏幕上的结果和 `ImageView` 一模一样；
+对一章文字这些都是必要的，对「把这张图画满屏」则全是白付的。
+规则是「只画整页图，且全有或全无」——画不了就交给 WebView，绝不出现空白页。
+EPUB 永远留在 WebView：文字排版是差异点，只能有一份实现。
 
 ### 离线合并语义
 
@@ -262,13 +274,11 @@ cd android
 
 ## 从源码开发
 
-两个包，互不依赖构建顺序：
-
 ```bash
 # 服务端
 cd server
 npm install
-npm test            # 114 个测试用例
+npm test            # 133 个测试用例
 npm run typecheck
 npm run dev         # 开发模式，热重载
 
@@ -280,7 +290,7 @@ BOOKS_DIR=/tmp/books DATA_DIR=/tmp/data npm run dev
 # 客户端（另开一个终端）
 cd web
 npm install
-npm test            # 147 个测试用例
+npm test            # 208 个测试用例（179 vitest + 29 node:test）
 npm run dev         # http://localhost:5174，自动把 /api 代理到 8080
 npm run build       # 产出 web/dist，服务端会在 / 上直接托管
 ```
@@ -294,19 +304,8 @@ server/src/
   indexer/
     identity.ts   书籍主键：dc:identifier + 内容哈希
     filename.ts   文件名解析（保守策略，宁可留空不猜错）
-    metadata.ts   EPUB 元数据与封面提取
+    metadata.ts   EPUB/PDF 元数据与封面提取
     scanner.ts    增量扫描、变更检测、清理
-    formats/      格式处理器注册表（新增格式只动这里）
-      registry.ts       handler 契约 + 扩展名路由
-      epub.ts           EPUB：spine、章节资源重写
-      pdf.ts            PDF：原样下发
-      comic-archive.ts  .cbz / .zip 按页翻
-      comic-directory.ts 图片目录按卷组织
-      text.ts           TXT：编码探测 + 分章
-      image.ts          单张图片
-      zip-reader.ts     自研只读 ZIP（只用 node:zlib）
-      natural-sort.ts   页序/卷序的自然排序
-      image-types.ts    图片扩展名与 content-type 单一来源
   providers/   可插拔刮削 provider 接口
   services/
     users.ts     账号、角色、令牌
@@ -342,28 +341,6 @@ android/app/src/main/java/cool/cnb/reader/
   bridge/ReaderBridge.kt     暴露给 JS 的原生方法
   bridge/ConnectivityMonitor.kt  真正的连通性判断
 ```
-
-### 新增一种格式
-
-写一个 handler 并注册即可，扫描器与 HTTP 层不用改：
-
-```ts
-// server/src/indexer/formats/mobi.ts
-import { registerFileHandler } from './registry.ts';
-
-export const mobiHandler = registerFileHandler({
-  format: 'mobi',
-  kind: 'document',
-  extensions: ['mobi', 'azw3'],
-  label: 'Mobipocket',
-  async parse(ctx, buf) { /* 返回 metadata / pageCount / cover */ },
-  async manifest(ctx) { /* 返回 groups 与 items */ },
-  async asset(ctx, { ref }) { /* 返回 data / contentType */ },
-});
-```
-
-然后在 `server/src/indexer/formats/index.ts` 里 `import './mobi.ts'`。
-扩展名列表、`/capabilities` 声明、扫描时的文件过滤都会自动跟上。
 
 ### 技术选型说明
 
@@ -419,9 +396,6 @@ export const mobiHandler = registerFileHandler({
 - `GET  /api/v1/books` — 书架列表，支持 `search` `author` `series` `tag` `format` `sort` `page`
 - `GET  /api/v1/books/:id`
 - `GET  /api/v1/books/:id/manifest` — 渲染器需要的清单
-- `GET  /api/v1/books/:id/items` — 可寻址结构（章节/页/卷），`?group=N` 取单卷
-- `GET  /api/v1/books/:id/assets?ref=<ref>` — 单个资源（章节文档、页图、字体）
-- `GET  /api/v1/library/formats` — 本实例支持的格式清单
 - `GET  /api/v1/books/:id/content` — 书文件流
 - `GET  /api/v1/books/:id/cover` — 封面
 - `PATCH  /api/v1/books/:id/metadata` — 手动补全元数据
@@ -446,22 +420,9 @@ export const mobiHandler = registerFileHandler({
 
 ## 范围边界（第一版）
 
-**做**：目录挂载扫描、元数据刮削、两级权限、同步 API、Docker 单容器、Android 客户端、
-EPUB 精排、TXT / 漫画（CBZ、图片目录）支持、PDF 保底、按书离线缓存。
+**做**：目录挂载扫描、元数据刮削、两级权限、同步 API、Docker 单容器、Android 客户端、EPUB 精排、PDF 保底、按书离线缓存。
 
-**不做**：在线书城、iOS、桌面端、社交、AI 问答、全格式转换、移动端批注输入、`.cbr`/`.rar`。
-
-### 已知边界
-
-写在明处，避免预期错位：
-
-- **PDF 只做保底可读**：不解析页数、书签，也不重排。页数上报 `null` 而不是猜一个数字 ——
-  猜错会让客户端的进度条错乱，比没有更糟。
-- **文本不做精品排版**：TXT 按行渲染，不折行重排、不调字号。精品排版是 EPUB 的承诺。
-- **不做全格式转换**：不把 epub 转 pdf、不把 txt 转 epub。
-- **ZIP 不支持 ZIP64 / 加密 / 分卷**：超限会明确报错，不会静默解出坏数据。
-- **漫画目录只认一层嵌套**：再深会把一个杂乱目录变成几千页的巨型漫画。
-- **没有内置 HTTPS 与限流**：给反向代理留位置，不重复造轮子。
+**不做**：在线书城、iOS、桌面端、社交、AI 问答、全格式转换、移动端批注输入。
 
 ---
 

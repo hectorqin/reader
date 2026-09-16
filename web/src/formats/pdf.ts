@@ -1,4 +1,4 @@
-import type { BookDoc } from './types.ts';
+import type { BookDoc, RenderMode } from './types.ts';
 
 /**
  * PDF loader.
@@ -22,6 +22,7 @@ export async function loadPdf(): Promise<BookDoc> {
   return {
     format: 'pdf',
     layout: 'fixed',
+    render: pdfRenderMode(),
     direction: 'ltr',
     // A PDF is one document, not a list of sections: the browser viewer owns
     // navigation inside it. One section keeps the progress model uniform.
@@ -38,4 +39,15 @@ export async function loadPdf(): Promise<BookDoc> {
     resources: new Map(),
     orderedByBook: true,
   };
+}
+
+/**
+ * Render mode for a PDF. Always `document`.
+ *
+ * A PDF is one document, and both the browser and Android already ship a viewer
+ * for it that is better than anything this project would write. The host is told
+ * so rather than being handed bytes to guess from.
+ */
+export function pdfRenderMode(): RenderMode {
+  return 'document';
 }

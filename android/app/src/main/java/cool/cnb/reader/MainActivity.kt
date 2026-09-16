@@ -13,6 +13,7 @@ import androidx.core.view.WindowInsetsCompat
 import android.widget.FrameLayout
 import cool.cnb.reader.bridge.ConnectivityMonitor
 import cool.cnb.reader.bridge.ReaderBridge
+import cool.cnb.reader.web.NativePageView
 import cool.cnb.reader.web.WebHost
 
 /**
@@ -28,6 +29,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var connectivity: ConnectivityMonitor
     private var host: WebHost? = null
+    private var pageView: NativePageView? = null
+
+    /**
+     * Current image-fit preference, pushed down by the web layer.
+     *
+     * The native page view needs it, and the setting lives in the client (it is a
+     * per-device preference, see SettingsStore), so it is mirrored here rather
+     * than duplicated. Default matches the client's default.
+     */
+    private var fitPreference: String = "contain"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,12 +69,33 @@ class MainActivity : AppCompatActivity() {
             overScrollMode = View.OVER_SCROLL_NEVER
         }
         root.addView(webView)
+
+        // The native page view sits above the WebView and is hidden until the
+        // client asks for a page. Above, not below: it covers the empty flow the
+        // web layer leaves behind when it hands a page over.
+        val page = NativePageView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+            )
+        }
+        root.addView(page)
+        pageView = page
+
         setContentView(root)
 
         applyInsets(root)
 
         host = WebHost(this, webView).apply {
-            install(ReaderBridge(this@MainActivity, webView, connectivity))
+            install(
+                ReaderBridge(
+                    this@MainActivity,
+                    webView,
+                    connectivity,
+                    pageView = page,
+                    fitPreference = { fitPreference },
+                ),
+            )
         }
 
         // Back should walk the reader's own history (shelf → book → shelf) rather
@@ -117,6 +149,7 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         host?.destroy()
         connectivity.close()
+        pageView?.hide()
         // Detaching the WebView explicitly: leaving it in the hierarchy leaks the
         // whole renderer process across a configuration change.
         (webView.parent as? ViewGroup)?.removeView(webView)
