@@ -49,6 +49,17 @@ export interface Book {
   source: string;
   manualFields: string[];
   updatedAt: number;
+  /**
+   * When this account first saw the book.
+   *
+   * Carried to the client because the shelf sorts its *cached* list while offline
+   * and must produce the same order the server would; without the key the two
+   * would disagree exactly when the reader cannot check which is right.
+   *
+   * Optional so a client reading a server that predates the field keeps working —
+   * the sort falls back to `updatedAt`.
+   */
+  addedAt?: number;
 }
 
 export interface BookListPage {

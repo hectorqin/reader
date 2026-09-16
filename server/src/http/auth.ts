@@ -52,6 +52,13 @@ function bearerToken(request: FastifyRequest): string | null {
 function queryTokenAllowed(request: FastifyRequest): boolean {
   if (request.method !== 'GET') return false;
   const path = (request.url.split('?')[0] ?? '').replace(/\/$/, '');
+
+  // Speech, for the same reason: it is a resource an `<audio>` element fetches
+  // itself. The allowlist is exact rather than a prefix, because the capability
+  // route (`/tts/voices`) is an API call and must carry a header — the exposure
+  // here is a read of audio derived from a sentence the client already holds.
+  if (path === '/api/v1/tts') return true;
+
   if (!path.startsWith('/api/v1/books/')) return false;
   return path.endsWith('/assets') || path.endsWith('/cover') || path.endsWith('/content');
 }

@@ -22,11 +22,28 @@ export interface BookDto {
   source: string;
   /** Which fields the user overrode by hand; lets the UI offer an undo. */
   manualFields: string[];
+  /**
+   * When the file last changed on disk.
+   *
+   * Distinct from `addedAt`, and the shelf offers both: "最近更新" answers "which
+   * book did I just replace with a better scan", "最近入库" answers "which book did
+   * I just acquire". Collapsing them would answer neither.
+   */
   updatedAt: number;
+  /**
+   * When this account first saw the book.
+   *
+   * Exposed because the client sorts its own cached shelf while offline, and a
+   * sort key it does not have is a sort it cannot reproduce — which would make the
+   * order change the moment a phone lost its connection.
+   */
+  addedAt: number;
 }
 
 interface BookRow {
   id: string;
+  /** `user_books.added_at`; selected alongside the book's own columns. */
+  added_at?: number;
   identifier: string | null;
   content_hash: string;
   format: string;
@@ -115,7 +132,7 @@ export class ShelfService {
     );
 
     const rows = this.db.all<BookRow>(
-      `SELECT ${BOOK_COLUMNS.split(',').map((c) => `b.${c.trim()}`).join(', ')}
+      `SELECT ${BOOK_COLUMNS.split(',').map((c) => `b.${c.trim()}`).join(', ')}, ub.added_at
        FROM books b JOIN user_books ub ON ub.book_id = b.id
        WHERE ${whereSql}
        ORDER BY ${sortColumn} ${order}, b.title ASC
@@ -179,6 +196,10 @@ export class ShelfService {
       source: effective.source,
       manualFields: appliedFields,
       updatedAt: row.updated_at,
+      // A row read outside `list` (a single-book lookup) has no `user_books`
+      // join, so the fallback is the book's own timestamp rather than 0 — a zero
+      // would sort every such book to the bottom of "最近入库".
+      addedAt: row.added_at ?? row.updated_at,
     };
   }
 

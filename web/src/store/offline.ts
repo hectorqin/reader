@@ -158,6 +158,19 @@ export class OfflineStore {
     return this.snapshot.progress[bookId];
   }
 
+  /**
+   * Synchronous read of one book's progress.
+   *
+   * The async form above is what the sync engine uses; this is for the shelf,
+   * which draws a progress bar on every card and cannot await one per card — an
+   * `await` inside a render loop is how a 200-book shelf takes a second to appear.
+   * The snapshot is already in memory by then, so the promise would have resolved
+   * immediately anyway.
+   */
+  progressFor(bookId: string): Progress | undefined {
+    return this.snapshot.progress[bookId];
+  }
+
   async upsertNotes(notes: Note[]): Promise<void> {
     for (const note of notes) {
       if (note.deleted) {

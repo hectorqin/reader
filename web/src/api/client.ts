@@ -24,12 +24,34 @@ export interface SessionStore {
   clear(): Promise<void>;
 }
 
+/**
+ * What this instance says it can synthesise.
+ *
+ * `http: false` is the normal answer for a deployment with no `TTS_URL`, and it
+ * is deliberately a 200 rather than a 404: the client's question is "which
+ * engines may I offer here", not "does this endpoint exist".
+ */
+export interface TtsCapabilities {
+  http: boolean;
+  formats: string[];
+  maxLength: number;
+  voices: Array<{ id: string; name: string; lang: string }>;
+}
+
 export interface ListQuery {
   search?: string;
   author?: string;
   series?: string;
   tag?: string;
   format?: string;
+  /**
+   * Sort key.
+   *
+   * `updated` is what the shelf has always used and stays the default: a library
+   * is browsed by "what did I just add", and a reader who wants A–Z can ask for
+   * `title`. The list is the server's own `ListOptions.sort`, so the two cannot
+   * drift.
+   */
   sort?: 'title' | 'author' | 'added' | 'updated';
   order?: 'asc' | 'desc';
   page?: number;
@@ -242,6 +264,17 @@ export class ReaderApi {
 
   async facets(options: RequestOptions = {}): Promise<Facets> {
     return this.get<Facets>('/api/v1/library/facets', options);
+  }
+
+  /** Whether this instance has a server-side speech engine, and what it offers. */
+  async ttsCapabilities(options: RequestOptions = {}): Promise<TtsCapabilities | null> {
+    try {
+      return await this.get<TtsCapabilities>('/api/v1/tts/voices', options);
+    } catch {
+      // An old server has no such route and a stale one answers 404; both mean
+      // the same thing to the caller, which is "no HTTP engine here".
+      return null;
+    }
   }
 
   async continueReading(limit = 20, options: RequestOptions = {}): Promise<ContinueReadingItem[]> {

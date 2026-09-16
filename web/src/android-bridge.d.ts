@@ -54,11 +54,97 @@ export interface AndroidBridge {
    * take the reader out of the app.
    */
   canOpenDocument(mediaType: string): boolean;
+
+  /**
+   * The native speech surface, if this shell has one.
+   *
+   * A nested object rather than more top-level methods because it is a *feature*
+   * rather than a capability: a shell without it is a perfectly good shell, and
+   * the client falls back to `speechSynthesis` (which is present in every
+   * Android WebView). Keeping it nested also means the feature check is one
+   * property read rather than seven `typeof` checks.
+   *
+   * Added in shell version 3. Note that on the platform side this is a *separate*
+   * registered interface (`window.ReaderAndroidSpeech`) — `addJavascriptInterface`
+   * can expose objects, not properties of one — and the web layer re-parents it
+   * onto this key in `android-platform.ts`. Declaring it here as a property is
+   * therefore the contract the client sees, not the shape Kotlin registers.
+   */
+  speech?: SpeechBridge;
 }
+
+/**
+ * Android's `TextToSpeech`, exposed to the client.
+ *
+ * This exists because a WebView's own `speechSynthesis` is a *different*
+ * synthesizer from the one the operating system uses, and on a phone it is
+ * frequently the worse of the two: Chinese voices installed for the OS are
+ * routinely absent from `getVoices()`, which is why "朗读没有中文声音" is the most
+ * common complaint about browser-based TTS on Android.
+ *
+ * The queue, the cursor and the chapter boundary stay in JavaScript. This is only
+ * "say this sentence" and "tell me when you have said it" — a native queue would
+ * be a second implementation of rules that already exist in one place.
+ */
+export interface SpeechBridge {
+  /** Whether the platform engine initialised successfully. */
+  available(): boolean;
+  /** Creates the engine and loads voices. Idempotent. */
+  init(): void;
+  /**
+   * Registers the callback invoked for `start` / `done` / `error` events.
+   *
+   * `id` is the utterance the event is about, and it is not decoration: a `done`
+   * for a sentence the reader has already moved past must not advance the client's
+   * cursor, and without an id there is no way to tell the two apart. The id is
+   * chosen by the client and echoed back by the shell (see `speak`).
+   */
+  onSpeechEvent(callback: (event: { type: string; id?: string; message?: string }) => void): void;
+  /** Registers the callback that receives the voice list, JSON-encoded. */
+  onVoices(callback: (voices: Array<{ id: string; name: string; lang: string; default?: boolean }>) => void): void;
+  /**
+   * Speaks one utterance. Replaces anything already in flight.
+   *
+   * The id is the client's, not the shell's: the client knows which sentence it
+   * asked for, and it is the only side that can decide whether a late event still
+   * belongs to the sentence on screen.
+   */
+  speak(text: string, utteranceId: string): void;
+  pause(): void;
+  stop(): void;
+  setRate(rate: number): void;
+  setPitch(pitch: number): void;
+  setVolume(volume: number): void;
+  setVoice(voiceId: string): void;
+  /**
+   * Releases the engine and unbinds the platform service.
+   *
+   * Not "stop": stopping leaves the engine ready for the next sentence, and this
+   * is what the shell calls when the activity is destroyed. On Android it is the
+   * difference between a bound service being released and being leaked.
+   */
+  shutdown(): void;
+}
+
+/**
+ * The subset of `SpeechBridge` the shared layer depends on.
+ *
+ * Declared as an alias so `speech.ts` can take one as a parameter without
+ * importing the whole bridge contract, and so a test double only has to
+ * implement the sentence-at-a-time part.
+ */
+export type NativeSpeechBridge = SpeechBridge;
 
 declare global {
   interface Window {
     ReaderAndroid?: AndroidBridge;
+    /**
+     * The speech interface, registered separately by the shell.
+     *
+     * Present only on shell version 3 and above. Read by
+     * `promoteSpeechInterface`, which is the one place that knows about it.
+     */
+    ReaderAndroidSpeech?: SpeechBridge;
   }
 }
 

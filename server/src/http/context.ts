@@ -5,6 +5,7 @@ import type { Scanner } from '../indexer/scanner.ts';
 import type { UserService, PublicUser } from '../services/users.ts';
 import type { ShelfService } from '../services/shelf.ts';
 import type { SyncService } from '../services/sync.ts';
+import type { TtsService } from '../services/tts.ts';
 
 export interface AppContext {
   config: AppConfig;
@@ -13,6 +14,7 @@ export interface AppContext {
   users: UserService;
   shelf: ShelfService;
   sync: SyncService;
+  tts: TtsService;
   log: FastifyBaseLogger;
 }
 

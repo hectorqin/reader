@@ -34,6 +34,33 @@
 
 import type { SpokenChunk } from './tts-text.ts';
 
+/**
+ * The structural contract `speech.ts` uses to treat the three engines alike.
+ *
+ * Declared here rather than imported from `speech.ts` so this file stays free of
+ * a circular import: the engines are the leaves, the facade is the branch.
+ */
+export interface SpeechEngineShape {
+  readonly kind: 'system' | 'http' | 'native';
+  readonly active: boolean;
+  snapshot: TtsSnapshot;
+  loadQueue: (from: number) => Promise<{ chunks: SpokenChunk[]; startIndex: number }>;
+  onChunk: (chunk: SpokenChunk, index: number) => void;
+  onState: (snapshot: TtsSnapshot) => void;
+  play(from: number): Promise<void>;
+  pause(): void;
+  resume(): void;
+  stop(): void;
+  next(): void | Promise<void>;
+  previous(): void | Promise<void>;
+  jump(index: number): void | Promise<void>;
+  setRate(rate: number): void;
+  setPitch(pitch: number): void;
+  setVolume(volume: number): void;
+  setVoice(voiceId: string): void;
+  dispose(): void;
+}
+
 export type TtsState = 'idle' | 'playing' | 'paused' | 'unsupported';
 
 export interface TtsVoice {
@@ -85,7 +112,21 @@ const DEFAULT_RATE = 1;
 const DEFAULT_PITCH = 1;
 const DEFAULT_VOLUME = 1;
 
-export class TtsEngine {
+export class TtsEngine implements SpeechEngineShape {
+  /**
+   * The three callbacks, as public mutable fields.
+   *
+   * They are assigned from the options rather than read off them, so the engine
+   * satisfies `SpeechEngine` structurally. That is what lets the screen layer
+   * hold a `SpeechEngine` and swap implementations without the three engines
+   * sharing a base class — which they must not, because their pause and rate
+   * semantics genuinely differ (see `speech.ts`).
+   */
+  loadQueue: (from: number) => Promise<{ chunks: SpokenChunk[]; startIndex: number }>;
+  onChunk: (chunk: SpokenChunk, index: number) => void;
+  onState: (snapshot: TtsSnapshot) => void;
+  readonly kind = 'system' as const;
+
   private readonly options: TtsOptions;
   private readonly voices: TtsVoice[] = [];
   private queue: SpokenChunk[] = [];
@@ -102,10 +143,12 @@ export class TtsEngine {
   private speaking = false;
   /** Watchdog: some Android builds never fire `onend` for a cancelled utterance. */
   private watchdog: ReturnType<typeof setTimeout> | null = null;
-  private readonly noop = (): void => undefined;
 
   constructor(options: TtsOptions) {
     this.options = options;
+    this.loadQueue = options.loadQueue;
+    this.onChunk = options.onChunk;
+    this.onState = options.onState;
     this.rate = DEFAULT_RATE;
     this.loadVoices();
     // Chrome fires this after the voice list is populated, which on a cold start
@@ -158,7 +201,7 @@ export class TtsEngine {
     }
     this.generation += 1;
     synthesis.cancel();
-    const loaded = await this.options.loadQueue(from);
+    const loaded = await this.loadQueue(from);
     if (loaded.chunks.length === 0) {
       this.status = 'idle';
       this.error = '这一章没有可朗读的文字';
@@ -282,7 +325,7 @@ export class TtsEngine {
     }
 
     this.cursor = nextIndex;
-    this.options.onChunk(chunk, nextIndex);
+    this.onChunk(chunk, nextIndex);
     this.emit();
 
     const utterance = this.options.utteranceFactory
@@ -356,7 +399,7 @@ export class TtsEngine {
     // The queue is intentionally left in place so a rewind works, but the
     // controller is told playback ran out so it can continue into the next
     // chapter instead of stopping at every chapter boundary.
-    void this.options
+    void this
       .loadQueue(this.queue.length)
       .then((loaded) => {
         if (generation !== this.generation || !loaded.chunks.length) return;
@@ -427,7 +470,7 @@ export class TtsEngine {
   }
 
   private emit(): void {
-    (this.options.onState ?? this.noop)(this.snapshot);
+    this.onState(this.snapshot);
   }
 }
 

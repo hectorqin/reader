@@ -13,6 +13,7 @@ import androidx.core.view.WindowInsetsCompat
 import android.widget.FrameLayout
 import cool.cnb.reader.bridge.ConnectivityMonitor
 import cool.cnb.reader.bridge.ReaderBridge
+import cool.cnb.reader.bridge.SpeechBridge
 import cool.cnb.reader.web.NativePageView
 import cool.cnb.reader.web.WebHost
 
@@ -30,6 +31,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var connectivity: ConnectivityMonitor
     private var host: WebHost? = null
     private var pageView: NativePageView? = null
+    /**
+     * The platform speech engine, held so it can be shut down.
+     *
+     * `TextToSpeech` binds a service and holds the audio route; releasing it in
+     * `onDestroy` is what stops a backgrounded app from continuing to speak.
+     */
+    private var speechBridge: SpeechBridge? = null
 
     /**
      * Current image-fit preference, pushed down by the web layer.
@@ -97,6 +105,11 @@ class MainActivity : AppCompatActivity() {
                 ),
             )
         }
+        // The speech engine is a bound service and a speaker; it is released when
+        // the activity goes away rather than left to the process's own cleanup,
+        // which on Android can be much later — a reader who backgrounds the app
+        // while listening should not be read to from the past.
+        speechBridge = host?.speechBridge
 
         // Back should walk the reader's own history (shelf → book → shelf) rather
         // than exiting the app, and only leave when there is nothing left.
@@ -113,6 +126,19 @@ class MainActivity : AppCompatActivity() {
                 }
             },
         )
+    }
+
+    /**
+     * Releases the platform speech engine.
+     *
+     * `onDestroy` rather than `onStop`: a WebView page can survive a stop (the
+     * reader comes back to the same chapter), and shutting the engine down there
+     * would make the first sentence after returning fail. On destroy the page is
+     * gone, so there is nothing left for the engine to speak.
+     */
+    override fun onDestroy() {
+        speechBridge?.shutdown()
+        super.onDestroy()
     }
 
     /**

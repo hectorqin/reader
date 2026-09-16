@@ -15,6 +15,14 @@ import type { TocEntry } from '../api/types.ts';
 import type { NativePageHost } from './native-page.ts';
 import { TtsEngine, type TtsSnapshot } from '../render/tts.ts';
 import type { SpokenChunk } from '../render/tts-text.ts';
+import {
+  createSpeechEngine,
+  speechAvailability,
+  SPEECH_ENGINE_LABELS,
+  type SpeechEngine,
+  type SpeechEngineKind,
+} from '../render/speech.ts';
+import type { NativeSpeechBridge } from '../android-bridge.ts';
 
 /**
  * Chapters per window, matching the server's own constant.
@@ -41,6 +49,15 @@ export interface ReaderScreenOptions {
    * behaviour the H5 build has always had.
    */
   pageHost?: NativePageHost;
+  /**
+   * The Android shell's own speech engine, when it has one.
+   *
+   * Optional for the same reason as `pageHost`: a browser has none, and a shell
+   * older than version 3 has none either. `undefined` means "the WebView's own
+   * synthesizer is the best available engine", which is a perfectly good
+   * outcome — it is what every browser build does today.
+   */
+  speechBridge?: NativeSpeechBridge;
   onBack(): void;
   onSettingsChange(patch: Partial<AppSettings>): void;
   onSignedOut(): void;
@@ -79,11 +96,32 @@ export class ReaderScreen {
   private readonly ttsRangeInput: HTMLInputElement;
   private readonly ttsLabel: HTMLSpanElement;
   private readonly ttsPlayButton: HTMLButtonElement;
-  private tts: TtsEngine | null = null;
+  /**
+   * The engine currently speaking.
+   *
+   * Held as the `SpeechEngine` interface rather than as `TtsEngine`, because
+   * there are three implementations and which one is in use depends on the host
+   * (see `speechAvailability`). Everything below this point — the queue, the
+   * highlight, the bar — is identical for all three.
+   */
+  private tts: SpeechEngine | null = null;
   /** The sentence at the reader's own position, for "read from here". */
   private pendingSpeechAnchor: SpokenChunk | null = null;
   /** Chapter the current speech queue was built from. */
   private spokenSectionIndex = -1;
+  /**
+   * The engine's fragment list, which is what an engine index refers to.
+   *
+   * It differs from the view's own sentence list for the HTTP engine: a paragraph
+   * with no punctuation is split before it is sent, and the engine counts
+   * fragments while the reader counts sentences. Both lists are kept so the
+   * highlight can be drawn from one and the progress bar counted in the other.
+   */
+  private lastSpeechQueue: SpokenChunk[] = [];
+  /** What the server said it can synthesise. */
+  private httpTtsAvailable = false;
+  /** Probed once per screen; a server's capabilities do not change mid-book. */
+  private httpProbed = false;
 
   private view: ReaderView | null = null;
   private doc: BookDoc | null = null;
@@ -640,16 +678,30 @@ export class ReaderScreen {
       // Rebuild the voice list on every open: a Bluetooth headset paired while
       // the book was open adds a voice, and Chrome only reports it asynchronously.
       this.refreshVoiceOptions();
+      // The server's capability answer is cached after the first probe, so this is
+      // a no-op on every subsequent open.
+      if (!this.httpProbed) {
+        this.httpProbed = true;
+        void this.probeHttpTts();
+      }
     }
   }
 
-  /** Re-reads the engine's voice list into the settings panel's select. */
+  /**
+   * Re-reads the engine's voice list into the settings panel's select.
+   *
+   * Done on every open rather than once, because three things can change under a
+   * reader: a Bluetooth headset that adds a voice, a desktop Chrome that only
+   * populates `getVoices()` after `voiceschanged`, and a native engine whose
+   * voices arrive from a service that was not bound yet. The `signature` check is
+   * what keeps that from rebuilding the `<select>` on every keystroke of the
+   * panel.
+   */
   private refreshVoiceOptions(): void {
-    if (!TtsEngine.isSupported()) return;
-    const engine = this.ensureTts();
     const select = this.settingsPanel.querySelector<HTMLSelectElement>('select[data-voice]');
     if (!select) return;
-    const voices = engine.snapshot.voices;
+    const engine = this.tts;
+    const voices = engine?.snapshot.voices ?? [];
     const signature = voices.map((voice) => voice.id).join('|');
     if (select.dataset['signature'] === signature) return;
     select.dataset['signature'] = signature;
@@ -666,6 +718,27 @@ export class ReaderScreen {
       option.selected = voice.id === current;
       select.append(option);
     }
+  }
+
+  /**
+   * Probes the server for an HTTP voice engine, once per screen.
+   *
+   * Not awaited by the settings panel: a probe against a NAS on a slow link must
+   * not delay the panel opening. The reply rebuilds the engine row when it
+   * arrives, which is why `ttsEngine` defaults to `auto` — the reader never has
+   * to wait for the answer to start listening.
+   */
+  private async probeHttpTts(): Promise<void> {
+    try {
+      const capabilities = await this.options.api.ttsCapabilities();
+      this.httpTtsAvailable = capabilities?.http === true;
+    } catch {
+      this.httpTtsAvailable = false;
+    }
+    // Rebuilt either way: the answer decides whether the engine picker appears at
+    // all, and a panel built before the probe would be missing the row that the
+    // reader is looking for.
+    this.rebuildSpeechEngineRow();
   }
 
   /**
@@ -845,7 +918,10 @@ export class ReaderScreen {
 
     // -- 朗读 --
     body.append(this.sectionTitle('朗读'));
-    body.append(this.buildSpeechSettings());
+    // Wrapped in its own element so the engine picker can rebuild the speech rows
+    // in place when the HTTP capability probe answers, without discarding whatever
+    // the reader has scrolled to in the rest of the panel.
+    body.append(el('div', { dataset: { speech: 'group' }, children: [this.buildSpeechSettings()] }));
 
     // -- 文本 --
     const encodingRow = this.settingsRow('TXT 编码', ['', 'utf-8', 'gb18030', 'big5', 'utf-16le'], this.settings.txtEncoding, (value) =>
@@ -887,7 +963,7 @@ export class ReaderScreen {
    */
   private recordSpeechAnchor(): void {
     const view = this.view;
-    if (!view || !TtsEngine.isSupported()) return;
+    if (!view) return;
     // The engine owns the cursor once it is running; re-anchoring then would make
     // "read from here" jump to wherever the reader last scrolled.
     if (this.tts?.active) return;
@@ -897,48 +973,78 @@ export class ReaderScreen {
   /**
    * The read-aloud section of the settings panel.
    *
-   * The voice list is read from the engine *when the section is built*, which is
-   * the first moment it can be trusted: Chrome populates `getVoices()` only after
-   * `voiceschanged`, and a panel built before that would ship an empty picker.
+   * Which rows exist depends on the engine, and the dependency is stated rather
+   * than hidden: pitch has no meaning for synthesised audio, a voice list is empty
+   * for HTTP until the server answers, and "系统语音（原生）" does not exist in a
+   * browser. A row that cannot do anything is hidden instead of being shown
+   * disabled — a disabled control tells the reader something is broken, and
+   * usually nothing is.
    */
   private buildSpeechSettings(): DocumentFragment {
     const fragment = document.createDocumentFragment();
-    if (!TtsEngine.isSupported()) {
+    const availability = this.speechAvailability();
+    if (!availability.preferred) {
       fragment.append(
         el('div', {
           className: 'notice',
-          text: '当前环境不支持系统朗读。Android 客户端会使用系统 TTS 引擎，浏览器中请使用 Chrome / Edge。',
+          text: '当前环境没有可用的朗读引擎：浏览器不支持语音合成，且服务端未配置 TTS_URL。在服务端设置 TTS_URL 后即可使用 HTTP 朗读。',
         }),
       );
       return fragment;
+    }
+
+    // The engine picker only appears when there is a choice to make. One engine
+    // is not a setting.
+    const engineCount = [availability.system, availability.native, availability.http].filter(Boolean).length;
+    if (engineCount > 1) {
+      const options: Array<{ value: string; label: string }> = [{ value: 'auto', label: '自动' }];
+      if (availability.native) options.push({ value: 'native', label: SPEECH_ENGINE_LABELS.native });
+      if (availability.system) options.push({ value: 'system', label: SPEECH_ENGINE_LABELS.system });
+      if (availability.http) options.push({ value: 'http', label: SPEECH_ENGINE_LABELS.http });
+      const row = this.selectRow('朗读引擎', options, this.settings.ttsEngine, (value) =>
+        this.switchSpeechEngine(value as AppSettings['ttsEngine']));
+      row.dataset['speech'] = 'engine';
+      fragment.append(row);
     }
 
     fragment.append(
       this.slider('语速', this.settings.ttsRate, { min: 0.5, max: 2.5, step: 0.1 }, (value) =>
         `${value.toFixed(1)}×`, (value) => this.updateSpeechSetting({ ttsRate: value })),
     );
-    fragment.append(
-      this.slider('音调', this.settings.ttsPitch, { min: 0.5, max: 2, step: 0.1 }, (value) =>
-        value.toFixed(1), (value) => this.updateSpeechSetting({ ttsPitch: value })),
-    );
+
+    // Pitch is offered only for the engines that have one. `HttpTtsEngine` has no
+    // pitch control that is not a rate change, and a shimmed one is worse than
+    // none — so the row is omitted rather than left to do nothing.
+    const active = this.effectiveEngineKind() ?? availability.preferred;
+    if (active !== 'http') {
+      const row = this.slider('音调', this.settings.ttsPitch, { min: 0.5, max: 2, step: 0.1 }, (value) =>
+        value.toFixed(1), (value) => this.updateSpeechSetting({ ttsPitch: value }));
+      row.dataset['speech'] = 'pitch';
+      fragment.append(row);
+    }
+
     fragment.append(
       this.slider('音量', this.settings.ttsVolume, { min: 0, max: 1, step: 0.05 }, (value) =>
         `${Math.round(value * 100)}%`, (value) => this.updateSpeechSetting({ ttsVolume: value })),
     );
 
-    const engine = this.ensureTts();
-    const voices = engine.snapshot.voices;
-    const options: Array<{ value: string; label: string }> = [
-      { value: '', label: '跟随系统' },
-      ...voices.map((voice) => ({
-        value: voice.id,
-        label: `${voice.name} · ${voice.lang}${voice.default ? ' · 默认' : ''}`,
-      })),
-    ];
-    fragment.append(
-      this.selectRow('语音', options, this.settings.ttsVoice, (value) =>
-        this.updateSpeechSetting({ ttsVoice: value })),
-    );
+    // The voice list belongs to the system and native engines; HTTP uses whatever
+    // voice id was configured upstream, and the server publishes those separately.
+    if (active !== 'http') {
+      const engine = this.tts;
+      const voices = engine?.snapshot.voices ?? [];
+      const options: Array<{ value: string; label: string }> = [
+        { value: '', label: '跟随系统' },
+        ...voices.map((voice) => ({
+          value: voice.id,
+          label: `${voice.name} · ${voice.lang}${voice.default ? ' · 默认' : ''}`,
+        })),
+      ];
+      const row = this.selectRow('语音', options, this.settings.ttsVoice, (value) =>
+        this.updateSpeechSetting({ ttsVoice: value }));
+      row.dataset['speech'] = 'voice';
+      fragment.append(row);
+    }
 
     fragment.append(
       this.settingsRow('章节播完', ['auto', 'stop'], this.settings.ttsAutoAdvance ? 'auto' : 'stop', (value) =>
@@ -956,6 +1062,52 @@ export class ReaderScreen {
     );
 
     return fragment;
+  }
+
+  /**
+   * Switches engines, discarding whatever the old one was saying.
+   *
+   * Stopping first is not optional: an `Audio` element and `speechSynthesis` will
+   * both happily keep talking, and two engines reading the same chapter in
+   * different voices is the kind of bug that is reported as "朗读疯了".
+   */
+  private switchSpeechEngine(kind: AppSettings['ttsEngine']): void {
+    this.tts?.dispose();
+    this.tts = null;
+    this.ttsBar.hidden = true;
+    this.view?.clearSpeechHighlight();
+    void this.updateSpeechSetting({ ttsEngine: kind });
+    // Rebuild only the speech rows, so the reader's scroll position in the panel
+    // is not thrown away by a full rebuild.
+    const host = this.settingsPanel.querySelector<HTMLElement>('[data-speech="group"]');
+    if (host) {
+      host.replaceChildren(this.buildSpeechSettings());
+      this.filterSettingsRows();
+    }
+  }
+
+  /**
+   * Rebuilds the speech rows.
+   *
+   * Called when the HTTP capability probe answers and when the reader switches
+   * engines. Only the speech group is replaced: a full panel rebuild would throw
+   * away the reader's scroll position, and the panel is long enough that this is
+   * the difference between a settings screen and a settings screen that jumps.
+   */
+  private rebuildSpeechEngineRow(): void {
+    const host = this.settingsPanel.querySelector<HTMLElement>('[data-speech="group"]');
+    if (!host) return;
+    host.replaceChildren(this.buildSpeechSettings());
+    this.filterSettingsRows();
+  }
+
+  /** Which engine will actually speak, for the panel's conditional rows. */
+  private effectiveEngineKind(): Exclude<SpeechEngineKind, 'auto'> | null {
+    if (this.tts) return this.tts.kind;
+    const availability = this.speechAvailability();
+    const requested = this.settings.ttsEngine;
+    if (requested !== 'auto' && availability[requested]) return requested;
+    return availability.preferred;
   }
 
   private sectionTitle(text: string): HTMLDivElement {
@@ -1102,18 +1254,71 @@ export class ReaderScreen {
     }) as HTMLDivElement;
   }
 
-  private ensureTts(): TtsEngine {
+  /**
+   * The engine that will speak, built on first use.
+   *
+   * `auto` resolves against what this host actually has, in the order
+   * `speechAvailability` documents: the native engine (an Android shell), then
+   * the WebView's own synthesizer, then HTTP. A pinned choice is honoured when it
+   * exists and falls back silently when it does not — a reader who chose "HTTP
+   * 朗读" on a server that has since lost its `TTS_URL` should still be able to
+   * listen rather than be told their preference is invalid.
+   */
+  private ensureTts(): SpeechEngine | null {
     if (this.tts) return this.tts;
-    this.tts = new TtsEngine({
-      loadQueue: (from) => this.loadSpeechQueue(from),
-      onChunk: (chunk) => this.view?.highlightSpokenChunk(chunk),
-      onState: (snapshot) => this.renderSpeechState(snapshot),
+    const availability = this.speechAvailability();
+    const requested = this.settings.ttsEngine;
+    const kind: Exclude<SpeechEngineKind, 'auto'> | null =
+      requested === 'auto'
+        ? availability.preferred
+        : availability[requested]
+          ? requested
+          : availability.preferred;
+    if (!kind) return null;
+
+    const engine = createSpeechEngine({
+      kind,
+      baseUrl: this.options.api.baseUrl,
+      accessToken: () => this.options.api.currentSession()?.accessToken ?? null,
+      nativeBridge: this.options.speechBridge ?? null,
+      onError: (message) => {
+        this.setStatus('error', message);
+        window.setTimeout(() => this.hideStatus(), 3200);
+      },
     });
-    this.tts.setRate(this.settings.ttsRate);
-    this.tts.setPitch(this.settings.ttsPitch);
-    this.tts.setVolume(this.settings.ttsVolume);
-    this.tts.setVoice(this.settings.ttsVoice);
-    return this.tts;
+    if (!engine) return null;
+
+    engine.loadQueue = (from) => this.loadSpeechQueue(from);
+    engine.onChunk = (chunk) => {
+      this.view?.highlightSpokenChunk(chunk);
+      this.speechCursor = chunk;
+    };
+    // The HTTP adapter holds the queue the engine is speaking from, so it can map
+    // an engine index back to the sentence the reader can see — the two differ
+    // when a long sentence had to be split. Only the screen layer knows the list,
+    // which is why it is handed over rather than duplicated.
+    if (engine.kind === 'http' && 'chunkSource' in engine) {
+      (engine as { chunkSource: () => SpokenChunk[] }).chunkSource = () => this.lastSpeechQueue;
+    }
+    engine.onState = (snapshot) => this.renderSpeechState(snapshot);
+    engine.setRate(this.settings.ttsRate);
+    engine.setPitch(this.settings.ttsPitch);
+    engine.setVolume(this.settings.ttsVolume);
+    engine.setVoice(this.settings.ttsVoice);
+    this.tts = engine;
+    return engine;
+  }
+
+  /** The sentence last handed to the engine, so `previous` can step back from it. */
+  private speechCursor: SpokenChunk | null = null;
+
+  /** What this host can speak with. */
+  private speechAvailability(): ReturnType<typeof speechAvailability> {
+    return speechAvailability({
+      systemSupported: TtsEngine.isSupported(),
+      nativeBridge: this.options.speechBridge ?? null,
+      httpConfigured: this.httpTtsAvailable,
+    });
   }
 
   /**
@@ -1126,7 +1331,7 @@ export class ReaderScreen {
   private async loadSpeechQueue(from: number): Promise<{ chunks: SpokenChunk[]; startIndex: number }> {
     const view = this.view;
     if (!view) return { chunks: [], startIndex: 0 };
-    let chunks = view.speechChunks as SpokenChunk[];
+    let chunks = this.rememberSpeechChunks(view);
     if (from < chunks.length && view.currentSectionIndex() === this.spokenSectionIndex) {
       return { chunks, startIndex: from };
     }
@@ -1138,17 +1343,45 @@ export class ReaderScreen {
     if (next >= view.sectionCount) return { chunks: [], startIndex: 0 };
     await view.open(next, 0);
     this.spokenSectionIndex = next;
-    chunks = view.speechChunks as SpokenChunk[];
+    chunks = this.rememberSpeechChunks(view);
     return { chunks, startIndex: 0 };
   }
 
+  /**
+   * Caches the chapter's sentence list and trims it for the engine in use.
+   *
+   * The trim is what makes the HTTP engine work at all: the server refuses an
+   * utterance over 800 characters, and a TXT chapter with no punctuation in it
+   * produces exactly one of those. Splitting a long sentence into ≤700-character
+   * pieces *for the engine only* keeps the highlight anchored to the original
+   * chunk, because `speechQueue` still holds the untrimmed list and the index
+   * arithmetic is done against that.
+   */
+  private rememberSpeechChunks(view: ReaderView): SpokenChunk[] {
+    const chunks = view.speechChunks as SpokenChunk[];
+    this.lastSpeechQueue = chunks;
+    if (this.tts?.kind !== 'http') return chunks;
+    const max = 700;
+    const trimmed: SpokenChunk[] = [];
+    for (const chunk of chunks) {
+      if (chunk.text.length <= max) {
+        trimmed.push(chunk);
+        continue;
+      }
+      for (let offset = 0; offset < chunk.text.length; offset += max) {
+        trimmed.push({ ...chunk, text: chunk.text.slice(offset, offset + max), start: chunk.start + offset });
+      }
+    }
+    return trimmed;
+  }
+
   private toggleSpeech(): void {
-    if (!TtsEngine.isSupported()) {
-      this.setStatus('error', '当前浏览器不支持朗读');
+    const engine = this.ensureTts();
+    if (!engine) {
+      this.setStatus('error', '当前环境没有可用的朗读引擎');
       window.setTimeout(() => this.hideStatus(), 2600);
       return;
     }
-    const engine = this.ensureTts();
     if (engine.active) {
       if (this.ttsBar.dataset['state'] === 'playing') engine.pause();
       else engine.resume();
@@ -1176,9 +1409,14 @@ export class ReaderScreen {
     const view = this.view;
     if (!view) return;
     const engine = this.ensureTts();
+    if (!engine) {
+      this.setStatus('error', '当前环境没有可用的朗读引擎');
+      window.setTimeout(() => this.hideStatus(), 2600);
+      return;
+    }
     this.ttsBar.hidden = false;
     this.spokenSectionIndex = view.currentSectionIndex();
-    const chunks = view.speechChunks as SpokenChunk[];
+    const chunks = this.rememberSpeechChunks(view);
     if (chunks.length === 0) {
       // A fixed-layout page has no text; say so instead of showing an empty bar.
       this.setStatus('idle', '这一页没有可朗读的文字');
@@ -1195,10 +1433,29 @@ export class ReaderScreen {
     await engine.play(start >= 0 ? start : 0);
   }
 
+  /**
+   * The index of the sentence being spoken, on the *untrimmed* queue.
+   *
+   * The engine may be speaking a fragment of a long sentence (see
+   * `rememberSpeechChunks`), and the reader's idea of "the current sentence" is
+   * the whole one. Mapping back through the original chunk is what makes the
+   * progress bar's denominator match the highlight.
+   */
+  private speechQueueIndex(): number {
+    const chunk = this.speechCursor;
+    if (!chunk) return -1;
+    // Searched on the engine's fragment list, because that is the list the index
+    // refers to; the fragment for a split sentence carries the original sentence's
+    // `start`, so identity comparison against the engine's own list is exact.
+    return this.lastSpeechQueue.indexOf(chunk);
+  }
+
   private onSpeechScrub(index: number): void {
     const engine = this.tts;
     if (!engine) return;
     const total = engine.snapshot.total;
+    // The engine's queue is the one being spoken, so the jump is by its index;
+    // the two only differ when a sentence had to be split for the HTTP engine.
     // Scrubbing to the very end means "stop", not "play the last sentence".
     if (total === 0 || index >= total) {
       this.stopSpeech();
@@ -1222,8 +1479,12 @@ export class ReaderScreen {
     this.ttsLabel.title = snapshot.chunk;
     this.ttsChip.textContent = snapshot.total > 0 ? `${snapshot.index + 1}/${snapshot.total}` : '从头朗读';
     this.ttsChip.setAttribute('aria-label', snapshot.total > 0 ? '朗读句数' : '从头朗读');
-    this.ttsRangeInput.max = String(Math.max(0, snapshot.total - 1));
-    this.ttsRangeInput.value = String(Math.max(0, snapshot.index));
+    // The scrub range is expressed in *sentences*, not in engine fragments, so a
+    // chapter with a 2000-character paragraph still shows one tick for it.
+    const sentenceIndex = this.speechQueueIndex();
+    const sentenceTotal = this.lastSpeechQueue.length || snapshot.total;
+    this.ttsRangeInput.max = String(Math.max(0, sentenceTotal - 1));
+    this.ttsRangeInput.value = String(Math.max(0, sentenceIndex >= 0 ? sentenceIndex : snapshot.index));
     if (snapshot.error) {
       this.setStatus('error', snapshot.error);
       window.setTimeout(() => this.hideStatus(), 3200);

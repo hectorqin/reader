@@ -4,6 +4,7 @@ import { Scanner } from './indexer/scanner.ts';
 import { UserService } from './services/users.ts';
 import { ShelfService } from './services/shelf.ts';
 import { SyncService } from './services/sync.ts';
+import { TtsService } from './services/tts.ts';
 import { buildApp } from './http/app.ts';
 import { setLogger } from './lib/log.ts';
 import type { AppContext } from './http/context.ts';
@@ -45,6 +46,7 @@ async function main(): Promise<void> {
   ctx.users = new UserService(db, config);
   ctx.shelf = new ShelfService(db);
   ctx.sync = new SyncService(db);
+  ctx.tts = new TtsService(config);
 
   app.log.info({ booksDir: config.booksDir, dataDir: config.dataDir }, 'starting reader server');
 
