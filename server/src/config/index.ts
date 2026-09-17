@@ -76,7 +76,22 @@ function loadOrCreateSecret(dataDir: string, file = 'token.secret'): string {
     if (existing.length >= 16) return existing;
   }
   const generated = randomBytes(48).toString('base64url');
-  writeFileSync(secretPath, generated, { mode: 0o600 });
+  try {
+    writeFileSync(secretPath, generated, { mode: 0o600 });
+  } catch (err) {
+    // A bare EACCES here is the single most common self-hosting failure: /data
+    // is a bind mount whose host directory is root-owned while the server runs
+    // as an unprivileged user. Say so, instead of surfacing a bare errno.
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'EACCES' || code === 'EPERM' || code === 'EROFS') {
+      throw new Error(
+        `cannot write ${secretPath} (${code}); DATA_DIR must be writable by the server. ` +
+          `If /data is a bind mount, fix its ownership on the host (e.g. \`chown -R 100:100 ./data\`) ` +
+          `or set READER_TOKEN_SECRET to a value of at least 16 characters to skip the file entirely.`,
+      );
+    }
+    throw err;
+  }
   return generated;
 }
 
