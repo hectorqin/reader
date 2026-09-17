@@ -12,7 +12,7 @@
  */
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, rename, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -29,7 +29,7 @@ import { ShelfService } from '../src/services/shelf.ts';
 import { SyncService } from '../src/services/sync.ts';
 import { TtsService } from '../src/services/tts.ts';
 import { BrowseService } from '../src/services/browse.ts';
-import { UploadService, sanitizeUploadName } from '../src/services/uploads.ts';
+import { UploadService, moveIntoLibrary, sanitizeUploadName } from '../src/services/uploads.ts';
 import { buildApp } from '../src/http/app.ts';
 import type { AppContext } from '../src/http/context.ts';
 
@@ -773,5 +773,59 @@ describe('a read-only mount', () => {
     // is exactly what a refusal has to clean up.
     const left = await readdir(join(isolated, 'uploads')).catch(() => []);
     assert.deepEqual(left, [], 'a refused upload must not leave scratch behind');
+  });
+});
+
+describe('moving a staged file into the library', () => {
+  /**
+   * The scratch directory and the library are different mounts in every real
+   * deployment — `DATA_DIR` is the container's writable layer, `BOOKS_DIR` is a
+   * bind mount — so `rename` across them fails with `EXDEV`. The move has to
+   * fall back to copying instead of surfacing a raw errno to the user.
+   *
+   * The cross-device rename is injected rather than staged on two real mounts:
+   * ownership of the branch under test is the `EXDEV` handling, not the kernel's.
+   */
+  const exdev = (): never => {
+    const err = new Error('EXDEV: cross-device link not permitted, rename') as NodeJS.ErrnoException;
+    err.code = 'EXDEV';
+    throw err;
+  };
+
+  test('copies when the rename reports EXDEV, and removes the scratch file', async () => {
+    const dir = await mkdtemp(join(root, 'cross-'));
+    const source = join(dir, 'part');
+    const destination = join(booksDir, '跨设备.epub');
+    await writeFile(source, 'the bytes');
+    await moveIntoLibrary(source, destination, exdev as unknown as typeof rename);
+    assert.equal(await readFile(destination, 'utf8'), 'the bytes');
+    await assert.rejects(stat(source), 'the scratch copy must not be left behind');
+  });
+
+  test('relies on rename when the filesystems match', async () => {
+    const dir = await mkdtemp(join(root, 'same-'));
+    const source = join(dir, 'part');
+    const destination = join(booksDir, '同设备.epub');
+    await writeFile(source, 'the bytes');
+    await moveIntoLibrary(source, destination);
+    assert.equal(await readFile(destination, 'utf8'), 'the bytes');
+    await assert.rejects(stat(source));
+  });
+
+  test('does not swallow any other errno', async () => {
+    const dir = await mkdtemp(join(root, 'enosys-'));
+    const source = join(dir, 'part');
+    await writeFile(source, 'the bytes');
+    const enoent = (): never => {
+      const err = new Error('ENOENT: no such file or directory') as NodeJS.ErrnoException;
+      err.code = 'ENOENT';
+      throw err;
+    };
+    await assert.rejects(
+      moveIntoLibrary(source, join(booksDir, '不会存在.epub'), enoent as unknown as typeof rename),
+      (err: unknown) => (err as { code?: string }).code === 'ENOENT',
+    );
+    // A failed move must not have copied anything either.
+    await assert.rejects(stat(join(booksDir, '不会存在.epub')));
   });
 });

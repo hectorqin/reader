@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { mkdir, mkdtemp, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import type { Readable } from 'node:stream';
@@ -129,6 +129,34 @@ export function parseConflictPolicy(value: unknown): ConflictPolicy {
     throw badRequest(`onConflict must be one of ${CONFLICT_POLICIES.join(', ')}`, 'BAD_CONFLICT_POLICY');
   }
   return value as ConflictPolicy;
+}
+
+/**
+ * Hard-linked rename refuses with `EXDEV` when the source and the destination are
+ * different filesystems, which is the normal case here rather than an exotic one:
+ * the scratch directory lives in `DATA_DIR` (a container's writable layer, a
+ * different volume) and the library is a mount of its own.
+ *
+ * The fallback still behaves like a move: `copyFile` + `unlink` leaves no
+ * scratch copy behind, and it is only reached after `rename` has already said
+ * the two paths cannot share an inode. A `copyFile` that dies halfway leaves a
+ * partial destination, which `rollback` removes along with everything else the
+ * failed request wrote — the same guarantee a failed rename had.
+ */
+export async function moveIntoLibrary(
+  source: string,
+  destination: string,
+  move: typeof rename = rename,
+): Promise<void> {
+  try {
+    await move(source, destination);
+    return;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EXDEV') throw err;
+  }
+  // Different filesystems: copy the bytes, then drop the scratch original.
+  await copyFile(source, destination);
+  await unlink(source).catch(() => undefined);
 }
 
 export class UploadService {
@@ -394,7 +422,7 @@ export class UploadService {
     const relPath = dir === '' ? finalName : `${dir}/${finalName}`;
     const abs = resolveInside(this.config.booksDir, relPath);
     await mkdir(dirname(abs), { recursive: true });
-    await rename(stagedPath, abs);
+    await moveIntoLibrary(stagedPath, abs);
     const info = await stat(abs);
     return { path: relPath, originalName, name: finalName, size: info.size, kind };
   }
