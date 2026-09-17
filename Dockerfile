@@ -25,7 +25,7 @@ RUN echo 'root:x:0:0:root:/kaniko:/busybox/sh' >> /etc/passwd \
  && echo 'root:x:0:' >> /etc/group
 
 # 上游插件脚本 + 上述两处修正。
-COPY kaniko/plugin.sh /kaniko/plugin.sh
+COPY kaniko-plugin.sh /kaniko/plugin.sh
 
 # CNB 环境下的默认值：运行时由 CNB 注入与本地构建相同的环境变量。
 ENV HOME=/kaniko \
