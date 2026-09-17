@@ -7,6 +7,7 @@ import type { ShelfService } from '../services/shelf.ts';
 import type { SyncService } from '../services/sync.ts';
 import type { TtsService } from '../services/tts.ts';
 import type { BrowseService } from '../services/browse.ts';
+import type { UploadService } from '../services/uploads.ts';
 
 export interface AppContext {
   config: AppConfig;
@@ -24,6 +25,17 @@ export interface AppContext {
    * part of a book's DTO anywhere in the API.
    */
   browse: BrowseService;
+  /**
+   * Uploads into the library, and the incremental scan that follows.
+   *
+   * Held apart from `browse` because the two disagree on the one thing that
+   * matters: `browse` never writes unless the deployment allows it, and an
+   * upload *is* the write the reader asked for. Keeping them separate keeps the
+   * file manager's "this mount is read-only, so here is a screen with no write
+   * buttons" answer from being weakened by the one feature whose whole purpose
+   * is to write.
+   */
+  uploads: UploadService;
   log: FastifyBaseLogger;
 }
 

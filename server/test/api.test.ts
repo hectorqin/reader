@@ -79,7 +79,7 @@ before(async () => {
   ctx.shelf = new ShelfService(db);
   ctx.sync = new SyncService(db);
   ctx.tts = new TtsService(config);
-  ctx.browse = new BrowseService(db, config);
+  ctx.browse = new BrowseService(db, config, ctx.shelf);
   app = buildApp(ctx);
   await app.ready();
 });

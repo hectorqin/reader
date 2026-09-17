@@ -1,8 +1,10 @@
 import { ApiError, errorForStatus, parseErrorBody } from './errors.ts';
 import type {
+  BatchResult,
   Book,
   BookContent,
   BrowseListing,
+  ConflictPolicy,
   BookListPage,
   ContinueReadingItem,
   Facets,
@@ -12,9 +14,11 @@ import type {
   NoteType,
   Progress,
   Session,
+  ShelfAction,
   SyncPull,
   SyncPushResult,
   TocEntry,
+  UploadResult,
   User,
 } from './types.ts';
 import type { Platform } from '../core/platform.ts';
@@ -310,6 +314,89 @@ export class ReaderApi {
 
   async browseDelete(paths: string[], options: RequestOptions = {}): Promise<{ removed: number }> {
     return this.call('/api/v1/library/browse/delete', 'POST', { paths }, options);
+  }
+
+
+  /**
+   * Applies one metadata patch to many paths.
+   *
+   * A path may name a folder, which the server reads as "every book indexed
+   * inside it" — a series is organised as a folder, and asking for the folder's
+   * own row would find nothing. The client never expands a folder itself: that
+   * mapping is the index's, and a second implementation of it here would be a
+   * second thing to keep in step.
+   */
+  async browseBatchMetadata(
+    paths: string[],
+    fields: Record<string, unknown>,
+    options: RequestOptions = {},
+  ): Promise<BatchResult> {
+    return this.call('/api/v1/library/browse/metadata', 'POST', { paths, fields }, options);
+  }
+
+  /**
+   * Adds or removes books on this account's shelf.
+   *
+   * Nothing on disk changes. Kept a separate call from move/delete because the
+   * two are one word apart in a list of rows and could not be more different in
+   * consequence.
+   */
+  async browseBatchShelf(
+    paths: string[],
+    action: ShelfAction,
+    options: RequestOptions = {},
+  ): Promise<BatchResult> {
+    return this.call('/api/v1/library/browse/shelf', 'POST', { paths, action }, options);
+  }
+
+  /** Whether the mount accepts an upload at all; asked before sending bytes. */
+  async uploadProbe(options: RequestOptions = {}): Promise<boolean> {
+    const result = await this.get<{ writable: boolean }>('/api/v1/library/upload', options);
+    return result.writable;
+  }
+
+  /**
+   * Uploads files into a library directory.
+   *
+   * `FormData`, not a hand-built body: a browser sets the multipart boundary and
+   * streams a `File` off disk, and reimplementing either would mean buffering a
+   * 400MB comic in memory on a phone.
+   *
+   * The progress hook rides on the request rather than replacing the transport.
+   * The browser itself cannot report upload progress — `fetch` has no such event
+   * in any shipping engine — so the H5 build simply never calls it and the UI
+   * shows "上传中…"; a host that can (the Android shell's native path) does, and
+   * the same screen then shows a real percentage. What must *not* happen is a
+   * second implementation of the upload that only one host exercises.
+   */
+  async upload(
+    files: File[],
+    target: string,
+    onConflict: ConflictPolicy,
+    onProgress?: (fraction: number) => void,
+    options: RequestOptions = {},
+  ): Promise<UploadResult> {
+    const form = new FormData();
+    for (const file of files) form.append('file', file, file.name);
+    if (target) form.append('path', target);
+    form.append('onConflict', onConflict);
+
+    // No `content-type` is set: only the host knows the multipart boundary, and
+    // a header naming `application/json` over a `FormData` leaves the server
+    // unable to parse a body that is perfectly well formed.
+    const response = await this.platform.transport.send({
+      url: '/api/v1/library/upload',
+      method: 'POST',
+      headers: { accept: 'application/json', ...this.authHeader() },
+      body: form,
+      ...(onProgress ? { onUploadProgress: onProgress } : {}),
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    return response.json as UploadResult;
+  }
+
+  private authHeader(): Record<string, string> {
+    return this.session ? { authorization: `Bearer ${this.session.accessToken}` } : {};
   }
 
   // ---- content ----

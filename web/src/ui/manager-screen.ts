@@ -1,6 +1,6 @@
 import { ApiError } from '../api/errors.ts';
 import type { ReaderApi } from '../api/client.ts';
-import type { BrowseEntry, BrowseListing } from '../api/types.ts';
+import type { BrowseEntry, BrowseListing, ConflictPolicy, ShelfAction } from '../api/types.ts';
 import { clear, el, formatBytes, formatDate } from './dom.ts';
 
 export interface ManagerScreenOptions {
@@ -45,6 +45,8 @@ export class ManagerScreen {
   private readonly actionBar: HTMLDivElement;
   private readonly selectionCount: HTMLDivElement;
   private readonly mkdirButton: HTMLButtonElement;
+  private readonly uploadButton: HTMLButtonElement;
+  private readonly uploadInput: HTMLInputElement;
   private readonly listBody: HTMLDivElement;
 
   private current = '';
@@ -52,6 +54,16 @@ export class ManagerScreen {
   /** Paths ticked for a batch operation. Empty means "navigate" mode. */
   private readonly selected = new Set<string>();
   private loading = false;
+  /** A write is in flight; every other write is refused until it settles. */
+  private busy = false;
+  /**
+   * The message a completed write left for the next render.
+   *
+   * Held across the reload a write triggers, because that reload's own status
+   * line is the directory summary — and the summary is not an answer to "did it
+   * work".
+   */
+  private outcome: string | null = null;
   private longPressTimer: ReturnType<typeof setTimeout> | null = null;
   private longPressFired = false;
 
@@ -66,6 +78,20 @@ export class ManagerScreen {
       text: '＋',
       attrs: { type: 'button', 'aria-label': '新建文件夹' },
       on: { click: () => void this.promptMkdir() },
+    }) as HTMLButtonElement;
+    // Hidden from the DOM to `display: none`, never hidden by *moving* it: a
+    // file input removed from the document loses its value in some WebViews, and
+    // the second upload after a cancel would then send nothing.
+    this.uploadInput = el('input', {
+      className: 'manager-upload-input',
+      attrs: { type: 'file', multiple: true, 'aria-hidden': 'true', tabindex: '-1' },
+      on: { change: () => void this.handlePicked() },
+    }) as HTMLInputElement;
+    this.uploadButton = el('button', {
+      className: 'icon-button',
+      text: '⬆',
+      attrs: { type: 'button', 'aria-label': '上传书籍' },
+      on: { click: () => this.uploadInput.click() },
     }) as HTMLButtonElement;
 
     this.listBody = el('div', {
@@ -83,13 +109,14 @@ export class ManagerScreen {
           on: { click: () => options.onClose() },
         }),
         this.crumbRow,
+        this.uploadButton,
         this.mkdirButton,
       ],
     });
 
     this.element = el('div', {
       className: 'manager-screen',
-      children: [header, this.listBody, this.actionBar, this.selectionCount],
+      children: [header, this.listBody, this.actionBar, this.selectionCount, this.uploadInput],
     }) as HTMLDivElement;
 
     // Clicking the empty area (not a row) clears a selection, which is the
@@ -106,7 +133,11 @@ export class ManagerScreen {
   private async load(path: string): Promise<void> {
     if (this.loading) return;
     this.loading = true;
-    this.setStatus('载入中…');
+    // An outcome message set by a write outlives the reload it triggers.
+    // Otherwise "已更新 2 本" is replaced by the directory's file counts a tick
+    // later, and the one thing the user needs to read is the one thing they
+    // never see.
+    if (!this.outcome) this.setStatus('载入中…');
     try {
       const listing = await this.options.api.browse(path);
       this.listing = listing;
@@ -119,6 +150,11 @@ export class ManagerScreen {
       // say*, and that thing is what `renderEntries` just wrote — how many
       // entries, how big, and how many the scanner is skipping. Clearing it left
       // the screen with no answer to any of those.
+      if (this.outcome) {
+        const message = this.outcome;
+        this.outcome = null;
+        this.toast(message);
+      }
     } catch (err) {
       this.handleError(err);
     } finally {
@@ -135,7 +171,10 @@ export class ManagerScreen {
    * and is dimmed by CSS rather than by a second branch in the render path.
    */
   private applyWritable(writable: boolean): void {
+    // The upload control disappears for the same reason the ＋ does: a control
+    // that can only answer 403 teaches the reader to distrust every other one.
     this.mkdirButton.hidden = !writable;
+    this.uploadButton.hidden = !writable;
     this.element.dataset['writable'] = String(writable);
   }
 
@@ -334,7 +373,19 @@ export class ManagerScreen {
       this.actionBar.append(
         el('button', {
           className: 'button',
-          text: '移动到…',
+          text: '改资料',
+          attrs: { type: 'button' },
+          on: { click: () => void this.promptBatchMetadata() },
+        }),
+        el('button', {
+          className: 'button',
+          text: '下架',
+          attrs: { type: 'button' },
+          on: { click: () => void this.batchShelf('remove') },
+        }),
+        el('button', {
+          className: 'button',
+          text: '移动…',
           attrs: { type: 'button' },
           on: { click: () => void this.promptMove() },
         }),
@@ -359,6 +410,8 @@ export class ManagerScreen {
     }
     const action = await this.pick(`「${entry.name}」`, [
       { value: 'select', label: '选择' },
+      { value: 'metadata', label: '改资料' },
+      { value: 'shelve', label: '从书架拿掉' },
       { value: 'rename', label: '重命名' },
       { value: 'move', label: '移动到…' },
       { value: 'delete', label: '删除' },
@@ -367,19 +420,216 @@ export class ManagerScreen {
       this.toggle(entry);
       return;
     }
+    // Everything below acts on exactly this row, so the selection is replaced
+    // rather than merged: an action started from one row's menu must not quietly
+    // include a batch ticked earlier and now off screen.
+    this.selectOnly(entry.path);
+    if (action === 'metadata') return this.promptBatchMetadata();
+    if (action === 'shelve') return this.batchShelf('remove');
     if (action === 'rename') return this.promptRename(entry.path, entry.name);
-    if (action === 'move') {
-      this.selected.clear();
-      this.selected.add(entry.path);
-      this.renderSelection();
-      return this.promptMove();
+    if (action === 'move') return this.promptMove();
+    if (action === 'delete') return this.confirmDelete();
+  }
+
+  private selectOnly(path: string): void {
+    this.selected.clear();
+    this.selected.add(path);
+    for (const node of this.list.querySelectorAll<HTMLElement>('.manager-row')) {
+      node.dataset['selected'] = String(node.dataset['path'] === path);
     }
-    if (action === 'delete') {
-      this.selected.clear();
-      this.selected.add(entry.path);
-      this.renderSelection();
-      return this.confirmDelete();
+    this.renderSelection();
+  }
+
+  /**
+   * Uploads the picked files into the directory currently open.
+   *
+   * The progress line is the whole point of the display: a book is routinely
+   * hundreds of megabytes on a phone over Wi-Fi, and a screen that says nothing
+   * for two minutes reads as broken. It is also the only place in this client
+   * where a request can outlive a screen change, so the input is cleared *before*
+   * the upload rather than after — picking the same file twice in a row must
+   * work.
+   */
+  private async handlePicked(): Promise<void> {
+    const files = [...(this.uploadInput.files ?? [])];
+    this.uploadInput.value = '';
+    if (files.length === 0) return;
+
+    const policy = await this.pickConflictPolicy();
+    if (!policy) return;
+
+    const total = files.reduce((sum, file) => sum + file.size, 0);
+    this.setBusy(true);
+    try {
+      const result = await this.options.api.upload(files, this.current, policy, (fraction) => {
+        this.setStatus(`上传中… ${Math.round(fraction * 100)}%（${formatBytes(total)}）`);
+      });
+      this.reportUpload(result);
+    } catch (err) {
+      this.handleError(err);
+    } finally {
+      this.setBusy(false);
     }
+  }
+
+  /**
+   * Asks what should happen to a name that is already taken.
+   *
+   * Asked before the bytes move rather than after a 409, because by then the
+   * user has waited for the whole upload twice. `覆盖` is the only answer that can
+   * lose a book, so it is described that way instead of being the default.
+   */
+  private async pickConflictPolicy(): Promise<ConflictPolicy | null> {
+    const answer = await this.pick('同名文件怎么办？', [
+      { value: 'rename', label: '两份都留（加 (2)）' },
+      { value: 'skip', label: '跳过已有的' },
+      { value: 'overwrite', label: '覆盖（会替换原文件）' },
+      { value: 'fail', label: '有重名就整批不动' },
+    ]);
+    return answer as ConflictPolicy | null;
+  }
+
+  private reportUpload(result: Awaited<ReturnType<ReaderApi['upload']>>): void {
+    const parts: string[] = [];
+    if (result.uploaded.length > 0) parts.push(`已入库 ${result.uploaded.length} 个文件`);
+    if (result.skipped.length > 0) parts.push(`跳过 ${result.skipped.length} 个`);
+    const added = result.scan?.added ?? 0;
+    parts.push(added > 0 ? `新增 ${added} 本` : '没有新书');
+    // A skipped file is the one thing the user has to act on, so it is named
+    // rather than counted: "跳过 1 个" without a name is a dead end.
+    const first = result.skipped[0];
+    if (first) parts.push(`（${first.name}：${first.reason}）`);
+    this.toast(parts.join(' · '));
+  }
+
+  /**
+   * Rewrites the metadata of every selected path at once.
+   *
+   * The fields are optional on purpose — this is a *patch*, and an empty field
+   * means "leave it alone", which is the only way one dialog can serve both "fill
+   * in the missing author on forty files" and "fix the series name".
+   */
+  private async promptBatchMetadata(): Promise<void> {
+    const paths = [...this.selected];
+    if (paths.length === 0) return;
+    const fields = await this.batchMetadataDialog(paths.length);
+    if (fields === null) return;
+    if (Object.keys(fields).length === 0) {
+      this.toast('没有填写任何字段');
+      return;
+    }
+    await this.mutate(
+      () => this.options.api.browseBatchMetadata(paths, fields),
+      `改资料（${paths.length} 项）`,
+      (result) => this.reportBatch(result),
+    );
+  }
+
+  private async batchShelf(action: ShelfAction): Promise<void> {
+    const paths = [...this.selected];
+    if (paths.length === 0) return;
+    const label = action === 'remove' ? '下架' : '上架';
+    if (action === 'remove') {
+      const ok = await this.confirm(
+        `${label} ${paths.length} 项？`,
+        '只是从你的书架上拿掉，磁盘上的文件一个都不会动，随时可以放回来。',
+      );
+      if (!ok) return;
+    }
+    await this.mutate(
+      () => this.options.api.browseBatchShelf(paths, action),
+      `${label}（${paths.length} 项）`,
+      (result) => this.reportBatch(result),
+    );
+  }
+
+  private reportBatch(result: { applied: number; failed: Array<{ path: string; reason: string }> }): string {
+    if (result.applied === 0 && result.failed.length > 0) {
+      return `没有可处理的书籍（${result.failed.length} 项不是书）`;
+    }
+    // A path that is not a book is expected — a folder of images, a `.nfo` — and
+    // saying so is what stops "已更新 12 本" from looking like the other two were
+    // silently dropped.
+    const skipped = result.failed.length > 0 ? `，跳过 ${result.failed.length} 项` : '';
+    return `已更新 ${result.applied} 本${skipped}`;
+  }
+
+  /** A form of optional fields; absent means "do not touch". */
+  private batchMetadataDialog(count: number): Promise<Record<string, string> | null> {
+    const FIELDS = [
+      { key: 'author', label: '作者' },
+      { key: 'publisher', label: '出版社' },
+      { key: 'series', label: '系列' },
+      { key: 'seriesIndex', label: '系列序号' },
+      { key: 'language', label: '语言' },
+      { key: 'tags', label: '标签（逗号分隔）' },
+      { key: 'pubdate', label: '出版日期' },
+    ];
+    return new Promise((resolve) => {
+      const inputs = new Map<string, HTMLInputElement>();
+      const rows = FIELDS.map((field) => {
+        const input = el('input', { attrs: { type: 'text', placeholder: '留空则不改' } }) as HTMLInputElement;
+        inputs.set(field.key, input);
+        return el('label', { className: 'dialog-field', children: [el('span', { text: field.label }), input] });
+      });
+      const close = (result: Record<string, string> | null): void => {
+        overlay.remove();
+        resolve(result);
+      };
+      const form = el('form', {
+        className: 'dialog',
+        on: {
+          submit: (event) => {
+            event.preventDefault();
+            const patch: Record<string, string> = {};
+            for (const [key, input] of inputs) {
+              const value = input.value.trim();
+              if (value !== '') patch[key] = value;
+            }
+            close(patch);
+          },
+        },
+        children: [
+          el('h3', { text: `改资料（${count} 项）` }),
+          el('p', { className: 'muted', text: '留空的字段保持不变。目录会写成它里面每一本书的资料。' }),
+          // The fields are their own scroller so the actions below them stay
+          // reachable: a sheet that scrolls whole puts 保存 past the fold, and a
+          // form with no visible way to commit it reads as a dead end.
+          el('div', { className: 'dialog-fields', children: rows }),
+          el('div', {
+            className: 'dialog-actions',
+            children: [
+              el('button', { className: 'button', text: '取消', attrs: { type: 'button' }, on: { click: () => close(null) } }),
+              el('button', { className: 'button primary', text: '保存', attrs: { type: 'submit' } }),
+            ],
+          }),
+        ],
+      });
+      const overlay = el('div', {
+        className: 'dialog-overlay',
+        on: {
+          click: (event) => {
+            if (event.target === overlay) close(null);
+          },
+        },
+        children: [form],
+      }) as HTMLDivElement;
+      this.element.append(overlay);
+      inputs.get('author')?.focus();
+    });
+  }
+
+  /**
+   * Blocks a second write while one is in flight.
+   *
+   * Uploads are long and the bar stays on screen; a second tap would start a
+   * second upload into the same directory, and the two would interleave their
+   * status lines.
+   */
+  private setBusy(busy: boolean): void {
+    this.busy = busy;
+    this.uploadButton.disabled = busy;
+    this.mkdirButton.disabled = busy;
   }
 
   private async promptRename(path: string, currentName: string): Promise<void> {
@@ -428,15 +678,24 @@ export class ManagerScreen {
    * directory listing, so the screen would look like the rename simply did not
    * happen — the worst possible answer to "why did nothing change".
    */
-  private async mutate(action: () => Promise<unknown>, label: string): Promise<void> {
+  private async mutate(
+    action: () => Promise<unknown>,
+    label: string,
+    describe?: (result: never) => string,
+  ): Promise<void> {
+    if (this.busy) return;
     this.toast(`${label}…`);
+    let result: unknown;
     try {
-      await action();
+      result = await action();
     } catch (err) {
       this.handleError(err);
       return;
     }
-    this.toast(`${label} 完成`);
+    // The server's own counts beat a generic "完成": a batch that touched two
+    // books out of five selected is a different outcome from one that touched
+    // five, and only the response knows which happened.
+    this.outcome = describe ? describe(result as never) : `${label} 完成`;
     await this.load(this.current);
   }
 

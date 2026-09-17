@@ -89,7 +89,7 @@ before(async () => {
   ctx.shelf = new ShelfService(db);
   ctx.sync = new SyncService(db);
   ctx.tts = new TtsService(config);
-  ctx.browse = new BrowseService(db, config);
+  ctx.browse = new BrowseService(db, config, ctx.shelf);
   app = buildApp(ctx);
   await app.ready();
 
@@ -387,7 +387,7 @@ describe('library file management', () => {
 
 describe('a read-only mount', () => {
   test('reports itself as not writable and refuses writes with 403', async () => {
-    const service = new BrowseService(ctx.db, ctx.config);
+    const service = new BrowseService(ctx.db, ctx.config, ctx.shelf);
     const original = service.writable.bind(service);
     // Stands in for a read-only bind mount, which looks writable by mode bits and
     // refuses every write. Simulated on the probe because the alternative is

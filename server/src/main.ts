@@ -6,6 +6,7 @@ import { ShelfService } from './services/shelf.ts';
 import { SyncService } from './services/sync.ts';
 import { TtsService } from './services/tts.ts';
 import { BrowseService } from './services/browse.ts';
+import { UploadService } from './services/uploads.ts';
 import { buildApp } from './http/app.ts';
 import { setLogger } from './lib/log.ts';
 import type { AppContext } from './http/context.ts';
@@ -48,7 +49,8 @@ async function main(): Promise<void> {
   ctx.shelf = new ShelfService(db);
   ctx.sync = new SyncService(db);
   ctx.tts = new TtsService(config);
-  ctx.browse = new BrowseService(db, config);
+  ctx.browse = new BrowseService(db, config, ctx.shelf);
+  ctx.uploads = new UploadService(db, config, ctx.browse, ctx.scanner);
 
   app.log.info({ booksDir: config.booksDir, dataDir: config.dataDir }, 'starting reader server');
 

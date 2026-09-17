@@ -1432,6 +1432,16 @@ book-content ::selection {
   border-top-color: var(--reader-line);
 }
 
+/*
+ * The batch bar scrolls horizontally rather than wrapping or squeezing.
+ *
+ * Five actions do not fit across a phone, and neither alternative works: wrapping
+ * makes the bar two rows tall and pushes the list up under the thumb that is
+ * mid-scroll, and `flex: 1` per button shrinks 移动到… to an ellipsis that no
+ * longer says what it does. A scrolling row keeps every label readable and the
+ * destructive action — deliberately last, so it is never the thing under the
+ * finger that just opened the bar — stays off screen until it is looked for.
+ */
 .manager-actions {
   display: flex;
   gap: 0.5rem;
@@ -1440,6 +1450,13 @@ book-content ::selection {
   padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
   border-top: 1px solid var(--reader-line);
   background: var(--reader-surface);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.manager-actions::-webkit-scrollbar {
+  display: none;
 }
 
 .manager-actions[hidden] {
@@ -1447,7 +1464,9 @@ book-content ::selection {
 }
 
 .manager-actions .button {
-  flex: 1 1 auto;
+  /* `flex: 0 0 auto`, so a label is never truncated — the bar scrolls instead. */
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .manager-selection {
@@ -1536,4 +1555,64 @@ book-content ::selection {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+/* ---- batch metadata ---- */
+
+/*
+ * The batch dialog has seven optional fields, which do not fit on a phone.
+ *
+ * The fields scroll and the buttons do not. Scrolling the whole dialog instead
+ * puts 保存 below the fold, so the reader fills the form, sees no way to commit
+ * it, and has to work out that the sheet itself moves — and the on-screen
+ * keyboard takes another third of the height while they are typing in it.
+ *
+ * `max-height` on the *fields* rather than on the dialog also keeps the title
+ * visible, so it stays obvious what is being edited after a scroll.
+ */
+.dialog:has(.dialog-field) {
+  max-height: min(86vh, 40rem);
+  overflow: hidden;
+}
+
+.dialog:has(.dialog-field) .dialog-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  overflow-y: auto;
+  min-height: 0;
+  /* Room for the last field's label, so it is not flush against the buttons. */
+  padding-bottom: 0.2rem;
+}
+
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: var(--reader-muted);
+}
+
+.dialog-field input {
+  appearance: none;
+  border: 1px solid var(--reader-line);
+  background: var(--reader-paper);
+  color: var(--reader-ink);
+  border-radius: var(--reader-radius);
+  padding: 0.5rem 0.6rem;
+  /* 16px, so iOS does not zoom the page on focus and push the dialog off-screen. */
+  font-size: 16px;
+  font-family: inherit;
+  width: 100%;
+}
+
+/*
+ * The file input is the trigger for the ⬆ button and is never shown.
+ *
+ * `display: none` rather than `position: absolute` off-screen: a control that is
+ * laid out still takes a tab stop, and this one has no meaning of its own — the
+ * button beside it is what the user operates.
+ */
+.manager-upload-input {
+  display: none;
 }
