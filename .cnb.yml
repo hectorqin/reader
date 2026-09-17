@@ -112,6 +112,10 @@ main:
       docker:
         build:
           dockerfile: .ci/kaniko/Dockerfile
+          # CNB 只把 `by` 里列出的文件放进构建上下文，`plugin.sh` 不在列的话
+          # 并不会报错，只是 Dockerfile 里那句 COPY 找不到文件。
+          by:
+            - .ci/kaniko/plugin.sh
       stages:
         - name: login
           script: |
