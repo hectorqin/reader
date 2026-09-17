@@ -15,6 +15,10 @@
       No external font: a self-hosted reader must work with no outbound network
       at all, and a webfont would also fail on the LAN with no internet uplink.
       The book's own embedded fonts are unaffected — they load from the archive.
+
+      The icon font is not an exception to this. It is a 16KB file in the bundle,
+      loaded by a relative URL from the same directory as this document, so it is
+      covered by the same rule: nothing here reaches the network.
     -->
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#fbfaf7" />

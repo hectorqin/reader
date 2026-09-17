@@ -10,7 +10,8 @@
     "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run && tsx --test test/api.test.ts test/asset-url.test.ts test/paginator.test.ts test/window.test.ts test/windowed-toc.test.ts",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "icons": "node tools/icons/build.mjs"
   },
   "dependencies": {
     "jszip": "^3.10.1"
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
     "@types/node": "^22.20.3",
+    "clipper-lib": "^6.4.2",
     "jsdom": "^30.0.1",
     "preact": "^10.29.8",
     "tsx": "^4.19.2",

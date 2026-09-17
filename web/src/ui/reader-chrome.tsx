@@ -139,16 +139,12 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
   return (
     <>
       <div className="topbar" hidden={!state.chromeVisible}>
-        <IconButton label="返回书架" onClick={handlers.onBack}>
-          ‹
-        </IconButton>
+        <IconButton label="返回书架" icon="arrow-left" onClick={handlers.onBack} />
         <div className="title-block" style="flex:1 1 auto;min-width:0;">
           <h1>{state.title}</h1>
           {state.author ? <span className="subtitle">{state.author}</span> : null}
         </div>
-        <IconButton label="目录" onClick={handlers.toggleToc}>
-          ☰
-        </IconButton>
+        <IconButton label="目录" icon="menu" onClick={handlers.toggleToc} />
       </div>
 
       <div className="status-bar" hidden={state.statusState === 'idle' && state.statusText === ''} data-state={state.statusState}>
@@ -163,29 +159,23 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           <span style={`width:${percentOf(state.progress)}`} />
         </div>
         <div className="footer-row">
-          <IconButton label="目录" onClick={handlers.toggleToc}>
-            ☰
-          </IconButton>
+          <IconButton label="目录" icon="menu" onClick={handlers.toggleToc} />
           <IconButton
             label="上一章"
+            icon="chevron-left"
             disabled={state.navigating || state.chapterIndex <= 1}
             onClick={() => handlers.onChapter(-1)}
-          >
-            ⟨
-          </IconButton>
+          />
           <button type="button" className="chapter" onClick={handlers.toggleToc}>
             {state.navigating ? '正在切换…' : state.chapterLabel || '目录'}
           </button>
           <IconButton
             label="下一章"
+            icon="chevron-right"
             disabled={state.navigating || state.chapterIndex >= state.chapterCount}
             onClick={() => handlers.onChapter(1)}
-          >
-            ⟩
-          </IconButton>
-          <IconButton label="阅读设置" onClick={handlers.toggleSettings}>
-            ⚙
-          </IconButton>
+          />
+          <IconButton label="阅读设置" icon="sliders" onClick={handlers.toggleSettings} />
         </div>
         <div className="footer-row footer-meta">
           <span>
@@ -266,9 +256,7 @@ function Panel({ title, onClose, children }: { title: string; onClose(): void; c
     <div className="panel">
       <div className="panel-header">
         <h2>{title}</h2>
-        <IconButton label="关闭" onClick={onClose}>
-          ✕
-        </IconButton>
+        <IconButton label="关闭" icon="close" onClick={onClose} />
       </div>
       <div className="panel-body">{children}</div>
     </div>
@@ -518,15 +506,13 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
   const value = Math.max(0, state.sentenceIndex >= 0 ? state.sentenceIndex : state.index);
   return (
     <div className="tts-bar" data-state={state.state}>
-      <IconButton label="上一句" onClick={handlers.onSpeechPrevious}>
-        ⏮
-      </IconButton>
-      <IconButton label={state.state === 'playing' ? '暂停朗读' : '开始朗读'} onClick={handlers.onSpeechToggle}>
-        {state.state === 'playing' ? '⏸' : '▶'}
-      </IconButton>
-      <IconButton label="下一句" onClick={handlers.onSpeechNext}>
-        ⏭
-      </IconButton>
+      <IconButton label="上一句" icon="skip-back" onClick={handlers.onSpeechPrevious} />
+      <IconButton
+        label={state.state === 'playing' ? '暂停朗读' : '开始朗读'}
+        icon={state.state === 'playing' ? 'pause' : 'play'}
+        onClick={handlers.onSpeechToggle}
+      />
+      <IconButton label="下一句" icon="skip-forward" onClick={handlers.onSpeechNext} />
       <div className="tts-main">
         <span className="tts-text" title={state.label}>
           {state.label}
@@ -550,9 +536,7 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
       >
         {state.chip}
       </button>
-      <IconButton label="停止朗读" onClick={handlers.onStopSpeech}>
-        ✕
-      </IconButton>
+      <IconButton label="停止朗读" icon="close" onClick={handlers.onStopSpeech} />
     </div>
   );
 }

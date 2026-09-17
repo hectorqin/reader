@@ -28,6 +28,27 @@
  * Host shell: the viewer, not the book. Safe to style freely.
  * ------------------------------------------------------------------ */
 
+/*
+ * The icon font.
+ *
+ * Declared here rather than in a separate sheet so the face and the token that
+ * sizes it are in one place. `format('truetype')` and a relative URL because the
+ * bundle is loaded from `file://` inside the Android WebView, where an absolute path
+ * resolves to the app's assets root rather than to the bundle.
+ *
+ * `font-display: block` is deliberate: icons are UI, not text. With `swap` a
+ * browser paints the fallback glyph — a literal private-use code point box — for one
+ * frame, and a row of tofu boxes flashing on every cold start reads as a broken app.
+ * The font is 16KB inside the bundle, so there is no network round trip to hide.
+ */
+@font-face {
+  font-family: 'Reader Icons';
+  src: url('./reader-icons.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
 :root {
   --reader-ink: #1a1a1a;
   --reader-paper: #fbfaf7;
@@ -36,6 +57,57 @@
   --reader-line: #e3e0da;
   --reader-accent: #7a5c3e;
   --reader-radius: 10px;
+
+  /*
+   * The spacing scale.
+   *
+   * Four steps, not eight. A larger scale reads as precision and behaves as a
+   * suggestion: once `1.75rem` and `2rem` both exist, half the stylesheet uses one
+   * and half the other and the inconsistency is invisible in any single rule.
+   *
+   * The values are the ones the stylesheet already used, promoted to names so that
+   * "put this a bit further from that" becomes "which step is this" — the question
+   * that actually has an answer.
+   */
+  --space-1: 0.35rem; /* inline gaps inside a control */
+  --space-2: 0.6rem;  /* padding inside a control */
+  --space-3: 0.9rem;  /* gutter between sections */
+  --space-4: 1.5rem;  /* padding inside a page-level band */
+
+  /*
+   * The type scale. Named by role rather than by size, because the size is the part
+   * that changes and the role is the part that does not: `--text-meta` is "the line
+   * under a title" whether it is 0.72rem today or 0.75rem later.
+   */
+  --text-title: 1.05rem;
+  --text-body: 0.95rem;
+  --text-label: 0.82rem;
+  --text-meta: 0.72rem;
+
+  /*
+   * Motion.
+   *
+   * One duration and one easing for everything, so a panel, a toast and a scrim
+   * move together. Two durations in a UI is the same mistake as two radii: each is
+   * defensible alone and the pair is visibly wrong.
+   *
+   * A `prefers-reduced-motion` block at the end of this file collapses every
+   * duration to a hair, including these, so honouring the preference is one rule
+   * rather than an audit of every transition.
+   */
+  --motion-duration: 0.18s;
+  --motion-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /*
+   * The focus ring.
+   *
+   * Defined as a token because it has to be drawn in three situations — on the
+   * paper, on a surface, and over a book's page — and the colour that reads against
+   * one does not read against the others. `currentColor` does not work here: the
+   * ring must stay visible when the control's own colour is the background.
+   */
+  --focus-ring: 2px solid color-mix(in srgb, var(--reader-accent) 70%, transparent);
+  --focus-offset: 2px;
 
   /*
    * The insets every full-bleed band respects.
@@ -281,6 +353,43 @@ book-content {
   text-overflow: ellipsis;
 }
 
+/*
+ * The icon glyph.
+ *
+ * `line-height: 1` and a fixed box are what make an icon row align. Without the
+ * former the glyph sits on a text baseline and its optical centre drifts with the
+ * font stack; without the latter the box is the glyph's advance width, which is
+ * font-dependent and therefore different from what any layout assumed.
+ *
+ * `font-synthesis: none` matters for a private-use glyph: some engines will
+ * synthesise a bold or oblique from the regular face, and a synthesised icon is a
+ * smeared icon.
+ */
+.icon {
+  font-family: 'Reader Icons', sans-serif;
+  font-size: 1.15rem;
+  font-style: normal;
+  font-weight: 400;
+  font-synthesis: none;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /*
+   * The glyph box is square and the glyph is centred in it, so a caller can align a
+   * mix of icons and text with `align-items: center` and get the same result for
+   * both. `-0.02em` is the optical correction: the glyphs sit slightly below the
+   * box's centre because their baseline is the box's baseline.
+   */
+  width: 1em;
+  height: 1em;
+  transform: translateY(-0.02em);
+  speak: never;
+  /* The code point itself must never be selectable or copied. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .icon-button {
   appearance: none;
   border: 0;
@@ -321,6 +430,87 @@ book-content {
 .button:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/* ---- interactive states ---- */
+
+/*
+ * One focus rule for every control in the product.
+ *
+ * This block did not exist. The stylesheet had a `:focus-visible` rule on the
+ * search field and *nothing* on any button, which meant the only way to see where
+ * the keyboard was on a shelf full of controls was to guess. It is written as a
+ * single rule over a list of selectors rather than per-component so that a new
+ * control inherits the behaviour: adding one to this list is the whole job.
+ *
+ * `:focus-visible` rather than `:focus` on purpose — a mouse click on a button
+ * should not leave a ring behind, and a keyboard tab must always show one.
+ */
+.button:focus-visible,
+.icon-button:focus-visible,
+.chip:focus-visible,
+.switch:focus-visible,
+.segmented button:focus-visible,
+.toc-list li button:focus-visible,
+.manager-row:focus-visible,
+.manager-crumb:focus-visible,
+.search-clear:focus-visible,
+.tts-bar button:focus-visible,
+.dialog button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/*
+ * Hover, for the pointer-equipped half of the audience.
+ *
+ * Guarded by `hover: hover` because on a touch device every tap would otherwise
+ * leave the last-tapped control stuck in its hover appearance — the phone shows a
+ * control as "hovered" as soon as the finger lifts, which makes the state look
+ * broken rather than responsive.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .icon-button:hover,
+  .button:hover,
+  .chip:hover,
+  .manager-row:hover,
+  .manager-crumb:hover,
+  .search-clear:hover,
+  .toc-list li button:hover {
+    background: color-mix(in srgb, var(--reader-ink) 6%, transparent);
+  }
+
+  .button.primary:hover {
+    background: color-mix(in srgb, var(--reader-accent) 88%, var(--reader-ink));
+    border-color: transparent;
+  }
+
+  .button.danger:hover {
+    background: color-mix(in srgb, #c0392b 10%, var(--reader-surface));
+  }
+}
+
+/*
+ * Every state transition in one place, using one duration and one easing.
+ *
+ * The individual rules further down used to carry their own `0.15s ease` /
+ * `160ms ease-out` / `120ms ease`, which is three answers to a question that has
+ * one. A control's feedback should be the same speed as every other control's
+ * feedback, or the app feels like it was assembled from several apps.
+ */
+.button,
+.icon-button,
+.chip,
+.manager-row,
+.manager-crumb,
+.search-clear,
+.toc-list li button,
+.segmented button {
+  transition:
+    background-color var(--motion-duration) var(--motion-ease),
+    border-color var(--motion-duration) var(--motion-ease),
+    color var(--motion-duration) var(--motion-ease),
+    opacity var(--motion-duration) var(--motion-ease);
 }
 
 .field {
@@ -734,7 +924,9 @@ book-content {
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.14), 0 3px 10px rgb(0 0 0 / 0.06);
   display: grid;
   place-items: stretch;
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform var(--motion-duration) var(--motion-ease),
+    box-shadow var(--motion-duration) var(--motion-ease);
 }
 
 .book-card:active .cover {
@@ -1094,7 +1286,7 @@ book-content {
   border: 0;
   background: var(--reader-line);
   cursor: pointer;
-  transition: background 0.15s ease;
+  transition: background var(--motion-duration) var(--motion-ease);
 }
 
 .shelf-settings .switch::after {
@@ -1107,7 +1299,7 @@ book-content {
   border-radius: 50%;
   background: var(--reader-surface);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
-  transition: inset-inline-start 0.15s ease;
+  transition: inset-inline-start var(--motion-duration) var(--motion-ease);
 }
 
 .shelf-settings .switch[aria-pressed='true'] {
@@ -1211,7 +1403,7 @@ book-content {
   display: block;
   height: 100%;
   background: var(--reader-accent);
-  transition: width 160ms ease-out;
+  transition: width var(--motion-duration) var(--motion-ease);
 }
 
 .footer-row {
@@ -1410,7 +1602,9 @@ book-content {
   pointer-events: none;
   opacity: 0;
   transform: translateY(0.75rem);
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity var(--motion-duration) var(--motion-ease),
+    transform var(--motion-duration) var(--motion-ease);
 }
 
 .app-toast[data-shown='true'] {
@@ -1886,4 +2080,33 @@ book-content {
  */
 .manager-upload-input {
   display: none;
+}
+
+/* ---- reduced motion ---- */
+
+/*
+ * Honouring `prefers-reduced-motion` in one rule.
+ *
+ * The alternative — a media query per animated rule — guarantees that the next
+ * animation added is the one that ignores the preference. Collapsing the *duration
+ * tokens* here means every rule that uses them (which is now all of them) is covered
+ * by construction, and a rule that hard-codes its own duration is the visible
+ * exception rather than the invisible one.
+ *
+ * `!important` is unavoidable and appropriate: this is a user preference, and a
+ * preference has to beat specificity rather than be outranked by a later rule.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration: 0.001s;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001s !important;
+    scroll-behavior: auto !important;
+  }
 }

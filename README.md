@@ -107,10 +107,27 @@ volumes:
 继承变量上，所以一本按章节变行距的书不会被压平，一本给段落写死 `font-size: 14px`
 的书也不会被字号滑块踩掉。这与「所有书看起来一致」的 Readium 路线正好相反。
 
+### 界面与图标
+
+界面图标是**一个自带的字体**（`web/src/styles/reader-icons.ttf`，37 个字形，16KB），
+不是 Unicode 字符，也不是内联 SVG：
+
+- **不是 Unicode 字符**：改动前按钮里放的是 `☰` `⚙` `✕` `🗂` `📁` `⏮`。
+  八个字形来自八个字族，光学重量各不相同；其中几个是 emoji，在部分平台被渲染成
+  彩色的——一个彩色 emoji 出现在单色工具栏里，是「没有设计过」最直接的信号。
+  不同平台的字体回退还不同，同一个界面在两个宿主上长得不一样。
+- **不是内联 SVG**：三十个小组件里，颜色、尺寸、线宽每一项都是单个字形可以漂移的
+  位置，而字体把字形变成**字符**——它没有自己的几何，也就没有可以漂移的地方。
+- 字形由 `web/tools/icons/` 下的脚本从**描边路径**编译而成，全部画在同一个
+  24 单位网格上、同一条线宽，这是光学一致性的来源。重新生成：`npm run icons`。
+
+界面规范（图标、间距/字号/动效令牌、焦点环、状态表达、文案）见
+[`docs/ui.md`](docs/ui.md)。
+
 ### 翻页与章节导航
 
 - **点击区域**：中间呼出/隐藏工具栏，左右翻页；可切换「左进右退」适配左右手。
-- **上一章 / 下一章**：页脚中间的 `‹` `›` 直接换章，不用先滚到章末。
+- **上一章 / 下一章**：页脚中间的翻页按钮直接换章，不用先滚到章末。
   到达书的第一章 / 最后一章时按钮置灰。跨窗口换章（一千二百章的书按 40 章一窗）
   会先取那一窗再落章，页脚在取窗期间显示「正在切换…」。
 - **页脚报位置**：`第 100/120 章 · 本章 1/3 页 · 40%`。章内页码与进度条同源、
@@ -488,7 +505,7 @@ BOOKS_DIR=/tmp/books DATA_DIR=/tmp/data npm run dev
 # 客户端（另开一个终端）
 cd web
 npm install
-npm test            # 208 个测试用例（179 vitest + 29 node:test）
+npm test            # 336 个测试用例（307 vitest + 29 node:test）
 npm run dev         # http://localhost:5174，自动把 /api 代理到 8080
 npm run build       # 产出 web/dist，服务端会在 / 上直接托管
 ```
@@ -530,6 +547,8 @@ web/src/
     router.ts        路由：fragment ↔ route，以及应用自己的屏幕轨迹
     mount.ts         组件树与类式屏幕之间唯一的接缝
     toolkit.tsx      按钮/分段控件/开关/面板这些原语
+    icon.tsx         图标组件（字体的唯一使用点）
+    icon-names.ts    码位表，由生成器写出，不要手改
     vendor/preact.ts 框架的唯一入口（换版本/换实现只改这一处）
     *-screen.tsx     书架、登录、书库管理、阅读器（铬层）
     reader-chrome.tsx  阅读器的顶栏/页脚/目录/设置/朗读条
@@ -537,7 +556,10 @@ web/src/
     locator.ts       阅读位置格式
     shadow.ts        书的样式与 App 样式隔离
     resources.ts     资源按需解出，不预展开
-  styles/reader.css  ← 干预策略都在这里，注释说明每条为什么必要
+  styles/
+    reader.css         ← 干预策略都在这里，注释说明每条为什么必要
+    reader-icons.ttf   图标字体（生成物，见 tools/icons/）
+  tools/icons/      图标字体的生成器：描边路径 → 字体
 
 android/app/src/main/java/cool/cnb/reader/
   MainActivity.kt            单 Activity，只做三件事
@@ -564,6 +586,10 @@ android/app/src/main/java/cool/cnb/reader/
   去调试的东西。`ReaderScreen` 把这两半拼在一个文件里：`stage` 节点由类持有并交给
   `ReaderView`，其余全部是 `ChromeState` 的函数。
   选型对比见 `docs/architecture.md` §8；产物是一个 252KB（gzip 79KB）的单文件 bundle。
+- **图标是一个自带的字体**：37 个字形、16KB、随 bundle 走。理由和生成方式见
+  [`docs/ui.md`](docs/ui.md) §1。一句话：字体把字形变成字符，它继承 `color` 和
+  `font-size`，因此没有可以漂移的几何——而三十个内联 SVG 组件里，颜色、尺寸、线宽
+  每一项都是单个字形可以漂移的位置。
 - **界面用 URL 表达**：每个屏幕都有地址——`#/shelf`、`#/book/<id>`、`#/library/<路径>`。
   用 fragment 而不是路径，是因为同一份产物要被 WebView（`appassets.androidplatform.net`，
   没有服务端）和 reader 服务端（没有客户端路由回落）同时加载，只有 fragment 在两边都成立。
