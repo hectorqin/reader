@@ -72,10 +72,18 @@ android {
              * and H5 clients from becoming two implementations: one bundle, two
              * hosts.
              *
-             * The directory has to exist for a clean checkout to build. The
-             * placeholder committed under `web-assets` is what makes that work.
+             * `src/main/assets/web-assets` is where
+             * android/scripts/build-web-assets.sh stages that bundle, and the
+             * directory is gitignored except for a README.txt placeholder.
+             *
+             * The placeholder is not decoration. Without it the directory is
+             * absent from a clean checkout, and the previous version of this line
+             * pointed at a *third* path (`android/app/web-assets`) that nothing
+             * ever created — so the staged bundle was silently not an asset
+             * source, and the APK built fine with no client inside it. That is a
+             * worse failure than a red build: nothing points at it.
              */
-            assets.srcDirs("src/main/assets", project.layout.projectDirectory.dir("web-assets").asFile)
+            assets.srcDirs("src/main/assets", "src/main/assets/web-assets")
         }
     }
 

@@ -30,8 +30,12 @@ fi
 npm run build
 
 echo "==> staging assets into $dest"
-rm -rf "$dest"
+# Clear the previous bundle but keep README.txt. That file is tracked, and a
+# blanket `rm -rf "$dest"` deletes it — leaving a dirty working tree after every
+# build and turning `git status` into noise that hides real changes. It is also
+# the only reason the directory exists in a clean checkout.
 mkdir -p "$dest"
+find "$dest" -mindepth 1 ! -name 'README.txt' -exec rm -rf {} +
 # Only the built output. Copying the sources would ship the whole TypeScript tree
 # inside the APK for no benefit.
 cp -R "$web_dir/dist/." "$dest/"

@@ -90,9 +90,21 @@ main:
       <<: *node-env
       ifModify:
         - web/**
+        # 触发条件包含脚本自身与 assets 目录布局：改这段逻辑、或改 Gradle 里
+        # `assets.srcDirs` 指到哪，本来不会跑任何验证，而它坏掉的形态是 APK 里
+        # 没有客户端、启动即白屏 —— 只有跑一遍才知道。
+        - android/scripts/build-web-assets.sh
+        - android/scripts/verify-web-assets.sh
+        - android/app/build.gradle.kts
+        - android/app/src/main/assets/**
       stages:
         - name: stage-for-shell
           script: sh android/scripts/build-web-assets.sh
+        # 只证明脚本写出了 assets 还不够，还要证明「写出来的东西真的会被打进 APK」。
+        # 脚本只知道它写到哪，Gradle 只知道哪些目录算 assets，两者之间没有任何
+        # 东西把它们连起来 —— 这两条路径此前就漂移过。
+        - name: verify-assets-are-packaged
+          script: sh android/scripts/verify-web-assets.sh
 
     # 发布镜像到制品库 `docker.cnb.cool/hectorqin/reader`。
     #
@@ -167,3 +179,18 @@ main:
         - web/**
       stages:
         - *client-check
+
+    # PR 阶段只跑不依赖 JDK/SDK 的那半（秒级）。桥接契约断裂与渲染模式词表漂移
+    # 是最容易出、最难在本地发现的错误 —— 两半分别用 Kotlin 和 TypeScript 写，
+    # 互相没法类型检查 —— 而它们恰好都不需要编译就能查出来。完整 assembleDebug
+    # 仍只在 main 的 push 上跑，PR 不该为一个 SDK 镜像等几分钟。
+    - name: android-contract-checks
+      <<: *node-env
+      ifModify:
+        - android/**
+        - web/src/android-bridge.d.ts
+        - web/src/formats/types.ts
+        - web/src/ui/native-page.ts
+      stages:
+        - name: shell-contract
+          script: sh android/scripts/check-shell.sh
