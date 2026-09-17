@@ -58,18 +58,30 @@ main:
     #
     # 触发条件包含 `web/src/formats/types.ts`：壳里分支的渲染模式词表来自它，
     # 改一个词就会让整条原生渲染通道静默失效，而 Kotlin 编译器不会知道。
-    # 镜像走 Docker Hub 官方命名空间，CNB 会自动经 Docker Hub 代理注入只读令牌。
-    # 不要写 `docker.cnb.cool/dockerhub/androidsdk/android-35`：`dockerhub/` 是
-    # 代理命名空间，只有 Docker Hub 上真实存在的镜像才解析得到，而
-    # `androidsdk/android-35` 并不是 —— 令牌颁发阶段就被拒（unauthorized），
-    # 表现为 prepare 阶段 docker pull 失败、整条流水线还没开始就跑不起来。
+    # 镜像走 Docker Hub 命名空间，CNB 会自动经 Docker Hub 代理注入只读令牌。
     #
-    # 之所以选 `androidsdk/android-35` 而不是官方 `androidsdk/android-sdk`：这条
-    # CI 的 targetsdk 是 35，镜像里必须带 android-35 平台，否则 assemble 会去
-    # 下载 SDK 组件。`android-35` 这个社区镜像正好只装它。
+    # 这里曾写 `androidsdk/android-35:latest`，而 Docker Hub 的 `androidsdk`
+    # 命名空间**没有**这个仓库 —— 它只发布到 `android-31`（`android-33` 及以上
+    # 都是 404）。仓库不存在时 Docker Hub 返回 `pull access denied / repository
+    # does not exist or may require 'docker login'`，daemon 会重试一次，然后
+    # prepare 阶段直接失败：`docker pull failed: 任务执行失败，返回码：1`。整条
+    # 流水线还没进入任何 stage 就红了，所以 `shell-contract`/`assemble` 全是
+    # skipped —— 失败信息指向 `docker pull`，但真正的问题是镜像名指向了一个
+    # 不存在的仓库，与令牌、网络、代理都无关。
+    #
+    # 改用 `mobiledevops/android-sdk-image`：Docker Hub 上真实存在且在维护的
+    # 社区镜像（2026-07 仍有更新，多架构 amd64/arm64）。它的 `packages.txt` 含
+    # `platforms;android-35` 与 `build-tools;35.0.1`，正好匹配本项目的
+    # compileSdk/targetSdk=35；基础镜像是 ubuntu:24.04 + openjdk-21（满足
+    # Gradle 8.11 与 AGP 8.7 对 JDK 17+ 的要求），并已预接受 SDK 许可，
+    # assemble 不需要再联网下载平台组件。
+    #
+    # 用 `latest` 而不是 `36.1.0` 之类的构建工具版本号：这个仓库的 tag 是按
+    # build-tools 版本命名的，`latest` 始终指向包含 android-35 的最新一份，
+    # 写死版本反而会在下一次平台升级后被遗漏。若要完全可复现可改钉具体 tag。
     - name: android-ci
       docker:
-        image: androidsdk/android-35:latest
+        image: mobiledevops/android-sdk-image:latest
       ifModify:
         - android/**
         - web/src/android-bridge.d.ts
