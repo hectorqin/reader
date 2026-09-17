@@ -17,6 +17,7 @@ import { SettingsStore, DEFAULT_APP_SETTINGS, type AppSettings } from './store/s
 import { ShelfScreen } from './ui/shelf-screen.ts';
 import { ReaderScreen } from './ui/reader-screen.ts';
 import { LoginScreen } from './ui/login-screen.ts';
+import { ManagerScreen } from './ui/manager-screen.ts';
 import { el } from './ui/dom.ts';
 
 /**
@@ -30,6 +31,7 @@ import { el } from './ui/dom.ts';
 
 const SCREEN_SHELF = 'shelf';
 const SCREEN_READER = 'reader';
+const SCREEN_MANAGER = 'manager';
 
 export interface AppOptions {
   /** Baked-in server URL, used when nothing is stored yet. */
@@ -49,6 +51,14 @@ export class App {
 
   private shelf: ShelfScreen | null = null;
   private reader: ReaderScreen | null = null;
+  /**
+   * The library file manager, opened from the shelf.
+   *
+   * A screen rather than a panel because it navigates: it has its own path, its
+   * own back action and its own selection state, and a panel over the shelf would
+   * have to reimplement all three badly.
+   */
+  private manager: ManagerScreen | null = null;
   /**
    * Native fixed-layout renderer, present only in the Android shell.
    *
@@ -136,6 +146,8 @@ export class App {
     this.reader = null;
     this.shelf?.dispose();
     this.shelf = null;
+    this.manager?.dispose();
+    this.manager = null;
     this.root.replaceChildren();
     this.screen = screen;
   }
@@ -165,6 +177,7 @@ export class App {
       // the reader's, so the two cannot disagree about where a preference lives.
       settings: this.settings,
       onOpenBook: (book) => void this.openBook(book),
+      onOpenManager: () => void this.showManager(),
       onSignedOut: () => this.handleSignedOut(),
       onSettingsChange: (patch) => {
         void this.settingsStore.update(patch);
@@ -175,6 +188,18 @@ export class App {
     this.root.append(shelf.element);
     void shelf.show();
     this.pendingBook = null;
+  }
+
+  private async showManager(): Promise<void> {
+    this.setScreen(SCREEN_MANAGER);
+    const manager = new ManagerScreen({
+      api: this.api,
+      onClose: () => this.showShelf(),
+      onSignedOut: () => this.handleSignedOut(),
+    });
+    this.manager = manager;
+    this.root.append(manager.element);
+    await manager.open();
   }
 
   private async openBook(book: Book): Promise<void> {

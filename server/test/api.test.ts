@@ -20,6 +20,7 @@ import { UserService } from '../src/services/users.ts';
 import { ShelfService } from '../src/services/shelf.ts';
 import { SyncService } from '../src/services/sync.ts';
 import { TtsService } from '../src/services/tts.ts';
+import { BrowseService } from '../src/services/browse.ts';
 import { buildApp } from '../src/http/app.ts';
 import type { AppContext } from '../src/http/context.ts';
 
@@ -68,6 +69,7 @@ before(async () => {
     shelf: undefined as never,
     sync: undefined as never,
     tts: undefined as never,
+    browse: undefined as never,
     log: undefined as never,
   };
   const silent = Fastify({ logger: false });
@@ -77,6 +79,7 @@ before(async () => {
   ctx.shelf = new ShelfService(db);
   ctx.sync = new SyncService(db);
   ctx.tts = new TtsService(config);
+  ctx.browse = new BrowseService(db, config);
   app = buildApp(ctx);
   await app.ready();
 });

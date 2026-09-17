@@ -267,6 +267,100 @@ pdf / 单图没有独立目录，回落到 items。
 目录型书籍（漫画目录）没有单一文件，返回 `400 DIRECTORY_BOOK`；
 这类书按 `items?group=N` 逐卷取图。
 
+## 书库管理（文件管理器）
+
+书架回答「我能读什么」，这一组端点回答「磁盘上有什么」。两者的差别不是冗余：
+书籍 DTO 里从来不带路径，所以「刚扫完目录但书架上看不到这本书」在本组端点之外
+没有任何地方能解释清楚。这也是唯一会**写** `BOOKS_DIR` 的一组端点。
+
+路径都是**书库内相对路径**，`''` 表示根目录；每一个都会过
+`resolveInside`，逃逸直接被拒。
+
+> **信任边界**：挂载点就是边界，没有第二道。能在这里改文件的人，能改书库里的
+> 任何文件——和 `POST /library/scan` 已有的信任级别一致。在这之上再叠一层按路径的
+> ACL 只是安全表演。
+
+### `GET /library/browse?path=<相对路径>`
+
+```json
+{ "path": "科幻/已读",
+  "crumbs": [ { "name": "书库", "path": "" }, { "name": "科幻", "path": "科幻" } ],
+  "parent": "科幻",
+  "entries": [
+    { "name": "三体.epub", "path": "科幻/已读/三体.epub", "type": "file",
+      "size": 1234567, "mtime": 1789537864820, "mode": 420,
+      "hidden": false, "hiddenByRule": false, "scanned": true,
+      "ext": "epub", "indexed": true }
+  ],
+  "total": 1, "dirs": 0, "files": 1, "size": 1234567,
+  "writable": true, "name": "已读" }
+```
+
+`hidden` 是「以点开头」，`hiddenByRule` 是「落在扫描器跳过的目录里」，
+`scanned` 是「扫描器会把它当一本书」。
+
+**被跳过的条目照样列出来。** `.trash`、`@eaDir` 这些目录是设计上不被扫描的，
+在这里过滤掉就正好藏住了读者要找的那批文件——在磁盘上、但不在书架上。标记出来，
+让界面能解释，而不是替读者决定不用知道。
+
+`writable` 是实际探测出来的（真的建一个临时目录再删），不是读 mode 位：
+`drwxr-xr-x` 的只读 bind mount 看起来可写，写起来 `EPERM`。
+
+符号链接按链接本身显示（`lstat`），不跟随——扫描器也不跟随，跟随等于描述一棵
+索引里并不存在的树，还会顺着链接走出挂载点。
+
+### `POST /library/browse/move`
+
+```json
+{ "paths": ["科幻/三体.epub"], "target": "科幻/已读" }
+```
+
+→ `{ "moved": 1, "target": "科幻/已读" }`
+
+同挂载点内 `rename`，不复制删除：文件字节、`mtime`、`inode` 都不变，扫描器视为
+无变化，书籍身份（`identifier + 内容哈希`）因此保持，进度和笔记都还在。
+
+同时把索引指向新路径，不等下一次扫描——文件管理器关掉时就该是一致的。
+
+整批一起校验、一起拒绝：一半成功的移动比拒绝难推理得多。
+
+目标已有同名条目 → `409 DESTINATION_EXISTS`。合并还是报错只有调用方知道，
+猜错就是数据丢失。把目录移进它自己 → `400 MOVE_INTO_SELF`。
+
+### `POST /library/browse/rename`
+
+```json
+{ "path": "科幻/三体.epub", "name": "三体（修订版）.epub" }
+```
+
+`name` 是单个路径段，不含斜杠。→ `{ "path": "科幻/三体（修订版）.epub" }`
+
+### `POST /library/browse/mkdir`
+
+```json
+{ "path": "科幻", "name": "待整理" }
+```
+
+→ `{ "path": "科幻/待整理" }`
+
+### `POST /library/browse/delete`
+
+```json
+{ "paths": ["科幻/其他/球状闪电.epub"] }
+```
+
+→ `{ "removed": 1 }`
+
+递归删除，**不进回收站**。索引行不动，留给下一次扫描标记 `missing`：
+删除本身已经是危险的那一半，再绑一次全量扫描会让界面等好几分钟才报告成功。
+勾选过的那一行也会一直留着，和「共享目录没挂上」是同一种状态——
+「文件没了但书还记着」，比书架突然少一本好。
+
+`paths` 必须是**非空字符串数组**：`"a"` 和 `["a"]` 只差一个键，
+但把字符串悄悄包成数组，会让「删了 1 项」看起来像「删了很多项」。
+
+只读挂载上任何写操作 → `403 READ_ONLY_MOUNT`。
+
 ### `GET /books/:id/file?path=<rel_path>`
 
 流式返回这本书的**某一个**文件（二进制流，不是 JSON）。
@@ -516,6 +610,15 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 | `UNSUPPORTED_FORMAT` | 400 | 该格式不提供可寻址结构 |
 | `EMPTY_ASSET` | 400 | 资源既没有数据也没有流 |
 | `ADMIN_REQUIRED` | 403 | 需要管理员权限 |
+| `READ_ONLY_MOUNT` | 403 | 书库是只读挂载，无法改名 / 移动 / 删除 |
+| `DIR_NOT_FOUND` | 404 | 目录不存在 |
+| `NOT_A_DIRECTORY` | 400 | 目标不是目录 |
+| `PATH_NOT_FOUND` | 404 | 路径不存在 |
+| `DESTINATION_EXISTS` | 409 | 目标位置已有同名条目 |
+| `MOVE_INTO_SELF` | 400 | 不能把目录移动到它自己里面 |
+| `BAD_NAME` | 400 | 名称含斜杠或非法 |
+| `NAME_REQUIRED` | 400 | 名称为空 |
+| `NO_PATHS` | 400 | 没有给出路径 |
 | `NOT_FOUND` | 404 | 资源不存在 |
 | `NO_COVER` | 404 | 这本书没有封面 |
 | `FILE_MISSING` | 404 | 文件已从磁盘消失 |
@@ -537,3 +640,8 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
    这样换字号、换屏幕宽度、换主题都不会跳位置。
 3. **拉取回来的 `deleted: true` 是墓碑**，本地也要删；不要因为它「看起来是空的」就丢弃。
 4. **推送是合并而不是覆盖**，按 `updatedAt` 做 LWW。所以离线队列可以放心重放。
+5. **403 不等于会话失效**。服务端用 403 表达两类事：「你的账号/令牌不行了」
+   （`ACCOUNT_DISABLED`、`TOKEN_INVALID`），和「这个操作被拒绝」
+   （`ADMIN_REQUIRED`、`PATH_TRAVERSAL`、`READ_ONLY_MOUNT`）。
+   只有前者该清掉凭据跳登录页；把后者也当会话失效，会把读者在读只读挂载上
+   改个文件名时踢下线，顺手把他存的令牌也删了。按 `error.code` 判断，不要只看状态码。

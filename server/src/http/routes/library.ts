@@ -84,6 +84,22 @@ function groupOffset(groups: Array<{ count: number }>, index: number): number {
   return offset;
 }
 
+/**
+ * Validates a `string[]` body field.
+ *
+ * Refused rather than coerced: `paths: "a"` and `paths: ["a"]` are one keystroke
+ * apart, and a silently wrapped string would make a batch delete of one entry
+ * look like a successful delete of many.
+ */
+function stringList(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.length === 0) throw badRequest(`${field} must be a non-empty array`);
+  if (value.length > 500) throw badRequest(`${field} is too long`);
+  for (const entry of value) {
+    if (typeof entry !== 'string' || entry.length === 0) throw badRequest(`${field} must contain strings`);
+  }
+  return value as string[];
+}
+
 export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): void {
   const auth = authenticate(ctx);
 
@@ -485,6 +501,53 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     ctx.shelf.get(user.id, id);
     ctx.shelf.clearOverride(id, field);
     return { book: ctx.shelf.get(user.id, id) };
+  });
+
+  // ---- file manager ----
+
+  /**
+   * The library as a tree.
+   *
+   * Every path here is library-relative and resolved through `resolveInside`, so
+   * a traversal attempt is refused before it reaches the disk. Authentication is
+   * the same as everywhere else; the mount is the only boundary, and it is the
+   * deployment's own.
+   */
+  app.get('/api/v1/library/browse', { preHandler: auth }, async (request) => {
+    currentUser(request);
+    const query = request.query as Record<string, string | undefined>;
+    return ctx.browse.list(query.path ?? '');
+  });
+
+  app.post('/api/v1/library/browse/move', { preHandler: auth }, async (request) => {
+    currentUser(request);
+    const body = (request.body ?? {}) as { paths?: unknown; target?: unknown };
+    const paths = stringList(body.paths, 'paths');
+    const target = typeof body.target === 'string' ? body.target : '';
+    return ctx.browse.move(paths, target);
+  });
+
+  app.post('/api/v1/library/browse/rename', { preHandler: auth }, async (request) => {
+    currentUser(request);
+    const body = (request.body ?? {}) as { path?: unknown; name?: unknown };
+    if (typeof body.path !== 'string' || typeof body.name !== 'string') {
+      throw badRequest('path and name are required');
+    }
+    return ctx.browse.renamePath(body.path, body.name);
+  });
+
+  app.post('/api/v1/library/browse/mkdir', { preHandler: auth }, async (request) => {
+    currentUser(request);
+    const body = (request.body ?? {}) as { path?: unknown; name?: unknown };
+    const parent = typeof body.path === 'string' ? body.path : '';
+    if (typeof body.name !== 'string') throw badRequest('name is required');
+    return ctx.browse.createDirectory(parent, body.name);
+  });
+
+  app.post('/api/v1/library/browse/delete', { preHandler: auth }, async (request) => {
+    currentUser(request);
+    const body = (request.body ?? {}) as { paths?: unknown };
+    return ctx.browse.remove(stringList(body.paths, 'paths'));
   });
 
   // ---- instance administration ----

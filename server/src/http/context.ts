@@ -6,6 +6,7 @@ import type { UserService, PublicUser } from '../services/users.ts';
 import type { ShelfService } from '../services/shelf.ts';
 import type { SyncService } from '../services/sync.ts';
 import type { TtsService } from '../services/tts.ts';
+import type { BrowseService } from '../services/browse.ts';
 
 export interface AppContext {
   config: AppConfig;
@@ -15,6 +16,14 @@ export interface AppContext {
   shelf: ShelfService;
   sync: SyncService;
   tts: TtsService;
+  /**
+   * The library tree, for the file-manager screen.
+   *
+   * Separate from `shelf` on purpose: the shelf serves *books*, keyed by a
+   * stable identity, and cannot answer "what is on the disk" — a path is not
+   * part of a book's DTO anywhere in the API.
+   */
+  browse: BrowseService;
   log: FastifyBaseLogger;
 }
 
