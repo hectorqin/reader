@@ -251,6 +251,243 @@ describe('library manager', () => {
   });
 });
 
+describe('uploading from the manager', () => {
+  /** A `File` the jsdom environment will accept. */
+  const file = (name: string, body = 'bytes'): File => new File([body], name, { type: 'application/epub+zip' });
+
+  const pick = async (screen: ManagerScreen, files: File[]): Promise<void> => {
+    const input = screen.element.querySelector<HTMLInputElement>('.manager-upload-input')!;
+    Object.defineProperty(input, 'files', { value: files, configurable: true });
+    input.dispatchEvent(new Event('change'));
+  };
+
+  it('asks what to do about a clash before sending any bytes', async () => {
+    const transport = new FakeTransport();
+    transport.json(listing({ entries: [entry({ name: '三体.epub', scanned: true })] }));
+    const { screen } = makeScreen(transport);
+    await screen.open();
+    void pick(screen, [file('三体.epub')]);
+
+    // The policy dialog appears first, so a user who has waited for a 400MB
+    // upload is never told afterwards that it was a name clash.
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).not.toBeNull());
+    const uploads = transport.requests.filter((request) => request.url.includes('upload'));
+    expect(uploads).toHaveLength(0);
+  });
+
+  it('sends the file, the destination and the policy, and reports what landed', async () => {
+    const transport = new FakeTransport();
+    transport.respondWith((request) =>
+      request.url.includes('upload')
+        ? {
+            status: 200,
+            headers: {},
+            json: {
+              uploaded: [{ path: '科幻/三体.epub', originalName: '三体.epub', name: '三体.epub', size: 5, kind: 'file', bookId: 'b1' }],
+              skipped: [{ name: '坏.zip', reason: '无法解压' }],
+              scan: { added: 1, updated: 0, removed: 0, failed: 0, startedAt: 1, finishedAt: 2 },
+            },
+          }
+        : {
+            status: 200,
+            headers: {},
+            json:
+              new URL(`http://x${request.url}`).searchParams.get('path') === '科幻'
+                ? listing({
+                    path: '科幻',
+                    name: '科幻',
+                    parent: '',
+                    crumbs: [
+                      { name: '书库', path: '' },
+                      { name: '科幻', path: '科幻' },
+                    ],
+                    entries: [],
+                  })
+                : listing({ entries: [entry({ name: '科幻', type: 'dir', path: '科幻' })] }),
+          },
+    );
+    const { screen } = makeScreen(transport);
+    await screen.open();
+    // Open the folder first: the upload goes into the directory being viewed,
+    // which is the whole contract of the feature.
+    (screen.element.querySelector('.manager-row') as HTMLElement).click();
+    await vi.waitFor(() => expect(screen.element.querySelector('.manager-crumb[aria-current="true"]')?.textContent).toBe('科幻'));
+
+    void pick(screen, [file('三体.epub')]);
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).not.toBeNull());
+    const rename = [...screen.element.querySelectorAll('.dialog-list .button')].find(
+      (button) => button.textContent === '两份都留（加 (2)）',
+    ) as HTMLElement;
+    rename.click();
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).toBeNull());
+
+    await vi.waitFor(() => {
+      expect(transport.requests.some((request) => request.url.includes('upload'))).toBe(true);
+    });
+    const request = transport.requests.find((r) => r.url.includes('upload'))!;
+    const form = request.body as FormData;
+    expect(form.get('path')).toBe('科幻');
+    expect(form.get('onConflict')).toBe('rename');
+    expect((form.get('file') as File).name).toBe('三体.epub');
+
+    // The status line names the file that was *skipped*: a count alone leaves the
+    // user with nothing to act on.
+    await vi.waitFor(() => {
+      expect(screen.element.querySelector('.manager-status')?.textContent).toContain('坏.zip');
+    });
+  });
+
+  it('does not offer an upload at all on a read-only mount', async () => {
+    const transport = new FakeTransport();
+    transport.json(listing({ writable: false, entries: [] }));
+    const { screen } = makeScreen(transport);
+    await screen.open();
+    const buttons = [...screen.element.querySelectorAll<HTMLButtonElement>('.icon-button')];
+    expect(buttons.find((button) => button.getAttribute('aria-label') === '上传书籍')?.hidden).toBe(true);
+  });
+});
+
+describe('batch management', () => {
+  const twoBooks = (): BrowseListing =>
+    listing({
+      entries: [
+        entry({ name: '卷一.epub', path: '卷一.epub', scanned: true, indexed: true }),
+        entry({ name: '卷二.epub', path: '卷二.epub', scanned: true, indexed: true }),
+      ],
+      files: 2,
+    });
+
+  /** Selects every row through the action sheet, as a keyboard-less test can. */
+  const selectAll = async (screen: ManagerScreen): Promise<void> => {
+    for (const more of [...screen.element.querySelectorAll<HTMLElement>('.manager-more')]) {
+      more.click();
+      await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).not.toBeNull());
+      const choose = [...screen.element.querySelectorAll('.dialog-list .button')].find(
+        (button) => button.textContent === '选择',
+      ) as HTMLElement;
+      choose.click();
+      await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).toBeNull());
+    }
+  };
+
+  it('sends one metadata patch for the whole selection', async () => {
+    const transport = new FakeTransport();
+    transport.respondWith((request) =>
+      request.url.includes('/browse/metadata')
+        ? { status: 200, headers: {}, json: { applied: 2, books: ['a', 'b'], failed: [] } }
+        : { status: 200, headers: {}, json: twoBooks() },
+    );
+    const { screen } = makeScreen(transport);
+    await screen.open();
+    await selectAll(screen);
+
+    const metadata = [...screen.element.querySelectorAll('.manager-actions .button')].find(
+      (button) => button.textContent === '改资料',
+    ) as HTMLElement;
+    metadata.click();
+    await vi.waitFor(() => expect(screen.element.querySelector('[placeholder="留空则不改"]')).not.toBeNull());
+    const author = screen.element.querySelector<HTMLInputElement>('.dialog input')!;
+    author.value = '某某';
+    screen.element.querySelector<HTMLFormElement>('form.dialog')!.dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    );
+
+    await vi.waitFor(() => {
+      expect(transport.requests.some((request) => request.url.endsWith('/browse/metadata'))).toBe(true);
+    });
+    const request = transport.requests.find((r) => r.url.endsWith('/browse/metadata'))!;
+    // Bottom to top, because the *last* row was appended second and the list is
+    // built in document order — what matters is that both were sent.
+    expect(JSON.parse(String(request.body))).toEqual({
+      paths: ['卷一.epub', '卷二.epub'],
+      fields: { author: '某某' },
+    });
+    // The server's count, not a generic "完成".
+    await vi.waitFor(() => {
+      expect(screen.element.querySelector('.manager-status')?.textContent).toContain('已更新 2 本');
+    });
+  });
+
+  it('takes books off the shelf only after saying the files are untouched', async () => {
+    const transport = new FakeTransport();
+    transport.respondWith((request) =>
+      request.url.includes('/browse/shelf')
+        ? { status: 200, headers: {}, json: { applied: 2, books: ['a', 'b'], failed: [] } }
+        : { status: 200, headers: {}, json: twoBooks() },
+    );
+    const { screen } = makeScreen(transport);
+    await screen.open();
+    await selectAll(screen);
+    const shelve = [...screen.element.querySelectorAll('.manager-actions .button')].find(
+      (button) => button.textContent === '下架',
+    ) as HTMLElement;
+    shelve.click();
+
+    // The confirmation has to say the files survive: this is one word away from a
+    // delete in the same bar, and the two mean opposite things.
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog p')?.textContent).toContain('文件一个都不会动'));
+    const confirm = [...screen.element.querySelectorAll('.dialog-actions .button')].find(
+      (button) => button.textContent === '删除',
+    ) as HTMLElement;
+    confirm.click();
+
+    await vi.waitFor(() => {
+      expect(transport.requests.some((request) => request.url.endsWith('/browse/shelf'))).toBe(true);
+    });
+    expect(JSON.parse(String(transport.requests.find((r) => r.url.endsWith('/browse/shelf'))!.body))).toEqual({
+      paths: ['卷一.epub', '卷二.epub'],
+      action: 'remove',
+    });
+    // And no delete was ever sent.
+    expect(transport.requests.some((request) => request.url.endsWith('/browse/delete'))).toBe(false);
+  });
+
+  it('keeps the form actions out of the fields-scan scroller', async () => {
+    const transport = new FakeTransport();
+    transport.json(twoBooks());
+    const { screen } = makeScreen(transport);
+    await screen.open();
+    await selectAll(screen);
+    await vi.waitFor(() => expect(screen.element.querySelector('.manager-actions .button')).not.toBeNull());
+    ([...screen.element.querySelectorAll('.manager-actions .button')].find(
+      (button) => button.textContent === '改资料',
+    ) as HTMLElement).click();
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog-fields')).not.toBeNull());
+
+    // Seven optional fields do not fit on a phone, so the *fields* scroll and the
+    // actions do not. A dialog that scrolled whole put 保存 below the fold, which
+    // reads as a form with no way to commit it.
+    const fields = screen.element.querySelector('.dialog-fields')!;
+    const actions = screen.element.querySelector('.dialog-actions')!;
+    expect(fields.contains(actions)).toBe(false);
+    expect(fields.querySelectorAll('.dialog-field')).toHaveLength(7);
+  });
+
+  it('would rather say nothing than guess when a path is not a book', async () => {
+    const transport = new FakeTransport();
+    transport.respondWith((request) =>
+      request.url.includes('/browse/shelf')
+        ? { status: 200, headers: {}, json: { applied: 0, books: [], failed: [{ path: '空目录', reason: 'NOT_A_BOOK' }] } }
+        : { status: 200, headers: {}, json: listing({ entries: [entry({ name: '空目录', type: 'dir', path: '空目录' })], writable: true }) },
+    );
+    const { screen } = makeScreen(transport);
+    await screen.open();
+    await selectAll(screen);
+    const shelve = [...screen.element.querySelectorAll('.manager-actions .button')].find(
+      (button) => button.textContent === '下架',
+    ) as HTMLElement;
+    shelve.click();
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog-actions')).not.toBeNull());
+    ([...screen.element.querySelectorAll('.dialog-actions .button')].find(
+      (button) => button.textContent === '删除',
+    ) as HTMLElement).click();
+
+    await vi.waitFor(() => {
+      expect(screen.element.querySelector('.manager-status')?.textContent).toContain('不是书');
+    });
+  });
+});
+
 describe('error classification', () => {
   it('does not treat a refused operation as a dead session', () => {
     // Both are 403 on this API and only one is about the credentials. Classifying

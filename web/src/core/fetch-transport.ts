@@ -19,6 +19,9 @@ export class FetchTransport implements Transport {
       response = await fetch(url, {
         method: request.method,
         headers: request.headers,
+        // A `FormData` body must be sent without a caller-set `content-type`:
+        // only the browser knows the multipart boundary, and it can only add one
+        // it chose itself.
         ...(request.body !== undefined ? { body: request.body } : {}),
         ...(request.signal ? { signal: request.signal } : {}),
         mode: 'cors',

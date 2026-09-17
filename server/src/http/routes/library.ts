@@ -1,7 +1,8 @@
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.ts';
 import { authenticate, currentUser, requireAdmin } from '../auth.ts';
 import { badRequest, notFound } from '../../lib/errors.ts';
+import { parseConflictPolicy, type ConflictPolicy, type StagedUpload } from '../../services/uploads.ts';
 import { assertSafeRel, normalizeRel, resolveInside } from '../../lib/paths.ts';
 import { createHash } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
@@ -548,6 +549,141 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     currentUser(request);
     const body = (request.body ?? {}) as { paths?: unknown };
     return ctx.browse.remove(stringList(body.paths, 'paths'));
+  });
+
+  // ---- batch management ----
+
+  /**
+   * The metadata fields a batch may set.
+   *
+   * The same allowlist the single-book route uses, and for the same reason: a
+   * batch is not a licence to write columns the API never exposes. It also
+   * matches the client's form, so "edit 40 books" cannot offer a field that the
+   * single-book dialog does not.
+   */
+  const BATCH_FIELDS = [
+    'title', 'author', 'publisher', 'language', 'isbn', 'description',
+    'series', 'seriesIndex', 'pubdate', 'tags',
+  ];
+
+  app.post('/api/v1/library/browse/metadata', { preHandler: auth }, async (request) => {
+    const user = currentUser(request);
+    const body = (request.body ?? {}) as { paths?: unknown; fields?: unknown };
+    const paths = stringList(body.paths, 'paths');
+    const fields = (body.fields ?? {}) as Record<string, unknown>;
+    if (typeof fields !== 'object' || Array.isArray(fields)) {
+      throw badRequest('fields must be an object');
+    }
+    const patch: Record<string, unknown> = {};
+    for (const key of BATCH_FIELDS) {
+      if (fields[key] !== undefined) patch[key] = fields[key];
+    }
+    if (Object.keys(patch).length === 0) throw badRequest('no editable field supplied');
+    return ctx.browse.batchMetadata(paths, patch, user.id);
+  });
+
+  /**
+   * Adds, removes or hides books on the *caller's* shelf.
+   *
+   * Nothing on disk changes, and that is the point: "hide these forty scans from
+   * my shelf" and "move these forty scans into a folder" are one word apart in a
+   * list of rows and could not be more different in consequence.
+   */
+  app.post('/api/v1/library/browse/shelf', { preHandler: auth }, async (request) => {
+    const user = currentUser(request);
+    const body = (request.body ?? {}) as { paths?: unknown; action?: unknown };
+    const paths = stringList(body.paths, 'paths');
+    const action = body.action;
+    if (action !== 'add' && action !== 'remove' && action !== 'hide' && action !== 'unhide') {
+      throw badRequest('action must be one of add, remove, hide, unhide', 'BAD_ACTION');
+    }
+    return ctx.browse.batchShelf(paths, action, user.id);
+  });
+
+  // ---- uploads ----
+
+  /**
+   * Stores uploaded books in the library and indexes them.
+   *
+   * `multipart/form-data` with repeatable `file` parts and an optional `path`
+   * field naming the destination directory. The response reports what landed,
+   * what was skipped and why, and what the incremental scan saw — the same shape
+   * a scan reports, so the client has one story to tell about a library change
+   * rather than two.
+   */
+  app.post('/api/v1/library/upload', { preHandler: auth }, async (request) => {
+    const user = currentUser(request);
+    if (!request.isMultipart()) {
+      throw badRequest('expected multipart/form-data', 'NOT_MULTIPART');
+    }
+
+    const staged: StagedUpload[] = [];
+    let target = '';
+    let policy: ConflictPolicy = 'rename';
+    let targetChecked = false;
+
+    // Refused before a single byte is read, rather than reported per file. A
+    // destination that escapes the library is not a file's problem, and a
+    // per-file `skipped` note would make a client show "已跳过" for something that
+    // should never have been attempted.
+    const ensureTarget = (raw: string): void => {
+      if (targetChecked) return;
+      targetChecked = true;
+      target = ctx.browse.assertDestination(raw);
+    };
+
+    // Every part is drained before any of it is placed, for two reasons that are
+    // both about correctness rather than tidiness:
+    //
+    //  - A form built by a browser puts its fields first, but nothing guarantees
+    //    that of a hand-rolled client, and the destination has to be known before
+    //    the first file can be stored.
+    //  - A batch that is refused should be refused whole. Committing file one
+    //    before file two has been received makes "the upload failed" a lie.
+    //
+    // Parking is safe because a staged part is a *file* in DATA_DIR, not a
+    // buffered stream: the multipart plugin will not hand out the next part until
+    // this one has been consumed, and a NAS upload must not become heap.
+    try {
+      for await (const part of request.parts()) {
+        if (part.type === 'field') {
+          if (part.fieldname === 'path') ensureTarget(String(part.value ?? ''));
+          if (part.fieldname === 'onConflict') policy = parseConflictPolicy(String(part.value ?? ''));
+          continue;
+        }
+        // Registered before it is read: a part that fails halfway has still
+        // created its scratch directory, and not leaking that is the subject of
+        // the `catch` around this whole loop.
+        const item = await ctx.uploads.stage(part.file, part.filename ?? '');
+        staged.push(item);
+        // Consumed here rather than later: the request body is a stream, and a
+        // part that is not read blocks every part behind it.
+        await ctx.uploads.receive(item);
+      }
+    } catch (err) {
+      // Nothing reached the library, so the only cleanup owed is the scratch
+      // copies — which `commit` would have made, and never got to run.
+      await ctx.uploads.discard(staged);
+      throw err;
+    }
+
+    ensureTarget(target);
+    if (staged.length === 0) throw badRequest('no file was uploaded', 'NO_FILES');
+    void user;
+    return ctx.uploads.commit(staged, target, policy);
+  });
+
+  /**
+   * A one-off write probe for the upload screen.
+   *
+   * `browse` already reports whether the mount is writable per directory, and
+   * this is the same answer for the *root* — asked before a phone starts
+   * uploading 400MB it cannot store. Not cached: a mount is remounted far more
+   * often than this is called.
+   */
+  app.get('/api/v1/library/upload', { preHandler: auth }, async () => {
+    const listing = await ctx.browse.list('');
+    return { writable: listing.writable };
   });
 
   // ---- instance administration ----

@@ -3,7 +3,7 @@ import { ReaderApi } from '../src/api/client.ts';
 import { ApiError } from '../src/api/errors.ts';
 import { SyncEngine } from '../src/core/sync.ts';
 import { OfflineStore, isOutboxEmpty } from '../src/store/offline.ts';
-import { FakeTransport, MemoryKv, makePlatform } from './helpers/env.ts';
+import { FakeTransport, MemoryKv, bodyText, makePlatform } from './helpers/env.ts';
 
 const SESSION = {
   user: { id: 'u1', username: 'me', displayName: '我', role: 'member' as const, createdAt: 0 },
@@ -373,7 +373,7 @@ describe('SyncEngine', () => {
     const sizes: number[] = [];
     transport.respondWith((request) => {
       if (request.method === 'POST') {
-        const body = JSON.parse(request.body ?? '{}') as { progress?: unknown[] };
+        const body = JSON.parse(bodyText(request)) as { progress?: unknown[] };
         sizes.push(body.progress?.length ?? 0);
         return { status: 200, headers: {}, json: { accepted: 1, rejected: 0, serverTime: 1, progress: [], notes: [] } };
       }

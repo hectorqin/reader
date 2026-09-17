@@ -236,6 +236,56 @@ export interface BrowseListing {
   name: string;
 }
 
+/** One file that an upload put into the library. */
+export interface UploadedItem {
+  /** Library-relative path it now lives at. */
+  path: string;
+  /** The name the client sent, so a report can name what the user chose. */
+  originalName: string;
+  /** Name after the conflict policy ran; differs when a suffix was added. */
+  name: string;
+  size: number;
+  /** `archive-entry` for a member of an uploaded zip. */
+  kind: 'file' | 'archive-entry';
+  /** Present once the incremental scan has indexed it. */
+  bookId?: string;
+  title?: string;
+}
+
+export interface UploadResult {
+  uploaded: UploadedItem[];
+  /** Files that were not stored, with the reason, rather than failing the batch. */
+  skipped: Array<{ name: string; reason: string }>;
+  /**
+   * Files already on disk are kept rather than replaced.
+   *
+   * `rename` keeps both, `skip` keeps the one that was there, `overwrite`
+   * replaces it — which is the only one of the four that can lose a book, so it
+   * is not the default and the UI says so.
+   */
+  scan: {
+    added: number;
+    updated: number;
+    removed: number;
+    failed: number;
+    startedAt: number | null;
+    finishedAt: number | null;
+  } | null;
+}
+
+/** Outcome of a batch operation. Mirrors the server's `BatchResult`. */
+export interface BatchResult {
+  /** Rows changed; a folder counts once per book inside it. */
+  applied: number;
+  books: string[];
+  /** Paths that could not be acted on, with the reason. */
+  failed: Array<{ path: string; reason: string }>;
+}
+
+export type ConflictPolicy = 'rename' | 'skip' | 'overwrite' | 'fail';
+
+export type ShelfAction = 'add' | 'remove' | 'hide' | 'unhide';
+
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }

@@ -12,10 +12,28 @@ export interface HttpRequest {
   url: string;
   method: string;
   headers: Record<string, string>;
-  /** JSON-encoded request body, when there is one. */
-  body?: string;
+  /**
+   * Request body.
+   *
+   * A string for the JSON calls, a `FormData` for an upload. The two are genuinely
+   * different things and the transport must not guess: a `FormData` carries its
+   * own `content-type` with the multipart boundary in it, and setting a header
+   * that says `application/json` over one leaves a body the server cannot parse.
+   */
+  body?: string | FormData;
   /** Binary response mode: used for book bodies and covers. */
   binary?: boolean;
+  /**
+   * Called with `loaded / total` while the body is being sent.
+   *
+   * A request *property* rather than a second transport method, because there is
+   * exactly one kind of request anyone wants progress on — a body the user's own
+   * connection has to carry — and a host that cannot report it simply never calls
+   * this. `fetch` is the case that matters: no shipping browser reports upload
+   * progress, so the browser host reports nothing and the UI falls back to
+   * "上传中…" rather than to a progress bar that never moves.
+   */
+  onUploadProgress?: (fraction: number) => void;
   signal?: AbortSignal;
 }
 

@@ -41,7 +41,18 @@ export interface RecordedRequest {
   url: string;
   method: string;
   headers: Record<string, string>;
-  body?: string;
+  /** String for the JSON calls, `FormData` for an upload. */
+  body?: string | FormData;
+}
+
+/** The recorded body as text, for the assertions that read JSON. */
+export function bodyText(request: RecordedRequest | undefined): string {
+  const body = request?.body;
+  if (body === undefined) return '';
+  if (typeof body === 'string') return body;
+  // A `FormData` has no single text form; the upload tests read it field by
+  // field instead, which is what the server does.
+  return '';
 }
 
 export type Responder = (request: RecordedRequest) => HttpResponse | Promise<HttpResponse>;

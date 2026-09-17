@@ -87,10 +87,38 @@ export interface BrowseMoveResult {
   target: string;
 }
 
+export interface BatchResult {
+  /** Rows changed; a folder counts once per book inside it. */
+  applied: number;
+  /** Distinct book ids touched, so the client can refresh exactly those. */
+  books: string[];
+  /** Paths that could not be acted on, with the reason. */
+  failed: Array<{ path: string; reason: string }>;
+}
+
+function emptyBatch(): BatchResult {
+  return { applied: 0, books: [], failed: [] };
+}
+
+/** What a batch operation needs from the shelf: the override layer. */
+export interface MetadataWriter {
+  setOverrides(bookId: string, patch: Record<string, unknown>, userId: string): void;
+}
+
 export class BrowseService {
   constructor(
     private readonly db: Db,
     private readonly config: AppConfig,
+    /**
+     * The manual-override layer, injected rather than imported.
+     *
+     * Batch metadata edits are the one thing here that is about *books* rather
+     * than files, and the override rules (which fields are editable, that a
+     * manual value is never auto-overwritten) live in the shelf service. Taking
+     * it as a collaborator keeps one implementation of them; reaching into the
+     * table directly would be a second.
+     */
+    private readonly metadata: MetadataWriter,
   ) {}
 
   // ---- reads ----
@@ -300,6 +328,131 @@ export class BrowseService {
       removed += 1;
     }
     return { removed };
+  }
+
+  /**
+   * Validates a destination directory for an upload, without touching the disk.
+   *
+   * Split out from `list`/`move` because an upload's destination arrives as a
+   * form *field* before any bytes do, and the answer has to be a refusal rather
+   * than a per-file "skipped" note: a path that escapes the library is a bad
+   * request, not a bad file.
+   */
+  assertDestination(input: string): string {
+    if (input === '') return '';
+    const rel = assertSafeRel(input);
+    return rel;
+  }
+
+  // ---- batch management ----
+
+  /**
+   * Applies one metadata patch to many paths at once.
+   *
+   * Written as a batch because the manual-override layer is per *book*, and a
+   * library is organised in batches: forty volumes that arrived as `佚名` want
+   * one author between them, not forty dialogs. The loop lives here rather than
+   * in the client for the reason every other write does — the mapping from path
+   * to book id is the server's, and a client that guessed it would be a second
+   * implementation of the index.
+   *
+   * A path that is not a book is reported, not refused: selecting a folder and a
+   * stray `.nfo` alongside the books is ordinary, and the caller can say "已更新
+   * 12 本，跳过 2 项" instead of failing the whole operation.
+   */
+  batchMetadata(paths: string[], fields: Record<string, unknown>, userId: string): BatchResult {
+    if (paths.length === 0) throw badRequest('no paths given', 'NO_PATHS');
+    const result = emptyBatch();
+    for (const input of paths) {
+      const relPath = assertSafeRel(input);
+      const bookIds = this.booksUnder(relPath);
+      if (bookIds.length === 0) {
+        result.failed.push({ path: relPath, reason: 'NOT_A_BOOK' });
+        continue;
+      }
+      for (const bookId of bookIds) {
+        this.metadata.setOverrides(bookId, fields, userId);
+        result.applied += 1;
+        result.books.push(bookId);
+      }
+    }
+    result.books = [...new Set(result.books)];
+    return result;
+  }
+
+  /**
+   * Adds or removes many paths on the caller's shelf.
+   *
+   * Distinct from the file manager's own operations in the way that matters: it
+   * changes nothing on disk. "Hide these forty scans from my shelf" and "move
+   * these forty scans into a folder" look similar in a list of rows and could not
+   * be more different in consequence, so they are different endpoints.
+   */
+  batchShelf(paths: string[], action: 'add' | 'remove' | 'hide' | 'unhide', userId: string): BatchResult {
+    if (paths.length === 0) throw badRequest('no paths given', 'NO_PATHS');
+    const result = emptyBatch();
+    const now = Date.now();
+    for (const input of paths) {
+      const relPath = assertSafeRel(input);
+      const bookIds = this.booksUnder(relPath);
+      if (bookIds.length === 0) {
+        result.failed.push({ path: relPath, reason: 'NOT_A_BOOK' });
+        continue;
+      }
+      for (const bookId of bookIds) {
+        this.setShelfState(bookId, userId, action, now);
+        result.applied += 1;
+        result.books.push(bookId);
+      }
+    }
+    result.books = [...new Set(result.books)];
+    return result;
+  }
+
+  /**
+   * The book ids a library path stands for.
+   *
+   * A file path is one book. A *folder* stands for everything the scanner
+   * indexed inside it, which is what makes "fix the metadata of this series"
+   * one action: the series folder holds forty volume files and no rows of its
+   * own, so asking for the folder's own row would find nothing.
+   */
+  private booksUnder(relPath: string): string[] {
+    const own = this.fileRow(relPath);
+    if (own) return [own.book_id];
+    const rows = this.db.all<{ book_id: string }>(
+      'SELECT DISTINCT book_id FROM book_files WHERE rel_path LIKE ?',
+      `${escapeLike(relPath)}/%`,
+    );
+    return rows.map((row) => row.book_id);
+  }
+
+  private setShelfState(bookId: string, userId: string, action: 'add' | 'remove' | 'hide' | 'unhide', now: number): void {
+    if (action === 'add') {
+      this.db.run(
+        'INSERT OR IGNORE INTO user_books (user_id, book_id, added_at) VALUES (?,?,?)',
+        userId, bookId, now,
+      );
+      return;
+    }
+    if (action === 'remove') {
+      // `hidden` rather than a delete: the book stays in the library and stays
+      // indexed, so the reader can put it back. Deleting the row would look
+      // identical on the shelf and be irreversible.
+      this.db.run('UPDATE user_books SET hidden = 1 WHERE user_id = ? AND book_id = ?', userId, bookId);
+      this.db.run(
+        'INSERT OR IGNORE INTO user_books (user_id, book_id, added_at, hidden) VALUES (?,?,?,1)',
+        userId, bookId, now,
+      );
+      return;
+    }
+    // unhide: an entry that was never added is left alone rather than created —
+    // "put it back" cannot resurrect a shelf entry that never existed.
+    this.db.run(
+      `UPDATE user_books SET hidden = 0 WHERE user_id = ? AND book_id = ?`,
+      userId, bookId,
+    );
+    void action;
   }
 
   /**

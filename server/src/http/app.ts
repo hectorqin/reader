@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import multipart from '@fastify/multipart';
 import type { AppContext } from './context.ts';
 import { registerErrorHandler } from './errors.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
@@ -11,13 +12,31 @@ import { isOriginAllowed, resolveCorsOrigin } from './cors.ts';
 export function buildApp(ctx: AppContext): FastifyInstance {
   const app = Fastify({
     logger: { level: ctx.config.logLevel },
-    // Book bodies are streamed straight from disk, so the default 1MB body
-    // limit is fine and protects the server from oversized sync payloads.
+    // Book bodies are streamed straight from disk, so a JSON limit this small is
+    // fine and protects the server from oversized sync payloads. Uploads are the
+    // exception and are not bounded here: a multipart body is streamed by the
+    // multipart plugin rather than buffered by Fastify, and its own `fileSize`
+    // limit is what bounds a request. Raising this number would instead let one
+    // JSON request (a sync batch, a batch metadata edit) hold 400MB of heap.
     bodyLimit: 8 * 1024 * 1024,
     trustProxy: true,
   });
 
   registerErrorHandler(app);
+
+  // Uploads arrive as `multipart/form-data`, one part per file, because that is
+  // the only encoding a browser and an Android picker both produce without a
+  // helper library. `attachFieldsToBody` is deliberately off: the handler wants
+  // the file *stream*, not a buffer, so that a 400MB comic does not have to fit
+  // in the process's memory before it can be stored.
+  //
+  // The per-file limit is generous (a scanned volume is genuinely large) and the
+  // per-request limit bounds a batch, so a client cannot turn one request into
+  // an unbounded amount of disk.
+  app.register(multipart, {
+    limits: { fileSize: 4 * 1024 * 1024 * 1024, files: 20 },
+    throwFileSizeLimit: true,
+  });
 
   app.addHook('onRequest', async (request, reply) => {
     if (!isOriginAllowed(ctx.config, request)) {

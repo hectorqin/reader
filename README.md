@@ -184,6 +184,10 @@ environment:
 - **删除要再确认一次**，且会说明「不进回收站、需要重新扫描」。
 - **只读挂载上写操作按钮直接不出现**。`:ro` 是文档里推荐的部署方式，所以「这个页面只能看」
   是常态；给一排按下去必然 403 的按钮，只会教读者不信任界面。
+- **上传**：直接往当前目录传书。`.zip` / `.cbz` 当合集解开（单层包裹目录抹平，更深的树保留，
+  因为漫画的卷结构就是深层目录）。重名可选保留两份 / 跳过 / 覆盖 / 整批拒绝。
+- **批量管理**：长按多选后可以一次改一批的元数据、一起从书架拿掉、一起移动。
+  改元数据和「从书架拿掉」都不动磁盘——`remove` 只是 `hidden = 1`，书还在索引里，放得回去。
 
 写操作都做两件事：
 
@@ -592,6 +596,10 @@ android/app/src/main/java/cool/cnb/reader/
 - `POST /api/v1/library/browse/rename` — 改名
 - `POST /api/v1/library/browse/mkdir` — 新建文件夹
 - `POST /api/v1/library/browse/delete` — 删除（递归）
+- `POST /api/v1/library/browse/metadata` — 批量改元数据（路径可以是目录，等于目录里每本书）
+- `POST /api/v1/library/browse/shelf` — 批量加入书架 / 从书架拿掉（只动 `user_books`，不动磁盘）
+- `POST /api/v1/library/upload` — 上传书籍（multipart；`.zip`/`.cbz` 按合集解开）
+- `GET  /api/v1/library/upload` — 挂载是否可写，客户端在开始传之前先问
 
 **管理员**
 - `POST /api/v1/library/scan`
