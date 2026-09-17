@@ -131,12 +131,11 @@ main:
             - kaniko-plugin.sh
       stages:
         - name: build & push
-          # 与 dockerfile 同名：
-          #   1) 名字里的大写会被 `docker pull` 拒绝，`Dockerfile` → `dockerfile`；
-          #   2) 不加引号时 CNB 会按变量替换处理，`dockerfile` 恰好是它自己
-          #      上下文里的变量名，于是值被替换成空字符串，真正拉的是 `""`。
-          #      引号让它按字面量处理。
-          image: "dockerfile"
+          # 与 dockerfile 同名，CNB 才会用刚构建出来的那个镜像：单独写
+          # `image: <镜像仓库地址>` 时，`dockerfile` 是仓库名而不是路径，平台
+          # 只能自己跟 docker.build 的 dockerfile 做匹配，而同名就是它的约定。
+          # 仓库名不能有大写字母，所以 Dockerfile 得写成 dockerfile。
+          image: $CNB_DOCKER_REGISTRY/$CNB_REPO_SLUG/dockerfile-caches:3428dfd7a689ee3ffd459f471df809dd8a59934e
           settings:
             # 凭证走插件参数，别再单独跑 `docker login`：这个镜像是 kaniko 的
             # debug 版，里面没有任何 docker CLI，写了也是 `docker: not found`。
