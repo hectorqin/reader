@@ -10,6 +10,17 @@ export interface ManagerScreenOptions {
   api: ReaderApi;
   onClose(): void;
   onSignedOut(): void;
+  /**
+   * Ask to be shown a directory, without doing it.
+   *
+   * The screen does not navigate itself any more: a path is a *route*
+   * (`#/library/<path>`), and folders are exactly the thing a reader wants to
+   * send to someone else. So the screen reports the intent, the router writes the
+   * URL, and the router hands the path back through `open(path)` below. The
+   * round trip is what makes Back leave the manager instead of retracing every
+   * folder the reader walked into.
+   */
+  onNavigate(path: string): void;
 }
 
 /** Long-press, in milliseconds, before a touch starts a selection. */
@@ -139,8 +150,15 @@ export class ManagerScreen {
     this.element.dataset['writable'] = String(writable);
   }
 
-  async open(): Promise<void> {
-    await this.load('');
+  /**
+   * Shows a directory.
+   *
+   * The path comes from the URL rather than from this screen's own history, so a
+   * deep link, a Back, and a forward walk all arrive here the same way: the route
+   * is the request, and this method is only the executor.
+   */
+  async open(path = ''): Promise<void> {
+    await this.load(path);
   }
 
   private async load(path: string): Promise<void> {
@@ -235,7 +253,7 @@ export class ManagerScreen {
                   key={`${crumb.path}#${index}`}
                   className="manager-crumb"
                   aria-current={index === (listing?.crumbs.length ?? 0) - 1}
-                  onClick={() => void this.load(crumb.path)}
+                  onClick={() => this.options.onNavigate(crumb.path)}
                 >
                   {crumb.name}
                 </button>
@@ -334,7 +352,8 @@ export class ManagerScreen {
       this.toggle(entry);
       return;
     }
-    if (entry.type === 'dir') void this.load(entry.path);
+    // A folder is announced to the outside, which turns it into a URL.
+    if (entry.type === 'dir') this.options.onNavigate(entry.path);
   }
 
   // ---- selection actions ----

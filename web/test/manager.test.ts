@@ -47,7 +47,7 @@ function listing(overrides: Partial<BrowseListing> = {}): BrowseListing {
   };
 }
 
-function makeScreen(transport: FakeTransport): { screen: ManagerScreen; calls: string[] } {
+function makeScreen(transport: FakeTransport, calls: string[] = []): { screen: ManagerScreen; calls: string[] } {
   const platform = makePlatform(transport);
   const sessions: SessionStore = {
     load: async () => null,
@@ -56,11 +56,11 @@ function makeScreen(transport: FakeTransport): { screen: ManagerScreen; calls: s
   };
   const api = new ReaderApi(platform, sessions);
   api.setBaseUrl('http://nas:8080');
-  const calls: string[] = [];
   const screen = new ManagerScreen({
     api,
     onClose: () => calls.push('close'),
     onSignedOut: () => calls.push('signed-out'),
+    onNavigate: (path) => calls.push(`navigate:${path}`),
   });
   document.body.append(screen.element);
   return { screen, calls };
@@ -121,7 +121,7 @@ describe('library manager', () => {
     expect(mkdir?.hidden).toBe(true);
   });
 
-  it('navigates into a folder and asks the server for that path', async () => {
+  it('reports a folder tap as navigation instead of doing it itself', async () => {
     const transport = new FakeTransport();
     transport.respondWith((request) => {
       const path = new URL(`http://x${request.url}`).searchParams.get('path') ?? '';
@@ -147,12 +147,39 @@ describe('library manager', () => {
             json: listing({ entries: [entry({ name: '科幻', type: 'dir', path: '科幻' })] }),
           };
     });
-    const { screen } = makeScreen(transport);
+    const calls: string[] = [];
+    const { screen } = makeScreen(transport, calls);
     await screen.open();
     (screen.element.querySelector('.manager-row') as HTMLElement).click();
-    await vi.waitFor(() => {
-      expect(screen.element.textContent).toContain('三体.epub');
-    });
+    // The screen does not navigate itself any more: a folder is a route
+    // (`#/library/科幻`), so the tap reports the intent and the router writes the
+    // URL. That round trip is what makes a folder link shareable and Back leave
+    // the manager rather than walk out of it one folder at a time.
+    expect(calls).toEqual(['navigate:科幻']);
+    expect(transport.requests.filter((request) => request.method !== 'GET')).toHaveLength(0);
+  });
+
+  it('shows the folder the route asked for, without navigating itself', async () => {
+    const transport = new FakeTransport();
+    transport.respondWith(() => ({
+      status: 200,
+      headers: {},
+      json: listing({
+        path: '科幻',
+        name: '科幻',
+        parent: '',
+        crumbs: [
+          { name: '书库', path: '' },
+          { name: '科幻', path: '科幻' },
+        ],
+        entries: [entry({ name: '三体.epub', path: '科幻/三体.epub', scanned: true })],
+        files: 1,
+      }),
+    }));
+    const { screen } = makeScreen(transport);
+    // What a deep link, a Back and a forward walk all look like from here.
+    await screen.open('科幻');
+    expect(screen.element.textContent).toContain('三体.epub');
     expect(transport.requests.at(-1)?.url).toBe('/api/v1/library/browse?path=%E7%A7%91%E5%B9%BB');
   });
 
@@ -307,11 +334,11 @@ describe('uploading from the manager', () => {
           },
     );
     const { screen } = makeScreen(transport);
-    await screen.open();
     // Open the folder first: the upload goes into the directory being viewed,
-    // which is the whole contract of the feature.
-    (screen.element.querySelector('.manager-row') as HTMLElement).click();
-    await vi.waitFor(() => expect(screen.element.querySelector('.manager-crumb[aria-current="true"]')?.textContent).toBe('科幻'));
+    // which is the whole contract of the feature. It is the *route* that opens it,
+    // which is also why the destination survives a reload.
+    await screen.open('科幻');
+    expect(screen.element.querySelector('.manager-crumb[aria-current="true"]')?.textContent).toBe('科幻');
 
     void pick(screen, [file('三体.epub')]);
     await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).not.toBeNull());

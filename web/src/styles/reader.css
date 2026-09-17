@@ -38,6 +38,24 @@
   --reader-radius: 10px;
 
   /*
+   * The insets every full-bleed band respects.
+   *
+   * Defined here, in one place, and *not* read straight from `env()` at each use
+   * site. Two reasons, and the second one is the whole point of the indirection:
+   * one name per edge means the phone, the browser and the Android shell cannot
+   * each end up with a slightly different idea of where the screen starts; and
+   * an undefined custom property makes the whole `calc()` invalid, which drops
+   * the declaration silently. A `padding: calc(0.9rem + var(--safe-left))` on an
+   * element whose variable is unset is not "0.9rem of padding" — it is *no
+   * padding at all*, and the fingerprint was a header with zero left inset while
+   * the rule that set it looked correct.
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  /*
    * The three user controls, in their default = do-not-touch position.
    *
    * `inherit` rather than a concrete value is deliberate for line-height and
@@ -383,28 +401,12 @@ book-content blockquote {
 }
 
 /* ------------------------------------------------------------------ *
- * Selection and search highlight
+ * Selection
  * ------------------------------------------------------------------ */
 
 book-content ::selection {
   background: color-mix(in srgb, var(--reader-accent) 35%, transparent);
   color: inherit;
-}
-
-.book-highlight {
-  /*
-   * Highlights are drawn as an overlay behind the text so they never alter the
-   * author's line boxes, which would otherwise shift a whole paragraph by a
-   * subpixel and change pagination when a highlight is added.
-   */
-  background-image: linear-gradient(
-    to bottom,
-    transparent 0%,
-    color-mix(in srgb, var(--reader-accent) 40%, transparent) 15%,
-    color-mix(in srgb, var(--reader-accent) 40%, transparent) 85%,
-    transparent 100%
-  );
-  background-repeat: no-repeat;
 }
 
 /* ------------------------------------------------------------------ *
@@ -610,156 +612,145 @@ book-content ::selection {
   width: 100%;
 }
 
-/* ---- shelf ---- */
+/* ---- shelf: the home screen ---- */
+
+/*
+ * The shelf is the most-opened screen in the product, and it is also the only one
+ * a reader sees before they have decided whether to trust the app. So its layout
+ * is stated rather than arrived at, and the three decisions below are the ones
+ * the previous version got wrong.
+ *
+ *  1. **It reads top-down like a page, not like a toolbar.** The old version led
+ *     with a search box, then counted books, then offered four sort chips — three
+ *     rows of controls before a single cover. A library's first job is to show the
+ *     library, so the title and the covers come first and the controls sit *with*
+ *     the section they act on.
+ *  2. **Nothing is centred.** `.centered-form` and `.empty-state` were `text-align:
+ *     center` with `padding: 1.5rem`, which is right for an empty state and wrong
+ *     for a shelf of two thousand books. The grid is left-aligned and its own edge
+ *     is the alignment.
+ *  3. **The header is not sticky, the toolbar is.** A sticky band carrying the
+ *     title costs 4rem of a phone's height permanently to say something the reader
+ *     already knows. A sticky band carrying the count and the sort control earns
+ *     it: those are the two things a reader scrolls back up to change.
+ */
 
 .shelf {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 0.75rem;
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  padding: 0 0 var(--safe-bottom);
+  /*
+   * On a wide window the shelf is centred and capped rather than stretched.
+   *
+   * `auto-fill` on a 1600px monitor otherwise produces eleven covers a row, each
+   * with a twelve-character title — a wall of thumbnails that is *harder* to scan
+   * than a phone's three, which is the opposite of what the extra width is for. A
+   * cap also means the search field and the sort chips stop being a metre wide,
+   * so the eye does not have to travel the full window to use them.
+   *
+   * `--shelf-measure` is the maximum content width, not the viewport's: the cover
+   * size below is scaled against it, so widening the window past the cap adds
+   * margin instead of more columns.
+   */
+  --shelf-measure: 68rem;
+  /*
+   * One place sets the gutter. Every band inside the scroller — the header, the
+   * search box, the toolbar, the sections — reuses it, so they cannot drift apart
+   * and a cover can never sit nearer the screen edge than the title above it.
+   */
+  --shelf-gutter: 0.9rem;
+  --shelf-gutter-end: calc(0.9rem + var(--safe-right));
 }
 
-.shelf-search {
+/* ---- header ---- */
+
+.shelf-head {
   display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.shelf-section-title {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--reader-muted);
-  margin: 1rem 0 0.5rem;
-}
-
-.continue-row {
-  display: flex;
+  align-items: flex-start;
   gap: 0.75rem;
-  overflow-x: auto;
-  padding-bottom: 0.5rem;
-  scrollbar-width: none;
+  padding: calc(0.9rem + var(--safe-top)) calc(0.9rem + var(--safe-left)) 0.5rem
+    var(--shelf-gutter-end);
+  max-width: var(--shelf-measure);
+  margin-inline: auto;
 }
 
-.continue-row::-webkit-scrollbar {
-  display: none;
+.shelf-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.continue-card {
-  flex: 0 0 8rem;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  text-align: start;
-  cursor: pointer;
+.shelf-title {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
 }
 
-.continue-card img {
-  width: 8rem;
-  height: 11rem;
-  object-fit: cover;
-  border-radius: 6px;
-  background: var(--reader-line);
-  display: block;
+.shelf-subtitle {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
 }
 
-.continue-card .progress-track {
-  height: 3px;
-  margin-top: 0.35rem;
-  border-radius: 2px;
-  background: var(--reader-line);
-  overflow: hidden;
-}
-
-.continue-card .progress-track span {
-  display: block;
-  height: 100%;
-  background: var(--reader-accent);
-}
-
-.book-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(7rem, 1fr));
-  gap: 0.85rem;
-}
-
-.book-card {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  text-align: start;
-  cursor: pointer;
+.shelf-head-actions {
   display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+  align-items: center;
+  gap: 0.15rem;
+  flex: 0 0 auto;
+  /* Nudged back up so the 40px target of the first button aligns with the cap
+     height of the title rather than with its baseline. */
+  margin-top: -0.4rem;
 }
 
-.book-card .cover {
-  position: relative;
-  aspect-ratio: 2 / 3;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--reader-line);
-  display: grid;
-  place-items: center;
-}
+/* ---- search ---- */
 
-.book-card .cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.book-card .cover .placeholder {
-  font-size: 1.6rem;
-  color: var(--reader-muted);
-  padding: 0.5rem;
-  text-align: center;
-  line-height: 1.3;
-  word-break: break-word;
-  overflow: hidden;
-}
-
-.book-card .format-badge {
-  position: absolute;
-  inset-block-end: 0.25rem;
-  inset-inline-end: 0.25rem;
-  background: rgba(0, 0, 0, 0.62);
-  color: #fff;
-  border-radius: 4px;
-  padding: 0.05rem 0.3rem;
-  font-size: 0.62rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
-.book-card .title {
-  font-size: 0.82rem;
-  font-weight: 500;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.book-card .author {
-  font-size: 0.72rem;
-  color: var(--reader-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ---- shelf: search, toolbar, density ---- */
-
+/*
+ * The field is a pill with the glyph inside it, and it is exactly as wide as the
+ * content column. `font-size: 16px` is not a taste decision — anything smaller
+ * makes iOS Safari zoom the viewport on focus and leave the layout half
+ * off-screen, which on a *search field* means the shelf jumps every time it is
+ * used.
+ */
 .shelf-search {
   position: relative;
+  display: flex;
   align-items: center;
+  margin: 0.35rem auto 0.9rem;
+  max-width: calc(var(--shelf-measure) - 1.8rem - var(--safe-left) - var(--safe-right));
+  padding-inline: 0;
+}
+
+.search-glyph {
+  position: absolute;
+  inset-inline-start: 0.7rem;
+  font-size: 1.05rem;
+  line-height: 1;
+  color: var(--reader-muted);
+  pointer-events: none;
 }
 
 .shelf-search input {
+  appearance: none;
   flex: 1 1 auto;
   min-width: 0;
+  width: 100%;
+  border: 1px solid var(--reader-line);
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  border-radius: 999px;
+  /* Room for the glyph on the left and the clear button on the right. */
+  padding: 0.62rem 2.4rem 0.62rem 2.15rem;
+  font-size: 16px;
+  font-family: inherit;
+}
+
+.shelf-search input::placeholder {
+  color: color-mix(in srgb, var(--reader-muted) 85%, transparent);
+}
+
+.shelf-search input:focus-visible {
+  outline: 2px solid var(--reader-accent);
+  outline-offset: 1px;
 }
 
 /*
@@ -772,7 +763,7 @@ book-content ::selection {
  */
 .search-clear {
   position: absolute;
-  inset-inline-end: 0.35rem;
+  inset-inline-end: 0.3rem;
   top: 50%;
   transform: translateY(-50%);
   width: 1.9rem;
@@ -788,46 +779,87 @@ book-content ::selection {
   cursor: pointer;
 }
 
-.search-clear[hidden] {
-  display: none;
+/* ---- sections ---- */
+
+.shelf-section {
+  padding-inline: calc(0.9rem + var(--safe-left)) calc(0.9rem + var(--safe-right));
+  margin-bottom: 1.35rem;
+  /*
+   * The measure cap, applied to the *content* bands rather than to the scroller.
+   *
+   * `max-width` + `margin-inline: auto` on the scroller would break `position:
+   * sticky` on the toolbar (a scroll container's own box is what sticky is
+   * measured against) and would make the scrollbar sit inside the centred column
+   * instead of at the window edge. Capping each band keeps both behaviours and
+   * still reads as one centred column, because every band shares the same cap.
+   */
+  max-width: var(--shelf-measure);
+  margin-inline: auto;
 }
 
+.shelf-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.shelf-section-title {
+  margin: 0.85rem 0 0.55rem;
+  font-size: 0.95rem;
+  font-weight: 620;
+}
+
+/* ---- toolbar: the count and the sort, pinned to their section ---- */
+
+/*
+ * Sticky, and deliberately *only* this band. It carries the two controls a reader
+ * scrolls back up to change — how many books there are, and in what order — and it
+ * is the reason the header above it does not need to stick.
+ */
 .shelf-toolbar {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 4;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin: 0.25rem 0 0.75rem;
+  /*
+   * The band is full-bleed *within its section*, and the section is capped, so
+   * the sticky background matches the column rather than the window. Negative
+   * inline margins undo the section's padding so covers scroll under the blur
+   * instead of appearing beside it.
+   */
+  /*
+   * Full-bleed with a gutter-sized padding rather than a margin: a sticky band
+   * narrower than its scroller lets the covers scroll past *behind* it on either
+   * side, which looks like a rendering bug.
+   */
+  margin-inline: calc(-0.9rem - var(--safe-left)) calc(-0.9rem - var(--safe-right));
+  padding: 0.4rem calc(0.9rem + var(--safe-right)) 0.4rem calc(0.9rem + var(--safe-left));
+  background: color-mix(in srgb, var(--reader-paper) 88%, transparent);
+  backdrop-filter: blur(10px);
 }
 
 .shelf-count {
   font-size: 0.75rem;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .shelf-sort {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
   overflow-x: auto;
   scrollbar-width: none;
   flex: 1 1 auto;
   min-width: 0;
+  /* The chips scroll from the right edge, so the row reads as "more this way". */
+  justify-content: flex-end;
 }
 
 .shelf-sort::-webkit-scrollbar {
   display: none;
-}
-
-.shelf-sort-label {
-  font-size: 0.72rem;
-  white-space: nowrap;
-}
-
-.shelf-settings-button {
-  width: 2.2rem;
-  height: 2.2rem;
-  font-size: 1rem;
-  flex: 0 0 auto;
 }
 
 .shelf-refresh {
@@ -841,26 +873,207 @@ book-content ::selection {
   display: none;
 }
 
+.shelf-status {
+  font-size: 0.78rem;
+  text-align: center;
+  padding: 0.75rem 0.9rem calc(0.75rem + var(--safe-bottom));
+}
+
+/* ---- the grid ---- */
+
 /*
- * Density is a custom property, not three `grid-template-columns` rules on three
- * classes: the grid then has one declaration and the reader's choice is one value.
- * The numbers are chosen so a phone shows three covers at "紧凑" and two at
- * "宽松", and a desktop scales up from there without a media query.
+ * Fixed minimum with `auto-fill`: the number of columns follows the container, so
+ * the same markup works on a phone, a tablet and a desktop without a media query
+ * per breakpoint. Density is a *custom property*, not three
+ * `grid-template-columns` rules on three classes — one declaration, one value, and
+ * the reader's choice cannot disagree with the layout.
  */
 .book-grid {
   --shelf-cover-min: 7rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--shelf-cover-min), 1fr));
+  /*
+   * The row gap is larger than the column gap on purpose: a cover and its two
+   * lines of text form one block, and equal gaps make the author name look like
+   * it belongs to the book below it.
+   */
+  gap: 1.1rem 0.75rem;
+  align-items: start;
 }
 
 .book-grid[data-density='compact'] {
-  --shelf-cover-min: 5.25rem;
+  --shelf-cover-min: 5rem;
+  gap: 0.9rem 0.6rem;
 }
 
 .book-grid[data-density='comfortable'] {
   --shelf-cover-min: 9.5rem;
+  gap: 1.35rem 1rem;
 }
 
-.book-grid {
-  grid-template-columns: repeat(auto-fill, minmax(var(--shelf-cover-min), 1fr));
+/*
+ * Two columns at the widest, on a desktop.
+ *
+ * Left alone, `auto-fill` on a 1600px window produces eleven covers a row, each
+ * 130px wide and each with a 12-character title — a wall of thumbnails that is
+ * harder to scan than a phone's three. Capped, the grid stays a *browsing* surface
+ * and the extra width goes to the covers, which is what makes the titles readable
+ * again.
+ *
+ * The number is a `min()` of a count and a width rather than a media query,
+ * because the thing that makes eleven columns wrong is not "it is a phone" — it is
+ * "the covers got too small", and the two are not the same question.
+ */
+/*
+ * Wider screens get *bigger* covers, not more of them.
+ *
+ * The failure this avoids is the one every grid has: `auto-fill` turns a wide
+ * window into a contact sheet, and a 130px cover with a two-line title is less
+ * scannable than a 200px one with the same two lines. The breakpoint moves the
+ * size, and the measure cap above bounds the count — the two together are what
+ * make a desktop shelf look like a shelf.
+ */
+@media (min-width: 40rem) {
+  .book-grid[data-density='compact'] {
+    --shelf-cover-min: 7rem;
+  }
+
+  .book-grid:not([data-density='compact']):not([data-density='comfortable']) {
+    --shelf-cover-min: 9.5rem;
+  }
+
+  .book-grid[data-density='comfortable'] {
+    --shelf-cover-min: 12rem;
+  }
+}
+
+.book-card {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  width: 100%;
+}
+
+/*
+ * The cover.
+ *
+ * `aspect-ratio` rather than a fixed height, so the cover scales with the column.
+ * No border: a 1px hairline on a cover that already has a shadow reads as a frame
+ * around a photo, and the whole point of the shadow is that the cover looks like
+ * an object lying on the paper.
+ */
+/*
+ * The cover.
+ *
+ * `display: grid` with `place-items: stretch` and *not* `center`, which is a
+ * distinction worth stating because getting it wrong is invisible in the
+ * stylesheet and obvious on screen: a centred grid item makes the implicit column
+ * shrink to its content, so a cover containing only a title collapsed to 45px
+ * inside a 122px card while a cover containing an image filled it. The card was
+ * the right size and the cover was not, so every row looked ragged for no
+ * reason. Stretching the item and centring the *text* inside the placeholder is
+ * what makes both cases fill the card.
+ */
+.book-card .cover {
+  position: relative;
+  /* Explicit, because inside a flex column an `aspect-ratio` box with no width
+     shrink-wraps to its content: a cover holding only a title collapsed to 42px
+     in a 122px card, while one holding an image filled it, so every row of an
+     all-TXT shelf came out ragged. */
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--reader-line) 70%, var(--reader-surface));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14), 0 3px 10px rgb(0 0 0 / 0.06);
+  display: grid;
+  place-items: stretch;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.book-card:active .cover {
+  transform: scale(0.975);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
+}
+
+.book-card .cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/*
+ * A book with no cover art — every TXT file, plenty of PDFs.
+ *
+ * The title is drawn *as* the cover rather than as a broken-image icon, because
+ * "this book has no cover" and "this library is broken" look identical otherwise,
+ * and the first one is a fact about the book. A tinted panel with the title set in
+ * it also makes the shelf scannable at a glance, which a grey box does not.
+ */
+.book-card .cover .placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: center;
+  color: color-mix(in srgb, var(--reader-ink) 72%, transparent);
+  background:
+    linear-gradient(
+      150deg,
+      color-mix(in srgb, var(--reader-accent) 16%, var(--reader-surface)) 0%,
+      color-mix(in srgb, var(--reader-accent) 6%, var(--reader-line)) 100%
+    );
+  /* Clipped rather than scrolled: a title set to fourteen lines stops being a
+     cover and starts being a paragraph in the wrong place. */
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.book-card .format-badge {
+  position: absolute;
+  inset-block-end: 0.3rem;
+  inset-inline-end: 0.3rem;
+  background: rgb(0 0 0 / 0.58);
+  color: #fff;
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  backdrop-filter: blur(4px);
+}
+
+.book-card .title {
+  font-size: 0.8rem;
+  line-height: 1.3;
+  font-weight: 520;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* Two lines are always occupied, so the author names of a row of covers line
+     up even when one title is short — a ragged baseline under a grid is the
+     difference between "a shelf" and "a list". */
+  min-height: 2.6em;
+}
+
+.book-card .author {
+  font-size: 0.7rem;
+  color: var(--reader-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .book-grid[data-show-author='false'] .book-card .author {
@@ -875,22 +1088,235 @@ book-content ::selection {
  * Progress on the cover.
  *
  * Absolute rather than a row under the title: the point of the bar is to be
- * readable at a glance while skimming a shelf, and a 3px line under 11px of
- * author text is not glancing distance from a cover. It sits at the bottom edge
- * of the cover art, where the eye already is.
+ * readable while skimming a shelf, and a 3px line under 11px of author text is not
+ * glancing distance from a cover. It sits at the bottom edge of the cover art,
+ * where the eye already is.
  */
 .book-card .cover-progress {
   position: absolute;
   inset-inline: 0;
   inset-block-end: 0;
   height: 4px;
-  background: rgba(0, 0, 0, 0.35);
+  background: rgb(0 0 0 / 0.35);
 }
 
 .book-card .cover-progress span {
   display: block;
   height: 100%;
   background: var(--reader-accent);
+}
+
+/* ---- continue reading ---- */
+
+.continue-row {
+  display: flex;
+  gap: 0.65rem;
+  overflow-x: auto;
+  /* Full-bleed, with padding rather than a margin: the first card should start at
+     the gutter, and the last should be able to scroll *to* the gutter. */
+  padding: 0.1rem calc(0.9rem + var(--safe-right)) 0.4rem calc(0.9rem + var(--safe-left));
+  margin-inline: calc(-0.9rem - var(--safe-left)) calc(-0.9rem - var(--safe-right));
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.continue-row::-webkit-scrollbar {
+  display: none;
+}
+
+.shelf-section-head + .continue-row {
+  margin-top: 0;
+}
+
+.continue-card {
+  flex: 0 0 6.5rem;
+  width: 6.5rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.continue-card .cover {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border-radius: 7px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--reader-line) 70%, var(--reader-surface));
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14), 0 3px 10px rgb(0 0 0 / 0.06);
+  display: grid;
+  place-items: stretch;
+}
+
+.continue-card .cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.continue-card .placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  text-align: center;
+  padding: 0.5rem 0.4rem;
+  line-height: 1.3;
+  word-break: break-word;
+  color: color-mix(in srgb, var(--reader-ink) 72%, transparent);
+  background: linear-gradient(
+    150deg,
+    color-mix(in srgb, var(--reader-accent) 16%, var(--reader-surface)) 0%,
+    color-mix(in srgb, var(--reader-accent) 6%, var(--reader-line)) 100%
+  );
+  overflow: hidden;
+}
+
+/*
+ * The progress sits *on* the cover, at its bottom edge.
+ *
+ * Two reasons it is not a line under the title. It has to be readable at a
+ * glance while skimming a horizontal row, and a 4px line beneath the chapter
+ * name is not glancing distance from the cover — the eye is on the artwork. And
+ * a tinted track over the art reads as "this cover is part done" even when the
+ * bar underneath is a thumbnail's worth of pixels, because the *darkening* is
+ * what registers. The fill is the accent, so the two rows of the shelf use the
+ * same colour for the same meaning.
+ */
+.continue-card .progress-track {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 5px;
+  background: rgb(0 0 0 / 0.45);
+}
+
+.continue-card .progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--reader-accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--reader-accent) 70%, transparent);
+}
+
+.continue-card .title {
+  font-size: 0.75rem;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.6em;
+}
+
+.continue-card .muted {
+  font-size: 0.68rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- the first paint ---- */
+
+/*
+ * The shelf's shape, before the shelf exists.
+ *
+ * Drawn in the reader's own density so the fill-in is a fill-in: a skeleton in the
+ * wrong grid makes the reader watch the layout move twice and stops trusting the
+ * first one. The shimmer is animation only — under `prefers-reduced-motion` it
+ * becomes a flat tint, which still says "loading" without moving.
+ */
+.book-grid.is-skeleton {
+  pointer-events: none;
+}
+
+.book-grid.is-skeleton .cover {
+  box-shadow: none;
+}
+
+.skeleton-line {
+  height: 0.62rem;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--reader-line) 80%, var(--reader-surface));
+  min-height: 0;
+}
+
+.skeleton-line.short {
+  width: 55%;
+}
+
+.book-grid.is-skeleton .cover,
+.skeleton-line {
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in srgb, var(--reader-ink) 5%, transparent) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: shelf-shimmer 1.5s linear infinite;
+}
+
+@keyframes shelf-shimmer {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+/* ---- empty state ---- */
+
+/*
+ * `margin: auto` inside the section, so the box is centred in whatever height is
+ * left rather than pinned under the toolbar — which is where the old version put
+ * it, half a screen above the fold on a phone.
+ */
+.empty-state {
+  margin: 2.5rem auto auto;
+  max-width: 20rem;
+  text-align: center;
+  color: var(--reader-ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 550;
+}
+
+.empty-state p.muted {
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.empty-glyph {
+  font-size: 2.4rem;
+  line-height: 1;
+  opacity: 0.35;
+  margin-bottom: 0.35rem;
+}
+
+.empty-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 0.85rem;
 }
 
 /* ---- shelf settings sheet ---- */
@@ -956,6 +1382,13 @@ book-content ::selection {
 @media (prefers-reduced-motion: reduce) {
   .shelf-settings .switch,
   .shelf-settings .switch::after {
+    transition: none;
+  }
+
+  .book-card .cover,
+  .book-grid.is-skeleton .cover,
+  .book-grid.is-skeleton .skeleton-line {
+    animation: none;
     transition: none;
   }
 }
@@ -1166,6 +1599,48 @@ book-content ::selection {
 
 .status-bar[data-state='error'] .status-dot {
   background: #b6453a;
+}
+
+/*
+ * The snackbar.
+ *
+ * On `document.body`, not inside `#app`: it outlives the screen change it is
+ * usually reporting, and a message mounted inside the screen it is about would
+ * leave the DOM exactly when the reader starts reading it. It is `fixed` to the
+ * bottom, above the safe area, and takes no pointer events, so it can never cover
+ * the control the reader is reaching for.
+ */
+.app-toast {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: calc(1rem + env(safe-area-inset-bottom));
+  margin-inline: auto;
+  width: fit-content;
+  max-width: min(24rem, calc(100vw - 2rem));
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--reader-ink) 92%, transparent);
+  color: var(--reader-paper);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  text-align: center;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(0.75rem);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.app-toast[data-shown='true'] {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-toast {
+    transition: none;
+    transform: none;
+  }
 }
 
 /* ---- misc ---- */

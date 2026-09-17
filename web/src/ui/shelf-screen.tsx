@@ -7,7 +7,7 @@ import type { AppSettings, ShelfSort } from '../store/settings.ts';
 import { mountUI } from './mount.ts';
 import { DENSITY_LABELS, ShelfSettingsPanel } from './shelf-settings.tsx';
 import { sortBooks, shelfOrder } from './shelf-order.ts';
-import { IconButton } from './toolkit.tsx';
+import { Button, IconButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useState } from './vendor/preact.ts';
 
 export interface ShelfScreenOptions {
@@ -17,8 +17,14 @@ export interface ShelfScreenOptions {
   /** Current shelf preferences, so the screen starts in the reader's own state. */
   settings: AppSettings;
   onOpenBook(book: Book): void;
-  /** Opens the library file manager. Admin-ish by nature, but gated by the mount. */
-  onOpenManager(): void;
+  /**
+   * Opens the library manager, optionally at a folder.
+   *
+   * A path rather than no argument because the manager is a *place* with a URL:
+   * the shelf reports the intent and the router writes `#/library/<path>`, which
+   * is what makes a folder shareable.
+   */
+  onOpenManager(path: string): void;
   onSignedOut(): void;
   /** Persisted through the app's settings store, like the reader's own. */
   onSettingsChange(patch: Partial<AppSettings>): void;
@@ -45,8 +51,57 @@ interface ShelfState {
   status: string;
   settingsOpen: boolean;
   refreshing: boolean;
+  /**
+   * True until the first frame that has *anything* to show.
+   *
+   * Distinct from `loading`, which means "a page is in flight" and is drawn as a
+   * spinner under a list that already exists. This one is about the first paint
+   * of a cold start, where there is no list yet: a shelf that opens on a blank
+   * page and then pops into a grid reads as a broken app, so it draws the shape
+   * of the grid instead.
+   */
+  bootstrapping: boolean;
   /** Bumped after a mutation so the cached cover URLs re-key, not re-fetch. */
   revision: number;
+}
+
+/**
+ * A section label above a row of the shelf.
+ *
+ * A `<h2>` rather than styled text, because both sections are real landmarks: a
+ * screen reader should be able to jump between "继续阅读" and the shelf itself,
+ * and the two bands genuinely are different lists.
+ */
+function SectionHeading({ label }: { label: string }): JSX.Element {
+  return (
+    <div className="shelf-section-head">
+      <h2 className="shelf-section-title">{label}</h2>
+    </div>
+  );
+}
+
+/**
+ * The shape of the shelf, before the shelf exists.
+ *
+ * Drawn from the *same* density the grid will use, so the transition from
+ * placeholder to content is a fill-in rather than a reflow: a skeleton in the
+ * wrong grid is worse than no skeleton, because the reader sees the layout move
+ * twice and learns not to trust the first one. It is `aria-hidden` and costs no
+ * requests — the point is only that the page has a shape on the first frame.
+ */
+function ShelfSkeleton({ density }: { density: AppSettings['shelfDensity'] }): JSX.Element {
+  const count = density === 'compact' ? 12 : density === 'comfortable' ? 6 : 9;
+  return (
+    <div className="book-grid is-skeleton" data-density={density} aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <div className="book-card skeleton" key={index}>
+          <div className="cover" />
+          <div className="title skeleton-line" />
+          <div className="author skeleton-line short" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /**
@@ -93,18 +148,21 @@ interface ShelfState {
 export class ShelfScreen {
   readonly element: HTMLDivElement;
   private readonly ui: ReturnType<typeof mountUI>;
-  private state: ShelfState = {
-    search: '',
-    query: '',
-    items: [],
-    continueItems: [],
-    total: 0,
-    loading: false,
-    status: '',
-    settingsOpen: false,
-    refreshing: false,
-    revision: 0,
-  };
+  /**
+   * The whole screen, as one value the tree is a function of.
+   *
+   * Assigned in the constructor rather than as a field initialiser, and the
+   * difference is not stylistic. A field initialiser and the constructor body are
+   * *both* ways to describe the object's initial state, and the order between them
+   * depends on the compiler's class-field target: with `useDefineForClassFields`
+   * lowered (which is what the dev server emits) every initialiser runs *after*
+   * the constructor body. So `mountUI(..., this.state)` in the constructor would
+   * capture `undefined`, the first diff would render nothing, and the next `patch`
+   * would spread `undefined` and produce a state object missing every key it did
+   * not touch — a crash on the first field the tree reads. Initialising it here
+   * makes the ordering the same under every target.
+   */
+  private state: ShelfState;
   private readonly settings: AppSettings;
   /** Session sort; seeded from settings and written back when it changes. */
   private sort: ShelfSort;
@@ -116,6 +174,19 @@ export class ShelfScreen {
   private readonly scrollRef = { current: null as HTMLDivElement | null };
 
   constructor(private readonly options: ShelfScreenOptions) {
+    this.state = {
+      search: '',
+      query: '',
+      items: [],
+      continueItems: [],
+      total: 0,
+      loading: false,
+      status: '',
+      settingsOpen: false,
+      refreshing: false,
+      bootstrapping: true,
+      revision: 0,
+    };
     this.settings = { ...options.settings };
     this.sort = options.settings.shelfSort;
 
@@ -132,6 +203,9 @@ export class ShelfScreen {
       this.patch({ items: sortBooks(cached, this.sort) });
     }
     await this.refresh();
+    // The skeleton is cleared by `refresh` on both paths (success clears it with
+    // the first page, failure clears it in `handleError`), so this is only for the
+    // case where a screen is disposed mid-flight and never draws again.
   }
 
   /**
@@ -149,7 +223,13 @@ export class ShelfScreen {
       ]);
       this.state.total = page.total;
       await this.options.offline.replaceBooks(page.items);
-      this.patch({ items: sortBooks(page.items, this.sort), continueItems, status: '', revision: this.state.revision + 1 });
+      this.patch({
+        items: sortBooks(page.items, this.sort),
+        continueItems,
+        status: '',
+        bootstrapping: false,
+        revision: this.state.revision + 1,
+      });
       const scroll = this.scrollRef.current;
       // Restored after the render, because the list is empty for one tick and a
       // scroll position with nothing to scroll to is clamped to zero.
@@ -271,6 +351,9 @@ export class ShelfScreen {
   }
 
   private handleError(err: unknown): void {
+    // The first paint is over whatever the answer was: a skeleton that outlives
+    // the request is a screen that never finishes loading.
+    this.state = { ...this.state, bootstrapping: false };
     if (err instanceof ApiError) {
       if (err.isAuthFailure) {
         this.options.onSignedOut();
@@ -300,6 +383,8 @@ export class ShelfScreen {
   private view(): JSX.Element {
     const state = this.state;
     const density = this.settings.shelfDensity;
+    const hasQuery = state.query.length > 0;
+    const empty = state.items.length === 0;
     return (
       <ShelfScroller
         containerRef={this.scrollRef}
@@ -308,7 +393,39 @@ export class ShelfScreen {
           this.atTopSince = Date.now();
         }}
       >
-        <div className="shelf-search">
+        <header className="shelf-head">
+          <div className="shelf-head-text">
+            <h1 className="shelf-title">
+              {hasQuery ? '搜索结果' : '我的书架'}
+            </h1>
+            <p className="shelf-subtitle muted">
+              {hasQuery
+                ? state.total > 0
+                  ? `「${state.query}」匹配 ${state.total} 本`
+                  : `没有匹配「${state.query}」的书`
+                : this.subtitle(state.total)}
+            </p>
+          </div>
+          <div className="shelf-head-actions">
+            {/* The manager's entry point travels with the title rather than
+                sitting in the toolbar: it is a *place*, not a filter, and the
+                toolbar is where the filters are. */}
+            <IconButton label="书库管理" onClick={() => this.options.onOpenManager('')}>
+              🗂
+            </IconButton>
+            <IconButton
+              label={`书架设置 · ${DENSITY_LABELS[density]}`}
+              onClick={() => this.patch({ settingsOpen: !state.settingsOpen })}
+            >
+              ⚙
+            </IconButton>
+          </div>
+        </header>
+
+        <div className="shelf-search" role="search">
+          <span className="search-glyph" aria-hidden="true">
+            ⌕
+          </span>
           <input
             type="search"
             placeholder="搜索书名、作者、系列"
@@ -336,8 +453,8 @@ export class ShelfScreen {
         </div>
 
         {state.continueItems.length > 0 ? (
-          <div>
-            <div className="shelf-section-title">继续阅读</div>
+          <section className="shelf-section" aria-label="继续阅读">
+            <SectionHeading label="继续阅读" />
             <div className="continue-row">
               {state.continueItems.map((item) => (
                 <ContinueCard
@@ -349,77 +466,94 @@ export class ShelfScreen {
                 />
               ))}
             </div>
-          </div>
+          </section>
         ) : null}
 
-        <div className="shelf-toolbar">
-          <div className="shelf-count muted">
-            {state.query ? `找到 ${state.total} 本` : state.total > 0 ? `共 ${state.total} 本` : ''}
+        <section className="shelf-section" aria-label={hasQuery ? '搜索结果' : '全部书籍'}>
+          <div className="shelf-toolbar">
+            {hasQuery || state.total > 0 ? (
+              <span className="shelf-count muted">
+                {hasQuery ? `找到 ${state.total} 本` : `共 ${state.total} 本`}
+              </span>
+            ) : (
+              <span className="shelf-count muted" />
+            )}
+            <div className="shelf-sort" role="group" aria-label="排序方式">
+              {SORTS.map((option) => (
+                <button
+                  type="button"
+                  key={option.value}
+                  className="chip"
+                  aria-pressed={option.value === this.sort}
+                  aria-label={`按${option.label}排序`}
+                  onClick={() => this.pickSort(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="shelf-sort">
-            <span className="shelf-sort-label muted">排序</span>
-            {SORTS.map((option) => (
-              <button
-                type="button"
-                key={option.value}
-                className="chip"
-                aria-pressed={option.value === this.sort}
-                aria-label={`按${option.label}排序`}
-                onClick={() => this.pickSort(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
+
+          <div className="shelf-refresh" hidden={!state.refreshing}>
+            {state.refreshing ? '正在刷新…' : ''}
           </div>
-          <IconButton
-            label={`书架设置 · ${DENSITY_LABELS[density]}`}
-            onClick={() => this.patch({ settingsOpen: !state.settingsOpen })}
-          >
-            ⚙
-          </IconButton>
-          {/* The file manager's entry point sits next to the shelf settings gear
-              because that is where "the library itself" already lives. It is
-              offered to every account, not just admins: the mount decides whether
-              it can write anything, and a reader whose own book failed to appear
-              is exactly who needs to look. */}
-          <IconButton label="书库管理" onClick={() => this.options.onOpenManager()}>
-            🗂
-          </IconButton>
-        </div>
 
-        <div className="shelf-refresh" hidden={!state.refreshing}>
-          {state.refreshing ? '正在刷新…' : ''}
-        </div>
+          {state.bootstrapping && empty ? <ShelfSkeleton density={density} /> : null}
 
-        <div
-          className="book-grid"
-          data-density={density}
-          data-showAuthor={String(this.settings.shelfShowAuthor)}
-          data-showProgress={String(this.settings.shelfShowProgress)}
-        >
-          {state.items.length === 0 && !state.loading ? (
-            <div className="empty-state">
-              <p>{state.query ? '没有匹配的书' : '书库还是空的'}</p>
-              <p className="muted">
-                {state.query ? '换个关键词试试' : '确认已经挂载书籍目录，并在设置里触发一次扫描'}
-              </p>
+          {!state.bootstrapping && empty ? (
+            hasQuery ? (
+              <div className="empty-state">
+                <div className="empty-glyph" aria-hidden="true">
+                  ⌕
+                </div>
+                <p>没有匹配的书</p>
+                <p className="muted">换个关键词，或者检查一下作者名的写法</p>
+                <button type="button" className="button" onClick={() => this.clearSearch()}>
+                  清除搜索
+                </button>
+              </div>
+            ) : (
+              <div className="empty-state">
+                <div className="empty-glyph" aria-hidden="true">
+                  ▤
+                </div>
+                <p>书库还是空的</p>
+                <p className="muted">
+                  把书籍放进挂载的目录，扫一次，它们就会出现在这里
+                </p>
+                <div className="empty-actions">
+                  <Button onClick={() => this.options.onOpenManager('')}>打开书库管理</Button>
+                  <button type="button" className="button" onClick={() => void this.manualRefresh()}>
+                    刷新
+                  </button>
+                </div>
+              </div>
+            )
+          ) : null}
+
+          {!empty ? (
+            <div
+              className="book-grid"
+              data-density={density}
+              data-showAuthor={String(this.settings.shelfShowAuthor)}
+              data-show-progress={String(this.settings.shelfShowProgress)}
+            >
+              {state.items.map((book) => (
+                <BookCard
+                  key={book.id}
+                  book={book}
+                  progress={this.options.offline.progressFor(book.id)}
+                  revision={state.revision}
+                  api={this.options.api}
+                  onOpen={() => this.options.onOpenBook(book)}
+                />
+              ))}
             </div>
           ) : null}
-          {state.items.map((book) => (
-            <BookCard
-              key={book.id}
-              book={book}
-              progress={this.options.offline.progressFor(book.id)}
-              revision={state.revision}
-              api={this.options.api}
-              onOpen={() => this.options.onOpenBook(book)}
-            />
-          ))}
-        </div>
 
-        <div className="shelf-status muted">{state.status}</div>
-
-        {this.state.loading && this.state.items.length > 0 ? <div className="spinner" /> : null}
+          {state.loading && state.items.length > 0 ? <div className="spinner" /> : null}
+          {state.status ? <div className="shelf-status muted">{state.status}</div> : null}
+        </section>
 
         <ShelfSettingsPanel
           open={state.settingsOpen}
@@ -429,6 +563,22 @@ export class ShelfScreen {
         />
       </ShelfScroller>
     );
+  }
+
+  /**
+   * The line under "我的书架".
+   *
+   * Says how much there is before a single request has answered, because the
+   * count is already known from the local mirror — the one number a reader wants
+   * on opening a library is how big it is, and a blank line while the server
+   * thinks is a worse answer than a slightly stale one.
+   */
+  private subtitle(total: number): string {
+    if (this.settings.shelfSort === 'title' && total > 0) return `按书名排列 · ${total} 本`;
+    if (this.settings.shelfSort === 'author' && total > 0) return `按作者排列 · ${total} 本`;
+    if (this.settings.shelfSort === 'added' && total > 0) return `最近入库 · ${total} 本`;
+    if (total > 0) return `继续上次没读完的 · 共 ${total} 本`;
+    return '自部署书库';
   }
 
   dispose(): void {
