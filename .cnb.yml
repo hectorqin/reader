@@ -99,59 +99,54 @@ main:
     # 只在 `server/`、`web/` 或构建文件变更时跑：镜像里只有这两部分。文档改一行
     # 也重新发布一个镜像，会让制品库里堆满内容完全相同的标签。
     #
-    # 为什么不用插件市场的 kaniko 插件：本仓库以 Windows / macOS 客户端为主，
-    # Windows 上 git 会把工作区 checkout 成全小写，而 Kaniko 默认 snapshotter
-    # 只保留全大写路径，`COPY server/...` 会直接失败；且上游插件没有透出
-    # `--context-sub-path`。根目录的 `Dockerfile` + `kaniko-plugin.sh` 就是
-    # 上游插件加三处修正，细节写在那份 Dockerfile 的注释里。
+    # 用 CNB 官方的 `services: docker` + `docker build` / `docker push`，
+    # 而不是插件市场的 kaniko。原因是插件任务（`image:`）的镜像名必须是一个
+    # 真实的镜像引用：CNB 先 `docker pull` 它，拉不到就直接判失败，连容器的
+    # entrypoint 都不会执行。所以「先用 docker.build 构建一个镜像，再让插件任务
+    # 去用」这条路走不通——哪怕 `docker.build` 已经成功构建并处理好了本地缓存，
+    # 到了插件任务那一步仍然是 `docker pull <那个名字>`，而它在任何 registry 上
+    # 都不存在（失败日志就是这个形状：`docker pull Dockerfile` → 404）。
+    # `docker.build` 的产物只能给流水线级的 `docker.image` 用，即所有任务都在
+    # 那个镜像里跑，与本任务「在普通环境里构建并推送 reader 镜像」的意图不符。
+    #
+    # 换成 dind 之后整条链路上只剩标准 Docker：
+    #   - 没有 kaniko，就不需要为了 `COPY server/...` 保住大小写而绕开工作区，
+    #     `GIT_CLONE_PATH` 那个补丁连同它带来的 `--context-sub-path` 需求一起没了；
+    #   - 也不需要单独 `docker login`，CNB 起 dind 服务时会自动登录制品库，
+    #     且登录用的是同一次构建的临时令牌，权限天然对齐。
+    # 之前维护的根目录 `Dockerfile` / `kaniko-plugin.sh` 随之删除。
     - name: docker-image
+      services:
+        - docker
       ifModify:
         - server/**
         - web/**
         - server/Dockerfile
         - .dockerignore
-        - kaniko-plugin.sh
         # 触发条件包含自身，否则改完构建逻辑没法验证。
         - .cnb.yml
-        - Dockerfile
-      # GIT_CLONE_PATH 必须在这里就声明：流水线启动时 CNB 用它决定从哪个
-      # 目录加载仓库，放到 stages.env 里就晚了。
-      env:
-        GIT_CLONE_PATH: /tmp/cnb-workspace
-      # 这两句必须写在仓库根：docker.build 的构建上下文以仓库根为界，而
-      # CNB 启动构建容器时的 cwd 是工作区，比仓库根高一层；即 `GIT_CLONE_PATH`
-      # 生效的时间点，晚于平台读取 dockerfile 与执行 `docker pull`。写成子目录
-      # 里的路径时，平台会当成镜像名去拉，直接 `pull access denied`。
-      docker:
-        build:
-          # CNB 只把 `by` 里列出的文件放进构建上下文，`plugin.sh` 不在列的话
-          # 并不会报错，只是 Dockerfile 里那句 COPY 找不到文件。
-          dockerfile: Dockerfile
-          by:
-            - kaniko-plugin.sh
       stages:
-        - name: build & push
-          # 与 dockerfile 同名，CNB 就知道用刚构建出来的那个镜像（image 是
-          # 镜像名，仍然得全小写，所以 Dockerfile 得写成 dockerfile）。
-          image: dockerfile
-          settings:
-            # 凭证走插件参数，别再单独跑 `docker login`：这个镜像是 kaniko 的
-            # debug 版，里面没有任何 docker CLI，写了也是 `docker: not found`。
-            username: $CNB_TOKEN_USER_NAME
-            password: $CNB_TOKEN
-            registry: $CNB_DOCKER_REGISTRY
-            repo: $CNB_REPO_SLUG
-            tags: $CNB_BRANCH,$CNB_COMMIT_SHORT
-            dockerfile: server/Dockerfile
-            # Kaniko 的构建上下文必须限制在 git 仓库根目录内，而 CNB 工作区
-            # 比仓库根高一层（GIT_CLONE_PATH 是它的子目录），所以用 binary
-            # 参数把它指到克隆出来的仓库根。
-            binary: $GIT_CLONE_PATH
-            # snapshotter 压平上层文件容易丢大小写（见文件头注释），构建时也
-            # 显式指定一次，避免依赖镜像内的默认值。
-            snapshot_mode: redo
-            cache: true
-            log: debug
+        - name: docker build and push
+          # 镜像路径按「同名制品」规则走，即 `docker.cnb.cool/hectorqin/reader`，
+          # 与 README、docker-compose.yml 里引用的地址一致。用
+          # `CNB_REPO_SLUG_LOWERCASE` 而不是写死 `hectorqin/reader`：Docker 要求
+          # 仓库名全小写，而 CNB 的仓库路径本身可能带大写。
+          #
+          # 构建上下文是仓库根，`server/Dockerfile` 里那句 `COPY web/...` 依赖
+          # 这一点（客户端产物要打进服务端镜像）。`services: docker` 下的任务
+          # 工作目录就是仓库根，不需要额外指定 `-f`/`--context`。
+          #
+          # 两个标签：分支名给「跟 main 走」的部署用，短 commit 给需要回滚到
+          # 某个确切版本的情况用。`main` 分支上两者分别是 `main` 和当次提交。
+          # 逐个 `docker push` 而不是 `--all-tags`：文档里的写法就是显式推标签，
+          # 不想把这条流水线绑在一个没被文档覆盖的 flag 上。
+          script: |
+            set -eu
+            image="$CNB_DOCKER_REGISTRY/$CNB_REPO_SLUG_LOWERCASE"
+            docker build -t "$image:$CNB_BRANCH" -t "$image:$CNB_COMMIT_SHORT" \
+              -f server/Dockerfile .
+            docker push "$image:$CNB_BRANCH"
+            docker push "$image:$CNB_COMMIT_SHORT"
       failStages:
         - name: report-failure
           script: echo "镜像发布失败：$CNB_BUILD_FAILED_MSG"
