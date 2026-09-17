@@ -195,6 +195,58 @@ Readium 用 Readium CSS 主动接管排版、覆盖出版方样式，这与本�
 - 渲染层是 **WebView + 自研 CSS 干预策略**，保留作者样式、只做最小覆盖
 - 参考 readium-css 的变量组织方式，但**不引入它的默认接管行为**
 
+### UI 框架选型：Preact，而且只用在「没有布局要量测」的那一半
+
+界面原来是纯命令式 DOM：每个屏幕在构造函数里建好全部节点、把它们存成实例字段，
+再由若干 `render*()` 方法在状态变化时挑选该改哪个。它有两个具体的坏味道：
+
+1. **同一份状态有多个副本。** 分段控件的选中态既在 `settings` 里也在
+   `aria-pressed` 上，两者靠点击处理器手工同步；`LoginScreen` 的通知、错误、
+   注册开关、按钮文案是四个节点被五个地方改。改一处漏一处不会报错。
+2. **重建与状态的矛盾。** 朗读引擎行必须在 HTTP 能力探测回来时重新生成，
+   而整块面板重建会丢掉读者在面板里的滚动位置，于是长出一套
+   「只替换 `[data-speech=group]`」的定点重建。
+
+选型的硬约束有三个，都来自「一份产物两个宿主」：
+
+- **单文件 bundle、`base: './'`**：WebView 从 `https://appassets...` 加载，
+  不能按需拉分片，所以框架必须能被 tree-shake 进一个文件。
+- **体积**：这是要打进 APK、也要由 NAS 上的 Node 托管的资源。
+- **不认识的东西不能碰布局**：阅读舞台的分页依赖 `getBoundingClientRect()`，
+  虚拟 DOM 不能在它和布局之间。
+
+对比过的四个：
+
+| 方案 | gzip 净成本 | 结论 |
+| --- | --- | --- |
+| Preact + `preact/hooks` | 最小 | **选用**（无 `preact/compat`、无 `react-dom`，仅这两个模块） |
+| React + react-dom | ~45KB | 一个阅读器不该为 `react-dom` 付这个价钱 |
+| Vue 3 runtime | ~34KB | 需要 SFC 预编译或运行时模板编译，产物形状与单文件 bundle 相冲 |
+| 纯 Web Components / lit | ~5KB / ~7KB | 手写 `render()` 等于自建一个更窄的框架；lit 又把模板塞进字符串，失去类型检查 |
+
+**边界写在 `ReaderScreen` 里，而不是靠自觉**：舞台（`stage`）由类持有、
+交给 `ReaderView`，并通过一个 ref 回调挂进组件树；组件只决定它**放在哪**
+（状态行与页脚之间，stacking context 来自这里），内容一概不碰。于是：
+
+- 排版、分页、shadow root、手势、量测：**零框架**。
+- 顶栏、页脚进度、目录、设置面板、朗读条、状态行、书架、登录、书库管理：
+  `ChromeState` 的函数。
+
+副作用也是可见的：`settingsPanel` 那套「只重建朗读行」的定点更新没有了，
+探测答案回来时只是改状态，Preact 的 diff 让读者的滚动位置天然保住。
+
+组件只用了 `preact` 与 `preact/hooks`（`useState` / `useRef` / `useEffect`），
+没有引入 `@preact/signals` 之类的额外状态层——屏幕自己就是状态的持有者，
+`update()` 把整份状态交给树。少一个依赖，就少一处「值在哪」的歧义。
+
+### `mountUI`：类与组件之间唯一的接缝
+
+屏幕仍然是类，仍然有 `element` 和 `dispose()`——路由不需要知道框架，
+`ReaderScreen` 这种以命令式为主的屏幕也不必假装自己不是。
+`mountUI(container, tree, initial)` 返回 `{ element, update, unmount }`，
+`update` 传入「整棵树应该是什么状态的函数」的那个值。测试保持原样：
+断言仍然打在真实 DOM 上（`test/manager.test.ts` 一行没改逻辑，只改了 import 后缀）。
+
 ### 只有一份渲染层
 
 Android 不重写渲染，它加载的是同一份 `web/` 产物。这不是为了省事，

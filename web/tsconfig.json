@@ -15,7 +15,11 @@
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    // The UI layer is Preact components; the render layer is still imperative DOM
+    // work and stays TS. Both compile out of this one config.
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
   },
   "include": ["src", "test", "vite.config.ts"]
 }

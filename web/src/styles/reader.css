@@ -1262,6 +1262,20 @@ book-content ::selection {
   min-height: 0;
 }
 
+/*
+ * The host of the screen's component tree.
+ *
+ * The screens are component trees mounted into a container, and the container
+ * must not become a layout box of its own: the styles below are written against
+ * `.manager-screen > .manager-body`, and a wrapper in between would break the
+ * `min-height: 0` chain that lets the list scroll instead of pushing the action
+ * bar off the bottom of the phone. `display: contents` makes the host vanish for
+ * layout purposes and keeps the tree's children exactly where they were.
+ */
+.manager-ui {
+  display: contents;
+}
+
 .manager-crumbs {
   flex: 1 1 auto;
   display: flex;

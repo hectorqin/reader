@@ -1,10 +1,16 @@
 /**
  * A very small element helper.
  *
- * No framework, deliberately. The rendering layer is imperative DOM work
- * (pagination, injected documents, shadow roots, column measurement) where a
- * virtual DOM adds a layer of indirection between the code and the layout it is
- * measuring — exactly the layer this product cannot afford to debug through.
+ * Still no framework, and now scoped to the half of the UI that genuinely is
+ * imperative: the rendering layer (pagination, injected documents, shadow roots,
+ * column measurement) where a virtual DOM adds a layer of indirection between the
+ * code and the layout it is measuring — exactly the layer this product cannot
+ * afford to debug through.
+ *
+ * The chrome — shelves, panels, dialogs, the reader's topbar and settings — is
+ * Preact now (see `toolkit.tsx` and `mount.ts`). `el` survives for the code that
+ * builds DOM *to be measured* rather than DOM to be described, plus the few
+ * places a legacy screen still constructs a node by hand.
  */
 export type Child = Node | string | null | undefined | false;
 
