@@ -131,8 +131,9 @@ main:
             - kaniko-plugin.sh
       stages:
         - name: build & push
-          # 与 dockerfile 同名，CNB 就知道用刚构建出来的那个镜像。
-          image: Dockerfile
+          # 与 dockerfile 同名，CNB 就知道用刚构建出来的那个镜像（image 是
+          # 镜像名，仍然得全小写，所以 Dockerfile 得写成 dockerfile）。
+          image: dockerfile
           settings:
             # 凭证走插件参数，别再单独跑 `docker login`：这个镜像是 kaniko 的
             # debug 版，里面没有任何 docker CLI，写了也是 `docker: not found`。
