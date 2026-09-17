@@ -7,7 +7,17 @@
 # `web` is optional. When the build context has no `web` directory the copy below
 # fails, so the client stage is gated behind a build arg and the runtime stage
 # tolerates an absent bundle. A server-only deployment stays possible.
-FROM docker.cnb.cool/dockerhub/node:24-alpine AS web
+#
+# The base image is overridable because `docker.cnb.cool` is an authenticated
+# mirror: a plain `docker build` on a machine whose token has no pull rights on
+# it fails at the very first stage. Docker Hub is the default; pass the mirror
+# where it is reachable (CNB pipelines, or anywhere Hub is slow):
+#
+#   docker build . -f server/Dockerfile \
+#     --build-arg NODE_IMAGE=docker.cnb.cool/dockerhub/node:24-alpine
+ARG NODE_IMAGE=node:24-alpine
+
+FROM ${NODE_IMAGE} AS web
 WORKDIR /web
 COPY web/package.json web/package-lock.json* ./
 RUN npm ci
@@ -15,7 +25,7 @@ COPY web/ ./
 RUN npm run build
 
 # --- server build stage ------------------------------------------------------
-FROM docker.cnb.cool/dockerhub/node:24-alpine AS build
+FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 
 COPY server/package.json server/package-lock.json* ./
@@ -31,7 +41,7 @@ RUN npm prune --omit=dev
 
 
 # --- runtime stage -----------------------------------------------------------
-FROM docker.cnb.cool/dockerhub/node:24-alpine AS runtime
+FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
 
 ENV NODE_ENV=production \
