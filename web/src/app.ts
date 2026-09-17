@@ -14,10 +14,10 @@ import type { Platform } from './core/platform.ts';
 import { SyncEngine, type SyncStatus } from './core/sync.ts';
 import { OfflineStore } from './store/offline.ts';
 import { SettingsStore, DEFAULT_APP_SETTINGS, type AppSettings } from './store/settings.ts';
-import { ShelfScreen } from './ui/shelf-screen.ts';
-import { ReaderScreen } from './ui/reader-screen.ts';
-import { LoginScreen } from './ui/login-screen.ts';
-import { ManagerScreen } from './ui/manager-screen.ts';
+import { ShelfScreen } from './ui/shelf-screen.tsx';
+import { ReaderScreen } from './ui/reader-screen.tsx';
+import { LoginScreen } from './ui/login-screen.tsx';
+import { ManagerScreen } from './ui/manager-screen.tsx';
 import { el } from './ui/dom.ts';
 
 /**

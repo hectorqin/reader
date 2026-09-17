@@ -507,7 +507,12 @@ web/src/
     comic.ts     CBZ / 图片目录
     detect.ts    魔数优先的格式识别
   ui/
-    reader-view.ts   分页、滚动、手势、定位
+    mount.ts         组件树与类式屏幕之间唯一的接缝
+    toolkit.tsx      按钮/分段控件/开关/面板这些原语
+    vendor/preact.ts 框架的唯一入口（换版本/换实现只改这一处）
+    *-screen.tsx     书架、登录、书库管理、阅读器（铬层）
+    reader-chrome.tsx  阅读器的顶栏/页脚/目录/设置/朗读条
+    reader-view.ts   分页、滚动、手势、定位（命令式，零框架）
     locator.ts       阅读位置格式
     shadow.ts        书的样式与 App 样式隔离
     resources.ts     资源按需解出，不预展开
@@ -531,12 +536,18 @@ android/app/src/main/java/cool/cnb/reader/
 
 ### 客户端技术选型说明
 
-- **不用框架**：渲染层是命令式 DOM 操作——分页、注入文档、shadow root、量测列宽。
-  引一个虚拟 DOM 只在代码和它要量测的布局之间多加一层，而这一层恰好是这个产品最不该
-  透过它去调试的东西。产物是一个 171KB（gzip 54KB）的单文件 bundle。
+- **UI 层用 Preact + signals，排版层不用框架**：这条线划在「有没有布局要量测」上。
+  书架、登录、书库管理、阅读器的**铬层**（顶栏/页脚/目录/设置面板/朗读条）是状态与
+  事件，用组件描述；而**阅读舞台**——分页、注入文档、shadow root、量测列宽——仍然是
+  命令式 DOM，一个虚拟 DOM 加在代码和它要量测的布局之间，恰好是这个产品最不该透过它
+  去调试的东西。`ReaderScreen` 把这两半拼在一个文件里：`stage` 节点由类持有并交给
+  `ReaderView`，其余全部是 `ChromeState` 的函数。
+  选型对比见 `docs/architecture.md` §8；产物是一个 240KB（gzip 75KB）的单文件 bundle。
 - **单文件 bundle、相对路径**：产物要被两个宿主消费——服务端托管给浏览器、Android 打进
   assets。`file://` 或 WebView 里加载同源分片会踩平台特异性，所以 `inlineDynamicImports`
-  打成一份，`base: './'`。
+  打成一份，`base: './'`。这条约束也是选 Preact 而不是 React/Vue 的关键：
+  `preact/compat` 不进包、没有 `react-dom`，只引入 `preact` 与 `preact/hooks`，
+  两个模块压缩前合计约 15KB。
 - **不注入 reset 样式**：见 `web/src/styles/reader.css` 顶部。整个产品的差异点是「忠于
   出版方的排版」，而一份 reset 正好会抹掉出版方的字体、缩进和行距。
   可调项全部是可继承的自定义属性，默认值是 `inherit`——「关」的意思是「不动它」，

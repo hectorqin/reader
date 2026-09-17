@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ManagerScreen } from '../src/ui/manager-screen.ts';
+import { ManagerScreen } from '../src/ui/manager-screen.tsx';
 import { ReaderApi, type SessionStore } from '../src/api/client.ts';
 import { ApiError } from '../src/api/errors.ts';
 import { FakeTransport, makePlatform } from './helpers/env.ts';
