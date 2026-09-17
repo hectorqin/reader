@@ -58,9 +58,18 @@ main:
     #
     # 触发条件包含 `web/src/formats/types.ts`：壳里分支的渲染模式词表来自它，
     # 改一个词就会让整条原生渲染通道静默失效，而 Kotlin 编译器不会知道。
+    # 镜像走 Docker Hub 官方命名空间，CNB 会自动经 Docker Hub 代理注入只读令牌。
+    # 不要写 `docker.cnb.cool/dockerhub/androidsdk/android-35`：`dockerhub/` 是
+    # 代理命名空间，只有 Docker Hub 上真实存在的镜像才解析得到，而
+    # `androidsdk/android-35` 并不是 —— 令牌颁发阶段就被拒（unauthorized），
+    # 表现为 prepare 阶段 docker pull 失败、整条流水线还没开始就跑不起来。
+    #
+    # 之所以选 `androidsdk/android-35` 而不是官方 `androidsdk/android-sdk`：这条
+    # CI 的 targetsdk 是 35，镜像里必须带 android-35 平台，否则 assemble 会去
+    # 下载 SDK 组件。`android-35` 这个社区镜像正好只装它。
     - name: android-ci
       docker:
-        image: docker.cnb.cool/dockerhub/androidsdk/android-35:latest
+        image: androidsdk/android-35:latest
       ifModify:
         - android/**
         - web/src/android-bridge.d.ts
