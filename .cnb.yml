@@ -99,21 +99,22 @@ main:
     # 只在 `server/`、`web/` 或构建文件变更时跑：镜像里只有这两部分。文档改一行
     # 也重新发布一个镜像，会让制品库里堆满内容完全相同的标签。
     #
-    # 用 CNB 官方的 `services: docker` + `docker build` / `docker push`，
-    # 而不是插件市场的 kaniko。原因是插件任务（`image:`）的镜像名必须是一个
-    # 真实的镜像引用：CNB 先 `docker pull` 它，拉不到就直接判失败，连容器的
-    # entrypoint 都不会执行。所以「先用 docker.build 构建一个镜像，再让插件任务
-    # 去用」这条路走不通——哪怕 `docker.build` 已经成功构建并处理好了本地缓存，
-    # 到了插件任务那一步仍然是 `docker pull <那个名字>`，而它在任何 registry 上
-    # 都不存在（失败日志就是这个形状：`docker pull Dockerfile` → 404）。
-    # `docker.build` 的产物只能给流水线级的 `docker.image` 用，即所有任务都在
-    # 那个镜像里跑，与本任务「在普通环境里构建并推送 reader 镜像」的意图不符。
+    # 为什么用 CNB 官方的 `services: docker`，而不是 `docker.build` + kaniko
+    # 插件任务：`docker.build` 的产物只活在 runner 的本地 dockerd 里，而平台
+    # 起插件任务容器走的是 `docker pull <image>`，不查本地镜像列表——
+    # `docker.build` 那条路要求 `image:` 写成与 `dockerfile` 同名的裸名字或
+    # 缓存仓库地址，靠平台去跟已构建的镜像做匹配。这条流水线因此在 `main` 上
+    # 连错八次，报错覆盖了 `pull access denied`（被当成 Docker Hub 官方镜像）
+    # 与 `invalid reference format`（名字里有大写或非法字符）两类；最后是靠把
+    # `image:` 指向 `dockerfile-caches` 的完整仓库地址跑通的，代价是那次匹配
+    # 依赖把一个**缓存 digest** 写死进流水线。
     #
     # 换成 dind 之后整条链路上只剩标准 Docker：
-    #   - 没有 kaniko，就不需要为了 `COPY server/...` 保住大小写而绕开工作区，
+    #   - 不再依赖平台对 `image:` 的匹配约定，也就不需要把缓存 digest 当镜像名；
+    #   - 没有 kaniko，就不必为了 `COPY server/...` 保住大小写而绕开工作区，
     #     `GIT_CLONE_PATH` 那个补丁连同它带来的 `--context-sub-path` 需求一起没了；
     #   - 也不需要单独 `docker login`，CNB 起 dind 服务时会自动登录制品库，
-    #     且登录用的是同一次构建的临时令牌，权限天然对齐。
+    #     用的是同一次构建的临时令牌，权限天然对齐。
     # 之前维护的根目录 `Dockerfile` / `kaniko-plugin.sh` 随之删除。
     - name: docker-image
       services:
