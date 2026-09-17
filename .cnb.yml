@@ -85,6 +85,63 @@ main:
         - name: stage-for-shell
           script: sh android/scripts/build-web-assets.sh
 
+    # 发布镜像到制品库 `docker.cnb.cool/hectorqin/reader`。
+    #
+    # 只在 `server/`、`web/` 或构建文件变更时跑：镜像里只有这两部分。文档改一行
+    # 也重新发布一个镜像，会让制品库里堆满内容完全相同的标签。
+    #
+    # 为什么不用插件市场的 kaniko 插件：本仓库以 Windows / macOS 客户端为主，
+    # Windows 上 git 会把工作区 checkout 成全小写，而 Kaniko 默认 snapshotter
+    # 只保留全大写路径，`COPY server/...` 会直接失败；且上游插件没有透出
+    # `--context-sub-path`。`.ci/kaniko/` 里的镜像就是上游插件 + 这三处修正，
+    # 细节写在那个 Dockerfile 的注释里。
+    -
+      name: docker-image
+      ifModify:
+        - server/**
+        - web/**
+        - server/Dockerfile
+        - .dockerignore
+        - .ci/kaniko/**
+        # 触发条件包含自身，否则改完构建逻辑没法验证。
+        - .cnb.yml
+      # GIT_CLONE_PATH 必须在这里就声明：流水线启动时 CNB 用它决定从哪个
+      # 目录加载仓库，放到 stages.env 里就晚了。
+      env:
+        GIT_CLONE_PATH: /tmp/cnb-workspace
+      docker:
+        build:
+          dockerfile: .ci/kaniko/Dockerfile
+      stages:
+        - name: login
+          script: |
+            set -e
+            echo "$CNB_TOKEN" | docker login "$CNB_DOCKER_REGISTRY" -u "$CNB_TOKEN_USER_NAME" --password-stdin
+        - name: build & push
+          image: .ci/kaniko
+          settings:
+            # debug 镜像里的 kaniko v1.23.2 不认识 `docker login` 写的 config.json
+            # 格式（它期望 `credHelpers`/`auths` 都指向同一份 auth），会带着空凭证
+            # 去推 401。所以这里把 CNB 注入的临时令牌以 username/password 明确传进去。
+            username: $CNB_TOKEN_USER_NAME
+            password: $CNB_TOKEN
+            registry: $CNB_DOCKER_REGISTRY
+            repo: $CNB_REPO_SLUG
+            tags: $CNB_BRANCH,$CNB_COMMIT_SHORT
+            dockerfile: server/Dockerfile
+            # Kaniko 的构建上下文必须限制在 git 仓库根目录内，而 CNB 工作区
+            # 比仓库根高一层（GIT_CLONE_PATH 是它的子目录），所以用 binary
+            # 参数把它指到克隆出来的仓库根。
+            binary: $GIT_CLONE_PATH
+            # snapshotter 压平上层文件容易丢大小写（见文件头注释），构建时也
+            # 显式指定一次，避免依赖镜像内的默认值。
+            snapshot_mode: redo
+            cache: true
+            log: debug
+      failStages:
+        - name: report-failure
+          script: echo "镜像发布失败：$CNB_BUILD_FAILED_MSG"
+
 "**":
   pull_request:
     - name: server-checks
