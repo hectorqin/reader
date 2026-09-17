@@ -113,6 +113,15 @@ class MainActivity : AppCompatActivity() {
 
         // Back should walk the reader's own history (shelf → book → shelf) rather
         // than exiting the app, and only leave when there is nothing left.
+        //
+        // This is worth spelling out because it used to be a lie that happened to
+        // be harmless: the client had no routes at all, so `canGoBack()` was false
+        // on every screen and Back left the app from the shelf. The client now
+        // navigates by fragment (`#/book/<id>`, `#/library/<path>`), which the
+        // WebView records as ordinary history entries — so the gesture means what
+        // it says. A screen that *renames* itself (walking into a library folder)
+        // uses `replaceState`, deliberately adding no entry: Back should leave the
+        // manager, not retrace the walk folder by folder.
         onBackPressedDispatcher.addCallback(
             this,
             object : OnBackPressedCallback(true) {

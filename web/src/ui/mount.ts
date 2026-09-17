@@ -37,10 +37,27 @@ type RenderFn = (value: unknown) => ComponentChildren;
  * `update` in a loop is cheap, and calling it from an event handler is safe: the
  * handler belongs to a listener attached to a persistent node, not to a node the
  * diff is about to replace.
+ *
+ * ## Updates after unmount are dropped, and that is the point
+ *
+ * Every screen loads asynchronously and every screen can be left before its load
+ * finishes — the reader taps a cover and then taps Back, a deep link replaces the
+ * shelf while the shelf is still fetching. `dispose()` cannot cancel a promise
+ * already in flight, so the continuation runs against a screen that is no longer
+ * on screen and calls `patch()`. Without the guard that re-renders a *full* tree
+ * into a container Preact has just been told is empty: the shelf's stale fetch
+ * would paint a whole shelf of covers inside the file manager, and a later
+ * `render(null)` would not remove them, because as far as Preact is concerned
+ * they were never its children.
+ *
+ * One flag here is therefore worth a cancellation token in every screen, and it
+ * cannot be forgotten in one of them.
  */
 export function mountUI(container: HTMLElement, renderTree: RenderFn, initial: unknown): MountedUI {
   let value = initial;
+  let disposed = false;
   const draw = (): void => {
+    if (disposed) return;
     render(renderTree(value), container);
   };
   draw();
@@ -51,6 +68,7 @@ export function mountUI(container: HTMLElement, renderTree: RenderFn, initial: u
       draw();
     },
     unmount() {
+      disposed = true;
       render(null, container);
     },
   };
