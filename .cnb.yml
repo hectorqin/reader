@@ -117,16 +117,11 @@ main:
           by:
             - .ci/kaniko/plugin.sh
       stages:
-        - name: login
-          script: |
-            set -e
-            echo "$CNB_TOKEN" | docker login "$CNB_DOCKER_REGISTRY" -u "$CNB_TOKEN_USER_NAME" --password-stdin
         - name: build & push
           image: .ci/kaniko
           settings:
-            # debug 镜像里的 kaniko v1.23.2 不认识 `docker login` 写的 config.json
-            # 格式（它期望 `credHelpers`/`auths` 都指向同一份 auth），会带着空凭证
-            # 去推 401。所以这里把 CNB 注入的临时令牌以 username/password 明确传进去。
+            # 凭证走插件参数，别再单独跑 `docker login`：这个镜像是 kaniko 的
+            # debug 版，里面没有任何 docker CLI，写了也是 `docker: not found`。
             username: $CNB_TOKEN_USER_NAME
             password: $CNB_TOKEN
             registry: $CNB_DOCKER_REGISTRY
