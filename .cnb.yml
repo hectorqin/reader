@@ -93,8 +93,8 @@ main:
     # 为什么不用插件市场的 kaniko 插件：本仓库以 Windows / macOS 客户端为主，
     # Windows 上 git 会把工作区 checkout 成全小写，而 Kaniko 默认 snapshotter
     # 只保留全大写路径，`COPY server/...` 会直接失败；且上游插件没有透出
-    # `--context-sub-path`。`.ci/kaniko/` 里的镜像就是上游插件 + 这三处修正，
-    # 细节写在那个 Dockerfile 的注释里。
+    # `--context-sub-path`。`kaniko.Dockerfile` + `kaniko/` 就是上游插件加三处
+    # 修正，细节写在那个 Dockerfile 的注释里。
     -
       name: docker-image
       ifModify:
@@ -102,7 +102,8 @@ main:
         - web/**
         - server/Dockerfile
         - .dockerignore
-        - .ci/kaniko/**
+        - kaniko.Dockerfile
+        - kaniko/**
         # 触发条件包含自身，否则改完构建逻辑没法验证。
         - .cnb.yml
       # GIT_CLONE_PATH 必须在这里就声明：流水线启动时 CNB 用它决定从哪个
@@ -111,14 +112,17 @@ main:
         GIT_CLONE_PATH: /tmp/cnb-workspace
       docker:
         build:
-          dockerfile: .ci/kaniko/Dockerfile
+          # dockerfile 必须在仓库根下：CNB 把构建上下文限制在仓库根目录内，
+          # 而 Git 的仓库根就是 cwd，工作区比它高一层。
+          dockerfile: kaniko.Dockerfile
           # CNB 只把 `by` 里列出的文件放进构建上下文，`plugin.sh` 不在列的话
           # 并不会报错，只是 Dockerfile 里那句 COPY 找不到文件。
           by:
-            - .ci/kaniko/plugin.sh
+            - kaniko/plugin.sh
       stages:
         - name: build & push
-          image: .ci/kaniko
+          # 这里不必再写完整路径：CNB 会从同名文件所在目录起逐级向上找。
+          image: kaniko.Dockerfile
           settings:
             # 凭证走插件参数，别再单独跑 `docker login`：这个镜像是 kaniko 的
             # debug 版，里面没有任何 docker CLI，写了也是 `docker: not found`。
