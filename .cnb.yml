@@ -130,8 +130,9 @@ main:
             - kaniko/plugin.sh
       stages:
         - name: build & push
-          # 这里不必再写完整路径：CNB 会从同名文件所在目录起逐级向上找。
-          image: kaniko.Dockerfile
+          # 名字必须全小写：CNB 拿这个字符串当镜像名去 `docker pull`，
+          # Docker 不接受仓库名里出现大写字符。
+          image: kaniko
           settings:
             # 凭证走插件参数，别再单独跑 `docker login`：这个镜像是 kaniko 的
             # debug 版，里面没有任何 docker CLI，写了也是 `docker: not found`。
