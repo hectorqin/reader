@@ -750,6 +750,216 @@ book-content ::selection {
   text-overflow: ellipsis;
 }
 
+/* ---- shelf: search, toolbar, density ---- */
+
+.shelf-search {
+  position: relative;
+  align-items: center;
+}
+
+.shelf-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/*
+ * The clear button sits *inside* the field rather than beside it.
+ *
+ * A phone's `type=search` renders its own clear affordance in some browsers and
+ * none in others, and the one it renders is 12px of low-contrast glyph at the
+ * edge of a control the reader has to hit with a thumb. Owning the button is the
+ * only way to get the same thing in both cases.
+ */
+.search-clear {
+  position: absolute;
+  inset-inline-end: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--reader-ink) 12%, transparent);
+  color: var(--reader-ink);
+  font-size: 0.8rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.search-clear[hidden] {
+  display: none;
+}
+
+.shelf-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.shelf-count {
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.shelf-sort {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.shelf-sort::-webkit-scrollbar {
+  display: none;
+}
+
+.shelf-sort-label {
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.shelf-settings-button {
+  width: 2.2rem;
+  height: 2.2rem;
+  font-size: 1rem;
+  flex: 0 0 auto;
+}
+
+.shelf-refresh {
+  font-size: 0.78rem;
+  color: var(--reader-muted);
+  text-align: center;
+  padding: 0.35rem 0;
+}
+
+.shelf-refresh[hidden] {
+  display: none;
+}
+
+/*
+ * Density is a custom property, not three `grid-template-columns` rules on three
+ * classes: the grid then has one declaration and the reader's choice is one value.
+ * The numbers are chosen so a phone shows three covers at "紧凑" and two at
+ * "宽松", and a desktop scales up from there without a media query.
+ */
+.book-grid {
+  --shelf-cover-min: 7rem;
+}
+
+.book-grid[data-density='compact'] {
+  --shelf-cover-min: 5.25rem;
+}
+
+.book-grid[data-density='comfortable'] {
+  --shelf-cover-min: 9.5rem;
+}
+
+.book-grid {
+  grid-template-columns: repeat(auto-fill, minmax(var(--shelf-cover-min), 1fr));
+}
+
+.book-grid[data-show-author='false'] .book-card .author {
+  display: none;
+}
+
+.book-grid[data-show-progress='false'] .cover-progress {
+  display: none;
+}
+
+/*
+ * Progress on the cover.
+ *
+ * Absolute rather than a row under the title: the point of the bar is to be
+ * readable at a glance while skimming a shelf, and a 3px line under 11px of
+ * author text is not glancing distance from a cover. It sits at the bottom edge
+ * of the cover art, where the eye already is.
+ */
+.book-card .cover-progress {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.book-card .cover-progress span {
+  display: block;
+  height: 100%;
+  background: var(--reader-accent);
+}
+
+/* ---- shelf settings sheet ---- */
+
+.shelf-settings .switch-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.shelf-settings .switch-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+.shelf-settings .switch-text .muted {
+  font-size: 0.72rem;
+  margin-top: 0.15rem;
+}
+
+/*
+ * The switch.
+ *
+ * A 2.6rem pill with the knob drawn by `::after`. `aria-pressed` drives both the
+ * colour and the knob position, so there is exactly one source of truth for "is
+ * this on" — a separate class would be a second one, and the two would eventually
+ * disagree.
+ */
+.shelf-settings .switch {
+  flex: 0 0 auto;
+  position: relative;
+  width: 2.7rem;
+  height: 1.6rem;
+  border-radius: 1rem;
+  border: 0;
+  background: var(--reader-line);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.shelf-settings .switch::after {
+  content: '';
+  position: absolute;
+  top: 0.2rem;
+  inset-inline-start: 0.2rem;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  background: var(--reader-surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: inset-inline-start 0.15s ease;
+}
+
+.shelf-settings .switch[aria-pressed='true'] {
+  background: var(--reader-accent);
+}
+
+.shelf-settings .switch[aria-pressed='true']::after {
+  inset-inline-start: 1.3rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shelf-settings .switch,
+  .shelf-settings .switch::after {
+    transition: none;
+  }
+}
+
 /* ---- panels ---- */
 
 .panel {

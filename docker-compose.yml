@@ -37,6 +37,17 @@ services:
       # Directory holding the built H5 client, served at `/`. Already set in the
       # image; only override if you build the client separately.
       # WEB_DIR: "/app/web"
+
+      # --- HTTP speech, for clients that have no engine of their own ---
+      # The server only *proxies*; it does not bundle a synthesizer, because
+      # that would multiply the image size and a NAS's CPU budget. Point this at
+      # any service that accepts the classic `?text=...&speed=...` shape
+      # (edge-tts, a local Piper wrapper, a commercial API with a shim).
+      #
+      #   TTS_URL: "http://host.docker.internal:5002/tts"
+      #   TTS_TOKEN: ""                    # bearer token, if the upstream wants one
+      #   TTS_VOICES_URL: ""               # defaults to <TTS_URL>/voices
+      #   TTS_CACHE_BYTES: "268435456"     # audio cache cap in /data; 0 disables
     volumes:
       # --- your books, mounted READ-ONLY ---
       # The server NEVER writes to this directory. Replace the left-hand side

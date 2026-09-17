@@ -19,6 +19,7 @@ import { Scanner } from '../src/indexer/scanner.ts';
 import { UserService } from '../src/services/users.ts';
 import { ShelfService } from '../src/services/shelf.ts';
 import { SyncService } from '../src/services/sync.ts';
+import { TtsService } from '../src/services/tts.ts';
 import { buildApp } from '../src/http/app.ts';
 import type { AppContext } from '../src/http/context.ts';
 
@@ -66,6 +67,7 @@ before(async () => {
     users: undefined as never,
     shelf: undefined as never,
     sync: undefined as never,
+    tts: undefined as never,
     log: undefined as never,
   };
   const silent = Fastify({ logger: false });
@@ -74,6 +76,7 @@ before(async () => {
   ctx.users = new UserService(db, config);
   ctx.shelf = new ShelfService(db);
   ctx.sync = new SyncService(db);
+  ctx.tts = new TtsService(config);
   app = buildApp(ctx);
   await app.ready();
 });

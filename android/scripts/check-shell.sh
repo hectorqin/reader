@@ -45,15 +45,59 @@ done
 
 # 3. Every bridge method the web client calls must exist, and every bridge method
 #    the shell exposes must be declared. This is the cross-language seam.
+#
+#    There are two interfaces, not one. `ReaderAndroid` is the top-level object;
+#    `SpeechBridge` is registered as a *separate* interface on the platform side
+#    (`addJavascriptInterface` can expose objects, not properties of one) and the
+#    web layer re-parents it onto `ReaderAndroid.speech`. So the check walks both
+#    declarations against both implementations — comparing the nested interface's
+#    methods against `ReaderBridge.kt` is what produced eleven false failures the
+#    first time this was run.
 note "==> checking the JS bridge contract in both directions"
 bridge_file="$android_dir/app/src/main/java/cool/cnb/reader/bridge/ReaderBridge.kt"
-declared=$(sed -n 's/^    fun \([A-Za-z][A-Za-z0-9_]*\)(.*/\1/p' "$bridge_file" | sort -u)
+speech_file="$android_dir/app/src/main/java/cool/cnb/reader/bridge/SpeechBridge.kt"
 types_file="$repo_dir/web/src/android-bridge.d.ts"
-consumed=$(sed -n 's/^  \([a-z][A-Za-z0-9_]*\)[?]\?(.*:.*;.*$/\1/p' "$types_file" | sort -u)
 
-for method in $consumed; do
-  if ! printf '%s\n' "$declared" | grep -qx "$method"; then
-    err "web client calls ReaderAndroid.$method() but ReaderBridge.kt does not declare it"
+# A method is "implemented" if either bridge class has it at method indentation.
+# Both files are searched for both interfaces: the Kotlin class a method happens
+# to live in is an implementation detail, not part of the contract.
+implemented=$(sed -n 's/^    fun \([A-Za-z][A-Za-z0-9_]*\)(.*/\1/p' "$bridge_file" "$speech_file" | sort -u)
+
+# The declaration side has two shapes, and the difference matters:
+#
+#   - top-level members are `name(args): type;` inside `interface AndroidBridge`;
+#   - `speech` is a *property* whose type is a nested interface, and the nested
+#     interface's own methods are the second shape.
+#
+# Reading only the first shape is what let the speech methods go unchecked; reading
+# only the second is what made an early version of this check fail on every
+# ordinary method of the first.
+declared_top=$(sed -n 's/^  \([a-z][A-Za-z0-9_]*\)[?]\{0,1\}(.*/\1/p' "$types_file" | sort -u)
+# The nested interface's members, delimited by its own declaration.
+nested_block=$(sed -n '/^export interface SpeechBridge {/,/^}/p' "$types_file")
+declared_nested=$(printf '%s\n' "$nested_block" | sed -n 's/^  \([a-z][A-Za-z0-9_]*\)[?]\{0,1\}(.*/\1/p' | sort -u)
+
+for method in $declared_top $declared_nested; do
+  if ! printf '%s\n' "$implemented" | grep -qx "$method"; then
+    err "android-bridge.d.ts declares $method() but no bridge class implements it"
+  fi
+done
+
+# The nested interface must be exposed, or the re-parenting in
+# `promoteSpeechInterface` would attach nothing at runtime.
+if printf '%s\n' "$declared_top" | grep -qx "speech"; then
+  if ! grep -q '^    fun speech()' "$bridge_file"; then
+    err "android-bridge.d.ts declares ReaderAndroid.speech but ReaderBridge.kt does not expose it"
+  fi
+fi
+
+# Every implemented method must also be declared, or the next person writing
+# client code will not know it is available. `speech()` is the exception: it is
+# declared as the nested interface's name, not as a method returning one.
+for method in $implemented; do
+  [ "$method" = "speech" ] && continue
+  if ! printf '%s\n%s\n' "$declared_top" "$declared_nested" | grep -qx "$method"; then
+    err "a bridge class implements $method() but android-bridge.d.ts does not declare it"
   fi
 done
 
@@ -86,17 +130,6 @@ for mediaType in "image/jpeg" "image/png" "image/webp"; do
     err "NativePageView cannot decode $mediaType, which the client routinely produces"
   fi
 done
-
-# Every bridge method must also appear in the client-facing declaration, or the
-# next person writing client code will not know it is available.
-missing_from_types=0
-for method in $declared; do
-  if ! printf '%s\n' "$consumed" | grep -qx "$method"; then
-    err "ReaderBridge.$method exists but is missing from android-bridge.d.ts"
-    missing_from_types=1
-  fi
-done
-[ "$missing_from_types" -eq 0 ] || true
 
 if [ "$fail" -ne 0 ]; then
   note "==> shell checks failed"

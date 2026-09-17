@@ -1,4 +1,4 @@
-import type { AndroidBridge } from '../android-bridge.ts';
+import type { AndroidBridge, SpeechBridge } from '../android-bridge.ts';
 import { FetchTransport } from './fetch-transport.ts';
 import type { Connectivity, Platform } from './platform.ts';
 import { createStores } from '../store/idb.ts';
@@ -100,15 +100,40 @@ export const MIN_SHELL_VERSION = 1;
  */
 export const NATIVE_PAGE_SHELL_VERSION = 2;
 
+/**
+ * First shell version with a native `TextToSpeech` surface.
+ *
+ * A feature rather than a capability, like the native page renderer: a shell
+ * below 3 simply reads with the WebView's own synthesizer. Declared separately so
+ * the failure mode is understood — an old APK is not refused, it just does not
+ * appear in the朗读 engine list.
+ */
+export const NATIVE_SPEECH_SHELL_VERSION = 3;
+
 export function detectAndroidBridge(): AndroidBridge | null {
   if (typeof window === 'undefined') return null;
   const bridge = window.ReaderAndroid;
   if (!bridge || typeof bridge.shellVersion !== 'function') return null;
   try {
-    return bridge.shellVersion() >= MIN_SHELL_VERSION ? bridge : null;
+    if (bridge.shellVersion() < MIN_SHELL_VERSION) return null;
+    return promoteSpeechInterface(bridge);
   } catch {
     return null;
   }
+}
+
+/**
+ * The native speech engine, when the shell has one.
+ *
+ * Gated on the shell version like the page renderer, and for the same reason: a
+ * shell below 3 has no `speech` interface, and a client that called into it would
+ * fail in a way that looks like a reader bug rather than an old APK.
+ */
+export function androidSpeechBridge(bridge: AndroidBridge): SpeechBridge | null {
+  if (!shellAtLeast(bridge, NATIVE_SPEECH_SHELL_VERSION)) return null;
+  const speech = bridge.speech;
+  if (!speech || typeof speech.speak !== 'function') return null;
+  return speech;
 }
 
 /**
@@ -179,6 +204,26 @@ function toBase64(bytes: Uint8Array): string {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk));
   }
   return btoa(binary);
+}
+
+/**
+ * Re-parents the flat speech interface into the object shape the client expects.
+ *
+ * `addJavascriptInterface` can expose objects, not properties of one, so the
+ * shell registers a second interface at `window.ReaderAndroidSpeech` (see
+ * `ReaderBridge.SPEECH_NAME`). Promoting it here keeps the contract in
+ * `android-bridge.d.ts` — one nested `speech` object — true from the web layer's
+ * point of view, so nothing above this file knows how the bridge happens to be
+ * wired on the platform side.
+ *
+ * Returns a new object rather than mutating the bridge: the bridge is created by
+ * the shell and may be shared, and a client that writes into it would be a client
+ * that can break the shell's own references.
+ */
+export function promoteSpeechInterface(bridge: AndroidBridge): AndroidBridge {
+  const raw = window.ReaderAndroidSpeech;
+  if (!raw) return bridge;
+  return { ...bridge, speech: raw };
 }
 
 function shellAtLeast(bridge: AndroidBridge, version: number): boolean {

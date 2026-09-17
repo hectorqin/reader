@@ -308,6 +308,50 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 ---
 
+## 朗读（HTTP TTS）
+
+这两条路由只在服务端配置了 `TTS_URL` 时才有意义，并且分工明确：
+一条回答「这里能用什么」，一条真正合成音频。
+
+### `GET /tts/voices`
+
+能力查询，朗读设置面板打开时调用一次。
+
+→ `{ "http": false, "formats": ["audio/mpeg", ...], "maxLength": 800, "voices": [] }`
+
+- 未配置 `TTS_URL` 时返回 `http: false` 而**不是 404**：客户端问的是「这里能用什么引擎」，
+  不是「这个接口存在吗」。一个 `TTS_URL` 没配的实例是完全正常的实例。
+- `maxLength` 无论开关都返回：客户端会按它切句，这个决定发生在选引擎之前。
+- 配置了之后 `voices` 来自 `TTS_VOICES_URL`（或约定路径 `<TTS_URL>/voices`）。
+
+### `GET /tts?text=<文本>&voice=<可选>&speed=<可选>&format=<可选>`
+
+合成一条语句，返回音频字节流（`audio/*`）。
+
+- **一次一条语句，不是一章**。客户端本来就是逐句朗读（理由见架构文档第 9 节），
+  而按请求切分正是让暂停、续读、下一句、改语速在远程引擎上也能工作的前提；
+  它同时把响应限制在手机可以边走边缓冲的大小，并让缓存以句为单位而不是以书为单位。
+- `speed` 夹在 0.25–4；`text` 上限 800 字，超了返回 `TEXT_TOO_LONG`，
+  **不会转发给上游**。
+- 上游返回非 `audio/*` 时返回 `TTS_UPSTREAM` 而不是把 HTML 当音频流出去：
+  一个配错的 `TTS_URL`（指到一个网页）会以 200 返回 HTML，塞进 `<audio>` 里
+  既没有声音也没有事件——这是最难排查的一种「成功」。
+- 这是唯一接受**查询串令牌**的接口之一（另一个是 `/books/:id/assets`、`/cover`、`/content`）：
+  `<audio src>` 无法携带 `Authorization` 头。因此它被精确地限制为 `GET /tts`，
+  能力查询 `/tts/voices` 不支持查询串令牌。
+- 响应带 `cache-control: private, max-age=604800, immutable`：
+  同一句话的音频永远相同，第二次播放不应该再到服务端。
+
+相关环境变量：
+
+| 变量 | 说明 |
+| --- | --- |
+| `TTS_URL` | 上游合成服务的地址，例如 `http://127.0.0.1:5002/tts`。不设则关闭 HTTP 朗读 |
+| `TTS_TOKEN` | 以 `Authorization: Bearer` 转发给上游 |
+| `TTS_VOICES_URL` | 语音列表地址；默认 `<TTS_URL>/voices` |
+| `TTS_TIMEOUT_MS` | 单次合成超时，默认 20000 |
+| `TTS_CACHE_BYTES` | 音频磁盘缓存上限（`DATA_DIR/tts-cache`），默认 256MiB；0 关闭缓存 |
+
 ## 静态客户端
 
 ### `GET /` 与 `GET /*` — 公开
@@ -477,6 +521,9 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 | `FILE_MISSING` | 404 | 文件已从磁盘消失 |
 | `USERNAME_TAKEN` | 409 | 用户名已占用 |
 | `PASSWORD_TOO_SHORT` | 409 | 口令少于 8 位 |
+| `TTS_DISABLED` | 400 | 该实例没有配置 `TTS_URL`，无法使用 HTTP 朗读 |
+| `TTS_UPSTREAM` | 400 | 上游合成服务不可达、超时、报错，或返回的不是音频 |
+| `TEXT_TOO_LONG` | 400 | 单条语句超过 800 字，请客户端先切句 |
 | `INTERNAL` | 500 | 服务端错误 |
 
 ## 客户端应当遵守的约定

@@ -59,6 +59,16 @@ class ReaderBridge(
     private val mainHandler = Handler(Looper.getMainLooper())
 
     /**
+     * The platform speech engine, exposed as `window.ReaderAndroid.speech`.
+     *
+     * Constructed eagerly and lazily *initialised*: creating the object is free,
+     * whereas creating the `TextToSpeech` engine binds a service and is not — so
+     * the web layer decides when to pay that, by calling `init()` when the reader
+     * first opens the朗读 settings rather than on every app start.
+     */
+    private val speechBridge = SpeechBridge(context, webView)
+
+    /**
      * Runs a UI-thread block and waits for its result.
      *
      * `renderPage` must be synchronous from the client's point of view — it
@@ -260,6 +270,22 @@ class ReaderBridge(
         return false
     }
 
+    /**
+     * The native speech surface, as a nested object.
+     *
+     * `window.ReaderAndroid.speech` rather than seven more top-level methods, for
+     * a reason that matters on the client side: it is a *feature*, not a
+     * capability, and a shell without it is a perfectly good shell — the client
+     * falls back to the WebView's own `speechSynthesis`, which every Android
+     * WebView has. One property read is the whole feature check.
+     *
+     * See `SpeechBridge` for why the platform's `TextToSpeech` is worth having
+     * when the WebView already exposes one: it is a different engine, and the
+     * WebView's `getVoices()` routinely misses the voices the OS has installed.
+     */
+    @JavascriptInterface
+    fun speech(): SpeechBridge = speechBridge
+
     private fun appVersion(): String = runCatching {
         val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
         packageInfo.versionName ?: "unknown"
@@ -299,6 +325,16 @@ class ReaderBridge(
         const val NAME = "ReaderAndroid"
 
         /**
+         * Name of the nested speech interface.
+         *
+         * `@JavascriptInterface` can register objects, not properties of one, so
+         * "`ReaderAndroid.speech`" is really a second interface that the client
+         * re-parents onto the first. The name is therefore part of the contract:
+         * `web/src/core/android-platform.ts` reads exactly this key.
+         */
+        const val SPEECH_NAME = "ReaderAndroidSpeech"
+
+        /**
          * Bump when a method is added that the client cannot work without, and
          * raise MIN_SHELL_VERSION in `web/src/core/android-platform.ts` to match.
          *
@@ -306,8 +342,15 @@ class ReaderBridge(
          * shell below 2 as "no native page renderer" and draws everything in the
          * WebView, so the version check is how an old APK degrades instead of
          * calling a method that does not exist.
+         *
+         * 3 added `speech` (native `TextToSpeech`). Unlike version 2 this is a
+         * *feature* rather than a capability: a shell below 3 simply reads with
+         * the WebView's own synthesizer, which is what happens today. The version
+         * still matters, because it is how the client knows whether to offer
+         * "系统语音（原生）" in the settings rather than discovering at play time
+         * that the method does not exist.
          */
-        const val SHELL_VERSION = 2
+        const val SHELL_VERSION = 3
 
         /**
          * Callback names must be plain identifiers.

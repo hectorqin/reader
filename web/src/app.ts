@@ -2,7 +2,13 @@ import { ReaderApi, type SessionStore } from './api/client.ts';
 import { ApiError } from './api/errors.ts';
 import type { Book, Session } from './api/types.ts';
 import { createWebPlatform } from './core/web-platform.ts';
-import { androidPageHost, createAndroidPlatform, detectAndroidBridge } from './core/android-platform.ts';
+import {
+  androidPageHost,
+  androidSpeechBridge,
+  createAndroidPlatform,
+  detectAndroidBridge,
+} from './core/android-platform.ts';
+import type { SpeechBridge } from './android-bridge.ts';
 import type { NativePageHost } from './ui/native-page.ts';
 import type { Platform } from './core/platform.ts';
 import { SyncEngine, type SyncStatus } from './core/sync.ts';
@@ -51,6 +57,14 @@ export class App {
    * constructed with or without one without either path special-casing.
    */
   private pageHost: NativePageHost | null = null;
+  /**
+   * The shell's native speech engine, present only on Android shell 3+.
+   *
+   * Held alongside the page host because both are the same kind of thing: a
+   * capability the *shell* has that the shared layer uses when it is there and
+   * does without when it is not.
+   */
+  private speechBridge: SpeechBridge | null = null;
   private screen: string | null = null;
   private pendingBook: Book | null = null;
 
@@ -110,6 +124,7 @@ export class App {
     // The native page renderer is resolved here, once, alongside the bridge that
     // provides it, so no screen has to ask whether it is running on Android.
     this.pageHost = androidPageHost(bridge);
+    this.speechBridge = androidSpeechBridge(bridge);
     return createAndroidPlatform(this.options.defaultServerUrl ?? '', bridge);
   }
 
@@ -146,8 +161,15 @@ export class App {
       api: this.api,
       offline: this.offline,
       platform: this.platform,
+      // The shelf's own preferences ride in the same per-device settings store as
+      // the reader's, so the two cannot disagree about where a preference lives.
+      settings: this.settings,
       onOpenBook: (book) => void this.openBook(book),
       onSignedOut: () => this.handleSignedOut(),
+      onSettingsChange: (patch) => {
+        void this.settingsStore.update(patch);
+        this.settings = { ...this.settings, ...patch };
+      },
     });
     this.shelf = shelf;
     this.root.append(shelf.element);
@@ -164,6 +186,7 @@ export class App {
       platform: this.platform,
       settings: this.settings,
       ...(this.pageHost ? { pageHost: this.pageHost } : {}),
+      ...(this.speechBridge ? { speechBridge: this.speechBridge } : {}),
       onBack: () => this.showShelf(),
       onSettingsChange: (patch) => {
         void this.settingsStore.update(patch);

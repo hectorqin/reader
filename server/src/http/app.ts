@@ -4,6 +4,7 @@ import { registerErrorHandler } from './errors.ts';
 import { registerAuthRoutes } from './routes/auth.ts';
 import { registerLibraryRoutes } from './routes/library.ts';
 import { registerSyncRoutes } from './routes/sync.ts';
+import { registerTtsRoutes } from './routes/tts.ts';
 import { registerWebRoutes } from './routes/web.ts';
 import { isOriginAllowed, resolveCorsOrigin } from './cors.ts';
 
@@ -37,6 +38,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerAuthRoutes(app, ctx);
   registerLibraryRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
+  registerTtsRoutes(app, ctx);
   // Registered last: the SPA fallback must not shadow an API route.
   registerWebRoutes(app, ctx);
 
