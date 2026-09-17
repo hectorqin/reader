@@ -137,6 +137,41 @@ body {
 }
 
 /*
+ * The stage's slot in the component tree.
+ *
+ * A wrapper rather than the stage itself, because the stage is owned by the
+ * screen and handed in through a ref callback (see `StageHost`): it is a node
+ * with its own lifetime, and putting it in a tree that re-renders is how a
+ * chapter's shadow root ends up detached from the element the paginator
+ * measured. The wrapper does not inherit `.stage`'s rules, so it has to carry
+ * the one that matters — *growing*. Without this the slot is a zero-height block
+ * in a flex column, and the reader sees the chrome, the header and the footer
+ * with no text between them.
+ */
+.stage-host {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
+/*
+ * The stage fills its slot.
+ *
+ * `.stage` is `position: relative` with a percentage-free height, which is all it
+ * needs once its parent is a flex container — but the parent is `.stage-host`
+ * above, added when the chrome became a component tree, and a *block* parent
+ * gives an auto-height child its content height instead of the slot's. The stage
+ * then measures zero and the book is laid out in a band at the top of the
+ * screen. `flex: 1` here is what restores "the stage is the space between the
+ * chrome", which is the one thing this layout is supposed to guarantee.
+ */
+.stage-host > .stage {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/*
  * The chapter document is rendered into a shadow root so a book's own
  * stylesheet cannot reach the app chrome, and the app chrome cannot reach into
  * the book. The two only meet through the custom properties above.
@@ -165,46 +200,30 @@ body {
 }
 
 /*
- * Reflowable content column.
+ * The reading column's own rules are in `ui/shadow.ts`, not here — and that
+ * separation is load-bearing.
  *
- * `max-inline-size` on the *container* rather than on the book's own elements:
- * it constrains the line length without editing a single author rule, which is
- * the only way to bound measure without also overriding the author's margins on
- * `p` and `div`.
+ * `.book-flow`, `.fixed-page`, `.reader-speech-highlight` and the page-turn
+ * animations all belong to elements inside the book's *shadow root*, and a
+ * selector in a document stylesheet does not reach into a shadow root. Declaring
+ * them here is therefore indistinguishable from deleting them: the column
+ * rendered at the browser default — no measure, no margins, no font scale, and
+ * no columns in paged mode — while the surrounding chrome, which *is* in the
+ * document, looked perfectly styled. That asymmetry is what made it read as a
+ * missing feature rather than a missing stylesheet.
+ *
+ * What stays below is everything that is genuinely in the document: the
+ * brightness overlay (a pseudo-element on the *host*, which is light DOM), the
+ * host element's own box, and the chrome.
  */
-.book-flow {
-  position: relative;
-  max-inline-size: var(--reader-measure);
-  margin-inline: auto;
-  padding-block: var(--reader-page-padding-block);
-  /*
-   * The margin control is a *variable* rather than a fixed padding, and the
-   * reader's value rides on the left/right pair only: the block padding is set by
-   * the shell because vertical whitespace on a phone is a different decision
-   * (safe areas) from the measure.
-   */
-  padding-inline: var(--reader-page-margin);
-  /* The size control scales the root of the injected document only. */
-  font-size: calc(1em * var(--reader-font-scale));
-  line-height: var(--reader-line-height);
-  /*
-   * Both of these are set as inheriting values on the container, never as rules
-   * on the book's own elements. `inherit` is the default in both cases, so "off"
-   * means the author's typography is untouched — which is the whole contract of
-   * this stylesheet. Where the book ships an absolute font stack, this is prefixed
-   * rather than replaced: the book's stack stays first.
-   */
-  font-family: var(--reader-font-family);
-  text-align: var(--reader-text-align);
-}
 
 /*
  * Brightness.
  *
  * A dimming bed-time overlay rather than a change to the palette: the reader's
  * theme is the author's colours, and darkening them keeps the relationship
- * between paper and ink. An overlay *on top* would darken the text as much as the
- * paper, which is what makes a "brightness" slider feel broken. Applied with
+ * between paper and ink. An overlay *on top* would darken the text as much as
+ * the paper, which is what makes a "brightness" slider feel broken. Applied with
  * `mix-blend-mode: multiply` on a pseudo-element so it costs no extra DOM and
  * cannot be reached by the book.
  */
@@ -219,293 +238,13 @@ body {
   mix-blend-mode: multiply;
 }
 
-.book-host[data-paginated='true'] .book-flow {
-  /*
-   * Paged mode: the column is exactly one viewport tall and overflows
-   * horizontally by column. This is the one place a structural override is
-   * unavoidable — CSS multi-column is the only way to paginate reflowable text
-   * without re-measuring every line in JS, and it needs the ancestor chain to
-   * honour a fixed height.
-   */
-  height: 100%;
-  max-inline-size: none;
-  padding: 0;
-  column-gap: 0;
-  columns: 1;
-  column-width: 100vw;
-  column-fill: auto;
-  overflow: hidden;
-}
-
-.book-host[data-paginated='true'] .book-flow > * {
-  /* A block that spans a column break would be split awkwardly; keeping
-     headings with their following paragraph is the cheap 90% fix. */
-  break-inside: auto;
-}
-
+/*
+ * The host is the scroll container in scroll mode and a plain frame in paged
+ * mode; `book-content` is an unknown element to the browser, so its `display`
+ * has to be stated.
+ */
 book-content {
   display: block;
-}
-
-/* ------------------------------------------------------------------ *
- * Fixed-layout pages (comic, PDF fallback)
- * ------------------------------------------------------------------ */
-
-.fixed-page {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-  /*
-   * `contain` keeps a 4000px-tall scan from forcing the whole layout to
-   * reflow on every page turn.
-   */
-  contain: layout paint size;
-  background: #0d0d0f;
-}
-
-.fixed-page img {
-  /*
-   * `max-*` rather than fixed dimensions: a comic page must letterbox inside
-   * the viewport, and `object-fit: contain` is the only way to do that without
-   * knowing the image's intrinsic size before it loads.
-   */
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
-  object-fit: contain;
-  display: block;
-  /* Prevents the 1px dark seam some Android GPUs render along a scaled edge. */
-  image-rendering: auto;
-  outline: none;
-  -webkit-user-drag: none;
-  user-select: none;
-}
-
-.fixed-page[data-fit='width'] img {
-  max-height: none;
-  width: 100%;
-}
-
-/* ------------------------------------------------------------------ *
- * PDF
- * ------------------------------------------------------------------ */
-
-.pdf-frame {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: #0d0d0f;
-}
-
-/* ------------------------------------------------------------------ *
- * Injected book content: the minimum set of overrides
- * ------------------------------------------------------------------ *
- *
- * Everything below is scoped to `book-content`, so it reaches the book's own
- * markup and nothing else. Each rule states why it is necessary. A rule without
- * a justification does not belong in this section.
- */
-
-book-content img,
-book-content svg,
-book-content video {
-  /*
-   * A book laid out for a print page has images sized in absolute units. On a
-   * 360px screen those overflow and force a horizontal scrollbar that makes the
-   * whole chapter feel broken. Bounding them is an override, but the author's
-   * value is honoured up to the viewport, so nothing is enlarged.
-   */
-  max-width: 100%;
-  height: auto;
-}
-
-book-content table {
-  /*
-   * Tables are the one construct that genuinely cannot reflow into a narrow
-   * column. Allowing a horizontal scroll inside the table is strictly better
-   * than letting it push the chapter wider than the screen.
-   */
-  max-width: 100%;
-  overflow-x: auto;
-  display: block;
-}
-
-book-content pre {
-  /*
-   * `pre` does not wrap by default, so a long code line or an ASCII-art page
-   * makes the entire chapter scroll horizontally. Wrapping keeps the chapter
-   * usable; the author's font and spacing are untouched.
-   */
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-  max-width: 100%;
-}
-
-book-content a[href] {
-  /*
-   * Footnotes and cross-references must be tappable, and the platform default
-   * is a colour the author already chose. Only the touch target is enforced.
-   */
-  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
-  touch-action: manipulation;
-}
-
-book-content :is(h1, h2, h3, h4, h5, h6) {
-  /*
-   * Long Chinese headings have no spaces and will overflow rather than wrap.
-   * `overflow-wrap` only affects the overflowing case, so a heading that fits is
-   * rendered exactly as the author specified.
-   */
-  overflow-wrap: break-word;
-}
-
-book-content ruby rt {
-  /*
-   * 振假名 (ruby annotations) are named in the product design as a
-   * differentiator (§9). Sizing them correctly relative to the base text is what
-   * makes them readable on a phone; the default 50% is too small at 16px.
-   */
-  font-size: 0.55em;
-  line-height: 1;
-}
-
-book-content :is(ruby, rt) {
-  /* Ruby is a first-class text feature here, so it must not be hidden or
-     clipped by an ancestor's overflow or line-height. */
-  line-height: 1.6;
-}
-
-book-content [epub|type~='pagebreak'],
-book-content hr {
-  /*
-   * Some publishers put a decorative rule at every page break, which turns into
-   * a stray line in the middle of a paragraph once pagination is redone.
-   * Collapsing it to a spacing hint keeps the author's intent without the
-   * artefact. `hr` is intentionally NOT hidden: a rule the author drew to
-   * separate scenes is content.
-   */
-  border: 0;
-}
-
-book-content figure,
-book-content blockquote {
-  /*
-   * Print-oriented books indent these with fixed margins that waste a third of
-   * a phone screen. The author's indentation is preserved, only the outer
-   * margin is capped to the container.
-   */
-  max-width: 100%;
-  margin-inline: auto;
-}
-
-/* ------------------------------------------------------------------ *
- * Selection
- * ------------------------------------------------------------------ */
-
-book-content ::selection {
-  background: color-mix(in srgb, var(--reader-accent) 35%, transparent);
-  color: inherit;
-}
-
-/* ------------------------------------------------------------------ *
- * Page-turn transition
- * ------------------------------------------------------------------ */
-
-.book-host[data-animating='slide-next'] .book-flow {
-  animation: slide-next 180ms ease-out;
-}
-
-.book-host[data-animating='slide-previous'] .book-flow {
-  animation: slide-previous 180ms ease-out;
-}
-
-.book-host[data-animating='fade-next'] .book-flow {
-  animation: fade-next 160ms ease-out;
-}
-
-.book-host[data-animating='fade-previous'] .book-flow {
-  animation: fade-previous 160ms ease-out;
-}
-
-@keyframes slide-next {
-  from {
-    transform: translateX(6%);
-    opacity: 0.6;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes slide-previous {
-  from {
-    transform: translateX(-6%);
-    opacity: 0.6;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
-}
-
-@keyframes fade-next {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes fade-previous {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .book-host[data-animating] .book-flow {
-    animation: none;
-  }
-}
-
-/* ------------------------------------------------------------------ *
- * Read-aloud helpers
- * ------------------------------------------------------------------ */
-
-/*
- * The sentence being spoken.
- *
- * Drawn as a translucent block *behind* the text, positioned from a `Range`'s
- * client rect. The alternative — wrapping the sentence in a `<span>` — would edit
- * the publisher's markup and, worse, change the line box metrics for that phrase,
- * which repaginates the chapter the moment playback starts.
- */
-.reader-speech-highlight {
-  position: absolute;
-  pointer-events: none;
-  z-index: -1;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--reader-accent) 34%, transparent);
-  transition: top 120ms linear, left 120ms linear, width 120ms linear, height 120ms linear;
-}
-
-/* The overlay needs a stacking context that puts it under the text but above the
-   page background; `z-index: -1` alone would fall behind an opaque body. */
-.book-flow {
-  isolation: isolate;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reader-speech-highlight {
-    transition: none;
-  }
 }
 
 /* ------------------------------------------------------------------ *
@@ -1487,10 +1226,53 @@ book-content ::selection {
 
 .footer-row .chapter {
   flex: 1 1 auto;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
+  /* The chapter label is the second way into the contents panel, because the ☰
+     button beside it is a 2.5rem square and the label is the thing a reader
+     actually aims at when they want to pick a chapter. */
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.35rem 0.25rem;
+  border-radius: var(--reader-radius);
+  cursor: pointer;
+}
+
+.footer-row .chapter:active {
+  background: var(--reader-line);
+}
+
+/*
+ * The chapter buttons share the row with the chapter label, so they are a size
+ * down from the topbar's icon buttons: four 2.5rem controls plus a label is more
+ * than a 360px phone has, and the two that turn pages deserve the room.
+ */
+.footer-row .icon-button {
+  width: 2.1rem;
+  height: 2.1rem;
+  font-size: 1rem;
+}
+
+.footer-row .icon-button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.footer-meta span {
+  flex: 1 1 0;
+}
+
+.footer-meta span:first-child {
+  text-align: start;
+}
+
+.footer-meta .progress-label {
+  text-align: end;
 }
 
 /* ---- read-aloud bar ---- */

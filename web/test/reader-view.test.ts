@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReaderView } from '../src/ui/reader-view.ts';
+import { createStagedDoc } from '../src/formats/windowed.ts';
+import type { BookContent, ContentItem } from '../src/net/api.ts';
 import type { BookDoc } from '../src/formats/types.ts';
 
 /**
@@ -74,6 +76,44 @@ function fixedDoc(pageCount: number): BookDoc {
 
 function make(container: HTMLDivElement, doc: BookDoc): ReaderView {
   return new ReaderView({ container, doc });
+}
+
+/** One window of a staged book, as the manifest endpoint delivers it. */
+function windowOf(from: number, total: number, count = 40): BookContent {
+  const items: ContentItem[] = Array.from({ length: count }, (_value, index) => ({
+    id: `c${from + index}`,
+    seq: from + index,
+    title: `第 ${from + index + 1} 章`,
+    kind: 'chapter',
+    mediaType: 'application/xhtml+xml',
+    href: `xhtml:ch${from + index}.xhtml`,
+  }));
+  const groups = Array.from({ length: Math.ceil(total / count) }, (_value, index) => ({
+    id: `spine:${index * count}`,
+    seq: index,
+    title: `${index * count + 1}..`,
+    count: Math.min(count, total - index * count),
+    offset: index * count,
+  }));
+  return { kind: 'reflowable', total, groups, items, group: Math.floor(from / count) };
+}
+
+/** A `ReaderView` over a staged book whose first window starts at `from`. */
+function stagedBook(count: number, total: number, from: number): BookDoc {
+  const doc = createStagedDoc({
+    kind: 'reflowable',
+    toc: Array.from({ length: total }, (_value, index) => ({
+      id: `xhtml:ch${index}.xhtml`,
+      label: `第 ${index + 1} 章`,
+      depth: 0,
+    })),
+    content: windowOf(from, total, count),
+    loader: { async read(item) { return { html: `<p>${item.title}</p>` }; } },
+  });
+  // The same hand-off the reader screen performs: a staged document answers to
+  // `setWindow`, and the view finds it through this property.
+  (doc as BookDoc & { staged?: unknown }).staged = doc;
+  return doc;
 }
 
 describe('ReaderView navigation', () => {
@@ -163,6 +203,76 @@ describe('ReaderView navigation', () => {
     expect(view.currentSectionIndex()).toBe(3);
     await view.seekPercentage(-1);
     expect(view.currentSectionIndex()).toBe(0);
+  });
+
+  it('lands on the chapter when a window is swapped in', async () => {
+    // The bug this pins was reported as "点击章节没有反应": the screen asked the
+    // document to swap windows, and the swap — when it happened at all — replaced
+    // the section list without opening the new chapter. The reader was left
+    // staring at the chapter they had just tried to leave. Swapping and landing
+    // are one operation now.
+    const view = make(container, stagedBook(40, 120, 0));
+    await view.open(0, 0);
+    expect(view.currentSectionIndex()).toBe(0);
+    expect(view.currentChapterPosition).toBe(0);
+
+    const landed = await view.loadWindow(windowOf(80, 120), 90);
+    expect(landed).toBe(true);
+    expect(view.currentSectionIndex()).toBe(10);
+    expect(view.currentChapterPosition).toBe(90);
+    expect(view.position().chapterTitle).toBe('第 91 章');
+  });
+
+  it('refuses a window that does not hold the chapter', async () => {
+    const view = make(container, stagedBook(40, 120, 0));
+    await view.open(7, 0);
+    const landed = await view.loadWindow(windowOf(80, 120), 3);
+    expect(landed).toBe(false);
+    // The old chapter is still on screen: a failed jump that also moved the
+    // reader would be worse than one that did nothing.
+    expect(view.currentSectionIndex()).toBe(7);
+    expect(view.currentChapterPosition).toBe(7);
+  });
+
+  it('refuses a window for a book that is not staged', async () => {
+    const view = make(container, reflowableDoc(5));
+    await view.open(0, 0);
+    expect(await view.loadWindow(windowOf(0, 120), 0)).toBe(false);
+  });
+
+  it('reports a whole-book chapter position that ignores the window boundary', () => {
+    // `currentSectionIndex` is window-local and must not be used to decide where
+    // the book ends: at the last chapter of a window it reads 39, which a naive
+    // check against the window's length would call "the last chapter" of a
+    // 120-chapter book.
+    const view = make(container, stagedBook(40, 120, 80));
+    expect(view.sectionCount).toBe(40);
+    expect(view.windowOffset).toBe(80);
+    expect(view.currentChapterPosition).toBe(80);
+  });
+
+  it('resolves a section id to its local index and whole-book position', async () => {
+    const view = make(container, stagedBook(40, 120, 40));
+    await view.open(0, 0);
+    expect(view.indexOfSection('xhtml:ch57.xhtml')).toBe(17);
+    expect(view.indexOfSection('xhtml:ch0.xhtml')).toBe(-1);
+    expect(view.windowIndexOfRef('xhtml:ch57.xhtml')).toBe(57);
+    expect(view.windowIndexOfRef('xhtml:ch0.xhtml')).toBeNull();
+    expect(view.sectionIdAt(17)).toBe('xhtml:ch57.xhtml');
+    expect(view.sectionIdAt(99)).toBeNull();
+  });
+
+  it('counts the pages of a chapter from the scroll container', () => {
+    // jsdom has no layout, so every extent is zero and the honest answer is "one
+    // page" rather than a division by zero. What is asserted is that the two
+    // page-turn modes do not read the *wrong element*: the host scrolls in scroll
+    // mode and the column scrolls in paged mode, and measuring the other one
+    // reports every chapter as a single page.
+    const view = make(container, reflowableDoc(2));
+    const position = view.position();
+    expect(position.pageInChapter).toBe(1);
+    expect(position.chapterPages).toBe(1);
+    expect(position.chapterPosition).toBe(0);
   });
 
   it('disposes without leaving the host in the container', () => {

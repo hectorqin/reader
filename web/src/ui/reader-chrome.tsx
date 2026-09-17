@@ -20,6 +20,21 @@ import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ComponentChildren, type JSX } from './vendor/preact.ts';
 import { IconButton, SectionTitle } from './toolkit.tsx';
 
+/**
+ * A table-of-contents row.
+ *
+ * `spine` is the whole-book position, and its absence is meaningful: the server
+ * omits it for formats whose navigation is not a linear chapter list. A row
+ * without one cannot be jumped to across windows, so the panel marks it instead
+ * of offering a tap that would do nothing.
+ */
+export interface ChromeTocEntry {
+  id: string;
+  label: string;
+  depth: number;
+  spine?: number;
+}
+
 export interface SpeechBarState {
   active: boolean;
   state: string;
@@ -43,8 +58,16 @@ export interface ChromeState {
   chapterLabel: string;
   tocOpen: boolean;
   settingsOpen: boolean;
-  toc: Array<{ id: string; label: string; depth: number }>;
+  toc: ChromeTocEntry[];
   currentSectionId: string;
+  /** 1-based position of the current page inside its chapter, and the count. */
+  pageInChapter: number;
+  chapterPages: number;
+  /** Which whole-book chapter is open, 1-based, and how many there are. */
+  chapterIndex: number;
+  chapterCount: number;
+  /** True while a window is being fetched, so the chapter buttons can say so. */
+  navigating: boolean;
   tts: SpeechBarState;
   layout: string;
   format: string;
@@ -90,6 +113,7 @@ export interface ChromeHandlers {
   onSpeakFromHere(): void;
   onSwitchEngine(kind: AppSettings['ttsEngine']): void;
   onTocEntry(ref: string): void;
+  onChapter(delta: 1 | -1): void;
   onTurnPage(direction: 'next' | 'previous'): void;
   onSpeechToggle(): void;
   onSpeechPrevious(): void;
@@ -142,15 +166,37 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           <IconButton label="目录" onClick={handlers.toggleToc}>
             ☰
           </IconButton>
-          <span className="chapter">{state.chapterLabel}</span>
+          <IconButton
+            label="上一章"
+            disabled={state.navigating || state.chapterIndex <= 1}
+            onClick={() => handlers.onChapter(-1)}
+          >
+            ⟨
+          </IconButton>
+          <button type="button" className="chapter" onClick={handlers.toggleToc}>
+            {state.navigating ? '正在切换…' : state.chapterLabel || '目录'}
+          </button>
+          <IconButton
+            label="下一章"
+            disabled={state.navigating || state.chapterIndex >= state.chapterCount}
+            onClick={() => handlers.onChapter(1)}
+          >
+            ⟩
+          </IconButton>
           <IconButton label="阅读设置" onClick={handlers.toggleSettings}>
             ⚙
           </IconButton>
         </div>
-        <div className="footer-row">
-          <span />
-          <span>{percentOf(state.progress)}</span>
-          <span />
+        <div className="footer-row footer-meta">
+          <span>
+            {state.chapterCount > 0 ? `${state.chapterIndex}/${state.chapterCount} 章` : ''}
+          </span>
+          <span>
+            {state.chapterPages > 0
+              ? `本章 ${state.pageInChapter}/${state.chapterPages} 页`
+              : ''}
+          </span>
+          <span className="progress-label">{percentOf(state.progress)}</span>
         </div>
       </div>
 
@@ -167,6 +213,10 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
                   <button
                     type="button"
                     aria-current={entry.id === state.currentSectionId}
+                    // A row that is already on screen is a scroll, not a jump:
+                    // saying so is the difference between a list that reacts and
+                    // a list that appears not to.
+                    title={entry.spine === undefined ? '这一章不在当前窗口中' : undefined}
                     style={entry.depth > 0 ? `padding-inline-start:${0.4 + entry.depth * 0.9}rem` : undefined}
                     onClick={() => handlers.onTocEntry(entry.id)}
                   >

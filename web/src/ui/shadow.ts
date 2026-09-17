@@ -19,21 +19,153 @@
 
 
 
+/**
+ * The reading column's own stylesheet, for the shadow root.
+ *
+ * A selector in the document's stylesheet cannot reach into a shadow root, and
+ * that is the whole reason this constant exists. `.book-flow` is the content
+ * column — the element that carries the measure, the margins, the font scale and
+ * the pagination columns — and it lives in *here*, so every one of those rules has
+ * to be declared *here*. They used to be declared in `styles/reader.css`, matched
+ * nothing, and the column therefore rendered at the browser's default: full
+ * width, no padding, a 42rem measure it never applied, and — in paged mode — no
+ * columns at all. It did not look like a missing stylesheet, because the parts
+ * that *did* work (the book's own CSS, which is injected here) still applied; it
+ * looked like the reader simply had no margin setting.
+ *
+ * The same reason dictates `:host(...)` rather than `.book-host[...]` in the rules
+ * below. `data-paginated` and `data-animating` are set on the *host element*, and a
+ * shadow root's own stylesheet cannot match its host with a class selector — the
+ * host is outside the shadow tree and the class is on it, not in it. `:host()` is
+ * the only selector that crosses that line, and without it paged mode silently did
+ * nothing: the columns were never created, so every "page" was the whole chapter
+ * and a page turn had nowhere to go.
+ *
+ * What must not be duplicated between the two copies is the *values* — every one
+ * of them is a custom property, and the properties themselves are defined on
+ * `:root`, which a shadow root inherits.
+ */
+const FLOW_STYLESHEET = `
+.book-flow {
+  position: relative;
+  max-inline-size: var(--reader-measure, 42rem);
+  margin-inline: auto;
+  padding-block: var(--reader-page-padding-block, 1.25rem);
+  padding-inline: var(--reader-page-margin, 1.5rem);
+  font-size: calc(1em * var(--reader-font-scale, 1));
+  line-height: var(--reader-line-height, inherit);
+  font-family: var(--reader-font-family, inherit);
+  text-align: var(--reader-text-align, inherit);
+  isolation: isolate;
+}
+:host([data-paginated='true']) .book-flow {
+  height: 100%;
+  max-inline-size: none;
+  padding: 0;
+  column-gap: 0;
+  columns: 1;
+  column-width: 100vw;
+  column-fill: auto;
+  overflow: hidden;
+}
+:host([data-paginated='true']) .book-flow > * {
+  break-inside: auto;
+}
+:host([data-animating='slide-next']) .book-flow {
+  animation: slide-next 180ms ease-out;
+}
+:host([data-animating='slide-previous']) .book-flow {
+  animation: slide-previous 180ms ease-out;
+}
+:host([data-animating='fade-next']) .book-flow {
+  animation: fade-next 160ms ease-out;
+}
+:host([data-animating='fade-previous']) .book-flow {
+  animation: fade-previous 160ms ease-out;
+}
+@keyframes slide-next {
+  from { transform: translateX(8px); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes slide-previous {
+  from { transform: translateX(-8px); opacity: 0.4; }
+  to { transform: none; opacity: 1; }
+}
+@keyframes fade-next {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+@keyframes fade-previous {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+.reader-speech-highlight {
+  position: absolute;
+  pointer-events: none;
+  z-index: -1;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--reader-accent, #7a5c3e) 34%, transparent);
+  transition: top 120ms linear, left 120ms linear, width 120ms linear, height 120ms linear;
+}
+.fixed-page {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+.fixed-page[data-fit='contain'] img,
+.fixed-page[data-fit='contain'] .pdf-frame {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+.fixed-page[data-fit='width'] img,
+.fixed-page[data-fit='width'] .pdf-frame {
+  width: 100%;
+}
+.fixed-page img {
+  display: block;
+}
+.fixed-page .pdf-frame {
+  border: 0;
+  width: 100%;
+  height: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  :host([data-animating]) .book-flow { animation: none; }
+  .reader-speech-highlight { transition: none; }
+}
+`;
+
 export class BookShadowHost extends HTMLElement {
   readonly shadow: ShadowRoot;
   private readonly styleEl: HTMLStyleElement;
+  /** The reader's own layout rules, injected once and never replaced. */
+  private readonly layoutEl: HTMLStyleElement;
   private readonly contentEl: HTMLDivElement;
 
   constructor() {
     super();
     this.shadow = this.attachShadow({ mode: 'open' });
+    this.layoutEl = document.createElement('style');
     this.styleEl = document.createElement('style');
     this.contentEl = document.createElement('div');
     this.contentEl.className = 'book-flow';
-    this.shadow.append(this.styleEl, this.contentEl);
+    // The layout sheet goes first so the book's own styles, which follow in
+    // `styleEl`, can still override it — the same cascade order the document
+    // stylesheet gives them.
+    this.layoutEl.textContent = FLOW_STYLESHEET;
+    this.shadow.append(this.layoutEl, this.styleEl, this.contentEl);
   }
 
-  /** Replaces the reading surface and the stylesheets that apply to it. */
+  /**
+   * Replaces the reading surface and the *book's* stylesheets.
+   *
+   * Only the book's own styles live in `styleEl`, which is replaced on every
+   * chapter: the reader's layout rules are in `layoutEl` and are never touched,
+   * because a chapter change is not a reason for the column to lose its measure
+   * for one frame.
+   */
   setContent(html: string, styles: string[]): void {
     this.styleEl.textContent = styles.join('\n');
     this.contentEl.innerHTML = html;
