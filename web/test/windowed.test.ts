@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { createStagedDoc } from '../src/formats/windowed.ts';
+import { adoptWindow, createStagedDoc, windowIndexOf } from '../src/formats/windowed.ts';
 import { HttpRangeSource, RemoteZip, type RangeSource } from '../src/formats/remote-zip.ts';
 import type { BookContent, ContentItem } from '../src/net/api.ts';
 
@@ -98,6 +98,68 @@ describe('staged documents', () => {
     expect(doc.sections).toHaveLength(40);
     expect(doc.toc).toHaveLength(1200);
     expect(doc.toc[1199]?.label).toBe('第 1200 章');
+  });
+
+  it('swaps a window through either method name it might answer to', async () => {
+    // The regression this pins is the reason the 目录 looked dead on a long book:
+    // the screen duck-typed a `loadWindow` method off the document, the document
+    // answered to `setWindow`, and the check therefore never succeeded — so a
+    // jump to a chapter outside the loaded window was a silent no-op. One helper
+    // now knows both names, and it is tested with a document that uses *only* the
+    // other one.
+    const plain = createStagedDoc({
+      kind: 'reflowable',
+      toc: [],
+      content: windowOf(0, 40, 1200),
+      loader: { async read() { return { html: '' }; } },
+    });
+    expect(adoptWindow(plain, windowOf(880, 40, 1200), 900)).toBe(20);
+    expect(plain.windowOffset()).toBe(880);
+
+    const legacy = {
+      sections: [],
+      toc: [],
+      loadWindow: (_content: unknown, spine: number) => (spine === 900 ? 20 : -1),
+    } as unknown as import('../src/formats/types.ts').BookDoc;
+    expect(adoptWindow(legacy, windowOf(880, 40, 1200), 900)).toBe(20);
+    expect(adoptWindow(legacy, windowOf(880, 40, 1200), 1)).toBe(-1);
+  });
+
+  it('answers -1 for a document that has no window at all', () => {
+    // A book read whole (the fallback for a server with no addressable structure)
+    // must say so rather than throw, because the caller's next move is to report
+    // "this chapter cannot be reached" rather than to crash the reader.
+    const whole = { sections: [], toc: [] } as unknown as import('../src/formats/types.ts').BookDoc;
+    expect(adoptWindow(whole, windowOf(0, 40, 1200), 0)).toBe(-1);
+  });
+
+  it('computes the window from the groups, not from a chapter constant', () => {
+    // A comic windows by *volume*, and a volume is not forty pages. Deriving the
+    // window from `spine / 40` asks for a group that does not exist and the jump
+    // lands nowhere; the manifest's own group sizes are the only authority.
+    const volumes: BookContent = {
+      kind: 'paged',
+      total: 900,
+      groups: [
+        { id: 'v0', seq: 0, title: '卷一', count: 500, offset: 0 },
+        { id: 'v1', seq: 1, title: '卷二', count: 400, offset: 500 },
+      ],
+      items: [],
+    };
+    expect(windowIndexOf(volumes, 0)).toBe(0);
+    expect(windowIndexOf(volumes, 499)).toBe(0);
+    expect(windowIndexOf(volumes, 500)).toBe(1);
+    expect(windowIndexOf(volumes, 899)).toBe(1);
+    // Past the end clamps to the last group rather than to a nonexistent one.
+    expect(windowIndexOf(volumes, 9000)).toBe(1);
+  });
+
+  it('falls back to the chapter window when a manifest ships no groups', () => {
+    const bare: BookContent = { kind: 'text', total: 120, groups: [], items: [] };
+    expect(windowIndexOf(bare, 0)).toBe(0);
+    expect(windowIndexOf(bare, 39)).toBe(0);
+    expect(windowIndexOf(bare, 40)).toBe(1);
+    expect(windowIndexOf(bare, 119)).toBe(2);
   });
 
   it('finds a whole-book position inside a newly loaded window', async () => {

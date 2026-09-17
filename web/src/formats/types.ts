@@ -121,6 +121,8 @@ export interface StagedBook {
    * window does not contain it.
    */
   loadWindow(content: unknown, spine: number): number;
+  /** Whole-book index of the loaded window's first section. */
+  windowOffset?(): number;
 }
 
 export interface LoadContext {

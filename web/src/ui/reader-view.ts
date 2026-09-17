@@ -5,6 +5,7 @@ import { ResourceResolver, hydrateResources } from './resources.ts';
 import { createBookHost, extractBody, extractInlineStyles, sanitiseInjectedContent, type BookShadowHost } from './shadow.ts';
 import { bookPercentage, formatLocator, parseLocator } from './locator.ts';
 import { collectSpokenChunks, type SpokenChunk } from '../render/tts-text.ts';
+import { adoptWindow } from '../formats/windowed.ts';
 
 export interface ReaderViewOptions {
   container: HTMLElement;
@@ -30,6 +31,20 @@ export interface Position {
   percentage: number;
   locator: string;
   chapterTitle: string;
+  /**
+   * Which page of the current chapter this is, 1-based.
+   *
+   * Reported as part of the position rather than measured by the caller because
+   * "where am I inside this chapter" is the same measurement `within` already is
+   * — one `scrollLeft` read in paged mode, one `scrollHeight` read in scroll
+   * mode — and a footer that showed a page number by asking separately would be
+   * a second measurement of the same thing, taken at a different moment, and
+   * therefore able to disagree with the progress bar beside it.
+   */
+  pageInChapter: number;
+  chapterPages: number;
+  /** Whole-book index of the section, window offset included. */
+  chapterPosition: number;
 }
 
 export type TextAlign = 'inherit' | 'start' | 'justify';
@@ -145,8 +160,69 @@ export class ReaderView {
     return this.sectionIndex;
   }
 
+  /**
+   * The loaded window's own labels, as contents entries.
+   *
+   * The fallback for a book whose table of contents cannot be fetched: worse than
+   * the server's list, because it names one window, and better than an empty
+   * panel for a book that plainly has chapters.
+   */
   chapterLabels(): Array<{ id: string; label: string; depth: number }> {
-    return this.doc.toc;
+    return this.doc.sections.map((section) => ({
+      id: section.id,
+      label: section.label,
+      depth: section.depth,
+    }));
+  }
+
+  /** The identifier of the section at a local index, or null when out of range. */
+  sectionIdAt(index: number): string | null {
+    return this.doc.sections[index]?.id ?? null;
+  }
+
+  /**
+   * The local index of a section by id, or -1 when the loaded window has none.
+   *
+   * The table of contents speaks in the server's references and the view speaks
+   * in local indices, so every jump needs this translation. It is a linear scan
+   * of at most one window — forty entries for an EPUB, one volume for a comic —
+   * and it replaces the *wrong* way of doing the same thing, which was to build a
+   * whole locator and ask `openLocator` to parse it back.
+   */
+  indexOfSection(id: string): number {
+    if (!id) return -1;
+    return this.doc.sections.findIndex((section) => section.id === id);
+  }
+
+  /**
+   * The whole-book position of a section in the loaded window.
+   *
+   * Derived from the section's own index in this window plus the window's offset,
+   * never from the client's idea of the window size: a comic windows by volume,
+   * and a chapter count is not a volume count. Null when the window does not hold
+   * the section.
+   */
+  windowIndexOfRef(id: string): number | null {
+    const local = this.indexOfSection(id);
+    if (local === -1) return null;
+    return this.windowOffset + local;
+  }
+
+  /** Whole-book index of the loaded window's first section. */
+  get windowOffset(): number {
+    return this.staged?.windowOffset?.() ?? 0;
+  }
+
+  /**
+   * Whole-book index of the chapter on screen.
+   *
+   * The unit the chapter buttons step in. `currentSectionIndex` is window-local
+   * and must not be used for that: at the last chapter of a window it reads 39,
+   * which the screen would compare against the window's length of 40 and call
+   * "the last chapter" of a 120-chapter book.
+   */
+  get currentChapterPosition(): number {
+    return this.windowOffset + this.sectionIndex;
   }
 
   applySettings(next?: Partial<ViewSettings>): void {
@@ -197,16 +273,49 @@ export class ReaderView {
   }
 
   /**
-   * Replace the loaded window of a staged book.
+   * Replace the loaded window of a staged book, and land on `spine`.
    *
-   * Optional: a book read whole (the fallback when a server has no addressable
-   * structure) simply never calls it. Returns false when the book is not staged
-   * or the new window does not hold `spine`, so a caller can report honestly
-   * rather than silently landing on the wrong chapter.
+   * A book read whole (the fallback when a server has no addressable structure)
+   * never calls this, and answers false. So does a window that does not contain
+   * `spine`, so a caller can report honestly rather than silently landing on the
+   * wrong chapter.
+   *
+   * The swap and the landing are one operation rather than two calls from the
+   * screen, because doing them apart is what allowed the bug this method's
+   * comment in `windowed.ts` describes: the screen asked the document to swap
+   * through a method that did not exist, got nothing, and then asked the view to
+   * open a locator in the old window — which failed, silently, for a reader who
+   * had just tapped a chapter in the 目录. Returns whether the reader is now
+   * inside `spine`.
    */
-  loadWindow(content: BookContent, spine: number): boolean {
+  async loadWindow(content: BookContent, spine: number): Promise<boolean> {
     if (!this.staged) return false;
-    return this.staged.loadWindow(content, spine) >= 0;
+    const local = adoptWindow(this.doc, content, spine);
+    if (local < 0) return false;
+    // Landing on the chapter is part of swapping the window, not a second call
+    // the caller has to remember. Swapping alone leaves the *old* chapter on
+    // screen — the host's content is untouched, `currentSectionIndex` still
+    // points into the previous window's sections, and the footer keeps naming
+    // the chapter the reader just left. That is precisely the "点击章节没有反应"
+    // report, one layer down.
+    await this.open(local, 0);
+    return true;
+  }
+
+  /**
+   * The element that actually scrolls the chapter.
+   *
+   * Two different elements depending on the mode, and getting it wrong is silent:
+   * a `scroll` event does not bubble, so a listener on the wrong one never fires;
+   * `scrollTop` on the wrong one is always zero, so every measurement reads as
+   * "the top of the chapter". In scroll mode the *host* scrolls and the column
+   * inside it is simply taller than the viewport (`overflow-y: auto` on
+   * `book-host`, which is where the reading position has to be read from). In
+   * paged mode the host is `overflow: hidden` and the *column* is the horizontal
+   * scroller that holds the columns.
+   */
+  get scroller(): HTMLElement {
+    return this.settings.mode === 'paged' ? this.host.flow : this.host;
   }
 
   /** Opens a section by index, optionally at a fractional offset within it. */
@@ -247,6 +356,7 @@ export class ReaderView {
   position(): Position {
     const section = this.doc.sections[this.sectionIndex];
     const within = this.measureWithin();
+    const pages = this.chapterPaging(within);
     return {
       sectionIndex: this.sectionIndex,
       sectionId: section?.id ?? '',
@@ -254,7 +364,43 @@ export class ReaderView {
       percentage: bookPercentage(this.doc, this.sectionIndex, within),
       locator: formatLocator(section?.id ?? '', within),
       chapterTitle: section?.label ?? '',
+      pageInChapter: pages.current,
+      chapterPages: pages.total,
+      chapterPosition: this.windowOffset + this.sectionIndex,
     };
+  }
+
+  /**
+   * The page the reader is on, and how many the chapter has.
+   *
+   * Both are derived from the same measurement the progress fraction uses, so
+   * the two can never disagree. A fixed-layout section is atomic — one page —
+   * and a chapter that fits the screen entirely is one page, which is why the
+   * counts are clamped to at least one rather than reported as zero.
+   */
+  private chapterPaging(within: number): { current: number; total: number } {
+    if (this.doc.layout === 'fixed') return { current: 1, total: 1 };
+    // The *scroll container*, not the content column inside it — and the two are
+    // different elements. In scroll mode the host scrolls and the column is
+    // taller than it; in paged mode the column scrolls sideways inside a host
+    // that does not scroll at all. Measuring the wrong one reports every chapter
+    // as a single page, which is worse than reporting nothing: a footer that
+    // says "1/1" while the reader is scrolling through six screens is a footer
+    // that is lying.
+    const scroller = this.scroller;
+    if (this.settings.mode === 'paged') {
+      const page = Math.max(1, scroller.clientWidth);
+      const total = Math.max(1, Math.round(scroller.scrollWidth / page));
+      const current = Math.min(total, Math.max(1, Math.round(scroller.scrollLeft / page) + 1));
+      return { current, total };
+    }
+    const page = Math.max(1, scroller.clientHeight);
+    const total = Math.max(1, Math.ceil(scroller.scrollHeight / page));
+    // The last screen is "the last page" even when it is a half-screen: a scroll
+    // position of 0.83 of the extent is on page 5 of 6, and rounding the fraction
+    // up instead would give a different number for the same scroll position.
+    const current = Math.min(total, Math.max(1, Math.floor(within * (total - 1)) + 1));
+    return { current, total };
   }
 
   /** Advances one unit: a page when paged, a screenful when scrolling. */
@@ -265,10 +411,11 @@ export class ReaderView {
       if (advanced) return true;
       return this.stepSection(1);
     }
-    const flow = this.host.flow;
-    const limit = flow.scrollHeight - flow.clientHeight;
-    if (flow.scrollTop < limit - 8) {
-      flow.scrollTop = Math.min(limit, flow.scrollTop + flow.clientHeight * 0.9);
+    const scroller = this.scroller;
+    const limit = scroller.scrollHeight - scroller.clientHeight;
+    if (scroller.scrollTop < limit - 8) {
+      scroller.scrollTop = Math.min(limit, scroller.scrollTop + scroller.clientHeight * 0.9);
+      this.emitPosition();
       return true;
     }
     return this.stepSection(1);
@@ -281,9 +428,10 @@ export class ReaderView {
       if (moved) return true;
       return this.stepSection(-1, true);
     }
-    const flow = this.host.flow;
-    if (flow.scrollTop > 8) {
-      flow.scrollTop = Math.max(0, flow.scrollTop - flow.clientHeight * 0.9);
+    const scroller = this.scroller;
+    if (scroller.scrollTop > 8) {
+      scroller.scrollTop = Math.max(0, scroller.scrollTop - scroller.clientHeight * 0.9);
+      this.emitPosition();
       return true;
     }
     return this.stepSection(-1, true);
@@ -402,27 +550,27 @@ export class ReaderView {
     // Fixed layout has no sub-section position: a comic page is atomic, so the
     // position is entirely expressed by the section index.
     if (this.doc.layout === 'fixed') return 0;
-    const flow = this.host.flow;
+    const scroller = this.scroller;
     if (this.settings.mode === 'paged') {
-      const width = flow.scrollWidth;
+      const width = scroller.scrollWidth;
       if (width <= 0) return this.sectionOffset;
-      return Math.min(1, Math.max(0, flow.scrollLeft / Math.max(1, width - flow.clientWidth)));
+      return Math.min(1, Math.max(0, scroller.scrollLeft / Math.max(1, width - scroller.clientWidth)));
     }
-    const limit = flow.scrollHeight - flow.clientHeight;
+    const limit = scroller.scrollHeight - scroller.clientHeight;
     if (limit <= 0) return 0;
-    return Math.min(1, Math.max(0, flow.scrollTop / limit));
+    return Math.min(1, Math.max(0, scroller.scrollTop / limit));
   }
 
   private restoreOffset(): void {
-    const flow = this.host.flow;
+    const scroller = this.scroller;
     if (this.doc.layout === 'fixed') return;
     if (this.settings.mode === 'paged') {
-      const max = Math.max(0, flow.scrollWidth - flow.clientWidth);
-      flow.scrollLeft = max * this.sectionOffset;
+      const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+      scroller.scrollLeft = max * this.sectionOffset;
       return;
     }
-    const limit = Math.max(0, flow.scrollHeight - flow.clientHeight);
-    flow.scrollTop = limit * this.sectionOffset;
+    const limit = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    scroller.scrollTop = limit * this.sectionOffset;
   }
 
   private emitPosition(): void {
@@ -445,8 +593,11 @@ export class ReaderView {
   private attachResizeObserver(): void {
     this.resizeObserver?.disconnect();
     if (typeof ResizeObserver === 'undefined') return;
-    this.resizeObserver = new ResizeObserver(() => this.restoreOffset());
-    this.resizeObserver.observe(this.host.flow);
+    this.resizeObserver = new ResizeObserver(() => {
+      this.restoreOffset();
+      this.emitPosition();
+    });
+    this.resizeObserver.observe(this.host);
   }
 
   private async stepFixed(delta: number): Promise<boolean> {
@@ -465,12 +616,12 @@ export class ReaderView {
 
   /** Moves by one CSS column, which is one screen in paged mode. */
   private stepColumn(delta: number): boolean {
-    const flow = this.host.flow;
-    const step = Math.max(1, flow.clientWidth);
-    const max = Math.max(0, flow.scrollWidth - flow.clientWidth);
-    const target = flow.scrollLeft + step * delta;
+    const scroller = this.scroller;
+    const step = Math.max(1, scroller.clientWidth);
+    const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const target = scroller.scrollLeft + step * delta;
     if (target < -1 || target > max + 1) return false;
-    flow.scrollLeft = Math.min(max, Math.max(0, target));
+    scroller.scrollLeft = Math.min(max, Math.max(0, target));
     this.emitPosition();
     return true;
   }

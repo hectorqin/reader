@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { extractBody, extractInlineStyles, sanitiseInjectedContent } from '../src/ui/shadow.ts';
+import { createBookHost, extractBody, extractInlineStyles, sanitiseInjectedContent } from '../src/ui/shadow.ts';
 
 /**
  * Sanitisation and style extraction.
@@ -99,5 +99,65 @@ describe('extractInlineStyles', () => {
 
   it('returns an empty list when there are none', () => {
     expect(extractInlineStyles('<p>x</p>')).toEqual([]);
+  });
+});
+
+/**
+ * The host's own styling.
+ *
+ * These exist because the reading column was, for a while, completely unstyled
+ * and nothing said so. `.book-flow` is inside a shadow root, so the rules in
+ * `styles/reader.css` matched nothing at all — a document stylesheet cannot reach
+ * into a shadow root, and the failure is invisible from the outside: the book's
+ * own CSS still applied, so the page looked *styled*, just without a measure, a
+ * margin, a font scale or any columns. What is asserted here is the mechanism,
+ * not the appearance: the layout sheet is in the shadow root, it survives a
+ * chapter change, and it reaches the host's own state attribute through `:host()`
+ * rather than through a class selector that cannot match.
+ */
+describe('BookShadowHost', () => {
+  it('injects the reading column rules into the shadow root', () => {
+    const host = createBookHost();
+    const sheet = host.shadow.querySelector('style')?.textContent ?? '';
+    // The measure, the margins, the font scale and the columns: the four things
+    // the document stylesheet was supposedly providing.
+    expect(sheet).toContain('.book-flow');
+    expect(sheet).toContain('max-inline-size: var(--reader-measure');
+    expect(sheet).toContain('padding-inline: var(--reader-page-margin');
+    expect(sheet).toContain('font-size: calc(1em * var(--reader-font-scale');
+    expect(sheet).toContain('column-width: 100vw');
+  });
+
+  it('reaches the host state through :host(), not through a class selector', () => {
+    // `data-paginated` and `data-animating` are set on the host element, which is
+    // *outside* the shadow tree. `.book-host[data-paginated] .book-flow` cannot
+    // match it from inside — which is why paged mode silently produced no columns
+    // and a page turn had nowhere to go.
+    const host = createBookHost();
+    const sheet = host.shadow.querySelector('style')?.textContent ?? '';
+    expect(sheet).toContain(":host([data-paginated='true']) .book-flow");
+    expect(sheet).toContain(":host([data-animating='slide-next']) .book-flow");
+    expect(sheet).not.toContain('.book-host[');
+  });
+
+  it('keeps the layout sheet when a chapter replaces the book styles', () => {
+    // The book's styles change with every chapter; the reader's layout rules must
+    // not, or the column loses its measure for a frame on every chapter change.
+    const host = createBookHost();
+    const before = host.shadow.querySelectorAll('style')[0]?.textContent;
+    host.setContent('<p>正文</p>', ['p { color: red }']);
+    const sheets = [...host.shadow.querySelectorAll('style')].map((node) => node.textContent ?? '');
+    expect(sheets[0]).toBe(before);
+    expect(sheets[1]).toContain('p { color: red }');
+    // The layout sheet is first, so the book's own rules still win the cascade.
+    expect(sheets[0]).toContain('.book-flow');
+  });
+
+  it('keeps the layout sheet through clear()', () => {
+    const host = createBookHost();
+    host.clear();
+    const sheets = [...host.shadow.querySelectorAll('style')].map((node) => node.textContent ?? '');
+    expect(sheets[0]).toContain('.book-flow');
+    expect(sheets[1]).toBe('');
   });
 });

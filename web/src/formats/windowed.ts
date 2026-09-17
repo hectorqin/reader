@@ -31,7 +31,7 @@
 
 import type { BookContent, ContentItem } from '../net/api.ts';
 import { RemoteZip, type RangeSource } from './remote-zip.ts';
-import type { BookDoc, Section, TocEntry } from './types.ts';
+import type { BookDoc, Section, StagedBook, TocEntry } from './types.ts';
 
 /**
  * How a staged section's bytes are obtained.
@@ -67,6 +67,13 @@ export interface StagedDoc extends BookDoc {
    *
    * Returns the local index of `spine` within the new window, or -1 when the new
    * window does not contain it.
+   *
+   * Named `setWindow` here and `loadWindow` on `StagedBook` — and one of those
+   * two names is the reason this comment exists. The screen used to duck-type a
+   * `loadWindow` off the document, found nothing (the method was called
+   * `setWindow`), and so never swapped a window: tapping chapter 900 of a
+   * 1200-chapter book did nothing at all. The duck type is gone; the contract is
+   * this interface, and `adoptWindow` below is the single implementation of it.
    */
   setWindow(content: BookContent, spine: number): number;
   /** Whole-book index of the loaded window's first section. */
@@ -125,6 +132,14 @@ export function createStagedDoc(options: StagedDocOptions): StagedDoc {
       return section;
     },
     setWindow(content: BookContent, spine: number): number {
+      // Checked *before* anything is mutated. A window that does not hold the
+      // chapter must leave the loaded one exactly as it was: swapping first and
+      // then reporting -1 replaces the reader's chapter with a different one and
+      // then tells the caller the jump failed, which is both wrong on screen and
+      // impossible for the caller to undo — the old sections are already gone.
+      const local = content.items.findIndex((item) => item.seq === spine);
+      if (local === -1) return -1;
+
       // The offset comes from the group the response actually carries. A
       // response that omits `group` (a server that chose not to window, or a
       // hand-built one in a test) still has to answer correctly, so the offset
@@ -144,7 +159,6 @@ export function createStagedDoc(options: StagedDocOptions): StagedDoc {
           path: item.href,
         });
       }
-      const local = items.findIndex((item) => item.seq === spine);
       return local;
     },
     windowOffset(): number {
@@ -159,6 +173,62 @@ export function createStagedDoc(options: StagedDocOptions): StagedDoc {
 
   return doc;
 }
+
+/**
+ * Swaps a document's loaded window, whichever way the document exposes it.
+ *
+ * Two method names exist in the codebase for one operation — `setWindow` on a
+ * client-built `StagedDoc`, `loadWindow` on the `StagedBook` interface — and the
+ * reader screen used to pick between them by checking which one *looked* present.
+ * It checked for `loadWindow`, the documents answer to `setWindow`, and the check
+ * therefore always failed: every jump out of the loaded window was a silent
+ * no-op. This function is the one place that knows both names, so no caller has
+ * to guess and a future third name has one place to be added.
+ *
+ * Returns the local index of `spine` in the newly loaded window, or -1 when there
+ * is no window to load or the window does not hold that spine.
+ */
+export function adoptWindow(doc: BookDoc, content: BookContent, spine: number): number {
+  const staged = doc as StagedBook & Partial<StagedDoc>;
+  if (typeof staged.setWindow === 'function') return staged.setWindow(content, spine);
+  if (typeof staged.loadWindow === 'function') return staged.loadWindow(content, spine);
+  return -1;
+}
+
+/**
+ * Which window (group) holds a whole-book index.
+ *
+ * Derived from the manifest's own group sizes rather than from the constant the
+ * client keeps, because a format is free to window at its own granularity — a
+ * comic windows by volume, and a volume is not forty pages. The constant is only
+ * a fallback for a manifest that ships no groups at all.
+ *
+ * The result is the group's *index*, which is what the endpoint takes, not the
+ * group's `seq`.
+ */
+export function windowIndexOf(content: BookContent, spine: number): number {
+  const groups = content.groups ?? [];
+  if (groups.length > 0) {
+    let offset = groups[0]?.offset ?? 0;
+    for (const [index, group] of groups.entries()) {
+      // The first group may declare an offset of its own instead of zero; the
+      // running offset is anchored on it so both conventions answer correctly.
+      if (index > 0) offset += groups[index - 1]?.count ?? 0;
+      if (spine < offset + group.count) return index;
+    }
+    return groups.length - 1;
+  }
+  return Math.max(0, Math.floor(spine / CHAPTER_WINDOW));
+}
+
+/**
+ * Chapters per window, for a manifest that reports no groups of its own.
+ *
+ * Duplicated from the server's constant on purpose (see `CHAPTER_WINDOW` in the
+ * reader screen): overlapping by one window costs one request, never a wrong
+ * chapter, because the response is always the authority on what it contains.
+ */
+const CHAPTER_WINDOW = 40;
 
 function formatFor(kind: BookContent['kind']): BookDoc['format'] {
   switch (kind) {

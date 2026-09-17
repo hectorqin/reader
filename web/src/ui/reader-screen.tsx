@@ -1,6 +1,6 @@
 import { ApiError } from '../api/errors.ts';
 import type { ReaderApi } from '../api/client.ts';
-import type { Book, Manifest, Note } from '../api/types.ts';
+import type { Book, BookContent, Manifest, Note } from '../api/types.ts';
 import { loadBook, isImagePath, extensionOf } from '../formats/index.ts';
 import type { OfflineStore } from '../store/offline.ts';
 import type { SyncEngine, SyncStatus } from '../core/sync.ts';
@@ -8,7 +8,7 @@ import type { Platform } from '../core/platform.ts';
 import { ReaderView, type Position, type ViewSettings } from './reader-view.ts';
 import { attachGestures } from './gestures.ts';
 import type { AppSettings } from '../store/settings.ts';
-import { createStagedDoc, isStagedKind } from '../formats/windowed.ts';
+import { createStagedDoc, isStagedKind, windowIndexOf } from '../formats/windowed.ts';
 import type { BookDoc } from '../formats/types.ts';
 import type { TocEntry } from '../api/types.ts';
 import type { NativePageHost } from './native-page.ts';
@@ -23,18 +23,7 @@ import {
 } from '../render/speech.ts';
 import type { NativeSpeechBridge } from '../android-bridge.ts';
 import { mountUI } from './mount.ts';
-import { ReaderChrome, type ChromeState } from './reader-chrome.tsx';
-
-/**
- * Chapters per window, matching the server's own constant.
- *
- * Duplicated rather than fetched because the client needs it to *compute* which
- * window holds a chapter, and a round trip to learn a constant would defeat the
- * purpose. It matches `CHAPTER_WINDOW` in the server's epub handler; a mismatch
- * costs one extra request, never a wrong chapter, because the response is always
- * the authority on what it contains.
- */
-const CHAPTER_WINDOW = 40;
+import { ReaderChrome, type ChromeState, type ChromeTocEntry } from './reader-chrome.tsx';
 
 export interface ReaderScreenOptions {
   api: ReaderApi;
@@ -117,6 +106,11 @@ export class ReaderScreen {
     settingsOpen: false,
     toc: [],
     currentSectionId: '',
+    pageInChapter: 0,
+    chapterPages: 0,
+    chapterIndex: 1,
+    chapterCount: 0,
+    navigating: false,
     // Settings rows, flattened for the panel. See `settingsView`.
     ...emptyChromeSettings(),
     tts: { active: false, state: 'idle', label: '', chip: '从头朗读', index: 0, total: 0, sentenceIndex: -1, sentenceTotal: 0 },
@@ -155,9 +149,29 @@ export class ReaderScreen {
 
   private view: ReaderView | null = null;
   private doc: BookDoc | null = null;
+  /**
+   * The windowed structure the server handed out, when the book is read in
+   * windows.
+   *
+   * Kept beside `doc` rather than folded into it because the two answer different
+   * questions: `doc` is what the *view* renders (the loaded window's sections),
+   * and this is the whole book's shape — the group sizes a jump needs to compute
+   * which window holds a chapter. It is the manifest's own `content`, passed to
+   * `createStagedDoc` and kept here so a later jump does not have to re-fetch it.
+   */
+  private content: BookContent | null = null;
   private book: Book | null = null;
   private manifest: Manifest | null = null;
   private chromeVisible = true;
+  /**
+   * True while a window is being fetched for a chapter jump.
+   *
+   * A guard *and* published state, because the footer's chapter buttons have to
+   * say what is happening: a tap that fetches a window over a tunnel takes a
+   * visible moment, and a button that looks dead for two seconds is the
+   * difference between "slow" and "broken" to the reader pressing it.
+   */
+  private navigating = false;
   private detachGestures: (() => void) | null = null;
   private progressTimer: ReturnType<typeof setTimeout> | null = null;
   private statusTimer: ReturnType<typeof setTimeout> | null = null;
@@ -194,6 +208,7 @@ export class ReaderScreen {
             onSpeakFromHere: () => void this.speakFromReaderPosition(),
             onSwitchEngine: (kind) => this.switchSpeechEngine(kind),
             onTocEntry: (ref) => void this.goToChapterRef(ref),
+            onChapter: (delta) => void this.goToChapter(delta),
             onTurnPage: (direction) => void this.turnPage(direction),
             onSpeechToggle: () => this.toggleSpeech(),
             onSpeechPrevious: () => void this.tts?.previous(),
@@ -285,6 +300,7 @@ export class ReaderScreen {
     }
     if (token !== this.loadingToken) return null;
 
+    this.content = content;
     const doc = createStagedDoc({
       kind: content.kind,
       toc: toc.map((entry) => ({ id: entry.href, label: entry.title, depth: entry.level })),
@@ -425,7 +441,15 @@ export class ReaderScreen {
 
   /** Publishes what the chrome needs to know about the book that just loaded. */
   private afterDocLoaded(): void {
-    this.patch({ layout: this.doc?.layout ?? 'reflowable', format: this.doc?.format ?? '' });
+    this.patch({
+      layout: this.doc?.layout ?? 'reflowable',
+      format: this.doc?.format ?? '',
+      // The window's own length is a page count for the first window and a
+      // chapter count for the rest; `chapterCount` is corrected from the whole
+      // book's total below, which is what the server reports and the window does
+      // not.
+      chapterCount: this.chapterCount,
+    });
     this.buildView();
     void this.renderToc();
   }
@@ -448,6 +472,7 @@ export class ReaderScreen {
       onPositionChange: (position) => this.onPosition(position),
       onChapterChange: (index, section) => {
         this.patch({ chapterLabel: section.label, currentSectionId: section.id });
+        this.syncTocPosition();
         // The previous chapter's sentence nodes are gone the moment this fires,
         // so the engine is holding a queue that can never be spoken. It is told
         // to refill from the new chapter rather than left to speak into the void:
@@ -462,8 +487,14 @@ export class ReaderScreen {
     this.view.applySettings(this.viewSettings());
 
     if (doc.layout === 'reflowable') {
+      // On the *scroll container*, which is the host element and not the stage
+      // around it. A `scroll` event does not bubble, so a listener on the stage
+      // sees nothing at all: the reading position never advanced past the first
+      // screen, the footer's page counter stayed at 1, and — because a position
+      // change is also what schedules the progress write — a reader could scroll
+      // through a whole chapter and have the app believe they never moved.
       this.listeners.push(
-        addDebouncedListener(this.stage, 'scroll', () => this.onPosition(this.view?.position() ?? null), 250),
+        addDebouncedListener(this.view.elementHost, 'scroll', () => this.onPosition(this.view?.position() ?? null), 250),
       );
     }
 
@@ -578,8 +609,14 @@ export class ReaderScreen {
 
   private onPosition(position: Position | null): void {
     if (!position || !this.book) return;
-    this.patch({ progress: position.percentage });
+    this.patch({
+      progress: position.percentage,
+      pageInChapter: position.pageInChapter,
+      chapterPages: position.chapterPages,
+      chapterIndex: position.chapterPosition + 1,
+    });
     if (position.chapterTitle) this.patch({ chapterLabel: position.chapterTitle });
+    if (position.sectionId !== this.chrome.currentSectionId) this.patch({ currentSectionId: position.sectionId });
     this.pendingPosition = position;
     this.recordSpeechAnchor();
 
@@ -686,11 +723,21 @@ export class ReaderScreen {
   private async renderToc(): Promise<void> {
     const book = this.book;
     if (!book) return;
+    // Fetched once per book. The panel is opened and closed constantly and the
+    // TOC cannot change under a reader, so refetching it is a request per tap on
+    // the ☰ button — which, on a NAS over a tunnel, is a visible pause before the
+    // panel appears.
+    if (this.chrome.toc.length > 0) return;
 
-    let entries: Array<{ id: string; label: string; depth: number }> = [];
+    let entries: ChromeTocEntry[] = [];
     try {
       const toc = await this.options.api.toc(book.id);
-      entries = toc.map((entry) => ({ id: entry.href, label: entry.title, depth: entry.level }));
+      entries = toc.map((entry) => ({
+        id: entry.href,
+        label: entry.title,
+        depth: entry.level,
+        ...(entry.spine !== undefined ? { spine: entry.spine } : {}),
+      }));
     } catch {
       entries = this.view?.chapterLabels() ?? [];
     }
@@ -699,32 +746,213 @@ export class ReaderScreen {
   }
 
   /**
-   * Jump to a contents entry, loading the window that holds it when necessary.
+   * Marks the contents entry the reader is in, and points the window's own
+   * labels at their whole-book position.
    *
-   * A position inside the loaded window is a local index change; one outside it
-   * means fetching that window first. Without this, tapping chapter 900 of a
-   * 1200-chapter book does nothing at all, which is how a windowed reader turns
-   * from fast into broken.
+   * The TOC and the loaded window carry different identifiers — one is the
+   * server's chapter reference, the other the window's — so "which entry is
+   * current" cannot be answered by comparing them, and `chapterLabels()` (built
+   * from the window) has no `spine` at all. Both are resolved here, against the
+   * loaded window, once per chapter change rather than once per entry in a
+   * 1200-row list.
    */
-  private async goToChapterRef(ref: string): Promise<void> {
-    if (this.view?.openLocator(`${ref}:0`)) {
-      await this.view.openLocator(`${ref}:0`);
+  private syncTocPosition(): void {
+    const view = this.view;
+    const doc = this.doc;
+    if (!view || !doc) return;
+    const local = view.currentSectionIndex();
+    const spine = view.windowIndexOfRef(view.sectionIdAt(local) ?? '') ?? local;
+    const item = this.content?.items[local];
+    // A window the client built itself (no manifest `content`) has no items to
+    // read a reference off, and the section id is then the reference.
+    const currentRef = item?.href ?? doc.sections[local]?.id ?? '';
+
+    const toc = this.chrome.toc.map((entry) =>
+      entry.spine === undefined && entry.id === currentRef ? { ...entry, spine } : entry,
+    );
+    if (toc.some((entry, index) => entry.spine !== this.chrome.toc[index]?.spine)) {
+      this.patch({ toc });
       return;
     }
+    if (currentRef !== this.chrome.currentSectionId) this.patch({ currentSectionId: currentRef });
+  }
+
+  /**
+   * Jump to a contents entry, loading the window that holds it when necessary.
+   *
+   * A chapter inside the loaded window is a local index change; one outside it
+   * means fetching that window first. Without the second half, tapping chapter
+   * 900 of a 1200-chapter book does nothing at all, which is how a windowed
+   * reader turns from fast into broken.
+   *
+   * Three things here were wrong and are the reason the 目录 felt dead:
+   *
+   *  - `openLocator` was awaited *after* being called for its boolean, so every
+   *    tap rendered the chapter twice. On a large chapter that is two full
+   *    document injections per tap, and the second one lands after the panel has
+   *    closed, so the reader sees a flash and no movement.
+   *  - The window fallback asked the *view* to swap windows through a method the
+   *    document never had (see `adoptWindow`), so a jump outside the window was a
+   *    silent no-op. It now goes through `view.loadWindow`, which owns the swap
+   *    and the landing together.
+   *  - The old code needed the TOC's `spine`, and a TOC entry without one (a
+   *    comic whose chapter is a page, a format that only has items) returned
+   *    without a word. It is derived from the loaded window's own `seq` instead.
+   */
+  private async goToChapterRef(ref: string): Promise<void> {
+    const view = this.view;
+    if (!view || this.navigating) return;
     const book = this.book;
     if (!book) return;
+
+    const local = view.indexOfSection(ref);
+
+    // The overwhelmingly common case: the chapter is one the window already
+    // holds. No network, no window, no second render.
+    if (local >= 0) {
+      await view.open(local, 0);
+      return;
+    }
+    if (!this.content) return;
+
+    this.navigating = true;
+    this.patch({ navigating: true });
+    this.setStatus('loading', '正在跳到这一章…');
     try {
-      // The TOC's `spine` is the whole-book index the windowing is keyed on.
-      const toc = await this.options.api.toc(book.id);
-      const spine = toc.find((entry) => entry.href === ref)?.spine;
-      if (spine === undefined) return;
-      const group = Math.floor(spine / CHAPTER_WINDOW);
+      const spine = view.windowIndexOfRef(ref) ?? this.tocSpineFor(ref);
+      if (spine === null) {
+        // A chapter the server's windowing cannot address at all — an image
+        // whose reference names a page rather than a position. Saying so is the
+        // whole fix: the old code was silent here, and silence is what a reader
+        // reports as "点击章节没有反应".
+        this.flashStatus('这一章暂时无法跳转', 2600);
+        return;
+      }
+      const group = windowIndexOf(this.content ?? this.windowShape(), spine);
       const content = await this.options.api.items(book.id, group);
-      if (this.view?.loadWindow(content, spine)) {
-        await this.view.openLocator(`${ref}:0`);
+      const landed = await view.loadWindow(content, spine);
+      if (!landed) this.flashStatus('这一章暂时无法跳转', 2600);
+      else this.hideStatus();
+    } catch {
+      this.flashStatus('无法跳到这一章', 2600);
+      this.setStatus('error', '无法跳到这一章');
+    } finally {
+      this.navigating = false;
+      this.patch({ navigating: false });
+    }
+  }
+
+  /**
+   * A minimal group list, for a book whose manifest carried no windowed content.
+   *
+   * Only reached by the fallback path of a server old enough to answer a manifest
+   * without `content`; the client then reads the file whole and never jumps
+   * between windows, so this exists to keep the arithmetic total rather than to
+   * be used. Sizing it from the loaded document is what makes the arithmetic
+   * right in the one case it can be reached: sections are chapters there.
+   */
+  private windowShape(): BookContent {
+    const count = this.doc?.sections.length ?? 0;
+    return {
+      kind: 'reflowable',
+      total: count,
+      groups: count > 0 ? [{ id: 'chapters', seq: 0, title: '章节', count, offset: 0 }] : [],
+      items: [],
+    };
+  }
+
+  /** Whole-book index of a contents entry, from the fetched table of contents. */
+  private tocSpineFor(ref: string): number | null {
+    const entry = this.chrome.toc.find((candidate) => candidate.id === ref);
+    return entry?.spine ?? null;
+  }
+
+  /**
+   * Steps one chapter at a time, the way the footer's ‹ / › buttons do.
+   *
+   * A chapter, not a page: the two controls answer different questions ("next
+   * screen" is the tap zone and the swipe, "next chapter" is this), and the one
+   * this exists for is the one a reader wants at the end of a chapter — the
+   * point where a page turn lands them on the next chapter's first page anyway,
+   * but only after a variable number of taps.
+   */
+  private async goToChapter(delta: 1 | -1): Promise<void> {
+    const view = this.view;
+    if (!view || this.navigating) return;
+    // The *whole-book* position, not the window-local index: `sectionCount` is
+    // the loaded window's length (forty chapters, or one comic volume), so a
+    // reader at the last chapter of a window would be told "已经是最后一章" while
+    // eighty chapters remained. The window's length is a transport detail and
+    // has no business deciding where the book ends.
+    const target = view.currentChapterPosition + delta;
+    if (target < 0) {
+      this.flashStatus('已经是第一章', 1800);
+      return;
+    }
+    if (this.chapterCount > 0 && target >= this.chapterCount) {
+      this.flashStatus('已经是最后一章', 1800);
+      return;
+    }
+    // A chapter inside the loaded window is the only case this can resolve on
+    // its own; one past the window's end has to fetch, and that is exactly what
+    // `goToSection` does — window included, because a chapter at the boundary is
+    // in the next window on one side and this one on the other.
+    await this.goToSection(target);
+  }
+
+  /**
+   * How many chapters the book has, from the manifest's own total.
+   *
+   * Not `view.sectionCount`: that is the window. A manifest with no `total` (an
+   * old server) reports the window's length, which makes the › button stop at the
+   * window's end rather than at the book's — the old behaviour, and the honest one
+   * when the client genuinely does not know.
+   */
+  private get chapterCount(): number {
+    return this.manifest?.total ?? this.doc?.sections.length ?? 0;
+  }
+
+  /**
+   * Opens a section by whole-book position, fetching its window when it is not
+   * the one loaded.
+   *
+   * The position is resolved through the *window's own* `seq`, never through the
+   * client's idea of the window size: a comic windows by volume, and forty is a
+   * chapter count, not a volume.
+   */
+  private async goToSection(spine: number): Promise<void> {
+    const view = this.view;
+    const book = this.book;
+    if (!view || !book) return;
+    // The local index of a whole-book position, when the loaded window holds it.
+    // Resolved by arithmetic against the window's offset rather than by looking a
+    // reference up: a section id is the server's, and a whole-book position is
+    // not one — the two meet only through the window's own offset.
+    const local = spine - view.windowOffset;
+    if (local >= 0 && local < view.sectionCount) {
+      await view.open(local, 0);
+      return;
+    }
+    this.navigating = true;
+    this.patch({ navigating: true });
+    this.setStatus('loading', '正在切换章节…');
+    try {
+      const content = await this.options.api.items(book.id, windowIndexOf(this.content ?? this.windowShape(), spine));
+      const landed = await view.loadWindow(content, spine);
+      if (landed) {
+        // The loaded window is a new set of sections; the *shape* does not change
+        // (the server's group list is complete in every response), but its own
+        // group marker does, and a later jump computes its target from it.
+        this.content = content;
+        this.hideStatus();
+      } else {
+        this.flashStatus('这一章暂时无法跳转', 2600);
       }
     } catch {
-      this.flashStatus('无法跳到这一章');
+      this.flashStatus('无法切换章节', 2600);
+    } finally {
+      this.navigating = false;
+      this.patch({ navigating: false });
     }
   }
 
