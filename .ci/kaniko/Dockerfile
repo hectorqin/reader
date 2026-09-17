@@ -18,6 +18,12 @@
 # 证书去探测会报 `unexpected EOF`，所以对目标 registry 关掉 TLS 证书校验。
 FROM gcr.io/kaniko-project/executor:v1.23.2-debug
 
+# 补上 `root` 用户。kaniko 官方镜像为了做到零依赖，连 `/etc/passwd` 都没有，
+# 而 CNB 起容器时固定带 `-u root`，会以 `unable to find user root` 直接失败。
+# 只加一行账户记录，不改任何权限（容器本来就是 root 在跑）。
+RUN echo 'root:x:0:0:root:/kaniko:/busybox/sh' >> /etc/passwd \
+ && echo 'root:x:0:' >> /etc/group
+
 # 上游插件脚本 + 上述两处修正。
 COPY .ci/kaniko/plugin.sh /kaniko/plugin.sh
 
