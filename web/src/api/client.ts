@@ -2,6 +2,7 @@ import { ApiError, errorForStatus, parseErrorBody } from './errors.ts';
 import type {
   Book,
   BookContent,
+  BrowseListing,
   BookListPage,
   ContinueReadingItem,
   Facets,
@@ -280,6 +281,35 @@ export class ReaderApi {
   async continueReading(limit = 20, options: RequestOptions = {}): Promise<ContinueReadingItem[]> {
     const result = await this.get<{ items: ContinueReadingItem[] }>(`/api/v1/library/continue?limit=${limit}`, options);
     return result.items;
+  }
+
+  // ---- library file manager ----
+
+  /**
+   * One directory of the library tree.
+   *
+   * `path` is library-relative and `''` means the root; the server resolves it
+   * through the same containment check every other filesystem access uses.
+   */
+  async browse(path = '', options: RequestOptions = {}): Promise<BrowseListing> {
+    const suffix = path ? `?path=${encodeURIComponent(path)}` : '';
+    return this.get<BrowseListing>(`/api/v1/library/browse${suffix}`, options);
+  }
+
+  async browseMove(paths: string[], target: string, options: RequestOptions = {}): Promise<{ moved: number; target: string }> {
+    return this.call('/api/v1/library/browse/move', 'POST', { paths, target }, options);
+  }
+
+  async browseRename(path: string, name: string, options: RequestOptions = {}): Promise<{ path: string }> {
+    return this.call('/api/v1/library/browse/rename', 'POST', { path, name }, options);
+  }
+
+  async browseMkdir(path: string, name: string, options: RequestOptions = {}): Promise<{ path: string }> {
+    return this.call('/api/v1/library/browse/mkdir', 'POST', { path, name }, options);
+  }
+
+  async browseDelete(paths: string[], options: RequestOptions = {}): Promise<{ removed: number }> {
+    return this.call('/api/v1/library/browse/delete', 'POST', { paths }, options);
   }
 
   // ---- content ----

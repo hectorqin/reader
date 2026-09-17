@@ -35,11 +35,30 @@ export class ApiError extends Error {
     return this.kind === 'offline';
   }
 
-  /** True when the failure means the stored credentials are no longer usable. */
+  /**
+   * True when the failure means the stored credentials are no longer usable.
+   *
+   * A 403 is ambiguous on this API and the distinction matters: the server uses it
+   * both for "your account is gone" (`ACCOUNT_DISABLED`, which has to sign the
+   * reader out) and for "that operation is refused" (`ADMIN_REQUIRED`,
+   * `PATH_TRAVERSAL`, `READ_ONLY_MOUNT` — none of which say anything about the
+   * session). Treating every 403 as a dead session meant a reader who tried to
+   * rename a file on a read-only mount was thrown back to the login screen, with
+   * their credentials silently discarded, for an error that had nothing to do
+   * with signing in.
+   *
+   * So the code decides, and the status is only the fallback for a 403 whose code
+   * the client cannot classify.
+   */
   get isAuthFailure(): boolean {
-    return this.kind === 'unauthorized' || this.kind === 'forbidden';
+    if (this.kind === 'unauthorized') return true;
+    if (this.kind !== 'forbidden') return false;
+    return AUTH_FAILURE_CODES.has(this.code);
   }
 }
+
+/** The 403 codes that mean the session itself is no longer valid. */
+const AUTH_FAILURE_CODES = new Set(['ACCOUNT_DISABLED', 'TOKEN_INVALID', 'NO_TOKEN']);
 
 const KIND_BY_STATUS: Record<number, ApiErrorKind> = {
   400: 'bad_request',

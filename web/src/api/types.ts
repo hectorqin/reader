@@ -197,6 +197,45 @@ export interface ContinueReadingItem extends Book {
   lastReadAt: number | null;
 }
 
+/**
+ * One entry in the library tree, as the file-manager screen sees it.
+ *
+ * Carries the flags rather than the decisions: `hidden`, `hiddenByRule` and
+ * `scanned` together let the UI explain *why* a book on disk is not on the shelf,
+ * which is the one question no other screen can answer.
+ */
+export interface BrowseEntry {
+  name: string;
+  /** Library-relative path; the id every operation passes back. */
+  path: string;
+  type: 'dir' | 'file' | 'other';
+  size: number;
+  mtime: number;
+  mode: number;
+  hidden: boolean;
+  hiddenByRule: boolean;
+  /** The scanner indexes this path as a book of its own. */
+  scanned: boolean;
+  ext: string;
+  /** The index currently holds a row for this exact path. */
+  indexed: boolean;
+}
+
+export interface BrowseListing {
+  /** `''` is the library root. */
+  path: string;
+  crumbs: Array<{ name: string; path: string }>;
+  parent: string | null;
+  entries: BrowseEntry[];
+  total: number;
+  dirs: number;
+  files: number;
+  size: number;
+  /** Whether the mount accepts writes; the UI hides its write controls when not. */
+  writable: boolean;
+  name: string;
+}
+
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }

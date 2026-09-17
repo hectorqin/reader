@@ -15,6 +15,8 @@ export interface ShelfScreenOptions {
   /** Current shelf preferences, so the screen starts in the reader's own state. */
   settings: AppSettings;
   onOpenBook(book: Book): void;
+  /** Opens the library file manager. Admin-ish by nature, but gated by the mount. */
+  onOpenManager(): void;
   onSignedOut(): void;
   /** Persisted through the app's settings store, like the reader's own. */
   onSettingsChange(patch: Partial<AppSettings>): void;
@@ -143,9 +145,20 @@ export class ShelfScreen {
       on: { click: () => this.toggleSettings() },
     }) as HTMLButtonElement;
 
+    // The file manager's entry point sits next to the shelf settings gear because
+    // that is where "the library itself" already lives. It is offered to every
+    // account, not just admins: the mount decides whether it can write anything,
+    // and a reader whose own book failed to appear is exactly who needs to look.
+    const managerButton = el('button', {
+      className: 'icon-button shelf-settings-button',
+      text: '🗂',
+      attrs: { type: 'button', 'aria-label': '书库管理' },
+      on: { click: () => this.options.onOpenManager() },
+    });
+
     const toolbar = el('div', {
       className: 'shelf-toolbar',
-      children: [this.countLabel, this.sortRow, this.settingsButton],
+      children: [this.countLabel, this.sortRow, this.settingsButton, managerButton],
     });
 
     this.settingsPanel = buildShelfSettingsPanel({

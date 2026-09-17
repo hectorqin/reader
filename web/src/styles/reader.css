@@ -1238,3 +1238,302 @@ book-content ::selection {
   background: var(--reader-accent);
   color: #fff;
 }
+
+/* ------------------------------------------------------------------ *
+ * 书库管理 — the library as a file manager
+ *
+ * The one screen that shows the mount rather than the catalog, so its job is to
+ * stay out of the way: a path you can read at the top, rows that navigate, and
+ * the destructive actions behind an explicit selection.
+ * ------------------------------------------------------------------ */
+
+/*
+ * The screen fills the app and scrolls internally, like every other screen.
+ * `#app` is `overflow: hidden`, so a screen that does not claim `min-height: 0`
+ * on the flex chain pushes its own content off the bottom instead of scrolling.
+ * `position: relative` is what the dialogs and the selection pill are placed
+ * against.
+ */
+.manager-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.manager-crumbs {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+}
+
+.manager-crumbs::-webkit-scrollbar {
+  display: none;
+}
+
+.manager-crumb {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--reader-ink);
+  font-size: 0.9rem;
+  font-family: inherit;
+  padding: 0.35rem 0.25rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.manager-crumb[aria-current='true'] {
+  font-weight: 600;
+}
+
+.manager-crumb-sep {
+  color: var(--reader-muted);
+}
+
+.manager-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;
+}
+
+.manager-list {
+  padding: 0;
+}
+
+.manager-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--reader-line);
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.manager-row:active {
+  background: color-mix(in srgb, var(--reader-ink) 6%, transparent);
+}
+
+.manager-row[data-selected='true'] {
+  background: color-mix(in srgb, var(--reader-accent) 14%, transparent);
+}
+
+/*
+ * The checkbox is always laid out and only made visible in selection mode.
+ *
+ * Toggling `display` instead would shift every row's indent the moment a
+ * selection begins, which reads as the list jumping under the finger that just
+ * started the selection.
+ */
+.manager-check {
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--reader-line);
+  box-sizing: border-box;
+  /* Always laid out, only visible while something is selected: toggling
+     `display` would shift every row's indent the moment a selection begins,
+     which reads as the list jumping under the finger that started it. */
+  opacity: 0;
+}
+
+.manager-row[data-selected] .manager-check {
+  opacity: 1;
+}
+
+.manager-row[data-selected='true'] .manager-check {
+  border-color: var(--reader-accent);
+  background: var(--reader-accent);
+}
+
+.manager-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.manager-icon {
+  font-size: 1rem;
+  flex: 0 0 auto;
+}
+
+.manager-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.manager-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.manager-badge {
+  border: 1px solid var(--reader-line);
+  border-radius: 4px;
+  padding: 0 0.25rem;
+  font-size: 0.65rem;
+  color: var(--reader-muted);
+}
+
+/* The badge a reader needs to see is the one explaining a missing book. */
+.manager-badge.warn {
+  border-color: color-mix(in srgb, var(--reader-accent) 60%, transparent);
+  color: var(--reader-accent);
+}
+
+.manager-more {
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.1rem;
+}
+
+/*
+ * On a read-only mount the row menu offers nothing but "选择", so it is dimmed
+ * rather than removed: the row still has to line up with the others, and a
+ * column that appears and disappears with the deployment reads as a bug.
+ */
+.manager-screen[data-writable='false'] .manager-more {
+  opacity: 0.35;
+}
+
+/*
+ * The counts sit *inside* the scroller, not after it.
+ *
+ * Pinned below a scrolling list they were the first thing pushed off-screen by a
+ * directory of forty files — which is exactly when a reader wants to know how
+ * many there are, and exactly when "删除完成" would have gone unread.
+ */
+.manager-status {
+  position: sticky;
+  inset-block-end: 0;
+  font-size: 0.75rem;
+  text-align: center;
+  padding: 0.5rem 0.75rem;
+  background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid transparent;
+}
+
+.manager-status:not(:empty) {
+  border-top-color: var(--reader-line);
+}
+
+.manager-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--reader-line);
+  background: var(--reader-surface);
+}
+
+.manager-actions[hidden] {
+  display: none;
+}
+
+.manager-actions .button {
+  flex: 1 1 auto;
+}
+
+.manager-selection {
+  position: absolute;
+  inset-block-start: calc(env(safe-area-inset-top) + 0.25rem);
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  background: var(--reader-ink);
+  color: var(--reader-paper);
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.72rem;
+  pointer-events: none;
+  z-index: 25;
+}
+
+.manager-selection[hidden] {
+  display: none;
+}
+
+.button.danger {
+  border-color: color-mix(in srgb, #c0392b 55%, transparent);
+  color: #c0392b;
+}
+
+/* ---- dialogs ---- */
+
+.dialog-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  z-index: 30;
+}
+
+.dialog {
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  border: 1px solid var(--reader-line);
+  border-radius: var(--reader-radius);
+  padding: 1rem;
+  width: min(24rem, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dialog h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dialog p {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.dialog input {
+  appearance: none;
+  border: 1px solid var(--reader-line);
+  background: var(--reader-paper);
+  color: var(--reader-ink);
+  border-radius: var(--reader-radius);
+  padding: 0.6rem 0.7rem;
+  /* 16px, so iOS does not zoom the page on focus and leave the dialog off-screen. */
+  font-size: 16px;
+  font-family: inherit;
+  width: 100%;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.dialog-actions .button {
+  flex: 0 1 auto;
+  min-width: 5rem;
+}
+
+.dialog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
