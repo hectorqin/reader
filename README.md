@@ -319,6 +319,43 @@ EPUB 永远留在 WebView：文字排版是差异点，只能有一份实现。
 
 ---
 
+## 故障排查
+
+### 启动即退出：`EACCES: permission denied, open '/data/token.secret'`
+
+```
+fatal: Error: EACCES: permission denied, open '/data/token.secret'
+    at loadOrCreateSecret (file:///app/dist/config/index.js:27:5)
+```
+
+`/data` 挂上了，但容器里的服务进程写不进去。服务端以非特权用户 `reader`
+（uid/gid `100:100`）运行，而 `/data` 若是 **bind mount**（`./data:/data`），
+挂载点的属主来自宿主机目录，**会覆盖镜像里构建时做的 chown**——宿主机上
+`./data` 不存在时 Docker 会以 `root:root` 新建它，于是非特权用户写不了。
+命名卷（named volume）继承镜像里的 chown，不受影响。
+
+镜像的入口脚本已经会在启动时自动把 `/data` 的属主改成 `reader` 再降权运行，
+所以**正常用官方镜像不会遇到这个问题**。仍然报错时按顺序检查：
+
+1. 拉的是最新镜像：`docker compose pull && docker compose up -d`。
+2. 自己加了 `user:` / `docker run --user` 覆盖了启动用户，去掉它。
+3. `/data` 所在文件系统不支持改属主（NFS / SMB / NTFS 挂载，如群晖的部分共享目录），
+   此时给 `READER_TOKEN_SECRET` 设一个 ≥16 字符的随机串，服务端就不需要写密钥文件：
+   ```bash
+   openssl rand -base64 48          # 生成一个
+   ```
+   在 compose 里加 `READER_TOKEN_SECRET: "<上面的值>"`。
+4. 手动修宿主机目录属主（Linux；群晖等 NAS 上 uid 可能不同）：
+   ```bash
+   sudo chown -R 100:100 ./data
+   ```
+
+> 自建的镜像若来自 `server/Dockerfile`，注意 `ENTRYPOINT` 不能被覆盖，否则降权
+> 那一步不会执行。服务端本身在写密钥失败时会直接报出「`DATA_DIR` 必须可写」
+> 并给出一键修法，不会再只抛一个 errno。
+
+---
+
 ## 让外网访问（内网穿透 / 域名 / HTTPS）
 
 自部署最大的门槛在这里，所以单独说清楚。三种常见做法：

@@ -52,7 +52,12 @@ ENV NODE_ENV=production \
 
 # Run as an unprivileged user. The library mount is read-only, so this user only
 # ever needs write access to /data.
-RUN addgroup -S reader && adduser -S reader -G reader \
+#
+# `su-exec` is a ~10KB static helper that drops privileges from an entrypoint;
+# Alpine's busybox has no equivalent (`setpriv` lives in util-linux, which the
+# base image does not carry), and `su` there needs a password hash to be set up.
+RUN apk add --no-cache su-exec \
+ && addgroup -S reader && adduser -S reader -G reader \
  && mkdir -p /data /books /app/public && chown -R reader:reader /data /books /app/public
 
 COPY --from=build --chown=reader:reader /app/node_modules ./node_modules
@@ -61,7 +66,12 @@ COPY --from=build --chown=reader:reader /app/package.json ./
 # The built H5 client, served by the same process at `/`.
 COPY --from=web --chown=reader:reader /web/dist ./web
 
-USER reader
+# The entrypoint starts as root purely to take ownership of the *mounted* /data
+# (a bind mount's uid/gid comes from the host and overrides the chown above),
+# then re-execs the server as `reader`. See the script for the full rationale.
+COPY --chown=root:root server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 8080
 VOLUME ["/data"]
 
@@ -70,4 +80,5 @@ VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "dist/main.js"]
