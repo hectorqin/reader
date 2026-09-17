@@ -33,6 +33,7 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    allowedHosts: ["drs838pg4q-5174.cnb.run"]
   },
   test: {
     environment: 'node',
