@@ -1,5 +1,6 @@
 import { ApiError } from '../api/errors.ts';
 import type { ReaderApi, NoteInput } from '../api/client.ts';
+import type { SyncPull } from '../api/types.ts';
 import { isOutboxEmpty, type OfflineStore } from '../store/offline.ts';
 import type { Connectivity, Platform } from './platform.ts';
 
@@ -93,7 +94,24 @@ export class SyncEngine {
     for (const listener of this.listeners) listener(status);
   }
 
+  /**
+   * Publishes a state change, and *only* a change.
+   *
+   * The guard is the fix for a re-render storm. The reader screen's status
+   * listener repaints the whole chrome tree on every notification, and a sync
+   * cycle announces itself twice — `syncing` on the way in, `idle` on the way out —
+   * so a reader flipping through a book repainted that tree three times per cycle
+   * (the explicit `emit()` after `setState('idle')` was a third) whether or not
+   * anything had actually changed. `syncNow` also runs on a 30s poll, so the storm
+   * continued while the reader was doing nothing at all.
+   *
+   * A state or message that is already published carries no new information, and
+   * the readers of this stream are *painters*: telling them again is pure cost.
+   * Deduplicating here rather than at each listener means every listener gets the
+   * same guarantee, and a listener added later cannot reintroduce the storm.
+   */
   private setState(state: SyncState, message = ''): void {
+    if (this.state === state && this.message === message) return;
     this.state = state;
     this.message = message;
     this.emit();
@@ -156,7 +174,21 @@ export class SyncEngine {
     return this.requested !== null;
   }
 
-  private scheduleNext(delay: number): void {
+  /**
+   * Arms the next automatic poll.
+   *
+   * A timer that is already armed is *kept* rather than re-armed, and the
+   * difference is a real one: `syncNow` runs on demand (every `schedule()` push)
+   * as well as on the poll, and resetting the timer on each of those meant the
+   * poll was pushed out by every page turn. On a book being read, the 30-second
+   * poll then never fired at all — the pull half of sync stopped happening while
+   * the push half ran constantly, which is the asymmetry a reader sees as "怎么还
+   * 在一直请求" and as a shelf that never picks up another device's progress.
+   */
+  private scheduleNext(delay: number, force = false): void {
+    // A backoff retry *replaces* the poll rather than waiting behind it: the poll
+    // is 30 seconds away, and a failure that retries in 2 has to be allowed to.
+    if (this.timer && !force) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = null;
@@ -172,9 +204,22 @@ export class SyncEngine {
    * the same time.
    */
   async syncNow(): Promise<void> {
-    if (this.running) return;
+    if (this.running) {
+      // A run is already in flight and will arm the next poll itself. Re-arming
+      // here would be a second timer, and the loser would fire a duplicate cycle.
+      return;
+    }
     if (!this.api.currentSession()) {
       this.setState('signed-out');
+      return;
+    }
+    // A push that has been asked for and not yet run is *this* work, a few
+    // milliseconds early. Letting the poll run first would send the same outbox
+    // twice and pull twice, and the second answer would be identical to the first
+    // — which is exactly the "sync 接口在不停重复" a reader sees in the network
+    // panel. The pending push will do the job; the poll re-arms itself below.
+    if (this.requested) {
+      this.scheduleNext(IDLE_INTERVAL_MS);
       return;
     }
     this.running = true;
@@ -187,8 +232,19 @@ export class SyncEngine {
         return;
       }
 
-      await this.pushOutbox();
-      const pull = await this.api.pull(this.offline.current.serverTime);
+      // One round trip, not two.
+      //
+      // `POST /api/v1/sync` answers with the merged state — the server's own
+      // comment says so: "Returning the merged state lets the client reconcile in
+      // the same round trip instead of issuing a follow-up pull." A push used to
+      // throw that answer away and then issue a *second* request for it, so every
+      // page turn cost a POST and a GET carrying the same body. Taking the push's
+      // answer is what makes a page turn cost one request.
+      //
+      // A push that had nothing to send (an idle poll) returns null, and then the
+      // pull is the real work — that is the poll's whole purpose.
+      const pushed = await this.pushOutbox();
+      const pull = pushed ?? (await this.api.pull(this.offline.current.serverTime));
       await this.offline.applyPulled(pull);
       this.rememberNoteBooks();
 
@@ -196,7 +252,6 @@ export class SyncEngine {
       // A rejection message has to survive the state transition to idle,
       // otherwise the reader never learns that a record was dropped.
       this.setState('idle', this.rejectedCount > 0 ? `${this.rejectedCount} 条记录被服务端拒绝` : this.message);
-      this.emit();
       this.scheduleNext(IDLE_INTERVAL_MS);
     } catch (err) {
       this.handleFailure(err);
@@ -213,7 +268,7 @@ export class SyncEngine {
    * the record's own update will still be dirty after this returns, so the next
    * cycle picks it up instead of it being cleared by a response that predates it.
    */
-  private async pushOutbox(): Promise<void> {
+  private async pushOutbox(): Promise<SyncPull | null> {
     const batch = this.offline.outbox();
     const deletes: NoteInput[] = batch.deletes.map((id) => ({
       id,
@@ -244,7 +299,8 @@ export class SyncEngine {
       })),
       ...deletes,
     ];
-    if (batch.progress.length === 0 && notes.length === 0) return;
+    // Nothing to send: this is an idle poll, and the caller does the pull.
+    if (batch.progress.length === 0 && notes.length === 0) return null;
 
     // The server caps a batch at 5000 records; chunk well below that so a long
     // offline session cannot fail wholesale on one oversized request.
@@ -252,6 +308,10 @@ export class SyncEngine {
     const batches = Math.max(1, Math.ceil(Math.max(batch.progress.length, notes.length) / CHUNK));
     let serverTime = 0;
     let rejected = 0;
+    // The last chunk's answer is the merged state as of the final write, which is
+    // the only one worth reconciling against: an earlier chunk's `progress` list
+    // predates the writes that came after it.
+    let merged: SyncPull | null = null;
     for (let index = 0; index < batches; index += 1) {
       const offset = index * CHUNK;
       const progressChunk = batch.progress.slice(offset, offset + CHUNK);
@@ -262,6 +322,7 @@ export class SyncEngine {
       });
       serverTime = Math.max(serverTime, result.serverTime);
       rejected += result.rejected;
+      merged = result;
     }
     await this.offline.markDelivered(batch, serverTime);
     // Rejections are informational. The server refuses records it can never
@@ -270,6 +331,7 @@ export class SyncEngine {
     // on the engine rather than in a transient message so the status bar can
     // still show it after the state settles.
     this.rejectedCount = rejected;
+    return merged;
   }
 
   /**
@@ -302,7 +364,10 @@ export class SyncEngine {
     }
     this.setState('error', err instanceof Error ? err.message : '同步失败');
     this.backoff = Math.min(this.backoff * 2, RETRY_MAX_MS);
-    this.scheduleNext(this.backoff);
+    // `force`: an error's exponential backoff must be able to shorten a wait the
+    // poll has already armed, or the first retry after a blip would be 30 seconds
+    // late and the backoff would appear not to work.
+    this.scheduleNext(this.backoff, true);
   }
 
   /**

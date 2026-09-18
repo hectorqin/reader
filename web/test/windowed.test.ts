@@ -24,6 +24,21 @@ function item(index: number): ContentItem {
   };
 }
 
+/** A plain-text chapter, as the server's manifest declares one. */
+function textItem(index: number): ContentItem {
+  return {
+    id: `c${index}`,
+    seq: index,
+    title: `第 ${index + 1} 章`,
+    kind: 'chapter',
+    // The declaration the reader typesets from. `format: 'html'` and a `text/plain`
+    // media type are the pair the server actually sends for a TXT.
+    mediaType: 'text/plain; charset=utf-8',
+    href: `chapter:${index}`,
+    format: 'html',
+  };
+}
+
 function windowOf(from: number, count: number, total: number): BookContent {
   return {
     kind: 'reflowable',
@@ -37,6 +52,59 @@ function windowOf(from: number, count: number, total: number): BookContent {
 }
 
 describe('staged documents', () => {
+  it('carries the manifest\'s plain-text declaration onto the section', async () => {
+    // The declaration has to reach the *section*, because that is what the reader
+    // asks when it decides whether to typeset. It cannot be re-derived from the body:
+    // the server sends a TXT chapter as bare characters with no wrapper, so a body
+    // that is nothing but plain text carries nothing to recognise it by — and a
+    // reader that answers "not plain text" draws the novel as an unstyled slab.
+    const doc = createStagedDoc({
+      kind: 'reflowable',
+      toc: [],
+      content: {
+        kind: 'reflowable',
+        total: 2,
+        groups: [{ id: 'g', seq: 0, title: '', count: 2, offset: 0 }],
+        items: [textItem(0), item(1)],
+      },
+      loader: { async read() { return { html: '第一章\n\n正文。' }; } },
+    });
+
+    expect(doc.sections[0]?.plainText).toBe(true);
+    // An EPUB chapter in the same window is not swept up by it: the decision is per
+    // section, and an EPUB's own markup must survive untouched.
+    expect(doc.sections[1]?.plainText).toBeUndefined();
+  });
+
+  it('keeps the declaration across a window swap', async () => {
+    // A jump to chapter 900 replaces every section. Losing the flag there would turn
+    // the rest of the book into an EPUB — paragraphs gone, stylesheet gone — and only
+    // after the reader had navigated, which is the hardest kind of defect to report.
+    const doc = createStagedDoc({
+      kind: 'reflowable',
+      toc: [],
+      content: {
+        kind: 'reflowable',
+        total: 4,
+        groups: [{ id: 'g', seq: 0, title: '', count: 2, offset: 0 }],
+        items: [textItem(0), textItem(1)],
+        group: 0,
+      },
+      loader: { async read() { return { html: '第一章\n\n正文。' }; } },
+    });
+    expect(doc.sections[0]?.plainText).toBe(true);
+
+    doc.setWindow({
+      kind: 'reflowable',
+      total: 4,
+      groups: [{ id: 'g', seq: 1, title: '', count: 2, offset: 2 }],
+      items: [textItem(2), textItem(3)],
+      group: 1,
+    }, 2);
+
+    expect(doc.sections[0]?.plainText).toBe(true);
+  });
+
   it('does not read a section until it is asked for', async () => {
     const read: string[] = [];
     const doc = createStagedDoc({

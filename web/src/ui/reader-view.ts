@@ -9,7 +9,7 @@ import {
   sanitiseInjectedContent,
   type BookShadowHost,
 } from './shadow.ts';
-import { escapeHtml, textToParagraphHtml } from '../formats/segments.ts';
+import { escapeHtml, textToChapterHtml } from '../formats/segments.ts';
 import { bookPercentage, formatLocator, parseLocator } from './locator.ts';
 import { collectSpokenChunks, type SpokenChunk } from '../render/tts-text.ts';
 import { adoptWindow } from '../formats/windowed.ts';
@@ -525,63 +525,102 @@ export class ReaderView {
    * indent control beside them.
    */
   isPlainText(section: Section = this.doc.sections[this.sectionIndex] ?? EMPTY_SECTION): boolean {
-    if (this.doc.format === 'txt') return true;
+    // The declaration wins outright. `format: 'txt'` is the book saying so and
+    // `plainText` is the *section* saying so, which is the one that can be right when
+    // a manifest windows a TXT as `reflowable` — a reasonable choice, since a TXT is
+    // reflowable, and one that made the chapter-level answer differ from the
+    // book-level one.
+    if (this.doc.format === 'txt' || section.plainText) return true;
+    // The marker is kept as the last resort, for a section that reached here from an
+    // older server (or a cache written by one) which *did* wrap its chapters in
+    // `<div class="txt-body">`. It is deliberately no longer the primary signal: a
+    // server that sends bare characters carries no marker, so sniffing for one
+    // answers "not plain text" for a chapter that is nothing but plain text.
     const html = section.html ?? '';
     return /<div[^>]*class="[^"]*\btxt-body\b/.test(html);
   }
 
   /**
-   * Re-renders a chapter of a plain-text book through the reader's own split.
+   * Renders a chapter of a plain-text book through the reader's own split.
    *
-   * Two sources reach this method and they need the same treatment:
+   * The input is the *characters* of the chapter, however they arrived:
    *
-   *  - the server's `chapter-html:<n>` rendition (see `text-html.ts`), which is
-   *    that book's characters as markup; and
-   *  - a `chapter:<n>` body fetched by the windowed path, which is the book's
-   *    characters and nothing else.
+   *  - a `chapter-html:<n>` body fetched by the windowed path, which is that
+   *    book's text and nothing else (the server stopped typesetting — see
+   *    `server/src/indexer/formats/text-html.ts`); or
+   *  - a body from a server that still renders markup, which is handled by
+   *    reading its blocks back as text rather than by trusting its elements.
    *
    * Both end up here because *both* are the reader's own rendering of a file that
    * has none, and the thing the reader asked for — a per-device indent, paragraph
    * spacing, the removal of a scraper's leading spaces — is a property of the
    * rendering, not of the file. Doing it server-side meant the settings could only
-   * apply to the rendition the server had already produced, and a book read
-   * windowed got no paragraphs at all; doing it here means one code path and no
-   * request, and the server's job shrinks to handing over the text.
+   * apply to the rendition the server had already produced, and it meant the two
+   * transports could disagree about where a paragraph was.
    *
    * Guarded by `isPlainText`, and the guard is why an EPUB is safe: an ordinary
-   * novel never produces a `txt-body` wrapper, so it goes through untouched (the
+   * novel never carries the `txt-body` marker, so it goes through untouched (the
    * one thing in this file that must not happen is a re-typesetting pass that runs
    * on every format, because that would mangle every EPUB).
    */
   private retypePlainText(section: Section): string {
     const raw = section.html ?? '';
     if (!this.isPlainText(section)) return raw;
-    const container = document.createElement('div');
-    container.innerHTML = extractBody(raw);
-    const wrapper = container.querySelector('.txt-body');
-    if (!wrapper) return raw;
-    // A heading the server promoted out of the body is kept, and kept *first*:
-    // it is the one piece of structure a TXT has, and re-deriving it here would
-    // duplicate a heuristic the server already runs against the undecoded file.
-    const heading = wrapper.querySelector('h3, h4');
-    // The text is read back *per block*, and that is the whole job. Using
-    // `wrapper.textContent` would concatenate the paragraphs into one run with no
-    // separator, so a chapter that arrived already split would be re-split as a
-    // single paragraph and every boundary it had would be lost — the exact defect
-    // this method exists to remove, arriving from the other direction. Joining the
-    // blocks with a blank line puts back the separator the split reads as a
-    // boundary, and the boundaries *inside* a block are still inferred from its
-    // text, which is what makes this work for a chapter the server sent as one
-    // slab with no elements in it at all.
-    const blocks = [...wrapper.children]
-      .filter((element) => !/^H[1-6]$/.test(element.tagName))
-      .map((element) => element.textContent ?? '')
-      .filter((text) => text.trim().length > 0);
-    const body = blocks.length > 0
-      ? blocks.join('\n\n')
-      : wrapper.textContent ?? '';
-    const promoted = heading ? `<h3>${escapeHtml(heading.textContent ?? '')}</h3>\n` : '';
-    return `<div class="txt-body">\n${promoted}${textToParagraphHtml(body)}\n</div>\n`;
+    // A `txt-body` wrapper means the body arrived as markup (this build no longer
+    // produces one, but a window carried over from an older server or a cached
+    // section might). Its blocks are read back *per block* and re-joined with a
+    // blank line: `textContent` on the wrapper would concatenate them into one
+    // run, and the re-split below would then see a single paragraph and destroy
+    // every boundary the block structure was carrying.
+    let text = raw;
+    // A heading an older server promoted out of the body. It is kept, and kept
+    // *first*, because it is the one piece of structure a TXT has and because
+    // re-deriving it is a heuristic — running a heuristic twice is how two copies of
+    // it come to disagree. Re-emitted below rather than fed back through the regex.
+    let keptHeading = '';
+    // Only a body that *is* markup is parsed as markup: a section the manifest
+    // declared as plain text is characters all the way down, and running an HTML
+    // parser over a novel whose text happens to contain `<` is how a paragraph gets
+    // silently eaten.
+    if (!section.plainText && /<div[^>]*class="[^"]*\btxt-body\b/.test(raw)) {
+      const container = document.createElement('div');
+      container.innerHTML = raw;
+      const wrapper = container.querySelector('.txt-body');
+      if (wrapper) {
+        const heading = wrapper.querySelector('h3, h4');
+        keptHeading = heading?.textContent?.trim() ?? '';
+        // Read back *per block*, not with `textContent` on the wrapper: the latter
+        // concatenates the paragraphs into one run, and the re-split below would
+        // then see a single paragraph and destroy every boundary the block
+        // structure was carrying.
+        const blocks = [...wrapper.children]
+          .filter((element) => !/^H[1-6]$/.test(element.tagName))
+          .map((element) => element.textContent ?? '')
+          .filter((block) => block.trim().length > 0);
+        text = blocks.length > 0 ? blocks.join('\n\n') : wrapper.textContent ?? '';
+      }
+    } else {
+      // Not markup: the chapter's characters, as fetched, and nothing else. This
+      // is what the server sends now (see `server/src/indexer/formats/text.ts`).
+      // `extractBody` is still applied because a plain-text body can be wrapped in
+      // an `<html>`/`<body>` shell by a proxy, and unwrapping that is cheaper than
+      // discovering it as a stray `<html>` inside the first paragraph.
+      text = extractBody(raw);
+    }
+    // The heading is re-derived from the text like every other boundary, by
+    // `segments.ts`, when the body did not already carry one: the chapter's first
+    // line is its title (that is what `splitChapters` records and why a locator
+    // lands on the title). A heading the body *did* carry is re-emitted directly
+    // rather than fed back through the regex — it was already promoted once, and
+    // a second pass would only be a chance to disagree with the first.
+    const rendered = textToChapterHtml(text);
+    if (keptHeading) {
+      return rendered.replace(
+        '<div class="txt-body">\n',
+        `<div class="txt-body">\n<h3>${escapeHtml(keptHeading)}</h3>\n`,
+      );
+    }
+    return rendered;
   }
 
   private async renderReflowable(section: Section): Promise<void> {

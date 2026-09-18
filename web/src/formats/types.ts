@@ -46,6 +46,19 @@ export interface Section {
    */
   render?: RenderMode;
   /**
+   * The section's body is plain characters to be typeset, not authored markup.
+   *
+   * Carried per section because the *manifest* is where the declaration lives (a
+   * content item's `format: 'html'`), and because inferring it from the body is a
+   * guess that fails in exactly the case this exists for: the server used to wrap a
+   * TXT chapter in `<div class="txt-body">`, and now it sends bare characters, so a
+   * marker-sniffing check answers "not plain text" for a chapter that is nothing
+   * *but* plain text — and the reader then draws a novel with no paragraphs, no
+   * indent and no stylesheet applied, which is a defect that looks like a typography
+   * preference rather than a bug.
+   */
+  plainText?: boolean;
+  /**
    * Path this section's bytes can be fetched from, when the section is one
    * addressable file. This is what lets a native host fetch a page itself
    * instead of being handed a buffer by the web layer.

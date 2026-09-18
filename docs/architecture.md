@@ -151,6 +151,22 @@ id = sha256( (dc:identifier ?? '').toLowerCase() + '\0' + sha256(fileBytes) )
 `GET /api/v1/sync?since=<上次的 serverTime>`。客户端记住上次返回的 `serverTime`，
 每次只拿增量。移动网络下重连很便宜。
 
+### 一次写入只发一个请求
+
+`POST /api/v1/sync` 的响应**就是合并后的状态**（服务端在两个接口上返回同一份
+`pull`）。所以推完之后**不要再拉一次**——`SyncEngine` 直接拿 push 的返回值喂给
+`applyPulled`，没有东西可推（空闲轮询）时才真的发 `GET`。
+
+之前不是这样：push 的返回值被丢掉，然后为了同一份数据再发一个 `GET`。于是读者每
+翻一页都发一个 POST **加** 一个 GET，网络面板里就是成对出现的 `sync` ——这正是
+「sync 接口在不停重复」的来源。
+
+### 状态只在变化时广播
+
+`setState` 先比对新旧 state/message，相同就直接返回。阅读页的状态监听会重绘整棵
+chrome 树，而一个同步循环本来会通知三次（进门 `syncing`、出门 `idle`、再加一次
+多余的 `emit()`），30 秒轮询让这件事在读者什么都不做时也持续发生。
+
 ---
 
 ## 6. 认证与安全

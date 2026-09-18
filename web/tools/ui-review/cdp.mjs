@@ -157,6 +157,20 @@ export class CDP {
   }
 
   /**
+   * How many requests the stand-in API has answered, by name.
+   *
+   * Read from the page rather than from Node, because that is where the review's own
+   * origin is: the harness server logs every request it sees, and the page is the
+   * only party that can reach it without the tool growing its own HTTP client. The
+   * endpoint returns *counts* rather than the log so the assertion is a comparison of
+   * two numbers instead of a scan of a growing array.
+   */
+  async requestCounts() {
+    const counts = await this.evaluate(`fetch('/__counts').then((r) => r.json())`);
+    return counts && typeof counts === 'object' ? counts : {};
+  }
+
+  /**
    * Runs a statement body in the page, with its own `return`.
    *
    * `async` so a body can `await` — measuring a screen after a fetch settles is the
@@ -265,6 +279,37 @@ export class CDP {
   async fill(selector, value) {
     await this.click(selector);
     await this.send('Input.insertText', { text: value });
+  }
+
+  /**
+   * A horizontal swipe across the middle of the reading area: a page turn.
+   *
+   * Dispatched as *touch* events rather than a click, because that is what the
+   * gesture layer listens for and what a page turn in this app actually is. The
+   * intermediate moves matter: a single `touchStart`/`touchEnd` pair is a tap, and
+   * the gesture layer decides between the two from the distance travelled.
+   */
+  async swipePage(direction = 'next') {
+    const box = await this.execute(`(() => {
+      const el = document.querySelector('.stage');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2, width: r.width };
+    })()`);
+    if (!box) throw new Error('no .stage to swipe');
+    const travel = box.width * 0.35 * (direction === 'next' ? -1 : 1);
+    const steps = 6;
+    const points = (offset) => [{ x: box.x + offset, y: box.y }];
+    await this.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: points(0) });
+    for (let step = 1; step <= steps; step += 1) {
+      await this.send('Input.dispatchTouchEvent', {
+        type: 'touchMove',
+        touchPoints: points((travel * step) / steps),
+      });
+      await sleep(16);
+    }
+    await this.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await sleep(160);
   }
 
   /** A tap in the middle of the reading area, which is the chrome toggle. */

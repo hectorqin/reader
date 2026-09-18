@@ -4,6 +4,7 @@ import {
   endsAtParagraphBreak,
   escapeHtml,
   paragraphElement,
+  splitChapterHeading,
   splitTextParagraphs,
   textToChapterHtml,
   textToParagraphHtml,
@@ -86,11 +87,62 @@ describe('the markup form', () => {
     expect(textToChapterHtml('一段')).toMatch(/^<div class="txt-body">\n<p>一段<\/p>\n<\/div>\n$/);
   });
 
+  it('promotes the chapter title instead of gluing it to the first sentence', () => {
+    // Chapter splitting records the heading as the chapter's *first line* — that is
+    // what makes a saved position land on the title rather than one line in. Rendered
+    // as ordinary prose it reads `第二章 落雨雨来了。`: title and first sentence as one
+    // paragraph, which is what a reader reports as "格式乱了".
+    const html = textToChapterHtml(['第二章 落雨', '雨来了。'].join('\n'));
+    expect(html).toContain('<h3>第二章 落雨</h3>');
+    expect(html).toContain('<p>雨来了。</p>');
+    expect(html).not.toContain('落雨雨来了');
+  });
+
+  it('leaves prose that merely looks like a heading where it is', () => {
+    // Only the *first* line is considered, and only when it is short enough to be a
+    // title. A mid-chapter line that mentions a chapter number is a sentence, and
+    // promoting it would restructure the book rather than render it.
+    const html = textToChapterHtml(['雨来了。', '他说第二章他看过。'].join('\n'));
+    expect(html).not.toContain('<h3>');
+    expect(html).toContain('<p>他说第二章他看过。</p>');
+  });
+
   it('uses textContent for the node form, so the DOM is the escaper', () => {
     const element = paragraphElement({ text: '<b>不是标签</b>', leading: 0 });
     expect(element.tagName).toBe('P');
     expect(element.textContent).toBe('<b>不是标签</b>');
     expect(element.querySelector('b')).toBeNull();
+  });
+});
+
+describe('splitChapterHeading', () => {
+  it('splits the heading off the body and reports both', () => {
+    // The pair, not just the heading: the body is what the paragraph split then
+    // works on, and returning only the heading would leave the caller to find the
+    // boundary again — a second copy of the rule, which is how the server's copy and
+    // the client's came to disagree in the first place.
+    expect(splitChapterHeading(['第一章 起点', '正文。'].join('\n'))).toEqual({
+      heading: '第一章 起点',
+      body: '正文。',
+    });
+  });
+
+  it('skips leading blank lines before looking for the heading', () => {
+    expect(splitChapterHeading('\n\n第二章 落雨\n正文。').heading).toBe('第二章 落雨');
+  });
+
+  it('reports no heading for a body that has none', () => {
+    expect(splitChapterHeading('正文只有这一段。')).toEqual({
+      heading: '',
+      body: '正文只有这一段。',
+    });
+  });
+
+  it('does not promote a long line that merely starts with a chapter number', () => {
+    // The length cap is what keeps a paragraph that *starts* with `第三章` from being
+    // read as a title, which would move the real body's first line into a heading.
+    const prose = `第三章他记得很清楚，${'那天的雨下得很大，'.repeat(8)}`;
+    expect(splitChapterHeading(prose).heading).toBe('');
   });
 });
 

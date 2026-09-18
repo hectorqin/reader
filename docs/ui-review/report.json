@@ -130,6 +130,11 @@
       "name": "没有横向溢出",
       "ok": true,
       "detail": "document 溢出 0px"
+    },
+    {
+      "name": "翻页不再每次都发两次 sync",
+      "ok": true,
+      "detail": "8 次翻页 + 6 秒静默：1 次 POST / 0 次 GET（共 1 次 sync 请求）"
     }
   ],
   "failures": []
