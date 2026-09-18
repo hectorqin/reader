@@ -46,6 +46,13 @@ const SCENES = [
   { name: '06-reader-paged', label: '阅读页 · 翻页模式', what: '分栏后的一页，页数应与可翻次数一致', openBook: true, choose: ['阅读设置', '翻页'], closePanel: true },
   { name: '07-reader-sepia', label: '阅读页 · 米黄', what: '主题切换后的同一页', openBook: true, theme: '米黄' },
   { name: '08-reader-dark', label: '阅读页 · 夜间', what: '暗色下的正文与工具栏', openBook: true, theme: '夜间' },
+  {
+    name: '09-panel-txt',
+    label: 'TXT · 正文排版',
+    what: '纯文本专属的缩进/段间距/编码三行，且面板仍是半屏',
+    openBook: true,
+    openPanel: '阅读设置',
+  },
 ];
 
 /** Measurements that must hold, on the scenes where they apply. */
@@ -207,6 +214,10 @@ async function main() {
       // Navigated to the *book* directly rather than through the shelf for the
       // scenes that need the reader: the shelf's cards need the book list to have
       // arrived, and a review of the reader should not depend on the shelf's timing.
+      // Every scene states the theme it expects, rather than inheriting whatever the
+      // previous one left behind. The TXT panel scene rendered on the dark theme the
+      // night-mode scene had set, which is a screenshot that is not about what its
+      // label says it is about — with nothing on the page to say so.
       await cdp.navigate(`${origin}/#/${scene.openBook ? `book/${encodeURIComponent('review-book')}` : 'shelf'}`);
       if (!scene.openBook) {
         try {
@@ -231,13 +242,14 @@ async function main() {
         await cdp.waitFor('document.querySelector("book-content")?.shadowRoot?.querySelector(".book-flow") !== null', 20_000);
         await cdp.sleep(800);
       }
-      if (scene.theme) {
+      const theme = scene.theme ?? (scene.openBook ? '白' : null);
+      if (theme) {
         await cdp.click('button[aria-label="阅读设置"]');
         await cdp.waitFor('document.querySelector(".panel") !== null');
-        await cdp.clickText('.segmented button', scene.theme);
-        await cdp.sleep(200);
+        await cdp.clickText('.segmented button', theme);
+        await cdp.sleep(250);
         await cdp.click('button[aria-label="关闭"]');
-        await cdp.sleep(200);
+        await cdp.sleep(250);
       }
       if (scene.openPanel) {
         await cdp.click(`button[aria-label="${scene.openPanel}"]`);

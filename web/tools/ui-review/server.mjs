@@ -120,6 +120,13 @@ function manifest() {
     total: CHAPTERS.length,
     files: [{ rel_path: '剑来.epub', size: 1024, missing: 0 }],
     content: {
+      // Deliberately `reflowable` rather than `text`, and the manifest says `epub`.
+      //
+      // A TXT *is* reflowable, so a server windowing it that way is making a
+      // reasonable choice — and the review found that the client believed the label
+      // instead of looking at the chapter it had been sent, leaving the paragraphs
+      // unstyled with no indent control beside them. Keeping the fixture on the
+      // awkward path is what keeps that fixed.
       kind: 'reflowable',
       total: CHAPTERS.length,
       groups: [{ id: 'chapters', seq: 0, title: '章节', count: CHAPTERS.length, offset: 0 }],

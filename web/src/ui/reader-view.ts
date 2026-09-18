@@ -97,6 +97,9 @@ export interface ViewSettings {
   txtParagraphGap: number;
 }
 
+/** A stand-in for the section index being out of range, so a caller need not guard. */
+const EMPTY_SECTION: Section = { id: '', label: '', depth: 0 };
+
 const DEFAULT_SETTINGS: ViewSettings = {
   mode: 'scroll',
   fontScale: 1,
@@ -266,10 +269,7 @@ export class ReaderView {
     // so an indent in `rem` drifts away from the text as the reader enlarges it.
     this.container.style.setProperty('--reader-txt-indent', `${this.settings.txtIndent}em`);
     this.container.style.setProperty('--reader-txt-para-gap', `${this.settings.txtParagraphGap}em`);
-    // Which typesheet applies is a property of the *book*, so it is set here rather
-    // than in the render path: a chapter change and a settings change both land
-    // here, and neither is a reason to state the format twice.
-    this.host.setPlainText(this.doc.format === 'txt');
+
     this.host.style.direction = this.settings.direction;
     // Toggling pagination changes the column count, so the stored offset has to
     // be re-applied after the browser has laid out the new column box.
@@ -503,9 +503,42 @@ export class ReaderView {
 
   // ---- rendering per layout ----
 
+  /**
+   * Whether the chapter on screen is the reader's own plain-text rendition.
+   *
+   * See the call site for why the format is not the whole answer. The check is on
+   * the *body* rather than the raw document because the server wraps its output in
+   * `<div class="txt-body">` and an EPUB could legitimately contain that string in
+   * its own prose; only the wrapper element counts.
+   */
+  /**
+   * Whether a section is the reader's own plain-text rendition.
+   *
+   * Public because the settings panel's "正文" rows are the *same question* asked by
+   * a different part of the screen, and two answers computed differently eventually
+   * disagree — which is how a reader ends up looking at unstyled paragraphs with no
+   * indent control beside them.
+   */
+  isPlainText(section: Section = this.doc.sections[this.sectionIndex] ?? EMPTY_SECTION): boolean {
+    if (this.doc.format === 'txt') return true;
+    const html = section.html ?? '';
+    return /<div[^>]*class="[^"]*\btxt-body\b/.test(html);
+  }
+
   private async renderReflowable(section: Section): Promise<void> {
     this.options.pageHost?.hide();
     const raw = section.html ?? '';
+    // Which typesheet applies is decided here rather than once per book, because the
+    // answer can differ per *chapter*: a server that windows a TXT as `reflowable`
+    // (a reasonable choice — it is reflowable) reports `format: 'reflowable'` while
+    // sending the reader's own plain-text markup. Deciding from the format alone left
+    // those paragraphs unstyled and the indent control doing nothing.
+    //
+    // The marker is the server's own wrapper (`text-html.ts`), so this agrees with
+    // the server by construction rather than by a second convention. `format: 'txt'`
+    // is still honoured first: it is the declaration, and a book that declares itself
+    // is not asked to prove it.
+    this.host.setPlainText(this.isPlainText(section));
     const body = extractBody(raw);
     const inlineStyles = extractInlineStyles(raw);
     // The chapter's own <style> blocks are prepended so the book's link-level

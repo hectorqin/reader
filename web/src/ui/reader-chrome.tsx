@@ -407,6 +407,48 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         onChange={(value) => handlers.onSetting({ brightness: value })}
       />
 
+      {/* Plain text is the one format with no typography of its own, so these are
+          the rows that give it some. They sit with 排版 rather than at the end,
+          because they are the *same kind of setting* — how the text looks — and a
+          reader looking for the indent should not have to scroll past the
+          read-aloud controls to find it. They are absent for every other format,
+          where the answer to all three is "whatever the book said". */}
+      {state.showTxtRows ? (
+        <>
+          <SectionTitle>正文</SectionTitle>
+          <SliderRow
+            label="段落缩进"
+            value={state.txtIndent}
+            min={0}
+            max={4}
+            step={0.25}
+            format={(value) => (value === 0 ? '无' : `${value.toFixed(2)} 字`)}
+            onChange={(value) => handlers.onSetting({ txtIndent: value })}
+          />
+          <SliderRow
+            label="段间距"
+            value={state.txtParagraphGap}
+            min={0}
+            max={1.5}
+            step={0.05}
+            format={(value) => (value === 0 ? '无' : `${value.toFixed(2)} 字`)}
+            onChange={(value) => handlers.onSetting({ txtParagraphGap: value })}
+          />
+          <SelectRow
+            label="TXT 编码"
+            options={[
+              { value: '', label: '自动识别' },
+              { value: 'utf-8', label: 'utf-8' },
+              { value: 'gb18030', label: 'gb18030' },
+              { value: 'big5', label: 'big5' },
+              { value: 'utf-16le', label: 'utf-16le' },
+            ]}
+            value={state.txtEncoding}
+            onChange={(value) => handlers.onSetting({ txtEncoding: value })}
+          />
+        </>
+      ) : null}
+
       <SectionTitle>翻页</SectionTitle>
       <SegmentedRow
         label="点击区域"
@@ -455,46 +497,6 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
 
       <SectionTitle>朗读</SectionTitle>
       <SpeechSettings state={state} handlers={handlers} />
-
-      {/* Plain text is the one format with no typography of its own, so these are
-          the rows that give it some. They are only present for a TXT because for
-          every other format the answer to all of them is "whatever the book said",
-          which is not a thing to offer as a setting. */}
-      {state.showTxtRows ? (
-        <>
-          <SectionTitle>正文</SectionTitle>
-          <SliderRow
-            label="段落缩进"
-            value={state.txtIndent}
-            min={0}
-            max={4}
-            step={0.25}
-            format={(value) => (value === 0 ? '无' : `${value.toFixed(2)} 字`)}
-            onChange={(value) => handlers.onSetting({ txtIndent: value })}
-          />
-          <SliderRow
-            label="段间距"
-            value={state.txtParagraphGap}
-            min={0}
-            max={1.5}
-            step={0.05}
-            format={(value) => (value === 0 ? '无' : `${value.toFixed(2)} 字`)}
-            onChange={(value) => handlers.onSetting({ txtParagraphGap: value })}
-          />
-          <SelectRow
-            label="TXT 编码"
-            options={[
-              { value: '', label: '自动识别' },
-              { value: 'utf-8', label: 'utf-8' },
-              { value: 'gb18030', label: 'gb18030' },
-              { value: 'big5', label: 'big5' },
-              { value: 'utf-16le', label: 'utf-16le' },
-            ]}
-            value={state.txtEncoding}
-            onChange={(value) => handlers.onSetting({ txtEncoding: value })}
-          />
-        </>
-      ) : null}
     </>
   );
 }

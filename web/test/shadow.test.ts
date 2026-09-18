@@ -209,3 +209,45 @@ describe('BookShadowHost', () => {
 function sheets(host: ReturnType<typeof createBookHost>): string[] {
   return [...host.shadow.querySelectorAll('style')].map((node) => node.textContent ?? '');
 }
+
+describe('plain-text detection', () => {
+  it('is driven by the format, and confirmed against the markup', async () => {
+    // The two have to agree, and the client cannot assume they do. A server that
+    // windows a TXT as `reflowable` — a reasonable choice, since a TXT is reflowable
+    // — declares `format: 'reflowable'` while sending the reader's own plain-text
+    // markup; believing the label alone left those paragraphs unstyled and the indent
+    // control doing nothing.
+    const { ReaderView } = await import('../src/ui/reader-view.ts');
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    const declared = new ReaderView({ container, doc: textDoc('txt', '<div class="txt-body"><p>一</p></div>') });
+    expect(declared.isPlainText()).toBe(true);
+
+    const observed = new ReaderView({ container, doc: textDoc('epub', '<div class="txt-body"><p>一</p></div>') });
+    expect(observed.isPlainText()).toBe(true);
+
+    // An EPUB chapter that merely *mentions* the marker in its prose is not one.
+    const prose = new ReaderView({ container, doc: textDoc('epub', '<p>他说 div class="txt-body" 是纯文本用的</p>') });
+    expect(prose.isPlainText()).toBe(false);
+
+    // Neither is one with no markup at all.
+    const bare = new ReaderView({ container, doc: textDoc('epub', '<p>正文</p>') });
+    expect(bare.isPlainText()).toBe(false);
+  });
+});
+
+/** A one-section document, for the detection test. */
+function textDoc(format: string, html: string) {
+  return {
+    format,
+    layout: 'reflowable',
+    render: 'reflowable',
+    direction: 'ltr',
+    sections: [{ id: 'c0', label: '一', html, depth: 0 }],
+    toc: [],
+    styles: [],
+    resources: new Map(),
+    orderedByBook: true,
+  } as never;
+}

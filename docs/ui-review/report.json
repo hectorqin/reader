@@ -43,6 +43,11 @@
       "name": "08-reader-dark",
       "label": "阅读页 · 夜间",
       "what": "暗色下的正文与工具栏"
+    },
+    {
+      "name": "09-panel-txt",
+      "label": "TXT · 正文排版",
+      "what": "纯文本专属的缩进/段间距/编码三行，且面板仍是半屏"
     }
   ],
   "results": [

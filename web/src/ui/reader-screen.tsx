@@ -1430,6 +1430,10 @@ export class ReaderScreen {
       ...settingsView(this.settings, {
         layout: this.doc?.layout ?? 'reflowable',
         format: this.doc?.format ?? '',
+        // The view already answered this question for the stylesheet; asking it the
+        // same way here is what keeps the panel's rows and the page's typography
+        // from disagreeing about what kind of book is open.
+        plainText: this.view?.isPlainText() ?? this.doc?.format === 'txt',
         availability: this.speechAvailability(),
         engine: this.effectiveEngineKind(),
         voices: this.voices,
@@ -1500,13 +1504,23 @@ function settingsView(
   context: {
     layout: AppSettings['mode'] extends never ? never : string;
     format: string;
+    /** True when the chapter on screen is the reader's plain-text rendition. */
+    plainText?: boolean;
     availability: ReturnType<typeof speechAvailability>;
     engine: Exclude<SpeechEngineKind, 'auto'> | null;
     voices: Array<{ id: string; name: string; lang: string; default: boolean }>;
   },
 ): Partial<ChromeState> {
   const fixedLayout = context.layout === 'fixed';
-  const isTxt = context.format === 'txt';
+  // Plain text, as *either* a declaration or an observation.
+  //
+  // `format: 'txt'` is the declarative answer and the common one. The observation is
+  // for a server that windows a TXT as `reflowable`: the chapter it sends is still
+  // the reader's own plain-text markup with a `txt-body` wrapper, and every one of
+  // the 正文 rows applies to it exactly as it would to a book that announced itself.
+  // Keying the rows on the declaration alone meant the reader could see unstyled
+  // paragraphs and no way to adjust them.
+  const isTxt = context.format === 'txt' || context.plainText === true;
   const activeEngine = context.engine ?? context.availability.preferred;
   return {
     mode: settings.mode,
