@@ -40,7 +40,7 @@ const SCALE = 2;
 const SCENES = [
   { name: '01-shelf', label: '书架', what: '第一屏：先看到书，再看到控件' },
   { name: '02-reader', label: '阅读页', what: '顶栏 / 正文 / 底部工具栏 / 状态药丸', openBook: true },
-  { name: '03-reader-no-chrome', label: '阅读页 · 收起工具栏', what: '点中间三分之一后，正文占满且不跳动', openBook: true, tapCenter: true },
+  { name: '03-reader-no-chrome', label: '阅读页 · 收起工具栏', what: '顶栏与底栏同时收起，正文占满，右侧留出快捷按钮列', openBook: true, tapCenter: true },
   { name: '04-panel-toc', label: '目录 · 半屏', what: '下半屏，上半屏正文仍可见', openBook: true, openPanel: '目录' },
   { name: '05-panel-settings', label: '阅读设置 · 半屏', what: '一行式行：标签在左、控件在右', openBook: true, openPanel: '阅读设置' },
   { name: '06-reader-paged', label: '阅读页 · 翻页模式', what: '分栏后的一页，页数应与可翻次数一致', openBook: true, choose: ['阅读设置', '翻页'], closePanel: true },
@@ -64,8 +64,74 @@ async function audit(cdp, scenes, results) {
     if (!ok) failures.push(`${name}: ${detail}`);
   };
 
+  // The chrome is one state, not two.
+  //
+  // The request behind this is specific — the top bar and the bottom bar hide
+  // together — and the failure it guards against is the one a reader reports as
+  // "只收起了一半": a header that leaves the text full height while a footer keeps
+  // covering the last two lines. So the collapse is asserted on *both* bands and on
+  // the space they occupied, in the state where the reader asked for immersion, and
+  // the rail is asserted to be there — hiding the chrome without it is a state the
+  // reader has to leave in order to do anything.
+  //
+  // Asked for the way the reader asks for it (a tap on the middle third) rather than
+  // by setting the attribute: the tap is also a thing that has to keep working.
+  await cdp.tapMiddle();
+  await cdp.sleep(400);
+  const hidden = await cdp.evaluate(`(() => {
+    const screen = document.querySelector('.reader-screen');
+    const topbar = document.querySelector('.topbar');
+    const footer = document.querySelector('.footer');
+    const stage = document.querySelector('.stage');
+    if (!screen || !topbar || !footer || !stage) return { missing: true };
+    const t = topbar.getBoundingClientRect();
+    const f = footer.getBoundingClientRect();
+    const s = stage.getBoundingClientRect();
+    return {
+      attribute: screen.dataset.chrome,
+      topbarHeight: Math.round(t.height),
+      footerHeight: Math.round(f.height),
+      topbarVisibility: getComputedStyle(topbar).visibility,
+      footerVisibility: getComputedStyle(footer).visibility,
+      stageTop: Math.round(s.top),
+      stageBottom: Math.round(s.bottom),
+      viewportHeight: window.innerHeight,
+      rail: !!document.querySelector('.reader-rail'),
+    };
+  })()`);
+  check(
+    '收起工具栏: 顶栏与底栏一起走',
+    !hidden.missing && hidden.attribute === 'hidden' && hidden.topbarHeight <= 1 && hidden.footerHeight <= 1,
+    hidden.missing ? '没有找到阅读页' : `state=${hidden.attribute} 顶栏 ${hidden.topbarHeight}px / 底栏 ${hidden.footerHeight}px`,
+  );
+  check(
+    '收起工具栏: 两条栏都不可见，也不可点',
+    !hidden.missing && hidden.topbarVisibility === 'hidden' && hidden.footerVisibility === 'hidden',
+    hidden.missing ? 'n/a' : `topbar=${hidden.topbarVisibility} footer=${hidden.footerVisibility}`,
+  );
+  check(
+    '收起工具栏: 正文占满整屏',
+    !hidden.missing && hidden.stageTop <= 1 && hidden.viewportHeight - hidden.stageBottom <= 1,
+    hidden.missing ? 'n/a' : `正文 ${hidden.stageTop}..${hidden.stageBottom} / 视口 ${hidden.viewportHeight}`,
+  );
+  check(
+    '收起工具栏: 右侧仍有快捷按钮',
+    !hidden.missing && hidden.rail,
+    hidden.missing ? 'n/a' : `rail=${hidden.rail}`,
+  );
+  // Back to the chrome: the panel checks that follow need a page they can tap, and
+  // the screen is left in the state a reader spends most of their time in.
+  await cdp.tapMiddle();
+  await cdp.sleep(400);
+
   for (const scene of scenes) {
     if (scene.openPanel) {
+      // Opened here rather than assumed open: the chrome checks above interact with
+      // the page, and a sheet they left behind would make the tap that hides the
+      // chrome land on the sheet's backdrop instead.
+      await cdp.click(`button[aria-label="${scene.openPanel}"]`);
+      await cdp.waitFor('document.querySelector(".panel") !== null', 10_000);
+      await cdp.sleep(400);
       const geometry = await cdp.evaluate(`(() => {
         const panel = document.querySelector('.panel');
         const scrim = document.querySelector('.scrim');
@@ -304,7 +370,13 @@ async function main() {
       };
     })()`);
 
-    const withGeometry = panelGeometry ? [{ name: '目录', openPanel: true }] : [];
+    // The sheet is dismissed before the audit: the gesture the audit uses to hide
+    // the chrome is a tap on the page, and with a sheet open that tap lands on the
+    // sheet's backdrop — the correct behaviour, and not what is being measured.
+    await cdp.click('button[aria-label="关闭"]');
+    await cdp.sleep(350);
+
+    const withGeometry = panelGeometry ? [{ name: '目录', openPanel: '目录' }] : [];
     const auditResult = await audit(cdp, withGeometry, measured);
     failures = auditResult.failures;
 

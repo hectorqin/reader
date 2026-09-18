@@ -1,4 +1,5 @@
 import { decodeText } from './text-encoding.ts';
+import { textToChapterHtml } from './segments.ts';
 import type { BookDoc, LoadContext, Section } from './types.ts';
 
 /**
@@ -89,7 +90,7 @@ export function loadTxt(ctx: LoadContext, options: TxtOptions = {}): TxtSplitRes
       sections.push({
         id: `chunk-${sections.length}`,
         label: chunk.label,
-        html: textToHtml(chunk.text),
+        html: textToChapterHtml(chunk.text),
         depth: 0,
       });
     }
@@ -97,7 +98,7 @@ export function loadTxt(ctx: LoadContext, options: TxtOptions = {}): TxtSplitRes
     if (chapters[0]!.start > 0) {
       const preface = text.slice(0, chapters[0]!.start).trim();
       if (preface.length > 0) {
-        sections.push({ id: 'preface', label: '前言', html: textToHtml(preface), depth: 0 });
+        sections.push({ id: 'preface', label: '前言', html: textToChapterHtml(preface), depth: 0 });
       }
     }
     for (let index = 0; index < chapters.length; index += 1) {
@@ -111,7 +112,7 @@ export function loadTxt(ctx: LoadContext, options: TxtOptions = {}): TxtSplitRes
         sections.push({
           id: `ch${index}-${partIndex}`,
           label: parts.length > 1 ? `${current.title} (${partIndex + 1}/${parts.length})` : current.title,
-          html: textToHtml(part.text),
+          html: textToChapterHtml(part.text),
           depth: 0,
         });
       }
@@ -196,28 +197,12 @@ export function chunkByLength(text: string, maxLength: number): Chunk[] {
 }
 
 /**
- * Escapes the text and wraps each non-empty line in a paragraph.
+ * A chapter body as the reader's own paragraph markup.
  *
- * Escaping is not optional: TXT files routinely contain `<` from markup that was
- * partially stripped by whichever tool produced them, and injecting that raw
- * would let the file break the page layout.
+ * Kept as a named export because the loader has always had one and the name is
+ * what the tests look for; the work itself moved to `segments.ts`, which is the
+ * single definition of what a paragraph is for a TXT — shared with the server's
+ * `chapter-html:` rendition's consumer and with the text reader, so a book cannot
+ * be typeset one way locally and another way when it arrives windowed.
  */
-export function textToHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  const paragraphs = escaped
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter((block) => block.length > 0)
-    .map((block) => {
-      const inner = block
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0)
-        .join('<br>');
-      return `<p>${inner}</p>`;
-    });
-  return paragraphs.join('\n');
-}
+export const textToHtml = textToChapterHtml;

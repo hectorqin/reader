@@ -191,6 +191,11 @@ export class ReaderScreen {
 
     this.element = document.createElement('div');
     this.element.className = 'reader-screen';
+    // Whether the chrome is on screen, as an attribute rather than a class per band.
+    // The topbar and the footer are one state (see the stylesheet), and one attribute
+    // is what makes "cannot be half-hidden" true by construction rather than by two
+    // rules that have to be kept in agreement.
+    this.element.dataset['chrome'] = 'visible';
     this.element.style.cssText = 'flex:1 1 auto;min-height:0;display:flex;flex-direction:column;position:relative;';
     this.ui = mountUI(
       this.element,
@@ -622,6 +627,11 @@ export class ReaderScreen {
   private onTapZone(zone: 'previous' | 'toggle-chrome' | 'next'): void {
     if (this.chrome.tocOpen || this.chrome.settingsOpen) return;
 
+    // The middle zone always toggles, in both directions. The outer zones reveal
+    // the chrome only while it is hidden, and that asymmetry is deliberate: hidden,
+    // every zone has to be a way back (see below); shown, a tap on the left or right
+    // third is a page turn, and stealing it to re-show a header that is already on
+    // screen would be the "翻页没反应" bug in its most annoying form.
     if (zone === 'toggle-chrome' || !this.chromeVisible) {
       this.setChromeVisible(!this.chromeVisible);
       return;
@@ -750,6 +760,7 @@ export class ReaderScreen {
 
   private setChromeVisible(visible: boolean): void {
     this.chromeVisible = visible;
+    this.element.dataset['chrome'] = visible ? 'visible' : 'hidden';
     this.patch({
       chromeVisible: visible,
       // Hiding the chrome closes the panels: a panel floating over a hidden

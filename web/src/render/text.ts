@@ -18,15 +18,18 @@
  *    ranges; the client appends them as the reader reaches the bottom. Appending
  *    rather than replacing is what keeps a scroll position valid.
  *
- * Deliberate omission: this reader does not re-typeset the text. No paragraph
- * inference, no smart quotes, no reflow. A TXT file with hard-wrapped lines is
- * rendered exactly as it is stored, because guessing at paragraph boundaries
- * mangles as many books as it fixes — and 「精品排版」 is a promise made for
- * EPUB, not for a file that has no typesetting to preserve.
+ * Its typography is the reader's own, and it comes from the same place the
+ * windowed TXT path gets it: `formats/segments.ts` decides what a paragraph is,
+ * so a book cannot look like a different book depending on whether it arrived as
+ * a window or as a stream. The one thing this path does differently is *add* to
+ * the reading surface instead of replacing it — the split is therefore applied per
+ * chunk, which is why a chunk boundary is always taken at a paragraph end (see
+ * `paragraphsOf`).
  */
 
 import { ApiClient, type BookDto } from '../net/api.ts';
 import { Emitter } from '../lib/events.ts';
+import { endsAtParagraphBreak, paragraphElement, splitTextParagraphs } from '../formats/segments.ts';
 
 /** Size of a streamed chunk, matching the server's own window. */
 const CHUNK_CHARS = 256 * 1024;
@@ -60,6 +63,14 @@ export class TextReader {
   private offset = 0;
   private loading = false;
   private finished = false;
+  /**
+   * The tail of the last chunk, which could not be split yet.
+   *
+   * At most one paragraph, and it exists because a split needs to see the *next*
+   * line: the last paragraph of a chunk might still be continued by the first line
+   * of the one after it.
+   */
+  private carry = '';
   private readonly scroll: HTMLElement;
 
   private readonly host: HTMLElement;
@@ -93,7 +104,8 @@ export class TextReader {
   /** Load the next chapter, when the book has a table of contents. */
   async goToChapter(index: number, bookId: string): Promise<void> {
     const blob = await this.api.asset(bookId, `chapter:${index}`);
-    this.scroll.replaceChildren(paragraphs(await blob.text()));
+    const { fragment } = paragraphsOf(await blob.text(), '');
+    this.scroll.replaceChildren(fragment);
     this.offset = 0;
     this.scroll.scrollTop = 0;
     this.emit(false);
@@ -128,10 +140,24 @@ export class TextReader {
         return;
       }
       this.offset += text.length;
-      this.scroll.append(paragraphs(text));
+      const { fragment, rest } = paragraphsOf(text, this.carry);
+      this.scroll.append(fragment);
+      // Kept for the next chunk: see `paragraphsOf`. Re-emitting it is what would
+      // duplicate a paragraph across a chunk boundary.
+      this.carry = rest;
       // A short reply means the end was reached; asking again would return empty
       // forever and keep a spinner on screen.
-      if (text.length < CHUNK_CHARS) this.finished = true;
+      if (text.length < CHUNK_CHARS) {
+        this.finished = true;
+        // The final chunk is the one place where "wait for the next line" has no
+        // next line; whatever was held back has to be drawn or the novel loses its
+        // last paragraph.
+        if (this.carry) {
+          const { fragment: tail } = paragraphsOf(`${this.carry}\n\n`, '');
+          this.scroll.append(tail);
+          this.carry = '';
+        }
+      }
     } finally {
       this.loading = false;
       this.emit(false);
@@ -171,34 +197,37 @@ export class TextReader {
 }
 
 /**
- * Split text into paragraphs for rendering.
+ * A chunk of text as `<p>` elements, for the reader's typography.
  *
- * `<br>` between lines rather than one element per paragraph: a TXT file's blank
- * lines are the only paragraph signal it has, and treating a blank line as a
- * break while rendering single newlines as hard breaks is the most faithful
- * reading of a format that has no markup. Collapsing them would reflow a book
- * whose author wrapped at 80 columns, which is most of them.
+ * The split itself is `formats/segments.ts`, shared with the windowed TXT path so
+ * the two cannot disagree about where a paragraph is. What is *not* shared is what
+ * a hard-wrapped line means, and the difference is why this function exists
+ * instead of a one-line call: a stream arrives in 256KB pieces, so a chunk
+ * boundary usually lands in the middle of a paragraph, and both of the split's
+ * rules look at the *next* line to decide. Splitting each chunk independently
+ * would therefore turn every chunk boundary into a spurious paragraph break — one
+ * extra indent somewhere in the middle of a novel, which is exactly the kind of
+ * defect that is never reported but always visible.
+ *
+ * `carry` is the text left over from the previous chunk: everything the split
+ * could not finish, which is at most the final incomplete paragraph. It is
+ * prepended so the boundary paragraph is decided with both of its halves present,
+ * and the last paragraph is held back rather than emitted — there is no way to
+ * know yet whether more of it is coming.
  */
-function paragraphs(text: string): DocumentFragment {
+function paragraphsOf(
+  text: string,
+  carry: string,
+): { fragment: DocumentFragment; rest: string } {
+  const combined = carry + text;
+  const split = splitTextParagraphs(combined);
+  // The last paragraph is only held back when the chunk was cut, which is the
+  // case whenever it is not the final one. An empty result means the chunk ended
+  // at a paragraph break, so there is nothing to carry.
+  const endsClean = endsAtParagraphBreak(combined);
+  const settled = endsClean ? split : split.slice(0, -1);
+  const rest = endsClean ? '' : (split[split.length - 1]?.text ?? '');
   const fragment = document.createDocumentFragment();
-  const lines = text.split(/\r\n|\r|\n/);
-  let buffer: string[] = [];
-
-  const flush = (): void => {
-    if (buffer.length === 0) return;
-    const block = document.createElement('p');
-    // Text content, never innerHTML: a TXT file is user data and a `&` or a `<`
-    // in a novel must not be able to produce markup.
-    block.textContent = buffer.join('\n');
-    block.style.whiteSpace = 'pre-wrap';
-    fragment.append(block);
-    buffer = [];
-  };
-
-  for (const line of lines) {
-    if (line.trim() === '') flush();
-    else buffer.push(line);
-  }
-  flush();
-  return fragment;
+  for (const paragraph of settled) fragment.append(paragraphElement(paragraph));
+  return { fragment, rest };
 }

@@ -206,13 +206,17 @@ export const textHandler = registerFileHandler({
 
   /**
    * Body text. Three addressing modes, because clients need all three:
-   *   - `chapter-html:<n>` for a table-of-contents jump, as renderable markup
+   *   - `chapter-html:<n>` one whole chapter as a document (the reader draws this)
    *   - `chapter:<n>` for the same chapter as plain text, for callers that want
    *     the characters rather than a document (TTS, search, a diff)
    *   - `chunk:<byteOffset>` for streaming a novel with no headings
    *
-   * The HTML form is what the reader actually renders; see `text-html.ts` for why
-   * plain text was not enough.
+   * Neither rendition carries the reader's typography. Indentation, paragraph
+   * spacing and the removal of a scraper's leading spaces are per-device reading
+   * preferences, applied by the client over whatever text either form delivers
+   * (see `web/src/formats/segments.ts`); what the server owes the reader is the
+   * chapter entire, and the paragraph boundaries it can only infer with the file
+   * in hand.
    */
   async asset(ctx: HandlerContext, req): Promise<AssetPayload> {
     const size = Math.min(MAX_CHUNK_BYTES, DEFAULT_CHUNK_BYTES);
@@ -223,10 +227,13 @@ export const textHandler = registerFileHandler({
       const { chapters, lines } = splitChapters(text);
       const chapter = chapters[index];
       if (!chapter) throw new Error(`chapter ${index} is out of range`);
-      // Deliberately *not* capped at `size`. The cap on `chapter:` exists to bound
-      // a body that is handed out verbatim; a rendered chapter is split into
-      // paragraphs and the client paginates it, so cutting it in half would only
-      // leave a reader with a chapter that stops mid-sentence.
+      // Deliberately *not* capped at `size`, unlike `chapter:` below. The two
+      // renditions answer different questions and the cap belongs to only one of
+      // them: `chapter:` is a *window* into the file for streaming, so bounding it
+      // is the feature; this is one whole chapter for a reader, so bounding it
+      // would leave them with a chapter that stops mid-sentence. The client's own
+      // `textToParagraphHtml` is what turns it into paragraphs — this is the
+      // chapter's characters, complete, and the reader typesets them.
       const body = lines.slice(chapter.startLine, chapter.endLine + 1).join('\n');
       const data = renderChapterHtml(body);
       return {

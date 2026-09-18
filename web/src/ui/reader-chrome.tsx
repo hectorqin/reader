@@ -19,6 +19,7 @@ import type { AppSettings } from '../store/settings.ts';
 import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ComponentChildren, type JSX } from './vendor/preact.ts';
 import { IconButton, SectionTitle } from './toolkit.tsx';
+import { ICON_CODEPOINTS, type IconName } from './icon-names.ts';
 
 /**
  * A table-of-contents row.
@@ -167,6 +168,33 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
       </div>
 
       <StageHost stage={stage} />
+
+      {/* The immersion rail.
+          —
+          A column of controls on the right edge, drawn *only* while the chrome is
+          hidden. It is what makes hiding the chrome a usable state rather than a
+          state the reader has to leave in order to do anything: without it, the
+          only way to change the font size or open the contents is to tap back to
+          the toolbar, do the thing, and tap again — three interactions for one
+          adjustment, and the text moves under the reader on every one of them.
+          With it, the controls the reader reaches for most are always one tap away
+          and never cover the column, because the rail lives in the page margin
+          beside the text rather than over it.
+          The rail is *not* drawn while the chrome is visible. A rail plus a
+          toolbar is two competing sets of the same controls, and a reader who can
+          see the toolbar has already found what they were looking for. */}
+      {!state.chromeVisible ? (
+        <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作" aria-orientation="vertical">
+          <RailButton icon="menu" label="目录" onClick={handlers.toggleToc} />
+          <RailButton
+            icon={state.theme === 'dark' ? 'sun' : 'moon'}
+            label={state.theme === 'dark' ? '日间' : '夜间'}
+            onClick={() => handlers.onSetting({ theme: nextTheme(state.theme) })}
+          />
+          <RailButton icon="text-type" label="字号" onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })} />
+          <RailButton icon="sliders" label="阅读设置" onClick={handlers.toggleSettings} />
+        </div>
+      ) : null}
 
       <div className="footer" hidden={!state.chromeVisible}>
         <div className="progress-bar">
@@ -325,6 +353,42 @@ function Panel({
 function SettingsBody({ state, handlers }: { state: ChromeState; handlers: ChromeHandlers }): JSX.Element {
   return (
     <>
+      {/* The three controls a reader reaches for most often are also the three
+          the old bottom toolbar spent most of its width on. They are a row of
+          large targets at the top of the sheet rather than a toolbar over the
+          text, because the sheet is where the reader already is when they decide
+          the text is too small — and a toolbar that stays on screen to serve them
+          is a toolbar that covers the book for everyone else. */}
+      <SectionTitle>快捷</SectionTitle>
+      <div className="quick-row">
+        <QuickButton
+          icon="text-type"
+          label="字号"
+          value={`${Math.round(state.fontScale * 100)}%`}
+          onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })}
+        />
+        <QuickButton
+          icon="text-indent"
+          label="段落缩进"
+          value={state.showTxtRows ? indentLabel(state.txtIndent) : '—'}
+          disabled={!state.showTxtRows}
+          onClick={() => handlers.onSetting({ txtIndent: stepIndent(state.txtIndent) })}
+        />
+        <QuickButton
+          icon="spacing"
+          label="段间距"
+          value={state.showTxtRows ? `${state.txtParagraphGap.toFixed(2)} 字` : '—'}
+          disabled={!state.showTxtRows}
+          onClick={() => handlers.onSetting({ txtParagraphGap: stepGap(state.txtParagraphGap) })}
+        />
+        <QuickButton
+          icon={state.theme === 'dark' ? 'sun' : 'moon'}
+          label="主题"
+          value={THEME_LABELS[state.theme] ?? state.theme}
+          onClick={() => handlers.onSetting({ theme: nextTheme(state.theme) })}
+        />
+      </div>
+
       <SectionTitle>排版</SectionTitle>
       <SegmentedRow
         label="翻页方式"
@@ -716,6 +780,102 @@ function SelectRow({
       </select>
     </div>
   );
+}
+
+/**
+ * One control on the immersion rail.
+ *
+ * Round, thumb-sized, and matched to the rail's own width: the rail is a column of
+ * circles because a reader aiming at a 2.75rem disc in the margin hits it, while a
+ * reader aiming at a 2.75rem square in a list of five does not.
+ */
+function RailButton({ icon, label, onClick }: { icon: IconName; label: string; onClick(): void }): JSX.Element {
+  return (
+    <button type="button" className="rail-button" aria-label={label} title={label} onClick={onClick}>
+      <span className="icon" aria-hidden="true">{iconGlyph(icon)}</span>
+    </button>
+  );
+}
+
+/** The glyph for an icon name, from the generated code point table. */
+function iconGlyph(name: IconName): string {
+  return ICON_CODEPOINTS[name];
+}
+
+/**
+ * A labelled quick-action tile.
+ *
+ * A tap rather than a slider for the three controls a reader nudges most: a slider
+ * is the right control for "any value in this range" and the wrong one for "one
+ * step bigger", which is what a reader actually wants when the text looks small.
+ * The full range is still in the rows below, so the tile is a shortcut and never
+ * the only way to reach a value.
+ */
+function QuickButton({
+  icon,
+  label,
+  value,
+  disabled,
+  onClick,
+}: {
+  icon: IconName;
+  label: string;
+  value: string;
+  disabled?: boolean;
+  onClick(): void;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="quick-button"
+      disabled={disabled}
+      aria-label={`${label} ${value}`}
+      onClick={onClick}
+    >
+      <span className="icon" aria-hidden="true">{iconGlyph(icon)}</span>
+      <span className="quick-label">{label}</span>
+      <span className="quick-value">{value}</span>
+    </button>
+  );
+}
+
+/** The next font scale in the ladder, so a tap lands on a round percentage. */
+const FONT_SCALE_LADDER = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2.0, 2.2];
+
+function stepFontScale(current: number, direction: 1 | -1): number {
+  const index = FONT_SCALE_LADDER.findIndex((value) => value >= current - 0.001);
+  const at = index === -1 ? FONT_SCALE_LADDER.length - 1 : index;
+  const next = Math.min(FONT_SCALE_LADDER.length - 1, Math.max(0, at + direction));
+  return FONT_SCALE_LADDER[next] ?? current;
+}
+
+/** Paragraph indent, cycling 无 → 1 → 2 → 3 → 4 characters and back. */
+const INDENT_LADDER = [0, 1, 2, 3, 4];
+
+function stepIndent(current: number): number {
+  const index = INDENT_LADDER.findIndex((value) => value > current + 0.001);
+  return index === -1 ? INDENT_LADDER[0]! : INDENT_LADDER[index]!;
+}
+
+/** Paragraph spacing, cycling in quarter-character steps and back to none. */
+const GAP_LADDER = [0, 0.25, 0.5, 0.75, 1, 1.25];
+
+function stepGap(current: number): number {
+  const index = GAP_LADDER.findIndex((value) => value > current + 0.001);
+  return index === -1 ? GAP_LADDER[0]! : GAP_LADDER[index]!;
+}
+
+function indentLabel(indent: number): string {
+  return indent === 0 ? '无' : `${indent.toFixed(2)} 字`;
+}
+
+const THEME_LADDER: Array<AppSettings['theme']> = ['light', 'sepia', 'dark'];
+
+const THEME_LABELS: Record<string, string> = { light: '白', sepia: '米黄', dark: '夜间' };
+
+function nextTheme(theme: AppSettings['theme']): AppSettings['theme'] {
+  const index = THEME_LADDER.indexOf(theme);
+  return THEME_LADDER[(index + 1) % THEME_LADDER.length] ?? 'light';
 }
 
 /** The progress fraction as a percentage, clamped. */

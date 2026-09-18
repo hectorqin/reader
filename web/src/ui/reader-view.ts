@@ -2,7 +2,14 @@ import type { BookDoc, Section, StagedBook } from '../formats/types.ts';
 import type { BookContent } from '../net/api.ts';
 import type { NativePageHost } from './native-page.ts';
 import { ResourceResolver, hydrateResources } from './resources.ts';
-import { createBookHost, extractBody, extractInlineStyles, sanitiseInjectedContent, type BookShadowHost } from './shadow.ts';
+import {
+  createBookHost,
+  extractBody,
+  extractInlineStyles,
+  sanitiseInjectedContent,
+  type BookShadowHost,
+} from './shadow.ts';
+import { escapeHtml, textToParagraphHtml } from '../formats/segments.ts';
 import { bookPercentage, formatLocator, parseLocator } from './locator.ts';
 import { collectSpokenChunks, type SpokenChunk } from '../render/tts-text.ts';
 import { adoptWindow } from '../formats/windowed.ts';
@@ -504,15 +511,13 @@ export class ReaderView {
   // ---- rendering per layout ----
 
   /**
-   * Whether the chapter on screen is the reader's own plain-text rendition.
-   *
-   * See the call site for why the format is not the whole answer. The check is on
-   * the *body* rather than the raw document because the server wraps its output in
-   * `<div class="txt-body">` and an EPUB could legitimately contain that string in
-   * its own prose; only the wrapper element counts.
-   */
-  /**
    * Whether a section is the reader's own plain-text rendition.
+   *
+   * The check is on the *body* rather than the raw document, because the reader
+   * wraps its own rendition in `<div class="txt-body">` and an EPUB could
+   * legitimately contain that string in its own prose; only the wrapper element
+   * counts. `format: 'txt'` is honoured first — a book that declares itself is not
+   * asked to prove it.
    *
    * Public because the settings panel's "正文" rows are the *same question* asked by
    * a different part of the screen, and two answers computed differently eventually
@@ -525,9 +530,71 @@ export class ReaderView {
     return /<div[^>]*class="[^"]*\btxt-body\b/.test(html);
   }
 
+  /**
+   * Re-renders a chapter of a plain-text book through the reader's own split.
+   *
+   * Two sources reach this method and they need the same treatment:
+   *
+   *  - the server's `chapter-html:<n>` rendition (see `text-html.ts`), which is
+   *    that book's characters as markup; and
+   *  - a `chapter:<n>` body fetched by the windowed path, which is the book's
+   *    characters and nothing else.
+   *
+   * Both end up here because *both* are the reader's own rendering of a file that
+   * has none, and the thing the reader asked for — a per-device indent, paragraph
+   * spacing, the removal of a scraper's leading spaces — is a property of the
+   * rendering, not of the file. Doing it server-side meant the settings could only
+   * apply to the rendition the server had already produced, and a book read
+   * windowed got no paragraphs at all; doing it here means one code path and no
+   * request, and the server's job shrinks to handing over the text.
+   *
+   * Guarded by `isPlainText`, and the guard is why an EPUB is safe: an ordinary
+   * novel never produces a `txt-body` wrapper, so it goes through untouched (the
+   * one thing in this file that must not happen is a re-typesetting pass that runs
+   * on every format, because that would mangle every EPUB).
+   */
+  private retypePlainText(section: Section): string {
+    const raw = section.html ?? '';
+    if (!this.isPlainText(section)) return raw;
+    const container = document.createElement('div');
+    container.innerHTML = extractBody(raw);
+    const wrapper = container.querySelector('.txt-body');
+    if (!wrapper) return raw;
+    // A heading the server promoted out of the body is kept, and kept *first*:
+    // it is the one piece of structure a TXT has, and re-deriving it here would
+    // duplicate a heuristic the server already runs against the undecoded file.
+    const heading = wrapper.querySelector('h3, h4');
+    // The text is read back *per block*, and that is the whole job. Using
+    // `wrapper.textContent` would concatenate the paragraphs into one run with no
+    // separator, so a chapter that arrived already split would be re-split as a
+    // single paragraph and every boundary it had would be lost — the exact defect
+    // this method exists to remove, arriving from the other direction. Joining the
+    // blocks with a blank line puts back the separator the split reads as a
+    // boundary, and the boundaries *inside* a block are still inferred from its
+    // text, which is what makes this work for a chapter the server sent as one
+    // slab with no elements in it at all.
+    const blocks = [...wrapper.children]
+      .filter((element) => !/^H[1-6]$/.test(element.tagName))
+      .map((element) => element.textContent ?? '')
+      .filter((text) => text.trim().length > 0);
+    const body = blocks.length > 0
+      ? blocks.join('\n\n')
+      : wrapper.textContent ?? '';
+    const promoted = heading ? `<h3>${escapeHtml(heading.textContent ?? '')}</h3>\n` : '';
+    return `<div class="txt-body">\n${promoted}${textToParagraphHtml(body)}\n</div>\n`;
+  }
+
   private async renderReflowable(section: Section): Promise<void> {
     this.options.pageHost?.hide();
-    const raw = section.html ?? '';
+    // The client typesets what the server sent.
+    //
+    // Whether the server's rendition arrived with paragraphs or as one slab, this
+    // is where the reader's own split runs — so the indent, the paragraph spacing
+    // and the removal of a scraper's leading spaces apply to *both* of the two ways
+    // a TXT reaches this view (`chapter-html:<n>` windowed, `chapter:<n>` streamed)
+    // without a second request, and the settings panel's rows do something on
+    // whichever one the reader happens to be looking at.
+    const raw = this.retypePlainText(section);
     // Which typesheet applies is decided here rather than once per book, because the
     // answer can differ per *chapter*: a server that windows a TXT as `reflowable`
     // (a reasonable choice — it is reflowable) reports `format: 'reflowable'` while

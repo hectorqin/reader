@@ -71,11 +71,16 @@ describe('renderChapterHtml', () => {
     assert.match(html, /<p>第二段<\/p>/);
   });
 
-  test('marks the payload when no indent was applied', () => {
-    const html = renderChapterHtml('一段', { indent: false }).toString('utf8');
-    assert.match(html, /data-indent="none"/);
-    // The default carries no attribute, so the stylesheet's own indent applies.
-    assert.doesNotMatch(renderChapterHtml('一段').toString('utf8'), /data-indent/);
+  test('carries no typography, so the readers own settings are what apply', () => {
+    // The indent, the paragraph spacing and the removal of a scraper's leading
+    // spaces are per-device reading preferences, and a server that baked one of
+    // them into the payload is what made them a round trip — and what made a book
+    // read windowed look different from the same book read whole. The assertion is
+    // on the absence, because absence is the contract.
+    const html = renderChapterHtml('一段').toString('utf8');
+    assert.doesNotMatch(html, /data-indent/);
+    assert.doesNotMatch(html, /style=/);
+    assert.doesNotMatch(html, /text-indent/);
   });
 
   test('a file containing markup cannot inject elements', () => {
