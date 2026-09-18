@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ReaderApi } from '../src/api/client.ts';
 import { ApiError } from '../src/api/errors.ts';
 import { SyncEngine } from '../src/core/sync.ts';
@@ -300,6 +300,103 @@ describe('SyncEngine', () => {
     expect(seen[1]).toContain('since=5000');
     expect(isOutboxEmpty(offline.current)).toBe(true);
     expect(offline.current.serverTime).toBe(5000);
+  });
+
+  it('folds a burst of scheduled pushes into one round trip', async () => {
+    // The reported symptom: "sync 接口调用太过频繁". Every page turn scheduled its
+    // own round trip, so a reader flipping through a book produced a POST and a GET
+    // every 1.5 seconds for as long as they kept reading.
+    vi.useFakeTimers();
+    try {
+      const { api, transport, offline, engine, platform } = build();
+      transport.json(SESSION);
+      await api.login('me', 'password12');
+      await offline.load();
+      transport.json({ serverTime: 10, progress: [], notes: [] });
+
+      for (let page = 0; page < 20; page += 1) {
+        await offline.setProgress({
+          bookId: 'b1', locator: `r1:${page / 20}:c1`, percentage: page / 20,
+          chapterTitle: 'c1', device: platform.deviceLabel, updatedAt: 1000 + page,
+        });
+        engine.schedule();
+        // A page turn every 700ms, well inside the coalescing window.
+        await vi.advanceTimersByTimeAsync(700);
+      }
+      await vi.advanceTimersByTimeAsync(5000);
+
+      const syncPosts = transport.countMatching(
+        (request) => request.method === 'POST' && request.url.endsWith('/api/v1/sync'),
+      );
+      // Twenty page turns, one push. The bound is not "exactly one" — the window
+      // may legitimately close more than once across 14 seconds of activity — but
+      // it must be a handful rather than one per page.
+      expect(syncPosts).toBeGreaterThan(0);
+      expect(syncPosts).toBeLessThanOrEqual(6);
+      expect(isOutboxEmpty(offline.current)).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('always makes the trailing push, so the last page turn is not lost', async () => {
+    // The failure mode a debounce without a trailing run has: the reader turns one
+    // final page, closes the book, and that page never reaches the server. So the
+    // last call has to fire even though nothing followed it to re-arm the timer.
+    vi.useFakeTimers();
+    try {
+      const { api, transport, offline, engine, platform } = build();
+      transport.json(SESSION);
+      await api.login('me', 'password12');
+      await offline.load();
+      transport.json({ serverTime: 42, progress: [], notes: [] });
+
+      await offline.setProgress({
+        bookId: 'b1', locator: 'r1:0.99:c9', percentage: 0.99,
+        chapterTitle: 'c9', device: platform.deviceLabel, updatedAt: 9000,
+      });
+      engine.schedule();
+      expect(engine.pendingRequest).toBe(true);
+      await vi.advanceTimersByTimeAsync(4000);
+      expect(engine.pendingRequest).toBe(false);
+      expect(isOutboxEmpty(offline.current)).toBe(true);
+      expect(transport.countMatching((r) => r.method === 'POST' && r.url.endsWith('/api/v1/sync'))).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends nothing at all when there is no session', async () => {
+    // A signed-out app must not queue work it can never perform: the timer would
+    // fire, find no session, and re-queue itself forever on a device with no
+    // account — which is a background wake-up per few seconds on a phone.
+    vi.useFakeTimers();
+    try {
+      const { engine } = build();
+      engine.schedule();
+      expect(engine.pendingRequest).toBe(false);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(engine.pendingRequest).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('drops a scheduled push when the engine is stopped', async () => {
+    vi.useFakeTimers();
+    try {
+      const { api, transport, engine } = build();
+      transport.json(SESSION);
+      await api.login('me', 'password12');
+      engine.schedule();
+      expect(engine.pendingRequest).toBe(true);
+      engine.stop();
+      expect(engine.pendingRequest).toBe(false);
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(engine.pendingRequest).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('sends nothing but a pull when the outbox is empty', async () => {

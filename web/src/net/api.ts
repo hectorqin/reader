@@ -20,6 +20,15 @@ export interface ContentItem {
   kind: 'chapter' | 'page';
   mediaType: string;
   href: string;
+  /**
+   * Which rendition of the unit this item refers to.
+   *
+   * A TXT chapter exists twice on the server — its own characters and renderable
+   * markup — under one reference, because the reference is also the reading
+   * position's identity. Absent means "the only rendition there is", which is true
+   * for every other format; see `ContentItem.format` on the server.
+   */
+  format?: 'text' | 'html';
   /** Byte length when known, so a prefetch can be budgeted. */
   size?: number;
 }

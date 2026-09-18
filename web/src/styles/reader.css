@@ -335,12 +335,14 @@ book-content {
    * line every box in this row shares.
    */
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-1);
   min-height: 3rem;
-  padding: 0 0.75rem;
+  padding: 0 0.5rem 0 0.35rem;
   background: var(--reader-surface);
-  border-bottom: 1px solid var(--reader-line);
-  padding-top: env(safe-area-inset-top);
+  /* Same hairline treatment as the footer, so the two edges of the reading area
+     are the same weight. */
+  border-bottom: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
+  padding-top: var(--safe-top);
 }
 
 .topbar h1 {
@@ -568,18 +570,15 @@ book-content {
     opacity var(--motion-duration) var(--motion-ease);
 }
 
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin-bottom: 0.9rem;
-}
-
-.field label {
-  font-size: 0.82rem;
-  color: var(--reader-muted);
-}
-
+/*
+ * The controls inside a settings row.
+ *
+ * Sized to the row rather than to the sheet: a select that spans the whole sheet is
+ * a control whose value is far from its label, and a range input that does is a
+ * slider the reader has to hunt for the thumb of. The 16px floor is not cosmetic
+ * either — anything smaller makes iOS Safari zoom the page on focus, which leaves
+ * the layout scrolled and half off-screen with no way back except a pinch.
+ */
 .field input,
 .field select,
 .field textarea {
@@ -588,12 +587,17 @@ book-content {
   background: var(--reader-surface);
   color: var(--reader-ink);
   border-radius: var(--reader-radius);
-  padding: 0.6rem 0.7rem;
-  /* 16px minimum: anything smaller makes iOS Safari zoom the whole page on
-     focus, which then leaves the layout scrolled and half off-screen. */
+  padding: 0.45rem 0.6rem;
   font-size: 16px;
   font-family: inherit;
   width: 100%;
+}
+
+.field input[type='range'] {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  accent-color: var(--reader-accent);
 }
 
 /* ---- shelf: the home screen ---- */
@@ -1414,43 +1418,121 @@ book-content {
   }
 }
 
-/* ---- panels ---- */
+/* ---- panels: a bottom sheet, half the screen ----
+ *
+ * These used to be `inset: 0` — full-screen opaque pages that replaced the book.
+ * That is a defensible pattern for a *destination* and the wrong one for a
+ * *control*: choosing a chapter or nudging the font size is an adjustment to the
+ * page underneath, and a full-screen panel makes the reader leave the page to make
+ * it — then come back to a re-laid-out chapter with no memory of what it looked
+ * like before. The panel is therefore a sheet over the *lower half* of the reading
+ * area, and the top half stays readable, which is what makes the change visible
+ * while it is being made.
+ *
+ * Three things follow from that and are not decoration:
+ *
+ *  - **A scrim**, because a sheet without one reads as part of the page. It is
+ *    also the tap target that closes the sheet, which is the second way out, along
+ *    with the ✕ in the header.
+ *  - **A handle**, because a sheet that rises from the bottom is understood to be
+ *    draggable, and a drag target with nothing to grab is a sheet the reader
+ *    cannot close the way they expect. (The drag itself is not implemented; the
+ *    handle is the *affordance*, and the scrim and the ✕ are the two real ways out.
+ *    Promising a drag that does not exist would be worse than not drawing it, so
+ *    the handle is a visual cue and the sheet's own scroll is what moves.)
+ *  - **A height that leaves the top of the page alone.** `min(70%, ...)` rather
+ *    than a fixed viewport fraction: the contents list of a 1200-chapter book wants
+ *    all the room it can get, and the settings list of eleven rows does not want
+ *    more than it needs.
+ */
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  background: color-mix(in srgb, #000 42%, transparent);
+  animation: scrim-in var(--motion-duration) var(--motion-ease);
+}
+
+@keyframes scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 .panel {
   position: absolute;
-  inset: 0;
-  background: var(--reader-surface);
+  inset-inline: 0;
+  bottom: 0;
   z-index: 20;
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Half the reading area, and never more than three quarters of it: the reader
+     has to be able to see the page they are adjusting, and a sheet that covers
+     everything is the full-screen panel this replaced. */
+  height: min(62%, 34rem);
+  max-height: 78%;
+  background: var(--reader-surface);
+  border-top: 1px solid var(--reader-line);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -14px 36px color-mix(in srgb, #000 26%, transparent);
+  animation: sheet-in var(--motion-duration) var(--motion-ease);
+}
+
+@keyframes sheet-in {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
 }
 
 .panel[hidden] {
   display: none;
 }
 
+/* The grab handle. Decorative, so it is `aria-hidden` in the markup. */
+.panel-grip {
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 0.25rem;
+  margin: 0.5rem auto 0.125rem;
+  border-radius: 999px;
+  background: var(--reader-line);
+}
+
 .panel-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  padding-top: calc(0.5rem + env(safe-area-inset-top));
+  padding: 0.25rem 0.5rem 0.5rem 0.9rem;
   border-bottom: 1px solid var(--reader-line);
 }
 
 .panel-header h2 {
-  flex: 1 1 auto;
   margin: 0;
-  font-size: 1rem;
+  font-size: var(--text-title);
+  font-weight: 600;
+}
+
+/* The count beside the title. Right-aligned against the ✕ rather than next to the
+   title, so the header reads as "title … count … close" and the closing control
+   stays exactly where the reader's thumb expects it. */
+.panel-subtitle {
+  flex: 1 1 auto;
+  text-align: end;
+  font-size: var(--text-meta);
+  color: var(--reader-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .panel-body {
   flex: 1 1 auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 0.75rem;
-  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  /* `overscroll-behavior: contain` stops a flick at the end of the list from
+     scrolling the *chapter* behind the sheet, which is the classic bottom-sheet
+     annoyance: the list stops moving, the text underneath starts, and the reader
+     has lost their place. */
+  overscroll-behavior: contain;
+  padding: var(--space-3) 0.9rem calc(var(--space-3) + var(--safe-bottom));
 }
 
 .toc-list {
@@ -1459,40 +1541,102 @@ book-content {
   padding: 0;
 }
 
+/* A row is a row, not a full-width button with a divider under it.
+ *
+ * The list is long and the rows are short, so the divider was doing the work a
+ * rhythm should: rows are separated by their own spacing, and the *current* row is
+ * marked once, loudly, instead of every row being marked equally. */
 .toc-list li button {
   width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   text-align: start;
   border: 0;
   background: transparent;
   color: var(--reader-ink);
-  padding: 0.6rem 0.4rem;
-  border-bottom: 1px solid var(--reader-line);
-  font-size: 0.9rem;
+  padding: 0.55rem 0.6rem;
+  border-radius: var(--reader-radius);
+  font-size: var(--text-body);
+  line-height: 1.35;
   cursor: pointer;
+  touch-action: manipulation;
+}
+
+.toc-list li button:hover {
+  background: color-mix(in srgb, var(--reader-ink) 6%, transparent);
 }
 
 .toc-list li button[aria-current='true'] {
   color: var(--reader-accent);
   font-weight: 600;
+  background: color-mix(in srgb, var(--reader-accent) 12%, transparent);
 }
 
-/* ---- footer / progress ---- */
+/* A row for a chapter the loaded window cannot reach. It is still listed — the
+   book does have that chapter — but it must not look tappable, because tapping it
+   is the case the panel used to accept in silence. */
+.toc-list li button[data-unreachable='true'] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.toc-list li button[data-unreachable='true']:hover {
+  background: transparent;
+}
+
+/* A chapter's title, and the whole-book position beside it. The position is what
+   makes a long list navigable: it is the only number that tells the reader how far
+   in they are while they scroll. */
+.toc-list li .toc-index {
+  flex: 0 0 auto;
+  min-width: 2.4rem;
+  font-size: var(--text-meta);
+  color: var(--reader-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.toc-list li .toc-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- footer / progress ----
+ *
+ * The footer has two rows and they are doing different jobs, so they are laid out
+ * differently rather than as two rows of the same thing:
+ *
+ *  - the *control* row (☰ ‹ chapter › ⚙) is what the reader aims at, so it is
+ *    centred and its controls are one size down from the topbar's — four 2.5rem
+ *    controls plus a label is more than a 360px phone has;
+ *  - the *readout* row (章节 / 页数 / 百分比) is what the reader glances at, so it
+ *    is a single line of small tabular numbers spread across the width, with the
+ *    three numbers in the three positions they will always be in. A readout that
+ *    moves around as its values change is a readout the reader has to search.
+ */
 
 .footer {
   background: var(--reader-surface);
-  border-top: 1px solid var(--reader-line);
-  padding-bottom: env(safe-area-inset-bottom);
+  /* A hairline that survives a dark theme and a bright page equally: one solid
+     colour has to fight whichever side it borders, and this is the one place the
+     footer meets the paper. */
+  border-top: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
+  padding-bottom: var(--safe-bottom);
 }
 
 .progress-bar {
-  height: 2px;
-  background: var(--reader-line);
+  height: 3px;
+  background: color-mix(in srgb, var(--reader-line) 70%, transparent);
 }
 
 .progress-bar span {
   display: block;
   height: 100%;
   background: var(--reader-accent);
+  border-radius: 0 2px 2px 0;
   transition: width var(--motion-duration) var(--motion-ease);
 }
 
@@ -1500,9 +1644,8 @@ book-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.3rem 0.75rem;
-  font-size: 0.75rem;
+  gap: var(--space-1);
+  padding: var(--space-1) 0.6rem 0;
   color: var(--reader-muted);
 }
 
@@ -1514,19 +1657,21 @@ book-content {
   text-overflow: ellipsis;
   text-align: center;
   /* The chapter label is the second way into the contents panel, because the ☰
-     button beside it is a 2.5rem square and the label is the thing a reader
+     button beside it is a 2.1rem square and the label is the thing a reader
      actually aims at when they want to pick a chapter. */
   border: 0;
   background: transparent;
-  color: inherit;
+  color: var(--reader-ink);
   font: inherit;
-  padding: 0.35rem 0.25rem;
+  font-size: var(--text-label);
+  padding: 0.45rem 0.3rem;
   border-radius: var(--reader-radius);
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .footer-row .chapter:active {
-  background: var(--reader-line);
+  background: color-mix(in srgb, var(--reader-ink) 8%, transparent);
 }
 
 /*
@@ -1538,11 +1683,21 @@ book-content {
   width: 2.1rem;
   height: 2.1rem;
   font-size: 1rem;
+  flex: 0 0 auto;
 }
 
 .footer-row .icon-button:disabled {
-  opacity: 0.35;
+  opacity: 0.3;
   cursor: default;
+}
+
+/* The readout. One line, three positions, numbers that do not jitter as they
+   change — `tabular-nums` is what stops "1/3 章" from shifting sideways when it
+   becomes "2/3 章", which at this size is a visible twitch on every page turn. */
+.footer-meta {
+  padding: 0.15rem 0.75rem 0.5rem;
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
 }
 
 .footer-meta span {
@@ -1553,8 +1708,14 @@ book-content {
   text-align: start;
 }
 
+.footer-meta span:nth-child(2) {
+  text-align: center;
+}
+
 .footer-meta .progress-label {
   text-align: end;
+  color: var(--reader-ink);
+  font-weight: 600;
 }
 
 /* ---- read-aloud bar ---- */
@@ -1614,15 +1775,67 @@ book-content {
 
 /* ---- settings panel structure ---- */
 
+/*
+ * A section heading inside a sheet.
+ *
+ * Sticky, and that is the one thing it does. The settings sheet is longer than the
+ * half-screen it lives in, so a reader scrolling to find 亮度 passes 排版 and 翻页
+ * on the way — and without a sticky heading they arrive at a row with no idea which
+ * group it belongs to. It is also the only sticky thing in the sheet, so it does
+ * not compete with the panel header.
+ */
 .section-title {
-  font-size: 0.8rem;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 -0.9rem var(--space-2);
+  padding: var(--space-2) 0.9rem 0.35rem;
+  background: var(--reader-surface);
+  border-bottom: 1px solid color-mix(in srgb, var(--reader-line) 60%, transparent);
+  font-size: var(--text-label);
   font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--reader-muted);
-  margin: 1.1rem 0 0.5rem;
 }
 
 .section-title:first-child {
-  margin-top: 0;
+  margin-top: -0.35rem;
+}
+
+/* A row: label on the left, control on the right, on one line where it fits.
+ *
+ * The old rows were a column — a label, then the control under it — which is right
+ * for a text field and wasteful for a segmented control or a slider: eleven rows of
+ * two lines each is a sheet that scrolls twice as far as it needs to, and the reader
+ * has to re-read every label to find the one control they came for. */
+.field {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, max-content) 1fr;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field label {
+  font-size: var(--text-label);
+  color: var(--reader-muted);
+  white-space: nowrap;
+}
+
+/* A control that needs the full width takes it, by asking for it. */
+.field.is-stacked {
+  grid-template-columns: 1fr;
+}
+
+.field > .segmented,
+.field > select,
+.field > input[type='range'] {
+  justify-self: stretch;
+  min-width: 0;
 }
 
 .field[hidden] {
@@ -1631,18 +1844,58 @@ book-content {
 
 /* ---- status ---- */
 
+/*
+ * The status line: a floating pill, not a band.
+ *
+ * It used to be a full-width strip in the flex column *between* the header and the
+ * page, which meant every status change moved the book down by a line and back.
+ * On a reader that is the worst possible place for a transient message: the text
+ * the reader is looking at jumps, and the jump is caused by a line about syncing
+ * that they did not ask for.
+ *
+ * Floated over the top of the reading area instead, so it can appear and disappear
+ * without the page moving at all. It is centred on the text column rather than the
+ * screen, so it lands under the reader's eye wherever the column is, and it takes no
+ * pointer events — a message that intercepts the tap meant for the page beneath it
+ * is a message that costs the reader a page turn.
+ */
 .status-bar {
+  position: absolute;
+  inset-inline: 0;
+  top: calc(var(--space-3) + var(--safe-top));
+  z-index: 12;
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.3rem 0.75rem;
-  font-size: 0.72rem;
-  background: color-mix(in srgb, var(--reader-accent) 12%, var(--reader-surface));
+  width: fit-content;
+  max-width: min(28rem, calc(100% - 1.5rem));
+  margin-inline: auto;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--reader-line) 70%, transparent);
+  background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 14px color-mix(in srgb, #000 12%, transparent);
   color: var(--reader-ink);
+  font-size: var(--text-meta);
+  pointer-events: none;
+  animation: status-in var(--motion-duration) var(--motion-ease);
+}
+
+@keyframes status-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
 }
 
 .status-bar[hidden] {
   display: none;
+}
+
+.status-bar .status-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status-dot {
@@ -1651,6 +1904,17 @@ book-content {
   border-radius: 50%;
   background: var(--reader-muted);
   flex: 0 0 auto;
+}
+
+/* A syncing dot that *does* something: the only state here that is a process
+   rather than an outcome, so it is the only one that earns an animation. */
+.status-bar[data-state='syncing'] .status-dot {
+  animation: status-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 .status-bar[data-state='syncing'] .status-dot {

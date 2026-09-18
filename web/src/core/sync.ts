@@ -17,6 +17,18 @@ const RETRY_BASE_MS = 2_000;
 const RETRY_MAX_MS = 120_000;
 
 /**
+ * How long a `schedule()` request waits for company.
+ *
+ * Long enough to fold a burst of page turns into one round trip, short enough that
+ * a reader who puts the phone down after one page still sees it synced while they
+ * watch. The reader screen debounces its own *write* at 1.5s, so this sits on top
+ * of that: the net effect is "a page turn reaches the server about four seconds
+ * after the reader stops turning pages", against "a POST and a GET every 1.5
+ * seconds, forever".
+ */
+const SCHEDULE_DELAY_MS = 2_500;
+
+/**
  * Keeps local state and the server in step, and never surfaces a connectivity
  * failure to the reader as an error (product design §8.2, "三态切换不能报错").
  *
@@ -37,6 +49,15 @@ export class SyncEngine {
   private backoff = RETRY_BASE_MS;
   private running = false;
   private rejectedCount = 0;
+  /**
+   * A push that has been asked for but not yet started.
+   *
+   * Separate from `timer` (which is the *poll* schedule and the retry backoff)
+   * because the two have different policies: a poll happens whether or not anything
+   * changed, and a requested push is the answer to a change that has already
+   * happened. Sharing one timer would let a poll cancel a pending push.
+   */
+  private requested: ReturnType<typeof setTimeout> | null = null;
   /** Book id per note id, so a tombstone can still be scoped after a restart. */
   private readonly noteBooks = new Map<string, string>();
   private readonly listeners = new Set<(status: SyncStatus) => void>();
@@ -98,6 +119,41 @@ export class SyncEngine {
     this.unwatch = null;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    if (this.requested) clearTimeout(this.requested);
+    this.requested = null;
+  }
+
+  /**
+   * Asks for a push, coalescing bursts into one round trip.
+   *
+   * The counterpart to `syncNow()` for callers whose change is *frequent*. Anything
+   * that writes a row per user action — a reading position, a scrub through a
+   * chapter — should call this rather than `syncNow`, because the difference is a
+   * request per action versus a request per *session of action*.
+   *
+   * A trailing run is guaranteed, not merely likely: the timer is re-armed on every
+   * call and fires once the calls stop. That matters more than the coalescing does,
+   * because the failure mode of a debounce with no trailing run is a *lost* reading
+   * position — the reader turns one last page, closes the book, and the page is
+   * never sent. So the last call always produces a request.
+   *
+   * A push already in flight is not disturbed. When it lands it schedules the next
+   * poll, and this timer fires independently; `syncNow` folds them if they overlap,
+   * and the outbox is a dirty-set, so a second pass that finds nothing to send
+   * costs one empty request and loses nothing.
+   */
+  schedule(delay = SCHEDULE_DELAY_MS): void {
+    if (!this.api.currentSession()) return;
+    if (this.requested) clearTimeout(this.requested);
+    this.requested = setTimeout(() => {
+      this.requested = null;
+      void this.syncNow();
+    }, delay);
+  }
+
+  /** True when a push has been requested and has not yet run. */
+  get pendingRequest(): boolean {
+    return this.requested !== null;
   }
 
   private scheduleNext(delay: number): void {

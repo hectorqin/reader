@@ -45,6 +45,74 @@
  * of them is a custom property, and the properties themselves are defined on
  * `:root`, which a shadow root inherits.
  */
+/**
+ * The plain-text reader's own typesheet, for the shadow root.
+ *
+ * A TXT file has no markup, so it has no typography: the paragraphs the server
+ * renders are `<p>` elements with nothing said about them, which is exactly as
+ * unstyled as raw text and no better. Unlike an EPUB — where the *default* has to
+ * be the author's own stylesheet, and overriding is a bug — a TXT has no author to
+ * defer to, so this is the one place in the reader where stating a full set of
+ * values is the right answer rather than an intrusion.
+ *
+ * It is also the place where the reader's own controls actually land for a TXT.
+ * Every adjustable value below is a custom property defined on `:root` (which a
+ * shadow root inherits), so the settings panel changes the paragraph indent or the
+ * spacing between paragraphs by writing one property on the stage rather than by
+ * re-injecting the chapter.
+ *
+ * Scoped to `.txt-body` on purpose. The server wraps a TXT chapter in that element
+ * (`text-html.ts`) and nothing else produces it, so an EPUB chapter — which may
+ * well contain its own `p` rules and its own idea of an indent — is untouched by
+ * any of this.
+ */
+const TXT_STYLESHEET = `
+.txt-body {
+  /* Declared on the column rather than on each paragraph so one property can be
+     changed in one place, and so a paragraph that the book's own markup already
+     indented is not indented twice. */
+  text-indent: 0;
+}
+.txt-body > p {
+  margin: 0;
+  /* The readable default for Chinese prose: two full-width characters of indent,
+     and a gap between paragraphs small enough that the indent is the primary
+     signal and large enough that a paragraph break is visible when the reader
+     turns the indent off. Both are properties the settings panel can change. */
+  text-indent: var(--reader-txt-indent, 2em);
+  margin-block-end: var(--reader-txt-para-gap, 0.55em);
+  /* Justified by default for CJK — a Chinese line that is not justified is a line
+     with a ragged right edge the reader notices immediately — while Latin text in
+     the same paragraph falls back to the browser's own text-justify. The reader's
+     own alignment control still wins, because it is applied on .book-flow and the
+     value inherits. */
+  orphans: 2;
+  widows: 2;
+}
+/* The reader's own alignment control sets --reader-text-align on the column; a
+   value of inherit is "leave it alone", which for a TXT means this file's
+   default rather than the browser's. */
+.txt-body > p:last-child {
+  margin-block-end: 0;
+}
+/* An indent the reader can turn off, stated in a way that cannot be undone by the
+   text-indent above: both blocks target the same element, and the attribute is
+   written by the server only when it rendered without an indent. */
+.txt-body[data-indent='none'] > p {
+  text-indent: 0;
+}
+/* A heading line the server promoted out of the body is shown as a heading rather
+   than as an indented paragraph — the one piece of structure a TXT has. */
+.txt-body > h3,
+.txt-body > h4 {
+  margin: 1.4em 0 0.6em;
+  font-size: 1.05em;
+  font-weight: 600;
+  text-indent: 0;
+  break-after: avoid;
+}
+`;
+
 const FLOW_STYLESHEET = `
 .book-flow {
   position: relative;
@@ -142,20 +210,32 @@ export class BookShadowHost extends HTMLElement {
   private readonly styleEl: HTMLStyleElement;
   /** The reader's own layout rules, injected once and never replaced. */
   private readonly layoutEl: HTMLStyleElement;
+  /**
+   * The plain-text typesheet, present only for text the reader did not author.
+   *
+   * A third sheet rather than a branch inside `styleEl`, because the two have
+   * different lifetimes: `styleEl` is the *book's* stylesheet and is replaced on
+   * every chapter, while this depends on the *format* of the whole book and should
+   * not be re-parsed sixty times while a novel is read. Empty for every format but
+   * TXT, so an EPUB is not merely "unaffected by default" — nothing is present to
+   * affect it with.
+   */
+  private readonly txtEl: HTMLStyleElement;
   private readonly contentEl: HTMLDivElement;
 
   constructor() {
     super();
     this.shadow = this.attachShadow({ mode: 'open' });
     this.layoutEl = document.createElement('style');
+    this.txtEl = document.createElement('style');
     this.styleEl = document.createElement('style');
     this.contentEl = document.createElement('div');
     this.contentEl.className = 'book-flow';
-    // The layout sheet goes first so the book's own styles, which follow in
-    // `styleEl`, can still override it — the same cascade order the document
-    // stylesheet gives them.
+    // The sheets go in cascade order, weakest first: the reader's layout rules, then
+    // the plain-text typesheet, then the book's own styles, which must be able to
+    // override both — the same order the document stylesheet gives them.
     this.layoutEl.textContent = FLOW_STYLESHEET;
-    this.shadow.append(this.layoutEl, this.styleEl, this.contentEl);
+    this.shadow.append(this.layoutEl, this.txtEl, this.styleEl, this.contentEl);
   }
 
   /**
@@ -169,6 +249,19 @@ export class BookShadowHost extends HTMLElement {
   setContent(html: string, styles: string[]): void {
     this.styleEl.textContent = styles.join('\n');
     this.contentEl.innerHTML = html;
+  }
+
+  /**
+   * Turns the plain-text typesheet on or off.
+   *
+   * Set once per book rather than once per chapter, and toggled by *format* rather
+   * than by sniffing the markup: an EPUB that happens to contain a `.txt-body`
+   * class is not a TXT, and the reader's answer to "should this text be styled for
+   * me" is "did I author it", which only the format answers.
+   */
+  setPlainText(enabled: boolean): void {
+    this.txtEl.textContent = enabled ? TXT_STYLESHEET : '';
+    this.toggleAttribute('data-plain-text', enabled);
   }
 
   /** The element pagination and scroll measurement should look at. */

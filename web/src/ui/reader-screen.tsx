@@ -244,8 +244,13 @@ export class ReaderScreen {
       if (staged) {
         this.doc = staged.doc;
         this.afterDocLoaded();
-        this.hideStatus();
+        // Cleared *after* the position is restored, not before. `restorePosition`
+        // ends in `flashStatus('已恢复到上次阅读位置')`, and clearing the line first
+        // meant that message was immediately replaced by nothing — so a reader
+        // returning to a book saw no confirmation at all. The other order lets the
+        // restore message overwrite "正在载入…", which is what it is there for.
         await this.restorePosition(book, token);
+        if (this.chrome.statusState === 'loading') this.hideStatus();
         return;
       }
 
@@ -284,13 +289,28 @@ export class ReaderScreen {
     const content = manifest?.content;
     if (!content || !isStagedKind(content.kind)) return null;
 
-    let toc: TocEntry[];
+    // The manifest's own items are the fallback *and* the sanity check.
+    //
+    // The fallback half is the original reasoning: refusing to open a book because
+    // its contents list failed is the wrong trade, and a window of chapter titles is
+    // a worse table of contents and a perfectly usable one.
+    //
+    // The sanity check half is the part that was missing. `api.toc()` resolves to
+    // `undefined` for a response shaped differently from what `docs/api.md`
+    // describes — a proxy that re-wraps JSON, a server from another branch — and
+    // `undefined.map(...)` is a TypeError that takes down the whole `open()`. The
+    // reader then shows a raw JavaScript message where the book should be, and the
+    // one thing a reader cannot do anything with is a TypeError. So the *shape* is
+    // checked, not just the success, and a response that is not a list falls back
+    // exactly like a failed request does.
+    let toc: TocEntry[] = [];
     try {
-      toc = await this.options.api.toc(book.id);
+      const fetched = await this.options.api.toc(book.id);
+      if (Array.isArray(fetched)) toc = fetched;
     } catch {
-      // The manifest's own items are a worse table of contents but a usable one,
-      // and refusing to open the book because a contents list failed would be
-      // the wrong trade.
+      // Covered by the fallback below.
+    }
+    if (toc.length === 0) {
       toc = (content.items ?? []).map((item) => ({
         href: item.href,
         title: item.title,
@@ -320,17 +340,27 @@ export class ReaderScreen {
   /**
    * One section's bytes, by the server's own reference.
    *
-   * `ref` is opaque and passed through unchanged: the client must not build it
-   * from an index, because the whole reason it is a reference is that indices
-   * mean different chapters in different windows.
+   * The reference itself is opaque and passed through unchanged: the client must
+   * not build it from an index, because the whole reason it is a reference is that
+   * indices mean different chapters in different windows.
+   *
+   * What *is* derived here is which rendition to ask for. A TXT chapter has two of
+   * them under one reference — plain characters and renderable markup — and the
+   * reader needs the markup; a `format` the client does not recognise falls back to
+   * the reference as-is, so an unknown value is a no-op rather than a failed
+   * chapter.
    */
   private async readStagedSection(
     book: Book,
-    item: { href: string; kind: string; mediaType: string },
+    item: { href: string; kind: string; mediaType: string; format?: string },
   ): Promise<{ html?: string; image?: { mediaType: string; bytes: Uint8Array } }> {
-    const cacheKey = `section:${book.id}:${item.href}`;
+    const ref = renditionRef(item);
+    // Keyed by the rendition, not just the section: a client that read the plain
+    // text before this change and the markup after it must not serve the cached
+    // plain text for a chapter it is now rendering as a document.
+    const cacheKey = `section:${book.id}:${ref}`;
     const cached = await this.options.platform.blobs.get(cacheKey);
-    const blob = cached ? new Blob([toArrayBuffer(cached)]) : await this.options.api.asset(book.id, item.href);
+    const blob = cached ? new Blob([toArrayBuffer(cached)]) : await this.options.api.asset(book.id, ref);
     if (!cached) {
       // Cached per section, not per book, so a partially read book is partially
       // readable offline and re-opening one does not re-fetch what was read.
@@ -471,6 +501,11 @@ export class ReaderScreen {
       ...(this.options.pageHost ? { pageHost: this.options.pageHost } : {}),
       onPositionChange: (position) => this.onPosition(position),
       onChapterChange: (index, section) => {
+        // One patch, and `syncTocPosition` folds its own correction into the same
+        // one rather than issuing a second. A chapter change is the one moment
+        // several pieces of chrome move together (label, section, progress, the
+        // contents highlight), and publishing them separately means the diff runs
+        // — and the sync status line repaints — once per field.
         this.patch({ chapterLabel: section.label, currentSectionId: section.id });
         this.syncTocPosition();
         // The previous chapter's sentence nodes are gone the moment this fires,
@@ -540,6 +575,8 @@ export class ReaderScreen {
       brightness: this.settings.brightness,
       pageAnimation: this.settings.pageAnimation,
       tapZone: this.settings.tapZone,
+      txtIndent: this.settings.txtIndent,
+      txtParagraphGap: this.settings.txtParagraphGap,
     };
   }
 
@@ -563,12 +600,33 @@ export class ReaderScreen {
     this.pendingSpeechAnchor = null;
   }
 
-  /** Tap zones, honouring the reader's handedness. */
+  /**
+   * Tap zones, in priority order.
+   *
+   * The order is the whole content of this method, and getting it wrong is the
+   * difference between a reader and a puzzle:
+   *
+   *   1. **A panel that is open owns the tap.** The contents and settings panels
+   *      are half-screen sheets over the text; a tap in the strip of text still
+   *      visible beside one is a tap on the panel's backdrop, and turning the page
+   *      behind an open panel is the bug the reader reports as "翻页和设置抢事件".
+   *      The gesture layer cannot enforce this — it sees the stage, and the panel
+   *      is a sibling — so it is enforced here.
+   *   2. **The middle third toggles the chrome.** With the chrome hidden, *every*
+   *      zone reveals it: the reader has no other way to get the controls back, and
+   *      a page turn that leaves them with no visible way to open the contents is a
+   *      trap. This is why the middle-zone check comes first with the chrome
+   *      visible and effectively covers everything with it hidden.
+   *   3. **The outer thirds turn the page**, honouring the reader's handedness.
+   */
   private onTapZone(zone: 'previous' | 'toggle-chrome' | 'next'): void {
-    if (zone === 'toggle-chrome') {
+    if (this.chrome.tocOpen || this.chrome.settingsOpen) return;
+
+    if (zone === 'toggle-chrome' || !this.chromeVisible) {
       this.setChromeVisible(!this.chromeVisible);
       return;
     }
+
     const reversed = this.settings.tapZone === 'reversed';
     const forward = reversed ? zone === 'previous' : zone === 'next';
     void this.turnPage(forward ? 'next' : 'previous');
@@ -607,25 +665,68 @@ export class ReaderScreen {
 
   // ---- position and progress ----
 
+  /**
+   * Publishes a new reading position to the chrome, once.
+   *
+   * **One** patch, not one per field. The old version called `patch()` up to three
+   * times per position — once for the numbers, once for the chapter label, once for
+   * the current section — and `patch` re-renders the whole chrome tree. A scroll
+   * produces a position per frame (the view throttles nothing; the debounce is
+   * below), so a reader dragging a finger down a chapter was re-rendering the
+   * topbar, the footer and both panels sixty times a second *three times over*.
+   * On a phone that is the difference between a smooth flick and a stutter, and it
+   * is also what made the status line flicker: every one of those renders walked
+   * the sync state machine's status text.
+   *
+   * The fields are merged into one object so the diff sees them arrive together,
+   * which is also what makes the three of them consistent with each other — they
+   * come from a single `position()` call and must not be published from three.
+   *
+   * Nothing here writes to the network. The position is held in `pendingPosition`
+   * and the *write* is debounced below, because a scroll is a gesture in progress
+   * rather than a sequence of decisions to persist.
+   */
   private onPosition(position: Position | null): void {
     if (!position || !this.book) return;
+
+    const title = position.chapterTitle;
+    const sectionId = position.sectionId;
+    const chapterMoved = sectionId !== this.chrome.currentSectionId;
     this.patch({
       progress: position.percentage,
       pageInChapter: position.pageInChapter,
       chapterPages: position.chapterPages,
       chapterIndex: position.chapterPosition + 1,
+      // Only overwrite the label when the position carries one: a chapter with no
+      // title would otherwise blank the footer on every position update.
+      ...(title ? { chapterLabel: title } : {}),
+      ...(chapterMoved ? { currentSectionId: sectionId } : {}),
     });
-    if (position.chapterTitle) this.patch({ chapterLabel: position.chapterTitle });
-    if (position.sectionId !== this.chrome.currentSectionId) this.patch({ currentSectionId: position.sectionId });
+
     this.pendingPosition = position;
     this.recordSpeechAnchor();
 
-    // Debounced: a scroll produces a position per frame, and each one would
-    // otherwise become a write to IndexedDB and a network sync.
+    // Debounced, and *only* the write: a scroll produces a position per frame, and
+    // each one would otherwise be a write to IndexedDB plus a network round trip.
+    // 1.5s of stillness is the point at which the reader has decided where they are.
     if (this.progressTimer) clearTimeout(this.progressTimer);
     this.progressTimer = setTimeout(() => this.flushProgress(), 1500);
   }
 
+  /**
+   * Persists the pending position locally, then asks sync to catch up.
+   *
+   * The two halves are separated on purpose, and the separation is the fix for
+   * "sync 调用太过频繁": `syncNow()` used to be called unconditionally, once per
+   * flush, so a reader flipping through a book produced a POST *and* a GET every
+   * 1.5 seconds for as long as they kept reading — even though the only thing that
+   * had changed was one row, and even while a previous round trip was still in
+   * flight. `SyncEngine.syncNow` folds concurrent calls together, but a *sequence*
+   * of them one per flush is not concurrency, and that is what this was.
+   *
+   * `SyncEngine.schedule()` debounces the push across flushes and guarantees a
+   * trailing one, so the last page turn of a session still reaches the server.
+   */
   private flushProgress(): void {
     const position = this.pendingPosition;
     const book = this.book;
@@ -641,7 +742,7 @@ export class ReaderScreen {
         device: this.options.platform.deviceLabel,
         updatedAt: now,
       })
-      .then(() => this.options.sync.syncNow())
+      .then(() => this.options.sync.schedule())
       .catch(() => undefined);
   }
 
@@ -1275,8 +1376,24 @@ export class ReaderScreen {
     this.patch({ statusState: state, statusText: text });
   }
 
+  /**
+   * Clears the status line.
+   *
+   * No guard on `loading`, and the absence is the fix. The old version refused to
+   * clear while the state was `loading` — meaning to protect a "正在载入…" line from
+   * an unrelated event — and the effect was a line that could *never* be dismissed:
+   * every path that would have cleared it was itself the thing the guard rejected,
+   * so opening a book left "正在载入…" floating over the text for the rest of the
+   * session. A guard that disables the only way out is not a guard.
+   *
+   * The protection it was reaching for is real, and it belongs at the *call sites*:
+   * a finished load clears its own loading line (see `open`), and a later message
+   * simply replaces it. `setStatus` and `flashStatus` both overwrite unconditionally,
+   * which is the behaviour a status line wants.
+   */
   private hideStatus(): void {
-    if (this.chrome.statusState === 'loading') return;
+    if (this.statusTimer) clearTimeout(this.statusTimer);
+    this.statusTimer = null;
     this.patch({ statusState: 'idle', statusText: '' });
   }
 
@@ -1349,6 +1466,8 @@ function emptyChromeSettings(): Partial<ChromeState> {
       brightness: 1,
       pageAnimation: 'slide',
       tapZone: 'standard',
+      txtIndent: 2,
+      txtParagraphGap: 0.55,
       txtEncoding: '',
       comicDirection: 'ltr',
       ttsRate: 1,
@@ -1402,6 +1521,8 @@ function settingsView(
     pageAnimation: settings.pageAnimation,
     tapZone: settings.tapZone,
     txtEncoding: settings.txtEncoding,
+    txtIndent: settings.txtIndent,
+    txtParagraphGap: settings.txtParagraphGap,
     comicDirection: settings.comicDirection,
     ttsRate: settings.ttsRate,
     ttsPitch: settings.ttsPitch,
@@ -1412,6 +1533,7 @@ function settingsView(
     showFitRow: fixedLayout,
     showDirectionRow: fixedLayout,
     showEncodingRow: isTxt,
+    showTxtRows: isTxt,
     engineOptions: enginePickerOptions(context.availability),
     showEngineRow:
       [context.availability.system, context.availability.native, context.availability.http].filter(Boolean).length > 1,
@@ -1491,11 +1613,73 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copy;
 }
 
+/**
+ * The reference to fetch for an item's rendition.
+ *
+ * The mapping lives here rather than being baked into the server's `href`, because
+ * `href` is also the section id and therefore the identity a saved reading
+ * position is matched on: changing it would move every existing TXT reader back to
+ * chapter one. Prefixing on the client keeps old positions resolving and new
+ * chapters rendering.
+ *
+ * `chapter-html:` is the server's markup rendition of `chapter:`. An item that does
+ * not declare `html` is fetched exactly as the server named it, which is the
+ * behaviour every other format already relies on.
+ */
+function renditionRef(item: { href: string; format?: string }): string {
+  if (item.format !== 'html') return item.href;
+  if (item.href.startsWith('chapter:')) return `chapter-html:${item.href.slice('chapter:'.length)}`;
+  return item.href;
+}
+
+/**
+ * True when the reader has selected text inside the reading surface.
+ *
+ * Two selections have to be consulted, not one. The book's markup lives in a shadow
+ * root, and a selection made inside it is reported by the *shadow root's* own
+ * `getSelection` — `document.getSelection()` returns a selection whose nodes are
+ * relative to the shadow tree's host, so `root.contains(anchor)` is false for a
+ * sentence the reader has visibly highlighted, and the gesture layer then treats the
+ * release of a long-press selection as a page turn. That is precisely how a reader
+ * loses a selection they just made, on the way to copying it.
+ */
 function hasTextSelection(root: HTMLElement): boolean {
-  const selection = window.getSelection();
-  if (!selection || selection.isCollapsed) return false;
+  if (selectionInside(root, window.getSelection())) return true;
+  for (const host of root.querySelectorAll('*')) {
+    const shadow = (host as HTMLElement & { shadowRoot?: ShadowRoot | null }).shadowRoot;
+    if (!shadow) continue;
+    // `ShadowRoot.getSelection` exists in Chromium and WebKit, which is what the H5
+    // build and the Android WebView both are; the structural check keeps this
+    // honest on a host that lacks it rather than crashing the gesture layer.
+    const getSelection = (shadow as ShadowRoot & { getSelection?: () => Selection | null }).getSelection;
+    if (typeof getSelection === 'function' && selectionInside(root, getSelection.call(shadow))) return true;
+  }
+  return false;
+}
+
+/** Whether a selection's node lives under `root`, or under a shadow root it owns. */
+function selectionInside(root: HTMLElement, selection: Selection | null | undefined): boolean {
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false;
   const anchor = selection.anchorNode;
-  return anchor !== null && root.contains(anchor);
+  if (!anchor) return false;
+  if (root.contains(anchor)) return true;
+  // A node inside a shadow root is not `contains`-reachable from the light DOM, so
+  // the tree is walked the other way: up from the node to whichever root it belongs
+  // to, then out to the host, until the reading surface is reached.
+  let node: Node | null = anchor;
+  while (node) {
+    const parent: Node | null = node.parentNode;
+    if (!parent) {
+      const host = (node as ShadowRoot).host as HTMLElement | undefined;
+      if (!host) return false;
+      if (host === root || root.contains(host)) return true;
+      node = host;
+      continue;
+    }
+    if (parent === root) return true;
+    node = parent;
+  }
+  return false;
 }
 
 export type { Note };

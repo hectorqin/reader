@@ -72,6 +72,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   brightness: 1,
   pageAnimation: 'slide',
   tapZone: 'standard',
+  txtIndent: 2,
+  txtParagraphGap: 0.55,
   txtEncoding: '',
   comicDirection: 'ltr',
   ttsRate: 1,
