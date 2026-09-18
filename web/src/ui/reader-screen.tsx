@@ -214,6 +214,7 @@ export class ReaderScreen {
             onSwitchEngine: (kind) => this.switchSpeechEngine(kind),
             onTocEntry: (ref) => void this.goToChapterRef(ref),
             onChapter: (delta) => void this.goToChapter(delta),
+            onScrub: (fraction) => void this.scrubTo(fraction),
             onTurnPage: (direction) => void this.turnPage(direction),
             onSpeechToggle: () => this.toggleSpeech(),
             onSpeechPrevious: () => void this.tts?.previous(),
@@ -977,6 +978,29 @@ export class ReaderScreen {
   private tocSpineFor(ref: string): number | null {
     const entry = this.chrome.toc.find((candidate) => candidate.id === ref);
     return entry?.spine ?? null;
+  }
+
+  /**
+   * Jumps to a fraction of the whole book, from the footer's scrubber.
+   *
+   * The slider is `input[type=range]`, which fires on every pixel of a drag, so
+   * this is deliberately the *cheap* path: `seekPercentage` asks the view to open
+   * the section at that fraction, and the view's own position reporting feeds the
+   * numbers back through the same `onPosition` every other movement uses. There is
+   * no separate "scrubbing" state to get out of sync with — the reader drags, the
+   * book follows, and letting go leaves them where they let go.
+   *
+   * Position writes are untouched on purpose: `onPosition` already debounces the
+   * network write by 1.5s, so a drag does not produce a request per frame.
+   */
+  private async scrubTo(fraction: number): Promise<void> {
+    const view = this.view;
+    if (!view) return;
+    await view.seekPercentage(fraction);
+    // The drag can end between two scroll events, and a book with no reported
+    // position after the seek would leave the bar showing the pre-drag value.
+    this.pendingPosition = view.position();
+    this.onPosition(view.position());
   }
 
   /**

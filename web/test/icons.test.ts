@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ICON_CODEPOINTS } from '../src/ui/icon-names.ts';
 import { GLYPHS } from '../tools/icons/paths.mjs';
+import { pathToSubpaths } from '../tools/icons/path.mjs';
 
 /**
  * The icon set's contract with the font.
@@ -83,6 +84,48 @@ describe('the icon font and its code point table', () => {
     const tableNames = Object.keys(ICON_CODEPOINTS).sort();
     const sourceNames = Object.keys(GLYPHS).sort();
     expect(tableNames).toEqual(sourceNames);
+  });
+
+  it('does not give two different icons the same path', () => {
+    // A duplicated path is a wrong icon that no other assertion here can see: the
+    // name is in the table, the code point maps, the glyph has ink and fits the em —
+    // and it draws the other icon. `chevron-right` was exactly this, byte for byte
+    // the same as `chevron-left`, so the "next chapter" button pointed backwards.
+    const byPath = new Map<string, string[]>();
+    for (const [name, path] of Object.entries(GLYPHS as Record<string, string>)) {
+      const key = path.replace(/\s+/g, '');
+      byPath.set(key, [...(byPath.get(key) ?? []), name]);
+    }
+    const duplicates = [...byPath.values()].filter((names) => names.length > 1);
+    expect(duplicates, `these icons share a path: ${duplicates.map((n) => n.join(' = ')).join('; ')}`).toEqual([]);
+  });
+
+  it('points the two chevrons in opposite directions', () => {
+    // The mirror is what makes this pair useful; two left chevrons are a working
+    // glyph and a broken control. Measured on the flattened polylines rather than
+    // on the strings, because "which way does it point" is a fact about the
+    // geometry and a regex over the path data is not that fact.
+    const points = (name: 'chevron-left' | 'chevron-right') =>
+      pathToSubpaths((GLYPHS as Record<string, string>)[name]!).flat();
+    const tip = (name: 'chevron-left' | 'chevron-right') => {
+      const xs = points(name).map((p) => p[0]);
+      // The tip is the extreme point along the direction the chevron points.
+      return name === 'chevron-left' ? Math.min(...xs) : Math.max(...xs);
+    };
+    const back = (name: 'chevron-left' | 'chevron-right') => {
+      const xs = points(name).map((p) => p[0]);
+      return name === 'chevron-left' ? Math.max(...xs) : Math.min(...xs);
+    };
+    // A chevron's tip is its leading edge; for it to point left, the leftmost x
+    // has to be the tip and the two back corners have to be further right.
+    expect(tip('chevron-left'), 'chevron-left points left').toBeLessThan(back('chevron-left'));
+    expect(tip('chevron-right'), 'chevron-right points right').toBeGreaterThan(back('chevron-right'));
+    // And the two are a matched pair: the same span, mirrored about the centre.
+    const span = (name: 'chevron-left' | 'chevron-right') => {
+      const xs = points(name).map((p) => p[0]);
+      return Math.max(...xs) - Math.min(...xs);
+    };
+    expect(span('chevron-right')).toBeCloseTo(span('chevron-left'), 5);
   });
 
   it('assigns code points in the same order as the source, starting at 0xE900', () => {

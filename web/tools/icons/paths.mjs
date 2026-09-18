@@ -13,7 +13,7 @@
 export const GLYPHS = {
   menu: 'M4 6h16M4 12h16M4 18h16',
   'chevron-left': 'M15 5l-7 7 7 7',
-  'chevron-right': 'M15 5l-7 7 7 7',
+  'chevron-right': 'M9 5l7 7-7 7',
   'arrow-left': 'M11 5l-7 7 7 7M4 12h16',
   folder: 'M3 7h6l2 2.5h10V19H3z',
   file: 'M6.5 3h7l4.5 4.5V21h-11.5z',
