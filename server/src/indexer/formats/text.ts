@@ -11,6 +11,7 @@ import {
   type TocEntry,
 } from './registry.ts';
 import { filenameMetadata } from '../metadata.ts';
+import { renderChapterHtml } from './text-html.ts';
 
 /**
  * Plain text and Markdown.
@@ -45,6 +46,15 @@ const CHAPTER_PATTERNS: readonly RegExp[] = [
   /^\s*Chapter\s*\d+.*$/i,
   /^\s*#{1,3}\s+.+$/,
 ];
+
+/**
+ * The asset reference prefix for a chapter rendered as markup.
+ *
+ * A second prefix rather than a new `kind` on the manifest: the reference is
+ * opaque and format-specific by design, so a client that does not understand
+ * `chapter-html:` keeps working through `chapter:` unchanged.
+ */
+const CHAPTER_HTML_REF = 'chapter-html:';
 
 /** A heading has to be short; a 200-character line is prose, not a title. */
 const MAX_HEADING_LENGTH = 60;
@@ -171,8 +181,14 @@ export const textHandler = registerFileHandler({
         seq: index,
         title: chapter.title,
         kind: 'chapter' as const,
-        mediaType: 'text/plain; charset=utf-8',
+        // The item *is* markup as far as a reader is concerned, and saying so here
+        // is what stops the client from having to special-case the text format.
+        // The reference stays `chapter:<n>` so a position saved before this field
+        // existed still resolves; `format` tells the client which rendition to ask
+        // for (see `ContentItem.format`).
+        mediaType: 'text/html; charset=utf-8',
         href: `chapter:${index}`,
+        format: 'html' as const,
       })),
     };
   },
@@ -189,13 +205,36 @@ export const textHandler = registerFileHandler({
   },
 
   /**
-   * Body text. Two addressing modes, because clients need both:
-   *   - `chapter:<n>` for a table-of-contents jump
+   * Body text. Three addressing modes, because clients need all three:
+   *   - `chapter-html:<n>` for a table-of-contents jump, as renderable markup
+   *   - `chapter:<n>` for the same chapter as plain text, for callers that want
+   *     the characters rather than a document (TTS, search, a diff)
    *   - `chunk:<byteOffset>` for streaming a novel with no headings
+   *
+   * The HTML form is what the reader actually renders; see `text-html.ts` for why
+   * plain text was not enough.
    */
   async asset(ctx: HandlerContext, req): Promise<AssetPayload> {
     const size = Math.min(MAX_CHUNK_BYTES, DEFAULT_CHUNK_BYTES);
     const { text } = await readTextFile(ctx.absPath);
+
+    if (req.ref.startsWith(CHAPTER_HTML_REF)) {
+      const index = Number.parseInt(req.ref.slice(CHAPTER_HTML_REF.length), 10);
+      const { chapters, lines } = splitChapters(text);
+      const chapter = chapters[index];
+      if (!chapter) throw new Error(`chapter ${index} is out of range`);
+      // Deliberately *not* capped at `size`. The cap on `chapter:` exists to bound
+      // a body that is handed out verbatim; a rendered chapter is split into
+      // paragraphs and the client paginates it, so cutting it in half would only
+      // leave a reader with a chapter that stops mid-sentence.
+      const body = lines.slice(chapter.startLine, chapter.endLine + 1).join('\n');
+      const data = renderChapterHtml(body);
+      return {
+        data,
+        contentType: 'text/html; charset=utf-8',
+        size: data.byteLength,
+      };
+    }
 
     if (req.ref.startsWith('chapter:')) {
       const index = Number.parseInt(req.ref.slice('chapter:'.length), 10);

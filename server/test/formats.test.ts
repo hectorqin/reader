@@ -645,6 +645,38 @@ describe('reading endpoints per format', () => {
     assert.ok(!res.body.includes('风来了'), 'chapter content must not bleed into the next chapter');
   });
 
+  test('txt chapter content is also offered as renderable markup', async () => {
+    // The rendition the reader actually draws. `chapter:` is the characters; this
+    // is the same chapter as a document, which is what gives a TXT paragraphs it
+    // can style instead of a wall of text with no line breaks in it.
+    const book = await findBook('小说');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('chapter-html:1')}`,
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.match(res.headers['content-type'] as string, /text\/html/);
+    assert.match(res.body, /<p>雨来了。<\/p>/);
+    assert.ok(!res.body.includes('风来了'), 'chapter content must not bleed into the next chapter');
+  });
+
+  test('the manifest advertises the markup rendition without moving the reference', async () => {
+    // The reference is also the reading position's identity, so it has to stay
+    // `chapter:<n>` across this change; `format` is what carries the new choice.
+    // A client that ignores the field keeps working through `chapter:`.
+    const book = await findBook('小说');
+    const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/manifest`, headers: auth() });
+    assert.equal(res.statusCode, 200, res.body);
+    const manifest = res.json() as { content?: { items: Array<{ href: string; format?: string }> } };
+    const items = manifest.content?.items ?? [];
+    assert.ok(items.length > 0, 'a chaptered txt must expose items');
+    for (const item of items) {
+      assert.match(item.href, /^chapter:\d+$/);
+      assert.equal(item.format, 'html');
+    }
+  });
+
   test('txt without headings can be streamed in chunks', async () => {
     const target = join(booksDir, '无章节.txt');
     await writeFile(target, 'x'.repeat(1000), 'utf8');

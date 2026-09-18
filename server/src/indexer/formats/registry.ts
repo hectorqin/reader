@@ -59,6 +59,20 @@ export interface ContentItem {
   /** Where the bytes come from. Opaque to the HTTP layer. */
   href: string;
   /**
+   * How the bytes should be read, when the format can produce more than one
+   * rendition of the same unit.
+   *
+   * A TXT chapter exists twice on the server: as its own characters (`text`) and
+   * as renderable markup (`html`). The *reference* is the same either way, because
+   * a reference is also the reading position's identity — a client that saved
+   * `chapter:12` must still resolve it after this field appears. So the choice of
+   * rendition is stated separately rather than encoded into `href`, and a client
+   * that ignores the field keeps getting plain text, which is exactly what it had
+   * before. Absent means "whatever `href` already means", which is the case for
+   * every format that has only one rendition.
+   */
+  format?: 'text' | 'html';
+  /**
    * Byte length when the format knows it cheaply. Sent with the manifest so a
    * client can estimate a download or prefetch budget instead of discovering
    * the size one request at a time. Absent means unknown.

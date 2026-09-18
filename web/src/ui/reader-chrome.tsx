@@ -85,6 +85,8 @@ export interface ChromeState {
   pageAnimation: AppSettings['pageAnimation'];
   tapZone: AppSettings['tapZone'];
   txtEncoding: string;
+  txtIndent: number;
+  txtParagraphGap: number;
   comicDirection: AppSettings['comicDirection'];
   ttsRate: number;
   ttsPitch: number;
@@ -95,6 +97,8 @@ export interface ChromeState {
   showFitRow: boolean;
   showDirectionRow: boolean;
   showEncodingRow: boolean;
+  /** Plain-text typography rows; see the `正文` section in the panel. */
+  showTxtRows: boolean;
   showEngineRow: boolean;
   showPitchRow: boolean;
   showVoiceRow: boolean;
@@ -147,9 +151,19 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
         <IconButton label="目录" icon="menu" onClick={handlers.toggleToc} />
       </div>
 
-      <div className="status-bar" hidden={state.statusState === 'idle' && state.statusText === ''} data-state={state.statusState}>
-        <span className="status-dot" />
-        <span>{state.statusText}</span>
+      {/* Outside the flex flow: see the comment on `.status-bar`. It has to be a
+          sibling of the stage rather than a child of it, because the stage's slot
+          measures the space between the chrome and a strip that came and went would
+          change that measurement on every sync. */}
+      <div
+        className="status-bar"
+        hidden={state.statusState === 'idle' && state.statusText === ''}
+        data-state={state.statusState}
+        role="status"
+        aria-live="polite"
+      >
+        <span className="status-dot" aria-hidden="true" />
+        <span className="status-text">{state.statusText}</span>
       </div>
 
       <StageHost stage={stage} />
@@ -193,27 +207,35 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
       {state.tts.active ? <SpeechBar state={state.tts} handlers={handlers} /> : null}
 
       {state.tocOpen ? (
-        <Panel title="目录" onClose={handlers.toggleToc}>
+        <Panel title="目录" subtitle={`${state.toc.length} 章`} onClose={handlers.toggleToc}>
           {state.toc.length === 0 ? (
             <div className="empty-state">这本书没有目录</div>
           ) : (
             <ul className="toc-list">
-              {state.toc.map((entry) => (
-                <li key={entry.id} data-section={entry.id}>
-                  <button
-                    type="button"
-                    aria-current={entry.id === state.currentSectionId}
-                    // A row that is already on screen is a scroll, not a jump:
-                    // saying so is the difference between a list that reacts and
-                    // a list that appears not to.
-                    title={entry.spine === undefined ? '这一章不在当前窗口中' : undefined}
-                    style={entry.depth > 0 ? `padding-inline-start:${0.4 + entry.depth * 0.9}rem` : undefined}
-                    onClick={() => handlers.onTocEntry(entry.id)}
-                  >
-                    {entry.label}
-                  </button>
-                </li>
-              ))}
+              {state.toc.map((entry, index) => {
+                // A entry the loaded window cannot reach is *marked*, not hidden and
+                // not silently inert. It is a real chapter of the book, so removing
+                // it would make the list disagree with the chapter count in the
+                // header; and leaving it looking tappable is how the panel accepts a
+                // tap and does nothing, which reads as a broken panel.
+                const reachable = entry.spine !== undefined;
+                return (
+                  <li key={entry.id} data-section={entry.id}>
+                    <button
+                      type="button"
+                      aria-current={entry.id === state.currentSectionId}
+                      data-unreachable={reachable ? undefined : 'true'}
+                      disabled={!reachable}
+                      title={reachable ? undefined : '这一章不在当前窗口中'}
+                      style={entry.depth > 0 ? `padding-inline-start:${0.6 + entry.depth * 0.9}rem` : undefined}
+                      onClick={() => handlers.onTocEntry(entry.id)}
+                    >
+                      <span className="toc-index">{index + 1}</span>
+                      <span className="toc-label">{entry.label}</span>
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Panel>
@@ -251,15 +273,52 @@ function StageHost({ stage }: { stage: HTMLElement }): JSX.Element {
   );
 }
 
-function Panel({ title, onClose, children }: { title: string; onClose(): void; children: ComponentChildren }): JSX.Element {
+/**
+ * A half-screen sheet over the reading area.
+ *
+ * Bottom sheet rather than a full-screen page, and the comment on `.panel` in the
+ * stylesheet is where the reasoning lives. What belongs here is the *interaction*:
+ *
+ *  - The scrim is the second way out. A sheet that covers half the screen has a
+ *    large, obvious, already-under-the-thumb dismissal target beside it, and using
+ *    it is the gesture every reader already has; the ✕ is there for the reader who
+ *    reaches for a button instead.
+ *  - The scrim and the sheet are `role="dialog"`-adjacent but not a dialog: nothing
+ *    behind them is inert, the text stays selectable and readable, and the point of
+ *    the half height is that the reader can still see what they are adjusting. A
+ *    modal that traps focus would be a lie about a sheet the reader can read
+ *    through.
+ *  - The grip is `aria-hidden`: it is an affordance for a drag that is not
+ *    implemented, and announcing a control that does nothing is worse than not
+ *    drawing one. The two real exits are labelled.
+ */
+function Panel({
+  title,
+  subtitle,
+  onClose,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  onClose(): void;
+  children: ComponentChildren;
+}): JSX.Element {
   return (
-    <div className="panel">
-      <div className="panel-header">
-        <h2>{title}</h2>
-        <IconButton label="关闭" icon="close" onClick={onClose} />
+    <>
+      {/* `onClick` on the scrim rather than a document listener: the scrim *is* the
+          dismiss control, so it should be a node the reader can hit, with the same
+          processing as any other tap on the page. */}
+      <div className="scrim" onClick={onClose} role="presentation" />
+      <div className="panel" role="group" aria-label={title}>
+        <div className="panel-grip" aria-hidden="true" />
+        <div className="panel-header">
+          <h2>{title}</h2>
+          {subtitle ? <span className="panel-subtitle">{subtitle}</span> : null}
+          <IconButton label="关闭" icon="close" onClick={onClose} />
+        </div>
+        <div className="panel-body">{children}</div>
       </div>
-      <div className="panel-body">{children}</div>
-    </div>
+    </>
   );
 }
 
@@ -348,6 +407,48 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         onChange={(value) => handlers.onSetting({ brightness: value })}
       />
 
+      {/* Plain text is the one format with no typography of its own, so these are
+          the rows that give it some. They sit with 排版 rather than at the end,
+          because they are the *same kind of setting* — how the text looks — and a
+          reader looking for the indent should not have to scroll past the
+          read-aloud controls to find it. They are absent for every other format,
+          where the answer to all three is "whatever the book said". */}
+      {state.showTxtRows ? (
+        <>
+          <SectionTitle>正文</SectionTitle>
+          <SliderRow
+            label="段落缩进"
+            value={state.txtIndent}
+            min={0}
+            max={4}
+            step={0.25}
+            format={(value) => (value === 0 ? '无' : `${value.toFixed(2)} 字`)}
+            onChange={(value) => handlers.onSetting({ txtIndent: value })}
+          />
+          <SliderRow
+            label="段间距"
+            value={state.txtParagraphGap}
+            min={0}
+            max={1.5}
+            step={0.05}
+            format={(value) => (value === 0 ? '无' : `${value.toFixed(2)} 字`)}
+            onChange={(value) => handlers.onSetting({ txtParagraphGap: value })}
+          />
+          <SelectRow
+            label="TXT 编码"
+            options={[
+              { value: '', label: '自动识别' },
+              { value: 'utf-8', label: 'utf-8' },
+              { value: 'gb18030', label: 'gb18030' },
+              { value: 'big5', label: 'big5' },
+              { value: 'utf-16le', label: 'utf-16le' },
+            ]}
+            value={state.txtEncoding}
+            onChange={(value) => handlers.onSetting({ txtEncoding: value })}
+          />
+        </>
+      ) : null}
+
       <SectionTitle>翻页</SectionTitle>
       <SegmentedRow
         label="点击区域"
@@ -396,21 +497,6 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
 
       <SectionTitle>朗读</SectionTitle>
       <SpeechSettings state={state} handlers={handlers} />
-
-      {state.showEncodingRow ? (
-        <SegmentedRow
-          label="TXT 编码"
-          options={[
-            { value: '', label: '自动' },
-            { value: 'utf-8', label: 'utf-8' },
-            { value: 'gb18030', label: 'gb18030' },
-            { value: 'big5', label: 'big5' },
-            { value: 'utf-16le', label: 'utf-16le' },
-          ]}
-          value={state.txtEncoding}
-          onChange={(value) => handlers.onSetting({ txtEncoding: value })}
-        />
-      ) : null}
     </>
   );
 }

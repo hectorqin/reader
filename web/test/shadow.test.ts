@@ -144,20 +144,110 @@ describe('BookShadowHost', () => {
     // The book's styles change with every chapter; the reader's layout rules must
     // not, or the column loses its measure for a frame on every chapter change.
     const host = createBookHost();
-    const before = host.shadow.querySelectorAll('style')[0]?.textContent;
+    const before = sheets(host)[0];
     host.setContent('<p>正文</p>', ['p { color: red }']);
-    const sheets = [...host.shadow.querySelectorAll('style')].map((node) => node.textContent ?? '');
-    expect(sheets[0]).toBe(before);
-    expect(sheets[1]).toContain('p { color: red }');
+    const after = sheets(host);
+    expect(after[0]).toBe(before);
+    expect(after[after.length - 1]).toContain('p { color: red }');
     // The layout sheet is first, so the book's own rules still win the cascade.
-    expect(sheets[0]).toContain('.book-flow');
+    expect(after[0]).toContain('.book-flow');
   });
 
   it('keeps the layout sheet through clear()', () => {
     const host = createBookHost();
     host.clear();
-    const sheets = [...host.shadow.querySelectorAll('style')].map((node) => node.textContent ?? '');
-    expect(sheets[0]).toContain('.book-flow');
-    expect(sheets[1]).toBe('');
+    const after = sheets(host);
+    expect(after[0]).toContain('.book-flow');
+    // Only the *book's* sheet is emptied by a clear; the reader's own sheets are
+    // not this method's business.
+    expect(after[after.length - 1]).toBe('');
+  });
+
+  it('injects the plain-text typesheet only when the book asks for it', () => {
+    // A TXT has no author stylesheet to defer to, so the reader supplies one; an
+    // EPUB does, so it must be absent rather than merely overridable. The absence
+    // is the contract, which is why it is asserted and not just the presence.
+    const host = createBookHost();
+    expect(sheets(host).join('\n')).not.toContain('.txt-body');
+
+    host.setPlainText(true);
+    expect(sheets(host).join('\n')).toContain('.txt-body > p');
+    expect(host.hasAttribute('data-plain-text')).toBe(true);
+
+    host.setPlainText(false);
+    expect(sheets(host).join('\n')).not.toContain('.txt-body');
+    expect(host.hasAttribute('data-plain-text')).toBe(false);
+  });
+
+  it('puts the plain-text sheet before the book sheet, so a book still wins', () => {
+    // A TXT has no styles to lose, but a book *classified* as one (a `.txt` that is
+    // really an XHTML fragment) does, and the cascade has to leave room for it.
+    const host = createBookHost();
+    host.setPlainText(true);
+    host.setContent('<p>正文</p>', ['p { color: red }']);
+    const after = sheets(host);
+    const txt = after.findIndex((sheet) => sheet.includes('.txt-body'));
+    const book = after.findIndex((sheet) => sheet.includes('p { color: red }'));
+    expect(txt).toBeGreaterThanOrEqual(0);
+    expect(txt).toBeLessThan(book);
+  });
+
+  it('keeps the plain-text decision across a chapter change', () => {
+    // Which typesheet applies is a property of the *book*, not of the chapter on
+    // screen; a TXT that lost its stylesheet on the second chapter would read as a
+    // rendering bug at exactly the moment the reader turned the page.
+    const host = createBookHost();
+    host.setPlainText(true);
+    host.setContent('<div class="txt-body"><p>第一章</p></div>', []);
+    host.setContent('<div class="txt-body"><p>第二章</p></div>', []);
+    expect(host.shadow.querySelector('.txt-body')).not.toBeNull();
+    expect(sheets(host).join('\n')).toContain('.txt-body > p');
   });
 });
+
+/** The shadow root's sheets, in cascade order. */
+function sheets(host: ReturnType<typeof createBookHost>): string[] {
+  return [...host.shadow.querySelectorAll('style')].map((node) => node.textContent ?? '');
+}
+
+describe('plain-text detection', () => {
+  it('is driven by the format, and confirmed against the markup', async () => {
+    // The two have to agree, and the client cannot assume they do. A server that
+    // windows a TXT as `reflowable` — a reasonable choice, since a TXT is reflowable
+    // — declares `format: 'reflowable'` while sending the reader's own plain-text
+    // markup; believing the label alone left those paragraphs unstyled and the indent
+    // control doing nothing.
+    const { ReaderView } = await import('../src/ui/reader-view.ts');
+    const container = document.createElement('div');
+    document.body.append(container);
+
+    const declared = new ReaderView({ container, doc: textDoc('txt', '<div class="txt-body"><p>一</p></div>') });
+    expect(declared.isPlainText()).toBe(true);
+
+    const observed = new ReaderView({ container, doc: textDoc('epub', '<div class="txt-body"><p>一</p></div>') });
+    expect(observed.isPlainText()).toBe(true);
+
+    // An EPUB chapter that merely *mentions* the marker in its prose is not one.
+    const prose = new ReaderView({ container, doc: textDoc('epub', '<p>他说 div class="txt-body" 是纯文本用的</p>') });
+    expect(prose.isPlainText()).toBe(false);
+
+    // Neither is one with no markup at all.
+    const bare = new ReaderView({ container, doc: textDoc('epub', '<p>正文</p>') });
+    expect(bare.isPlainText()).toBe(false);
+  });
+});
+
+/** A one-section document, for the detection test. */
+function textDoc(format: string, html: string) {
+  return {
+    format,
+    layout: 'reflowable',
+    render: 'reflowable',
+    direction: 'ltr',
+    sections: [{ id: 'c0', label: '一', html, depth: 0 }],
+    toc: [],
+    styles: [],
+    resources: new Map(),
+    orderedByBook: true,
+  } as never;
+}

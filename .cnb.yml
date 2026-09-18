@@ -28,6 +28,37 @@
   - name: build
     script: cd web && npm run build
 
+# UI 评审：把真实产物在真实 Chromium（390×844）里逐屏渲染、截图并测量。
+#
+# 和 `client-check` 分开，因为两者回答的问题不同：那里问「功能对不对」，
+# 这里问「看起来对不对」—— 面板是不是盖住了整页、底部页数和可翻次数是不是
+# 一个数、状态提示出现时正文会不会被推下去。这些都能在功能全绿的同时是错的，
+# 而它们的形态只有截图和量出来的数字能发现（见 docs/ui.md §8）。
+#
+# 截图作为制品留存，所以一次失败的评审可以被人看到，而不是只看到一行报错。
+.ui-review: &ui-review
+  docker:
+    # 镜像里带 Chromium。评审工具只用 CDP 协议驱动浏览器（见
+    # `web/tools/ui-review/cdp.mjs`），所以这里只要一个能跑的 Chromium，
+    # 不需要 playwright 的运行时依赖。
+    #
+    # `/usr/local/bin/chromium` 是镜像自己提供的路径之一，工具会按
+    # CHROME_PATH → chromium → chromium-browser → google-chrome 的顺序找，
+    # 找不到就直接报错，不会静默跳过整轮评审。
+    image: mcr.microsoft.com/playwright:v1.49.1-noble
+  stages:
+    - name: install
+      script: cd web && npm ci
+    # 生产产物，不是 dev server：被评审的必须是用户真正拿到的那份。
+    - name: build
+      script: cd web && npm run build
+    - name: ui-review
+      script: cd web && npm run ui:review:only
+    - name: archive-screenshots
+      script: |
+        echo "UI 评审截图：docs/ui-review/"
+        ls -la docs/ui-review/
+
 main:
   push:
     - name: server-ci
@@ -46,6 +77,17 @@ main:
         - web/**
       stages:
         - *client-check
+
+    # UI 评审只在界面相关文件变化时跑：它要装 Chromium、渲染八屏、量尺寸，
+    # 比 client-ci 慢一个量级，而它验证的每一条规则都只被样式与组件改动影响。
+    - name: client-ui-review
+      <<: *ui-review
+      ifModify:
+        - web/src/ui/**
+        - web/src/styles/**
+        - docs/ui.md
+        - web/tools/ui-review/**
+        - web/index.html
       failStages:
         - name: report-failure
           script: echo "客户端 CI 失败：$CNB_BUILD_FAILED_MSG"

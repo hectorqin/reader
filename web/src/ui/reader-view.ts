@@ -77,7 +77,28 @@ export interface ViewSettings {
   pageAnimation: PageAnimation;
   /** Which side of the screen turns forward; handedness is a real preference. */
   tapZone: TapZone;
+  /**
+   * First-line indent for plain text, in em.
+   *
+   * A number rather than on/off because the useful values are a continuum: two
+   * full-width characters is the Chinese convention, one is what a reader used to
+   * Western books expects, and zero is what a reader who finds the indent noisy
+   * wants. Only a TXT is affected — an EPUB's indent is the author's.
+   */
+  txtIndent: number;
+  /**
+   * Space between paragraphs of plain text, in em.
+   *
+   * The second half of the same question. With no indent, paragraph separation has
+   * to come from spacing or the body becomes one undifferentiated block; with an
+   * indent, a large gap reads as a scene break. The two controls together cover
+   * both conventions, which is why they are separate.
+   */
+  txtParagraphGap: number;
 }
+
+/** A stand-in for the section index being out of range, so a caller need not guard. */
+const EMPTY_SECTION: Section = { id: '', label: '', depth: 0 };
 
 const DEFAULT_SETTINGS: ViewSettings = {
   mode: 'scroll',
@@ -92,6 +113,8 @@ const DEFAULT_SETTINGS: ViewSettings = {
   brightness: 1,
   pageAnimation: 'slide',
   tapZone: 'standard',
+  txtIndent: 2,
+  txtParagraphGap: 0.55,
 };
 
 /**
@@ -241,6 +264,12 @@ export class ReaderView {
     this.container.style.setProperty('--reader-text-align', this.settings.textAlign);
     this.container.style.setProperty('--reader-page-margin', `${this.settings.pageMargin}rem`);
     this.container.style.setProperty('--reader-brightness', String(this.settings.brightness));
+    // Written in `em` rather than `rem` on purpose: the indent is meant to be two
+    // characters wide, and a character's width scales with the reader's font size,
+    // so an indent in `rem` drifts away from the text as the reader enlarges it.
+    this.container.style.setProperty('--reader-txt-indent', `${this.settings.txtIndent}em`);
+    this.container.style.setProperty('--reader-txt-para-gap', `${this.settings.txtParagraphGap}em`);
+
     this.host.style.direction = this.settings.direction;
     // Toggling pagination changes the column count, so the stored offset has to
     // be re-applied after the browser has laid out the new column box.
@@ -356,7 +385,7 @@ export class ReaderView {
   position(): Position {
     const section = this.doc.sections[this.sectionIndex];
     const within = this.measureWithin();
-    const pages = this.chapterPaging(within);
+    const pages = this.chapterPaging();
     return {
       sectionIndex: this.sectionIndex,
       sectionId: section?.id ?? '',
@@ -378,7 +407,7 @@ export class ReaderView {
    * and a chapter that fits the screen entirely is one page, which is why the
    * counts are clamped to at least one rather than reported as zero.
    */
-  private chapterPaging(within: number): { current: number; total: number } {
+  private chapterPaging(): { current: number; total: number } {
     if (this.doc.layout === 'fixed') return { current: 1, total: 1 };
     // The *scroll container*, not the content column inside it — and the two are
     // different elements. In scroll mode the host scrolls and the column is
@@ -387,23 +416,45 @@ export class ReaderView {
     // as a single page, which is worse than reporting nothing: a footer that
     // says "1/1" while the reader is scrolling through six screens is a footer
     // that is lying.
-    const scroller = this.scroller;
     if (this.settings.mode === 'paged') {
-      const page = Math.max(1, scroller.clientWidth);
-      const total = Math.max(1, Math.round(scroller.scrollWidth / page));
-      const current = Math.min(total, Math.max(1, Math.round(scroller.scrollLeft / page) + 1));
-      return { current, total };
+      // Both numbers from the same helpers the page turns use. A footer whose "2/3"
+      // is computed one way and whose presses are counted another is a footer that
+      // eventually disagrees with the reader, and the two were separate arithmetic
+      // before this change.
+      return { current: this.columnIndex() + 1, total: this.columnCount() };
     }
-    const page = Math.max(1, scroller.clientHeight);
-    const total = Math.max(1, Math.ceil(scroller.scrollHeight / page));
-    // The last screen is "the last page" even when it is a half-screen: a scroll
-    // position of 0.83 of the extent is on page 5 of 6, and rounding the fraction
-    // up instead would give a different number for the same scroll position.
-    const current = Math.min(total, Math.max(1, Math.floor(within * (total - 1)) + 1));
-    return { current, total };
+    // Deliberately *not* derived from `within`. `within` is the fraction of the
+    // scroll *extent*, and mapping it back to a page count multiplies the rounding
+    // error by the number of pages: at 0.83 of a six-screen chapter it gives page 5,
+    // while the reader is on page 6 of 6 by the same arithmetic the page turns use,
+    // so the number beside the thumb disagreed with the number of presses left.
+    return { current: this.scrollPage() + 1, total: this.screenCount() };
   }
 
-  /** Advances one unit: a page when paged, a screenful when scrolling. */
+  /**
+   * Advances one unit: a page when paged, a screenful when scrolling.
+   *
+   * Both directions go through `stepScreen`/`stepColumn`, which decide *where they
+   * are* by arithmetic on the page index rather than by comparing a pixel offset
+   * against a threshold. That distinction is the whole reason this method reads the
+   * way it does:
+   *
+   * The old version asked `scrollTop < limit - 8` to decide whether there was room
+   * to move, and then moved by 0.9 of a screen. Those two numbers do not agree.
+   * `limit - 8` says "there is room" for any offset below `limit - 8`, while a 0.9
+   * step from `scrollTop` lands at `scrollTop + 0.9 * screen`; so on a three-screen
+   * chapter, from 0 the step leaves 0.9 screens (720px) and there is still room by
+   * that test, and a *second* press moves to 1440 — one sliver short of the last
+   * screen — and a *third* finally crosses the chapter boundary. The reader's
+   * complaint was precisely this: it takes one press more than the footer says it
+   * should, and pressing back does not retrace those presses, because backwards
+   * used a different threshold (`> 8`) against the same offsets. Offsets landed on
+   * by going forward were not recognised as boundaries by going back, so the page
+   * appeared to bounce.
+   *
+   * A page index has neither problem: it is an integer, both directions compute it
+   * from the same measurement, and a step is exactly one of it.
+   */
   async next(): Promise<boolean> {
     if (this.doc.layout === 'fixed') return this.stepFixed(1);
     if (this.settings.mode === 'paged') {
@@ -411,13 +462,8 @@ export class ReaderView {
       if (advanced) return true;
       return this.stepSection(1);
     }
-    const scroller = this.scroller;
-    const limit = scroller.scrollHeight - scroller.clientHeight;
-    if (scroller.scrollTop < limit - 8) {
-      scroller.scrollTop = Math.min(limit, scroller.scrollTop + scroller.clientHeight * 0.9);
-      this.emitPosition();
-      return true;
-    }
+    const advanced = this.stepScreen(1);
+    if (advanced) return true;
     return this.stepSection(1);
   }
 
@@ -428,12 +474,8 @@ export class ReaderView {
       if (moved) return true;
       return this.stepSection(-1, true);
     }
-    const scroller = this.scroller;
-    if (scroller.scrollTop > 8) {
-      scroller.scrollTop = Math.max(0, scroller.scrollTop - scroller.clientHeight * 0.9);
-      this.emitPosition();
-      return true;
-    }
+    const moved = this.stepScreen(-1);
+    if (moved) return true;
     return this.stepSection(-1, true);
   }
 
@@ -461,9 +503,42 @@ export class ReaderView {
 
   // ---- rendering per layout ----
 
+  /**
+   * Whether the chapter on screen is the reader's own plain-text rendition.
+   *
+   * See the call site for why the format is not the whole answer. The check is on
+   * the *body* rather than the raw document because the server wraps its output in
+   * `<div class="txt-body">` and an EPUB could legitimately contain that string in
+   * its own prose; only the wrapper element counts.
+   */
+  /**
+   * Whether a section is the reader's own plain-text rendition.
+   *
+   * Public because the settings panel's "正文" rows are the *same question* asked by
+   * a different part of the screen, and two answers computed differently eventually
+   * disagree — which is how a reader ends up looking at unstyled paragraphs with no
+   * indent control beside them.
+   */
+  isPlainText(section: Section = this.doc.sections[this.sectionIndex] ?? EMPTY_SECTION): boolean {
+    if (this.doc.format === 'txt') return true;
+    const html = section.html ?? '';
+    return /<div[^>]*class="[^"]*\btxt-body\b/.test(html);
+  }
+
   private async renderReflowable(section: Section): Promise<void> {
     this.options.pageHost?.hide();
     const raw = section.html ?? '';
+    // Which typesheet applies is decided here rather than once per book, because the
+    // answer can differ per *chapter*: a server that windows a TXT as `reflowable`
+    // (a reasonable choice — it is reflowable) reports `format: 'reflowable'` while
+    // sending the reader's own plain-text markup. Deciding from the format alone left
+    // those paragraphs unstyled and the indent control doing nothing.
+    //
+    // The marker is the server's own wrapper (`text-html.ts`), so this agrees with
+    // the server by construction rather than by a second convention. `format: 'txt'`
+    // is still honoured first: it is the declaration, and a book that declares itself
+    // is not asked to prove it.
+    this.host.setPlainText(this.isPlainText(section));
     const body = extractBody(raw);
     const inlineStyles = extractInlineStyles(raw);
     // The chapter's own <style> blocks are prepended so the book's link-level
@@ -607,23 +682,160 @@ export class ReaderView {
     return true;
   }
 
-  private stepSection(delta: number, toEnd = false): boolean {
+  /**
+   * Crosses a chapter boundary, landing on the first screen going forwards and the
+   * last going back.
+   *
+   * Awaited rather than fired and forgotten, and that is a fix rather than tidiness.
+   * Every caller does `await view.previous()` and then acts on the result — the
+   * reader screen animates the turn, and the sync layer records the new position —
+   * so a chapter change that has not finished rendering when the call returns leaves
+   * both of those acting on the chapter the reader just left. The visible form is a
+   * page-turn animation played over the old text, and a saved position one chapter
+   * behind.
+   */
+  private async stepSection(delta: number, toEnd = false): Promise<boolean> {
     const next = this.sectionIndex + delta;
     if (next < 0 || next >= this.doc.sections.length) return false;
-    void this.open(next, toEnd ? 1 : 0);
+    await this.open(next, toEnd ? 1 : 0);
     return true;
   }
 
-  /** Moves by one CSS column, which is one screen in paged mode. */
-  private stepColumn(delta: number): boolean {
+  /**
+   * Moves up or down by one screen in scroll mode.
+   *
+   * A *whole* screen, not 0.9 of one. The 0.9 was a "keep a line of context"
+   * gesture, and it does not survive contact with a reader pressing a page-turner:
+   * ten presses leave the last screen 35% unread after the chapter ends, and every
+   * intermediate position is one the opposite direction cannot name. A page turn
+   * shows a page.
+   */
+  private stepScreen(delta: number): boolean {
     const scroller = this.scroller;
-    const step = Math.max(1, scroller.clientWidth);
-    const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-    const target = scroller.scrollLeft + step * delta;
-    if (target < -1 || target > max + 1) return false;
-    scroller.scrollLeft = Math.min(max, Math.max(0, target));
+    const page = this.scrollPage();
+    const target = page + delta;
+    if (target < 0 || target >= this.screenCount()) return false;
+    scroller.scrollTop = this.screenOffset(target);
     this.emitPosition();
     return true;
+  }
+
+  /**
+   * Which screen the reader is on, 0-based, in scroll mode.
+   *
+   * Found by asking which two page offsets the current scroll sits between, rather
+   * than by dividing the scroll position by the screen height. The two agree only
+   * when the chapter is a whole number of screens tall, and a chapter almost never
+   * is: see `screenOffset`.
+   */
+  private scrollPage(): number {
+    const total = this.screenCount();
+    const top = this.scroller.scrollTop;
+    for (let page = total - 1; page >= 0; page -= 1) {
+      // A tolerance of one pixel, because the browser rounds `scrollTop` on read
+      // (`722.99` is reported as `723`) and an exact comparison would then put the
+      // reader on the page *before* the one they are looking at.
+      if (top >= this.screenOffset(page) - 1) return page;
+    }
+    return 0;
+  }
+
+  /**
+   * How many screens the chapter occupies, at least one.
+   *
+   * From the scrollable *range*, not from the content height, and the difference is
+   * the bug this method exists to prevent. A chapter 2397px tall in a 723px viewport
+   * can only be scrolled to `2397 - 723 = 1674`, so the reachable positions are
+   * 0…1674. Dividing the *content* height gives `ceil(2397/723) = 4` pages and then
+   * asks for offsets `0, 723, 1446, 2169` — and the last one clamps to 1674, which is
+   * the *third* boundary. So the fourth press left the reader on page 3 by every
+   * measure, the counter stuck at "3/4", and the press after that crossed into the
+   * next chapter from what the footer still called page 3. A page count and a set of
+   * page offsets have to be computed from the same range or they cannot agree.
+   */
+  private screenCount(): number {
+    const range = this.scrollRange();
+    if (range <= 0) return 1;
+    // Ceil: the last screen is a screen even when it shows only a line, and its text
+    // would otherwise be reachable only by scrolling past what the footer calls the
+    // last page.
+    return Math.max(1, Math.ceil(range / this.screenHeight()) + 1);
+  }
+
+  /** The top scroll offset of a page, spread across the scrollable range. */
+  private screenOffset(page: number): number {
+    const total = this.screenCount();
+    if (total <= 1) return 0;
+    return (this.scrollRange() * page) / (total - 1);
+  }
+
+  /** How far the chapter can actually scroll. */
+  private scrollRange(): number {
+    const scroller = this.scroller;
+    return Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  }
+
+  /**
+   * The height of one screen.
+   *
+   * The scroll container's own height, which is the only value a page turn can
+   * step by: a screen is what the viewport shows.
+   */
+  private screenHeight(): number {
+    return Math.max(1, this.scroller.clientHeight);
+  }
+
+  /**
+   * Moves by one CSS column, which is one screen in paged mode.
+   *
+   * The column *stride* comes from the measured page count rather than from
+   * `clientWidth`. They differ whenever the column layout has a gap between
+   * columns or a padding the browser folds into the stride: stepping by
+   * `clientWidth` then walks a position that is not a column boundary, and the
+   * round trip stops matching — go forward twice, back once, and the reader is not
+   * where they started. Deriving the stride from `scrollWidth / pages` makes the
+   * step land on the boundaries the layout actually created, which is the only
+   * definition of "one column" that survives both directions.
+   */
+  private stepColumn(delta: number): boolean {
+    const scroller = this.scroller;
+    const columns = this.columnCount();
+    const current = this.columnIndex();
+    const target = current + delta;
+    if (target < 0 || target >= columns) return false;
+    scroller.scrollLeft = target * this.columnStride(columns);
+    this.emitPosition();
+    return true;
+  }
+
+  /** How many columns the chapter has, at least one. */
+  private columnCount(): number {
+    return Math.max(1, Math.round(this.scroller.scrollWidth / this.columnStrideBase()));
+  }
+
+  /** Which column the reader is on, 0-based, clamped to the chapter. */
+  private columnIndex(): number {
+    const columns = this.columnCount();
+    const stride = this.columnStride(columns);
+    return Math.min(columns - 1, Math.max(0, Math.round(this.scroller.scrollLeft / stride)));
+  }
+
+  /**
+   * How far apart two column boundaries are, for a chapter of `columns` columns.
+   *
+   * A closed form rather than `scrollWidth / columns`, so the stride and the count
+   * cannot disagree: the count is computed from the base extent, and a chapter
+   * whose extent is not a whole number of columns rounds to the nearest boundary
+   * instead of accumulating the difference over a chapter's worth of presses.
+   */
+  private columnStride(columns: number): number {
+    const max = Math.max(0, this.scroller.scrollWidth - this.scroller.clientWidth);
+    return columns > 1 ? max / (columns - 1) : this.columnStrideBase();
+  }
+
+  /** The layout's own idea of one column, used only to count them. */
+  private columnStrideBase(): number {
+    return Math.max(1, this.scroller.clientWidth);
   }
 
   // ---- read aloud ----

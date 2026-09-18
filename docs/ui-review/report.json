@@ -1,0 +1,96 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "scenes": [
+    {
+      "name": "01-shelf",
+      "label": "书架",
+      "what": "第一屏：先看到书，再看到控件"
+    },
+    {
+      "name": "02-reader",
+      "label": "阅读页",
+      "what": "顶栏 / 正文 / 底部工具栏 / 状态药丸"
+    },
+    {
+      "name": "03-reader-no-chrome",
+      "label": "阅读页 · 收起工具栏",
+      "what": "点中间三分之一后，正文占满且不跳动"
+    },
+    {
+      "name": "04-panel-toc",
+      "label": "目录 · 半屏",
+      "what": "下半屏，上半屏正文仍可见"
+    },
+    {
+      "name": "05-panel-settings",
+      "label": "阅读设置 · 半屏",
+      "what": "一行式行：标签在左、控件在右"
+    },
+    {
+      "name": "06-reader-paged",
+      "label": "阅读页 · 翻页模式",
+      "what": "分栏后的一页，页数应与可翻次数一致"
+    },
+    {
+      "name": "07-reader-sepia",
+      "label": "阅读页 · 米黄",
+      "what": "主题切换后的同一页"
+    },
+    {
+      "name": "08-reader-dark",
+      "label": "阅读页 · 夜间",
+      "what": "暗色下的正文与工具栏"
+    },
+    {
+      "name": "09-panel-txt",
+      "label": "TXT · 正文排版",
+      "what": "纯文本专属的缩进/段间距/编码三行，且面板仍是半屏"
+    }
+  ],
+  "results": [
+    {
+      "name": "目录: 面板不遮住整页",
+      "ok": true,
+      "detail": "面板从 y=321 开始，正文区 y=48"
+    },
+    {
+      "name": "目录: 面板留出可预览的正文",
+      "ok": true,
+      "detail": "正文可见高度 273px"
+    },
+    {
+      "name": "目录: 面板有遮罩和把手",
+      "ok": true,
+      "detail": "scrim=true grip=true"
+    },
+    {
+      "name": "目录: 面板高度不超过阅读区",
+      "ok": true,
+      "detail": "面板 523px / 阅读区 727px"
+    },
+    {
+      "name": "状态提示不推动正文",
+      "ok": true,
+      "detail": "正文顶部 y: 48 / 48 / 48"
+    },
+    {
+      "name": "触控目标不小于 28px",
+      "ok": true,
+      "detail": "11 个控件全部合格"
+    },
+    {
+      "name": "每个控件都有可读的名字",
+      "ok": true,
+      "detail": "11 个控件全部有名字"
+    },
+    {
+      "name": "没有横向溢出",
+      "ok": true,
+      "detail": "document 溢出 0px"
+    }
+  ],
+  "failures": []
+}
