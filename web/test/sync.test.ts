@@ -293,13 +293,67 @@ describe('SyncEngine', () => {
     });
 
     await engine.syncNow();
-    expect(seen[0]).toBe('POST /api/v1/sync');
-    // The pull reuses the cursor the push just returned. That is intentional: a
-    // pull from 0 would re-download the entire server state after every page
-    // turn, which is exactly what the incremental cursor exists to avoid.
-    expect(seen[1]).toContain('since=5000');
+    // One request, not two.
+    //
+    // `POST /api/v1/sync` already answers with the merged state — the server's own
+    // comment says so — and the engine used to throw that answer away and then
+    // issue a second request for it. Every page turn therefore cost a POST *and* a
+    // GET carrying the same body, which is the doubling a reader sees in the
+    // network panel as "sync 接口在不停重复". Asserting the *length* is what makes
+    // the fix visible: a test that only checked the cursor would pass either way.
+    expect(seen).toEqual(['POST /api/v1/sync']);
     expect(isOutboxEmpty(offline.current)).toBe(true);
+    // The cursor is still adopted from the push's answer, so the next real pull is
+    // incremental rather than a re-download of the entire server state.
     expect(offline.current.serverTime).toBe(5000);
+  });
+
+  it('pulls with the incremental cursor when a poll has nothing to push', async () => {
+    // The other half of the same contract: with an empty outbox the push has no
+    // answer to reuse, so the pull is the real work and it must still happen — and
+    // still be incremental.
+    const { api, transport, offline, engine } = build();
+    transport.json(SESSION);
+    await api.login('me', 'password12');
+    await offline.load();
+
+    const seen: string[] = [];
+    transport.respondWith((request) => {
+      seen.push(`${request.method} ${request.url}`);
+      return { status: 200, headers: {}, json: { serverTime: 9000, progress: [], notes: [] } };
+    });
+
+    await engine.syncNow();
+    expect(seen).toEqual(['GET /api/v1/sync?since=0']);
+    expect(offline.current.serverTime).toBe(9000);
+
+    await engine.syncNow();
+    expect(seen[1]).toBe('GET /api/v1/sync?since=9000');
+  });
+
+  it('does not notify its listeners twice for one unchanged state', async () => {
+    // The reported symptom: "sync 接口会不停的重复渲染". The reader screen repaints
+    // its whole chrome tree on every notification, and a cycle announced itself
+    // three times (syncing, idle, and a redundant explicit emit) whether or not
+    // anything had changed — with a 30s poll keeping the cycle going while the
+    // reader did nothing at all.
+    const { api, transport, offline, engine } = build();
+    transport.json(SESSION);
+    await api.login('me', 'password12');
+    await offline.load();
+    transport.json({ serverTime: 10, progress: [], notes: [] });
+
+    const states: string[] = [];
+    engine.onStatus((status) => states.push(`${status.state}:${status.message}`));
+
+    await engine.syncNow();
+    expect(states).toEqual(['syncing:', 'idle:']);
+
+    // A second cycle that ends in the same state as the first adds nothing new, so
+    // it must add nothing to the stream either.
+    const before = states.length;
+    await engine.syncNow();
+    expect(states.slice(before)).toEqual(['syncing:', 'idle:']);
   });
 
   it('folds a burst of scheduled pushes into one round trip', async () => {

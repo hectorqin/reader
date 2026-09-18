@@ -11,7 +11,6 @@ import {
   type TocEntry,
 } from './registry.ts';
 import { filenameMetadata } from '../metadata.ts';
-import { renderChapterHtml } from './text-html.ts';
 
 /**
  * Plain text and Markdown.
@@ -181,12 +180,14 @@ export const textHandler = registerFileHandler({
         seq: index,
         title: chapter.title,
         kind: 'chapter' as const,
-        // The item *is* markup as far as a reader is concerned, and saying so here
-        // is what stops the client from having to special-case the text format.
-        // The reference stays `chapter:<n>` so a position saved before this field
+        // The item is a *document* as far as a reader is concerned even though the
+        // bytes are characters: the client turns it into one, and saying so here is
+        // what stops the client from having to special-case the text format. The
+        // reference stays `chapter:<n>` so a position saved before this field
         // existed still resolves; `format` tells the client which rendition to ask
-        // for (see `ContentItem.format`).
-        mediaType: 'text/html; charset=utf-8',
+        // for (see `ContentItem.format`), and `html` now means "the whole chapter,
+        // to be typeset" rather than "server-rendered markup".
+        mediaType: 'text/plain; charset=utf-8',
         href: `chapter:${index}`,
         format: 'html' as const,
       })),
@@ -206,40 +207,45 @@ export const textHandler = registerFileHandler({
 
   /**
    * Body text. Three addressing modes, because clients need all three:
-   *   - `chapter-html:<n>` one whole chapter as a document (the reader draws this)
-   *   - `chapter:<n>` for the same chapter as plain text, for callers that want
-   *     the characters rather than a document (TTS, search, a diff)
+   *   - `chapter-html:<n>` one whole chapter, as the characters it is stored as
+   *   - `chapter:<n>` the same chapter, capped at `size` (a streaming window)
    *   - `chunk:<byteOffset>` for streaming a novel with no headings
    *
-   * Neither rendition carries the reader's typography. Indentation, paragraph
-   * spacing and the removal of a scraper's leading spaces are per-device reading
-   * preferences, applied by the client over whatever text either form delivers
-   * (see `web/src/formats/segments.ts`); what the server owes the reader is the
-   * chapter entire, and the paragraph boundaries it can only infer with the file
-   * in hand.
+   * Not one of them carries the reader's typography, and not one of them carries
+   * paragraph boundaries either. `chapter-html:` used to render `<p>` markup on
+   * the server; it no longer does, because paragraph splitting is a *reading*
+   * decision (see `web/src/formats/segments.ts`) and doing it here meant the
+   * windowed path got paragraphs while the streamed path could not, and meant the
+   * reader's indent was a round trip. What the server owes the reader is the
+   * chapter entire; the client typesets it.
+   *
+   * `chapter-html:` is therefore now an alias for the whole chapter as plain
+   * characters, with the one difference that it is *not* capped: `chapter:` bounds
+   * its reply because it is a window for streaming, and bounding a chapter the
+   * reader is about to read would hand them a chapter that stops mid-sentence.
    */
   async asset(ctx: HandlerContext, req): Promise<AssetPayload> {
     const size = Math.min(MAX_CHUNK_BYTES, DEFAULT_CHUNK_BYTES);
     const { text } = await readTextFile(ctx.absPath);
 
+    // The whole chapter, uncapped. See the method comment: `chapter:` bounds its
+    // reply because it is a streaming window, and that bound must not be applied
+    // to a chapter the reader is about to read in one piece.
     if (req.ref.startsWith(CHAPTER_HTML_REF)) {
       const index = Number.parseInt(req.ref.slice(CHAPTER_HTML_REF.length), 10);
       const { chapters, lines } = splitChapters(text);
       const chapter = chapters[index];
       if (!chapter) throw new Error(`chapter ${index} is out of range`);
-      // Deliberately *not* capped at `size`, unlike `chapter:` below. The two
-      // renditions answer different questions and the cap belongs to only one of
-      // them: `chapter:` is a *window* into the file for streaming, so bounding it
-      // is the feature; this is one whole chapter for a reader, so bounding it
-      // would leave them with a chapter that stops mid-sentence. The client's own
-      // `textToParagraphHtml` is what turns it into paragraphs — this is the
-      // chapter's characters, complete, and the reader typesets them.
       const body = lines.slice(chapter.startLine, chapter.endLine + 1).join('\n');
-      const data = renderChapterHtml(body);
       return {
-        data,
-        contentType: 'text/html; charset=utf-8',
-        size: data.byteLength,
+        data: Buffer.from(body, 'utf8'),
+        // Plain characters, not `text/html`. The content type has to say what the
+        // body is: served as HTML, a chapter whose text happens to contain `<`
+        // would be parsed as markup by anything that trusted the label, and the
+        // client's own escaping — the thing that makes a TXT safe — would be
+        // sidestepped. The client typesets from this text; it does not trust it.
+        contentType: 'text/plain; charset=utf-8',
+        size: Buffer.byteLength(body, 'utf8'),
       };
     }
 

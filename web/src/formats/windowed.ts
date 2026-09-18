@@ -95,6 +95,11 @@ export function createStagedDoc(options: StagedDocOptions): StagedDoc {
     depth: 0,
     render: item.kind === 'page' ? 'image' : 'reflowable',
     path: item.href,
+    // The manifest's own declaration, not a guess from the body. A content item that
+    // says `format: 'html'` is saying "these are characters for you to typeset", and
+    // it is the only party that knows: the body no longer carries a marker to sniff
+    // (see `Section.plainText`).
+    ...(item.format === 'html' ? { plainText: true } : {}),
   }));
 
   const base: BookDoc = {
@@ -157,6 +162,9 @@ export function createStagedDoc(options: StagedDocOptions): StagedDoc {
           depth: 0,
           render: item.kind === 'page' ? 'image' : 'reflowable',
           path: item.href,
+          // Same declaration as above, and carried across a window swap for the same
+          // reason: a jump to chapter 900 must not turn the book into an EPUB.
+          ...(item.format === 'html' ? { plainText: true } : {}),
         });
       }
       return local;

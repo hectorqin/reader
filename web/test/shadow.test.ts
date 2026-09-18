@@ -231,20 +231,32 @@ describe('plain-text detection', () => {
     const prose = new ReaderView({ container, doc: textDoc('epub', '<p>他说 div class="txt-body" 是纯文本用的</p>') });
     expect(prose.isPlainText()).toBe(false);
 
-    // Neither is one with no markup at all.
+    // Neither is one with no markup at all — *unless* the section declares itself.
+    // And that declaration is the case the marker cannot cover: the server now sends
+    // a TXT chapter as bare characters with no wrapper at all, so a chapter that is
+    // nothing but plain text carries nothing to sniff. Sniffing for the marker
+    // answered "not plain text" and the reader drew a novel with no paragraphs, no
+    // indent and no stylesheet — a defect that reads as a typography preference
+    // rather than a bug.
     const bare = new ReaderView({ container, doc: textDoc('epub', '<p>正文</p>') });
     expect(bare.isPlainText()).toBe(false);
+
+    const declaredBare = new ReaderView({
+      container,
+      doc: textDoc('epub', '第一章 惊蛰\n\n第 1 段。', { plainText: true }),
+    });
+    expect(declaredBare.isPlainText()).toBe(true);
   });
 });
 
 /** A one-section document, for the detection test. */
-function textDoc(format: string, html: string) {
+function textDoc(format: string, html: string, section: Record<string, unknown> = {}) {
   return {
     format,
     layout: 'reflowable',
     render: 'reflowable',
     direction: 'ltr',
-    sections: [{ id: 'c0', label: '一', html, depth: 0 }],
+    sections: [{ id: 'c0', label: '一', html, depth: 0, ...section }],
     toc: [],
     styles: [],
     resources: new Map(),

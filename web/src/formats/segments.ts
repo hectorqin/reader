@@ -191,16 +191,70 @@ export function escapeHtml(text: string): string {
 }
 
 /**
+ * A chapter heading, promoted out of the body.
+ *
+ * A chapter's own slice *includes* its heading line — chapter splitting records
+ * the heading as the chapter's first line, which is what makes a saved position
+ * land on the title rather than one line into the chapter. Left as ordinary prose
+ * it renders as `第二章 落雨雨来了。`: the title and the first sentence glued
+ * together with no separation, which is what a reader reports as "格式乱了".
+ *
+ * Promoted rather than merely split off, because it is the one piece of structure
+ * a TXT actually has, and a reader scanning for a chapter boundary is looking for
+ * exactly this. The patterns are deliberately narrow for the same reason the
+ * chapter *split* is: a false positive restructures the book rather than
+ * rendering it.
+ */
+const HEADING_PATTERNS: readonly RegExp[] = [
+  /^第\s*[0-9０-９零一二三四五六七八九十百千万两]+\s*[章回节卷部篇集]\s*[:：.、\-—]?\s*.{0,60}$/,
+  /^(?:序章|序言|楔子|引子|前言|后记|尾声|终章|番外|附录)\s*.{0,40}$/,
+  /^[卷部]\s*[0-9０-９零一二三四五六七八九十百千万两]+\s*.{0,60}$/,
+  /^Chapter\s*\d+.*$/i,
+  /^#{1,3}\s+.+$/,
+];
+
+/** The longest line still plausibly a heading rather than prose. */
+const MAX_HEADING_LENGTH = 60;
+
+function isHeadingLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_HEADING_LENGTH) return false;
+  return HEADING_PATTERNS.some((pattern) => pattern.test(trimmed));
+}
+
+/**
+ * Splits a chapter body into its heading line and the rest.
+ *
+ * Only the *first* non-blank line is considered: a heading anywhere else is a line
+ * of prose that happens to look like one, and promoting those would restructure
+ * the book rather than render it.
+ */
+export function splitChapterHeading(text: string): { heading: string; body: string } {
+  const normalised = text.replace(LINE_ENDINGS, '\n');
+  const lines = normalised.split('\n');
+  const firstIndex = lines.findIndex((line) => line.trim().length > 0);
+  if (firstIndex === -1) return { heading: '', body: '' };
+  if (!isHeadingLine(lines[firstIndex] ?? '')) return { heading: '', body: normalised };
+  return {
+    heading: (lines[firstIndex] ?? '').trim(),
+    body: lines.slice(firstIndex + 1).join('\n'),
+  };
+}
+
+/**
  * The same rendition, wrapped so the client's scoping class is present.
  *
- * The string form used by the loaders, and the one thing it adds over
- * `textToParagraphHtml` is the wrapper: a chapter's markup is the unit that
+ * The string form used by the loaders, and what it adds over
+ * `textToParagraphHtml` is the wrapper — a chapter's markup is the unit that
  * reaches a shadow root, and the class has to travel with it rather than being
- * added by whoever renders it — a server-rendered chapter carries it in its own
- * response, so a locally loaded one must not be the odd one out.
+ * added by whoever renders it — plus the heading promotion, which is the same
+ * decision on every path (a locale's own file, the windowed manifest, the stream)
+ * rather than one the server made for two of them.
  */
 export function textToChapterHtml(text: string): string {
-  return `<div class="txt-body">\n${textToParagraphHtml(text)}\n</div>\n`;
+  const { heading, body } = splitChapterHeading(text);
+  const promoted = heading ? `<h3>${escapeHtml(heading)}</h3>\n` : '';
+  return `<div class="txt-body">\n${promoted}${textToParagraphHtml(body)}\n</div>\n`;
 }
 
 /**

@@ -645,10 +645,14 @@ describe('reading endpoints per format', () => {
     assert.ok(!res.body.includes('风来了'), 'chapter content must not bleed into the next chapter');
   });
 
-  test('txt chapter content is also offered as renderable markup', async () => {
-    // The rendition the reader actually draws. `chapter:` is the characters; this
-    // is the same chapter as a document, which is what gives a TXT paragraphs it
-    // can style instead of a wall of text with no line breaks in it.
+  test('the chapter-html reference hands over the whole chapter, unmarked up', async () => {
+    // This reference used to answer with server-rendered `<p>` markup. It no
+    // longer does: paragraph boundaries are a *reading* decision, and rendering
+    // them here meant the reader's indent was a round trip and a windowed chapter
+    // looked different from a streamed one. What it answers with is the chapter's
+    // characters and nothing else — the same bytes `chapter:` gives, minus the
+    // streaming cap — which is what makes one typesetting pass on the client the
+    // single definition of a paragraph.
     const book = await findBook('小说');
     const res = await app.inject({
       method: 'GET',
@@ -656,9 +660,30 @@ describe('reading endpoints per format', () => {
       headers: auth(),
     });
     assert.equal(res.statusCode, 200, res.body);
-    assert.match(res.headers['content-type'] as string, /text\/html/);
-    assert.match(res.body, /<p>雨来了。<\/p>/);
+    assert.match(res.headers['content-type'] as string, /text\/plain/);
+    assert.match(res.body, /雨来了/);
+    assert.doesNotMatch(res.body, /<p>/, 'the server must not typeset any more');
+    assert.doesNotMatch(res.body, /<div/, 'the server must not wrap the chapter any more');
     assert.ok(!res.body.includes('风来了'), 'chapter content must not bleed into the next chapter');
+  });
+
+  test('chapter-html is not capped the way the streaming chapter reference is', async () => {
+    // `chapter:` is a *window* for streaming, so bounding its reply is the
+    // feature. `chapter-html:` is a chapter the reader is about to read in one
+    // piece, so bounding it would hand them a chapter that stops mid-sentence.
+    const long = Array.from({ length: 4000 }, (_, i) => `第 ${i} 行的内容，足够长以越过流式窗口。`).join('\n');
+    const target = join(booksDir, '超长章节.txt');
+    await writeFile(target, `第一章 长\n${long}\n`, 'utf8');
+    await ctx.scanner.scan();
+    const book = await findBook('超长章节');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('chapter-html:0')}`,
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const text = res.body;
+    assert.ok(text.includes('第 3999 行'), 'the last line of the chapter must be present');
   });
 
   test('the manifest advertises the markup rendition without moving the reference', async () => {

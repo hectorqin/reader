@@ -514,15 +514,17 @@ describe('plain-text chapters are typeset by the reader', () => {
     return host.shadow;
   }
 
-  const serverChapter = [
-    '<div class="txt-body">',
-    '<h3>第二章 落雨</h3>',
-    '<p>　　雨来了。</p>',
-    '<p>他走在雨里。</p>',
-    '</div>',
-  ].join('\n');
+  /**
+   * A chapter exactly as the server now sends it: the characters, and nothing else.
+   *
+   * `chapter-html:<n>` used to answer with server-rendered `<p>` markup. It answers
+   * with the text now, because paragraph boundaries are a *reading* decision — see
+   * `server/src/indexer/formats/text.ts`. Every assertion below is written against
+   * this shape, because this is the shape the reader actually receives.
+   */
+  const serverChapter = ['第二章 落雨', '　　雨来了。', '他走在雨里。'].join('\n');
 
-  it('re-splits a serverside chapter and drops the leading spaces it carried', async () => {
+  it('typesets the text the server sends, and drops the leading spaces it carried', async () => {
     // The whole point of moving the typography to the client: the server hands over
     // characters, and one of the characters a scraper wrote is the full-width space
     // that was standing in for an indent. Left in, it is indent added to whatever the
@@ -535,17 +537,58 @@ describe('plain-text chapters are typeset by the reader', () => {
     expect(body).not.toBeNull();
     const paragraphs = [...body!.querySelectorAll('p')].map((p) => p.textContent);
     expect(paragraphs).toEqual(['雨来了。', '他走在雨里。']);
-    // The heading the server promoted is kept, and stays first.
+    // The chapter's first line is its title, and the *client* promotes it now —
+    // otherwise it renders as `第二章 落雨雨来了。`, the title and the first sentence
+    // glued together, which is what a reader reports as "格式乱了".
+    expect(body!.querySelector('h3')?.textContent).toBe('第二章 落雨');
+  });
+
+  it('escapes a chapter whose own text contains markup', async () => {
+    // The server sends `text/plain` now and for exactly this reason: served as HTML,
+    // a chapter containing `<b>` would be parsed as markup by anything that trusted
+    // the label, and the escaping that makes a TXT safe would be sidestepped. The
+    // assertion is on the *absence* of an element, not on the presence of the words.
+    const container = document.createElement('div');
+    document.body.append(container);
+    const view = make(container, txtDoc('<img src=x onerror=alert(1)>\n\n<b>粗</b>'));
+    await view.open(0, 0);
+    const shadow = shadowOf(container);
+    expect(shadow.querySelector('.txt-body img')).toBeNull();
+    expect(shadow.querySelector('.txt-body b')).toBeNull();
+    const paragraphs = [...shadow.querySelectorAll('.txt-body > p')].map((p) => p.textContent);
+    expect(paragraphs).toEqual(['<img src=x onerror=alert(1)>', '<b>粗</b>']);
+  });
+
+  it('re-typesets a chapter an older server sent as markup', async () => {
+    // A window may have been cached against a server that still rendered `<p>`s (or
+    // a proxy may re-wrap one). The blocks are read back as text and re-split, so an
+    // old response cannot be rendered as if it were a new one — and the heading it
+    // carried is kept rather than re-derived, because a heuristic run twice is two
+    // copies of the heuristic.
+    const container = document.createElement('div');
+    document.body.append(container);
+    const legacy = [
+      '<div class="txt-body">',
+      '<h3>第二章 落雨</h3>',
+      '<p>　　雨来了。</p>',
+      '<p>他走在雨里。</p>',
+      '</div>',
+    ].join('\n');
+    const view = make(container, txtDoc(legacy));
+    await view.open(0, 0);
+    const body = shadowOf(container).querySelector('.txt-body');
+    const paragraphs = [...body!.querySelectorAll('p')].map((p) => p.textContent);
+    expect(paragraphs).toEqual(['雨来了。', '他走在雨里。']);
     expect(body!.querySelector('h3')?.textContent).toBe('第二章 落雨');
   });
 
   it('adds paragraphs to a chapter the server sent as one slab', async () => {
-    // A windowed TXT arrives through `chapter:<n>`, which is the characters with no
-    // markup at all. Without this the reader gets a wall of text while the same book
-    // read whole gets paragraphs — one book, two appearances, decided by transport.
+    // A TXT whose chapters have no blank lines between paragraphs is the common
+    // scraped shape. Without this the reader gets a wall of text — one book, two
+    // appearances, decided by how the file happened to be written.
     const container = document.createElement('div');
     document.body.append(container);
-    const view = make(container, txtDoc('<div class="txt-body">他走了。\n她留下了。\n天亮了。</div>'));
+    const view = make(container, txtDoc('他走了。\n她留下了。\n天亮了。'));
     await view.open(0, 0);
     const paragraphs = [...shadowOf(container).querySelectorAll('.txt-body > p')].map((p) => p.textContent);
     expect(paragraphs).toEqual(['他走了。', '她留下了。', '天亮了。']);

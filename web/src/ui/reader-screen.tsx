@@ -1671,9 +1671,14 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
  * chapter one. Prefixing on the client keeps old positions resolving and new
  * chapters rendering.
  *
- * `chapter-html:` is the server's markup rendition of `chapter:`. An item that does
- * not declare `html` is fetched exactly as the server named it, which is the
- * behaviour every other format already relies on.
+ * `chapter-html:` is `chapter:` without the streaming cap — one whole chapter for a
+ * reader who is about to read it in one piece. It used to mean "server-rendered
+ * markup" as well; that half is gone (the client typesets, see
+ * `web/src/formats/segments.ts`) and the reference name is kept because it is the
+ * identity a cached section and a saved position are keyed on, and because a
+ * client that asks for it must keep working. An item that does not declare `html`
+ * is fetched exactly as the server named it, which is the behaviour every other
+ * format already relies on.
  */
 function renditionRef(item: { href: string; format?: string }): string {
   if (item.format !== 'html') return item.href;

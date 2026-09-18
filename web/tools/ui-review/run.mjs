@@ -288,6 +288,118 @@ async function audit(cdp, scenes, results) {
   })()`);
   check('没有横向溢出', overflow.document <= 1, `document 溢出 ${overflow.document}px`);
 
+  // Back to scroll mode before the traffic window.
+  //
+  // The scenes above end in paged mode, and a paged surface does not scroll — reading
+  // in paged mode turns pages without generating a position per screen. Scroll mode is
+  // where a reader produces a position *continuously*, which is the traffic profile
+  // the report was about, so the window has to be measured there. The sheet is opened
+  // by its own button rather than assumed to be open: the previous step closed it.
+  // The chrome is made visible first: the audit's own collapse check above left it
+  // hidden, and a hidden topbar's settings button is a button that cannot be clicked.
+  const revealChrome = async () => {
+    const hidden = await cdp.evaluate(`document.querySelector('.reader-screen')?.dataset?.chrome === 'hidden'`);
+    if (hidden) {
+      await cdp.tapMiddle();
+      await cdp.sleep(400);
+    }
+  };
+  await revealChrome();
+  // The settings sheet is identified by its own title, not by "a panel is open": the
+  // geometry step above leaves the *contents* sheet up, and a blind click on the
+  // settings button would close it and then wait for a sheet that is already there.
+  const settingsTitle = await cdp.evaluate(
+    `document.querySelector('.panel')?.querySelector('.panel-title, h2, header')?.textContent?.trim() ?? ''`,
+  );
+  if (!settingsTitle.includes('设置')) {
+    if (settingsTitle) {
+      await cdp.click('button[aria-label="关闭"]');
+      await cdp.sleep(300);
+    }
+    await cdp.click('button[aria-label="设置"]');
+    await cdp.waitFor('document.querySelector(".panel") !== null', 10_000);
+  }
+  await cdp.sleep(300);
+  await cdp.clickText('.segmented button', '滚动');
+  await cdp.sleep(300);
+  await cdp.click('button[aria-label="关闭"]');
+  await cdp.sleep(600);
+
+  // The traffic a *reading* session generates.
+  //
+  // The request behind this is the screenshot a reader sent: the network panel, full
+  // of `sync` POSTs each paired with a `sync?since=…` GET, repeating for as long as
+  // they kept reading. Both halves were real defects — the push's answer (which
+  // already carries the merged state) was thrown away and re-fetched, and the 30s
+  // poll was re-armed by every page turn so the pull half silently stopped — and
+  // neither is a *functional* failure, which is why no functional test caught them.
+  //
+  // So the window has to contain actual reading: turning pages is what writes a
+  // position and what used to produce a round trip per turn. A window in which the
+  // reader sits still proves nothing about the thing that was reported.
+  await cdp.sleep(1500);
+  const before = await cdp.requestCounts();
+  // Twelve page turns over six seconds — a reader settling into a book.
+  //
+  // The scroll is dispatched as a real sequence of positions on the reading surface
+  // rather than as a synthetic event: the surface is a scroll container in scroll
+  // mode (that is what "scroll mode" *is*), and its own `scroll` handler is what
+  // measures a position and writes it. Dispatching anything else would be a window in
+  // which no position was ever written, and such a window passes whatever the sync
+  // code does — which is the trap this check has to avoid.
+  // Driven one step at a time from here rather than as one long in-page loop: the
+  // protocol has a 20-second ceiling on a single evaluation, and twelve steps held
+  // long enough for the reader's own write debounce to fire is longer than that.
+  const pageTurns = 8;
+  const scrollMax = await cdp.evaluate(`(() => {
+    const host = document.querySelector('book-content');
+    if (!host) return 0;
+    return Math.max(0, host.scrollHeight - host.clientHeight);
+  })()`);
+  let turned = 0;
+  for (let step = 1; step <= pageTurns && scrollMax > 0; step += 1) {
+    await cdp.evaluate(`(() => {
+      const host = document.querySelector('book-content');
+      host.scrollTop = ${Math.round((scrollMax * step) / pageTurns)};
+      return host.scrollTop;
+    })()`);
+    // Held longer than the reader's own 1.5s write debounce, so every step is a
+    // *committed* position rather than one the next step cancels. Without that the
+    // window contains a single write however many times the surface is scrolled, and
+    // the check has nothing to measure.
+    await cdp.sleep(1800);
+    turned += 1;
+  }
+  // Then let the debounce and the coalescing window drain, so the trailing push a
+  // reader would actually cause is *in* the measurement rather than after it.
+  await cdp.sleep(6000);
+  const after = await cdp.requestCounts();
+  const delta = (name) => (after[name] ?? 0) - (before[name] ?? 0);
+  // Every write costs **one** request, not two.
+  //
+  // This is the doubling the report showed: a `POST /api/v1/sync` immediately
+  // followed by a `GET /api/v1/sync?since=…` carrying the same body. The push already
+  // answers with the merged state, so the GET is entirely redundant — and it doubles
+  // the traffic of every page turn for as long as the reader keeps reading.
+  //
+  // The assertion is on GETs specifically rather than on the total: how many *writes*
+  // a session produces is a product decision that belongs to the coalescing window,
+  // but a GET that appears *alongside* a POST is never right, whatever the reader did.
+  // Every step above is held past the reader's own write debounce, so each is a
+  // separate session and each legitimately pushes; none of them may also pull.
+  const syncTotal = delta('sync');
+  const posts = delta('sync-post');
+  const gets = delta('sync-get');
+  check(
+    '翻页不再每次都发两次 sync',
+    turned > 0 && posts > 0 && gets === 0,
+    turned === 0
+      ? '阅读面没有可滚动的高度，这一轮没有发生翻页（检查因此无效）'
+      : posts === 0
+        ? '这一轮没有发出任何 push，检查无效'
+        : `${turned} 次翻页 + 6 秒静默：${posts} 次 POST / ${gets} 次 GET（共 ${syncTotal} 次 sync 请求）`,
+  );
+
   return { failures, results };
 }
 

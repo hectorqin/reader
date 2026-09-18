@@ -110,15 +110,21 @@ const book = {
   updatedAt: Date.now(),
 };
 
-/** The reader's own chapter markup, in the shape the server produces. */
-function chapterHtml(index) {
-  const paragraphs = CHAPTER_BODY[index]
-    .split('\n\n')
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block) => `<p>${block.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p>`)
-    .join('\n');
-  return `<div class="txt-body">\n${paragraphs}\n</div>\n`;
+/**
+ * A chapter, in the shape the server actually produces: the characters, as text.
+ *
+ * This used to answer with a `txt-body` div full of `<p>`s, which is what the server
+ * rendered before the typesetting moved to the client. Keeping the fixture on the
+ * *new* shape matters more than keeping it on the old one: the review runs against
+ * the production bundle, and a fixture that still pre-rendered paragraphs would let
+ * a regression in the client's own split render perfectly.
+ *
+ * The `\u3000` indents in `LONG` are kept deliberately — they are "段前空格", and
+ * left in they are indent stacked on the reader's own. The screenshot is where that
+ * is visible.
+ */
+function chapterText(index) {
+  return `${CHAPTER_BODY[index]}\n`;
 }
 
 function manifest() {
@@ -143,8 +149,15 @@ function manifest() {
         seq: index,
         title: chapter.title,
         kind: 'chapter',
-        mediaType: 'application/xhtml+xml',
+        // The TXT manifest as the server actually emits it: plain characters, and
+        // `format: 'html'` to say "this is a document to be typeset" rather than
+        // "this is markup". The media type and the format field are both asserted
+        // here because they are what `renditionRef` keys on — a fixture that omitted
+        // them would have the client fetch `chapter:` and render an untitled slab,
+        // which is a review of a path no reader is on.
+        mediaType: 'text/plain; charset=utf-8',
         href: `chapter:${index}`,
+        format: 'html',
       })),
     },
   };
@@ -173,6 +186,28 @@ export function createReviewServer({ port = 5199 } = {}) {
 
     if (path === '/__seen') {
       return json(reply, seen);
+    }
+    // The request log, *counted*, in the names the traffic assertions use.
+    //
+    // Counting at the HTTP boundary is the only place that sees every request the
+    // bundle makes — including the ones a debounce was supposed to fold away — and
+    // it is deliberately blind to *why* a request was made. A review of the traffic
+    // has to be: the defects it is looking for are a request that was redundant, and
+    // no amount of reading the client's intent tells you whether it was sent.
+    if (path === '/__counts') {
+      const counts = { sync: 0, 'sync-post': 0, 'sync-get': 0, assets: 0, toc: 0 };
+      for (const entry of seen) {
+        const [method, target = ''] = entry.split(' ');
+        const bare = target.split('?')[0] ?? '';
+        if (bare === '/api/v1/sync') {
+          counts.sync += 1;
+          if (method === 'POST') counts['sync-post'] += 1;
+          else counts['sync-get'] += 1;
+        }
+        if (/\/assets$/.test(bare)) counts.assets += 1;
+        if (/\/toc$/.test(bare)) counts.toc += 1;
+      }
+      return json(reply, counts);
     }
     if (path.startsWith('/api/')) {
       return api(request, reply, url);
@@ -250,8 +285,10 @@ export function createReviewServer({ port = 5199 } = {}) {
     if (path === `/api/v1/books/${BOOK_ID}/assets`) {
       const ref = url.searchParams.get('ref') ?? '';
       const index = Number.parseInt(ref.replace(/^chapter(-html)?:/, ''), 10);
-      const body = chapterHtml(Number.isFinite(index) ? index : 0);
-      reply.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      const body = chapterText(Number.isFinite(index) ? index : 0);
+      // `text/plain`, not `text/html`: the server stopped rendering markup, and the
+      // content type is part of what the client is being reviewed against.
+      reply.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
       return reply.end(body);
     }
     if (path === `/api/v1/books/${BOOK_ID}/progress`) {
@@ -285,4 +322,4 @@ export function createReviewServer({ port = 5199 } = {}) {
   };
 }
 
-export { CHAPTERS, BOOK_ID, CHAPTER_BODY, chapterHtml };
+export { CHAPTERS, BOOK_ID, CHAPTER_BODY, chapterText };
