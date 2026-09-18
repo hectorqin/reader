@@ -7,7 +7,7 @@ import type { AppSettings, ShelfSort } from '../store/settings.ts';
 import { mountUI } from './mount.ts';
 import { DENSITY_LABELS, ShelfSettingsPanel } from './shelf-settings.tsx';
 import { sortBooks, shelfOrder } from './shelf-order.ts';
-import { Button, IconButton } from './toolkit.tsx';
+import { Button, Icon, IconButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useState } from './vendor/preact.ts';
 
 export interface ShelfScreenOptions {
@@ -410,22 +410,17 @@ export class ShelfScreen {
             {/* The manager's entry point travels with the title rather than
                 sitting in the toolbar: it is a *place*, not a filter, and the
                 toolbar is where the filters are. */}
-            <IconButton label="书库管理" onClick={() => this.options.onOpenManager('')}>
-              🗂
-            </IconButton>
+            <IconButton label="书库管理" icon="folder-open" onClick={() => this.options.onOpenManager('')} />
             <IconButton
               label={`书架设置 · ${DENSITY_LABELS[density]}`}
+              icon="settings"
               onClick={() => this.patch({ settingsOpen: !state.settingsOpen })}
-            >
-              ⚙
-            </IconButton>
+            />
           </div>
         </header>
 
         <div className="shelf-search" role="search">
-          <span className="search-glyph" aria-hidden="true">
-            ⌕
-          </span>
+          <Icon name="search" class="search-glyph" />
           <input
             type="search"
             placeholder="搜索书名、作者、系列"
@@ -447,7 +442,7 @@ export class ShelfScreen {
           />
           {state.search.length > 0 ? (
             <button type="button" className="search-clear" aria-label="清除搜索" onClick={() => this.clearSearch()}>
-              ✕
+              <Icon name="close" />
             </button>
           ) : null}
         </div>
@@ -503,9 +498,7 @@ export class ShelfScreen {
           {!state.bootstrapping && empty ? (
             hasQuery ? (
               <div className="empty-state">
-                <div className="empty-glyph" aria-hidden="true">
-                  ⌕
-                </div>
+                <Icon name="search" class="empty-glyph" />
                 <p>没有匹配的书</p>
                 <p className="muted">换个关键词，或者检查一下作者名的写法</p>
                 <button type="button" className="button" onClick={() => this.clearSearch()}>
@@ -514,9 +507,7 @@ export class ShelfScreen {
               </div>
             ) : (
               <div className="empty-state">
-                <div className="empty-glyph" aria-hidden="true">
-                  ▤
-                </div>
+                <Icon name="book" class="empty-glyph" />
                 <p>书库还是空的</p>
                 <p className="muted">
                   把书籍放进挂载的目录，扫一次，它们就会出现在这里

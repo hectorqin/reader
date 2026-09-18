@@ -3,7 +3,7 @@ import type { ReaderApi } from '../api/client.ts';
 import type { BrowseEntry, BrowseListing, ConflictPolicy, ShelfAction } from '../api/types.ts';
 import { formatBytes, formatDate } from './dom.ts';
 import { mountUI } from './mount.ts';
-import { Button, IconButton } from './toolkit.tsx';
+import { Button, Icon, IconButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useRef, useState } from './vendor/preact.ts';
 
 export interface ManagerScreenOptions {
@@ -241,9 +241,7 @@ export class ManagerScreen {
     return (
       <>
         <div className="panel-header">
-          <IconButton label="返回书架" onClick={() => this.options.onClose()}>
-            ←
-          </IconButton>
+          <IconButton label="返回书架" icon="arrow-left" onClick={() => this.options.onClose()} />
           <div className="manager-crumbs">
             {(listing?.crumbs ?? []).map((crumb, index) => (
               <>
@@ -264,12 +262,20 @@ export class ManagerScreen {
               that can only answer 403 teaches the reader to distrust every other
               control, and *which* controls are missing is what this attribute
               says. */}
-          <IconButton label="上传书籍" hidden={!writable} disabled={state.busy} onClick={() => this.uploadInput.click()}>
-            ⬆
-          </IconButton>
-          <IconButton label="新建文件夹" hidden={!writable} disabled={state.busy} onClick={() => void this.promptMkdir()}>
-            ＋
-          </IconButton>
+          <IconButton
+            label="上传书籍"
+            icon="upload"
+            hidden={!writable}
+            disabled={state.busy}
+            onClick={() => this.uploadInput.click()}
+          />
+          <IconButton
+            label="新建文件夹"
+            icon="plus"
+            hidden={!writable}
+            disabled={state.busy}
+            onClick={() => void this.promptMkdir()}
+          />
         </div>
         <div
           className="manager-body"
@@ -331,7 +337,7 @@ export class ManagerScreen {
   private summary(listing: BrowseListing | null): string {
     if (listing === null) return '';
     if (listing.entries.length === 0) {
-      return listing.writable ? '空文件夹 · 可以用右上角的 ＋ 新建子目录' : '空文件夹';
+      return listing.writable ? '空文件夹 · 可以用右上角的新建按钮添加子目录' : '空文件夹';
     }
     const hidden = listing.entries.filter((entry) => entry.hidden || entry.hiddenByRule).length;
     const parts = [`${listing.dirs} 个文件夹`, `${listing.files} 个文件`, formatBytes(listing.size)];
@@ -752,7 +758,7 @@ function Row({ entry, selecting, selected, onActivate, onToggle, onMenu }: RowPr
     >
       <span className="manager-check" aria-hidden="true" />
       <div className="manager-name">
-        <span className="manager-icon">{entry.type === 'dir' ? '📁' : '📄'}</span>
+        <Icon name={entry.type === 'dir' ? 'folder' : 'file'} class="manager-icon" />
         <span className="manager-label">{entry.name}</span>
       </div>
       <div className="manager-meta muted">{meta}</div>
@@ -766,7 +772,7 @@ function Row({ entry, selecting, selected, onActivate, onToggle, onMenu }: RowPr
             onMenu();
           }}
         >
-          ⋯
+          <Icon name="more" />
         </button>
       ) : null}
     </div>

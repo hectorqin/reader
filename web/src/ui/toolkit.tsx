@@ -13,7 +13,10 @@
  * a callback as props, so the rendered state cannot drift from the stored state.
  */
 
+import { Icon, type IconName } from './icon.tsx';
 import { type ComponentChildren, type JSX } from './vendor/preact.ts';
+
+export { Icon, type IconName } from './icon.tsx';
 
 /** The panel headings and controls the stylesheet already styles. */
 export function SectionTitle({ children }: { children: ComponentChildren }): JSX.Element {
@@ -25,26 +28,36 @@ export function Notice({ children }: { children: ComponentChildren }): JSX.Eleme
 }
 
 export interface IconButtonProps {
+  /** Accessible name. Required: an icon button has no text to fall back on. */
   label: string;
-  /** Glyph. Kept as a child so a caller can pass an element instead. */
-  children: ComponentChildren;
+  /**
+   * The glyph, by name.
+   *
+   * A name rather than a child node, so every icon button in the product draws from
+   * the same set at the same weight. The previous version took arbitrary children,
+   * and that is exactly how the UI ended up mixing a Unicode hamburger, a Unicode
+   * gear, an emoji folder and a `+` — four glyphs from four families, at four
+   * optical weights, in one toolbar.
+   */
+  icon: IconName;
   onClick?: (event: MouseEvent) => void;
   disabled?: boolean;
   /** Kept in the DOM so the header's layout does not depend on the mount. */
   hidden?: boolean;
+  class?: string;
 }
 
-export function IconButton({ label, children, onClick, disabled, hidden }: IconButtonProps): JSX.Element {
+export function IconButton({ label, icon, onClick, disabled, hidden, class: className }: IconButtonProps): JSX.Element {
   return (
     <button
       type="button"
-      className="icon-button"
+      className={className ? `icon-button ${className}` : 'icon-button'}
       aria-label={label}
       disabled={disabled ?? false}
       hidden={hidden ?? false}
       onClick={onClick}
     >
-      {children}
+      <Icon name={icon} />
     </button>
   );
 }
