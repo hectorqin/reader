@@ -32,9 +32,17 @@ const CHAPTERS = [
   { title: '第三章 落雨', body: ['雨来了。', '他没有打伞，就这么走回去。'] },
 ];
 
-/** Enough text that the chapter is several screens tall. */
+/**
+ * Enough text that the chapter is several screens tall, with a scraper's indentation.
+ *
+ * The full-width spaces are the point: they are what "段前空格" is, they are what a
+ * converted TXT library is full of, and they have to be *gone* from the rendered page
+ * — left in, they are indent added on top of the reader's own, and the screenshot is
+ * where that is visible. A fixture indented with ordinary spaces would not show it,
+ * because the browser collapses those.
+ */
 const LONG = Array.from({ length: 40 }, (_v, i) =>
-  `第 ${i + 1} 段。这一段特意写长一些，用来把这一章撑到好几屏，这样翻页和页数才看得出来。`,
+  `　　第 ${i + 1} 段。这一段特意写长一些，用来把这一章撑到好几屏，这样翻页和页数才看得出来。`,
 ).join('\n\n');
 
 const CHAPTER_BODY = CHAPTERS.map((chapter, index) =>

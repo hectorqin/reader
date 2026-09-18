@@ -43,7 +43,10 @@ export const ICON_CODEPOINTS = {
   'power': '\ue921',
   'logout': '\ue922',
   'plus-circle': '\ue923',
-  'settings': '\ue924',
+  'text-indent': '\ue924',
+  'text-type': '\ue925',
+  'spacing': '\ue926',
+  'settings': '\ue927',
 } as const;
 
 export type IconName = keyof typeof ICON_CODEPOINTS;

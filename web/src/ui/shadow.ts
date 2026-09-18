@@ -61,15 +61,23 @@
  * spacing between paragraphs by writing one property on the stage rather than by
  * re-injecting the chapter.
  *
- * Scoped to `.txt-body` on purpose. The server wraps a TXT chapter in that element
- * (`text-html.ts`) and nothing else produces it, so an EPUB chapter — which may
- * well contain its own `p` rules and its own idea of an indent — is untouched by
- * any of this.
+ * Scoped to `.txt-body` on purpose. The reader wraps a TXT chapter in that element
+ * when it typesets it (`formats/segments.ts`) and nothing else produces it, so an
+ * EPUB chapter — which may well contain its own `p` rules and its own idea of an
+ * indent — is untouched by any of this.
+ *
+ * Note what is *not* here: no rule reads an attribute the server wrote. The old
+ * sheet branched on `data-indent='none'`, which meant the reader's own indent
+ * setting could only take effect on a chapter the server had rendered with the
+ * matching attribute — the setting was a property of a response. The indent is
+ * now one custom property with one value, written by the settings panel and read
+ * here, and "off" is the same property set to zero rather than a second code path
+ * that has to be kept in agreement with the first.
  */
 const TXT_STYLESHEET = `
 .txt-body {
-  /* Declared on the column rather than on each paragraph so one property can be
-     changed in one place, and so a paragraph that the book's own markup already
+  /* Declared on the wrapper rather than on each paragraph so one property can be
+     changed in one place, and so a paragraph that the file's own text already
      indented is not indented twice. */
   text-indent: 0;
 }
@@ -78,30 +86,23 @@ const TXT_STYLESHEET = `
   /* The readable default for Chinese prose: two full-width characters of indent,
      and a gap between paragraphs small enough that the indent is the primary
      signal and large enough that a paragraph break is visible when the reader
-     turns the indent off. Both are properties the settings panel can change. */
+     turns the indent off. Both are properties the settings panel can change, and
+     the values are in 'em' rather than 'rem' on purpose — the indent is meant to
+     be two *characters* wide, and a character's width scales with the reader's
+     font size. */
   text-indent: var(--reader-txt-indent, 2em);
   margin-block-end: var(--reader-txt-para-gap, 0.55em);
-  /* Justified by default for CJK — a Chinese line that is not justified is a line
-     with a ragged right edge the reader notices immediately — while Latin text in
-     the same paragraph falls back to the browser's own text-justify. The reader's
-     own alignment control still wins, because it is applied on .book-flow and the
-     value inherits. */
+  /* A paragraph that has been split correctly has no hard wraps left in it, so
+     the browser's own line breaking is what the reader sees. Justification is
+     deliberately *not* stated here: a Chinese line that is not justified is a
+     line with a ragged right edge the reader notices immediately, but a Latin
+     line that *is* justified is a line with rivers in it, and the reader's own
+     alignment control is the honest place to decide which of the two they are
+     looking at. */
   orphans: 2;
   widows: 2;
 }
-/* The reader's own alignment control sets --reader-text-align on the column; a
-   value of inherit is "leave it alone", which for a TXT means this file's
-   default rather than the browser's. */
-.txt-body > p:last-child {
-  margin-block-end: 0;
-}
-/* An indent the reader can turn off, stated in a way that cannot be undone by the
-   text-indent above: both blocks target the same element, and the attribute is
-   written by the server only when it rendered without an indent. */
-.txt-body[data-indent='none'] > p {
-  text-indent: 0;
-}
-/* A heading line the server promoted out of the body is shown as a heading rather
+/* A heading the reader promoted out of the body is shown as a heading rather
    than as an indented paragraph — the one piece of structure a TXT has. */
 .txt-body > h3,
 .txt-body > h4 {
@@ -110,6 +111,11 @@ const TXT_STYLESHEET = `
   font-weight: 600;
   text-indent: 0;
   break-after: avoid;
+}
+/* The last paragraph's gap is trailing space rather than separation, and at the
+   end of a chapter it stacks with the column's own bottom padding. */
+.txt-body > p:last-child {
+  margin-block-end: 0;
 }
 `;
 

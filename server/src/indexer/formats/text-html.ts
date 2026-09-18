@@ -1,28 +1,24 @@
 /**
- * The `chapter-html:<n>` rendition: one chapter as a real document.
+ * The `chapter-html:<n>` rendition: one chapter, whole, as a document.
  *
- * Why this exists at all. `chapter:<n>` answers with `text/plain`, and the client
- * injected that answer straight into the reading column — a wall of characters
- * with no paragraph elements, because the only thing that turns a newline into a
- * line break in HTML is `<br>`, and `text/plain` contains none. The result was a
- * TXT book rendered as a single uninterrupted slab, while the *same* book read
- * client-side (the fallback when a server has no windowed manifest) was rendered
- * as proper paragraphs by `formats/txt.ts`. One book, two appearances, decided by
- * which transport happened to be used. This closes that gap.
+ * This is a *transport* for a chapter's characters, not a typesetting pass. The
+ * server's only two jobs are to hand over the entire chapter (nothing truncated)
+ * and to say where its paragraphs are (a blank line, a line ending, a
+ * sentence-final newline) — the boundaries are a property of the file, so they
+ * are inferred once, here, against the undecoded text.
  *
- * It also fixes two things the plain-text path could not express:
+ * The indentation, the paragraph spacing and the removal of the leading spaces a
+ * scraper wrote are *not* the server's business, and that is a deliberate change.
+ * They are reading preferences: a phone and a tablet want different indents, and
+ * a reader changes them while looking at the page. A server that baked them into
+ * a response made every one of those changes a round trip, and it made a book
+ * read windowed (`chapter:<n>`, no markup to carry the decision) look different
+ * from the same book read whole. The client typesets the text it is given (see
+ * `web/src/formats/segments.ts`), so the two transports agree by construction and
+ * the setting costs no request.
  *
- *  - **Truncation.** `chapter:<n>` sliced the body at 256KB, so a long chapter was
- *    silently cut in half. A JSON-rendered chapter has no reason to be bounded
- *    that way; the escape hatch for an enormous chapter is the client's own
- *    chunking, not a cut-off in the middle.
- *  - **Typography.** Raw text carries no structure, so no stylesheet could give it
- *    a first-line indent, spacing between paragraphs or a readable measure.
- *    `<p>` elements can be styled, and the client's TXT sheet does.
- *
- * The HTML is deliberately a *fragment* wrapped in the same shape an EPUB chapter
- * has (`<div class="txt-body">…`), so the client's `extractBody` and its shadow
- * root treat it identically to any other reflowable chapter. Nothing here is
+ * What is left here is the shape the client's shadow root expects: a *fragment*
+ * wrapped the same way an EPUB chapter is (`<div class="txt-body">…`). Nothing is
  * sanitised away by `sanitiseInjectedContent`: no scripts, no absolute URLs, and
  * every character escaped.
  */
@@ -62,13 +58,6 @@ const SENTENCE_BREAK = /(?<=[。！？…”』】])\n(?=\s*[^\s，。！？、�
  * they could start a sentence.
  */
 const CONTINUATION_START = /^[\s，。！？、；：”』】）\u3001-\u303f\uff01-\uff5e]/;
-
-export interface TextHtmlOptions {
-  /** Prepend a first-line indent to every paragraph. Default true. */
-  indent?: boolean;
-  /** Characters used for the indent. Ignored in favour of CSS when possible. */
-  indentText?: string;
-}
 
 /**
  * A leading heading line, promoted out of the body.
@@ -163,12 +152,11 @@ const SENTENCE_END = /[。！？…”』】]$/;
  *
  * A `<div class="txt-body">` rather than bare `<p>`s, so the client can scope its
  * own TXT rules to exactly this content and leave an EPUB's chapters untouched.
- * The `<style>` block carries only the structural rules that must hold even if the
- * reader's stylesheet never loads; everything adjustable lives in the client, so
- * changing the indent does not mean a server round trip.
+ * The markup it contains is what the client is expected to *re-typeset*; what the
+ * server promises is the whole chapter and the paragraph boundaries within it,
+ * and nothing about how it looks.
  */
-export function renderChapterHtml(body: string, options: TextHtmlOptions = {}): Buffer {
-  const indent = options.indent !== false;
+export function renderChapterHtml(body: string): Buffer {
   const normalised = body.replace(LINE_ENDINGS, '\n');
   const lines = normalised.split('\n');
   // Only the *first* non-blank line is considered: a heading anywhere else is a
@@ -182,6 +170,5 @@ export function renderChapterHtml(body: string, options: TextHtmlOptions = {}): 
   const parts = splitParagraphs(rest).map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`);
   if (heading) parts.unshift(`<h3>${escapeHtml(heading)}</h3>`);
   const html = parts.join('\n');
-  const wrapped = `<div class="txt-body"${indent ? '' : ' data-indent="none"'}>\n${html}\n</div>\n`;
-  return Buffer.from(wrapped, 'utf8');
+  return Buffer.from(`<div class="txt-body">\n${html}\n</div>\n`, 'utf8');
 }

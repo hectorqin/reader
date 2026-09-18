@@ -323,6 +323,38 @@ book-content {
  * Chrome: header, shelf, panels
  * ------------------------------------------------------------------ */
 
+/*
+ * Whether the chrome is on screen.
+ *
+ * The topbar and the footer are one state, not two, and that is the whole of the
+ * "沉浸式" request: a reader who hides the navigation wants the page and nothing
+ * else, and a header that hides while the footer stays is a footer that keeps
+ * covering the last two lines of every page. So both are toggled by one attribute
+ * on the screen, both animate with the same duration and easing, and neither can be
+ * on screen without the other.
+ *
+ * The animation is a *slide plus a fade*, and it is applied to the chrome's own
+ * reserved space rather than to the chrome alone: the reader has to end up with a
+ * full-height page, and a header that fades out while still occupying 3rem of the
+ * column leaves the text in a band with a gap above it. `position: absolute` would
+ * give the space back instantly and cover the first line on the way out, so the
+ * band keeps its normal flow role and collapses its own height — which is what
+ * makes the page *grow* into the space as the header leaves rather than jump into
+ * it afterwards.
+ */
+.reader-screen {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  /*
+   * The chrome's own reserved space, in one place. The bands animate between it
+   * and zero, and the stage — which is `flex: 1 1 auto` — takes whatever is left,
+   * so a single number here is what keeps the page from being measured mid-slide.
+   */
+  --reader-chrome-top: 3rem;
+}
+
 .topbar {
   display: flex;
   /*
@@ -343,6 +375,33 @@ book-content {
      are the same weight. */
   border-bottom: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
   padding-top: var(--safe-top);
+  /* The band's own height is the reserved space, and it is what the stage gets
+     back when the chrome hides. `min-height` above is what it is at rest; the
+     transition needs an explicit height to animate to zero, so it is stated. */
+  height: var(--reader-chrome-top);
+  transition:
+    height var(--motion-duration) var(--motion-ease),
+    opacity var(--motion-duration) var(--motion-ease),
+    transform var(--motion-duration) var(--motion-ease),
+    visibility 0s linear var(--motion-duration);
+}
+
+/*
+ * Hidden: the band collapses and the contents slide up out of it.
+ *
+ * `visibility` rather than `display: none` so the slide has something to animate,
+ * and `visibility: hidden` at the end of it so the (invisible) title cannot be
+ * reached by a screen reader or a tap. `overflow: hidden` is what makes the slide a
+ * slide rather than the header visibly hanging over the text.
+ */
+.reader-screen[data-chrome='hidden'] .topbar {
+  height: 0;
+  min-height: 0;
+  opacity: 0;
+  visibility: hidden;
+  overflow: hidden;
+  border-bottom-color: transparent;
+  transform: translateY(-100%);
 }
 
 .topbar h1 {
@@ -1405,6 +1464,16 @@ book-content {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* The chrome's own show/hide is a state change, not decoration: it still has to
+     happen, it just does not have to be animated. Collapsing every duration to a
+     hair keeps the reader's preference without leaving the bands half-way. */
+  .topbar,
+  .footer,
+  .reader-rail {
+    transition-duration: 1ms;
+    animation: none;
+  }
+
   .shelf-settings .switch,
   .shelf-settings .switch::after {
     transition: none;
@@ -1618,6 +1687,22 @@ book-content {
  *    moves around as its values change is a readout the reader has to search.
  */
 
+/*
+ * Hidden: the footer collapses and slides down, exactly as the header does, and on
+ * the same attribute — see `.reader-screen[data-chrome='hidden']`. The progress bar
+ * goes with it rather than staying as a hairline: it is part of the chrome, and a
+ * two-pixel band left behind at the bottom of the screen is the one thing that makes
+ * "沉浸式" look broken.
+ */
+.reader-screen[data-chrome='hidden'] .footer {
+  height: 0;
+  opacity: 0;
+  visibility: hidden;
+  overflow: hidden;
+  border-top-color: transparent;
+  transform: translateY(100%);
+}
+
 .footer {
   background: var(--reader-surface);
   /* A hairline that survives a dark theme and a bright page equally: one solid
@@ -1625,6 +1710,11 @@ book-content {
      footer meets the paper. */
   border-top: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
   padding-bottom: var(--safe-bottom);
+  transition:
+    height var(--motion-duration) var(--motion-ease),
+    opacity var(--motion-duration) var(--motion-ease),
+    transform var(--motion-duration) var(--motion-ease),
+    visibility 0s linear var(--motion-duration);
 }
 
 .progress-bar {
@@ -1716,6 +1806,129 @@ book-content {
   text-align: end;
   color: var(--reader-ink);
   font-weight: 600;
+}
+
+/* ---- immersion rail ----
+ *
+ * The column of controls that appears when the chrome is hidden.
+ *
+ * Positioned in the *page margin* rather than over the text, which is the reason it
+ * can stay on screen while a reader is reading: the reading column is capped by
+ * `--reader-measure`, so on anything wider than a phone there is a genuine gutter to
+ * put it in. On a phone there is not, and the rail floats over the right edge of the
+ * text — deliberately, because the alternative is not having the controls at all,
+ * and the buttons are translucent discs that a reader reads *through* rather than
+ * around.
+ *
+ * Its vertical position is a compromise made visible: roughly a third of the way
+ * down, which is where the thumb of a hand holding a phone at the bottom lands and
+ * where a hand holding a tablet at the side reaches. It is not centred, because the
+ * centre of the screen is where the reading is.
+ */
+
+.reader-rail {
+  position: absolute;
+  inset-inline-end: calc(0.35rem + var(--safe-right));
+  /*
+   * Below the top of the screen rather than centred on it. Two reasons, and the
+   * first one is the one that decided the number: the status pill floats over the
+   * top of the reading area at this very inset (see `.status-bar`), and a rail that
+   * started at 12% would put a button underneath it on every sync. The second is
+   * reach: a hand holding a phone at the bottom of the screen reaches this band, and
+   * the centre of the screen is where the reading is.
+   */
+  top: calc(22% + var(--safe-top));
+  z-index: 14;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: 0.2rem;
+  animation: rail-in var(--motion-duration) var(--motion-ease);
+}
+
+@keyframes rail-in {
+  from { opacity: 0; transform: translateX(0.5rem); }
+  to { opacity: 1; transform: none; }
+}
+
+.rail-button {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--reader-line) 70%, transparent);
+  border-radius: 50%;
+  /*
+   * Translucent, because the rail sits over text on a phone. A solid disc is a hole
+   * in the page; a blurred one is a control the reader can see the paragraph
+   * through, which is what makes it possible to leave it there.
+   */
+  background: color-mix(in srgb, var(--reader-surface) 78%, transparent);
+  backdrop-filter: blur(6px);
+  color: var(--reader-ink);
+  font-size: 1.05rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: 0 2px 8px color-mix(in srgb, #000 12%, transparent);
+  transition: transform var(--motion-duration) var(--motion-ease), background var(--motion-duration) var(--motion-ease);
+}
+
+.rail-button:active {
+  transform: scale(0.92);
+  background: color-mix(in srgb, var(--reader-surface) 96%, transparent);
+}
+
+/* On a wide screen the rail moves into the gutter the measure leaves, so it is
+   beside the text rather than on top of it. `--reader-measure` is the same token
+   the column uses, so the two cannot disagree about where the text ends. */
+@media (min-width: 60rem) {
+  .reader-rail {
+    inset-inline-end: max(0.75rem, calc((100% - var(--reader-measure)) / 2 - 3.5rem));
+  }
+}
+
+/* ---- quick rows in the settings sheet ---- */
+
+.quick-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+  padding: 0 0 var(--space-2);
+}
+
+.quick-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.55rem 0.3rem;
+  border: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
+  border-radius: var(--reader-radius);
+  background: color-mix(in srgb, var(--reader-ink) 4%, transparent);
+  color: var(--reader-ink);
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.quick-button:active {
+  background: color-mix(in srgb, var(--reader-ink) 10%, transparent);
+}
+
+.quick-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.quick-button .quick-label {
+  font-size: var(--text-meta);
+  color: var(--reader-muted);
+}
+
+.quick-button .quick-value {
+  font-size: var(--text-label);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- read-aloud bar ---- */

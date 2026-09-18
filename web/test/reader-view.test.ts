@@ -494,3 +494,73 @@ describe('ReaderView resource handling', () => {
     }
   });
 });
+
+describe('plain-text chapters are typeset by the reader', () => {
+  /** `format: 'txt'` is the declaration; the marker is the observation. */
+  function txtDoc(html: string, format: BookDoc['format'] = 'txt'): BookDoc {
+    const doc = reflowableDoc(1);
+    return { ...doc, format, sections: [{ id: 'ch0', label: '第一章', html, depth: 0 }] };
+  }
+
+  /**
+   * The chapter's own shadow root, which is where the reading surface lives.
+   *
+   * `container.querySelector` reaches nothing inside it — that is the whole point of
+   * the shadow root — so the tests have to go through the host element.
+   */
+  function shadowOf(root: HTMLElement): ShadowRoot {
+    const host = root.querySelector('book-content') as (HTMLElement & { shadow: ShadowRoot }) | null;
+    if (!host) throw new Error('the reading surface is not mounted');
+    return host.shadow;
+  }
+
+  const serverChapter = [
+    '<div class="txt-body">',
+    '<h3>第二章 落雨</h3>',
+    '<p>　　雨来了。</p>',
+    '<p>他走在雨里。</p>',
+    '</div>',
+  ].join('\n');
+
+  it('re-splits a serverside chapter and drops the leading spaces it carried', async () => {
+    // The whole point of moving the typography to the client: the server hands over
+    // characters, and one of the characters a scraper wrote is the full-width space
+    // that was standing in for an indent. Left in, it is indent added to whatever the
+    // reader chose, and the setting looks broken on the files that need it most.
+    const container = document.createElement('div');
+    document.body.append(container);
+    const view = make(container, txtDoc(serverChapter));
+    await view.open(0, 0);
+    const body = shadowOf(container).querySelector('.txt-body');
+    expect(body).not.toBeNull();
+    const paragraphs = [...body!.querySelectorAll('p')].map((p) => p.textContent);
+    expect(paragraphs).toEqual(['雨来了。', '他走在雨里。']);
+    // The heading the server promoted is kept, and stays first.
+    expect(body!.querySelector('h3')?.textContent).toBe('第二章 落雨');
+  });
+
+  it('adds paragraphs to a chapter the server sent as one slab', async () => {
+    // A windowed TXT arrives through `chapter:<n>`, which is the characters with no
+    // markup at all. Without this the reader gets a wall of text while the same book
+    // read whole gets paragraphs — one book, two appearances, decided by transport.
+    const container = document.createElement('div');
+    document.body.append(container);
+    const view = make(container, txtDoc('<div class="txt-body">他走了。\n她留下了。\n天亮了。</div>'));
+    await view.open(0, 0);
+    const paragraphs = [...shadowOf(container).querySelectorAll('.txt-body > p')].map((p) => p.textContent);
+    expect(paragraphs).toEqual(['他走了。', '她留下了。', '天亮了。']);
+  });
+
+  it('leaves an EPUB chapter exactly as the book wrote it', async () => {
+    // The other half of the contract: this is the one place in the reader where the
+    // book's own markup must survive untouched, and a re-typesetting pass that ran
+    // on every format would be a re-typesetting pass that mangles every EPUB.
+    const container = document.createElement('div');
+    document.body.append(container);
+    const view = make(container, txtDoc('<p data-authored="1">正文</p>', 'epub'));
+    await view.open(0, 0);
+    const shadow = shadowOf(container);
+    expect(shadow.querySelector('.txt-body')).toBeNull();
+    expect(shadow.querySelector('p')?.getAttribute('data-authored')).toBe('1');
+  });
+});

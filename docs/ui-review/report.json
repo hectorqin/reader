@@ -17,7 +17,7 @@
     {
       "name": "03-reader-no-chrome",
       "label": "阅读页 · 收起工具栏",
-      "what": "点中间三分之一后，正文占满且不跳动"
+      "what": "顶栏与底栏同时收起，正文占满，右侧留出快捷按钮列"
     },
     {
       "name": "04-panel-toc",
@@ -51,6 +51,26 @@
     }
   ],
   "results": [
+    {
+      "name": "收起工具栏: 顶栏与底栏一起走",
+      "ok": true,
+      "detail": "state=hidden 顶栏 1px / 底栏 0px"
+    },
+    {
+      "name": "收起工具栏: 两条栏都不可见，也不可点",
+      "ok": true,
+      "detail": "topbar=hidden footer=hidden"
+    },
+    {
+      "name": "收起工具栏: 正文占满整屏",
+      "ok": true,
+      "detail": "正文 1..844 / 视口 844"
+    },
+    {
+      "name": "收起工具栏: 右侧仍有快捷按钮",
+      "ok": true,
+      "detail": "rail=true"
+    },
     {
       "name": "目录: 面板不遮住整页",
       "ok": true,
