@@ -7,7 +7,7 @@ import type { AppSettings, ShelfSort } from '../store/settings.ts';
 import { mountUI } from './mount.ts';
 import { DENSITY_LABELS, ShelfSettingsPanel } from './shelf-settings.tsx';
 import { sortBooks, shelfOrder } from './shelf-order.ts';
-import { Button, Icon, IconButton } from './toolkit.tsx';
+import { Icon, IconButton, IconTextButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useState } from './vendor/preact.ts';
 
 export interface ShelfScreenOptions {
@@ -513,10 +513,8 @@ export class ShelfScreen {
                   把书籍放进挂载的目录，扫一次，它们就会出现在这里
                 </p>
                 <div className="empty-actions">
-                  <Button onClick={() => this.options.onOpenManager('')}>打开书库管理</Button>
-                  <button type="button" className="button" onClick={() => void this.manualRefresh()}>
-                    刷新
-                  </button>
+                  <IconTextButton icon="folder-open" label="打开书库管理" onClick={() => this.options.onOpenManager('')} />
+                  <IconTextButton icon="refresh" label="刷新" onClick={() => void this.manualRefresh()} />
                 </div>
               </div>
             )

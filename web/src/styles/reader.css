@@ -325,6 +325,15 @@ book-content {
 
 .topbar {
   display: flex;
+  /*
+   * Centred, not baselined.
+   *
+   * `align-items: baseline` reads as the more careful choice for a row that mixes a
+   * glyph and two lines of text, and it is the wrong one: the title block is two
+   * lines, so its first baseline is the *title's*, and the icon buttons would then be
+   * aligned to a line of text three quarters of a control away. Centre is the one
+   * line every box in this row shares.
+   */
   align-items: center;
   gap: 0.5rem;
   min-height: 3rem;
@@ -356,14 +365,32 @@ book-content {
 /*
  * The icon glyph.
  *
- * `line-height: 1` and a fixed box are what make an icon row align. Without the
- * former the glyph sits on a text baseline and its optical centre drifts with the
- * font stack; without the latter the box is the glyph's advance width, which is
- * font-dependent and therefore different from what any layout assumed.
+ * An icon is one character of a private-use font, so it is laid out as text — and the
+ * only thing that decides where a character lands is the font's own metrics. That is why
+ * this rule is three lines and not a geometry puzzle, and it is also what went wrong:
+ * the rule used to say `line-height: 0; display: inline-block; width: 1em; height: 1em`,
+ * which replaces the font's line box with a 1em box anchored at the baseline. The box
+ * then extends *downward* from the baseline while the glyph's ink is drawn *around* it,
+ * so the ink ended up at the box's top edge with the whole em empty beneath it. Every
+ * container in this stylesheet centres its children, the box was centred correctly, and
+ * the ink was half an em away from where the box said it was — measured at 0.496em
+ * across `menu`, `close` and `folder`, i.e. half the box, in every row, at every size.
  *
- * `font-synthesis: none` matters for a private-use glyph: some engines will
- * synthesise a bold or oblique from the regular face, and a synthesised icon is a
- * smeared icon.
+ * So the box is the font's line box (`line-height: 1`) and the font's line box is
+ * symmetric: `tools/icons/build.mjs` declares an ascent and descent of half the em each
+ * and draws every glyph inside it, so centring the line centres the ink. `width: 1em` is
+ * kept because it is the one thing the layout needs that the font cannot supply — a
+ * predictable advance width, so a row of icons and labels is a row and not a function of
+ * which glyphs happen to be in it.
+ *
+ * `vertical-align: middle` is for the rows that are *not* flex or grid — a glyph inline
+ * in a paragraph of text, which is where `baseline` would otherwise apply and put the
+ * icon's baseline on the text's, half an em low. In a flex or grid container (most of
+ * this app's chrome) it is inert and the container's own alignment does the work, which
+ * is the point: the icon needs no special case in either.
+ *
+ * `font-synthesis: none` matters for a private-use glyph: some engines will synthesise a
+ * bold or oblique from the regular face, and a synthesised icon is a smeared icon.
  */
 .icon {
   font-family: 'Reader Icons', sans-serif;
@@ -372,24 +399,34 @@ book-content {
   font-weight: 400;
   font-synthesis: none;
   line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /*
-   * The glyph box is square and the glyph is centred in it, so a caller can align a
-   * mix of icons and text with `align-items: center` and get the same result for
-   * both. `-0.02em` is the optical correction: the glyphs sit slightly below the
-   * box's centre because their baseline is the box's baseline.
-   */
+  display: inline-block;
   width: 1em;
-  height: 1em;
-  transform: translateY(-0.02em);
+  text-align: center;
+  vertical-align: middle;
   speak: never;
   /* The code point itself must never be selectable or copied. */
   user-select: none;
   -webkit-user-select: none;
 }
 
+/*
+ * A square control with its glyph centred in it.
+ *
+ * `inline-grid` rather than `grid`: a `grid` is block-level, so a button in a row of
+ * text starts a line of its own and the row it was supposed to sit in grows a
+ * baseline that has nothing to do with the text. `vertical-align` is what a control
+ * in a text row is aligned with, and it only applies to inline-level boxes.
+ *
+ * The glyph is centred on the box's *centre* — `place-content`, which is relative to
+ * the box — where the old rule used `place-items` on the implicit grid area. The
+ * area is the same box, so the pixels are the same pixels on every browser that
+ * exists; saying it in terms of the box is what keeps that true when the button grows
+ * a border or a padding, because the centre is still the centre.
+ *
+ * This is also why `.icon` must be a *line box* rather than a 1em square: a grid
+ * centres the box it is given, so the ink has to be in the middle of that box for the
+ * centring to be visible. See the derivation on `.icon`.
+ */
 .icon-button {
   appearance: none;
   border: 0;
@@ -399,8 +436,9 @@ book-content {
   height: 2.5rem;
   border-radius: var(--reader-radius);
   font-size: 1.1rem;
-  display: grid;
-  place-items: center;
+  display: inline-grid;
+  place-content: center;
+  vertical-align: middle;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -430,6 +468,23 @@ book-content {
 .button:disabled {
   opacity: 0.55;
   cursor: default;
+}
+
+/*
+ * A button whose contents are a glyph and a label.
+ *
+ * The gap is the whole reason this is a rule rather than incidental whitespace: the
+ * glyph is one em wide whatever the font-size, so `gap` is the only thing that can
+ * keep the space between icon and text equal across buttons at different sizes. The
+ * flex line centres both boxes on the button's centre, which is where they have to
+ * be, and cannot be written any other way.
+ */
+.icon-text-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  vertical-align: middle;
 }
 
 /* ---- interactive states ---- */
@@ -641,6 +696,12 @@ book-content {
  * used.
  */
 .shelf-search {
+  /*
+   * `position: relative` and a *centre*-aligned row: both the magnifier and the
+   * clear button are absolutely positioned against this box, and absolute
+   * positioning resolves against the padding box' top edge, so a row aligned any
+   * other way would put the glyph where the *field* is not.
+   */
   position: relative;
   display: flex;
   align-items: center;
@@ -649,11 +710,24 @@ book-content {
   padding-inline: 0;
 }
 
+/*
+ * The magnifier inside the search field.
+ *
+ * Centred on the field's *centre*: `inset-block: 0` with `margin-block: auto` resolves to
+ * the middle of the containing block, which is where the field's own text is centred too.
+ * The glyph is inline and the box is a line box, so "centre the box" and "centre the
+ * glyph" are the same instruction here.
+ *
+ * The old rule anchored only the inline axis and left the block position to the field's
+ * top edge, which put the glyph's box where the field's centre was and the ink half an em
+ * above that — the same defect as the buttons, in a different container.
+ */
 .search-glyph {
   position: absolute;
   inset-inline-start: 0.7rem;
+  inset-block: 0;
+  margin-block: auto;
   font-size: 1.05rem;
-  line-height: 1;
   color: var(--reader-muted);
   pointer-events: none;
 }
@@ -669,6 +743,12 @@ book-content {
   border-radius: 999px;
   /* Room for the glyph on the left and the clear button on the right. */
   padding: 0.62rem 2.4rem 0.62rem 2.15rem;
+  /*
+   * A field is text, so it gets the text' baseline and the icons positioned inside it
+   * are centred against its box instead. The two are only the same line while the
+   * field has symmetric padding, which is what the line above guarantees.
+   */
+  line-height: 1.4;
   font-size: 16px;
   font-family: inherit;
 }
@@ -693,18 +773,25 @@ book-content {
 .search-clear {
   position: absolute;
   inset-inline-end: 0.3rem;
-  top: 50%;
-  transform: translateY(-50%);
+  /*
+   * Centred on the field by the geometry both boxes share, not by a transform.
+   *
+   * `top: 50%` + `translateY(-50%)` is the usual way to do this, and it is a way
+   * that has to be repeated at every call site and can be forgotten at one of them.
+   * `inset-block: 0` + `margin-block: auto` says the same thing in terms of the
+   * containing block, so it stays true if the field's height changes.
+   */
+  inset-block: 0;
+  margin-block: auto;
   width: 1.9rem;
   height: 1.9rem;
   border: 0;
   border-radius: 50%;
   background: color-mix(in srgb, var(--reader-ink) 12%, transparent);
   color: var(--reader-ink);
-  font-size: 0.8rem;
-  line-height: 1;
+  font-size: 0.9rem;
   display: grid;
-  place-items: center;
+  place-content: center;
   cursor: pointer;
 }
 
@@ -1237,9 +1324,12 @@ book-content {
 
 .empty-glyph {
   font-size: 2.4rem;
-  line-height: 1;
+  /*
+   * A block of its own, so the flex column's `gap` owns the space between the glyph and
+   * the text rather than the glyph's own line box.
+   */
+  display: block;
   opacity: 0.35;
-  margin-bottom: 0.35rem;
 }
 
 .empty-actions {
@@ -1829,6 +1919,12 @@ book-content {
 .manager-icon {
   font-size: 1rem;
   flex: 0 0 auto;
+  /*
+   * The row's label is a single line of 0.9rem text in a flex box that centres its
+   * items, so the icon's box centre and the label's box centre already coincide;
+   * `.icon`'s `-0.02em` then puts the *ink* on that same line. Nothing to override —
+   * this comment is here because the rule looks like it should need one.
+   */
 }
 
 .manager-label {
@@ -1864,6 +1960,14 @@ book-content {
   width: 2rem;
   height: 2rem;
   font-size: 1.1rem;
+  /*
+   * It is an `.icon-button`, so it is already inline-grid and already centred; this
+   * only has to state where in the row it sits. Left to `baseline`, the button's
+   * own baseline — the baseline of the glyph — decides its position, and a glyph box
+   * aligned by its baseline is the misalignment this whole change is about.
+   */
+  vertical-align: middle;
+  align-self: center;
 }
 
 /*

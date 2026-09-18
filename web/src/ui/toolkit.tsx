@@ -47,6 +47,16 @@ export interface IconButtonProps {
   class?: string;
 }
 
+/**
+ * A square control holding one glyph.
+ *
+ * `hidden` rather than a conditional: the attribute is what the stylesheet hides on,
+ * so a control that is not available disappears *and* keeps its place in the markup,
+ * and no caller has to decide which of the two it wants.
+ *
+ * The glyph is passed as a *name*, so it is always `.icon` — which is what makes the
+ * control's own alignment guaranteed rather than inherited from a caller's layout.
+ */
 export function IconButton({ label, icon, onClick, disabled, hidden, class: className }: IconButtonProps): JSX.Element {
   return (
     <button
@@ -58,6 +68,37 @@ export function IconButton({ label, icon, onClick, disabled, hidden, class: clas
       onClick={onClick}
     >
       <Icon name={icon} />
+    </button>
+  );
+}
+
+export interface IconTextButtonProps {
+  label: string;
+  icon: IconName;
+  onClick?: (event: MouseEvent) => void;
+  disabled?: boolean;
+  className?: string;
+}
+
+/**
+ * A glyph and a label inside one control.
+ *
+ * The reason this exists as a component instead of as two children at each call
+ * site: an icon beside text is exactly the arrangement that goes wrong, and it goes
+ * wrong the same way every time — the glyph ends up on the text's baseline, half a
+ * glyph high or low, and nobody notices until a screenshot. Here the glyph is always
+ * `.icon`, the box centres its contents, and the pair cannot drift apart.
+ */
+export function IconTextButton({ label, icon, onClick, disabled, className }: IconTextButtonProps): JSX.Element {
+  return (
+    <button
+      type="button"
+      className={className ? `button icon-text-button ${className}` : 'button icon-text-button'}
+      disabled={disabled ?? false}
+      onClick={onClick}
+    >
+      <Icon name={icon} />
+      <span>{label}</span>
     </button>
   );
 }
