@@ -39,11 +39,11 @@ const SCALE = 2;
 
 const SCENES = [
   { name: '01-shelf', label: '书架', what: '第一屏：先看到书，再看到控件' },
-  { name: '02-reader', label: '阅读页', what: '顶栏 / 正文 / 底部工具栏 / 状态药丸', openBook: true },
-  { name: '03-reader-no-chrome', label: '阅读页 · 收起工具栏', what: '顶栏与底栏同时收起，正文占满，右侧留出快捷按钮列', openBook: true, tapCenter: true },
+  { name: '02-reader', label: '阅读页', what: '顶栏（图标+文字）/ 正文 / 底栏滑杆与上一章下一章 / 状态药丸', openBook: true },
+  { name: '03-reader-no-chrome', label: '阅读页 · 收起工具栏', what: '顶栏与底栏同时收起，正文占满，右上留快捷列、左上左下留章节与页码', openBook: true, tapCenter: true },
   { name: '04-panel-toc', label: '目录 · 半屏', what: '下半屏，上半屏正文仍可见', openBook: true, openPanel: '目录' },
-  { name: '05-panel-settings', label: '阅读设置 · 半屏', what: '一行式行：标签在左、控件在右', openBook: true, openPanel: '阅读设置' },
-  { name: '06-reader-paged', label: '阅读页 · 翻页模式', what: '分栏后的一页，页数应与可翻次数一致', openBook: true, choose: ['阅读设置', '翻页'], closePanel: true },
+  { name: '05-panel-settings', label: '阅读设置 · 半屏', what: '一行式行：标签在左、控件在右', openBook: true, openPanel: '设置' },
+  { name: '06-reader-paged', label: '阅读页 · 翻页模式', what: '分栏后的一页，页数应与可翻次数一致', openBook: true, choose: ['设置', '翻页'], closePanel: true },
   { name: '07-reader-sepia', label: '阅读页 · 米黄', what: '主题切换后的同一页', openBook: true, theme: '米黄' },
   { name: '08-reader-dark', label: '阅读页 · 夜间', what: '暗色下的正文与工具栏', openBook: true, theme: '夜间' },
   {
@@ -51,7 +51,7 @@ const SCENES = [
     label: 'TXT · 正文排版',
     what: '纯文本专属的缩进/段间距/编码三行，且面板仍是半屏',
     openBook: true,
-    openPanel: '阅读设置',
+    openPanel: '设置',
   },
 ];
 
@@ -97,6 +97,19 @@ async function audit(cdp, scenes, results) {
       stageBottom: Math.round(s.bottom),
       viewportHeight: window.innerHeight,
       rail: !!document.querySelector('.reader-rail'),
+      indicator: (() => {
+        const el = document.querySelector('.reading-indicator');
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        const chapter = el.querySelector('.indicator-chapter');
+        const progress = el.querySelector('.indicator-progress');
+        return {
+          visible: getComputedStyle(el).visibility !== 'hidden' && r.height > 0,
+          pointerEvents: getComputedStyle(el).pointerEvents,
+          chapter: chapter ? chapter.textContent.trim() : '',
+          progress: progress ? progress.textContent.trim() : '',
+        };
+      })(),
     };
   })()`);
   check(
@@ -118,6 +131,29 @@ async function audit(cdp, scenes, results) {
     '收起工具栏: 右侧仍有快捷按钮',
     !hidden.missing && hidden.rail,
     hidden.missing ? 'n/a' : `rail=${hidden.rail}`,
+  );
+  // Immersion keeps the *where am I* readouts. Hiding the chrome should leave a
+  // reader who knows which chapter they are in and how far through — not a blank
+  // screen they have to tap to interrogate.
+  check(
+    '收起工具栏: 保留章节与页码指示',
+    !hidden.missing &&
+      hidden.indicator !== null &&
+      hidden.indicator.visible &&
+      hidden.indicator.chapter.length > 0 &&
+      hidden.indicator.progress.length > 0,
+    hidden.missing
+      ? 'n/a'
+      : hidden.indicator
+        ? `chapter="${hidden.indicator.chapter}" progress="${hidden.indicator.progress}"`
+        : '没有找到阅读指示',
+  );
+  // The indicator is a readout, not a control: a tap on it has to fall through to
+  // the page-turning zone underneath, or hiding the chrome would create a dead band.
+  check(
+    '收起工具栏: 阅读指示不吃手势',
+    !hidden.missing && hidden.indicator !== null && hidden.indicator.pointerEvents === 'none',
+    hidden.missing ? 'n/a' : `pointer-events=${hidden.indicator?.pointerEvents ?? 'missing'}`,
   );
   // Back to the chrome: the panel checks that follow need a page they can tap, and
   // the screen is left in the state a reader spends most of their time in.
@@ -171,6 +207,35 @@ async function audit(cdp, scenes, results) {
       );
     }
   }
+
+  // The footer scrubber has to be a real control: visible, at least the width of a
+  // thumb, reachable by keyboard, and labelled. A progress bar that only *reports*
+  // is the thing this replaced, so the check is that it can be dragged.
+  const scrubber = await cdp.evaluate(`(() => {
+    const el = document.querySelector('.progress-scrubber');
+    if (!el) return { missing: true };
+    const r = el.getBoundingClientRect();
+    return {
+      type: el.type,
+      width: Math.round(r.width),
+      height: Math.round(r.height),
+      label: el.getAttribute('aria-label') ?? '',
+      page: document.querySelector('.progress-page')?.textContent.trim() ?? '',
+      nav: document.querySelector('.chapter-nav .nav-progress')?.textContent.trim() ?? '',
+    };
+  })()`);
+  check(
+    '底栏: 进度是可拖动的滑杆',
+    !scrubber.missing && scrubber.type === 'range' && scrubber.width >= 120 && scrubber.label.length > 0,
+    scrubber.missing
+      ? '没有找到滑杆'
+      : `type=${scrubber.type} 宽 ${scrubber.width}px label="${scrubber.label}"`,
+  );
+  check(
+    '底栏: 有页码与阅读进度读数',
+    !scrubber.missing && scrubber.page.length > 0 && scrubber.nav.length > 0,
+    scrubber.missing ? 'n/a' : `page="${scrubber.page}" nav="${scrubber.nav}"`,
+  );
 
   // The status line must not change the page's geometry. Measured by moving it
   // from empty to a message and back, and comparing the reading column's top.
@@ -310,7 +375,7 @@ async function main() {
       }
       const theme = scene.theme ?? (scene.openBook ? '白' : null);
       if (theme) {
-        await cdp.click('button[aria-label="阅读设置"]');
+        await cdp.click('button[aria-label="设置"]');
         await cdp.waitFor('document.querySelector(".panel") !== null');
         await cdp.clickText('.segmented button', theme);
         await cdp.sleep(250);

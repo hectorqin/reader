@@ -119,6 +119,8 @@ export interface ChromeHandlers {
   onSwitchEngine(kind: AppSettings['ttsEngine']): void;
   onTocEntry(ref: string): void;
   onChapter(delta: 1 | -1): void;
+  /** Jump to a fraction of the whole book, from the footer scrubber. */
+  onScrub(fraction: number): void;
   onTurnPage(direction: 'next' | 'previous'): void;
   onSpeechToggle(): void;
   onSpeechPrevious(): void;
@@ -143,13 +145,23 @@ export interface ReaderChromeProps {
 export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX.Element {
   return (
     <>
+      {/* The top bar.
+          —
+          A row of labelled buttons, not a title with a back arrow. The reference
+          layout is a toolbar the reader *scans*: five controls of equal weight,
+          each an icon over its own name, so nothing has to be learned and nothing
+          is announced twice. The book's title lived here before; it is still on
+          screen when the chrome is hidden (see `.reading-indicator`), which is
+          where a reader actually looks for it — a title that disappears with the
+          toolbar was the reason the indicator had to exist at all.
+          Buttons are kept to the ones this screen can really do. The reference's
+          首页/书架/书源/目录/设置 collapses to 返回/目录/设置 here because there is
+          no book-source browser *inside* the reader: a button that navigates
+          somewhere the screen cannot go is worse than one fewer button. */}
       <div className="topbar" hidden={!state.chromeVisible}>
-        <IconButton label="返回书架" icon="arrow-left" onClick={handlers.onBack} />
-        <div className="title-block" style="flex:1 1 auto;min-width:0;">
-          <h1>{state.title}</h1>
-          {state.author ? <span className="subtitle">{state.author}</span> : null}
-        </div>
-        <IconButton label="目录" icon="menu" onClick={handlers.toggleToc} />
+        <TopButton icon="arrow-left" label="返回" onClick={handlers.onBack} />
+        <TopButton icon="menu" label="目录" onClick={handlers.toggleToc} />
+        <TopButton icon="sliders" label="设置" onClick={handlers.toggleSettings} />
       </div>
 
       {/* Outside the flex flow: see the comment on `.status-bar`. It has to be a
@@ -168,6 +180,27 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
       </div>
 
       <StageHost stage={stage} />
+
+      {/* The reading indicator.
+          —
+          What is left on screen when the chrome is hidden. The reference keeps two
+          quiet facts pinned to the corners — which chapter, and how far in — and
+          nothing else. That is the difference between "沉浸式" and "the app stopped
+          drawing": a reader who has hidden the toolbar still wants to know where
+          they are, and making them tap to find out is what the hidden state was
+          supposed to save them from.
+          Both live in the page margin at the very top and bottom of the stage, are
+          `pointer-events: none` (they are readouts, not controls), and are drawn
+          only while the chrome is hidden so they do not double up with it. */}
+      {!state.chromeVisible ? (
+        <div className="reading-indicator" aria-hidden="true">
+          <span className="indicator-chapter">{state.chapterLabel}</span>
+          <span className="indicator-progress">
+            {state.chapterPages > 0 ? `第 ${state.pageInChapter}/${state.chapterPages} 页 ` : ''}
+            {percentOf(state.progress)}
+          </span>
+        </div>
+      ) : null}
 
       {/* The immersion rail.
           —
@@ -196,39 +229,52 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
         </div>
       ) : null}
 
+      {/* The bottom bar.
+          —
+          Two rows, and the split is the reference's: a scrubber the reader can
+          drag to any page, then a navigation row with the chapter buttons at the
+          ends and the reading progress in the middle. The scrubber replaces the
+          old 3px bar plus the "本章 x/y 页" readout — a bar that only reports could
+          not be used to *go* anywhere, and the reader who wanted the end of the
+          chapter had to tap the next button forty times. */}
       <div className="footer" hidden={!state.chromeVisible}>
-        <div className="progress-bar">
-          <span style={`width:${percentOf(state.progress)}`} />
+        <div className="progress-row">
+          <input
+            className="progress-scrubber"
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={Math.round(Math.min(1, Math.max(0, state.progress)) * 100)}
+            aria-label="阅读进度"
+            onInput={(event) =>
+              handlers.onScrub(Number((event.currentTarget as HTMLInputElement).value) / 100)
+            }
+          />
+          <span className="progress-page">
+            {state.chapterPages > 0 ? `第 ${state.pageInChapter}/${state.chapterPages} 页` : ''}
+          </span>
         </div>
-        <div className="footer-row">
-          <IconButton label="目录" icon="menu" onClick={handlers.toggleToc} />
-          <IconButton
-            label="上一章"
-            icon="chevron-left"
+        <div className="footer-row chapter-nav">
+          <button
+            type="button"
+            className="nav-chapter"
             disabled={state.navigating || state.chapterIndex <= 1}
             onClick={() => handlers.onChapter(-1)}
-          />
-          <button type="button" className="chapter" onClick={handlers.toggleToc}>
-            {state.navigating ? '正在切换…' : state.chapterLabel || '目录'}
+          >
+            <span className="icon" aria-hidden="true">{iconGlyph('chevron-left')}</span>
+            上一章
           </button>
-          <IconButton
-            label="下一章"
-            icon="chevron-right"
+          <span className="nav-progress">阅读进度：{percentOf(state.progress)}</span>
+          <button
+            type="button"
+            className="nav-chapter"
             disabled={state.navigating || state.chapterIndex >= state.chapterCount}
             onClick={() => handlers.onChapter(1)}
-          />
-          <IconButton label="阅读设置" icon="sliders" onClick={handlers.toggleSettings} />
-        </div>
-        <div className="footer-row footer-meta">
-          <span>
-            {state.chapterCount > 0 ? `${state.chapterIndex}/${state.chapterCount} 章` : ''}
-          </span>
-          <span>
-            {state.chapterPages > 0
-              ? `本章 ${state.pageInChapter}/${state.chapterPages} 页`
-              : ''}
-          </span>
-          <span className="progress-label">{percentOf(state.progress)}</span>
+          >
+            下一章
+            <span className="icon" aria-hidden="true">{iconGlyph('chevron-right')}</span>
+          </button>
         </div>
       </div>
 
@@ -779,6 +825,24 @@ function SelectRow({
         ))}
       </select>
     </div>
+  );
+}
+
+/**
+ * One control in the top bar.
+ *
+ * An icon **over** a name, matching the reference: the label is not a tooltip and
+ * not an `aria-label` alone, it is drawn, because the icons here are not universal
+ * (a "目录" list glyph and a "设置" slider glyph read as the same thing when there
+ * is no word under them). Centred, equal-width, and full-height so the whole
+ * column of the bar is the target rather than the glyph.
+ */
+function TopButton({ icon, label, onClick }: { icon: IconName; label: string; onClick(): void }): JSX.Element {
+  return (
+    <button type="button" className="top-button" aria-label={label} onClick={onClick}>
+      <span className="icon" aria-hidden="true">{iconGlyph(icon)}</span>
+      <span className="top-button-label">{label}</span>
+    </button>
   );
 }
 

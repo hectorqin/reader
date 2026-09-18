@@ -33,13 +33,13 @@ export const SCENES = [
   {
     name: 'reader-light',
     label: '阅读页 · 白',
-    note: '顶栏、正文、底部工具栏、状态药丸',
+    note: '顶栏（图标+文字）、正文、底栏滑杆与章节导航、状态药丸',
     steps: [],
   },
   {
     name: 'reader-chrome-hidden',
     label: '阅读页 · 收起工具栏',
-    note: '点中间三分之一收起后，正文应当占满，且没有布局跳动',
+    note: '点中间三分之一收起后，正文占满、右侧留快捷列、角上留章节与页码',
     steps: [{ tap: { x: 'center', y: 'center' } }],
   },
   {

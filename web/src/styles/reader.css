@@ -352,24 +352,27 @@ book-content {
    * and zero, and the stage — which is `flex: 1 1 auto` — takes whatever is left,
    * so a single number here is what keeps the page from being measured mid-slide.
    */
-  --reader-chrome-top: 3rem;
+  --reader-chrome-top: 3.4rem;
 }
 
 .topbar {
   display: flex;
   /*
-   * Centred, not baselined.
-   *
-   * `align-items: baseline` reads as the more careful choice for a row that mixes a
-   * glyph and two lines of text, and it is the wrong one: the title block is two
-   * lines, so its first baseline is the *title's*, and the icon buttons would then be
-   * aligned to a line of text three quarters of a control away. Centre is the one
-   * line every box in this row shares.
+   * `stretch`, so each button owns the full height of the band. The buttons are
+   * icon-over-label now, and a button that only owned its two lines would leave a
+   * strip of the bar above and below that looked identical but did nothing — on
+   * the one row where the reader is aiming at controls rather than at text.
    */
-  align-items: center;
+  align-items: stretch;
+  /*
+   * `space-evenly` rather than `space-between`: three controls spread to the two
+   * ends of a wide screen stop reading as one toolbar and start reading as two
+   * stray icons at opposite corners. Even gaps keep them a row at any width.
+   */
+  justify-content: space-evenly;
   gap: var(--space-1);
-  min-height: 3rem;
-  padding: 0 0.5rem 0 0.35rem;
+  min-height: 3.4rem;
+  padding: 0 0.35rem;
   background: var(--reader-surface);
   /* Same hairline treatment as the footer, so the two edges of the reading area
      are the same weight. */
@@ -404,23 +407,96 @@ book-content {
   transform: translateY(-100%);
 }
 
-.topbar h1 {
-  flex: 1 1 auto;
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 600;
+/*
+ * One icon-over-label control in the top bar.
+ *
+ * A column, so the glyph and the word are one hit target rather than two; the word
+ * is drawn rather than left to a tooltip because the glyphs here are not universal
+ * (a list and a slider read as the same thing without it). The label is the small
+ * `--text-meta` size — it is a caption for the glyph, not a second title.
+ */
+.top-button {
+  flex: 1 1 0;
+  max-width: 6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  padding: 0.3rem 0.25rem;
+  border: 0;
+  border-radius: var(--reader-radius);
+  background: transparent;
+  color: var(--reader-ink);
+  font: inherit;
+  font-size: 1.15rem;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background var(--motion-duration) var(--motion-ease);
+}
+
+.top-button:active {
+  background: color-mix(in srgb, var(--reader-ink) 8%, transparent);
+}
+
+.top-button-label {
+  font-size: var(--text-meta);
+  font-weight: 400;
+  color: var(--reader-muted);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/*
+ * The reading indicator.
+ *
+ * Two quiet readouts pinned to the corners of the stage, drawn only while the
+ * chrome is hidden. `position: absolute` inside `.reader-screen` (which is
+ * `position: relative`) so they can sit over the top and bottom of the text
+ * without being part of the flow — they must not take height from the page, or
+ * showing them would re-measure the columns and move the text.
+ *
+ * `pointer-events: none` because they are readouts, not controls: a tap on the
+ * chapter name has to reach the tap zone underneath it and turn the page (or
+ * bring the chrome back), not be swallowed by a label.
+ */
+.reading-indicator {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: calc(0.5rem + var(--safe-top)) calc(var(--reader-page-padding-inline) + var(--safe-right))
+    calc(0.5rem + var(--safe-bottom)) calc(var(--reader-page-padding-inline) + var(--safe-left));
+  font-size: var(--text-meta);
+  color: var(--reader-muted);
+  /* A slow fade of its own, offset by the chrome's duration: the indicator comes
+     up as the bars go down, so the reader never sees an empty screen. */
+  animation: indicator-in var(--motion-duration) var(--motion-ease);
+}
+
+@keyframes indicator-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.indicator-chapter {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-size: var(--text-label);
 }
 
-.topbar .subtitle {
-  display: block;
-  font-size: 0.72rem;
-  font-weight: 400;
-  color: var(--reader-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
+.indicator-progress {
+  font-variant-numeric: tabular-nums;
+  color: var(--reader-ink);
+  opacity: 0.72;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reading-indicator { animation: none; }
 }
 
 /*
@@ -1717,95 +1793,137 @@ book-content {
     visibility 0s linear var(--motion-duration);
 }
 
-.progress-bar {
-  height: 3px;
+/*
+ * The scrubber row: a draggable progress slider and the page readout beside it.
+ *
+ * The slider replaces the old 3px bar. That bar could only *report* the position;
+ * a reader who wanted the end of a long chapter had to tap "next" forty times. A
+ * range input is the one control that answers "take me there" in a single gesture,
+ * and it is native — the thumb, the track, the drag physics and the accessibility
+ * (arrow keys, `aria-valuenow`) all come with it rather than being reimplemented.
+ */
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0.75rem 0.25rem;
+}
+
+.progress-scrubber {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Native range inputs default to a chunky, theme-blind widget; `appearance: none`
+     is what lets the tokens below draw it. The track is drawn on the element and
+     the thumb on `::-webkit-slider-thumb` / `::-moz-range-thumb`, which are two
+     separate rule sets because the two engines never agreed on a shared one. */
+  appearance: none;
+  -webkit-appearance: none;
+  height: 1.5rem;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.progress-scrubber::-webkit-slider-runnable-track {
+  height: 0.3rem;
+  border-radius: 0.15rem;
   background: color-mix(in srgb, var(--reader-line) 70%, transparent);
 }
 
-.progress-bar span {
-  display: block;
-  height: 100%;
-  background: var(--reader-accent);
-  border-radius: 0 2px 2px 0;
-  transition: width var(--motion-duration) var(--motion-ease);
+.progress-scrubber::-moz-range-track {
+  height: 0.3rem;
+  border-radius: 0.15rem;
+  background: color-mix(in srgb, var(--reader-line) 70%, transparent);
 }
 
-.footer-row {
+.progress-scrubber::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  /* Pull the thumb up onto the middle of the track: the track is 0.3rem and the
+     thumb 1.1rem, so half the difference is the offset. Without this the thumb
+     sits below the line it is supposed to ride. */
+  margin-top: -0.4rem;
+  border-radius: 50%;
+  background: var(--reader-surface);
+  border: 2px solid var(--reader-accent);
+  box-shadow: 0 1px 4px color-mix(in srgb, #000 18%, transparent);
+}
+
+.progress-scrubber::-moz-range-thumb {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 50%;
+  background: var(--reader-surface);
+  border: 2px solid var(--reader-accent);
+  box-shadow: 0 1px 4px color-mix(in srgb, #000 18%, transparent);
+}
+
+.progress-scrubber:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-offset);
+}
+
+/* The page readout: tabular so "第 9/32 页" does not twitch sideways as the
+   denominator changes width. */
+.progress-page {
+  flex: 0 0 auto;
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--reader-muted);
+  white-space: nowrap;
+}
+
+/*
+ * The chapter navigation row.
+ *
+ * Three cells: previous chapter, the reading progress as a label, next chapter.
+ * The two buttons are text-with-chevron rather than bare chevrons — the whole row
+ * is a labelled destination, and a bare "‹" beside a bare "›" is a guess.
+ */
+.footer-row.chapter-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-1);
-  padding: var(--space-1) 0.6rem 0;
-  color: var(--reader-muted);
+  gap: var(--space-2);
+  padding: 0.15rem 0.75rem 0.65rem;
 }
 
-.footer-row .chapter {
-  flex: 1 1 auto;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
-  /* The chapter label is the second way into the contents panel, because the ☰
-     button beside it is a 2.1rem square and the label is the thing a reader
-     actually aims at when they want to pick a chapter. */
+.nav-chapter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
   border: 0;
   background: transparent;
   color: var(--reader-ink);
   font: inherit;
   font-size: var(--text-label);
-  padding: 0.45rem 0.3rem;
+  padding: 0.45rem 0.4rem;
   border-radius: var(--reader-radius);
   cursor: pointer;
   touch-action: manipulation;
+  white-space: nowrap;
 }
 
-.footer-row .chapter:active {
+.nav-chapter:active {
   background: color-mix(in srgb, var(--reader-ink) 8%, transparent);
 }
 
-/*
- * The chapter buttons share the row with the chapter label, so they are a size
- * down from the topbar's icon buttons: four 2.5rem controls plus a label is more
- * than a 360px phone has, and the two that turn pages deserve the room.
- */
-.footer-row .icon-button {
-  width: 2.1rem;
-  height: 2.1rem;
-  font-size: 1rem;
-  flex: 0 0 auto;
-}
-
-.footer-row .icon-button:disabled {
-  opacity: 0.3;
+.nav-chapter:disabled {
+  opacity: 0.35;
   cursor: default;
 }
 
-/* The readout. One line, three positions, numbers that do not jitter as they
-   change — `tabular-nums` is what stops "1/3 章" from shifting sideways when it
-   becomes "2/3 章", which at this size is a visible twitch on every page turn. */
-.footer-meta {
-  padding: 0.15rem 0.75rem 0.5rem;
-  font-size: var(--text-meta);
-  font-variant-numeric: tabular-nums;
-}
-
-.footer-meta span {
-  flex: 1 1 0;
-}
-
-.footer-meta span:first-child {
-  text-align: start;
-}
-
-.footer-meta span:nth-child(2) {
+.nav-progress {
+  flex: 1 1 auto;
   text-align: center;
-}
-
-.footer-meta .progress-label {
-  text-align: end;
-  color: var(--reader-ink);
-  font-weight: 600;
+  font-size: var(--text-label);
+  color: var(--reader-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---- immersion rail ----
@@ -2075,7 +2193,15 @@ book-content {
 .status-bar {
   position: absolute;
   inset-inline: 0;
-  top: calc(var(--space-3) + var(--safe-top));
+  /*
+   * Just *below* the top bar rather than over it. It used to sit at
+   * `--space-3 + safe-top`, i.e. inside the 3.4rem band — which put the middle of
+   * the pill on top of the middle button of the top bar, so a reader who had just
+   * opened a book could not see (or reach) 目录 until the message faded. The pill
+   * belongs over the *page*, which is where the reader is looking, and it must not
+   * cover the controls they might be reaching for.
+   */
+  top: calc(var(--reader-chrome-top) + var(--space-2));
   z-index: 12;
   display: flex;
   align-items: center;
