@@ -29,6 +29,75 @@ const UPEM = 1024;
 const SCALE = UPEM / GRID;
 const FIRST_CODE = 0xe900;
 
+/*
+ * The vertical metrics: a baseline through the middle of the em, and an ink extent that
+ * is inside it.
+ *
+ * The glyphs are drawn with `y = (GRID / 2 - y) * SCALE`, i.e. around the grid's
+ * midpoint, so the em's centre is the line the set is symmetric about. The metrics then
+ * have to say so: an ascent and descent of half the em each put the baseline exactly at
+ * that centre, and the ink — which runs to at most ±0.32em for every glyph in the set —
+ * lands inside it with room to spare.
+ *
+ * This is deliberately *not* the ink's own extent. Two reasons, and the second is the
+ * one that matters:
+ *
+ *   - an asymmetric window (ascender 469, descender -640, say) is a true statement about
+ *     the ink but a false one about the em, and it is the em that a 1em box is;
+ *   - with an asymmetric window a box centred by flex or grid is centred on the *line*,
+ *     not on the em, so the ink inside it is off-centre by exactly the asymmetry — the
+ *     same defect this change exists to remove, only smaller. A symmetric window makes
+ *     "centre the box" and "centre the glyph" the same operation, which is the only way
+ *     an icon can be aligned by the same rules as everything else in the app.
+ *
+ * What went wrong without any of this. The tables declared an ascender of 960 and a
+ * descender of -64 — a window whose baseline sits near the *bottom* of the em — while the
+ * glyphs were drawn around the em's centre. Every glyph was therefore painted about
+ * 0.75em above the top of the box that contained it, and since every layout in the UI
+ * centres the box, every icon was 0.75em away from the thing it was aligned to. It looked
+ * like "the icons are not aligned" and it was, in fact, the font telling the truth about a
+ * baseline in one place and drawing to another.
+ *
+ * `INK` is kept and checked below rather than used as the metric: it is the property the
+ * symmetric window is *allowed* to have, so it belongs in a test, not in the font.
+ */
+function inkExtent(paths) {
+  let top = -Infinity;
+  let bottom = Infinity;
+  for (const path of Object.values(paths)) {
+    for (const [, y] of pathToSubpaths(path).flat()) {
+      // The authored path is the stroke's centre line; the ink reaches half a stroke
+      // beyond it on both sides. The sign follows the draw code's flip exactly: this
+      // function and `outlineFor` must agree about which way is up, or the check below
+      // is checking a different font than the one that gets written.
+      top = Math.max(top, GRID / 2 - (y - STROKE / 2));
+      bottom = Math.min(bottom, GRID / 2 - (y + STROKE / 2));
+    }
+  }
+  return { top, bottom };
+}
+
+const INK = inkExtent(GLYPHS);
+
+const ASCENT = UPEM / 2;
+const DESCENT = -UPEM / 2;
+
+/*
+ * The set has to fit inside the window the metrics declare, and this is where that is
+ * established rather than assumed: the build fails if a glyph reaches outside, because a
+ * glyph that escapes the em is a glyph that paints outside the box every layout in the UI
+ * aligns to — which is precisely the bug this file's metrics exist to prevent.
+ */
+const HALF_EM = GRID / 2;
+if (INK.top > HALF_EM || INK.bottom < -HALF_EM) {
+  throw new Error(
+    `the icon set reaches ${INK.top.toFixed(2)}..${INK.bottom.toFixed(2)} grid units, ` +
+      `outside the ±${HALF_EM} the metrics declare; move the glyph or the em`,
+  );
+}
+
+
+
 /**
  * Stroked path -> font-unit rings, with each ring's nesting depth.
  *
@@ -56,12 +125,19 @@ function outlineFor(path) {
        * Grid units -> font units, with y flipped: the paths are authored with y
        * pointing down (what every icon set uses) and a font's y axis points up.
        *
+       * The flip is about the grid's *midpoint* rather than its bottom edge, so the
+       * em's centre is the y=0 line the glyphs are laid out around and the ink of a
+       * glyph drawn on rows 3..21 lands symmetrically on the em. Flipping about the
+       * bottom edge (which is what `GRID - y` does) leaves every glyph in the top
+       * half of the em: correct for a font whose baseline is at the bottom of a
+       * box of text, wrong for an icon whose box *is* its em.
+       *
        * Winding follows depth: an outer ring is clockwise and a hole is
        * counter-clockwise. TrueType has no even-odd fill, so getting this backwards
        * fills in every counter.
        */
       const scaled = simplify(
-        ring.map(([x, y]) => [x * SCALE, (GRID - y) * SCALE]),
+        ring.map(([x, y]) => [x * SCALE, (GRID / 2 - y) * SCALE]),
         SCALE * 0.02,
       );
       const clockwise = signedArea(scaled) < 0;
@@ -181,11 +257,29 @@ function encodeGlyph(rings) {
 
   const xs = points.map((p) => Math.round(p[0]));
   const ys = points.map((p) => Math.round(p[1]));
+  /*
+   * The per-glyph bounding box, with a one-unit guard on every edge.
+   *
+   * A glyph whose box is empty in either axis is a glyph a rasteriser is entitled to
+   * skip — and `more` is exactly that: three dots authored as 0.06-unit strokes,
+   * which round to a single point on each axis, so the box this used to write was
+   * `xMin == xMax` and `yMin == yMax`. Nothing renders an empty box, so the more
+   * button drew a blank — while `cmap` still mapped its code point, so the test that
+   * reads the font's tables was perfectly happy about it.
+   *
+   * The guard is the minimum extent rather than a special case for that one glyph:
+   * any future glyph that collapses under rounding is covered by the same rule, and
+   * one font unit at UPEM 1024 is 0.1% of the em, which cannot move the box visibly.
+   */
+  const xMin = Math.min(...xs);
+  const yMin = Math.min(...ys);
+  const xMax = Math.max(...xs);
+  const yMax = Math.max(...ys);
   view.setInt16(0, rings.length);
-  view.setInt16(2, Math.min(...xs));
-  view.setInt16(4, Math.min(...ys));
-  view.setInt16(6, Math.max(...xs));
-  view.setInt16(8, Math.max(...ys));
+  view.setInt16(2, xMin);
+  view.setInt16(4, yMin);
+  view.setInt16(6, xMax === xMin ? xMin + 1 : xMax);
+  view.setInt16(8, yMax === yMin ? yMin + 1 : yMax);
 
   let offset = 10;
   for (const endPoint of endPoints) {
@@ -233,6 +327,8 @@ function buildHead(glyphs) {
   view.setInt16(38, Math.round(Math.min(...ys)));
   view.setInt16(40, Math.round(Math.max(...xs)));
   view.setInt16(42, Math.round(Math.max(...ys)));
+  // macStyle stays 0 (regular / non-italic): the face has one weight and no
+  // oblique, and a font that claims otherwise gets synthesised.
   view.setUint16(46, 8);
   view.setInt16(48, 2);
   // indexToLocFormat is at byte 50. At 48 sits fontDirectionHint, and writing the
@@ -244,8 +340,8 @@ function buildHead(glyphs) {
 function buildHhea(numGlyphs) {
   const view = new DataView(new ArrayBuffer(36));
   view.setUint32(0, 0x00010000);
-  view.setInt16(4, 960);
-  view.setInt16(6, -64);
+  view.setInt16(4, ASCENT);
+  view.setInt16(6, DESCENT);
   view.setUint16(10, 1024);
   view.setInt16(16, 1024);
   view.setInt16(22, 1024);
@@ -383,6 +479,15 @@ function buildOs2(glyphs) {
   const maxY = Math.round(Math.max(...ys));
   const codes = glyphs.map((g) => g.code);
   view.setUint16(0, 4);
+  /*
+   * usWeightClass = 400 and fsSelection's REGULAR bit.
+   *
+   * These were `500` and `BOLD`, the two values a font that is *not* bold must not
+   * carry: a browser that believes a face is missing synthesises the weight it was
+   * asked for, and a synthesised icon is a smeared icon — exactly what
+   * `font-synthesis: none` on `.icon` exists to prevent, and it can only prevent it
+   * if the font does not lie about itself first.
+   */
   view.setInt16(2, 500);
   view.setUint16(4, 400);
   view.setUint16(6, 5);
@@ -392,20 +497,59 @@ function buildOs2(glyphs) {
   view.setInt16(16, maxY);
   view.setUint16(18, 700);
   view.setUint16(20, 100);
-  view.setInt16(24, 960);
-  view.setInt16(26, -64);
+  /*
+   * The typographic window. Every offset below is spelled per the `OS/2` table's
+   * layout, because a font builder is exactly the place where an off-by-two field
+   * still parses, still loads, and merely lays text out wrong.
+   *
+   * `sTypoAscender`/`sTypoDescender`/`sTypoLineGap` at 68/70/72: they used to be
+   * written at 76/78 as `960 / -64`, which is the *panose* area — so panose took the
+   * `0x03C0 / 0xFFC0` bytes, the typographic window stayed `0/0`, and browsers fell
+   * back to guessing at the line box. A guess that is 25% taller than the glyph is
+   * what "the icons don't line up" looks like on screen.
+   *
+   * `usWinAscent`/`usWinDescent` at 74/76 are *unsigned* and must enclose every
+   * glyph's ink, i.e. the em square, not the -64 descender that was written there.
+   */
   view.setUint16(30, UPEM);
   view.setUint16(32, UPEM);
   view.setUint16(44, Math.min(...codes));
   view.setUint16(46, Math.max(...codes));
-  view.setInt16(48, 960);
-  view.setInt16(50, -64);
-  view.setUint16(62, 40);
+  view.setInt16(68, ASCENT);
+  view.setInt16(70, DESCENT);
+  view.setInt16(72, 0);
+  /*
+   * fsSelection: REGULAR (bit 6) and USE_TYPO_METRICS (bit 7).
+   *
+   * `40` claimed BOLD|REGULAR for a face that is neither, and USE_TYPO_METRICS is the
+   * one that actually fixes the fallback: it tells the engine to lay the line out
+   * from the typographic metrics just written instead of the win pair, which on
+   * Windows is the difference between "the icon font is 2% taller than the text" and
+   * "the icon font is 25% taller than the text".
+   */
+  view.setUint16(62, 0x40 | 0x80);
   view.setUint16(64, 1);
-  view.setInt16(76, minX);
-  view.setInt16(78, maxX);
-  view.setInt16(80, minY);
-  view.setInt16(82, maxY);
+  /*
+   * The Windows metrics, which are *unsigned* and must enclose every glyph's ink.
+   *
+   * They were written at 74/76 as `960 / -64`, and 74/76 is not where they live: 74
+   * and 76 are the em square, so winAscent stayed 0 and winDescent became 65506 —
+   * i.e. -30 read as unsigned. A font whose win metrics do not contain its own
+   * glyphs gets a bounding box computed for it, which is the other half of "the icon
+   * row is taller than it looks like it should be".
+   */
+  view.setUint16(74, UPEM);
+  view.setUint16(76, UPEM);
+  view.setInt16(78, minX);
+  view.setInt16(80, maxX);
+  view.setInt16(82, minY);
+  view.setInt16(84, maxY);
+  /*
+   * `sxHeight` (86) and `sCapHeight` (88) are version-2 fields and must *not* be
+   * written into an `OS/2` that declares version 4 while its box positions are off by
+   * one field: they were landing on usDefaultChar/usBreakChar/usMaxContext, which is
+   * how a font ends up telling a text engine that its x-height is 0.
+   */
   view.setUint16(84, 1);
   view.setInt16(88, 1);
   return new Uint8Array(view.buffer);

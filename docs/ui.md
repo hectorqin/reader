@@ -58,7 +58,49 @@ build.mjs   → src/styles/reader-icons.ttf + src/ui/icon-names.ts
 规则无法表达「边界在一格宽的图形上左右交替」**——结果是一个圆被追踪成 58 段
 碎片。精确布尔没有这种情形。`union.mjs` 的注释里写了这段。
 
-### 1.3 字符编码
+### 1.3 垂直度量：为什么图标能对齐
+
+图标「显示正常但对不齐」曾经是个查不出来的问题，因为坏的地方在字体的
+**垂直度量**里，而当时所有测试都只读 `cmap` 和字形名。记下来，因为只要再动
+一次生成器就会重新踩到。
+
+**约定（生成器与样式表之间的契约）：**
+
+- 网格中点（12）就是 `y = 0`，即 em 的中心线；绘制代码用 `(GRID / 2 - y)`。
+- `hhea` 与 `OS/2` 的上升部/下降部各为半个 em（512 / -512），也就是
+  **对称**。对称不是审美：UI 里每个容器都在「居中一个盒子」，只有度量对称时
+  「居中盒子」和「居中字形」才是同一件事。度量不对称时，两者相差正好是那个
+  不对称量——这就是当初每一行图标歪的幅度都不一样的原因。
+- 每个字形的墨迹必须落在 `±0.5em` 内。生成器会检查，越界直接报错。
+- `OS/2` 的 Windows 度量是**无符号**的，且必须包住所有字形；`fsSelection`
+  打开 `USE_TYPO_METRICS`（否则引擎会去用 Windows 那一对）。
+
+**当初错在哪：** 表格声明上升部 960、下降部 -64（基线靠近 em 底部），而字形是
+围绕 em 中心画的。于是每个字形的墨迹都画在它所在盒子**上边界之上**约 0.75em，
+而所有布局居中的都是盒子——`menu`、`close`、`folder` 实测偏移一致是 0.496em。
+
+**样式表那一半：**
+
+```css
+.icon {
+  line-height: 1;          /* 用字体自己的行盒，而不是自建一个方块 */
+  display: inline-block;
+  width: 1em;              /* 唯一需要显式给的东西：可预测的前进宽度 */
+  text-align: center;
+  vertical-align: middle;  /* 非 flex/grid 的行（正文里的行内图标） */
+}
+```
+
+`line-height: 0` + `height: 1em` 是**错的**：那把盒子锚在基线上、向下一整个
+em，而墨迹画在基线周围，于是墨迹贴在盒子上沿、盒子下方全空。居中盒子的容器
+把盒子居中了，字形却差了半个 em。`transform` 也不行——它在绘制期移动字形，让
+图标占的位置和看起来占的位置不再一致。
+
+代价：`web/test/icons.test.ts` 会读字体的 `hhea` / `OS/2` / `head` 与每个字形的
+包围盒来断言上面这些，也会读 `reader.css` 里的 `.icon` 规则。两边都是之前没被
+任何断言覆盖的地方。
+
+### 1.4 字符编码
 
 - 码位从 `U+E900` 起，连续分配，位于**私有使用区**。
 - 顺序与 `paths.mjs` 中定义的顺序一致。
@@ -68,7 +110,7 @@ build.mjs   → src/styles/reader-icons.ttf + src/ui/icon-names.ts
   **不映射私有使用区之外**的任何码位（否则普通文字在应用了这个字族的元素里
   会变成图标）。
 
-### 1.4 无障碍
+### 1.5 无障碍
 
 `Icon` 组件的 `label` 决定语义：
 
@@ -92,7 +134,7 @@ build.mjs   → src/styles/reader-icons.ttf + src/ui/icon-names.ts
 现在 `IconButton` 的 `icon` 是 `IconName`，即字形的**名字**，
 传一个不存在的名字是编译错误。
 
-### 1.5 现在有哪些图标
+### 1.6 现在有哪些图标
 
 见 `web/tools/icons/paths.mjs`，或 `npm run icons:sheet` 生成的预览图。
 命名按**用途**而非形状：`sliders`（阅读设置）而不是 `knobs`；
@@ -255,6 +297,11 @@ build.mjs   → src/styles/reader-icons.ttf + src/ui/icon-names.ts
 5. 有状态变化的控件 → 对照 §5 那张表，确认用的是对的那一种。
 6. 图标按钮 → `label` 必填，且这条 label 是**这个按钮自己的作用**，
    不是它所在的区块的名字。
+7. 图标 + 文字并排 → 用 `IconTextButton`，不要自己拼一个 `<button>` 加一个
+   `<span class="icon">`；图标加文字正是最容易歪的组合，而它每次歪的方式都
+   一样（字形落到文字基线上）。
+8. 动图标相关的东西 → 先读 §1.3。图标对齐是字体度量和 CSS 两半一起决定的，
+   只改一半会得到一个更小的偏移，而不是没有偏移。
 
 ---
 
@@ -266,6 +313,6 @@ build.mjs   → src/styles/reader-icons.ttf + src/ui/icon-names.ts
 | `web/src/ui/icon-names.ts` | 码位表（生成） |
 | `web/src/styles/reader-icons.ttf` | 字体（生成） |
 | `web/tools/icons/` | 生成器 |
-| `web/test/icons.test.ts` | 字体与码位表的一致性契约 |
+| `web/test/icons.test.ts` | 字体度量、字形包围盒、码位表与 `.icon` 规则的契约 |
 | `web/src/ui/toolkit.tsx` | `IconButton` / `Button` / `Segmented` / `SwitchRow` / `Scrim` |
 | `web/src/styles/reader.css` | 令牌、组件样式、交互状态、`prefers-reduced-motion` |

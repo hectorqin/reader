@@ -763,17 +763,15 @@ function Row({ entry, selecting, selected, onActivate, onToggle, onMenu }: RowPr
       </div>
       <div className="manager-meta muted">{meta}</div>
       {selectable || selecting ? (
-        <button
-          type="button"
-          className="icon-button manager-more"
-          aria-label={`${entry.name} 的操作`}
+        <IconButton
+          label={`${entry.name} 的操作`}
+          icon="more"
+          class="manager-more"
           onClick={() => {
             cancel();
             onMenu();
           }}
-        >
-          <Icon name="more" />
-        </button>
+        />
       ) : null}
     </div>
   );
