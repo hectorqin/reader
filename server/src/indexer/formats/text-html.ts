@@ -1,5 +1,5 @@
 /**
- * The `chapter-html:<n>` rendition: one chapter, whole, and nothing else.
+ * The `chapter-full:<n>` rendition: one chapter, whole, and nothing else.
  *
  * This file used to be a typesetting pass — it inferred paragraph boundaries,
  * promoted a heading and emitted `<p>` elements. It is not one any more, and the
@@ -8,7 +8,7 @@
  * *reading* decisions. A server that baked them into a response made every one of
  * them a round trip, and it meant the same file could be typeset two different
  * ways depending on which transport happened to deliver it (the windowed
- * `chapter-html:` path got markup; the streamed `chapter:` path got characters and
+ * `chapter-full:` path got markup; the streamed `chapter:` path got characters and
  * no paragraphs at all).
  *
  * So the server's job has shrunk to the one thing only it can do: hand over the
@@ -16,11 +16,12 @@
  * `web/src/formats/segments.ts`, which is the single definition of what a paragraph
  * is for a TXT and is shared by every path a text can reach the reader through.
  *
- * The reference is kept (`chapter-html:` rather than deleting it and rewriting the
- * client's `renditionRef`), because it is opaque and format-specific by design: a
- * client that still asks for `chapter-html:` must keep working, and it does — it
- * now receives the same bytes as `chapter:`. Removing it would have been a
- * breaking change to a published reference for no gain.
+ * The reference itself is what this file is named after, and it has two spellings
+ * while they migrate: `chapter-full:` is the name, and `chapter-html:` is the old
+ * one, still answered. The name matters because a reference is opaque and
+ * format-specific by design — a client that understands neither falls back to
+ * `chapter:` and keeps working, and a client that was shipped asking for
+ * `chapter-html:` keeps getting the same bytes while it is replaced.
  */
 
 /** Escapes the five characters that would otherwise let a file rewrite the page. */

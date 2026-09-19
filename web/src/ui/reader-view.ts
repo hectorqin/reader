@@ -486,15 +486,39 @@ export class ReaderView {
     return this.stepSection(-1, true);
   }
 
-  /** Jumps to a fraction of the whole book, used by the progress slider. */
-  async seekPercentage(percentage: number): Promise<void> {
-    const clamped = Math.min(1, Math.max(0, percentage));
-    const index = Math.min(
-      this.doc.sections.length - 1,
-      Math.floor(clamped * this.doc.sections.length),
-    );
-    const remainder = clamped * this.doc.sections.length - index;
-    await this.open(index, remainder);
+  /**
+   * Jumps to a 0-based page *inside the current chapter*.
+   *
+   * This is the footer scrubber's move, and the distinction is the whole point of
+   * it: a reader dragging the slider is asking "show me page 7 of this chapter",
+   * not "show me 40% of the book". Those two questions are answered by two
+   * different measurements, and a control that answers the wrong one moves the
+   * reader to a different chapter than the one whose page number is written
+   * beside its thumb — which is exactly the report this method closes. There is
+   * deliberately no whole-book seek left on this view: the only caller it had was
+   * the slider, and a second seek with the *wrong* semantics is a trap for the
+   * next change rather than an API.
+   *
+   * Both modes go through the same page arithmetic the page turns use
+   * (`stepColumn`/`stepScreen`), so the position a drag lands on is a position
+   * the next press will move *from*, and the counter beside the slider names it.
+   * A target outside the chapter is clamped rather than followed: the slider is
+   * bounded by `chapterPages`, and a jump to page 900 of a 9-page chapter would
+   * have to invent a destination.
+   */
+  async seekPageInChapter(page: number): Promise<void> {
+    if (this.doc.layout === 'fixed') return;
+    if (this.settings.mode === 'paged') {
+      const columns = this.columnCount();
+      const target = Math.min(columns - 1, Math.max(0, Math.round(page)));
+      this.scroller.scrollLeft = target * this.columnStride(columns);
+      this.emitPosition();
+      return;
+    }
+    const total = this.screenCount();
+    const target = Math.min(total - 1, Math.max(0, Math.round(page)));
+    this.scroller.scrollTop = this.screenOffset(target);
+    this.emitPosition();
   }
 
   dispose(): void {
@@ -545,7 +569,7 @@ export class ReaderView {
    *
    * The input is the *characters* of the chapter, however they arrived:
    *
-   *  - a `chapter-html:<n>` body fetched by the windowed path, which is that
+   *  - a `chapter-full:<n>` body fetched by the windowed path, which is that
    *    book's text and nothing else (the server stopped typesetting — see
    *    `server/src/indexer/formats/text-html.ts`); or
    *  - a body from a server that still renders markup, which is handled by
@@ -630,7 +654,7 @@ export class ReaderView {
     // Whether the server's rendition arrived with paragraphs or as one slab, this
     // is where the reader's own split runs — so the indent, the paragraph spacing
     // and the removal of a scraper's leading spaces apply to *both* of the two ways
-    // a TXT reaches this view (`chapter-html:<n>` windowed, `chapter:<n>` streamed)
+    // a TXT reaches this view (`chapter-full:<n>` windowed, `chapter:<n>` streamed)
     // without a second request, and the settings panel's rows do something on
     // whichever one the reader happens to be looking at.
     const raw = this.retypePlainText(section);
