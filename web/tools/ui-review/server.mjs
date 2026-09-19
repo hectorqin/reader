@@ -26,6 +26,56 @@ const BOOK_ID = 'review-book';
 const TITLE = '剑来';
 const AUTHOR = '烽火戏诸侯';
 
+/**
+ * A book whose chapters are *documents*, and whose first one carries an image.
+ *
+ * A second fixture rather than a variant of the TXT one, because the two exercise
+ * opposite sides of the same decision — "does this body get parsed" — and the
+ * report that produced this scene was exactly the case where they were conflated: a
+ * TXT chapter was rendered as one paragraph *and* every illustration in an
+ * illustrated EPUB came out as a broken-image placeholder. Both are visible only on
+ * a screen, and both need a chapter of a shape the TXT fixture cannot have.
+ *
+ * The image is served from the book's own asset endpoint and reached through the
+ * URL the server actually writes — an absolute one, carrying
+ * `__reader-book-resource__` — because that is the URL the client has to accept.
+ * A fixture that inlined a `data:` URI would leave the defect reproducible in
+ * production and invisible here.
+ */
+const ILLUSTRATED_ID = 'review-illustrated';
+
+const ILLUSTRATED_CHAPTERS = [
+  { title: '第一卷 插图', path: 'OEBPS/Text/ch1.xhtml' },
+  { title: '第一卷 后记', path: 'OEBPS/Text/ch2.xhtml' },
+];
+
+/** 1×1 is enough: the assertion is that the image *loads*, not how it looks. */
+const PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFElEQVR42mP8z8DAwMDAwMDAQAcAABkAAe0lQh4AAAAASUVORK5CYII=',
+  'base64',
+);
+
+/** The two paragraphs of a document chapter, and the image between them. */
+function illustratedChapter(index) {
+  if (index !== 0) {
+    return [
+      '<?xml version="1.0" encoding="utf-8"?>',
+      '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一卷 后记</title></head>',
+      '<body><p>后记：这一章没有插图，用来确认上一章的图片不是碰巧出现的。</p></body></html>',
+    ].join('\n');
+  }
+  const image = `/api/v1/books/${ILLUSTRATED_ID}/assets?__reader-book-resource__=1&ref=${encodeURIComponent('OEBPS/Images/pic.png')}`;
+  return [
+    '<?xml version="1.0" encoding="utf-8"?>',
+    '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一卷 插图</title></head>',
+    '<body>',
+    `<div class="pic"><img src="${image}" alt="插图"/></div>`,
+    '<p>台版 转自 天使动漫</p>',
+    '<p>插图下面还有正文，这样图片没显示出来的时候，空出来的位置也是看得见的。</p>',
+    '</body></html>',
+  ].join('\n');
+}
+
 const CHAPTERS = [
   { title: '第一章 惊蛰', body: ['小镇上的人都知道，泥瓶巷住着一个少年。', '他叫陈平安。'] },
   { title: '第二章 山水', body: ['山上的风很大。', '他站在山顶，看了很久。'] },
@@ -125,6 +175,42 @@ const book = {
  */
 function chapterText(index) {
   return `${CHAPTER_BODY[index]}\n`;
+}
+
+/** The illustrated book, with every field `docs/api.md` declares. */
+function illustratedBook() {
+  return {
+    ...book,
+    id: ILLUSTRATED_ID,
+    title: '第一卷 插图',
+    format: 'epub',
+    pageCount: ILLUSTRATED_CHAPTERS.length,
+  };
+}
+
+function illustratedManifest() {
+  return {
+    id: ILLUSTRATED_ID,
+    format: 'epub',
+    total: ILLUSTRATED_CHAPTERS.length,
+    files: [{ rel_path: '插图.epub', size: 4096, missing: 0 }],
+    content: {
+      kind: 'reflowable',
+      total: ILLUSTRATED_CHAPTERS.length,
+      groups: [{ id: 'spine:0', seq: 0, title: '章节', count: ILLUSTRATED_CHAPTERS.length, offset: 0 }],
+      items: ILLUSTRATED_CHAPTERS.map((chapter, index) => ({
+        id: chapter.path,
+        seq: index,
+        title: chapter.title,
+        kind: 'chapter',
+        // A *document*, not characters: the media type is what tells the client to
+        // parse this body instead of typesetting it, and it is the field the report
+        // was about.
+        mediaType: 'application/xhtml+xml',
+        href: `xhtml:${chapter.path}`,
+      })),
+    },
+  };
 }
 
 function manifest() {
@@ -275,7 +361,11 @@ export function createReviewServer({ port = 5199 } = {}) {
         id: from + i === 0 ? BOOK_ID : `${BOOK_ID}-${from + i}`,
         title: `${TITLE} 第${from + i + 1}卷`,
       }));
-      return json(reply, { items, total, page, pageSize });
+      // The illustrated book is appended rather than paged: it exists for one reader
+      // scene that deep links to it, and burying it under 130 synthetic volumes would
+      // make that link depend on the shelf's own pagination arithmetic. `total` counts
+      // it, so the pager still agrees with the list it is counting.
+      return json(reply, { items: [...items, illustratedBook()], total: total + 1, page, pageSize });
     }
     // The shelf asks for its "continue reading" strip in the same breath as the
     // list, and a 404 there makes the shelf render an empty state that looks like a
@@ -344,6 +434,32 @@ export function createReviewServer({ port = 5199 } = {}) {
     if (path === `/api/v1/books/${BOOK_ID}/manifest`) {
       return json(reply, manifest());
     }
+    if (path === `/api/v1/books/${ILLUSTRATED_ID}/manifest`) {
+      return json(reply, illustratedManifest());
+    }
+    if (path === `/api/v1/books/${ILLUSTRATED_ID}/toc`) {
+      return json(reply, {
+        toc: ILLUSTRATED_CHAPTERS.map((chapter, index) => ({
+          href: `xhtml:${chapter.path}`,
+          title: chapter.title,
+          level: 0,
+          spine: index,
+        })),
+      });
+    }
+    if (path === `/api/v1/books/${ILLUSTRATED_ID}/items`) {
+      return json(reply, illustratedManifest().content);
+    }
+    if (path === `/api/v1/books/${ILLUSTRATED_ID}/assets`) {
+      const ref = url.searchParams.get('ref') ?? '';
+      if (ref.endsWith('pic.png')) {
+        reply.writeHead(200, { 'content-type': 'image/png' });
+        return reply.end(PNG);
+      }
+      const index = ILLUSTRATED_CHAPTERS.findIndex((chapter) => ref === chapter.path);
+      reply.writeHead(200, { 'content-type': 'application/xhtml+xml; charset=utf-8' });
+      return reply.end(illustratedChapter(index < 0 ? 0 : index));
+    }
     if (path === `/api/v1/books/${BOOK_ID}/toc`) {
       // `{ toc: [...] }`, matching `docs/api.md`. A bare array here is the mistake
       // the reader is not allowed to make: it is what made the harness discover that
@@ -407,4 +523,4 @@ export function createReviewServer({ port = 5199 } = {}) {
   };
 }
 
-export { CHAPTERS, BOOK_ID, CHAPTER_BODY, chapterText };
+export { CHAPTERS, BOOK_ID, CHAPTER_BODY, chapterText, ILLUSTRATED_ID, ILLUSTRATED_CHAPTERS };

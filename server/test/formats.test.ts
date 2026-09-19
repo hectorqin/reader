@@ -24,7 +24,7 @@ import { SyncService } from '../src/services/sync.ts';
 import { buildApp } from '../src/http/app.ts';
 import type { AppContext } from '../src/http/context.ts';
 import { naturalCompare, naturalSortBy } from '../src/indexer/formats/natural-sort.ts';
-import { decodeTextBuffer, splitChapters } from '../src/indexer/formats/text.ts';
+import { decodeTextBuffer, splitChapters, windowByLines } from '../src/indexer/formats/text.ts';
 import { ZipArchive, ZipError } from '../src/indexer/formats/zip-reader.ts';
 import {
   fileHandlerForExtension,
@@ -32,6 +32,7 @@ import {
   capabilities,
 } from '../src/indexer/formats/index.ts';
 import { looksLikeComicDirectory } from '../src/indexer/formats/comic-directory.ts';
+import { BOOK_RESOURCE_MARKER, rewriteRelativeReferences } from '../src/indexer/formats/epub.ts';
 import '../src/indexer/formats/index.ts';
 
 // ---------------------------------------------------------------- fixtures
@@ -596,7 +597,22 @@ describe('reading endpoints per format', () => {
     // A WebView cannot resolve `images/pic.png`; it must be a real path now.
     assert.ok(!/src="images\/pic\.png"/.test(html), 'relative image src should have been rewritten');
     // It must become a URL the client can actually fetch, not just a raw path.
-    assert.match(html, /\/api\/v1\/books\/[^"]+\/assets\?ref=OEBPS%2Fimages%2Fpic\.png/);
+    assert.match(html, /\/api\/v1\/books\/[^"]+\/assets\?[^"]*ref=OEBPS%2Fimages%2Fpic\.png/);
+    // And it must be *marked* as the book's own resource.
+    //
+    // The marker is what lets the client tell a book's illustration apart from an
+    // address the book is pointing at on the internet — the two are treated
+    // oppositely (drawn vs dropped), and telling them apart from the *string* is
+    // what broke every illustrated EPUB: the client compared against the page's
+    // origin while this handler had written the API's, so every rewritten `src`
+    // was dropped and the reader saw broken-image placeholders.
+    assert.ok(html.includes(`${BOOK_RESOURCE_MARKER}=1&amp;`), 'rewritten URLs must carry the book-resource marker');
+    // The literal itself, asserted once here and once on the client
+    // (`web/test/shadow.test.ts`), because the two sides are the server and the
+    // client and neither can import the other's constant. A rename that landed on
+    // one side would silently stop every illustration in every EPUB from rendering,
+    // which is the defect this whole mechanism exists to close.
+    assert.equal(BOOK_RESOURCE_MARKER, '__reader-book-resource__');
   });
 
   test('an epub chapter can be fetched without loading the whole container', async () => {
@@ -705,6 +721,107 @@ describe('reading endpoints per format', () => {
     assert.equal(res.statusCode, 200, res.body);
     const text = res.body;
     assert.ok(text.includes('第 3999 行'), 'the last line of the chapter must be present');
+  });
+
+  test('a txt chapter arrives with its line structure intact', async () => {
+    // The chapter's newlines are the whole of what the client has to work from:
+    // its paragraph splitter decides from the *next* line whether a newline ended
+    // a paragraph or merely wrapped one. A reply that re-joined the chapter into
+    // one run of characters therefore did not "leave typesetting to the client" —
+    // it destroyed the information the client would typeset from, and the reader
+    // got the single slab the splitter exists to prevent.
+    //
+    // This pins the *bytes* rather than the paragraph count, because the count is
+    // the client's answer and this is the input to it: one line per paragraph, in
+    // the file, must be one line in the reply.
+    const target = join(booksDir, '分行.txt');
+    await writeFile(target, '第一章 分行\n他走了。\n她留下了。\n天亮了。\n', 'utf8');
+    await ctx.scanner.scan();
+    const book = await findBook('分行');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('chapter-full:0')}`,
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    // The *line structure* is what the assertion is about: each paragraph on its
+    // own line, exactly as the file has it. (The chapter slice keeps the newline
+    // that ends its last line, which the client's splitter drops as leading
+    // whitespace on a paragraph that does not exist.)
+    assert.equal(res.body.trimEnd(), '第一章 分行\n他走了。\n她留下了。\n天亮了。');
+
+    await rm(target);
+    await ctx.scanner.scan();
+  });
+
+  test('the streaming window cuts at a line boundary, not mid-paragraph', async () => {
+    // `chapter:` bounds its reply because it is a window. It used to bound it with
+    // `slice(0, size)`, which is a cut *inside the chapter's structure*: a window
+    // that ended between two sentence-final lines joined them into one run, so the
+    // client's splitter saw a paragraph that was two paragraphs. A window may drop
+    // the last line it does not have room for; it may not glue lines together.
+    // Long enough to exceed the streaming window (256KB) by several times over, so
+    // the cap is exercised rather than merely present.
+    const lines = Array.from({ length: 12000 }, (_, i) => `第 ${i} 行的内容，写长一点好让这一章越过一个流式窗口的边界。`);
+    const target = join(booksDir, '窗口.txt');
+    await writeFile(target, `第一章 窗口\n${lines.join('\n')}\n`, 'utf8');
+    await ctx.scanner.scan();
+    const book = await findBook('窗口');
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('chapter:0')}`,
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const returned = res.body.split('\n');
+    // The window is capped, so it is a prefix of the chapter's lines and nothing
+    // else: every line in the reply is a whole line of the file.
+    assert.ok(returned.length > 1, 'the window must contain several lines');
+    assert.ok(returned.length < lines.length + 1, 'the window must still be capped');
+    for (const [index, line] of returned.entries()) {
+      assert.equal(line, index === 0 ? '第一章 窗口' : lines[index - 1], `line ${index} must be a whole line of the chapter`);
+    }
+
+    await rm(target);
+    await ctx.scanner.scan();
+  });
+
+  test('windowByLines keeps every line it returns whole, and drops only a whole line', () => {
+    // The unit-level statement of the invariant the two chapter tests check through
+    // HTTP: a window may be shorter than the chapter, and every line in it is a line
+    // of the chapter. A character slice cannot promise that, and the failure it
+    // produces is not a truncation — it is two paragraphs glued into one, which is
+    // exactly what the client's splitter reads as a single paragraph.
+    const lines = ['一', '二二', '三三三', '四四四四'];
+    // `一\n二二\n三三三` is 1 + 1 + 2 + 1 + 3 = 8 characters, and a 9th needs the
+    // fourth line's first character — which is not a line, so it is not returned.
+    assert.equal(windowByLines(lines, 9), '一\n二二\n三三三');
+    // A budget large enough for everything returns everything.
+    assert.equal(windowByLines(lines, 100), lines.join('\n'));
+    // A budget smaller than the first line still returns that line: a window that
+    // returned nothing would make the client ask again forever.
+    assert.equal(windowByLines(lines, 1), '一');
+  });
+
+  test('the book-resource marker is the value both halves of the rewrite agree on', () => {
+    // The server writes it (`rewriteRelativeReferences`) and the client reads it
+    // (`web/src/ui/shadow.ts`), and the two cannot import each other. This is the
+    // server's half of the assertion; the client's is in `web/test/shadow.test.ts`.
+    assert.equal(BOOK_RESOURCE_MARKER, '__reader-book-resource__');
+    // The reference is resolved against the *chapter's own directory* first, so the
+    // path the marker travels with is the archive path the resolver was asked about.
+    const rewritten = rewriteRelativeReferences(
+      '<img src="../Images/pic.png"/>',
+      'OEBPS/Text',
+      (path) => `/api/v1/books/x/assets?${BOOK_RESOURCE_MARKER}=1&ref=${path}`,
+      (path) => path === 'OEBPS/Images/pic.png',
+    );
+    // `&amp;` because the attribute is escaped on the way into the document — the
+    // URL is still `...&ref=...` after the browser parses it back.
+    assert.equal(
+      rewritten,
+      `<img src="/api/v1/books/x/assets?${BOOK_RESOURCE_MARKER}=1&amp;ref=OEBPS/Images/pic.png"/>`,
+    );
   });
 
   test('the manifest advertises the markup rendition without moving the reference', async () => {
@@ -1239,7 +1356,11 @@ describe('windowed reading', () => {
     });
     assert.equal(res.statusCode, 200, res.body);
     const html = res.rawPayload.toString('utf8');
-    assert.match(html, /\/api\/v1\/books\/[^"']+\/assets\?ref=/, 'relative resources must be absolute');
+    assert.match(html, /\/api\/v1\/books\/[^"']+\/assets\?[^"']*ref=/, 'relative resources must be absolute');
+    assert.ok(
+      html.includes(`${BOOK_RESOURCE_MARKER}=1&amp;`),
+      'a rewritten resource must be marked as the book\'s own',
+    );
     assert.equal(res.headers['content-length'], String(res.rawPayload.byteLength));
 
     await rm(join(booksDir, '窗读4.epub'));

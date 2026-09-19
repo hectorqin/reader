@@ -18,6 +18,7 @@
  */
 
 
+import { BOOK_RESOURCE_MARKER } from '../formats/book-resource.ts';
 
 /**
  * The reading column's own stylesheet, for the shadow root.
@@ -313,17 +314,137 @@ export function sanitiseInjectedContent(root: ParentNode): void {
         if (/^\s*javascript:/i.test(value)) {
           element.removeAttribute(name);
         }
-      } else if (name.toLowerCase() === 'src') {
-        const value = element.getAttribute(name) ?? '';
-        // Only the internal scheme and blobs are allowed. An absolute URL would
-        // leak a reading session to a third party; the book has no reason to
-        // need one.
-        if (!value.startsWith('reader-res:') && !value.startsWith('blob:') && !value.startsWith('data:')) {
-          element.removeAttribute(name);
-        }
       }
     }
   }
+
+  // Every address an injected element can *fetch from* is rewritten to a resolved
+  // blob URL, or dropped.
+  //
+  // Two things have to be true at once here, and the previous version had neither.
+  //
+  // **A book's own resources must be drawn.** An EPUB's chapter arrives with its
+  // relative references already rewritten to *absolute* URLs, because the document
+  // was fetched from the asset endpoint and `images/pic.png` resolves to nothing
+  // from there. The old check kept an absolute URL only when it started with the
+  // page's own `location.origin` — which is the API origin, not the page's, so
+  // every image in every illustrated book lost its `src` and rendered as the
+  // browser's broken-image placeholder. A check that has to guess "is this ours"
+  // from a hostname, a port, a proxy header and a base path is wrong the first time
+  // any of the four differs, and it is wrong *silently*: a removed attribute, not
+  // an error. So the server marks the URLs it rewrote (`BOOK_RESOURCE_MARKER`) and
+  // the test is a marker, not an origin.
+  //
+  // **Nothing else may be fetched.** A book is a file from an unknown source; a
+  // remote URL in it would leak a reading session, or phone home on every page
+  // turn. Those are dropped rather than rewritten, which is the security property
+  // this function exists for — and it is now *stronger* than before, because what
+  // is allowed is a set of three schemes instead of "anything on the origin the
+  // app happens to be served from" (which included the API's other endpoints).
+  //
+  // The rewrite resolves through the element's own base, so a relative URL — from
+  // a book loaded locally, which never went through the server's rewriter — is
+  // resolved against the document rather than dropped. An absolute URL to another
+  // host resolves to that host and is therefore dropped, which is the point.
+  for (const element of root.querySelectorAll('[src], [poster], [srcset], [href]')) {
+    for (const name of ['src', 'poster', 'href']) {
+      const value = element.getAttribute(name);
+      if (value === null) continue;
+      const resolved = resolveBookResource(value);
+      if (resolved === null) element.removeAttribute(name);
+      else if (resolved !== value) element.setAttribute(name, resolved);
+    }
+    const srcset = element.getAttribute('srcset');
+    if (srcset !== null) {
+      const rewritten = resolveSrcset(srcset);
+      if (rewritten === null) element.removeAttribute('srcset');
+      else if (rewritten !== srcset) element.setAttribute('srcset', rewritten);
+    }
+  }
+}
+
+/**
+ * Whether a URL is one of the book's own resources rather than a remote address.
+ *
+ * Three mechanisms, and each is a *mechanism* rather than a guess:
+ *
+ *  - `reader-res:` — the client's own internal scheme, which never touches the
+ *    network (`formats/epub.ts`'s loader rewrites local references to it).
+ *  - `blob:` / `data:` — bytes already in memory. A `blob:` URL is one this
+ *    client minted from the archive, so it cannot reach a third party.
+ *  - a **marked, same-origin** absolute URL — one the *server* rewrote
+ *    (`BOOK_RESOURCE_MARKER`), which is the case the EPUB illustrations need.
+ *
+ * The marker alone is not enough, and that is the point of asking it together
+ * with the origin: the marker is a string a *book* can also write, so on its own
+ * it would be a book's own permission slip to reach a third party — which is the
+ * property this function exists to deny. The pair is what a book cannot forge:
+ * it can put the marker in a URL, and it cannot make that URL be served from the
+ * reader's own origin.
+ *
+ * Deliberately *not* included: "anything on our origin". That test passed the
+ * API's other endpoints and the app's own scripts, and it is the test that failed
+ * the case it was written for.
+ */
+function isBookResource(value: string): boolean {
+  const trimmed = value.trim();
+  if (trimmed === '') return false;
+  if (trimmed.startsWith('reader-res:') || trimmed.startsWith('blob:') || trimmed.startsWith('data:')) return true;
+  if (!trimmed.includes(`${BOOK_RESOURCE_MARKER}=`)) return false;
+  // The marker is a *query parameter*, so it is looked for by name rather than by
+  // position: `?a=1&__reader-book-resource__=1` and `?__reader-book-resource__=1`
+  // are both the server's own rewrite.
+  return isSameOrigin(trimmed);
+}
+
+/** Whether a URL is served by the origin this document came from. */
+function isSameOrigin(value: string): boolean {
+  try {
+    const url = new URL(value, document.baseURI);
+    return url.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolves a URL found in a chapter to something the browser may fetch, or null.
+ *
+ * `null` means "drop it". A relative URL is resolved against the document, which
+ * is what makes a locally-loaded book (whose references were never rewritten by
+ * the server) work: its `images/pic.png` resolves to a same-origin URL, which is
+ * the book's own file. An absolute URL to another host resolves to that host and
+ * is not a book resource, so it is dropped.
+ */
+function resolveBookResource(value: string): string | null {
+  if (isBookResource(value)) return value;
+  const trimmed = value.trim();
+  if (trimmed.startsWith('#')) return value;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return null;
+  try {
+    const url = new URL(trimmed, document.baseURI);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    // A relative reference is the book's own file, resolved against the document
+    // that is displaying it — which is the same origin by construction. Stated as
+    // the rule rather than as a special case so the two paths cannot disagree.
+    return url.origin === window.location.origin ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The same decision, per candidate of a `srcset`. Drops the ones that are not ours. */
+function resolveSrcset(value: string): string | null {
+  const out: string[] = [];
+  for (const part of value.split(',')) {
+    const trimmed = part.trim();
+    if (trimmed === '') continue;
+    const [url, ...descriptor] = trimmed.split(/\s+/);
+    const resolved = url === undefined ? null : resolveBookResource(url);
+    if (resolved === null) continue;
+    out.push([resolved, ...descriptor].join(' '));
+  }
+  return out.length > 0 ? out.join(', ') : null;
 }
 
 /** Keeps only the body of a full XHTML document, dropping `html`/`head` wrappers. */

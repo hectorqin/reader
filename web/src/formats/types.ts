@@ -59,6 +59,24 @@ export interface Section {
    */
   plainText?: boolean;
   /**
+   * Whether this section's body is a *document* rather than characters.
+   *
+   * The companion of `plainText`, and a separate field because they are two
+   * different questions that have to be asked separately:
+   *
+   *  - `plainText` — "should the reader typeset this, with its own paragraph split
+   *    and indents?" A TXT chapter: yes. An EPUB chapter: no.
+   *  - `bodyIsMarkup` — "is the body markup to be parsed, or characters not to
+   *    be?" A TXT chapter: no. An EPUB chapter: yes.
+   *
+   * The two answers disagree for every TXT chapter, and collapsing them into one
+   * field is what made a novel render as a single paragraph: the chapter *was*
+   * split into `<p>` elements, and then the body was read back as text — because
+   * it had been declared "plain text" — which stripped the tags the split had just
+   * produced. One slab, from a split that had worked perfectly.
+   */
+  bodyIsMarkup?: boolean;
+  /**
    * Path this section's bytes can be fetched from, when the section is one
    * addressable file. This is what lets a native host fetch a page itself
    * instead of being handed a buffer by the web layer.

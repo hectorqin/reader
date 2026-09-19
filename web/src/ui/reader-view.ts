@@ -606,7 +606,14 @@ export class ReaderView {
     // declared as plain text is characters all the way down, and running an HTML
     // parser over a novel whose text happens to contain `<` is how a paragraph gets
     // silently eaten.
-    if (!section.plainText && /<div[^>]*class="[^"]*\btxt-body\b/.test(raw)) {
+    //
+    // The test is `bodyIsMarkup`, not `!plainText`. They read alike and mean
+    // different things, and using the wrong one is what made every TXT a single
+    // paragraph: a TXT chapter is `plainText` *and* not markup, so `!plainText` sent
+    // its server-rendered `<p>` markup down the text path — where the tags were
+    // stripped and the paragraphs the server had just built were joined back into
+    // one slab. The question here is about the *bytes*, and only the bytes answer it.
+    if (section.bodyIsMarkup !== false && /<div[^>]*class="[^"]*\btxt-body\b/.test(raw)) {
       const container = document.createElement('div');
       container.innerHTML = raw;
       const wrapper = container.querySelector('.txt-body');

@@ -43,9 +43,63 @@ describe('splitTextParagraphs', () => {
     expect(splitTextParagraphs('他走了。\n」她说。')[0]!.text).toBe('他走了。」她说。');
   });
 
+  it('starts a new paragraph on an *indented* sentence-final line', () => {
+    // The report: "章节txt原文包含换行符，但是客户端没有拆分为多个段落" — the whole
+    // chapter came out as one paragraph, in a file where every paragraph is on its
+    // own line.
+    //
+    // The cause was one character class. The continuation test was applied to the
+    // line *as written* and its first alternative was `\s`, so a line beginning
+    // with the two full-width spaces that essentially every Chinese web novel
+    // indents with was classified as "this continues the sentence above" — the
+    // boundary rule therefore never fired once, on exactly the files it exists
+    // for. It was invisible in this suite because every fixture wrote paragraphs
+    // *without* the indent.
+    expect(
+      splitTextParagraphs(['　　他走了。', '　　她留下了。', '　　天亮了。'].join('\n')).map((p) => p.text),
+    ).toEqual(['他走了。', '她留下了。', '天亮了。']);
+  });
+
+  it('splits an indented chapter of any indent style the same way', () => {
+    // The three ways a converter writes "this is a new paragraph": full-width
+    // spaces, ASCII spaces, and the ideographic space mixed with a tab. All three
+    // mean the same thing and none of them is a continuation.
+    for (const indent of ['　　', '    ', '\t']) {
+      expect(splitTextParagraphs([`${indent}他走了。`, `${indent}她留下了。`].join('\n')).map((p) => p.text))
+        .toEqual(['他走了。', '她留下了。']);
+    }
+  });
+
+  it('still joins a wrapped line that is indented like a paragraph', () => {
+    // The failure the continuation rule guards the *other* way. A file that
+    // indents every paragraph and also hard-wraps long ones has continuation lines
+    // that carry the same indentation, so "indented" cannot by itself mean "new
+    // paragraph" — it is the sentence-final lookahead that decides, and the indent
+    // is only *not allowed to veto* it.
+    expect(splitTextParagraphs(['　　他走了，', '　　没有回头，', '　　也没有说话。'].join('\n'))[0]!.text)
+      .toBe('他走了，没有回头，也没有说话。');
+  });
+
+  it('does not let the indent be counted as the continuation punctuation', () => {
+    // A line that begins with the closing quote *of the sentence above* is a
+    // continuation, indented or not: the punctuation test has to see the content,
+    // not the whitespace before it.
+    expect(splitTextParagraphs(['　　他走了。', '　　」她接着说。'].join('\n'))[0]!.text)
+      .toBe('他走了。」她接着说。');
+  });
+
   it('normalises CRLF and a lone CR, so a Windows file is not one paragraph', () => {
     expect(splitTextParagraphs('一段\r\n\r\n二段').map((p) => p.text)).toEqual(['一段', '二段']);
     expect(splitTextParagraphs('他走了。\r她留下了。').map((p) => p.text)).toEqual(['他走了。', '她留下了。']);
+  });
+
+  it('counts a full-width space as one character of indent', () => {
+    // The count is in *characters*, not bytes and not code units, because what a
+    // caller can do with it is compare it: two ideographic spaces is the
+    // conventional Chinese indent and four ASCII ones is the other convention, and
+    // the two are distinguishable only if each counts as itself.
+    const [indented] = splitTextParagraphs('　　Two ideographic spaces.');
+    expect(indented!.leading).toBe(2);
   });
 
   it('removes the leading whitespace a scraper wrote, and reports how much', () => {

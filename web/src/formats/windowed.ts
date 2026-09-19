@@ -45,6 +45,26 @@ export interface SectionLoader {
   read(item: ContentItem): Promise<{ html?: string; image?: { mediaType: string; bytes: Uint8Array } }>;
 }
 
+/**
+ * Whether an item's bytes are a *document* rather than characters to typeset.
+ *
+ * The companion of `Section.plainText`, and the reason the two have to be asked
+ * separately: `plainText` says "these are characters, so typeset them" and this
+ * says "so do not run a parser over them". A TXT chapter answers yes to the first
+ * and no to the second, which is the combination that was collapsing into one
+ * paragraph.
+ *
+ * Answered from the media type because that is the server's own statement about
+ * its own bytes — `text/plain` is characters, XHTML is a document — and because it
+ * is available in the manifest, where sniffing the body is not: asking for a
+ * chapter's bytes to find out what it is would turn the one cheap request into
+ * forty.
+ */
+export function isMarkupMediaType(mediaType: string | undefined): boolean {
+  if (!mediaType) return false;
+  return /(?:xhtml|html|xml)/i.test(mediaType);
+}
+
 export interface StagedDocOptions {
   kind: BookContent['kind'];
   /** Every chapter of the book, so the table of contents is complete. */
@@ -100,6 +120,25 @@ export function createStagedDoc(options: StagedDocOptions): StagedDoc {
     // it is the only party that knows: the body no longer carries a marker to sniff
     // (see `Section.plainText`).
     ...(item.format === 'html' ? { plainText: true } : {}),
+    // *How to read the body* is a second question, and the renderer needs it
+    // separately — that separation is what the single-slab report was about.
+    //
+    // `plainText` answers "should this be typeset by us", and it is the field the
+    // reader's own paragraph split and indent control follow. It does **not** answer
+    // "does the body contain markup", and the renderer has to know both: markup has
+    // to be parsed, and characters must not be (running an HTML parser over a novel
+    // whose text contains `<` is how a paragraph gets silently eaten). The renderer
+    // used `plainText` for both, so a TXT chapter *was* split into paragraphs and
+    // then had every boundary read back out again by the text path — one slab, which
+    // is exactly what was reported.
+    //
+    // Answered from the manifest's own `mediaType`, which is the server's statement
+    // about its own bytes: `text/plain` is characters, `application/xhtml+xml` is a
+    // document. Inferring it instead — sniffing the body for a `<` — is the guess
+    // that fails on exactly the novel that discusses markup, and it would need the
+    // chapter's bytes at manifest time, turning the one request that must stay cheap
+    // into forty.
+    ...(item.kind === 'chapter' ? { bodyIsMarkup: isMarkupMediaType(item.mediaType) } : {}),
   }));
 
   const base: BookDoc = {
@@ -165,6 +204,7 @@ export function createStagedDoc(options: StagedDocOptions): StagedDoc {
           // Same declaration as above, and carried across a window swap for the same
           // reason: a jump to chapter 900 must not turn the book into an EPUB.
           ...(item.format === 'html' ? { plainText: true } : {}),
+          ...(item.kind === 'chapter' ? { bodyIsMarkup: isMarkupMediaType(item.mediaType) } : {}),
         });
       }
       return local;

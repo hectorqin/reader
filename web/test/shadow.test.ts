@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { createBookHost, extractBody, extractInlineStyles, sanitiseInjectedContent } from '../src/ui/shadow.ts';
+import { BOOK_RESOURCE_MARKER } from '../src/formats/book-resource.ts';
 
 /**
  * Sanitisation and style extraction.
@@ -56,6 +57,69 @@ describe('sanitiseInjectedContent', () => {
     sanitiseInjectedContent(node);
     const sources = [...node.querySelectorAll('img')].map((img) => img.getAttribute('src'));
     expect(sources).toEqual(['reader-res:OEBPS/a.png', 'data:image/png;base64,AA', 'blob:xyz']);
+  });
+
+  it('agrees with the server on the name of the book-resource marker', () => {
+    // The server writes this string into the URLs it rewrites
+    // (`server/src/indexer/formats/epub.ts`) and the check below reads it. The two
+    // are the server and the client, so neither can import the other's constant —
+    // each asserts the literal, and a rename that landed on one side would silently
+    // stop every illustration in every EPUB from rendering.
+    expect(BOOK_RESOURCE_MARKER).toBe('__reader-book-resource__');
+  });
+
+  it('keeps a marked absolute asset URL, which is how an illustrated EPUB renders', () => {
+    // The report: "epub的图片没有显示出来" — every illustration in the book came
+    // out as the browser's broken-image placeholder, and the cause was here.
+    //
+    // The server rewrites a chapter's relative references to *absolute* URLs,
+    // because the chapter is fetched from the asset endpoint and `images/pic.png`
+    // resolves to nothing from there. This function then kept an absolute URL only
+    // when it started with the page's own `location.origin` — which is the app's
+    // origin, not the API's — so every rewritten `src` was dropped. The check has
+    // to be "is this the book's resource", which is what the marker says, rather
+    // than "does this look like our origin", which is a guess that was wrong.
+    const node = parse(
+      `<img src="/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=OEBPS%2Fimages%2Fpic.png"/>`,
+    );
+    sanitiseInjectedContent(node);
+    const src = node.querySelector('img')?.getAttribute('src') ?? '';
+    expect(src).toContain('ref=OEBPS%2Fimages%2Fpic.png');
+  });
+
+  it('resolves a relative URL from a book loaded locally', () => {
+    // A book read straight from the file system never went through the server's
+    // rewriter, so its references are still relative. Resolving them against the
+    // document is what makes those illustrations work too — and it is why the
+    // rewrite is a resolution rather than an allowlist of strings.
+    const node = parse('<img src="images/pic.png"/>');
+    sanitiseInjectedContent(node);
+    const src = node.querySelector('img')?.getAttribute('src') ?? '';
+    expect(src).not.toBe('');
+    expect(src.startsWith('http')).toBe(true);
+    expect(src.endsWith('images/pic.png')).toBe(true);
+  });
+
+  it('still drops a remote URL, marked or not', () => {
+    // The marker is a *statement by the server*, so a book cannot forge it into
+    // permission to reach a third party: an absolute URL is resolved and then
+    // checked against the same rule, and a host that is not the document's own is
+    // dropped either way. Stated as a test because the marker must not have
+    // weakened the property this function exists for.
+    const node = parse(`<img src="https://tracker.example/x.png?${BOOK_RESOURCE_MARKER}=1"/>`);
+    sanitiseInjectedContent(node);
+    expect(node.querySelector('img')?.hasAttribute('src')).toBe(false);
+  });
+
+  it('drops a remote srcset and keeps the local candidates', () => {
+    const node = parse(
+      '<img srcset="images/a.png 1x, https://tracker.example/b.png 2x, images/c.png 3x"/>',
+    );
+    sanitiseInjectedContent(node);
+    const srcset = node.querySelector('img')?.getAttribute('srcset') ?? '';
+    expect(srcset).not.toContain('tracker.example');
+    expect(srcset).toContain('images/a.png 1x');
+    expect(srcset).toContain('images/c.png 3x');
   });
 
   it('removes a base element and a meta refresh, which would navigate away', () => {

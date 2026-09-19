@@ -68,6 +68,11 @@
       "name": "13-reader-paged-scrub",
       "label": "阅读页 · 滑杆拖到本章第 3 页",
       "what": "分栏模式下拖动底部滑杆：读数与画面都停在本章内，不换章"
+    },
+    {
+      "name": "14-reader-epub-image",
+      "label": "EPUB · 插图",
+      "what": "章节文档里的图片真的画出来了，而不是浏览器的破图占位符"
     }
   ],
   "results": [
@@ -107,6 +112,31 @@
       "detail": "pointer-events=none"
     },
     {
+      "name": "收起工具栏: 章节名画在正文之上",
+      "ok": true,
+      "detail": "层级 30 vs 正文 1，y=10..28 文本=\"第一章 惊蛰\""
+    },
+    {
+      "name": "收起工具栏: 章节名自带底色，不被正文透出",
+      "ok": true,
+      "detail": "background=rgb(22, 23, 26)"
+    },
+    {
+      "name": "收起工具栏: 页码读数画在正文之上",
+      "ok": true,
+      "detail": "层级 30 vs 正文 1，y=819..834 文本=\"第 1/4 页 0%\""
+    },
+    {
+      "name": "收起工具栏: 页码读数自带底色，不被正文透出",
+      "ok": true,
+      "detail": "background=rgb(22, 23, 26)"
+    },
+    {
+      "name": "收起工具栏: 章节名与页码左边对齐",
+      "ok": true,
+      "detail": "章节名 left=20 页码 left=20"
+    },
+    {
       "name": "目录: 面板不遮住整页",
       "ok": true,
       "detail": "面板从 y=321 开始，正文区 y=54"
@@ -127,9 +157,24 @@
       "detail": "面板 523px / 阅读区 701px"
     },
     {
+      "name": "顶栏: 三个按钮左右两边对齐",
+      "ok": true,
+      "detail": "左 12px / 右 12px，两道间隙 6px / 6px"
+    },
+    {
+      "name": "底栏: 页码与下一章右边对齐，滑杆与上一章左边对齐",
+      "ok": true,
+      "detail": "页码右 12px / 下一章右 12px；上一章左 12px / 滑杆左 12px"
+    },
+    {
+      "name": "顶栏与底栏共用同一条内边距",
+      "ok": true,
+      "detail": "顶栏 12px / 底栏 12px"
+    },
+    {
       "name": "底栏: 进度是可拖动的滑杆",
       "ok": true,
-      "detail": "type=range 宽 304px label=\"章节内页数\""
+      "detail": "type=range 宽 308px label=\"章节内页数\""
     },
     {
       "name": "底栏: 有页码与阅读进度读数",
@@ -175,6 +220,16 @@
       "name": "翻页不再每次都发两次 sync",
       "ok": true,
       "detail": "8 次翻页 + 6 秒静默：1 次 POST / 0 次 GET（共 1 次 sync 请求）"
+    },
+    {
+      "name": "EPUB: 章节里的图片真的画出来了",
+      "ok": true,
+      "detail": "naturalWidth=4 显示 4x4 src=\"/api/v1/books/review-illustrated/assets?__reader-book-resource__=1&ref=OEBPS%2FI\""
+    },
+    {
+      "name": "EPUB: 插图下面的正文也在",
+      "ok": true,
+      "detail": "正文开头=\"台版 转自 天使动漫\n插图下面还有正文，这样图片没显示出来的时候，空出来的位置也是看得见的。\""
     }
   ],
   "failures": []
