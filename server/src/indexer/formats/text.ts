@@ -143,6 +143,34 @@ export async function readTextFile(absPath: string): Promise<DecodedText> {
   return decodeTextBuffer(await readFile(absPath));
 }
 
+/**
+ * As much of a chapter as fits in `maxChars`, cut at a line boundary.
+ *
+ * The streaming window used to be `body.slice(0, size)`, which is a character
+ * cut and therefore a cut *inside the chapter's structure*: a slice that ended
+ * between two sentence-final lines joined them into one run, and the client's
+ * splitter — which decides paragraph boundaries from the newline between two
+ * lines — then saw a single paragraph. The server was editing the text in the one
+ * place it had promised not to: its whole job here is to hand over characters.
+ *
+ * Whole lines also mean the character count still bounds the reply, which is what
+ * the window is for; only the last line of a window is dropped, and the reader's
+ * next window starts at the line the reply actually ended on because the offset
+ * is counted from the text the client received.
+ */
+export function windowByLines(lines: readonly string[], maxChars: number): string {
+  const out: string[] = [];
+  let used = 0;
+  for (const line of lines) {
+    // One character for the newline that joins it to the line above.
+    const cost = out.length === 0 ? line.length : line.length + 1;
+    if (used + cost > maxChars && out.length > 0) break;
+    out.push(line);
+    used += cost;
+  }
+  return out.join('\n');
+}
+
 function looksChinese(text: string): boolean {
   return /[\u4e00-\u9fff]/.test(text.slice(0, 4096));
 }
@@ -240,6 +268,16 @@ export const textHandler = registerFileHandler({
    * reply because it is a window for streaming, and bounding a chapter the reader
    * is about to read would hand them a chapter that stops mid-sentence.
    *
+   * **The line structure of the chapter is part of what is owed.** A TXT's only
+   * structure is its line breaks, and they are the whole of what the client has to
+   * work from — its paragraph splitter decides from the *next* line whether a
+   * newline ended a paragraph or merely wrapped one. A reply that re-joined the
+   * chapter into one run of characters therefore did not "leave typesetting to the
+   * client"; it destroyed the information the client would typeset from, and the
+   * reader got the slab the splitter exists to prevent. The chapter is returned
+   * as it is stored, newlines and all; shortening it (the `chapter:` window) also
+   * keeps whole lines, for the same reason.
+   *
    * `chapter-html:<n>` is the old name and is still answered identically. The
    * reference has been asked for by shipped clients and is stored in their
    * offline caches, so dropping it would strand a reader rather than improve
@@ -280,7 +318,12 @@ export const textHandler = registerFileHandler({
       const { chapters, lines } = splitChapters(text);
       const chapter = chapters[index];
       if (!chapter) throw new Error(`chapter ${index} is out of range`);
-      const body = lines.slice(chapter.startLine, chapter.endLine + 1).join('\n').slice(0, size);
+      // Sliced *per line* rather than by characters: see the note on the
+      // `chapter-full:` reply below. A character slice cannot tell a paragraph
+      // break from a mid-sentence line break, so a window that ended between two
+      // paragraphs glued them together and a line break that was a paragraph
+      // boundary never reached the client at all.
+      const body = windowByLines(lines.slice(chapter.startLine, chapter.endLine + 1), size);
       return {
         data: Buffer.from(body, 'utf8'),
         contentType: 'text/plain; charset=utf-8',

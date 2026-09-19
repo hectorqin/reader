@@ -145,6 +145,59 @@
 
   --reader-page-padding-inline: 1.5rem;
   --reader-page-padding-block: 1.25rem;
+
+  /*
+   * The inset every *band* — the top bar's row of buttons, the footer's two rows,
+   * the reading indicator's two readouts — is drawn to.
+   *
+   * Declared once because the three of them sit at the two edges of the same page
+   * and the reader reads their edges as one line. They were separate numbers
+   * before: the top bar had 0.35rem of padding, the scrubber row 0.75rem and the
+   * chapter row 0.75rem, so nothing lined up with anything and the mismatch read
+   * as three unrelated bars rather than one frame around the text. The two
+   * readouts at the bottom (page count and chapter navigation) are the pair the
+   * reader looks at together, and they were 0.4rem apart from each other.
+   *
+   * `0.75rem` rather than the page's own 1.5rem margin: a band is chrome, and the
+   * controls inside it are what the reader aims at, so its inset is the gap
+   * between the outermost control and the device edge rather than the measure the
+   * book is set to.
+   */
+  --reader-band-inset: 0.75rem;
+
+  /*
+   * The reader's own paint order, weakest first.
+   *
+   * The three numbers exist because the reading surface and the chrome are
+   * *positioned siblings*, and positioned siblings with no `z-index` are painted in
+   * document order — which is how the chapter's own text came to be drawn over the
+   * chapter name in immersion. The immersion readouts in particular have to be above
+   * the page, because the whole point of them is that the reader can still see where
+   * they are; the page cannot be above the thing that describes it. Declared as a
+   * named scale rather than as three literals so the relationship is readable and a
+   * fourth band has an obvious place to go.
+   */
+  --reader-layer-page: 1;     /* the reading surface: below everything else here */
+  --reader-layer-rail: 14;    /* the quick-action column */
+  --reader-layer-panel: 20;   /* sheets and their scrim */
+  --reader-layer-readout: 30; /* the immersion readouts, above the page they describe */
+
+  /*
+   * The reading indicator's own inset.
+   *
+   * Wider than a band's, because the indicator is not chrome: it is text, drawn
+   * over the page while the reader is reading, so it is set to the *page margin* —
+   * the same measure the book is typeset to, which is what makes it look like a
+   * caption on the page rather than a label stuck to the screen. `--reader-page-margin`
+   * is the reader's own control (0 by default would be flush with the band, 4rem
+   * would be a well-inset caption) and `--reader-page-padding-inline` is the floor,
+   * so the readouts never overlap the paragraph underneath on a device where the
+   * margin is set to nothing.
+   */
+  --reader-indicator-inset: max(
+    var(--reader-page-margin),
+    var(--reader-page-padding-inline)
+  );
 }
 
 [data-theme='sepia'] {
@@ -248,10 +301,21 @@ body {
  * stylesheet cannot reach the app chrome, and the app chrome cannot reach into
  * the book. The two only meet through the custom properties above.
  */
+/*
+ * The reading surface, and its place in the paint order.
+ *
+ * It is `position: absolute` inside `.stage`, so it is a *positioned* box — and a
+ * positioned box with no `z-index` paints in **document order** against its
+ * positioned siblings. It is appended before the chrome is rendered, so it comes
+ * after the immersion readouts, which is how the chapter's own text came to be
+ * drawn over the chapter name that describes it. One declared number fixes that,
+ * and it is the page's place in the layer scale declared with the other tokens.
+ */
 .book-host {
   position: absolute;
   inset: 0;
   overflow: hidden;
+  z-index: var(--reader-layer-page);
 }
 
 .book-host[data-layout='reflowable'] {
@@ -370,9 +434,12 @@ book-content {
    * stray icons at opposite corners. Even gaps keep them a row at any width.
    */
   justify-content: space-evenly;
+  align-items: stretch;
   gap: var(--space-1);
   min-height: 3.4rem;
-  padding: 0 0.35rem;
+  /* The band inset on both sides, so the outermost glyphs are the same distance
+     from the device edge as every control in the footer below them. */
+  padding-inline: var(--reader-band-inset);
   background: var(--reader-surface);
   /* Same hairline treatment as the footer, so the two edges of the reading area
      are the same weight. */
@@ -415,9 +482,34 @@ book-content {
  * (a list and a slider read as the same thing without it). The label is the small
  * `--text-meta` size — it is a caption for the glyph, not a second title.
  */
+/*
+ * One control of the top bar.
+ *
+ * `flex: 1 1 0` gives all three the same *width*, and that is the whole of how the
+ * row comes out symmetric: with three equal columns there is no free space left for
+ * `space-evenly` to distribute as gaps, so the two outer buttons start and end
+ * exactly on the bar's own inset and the two interior gaps are equal. The reader's
+ * "顶部栏三个按钮需要两边对齐" was not achievable while the columns had a
+ * `max-width`: the row was `space-evenly` *with* a 6rem cap, so the free space left
+ * over grew with the screen and was inserted as *gaps* — which are computed from
+ * what is left, and therefore came out unequal for labels of unequal width. The
+ * measured result was outer edges 29px in while the footer's were 12px in, on the
+ * same screen.
+ *
+ * The ceiling is gone rather than moved. It read as a sensible tablet refinement
+ * ("three 6rem buttons across 800px is a lot of air") and it was precisely what
+ * broke the alignment, because a row narrower than its bar always has space to
+ * insert somewhere. A row at `100%` has no leftover space at any width, so its
+ * edges are the bar's inset everywhere — which is the property that makes the top
+ * bar and the footer share one frame. `flex: 1` is already the ceiling; the row
+ * cannot exceed the bar.
+ *
+ * `flex-basis: 0` also means a long label cannot make its own column wider than its
+ * neighbours: 返回 and 设置 are the same target whatever the words say.
+ */
 .top-button {
   flex: 1 1 0;
-  max-width: 6rem;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -459,17 +551,39 @@ book-content {
  * `pointer-events: none` because they are readouts, not controls: a tap on the
  * chapter name has to reach the tap zone underneath it and turn the page (or
  * bring the chrome back), not be swallowed by a label.
+ *
+ * What the two readouts must therefore do is be drawn *over* the page, and they
+ * were not — the chapter name and the page count were painted over by the chapter's
+ * own text.
+ *
+ * The cause is worth stating exactly, because the number was not the problem. A
+ * `z-index` orders boxes *within one stacking context*; these two are siblings of
+ * the reading surface inside the screen's, so with neither declaring a `z-index`
+ * they were painted in **document order** — and `.book-host` comes later in the
+ * tree than the indicator, because the reading surface is appended before the
+ * chrome is rendered. It is `position: absolute`, so it is a positioned box like
+ * them, and the `z-index: 12` the indicator carried did nothing across two
+ * unrelated positioned siblings. One declared number on each side is what makes
+ * the order a fact of this stylesheet (see the layer scale with the other tokens).
+ *
+ * The bleed of paper behind each readout is a `background` on the label rather than
+ * a full-width scrim: the reader asked to see the page, and a translucent strip
+ * across the top and bottom would be a third bar. One line's worth of the page's own
+ * colour behind each label covers only what it has to — and it is what makes the
+ * number legible when the line of text underneath happens to be exactly that line,
+ * which is the case the reader photographed.
  */
 .reading-indicator {
   position: absolute;
   inset: 0;
-  z-index: 12;
+  z-index: var(--reader-layer-readout);
   pointer-events: none;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: calc(0.5rem + var(--safe-top)) calc(var(--reader-page-padding-inline) + var(--safe-right))
-    calc(0.5rem + var(--safe-bottom)) calc(var(--reader-page-padding-inline) + var(--safe-left));
+  align-items: flex-start;
+  padding: calc(0.6rem + var(--safe-top)) calc(var(--reader-indicator-inset) + var(--safe-right))
+    calc(0.6rem + var(--safe-bottom)) calc(var(--reader-indicator-inset) + var(--safe-left));
   font-size: var(--text-meta);
   color: var(--reader-muted);
   /* A slow fade of its own, offset by the chrome's duration: the indicator comes
@@ -483,16 +597,26 @@ book-content {
 }
 
 .indicator-chapter {
+  /* A label over the book's own text, so it is capped to the page's measure and
+     ellipsised rather than allowed to run past the column. */
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: var(--text-label);
+  background: var(--reader-paper);
+  padding: 0 0.25rem;
+  margin-inline-start: -0.25rem;
+  border-radius: 3px;
 }
 
 .indicator-progress {
   font-variant-numeric: tabular-nums;
   color: var(--reader-ink);
-  opacity: 0.72;
+  background: var(--reader-paper);
+  padding: 0 0.25rem;
+  margin-inline-start: -0.25rem;
+  border-radius: 3px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1594,7 +1718,7 @@ book-content {
 .scrim {
   position: absolute;
   inset: 0;
-  z-index: 15;
+  z-index: var(--reader-layer-panel);
   background: color-mix(in srgb, #000 42%, transparent);
   animation: scrim-in var(--motion-duration) var(--motion-ease);
 }
@@ -1608,7 +1732,7 @@ book-content {
   position: absolute;
   inset-inline: 0;
   bottom: 0;
-  z-index: 20;
+  z-index: var(--reader-layer-panel);
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -1806,12 +1930,17 @@ book-content {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-2) 0.75rem 0.25rem;
+  padding: var(--space-2) var(--reader-band-inset) 0.25rem;
 }
 
 .progress-scrubber {
   flex: 1 1 auto;
   min-width: 0;
+  /* A range input carries a user-agent inline margin, which put the track 2px
+     inside the row's own padding while the page readout opposite it sat flush with
+     it — a visible hairline of misalignment on the row the reader asked to have
+     aligned. The row's padding is the inset; the control adds none of its own. */
+  margin-inline: 0;
   /* Native range inputs default to a chunky, theme-blind widget; `appearance: none`
      is what lets the tokens below draw it. The track is drawn on the element and
      the thumb on `::-webkit-slider-thumb` / `::-moz-range-thumb`, which are two
@@ -1887,9 +2016,20 @@ book-content {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: 0.15rem 0.75rem 0.65rem;
+  padding: 0.15rem var(--reader-band-inset) 0.65rem;
 }
 
+/*
+ * The chapter buttons' horizontal padding is *zero*.
+ *
+ * They used to carry `0.4rem` of their own on top of the row's padding, so the
+ * label "上一章" started 0.4rem further in than the page readout above it and the
+ * row's two ends disagreed with the scrubber row's. The padding was there to give
+ * the button a bigger hit area — which it still gets, vertically: the row's height
+ * is 0.45rem of padding plus a line, and the *width* is now the label's own. A
+ * button whose target is as wide as its text is the right target for a row that is
+ * read as one line of controls.
+ */
 .nav-chapter {
   display: inline-flex;
   align-items: center;
@@ -1899,7 +2039,7 @@ book-content {
   color: var(--reader-ink);
   font: inherit;
   font-size: var(--text-label);
-  padding: 0.45rem 0.4rem;
+  padding: 0.45rem 0;
   border-radius: var(--reader-radius);
   cursor: pointer;
   touch-action: manipulation;
@@ -1967,7 +2107,7 @@ book-content {
    * the centre of the screen is where the reading is.
    */
   top: calc(22% + var(--safe-top));
-  z-index: 14;
+  z-index: var(--reader-layer-rail);
   display: flex;
   flex-direction: column;
   gap: var(--space-1);

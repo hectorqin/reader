@@ -212,7 +212,7 @@ export const epubHandler = registerFileHandler({
         path,
         baseDir: posix.dirname(path),
         assetUrl: (archivePath, fragment) =>
-          `${assetBase(ctx)}?ref=${encodeURIComponent(archivePath)}${fragment ? `#${fragment}` : ''}`,
+          `${assetBase(ctx)}?${BOOK_RESOURCE_MARKER}=1&ref=${encodeURIComponent(archivePath)}${fragment ? `#${fragment}` : ''}`,
         exists: (archivePath) => archive.has(archivePath),
       });
 
@@ -276,6 +276,42 @@ function stripMarkup(value: string): string {
     .trim()
     .slice(0, 80);
 }
+
+/**
+ * Marks a URL as "this is one of the book's own resources".
+ *
+ * The chapter rewriter resolves a book's relative references to *absolute* URLs,
+ * because the client fetched the document from the asset endpoint rather than
+ * from inside the archive — `images/pic.png` resolves to nothing from there. The
+ * client then has to be able to tell such a URL apart from one the book is
+ * pointing at on the internet, because the two are treated oppositely: its own
+ * resources are fetched and drawn, and an absolute URL to a third party is
+ * dropped (a book must not be able to leak a reading session, or to phone home).
+ *
+ * It used to try to tell them apart by *guessing from the string* — "does this
+ * look like one of our origins" — which is the kind of check that is right until
+ * it is wrong, and here it was wrong twice at once: the client compared against
+ * the page's origin while the server had rewritten to the API's, so every image
+ * in every illustrated EPUB lost its `src` on the way into the reader and
+ * rendered as the browser's broken-image placeholder. The book that failed was
+ * exactly the one the reader complained about, and the failure was silent —
+ * a dropped attribute, not an error.
+ *
+ * So the rewriter *says so* instead: it adds a named marker to the query, and the
+ * check on the other side is the presence of that name rather than a comparison of
+ * two origins that have to agree on a hostname, a port, a proxy header and a base
+ * path.
+ *
+ * The marker is not on its own permission to fetch: the client also requires the
+ * URL to be same-origin, because a marker is a string a *book* can also write, and
+ * permissive-if-marked would be a book's own permission slip to reach the
+ * internet. The pair is what a book cannot forge.
+ *
+ * Kept in step with `web/src/formats/book-resource.ts`, which is the reader of this
+ * value and cannot import it — the two are the server and the client. Both sides
+ * assert the same literal in their tests so a rename cannot land on one of them.
+ */
+export const BOOK_RESOURCE_MARKER = '__reader-book-resource__';
 
 /** Base URL of this book's asset endpoint, used when rewriting chapter links. */
 function assetBase(ctx: HandlerContext): string {

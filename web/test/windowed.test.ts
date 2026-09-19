@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { adoptWindow, createStagedDoc, windowIndexOf } from '../src/formats/windowed.ts';
+import { adoptWindow, createStagedDoc, isMarkupMediaType, windowIndexOf } from '../src/formats/windowed.ts';
 import { HttpRangeSource, RemoteZip, type RangeSource } from '../src/formats/remote-zip.ts';
 import type { BookContent, ContentItem } from '../src/net/api.ts';
 
@@ -103,6 +103,80 @@ describe('staged documents', () => {
     }, 2);
 
     expect(doc.sections[0]?.plainText).toBe(true);
+  });
+
+  it('separates "typeset this" from "parse this", which is what a TXT needs', async () => {
+    // The report: a TXT chapter's paragraphs were all rendered as one. The two
+    // questions were one field — `plainText` — and the renderer used it to decide
+    // both whether to typeset *and* whether to parse the body as markup. A TXT
+    // chapter answers "typeset it" and "it is not markup", so reading the second
+    // answer off the first sent the paragraphs the client had just built down the
+    // text path, where their tags were stripped and they were joined back into one
+    // slab.
+    //
+    // Answered from the manifest's `mediaType`, which is the server's own statement
+    // about its own bytes, and asserted *separately* from `plainText` because it is
+    // precisely their disagreement that a TXT is.
+    const doc = createStagedDoc({
+      kind: 'reflowable',
+      toc: [],
+      content: {
+        kind: 'reflowable',
+        total: 2,
+        groups: [{ id: 'g', seq: 0, title: '', count: 2, offset: 0 }],
+        items: [textItem(0), item(1)],
+      },
+      loader: { async read() { return { html: '第一章\n正文。' }; } },
+    });
+
+    expect(doc.sections[0]?.plainText).toBe(true);
+    expect(doc.sections[0]?.bodyIsMarkup).toBe(false);
+    // The EPUB chapter in the same window is the mirror image: markup to parse, and
+    // not the reader's own text to typeset.
+    expect(doc.sections[1]?.plainText).toBeUndefined();
+    expect(doc.sections[1]?.bodyIsMarkup).toBe(true);
+  });
+
+  it('re-derives the markup answer for a window swap, and forgets nothing', async () => {
+    // The answer is a statement about a *chapter's bytes*, so a jump to a different
+    // window is a different set of chapters. Carried over from the old window it
+    // would be a statement about the wrong chapters — an EPUB window read as text,
+    // or a TXT window parsed as markup.
+    const doc = createStagedDoc({
+      kind: 'reflowable',
+      toc: [],
+      content: {
+        kind: 'reflowable',
+        total: 4,
+        groups: [{ id: 'g', seq: 0, title: '', count: 2, offset: 0 }],
+        items: [textItem(0), textItem(1)],
+        group: 0,
+      },
+      loader: { async read() { return { html: '第一章\n正文。' }; } },
+    });
+    expect(doc.sections[0]?.bodyIsMarkup).toBe(false);
+
+    doc.setWindow({
+      kind: 'reflowable',
+      total: 4,
+      groups: [{ id: 'g', seq: 1, title: '', count: 2, offset: 2 }],
+      items: [item(2), textItem(3)],
+      group: 1,
+    }, 2);
+
+    expect(doc.sections[0]?.bodyIsMarkup).toBe(true);
+    expect(doc.sections[1]?.bodyIsMarkup).toBe(false);
+  });
+
+  it('reads the markup answer from the media type, not from the body', () => {
+    // A book that *discusses* markup must not be parsed as markup. Deciding from
+    // the body means a novel with a `<` in it gets an HTML parser run over it, which
+    // is how a paragraph is silently eaten — so the answer comes from the one field
+    // that is the server's own statement about its own bytes.
+    expect(isMarkupMediaType('application/xhtml+xml')).toBe(true);
+    expect(isMarkupMediaType('text/html; charset=utf-8')).toBe(true);
+    expect(isMarkupMediaType('text/plain; charset=utf-8')).toBe(false);
+    expect(isMarkupMediaType(undefined)).toBe(false);
   });
 
   it('does not read a section until it is asked for', async () => {

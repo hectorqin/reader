@@ -29,6 +29,12 @@
  *     is a single slab, and with a *looser* rule a hard-wrapped paragraph is
  *     chopped into fragments. The lookahead on the next line is what keeps the
  *     second failure out: a wrapped paragraph's continuation starts mid-sentence.
+ *
+ *     The lookahead is applied to the next line's *content*, with its indentation
+ *     removed first, and that detail is load-bearing rather than tidy: the same
+ *     scraped novels that need this rule are the ones that indent every paragraph
+ *     with two full-width spaces, so a rule that read the leading whitespace as
+ *     "this line continues the one above" never fired on any of them.
  *  4. **Every paragraph loses its leading whitespace.** What "段前空格" is: the
  *     full-width spaces a scraper indented with, which the client draws itself
  *     from the reader's own indent setting. Kept, they would be indent *added to*
@@ -46,17 +52,37 @@ const LINE_ENDINGS = /\r\n?/g;
 const SENTENCE_END = /[。！？…”』】]$/;
 
 /**
+ * What a line starts with, once its indentation has been set aside.
+ *
+ * Splitting the indentation out is the whole of the rule, and getting it wrong is
+ * the difference between a novel and one paragraph. `CONTINUATION_START` used to
+ * be tested against the line *as written*, and its first alternative was `\s` —
+ * whitespace. Every paragraph of a Chinese web novel begins with two full-width
+ * spaces, so **every** indented line was classified a continuation: the boundary
+ * rule never fired once and a chapter of forty paragraphs became a single slab of
+ * text. It was invisible in the tests because their fixtures wrote paragraphs
+ * *without* the indent that the files the module exists for are full of.
+ *
+ * So the two alternatives are separated: `CONTINUATION_START` is punctuation, and
+ * the indentation is carried for the paragraph it belongs to (which is also what
+ * lets the reader's indent be `text-indent` from zero without the file's own
+ * indentation stacking on top of it).
+ */
+const INDENT = /^[\s\u3000\u00a0]+/;
+
+/**
  * Characters that begin a *continuation* rather than a sentence.
  *
  * A line starting with one of these is finishing the sentence above it: a closing
  * quote, bracket or dash carried over from a wrapped paragraph, or a clause that
  * opens with punctuation. Excluded from the boundary test so that splitting is
  * driven by the text and not by where a source file happened to wrap.
+ *
+ * Deliberately no whitespace: the line's indentation is stripped before this is
+ * applied, so a leading space can never make a paragraph look like a continuation
+ * again.
  */
-const CONTINUATION_START = /^[\s，。！？、；：”』】）\u3001-\u303f\uff01-\uff5e]/;
-
-/** Whitespace at the start of a paragraph, including the ideographic space. */
-const LEADING_SPACE = /^[\s\u3000\u00a0]+/;
+const CONTINUATION_START = /^[，。！？、；：”』】）\u3001-\u303f\uff01-\uff5e]/;
 
 /**
  * The leading whitespace a line had, in *characters*.
@@ -107,7 +133,9 @@ function splitSentenceBreaks(block: string): string[] {
   for (let index = 1; index < lines.length; index += 1) {
     const line = lines[index] ?? '';
     const endsSentence = SENTENCE_END.test(current.trimEnd());
-    const startsSentence = line.trim().length > 0 && !CONTINUATION_START.test(line);
+    // Tested against the content, not the raw line: see `CONTINUATION_START`.
+    const content = line.replace(INDENT, '');
+    const startsSentence = content.length > 0 && !CONTINUATION_START.test(content);
     if (endsSentence && startsSentence) {
       out.push(current);
       current = line;
@@ -117,16 +145,29 @@ function splitSentenceBreaks(block: string): string[] {
       // full of gaps that grow with the reader's font size. A line ending inside
       // a CJK paragraph is not a space, and inserting one produces the visible
       // "多余的空格" a reader reports as a mangled book.
-      current += line;
+      //
+      // Its *indentation* goes with it. A file that indents every paragraph and
+      // also hard-wraps long ones indents the continuation lines too, so joining
+      // the raw line put two full-width spaces in the middle of a sentence — the
+      // same "多余的空格", from the same character, one branch over. The
+      // indentation belongs to a paragraph's first line, and this line is not one.
+      current += content;
     }
   }
   out.push(current);
   return out;
 }
 
-/** Trims a paragraph and records what the trim removed from its front. */
+/**
+ * Trims a paragraph and records what the trim removed from its front.
+ *
+ * The leading count is in *characters* and includes a full-width space as one, so
+ * a caller can tell "this paragraph was indented with two ideographic spaces"
+ * from "it was indented with four ASCII ones" — the two are written by different
+ * converters, and only the first is what a Chinese novel's indentation is.
+ */
 function toParagraph(block: string): TextParagraph {
-  const withoutLeading = block.replace(LEADING_SPACE, '');
+  const withoutLeading = block.replace(INDENT, '');
   const leading = block.length - withoutLeading.length;
   return { text: withoutLeading.trimEnd(), leading };
 }

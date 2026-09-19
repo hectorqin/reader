@@ -28,7 +28,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CDP } from './cdp.mjs';
-import { createReviewServer } from './server.mjs';
+import { createReviewServer, ILLUSTRATED_ID } from './server.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const outDir = join(here, '..', '..', '..', 'docs', 'ui-review');
@@ -62,10 +62,17 @@ const SCENES = [
     closePanel: true,
     scrubPage: 3,
   },
+  {
+    name: '11-reader-epub-image',
+    label: 'EPUB · 插图',
+    what: '章节文档里的图片真的画出来了，而不是浏览器的破图占位符',
+    openBook: true,
+    book: 'review-illustrated',
+  },
 ];
 
 /** Measurements that must hold, on the scenes where they apply. */
-async function audit(cdp, scenes, results) {
+async function audit(cdp, origin, scenes, results) {
   const failures = [];
 
   const check = (name, ok, detail) => {
@@ -206,6 +213,87 @@ async function audit(cdp, scenes, results) {
     !hidden.missing && hidden.indicator !== null && hidden.indicator.pointerEvents === 'none',
     hidden.missing ? 'n/a' : `pointer-events=${hidden.indicator?.pointerEvents ?? 'missing'}`,
   );
+  // The two readouts left on screen in immersion must not be *covered*, and the
+  // report is specific: the chapter name and the page count were painted over by
+  // the chapter's own text.
+  //
+  // Measured as **paint order**, not as a hit test, and the difference is the whole
+  // difficulty of the check. The readouts are `pointer-events: none` — deliberately,
+  // so a tap on the chapter name turns the page rather than being swallowed — and
+  // `elementFromPoint` skips anything that opts out of hit testing, so a hit test
+  // can *never* see them and would report "covered" for a readout drawn on top of
+  // everything. What the browser actually does is paint the two boxes in order, and
+  // the number that decides the order is the `z-index` the two boxes *resolve to*
+  // within the screen's stacking context. So that is what is compared.
+  //
+  // This is how the defect was possible at all: the reading surface is a positioned
+  // sibling and it comes *later* in the tree, so with neither box declaring a
+  // `z-index` the page was painted last — over the two numbers describing it.
+  const indicator = await cdp.evaluate(`(() => {
+    const root = document.querySelector('.reader-screen');
+    const host = document.querySelector('.book-host');
+    if (!root || !host) return { missing: true };
+    // The z-index each of the four boxes resolves to, taken from the nearest box
+    // that declares one — which is how the browser answers the same question.
+    const effective = (node) => {
+      let current = node;
+      while (current && current !== root) {
+        const value = getComputedStyle(current).zIndex;
+        if (value !== 'auto' && value !== '') return Number(value);
+        current = current.parentElement;
+      }
+      return 0;
+    };
+    const out = { page: effective(host) };
+    for (const [name, selector] of [['chapter', '.indicator-chapter'], ['progress', '.indicator-progress']]) {
+      const el = document.querySelector(selector);
+      if (!el) { out[name] = { missing: true }; continue; }
+      const r = el.getBoundingClientRect();
+      out[name] = {
+        text: el.textContent.trim(),
+        top: Math.round(r.top),
+        bottom: Math.round(r.bottom),
+        left: Math.round(r.left),
+        layer: effective(el),
+        // The paper behind the label, so a line of the chapter underneath cannot
+        // show through the number the reader is trying to read.
+        background: getComputedStyle(el).backgroundColor,
+      };
+    }
+    return out;
+  })()`);
+  for (const [name, label] of [['chapter', '章节名'], ['progress', '页码读数']]) {
+    const reading = indicator[name];
+    check(
+      `收起工具栏: ${label}画在正文之上`,
+      !reading?.missing && !indicator.missing && reading.layer > indicator.page,
+      indicator.missing || reading?.missing
+        ? '没有找到阅读指示或阅读面'
+        : `层级 ${reading.layer} vs 正文 ${indicator.page}，y=${reading.top}..${reading.bottom} 文本="${reading.text}"`,
+    );
+    check(
+      `收起工具栏: ${label}自带底色，不被正文透出`,
+      !reading?.missing && reading.background !== 'rgba(0, 0, 0, 0)' && reading.background !== 'transparent',
+      reading?.missing ? '没有找到阅读指示' : `background=${reading.background}`,
+    );
+  }
+  // Both readouts are at the *same* left edge, and that edge is inset from the
+  // screen: two lines stacked at the bottom of a page are read as one column, and
+  // the page count used to sit 4px to the right of the chapter name above it.
+  const indicatorAligned = await cdp.evaluate(`(() => {
+    const a = document.querySelector('.indicator-chapter')?.getBoundingClientRect();
+    const b = document.querySelector('.indicator-progress')?.getBoundingClientRect();
+    if (!a || !b) return null;
+    return { chapterLeft: Math.round(a.left), progressLeft: Math.round(b.left) };
+  })()`);
+  check(
+    '收起工具栏: 章节名与页码左边对齐',
+    indicatorAligned !== null && Math.abs(indicatorAligned.chapterLeft - indicatorAligned.progressLeft) <= 1,
+    indicatorAligned
+      ? `章节名 left=${indicatorAligned.chapterLeft} 页码 left=${indicatorAligned.progressLeft}`
+      : '没有找到阅读指示',
+  );
+
   // Back to the chrome: the panel checks that follow need a page they can tap, and
   // the screen is left in the state a reader spends most of their time in.
   await cdp.tapMiddle();
@@ -262,6 +350,65 @@ async function audit(cdp, scenes, results) {
   // The footer scrubber has to be a real control: visible, at least the width of a
   // thumb, reachable by keyboard, and labelled. A progress bar that only *reports*
   // is the thing this replaced, so the check is that it can be dragged.
+  // Two rows of one band must share an inset, and the top bar must share it too.
+  //
+  // The report had two halves — "底部页面数和进度需要两边对齐" and "顶部栏三个按钮需要
+  // 两边对齐" — and both are the same question asked of two bands: are the outermost
+  // things at the two edges the same distance in? They were three numbers (0.35rem,
+  // 0.75rem, 0.75rem plus a button's own 0.4rem of padding), so nothing lined up
+  // with anything and the frame around the page was visibly ragged.
+  //
+  // Asserted on *measured edges*, not on the CSS: the values have to end up equal
+  // after every padding and margin has been applied, and reading the declaration
+  // back would pass while a nested control still sat somewhere else.
+  const bandGaps = await cdp.evaluate(`(() => {
+    const viewport = document.documentElement.clientWidth;
+    const gap = (selector, edge) => {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return Math.round(edge === 'left' ? r.left : viewport - r.right);
+    };
+    const buttons = [...document.querySelectorAll('.topbar .top-button')].map((b) => b.getBoundingClientRect());
+    return {
+      // Top bar: the outermost buttons' own edges, and the two gaps between the
+      // three of them (which is what makes the row symmetric rather than merely
+      // spread out).
+      topbarLeft: buttons.length > 0 ? Math.round(buttons[0].left) : null,
+      topbarRight: buttons.length > 0 ? Math.round(viewport - buttons[buttons.length - 1].right) : null,
+      topbarGap: buttons.length === 3 ? Math.round(buttons[1].left - buttons[0].right) : null,
+      topbarGap2: buttons.length === 3 ? Math.round(buttons[2].left - buttons[1].right) : null,
+      // Footer: the two readouts the reader asked to have aligned.
+      pageRight: gap('.progress-page', 'right'),
+      nextRight: gap('.chapter-nav .nav-chapter:last-child', 'right'),
+      prevLeft: gap('.chapter-nav .nav-chapter:first-child', 'left'),
+      scrubLeft: gap('.progress-scrubber', 'left'),
+    };
+  })()`);
+  check(
+    '顶栏: 三个按钮左右两边对齐',
+    bandGaps.topbarLeft !== null &&
+      Math.abs(bandGaps.topbarLeft - bandGaps.topbarRight) <= 1 &&
+      Math.abs(bandGaps.topbarGap - bandGaps.topbarGap2) <= 1,
+    bandGaps.topbarLeft === null
+      ? '没有找到顶栏按钮'
+      : `左 ${bandGaps.topbarLeft}px / 右 ${bandGaps.topbarRight}px，两道间隙 ${bandGaps.topbarGap}px / ${bandGaps.topbarGap2}px`,
+  );
+  check(
+    '底栏: 页码与下一章右边对齐，滑杆与上一章左边对齐',
+    bandGaps.pageRight !== null &&
+      Math.abs(bandGaps.pageRight - bandGaps.nextRight) <= 1 &&
+      Math.abs(bandGaps.prevLeft - bandGaps.scrubLeft) <= 1,
+    bandGaps.pageRight === null
+      ? '没有找到底栏读数'
+      : `页码右 ${bandGaps.pageRight}px / 下一章右 ${bandGaps.nextRight}px；上一章左 ${bandGaps.prevLeft}px / 滑杆左 ${bandGaps.scrubLeft}px`,
+  );
+  check(
+    '顶栏与底栏共用同一条内边距',
+    bandGaps.topbarLeft !== null && Math.abs(bandGaps.topbarLeft - bandGaps.prevLeft) <= 1,
+    bandGaps.topbarLeft === null ? '没有找到顶栏按钮' : `顶栏 ${bandGaps.topbarLeft}px / 底栏 ${bandGaps.prevLeft}px`,
+  );
+
   const scrubber = await cdp.evaluate(`(() => {
     const el = document.querySelector('.progress-scrubber');
     if (!el) return { missing: true };
@@ -570,6 +717,51 @@ async function audit(cdp, scenes, results) {
         : `${turned} 次翻页 + 6 秒静默：${posts} 次 POST / ${gets} 次 GET（共 ${syncTotal} 次 sync 请求）`,
   );
 
+    // The illustrated chapter's image must actually be *painted*.
+  //
+  // The report was a screenshot of the browser's broken-image placeholder where a
+  // plate should have been, and the cause was one attribute: the server rewrote the
+  // chapter's relative `src` to an absolute asset URL, and the client kept an
+  // absolute URL only when it began with the page's own origin — which is the
+  // app's, not the API's — so every `src` was dropped. So the assertion is on the
+  // decoded image rather than on the attribute: a URL that is present and 404s
+  // would pass an attribute check and fail the reader in exactly the same way.
+  await cdp.navigate(`${origin}/#/book/${encodeURIComponent(ILLUSTRATED_ID)}`);
+  await cdp.waitFor('document.querySelector("book-content")?.shadowRoot?.querySelector(".book-flow") !== null', 20_000);
+  await cdp.sleep(1200);
+  const image = await cdp.evaluate(`(() => {
+    const root = document.querySelector('book-content')?.shadowRoot;
+    const img = root?.querySelector('img');
+    if (!img) return { missing: true };
+    const r = img.getBoundingClientRect();
+    return {
+      src: img.getAttribute('src') ?? '',
+      complete: img.complete,
+      naturalWidth: img.naturalWidth,
+      naturalHeight: img.naturalHeight,
+      width: Math.round(r.width),
+      height: Math.round(r.height),
+    };
+  })()`);
+  check(
+    'EPUB: 章节里的图片真的画出来了',
+    !image.missing && image.complete && image.naturalWidth > 0 && image.width > 0,
+    image.missing
+      ? '章节里没有 img 元素'
+      : `naturalWidth=${image.naturalWidth} 显示 ${image.width}x${image.height} src="${image.src.slice(0, 80)}"`,
+  );
+  // And the *text* around it is a paragraph of its own, so the plate is not the
+  // only thing that renders.
+  const chapterText = await cdp.evaluate(`(() => {
+    const root = document.querySelector('book-content')?.shadowRoot;
+    return (root?.querySelector('.book-flow')?.textContent ?? '').trim().slice(0, 60);
+  })()`);
+  check(
+    'EPUB: 插图下面的正文也在',
+    typeof chapterText === 'string' && chapterText.includes('台版'),
+    `正文开头="${chapterText}"`,
+  );
+
   return { failures, results };
 }
 
@@ -631,7 +823,7 @@ async function main() {
       // previous one left behind. The TXT panel scene rendered on the dark theme the
       // night-mode scene had set, which is a screenshot that is not about what its
       // label says it is about — with nothing on the page to say so.
-      await cdp.navigate(`${origin}/#/${scene.openBook ? `book/${encodeURIComponent('review-book')}` : 'shelf'}`);
+      await cdp.navigate(`${origin}/#/${scene.openBook ? `book/${encodeURIComponent(scene.book ?? 'review-book')}` : 'shelf'}`);
       if (!scene.openBook) {
         try {
           await cdp.waitFor('document.querySelector(".book-card:not(.skeleton)") !== null', 20_000);
@@ -740,7 +932,7 @@ async function main() {
     await cdp.sleep(350);
 
     const withGeometry = panelGeometry ? [{ name: '目录', openPanel: '目录' }] : [];
-    const auditResult = await audit(cdp, withGeometry, measured);
+    const auditResult = await audit(cdp, origin, withGeometry, measured);
     failures = auditResult.failures;
 
     const summary = {
