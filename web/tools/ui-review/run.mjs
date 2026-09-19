@@ -69,7 +69,7 @@ const SCENES = [
   {
     name: '11-library',
     label: '书库',
-    what: '面包屑、行、扫描忽略的徽章、以及书架/书库之间的切换',
+    what: '面包屑、行、「书籍」徽章、不在书架的书带「不在书架」标记，以及书架/书库之间的切换',
     openLibraryAt: '#/library',
   },
   {
@@ -787,6 +787,58 @@ async function audit(cdp, origin, scenes, results) {
     'EPUB: 插图下面的正文也在',
     typeof chapterText === 'string' && chapterText.includes('台版'),
     `正文开头="${chapterText}"`,
+  );
+
+  /*
+   * The search field's magnifier, measured rather than eyeballed.
+   *
+   * The report was "书架页面的搜索按钮没有垂直对齐", and it is the class of defect
+   * this harness exists for: nothing about it is a functional failure. The field
+   * works, the input focuses, the search runs — the glyph is simply drawn fourteen
+   * pixels above where it looks like it belongs, and every green test in the suite
+   * says so.
+   *
+   * Measured on the **ink**, not on the box, because the box was *already* correct
+   * when the defect was reported (75.98..120.19 inside a field of 75.98..120.19 —
+   * dead centre) and that is exactly what made the bug survive a layout review. A
+   * range over the glyph's contents is the browser's own answer to "where is the
+   * character", which is the thing a reader sees and the thing a box check cannot.
+   *
+   * The tolerance is 2px: the icon font's ink is not perfectly symmetric inside a
+   * symmetric em (measured 0.4px of asymmetry at this size), so an exact match would
+   * be an assertion about the generator's curve fitting rather than about alignment.
+   * The defect it guards against was 14px.
+   */
+  // The shelf, explicitly: `audit` runs after the scenes, and the last one leaves
+  // the reader open. The check is about the shelf's own search field, so it has to
+  // put the shelf up rather than assert on whatever screen happened to be there.
+  await cdp.navigate(`${origin}/#/shelf`);
+  await cdp.waitFor('document.querySelector(".shelf-search input") !== null', 20_000);
+  await cdp.sleep(400);
+  const searchGlyph = await cdp.evaluate(`(() => {
+    const glyph = document.querySelector('.search-glyph');
+    const input = document.querySelector('.shelf-search input');
+    if (!glyph || !input) return { missing: true };
+    const range = document.createRange();
+    range.selectNodeContents(glyph);
+    const ink = range.getBoundingClientRect();
+    const field = input.getBoundingClientRect();
+    return {
+      ink: (ink.top + ink.bottom) / 2,
+      field: (field.top + field.bottom) / 2,
+      inkHeight: ink.height,
+      fieldHeight: field.height,
+      display: getComputedStyle(glyph).display,
+    };
+  })()`);
+  check(
+    '搜索框: 放大镜与输入框中线对齐',
+    !searchGlyph.missing && searchGlyph.inkHeight > 0
+      && Math.abs(searchGlyph.ink - searchGlyph.field) <= 2,
+    searchGlyph.missing
+      ? '没有找到搜索框或放大镜'
+      : `放大镜中线 ${searchGlyph.ink.toFixed(1)} / 输入框中线 ${searchGlyph.field.toFixed(1)}`
+        + `（偏差 ${(searchGlyph.ink - searchGlyph.field).toFixed(1)}px，字形 ${searchGlyph.inkHeight}px，框高 ${searchGlyph.fieldHeight}px）`,
   );
 
   return { failures, results };

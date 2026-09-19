@@ -27,6 +27,7 @@ function entry(partial: Partial<BrowseListing['entries'][number]> & { name: stri
     scanned: false,
     ext: '',
     indexed: false,
+    shelfState: null,
     ...partial,
   };
 }
@@ -472,6 +473,102 @@ describe('batch management', () => {
     });
     // And no delete was ever sent.
     expect(transport.requests.some((request) => request.url.endsWith('/browse/delete'))).toBe(false);
+  });
+
+  it('marks the book that is not on the shelf, and only that one', async () => {
+    /*
+     * The row badge is the *only* thing on this screen that answers "why is this book
+     * missing from my shelf" for a book the reader took off it. Before it, every row
+     * was identical whatever its shelf state — so the screen that exists to explain a
+     * missing book could not name one.
+     *
+     * The negative half of the assertion matters as much as the positive: a badge on
+     * every row is a column of noise that hides the one row that is the exception, and
+     * the exception is the reader's whole reason for being here.
+     */
+    const transport = new FakeTransport();
+    transport.json(listing({
+      writable: true,
+      entries: [
+        entry({ name: '在架.epub', path: '在架.epub', scanned: true, indexed: true, shelfState: 'on' }),
+        entry({ name: '下架.epub', path: '下架.epub', scanned: true, indexed: true, shelfState: 'off' }),
+        entry({ name: '文件夹', type: 'dir', path: '文件夹', shelfState: null }),
+      ],
+    }));
+    const { screen } = makeScreen(transport);
+    await screen.open();
+
+    const rows = [...screen.element.querySelectorAll<HTMLElement>('.manager-row')];
+    const badgeOf = (name: string): string | undefined =>
+      rows.find((row) => row.querySelector('.manager-label')?.textContent === name)
+        ?.querySelector('.manager-badge.off')?.textContent ?? undefined;
+    expect(badgeOf('下架.epub')).toBe('不在书架');
+    expect(badgeOf('在架.epub')).toBeUndefined();
+    expect(badgeOf('文件夹')).toBeUndefined();
+  });
+
+  it('offers "放回书架" for a book that is off the shelf, and sends the add', async () => {
+    /*
+     * The reported "需要手动加入" was *half* a bug in the UI and half one in the API.
+     *
+     * The UI half: the row menu answered "从书架拿掉" whatever the book's state, so a
+     * reader looking at a book that was missing from their shelf had no control that
+     * said otherwise — and the batch bar only ever called `remove`. Selecting the book
+     * and looking for "put it back" found nothing.
+     */
+    const transport = new FakeTransport();
+    transport.respondWith((request) =>
+      request.url.includes('/browse/shelf')
+        ? { status: 200, headers: {}, json: { applied: 1, books: ['a'], failed: [] } }
+        : { status: 200, headers: {}, json: listing({
+            writable: true,
+            entries: [entry({ name: '下架.epub', path: '下架.epub', scanned: true, indexed: true, shelfState: 'off' })],
+          }) },
+    );
+    const { screen } = makeScreen(transport);
+    await screen.open();
+
+    // The row's own menu, which is the single-book path.
+    ([...screen.element.querySelectorAll<HTMLElement>('.manager-row .manager-more')][0]!).click();
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog')).not.toBeNull());
+    const putBack = [...screen.element.querySelectorAll<HTMLElement>('.dialog-options .button, .dialog button')]
+      .find((button) => button.textContent === '放回书架');
+    expect(putBack, 'a book off the shelf must offer "放回书架"').toBeTruthy();
+    // And it must *not* offer to take it off, which is the action that was there before.
+    const takeOff = [...screen.element.querySelectorAll<HTMLElement>('.dialog button')]
+      .find((button) => button.textContent === '从书架拿掉');
+    expect(takeOff).toBeUndefined();
+    putBack!.click();
+
+    await vi.waitFor(() => {
+      expect(transport.requests.some((request) => request.url.endsWith('/browse/shelf'))).toBe(true);
+    });
+    expect(JSON.parse(String(transport.requests.find((r) => r.url.endsWith('/browse/shelf'))!.body))).toEqual({
+      paths: ['下架.epub'],
+      action: 'add',
+    });
+  });
+
+  it('shows both shelf directions in the batch bar', async () => {
+    /*
+     * The batch bar needs them *both*, unconditionally.
+     *
+     * A selection can hold a mixture — some on the shelf, some off it — and the
+     * reader's intent is "make these match", which has a direction. Hiding one of the
+     * two behind a state check would mean a mixed selection could only be pushed one
+     * way, and the way it could not go is the one the report was about.
+     */
+    const transport = new FakeTransport();
+    transport.json(listing({
+      writable: true,
+      entries: [entry({ name: '下架.epub', path: '下架.epub', scanned: true, indexed: true, shelfState: 'off' })],
+    }));
+    const { screen } = makeScreen(transport);
+    await screen.open();
+    await selectAll(screen);
+    const labels = [...screen.element.querySelectorAll('.manager-actions .button')].map((button) => button.textContent);
+    expect(labels).toContain('下架');
+    expect(labels).toContain('加入书架');
   });
 
   it('keeps the form actions out of the fields-scan scroller', async () => {

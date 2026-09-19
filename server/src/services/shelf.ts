@@ -158,6 +158,36 @@ export class ShelfService {
   }
 
   /**
+   * Several books by id, in one round trip, as a map.
+   *
+   * The `user_books` join is applied for the same reason `get` applies it: an id
+   * the caller holds is not proof that *this* user may see the book, and a helper
+   * that skipped the check would be the one place in the service where an id alone
+   * was enough.
+   *
+   * Missing or invisible ids are simply absent from the map rather than an error:
+   * the callers are all "join this list of ids onto their books", and a book that
+   * vanished between the two queries is one fewer row to draw, not a failed
+   * request. `get` still throws, because a *single* book that cannot be found is
+   * exactly the case where the caller needs to know.
+   *
+   * `addedAt` is read from the join, so the DTOs here are identical to the ones
+   * `list` produces — which is what lets the continue-reading strip and the shelf
+   * grid be the same `Book` on the client.
+   */
+  getMany(userId: string, bookIds: string[]): Map<string, BookDto> {
+    const unique = [...new Set(bookIds)].filter((id) => id !== '');
+    if (unique.length === 0) return new Map();
+    const rows = this.db.all<BookRow>(
+      `SELECT ${BOOK_COLUMNS.split(',').map((c) => `b.${c.trim()}`).join(', ')}, ub.added_at
+       FROM books b JOIN user_books ub ON ub.book_id = b.id
+       WHERE ub.user_id = ? AND ub.hidden = 0 AND b.id IN (${unique.map(() => '?').join(',')})`,
+      userId, ...unique,
+    );
+    return new Map(rows.map((row) => [row.id, this.toDto(row)]));
+  }
+
+  /**
    * Applies the manual override layer, which sits above embedded metadata and
    * above anything a provider filled in.
    */

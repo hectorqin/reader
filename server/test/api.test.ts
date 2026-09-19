@@ -77,7 +77,7 @@ before(async () => {
   ctx.scanner = new Scanner(db, config, { info: () => {}, warn: () => {} });
   ctx.users = new UserService(db, config);
   ctx.shelf = new ShelfService(db);
-  ctx.sync = new SyncService(db);
+  ctx.sync = new SyncService(db, ctx.shelf);
   ctx.tts = new TtsService(config);
   ctx.browse = new BrowseService(db, config, ctx.shelf);
   app = buildApp(ctx);
@@ -458,6 +458,88 @@ test('a book whose file is gone is not offered as "continue reading"', async () 
   // And the shelf agrees, because the two now share the predicate.
   const shelf = await app.inject({ method: 'GET', url: '/api/v1/books?search=%E4%BC%9A%E6%B6%88%E5%A4%B1', headers: auth(session.token) });
   assert.equal((shelf.json() as { total: number }).total, 0);
+});
+
+test('a continue-reading item is the same book the shelf serves', async () => {
+  /*
+   * The card and the shelf have to agree about the *shape* of a book, not just
+   * about which books are visible.
+   *
+   * `/library/continue` used to answer the progress row's own naming —
+   * `{ bookId, title, author, percentage, chapterTitle, updatedAt, coverUrl }` —
+   * while the client's `ContinueReadingItem extends Book` and the tap path reads
+   * `book.id`. Nothing failed loudly: `title` and `coverUrl` are spelled the same
+   * in both shapes, so the card drew correctly, and tapping it routed to
+   * `#/book/undefined`, which 404s and is reported as "这本书不在书架上了".
+   *
+   * Asserting field-by-field against `GET /books` is the point: the two endpoints
+   * have to return the *same* object for the same book, or the strip is drawing a
+   * second, unofficial kind of book.
+   */
+  const session = await createUser('continueuser2');
+  await writeFile(join(booksDir, '接着读.epub'), await makeEpub({
+    id: 'urn:isbn:9780000000043', title: '接着读', creator: '某作者',
+  }));
+  await ctx.scanner.scan();
+
+  const listing = await app.inject({ method: 'GET', url: '/api/v1/books?search=%E6%8E%A5%E7%9D%80%E8%AF%BB', headers: auth(session.token) });
+  const shelfBook = (listing.json() as { items: Array<Record<string, unknown>> }).items[0]!;
+  ctx.db.run(
+    `INSERT INTO reading_progress (user_id, book_id, locator, percentage, chapter_title, device, updated_at)
+     VALUES (?,?,?,?,?,?,?)`,
+    session.userId, shelfBook.id, 'r1:0:c0', 0.4, '第二章', 'test', Date.now(),
+  );
+
+  const res = await app.inject({ method: 'GET', url: '/api/v1/library/continue', headers: auth(session.token) });
+  const item = (res.json() as { items: Array<Record<string, unknown>> }).items[0]!;
+
+  // `id` is the field the tap path reads, and the one whose absence produced the
+  // "不在书架上了" report. Checked first because it is the actual defect.
+  assert.equal(item.id, shelfBook.id, 'the card must carry `id`, not `bookId`');
+  assert.equal(item.bookId, undefined, 'the progress-row spelling must not be what the client sees');
+  for (const field of ['title', 'author', 'format', 'coverUrl', 'addedAt', 'manualFields']) {
+    assert.deepEqual(item[field], shelfBook[field], `\`${field}\` must match GET /books`);
+  }
+  assert.equal(item.percentage, 0.4);
+  assert.equal(item.chapterTitle, '第二章');
+  assert.equal(typeof item.lastReadAt, 'number');
+  // And the id it carries is directly openable — the check the tap performs.
+  const opened = await app.inject({ method: 'GET', url: `/api/v1/books/${String(item.id)}`, headers: auth(session.token) });
+  assert.equal(opened.statusCode, 200, 'the id a continue card carries must resolve to a book');
+});
+
+test('a manual metadata override reaches the continue-reading card', async () => {
+  /*
+   * The second half of the same defect, and the reason the fix reads through
+   * `ShelfService` rather than re-selecting columns.
+   *
+   * The old query joined `books` directly, which meant it answered the *embedded*
+   * title. A reader who fixed a garbled title in the library manager therefore saw
+   * the corrected name on the shelf and the garbled one on the card above it — the
+   * same book, two names, one screen.
+   */
+  const session = await createUser('overrideuser');
+  await writeFile(join(booksDir, '待改名.epub'), await makeEpub({
+    id: 'urn:isbn:9780000000044', title: '待改名', creator: '某人',
+  }));
+  await ctx.scanner.scan();
+
+  const listing = await app.inject({ method: 'GET', url: '/api/v1/books?search=%E5%BE%85%E6%94%B9%E5%90%8D', headers: auth(session.token) });
+  const book = (listing.json() as { items: Array<{ id: string }> }).items[0]!;
+  await app.inject({
+    method: 'PATCH', url: `/api/v1/books/${book.id}/metadata`,
+    headers: auth(session.token), payload: { title: '改好的名字' },
+  });
+  ctx.db.run(
+    `INSERT INTO reading_progress (user_id, book_id, locator, percentage, chapter_title, device, updated_at)
+     VALUES (?,?,?,?,?,?,?)`,
+    session.userId, book.id, 'r1:0:c0', 0.1, '第一章', 'test', Date.now(),
+  );
+
+  const res = await app.inject({ method: 'GET', url: '/api/v1/library/continue', headers: auth(session.token) });
+  const item = (res.json() as { items: Array<{ title: string; manualFields: string[] }> }).items[0]!;
+  assert.equal(item.title, '改好的名字');
+  assert.ok(item.manualFields.includes('title'));
 });
 
 test('an ambiguous "title - author" file name is kept whole rather than guessed at', async () => {

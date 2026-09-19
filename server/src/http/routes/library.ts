@@ -528,7 +528,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
    * deployment's own.
    */
   app.get('/api/v1/library/browse', { preHandler: auth }, async (request) => {
-    currentUser(request);
+    const user = currentUser(request);
     const query = request.query as Record<string, string | undefined>;
     /*
      * `page` and `pageSize` are read here rather than by the service, because they
@@ -536,8 +536,17 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
      * is parsed at the same boundary for the same reason. A directory can hold
      * thousands of entries, and the response is one page of them — see
      * `BrowseListing.entries`.
+     *
+     * The caller is passed through because a row's `shelfState` describes *their*
+     * shelf. It is the same rule the write endpoints already follow: the screen
+     * answers questions about the reader, not about the disk alone.
      */
-    return ctx.browse.list(query.path ?? '', numberParam(query.page, 1), numberParam(query.pageSize, 200));
+    return ctx.browse.list(
+      query.path ?? '',
+      numberParam(query.page, 1),
+      numberParam(query.pageSize, 200),
+      user.id,
+    );
   });
 
   app.post('/api/v1/library/browse/move', { preHandler: auth }, async (request) => {

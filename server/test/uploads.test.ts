@@ -193,7 +193,7 @@ before(async () => {
   ctx.scanner = new Scanner(db, config, { info: () => {}, warn: () => {} });
   ctx.users = new UserService(db, config);
   ctx.shelf = new ShelfService(db);
-  ctx.sync = new SyncService(db);
+  ctx.sync = new SyncService(db, ctx.shelf);
   ctx.tts = new TtsService(config);
   ctx.browse = new BrowseService(db, config, ctx.shelf);
   ctx.uploads = new UploadService(db, config, ctx.browse, ctx.scanner);
@@ -675,6 +675,80 @@ describe('batch management', () => {
       userId,
     );
     assert.equal(back!.n, before!.n);
+  });
+
+  test('a row reports whether its book is on the caller\'s shelf', async () => {
+    /*
+     * The file manager could describe the disk and not the shelf, and the two
+     * diverge the moment a reader takes a book off their shelf. Without this flag
+     * the screen offers "从书架拿掉" for every book — including the ones already off
+     * it — so a reader looking for the reason a book is missing from their shelf
+     * found the one screen that could explain it unable to say anything.
+     */
+    const listing = async (): Promise<Array<{ name: string; shelfState: string | null }>> =>
+      (await app.inject({
+        method: 'GET', url: `/api/v1/library/browse?path=${encodeURIComponent(batchRoot)}`, headers: auth(),
+      })).json<{ entries: Array<{ name: string; shelfState: string | null }> }>().entries;
+
+    // A fresh scan puts every book on every user's shelf, so both start `on`.
+    assert.deepEqual((await listing()).map((entry) => entry.shelfState), ['on', 'on']);
+
+    const removed = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { paths: [`${batchRoot}/卷一.epub`], action: 'remove' },
+    });
+    assert.equal(removed.statusCode, 200, removed.body);
+    const after = new Map((await listing()).map((entry) => [entry.name, entry.shelfState]));
+    assert.equal(after.get('卷一.epub'), 'off', 'a book taken off the shelf must say so');
+    assert.equal(after.get('卷二.epub'), 'on');
+  });
+
+  test('"加入书架" puts back a book that was taken off the shelf', async () => {
+    /*
+     * The reported defect, at the layer that caused it.
+     *
+     * `add` was a bare `INSERT OR IGNORE`, and a book taken off the shelf already
+     * *had* a `user_books` row — the one `remove` writes with `hidden = 1`, which is
+     * exactly what makes a removal reversible. So `OR IGNORE` skipped the insert and
+     * the book stayed hidden: the reader selected it, chose "加入书架", and nothing
+     * happened. Reversibility that exists in the schema but not in the endpoint is
+     * not reversibility.
+     */
+    const total = async (search: string): Promise<number> =>
+      (await app.inject({ method: 'GET', url: `/api/v1/books?search=${encodeURIComponent(search)}`, headers: auth() }))
+        .json<{ total: number }>().total;
+    assert.equal(await total('合集第一卷'), 0, 'precondition: the book is off the shelf');
+
+    const added = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { paths: [`${batchRoot}/卷一.epub`], action: 'add' },
+    });
+    assert.equal(added.statusCode, 200, added.body);
+    assert.equal((added.json() as { applied: number }).applied, 1);
+    assert.equal(await total('合集第一卷'), 1, '"add" must clear the hidden flag, not only create a missing row');
+
+    /*
+     * And a folder is one action, not forty.
+     *
+     * "Hide these forty scans from my shelf" is the batch the endpoint exists for,
+     * and its inverse has to be the same shape — otherwise putting a series back is
+     * a per-volume chore, which is the manual work the auto-add rule exists to
+     * avoid in the first place.
+     */
+    const off = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { paths: [batchRoot], action: 'remove' },
+    });
+    assert.equal(off.statusCode, 200, off.body);
+    assert.equal((off.json() as { applied: number }).applied, 2);
+    assert.equal(await total('合集第二卷'), 0);
+
+    const restored = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { paths: [batchRoot], action: 'unhide' },
+    });
+    assert.equal(restored.statusCode, 200, restored.body);
+    assert.equal(await total('合集第二卷'), 1, 'the alias must be the same write as `add`');
   });
 
   test('an unknown shelf action is refused', async () => {
