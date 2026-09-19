@@ -17,6 +17,21 @@ import { adoptWindow } from '../formats/windowed.ts';
 export interface ReaderViewOptions {
   container: HTMLElement;
   doc: BookDoc;
+  /**
+   * Makes an asset URL self-authenticating, for the requests the browser makes
+   * itself.
+   *
+   * The chapter path is the *server's*: a windowed EPUB's document arrives with its
+   * relative references rewritten to absolute URLs on the asset endpoint, and the
+   * browser — not this view — fetches every `<img>` and `<link>` in it. Those
+   * requests cannot carry an `Authorization` header, so without a token in the URL
+   * they are refused and the reader gets a chapter of broken-image placeholders.
+   *
+   * Applied *after* the allow-list decides a URL may be fetched at all (see
+   * `SanitiseOptions.signAssetUrl`), so a session token is never handed to an
+   * address out of a book.
+   */
+  signAssetUrl?(url: string): string | null;
   /** Called on every position change, throttled by the caller via the view. */
   onPositionChange?: (position: Position) => void;
   onChapterChange?: (index: number, section: Section) => void;
@@ -682,7 +697,9 @@ export class ReaderView {
     // stylesheets (already in `doc.styles`) can still override them, matching
     // the cascade the book was authored against.
     this.host.setContent(body, [...inlineStyles, ...this.doc.styles]);
-    sanitiseInjectedContent(this.host.shadow);
+    sanitiseInjectedContent(this.host.shadow, {
+      ...(this.options.signAssetUrl ? { signAssetUrl: this.options.signAssetUrl } : {}),
+    });
     await hydrateResources(this.host.shadow, this.resolver);
     // Images load asynchronously and change the flow height, which invalidates
     // any offset measured before they arrive.

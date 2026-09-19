@@ -125,6 +125,13 @@ async function audit(cdp, origin, scenes, results) {
   // Asked for the way the reader asks for it (a tap on the middle third) rather than
   // by setting the attribute: the tap is also a thing that has to keep working.
   await cdp.sleep(300);
+  // The chapter's first block, with the chrome up. Held so the assertion below can
+  // compare it against the same measurement taken with the chrome hidden.
+  const visibleChromeTextTop = await cdp.evaluate(`(() => {
+    const flow = document.querySelector('book-content')?.shadowRoot?.querySelector('.book-flow');
+    const first = flow?.querySelector('p, h1, h2, h3');
+    return first ? Math.round(first.getBoundingClientRect().top) : null;
+  })()`);
   const visibleChrome = await cdp.evaluate(`(() => {
     const rail = document.querySelector('.reader-rail');
     if (!rail) return { missing: true };
@@ -161,9 +168,18 @@ async function audit(cdp, origin, scenes, results) {
       footerHeight: Math.round(f.height),
       topbarVisibility: getComputedStyle(topbar).visibility,
       footerVisibility: getComputedStyle(footer).visibility,
+      topbarPointerEvents: getComputedStyle(topbar).pointerEvents,
+      footerPointerEvents: getComputedStyle(footer).pointerEvents,
+      topbarPosition: getComputedStyle(topbar).position,
+      footerPosition: getComputedStyle(footer).position,
       stageTop: Math.round(s.top),
       stageBottom: Math.round(s.bottom),
       viewportHeight: window.innerHeight,
+      textTop: (() => {
+        const flow = document.querySelector('book-content')?.shadowRoot?.querySelector('.book-flow');
+        const first = flow?.querySelector('p, h1, h2, h3');
+        return first ? Math.round(first.getBoundingClientRect().top) : null;
+      })(),
       rail: (() => {
         const el = document.querySelector('.reader-rail');
         if (!el) return null;
@@ -189,20 +205,41 @@ async function audit(cdp, origin, scenes, results) {
       })(),
     };
   })()`);
+  const hiddenTextTop = hidden.missing ? null : hidden.textTop;
   check(
     '收起工具栏: 顶栏与底栏一起走',
-    !hidden.missing && hidden.attribute === 'hidden' && hidden.topbarHeight <= 1 && hidden.footerHeight <= 1,
-    hidden.missing ? '没有找到阅读页' : `state=${hidden.attribute} 顶栏 ${hidden.topbarHeight}px / 底栏 ${hidden.footerHeight}px`,
+    !hidden.missing && hidden.attribute === 'hidden' && hidden.topbarVisibility === 'hidden' && hidden.footerVisibility === 'hidden',
+    hidden.missing ? '没有找到阅读页' : `state=${hidden.attribute} 顶栏 ${hidden.topbarVisibility} / 底栏 ${hidden.footerVisibility}`,
   );
   check(
     '收起工具栏: 两条栏都不可见，也不可点',
-    !hidden.missing && hidden.topbarVisibility === 'hidden' && hidden.footerVisibility === 'hidden',
-    hidden.missing ? 'n/a' : `topbar=${hidden.topbarVisibility} footer=${hidden.footerVisibility}`,
+    !hidden.missing && hidden.topbarPointerEvents === 'none' && hidden.footerPointerEvents === 'none',
+    hidden.missing ? 'n/a' : `topbar=${hidden.topbarPointerEvents} footer=${hidden.footerPointerEvents}`,
   );
+  // The page is the screen in *both* states, and the assertion is on the text rather
+  // than on the stage: the stage is inset by the bars' height deliberately (see
+  // `--reader-chrome-*`), so "the page fills the viewport" is the wrong property to
+  // ask for. The property that matters is the one the reader reported: showing or
+  // hiding the chrome must not move a single line. It has to be measured on the
+  // *chapter's own first block* — the element the reader is reading — and compared
+  // against the same measurement taken with the chrome visible.
   check(
-    '收起工具栏: 正文占满整屏',
-    !hidden.missing && hidden.stageTop <= 1 && hidden.viewportHeight - hidden.stageBottom <= 1,
-    hidden.missing ? 'n/a' : `正文 ${hidden.stageTop}..${hidden.stageBottom} / 视口 ${hidden.viewportHeight}`,
+    '收起工具栏: 正文一行的位置不变（工具栏是浮层）',
+    !hidden.missing && visibleChromeTextTop !== null && hiddenTextTop !== null && Math.abs(hiddenTextTop - visibleChromeTextTop) <= 1,
+    hidden.missing || visibleChromeTextTop === null || hiddenTextTop === null
+      ? 'n/a'
+      : `正文首行 y: 显示时 ${visibleChromeTextTop} / 收起后 ${hiddenTextTop}`,
+  );
+  // The bars float over the page, so they must be *positioned* — a bar back in the
+  // flow is a bar that takes height out of the page and moves the text, which is the
+  // whole of the reported defect. Asserted on the computed `position` rather than on
+  // the text not moving, because the two are different facts: a bar could be in flow
+  // and the text still not move if something else absorbed the height, and the next
+  // person to touch this layout needs the reason to be the assertion.
+  check(
+    '工具栏是浮动层，不占正文的高度',
+    !hidden.missing && hidden.topbarPosition === 'absolute' && hidden.footerPosition === 'absolute',
+    hidden.missing ? 'n/a' : `topbar=${hidden.topbarPosition} footer=${hidden.footerPosition}`,
   );
   // The rail goes with the bars, in this direction too. `visibility: hidden` is
   // asserted rather than merely "height is zero", because a control a finger can
@@ -321,10 +358,39 @@ async function audit(cdp, origin, scenes, results) {
       : '没有找到阅读指示',
   );
 
-  // Back to the chrome: the panel checks that follow need a page they can tap, and
-  // the screen is left in the state a reader spends most of their time in.
-  await cdp.tapMiddle();
-  await cdp.sleep(400);
+  // A tap in an outer third pages *and* brings the chrome back.
+  //
+  // The report is "点击左右侧翻页时工具栏不能显示出来", and it is one tap described
+  // from both of the directions it can fail. The outer thirds used to *replace* the
+  // page turn with a reveal while the chrome was hidden, on the reasoning that a
+  // hidden bar leaves no other way back — so a reader who tapped the right third to
+  // read on got no next page, and a toolbar they were not looking for. Asserting
+  // both halves is the only way to state the fix: either one alone passes on the
+  // behaviour that was reported.
+  //
+  // The page readout is read before and after, and the chrome is hidden first, so the
+  // assertion is about a state the reader can actually be in. The measurement is
+  // skipped rather than failed when the chapter has only one page — there is nothing
+  // to turn, and a check that failed there would be asserting about the fixture.
+  const beforeThird = await cdp.evaluate(
+    `(() => ({ chrome: document.querySelector('.reader-screen').dataset.chrome, page: document.querySelector('.progress-page')?.textContent ?? '', value: Number(document.querySelector('.progress-scrubber')?.value ?? '0') }))()`,
+  );
+  await cdp.tapThird(0.85);
+  await cdp.sleep(600);
+  const afterThird = await cdp.evaluate(
+    `(() => ({ chrome: document.querySelector('.reader-screen').dataset.chrome, page: document.querySelector('.progress-page')?.textContent ?? '', value: Number(document.querySelector('.progress-scrubber')?.value ?? '0') }))()`,
+  );
+  check(
+    '点右侧翻页: 既翻页又把工具栏叫回来',
+    afterThird.chrome === 'visible' && beforeThird.chrome === 'hidden' && afterThird.value > beforeThird.value,
+    `收起前 ${beforeThird.chrome}(${beforeThird.page}) → 点击后 ${afterThird.chrome}(${afterThird.page})`,
+  );
+
+  // The panel checks that follow need the chrome *up*, and it already is: the check
+  // above deliberately ends with it visible, because that is half of what it asserts.
+  // Tapping the middle to "restore" it would hide it and leave every panel check
+  // waiting for a button it cannot reach.
+  await cdp.sleep(200);
 
   for (const scene of scenes) {
     if (scene.openPanel) {
@@ -726,17 +792,30 @@ async function audit(cdp, origin, scenes, results) {
   // answers with the merged state, so the GET is entirely redundant — and it doubles
   // the traffic of every page turn for as long as the reader keeps reading.
   //
-  // The assertion is on GETs specifically rather than on the total: how many *writes*
-  // a session produces is a product decision that belongs to the coalescing window,
-  // but a GET that appears *alongside* a POST is never right, whatever the reader did.
+  // The assertion is on the *ratio*, and that is the whole of the fix's shape.
+  //
+  // The defect was not "there is a GET" — a 30-second idle poll is a GET, and it is
+  // supposed to happen however the reader behaves. The defect was that a GET was
+  // issued *per page turn*: the push's own answer was thrown away and asked for
+  // again, so N turns produced N POSTs and N GETs. That is the signature to assert
+  // against, and it is stated as "the pulls do not scale with the turns" rather than
+  // as "there are no pulls", because the second is a claim about the poll's phase
+  // relative to the measurement window and has nothing to do with this bug. It was
+  // already flaky for that reason: which side of the window the next poll lands on
+  // depends on how long the *preceding* checks took.
+  //
   // Every step above is held past the reader's own write debounce, so each is a
-  // separate session and each legitimately pushes; none of them may also pull.
+  // separate session and each legitimately pushes, which makes `posts` a real count
+  // of the reader's turns.
   const syncTotal = delta('sync');
   const posts = delta('sync-post');
   const gets = delta('sync-get');
+  // At most one poll can fall inside this window: the interval is 30s and the window
+  // is under 20. More than one, or one per push, is the doubling.
+  const paired = gets >= posts && posts > 1;
   check(
     '翻页不再每次都发两次 sync',
-    turned > 0 && posts > 0 && gets === 0,
+    turned > 0 && posts > 0 && gets <= 1 && !paired,
     turned === 0
       ? '阅读面没有可滚动的高度，这一轮没有发生翻页（检查因此无效）'
       : posts === 0

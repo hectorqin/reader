@@ -313,6 +313,29 @@ export class CDP {
   }
 
   /** A tap in the middle of the reading area, which is the chrome toggle. */
+  /**
+   * A tap in one of the reading surface's three tap zones.
+   *
+   * Dispatched as *touch* rather than a click, because that is what the gesture
+   * layer listens for and because the zone model is a touch model: a tap in the
+   * outer third of a phone screen is how a reader turns a page, and reproducing it
+   * as a mouse click would exercise a path the reader never takes.
+   *
+   * The zone is given as a fraction of the stage's width — 0.15 is the left third,
+   * 0.85 the right — rather than as the zone's name, so the call sites state where
+   * the finger went rather than asserting which zone the app thinks that is.
+   */
+  async tapThird(fraction) {
+    const box = await this.execute(`(() => {
+      const el = document.querySelector('.stage');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width * ${fraction}, y: r.top + r.height / 2 };
+    })()`);
+    if (!box) throw new Error('no .stage to tap');
+    await this.#tapAt(box.x, box.y);
+  }
+
   async tapMiddle() {
     const box = await this.execute(`(() => {
       const el = document.querySelector('.stage');

@@ -84,17 +84,22 @@
     {
       "name": "收起工具栏: 顶栏与底栏一起走",
       "ok": true,
-      "detail": "state=hidden 顶栏 1px / 底栏 0px"
+      "detail": "state=hidden 顶栏 hidden / 底栏 hidden"
     },
     {
       "name": "收起工具栏: 两条栏都不可见，也不可点",
       "ok": true,
-      "detail": "topbar=hidden footer=hidden"
+      "detail": "topbar=none footer=none"
     },
     {
-      "name": "收起工具栏: 正文占满整屏",
+      "name": "收起工具栏: 正文一行的位置不变（工具栏是浮层）",
       "ok": true,
-      "detail": "正文 1..844 / 视口 844"
+      "detail": "正文首行 y: 显示时 78 / 收起后 78"
+    },
+    {
+      "name": "工具栏是浮动层，不占正文的高度",
+      "ok": true,
+      "detail": "topbar=absolute footer=absolute"
     },
     {
       "name": "收起工具栏: 快捷按钮跟着两条栏一起收",
@@ -137,6 +142,11 @@
       "detail": "章节名 left=20 页码 left=20"
     },
     {
+      "name": "点右侧翻页: 既翻页又把工具栏叫回来",
+      "ok": true,
+      "detail": "收起前 hidden(第 1/4 页) → 点击后 visible(第 2/4 页)"
+    },
+    {
       "name": "目录: 面板不遮住整页",
       "ok": true,
       "detail": "面板从 y=321 开始，正文区 y=54"
@@ -154,12 +164,12 @@
     {
       "name": "目录: 面板高度不超过阅读区",
       "ok": true,
-      "detail": "面板 523px / 阅读区 701px"
+      "detail": "面板 523px / 阅读区 700px"
     },
     {
       "name": "顶栏: 三个按钮左右两边对齐",
       "ok": true,
-      "detail": "左 12px / 右 12px，两道间隙 6px / 6px"
+      "detail": "左 12px / 右 12px，两道间隙 136px / 136px"
     },
     {
       "name": "底栏: 页码与下一章右边对齐，滑杆与上一章左边对齐",
@@ -179,12 +189,12 @@
     {
       "name": "底栏: 有页码与阅读进度读数",
       "ok": true,
-      "detail": "page=\"第 1/4 页\" nav=\"阅读进度：0%\""
+      "detail": "page=\"第 2/4 页\" nav=\"阅读进度：27%\""
     },
     {
       "name": "底栏: 滑杆量的是章节内页数，不是全书百分比",
       "ok": true,
-      "detail": "min=1 max=4 value=1 读数=\"第 1/4 页\"（章节共 4 页）"
+      "detail": "min=1 max=4 value=2 读数=\"第 2/4 页\"（章节共 4 页）"
     },
     {
       "name": "底栏: 拖动滑杆切到对应页",
@@ -219,12 +229,12 @@
     {
       "name": "翻页不再每次都发两次 sync",
       "ok": true,
-      "detail": "8 次翻页 + 6 秒静默：1 次 POST / 0 次 GET（共 1 次 sync 请求）"
+      "detail": "8 次翻页 + 6 秒静默：1 次 POST / 1 次 GET（共 2 次 sync 请求）"
     },
     {
       "name": "EPUB: 章节里的图片真的画出来了",
       "ok": true,
-      "detail": "naturalWidth=4 显示 4x4 src=\"/api/v1/books/review-illustrated/assets?__reader-book-resource__=1&ref=OEBPS%2FI\""
+      "detail": "naturalWidth=240 显示 240x160 src=\"/api/v1/books/review-illustrated/assets?__reader-book-resource__=1&ref=OEBPS%2FI\""
     },
     {
       "name": "EPUB: 插图下面的正文也在",
