@@ -1000,20 +1000,48 @@ book-content {
 /*
  * The magnifier inside the search field.
  *
- * Centred on the field's *centre*: `inset-block: 0` with `margin-block: auto` resolves to
- * the middle of the containing block, which is where the field's own text is centred too.
- * The glyph is inline and the box is a line box, so "centre the box" and "centre the
- * glyph" are the same instruction here.
+ * ## The bug this rule exists to remove
  *
- * The old rule anchored only the inline axis and left the block position to the field's
- * top edge, which put the glyph's box where the field's centre was and the ink half an em
- * above that — the same defect as the buttons, in a different container.
+ * The previous version said `inset-block: 0; margin-block: auto` and the comment above
+ * it claimed "the glyph is inline and the box is a line box, so centring the box and
+ * centring the glyph are the same instruction". That premise is false, and it is false
+ * for a reason that has nothing to do with this glyph: **`position: absolute` forces
+ * `display: block`**. The `<span>` was therefore a *block* box, not a line box, and a
+ * block box does not centre its line box vertically — it puts it at the top.
+ *
+ * So the rule did exactly what it said (the box was centred: measured 75.98..120.19 in
+ * a field of 75.98..120.19, dead centre) and produced exactly the wrong picture: the
+ * line box is 1em tall and sits at the box's top, so a 1.05rem glyph's ink landed with
+ * its centre at y=84 while the field's centre was y=98. Fourteen pixels high — the
+ * reported "搜索按钮没有垂直对齐".
+ *
+ * ## Why `grid` and not a transform
+ *
+ * `place-content: center` centres the *line box* inside the box, which — with the icon
+ * font's symmetric ascent/descent (see `tools/icons/build.mjs`) — centres the ink too.
+ * That is the same idiom `.icon-button` already uses, so "a glyph in a box" has one
+ * answer in this stylesheet rather than two.
+ *
+ * The alternative, `top: 50%; transform: translateY(-50%)`, also works and is worse: it
+ * has to be repeated at every call site and can be omitted at one, it makes the offset a
+ * fact about a *transform* rather than about the layout, and it interacts badly with any
+ * future padding (the percentage resolves against the padding box while the ink does
+ * not). Saying it with the layout system means the field can change height and the
+ * magnifier follows without this rule being touched.
  */
 .search-glyph {
   position: absolute;
   inset-inline-start: 0.7rem;
   inset-block: 0;
   margin-block: auto;
+  /*
+   * The box is only as wide as the glyph and as tall as the field. `grid` +
+   * `place-content` is what turns "the box is centred" into "the ink is centred" — see
+   * `.icon-button` for the same construction.
+   */
+  display: grid;
+  place-content: center;
+  width: 1.2rem;
   font-size: 1.05rem;
   color: var(--reader-muted);
   pointer-events: none;
@@ -2973,6 +3001,21 @@ book-content {
 /* The badge a reader needs to see is the one explaining a missing book. */
 .manager-badge.warn {
   border-color: color-mix(in srgb, var(--reader-accent) 60%, transparent);
+  color: var(--reader-accent);
+}
+
+/*
+ * "不在书架" — the exception mark.
+ *
+ * Filled rather than outlined, and in the accent colour, because it is the one
+ * badge in the row that means "you are looking at the reason this book is missing
+ * from your shelf". The `warn` style is an outline with accent text and is the
+ * other explainer badge; this one is solid so the two are distinguishable at a
+ * glance in a list where both can appear.
+ */
+.manager-badge.off {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--reader-accent) 16%, transparent);
   color: var(--reader-accent);
 }
 

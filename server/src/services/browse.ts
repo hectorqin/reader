@@ -60,6 +60,24 @@ export interface BrowseEntry {
   ext: string;
   /** True when this path is what the index actually holds for that book. */
   indexed: boolean;
+  /**
+   * Whether the *caller's* shelf holds the book at this path.
+   *
+   * `null` for a path that is not an indexed book at all (a folder, a stray
+   * `.nfo`, an archive's page image), because "not on your shelf" would be a
+   * category error for a row that is not a book.
+   *
+   * This exists because the library screen could describe what is on the *disk*
+   * and not what is on the *shelf*, and the two are different sets the moment a
+   * reader takes a book off their shelf. Without it the file manager offered only
+   * "下架" — an action for a book that is on the shelf — with no way to see that a
+   * book was off it, and no way to put one back: the reader's only route to
+   * restoring a book was to guess, select it, and hope.
+   *
+   * It is per-caller rather than a property of the entry, so it is filled in by
+   * `list` when the caller supplies a user id.
+   */
+  shelfState: 'on' | 'off' | null;
 }
 
 export interface BrowseListing {
@@ -150,11 +168,11 @@ export class BrowseService {
 
   // ---- reads ----
 
-  list(relPathInput: string, page = 1, pageSize = BROWSE_PAGE_SIZE): Promise<BrowseListing> {
-    return this.listSync(relPathInput, page, pageSize);
+  list(relPathInput: string, page = 1, pageSize = BROWSE_PAGE_SIZE, userId?: string): Promise<BrowseListing> {
+    return this.listSync(relPathInput, page, pageSize, userId);
   }
 
-  private async listSync(relPathInput: string, page: number, pageSize: number): Promise<BrowseListing> {
+  private async listSync(relPathInput: string, page: number, pageSize: number, userId?: string): Promise<BrowseListing> {
     const relPath = relPathInput === '' ? '' : assertSafeRel(relPathInput);
     const abs = resolveInside(this.config.booksDir, relPath);
     const info = await stat(abs).catch(() => null);
@@ -186,7 +204,52 @@ export class BrowseService {
         scanned: entry.isFile() && this.isBookFile(entry.name),
         ext: extensionOf(entry.name),
         indexed: Boolean(this.fileRow(childRel)),
+        // Filled in by the pass below, which is the only place that knows the
+        // caller: `listSync` does not take a user id when it is called from
+        // `upload`'s own destination probe.
+        shelfState: null,
       });
+    }
+
+    /*
+     * The shelf flag, resolved in one query for the whole page.
+     *
+     * Asked per row it would be one query per file in a folder of four thousand
+     * scans — on the read path of the screen that exists because reading the disk
+     * is slow. The map is built from a single `IN`, and a path whose book has no
+     * `user_books` row (or has `hidden = 1`) is `'off'`: the shelf's own predicate
+     * is `hidden = 0`, and being off the shelf and being hidden are the same state
+     * seen from opposite ends.
+     */
+    if (userId) {
+      const bookIdsByPath = new Map<string, string>();
+      const indexedPaths = entries.filter((entry) => entry.indexed).map((entry) => entry.path);
+      if (indexedPaths.length > 0) {
+        const fileRows = this.db.all<{ rel_path: string; book_id: string }>(
+          `SELECT rel_path, book_id FROM book_files WHERE rel_path IN (${indexedPaths.map(() => '?').join(',')})`,
+          ...indexedPaths,
+        );
+        for (const row of fileRows) bookIdsByPath.set(row.rel_path, row.book_id);
+      }
+      const onShelf = new Set<string>();
+      const bookIds = [...new Set(bookIdsByPath.values())];
+      if (bookIds.length > 0) {
+        const rows = this.db.all<{ book_id: string }>(
+          `SELECT book_id FROM user_books
+           WHERE user_id = ? AND hidden = 0 AND book_id IN (${bookIds.map(() => '?').join(',')})`,
+          userId, ...bookIds,
+        );
+        for (const row of rows) onShelf.add(row.book_id);
+      }
+      for (const entry of entries) {
+        const bookId = bookIdsByPath.get(entry.path);
+        if (bookId === undefined) continue;
+        // A folder's own `shelfState` stays null: the flag describes the row the
+        // reader can tap, and a folder is not a book even when the books inside it
+        // are on the shelf. Selection acts on the path, and `batchShelf` already
+        // fans a folder out to the books under it.
+        if (entry.type !== 'dir') entry.shelfState = onShelf.has(bookId) ? 'on' : 'off';
+      }
     }
 
     /*
@@ -465,32 +528,59 @@ export class BrowseService {
     return rows.map((row) => row.book_id);
   }
 
+  /**
+   * The two directions, with the aliases folded in.
+   *
+   * `add`/`unhide` and `remove`/`hide` are the same two writes under two names.
+   * The aliases date from when the API was going to distinguish "put it on my
+   * shelf" from "stop hiding it"; there is only one flag, so there is only one
+   * pair of operations, and a second name for each is kept because dropping a
+   * documented value is a breaking change. They are normalised here, at the one
+   * place that writes, so the rest of the method reasons about two cases.
+   */
   private setShelfState(bookId: string, userId: string, action: 'add' | 'remove' | 'hide' | 'unhide', now: number): void {
-    if (action === 'add') {
+    if (action === 'add' || action === 'unhide') {
+      /*
+       * `add` (and its synonym `hide`... see below) both *create* the row if it is
+       * absent and *clear the flag* if it is present.
+       *
+       * The upsert is the whole fix for the reported "书库的书不再自动加入书架，
+       * 需要手动加入". `add` used to be a bare `INSERT OR IGNORE`, which reads as
+       * "add it if it is not already there" and behaves as "do nothing" in the one
+       * case that matters: a book the reader had previously taken off the shelf
+       * already *has* a `user_books` row — the row `remove` wrote with `hidden = 1`
+       * precisely so the removal would be reversible — so `OR IGNORE` skipped it
+       * and the book stayed hidden. Selecting a book, choosing "加入书架", and
+       * watching it not appear is the exact shape of "需要手动加入，但加了也没用".
+       *
+       * `added_at` is refreshed only when the row is actually being re-added, so
+       * "最近入库" keeps meaning "when I first got this book" for a book that never
+       * left, and means "now" for one that did.
+       */
       this.db.run(
-        'INSERT OR IGNORE INTO user_books (user_id, book_id, added_at) VALUES (?,?,?)',
+        `INSERT INTO user_books (user_id, book_id, added_at, hidden) VALUES (?,?,?,0)
+         ON CONFLICT(user_id, book_id) DO UPDATE SET hidden = 0,
+           added_at = CASE WHEN user_books.hidden = 1 THEN excluded.added_at ELSE user_books.added_at END`,
         userId, bookId, now,
       );
       return;
     }
-    if (action === 'remove') {
-      // `hidden` rather than a delete: the book stays in the library and stays
-      // indexed, so the reader can put it back. Deleting the row would look
-      // identical on the shelf and be irreversible.
-      this.db.run('UPDATE user_books SET hidden = 1 WHERE user_id = ? AND book_id = ?', userId, bookId);
-      this.db.run(
-        'INSERT OR IGNORE INTO user_books (user_id, book_id, added_at, hidden) VALUES (?,?,?,1)',
-        userId, bookId, now,
-      );
-      return;
-    }
-    // unhide: an entry that was never added is left alone rather than created —
-    // "put it back" cannot resurrect a shelf entry that never existed.
+    // `remove` keeps the row: `hidden` rather than a delete, so the book stays in
+    // the library and stays indexed and the reader can put it back. Deleting the
+    // row would look identical on the shelf and be irreversible.
+    this.db.run('UPDATE user_books SET hidden = 1 WHERE user_id = ? AND book_id = ?', userId, bookId);
+    /*
+     * And it *creates* the row when there is none.
+     *
+     * A book the reader never added, then took off a shelf it was never on, has no
+     * row; without this insert the "off the shelf" state would have nowhere to live
+     * and the book would come back on the next page load — the shelf's predicate is
+     * `hidden = 0`, and a missing row is not hidden.
+     */
     this.db.run(
-      `UPDATE user_books SET hidden = 0 WHERE user_id = ? AND book_id = ?`,
-      userId, bookId,
+      'INSERT OR IGNORE INTO user_books (user_id, book_id, added_at, hidden) VALUES (?,?,?,1)',
+      userId, bookId, now,
     );
-    void action;
   }
 
   /**

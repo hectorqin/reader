@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Db } from '../db/index.ts';
 import { badRequest } from '../lib/errors.ts';
+import type { BookDto, ShelfService } from './shelf.ts';
 
 /**
  * Sync payload is deliberately small and append-only where possible (§4): the
@@ -39,8 +40,41 @@ export interface SyncPushRequest {
   notes?: NoteRecord[];
 }
 
+/**
+ * One row of the "继续阅读" strip: a whole book plus where the reader left off.
+ *
+ * It is a `BookDto` with the progress flattened onto it, and that is the *contract*
+ * rather than a convenience. The client's `ContinueReadingItem extends Book`, so
+ * the card is drawn from the same columns as the shelf's own grid and opens through
+ * the same `openBook(book)` path — which reads `book.id`.
+ *
+ * It used to answer the progress row's own shape instead: `bookId` and `updatedAt`
+ * where the card wanted `id` and `lastReadAt`. Nothing failed loudly — the card
+ * rendered, because `title` and `coverUrl` happened to be spelled the same — and
+ * tapping it called `openBook` with `{ id: undefined }`, i.e. `#/book/undefined`,
+ * which 404s and is reported as "这本书不在书架上了". A field-name drift between
+ * two hand-written types, with no request that ever contains the right name.
+ */
+export type ContinueReadingItem = BookDto & {
+  percentage: number;
+  chapterTitle: string;
+  /** When the reader last turned a page here; `null` if progress was never pushed. */
+  lastReadAt: number | null;
+};
+
 export class SyncService {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    /**
+     * The shelf's own DTO builder, injected rather than duplicated.
+     *
+     * This endpoint's whole job is "the shelf, ordered by recency of reading", so
+     * a book it returns has to be byte-for-byte what `GET /books` would return for
+     * the same row — overrides applied, `addedAt` resolved, cover URL built. A
+     * second `SELECT` with its own column list is how the original drift happened.
+     */
+    private readonly shelf: ShelfService,
+  ) {}
 
   /**
    * Merges a client batch. Conflicts resolve by last-writer-wins on updatedAt,
@@ -179,11 +213,17 @@ export class SyncService {
     };
   }
 
-  /** Continue-reading list: newest progress first, joined with book titles. */
-  recentlyRead(userId: string, limit = 20): Array<{
-    bookId: string; title: string; author: string; percentage: number;
-    chapterTitle: string; updatedAt: number; coverUrl: string | null;
-  }> {
+  /**
+   * Continue-reading list: newest progress first, as whole books.
+   *
+   * The ordering key is `reading_progress.updated_at` — "what did I read last",
+   * which is the question the strip asks. Everything else about the row comes from
+   * `ShelfService`, because the answer to "which book is this" has to be the same
+   * answer the shelf gives: identical overrides, identical `addedAt`, identical
+   * cover URL. See `ContinueReadingItem` for why that is the contract rather than
+   * duplication.
+   */
+  recentlyRead(userId: string, limit = 20): ContinueReadingItem[] {
     /*
      * The visibility rule is `ShelfService.list`'s rule, character for character.
      *
@@ -204,27 +244,40 @@ export class SyncService {
      * keeps the predicate readable as "what the shelf would show".
      */
     const rows = this.db.all<{
-      book_id: string; title: string; author: string; percentage: number;
-      chapter_title: string; updated_at: number; cover_path: string | null;
+      book_id: string; percentage: number; chapter_title: string; updated_at: number;
     }>(
-      `SELECT p.book_id, b.title, b.author, p.percentage, p.chapter_title, p.updated_at, b.cover_path
+      `SELECT p.book_id, p.percentage, p.chapter_title, p.updated_at
        FROM reading_progress p
-       JOIN books b ON b.id = p.book_id
-       JOIN user_books ub ON ub.book_id = b.id AND ub.user_id = p.user_id
+       JOIN user_books ub ON ub.book_id = p.book_id AND ub.user_id = p.user_id
        WHERE p.user_id = ? AND ub.hidden = 0
-         AND EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)
+         AND EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = p.book_id AND f.missing = 0)
        ORDER BY p.updated_at DESC LIMIT ?`,
       userId, limit,
     );
-    return rows.map((row) => ({
-      bookId: row.book_id,
-      title: row.title,
-      author: row.author,
-      percentage: row.percentage,
-      chapterTitle: row.chapter_title,
-      updatedAt: row.updated_at,
-      coverUrl: row.cover_path ? `/api/v1/books/${row.book_id}/cover` : null,
-    }));
+    /*
+     * Read through `shelf.getMany` rather than re-selecting the book columns here.
+     *
+     * The old query joined `books` for `title`, `author` and `cover_path`, which
+     * looks equivalent and is not: it skipped the manual-override layer, so a book
+     * renamed in the library manager was still offered under its embedded title —
+     * and it could not produce `manualFields` or `addedAt` at all, which is why the
+     * client's type had to be widened to a `Book` while the response stayed narrow.
+     *
+     * A row that disappears between the two statements (a rescan mid-request) is
+     * dropped rather than rendered, for the same reason the `EXISTS` is above:
+     * offering a book the reader cannot open is the defect this endpoint had.
+     */
+    const byId = this.shelf.getMany(userId, rows.map((row) => row.book_id));
+    return rows.flatMap((row) => {
+      const book = byId.get(row.book_id);
+      if (!book) return [];
+      return [{
+        ...book,
+        percentage: row.percentage,
+        chapterTitle: row.chapter_title,
+        lastReadAt: row.updated_at,
+      }];
+    });
   }
 
   /** Client-generated note ids are accepted, but this keeps the API ergonomic. */

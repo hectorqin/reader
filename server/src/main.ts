@@ -47,7 +47,7 @@ async function main(): Promise<void> {
   });
   ctx.users = new UserService(db, config);
   ctx.shelf = new ShelfService(db);
-  ctx.sync = new SyncService(db);
+  ctx.sync = new SyncService(db, ctx.shelf);
   ctx.tts = new TtsService(config);
   ctx.browse = new BrowseService(db, config, ctx.shelf);
   ctx.uploads = new UploadService(db, config, ctx.browse, ctx.scanner);

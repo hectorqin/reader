@@ -259,6 +259,83 @@ describe('the shelf pager', () => {
     expect(requestedPages(transport)).toEqual([1]);
   });
 
+  it('opens a continue card through the same book object the shelf uses', async () => {
+    /*
+     * The defect in #40, at the layer the reader touches.
+     *
+     * The server answered `/library/continue` with the *progress row's* naming —
+     * `{ bookId, title, author, percentage, chapterTitle, updatedAt, coverUrl }` —
+     * while the card is typed as `ContinueReadingItem extends Book` and the tap path
+     * reads `book.id`. Nothing failed loudly: `title` and `coverUrl` are spelled the
+     * same in both shapes, so the card drew correctly, and tapping it handed the
+     * shell `{ id: undefined }` — i.e. `#/book/undefined`, which 404s and surfaces as
+     * "这本书不在书架上了".
+     *
+     * The request here is the *real* one (no item field is spelled `bookId`), and the
+     * assertion is on what the tap passes on, because that is the value the shell
+     * routes with. A test that asserted the card *rendered* passed before the fix.
+     */
+    const transport = new FakeTransport();
+    transport.respondWith((request) => {
+      if (request.url.startsWith('/api/v1/library/continue')) {
+        return { status: 200, headers: {}, json: { items: [{ ...book(1), percentage: 0.4, chapterTitle: '第二章', lastReadAt: Date.now() }] } };
+      }
+      return { status: 200, headers: {}, json: page(0, 0, 0) };
+    });
+    const { screen, calls } = await makeScreen(transport);
+    await screen.show();
+    const card = screen.element.querySelector<HTMLElement>('.continue-card');
+    expect(card, 'a continue card must be drawn').toBeTruthy();
+    card!.click();
+    expect(calls).toContain('book:b1');
+    expect(calls).not.toContain('book:undefined');
+  });
+
+  it('fills in a missing id from the field the old server sent', async () => {
+    /*
+     * The compatibility direction, and it is deliberate rather than defensive.
+     *
+     * The upstream bug was a *naming* drift between two hand-written types, and the
+     * one thing that made it expensive was that it was silent: a reader on an older
+     * server (or the Android WebView, which caches the client separately from the
+     * API) got a card that drew and a tap that went nowhere, with no error anywhere.
+     * Accepting `bookId` as a synonym means the tap works either way round, so the
+     * fix cannot be half-deployed into a broken state.
+     */
+    const transport = new FakeTransport();
+    transport.respondWith((request) => {
+      if (request.url.startsWith('/api/v1/library/continue')) {
+        return { status: 200, headers: {}, json: { items: [{ bookId: 'legacy-1', title: '旧服务端的书', author: '', percentage: 0.2, chapterTitle: '', updatedAt: 1, coverUrl: null }] } };
+      }
+      return { status: 200, headers: {}, json: page(0, 0, 0) };
+    });
+    const { screen, calls } = await makeScreen(transport);
+    await screen.show();
+    screen.element.querySelector<HTMLElement>('.continue-card')?.click();
+    expect(calls).toContain('book:legacy-1');
+  });
+
+  it('does not draw a card it cannot open', async () => {
+    /*
+     * And the last line of defence.
+     *
+     * A card whose book has no id at all is a card with a dead tap — the exact
+     * symptom reported as "提示书本不在书架上". Dropping it is better than drawing it:
+     * the reader loses one shortcut from a row of many, instead of gaining a control
+     * that lies about being one.
+     */
+    const transport = new FakeTransport();
+    transport.respondWith((request) => {
+      if (request.url.startsWith('/api/v1/library/continue')) {
+        return { status: 200, headers: {}, json: { items: [{ title: '没有 id 的书', author: '', percentage: 0.2, chapterTitle: '', coverUrl: null }] } };
+      }
+      return { status: 200, headers: {}, json: page(0, 0, 0) };
+    });
+    const { screen } = await makeScreen(transport);
+    await screen.show();
+    expect(screen.element.querySelector('.continue-card')).toBeNull();
+  });
+
   it('goes back to page one when the sort changes', async () => {
     const transport = new FakeTransport();
     transport.respondWith((request) =>

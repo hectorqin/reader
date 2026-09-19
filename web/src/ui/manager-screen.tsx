@@ -66,6 +66,25 @@ type Dialog =
  */
 const PAGE_SIZE = 200;
 
+/**
+ * What each shelf action is called, in the reader's words.
+ *
+ * `add` and `unhide` are two repairs for the same symptom and are *not* given the
+ * same label, because the server treats them as different operations: `unhide`
+ * clears the flag on a book that was deliberately taken off the shelf, while `add`
+ * creates the shelf row a book never had. Collapsing the labels would hide that
+ * the two are different writes, and the day one of them turns out to be wrong the
+ * report would say "放回书架 didn't work" for both.
+ */
+const SHELF_ACTION_LABELS: Record<ShelfAction, string> = {
+  add: '加入书架',
+  remove: '下架',
+  // Aliases of the two above — the server accepts both spellings and folds them
+  // into one write, so the labels are the same words rather than a second verb.
+  hide: '下架',
+  unhide: '加入书架',
+};
+
 interface ManagerState {
   path: string;
   /**
@@ -386,6 +405,7 @@ export class ManagerScreen {
           onRename={(path, name) => void this.promptRename(path, name)}
           onMetadata={() => void this.promptBatchMetadata()}
           onShelve={() => void this.batchShelf('remove')}
+          onUnshelve={() => void this.batchShelf('unhide')}
           onMove={() => void this.promptMove()}
           onDelete={() => void this.confirmDelete()}
         />
@@ -453,10 +473,24 @@ export class ManagerScreen {
       this.toast('书库是只读挂载，无法修改');
       return;
     }
+    /*
+     * The shelf entry names the action that applies to *this* book.
+     *
+     * `shelfState` is `'on'`, `'off'` or `null`, and only one of the three means
+     * anything here: `null` is a folder or a non-book, which has no shelf action at
+     * all. Offering "从书架拿掉" for a book that is already off the shelf was the
+     * visible half of the reported defect — the menu answered the same word whatever
+     * the book's state, so a reader looking at a book *missing* from their shelf had
+     * no way to put it back.
+     */
     const action = await this.pick(`「${entry.name}」`, [
       { value: 'select', label: '选择' },
       { value: 'metadata', label: '改资料' },
-      { value: 'shelve', label: '从书架拿掉' },
+      ...(entry.shelfState === 'on'
+        ? [{ value: 'shelve:remove', label: '从书架拿掉' }]
+        : entry.shelfState === 'off'
+          ? [{ value: 'shelve:add', label: '放回书架' }]
+          : []),
       { value: 'rename', label: '重命名' },
       { value: 'move', label: '移动到…' },
       { value: 'delete', label: '删除' },
@@ -470,7 +504,8 @@ export class ManagerScreen {
     // include a batch ticked earlier and now off screen.
     this.select([entry.path]);
     if (action === 'metadata') return this.promptBatchMetadata();
-    if (action === 'shelve') return this.batchShelf('remove');
+    if (action === 'shelve:add') return this.batchShelf('add');
+    if (action === 'shelve:remove') return this.batchShelf('remove');
     if (action === 'rename') return this.promptRename(entry.path, entry.name);
     if (action === 'move') return this.promptMove();
     if (action === 'delete') return this.confirmDelete();
@@ -537,10 +572,27 @@ export class ManagerScreen {
     );
   }
 
+  /**
+   * Puts books on the caller's shelf, or takes them off it.
+   *
+   * All four of the server's actions are reachable now, which is the fix for the
+   * half of the reported defect the menu could not express: the screen could only
+   * ever call `remove`, so a book that was off the shelf stayed off it.
+   *
+   * Only `remove` confirms, and only `remove` needs to: it is the one that takes
+   * something away. Adding is the reader saying "show me this", and a dialog in
+   * front of it would be a dialog in front of the repair.
+   *
+   * `add` and `unhide` are kept distinct rather than collapsed into one "put it
+   * back", because they are different repairs for the same symptom: `unhide`
+   * clears the flag on a book that was deliberately taken off, and `add` creates
+   * the shelf row a book never had. The server refuses to guess between them (see
+   * `setShelfState`), so the client must say which one it means.
+   */
   private async batchShelf(action: ShelfAction): Promise<void> {
     const paths = this.selectedList();
     if (paths.length === 0) return;
-    const label = action === 'remove' ? '下架' : '上架';
+    const label = SHELF_ACTION_LABELS[action];
     if (action === 'remove') {
       const ok = await this.confirm(
         `${label} ${paths.length} 项？`,
@@ -903,6 +955,15 @@ function Row({ entry, selecting, selected, onActivate, onToggle, onMenu }: RowPr
   if (entry.hiddenByRule) meta.push(<span className="manager-badge warn">扫描忽略</span>);
   else if (entry.scanned) meta.push(<span className="manager-badge">书籍</span>);
   if (entry.hidden && !entry.hiddenByRule) meta.push(<span className="manager-badge">隐藏</span>);
+  /*
+   * The shelf badge, and only when the answer is "off".
+   *
+   * "在书架上" on every row of a folder of books that are all on the shelf is a
+   * column of noise that hides the one row that is not. The reader is here to find
+   * the books that are *missing* from the shelf — that is the question this screen
+   * exists to answer — so the mark is on the exception.
+   */
+  if (entry.shelfState === 'off') meta.push(<span className="manager-badge off">不在书架</span>);
 
   return (
     <div
@@ -981,6 +1042,7 @@ interface SelectionBarProps {
   onRename(path: string, name: string): void;
   onMetadata(): void;
   onShelve(): void;
+  onUnshelve(): void;
   onMove(): void;
   onDelete(): void;
 }
@@ -997,7 +1059,17 @@ function SelectionBar(props: SelectionBarProps): JSX.Element {
             <Button onClick={() => props.onRename(props.only!, name)}>重命名</Button>
           ) : null}
           <Button onClick={props.onMetadata}>改资料</Button>
+          {/*
+            Both shelf directions are shown, and shown *always*.
+            The row badge marks the individual book that is off the shelf, and the
+            menu offers the matching single action; this bar is the batch one, where
+            a selection can hold a mixture and where the reader's intent is "make
+            these match", which has a direction. Hiding one of the two behind a
+            state check would mean a selection that is half on and half off the shelf
+            could only be pushed one way.
+          */}
           <Button onClick={props.onShelve}>下架</Button>
+          <Button onClick={props.onUnshelve}>加入书架</Button>
           <Button onClick={props.onMove}>移动…</Button>
           <Button className="danger" onClick={props.onDelete}>
             删除

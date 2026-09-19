@@ -406,6 +406,18 @@ export function createReviewServer({ port = 5199 } = {}) {
         scanned: true,
         ext: 'epub',
         indexed: true,
+        /*
+         * One book is deliberately *off* the shelf.
+         *
+         * The library screen's whole reason to exist is answering "why is this book
+         * not on my shelf", and the answer for a book the reader took off it is a
+         * badge and an action. A fixture where every row is `'on'` renders a screen
+         * with neither, so the review would certify the state where the feature is
+         * invisible — the same way the continue-reading fixture certified a card that
+         * could not be opened. `三体.epub` is the one row that carries the mark, and
+         * the scene's label names it.
+         */
+        shelfState: entry.type === 'dir' ? null : entry.name === '三体.epub' ? 'off' : 'on',
       }));
       const from = (page - 1) * pageSize;
       return json(reply, {
@@ -422,11 +434,20 @@ export function createReviewServer({ port = 5199 } = {}) {
       });
     }
     if (path === '/api/v1/library/continue') {
-      // A `ContinueReadingItem` *is* a `Book` with the progress flattened onto it,
-      // not a book-with-progress pair — see `ContinueReadingItem` in the client's
-      // types. Reading the server contract wrong here is what made this fixture
-      // crash the shelf's continue card, which is a useful thing for a review
-      // harness to be able to do.
+      /*
+       * A `ContinueReadingItem` is a whole `Book` with the progress flattened onto
+       * it — `id`, `addedAt`, `manualFields` and the rest, exactly as
+       * `GET /api/v1/books` returns them. See `ContinueReadingItem` in the client's
+       * types for why that is the contract.
+       *
+       * This fixture used to answer a *shorter*, differently-spelled object — the
+       * progress row's `bookId`/`updatedAt` — which is precisely the shape the real
+       * server was returning while the shelf's card drew from `book.id`. The
+       * harness agreed with the server and both were wrong, so the review passed on
+       * a screen whose every card deep-linked to `#/book/undefined`. Spreading the
+       * same `book` the shelf fixture uses is what keeps the two in step: a card
+       * that cannot be opened now fails the review instead of hiding in it.
+       */
       return json(reply, {
         items: [{ ...book, percentage: 0.18, chapterTitle: CHAPTERS[1].title, lastReadAt: Date.now() }],
       });

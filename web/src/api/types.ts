@@ -191,9 +191,28 @@ export interface Facets {
   formats: string[];
 }
 
+/**
+ * One row of the shelf's "继续阅读" strip.
+ *
+ * A whole `Book` with the progress flattened onto it — not a book-with-progress
+ * *pair*, and not the progress record's own shape.
+ *
+ * That distinction is the bug this shape fixes. The server used to answer
+ * `{ bookId, title, author, percentage, chapterTitle, updatedAt, coverUrl }`, i.e.
+ * the *progress* row's naming, while this type asked for `Book`'s. Nothing failed
+ * loudly: `title` and `coverUrl` are spelled the same in both, so the card drew,
+ * and tapping it handed `openBook` an object with `id: undefined` — which routes to
+ * `#/book/undefined`, 404s, and gets reported as "这本书不在书架上了". Two
+ * hand-written types drifting on the two fields the tap path actually reads.
+ *
+ * Declaring it as an intersection is what makes the drift impossible to reintroduce
+ * quietly: `id`, `addedAt` and `manualFields` are now *required* here, so a server
+ * that answers the narrow shape fails this type instead of failing a tap.
+ */
 export interface ContinueReadingItem extends Book {
   percentage: number;
   chapterTitle: string;
+  /** When the reader last turned a page here; `null` if progress was never pushed. */
   lastReadAt: number | null;
 }
 
@@ -216,6 +235,14 @@ export interface BrowseEntry {
   hiddenByRule: boolean;
   /** The scanner indexes this path as a book of its own. */
   scanned: boolean;
+  /**
+   * Whether the caller's shelf holds the book at this path.
+   *
+   * `null` when the path is not an indexed book at all — a folder, a stray `.nfo`,
+   * a page image inside an archive. The value is per-caller, because it describes
+   * *their* shelf: the server resolves it against the authenticated user.
+   */
+  shelfState: 'on' | 'off' | null;
   ext: string;
   /** The index currently holds a row for this exact path. */
   indexed: boolean;

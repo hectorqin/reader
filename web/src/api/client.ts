@@ -282,9 +282,40 @@ export class ReaderApi {
     }
   }
 
+  /**
+   * The shelf's "继续阅读" strip: whole books, newest reading first.
+   *
+   * ## The two normalisations, and why they live here
+   *
+   * This endpoint is the one place where the server and the client disagreed about
+   * the *name* of a field, and the disagreement was invisible: the card is typed as
+   * `ContinueReadingItem extends Book` and reads `book.id`, while the server answered
+   * the progress row's `bookId`. `title` and `coverUrl` happen to be spelled the same
+   * in both shapes, so the card drew correctly, and the tap carried `id: undefined` —
+   * `#/book/undefined`, a 404, and "这本书不在书架上了" on a book that was plainly on
+   * the shelf behind the toast.
+   *
+   * The server is fixed, so this is not the repair; it is what stops the repair from
+   * being *deployed in halves*. The H5 bundle and the API version independently: an
+   * Android WebView can hold a cached client against a newer server, and a browser
+   * can hold a cached client against an older one. Normalising at the boundary means
+   * either combination works, rather than the six weeks in which one does not.
+   *
+   * A row with no id at all is **dropped**, not drawn: a card whose tap goes nowhere
+   * is precisely the reported symptom, and losing one shortcut out of twenty is a
+   * smaller failure than growing a control that lies about being one.
+   */
   async continueReading(limit = 20, options: RequestOptions = {}): Promise<ContinueReadingItem[]> {
-    const result = await this.get<{ items: ContinueReadingItem[] }>(`/api/v1/library/continue?limit=${limit}`, options);
-    return result.items;
+    const result = await this.get<{ items: Array<ContinueReadingItem & { bookId?: string }> }>(
+      `/api/v1/library/continue?limit=${limit}`, options,
+    );
+    return result.items.flatMap((item) => {
+      // `bookId` is the old spelling of `id`; `updatedAt` the old spelling of
+      // `lastReadAt`. See the type for the full history.
+      const id = item.id ?? item.bookId;
+      if (!id) return [];
+      return [{ ...item, id, lastReadAt: item.lastReadAt ?? item.updatedAt ?? null }];
+    });
   }
 
   // ---- library file manager ----
