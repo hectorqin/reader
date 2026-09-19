@@ -49,11 +49,102 @@ const ILLUSTRATED_CHAPTERS = [
   { title: '第一卷 后记', path: 'OEBPS/Text/ch2.xhtml' },
 ];
 
-/** 1×1 is enough: the assertion is that the image *loads*, not how it looks. */
-const PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAYAAACp8Z5+AAAAFElEQVR42mP8z8DAwMDAwMDAQAcAABkAAe0lQh4AAAAASUVORK5CYII=',
-  'base64',
-);
+/**
+ * A plate big enough to *look* like one in the screenshot.
+ *
+ * It used to be 4×4, on the reasoning that "the assertion is that the image loads,
+ * not how it looks". That reasoning is what this harness exists to reject: the report
+ * is a person looking at the screen and seeing a broken-image placeholder, and a
+ * 4×4 fixture renders as four grey pixels whether it loaded or not — so the screenshot
+ * could not show the difference between the defect and the fix, and the only thing
+ * standing between them was one `naturalWidth` assertion. A plate with a shape in it
+ * makes the picture itself the evidence.
+ */
+const PLATE_WIDTH = 240;
+const PLATE_HEIGHT = 160;
+
+/** A PNG with a visible border and a diagonal, so "did it render" is answerable by eye. */
+function platePng(width, height) {
+  // Built by hand rather than with a library: the point is that this file has no
+  // image dependency, and a PNG whose rows are one filter byte plus RGB triples is
+  // short enough to write out.
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y += 1) {
+    const rowStart = y * (width * 3 + 1);
+    raw[rowStart] = 0; // filter: none
+    for (let x = 0; x < width; x += 1) {
+      const onBorder = x < 3 || y < 3 || x >= width - 3 || y >= height - 3;
+      const onDiagonal = Math.abs(x / width - y / height) < 0.03;
+      const ink = onBorder || onDiagonal ? 0x3a : 0xd8;
+      const at = rowStart + 1 + x * 3;
+      raw[at] = ink;
+      raw[at + 1] = onDiagonal ? 0x6a : ink;
+      raw[at + 2] = onDiagonal ? 0x3a : ink;
+    }
+  }
+  const crcTable = [];
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    crcTable[n] = c >>> 0;
+  }
+  const crc32 = (buf) => {
+    let c = 0xffffffff;
+    for (const byte of buf) c = crcTable[(c ^ byte) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type, data) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.length, 0);
+    head.write(type, 4, 'ascii');
+    const body = Buffer.concat([head.subarray(4), data]);
+    const tail = Buffer.alloc(4);
+    tail.writeUInt32BE(crc32(body), 0);
+    return Buffer.concat([head, data, tail]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // colour type: truecolour
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk('IHDR', ihdr),
+    chunk('IDAT', zlibDeflate(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/** zlib-wrapped deflate, which is what a PNG `IDAT` holds. */
+function zlibDeflate(buf) {
+  const header = Buffer.from([0x78, 0x01]);
+  const body = [];
+  // Stored (uncompressed) deflate blocks: 5 bytes of header per 65535-byte block.
+  for (let offset = 0; offset < buf.length; offset += 65535) {
+    const slice = buf.subarray(offset, Math.min(offset + 65535, buf.length));
+    const last = offset + 65535 >= buf.length ? 1 : 0;
+    const block = Buffer.alloc(5 + slice.length);
+    block[0] = last;
+    block.writeUInt16LE(slice.length, 1);
+    block.writeUInt16LE(~slice.length & 0xffff, 3);
+    slice.copy(block, 5);
+    body.push(block);
+  }
+  const adler = (() => {
+    let a = 1;
+    let b = 0;
+    for (const byte of buf) {
+      a = (a + byte) % 65521;
+      b = (b + a) % 65521;
+    }
+    return ((b << 16) | a) >>> 0;
+  })();
+  const tail = Buffer.alloc(4);
+  tail.writeUInt32BE(adler, 0);
+  return Buffer.concat([header, ...body, tail]);
+}
+
+const PNG = platePng(PLATE_WIDTH, PLATE_HEIGHT);
 
 /** The two paragraphs of a document chapter, and the image between them. */
 function illustratedChapter(index) {
@@ -256,6 +347,31 @@ function toc() {
     level: 0,
     spine: index,
   }));
+}
+
+/**
+ * Whether an asset request is authorised the way the real server would authorise it.
+ *
+ * Two ways in, and the fixture has to accept both or it is not a model of the
+ * endpoint: the client's own `fetch` carries `Authorization: Bearer …`, and a
+ * *sub-resource* request — an `<img src>`, a `<link href>` — cannot, so it carries
+ * `?access_token=` instead (see the server's `queryTokenAllowed`).
+ *
+ * The endpoint is guarded at all so the review cannot pass on a chapter whose
+ * pictures only load because the stub forgot to check. That is exactly how an
+ * illustrated EPUB shipped with broken images while every check was green: the
+ * fixture served the bytes to an anonymous request, and only the real server said
+ * no. Reproducing the *guard* here is what makes the signer load-bearing.
+ */
+function authorisedForAssets(request, url) {
+  const header = request.headers.authorization ?? '';
+  if (header.startsWith('Bearer ') && header.slice('Bearer '.length).trim().length > 0) return true;
+  return (url.searchParams.get('access_token') ?? '').length > 0;
+}
+
+function unauthorised(reply) {
+  reply.writeHead(401, { 'content-type': 'application/json; charset=utf-8' });
+  return reply.end(JSON.stringify({ error: { code: 'NO_TOKEN', message: 'missing bearer token' } }));
 }
 
 export function createReviewServer({ port = 5199 } = {}) {
@@ -473,6 +589,13 @@ export function createReviewServer({ port = 5199 } = {}) {
     }
     if (path === `/api/v1/books/${ILLUSTRATED_ID}/assets`) {
       const ref = url.searchParams.get('ref') ?? '';
+      // The asset endpoint is *authenticated* in production, and the browser fetches
+      // a chapter's images itself — with no `Authorization` header available. The
+      // only way such a request can be authorised is a token in the URL, and the
+      // fixture has to demand one or the review certifies a chapter whose images
+      // only load because this stub forgot to check. That is exactly how an
+      // illustrated EPUB shipped with broken pictures while the review was green.
+      if (!authorisedForAssets(request, url)) return unauthorised(reply);
       if (ref.endsWith('pic.png')) {
         reply.writeHead(200, { 'content-type': 'image/png' });
         return reply.end(PNG);
@@ -492,6 +615,7 @@ export function createReviewServer({ port = 5199 } = {}) {
       return json(reply, manifest().content);
     }
     if (path === `/api/v1/books/${BOOK_ID}/assets`) {
+      if (!authorisedForAssets(request, url)) return unauthorised(reply);
       const ref = url.searchParams.get('ref') ?? '';
       const index = Number.parseInt(ref.replace(/^chapter(-html)?:/, ''), 10);
       const body = chapterText(Number.isFinite(index) ? index : 0);

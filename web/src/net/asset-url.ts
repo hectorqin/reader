@@ -34,6 +34,24 @@
 import type { ApiClient } from './api.ts';
 
 /**
+ * What signing one address needs: where the API is, and the token to sign with.
+ *
+ * Passed as two values rather than as a client object on purpose. There are two API
+ * clients in this codebase — `net/api.ts` and `api/client.ts` — and they disagree
+ * about how to read the session (a getter in one, a method in the other, to say
+ * nothing of the reader's being behind an interface). Naming either one would make
+ * the signer unusable from the other, and neither is actually what the operation
+ * needs: an address is signed by knowing the *base URL* and the *token*, and
+ * nothing else in a client can change the answer.
+ */
+export interface AssetSigning {
+  /** The API's base, so a root-relative URL can be told from a foreign one. */
+  baseUrl: string;
+  /** The access token, read at the moment the signer is built. */
+  accessToken: string;
+}
+
+/**
  * Rewrite the asset URLs inside a chapter document to carry the token.
  *
  * The server has already made every relative reference absolute, so this only has
@@ -47,6 +65,35 @@ import type { ApiClient } from './api.ts';
  * a pattern's. The parse is done once per chapter and the serialization is what
  * the frame receives anyway.
  */
+/**
+ * The signer the *reader* uses, for the requests the browser makes itself.
+ *
+ * The same arrangement as `withAssetToken`, exposed as a function over one URL
+ * rather than over a document. The reader's chapter path takes the document from
+ * the *server's* asset endpoint, so the resources inside it are already absolute
+ * URLs pointing back at that endpoint — and the browser fetches those itself, with
+ * no header it could attach a credential to. A token in the query is the only way
+ * such a request can be authorised, and the server's `queryTokenAllowed` is the
+ * other half of the arrangement: it accepts a query token on read endpoints for
+ * immutable content and nowhere else.
+ *
+ * The distinction from `withAssetToken` is which pass over the document does the
+ * work, and it is not cosmetic. That function parses the markup, which means it
+ * only ever sees URLs the *document* contains, and the reader's own sanitising pass
+ * runs on the live DOM afterwards — so a URL the sanitising pass *kept* would still
+ * come out unsigned. Signing has to be the last thing that happens to an address,
+ * after the decision that it may be fetched at all, or the two passes disagree
+ * about which URLs are real.
+ */
+export function makeAssetSigner(api: AssetSigning): ((url: string) => string | null) | null {
+  const token = api.accessToken;
+  if (!token) return null;
+  return (url) => {
+    if (!isApiAsset(url, api.baseUrl) || hasToken(url)) return null;
+    return appendToken(url, token);
+  };
+}
+
 export function withAssetToken(html: string, api: ApiClient): string {
   const token = api.currentSession?.accessToken;
   if (!token) return html;
@@ -64,7 +111,7 @@ export function withAssetToken(html: string, api: ApiClient): string {
   for (const attribute of attributes) {
     for (const element of Array.from(doc.querySelectorAll(`[${attribute}]`))) {
       const value = element.getAttribute(attribute);
-      if (!value || !isApiAsset(value, api)) continue;
+      if (!value || !isApiAsset(value, api.baseUrl)) continue;
       if (hasToken(value)) continue;
       element.setAttribute(attribute, appendToken(value, token));
       touched = true;
@@ -75,7 +122,7 @@ export function withAssetToken(html: string, api: ApiClient): string {
   for (const element of Array.from(doc.querySelectorAll('[style]'))) {
     const value = element.getAttribute('style');
     if (!value) continue;
-    const rewritten = rewriteCssUrls(value, api, token);
+    const rewritten = rewriteCssUrls(value, api.baseUrl, token);
     if (rewritten !== value) {
       element.setAttribute('style', rewritten);
       touched = true;
@@ -84,7 +131,7 @@ export function withAssetToken(html: string, api: ApiClient): string {
   for (const style of Array.from(doc.querySelectorAll('style'))) {
     const value = style.textContent;
     if (!value) continue;
-    const rewritten = rewriteCssUrls(value, api, token);
+    const rewritten = rewriteCssUrls(value, api.baseUrl, token);
     if (rewritten !== value) {
       style.textContent = rewritten;
       touched = true;
@@ -95,10 +142,16 @@ export function withAssetToken(html: string, api: ApiClient): string {
   return `<?xml version="1.0" encoding="utf-8"?>\n${new XMLSerializer().serializeToString(doc.documentElement)}`;
 }
 
-/** Whether a URL points at this instance's asset endpoint. */
-function isApiAsset(value: string, api: ApiClient): boolean {
+/**
+ * Whether a URL points at this instance's asset endpoint.
+ *
+ * Takes the base URL rather than a client, so the two callers (the document
+ * rewriter, which has a client, and the signer, which has only a base and a token)
+ * can share one definition of "our address". Two copies of this test is how the
+ * client came to compare a page's origin against an API's.
+ */
+function isApiAsset(value: string, base: string): boolean {
   if (value.startsWith('/api/')) return true;
-  const base = api.baseUrl;
   return base.length > 0 && value.startsWith(`${base}/api/`);
 }
 
@@ -113,9 +166,9 @@ function appendToken(value: string, token: string): string {
 }
 
 /** Rewrite `url(...)` inside a CSS string, leaving anything else untouched. */
-function rewriteCssUrls(css: string, api: ApiClient, token: string): string {
+function rewriteCssUrls(css: string, base: string, token: string): string {
   return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (full, quote: string, value: string) => {
-    if (!isApiAsset(value, api) || hasToken(value)) return full;
+    if (!isApiAsset(value, base) || hasToken(value)) return full;
     return `url(${quote}${appendToken(value, token)}${quote})`;
   });
 }

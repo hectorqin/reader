@@ -7,6 +7,7 @@ import type { OfflineStore } from '../store/offline.ts';
 import type { SyncEngine, SyncStatus } from '../core/sync.ts';
 import type { Platform } from '../core/platform.ts';
 import { ReaderView, type Position, type ViewSettings } from './reader-view.ts';
+import { makeAssetSigner } from '../net/asset-url.ts';
 import { attachGestures } from './gestures.ts';
 import type { AppSettings } from '../store/settings.ts';
 import { createStagedDoc, isStagedKind, windowIndexOf } from '../formats/windowed.ts';
@@ -502,10 +503,20 @@ export class ReaderScreen {
     this.view?.dispose();
     if (!this.doc) return;
     const doc = this.doc;
+    // The token the browser cannot attach for itself. Built once per view rather
+    // than per chapter: the reader's session does not change while a book is open,
+    // and a signer that read the token lazily would have to be rebuilt whenever one
+    // arrived — which is a second lifecycle to keep in step with the first.
+    const token = this.options.api.currentSession()?.accessToken;
+    const signAssetUrl = makeAssetSigner({
+      baseUrl: this.options.api.baseUrl,
+      ...(token ? { accessToken: token } : { accessToken: '' }),
+    });
     this.view = new ReaderView({
       container: this.stage,
       doc,
       ...(this.options.pageHost ? { pageHost: this.options.pageHost } : {}),
+      ...(signAssetUrl ? { signAssetUrl } : {}),
       onPositionChange: (position) => this.onPosition(position),
       onChapterChange: (index, section) => {
         // One patch, and `syncTocPosition` folds its own correction into the same
@@ -619,29 +630,44 @@ export class ReaderScreen {
    *      behind an open panel is the bug the reader reports as "翻页和设置抢事件".
    *      The gesture layer cannot enforce this — it sees the stage, and the panel
    *      is a sibling — so it is enforced here.
-   *   2. **The middle third toggles the chrome.** With the chrome hidden, *every*
-   *      zone reveals it: the reader has no other way to get the controls back, and
-   *      a page turn that leaves them with no visible way to open the contents is a
-   *      trap. This is why the middle-zone check comes first with the chrome
-   *      visible and effectively covers everything with it hidden.
-   *   3. **The outer thirds turn the page**, honouring the reader's handedness.
+   *   2. **The middle third toggles the chrome**, in both directions.
+   *   3. **The outer thirds turn the page**, honouring the reader's handedness —
+   *      and while the chrome is hidden they *also* bring it back.
+   *
+   * The third rule is the one that changed, and the report behind it is the reason:
+   * "点击左右侧翻页时工具栏不能显示出来". The outer thirds used to *replace* the page
+   * turn with a reveal whenever the chrome was hidden, on the reasoning that a
+   * hidden bar leaves the reader no other way back. That reasoning was sound and the
+   * result was not: the reader tapped the right third to read the next page, got no
+   * next page, and — because they were already reading, not looking for controls —
+   * did not notice a toolbar had arrived. Both complaints ("翻页没反应" and "工具栏
+   * 显示不出来") are the same tap described from the two directions it can fail.
+   *
+   * So the tap does both: it turns the page, and it brings the chrome back. There is
+   * no ambiguity to resolve, because the two are not alternatives — the reader wants
+   * to go forward *and* to have the controls, and one gesture can serve both without
+   * either being guessed at.
+   *
+   * While the chrome is *shown* the outer thirds still only turn the page. Letting a
+   * tap re-show a bar that is already on screen would be the other half of the same
+   * mistake, and it is the behaviour the reader would notice immediately: every
+   * page turn would flash the top and bottom bars.
    */
   private onTapZone(zone: 'previous' | 'toggle-chrome' | 'next'): void {
     if (this.chrome.tocOpen || this.chrome.settingsOpen) return;
 
-    // The middle zone always toggles, in both directions. The outer zones reveal
-    // the chrome only while it is hidden, and that asymmetry is deliberate: hidden,
-    // every zone has to be a way back (see below); shown, a tap on the left or right
-    // third is a page turn, and stealing it to re-show a header that is already on
-    // screen would be the "翻页没反应" bug in its most annoying form.
-    if (zone === 'toggle-chrome' || !this.chromeVisible) {
+    if (zone === 'toggle-chrome') {
       this.setChromeVisible(!this.chromeVisible);
       return;
     }
 
+    // Read before the turn, because a page turn does not change it and the reveal
+    // must be decided from the state the reader was in when they tapped.
+    const wasHidden = !this.chromeVisible;
     const reversed = this.settings.tapZone === 'reversed';
     const forward = reversed ? zone === 'previous' : zone === 'next';
     void this.turnPage(forward ? 'next' : 'previous');
+    if (wasHidden) this.setChromeVisible(true);
   }
 
   private async restorePosition(book: Book, token: number): Promise<void> {

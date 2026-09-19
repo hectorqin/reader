@@ -133,13 +133,33 @@ const FLOW_STYLESHEET = `
   text-align: var(--reader-text-align, inherit);
   isolation: isolate;
 }
+/*
+ * Paged: the column *is* the page.
+ *
+ * The vertical padding goes, and only the vertical: the flow is now a container
+ * whose height is the page, so a padding-block would be a band of empty paper
+ * above and below every page. The inline padding stays, because that is the reader's
+ * page margin and dropping it is how a chapter came to be typeset flush against the
+ * edge of the screen — the *scroll* path keeps its margin and the *paged* path did
+ * not, so the same book looked deliberate in one mode and unfinished in the other.
+ *
+ * A column width of 100% rather than 100vw. The two are the same number only while
+ * the reading surface happens to span the whole viewport, and it does not: the two
+ * floating bars inset it (see --reader-chrome-top in styles/reader.css) and the
+ * reader's page margin is a property of the column, not of the screen. A column
+ * sized to the *viewport* inside a narrower box is a column wider than the page it
+ * is being paginated into — the stride arithmetic then walks positions that are not
+ * page boundaries and the last column of every chapter is unreachable. A percentage
+ * is the width of the box the column actually sits in, which is what "one page"
+ * means.
+ */
 :host([data-paginated='true']) .book-flow {
   height: 100%;
   max-inline-size: none;
-  padding: 0;
+  padding-block: 0;
   column-gap: 0;
   columns: 1;
-  column-width: 100vw;
+  column-width: 100%;
   column-fill: auto;
   overflow: hidden;
 }
@@ -292,7 +312,27 @@ export class BookShadowHost extends HTMLElement {
  * (`<base>`, meta refresh, `target` on links) which would otherwise turn a tap
  * on a footnote into an exit from the reader.
  */
-export function sanitiseInjectedContent(root: ParentNode): void {
+export interface SanitiseOptions {
+  /**
+   * Makes an asset URL self-authenticating, or returns null to leave it alone.
+   *
+   * Called for every address the chapter wants the *browser* to fetch — an
+   * `<img src>`, a `<link href>`, a `srcset` candidate — which is the set of
+   * requests that cannot carry an `Authorization` header. The reader supplies a
+   * function that appends the session token, and the chapter's pictures load; it
+   * is absent in every context where there is no session (a test, a local file),
+   * and then the URLs are passed through unchanged.
+   *
+   * This has to happen *here*, in the pass that walks the live DOM, rather than on
+   * the raw markup: the server writes absolute URLs for the resources it rewrote,
+   * and a document also contains absolute URLs the *book* wrote. Only the DOM walk
+   * sees both, and only it can be the one place that decides "this is one of ours,
+   * so it may be signed".
+   */
+  signAssetUrl?(url: string): string | null;
+}
+
+export function sanitiseInjectedContent(root: ParentNode, options: SanitiseOptions = {}): void {
   for (const element of root.querySelectorAll('script, base, meta[http-equiv="refresh" i]')) {
     element.remove();
   }
@@ -352,15 +392,58 @@ export function sanitiseInjectedContent(root: ParentNode): void {
       if (value === null) continue;
       const resolved = resolveBookResource(value);
       if (resolved === null) element.removeAttribute(name);
-      else if (resolved !== value) element.setAttribute(name, resolved);
+      else {
+        const signed = sign(resolved, options);
+        if (signed !== value) element.setAttribute(name, signed);
+      }
     }
     const srcset = element.getAttribute('srcset');
     if (srcset !== null) {
-      const rewritten = resolveSrcset(srcset);
+      const rewritten = resolveSrcset(srcset, options);
       if (rewritten === null) element.removeAttribute('srcset');
       else if (rewritten !== srcset) element.setAttribute('srcset', rewritten);
     }
   }
+
+  // `url(...)` inside the chapter's own CSS.
+  //
+  // A publisher ships a background image, a list bullet or a `@font-face` as a CSS
+  // URL, and the browser fetches every one of them itself — the same constraint as
+  // an `<img src>`, and refused in exactly the same way when unsigned. The element's
+  // `style` attribute and its `<style>` blocks are the two places CSS text can live
+  // in an injected chapter; the book's own `link`ed stylesheets arrive as *text* the
+  // reader injects (see `ReaderView`), and are signed by the same call from there.
+  if (options.signAssetUrl) {
+    const sign = options.signAssetUrl;
+    for (const element of root.querySelectorAll('[style]')) {
+      const value = element.getAttribute('style');
+      if (!value) continue;
+      const rewritten = signCssUrls(value, sign);
+      if (rewritten !== value) element.setAttribute('style', rewritten);
+    }
+    for (const style of root.querySelectorAll('style')) {
+      const value = style.textContent;
+      if (!value) continue;
+      const rewritten = signCssUrls(value, sign);
+      if (rewritten !== value) style.textContent = rewritten;
+    }
+  }
+}
+
+/**
+ * Signs every `url(...)` in a CSS string that survived the allow-list.
+ *
+ * Per URL rather than over the whole string: a `url()` token is quoted or not, may
+ * carry a fragment, and is the only place in CSS that names an address — so the one
+ * function that knows what a URL is decides, and the decision is the signer's.
+ */
+function signCssUrls(css: string, sign: (url: string) => string | null): string {
+  return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (full: string, quote: string, value: string) => {
+    const resolved = resolveBookResource(value);
+    if (resolved === null) return full;
+    const signed = sign(resolved) ?? resolved;
+    return `url(${quote}${signed}${quote})`;
+  });
 }
 
 /**
@@ -433,8 +516,15 @@ function resolveBookResource(value: string): string | null {
   }
 }
 
-/** The same decision, per candidate of a `srcset`. Drops the ones that are not ours. */
-function resolveSrcset(value: string): string | null {
+/**
+ * The same decision, per candidate of a `srcset`. Drops the ones that are not ours.
+ *
+ * Each candidate is signed individually rather than the value as a whole: the
+ * token goes in a *candidate's* own query, and a `srcset` is a comma-separated list
+ * whose entries each carry their own URL and descriptor. Signing the joined string
+ * would put one token at the end of the last candidate.
+ */
+function resolveSrcset(value: string, options: SanitiseOptions): string | null {
   const out: string[] = [];
   for (const part of value.split(',')) {
     const trimmed = part.trim();
@@ -442,9 +532,22 @@ function resolveSrcset(value: string): string | null {
     const [url, ...descriptor] = trimmed.split(/\s+/);
     const resolved = url === undefined ? null : resolveBookResource(url);
     if (resolved === null) continue;
-    out.push([resolved, ...descriptor].join(' '));
+    out.push([sign(resolved, options), ...descriptor].join(' '));
   }
   return out.length > 0 ? out.join(', ') : null;
+}
+
+/**
+ * Lets the reader sign an address, for the requests it cannot sign itself.
+ *
+ * Applied only to addresses that survived `resolveBookResource`, which is the set
+ * the reader has already agreed may be fetched. That ordering matters: the token is
+ * a credential, and handing it to an arbitrary URL out of a book would be a way to
+ * leak a reading session to a third party — the exact thing the allow-list above
+ * exists to prevent.
+ */
+function sign(url: string, options: SanitiseOptions): string {
+  return options.signAssetUrl?.(url) ?? url;
 }
 
 /** Keeps only the body of a full XHTML document, dropping `html`/`head` wrappers. */

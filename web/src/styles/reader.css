@@ -178,6 +178,7 @@
    * fourth band has an obvious place to go.
    */
   --reader-layer-page: 1;     /* the reading surface: below everything else here */
+  --reader-layer-bar: 10;     /* the two floating bars, over the page */
   --reader-layer-rail: 14;    /* the quick-action column */
   --reader-layer-panel: 20;   /* sheets and their scrim */
   --reader-layer-readout: 30; /* the immersion readouts, above the page they describe */
@@ -268,16 +269,32 @@ body {
  * screen and handed in through a ref callback (see `StageHost`): it is a node
  * with its own lifetime, and putting it in a tree that re-renders is how a
  * chapter's shadow root ends up detached from the element the paginator
- * measured. The wrapper does not inherit `.stage`'s rules, so it has to carry
- * the one that matters — *growing*. Without this the slot is a zero-height block
- * in a flex column, and the reader sees the chrome, the header and the footer
- * with no text between them.
+ * measured.
+ *
+ * Pinned to the *screen* rather than to whatever the flex column had left over,
+ * and that is the whole of the "内容会上下滑动" fix: with the stage in flow, the
+ * two bars took height out of it, so showing or hiding the chrome resized the page
+ * and moved every line on it. Here the page is the screen, always, in both states.
  */
 .stage-host {
   display: flex;
-  flex: 1 1 auto;
-  min-height: 0;
-  position: relative;
+  position: absolute;
+  inset: 0;
+  /*
+   * The space the two floating bars occupy, kept clear of the text.
+   *
+   * Constant, and that is the entire point. The bars are a layer now, so they no
+   * longer take height out of the page — but they do cover it, and a bar drawn over
+   * the first line of a chapter is a bar that has hidden something the reader was
+   * reading. So the page is inset by exactly the bars' own heights: the text is
+   * never underneath them, and the inset does not change when they come or go, so
+   * the text never moves either.
+   *
+   * `--reader-chrome-top` is the top bar's height and `--reader-chrome-bottom` the
+   * footer's, both declared on `.reader-screen`: one number per bar, read by the bar
+   * itself and by this rule, so the clearance and the bar cannot drift apart.
+   */
+  padding-block: var(--reader-chrome-top) var(--reader-chrome-bottom);
 }
 
 /*
@@ -397,30 +414,57 @@ book-content {
  * on the screen, both animate with the same duration and easing, and neither can be
  * on screen without the other.
  *
- * The animation is a *slide plus a fade*, and it is applied to the chrome's own
- * reserved space rather than to the chrome alone: the reader has to end up with a
- * full-height page, and a header that fades out while still occupying 3rem of the
- * column leaves the text in a band with a gap above it. `position: absolute` would
- * give the space back instantly and cover the first line on the way out, so the
- * band keeps its normal flow role and collapses its own height — which is what
- * makes the page *grow* into the space as the header leaves rather than jump into
- * it afterwards.
+ * Both bars *float*. They are positioned overlays rather than rows in a column, so
+ * the page beneath them is the whole screen whichever state they are in — which is
+ * the difference between "the toolbar appears" and "the toolbar appears *and* pushes
+ * everything the reader was looking at up by 53px". It was the second, and it was
+ * reported as such: a tap on the middle third slid the text up and a second tap slid
+ * it back down. The reader's own diagnosis was the right one — a toolbar is a
+ * floating layer, and a layout that lets it displace content has the chrome and the
+ * page in the same flow when they are not.
+ *
+ * The cost of floating is that the bars cover the top and bottom of the page, so the
+ * reading column keeps a constant inset clear of them (`--reader-chrome-inset-*` on
+ * the flow, in `ui/shadow.ts`). Constant is the operative word: the inset does not
+ * change with the chrome's state, because a page that re-typesets itself when the
+ * reader taps is the same defect wearing a different hat.
  */
 .reader-screen {
-  display: flex;
-  flex-direction: column;
+  display: block;
   height: 100%;
   position: relative;
   /*
-   * The chrome's own reserved space, in one place. The bands animate between it
-   * and zero, and the stage — which is `flex: 1 1 auto` — takes whatever is left,
-   * so a single number here is what keeps the page from being measured mid-slide.
+   * The chrome's own height, in one place.
+   *
+   * These are *measurements of the bars*, not space the layout reserves. The bars
+   * float over the page (see `.topbar`), so the page is the whole screen in both
+   * states and the numbers are only what the reading column has to keep clear of.
+   *
+   * They were previously the stage's own height arithmetic — the bands grew and
+   * shrank and the stage, being `flex: 1`, took whatever was left. That is what made
+   * a tap on the middle third *move the text*: every time the reader asked for the
+   * controls the page re-laid out 3.4rem shorter, and the line they were reading
+   * slid up the screen by 53px and back down again when they hid it. On a reader
+   * that is the worst possible motion — it is the text moving, and the text is the
+   * one thing that must stay still. So the geometry is constant and the bars are
+   * drawn over it.
    */
   --reader-chrome-top: 3.4rem;
+  --reader-chrome-bottom: 5.6rem;
 }
 
 .topbar {
   display: flex;
+  /*
+   * Over the page, not above it. `position: absolute` is what makes the bars a
+   * layer rather than a row: with them in flow, the stage was `flex: 1` of what was
+   * left, so the page grew and shrank by the bars' height on every toggle and every
+   * line of the chapter moved with it.
+   */
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: var(--reader-layer-bar);
   /*
    * `stretch`, so each button owns the full height of the band. The buttons are
    * icon-over-label now, and a button that only owned its two lines would leave a
@@ -429,12 +473,28 @@ book-content {
    */
   align-items: stretch;
   /*
-   * `space-evenly` rather than `space-between`: three controls spread to the two
-   * ends of a wide screen stop reading as one toolbar and start reading as two
-   * stray icons at opposite corners. Even gaps keep them a row at any width.
+   * Three columns, and the outer two are pinned to their own edges.
+   *
+   * This is the alignment the reader reads *vertically*: 返回 at the top of the
+   * screen and 上一章 at the bottom are the same thing in the reader's head — "the
+   * leftmost control" — so their left edges have to be one line. They were not.
+   * The bar was `space-evenly` over three equal-width buttons, so 返回's glyph sat
+   * 70px in, centred in its own third, while 上一章 began 12px from the device edge.
+   * Two rows framing the same text with corners that do not meet read as broken,
+   * without the reader being able to name what is wrong.
+   *
+   * A grid rather than `space-between`, and that distinction is the whole fix:
+   * `space-between` distributes *free* space, and with `flex: 1 1 0` buttons there
+   * is none — three equal columns fill the row exactly, so the property has nothing
+   * to do and the buttons stay centred in their boxes. The grid says what is
+   * actually wanted: three tracks, the first item flush start, the last flush end,
+   * the middle one centred. Those are the same three positions the footer's two
+   * chapter buttons and its progress readout occupy, and they are stated once, on
+   * the same `--reader-band-inset` both rows take their padding from.
    */
-  justify-content: space-evenly;
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-items: center;
   gap: var(--space-1);
   min-height: 3.4rem;
   /* The band inset on both sides, so the outermost glyphs are the same distance
@@ -445,31 +505,34 @@ book-content {
      are the same weight. */
   border-bottom: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
   padding-top: var(--safe-top);
-  /* The band's own height is the reserved space, and it is what the stage gets
-     back when the chrome hides. `min-height` above is what it is at rest; the
-     transition needs an explicit height to animate to zero, so it is stated. */
+  /* The band's own height, which the reading column also reads as the inset it has
+     to keep clear of. One number, so the bar and the space reserved for it cannot
+     disagree. */
   height: var(--reader-chrome-top);
+  /* Nothing is animated but the band's own opacity and position: no layout property
+     is touched, which is what makes the motion free of any effect on the page. */
   transition:
-    height var(--motion-duration) var(--motion-ease),
     opacity var(--motion-duration) var(--motion-ease),
     transform var(--motion-duration) var(--motion-ease),
     visibility 0s linear var(--motion-duration);
 }
 
 /*
- * Hidden: the band collapses and the contents slide up out of it.
+ * Hidden: the band slides up out of the way and fades.
  *
  * `visibility` rather than `display: none` so the slide has something to animate,
- * and `visibility: hidden` at the end of it so the (invisible) title cannot be
- * reached by a screen reader or a tap. `overflow: hidden` is what makes the slide a
- * slide rather than the header visibly hanging over the text.
+ * and `visibility: hidden` at the *end* of it so the (invisible) bar cannot be
+ * reached by a screen reader or a tap. `pointer-events: none` covers the interval
+ * itself, which is the part `visibility` alone does not: a control on its way off
+ * the screen is still a control for the duration of the fade.
+ *
+ * No height is animated, because there is no height to give back — the page never
+ * had less of it. That is the point of the bars being a layer.
  */
 .reader-screen[data-chrome='hidden'] .topbar {
-  height: 0;
-  min-height: 0;
   opacity: 0;
   visibility: hidden;
-  overflow: hidden;
+  pointer-events: none;
   border-bottom-color: transparent;
   transform: translateY(-100%);
 }
@@ -508,8 +571,8 @@ book-content {
  * neighbours: 返回 and 设置 are the same target whatever the words say.
  */
 .top-button {
-  flex: 1 1 0;
   min-width: 0;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -525,6 +588,17 @@ book-content {
   cursor: pointer;
   touch-action: manipulation;
   transition: background var(--motion-duration) var(--motion-ease);
+}
+
+/* The outer two flush to the band's own inset, which is where the footer's two
+   chapter buttons put their edges — see the grid comment above. The middle button
+   stays centred, which is where the reader expects the middle control. */
+.topbar > .top-button:first-child {
+  justify-self: start;
+}
+
+.topbar > .top-button:last-child {
+  justify-self: end;
 }
 
 .top-button:active {
@@ -2078,30 +2152,41 @@ book-content {
  */
 
 /*
- * Hidden: the footer collapses and slides down, exactly as the header does, and on
- * the same attribute — see `.reader-screen[data-chrome='hidden']`. The progress bar
- * goes with it rather than staying as a hairline: it is part of the chrome, and a
+ * Hidden: the footer slides down and fades, exactly as the header does, and on the
+ * same attribute — see `.reader-screen[data-chrome='hidden']`. The progress bar goes
+ * with it rather than staying as a hairline: it is part of the chrome, and a
  * two-pixel band left behind at the bottom of the screen is the one thing that makes
  * "沉浸式" look broken.
+ *
+ * Like the header it gives no height back, because it took none: the reading column
+ * keeps the same block inset in both states, so the last line of a page is in the
+ * same place whether the toolbar is up or down. It is drawn as a layer over the
+ * page, with its own surface colour, so the lines it covers are *behind* it rather
+ * than pushed above it.
  */
 .reader-screen[data-chrome='hidden'] .footer {
-  height: 0;
   opacity: 0;
   visibility: hidden;
-  overflow: hidden;
+  pointer-events: none;
   border-top-color: transparent;
   transform: translateY(100%);
 }
 
 .footer {
+  /* Over the page at the bottom edge, the same arrangement as the top bar. */
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: var(--reader-layer-bar);
   background: var(--reader-surface);
   /* A hairline that survives a dark theme and a bright page equally: one solid
      colour has to fight whichever side it borders, and this is the one place the
      footer meets the paper. */
   border-top: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
   padding-bottom: var(--safe-bottom);
+  /* The same two properties as the header, and for the same reason: nothing here
+     changes the page's geometry. */
   transition:
-    height var(--motion-duration) var(--motion-ease),
     opacity var(--motion-duration) var(--motion-ease),
     transform var(--motion-duration) var(--motion-ease),
     visibility 0s linear var(--motion-duration);

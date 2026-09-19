@@ -122,6 +122,76 @@ describe('sanitiseInjectedContent', () => {
     expect(srcset).toContain('images/c.png 3x');
   });
 
+  it('signs a book resource with the session token, which the browser cannot do itself', () => {
+    // The report: "图片还是加载不出来". The address allow-list was already right —
+    // the illustration survived with its `src` intact — and the request was still
+    // refused, because the asset endpoint is authenticated and a sub-resource request
+    // cannot carry an `Authorization` header. The only credential an `<img src>` can
+    // present is one in its own URL, and nothing was putting it there.
+    //
+    // This is the case a functional test cannot see: the request is issued by the
+    // browser, not by the client, so "did the client ask correctly" has nothing to do
+    // with it. What can be asserted is that the address the browser is *handed* is
+    // self-authenticating.
+    const node = parse(
+      `<img src="/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=OEBPS%2Fimages%2Fpic.png"/>`,
+    );
+    sanitiseInjectedContent(node, {
+      signAssetUrl: (url) => `${url}&access_token=tok`,
+    });
+    const src = node.querySelector('img')?.getAttribute('src') ?? '';
+    expect(src).toContain('access_token=tok');
+    expect(src).toContain('ref=OEBPS%2Fimages%2Fpic.png');
+  });
+
+  it('never hands the token to an address the allow-list refused', () => {
+    // Ordering, and it is a security property rather than a nicety: the signer runs
+    // *after* the decision that a URL may be fetched. If it ran before, or on the raw
+    // markup, a book could name a third party and have the reader's session token
+    // appended to the request for it — which is precisely the leak the allow-list
+    // exists to prevent.
+    const seen: string[] = [];
+    const node = parse(
+      `<img src="https://tracker.example/x.png?${BOOK_RESOURCE_MARKER}=1"/><img src="reader-res:a.png"/>`,
+    );
+    sanitiseInjectedContent(node, {
+      signAssetUrl: (url) => {
+        seen.push(url);
+        return `${url}?access_token=tok`;
+      },
+    });
+    expect(seen.some((url) => url.includes('tracker.example'))).toBe(false);
+    // The remote one lost its `src`; the internal scheme is signed, because it is a
+    // resource of this book and never touches the network.
+    expect(node.querySelectorAll('img')[0]?.hasAttribute('src')).toBe(false);
+    expect(seen).toEqual(['reader-res:a.png']);
+  });
+
+  it('signs a css url inside an injected style block', () => {
+    // A publisher ships a background image or a `@font-face` as a CSS URL, and the
+    // browser fetches that itself too — the same constraint, the same refusal. The
+    // element's `style` attribute and its `<style>` blocks are where an injected
+    // chapter's CSS text lives.
+    const node = parse(
+      `<style>.cover { background: url("/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=OEBPS%2Fcover.jpg"); }</style>`,
+    );
+    sanitiseInjectedContent(node, { signAssetUrl: (url) => `${url}&access_token=tok` });
+    expect(node.querySelector('style')?.textContent ?? '').toContain('access_token=tok');
+  });
+
+  it('leaves addresses alone when there is no session', () => {
+    // No signer means no session (a test, a local file, a signed-out shell), and the
+    // chapter must still render: the function returns null and the address is passed
+    // through exactly as the allow-list left it.
+    const node = parse(
+      `<img src="/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=a.png"/>`,
+    );
+    sanitiseInjectedContent(node, { signAssetUrl: () => null });
+    expect(node.querySelector('img')?.getAttribute('src')).toBe(
+      `/api/v1/books/abc/assets?${BOOK_RESOURCE_MARKER}=1&ref=a.png`,
+    );
+  });
+
   it('removes a base element and a meta refresh, which would navigate away', () => {
     const node = parse('<base href="https://evil.example/"/><meta http-equiv="refresh" content="0;url=https://evil.example"/>');
     sanitiseInjectedContent(node);
@@ -189,7 +259,28 @@ describe('BookShadowHost', () => {
     expect(sheet).toContain('max-inline-size: var(--reader-measure');
     expect(sheet).toContain('padding-inline: var(--reader-page-margin');
     expect(sheet).toContain('font-size: calc(1em * var(--reader-font-scale');
-    expect(sheet).toContain('column-width: 100vw');
+    // A column is one *page*, so it is sized to the box it is paginated into rather
+    // than to the viewport. `100vw` was the same number only while the reading
+    // surface happened to span the whole screen — and it does not: the two floating
+    // bars inset it, and the reader's page margin is a property of the column. A
+    // column wider than its page makes the stride arithmetic walk positions that are
+    // not page boundaries, and the last column of every chapter becomes unreachable.
+    const pagedRule = /:host\(\[data-paginated='true'\]\) .book-flow \{[^}]*\}/.exec(sheet)?.[0] ?? '';
+    expect(pagedRule).toContain('column-width: 100%');
+    expect(pagedRule).not.toContain('100vw');
+  });
+
+  it('keeps the page margin in paged mode, and drops only the vertical padding', () => {
+    // The same book looked deliberate in scroll mode and unfinished in paged mode,
+    // because the paged rule zeroed the whole `padding` — so a chapter was typeset
+    // flush against the edge of the screen the moment the reader chose columns.
+    // There is no screenshot assertion that catches this and no functional one
+    // either: the text is *there*, it is simply in the wrong place.
+    const host = createBookHost();
+    const sheet = host.shadow.querySelector('style')?.textContent ?? '';
+    const paged = /:host\(\[data-paginated='true'\]\) .book-flow \{[^}]*\}/.exec(sheet)?.[0] ?? '';
+    expect(paged).toContain('padding-block: 0');
+    expect(paged).not.toMatch(/padding:\s*0/);
   });
 
   it('reaches the host state through :host(), not through a class selector', () => {
