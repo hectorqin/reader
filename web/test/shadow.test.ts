@@ -214,6 +214,38 @@ describe('sanitiseInjectedContent', () => {
   });
 });
 
+describe('the sheet for content inside a chapter', () => {
+  /**
+   * The rules that keep a book's own markup from breaking the page.
+   *
+   * Asserted on the *host's* adopted sheets rather than on a rendered layout,
+   * because jsdom does no layout: what is checkable here is that the sheet exists,
+   * that it names the properties that matter, and — the one that decides whether the
+   * author's design survives — that it sits *before* the book's own stylesheet in
+   * the shadow root, so a chapter that styles its own images still wins.
+   */
+  it('clamps images that are wider than the column', () => {
+    const host = createBookHost();
+    const css = [...host.shadow.querySelectorAll('style')].map((el) => el.textContent ?? '').join('\n');
+    // The clamp itself, and the `height: auto` that keeps the aspect ratio: a
+    // `max-width` alone squashes the plate, which is the failure a fix for the
+    // width introduces.
+    expect(css).toMatch(/\.book-flow img[^}]*max-width:\s*min\(100%/);
+    expect(css).toMatch(/\.book-flow img[^}]*height:\s*auto/);
+  });
+
+  it('keeps the sheet below the book, so an author who sizes an image still wins', () => {
+    const host = createBookHost();
+    const sheets = [...host.shadow.querySelectorAll('style')];
+    // The order is the fix, not decoration: same specificity means the later sheet
+    // wins, and the book's own stylesheet is the one that has to.
+    const content = sheets.findIndex((el) => (el.textContent ?? '').includes('reader-image-max'));
+    const book = sheets.findIndex((el) => el === (host as unknown as { styleEl: HTMLStyleElement }).styleEl);
+    expect(content).toBeGreaterThanOrEqual(0);
+    expect(book).toBeGreaterThan(content);
+  });
+});
+
 describe('extractBody', () => {
   it('returns only the body of a full XHTML document', () => {
     const html = '<html><head><title>t</title></head><body><p>内容</p></body></html>';

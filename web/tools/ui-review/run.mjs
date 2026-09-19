@@ -92,7 +92,7 @@ const SCENES = [
   {
     name: '14-reader-epub-image',
     label: 'EPUB · 插图',
-    what: '章节文档里的图片真的画出来了，而不是浏览器的破图占位符',
+    what: '章节文档里的图片真的画出来了，而不是浏览器的破图占位符；比页面宽的那张也在栏内',
     openBook: true,
     book: 'review-illustrated',
   },
@@ -150,6 +150,106 @@ async function audit(cdp, origin, scenes, results) {
       ? '没有找到快捷按钮列'
       : `visible=${visibleChrome.visible} 按钮 ${visibleChrome.buttons} 个 pointer-events=${visibleChrome.pointerEvents}`,
   );
+
+  /*
+   * The rail holds the whole set of controls the reader reaches for, and every one
+   * of them is reachable.
+   *
+   * The standing report is "竖排工具栏显示为 主题切换、听书", and its shape decided
+   * these checks. The rail was a column with no height ceiling and no scrolling, so
+   * on a screen short enough it simply ran off the bottom: the reader sees what fits,
+   * concludes that is what the rail does, and reports the two they can see. Two
+   * properties answer that, and both are measured rather than read from the CSS:
+   *
+   *  - **the column is inside the page**, so its last control is not drawn off the
+   *    bottom of the screen;
+   *  - **the controls it cannot fit are reachable** — the column scrolls, and it
+   *    looks scrollable, because a control that can only be found by scrolling has to
+   *    advertise the scroll or it does not exist as far as the reader is concerned.
+   */
+  const rail = await cdp.evaluate(`(() => {
+    const el = document.querySelector('.reader-rail');
+    if (!el) return { missing: true };
+    const r = el.getBoundingClientRect();
+    const style = getComputedStyle(el);
+    const labels = [...el.querySelectorAll('button')].map((b) => b.getAttribute('aria-label') ?? '');
+    return {
+      labels,
+      top: r.top,
+      bottom: r.bottom,
+      viewport: window.innerHeight,
+      inside: r.bottom <= window.innerHeight + 1 && r.top >= -1,
+      scrollable: style.overflowY === 'auto' || style.overflowY === 'scroll',
+      overflows: el.scrollHeight - el.clientHeight > 1,
+      scrollbarWidth: el.offsetWidth - el.clientWidth,
+    };
+  })()`);
+  check(
+    '快捷列: 整组控件都在页内',
+    !rail.missing && rail.inside,
+    rail.missing ? '没有找到快捷按钮列' : `列 y=${Math.round(rail.top)}..${Math.round(rail.bottom)} / 屏高 ${rail.viewport}`,
+  );
+  check(
+    '快捷列: 装不下的控件有滚动条，说明还有更多',
+    !rail.missing && (!rail.overflows || (rail.scrollable && rail.scrollbarWidth > 0)),
+    rail.missing
+      ? '没有找到快捷按钮列'
+      : `溢出 ${rail.overflows ? '是' : '否'} overflow-y=${rail.scrollable} 滚动条 ${rail.scrollbarWidth}px`,
+  );
+  check(
+    '快捷列: 一列里含整组快捷操作，而不是只露出前几个',
+    !rail.missing && rail.labels.length >= 7,
+    rail.missing ? '没有找到快捷按钮列' : `按钮 ${rail.labels.length} 个：${rail.labels.join(' / ')}`,
+  );
+  // The read-aloud control is on the rail, which is the report's own example
+  // ("听书"). It matters because it is the one adjustment a reader makes *without*
+  // leaving the page: reaching it only through the settings sheet is a different
+  // product.
+  check(
+    '快捷列: 听书在列内',
+    !rail.missing && rail.labels.includes('听书'),
+    rail.missing ? '没有找到快捷按钮列' : `列内控件：${rail.labels.join(' / ')}`,
+  );
+
+  /*
+   * The same column on a short screen, which is the screen the report came from.
+   *
+   * A phone in landscape, or a phone whose browser chrome and status bar leave it
+   * 520px of page, is where a column with no height ceiling stops showing its own
+   * contents — and it is the case a review at a single 844px portrait size can never
+   * see. Asserted by *scrolling the column* and asking where the last control ended
+   * up, rather than by reading `overflow-y` back: the CSS is a claim about intent and
+   * this is a claim about the reader being able to reach the control.
+   */
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 420, deviceScaleFactor: 2, mobile: true });
+  await cdp.sleep(400);
+  const shortRail = await cdp.evaluate(`(() => {
+    const el = document.querySelector('.reader-rail');
+    if (!el) return { missing: true };
+    const r = el.getBoundingClientRect();
+    const buttons = [...el.querySelectorAll('button')];
+    el.scrollTop = el.scrollHeight;
+    const last = buttons[buttons.length - 1]?.getBoundingClientRect();
+    const col = el.getBoundingClientRect();
+    return {
+      bottom: r.bottom,
+      viewport: window.innerHeight,
+      inside: r.bottom <= window.innerHeight + 1,
+      reachable: last ? last.bottom <= col.bottom + 1 && last.top >= col.top - 1 : false,
+      count: buttons.length,
+      scrollbarWidth: el.offsetWidth - el.clientWidth,
+    };
+  })()`);
+  check(
+    '快捷列(420px 短屏): 列在页内，超出的控件能滚到',
+    !shortRail.missing && shortRail.inside && shortRail.reachable,
+    shortRail.missing
+      ? '没有找到快捷按钮列'
+      : `列底 ${Math.round(shortRail.bottom)} / 屏高 ${shortRail.viewport}，滚动条 ${shortRail.scrollbarWidth}px，`
+        + `滚到底后末个控件可见=${shortRail.reachable}`,
+  );
+  await cdp.send('Emulation.setDeviceMetricsOverride', { width: VIEWPORT.width, height: VIEWPORT.height, deviceScaleFactor: SCALE, mobile: true });
+  await cdp.sleep(300);
 
   await cdp.tapMiddle();
   await cdp.sleep(700);
@@ -866,6 +966,71 @@ async function audit(cdp, origin, scenes, results) {
     'EPUB: 插图下面的正文也在',
     typeof chapterText === 'string' && chapterText.includes('台版'),
     `正文开头="${chapterText}"`,
+  );
+
+  /*
+   * A plate the publisher sized in its own pixels stays inside the column.
+   *
+   * Three numbers, three different ways of saying the same failure:
+   *
+   *  - the image's own box against the reading column's — a picture wider than the
+   *    column is a picture the reader cannot see the ends of;
+   *  - the aspect *ratio* against the file's. A clamp that sets a width and leaves
+   *    the height alone squashes the plate, which is the defect a fix for the first
+   *    number can easily introduce, and it is invisible in a screenshot of a
+   *    diagonal;
+   *  - the screen's own horizontal overflow. The first two are about the image; this
+   *    one is about the *page*, which is what the reader actually reported.
+   *
+   * Measured on the *second* image, because the first is the one that fits and
+   * already has its own check above.
+   */
+  const wide = await cdp.evaluate(`(() => {
+    const root = document.querySelector('book-content')?.shadowRoot;
+    const img = root?.querySelector('.pic.wide img') ?? root?.querySelectorAll('img')[1];
+    if (!img) return { missing: true };
+    const r = img.getBoundingClientRect();
+    const flow = root.querySelector('.book-flow');
+    const fr = flow.getBoundingClientRect();
+    const style = getComputedStyle(flow);
+    // The column the image is in, which is what a max-width of 100% is a percentage
+    // of — read from the flow's own box rather than from the viewport, so the
+    // reader's page margin is accounted for the way the browser accounts for it.
+    const pad = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+    return {
+      naturalRatio: img.naturalWidth / img.naturalHeight,
+      shownRatio: r.width / r.height,
+      width: r.width,
+      columnWidth: fr.width - pad,
+      layoutWidth: img.offsetWidth,
+      layoutHeight: img.offsetHeight,
+      dpr: window.devicePixelRatio || 1,
+      documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      hostOverflow: (() => { const h = document.querySelector('book-content'); return h.scrollWidth - h.clientWidth; })(),
+      attributeWidth: img.getAttribute('width'),
+    };
+  })()`);
+  check(
+    'EPUB: 比页面宽的插图被收进栏内',
+    !wide.missing && wide.width <= wide.columnWidth + 1 && wide.layoutWidth <= wide.columnWidth + 1,
+    wide.missing
+      ? '章节里没有第二张图'
+      : `出版方写的是 ${wide.attributeWidth}px，画出来 ${Math.round(wide.width)}px / 栏宽 ${Math.round(wide.columnWidth)}px`
+        + `（布局 ${wide.layoutWidth}x${wide.layoutHeight}，dpr=${wide.dpr}）`,
+  );
+  check(
+    'EPUB: 收窄插图没有改变它的比例',
+    !wide.missing && Math.abs(wide.shownRatio - wide.naturalRatio) <= 0.02,
+    wide.missing
+      ? '章节里没有第二张图'
+      : `原图 ${wide.naturalRatio.toFixed(3)} / 画出来 ${wide.shownRatio.toFixed(3)}`,
+  );
+  check(
+    'EPUB: 宽插图没有让页面横向溢出',
+    !wide.missing && wide.documentOverflow <= 1 && wide.hostOverflow <= 1,
+    wide.missing
+      ? '章节里没有第二张图'
+      : `document 溢出 ${wide.documentOverflow}px / 阅读面溢出 ${wide.hostOverflow}px`,
   );
 
   /*

@@ -120,6 +120,96 @@ const TXT_STYLESHEET = `
 }
 `;
 
+/*
+ * The reader's own sheet for content *inside* a chapter, applied to every format.
+ *
+ * ## Why this exists at all
+ *
+ * The promise of this product is to preserve the author's design, so this sheet is
+ * the one place where that promise has to give way — and it gives way only where
+ * the alternative is a broken page rather than a plainer one:
+ *
+ *  - **An image wider than the column.** Publisher markup sizes images in the
+ *    book's own units (an `img` with a pixel `width` of 1400), and a screenshot-heavy novel or a
+ *    comic archive is full of them. Unclamped, the picture is wider than the page
+ *    it is paginated into: it runs off both edges (the report is a screenshot of
+ *    exactly that), and — worse than ugly — it changes the chapter's own geometry,
+ *    so the column count the footer reports is measured against content that is
+ *    off the screen.
+ *  - **A width/height attribute is a request, not a law.** A max-inline-size with
+ *    an `auto` height is what makes "fit the column" win over the author's pixel
+ *    width while keeping the aspect ratio; clamping the width alone squashes the
+ *    picture, which is the other way this defect is reported.
+ *  - **Markup that was never HTML.** A fixed-layout archive read as reflowable (a
+ *    photo folder, a comic whose pages the manifest does not label as fixed) hands
+ *    this shadow root a body of characters. A `white-space: pre-wrap` is the one
+ *    property that makes that body readable rather than a single squashed run —
+ *    but it is scoped to `.book-flow[data-raw]`, so it cannot reach an authored
+ *    document that must keep the author's own whitespace handling.
+ *
+ * Everything here is deliberately low priority in the cascade sense: it names only
+ * properties a chapter that styles its own images will also name, it is emitted
+ * *before* the book's stylesheet (see the constructor), and it declares no
+ * `!important` — so an author who sets a width of their own still wins.
+ */
+const CHAPTER_CONTENT_STYLESHEET = `
+.book-flow img,
+.book-flow video,
+.book-flow canvas {
+  /* Stated on the inline axis so it follows the writing mode, and with an absolute
+     ceiling as well: a max-width of 100% inside a box that is itself the full width
+     of a wide screen is still 1200px, which is wider than any page this product
+     draws. */
+  max-inline-size: min(100%, var(--reader-image-max, 100%));
+  max-width: min(100%, var(--reader-image-max, 100%));
+  /* An automatic height rather than 100%: with a pixel width of 1400 and a clamped
+     box of 342, auto keeps the author's aspect ratio and a percentage would not. */
+  height: auto;
+  /* Never taller than the page either, or a portrait plate pushes its own caption
+     onto the next page and the two become unreadable together. */
+  max-block-size: var(--reader-image-max-block, 100vh);
+  object-fit: contain;
+  /* A centred picture rather than one flush to the left margin, which is how a book
+     presents a plate that is narrower than the column. Display block, so it can be
+     centred at all: an inline image sits on a text baseline and comes with the
+     descender's worth of leading under it. */
+  display: block;
+  margin-inline: auto;
+  /* A picture cut in half by a column boundary is a picture the reader cannot
+     read, and one that is taller than the page cannot be kept whole — so "avoid"
+     applies to the ones that fit and is harmlessly ignored by the ones that do
+     not. */
+  break-inside: avoid;
+}
+/* An image the book gave no dimensions to. The box is given an intrinsic ratio so
+   the chapter does not reflow under the reader when the picture finishes loading:
+   without it, the paragraph they are reading is pushed down by the height of an
+   image that had not arrived yet, and the reader loses their place. */
+.book-flow img:not([width]):not([height]):not([style*='aspect-ratio']) {
+  aspect-ratio: var(--reader-image-ratio, auto);
+}
+.book-flow figure,
+.book-flow .pic,
+.book-flow p:has(> img:only-child) {
+  margin-inline: 0;
+  text-align: center;
+}
+/* Characters, not markup: a body of plain text under a fixed-layout label.
+   Scoped to the attribute, so an authored chapter is untouched by it. */
+.book-flow[data-raw='true'] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+/* The same wrapping for a chapter whose markup contains a single unbroken run: a
+   URL, a base64 blob, a line of repeated equals signs. Horizontal overflow is a
+   property of the whole screen, and one long token in one paragraph breaks it for
+   the entire page. */
+.book-flow :is(p, li, td, h1, h2, h3, h4, h5, h6) {
+  overflow-wrap: break-word;
+}
+`;
+
 const FLOW_STYLESHEET = `
 .book-flow {
   position: relative;
@@ -248,6 +338,18 @@ export class BookShadowHost extends HTMLElement {
    * affect it with.
    */
   private readonly txtEl: HTMLStyleElement;
+  /**
+   * The reader's rules for content *inside* a chapter, present for every format.
+   *
+   * A fourth sheet rather than more rules in `layoutEl`, because the two make
+   * different claims. `layoutEl` is the *viewer* — the flow, the column, the
+   * measure — and none of it is about the book's own bytes. This one is about the
+   * bytes: how an image is clamped, how an unlabelled body of characters is
+   * wrapped. Separating them means the sheet that has to yield to the author can be
+   * placed *below* the author's own stylesheet on its own, without moving the
+   * viewer's rules down with it.
+   */
+  private readonly chapterEl: HTMLStyleElement;
   private readonly contentEl: HTMLDivElement;
 
   constructor() {
@@ -255,14 +357,20 @@ export class BookShadowHost extends HTMLElement {
     this.shadow = this.attachShadow({ mode: 'open' });
     this.layoutEl = document.createElement('style');
     this.txtEl = document.createElement('style');
+    this.chapterEl = document.createElement('style');
     this.styleEl = document.createElement('style');
     this.contentEl = document.createElement('div');
     this.contentEl.className = 'book-flow';
     // The sheets go in cascade order, weakest first: the reader's layout rules, then
-    // the plain-text typesheet, then the book's own styles, which must be able to
-    // override both — the same order the document stylesheet gives them.
+    // the plain-text typesheet, then the reader's rules for content inside a
+    // chapter, then the book's own styles — which must be able to override all
+    // three, since preserving the author's design is the point of the product. The
+    // order the *content* sheet sits in is load-bearing rather than tidy: an author
+    // who writes `img { width: 60% }` has to win over the clamp, and the same
+    // specificity means the later sheet wins.
     this.layoutEl.textContent = FLOW_STYLESHEET;
-    this.shadow.append(this.layoutEl, this.txtEl, this.styleEl, this.contentEl);
+    this.chapterEl.textContent = CHAPTER_CONTENT_STYLESHEET;
+    this.shadow.append(this.layoutEl, this.txtEl, this.chapterEl, this.styleEl, this.contentEl);
   }
 
   /**
@@ -289,6 +397,26 @@ export class BookShadowHost extends HTMLElement {
   setPlainText(enabled: boolean): void {
     this.txtEl.textContent = enabled ? TXT_STYLESHEET : '';
     this.toggleAttribute('data-plain-text', enabled);
+  }
+
+  /**
+   * Marks the chapter's body as characters that were *not* typeset as a novel.
+   *
+   * The distinction is the one `plainText` does not make. A TXT chapter is
+   * characters, and the reader typesets them into paragraphs — after which the body
+   * is markup, and the browser's own whitespace collapsing is exactly right for it.
+   * A body of characters that arrived under a *document* label (a fixed-layout
+   * archive read as reflowable, a `text/plain` page the manifest called a chapter)
+   * keeps its characters, and its line breaks are then the only structure it has:
+   * collapsed, a log or an ASCII figure renders as one squashed run and the reader
+   * is looking at a paragraph that was never in the file.
+   *
+   * Both "what is it" and "was it typeset" have to be asked, because the answers
+   * combine: characters-not-typeset is the case this guards and
+   * characters-typeset is the ordinary TXT.
+   */
+  setRawText(raw: boolean): void {
+    this.contentEl.toggleAttribute('data-raw', raw);
   }
 
   /** The element pagination and scroll measurement should look at. */

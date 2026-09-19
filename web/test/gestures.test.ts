@@ -99,6 +99,34 @@ describe('tap zones', () => {
     expect(h.saw.zones).toEqual(['previous', 'toggle-chrome', 'next']);
   });
 
+  it('reads the zones from layout geometry, so a scaled page still taps where the finger is', () => {
+    // The failure this closes is a *half* of the tap area, and it is invisible at
+    // 100% zoom: `getBoundingClientRect()` and `event.clientX` are both in visual
+    // viewport units, so under a pinch zoom the border box and the finger disagree
+    // while the zone arithmetic happily accepts the tap. The reader taps the middle
+    // third to hide the toolbar and turns a page instead.
+    //
+    // Stated as a *scaled* rect: the layout box is 300px and on screen it is
+    // reported as 600px wide, which is what a page at 2× looks like to this layer.
+    // A tap at the visual centre of the screen must be the *middle* zone, and the
+    // two taps at the outer quarters must be the outer zones — with the old
+    // arithmetic, which compared a visual offset against a layout width, the first
+    // of the three landed in the middle and the whole row shifted by one.
+    const h = harness();
+    // `offsetWidth` is what the zones divide; the rect is where the element *is*.
+    Object.defineProperty(h.stage, 'offsetWidth', { get: () => 300, configurable: true });
+    h.stage.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 600, height: 1200, right: 600, bottom: 1200, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
+    // The tap coordinates are in *visual* units and the zones are in layout units.
+    // A third of the 300px layout box is 100px of *layout* and 200px of screen, so
+    // 150 is inside the first third, 300 (the visible centre) is the middle, and 450
+    // is the last.
+    press(h.stage, [150, 300]);
+    press(h.stage, [300, 300]);
+    press(h.stage, [450, 300]);
+    expect(h.saw.zones).toEqual(['previous', 'toggle-chrome', 'next']);
+  });
+
   it('does not turn a page when the tap lands on a control inside the stage', () => {
     // The bug: the gesture layer treats *every* pointer it sees on the stage as a
     // page turn, so a tap on a button that lives inside the reading surface — a

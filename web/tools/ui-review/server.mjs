@@ -63,6 +63,25 @@ const ILLUSTRATED_CHAPTERS = [
 const PLATE_WIDTH = 240;
 const PLATE_HEIGHT = 160;
 
+/**
+ * A plate far wider than any phone column.
+ *
+ * The report behind this is a screenshot of an illustration running off *both* edges
+ * of the page, and the fixture it was reported against was 240px wide — which fits
+ * inside a 342px column, so the harness certified that illustrations render while the
+ * defect was fully reproducible on a real book. A publisher sizes a plate in the
+ * book's own pixels, and reflowable comics and screenshot-heavy novels are full of
+ * them, so the fixture has to be one of those: the question this scene answers is not
+ * "did the image load" but "does the page still fit the screen once it has".
+ *
+ * The aspect ratio is deliberately extreme (1400×160), so the reported failure and
+ * the *other* failure a naive clamp produces are distinguishable in one picture. A
+ * plate clamped in width alone comes out squashed at 342×160; one clamped with an
+ * automatic height comes out at 342×39, which is what the book's own proportions are.
+ */
+const WIDE_PLATE_WIDTH = 1400;
+const WIDE_PLATE_HEIGHT = 160;
+
 /** A PNG with a visible border and a diagonal, so "did it render" is answerable by eye. */
 function platePng(width, height) {
   // Built by hand rather than with a library: the point is that this file has no
@@ -145,6 +164,7 @@ function zlibDeflate(buf) {
 }
 
 const PNG = platePng(PLATE_WIDTH, PLATE_HEIGHT);
+const WIDE_PNG = platePng(WIDE_PLATE_WIDTH, WIDE_PLATE_HEIGHT);
 
 /** The two paragraphs of a document chapter, and the image between them. */
 function illustratedChapter(index) {
@@ -155,13 +175,19 @@ function illustratedChapter(index) {
       '<body><p>后记：这一章没有插图，用来确认上一章的图片不是碰巧出现的。</p></body></html>',
     ].join('\n');
   }
-  const image = `/api/v1/books/${ILLUSTRATED_ID}/assets?__reader-book-resource__=1&ref=${encodeURIComponent('OEBPS/Images/pic.png')}`;
+  const image = (name) =>
+    `/api/v1/books/${ILLUSTRATED_ID}/assets?__reader-book-resource__=1&ref=${encodeURIComponent(`OEBPS/Images/${name}`)}`;
   return [
     '<?xml version="1.0" encoding="utf-8"?>',
     '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一卷 插图</title></head>',
     '<body>',
-    `<div class="pic"><img src="${image}" alt="插图"/></div>`,
+    // The plate that fits the column, as a book normally presents one…
+    `<div class="pic"><img src="${image('pic.png')}" alt="插图"/></div>`,
     '<p>台版 转自 天使动漫</p>',
+    // …and one the publisher sized in its own pixels, which is the case the reader
+    // reported. Both are on the page so one screenshot shows "a plate is drawn" and
+    // "a plate wider than the page is still inside it" at the same time.
+    `<div class="pic wide"><img src="${image('wide.png')}" alt="宽插图" width="${WIDE_PLATE_WIDTH}" height="${WIDE_PLATE_HEIGHT}"/></div>`,
     '<p>插图下面还有正文，这样图片没显示出来的时候，空出来的位置也是看得见的。</p>',
     '</body></html>',
   ].join('\n');
@@ -599,6 +625,10 @@ export function createReviewServer({ port = 5199 } = {}) {
       if (ref.endsWith('pic.png')) {
         reply.writeHead(200, { 'content-type': 'image/png' });
         return reply.end(PNG);
+      }
+      if (ref.endsWith('wide.png')) {
+        reply.writeHead(200, { 'content-type': 'image/png' });
+        return reply.end(WIDE_PNG);
       }
       const index = ILLUSTRATED_CHAPTERS.findIndex((chapter) => ref === chapter.path);
       reply.writeHead(200, { 'content-type': 'application/xhtml+xml; charset=utf-8' });
