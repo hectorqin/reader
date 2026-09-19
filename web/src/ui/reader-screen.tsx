@@ -1551,7 +1551,7 @@ function emptyChromeSettings(): Partial<ChromeState> {
       ttsAutoAdvance: true,
       ttsEngine: 'auto',
       shelfDensity: 'cozy',
-      shelfSort: 'updated',
+      shelfSort: 'recent',
       shelfShowAuthor: true,
       shelfShowProgress: true,
     },

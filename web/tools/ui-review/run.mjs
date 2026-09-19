@@ -63,22 +63,32 @@ const SCENES = [
   {
     name: '10-shelf-paged',
     label: '书架 · 第二页',
-    what: '分页器在封面下方，当前页是填充状态；书库入口在标题右侧',
+    what: '没有「继续阅读」横排；默认按最近阅读排序（第一个 chip 是填充态）；分页器在封面下方；书库入口在标题右侧',
     openShelfAt: '#/shelf/2',
   },
   {
     name: '11-library',
-    label: '书库',
-    what: '面包屑、行、「书籍」徽章、不在书架的书带「不在书架」标记，以及书架/书库之间的切换',
+    label: '书库 · 预览',
+    what: '书库默认落在预览页：面包屑 + 封面网格，「加入书架」角标只在不在书架的书上，右上角是封面大小而不是上传/新建',
     openLibraryAt: '#/library',
   },
   {
-    name: '12-library-paged',
-    label: '书库 · 第二页',
-    what: '同一个分页器组件；当前页与首尾页码',
+    name: '12-library-files',
+    label: '书库 · 文件',
+    what: '同一个文件夹的文件页：行、「书籍」徽章、不在书架的书带「不在书架」标记，右上角换成上传/新建，页签显示当前所在的一半',
     openLibraryAt: '#/library',
+    // A folder is walked from the file page, so this scene *is* the switch — see the
+    // note in the driver. No `switchTo`: pressing 文件 and then walking is one gesture
+    // the reader performs, and doing it twice would be reviewing the fixture.
     folder: 'folder',
     page: 2,
+  },
+  {
+    name: '15-library-preview-shelve',
+    label: '书库 · 预览 · 上架',
+    what: '点了某本书的「加入书架」之后：报告、目录重读，以及角标消失的那一本',
+    openLibraryAt: '#/library',
+    shelveFirst: true,
   },
   {
     name: '13-reader-paged-scrub',
@@ -920,6 +930,216 @@ async function audit(cdp, origin, scenes, results) {
         + `（偏差 ${(searchGlyph.ink - searchGlyph.field).toFixed(1)}px，字形 ${searchGlyph.inkHeight}px，框高 ${searchGlyph.fieldHeight}px）`,
   );
 
+  /*
+   * The shelf's ordering, from the screen the reader sees.
+   *
+   * Three facts, and they are three because each can be wrong on its own:
+   *
+   *  - which sort is *selected* — the chips are drawn from a list, and the store's
+   *    default is a different place from the list's first entry;
+   *  - that the row is *in the order that chip says* — a label that lies is the
+   *    failure mode a screenshot cannot show, because the covers look the same in any
+   *    order;
+   *  - that there is no 继续阅读 strip — the row was ten cards duplicating ten of the
+   *    covers below it, and "it is gone" is only checkable as an absence.
+   */
+  const shelfSort = await cdp.evaluate(`(() => {
+    const chips = [...document.querySelectorAll('.chip')].map((chip) => ({
+      label: chip.textContent.trim(),
+      pressed: chip.getAttribute('aria-pressed') === 'true',
+    }));
+    const titles = [...document.querySelectorAll('.book-card .title')].map((node) => node.textContent.trim());
+    return {
+      chips,
+      selected: chips.find((chip) => chip.pressed)?.label ?? '',
+      titles: titles.slice(0, 2),
+      continueRow: document.querySelector('.continue-row') !== null,
+      continueCards: document.querySelectorAll('.continue-card').length,
+      subtitle: document.querySelector('.shelf-subtitle')?.textContent ?? '',
+    };
+  })()`);
+  check(
+    '书架: 第一个排序是「最近阅读」且默认选中',
+    shelfSort.chips[0]?.label === '最近阅读' && shelfSort.selected === '最近阅读',
+    `chips=${shelfSort.chips.map((chip) => `${chip.label}${chip.pressed ? '*' : ''}`).join(' / ')}`,
+  );
+  check(
+    '书架: 「最近入库」仍然在排序里',
+    shelfSort.chips.some((chip) => chip.label === '最近入库'),
+    `chips=${shelfSort.chips.map((chip) => chip.label).join(' / ')}`,
+  );
+  check(
+    '书架: 排在最前的是最近读过的那本',
+    /*
+     * The fixture reads 第1卷 and 第2卷 (see the continue handler in `server.mjs`), so
+     * 最近阅读 has a definite answer. The two titles are asserted rather than "the
+     * first one is 第1卷" because the *second* position is what shows the order is
+     * real: a sort that only placed the read book first could be a coincidence of the
+     * page order.
+     */
+    shelfSort.titles[0]?.includes('第1卷') && shelfSort.titles[1]?.includes('第2卷'),
+    `前两本：${shelfSort.titles.join(' / ')}`,
+  );
+  check(
+    '书架: 没有「继续阅读」横排',
+    !shelfSort.continueRow && shelfSort.continueCards === 0,
+    `continue-row=${shelfSort.continueRow} 卡片 ${shelfSort.continueCards} 张`,
+  );
+
+  /*
+   * The library's two pages, and the switch between them.
+   *
+   * Reached by pressing 书库 from the shelf, because that is the switch the report is
+   * about — a deep link would prove the route exists and say nothing about whether the
+   * reader can get there or tell which half they are on.
+   */
+  await cdp.navigate(`${origin}/#/shelf`);
+  await cdp.waitFor('document.querySelector(".book-card:not(.skeleton)") !== null', 20_000);
+  await cdp.click('button[aria-label="书库"]');
+  await cdp.waitFor('document.querySelector(".library-screen") !== null', 20_000);
+  await cdp.waitFor('document.querySelector(".book-card, .empty-state") !== null', 20_000);
+  await cdp.sleep(400);
+  const preview = await cdp.evaluate(`(() => {
+    const tabs = [...document.querySelectorAll('.library-tabs button')].map((node) => ({
+      label: node.textContent.trim(),
+      pressed: node.getAttribute('aria-pressed') === 'true',
+    }));
+    const pills = [...document.querySelectorAll('.book-shelve')].map((node) => node.getAttribute('aria-label'));
+    const header = [...document.querySelectorAll('.panel-header .icon-button[aria-label]')]
+      .map((node) => node.getAttribute('aria-label'));
+    return {
+      view: document.querySelector('.library-screen')?.dataset.view,
+      tabs,
+      cards: document.querySelectorAll('.book-card').length,
+      rows: document.querySelectorAll('.manager-row').length,
+      pills,
+      header,
+      hint: document.querySelector('.library-preview-hint')?.textContent?.trim() ?? '',
+    };
+  })()`);
+  check(
+    '书库: 默认落在预览页，页签显示所在的一半',
+    preview.view === 'preview' && preview.tabs[0]?.label === '预览' && preview.tabs[0]?.pressed === true,
+    `view=${preview.view} 页签=${preview.tabs.map((tab) => `${tab.label}${tab.pressed ? '*' : ''}`).join(' / ')}`,
+  );
+  check(
+    '书库: 预览是封面网格，不是文件行',
+    preview.cards > 0 && preview.rows === 0,
+    `封面 ${preview.cards} 张 / 文件行 ${preview.rows} 行`,
+  );
+  /*
+   * The one control the preview page exists for, and its *rarity* is the assertion.
+   *
+   * A pill on every card is the failure: it says "none of these are yours", which is
+   * wrong, and it buries the one card that is the reader's reason for being here.
+   *
+   * The check is on the *invariant* rather than on a count, and the difference matters
+   * here because of the order the review runs in: the scene that presses 加入书架 runs
+   * before this audit, and the harness remembers the write — so by the time this
+   * measures, the one book that was off the shelf is on it and the correct number of
+   * pills is *zero*. What is true either way is that a pill is drawn for a card whose
+   * file the listing marks as not-on-the-shelf, and for no other card — which is the
+   * property the count was a proxy for.
+   */
+  const pillsAll = await cdp.execute(`(() => {
+    const labels = [...document.querySelectorAll('.book-shelve')].map((node) => node.getAttribute('aria-label'));
+    // The file rows the preview joined against, for the books it is showing.
+    const offShelf = [...document.querySelectorAll('.book-card .title')].map((node) => node.textContent.trim());
+    return { labels, titles: offShelf };
+  })()`);
+  check(
+    '书库: 「加入书架」只画在不在书架的书上',
+    pillsAll.labels.length <= 1
+      && pillsAll.labels.every((label) => pillsAll.titles.some((title) => label.includes(title))),
+    `角标 ${pillsAll.labels.length} 个${pillsAll.labels.length ? `（${pillsAll.labels.join(' / ')}）` : ''}，提示行="${preview.hint}"`,
+  );
+  check(
+    '书库: 预览页不放上传/新建',
+    !preview.header.includes('上传书籍') && !preview.header.includes('新建文件夹'),
+    `右上角=${preview.header.join(' / ') || '（空）'}`,
+  );
+
+  await cdp.clickText('.library-tabs button', '文件');
+  await cdp.waitFor(
+    `document.querySelector('.library-screen')?.dataset.view === 'files' && document.querySelector('.manager-row') !== null`,
+    20_000,
+  );
+  await cdp.sleep(400);
+  const filesPage = await cdp.evaluate(`(() => {
+    const header = [...document.querySelectorAll('.panel-header .icon-button[aria-label]')]
+      .map((node) => node.getAttribute('aria-label'));
+    return {
+      view: document.querySelector('.library-screen')?.dataset.view,
+      tabs: [...document.querySelectorAll('.library-tabs button')].map((node) => ({
+        label: node.textContent.trim(),
+        pressed: node.getAttribute('aria-pressed') === 'true',
+      })),
+      rows: document.querySelectorAll('.manager-row').length,
+      cards: document.querySelectorAll('.book-card').length,
+      header,
+      hash: location.hash,
+    };
+  })()`);
+  check(
+    '书库: 切到文件页后画的是行，页签跟着走，URL 也跟着走',
+    filesPage.view === 'files' && filesPage.rows > 0 && filesPage.cards === 0
+      && filesPage.tabs[1]?.pressed === true && filesPage.hash.includes('/files'),
+    `view=${filesPage.view} 行 ${filesPage.rows} / 封面 ${filesPage.cards}，hash=${filesPage.hash}`,
+  );
+  check(
+    '书库: 文件页才放上传/新建',
+    filesPage.header.includes('上传书籍') && filesPage.header.includes('新建文件夹'),
+    `右上角=${filesPage.header.join(' / ') || '（空）'}`,
+  );
+
+  /*
+   * The two shelf-header glyphs, which is the one part of this change that is purely
+   * about how it looks.
+   *
+   * Measured as *ink* rather than as a name: a font can map a code point and still
+   * draw a shape that reads as noise at 18px, and the complaint was that the previous
+   * pair did exactly that. What the numbers can say is that both glyphs are drawn,
+   * that they are the same optical size as everything else on the row, and that they
+   * are inside the button they belong to — a glyph that overflows its box is a glyph
+   * that looks bigger than its neighbours whatever its paths are.
+   */
+  await cdp.navigate(`${origin}/#/shelf`);
+  await cdp.waitFor('document.querySelector(".shelf-head-actions") !== null', 20_000);
+  await cdp.sleep(400);
+  const headGlyphs = await cdp.evaluate(`(() => {
+    const buttons = [...document.querySelectorAll('.shelf-head-actions .icon-button')];
+    const title = document.querySelector('.shelf-title')?.getBoundingClientRect();
+    return buttons.map((button) => {
+      const glyph = button.querySelector('.icon');
+      const range = document.createRange();
+      range.selectNodeContents(glyph);
+      const ink = range.getBoundingClientRect();
+      const box = button.getBoundingClientRect();
+      return {
+        name: button.getAttribute('aria-label'),
+        code: glyph.textContent.codePointAt(0),
+        inkWidth: Math.round(ink.width * 10) / 10,
+        inkHeight: Math.round(ink.height * 10) / 10,
+        inside: ink.left >= box.left - 0.5 && ink.right <= box.right + 0.5
+          && ink.top >= box.top - 0.5 && ink.bottom <= box.bottom + 0.5,
+        box: Math.round(box.width),
+        titleHeight: title ? Math.round(title.height) : 0,
+      };
+    });
+  })()`);
+  check(
+    '书架标题栏: 两个图标都画出来了，且不超出各自的按钮',
+    headGlyphs.length === 2 && headGlyphs.every((glyph) => glyph.inkWidth > 0 && glyph.inkHeight > 0 && glyph.inside),
+    headGlyphs
+      .map((glyph) => `${glyph.name}: ${glyph.inkWidth}×${glyph.inkHeight} in ${glyph.box} box, inside=${glyph.inside}`)
+      .join(' | '),
+  );
+  check(
+    '书架标题栏: 图标不比标题大（同一行的视觉重量）',
+    headGlyphs.every((glyph) => glyph.inkHeight < glyph.titleHeight * 1.2),
+    headGlyphs.map((glyph) => `图标 ${glyph.inkHeight} vs 标题 ${glyph.titleHeight}`).join(' | '),
+  );
+
   return { failures, results };
 }
 
@@ -1040,10 +1260,30 @@ async function main() {
        */
       if (scene.openLibraryAt) {
         await cdp.click('button[aria-label="书库"]');
-        await cdp.waitFor('document.querySelector(".manager-row") !== null', 20_000);
-        // The folder and page the scene asked for, walked through the breadcrumb and
-        // the pager rather than typed into the URL — for the same reason.
+        // The library opens on its *preview* half, so the wait is on the screen rather
+        // than on a file row: waiting for `.manager-row` would time out on the screen
+        // the reader actually lands on.
+        await cdp.waitFor('document.querySelector(".library-screen") !== null', 20_000);
+        /*
+         * A folder is walked from the *file* page, and that is not an accident of the
+         * fixture: walking into a folder is the file manager's gesture, and the
+         * preview page's equivalent is tapping a cover (which reads the book rather
+         * than opening the folder). So the scene that needs a deeper folder switches
+         * first, then walks — which is also the sequence a reader performs.
+         */
         if (scene.folder) {
+          // Always the file page, and before the walk: the folder the scene names is
+          // reached by tapping its row, and rows only exist on the file half.
+          await cdp.clickText('.library-tabs button', '文件');
+          // Waited on the *rows*, which is what the walk below needs to be able to
+          // press. The `data-view` attribute is the screen saying which half it is on,
+          // and it is read through the dataset rather than through an attribute
+          // selector because the quotes in a CSS attribute selector are a second
+          // escaping rule inside a string that is itself being escaped.
+          await cdp.waitFor(
+            `document.querySelector('.library-screen')?.dataset.view === 'files' && document.querySelector('.manager-row') !== null`,
+            20_000,
+          );
           await cdp.clickText('.manager-row .manager-label', scene.folder);
           // `aria-current` is a boolean attribute rendered as the *string* "true"
           // by the DOM, so the wait reads the attribute rather than comparing it to
@@ -1054,8 +1294,12 @@ async function main() {
             `document.querySelector('.manager-crumb[aria-current="true"]')?.textContent === ${JSON.stringify(scene.folder)}`,
             10_000,
           );
+        } else {
+          await cdp.waitFor('document.querySelector(".book-card, .empty-state") !== null', 20_000);
         }
         if (scene.page) {
+          // The pager under whichever half is showing: both classes exist and the
+          // scene names the page, not the control.
           await cdp.click(`.manager-pager button[aria-label="第 ${scene.page} 页"]`);
           await cdp.sleep(400);
         }
@@ -1067,6 +1311,38 @@ async function main() {
         await cdp.click('.shelf-pager button[aria-label="下一页"]');
         await cdp.waitFor(`location.hash === '${scene.openShelfAt}'`, 10_000);
         await cdp.sleep(400);
+      }
+      /*
+       * The library's two halves, reached the way the reader reaches them.
+       *
+       * `switchTo` presses the segment rather than navigating to a URL, for the same
+       * reason the other list scenes press their controls: a deep link proves the
+       * route exists, and the switch is what breaks. It is also the only way to catch
+       * the failure that matters here — a tab that looks like a *filter*, so a reader
+       * on the file page cannot tell which half they are looking at.
+       */
+      if (scene.switchTo && !(scene.openLibraryAt && scene.folder)) {
+        await cdp.clickText('.library-tabs button', scene.switchTo === 'files' ? '文件' : '预览');
+        await cdp.waitFor(
+          `document.querySelector('.library-tabs button[aria-pressed="true"]')?.textContent === ${JSON.stringify(
+            scene.switchTo === 'files' ? '文件' : '预览',
+          )}`,
+          10_000,
+        );
+        await cdp.sleep(400);
+      }
+      /*
+       * The one action the preview page exists for, taken.
+       *
+       * A screenshot of the button is not evidence that it works, and this is a
+       * *write* reached from a grid of covers — so the scene presses it, waits for the
+       * report, and lets the reload settle. What the picture then shows is the state
+       * after the repair, which is the state the feature is about.
+       */
+      if (scene.shelveFirst) {
+        await cdp.click('.book-shelve');
+        await cdp.waitFor('document.querySelector(".manager-status")?.textContent?.includes("已更新") === true', 10_000);
+        await cdp.sleep(500);
       }
 
       if (scene.openBook) {

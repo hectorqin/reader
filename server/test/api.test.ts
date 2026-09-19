@@ -982,3 +982,74 @@ test('a volume archive beside volume folders stays on the shelf and serves its p
     );
   }
 });
+
+test('the shelf can be filtered to one folder', async () => {
+  /*
+   * The library screen's browsing half, at the layer that has to make it possible.
+   *
+   * The preview page is a grid of the books *in a folder*, and "books" is the one
+   * shape `BookDto` has — so the filter is a parameter on `/books` rather than a new
+   * endpoint that would have to re-derive titles, covers and `manualFields` for
+   * itself. What is asserted here is the part a naive `LIKE '%dir%'` gets wrong: the
+   * *segment boundary*.
+   */
+  const session = await createUser('folderfilter');
+  const sciFi = join(booksDir, '筛选科幻');
+  const science = join(booksDir, '筛选科学');
+  const nested = join(sciFi, '子目录');
+  await mkdir(nested, { recursive: true });
+  await mkdir(science, { recursive: true });
+  await writeFile(join(sciFi, 'a.epub'), await makeEpub({ id: 'urn:uuid:ff-a', title: '筛选一' }));
+  await writeFile(join(nested, 'b.epub'), await makeEpub({ id: 'urn:uuid:ff-b', title: '筛选二' }));
+  await writeFile(join(science, 'c.epub'), await makeEpub({ id: 'urn:uuid:ff-c', title: '筛选三' }));
+  await ctx.scanner.scan();
+
+  const inFolder = async (path: string): Promise<string[]> => {
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books?path=${encodeURIComponent(path)}&pageSize=200`,
+      headers: auth(session.token),
+    });
+    // Sorted with `localeCompare` rather than the default `sort`, which compares
+    // code points: the two orders differ for Chinese titles, and this test is about
+    // which books came back, not about how they were ordered.
+    return ((res.json() as { items: Array<{ title: string }> }).items)
+      .map((item) => item.title)
+      .sort((a, b) => a.localeCompare(b));
+  };
+
+  // Recursive, and *only* this branch: 筛选科幻 must not drag in 筛选科学, which a
+  // `LIKE '%筛选科%'` would do.
+  assert.deepEqual(await inFolder('筛选科幻'), ['筛选一', '筛选二'].sort((a, b) => a.localeCompare(b)));
+  assert.deepEqual(await inFolder('筛选科学'), ['筛选三']);
+  // A trailing slash is not a different folder.
+  assert.deepEqual(await inFolder('筛选科幻/'), ['筛选一', '筛选二'].sort((a, b) => a.localeCompare(b)));
+  // The root is the whole library, so the filter is simply absent.
+  const all = await inFolder('');
+  assert.ok(all.length >= 3, 'an empty path is not a filter');
+});
+
+test('the folder filter is not fooled by LIKE wildcards in a name', async () => {
+  /*
+   * `%` and `_` are legal in a filename and are `LIKE` wildcards, and the difference
+   * is not academic: a folder called `100%` would otherwise match every sibling whose
+   * name begins with `100`, and a reader opening that folder would be shown books
+   * from the one beside it.
+   */
+  const session = await createUser('wildcardfilter');
+  const percent = join(booksDir, '100% 收录');
+  const decoy = join(booksDir, '100本合集');
+  await mkdir(percent, { recursive: true });
+  await mkdir(decoy, { recursive: true });
+  await writeFile(join(percent, 'p.epub'), await makeEpub({ id: 'urn:uuid:wc-p', title: '百分号' }));
+  await writeFile(join(decoy, 'd.epub'), await makeEpub({ id: 'urn:uuid:wc-d', title: '一百本' }));
+  await ctx.scanner.scan();
+
+  const res = await app.inject({
+    method: 'GET',
+    url: `/api/v1/books?path=${encodeURIComponent('100% 收录')}&pageSize=200`,
+    headers: auth(session.token),
+  });
+  const titles = ((res.json() as { items: Array<{ title: string }> }).items).map((item) => item.title);
+  assert.deepEqual(titles, ['百分号']);
+});

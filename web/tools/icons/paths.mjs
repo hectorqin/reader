@@ -68,4 +68,27 @@ export const GLYPHS = {
   'font': 'M5 6V4.5h14V6M12 4.5V19M9.5 19h5',
   'up-down': 'M4 4h16M4 20h16M12 7v10M9.5 9.5L12 7l2.5 2.5M9.5 14.5L12 17l2.5-2.5',
   'gear': 'M12 6.2L13.68 3.57L15.29 4.05L15.22 7.18L16.1 7.9L19.15 7.22L19.95 8.71L17.69 10.87L17.8 12L20.43 13.68L19.95 15.29L16.82 15.22L16.1 16.1L16.78 19.15L15.29 19.95L13.13 17.69L12 17.8L10.32 20.43L8.71 19.95L8.78 16.82L7.9 16.1L4.85 16.78L4.05 15.29L6.31 13.13L6.2 12L3.57 10.32L4.05 8.71L7.18 8.78L7.9 7.9L7.22 4.85L8.71 4.05L10.87 6.31ZM12 9.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6z',
+  // The two shelf-header controls, re-drawn from the shapes the report rejected.
+  //
+  // The complaint was "顶部右侧的两个 icon 太丑了", and the reason is visible in the
+  // geometry rather than in the taste: the pair was `folder-open` and `gear`. The
+  // folder is an *outline with an open flap*, so it reads as a stack of four
+  // strokes at 18px, and the gear is a twelve-lobed cog whose teeth and hub merge
+  // into a grey rosette at the same size. On a header that also carries a 24px
+  // title, two dense multi-stroke glyphs are the two noisiest things on the row.
+  //
+  // The replacements are the same *ideas* drawn at the set's own weight with the
+  // fewest strokes that still say them:
+  //
+  //  - `books` is the library: three book spines on a shelf, so it stays a book
+  //    shape (the product is a reader, not a file browser) while plainly meaning
+  //    "more than one".
+  //  - `sliders` already exists for settings; the header uses a *tune* shape whose
+  //    two knobs are on one horizontal line, which is one stroke fewer than
+  //    `sliders`' two rails and reads as a control rather than as a list.
+  //
+  // Both are drawn with the ends inside the 24-unit grid rather than at its edge,
+  // which is what keeps them from looking larger than the glyphs beside them.
+  'books': 'M4.5 5.2h3.4v14H4.5zM10.3 5.2h3.4v14h-3.4zM16.6 5.8l3.2.7-2.9 13.3-3.2-.7z',
+  'tune': 'M4 8.5h9M17 8.5h3M4 15.5h3M11 15.5h9M15 6.5v4M9 13.5v4',
 };

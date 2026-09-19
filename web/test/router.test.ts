@@ -108,7 +108,7 @@ describe('route parsing', () => {
     expect(parseRoute('#/shelf')).toEqual({ name: 'shelf', page: 1, libraryPath: '', libraryPage: 1 });
     expect(parseRoute('#/book/3f2a')).toEqual({ name: 'book', bookId: '3f2a' });
     expect(parseRoute('#/library/科幻/刘慈欣')).toEqual({
-      name: 'library', path: '科幻/刘慈欣', page: 1, fromShelf: false,
+      name: 'library', path: '科幻/刘慈欣', page: 1, view: 'preview', fromShelf: false,
     });
   });
 
@@ -132,7 +132,7 @@ describe('route parsing', () => {
   });
 
   it('round-trips a folder name that needs escaping', () => {
-    const route: Route = { name: 'library', path: '科幻 #1/100% 全集', page: 1, fromShelf: false };
+    const route: Route = { name: 'library', path: '科幻 #1/100% 全集', page: 1, view: 'preview', fromShelf: false };
     const hash = routeHash(route);
     expect(hash).toBe('#/library/%E7%A7%91%E5%B9%BB%20%231/100%25%20%E5%85%A8%E9%9B%86');
     expect(parseRoute(hash)).toEqual(route);
@@ -142,19 +142,19 @@ describe('route parsing', () => {
     // A pageful of books is a screenful of covers, and the second one has to be
     // addressable: Back out of a book lands on the page the reader was on, not on
     // the first sixty books of a two-thousand book library.
-    const page3: Route = { name: 'library', path: '科幻/刘慈欣', page: 3, fromShelf: false };
+    const page3: Route = { name: 'library', path: '科幻/刘慈欣', page: 3, view: 'preview', fromShelf: false };
     expect(routeHash(page3)).toBe('#/library/%E7%A7%91%E5%B9%BB/%E5%88%98%E6%85%88%E6%AC%A3/3');
     expect(parseRoute(routeHash(page3))).toEqual(page3);
     // `/1` and `` are the same list, so only one of them is written: a screen with
     // two URLs is a Back that appears to do nothing.
-    expect(routeHash({ name: 'library', path: '科幻', page: 1, fromShelf: false })).toBe('#/library/%E7%A7%91%E5%B9%BB');
+    expect(routeHash({ name: 'library', path: '科幻', page: 1, view: 'preview', fromShelf: false })).toBe('#/library/%E7%A7%91%E5%B9%BB');
   });
 
   it('keeps a folder actually named like a number a folder', () => {
     // The page segment is only ever written by `routeHash`, and it is only ever
     // appended — so a bare `/2` is the folder `2`, and `/科幻/2` is page two.
-    expect(parseRoute('#/library/2')).toEqual({ name: 'library', path: '2', page: 1, fromShelf: false });
-    expect(parseRoute('#/library/科幻/2')).toEqual({ name: 'library', path: '科幻', page: 2, fromShelf: false });
+    expect(parseRoute('#/library/2')).toEqual({ name: 'library', path: '2', page: 1, view: 'preview', fromShelf: false });
+    expect(parseRoute('#/library/科幻/2')).toEqual({ name: 'library', path: '科幻', page: 2, view: 'preview', fromShelf: false });
   });
 
   it('round-trips the shelf page the same way', () => {
@@ -168,7 +168,7 @@ describe('route parsing', () => {
     // here is a screen that never paints.
     const route = parseRoute('#/library/%E4%B');
     expect(route.name).toBe('library');
-    expect(route).toEqual({ name: 'library', path: '%E4%B', page: 1, fromShelf: false });
+    expect(route).toEqual({ name: 'library', path: '%E4%B', page: 1, view: 'preview', fromShelf: false });
   });
 
   it('ignores a query, so a shared link can carry tracking', () => {
@@ -177,7 +177,7 @@ describe('route parsing', () => {
 
   it('knows which routes are the same place', () => {
     const shelf: Route = { name: 'shelf', page: 1, libraryPath: '', libraryPage: 1 };
-    const lib = (path: string, page = 1): Route => ({ name: 'library', path, page, fromShelf: false });
+    const lib = (path: string, page = 1): Route => ({ name: 'library', path, page, view: 'preview', fromShelf: false });
     expect(sameRoute(shelf, { ...shelf })).toBe(true);
     expect(sameRoute({ name: 'book', bookId: 'a' }, { name: 'book', bookId: 'a' })).toBe(true);
     expect(sameRoute({ name: 'book', bookId: 'a' }, { name: 'book', bookId: 'b' })).toBe(false);
@@ -191,7 +191,7 @@ describe('route parsing', () => {
       name: 'shelf', page: 1, libraryPath: '', libraryPage: 1,
     });
     expect(parentOf({ name: 'book', bookId: 'a' })).toEqual({ name: 'shelf', page: 1, libraryPath: '', libraryPage: 1 });
-    expect(parentOf({ name: 'library', path: '科幻', page: 1, fromShelf: false })).toEqual({
+    expect(parentOf({ name: 'library', path: '科幻', page: 1, view: 'preview', fromShelf: false })).toEqual({
       name: 'shelf', page: 1, libraryPath: '', libraryPage: 1,
     });
   });
@@ -207,7 +207,7 @@ describe('the two list screens', () => {
    */
   it('keeps the two lists apart', () => {
     expect(routeHash({ name: 'shelf', page: 1, libraryPath: '', libraryPage: 1 })).toBe('#/shelf');
-    expect(routeHash({ name: 'library', path: '', page: 1, fromShelf: false })).toBe('#/library');
+    expect(routeHash({ name: 'library', path: '', page: 1, view: 'preview', fromShelf: false })).toBe('#/library');
     // A folder and its page are one URL, and the page is a *suffix*: reading the
     // last numeric segment as a page is only safe because `routeHash` is the only
     // thing that ever writes one.
@@ -231,7 +231,7 @@ describe('the two list screens', () => {
   it('carries the library location on the shelf, because the shelf cannot say it', () => {
     const win = new FakeWindow();
     const { router, seen } = makeRouter(win);
-    router.navigate({ name: 'library', path: '科幻', page: 3, fromShelf: false });
+    router.navigate({ name: 'library', path: '科幻', page: 3, view: 'preview', fromShelf: false });
     router.navigate({ name: 'shelf', page: 1, libraryPath: '科幻', libraryPage: 3 });
     // Switching back must land in the folder the reader was in — not at the library
     // root, which is what a hash with nowhere to put a path would mean.
@@ -243,7 +243,7 @@ describe('the two list screens', () => {
   it('remembers which list a page belongs to when the URL cannot', () => {
     const win = new FakeWindow();
     const { router, seen } = makeRouter(win);
-    router.navigate({ name: 'library', path: '科幻', page: 1, fromShelf: true });
+    router.navigate({ name: 'library', path: '科幻', page: 1, view: 'preview', fromShelf: true });
     router.navigate({ name: 'shelf', page: 1, libraryPath: '科幻', libraryPage: 1 });
     // Back into `#/library` from the shelf: the hash says "a library page" and
     // nothing about where the trail came from, so the router carries it forward.
@@ -294,9 +294,9 @@ describe('router navigation', () => {
   it('replaces instead of pushing when a screen renames itself', () => {
     const win = new FakeWindow();
     const { router, seen } = makeRouter(win);
-    router.navigate({ name: 'library', path: '', page: 1, fromShelf: false }, { replace: true });
-    router.navigate({ name: 'library', path: '科幻', page: 1, fromShelf: false }, { replace: true });
-    router.navigate({ name: 'library', path: '科幻/刘慈欣', page: 1, fromShelf: false }, { replace: true });
+    router.navigate({ name: 'library', path: '', page: 1, view: 'preview', fromShelf: false }, { replace: true });
+    router.navigate({ name: 'library', path: '科幻', page: 1, view: 'preview', fromShelf: false }, { replace: true });
+    router.navigate({ name: 'library', path: '科幻/刘慈欣', page: 1, view: 'preview', fromShelf: false }, { replace: true });
     // Walking folders is one screen with a breadcrumb: every step in the walk is
     // a `replace`, so the browser's history never grows a trail through folders
     // and Back leaves the manager instead of retracing the walk.
@@ -319,7 +319,7 @@ describe('router navigation', () => {
   it('returns to where the reader came from, not to the parent', () => {
     const win = new FakeWindow();
     const { router, seen } = makeRouter(win);
-    router.navigate({ name: 'library', path: '', page: 1, fromShelf: false });
+    router.navigate({ name: 'library', path: '', page: 1, view: 'preview', fromShelf: false });
     router.navigate({ name: 'book', bookId: 'a' });
     // Pressing back in the reader returns to the manager, because that is the
     // screen the reader was on — parentOf is only the fallback for a deep link.
@@ -342,7 +342,7 @@ describe('router navigation', () => {
   it('follows the browser back into the previous screen', () => {
     const win = new FakeWindow();
     const { router, seen } = makeRouter(win);
-    router.navigate({ name: 'library', path: '', page: 1, fromShelf: false });
+    router.navigate({ name: 'library', path: '', page: 1, view: 'preview', fromShelf: false });
     router.navigate({ name: 'book', bookId: 'a' });
     // What the Android back gesture looks like from here: the fragment changes
     // underneath the app, with no call to `navigate` at all.
@@ -357,7 +357,7 @@ describe('router navigation', () => {
   it('re-aligns its trail when the browser goes forward to a route it has seen', () => {
     const win = new FakeWindow();
     const { router, seen } = makeRouter(win);
-    router.navigate({ name: 'library', path: '', page: 1, fromShelf: false });
+    router.navigate({ name: 'library', path: '', page: 1, view: 'preview', fromShelf: false });
     router.navigate({ name: 'book', bookId: 'a' });
     win.hash = '#/library';
     win.fire();

@@ -59,6 +59,15 @@ export interface ListQuery {
    */
   sort?: 'title' | 'author' | 'added' | 'updated';
   order?: 'asc' | 'desc';
+  /**
+   * Restrict the list to books with a file inside this folder.
+   *
+   * Library-relative and recursive, `''` meaning the whole library. It is what the
+   * library screen's preview page asks with, and it is *not* a filter the shelf
+   * uses: the shelf is "my books" and a folder is a place inside the library, which
+   * are different questions (see `library-screen.tsx`).
+   */
+  path?: string;
   page?: number;
   pageSize?: number;
 }

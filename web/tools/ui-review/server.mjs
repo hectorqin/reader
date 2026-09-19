@@ -376,9 +376,43 @@ function unauthorised(reply) {
 
 export function createReviewServer({ port = 5199 } = {}) {
   const seen = [];
+  /*
+   * The paths the review has shelved, in memory.
+   *
+   * The one *write* this harness models, and it models it because without it the
+   * scene that presses 加入书架 screenshots the state *before* the repair: the shelf
+   * endpoint would report success and the browse listing would keep answering
+   * `shelfState: 'off'` for the same file, so the card would still carry its badge and
+   * the picture would be of the feature not working. A review harness that cannot be
+   * written to cannot certify a write.
+   */
+  const shelved = new Set();
+  /*
+   * The body of each request that had one, collected *before* the handler runs.
+   *
+   * The server's callback cannot await, and the handler is `async` — so reading a
+   * stream inside the handler is a race the review would lose intermittently, and one
+   * that `readBody(request)` at the top of the handler entry could not fix without
+   * making the whole request path sequential. Collecting here, where the stream is
+   * still untouched, is the same data with no ordering question.
+   */
+  const bodies = new WeakMap();
   const server = createServer((request, reply) => {
     seen.push(`${request.method} ${request.url}`);
-    void handle(request, reply);
+    const chunks = [];
+    request.on('data', (chunk) => chunks.push(chunk));
+    request.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      try {
+        const parsed = raw === '' ? {} : JSON.parse(raw);
+        // The shelf write sends `{ paths: [...] }`; a `FormData` upload does not parse
+        // and is simply not recorded, which is the right answer for every handler here.
+        if (Array.isArray(parsed?.paths)) bodies.set(request, parsed.paths);
+      } catch {
+        /* not JSON: nothing to record */
+      }
+      void handle(request, reply);
+    });
   });
   server.seen = seen;
 
@@ -467,7 +501,23 @@ export function createReviewServer({ port = 5199 } = {}) {
        */
       const page = Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1;
       const pageSize = Number.parseInt(url.searchParams.get('pageSize') ?? '60', 10) || 60;
-      const total = 130;
+      /*
+       * The shelf's default sort is 最近阅读, which is a *client-side* order, so the
+       * client reads a window of the shelf in one go — several pages at once. The
+       * harness answers whatever page it is asked for, so that works without a
+       * special case.
+       */
+      /*
+       * A `path` narrows the list, exactly as it does on the real server.
+       *
+       * Answering it here is what makes the library's preview page a screenshot of *a
+       * folder* rather than of the whole shelf under a folder's breadcrumb — and the
+       * difference is not cosmetic, because the two would look identical and mean
+       * different things. The file listing for any folder holds three entries, so the
+       * folder's book list is the first three of the synthetic shelf.
+       */
+      const folder = url.searchParams.get('path') ?? '';
+      const total = folder === '' ? 130 : 3;
       const from = (page - 1) * pageSize;
       const items = Array.from({ length: Math.max(0, Math.min(pageSize, total - from)) }, (_v, i) => ({
         ...book,
@@ -475,12 +525,24 @@ export function createReviewServer({ port = 5199 } = {}) {
         // link to it: a list of purely synthetic ids would make `#/book/<id>` a dead
         // link and every reader screenshot one of the "这本书不在书架上了" fallback.
         id: from + i === 0 ? BOOK_ID : `${BOOK_ID}-${from + i}`,
+        // Inside a folder the file is named `第<N>卷.epub` (see the browse fixture), and
+        // the preview joins a book to its file by that name — so the titles have to
+        // line up or every card would offer 加入书架 for a book already on the shelf.
         title: `${TITLE} 第${from + i + 1}卷`,
       }));
       // The illustrated book is appended rather than paged: it exists for one reader
       // scene that deep links to it, and burying it under 130 synthetic volumes would
       // make that link depend on the shelf's own pagination arithmetic. `total` counts
       // it, so the pager still agrees with the list it is counting.
+      /*
+       * The library screen's *browsing* half asks for the books **in a folder**.
+       *
+       * `path` is a real filter on the real server (see `ShelfService.list`), and
+       * answering it here is what makes the preview page a screenshot of a folder
+       * rather than of the whole shelf under a folder's breadcrumb. The fixture keeps
+       * it simple — every book it synthesises is "in" every folder — because what the
+       * review is looking at is the *page*, not the query.
+       */
       return json(reply, { items: [...items, illustratedBook()], total: total + 1, page, pageSize });
     }
     // The shelf asks for its "continue reading" strip in the same breath as the
@@ -502,14 +564,27 @@ export function createReviewServer({ port = 5199 } = {}) {
       // Two pages of files in the subfolder, so page 2 is a real page rather than an
       // empty one — a pager whose second page is blank is a pager that looks broken
       // and is not.
+      /*
+       * The file names and the book titles are the *same* names, on purpose.
+       *
+       * The preview page joins a book to the file it lives in by stripping the
+       * extension — the two DTOs share no path, so the filename is the only join there
+       * is. A fixture where the file listing said `第1卷.epub` and the book list said
+       * `剑来 第1卷` would render every card with a 加入书架 badge, because nothing
+       * would ever match: a screenshot of the feature failing, certified as passing.
+       *
+       * Root holds the first three volumes (so the preview's grid and the file list
+       * describe the same three books) plus a folder to walk into; the folder holds
+       * enough files for a real second page.
+       */
       const fileCount = dir === 'folder' ? 340 : 3;
       const total = dir === 'folder' ? fileCount : fileCount + 1;
       const all = [
         ...(dir === '' ? [{ name: 'folder', type: 'dir', path: 'folder' }] : []),
         ...Array.from({ length: fileCount }, (_v, i) => ({
-          name: i === 0 && dir === '' ? '三体.epub' : `第${i + 1}卷.epub`,
+          name: `${TITLE} 第${i + 1}卷.epub`,
           type: 'file',
-          path: dir === '' ? `第${i + 1}卷.epub` : `${dir}/第${i + 1}卷.epub`,
+          path: dir === '' ? `${TITLE} 第${i + 1}卷.epub` : `${dir}/${TITLE} 第${i + 1}卷.epub`,
         })),
       ];
       const entries = all.map((entry) => ({
@@ -533,7 +608,21 @@ export function createReviewServer({ port = 5199 } = {}) {
          * could not be opened. `三体.epub` is the one row that carries the mark, and
          * the scene's label names it.
          */
-        shelfState: entry.type === 'dir' ? null : entry.name === '三体.epub' ? 'off' : 'on',
+        /*
+         * One book is deliberately *off* the shelf, and one is deliberately `null`.
+         *
+         * `'off'` is the state the preview page exists to repair: a file that is on
+         * disk and a book that is not on the reader's shelf, which neither the shelf
+         * nor the file list could fix in one tap. `null` is a file the server does not
+         * index as a book at all — a folder, a stray file — and the page must draw *no*
+         * control for it, because the shelf endpoint would refuse the write.
+         */
+        shelfState:
+          entry.type === 'dir'
+            ? null
+            : shelved.has(entry.path) || entry.name !== `${TITLE} 第1卷.epub`
+              ? 'on'
+              : 'off',
       }));
       const from = (page - 1) * pageSize;
       return json(reply, {
@@ -565,7 +654,20 @@ export function createReviewServer({ port = 5199 } = {}) {
        * that cannot be opened now fails the review instead of hiding in it.
        */
       return json(reply, {
-        items: [{ ...book, percentage: 0.18, chapterTitle: CHAPTERS[1].title, lastReadAt: Date.now() }],
+        items: [
+          { ...book, percentage: 0.18, chapterTitle: CHAPTERS[1].title, lastReadAt: Date.now() },
+          // A second book, older, so the shelf's default order has something to be an
+          // order *of*: with one entry there is no way to see from a screenshot that
+          // 最近阅读 is doing anything at all.
+          {
+            ...book,
+            id: `${BOOK_ID}-1`,
+            title: `${TITLE} 第2卷`,
+            percentage: 0.42,
+            chapterTitle: CHAPTERS[2].title,
+            lastReadAt: Date.now() - 86_400_000,
+          },
+        ],
       });
     }
     if (path === `/api/v1/books/${BOOK_ID}/manifest`) {
@@ -656,6 +758,45 @@ export function createReviewServer({ port = 5199 } = {}) {
     }
     if (path === '/api/v1/tts/capabilities') {
       return json(reply, { http: false, system: true });
+    }
+    /*
+     * The one *write* the library's preview page performs.
+     *
+     * Answered rather than left to 404 because the scene that presses 加入书架 has to
+     * reach the state the feature is about — a card whose badge has gone, and a report
+     * under the grid — and a 404 would screenshot the error instead. It answers the
+     * `BatchResult` shape the screen reads: `applied` is what the status line prints,
+     * and `failed` is the list of paths that were not books.
+     */
+    if (path === '/api/v1/library/browse/shelf') {
+      /*
+       * The one *write* this harness models, and it models it because the *state after
+       * it* is the thing being reviewed.
+       *
+       * Recording the paths is what makes the reload the write triggers answer `'on'`
+       * for the file that was just shelved. Without it the endpoint would report
+       * success and the browse listing would keep answering `'off'` for the same file,
+       * so the card would still carry its badge and the screenshot would be of the
+       * feature not working — the harness certifying its own fixture.
+       *
+       * The response's `applied` is what the status line prints, and the paths are the
+       * paths: this fixture does not model the server's validation, because a fixture
+       * that answered "not a book" for a book would be a *second* failure mode rather
+       * than a review of the first one.
+       */
+      for (const entry of bodies.get(request) ?? []) shelved.add(entry);
+      return json(reply, { applied: 1, books: [], failed: [] });
+    }
+    if (
+      path === '/api/v1/library/browse/metadata' ||
+      path === '/api/v1/library/browse/move' ||
+      path === '/api/v1/library/browse/rename' ||
+      path === '/api/v1/library/browse/mkdir' ||
+      path === '/api/v1/library/browse/delete'
+    ) {
+      // The rest of the file page's writes, so a stray click in a scene reports a
+      // result rather than an error line.
+      return json(reply, { applied: 0, books: [], failed: [], moved: 0, removed: 0, path: '' });
     }
     return json(reply, { error: { code: 'NOT_FOUND', message: `no review handler for ${path}` } }, 404);
   }

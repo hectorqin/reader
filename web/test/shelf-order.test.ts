@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shelfOrder, shelfSortKey, sortBooks } from '../src/ui/shelf-order.ts';
+import { isLocalSort, shelfOrder, shelfServerSort, shelfSortKey, sortBooks, sortByRecency } from '../src/ui/shelf-order.ts';
 import type { Book } from '../src/api/types.ts';
 
 /**
@@ -39,8 +39,64 @@ describe('shelfOrder', () => {
     // A reader who asks for "by title" means A→Z; "recent" means newest first.
     expect(shelfOrder('title')).toBe('asc');
     expect(shelfOrder('author')).toBe('asc');
-    expect(shelfOrder('updated')).toBe('desc');
+    expect(shelfOrder('recent')).toBe('desc');
     expect(shelfOrder('added')).toBe('desc');
+  });
+});
+
+describe('the client/server sort split', () => {
+  it('translates every client sort into one the server knows', () => {
+    // `recent` is a reading-time order and the server has no equivalent, so it
+    // rides on an `added` page the client is about to re-sort. Sending the client's
+    // own vocabulary would be a 400 the day the server validates the parameter.
+    expect(shelfServerSort('recent')).toBe('added');
+    expect(shelfServerSort('added')).toBe('added');
+    expect(shelfServerSort('title')).toBe('title');
+    expect(shelfServerSort('author')).toBe('author');
+  });
+
+  it('says which sorts must be done over the whole shelf', () => {
+    // A client-side sort cannot page: sorting one page and drawing it under a pager
+    // that says "page 1 of 34" is a lie about the other thirty-three.
+    expect(isLocalSort('recent')).toBe(true);
+    expect(isLocalSort('added')).toBe(false);
+    expect(isLocalSort('title')).toBe(false);
+    expect(isLocalSort('author')).toBe(false);
+  });
+});
+
+describe('sortByRecency', () => {
+  it('puts the most recently read first and never-opened books last', () => {
+    const books = [
+      book({ id: 'never' }),
+      book({ id: 'yesterday' }),
+      book({ id: 'today' }),
+    ];
+    const times = new Map([
+      ['today', 900],
+      ['yesterday', 500],
+    ]);
+    // "Never opened" is not "read at time zero" — it is absent, and absent belongs at
+    // the bottom, which is what `?? 0` produces.
+    expect(sortByRecency(books, times).map((entry) => entry.id)).toEqual(['today', 'yesterday', 'never']);
+  });
+
+  it('is stable for two books read in the same second', () => {
+    const books = [book({ id: 'z' }), book({ id: 'a' })];
+    const times = new Map([
+      ['z', 100],
+      ['a', 100],
+    ]);
+    expect(sortByRecency(books, times).map((entry) => entry.id)).toEqual(['a', 'z']);
+  });
+
+  it('is what `sortBooks` routes `recent` to', () => {
+    const books = [book({ id: 'old', updatedAt: 900 }), book({ id: 'new', updatedAt: 1 })];
+    const times = new Map([['new', 999]]);
+    // The book that was *updated* most recently is not the one that was *read* most
+    // recently, and `recent` asks the second question.
+    expect(sortBooks(books, 'recent', times).map((entry) => entry.id)).toEqual(['new', 'old']);
+    expect(sortBooks(books, 'added').map((entry) => entry.id)).toEqual(['old', 'new']);
   });
 });
 
@@ -56,13 +112,13 @@ describe('sortBooks', () => {
     expect(sortBooks(books, 'title').map((entry) => entry.title)).toEqual(['第2章', '第9章', '第10章']);
   });
 
-  it('puts the newest first for a date sort', () => {
+  it('puts the newest acquisition first', () => {
     const books = [
-      book({ id: 'old', title: 'Old', updatedAt: 100 }),
-      book({ id: 'new', title: 'New', updatedAt: 300 }),
-      book({ id: 'mid', title: 'Mid', updatedAt: 200 }),
+      book({ id: 'old', title: 'Old', addedAt: 100 }),
+      book({ id: 'new', title: 'New', addedAt: 300 }),
+      book({ id: 'mid', title: 'Mid', addedAt: 200 }),
     ];
-    expect(sortBooks(books, 'updated').map((entry) => entry.id)).toEqual(['new', 'mid', 'old']);
+    expect(sortBooks(books, 'added').map((entry) => entry.id)).toEqual(['new', 'mid', 'old']);
   });
 
   it('uses addedAt for the acquisition sort, not the file mtime', () => {
@@ -71,10 +127,10 @@ describe('sortBooks', () => {
       book({ id: 'replaced', addedAt: 100, updatedAt: 900 }),
       book({ id: 'acquired', addedAt: 500, updatedAt: 500 }),
     ];
-    // "最近入库" asks about acquisition, "最近更新" asks about the file. Collapsing
-    // them would answer neither question.
+    // "最近入库" asks about acquisition, not about when the file last changed. The
+    // two are different questions, and `updated` is not a sort the shelf offers —
+    // the acquisition date is what a reader means by "最近".
     expect(sortBooks(books, 'added').map((entry) => entry.id)).toEqual(['acquired', 'replaced']);
-    expect(sortBooks(books, 'updated').map((entry) => entry.id)).toEqual(['replaced', 'acquired']);
   });
 
   it('falls back to updatedAt when the server does not send addedAt', () => {
@@ -103,7 +159,7 @@ describe('sortBooks', () => {
 
   it('has a key for every sort', () => {
     const sample = book({ id: 'x', title: 'T', author: 'A', addedAt: 5, updatedAt: 7 });
-    for (const sort of ['title', 'author', 'added', 'updated'] as const) {
+    for (const sort of ['title', 'author', 'added', 'recent'] as const) {
       expect(shelfSortKey(sample, sort)).toBeTruthy();
     }
   });
