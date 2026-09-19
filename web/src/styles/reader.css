@@ -2382,6 +2382,31 @@ book-content {
    * the centre of the screen is where the reading is.
    */
   top: calc(22% + var(--safe-top));
+  /*
+   * A ceiling, and it is the whole of why the rail can be trusted to show what it
+   * contains.
+   *
+   * Without one the column was as tall as its buttons and simply ran off the bottom
+   * of a short screen: a phone in landscape, or a phone whose status bar and
+   * browser chrome leave 500px, showed the first four controls and nothing else —
+   * with no scrollbar, no fade and no hint that there was more. That is the
+   * standing report ("竖排工具栏显示为 主题切换、听书") described exactly: a reader who
+   * counts what they can see and concludes that is what the rail does.
+   *
+   * `--reader-chrome-bottom` and `--reader-chrome-top` are the same two numbers the
+   * reading column reserves for the bars, so the rail cannot extend under either of
+   * them however many controls it holds; `max-height` rather than `height` so a rail
+   * with three buttons is three buttons tall and does not float in an empty column.
+   */
+  max-height: calc(100% - 22% - var(--safe-top) - var(--reader-chrome-bottom) - 0.5rem);
+  overflow-y: auto;
+  /*
+   * `overscroll-behavior: contain`, so reaching the end of the rail does not hand
+   * the rest of the gesture to the page underneath it. Without it, a flick that
+   * finds the last button turns into a chapter scroll — the reader's finger was on a
+   * control and the book moved.
+   */
+  overscroll-behavior: contain;
   z-index: var(--reader-layer-rail);
   display: flex;
   flex-direction: column;
@@ -2393,6 +2418,25 @@ book-content {
     opacity var(--motion-duration) var(--motion-ease),
     transform var(--motion-duration) var(--motion-ease),
     visibility 0s linear;
+}
+
+/*
+ * The rail's scrollbar is *drawn*, not hidden.
+ *
+ * `scrollbar-width: none` is the usual treatment for a decorative strip, and it is
+ * precisely wrong here: a control that can only be found by scrolling has to look
+ * scrollable, or the reader never learns it is there — which is the bug above. A
+ * hairline on a translucent column is also the honest amount of chrome for it: the
+ * rail floats over the text, and a 12px opaque gutter would be a band of the page
+ * the reader cannot see through for no information.
+ */
+.reader-rail::-webkit-scrollbar {
+  inline-size: 3px;
+}
+
+.reader-rail::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--reader-ink) 22%, transparent);
+  border-radius: 999px;
 }
 
 /*

@@ -226,13 +226,47 @@ export function attachGestures(element: HTMLElement, handlers: GestureHandlers):
 
     if (distance <= TAP_MAX_DISTANCE && duration <= TAP_MAX_DURATION) {
       suppressClick = true;
+      // The zone is a *layout* box, so it is read from layout geometry rather than
+      // from client coordinates.
+      //
+      // The two agree only while the page is unscaled. `getBoundingClientRect()`
+      // and `event.clientX` are both in *visual viewport* units, so under a pinch
+      // zoom — or any transformed ancestor — they disagree with up to half the
+      // tolerance above, and a tap lands in the neighbouring zone: the reader taps
+      // the middle third to hide the toolbar and turns a page instead, or taps the
+      // right third to turn a page and gets nothing but a toolbar. `offsetWidth`
+      // and `offsetLeft` are in the element's own untransformed pixel space, which
+      // is the space the three zones are defined in.
+      // Two boxes, and the reason is that they answer two different questions.
+      //
+      // The *content* box (`offsetWidth`) is what the three zones are a division of,
+      // and `offsetWidth` is in the element's own untransformed pixel space — which
+      // is the space the zones are defined in. The *border* box
+      // (`getBoundingClientRect`) is where the element is on screen right now, which
+      // is the space `event.clientX` is in. Dividing one by the other is exact while
+      // the page is unscaled and wrong under a pinch zoom, where half a third of a
+      // 390px screen is several pixels of error and the arithmetic above has already
+      // accepted the tap.
+      //
+      // `offsetWidth` is preferred and falls back to the border box: a host with no
+      // layout (jsdom, an embedded WebView before its first layout) reports zero for
+      // it, and a stage with no measurable width cannot have zones — reporting a tap
+      // in one would be inventing a position.
       const rect = element.getBoundingClientRect();
-      const width = rect.width || element.clientWidth;
-      // A stage with no measurable width cannot have zones; reporting a tap in
-      // one would be inventing a position.
+      const layoutWidth = element.offsetWidth;
+      const width = layoutWidth > 0 ? layoutWidth : rect.width || element.clientWidth;
       if (width <= 0) return;
+      // Where the tap landed, in the element's own space: on the border box's left
+      // edge, less the border, less anything the element has been scrolled by.
+      //
+      // `rect` is in visual units and so is `clientX`, so the *difference* is a
+      // visual distance; it is divided by the ratio between the two boxes to bring
+      // it back into the space the zones are measured in. Without an ancestor
+      // transform and without a zoom the ratio is exactly 1 and the line is a
+      // no-op — which is what makes this a correction rather than a conversion.
+      const scale = layoutWidth > 0 && rect.width > 0 ? rect.width / layoutWidth : 1;
+      const x = (event.clientX - rect.left - element.clientLeft * scale) / scale + element.scrollLeft;
       const third = width / 3;
-      const x = event.clientX - rect.left;
       if (x < third) handlers.onTapZone('previous');
       else if (x > third * 2) handlers.onTapZone('next');
       else handlers.onTapZone('toggle-chrome');

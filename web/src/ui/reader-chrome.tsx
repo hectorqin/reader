@@ -217,17 +217,37 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           destinations the top bar names (目录 / 主题 / 字号 / 设置), so it belongs to
           the same "the reader has asked for the controls" state as the bars. Drawn
           while the chrome is hidden, it was the one piece of chrome that survived
-          immersion — a reader who tapped to hide the navigation still had seven
-          controls floating over the right edge of the text, which is not the
-          "only the page" they asked for.
-          It is still *not* the toolbar's duplicate: the rail holds the four
-          controls a reader nudges while reading (contents, theme, size, settings)
-          and is a floating column in the page margin rather than a band, so it
-          covers no line of text on a wide screen.
+          immersion — a reader who tapped to hide the navigation still had controls
+          floating over the right edge of the text, which is not the "only the
+          page" they asked for.
+          It is still *not* the toolbar's duplicate: the rail holds the controls a
+          reader nudges while reading and is a floating column in the page margin
+          rather than a band, so it covers no line of text on a wide screen.
           Drawn unconditionally and collapsed by `data-chrome` in CSS, exactly like
           the two bars: `visibility: hidden` at the end of the fade is what takes it
           out of reach of both a finger and a screen reader, and one attribute for
-          three bands is what makes "the chrome is hidden" a single fact. */}
+          three bands is what makes "the chrome is hidden" a single fact.
+
+          ## What is in it, and why the list is not shorter
+          —
+          The rail used to hold four controls, and the standing report was "竖排
+          工具栏显示为 主题切换、听书" — which is what a reader sees when the row
+          they are looking at is a *scroll container* that nothing told them was
+          one. Every control past the fourth on a short phone screen was below the
+          fold of a 200px column with no scrollbar, no fade and no hint that it
+          continued; a rail whose contents depend on the height of the phone is a
+          rail whose contents the reader cannot enumerate. Two things follow, and
+          both are stated in CSS rather than left to the layout:
+           - the column scrolls when it must (`.reader-rail`), and its scrollbar is
+             drawn rather than hidden — a control the reader must scroll to reach
+             has to look scrollable, or it is a control that does not exist;
+           - the buttons are one *step* of the settings each, so the rail is the
+             whole set of adjustments the top bar reaches, not a sample of them:
+             目录 / 主题 / 字号 / 行距 / 页边距 / 听书 / 设置. The read-aloud control
+             was the one a reader could only reach by discovering the settings sheet,
+             and it is the one they reach for *without* leaving the page.
+          Every one of them is a destination the screen can actually reach: a
+          button that does nothing is worse than a missing one. */}
       <div
         className="reader-rail"
         role="toolbar"
@@ -241,6 +261,22 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           onClick={() => handlers.onSetting({ theme: nextTheme(state.theme) })}
         />
         <RailButton icon="font" label="字号" onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })} />
+        <RailButton
+          icon="up-down"
+          label="行距"
+          onClick={() => handlers.onSetting({ lineHeight: stepLineHeight(state.lineHeight) })}
+        />
+        <RailButton
+          icon="indent"
+          label="页边距"
+          onClick={() => handlers.onSetting({ pageMargin: stepPageMargin(state.pageMargin) })}
+        />
+        <RailButton
+          icon={state.tts.active ? 'pause' : 'volume-high'}
+          label={state.tts.active ? '暂停朗读' : '听书'}
+          pressed={state.tts.active}
+          onClick={handlers.onSpeechToggle}
+        />
         <RailButton icon="sliders" label="阅读设置" onClick={handlers.toggleSettings} />
       </div>
 
@@ -485,7 +521,7 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
       />
       <SegmentedRow
         label="行距"
-        options={['inherit', '1.4', '1.6', '1.8', '2.1'].map((value) => ({
+        options={LINE_HEIGHT_LADDER.map((value) => ({
           value,
           label: value === 'inherit' ? '原书' : value,
         }))}
@@ -882,9 +918,27 @@ function TopButton({ icon, label, onClick }: { icon: IconName; label: string; on
  * circles because a reader aiming at a 2.75rem disc in the margin hits it, while a
  * reader aiming at a 2.75rem square in a list of five does not.
  */
-function RailButton({ icon, label, onClick }: { icon: IconName; label: string; onClick(): void }): JSX.Element {
+function RailButton({
+  icon,
+  label,
+  onClick,
+  pressed,
+}: {
+  icon: IconName;
+  label: string;
+  onClick(): void;
+  /** Set for a control whose state the icon already shows, so it reports it too. */
+  pressed?: boolean;
+}): JSX.Element {
   return (
-    <button type="button" className="rail-button" aria-label={label} title={label} onClick={onClick}>
+    <button
+      type="button"
+      className="rail-button"
+      aria-label={label}
+      title={label}
+      {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
+      onClick={onClick}
+    >
       <span className="icon" aria-hidden="true">{iconGlyph(icon)}</span>
     </button>
   );
@@ -960,6 +1014,34 @@ function stepGap(current: number): number {
 
 function indentLabel(indent: number): string {
   return indent === 0 ? '无' : `${indent.toFixed(2)} 字`;
+}
+
+/**
+ * Line height, cycling the settings row's own ladder.
+ *
+ * The value is a *string*, because "原书" (`inherit`) is one of the choices and is
+ * not a number — the book's own line height is the default and the setting has to
+ * be able to mean "do not touch it". So the rail steps through the same list the
+ * sheet renders rather than through arithmetic on a number: a rail that computed
+ * its own values would sooner or later land on one the sheet's rows do not offer,
+ * and the reader would see the control jump to a position its own options do not
+ * include.
+ */
+const LINE_HEIGHT_LADDER = ['inherit', '1.4', '1.6', '1.8', '2.1'];
+
+function stepLineHeight(current: string): string {
+  const index = LINE_HEIGHT_LADDER.indexOf(current);
+  return LINE_HEIGHT_LADDER[(index + 1) % LINE_HEIGHT_LADDER.length] ?? 'inherit';
+}
+
+/** Page margin, cycling the slider's own range and wrapping at both ends. */
+const PAGE_MARGIN_MIN = 0;
+const PAGE_MARGIN_MAX = 4;
+const PAGE_MARGIN_STEP = 0.25;
+
+function stepPageMargin(current: number): number {
+  const next = Number((current + PAGE_MARGIN_STEP).toFixed(2));
+  return next > PAGE_MARGIN_MAX + 0.001 ? PAGE_MARGIN_MIN : next;
 }
 
 const THEME_LADDER: Array<AppSettings['theme']> = ['light', 'sepia', 'dark'];
