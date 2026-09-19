@@ -27,9 +27,12 @@ describe('shareable links', () => {
 
   it('resolves a library folder link, including Chinese names and spaces', () => {
     const route = parseRoute('#/library/%E7%A7%91%E5%B9%BB/%E5%88%98%E6%85%88%E6%AC%A3%20%E4%BD%9C%E5%93%81');
-    // The library's browsing half is the default, so the link carries no view
-    // segment — which is what keeps `#/library/<path>` the same URL it always was.
-    expect(route).toEqual({ name: 'library', path: '科幻/刘慈欣 作品', page: 1, view: 'preview', fromShelf: false });
+    // The library's browsing half is the default, so the link carries no `files`
+    // segment — which is what makes `#/library/<path>` the page a *reader* is handed
+    // and `#/library/files/<path>` the one an administrator navigates to.
+    expect(route).toEqual({
+      name: 'library', path: '科幻/刘慈欣 作品', page: 1, view: 'browse', fromShelf: false, search: '',
+    });
     expect(routeHash(route)).toBe('#/library/%E7%A7%91%E5%B9%BB/%E5%88%98%E6%85%88%E6%AC%A3%20%E4%BD%9C%E5%93%81');
   });
 
@@ -46,6 +49,33 @@ describe('shareable links', () => {
     const route = { name: 'book', bookId: 'a/b c' } as const;
     expect(routeHash(route)).toBe('#/book/a%2Fb%20c');
     expect(parseRoute(routeHash(route))).toEqual(route);
+  });
+});
+
+/*
+ * The library's two halves, as the *URL vocabulary* a reader is handed.
+ *
+ * The split matters here rather than in the router's own suite because it is a fact
+ * about the product rather than about the parser: `#/library/科幻` is the page a
+ * reader shares and `#/library/files/科幻` is the page an administrator navigates to,
+ * and the first must never resolve to the second. The role check that makes the
+ * second unreachable for a member lives in `App.render` (it is a URL guard, not a
+ * button guard), and this is the vocabulary that check is written against.
+ */
+describe('the library’s two halves', () => {
+  it('opens the browsing page from a shared folder link', () => {
+    expect(parseRoute('#/library/科幻')).toMatchObject({ view: 'browse', path: '科幻' });
+    // …and the file manager only from a URL that says so, so a link a member is sent
+    // cannot land them on a page whose every control writes to the server's disk.
+    expect(parseRoute('#/library/files/科幻')).toMatchObject({ view: 'files', path: '科幻' });
+  });
+
+  it('round-trips a filtered view, so a search is shareable', () => {
+    const route: Route = {
+      name: 'library', path: '科幻', page: 1, view: 'browse', fromShelf: false, search: '刘慈欣',
+    };
+    expect(routeHash(route)).toBe('#/library/%E7%A7%91%E5%B9%BB?q=%E5%88%98%E6%85%88%E6%AC%A3');
+    expect(parseRoute(routeHash(route))).toMatchObject({ path: '科幻', search: '刘慈欣' });
   });
 });
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { LibraryScreen } from '../src/ui/library-screen.tsx';
+import { LibraryFilesScreen } from '../src/ui/library-screen.tsx';
 import { ReaderApi, type SessionStore } from '../src/api/client.ts';
 import { ApiError } from '../src/api/errors.ts';
 import { OfflineStore } from '../src/store/offline.ts';
@@ -50,7 +50,7 @@ function listing(overrides: Partial<BrowseListing> = {}): BrowseListing {
   };
 }
 
-function makeScreen(transport: FakeTransport, calls: string[] = []): { screen: LibraryScreen; calls: string[] } {
+function makeScreen(transport: FakeTransport, calls: string[] = []): { screen: LibraryFilesScreen; calls: string[] } {
   const platform = makePlatform(transport);
   const sessions: SessionStore = {
     load: async () => null,
@@ -59,21 +59,21 @@ function makeScreen(transport: FakeTransport, calls: string[] = []): { screen: L
   };
   const api = new ReaderApi(platform, sessions);
   api.setBaseUrl('http://nas:8080');
-  const screen = new LibraryScreen({
+  const screen = new LibraryFilesScreen({
     api,
     offline: new OfflineStore(makePlatform(transport).kv),
     settings: { ...DEFAULT_APP_SETTINGS },
     onSettingsChange: () => {},
-    // The *file* page, which is what this suite has always been about. The browsing
-    // half has its own suite (`library-screen.test.ts`); the two share a class and
-    // nothing else about them is shared, so the tests stay separate too.
-    view: 'files',
+    // The file page, which is what this suite has always been about. The browsing
+    // half is a *different screen* now with its own suite (`library-screen.test.ts`),
+    // which is the whole reason the two can be tested apart at all.
     path: '',
     page: 1,
     fromShelf: true,
     onClose: () => calls.push('close'),
     onSignedOut: () => calls.push('signed-out'),
-    onOpenLibrary: (path, page, view, replace) => calls.push(`library:${path}:${page}:${view}:${replace}`),
+    onOpenLibrary: (path, page, replace) => calls.push(`library:${path}:${page}:${replace}`),
+    onOpenBrowse: (path) => calls.push(`browse:${path}`),
     onOpenBook: (book) => calls.push(`book:${book.id}`),
   });
   document.body.append(screen.element);
@@ -130,7 +130,7 @@ describe('library manager', () => {
       }),
     );
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     const rows = screen.element.querySelectorAll('.manager-row');
     expect(rows).toHaveLength(3);
     // The rule-skipped folder is the answer to "my book is on disk but not on
@@ -145,7 +145,7 @@ describe('library manager', () => {
       listing({ dirs: 2, files: 3, size: 4096, total: 5, entries: [entry({ name: 'a.epub' })] }),
     );
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     // The counts are the answer to "is my file in here at all", so a successful
     // listing must leave them on screen rather than blank.
     expect(screen.element.querySelector('.manager-status')?.textContent).toContain('3 个文件');
@@ -155,7 +155,7 @@ describe('library manager', () => {
     const transport = new FakeTransport();
     transport.respondWithBoth(listing({ writable: false, entries: [entry({ name: '三体.epub', scanned: true })] }));
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     const matches = transport.requests.filter((request) => request.url.startsWith('/api/v1/library/browse'));
     expect(matches).toHaveLength(1);
     expect(matches[0]!.method).toBe('GET');
@@ -193,16 +193,18 @@ describe('library manager', () => {
     });
     const calls: string[] = [];
     const { screen } = makeScreen(transport, calls);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     (screen.element.querySelector('.manager-row') as HTMLElement).click();
     // The screen does not navigate itself any more: a folder is a route
     // (`#/library/科幻`), so the tap reports the intent and the router writes the
     // URL. That round trip is what makes a folder link shareable and Back leave
     // the manager rather than walk out of it one folder at a time.
-    // The *view* travels with the navigation as well as the folder and the page:
-    // walking into a folder from the file page must land on the file page, or the
-    // reader would be moved to a grid they did not ask for by tapping a folder row.
-    expect(calls).toEqual(['library:科幻:1:files:true']);
+    // The half travels with the navigation as well as the folder and the page: the
+    // callback this screen uses is the *file* page's own, so walking into a folder
+    // from here cannot land the reader on the covers — which is the failure the two
+    // screens' separate callbacks exist to make impossible rather than merely to
+    // avoid (a shared `{view}` argument is exactly how it used to happen).
+    expect(calls).toEqual(['library:科幻:1:true']);
     expect(transport.requests.filter((request) => request.method !== 'GET')).toHaveLength(0);
   });
 
@@ -227,7 +229,7 @@ describe('library manager', () => {
     }));
     const { screen } = makeScreen(transport);
     // What a deep link, a Back and a forward walk all look like from here.
-    await screen.open('科幻', 1, 'files');
+    await screen.open('科幻', 1);
     expect(screen.element.textContent).toContain('三体.epub');
     // The listing's own request, found rather than taken as the last one: the screen
     // asks for the folder's *books* in the same breath (see `load`), so "the last
@@ -242,7 +244,7 @@ describe('library manager', () => {
     const transport = new FakeTransport();
     transport.respondWithBoth(listing({ entries: [entry({ name: '三体.epub', scanned: true })] }));
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     // Tapping a row is navigation, not selection — and on a file there is nowhere
     // to navigate, so a tap must be a no-op rather than a deletion.
     (screen.element.querySelector('.manager-row') as HTMLElement).click();
@@ -265,7 +267,7 @@ describe('library manager', () => {
         : { status: 200, headers: {}, json: { removed: 1 } },
     );
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
 
     // Selection through the row's own action sheet, which is the keyboard-free
     // path a test can drive without a touch device.
@@ -308,7 +310,7 @@ describe('library manager', () => {
           },
     );
     const { screen, calls } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     (screen.element.querySelector('.manager-more') as HTMLElement).click();
     const rename = [...screen.element.querySelectorAll('.dialog-list .button')].find(
       (button) => button.textContent === '重命名',
@@ -337,7 +339,7 @@ describe('uploading from the manager', () => {
   /** A `File` the jsdom environment will accept. */
   const file = (name: string, body = 'bytes'): File => new File([body], name, { type: 'application/epub+zip' });
 
-  const pick = async (screen: LibraryScreen, files: File[]): Promise<void> => {
+  const pick = async (screen: LibraryFilesScreen, files: File[]): Promise<void> => {
     const input = screen.element.querySelector<HTMLInputElement>('.manager-upload-input')!;
     Object.defineProperty(input, 'files', { value: files, configurable: true });
     input.dispatchEvent(new Event('change'));
@@ -347,7 +349,7 @@ describe('uploading from the manager', () => {
     const transport = new FakeTransport();
     transport.respondWithBoth(listing({ entries: [entry({ name: '三体.epub', scanned: true })] }));
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     void pick(screen, [file('三体.epub')]);
 
     // The policy dialog appears first, so a user who has waited for a 400MB
@@ -394,7 +396,7 @@ describe('uploading from the manager', () => {
     // Open the folder first: the upload goes into the directory being viewed,
     // which is the whole contract of the feature. It is the *route* that opens it,
     // which is also why the destination survives a reload.
-    await screen.open('科幻', 1, 'files');
+    await screen.open('科幻', 1);
     expect(screen.element.querySelector('.manager-crumb[aria-current="true"]')?.textContent).toBe('科幻');
 
     void pick(screen, [file('三体.epub')]);
@@ -425,7 +427,7 @@ describe('uploading from the manager', () => {
     const transport = new FakeTransport();
     transport.respondWithBoth(listing({ writable: false, entries: [] }));
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     const buttons = [...screen.element.querySelectorAll<HTMLButtonElement>('.icon-button')];
     expect(buttons.find((button) => button.getAttribute('aria-label') === '上传书籍')?.hidden).toBe(true);
   });
@@ -442,7 +444,7 @@ describe('batch management', () => {
     });
 
   /** Selects every row through the action sheet, as a keyboard-less test can. */
-  const selectAll = async (screen: LibraryScreen): Promise<void> => {
+  const selectAll = async (screen: LibraryFilesScreen): Promise<void> => {
     for (const more of [...screen.element.querySelectorAll<HTMLElement>('.manager-more')]) {
       more.click();
       await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).not.toBeNull());
@@ -464,7 +466,7 @@ describe('batch management', () => {
       ),
     );
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     await selectAll(screen);
 
     const metadata = [...screen.element.querySelectorAll('.manager-actions .button')].find(
@@ -502,7 +504,7 @@ describe('batch management', () => {
         : { status: 200, headers: {}, json: twoBooks() },
     );
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     await selectAll(screen);
     const shelve = [...screen.element.querySelectorAll('.manager-actions .button')].find(
       (button) => button.textContent === '下架',
@@ -549,7 +551,7 @@ describe('batch management', () => {
       ],
     }));
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
 
     const rows = [...screen.element.querySelectorAll<HTMLElement>('.manager-row')];
     const badgeOf = (name: string): string | undefined =>
@@ -579,7 +581,7 @@ describe('batch management', () => {
           }) },
     );
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
 
     // The row's own menu, which is the single-book path.
     ([...screen.element.querySelectorAll<HTMLElement>('.manager-row .manager-more')][0]!).click();
@@ -617,7 +619,7 @@ describe('batch management', () => {
       entries: [entry({ name: '下架.epub', path: '下架.epub', scanned: true, indexed: true, shelfState: 'off' })],
     }));
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     await selectAll(screen);
     const labels = [...screen.element.querySelectorAll('.manager-actions .button')].map((button) => button.textContent);
     expect(labels).toContain('下架');
@@ -628,7 +630,7 @@ describe('batch management', () => {
     const transport = new FakeTransport();
     transport.json(twoBooks());
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     await selectAll(screen);
     await vi.waitFor(() => expect(screen.element.querySelector('.manager-actions .button')).not.toBeNull());
     ([...screen.element.querySelectorAll('.manager-actions .button')].find(
@@ -655,7 +657,7 @@ describe('batch management', () => {
       ),
     );
     const { screen } = makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     await selectAll(screen);
     const shelve = [...screen.element.querySelectorAll('.manager-actions .button')].find(
       (button) => button.textContent === '下架',
@@ -697,10 +699,10 @@ describe('pagination and the refresh after an upload', () => {
       }),
     );
     const { screen } = await makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     expect(screen.element.querySelector('.manager-pager')).toBeNull();
 
-    await screen.open('', 2, 'files');
+    await screen.open('', 2);
     // 340 entries is two pages, and the page comes from the *route* rather than from
     // a field: a page that lives in this class is one Back and one reload throw away.
     // Found rather than taken as the last request: the screen asks for the folder's
@@ -720,15 +722,15 @@ describe('pagination and the refresh after an upload', () => {
       }),
     );
     const { screen, calls } = await makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     const next = [...screen.element.querySelectorAll<HTMLElement>('.manager-pager .pager-step')].find(
       (button) => button.getAttribute('aria-label') === '下一页',
     )!;
     next.click();
-    // The URL is the state: the screen reports the *intent*, and the shell writes it —
-    // which is also why the report carries the view: a page turn that dropped it would
-    // move the reader from the file list to the covers on the way to page two.
-    expect(calls).toContain('library::2:files:true');
+    // The URL is the state: the screen reports the *intent*, and the shell writes it.
+    // The callback is this screen's own (`onOpenLibrary`), so the page turn cannot
+    // carry the reader out of the file manager — see the note in `makeScreen`.
+    expect(calls).toContain('library::2:true');
   });
 
   it('re-reads the directory after an upload, so the new file is on screen', async () => {
@@ -764,7 +766,7 @@ describe('pagination and the refresh after an upload', () => {
       }),
     );
     const { screen } = await makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     expect(screen.element.querySelector('.manager-row')).toBeNull();
 
     const input = screen.element.querySelector<HTMLInputElement>('.manager-upload-input')!;
@@ -792,7 +794,7 @@ describe('pagination and the refresh after an upload', () => {
     const transport = new FakeTransport();
     transport.respondWith(withEmptyBooks(() => ({ status: 200, headers: {}, json: many(340, 1) })));
     const { screen } = await makeScreen(transport);
-    await screen.open('', 1, 'files');
+    await screen.open('', 1);
     // "340 个文件" under a screen showing 200 of them is a correct sentence and a
     // confusing one; naming the page makes the number and the rows agree.
     expect(screen.element.querySelector('.manager-status')?.textContent).toContain('第 1 / 2 页');

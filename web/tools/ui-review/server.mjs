@@ -238,6 +238,17 @@ const html = (reply, body, status = 200) => {
 
 function session() {
   return {
+    /*
+     * An **admin**, and the harness's one scene that depends on it.
+     *
+     * The library's file manager is admin-only (#40: 「书库管理页面只有管理员才能看到
+     * 使用」), so the review has to sign in as the role that is allowed to see it — a
+     * `member` fixture would make every file-manager screenshot a picture of the
+     * browsing page, and the review would certify the split by photographing the half
+     * that is reachable. The *guard* itself is asserted in the client's own suite
+     * (a URL is user input; see `App.render`), because a fixture cannot be a
+     * permission check.
+     */
     user: { id: 'u1', username: 'review', displayName: '评测', role: 'admin', createdAt: 0 },
     accessToken: 'review-token',
     accessTokenExpiresAt: Date.now() + 86_400_000,
@@ -543,6 +554,17 @@ export function createReviewServer({ port = 5199 } = {}) {
        * folder's book list is the first three of the synthetic shelf.
        */
       const folder = url.searchParams.get('path') ?? '';
+      /*
+       * A `search` narrows it further, as on the real server.
+       *
+       * The browsing half of the library is a shop now and its search box is the
+       * control the scene exists to photograph, so the harness has to answer the
+       * parameter — a fixture that ignored `search` would render a screenshot of a
+       * filtered page that is not filtered, which is the state the *defect* looks
+       * like. The filter keeps the `第<N>卷` volumes whose number contains the query,
+       * so a scene can ask for a specific volume by typing its number.
+       */
+      const search = url.searchParams.get('search') ?? '';
       const total = folder === '' ? 130 : 3;
       const from = (page - 1) * pageSize;
       const items = Array.from({ length: Math.max(0, Math.min(pageSize, total - from)) }, (_v, i) => ({
@@ -569,7 +591,25 @@ export function createReviewServer({ port = 5199 } = {}) {
        * it simple — every book it synthesises is "in" every folder — because what the
        * review is looking at is the *page*, not the query.
        */
-      return json(reply, { items: [...items, illustratedBook()], total: total + 1, page, pageSize });
+      /*
+       * The *total* follows the filter, which is the half that is easy to leave behind.
+       *
+       * A server that narrows `items` and answers the unfiltered `total` puts "找到 131
+       * 本" above a grid of two — a correct-looking page that lies about the search, and
+       * exactly the state a fixture that only paged would produce. The illustrated book
+       * is counted too, because it is appended unconditionally (one reader scene deep
+       * links to it) and a total that ignored it would be a pager disagreeing with its
+       * own list.
+       */
+      const listed = search === '' ? items : items.filter((item) => item.title.includes(search));
+      const matched = listed.length + 1;
+      const from2 = (page - 1) * pageSize;
+      return json(reply, {
+        items: [...listed, illustratedBook()].slice(from2, from2 + pageSize),
+        total: search === '' ? total + 1 : matched,
+        page,
+        pageSize,
+      });
     }
     // The shelf asks for its "continue reading" strip in the same breath as the
     // list, and a 404 there makes the shelf render an empty state that looks like a

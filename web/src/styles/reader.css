@@ -59,6 +59,19 @@
   --reader-radius: 10px;
 
   /*
+   * How far a search field is inset inside its content column, on *both* sides.
+   *
+   * One token rather than two margins, because the two have to be equal for the field
+   * to stay centred — and it is declared here rather than on `.shelf` because the
+   * *library* has the same field and it is not inside a shelf: a token that lives on
+   * one screen's element and is read by another screen's rule resolves to nothing, and
+   * `padding-inline: var(--undefined)` is `padding-inline: 0` — i.e. the gutters this
+   * token exists to create silently do not appear, which is exactly how it shipped for
+   * one round of this review.
+   */
+  --shelf-search-inset: 0.75rem;
+
+  /*
    * The spacing scale.
    *
    * Four steps, not eight. A larger scale reads as precision and behaves as a
@@ -820,6 +833,24 @@ book-content {
   justify-content: center;
   gap: var(--space-1);
   vertical-align: middle;
+  /*
+   * The label does not wrap, and the padding is the header's rather than the body's.
+   *
+   * In a *body* (an empty state, a dialog) a `.button` is a standalone control and the
+   * roomy padding is right. In a *header* it sits in a fixed-height row beside a
+   * breadcrumb, and the two together decide what the row looks like: a four-character
+   * Chinese label at `0.95rem` with `1rem` of padding either side is 90px, which on a
+   * 390px screen pushed it onto two lines and made the header taller than the icon
+   * buttons beside it. `nowrap` is the second half of the same fix — a label that wraps
+   * is the failure this rule exists to prevent, not a way to fit.
+   */
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.panel-header .icon-text-button {
+  padding: 0.45rem 0.6rem;
+  font-size: 0.82rem;
 }
 
 /* ---- interactive states ---- */
@@ -1066,9 +1097,43 @@ book-content {
   position: relative;
   display: flex;
   align-items: center;
+  /*
+   * The field is inset from the covers above and below it, on both sides.
+   *
+   * This was reported as 「书架的搜索框两边需要增加 margin」 and it is a *gutter*
+   * problem rather than a width problem: the field was exactly as wide as the grid,
+   * so its left and right edges — where the pill's border is, and where the clear
+   * button's 32px circle sits — landed on the same vertical line as the covers. At
+   * that distance a 1px border reads as part of the artwork beside it, and the clear
+   * button looks like it is inside the first cover rather than inside the field.
+   *
+   * `--shelf-search-inset` is one number used by *both* sides, so the field stays
+   * centred on the column: inset one side only would move the whole control, which is
+   * the other way to make a row look wrong without anything being at fault.
+   *
+   * `max-width` subtracts the inset as well, so the field cannot grow back to the
+   * full column width on a wide window — a cap that forgot the inset would leave the
+   * gutters at the widest size, which is exactly the size where they are least
+   * needed.
+   */
   margin: 0.35rem auto 0.9rem;
-  max-width: calc(var(--shelf-measure) - 1.8rem - var(--safe-left) - var(--safe-right));
-  padding-inline: 0;
+  max-width: calc(
+    var(--shelf-measure) - 1.8rem - var(--safe-left) - var(--safe-right) - 2 * var(--shelf-search-inset)
+  );
+  /*
+   * The gutters themselves, and they have to be on the *row* rather than as
+   * `padding-inline` on the input: the magnifier and the clear button are absolutely
+   * positioned against this box, so padding here would move them out of the field they
+   * are drawn inside and leave them floating in the margin.
+   */
+  padding-inline: var(--shelf-search-inset);
+  /*
+   * `box-sizing` is what keeps the inset from being *added* to the max-width above:
+   * with the default (`content-box`) the field would be `max-width + 2 × inset` wide,
+   * i.e. exactly the width it had before — the margin would be paid for by growing the
+   * control, and the covers beside it would sit under the clear button again.
+   */
+  box-sizing: border-box;
 }
 
 /*
@@ -1140,6 +1205,21 @@ book-content {
   line-height: 1.4;
   font-size: 16px;
   font-family: inherit;
+}
+
+/*
+ * The platform's own clear affordance, suppressed.
+ *
+ * A `type=search` input renders a decoration of its own in some browsers and none in
+ * others, and the one it renders is *beside* the button this app draws — so the field
+ * showed two clear controls, one of them 12px of the browser's own blue at the edge of
+ * a control the reader has to hit with a thumb. The app owns this affordance (see
+ * `.search-clear`), so the platform's is removed rather than left to duplicate it.
+ */
+.shelf-search input::-webkit-search-cancel-button,
+.shelf-search input::-webkit-search-decoration {
+  appearance: none;
+  display: none;
 }
 
 .shelf-search input::placeholder {
@@ -2848,42 +2928,125 @@ book-content {
 /* ---- library: the header's two-page switch ---- */
 
 /*
- * The switch between the library's two pages, and the reason it is a *segmented*
- * control rather than a tab strip.
+ * 书库 · 浏览 — the shop.
  *
- * There are exactly two of them, they are the same shape of choice as the reader's
- * other segmented controls, and the stylesheet for that already exists — so the
- * control cannot drift from the rest of the app the way a bespoke tab strip
- * inevitably does. It is `flex: 0 0 auto` rather than filling the header: the
- * breadcrumb beside it is the thing that grows, and a control that stretches would
- * push the crumb off the row on a long path.
- *
- * `align-self: center` because the header is `align-items: center` and the buttons
- * inside the control are shorter than the 40px targets around them; without it the
- * switch sits a couple of pixels high and reads as misaligned against the two icon
- * buttons it lives between.
+ * Everything here exists because this half of the library is a *different kind of
+ * page* from the file list beside it, which is what the review's second round asked
+ * for (「两者列表显示逻辑不一样」): a shop puts the search at the top, fills the
+ * window with covers, and gives each one a single action. The file page puts a
+ * breadcrumb at the top and gives each row a menu.
  */
-.library-tabs {
-  flex: 0 0 auto;
-  font-size: 0.78rem;
-}
 
-.library-tabs button {
-  padding: 0.3rem 0.55rem;
-  font-size: 0.78rem;
-  white-space: nowrap;
+/*
+ * The search field, on the shop's own scroller.
+ *
+ * The field itself is the shelf's control — same pill, same glyph, same 16px — so
+ * this rule only says where it sits and how wide it is allowed to be. It is inset by
+ * the same token the shelf's is (`--shelf-search-inset`), which is the way two screens
+ * keep their one shared control looking like one control.
+ *
+ * It is *not* capped at `--shelf-measure`: the shop's grid is uncapped (see below),
+ * and a search field that stopped growing while the covers beside it kept going would
+ * be the row that disagrees with the page.
+ */
+.library-search {
+  max-width: none;
+  /*
+   * The same gutter the shelf's field has, and *only* that: the field is as wide as
+   * the page, so there is no measure to subtract and no second inset to add. The
+   * covers below use the same token through their padding (see `.library-browse-grid`),
+   * which is what makes the field and the grid share a column.
+   */
+  padding-inline: var(--shelf-search-inset);
+  box-sizing: border-box;
+  margin: calc(var(--shelf-search-inset) + 0.4rem) 0;
 }
 
 /*
- * The preview grid, inside the file listing's scroller.
+ * …and the panels that hang off the row are placed against the *input*, not the row.
  *
- * `.manager-body` is a plain scroller and the grid is one child of it, so the two
- * halves of the library share the scroll container — which is what makes switching
- * between them not move the header. The padding is the listing's own gutter, and
- * the bottom padding leaves room for the sticky status line underneath.
+ * The magnifier and the clear button are `position: absolute` against this box, which
+ * resolves against its *padding box* — so a row with a 0.75rem gutter would put both of
+ * them in the gutter, i.e. the glyph would float in the margin and the clear button
+ * would sit on top of the cover beside it. Their own offsets are therefore the field's
+ * border plus the row's padding, which is one number rather than a coincidence.
  */
-.library-preview-grid {
-  padding: 0.6rem 0.9rem 0.75rem;
+.library-search .search-glyph {
+  inset-inline-start: calc(var(--shelf-search-inset) + 0.7rem);
+}
+
+.library-search .search-clear {
+  inset-inline-end: calc(var(--shelf-search-inset) + 0.3rem);
+}
+
+/*
+ * The covers, laid out as a shop rather than as a shelf.
+ *
+ * The one difference from `.book-grid` that matters: this grid has **no measure
+ * cap**. The shelf caps its width because a shelf is the reader's own collection at a
+ * density they chose, and eleven covers across a desktop window is a wall rather than
+ * a list. The library is the *server's* folder: its size is a fact about the disk, and
+ * a reader browsing it on a wide screen wants more of it visible, not more margin. So
+ * the columns are `auto-fill` with no maximum, and growing the window shows more books.
+ *
+ * The padding is the file listing's own gutter plus the search inset, because the
+ * field above and the covers below it share the column and have to line up.
+ */
+/*
+ * The covers' own gutters, and they are *wider* than the field's by the page's own
+ * padding: the field is the one control that spans the full content box (it is a
+ * single row, and a search box narrower than the list it filters reads as decoration),
+ * while the covers keep the page gutter they share with every other grid. The
+ * difference is the point of the check below — the field must be inset from the
+ * covers, not aligned with them.
+ */
+.library-browse-grid {
+  padding: 0.25rem calc(0.9rem + var(--shelf-search-inset)) 0.75rem;
+}
+
+/*
+ * …and the covers themselves get the shop's own size ladder.
+ *
+ * The shelf's ladder is tuned for a *capped* column, and the cap is what keeps it
+ * from producing eleven covers a row. With the cap removed (this grid has none — see
+ * above) the same minimum would tile a 1600px window with covers 130px wide, which is
+ * the failure the ladder exists to prevent and would come back the moment the two
+ * grids stop sharing a width rule. So the shop's minimums are the next step up, and
+ * they keep climbing with the window: more of the folder on screen, and every cover
+ * still big enough to read a title on.
+ */
+.library-browse-grid[data-density='compact'] {
+  --shelf-cover-min: 6.5rem;
+}
+
+.library-browse-grid[data-density='comfortable'] {
+  --shelf-cover-min: 11rem;
+}
+
+@media (min-width: 40rem) {
+  .library-browse-grid {
+    --shelf-cover-min: 10.5rem;
+  }
+
+  .library-browse-grid[data-density='compact'] {
+    --shelf-cover-min: 8rem;
+  }
+
+  .library-browse-grid[data-density='comfortable'] {
+    --shelf-cover-min: 13rem;
+  }
+}
+
+@media (min-width: 72rem) {
+  /*
+   * Past the shelf's own measure the shop keeps adding columns instead of margin,
+   * because there is nothing to cap to: the covers are already at a readable size
+   * and the folder is genuinely large. This is the one place in the product where a
+   * wider window shows *more*, and it is the point of an uncapped grid.
+   */
+  .library-browse-grid {
+    --shelf-cover-min: 11.5rem;
+  }
 }
 
 /*
@@ -2894,7 +3057,7 @@ book-content {
  * grid of covers is a gap the reader reads as a rendering mistake.
  */
 .library-preview-hint {
-  padding: 0.5rem 0.9rem 0;
+  padding: 0.5rem calc(0.9rem + var(--shelf-search-inset)) 0;
   font-size: 0.75rem;
   line-height: 1.4;
 }

@@ -128,6 +128,48 @@ describe('the icon font and its code point table', () => {
     expect(span('chevron-right')).toBeCloseTo(span('chevron-left'), 5);
   });
 
+  /*
+   * The names are the product's, and they have to stop claiming to be someone
+   * else's.
+   *
+   * The set borrowed Font Awesome 6's class names verbatim for one round of the
+   * review (#40), on the theory that a shared vocabulary stops "the magnifier" from
+   * having three spellings. What it actually did was put a *known* name on unknown
+   * artwork: a reader who knows that set opens `paths.mjs` expecting the glyph the
+   * name promises, and gets ours. The names were reverted to the plain English the
+   * rest of this codebase already speaks, and this is what keeps them there — a
+   * one-line assertion, because the failure is a name quietly drifting back to the
+   * borrowed list rather than a shape being wrong.
+   */
+  const BORROWED = [
+    'bars', 'magnifying-glass', 'xmark', 'file-lines', 'file-arrow-up', 'file-arrow-down',
+    'trash-can', 'arrows-rotate', 'table-columns', 'circle-info', 'triangle-exclamation',
+    'folder-open', 'ellipsis', 'power-off', 'right-from-bracket', 'circle-plus',
+    'backward-step', 'forward-step', 'volume-high', 'gear', 'books', 'pen',
+    'arrow-down-wide-short', 'up-down', 'font',
+  ];
+
+  it('does not borrow another icon set’s names', () => {
+    const names = Object.keys(GLYPHS);
+    const borrowed = names.filter((name) => BORROWED.includes(name));
+    expect(borrowed, `these names are another set's: ${borrowed.join(', ')}`).toEqual([]);
+  });
+
+  it('names every glyph after the thing it draws, in the vocabulary the UI uses', () => {
+    // A glyph whose name has to be *looked up* is a glyph nobody adds correctly. The
+    // list is the whole vocabulary, so adding an icon is a deliberate act rather than
+    // a free-form string that happens to compile.
+    const VOCABULARY = [
+      'add-circle', 'arrow-left', 'book', 'check', 'chevron-left', 'chevron-right',
+      'clock', 'close', 'download', 'edit', 'eye', 'file-text', 'folder', 'indent',
+      'info', 'library', 'line-height', 'logout', 'menu', 'moon', 'more', 'pause',
+      'play', 'plus', 'refresh', 'search', 'settings', 'shelf', 'sign-out', 'sliders',
+      'sort', 'step-backward', 'step-forward', 'stop', 'sun', 'text-size', 'trash',
+      'tune', 'upload', 'volume', 'warning',
+    ];
+    expect(Object.keys(GLYPHS).sort()).toEqual(VOCABULARY);
+  });
+
   it('assigns code points in the same order as the source, starting at 0xE900', () => {
     const names = Object.keys(GLYPHS);
     names.forEach((name, index) => {
@@ -252,9 +294,9 @@ describe('the icon box', () => {
     const { Icon } = await import('../src/ui/icon.tsx');
     const { render } = await import('../src/ui/vendor/preact.ts');
     const host = document.createElement('div');
-    render(Icon({ name: 'xmark' }), host);
+    render(Icon({ name: 'close' }), host);
     const span = host.querySelector('.icon')!;
-    expect(span.textContent).toBe(ICON_CODEPOINTS.xmark);
+    expect(span.textContent).toBe(ICON_CODEPOINTS.close);
     expect(span.getAttribute('aria-hidden')).toBe('true');
     expect(span.hasAttribute('aria-label')).toBe(false);
   });
@@ -263,7 +305,7 @@ describe('the icon box', () => {
     const { Icon } = await import('../src/ui/icon.tsx');
     const { render } = await import('../src/ui/vendor/preact.ts');
     const host = document.createElement('div');
-    render(Icon({ name: 'xmark', label: '关闭' }), host);
+    render(Icon({ name: 'close', label: '关闭' }), host);
     const span = host.querySelector('.icon')!;
     // `role="img"` is what makes a labelled span announce as an image rather than
     // as a stray character, which is what a bare span containing a PUA code point
@@ -345,24 +387,24 @@ describe('icon buttons', () => {
     const { IconButton } = await import('../src/ui/toolkit.tsx');
     const { render } = await import('../src/ui/vendor/preact.ts');
     const host = document.createElement('div');
-    render(IconButton({ label: '目录', icon: 'bars' }), host);
+    render(IconButton({ label: '目录', icon: 'menu' }), host);
     const button = host.querySelector('button')!;
     // The name must be on the *button*: a glyph inside an aria-labelled button is
     // read by some screen readers as well, which is why the glyph is aria-hidden.
     expect(button.getAttribute('aria-label')).toBe('目录');
     const glyph = button.querySelector('.icon')!;
     expect(glyph.getAttribute('aria-hidden')).toBe('true');
-    expect(glyph.textContent).toBe(ICON_CODEPOINTS.bars);
+    expect(glyph.textContent).toBe(ICON_CODEPOINTS.menu);
   });
 
   it('draws every icon button from the icon set rather than from text', async () => {
     const { IconButton } = await import('../src/ui/toolkit.tsx');
     const { render } = await import('../src/ui/vendor/preact.ts');
     const host = document.createElement('div');
-    render(IconButton({ label: '关闭', icon: 'xmark' }), host);
+    render(IconButton({ label: '关闭', icon: 'close' }), host);
     // A regression here is the whole point of the change: the old button took
     // arbitrary children, and Unicode punctuation is what it was given.
     expect(host.querySelector('.icon')).not.toBeNull();
-    expect(host.textContent).toBe(ICON_CODEPOINTS.xmark);
+    expect(host.textContent).toBe(ICON_CODEPOINTS.close);
   });
 });
