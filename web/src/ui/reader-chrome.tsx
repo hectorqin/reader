@@ -119,8 +119,15 @@ export interface ChromeHandlers {
   onSwitchEngine(kind: AppSettings['ttsEngine']): void;
   onTocEntry(ref: string): void;
   onChapter(delta: 1 | -1): void;
-  /** Jump to a fraction of the whole book, from the footer scrubber. */
-  onScrub(fraction: number): void;
+  /**
+   * Jump to a page *inside the current chapter*, from the footer scrubber.
+   *
+   * A page number rather than a fraction, because a page is what the reader is
+   * choosing: the readout beside the thumb says "第 3/9 页", and a slider that
+   * moved by whole-book fraction would land them somewhere the readout never
+   * names.
+   */
+  onScrubPage(page: number): void;
   onTurnPage(direction: 'next' | 'previous'): void;
   onSpeechToggle(): void;
   onSpeechPrevious(): void;
@@ -202,53 +209,75 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
         </div>
       ) : null}
 
-      {/* The immersion rail.
+      {/* The quick-action rail.
           —
-          A column of controls on the right edge, drawn *only* while the chrome is
-          hidden. It is what makes hiding the chrome a usable state rather than a
-          state the reader has to leave in order to do anything: without it, the
-          only way to change the font size or open the contents is to tap back to
-          the toolbar, do the thing, and tap again — three interactions for one
-          adjustment, and the text moves under the reader on every one of them.
-          With it, the controls the reader reaches for most are always one tap away
-          and never cover the column, because the rail lives in the page margin
-          beside the text rather than over it.
-          The rail is *not* drawn while the chrome is visible. A rail plus a
-          toolbar is two competing sets of the same controls, and a reader who can
-          see the toolbar has already found what they were looking for. */}
-      {!state.chromeVisible ? (
-        <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作" aria-orientation="vertical">
-          <RailButton icon="menu" label="目录" onClick={handlers.toggleToc} />
-          <RailButton
-            icon={state.theme === 'dark' ? 'sun' : 'moon'}
-            label={state.theme === 'dark' ? '日间' : '夜间'}
-            onClick={() => handlers.onSetting({ theme: nextTheme(state.theme) })}
-          />
-          <RailButton icon="text-type" label="字号" onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })} />
-          <RailButton icon="sliders" label="阅读设置" onClick={handlers.toggleSettings} />
-        </div>
-      ) : null}
+          A column of controls on the right edge, shown **and hidden with the two
+          bars**. That pairing is the request, and it is also the coherent reading
+          of what the rail is for: the rail is a second way to reach the same
+          destinations the top bar names (目录 / 主题 / 字号 / 设置), so it belongs to
+          the same "the reader has asked for the controls" state as the bars. Drawn
+          while the chrome is hidden, it was the one piece of chrome that survived
+          immersion — a reader who tapped to hide the navigation still had seven
+          controls floating over the right edge of the text, which is not the
+          "only the page" they asked for.
+          It is still *not* the toolbar's duplicate: the rail holds the four
+          controls a reader nudges while reading (contents, theme, size, settings)
+          and is a floating column in the page margin rather than a band, so it
+          covers no line of text on a wide screen.
+          Drawn unconditionally and collapsed by `data-chrome` in CSS, exactly like
+          the two bars: `visibility: hidden` at the end of the fade is what takes it
+          out of reach of both a finger and a screen reader, and one attribute for
+          three bands is what makes "the chrome is hidden" a single fact. */}
+      <div
+        className="reader-rail"
+        role="toolbar"
+        aria-label="阅读快捷操作"
+        aria-orientation="vertical"
+      >
+        <RailButton icon="menu" label="目录" onClick={handlers.toggleToc} />
+        <RailButton
+          icon={state.theme === 'dark' ? 'sun' : 'moon'}
+          label={state.theme === 'dark' ? '日间' : '夜间'}
+          onClick={() => handlers.onSetting({ theme: nextTheme(state.theme) })}
+        />
+        <RailButton icon="text-type" label="字号" onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })} />
+        <RailButton icon="sliders" label="阅读设置" onClick={handlers.toggleSettings} />
+      </div>
 
       {/* The bottom bar.
           —
           Two rows, and the split is the reference's: a scrubber the reader can
-          drag to any page, then a navigation row with the chapter buttons at the
-          ends and the reading progress in the middle. The scrubber replaces the
-          old 3px bar plus the "本章 x/y 页" readout — a bar that only reports could
-          not be used to *go* anywhere, and the reader who wanted the end of the
-          chapter had to tap the next button forty times. */}
+          drag to any page **of this chapter**, then a navigation row with the
+          chapter buttons at the ends and the reading progress in the middle. The
+          scrubber replaces the old 3px bar plus the "本章 x/y 页" readout — a bar
+          that only reports could not be used to *go* anywhere, and the reader who
+          wanted the end of the chapter had to tap the next button forty times.
+          It is scoped to the chapter, not the book: the readout beside it says
+          "第 3/9 页", and the reference's own screenshot shows the thumb near the
+          middle at page 25 of 32 — a book-wide bar would be two thirds of the way
+          across and blank in a chapter that is one of a thousand. The whole-book
+          number is still on screen, as the "阅读进度" readout below, which is the
+          row that *reports*; the slider is the row that *moves*. */}
       <div className="footer" hidden={!state.chromeVisible}>
         <div className="progress-row">
           <input
             className="progress-scrubber"
             type="range"
-            min={0}
-            max={100}
+            min={1}
+            max={Math.max(1, state.chapterPages)}
             step={1}
-            value={Math.round(Math.min(1, Math.max(0, state.progress)) * 100)}
-            aria-label="阅读进度"
+            // The *page*, not the whole-book fraction. The readout beside the thumb
+            // names a page in this chapter, so the control has to move by the same
+            // unit; a book-percentage slider next to "第 3/9 页" is two answers to
+            // two different questions sharing one thumb.
+            value={Math.min(Math.max(1, state.pageInChapter), Math.max(1, state.chapterPages))}
+            aria-label="章节内页数"
+            aria-valuetext={
+              state.chapterPages > 0 ? `第 ${state.pageInChapter}/${state.chapterPages} 页` : '章节内页数'
+            }
+            disabled={state.chapterPages <= 1}
             onInput={(event) =>
-              handlers.onScrub(Number((event.currentTarget as HTMLInputElement).value) / 100)
+              handlers.onScrubPage(Number((event.currentTarget as HTMLInputElement).value))
             }
           />
           <span className="progress-page">

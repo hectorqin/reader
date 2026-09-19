@@ -295,3 +295,86 @@ describe('page turns in paged mode', () => {
     }
   });
 });
+
+/**
+ * The footer scrubber, in the unit the footer reads out.
+ *
+ * The report is specific: the slider under the readout moved the *book*, not the
+ * page, so dragging it to one place left the reader in another chapter than the
+ * "第 3/9 页" beside its thumb. These assertions are written against the two things
+ * that have to agree — where a drag lands, and where the next page turn goes from.
+ */
+describe('seeking a page inside the chapter', () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    document.body.innerHTML = '';
+    container = document.createElement('div');
+    document.body.append(container);
+  });
+
+  it('lands on the page the readout names, in scroll mode', async () => {
+    const view = scrollingView(container, 4);
+    await view.open(1, 0);
+    const total = view.position().chapterPages;
+    expect(total).toBe(4);
+    for (let page = 1; page <= total; page += 1) {
+      await view.seekPageInChapter(page - 1);
+      expect(view.position().pageInChapter).toBe(page);
+      // Still in the chapter the reader was in: a scrub is not navigation.
+      expect(view.currentSectionIndex()).toBe(1);
+    }
+  });
+
+  it('lands on the page the readout names, in paged mode', async () => {
+    const view = pagedView(container, 4);
+    await view.open(1, 0);
+    expect(view.position().chapterPages).toBe(4);
+    for (let page = 1; page <= 4; page += 1) {
+      await view.seekPageInChapter(page - 1);
+      expect(view.position().pageInChapter).toBe(page);
+      expect(view.currentSectionIndex()).toBe(1);
+    }
+  });
+
+  it('leaves the next turn stepping from where the drag landed', async () => {
+    // The half that a "does the drag move the page" check misses: the scrub and
+    // the page turn have to share one arithmetic, or the reader drags to page 3
+    // and the next press jumps somewhere that is not page 4.
+    const view = scrollingView(container, 5);
+    await view.open(1, 0);
+    await view.seekPageInChapter(2);
+    expect(view.position().pageInChapter).toBe(3);
+    await view.next();
+    expect(view.position().pageInChapter).toBe(4);
+    await view.previous();
+    expect(view.position().pageInChapter).toBe(3);
+  });
+
+  it('clamps a page outside the chapter instead of following it', async () => {
+    // The slider is bounded by `chapterPages`, but a stale render or a chapter
+    // that re-paginated under a held thumb can still hand over a page number the
+    // chapter no longer has. Landing on the ends is the honest answer; inventing
+    // a destination is not.
+    const view = scrollingView(container, 3);
+    await view.open(1, 0);
+    await view.seekPageInChapter(99);
+    expect(view.position().pageInChapter).toBe(3);
+    expect(view.currentSectionIndex()).toBe(1);
+    await view.seekPageInChapter(-5);
+    expect(view.position().pageInChapter).toBe(1);
+    expect(view.currentSectionIndex()).toBe(1);
+  });
+
+  it('does not cross a chapter boundary, even at the last page', async () => {
+    // The distinction from the old whole-book seek: dragging to the last page of a
+    // chapter must stop there. A slider that navigated would take a reader who
+    // wanted the end of this chapter to the start of the next one, having asked
+    // for neither.
+    const view = scrollingView(container, 3);
+    await view.open(1, 0);
+    await view.seekPageInChapter(2);
+    expect(view.position().pageInChapter).toBe(3);
+    expect(view.currentSectionIndex()).toBe(1);
+  });
+});

@@ -1,4 +1,5 @@
 import { ApiError } from '../api/errors.ts';
+import { renditionRef } from './rendition.ts';
 import type { ReaderApi } from '../api/client.ts';
 import type { Book, BookContent, Manifest, Note } from '../api/types.ts';
 import { loadBook, isImagePath, extensionOf } from '../formats/index.ts';
@@ -214,7 +215,7 @@ export class ReaderScreen {
             onSwitchEngine: (kind) => this.switchSpeechEngine(kind),
             onTocEntry: (ref) => void this.goToChapterRef(ref),
             onChapter: (delta) => void this.goToChapter(delta),
-            onScrub: (fraction) => void this.scrubTo(fraction),
+            onScrubPage: (page) => void this.scrubToPage(page),
             onTurnPage: (direction) => void this.turnPage(direction),
             onSpeechToggle: () => this.toggleSpeech(),
             onSpeechPrevious: () => void this.tts?.previous(),
@@ -981,22 +982,30 @@ export class ReaderScreen {
   }
 
   /**
-   * Jumps to a fraction of the whole book, from the footer's scrubber.
+   * Jumps to a page in the current chapter, from the footer's scrubber.
    *
    * The slider is `input[type=range]`, which fires on every pixel of a drag, so
-   * this is deliberately the *cheap* path: `seekPercentage` asks the view to open
-   * the section at that fraction, and the view's own position reporting feeds the
-   * numbers back through the same `onPosition` every other movement uses. There is
-   * no separate "scrubbing" state to get out of sync with — the reader drags, the
-   * book follows, and letting go leaves them where they let go.
+   * this is deliberately the *cheap* path: `seekPageInChapter` moves the reader
+   * inside the chapter already open, and the view's own position reporting feeds
+   * the numbers back through the same `onPosition` every other movement uses.
+   * There is no separate "scrubbing" state to get out of sync with — the reader
+   * drags, the page follows, and letting go leaves them where they let go.
+   *
+   * A page, not a whole-book fraction: the readout beside the thumb and the
+   * positions the page turns land on are both pages *of this chapter*, and only a
+   * slider in the same unit stays in agreement with them. Reaching this control
+   * also no longer crosses a chapter boundary — a drag cannot silently navigate —
+   * because a slider whose thumb sits at 3% while the reader watches the book
+   * jump from chapter 40 to chapter 400 is a slider that answers a question
+   * nobody asked.
    *
    * Position writes are untouched on purpose: `onPosition` already debounces the
    * network write by 1.5s, so a drag does not produce a request per frame.
    */
-  private async scrubTo(fraction: number): Promise<void> {
+  private async scrubToPage(page: number): Promise<void> {
     const view = this.view;
     if (!view) return;
-    await view.seekPercentage(fraction);
+    await view.seekPageInChapter(page - 1);
     // The drag can end between two scroll events, and a book with no reported
     // position after the seek would leave the bar showing the pre-drag value.
     this.pendingPosition = view.position();
@@ -1660,30 +1669,6 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(copy).set(bytes);
   return copy;
-}
-
-/**
- * The reference to fetch for an item's rendition.
- *
- * The mapping lives here rather than being baked into the server's `href`, because
- * `href` is also the section id and therefore the identity a saved reading
- * position is matched on: changing it would move every existing TXT reader back to
- * chapter one. Prefixing on the client keeps old positions resolving and new
- * chapters rendering.
- *
- * `chapter-html:` is `chapter:` without the streaming cap — one whole chapter for a
- * reader who is about to read it in one piece. It used to mean "server-rendered
- * markup" as well; that half is gone (the client typesets, see
- * `web/src/formats/segments.ts`) and the reference name is kept because it is the
- * identity a cached section and a saved position are keyed on, and because a
- * client that asks for it must keep working. An item that does not declare `html`
- * is fetched exactly as the server named it, which is the behaviour every other
- * format already relies on.
- */
-function renditionRef(item: { href: string; format?: string }): string {
-  if (item.format !== 'html') return item.href;
-  if (item.href.startsWith('chapter:')) return `chapter-html:${item.href.slice('chapter:'.length)}`;
-  return item.href;
 }
 
 /**

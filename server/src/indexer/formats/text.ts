@@ -47,12 +47,27 @@ const CHAPTER_PATTERNS: readonly RegExp[] = [
 ];
 
 /**
- * The asset reference prefix for a chapter rendered as markup.
+ * The asset reference prefix for one whole chapter.
  *
  * A second prefix rather than a new `kind` on the manifest: the reference is
  * opaque and format-specific by design, so a client that does not understand
- * `chapter-html:` keeps working through `chapter:` unchanged.
+ * `chapter-full:` keeps working through `chapter:` unchanged.
+ *
+ * It was called `chapter-html:` when the server rendered `<p>` markup on this
+ * reference. It no longer renders anything — paragraph splitting moved to the
+ * client (`web/src/formats/segments.ts`) and this response is plain characters —
+ * so the name was the last thing left saying "html", and a name that lies about
+ * its own content is how the *next* change gets it wrong.
+ *
+ * The old name is still accepted as an alias. The reference is stored in a
+ * client's offline cache and in a saved reading position, and breaking it would
+ * cost an existing TXT reader their chapter rather than their place: an app that
+ * drops a reference its own client asked for last week is one that fails offline
+ * on the second launch. Answering both names costs one comparison.
  */
+const CHAPTER_FULL_REF = 'chapter-full:';
+
+/** The previous name for {@link CHAPTER_FULL_REF}, answered for compatibility. */
 const CHAPTER_HTML_REF = 'chapter-html:';
 
 /** A heading has to be short; a 200-character line is prose, not a title. */
@@ -207,22 +222,28 @@ export const textHandler = registerFileHandler({
 
   /**
    * Body text. Three addressing modes, because clients need all three:
-   *   - `chapter-html:<n>` one whole chapter, as the characters it is stored as
+   *   - `chapter-full:<n>` one whole chapter, as the characters it is stored as
    *   - `chapter:<n>` the same chapter, capped at `size` (a streaming window)
    *   - `chunk:<byteOffset>` for streaming a novel with no headings
    *
    * Not one of them carries the reader's typography, and not one of them carries
-   * paragraph boundaries either. `chapter-html:` used to render `<p>` markup on
-   * the server; it no longer does, because paragraph splitting is a *reading*
-   * decision (see `web/src/formats/segments.ts`) and doing it here meant the
-   * windowed path got paragraphs while the streamed path could not, and meant the
-   * reader's indent was a round trip. What the server owes the reader is the
-   * chapter entire; the client typesets it.
+   * paragraph boundaries either. `chapter-full:` used to render `<p>` markup on
+   * the server (under its old name, `chapter-html:`); it no longer does, because
+   * paragraph splitting is a *reading* decision (see
+   * `web/src/formats/segments.ts`) and doing it here meant the windowed path got
+   * paragraphs while the streamed path could not, and meant the reader's indent
+   * was a round trip. What the server owes the reader is the chapter entire; the
+   * client typesets it.
    *
-   * `chapter-html:` is therefore now an alias for the whole chapter as plain
-   * characters, with the one difference that it is *not* capped: `chapter:` bounds
-   * its reply because it is a window for streaming, and bounding a chapter the
-   * reader is about to read would hand them a chapter that stops mid-sentence.
+   * `chapter-full:` is therefore the whole chapter as plain characters, with the
+   * one difference from `chapter:` that it is *not* capped: `chapter:` bounds its
+   * reply because it is a window for streaming, and bounding a chapter the reader
+   * is about to read would hand them a chapter that stops mid-sentence.
+   *
+   * `chapter-html:<n>` is the old name and is still answered identically. The
+   * reference has been asked for by shipped clients and is stored in their
+   * offline caches, so dropping it would strand a reader rather than improve
+   * anything — the name is not part of the API's meaning, only of its history.
    */
   async asset(ctx: HandlerContext, req): Promise<AssetPayload> {
     const size = Math.min(MAX_CHUNK_BYTES, DEFAULT_CHUNK_BYTES);
@@ -231,8 +252,13 @@ export const textHandler = registerFileHandler({
     // The whole chapter, uncapped. See the method comment: `chapter:` bounds its
     // reply because it is a streaming window, and that bound must not be applied
     // to a chapter the reader is about to read in one piece.
-    if (req.ref.startsWith(CHAPTER_HTML_REF)) {
-      const index = Number.parseInt(req.ref.slice(CHAPTER_HTML_REF.length), 10);
+    const wholeChapterRef = req.ref.startsWith(CHAPTER_FULL_REF)
+      ? CHAPTER_FULL_REF
+      : req.ref.startsWith(CHAPTER_HTML_REF)
+        ? CHAPTER_HTML_REF
+        : '';
+    if (wholeChapterRef) {
+      const index = Number.parseInt(req.ref.slice(wholeChapterRef.length), 10);
       const { chapters, lines } = splitChapters(text);
       const chapter = chapters[index];
       if (!chapter) throw new Error(`chapter ${index} is out of range`);

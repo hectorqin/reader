@@ -39,8 +39,8 @@ const SCALE = 2;
 
 const SCENES = [
   { name: '01-shelf', label: '书架', what: '第一屏：先看到书，再看到控件' },
-  { name: '02-reader', label: '阅读页', what: '顶栏（图标+文字）/ 正文 / 底栏滑杆与上一章下一章 / 状态药丸', openBook: true },
-  { name: '03-reader-no-chrome', label: '阅读页 · 收起工具栏', what: '顶栏与底栏同时收起，正文占满，右上留快捷列、左上左下留章节与页码', openBook: true, tapCenter: true },
+  { name: '02-reader', label: '阅读页', what: '顶栏（图标+文字）/ 右侧快捷列 / 正文 / 底栏「章节内页数」滑杆与上一章下一章', openBook: true },
+  { name: '03-reader-no-chrome', label: '阅读页 · 收起工具栏', what: '顶栏、底栏、快捷列一起收起，正文占满，只留章节与页码读数', openBook: true, tapCenter: true },
   { name: '04-panel-toc', label: '目录 · 半屏', what: '下半屏，上半屏正文仍可见', openBook: true, openPanel: '目录' },
   { name: '05-panel-settings', label: '阅读设置 · 半屏', what: '一行式行：标签在左、控件在右', openBook: true, openPanel: '设置' },
   { name: '06-reader-paged', label: '阅读页 · 翻页模式', what: '分栏后的一页，页数应与可翻次数一致', openBook: true, choose: ['设置', '翻页'], closePanel: true },
@@ -53,6 +53,15 @@ const SCENES = [
     openBook: true,
     openPanel: '设置',
   },
+  {
+    name: '10-reader-paged-scrub',
+    label: '阅读页 · 滑杆拖到本章第 3 页',
+    what: '分栏模式下拖动底部滑杆：读数与画面都停在本章内，不换章',
+    openBook: true,
+    choose: ['设置', '翻页'],
+    closePanel: true,
+    scrubPage: 3,
+  },
 ];
 
 /** Measurements that must hold, on the scenes where they apply. */
@@ -64,20 +73,45 @@ async function audit(cdp, scenes, results) {
     if (!ok) failures.push(`${name}: ${detail}`);
   };
 
-  // The chrome is one state, not two.
+  // The chrome is one state, not two *or three*.
   //
   // The request behind this is specific — the top bar and the bottom bar hide
   // together — and the failure it guards against is the one a reader reports as
   // "只收起了一半": a header that leaves the text full height while a footer keeps
-  // covering the last two lines. So the collapse is asserted on *both* bands and on
-  // the space they occupied, in the state where the reader asked for immersion, and
-  // the rail is asserted to be there — hiding the chrome without it is a state the
-  // reader has to leave in order to do anything.
+  // covering the last two lines. So the collapse is asserted on both bands and on
+  // the space they occupied, in the state where the reader asked for immersion.
+  //
+  // The rail is the third band, and the follow-up report was that it *didn't* go
+  // with them: shown only while the chrome was hidden, it was the one piece of
+  // chrome that survived immersion, so a reader who tapped to get "just the page"
+  // still had a floating column over the text. It is asserted in both directions
+  // here — present with the bars, gone with the bars — because a control that only
+  // ever appears is exactly the state that was reported.
   //
   // Asked for the way the reader asks for it (a tap on the middle third) rather than
   // by setting the attribute: the tap is also a thing that has to keep working.
+  await cdp.sleep(300);
+  const visibleChrome = await cdp.evaluate(`(() => {
+    const rail = document.querySelector('.reader-rail');
+    if (!rail) return { missing: true };
+    const r = rail.getBoundingClientRect();
+    return {
+      present: true,
+      visible: getComputedStyle(rail).visibility !== 'hidden' && r.width > 0 && r.height > 0,
+      buttons: rail.querySelectorAll('button').length,
+      pointerEvents: getComputedStyle(rail).pointerEvents,
+    };
+  })()`);
+  check(
+    '展开工具栏: 快捷按钮与两条栏一起出现',
+    !visibleChrome.missing && visibleChrome.visible && visibleChrome.buttons > 0 && visibleChrome.pointerEvents !== 'none',
+    visibleChrome.missing
+      ? '没有找到快捷按钮列'
+      : `visible=${visibleChrome.visible} 按钮 ${visibleChrome.buttons} 个 pointer-events=${visibleChrome.pointerEvents}`,
+  );
+
   await cdp.tapMiddle();
-  await cdp.sleep(400);
+  await cdp.sleep(700);
   const hidden = await cdp.evaluate(`(() => {
     const screen = document.querySelector('.reader-screen');
     const topbar = document.querySelector('.topbar');
@@ -96,7 +130,16 @@ async function audit(cdp, scenes, results) {
       stageTop: Math.round(s.top),
       stageBottom: Math.round(s.bottom),
       viewportHeight: window.innerHeight,
-      rail: !!document.querySelector('.reader-rail'),
+      rail: (() => {
+        const el = document.querySelector('.reader-rail');
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return {
+          present: true,
+          visible: getComputedStyle(el).visibility !== 'hidden' && r.width > 0 && r.height > 0,
+          pointerEvents: getComputedStyle(el).pointerEvents,
+        };
+      })(),
       indicator: (() => {
         const el = document.querySelector('.reading-indicator');
         if (!el) return null;
@@ -127,10 +170,18 @@ async function audit(cdp, scenes, results) {
     !hidden.missing && hidden.stageTop <= 1 && hidden.viewportHeight - hidden.stageBottom <= 1,
     hidden.missing ? 'n/a' : `正文 ${hidden.stageTop}..${hidden.stageBottom} / 视口 ${hidden.viewportHeight}`,
   );
+  // The rail goes with the bars, in this direction too. `visibility: hidden` is
+  // asserted rather than merely "height is zero", because a control a finger can
+  // still land on is a control that is still there — and the state being guarded
+  // against is precisely "the rail outlived the toolbar".
   check(
-    '收起工具栏: 右侧仍有快捷按钮',
-    !hidden.missing && hidden.rail,
-    hidden.missing ? 'n/a' : `rail=${hidden.rail}`,
+    '收起工具栏: 快捷按钮跟着两条栏一起收',
+    !hidden.missing && hidden.rail !== null && !hidden.rail.visible && hidden.rail.pointerEvents === 'none',
+    hidden.missing
+      ? 'n/a'
+      : hidden.rail
+        ? `visible=${hidden.rail.visible} pointer-events=${hidden.rail.pointerEvents}`
+        : '没有找到快捷按钮列',
   );
   // Immersion keeps the *where am I* readouts. Hiding the chrome should leave a
   // reader who knows which chapter they are in and how far through — not a blank
@@ -220,6 +271,9 @@ async function audit(cdp, scenes, results) {
       width: Math.round(r.width),
       height: Math.round(r.height),
       label: el.getAttribute('aria-label') ?? '',
+      min: Number(el.min),
+      max: Number(el.max),
+      value: Number(el.value),
       page: document.querySelector('.progress-page')?.textContent.trim() ?? '',
       nav: document.querySelector('.chapter-nav .nav-progress')?.textContent.trim() ?? '',
     };
@@ -236,6 +290,122 @@ async function audit(cdp, scenes, results) {
     !scrubber.missing && scrubber.page.length > 0 && scrubber.nav.length > 0,
     scrubber.missing ? 'n/a' : `page="${scrubber.page}" nav="${scrubber.nav}"`,
   );
+  // The slider is in *chapter pages*, not in whole-book percent.
+  //
+  // This is the report: the readout beside the thumb said "第 8/9 页" while the
+  // thumb sat near the left end, because the two were counting different things —
+  // the readout counted pages in a nine-page chapter, and the slider counted the
+  // reader's position in a book of hundreds. The check is that the slider's own
+  // range *is* the chapter's page range, read from the same readout the reader
+  // sees, so the two cannot drift apart behind a passing screenshot.
+  const chapterPages = (() => {
+    const match = /\/\s*(\d+)\s*页/.exec(scrubber.page ?? '');
+    return match ? Number(match[1]) : 0;
+  })();
+  check(
+    '底栏: 滑杆量的是章节内页数，不是全书百分比',
+    !scrubber.missing && chapterPages > 0 && scrubber.max === chapterPages && scrubber.min === 1,
+    scrubber.missing
+      ? '没有找到滑杆'
+      : `min=${scrubber.min} max=${scrubber.max} value=${scrubber.value} 读数="${scrubber.page}"（章节共 ${chapterPages} 页）`,
+  );
+  // And it *moves*. Setting the value through a real `input` event is what a drag
+  // produces, and the assertion is on the page the reader ends up on: a slider
+  // wired to the wrong measurement still reports the right number while failing
+  // this, which is the bug being closed.
+  const scrubMove = await cdp.evaluate(`(async () => {
+    const el = document.querySelector('.progress-scrubber');
+    if (!el || Number(el.max) < 2) return { skipped: true };
+    // A page in *this* chapter, not a page of the book. A slider wired to the whole
+    // book reaches the same visible readout while quietly navigating: the page number
+    // it lands on is a page of whatever chapter the drag moved the reader into. That
+    // is why the range assertion above is on min/max matching the chapter's own page
+    // count — the two have to come from the same source, which is what makes this
+    // drag land where the readout says.
+    const target = Number(el.max);
+    el.value = String(target);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 500));
+    const page = document.querySelector('.progress-page')?.textContent.trim() ?? '';
+    return { skipped: false, want: target, page, value: Number(el.value) };
+  })()`);
+  if (scrubMove.skipped) {
+    check('底栏: 拖动滑杆切到对应页', true, `本章只有 ${scrubber.max} 页，这一轮跳过`);
+  } else {
+    check(
+      '底栏: 拖动滑杆切到对应页',
+      scrubMove.page.includes(`第 ${scrubMove.want}/`) && scrubMove.page.includes(`/${scrubMove.want} 页`),
+      `拖到 ${scrubMove.want} 后读数="${scrubMove.page}"`,
+    );
+  }
+
+  // The same drag, in **paged** mode, where the original defect was easiest to see
+  // and hardest to reason about: a paged surface does not scroll, so a slider wired
+  // to the book moves the reader by *opening a different chapter*, and the page
+  // number beside it then describes that other chapter.
+  //
+  // Driven here rather than left to the scene that screenshots it, because the audit
+  // has to hold the state while it measures: a scene runs once for the picture, and
+  // the mode it left the reader in is not the mode the checks below run in.
+  const pagedScrub = await cdp.evaluate(`(async () => {
+    // Switch to paged through the real control, then drag. Both are things a reader
+    // does; setting the setting directly would prove the slider works in a mode no
+    // reader could have reached.
+    document.querySelector('button[aria-label="设置"]').click();
+    await new Promise((r) => setTimeout(r, 350));
+    const paged = [...document.querySelectorAll('.segmented button')].find((b) => b.textContent.trim() === '翻页');
+    if (!paged) return { skipped: true };
+    paged.click();
+    await new Promise((r) => setTimeout(r, 350));
+    document.querySelector('button[aria-label="关闭"]').click();
+    await new Promise((r) => setTimeout(r, 400));
+    // The chapter the reader is in, taken from the immersion indicator's own source
+    // is not available here (the chrome is shown), so the *page count* stands in:
+    // a drag that navigated would change the chapter, and a chapter change is what
+    // the readout's denominator comes from.
+    const el = document.querySelector('.progress-scrubber');
+    if (!el) return { skipped: true };
+    const beforePage = document.querySelector('.progress-page')?.textContent.trim() ?? '';
+    const beforeMax = Number(el.max);
+    const target = Math.min(3, beforeMax);
+    el.value = String(target);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 500));
+    const afterPage = document.querySelector('.progress-page')?.textContent.trim() ?? '';
+    return {
+      skipped: false,
+      target,
+      min: Number(el.min),
+      max: Number(el.max),
+      value: Number(el.value),
+      before: beforePage,
+      page: afterPage,
+    };
+  })()`);
+  if (pagedScrub.skipped) {
+    check('翻页模式: 滑杆拖到本章某页', true, '没有找到滑杆或分栏选项，这一轮跳过');
+  } else {
+    check(
+      `翻页模式: 滑杆拖到第 ${pagedScrub.target} 页，仍在本章`,
+      pagedScrub.min === 1 &&
+        pagedScrub.value === pagedScrub.target &&
+        pagedScrub.max >= pagedScrub.target &&
+        pagedScrub.page.includes(`第 ${pagedScrub.target}/${pagedScrub.max} 页`),
+      `min=${pagedScrub.min} max=${pagedScrub.max} value=${pagedScrub.value} 拖前="${pagedScrub.before}" 拖后="${pagedScrub.page}"`,
+    );
+    // Back to scroll mode. The traffic window below is about the requests a
+    // *reading* session makes, and a paged surface does not scroll — it would
+    // generate no position at all, and the check would pass on an empty window.
+    await cdp.evaluate(`(async () => {
+      document.querySelector('button[aria-label="设置"]').click();
+      await new Promise((r) => setTimeout(r, 350));
+      const scroll = [...document.querySelectorAll('.segmented button')].find((b) => b.textContent.trim() === '滚动');
+      if (scroll) scroll.click();
+      await new Promise((r) => setTimeout(r, 350));
+      document.querySelector('button[aria-label="关闭"]').click();
+    })()`);
+    await cdp.sleep(500);
+  }
 
   // The status line must not change the page's geometry. Measured by moving it
   // from empty to a message and back, and comparing the reading column's top.
@@ -512,6 +682,22 @@ async function main() {
       if (scene.tapCenter) {
         await cdp.tapMiddle();
         await cdp.sleep(300);
+      }
+      // A drag on the footer scrubber, driven through a real `input` event because
+      // that is what a drag produces. Captured as a screenshot for the same reason
+      // the other scenes are: "the slider moved the book instead of the page" is
+      // invisible to a check that only reads the page number — both numbers are on
+      // screen — and obvious in a picture of a chapter that is not the one the
+      // reader was in.
+      if (scene.scrubPage) {
+        await cdp.evaluate(`(() => {
+          const el = document.querySelector('.progress-scrubber');
+          if (!el) return null;
+          el.value = String(${scene.scrubPage});
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          return el.value;
+        })()`);
+        await cdp.sleep(600);
       }
 
       const shot = join(outDir, `${scene.name}.png`);

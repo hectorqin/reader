@@ -645,7 +645,7 @@ describe('reading endpoints per format', () => {
     assert.ok(!res.body.includes('风来了'), 'chapter content must not bleed into the next chapter');
   });
 
-  test('the chapter-html reference hands over the whole chapter, unmarked up', async () => {
+  test('the chapter-full reference hands over the whole chapter, unmarked up', async () => {
     // This reference used to answer with server-rendered `<p>` markup. It no
     // longer does: paragraph boundaries are a *reading* decision, and rendering
     // them here meant the reader's indent was a round trip and a windowed chapter
@@ -656,7 +656,7 @@ describe('reading endpoints per format', () => {
     const book = await findBook('小说');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('chapter-html:1')}`,
+      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('chapter-full:1')}`,
       headers: auth(),
     });
     assert.equal(res.statusCode, 200, res.body);
@@ -667,9 +667,30 @@ describe('reading endpoints per format', () => {
     assert.ok(!res.body.includes('风来了'), 'chapter content must not bleed into the next chapter');
   });
 
-  test('chapter-html is not capped the way the streaming chapter reference is', async () => {
+  test('the old chapter-html name still answers, identically', async () => {
+    // The reference is stored in a shipped client's offline cache and asked for by
+    // name, so dropping the old spelling would strand a reader on a chapter their
+    // own client still asks for. Both names have to answer the same bytes, and the
+    // assertion is on equality rather than on "both 200": an alias that answers a
+    // *different* body is worse than a missing one, because it is invisible.
+    const book = await findBook('小说');
+    const refs = ['chapter-full:1', 'chapter-html:1'];
+    const bodies = [];
+    for (const ref of refs) {
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent(ref)}`,
+        headers: auth(),
+      });
+      assert.equal(res.statusCode, 200, `${ref}: ${res.body}`);
+      bodies.push(res.body);
+    }
+    assert.equal(bodies[0], bodies[1], 'the old name must answer the same chapter');
+  });
+
+  test('chapter-full is not capped the way the streaming chapter reference is', async () => {
     // `chapter:` is a *window* for streaming, so bounding its reply is the
-    // feature. `chapter-html:` is a chapter the reader is about to read in one
+    // feature. `chapter-full:` is a chapter the reader is about to read in one
     // piece, so bounding it would hand them a chapter that stops mid-sentence.
     const long = Array.from({ length: 4000 }, (_, i) => `第 ${i} 行的内容，足够长以越过流式窗口。`).join('\n');
     const target = join(booksDir, '超长章节.txt');
@@ -678,7 +699,7 @@ describe('reading endpoints per format', () => {
     const book = await findBook('超长章节');
     const res = await app.inject({
       method: 'GET',
-      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('chapter-html:0')}`,
+      url: `/api/v1/books/${book.id}/assets?ref=${encodeURIComponent('chapter-full:0')}`,
       headers: auth(),
     });
     assert.equal(res.statusCode, 200, res.body);

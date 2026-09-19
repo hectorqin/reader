@@ -191,20 +191,6 @@ describe('ReaderView navigation', () => {
     expect(seen).toEqual(['第 1 章', '第 3 章']);
   });
 
-  it('seeks to a fraction of the book', async () => {
-    const view = make(container, reflowableDoc(10));
-    await view.seekPercentage(0.55);
-    expect(view.currentSectionIndex()).toBe(5);
-  });
-
-  it('clamps a seek beyond the ends', async () => {
-    const view = make(container, reflowableDoc(4));
-    await view.seekPercentage(5);
-    expect(view.currentSectionIndex()).toBe(3);
-    await view.seekPercentage(-1);
-    expect(view.currentSectionIndex()).toBe(0);
-  });
-
   it('lands on the chapter when a window is swapped in', async () => {
     // The bug this pins was reported as "点击章节没有反应": the screen asked the
     // document to swap windows, and the swap — when it happened at all — replaced
@@ -517,7 +503,8 @@ describe('plain-text chapters are typeset by the reader', () => {
   /**
    * A chapter exactly as the server now sends it: the characters, and nothing else.
    *
-   * `chapter-html:<n>` used to answer with server-rendered `<p>` markup. It answers
+   * `chapter-full:<n>` (formerly `chapter-html:<n>`) used to answer with
+   * server-rendered `<p>` markup. It answers
    * with the text now, because paragraph boundaries are a *reading* decision — see
    * `server/src/indexer/formats/text.ts`. Every assertion below is written against
    * this shape, because this is the shape the reader actually receives.

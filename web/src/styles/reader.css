@@ -1926,12 +1926,17 @@ book-content {
   text-overflow: ellipsis;
 }
 
-/* ---- immersion rail ----
+/* ---- quick-action rail ----
  *
- * The column of controls that appears when the chrome is hidden.
+ * The column of controls that shows and hides **with** the two bars, not instead of
+ * them. It used to be drawn only while the chrome was hidden, which made it the one
+ * piece of chrome that survived immersion: a reader who tapped to get "just the
+ * page" still had a floating column over the right edge of the text. The rail holds
+ * the same destinations the top bar names (目录 / 主题 / 字号 / 设置), so it belongs to
+ * the same state — the reader has asked for the controls — and it goes with them.
  *
- * Positioned in the *page margin* rather than over the text, which is the reason it
- * can stay on screen while a reader is reading: the reading column is capped by
+ * Positioned in the *page margin* rather than over the text, which is why it can be
+ * on screen while a reader is reading: the reading column is capped by
  * `--reader-measure`, so on anything wider than a phone there is a genuine gutter to
  * put it in. On a phone there is not, and the rail floats over the right edge of the
  * text — deliberately, because the alternative is not having the controls at all,
@@ -1942,6 +1947,12 @@ book-content {
  * down, which is where the thumb of a hand holding a phone at the bottom lands and
  * where a hand holding a tablet at the side reaches. It is not centred, because the
  * centre of the screen is where the reading is.
+ *
+ * The collapse is the *same* mechanism as the bars': a height/opacity/visibility
+ * transition gated on `data-chrome`, so the three bands cannot disagree about
+ * whether the chrome is on screen. `animation` for entry was replaced by a
+ * transition for the same reason: an animation cannot be reversed mid-flight, so a
+ * reader who tapped twice quickly left the rail visible over a hidden toolbar.
  */
 
 .reader-rail {
@@ -1961,12 +1972,34 @@ book-content {
   flex-direction: column;
   gap: var(--space-1);
   padding: 0.2rem;
-  animation: rail-in var(--motion-duration) var(--motion-ease);
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--motion-duration) var(--motion-ease),
+    transform var(--motion-duration) var(--motion-ease),
+    visibility 0s linear;
 }
 
-@keyframes rail-in {
-  from { opacity: 0; transform: translateX(0.5rem); }
-  to { opacity: 1; transform: none; }
+/*
+ * Hidden: it slides out to the right and fades, the direction its own entry motion
+ * came from, so a reader who taps twice sees one movement rather than two.
+ *
+ * Gated on the screen's own `data-chrome`, exactly like `.topbar` and `.footer`.
+ * One attribute, three bands: they cannot disagree about whether the chrome is on
+ * screen, which is the failure mode ("only the toolbar collapsed") that a second
+ * source of truth produces. `visibility: hidden` lands at the *end* of the fade so
+ * a control that is on its way off the screen cannot be tapped or reached by a
+ * screen reader, and `pointer-events: none` covers the interval.
+ */
+.reader-screen[data-chrome='hidden'] .reader-rail {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(0.5rem);
+  pointer-events: none;
+  transition:
+    opacity var(--motion-duration) var(--motion-ease),
+    transform var(--motion-duration) var(--motion-ease),
+    visibility 0s linear var(--motion-duration);
 }
 
 .rail-button {
