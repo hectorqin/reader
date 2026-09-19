@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { parseRoute, routeHash } from '../src/ui/router.ts';
+import { parseRoute, routeHash, type Route } from '../src/ui/router.ts';
 
 /**
  * The parts of the shell's routing contract that do not need the whole app.
@@ -27,15 +27,16 @@ describe('shareable links', () => {
 
   it('resolves a library folder link, including Chinese names and spaces', () => {
     const route = parseRoute('#/library/%E7%A7%91%E5%B9%BB/%E5%88%98%E6%85%88%E6%AC%A3%20%E4%BD%9C%E5%93%81');
-    expect(route).toEqual({ name: 'library', path: '科幻/刘慈欣 作品' });
+    expect(route).toEqual({ name: 'library', path: '科幻/刘慈欣 作品', page: 1, fromShelf: false });
     expect(routeHash(route)).toBe('#/library/%E7%A7%91%E5%B9%BB/%E5%88%98%E6%85%88%E6%AC%A3%20%E4%BD%9C%E5%93%81');
   });
 
   it('treats the bare origin and an unknown fragment as the shelf', () => {
     // A reader who bookmarks the app, or follows a link from an older build.
-    expect(parseRoute('')).toEqual({ name: 'shelf' });
-    expect(parseRoute('#/bookshelf')).toEqual({ name: 'shelf' });
-    expect(routeHash({ name: 'shelf' })).toBe('#/shelf');
+    const shelf: Route = { name: 'shelf', page: 1, libraryPath: '', libraryPage: 1 };
+    expect(parseRoute('')).toEqual(shelf);
+    expect(parseRoute('#/bookshelf')).toEqual(shelf);
+    expect(routeHash(shelf)).toBe('#/shelf');
   });
 
   it('keeps a book link working when its id needs escaping', () => {

@@ -648,6 +648,8 @@ book-content {
 .manager-crumb:focus-visible,
 .search-clear:focus-visible,
 .tts-bar button:focus-visible,
+.pager-page:focus-visible,
+.pager-step:focus-visible,
 .dialog button:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
@@ -668,8 +670,16 @@ book-content {
   .manager-row:hover,
   .manager-crumb:hover,
   .search-clear:hover,
+  .pager-page:hover,
+  .pager-step:hover,
   .toc-list li button:hover {
     background: color-mix(in srgb, var(--reader-ink) 6%, transparent);
+  }
+
+  /* Hover must not paint over the one page the reader is *on*: the fill is the
+     state, and a hover that replaces it hides exactly the fact the control carries. */
+  .pager-page[aria-current='page']:hover {
+    background: var(--reader-accent);
   }
 
   .button.primary:hover {
@@ -696,6 +706,8 @@ book-content {
 .manager-row,
 .manager-crumb,
 .search-clear,
+.pager-page,
+.pager-step,
 .toc-list li button,
 .segmented button {
   transition:
@@ -802,17 +814,29 @@ book-content {
   min-width: 0;
 }
 
+/*
+ * The title block.
+ *
+ * One screen title, its count beneath it, and two actions on the right — which is
+ * what the reference稿 shows and what the previous arrangement did not. The count was
+ * a separate row *below* the search field, so the same fact ("共 12 本") appeared two
+ * rows away from the thing it counts and had to be re-found after every search.
+ */
 .shelf-title {
   margin: 0;
-  font-size: 1.55rem;
+  font-size: 1.5rem;
   font-weight: 650;
-  letter-spacing: -0.015em;
-  line-height: 1.2;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  /* The title is the one piece of text on this screen at a display size, so it gets
+     the optical correction the smaller sizes do not need: `-0.02em` closes the gaps
+     that a large weight opens between Chinese glyphs and Latin capitals alike. */
 }
 
 .shelf-subtitle {
-  margin: 0.2rem 0 0;
-  font-size: 0.78rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.76rem;
+  line-height: 1.35;
 }
 
 .shelf-head-actions {
@@ -822,7 +846,7 @@ book-content {
   flex: 0 0 auto;
   /* Nudged back up so the 40px target of the first button aligns with the cap
      height of the title rather than with its baseline. */
-  margin-top: -0.4rem;
+  margin-top: -0.45rem;
 }
 
 /* ---- search ---- */
@@ -958,10 +982,21 @@ book-content {
   gap: 0.5rem;
 }
 
+/*
+ * A section heading that reads as a heading rather than as bold body text.
+ *
+ * The reference稿 sets these slightly apart from the content under them with tracking
+ * and a muted colour, which is what makes a screen with two lists feel like two
+ * sections instead of one long list with a heading in the middle of it. It is a
+ * heading *of* the section, so it also loses the underline the toolbar used to carry:
+ * two horizontal rules 40px apart made the count row look like a separate band.
+ */
 .shelf-section-title {
-  margin: 0.85rem 0 0.55rem;
-  font-size: 0.95rem;
-  font-weight: 620;
+  margin: 0.9rem 0 0.55rem;
+  font-size: 0.83rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--reader-muted);
 }
 
 /* ---- toolbar: the count and the sort, pinned to their section ---- */
@@ -978,6 +1013,12 @@ book-content {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  /*
+   * A hairline under the sticky band, so the covers scrolling beneath it have an
+   * edge to pass. Without it the band is invisible until something slides under it,
+   * and a translucent band with no boundary reads as a rendering artefact.
+   */
+  border-bottom: 1px solid color-mix(in srgb, var(--reader-line) 70%, transparent);
   /*
    * The band is full-bleed *within its section*, and the section is capped, so
    * the sticky background matches the column rather than the window. Negative
@@ -999,6 +1040,7 @@ book-content {
   font-size: 0.75rem;
   white-space: nowrap;
   flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .shelf-sort {
@@ -1031,8 +1073,128 @@ book-content {
 .shelf-status {
   font-size: 0.78rem;
   text-align: center;
+  color: var(--reader-muted);
   padding: 0.75rem 0.9rem calc(0.75rem + var(--safe-bottom));
 }
+
+
+/* ---- the pager ----
+ *
+ * One control, two lists. It lives here rather than beside either list because the
+ * shelf and the library must page *identically*: two pagers that are 2px apart, or
+ * one with a chevron and one with a triangle, is the drift this stylesheet exists to
+ * prevent, and it is the kind of drift nobody notices until they are side by side in
+ * a screenshot.
+ *
+ * ## Why the numbers are pills and the arrows are not
+ *
+ * The current page is a *state* (where the reader is) and the others are *targets*
+ * (where they can go). Drawing all of them the same makes the one fact the control
+ * carries — "you are here" — invisible, and the reader has to read every number to
+ * find it. So the current page is filled with the accent, and the rest are quiet.
+ *
+ * ## Why the step arrows are on both sides
+ *
+ * A long list is read left-to-right and turned the same way: the right chevron is
+ * "next", which is the gesture the whole control exists for, and the left one is
+ * there so the reader who overshot does not have to find their page number and aim
+ * at it.
+ */
+.shelf-pager,
+.manager-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0.9rem 0.35rem 0.25rem;
+}
+
+/*
+ * A page number, sized to the 28px floor rather than to its text.
+ *
+ * It is a control the reader aims at repeatedly, and 0.72rem of digits in a 16px box
+ * is a target that needs the eye rather than the thumb. The box is what is sized, so
+ * the numbers stay quiet while the hit area is not.
+ */
+.pager-page,
+.pager-step {
+  appearance: none;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--reader-ink);
+  border-radius: var(--reader-radius);
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.4rem;
+  font-size: var(--text-label);
+  font-variant-numeric: tabular-nums;
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/*
+ * The current page: a state, in the same colour the shelf uses for "this is the one".
+ *
+ * `aria-current="page"` rather than a class, for the same reason the switch uses
+ * `aria-pressed`: a class would be a second source of truth for "which page am I on",
+ * and the two would eventually disagree — with the disagreement showing up only to a
+ * screen reader, which is the worst place for it.
+ */
+.pager-page[aria-current='page'] {
+  background: var(--reader-accent);
+  border-color: var(--reader-accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.pager-page:disabled,
+.pager-step:disabled {
+  /*
+   * `disabled` rather than hidden: the buttons sit in fixed positions, so a control
+   * that disappears at page one moves the numbers sideways under the thumb that is
+   * on its way to page two.
+   */
+  opacity: 0.35;
+  cursor: default;
+}
+
+/*
+ * The step arrows carry a glyph, so they take the icon's own line box rules. The
+ * `.icon` box is 1em wide with the ink centred in it, and the button centres that
+ * box — which is why there is no vertical nudge here and why there must not be one.
+ */
+.pager-step {
+  width: 2rem;
+  min-width: 2rem;
+  padding: 0;
+  font-size: 0.95rem;
+}
+
+/* A run of pages the window collapsed. Not a target: there is nothing here to press
+   — the two ends of the run are the two pages the reader can reach from here. */
+.pager-gap {
+  min-width: 1.4rem;
+  height: 2rem;
+  display: inline-grid;
+  place-content: center;
+  font-size: var(--text-meta);
+  color: var(--reader-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Nothing animates here, and that is deliberate: a page turn is a new list, and a
+     list that fades is a list the reader waits for. This block exists so the next
+     person adding a transition to this control has to delete it on purpose. */
+  .pager-page,
+  .pager-step {
+    transition: none;
+  }
+}
+
+/* ---- the shelf's own section header row ---- */
 
 /* ---- the grid ---- */
 
@@ -2125,16 +2287,40 @@ book-content {
   accent-color: var(--reader-accent);
 }
 
+/*
+ * A chip: a small, pressable *choice*.
+ *
+ * The pressed state did not exist. `aria-pressed` was set correctly and read by
+ * screen readers, and nothing drew it — so the shelf's four sort chips looked
+ * identical whichever one was in force, and the only way to find out how the list
+ * was ordered was to read the subtitle above it. `aria-pressed` drives the fill for
+ * the same reason the switch uses it: one source of truth for "is this on".
+ */
 .chip {
   appearance: none;
-  border: 1px solid var(--reader-line);
+  border: 1px solid color-mix(in srgb, var(--reader-line) 90%, transparent);
   background: var(--reader-surface);
-  color: var(--reader-ink);
+  color: var(--reader-muted);
   border-radius: 999px;
-  padding: 0.25rem 0.6rem;
+  padding: 0.3rem 0.7rem;
   font-size: 0.72rem;
   white-space: nowrap;
   cursor: pointer;
+}
+
+.chip[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--reader-accent) 12%, var(--reader-surface));
+  border-color: color-mix(in srgb, var(--reader-accent) 45%, transparent);
+  color: var(--reader-accent);
+  font-weight: 600;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip[aria-pressed='true']:hover {
+    /* The pressed chip keeps its own fill: hover must not erase the state, which is
+       the one fact the control carries. */
+    background: color-mix(in srgb, var(--reader-accent) 18%, var(--reader-surface));
+  }
 }
 
 /* ---- settings panel structure ---- */
@@ -2504,9 +2690,21 @@ book-content {
   align-items: center;
   gap: 0.5rem;
   padding: 0.6rem 0.75rem;
-  border-bottom: 1px solid var(--reader-line);
+  /*
+   * Rows are separated by a *hairline*, and the last one has none.
+   *
+   * A divider under the final row of a list draws a line between the content and
+   * nothing, which reads as "there is more, scrolled off" — the exact opposite of
+   * what the end of a directory means. `:last-child` rather than a class because
+   * every list here is rendered from an array and the end of it is the end of it.
+   */
+  border-bottom: 1px solid color-mix(in srgb, var(--reader-line) 75%, transparent);
   cursor: pointer;
   touch-action: pan-y;
+}
+
+.manager-row:last-child {
+  border-bottom: 0;
 }
 
 .manager-row:active {
@@ -2523,12 +2721,18 @@ book-content {
  * Toggling `display` instead would shift every row's indent the moment a
  * selection begins, which reads as the list jumping under the finger that just
  * started the selection.
+ *
+ * A *circle* with a drawn tick rather than a square with a filled box: the tick is
+ * what says "this one is in", and it is the one part of the control that has to be
+ * readable at 20px against an accent fill. `::after` rather than an inline glyph so
+ * it scales with the box instead of with the font the row happens to inherit.
  */
 .manager-check {
+  position: relative;
   width: 1.25rem;
   height: 1.25rem;
   border-radius: 50%;
-  border: 1.5px solid var(--reader-line);
+  border: 1.5px solid color-mix(in srgb, var(--reader-muted) 55%, transparent);
   box-sizing: border-box;
   /* Always laid out, only visible while something is selected: toggling
      `display` would shift every row's indent the moment a selection begins,
@@ -2545,11 +2749,49 @@ book-content {
   background: var(--reader-accent);
 }
 
+/*
+ * The tick: two borders on a rotated box.
+ *
+ * Not a glyph from the icon font, because the font is an *application* typeface and
+ * applying it inside a row that is 20px tall would mean managing two font sizes in
+ * one control. Not an SVG either, for the same reason the rest of this file is not:
+ * one shape is not a set, and a set of one has no consistency to enforce.
+ */
+.manager-check::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 0.28rem;
+  height: 0.52rem;
+  border: solid #fff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-0.05rem) rotate(45deg);
+  opacity: 0;
+}
+
+.manager-row[data-selected='true'] .manager-check::after {
+  opacity: 1;
+}
+
 .manager-name {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   min-width: 0;
+}
+
+/*
+ * A folder and a file, told apart by more than their outline.
+ *
+ * `folder` and `file-lines` are the same weight and the same 24-unit grid, so in a
+ * single column they read as the same kind of thing — which is a real problem in a
+ * list whose primary gesture *is* "this one opens, that one does not". The folder
+ * takes the accent and the file stays ink: colour is the fastest thing in the row to
+ * scan, and it costs nothing that the name beside it does not already say out loud.
+ */
+.manager-row[data-type='dir'] .manager-icon {
+  color: var(--reader-accent);
 }
 
 .manager-icon {
@@ -2579,11 +2821,13 @@ book-content {
 }
 
 .manager-badge {
-  border: 1px solid var(--reader-line);
-  border-radius: 4px;
-  padding: 0 0.25rem;
-  font-size: 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--reader-line) 90%, transparent);
+  border-radius: 999px;
+  padding: 0.02rem 0.35rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.01em;
   color: var(--reader-muted);
+  background: color-mix(in srgb, var(--reader-ink) 3%, transparent);
 }
 
 /* The badge a reader needs to see is the one explaining a missing book. */

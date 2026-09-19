@@ -295,9 +295,19 @@ export class ReaderApi {
    * `path` is library-relative and `''` means the root; the server resolves it
    * through the same containment check every other filesystem access uses.
    */
-  async browse(path = '', options: RequestOptions = {}): Promise<BrowseListing> {
-    const suffix = path ? `?path=${encodeURIComponent(path)}` : '';
-    return this.get<BrowseListing>(`/api/v1/library/browse${suffix}`, options);
+  async browse(path = '', page = 1, options: RequestOptions = {}): Promise<BrowseListing> {
+    /*
+     * `page` is sent even when it is 1, and the path is not sent when it is empty.
+     *
+     * The asymmetry is deliberate: an empty path *is* the root and the server
+     * defaults it, while a page of one is a position the client asked for — and a
+     * request that omits it says "whatever you think", which stops being the same
+     * request the day the default changes.
+     */
+    const params = new URLSearchParams();
+    if (path) params.set('path', path);
+    params.set('page', String(page > 0 ? page : 1));
+    return this.get<BrowseListing>(`/api/v1/library/browse?${params.toString()}`, options);
   }
 
   async browseMove(paths: string[], target: string, options: RequestOptions = {}): Promise<{ moved: number; target: string }> {

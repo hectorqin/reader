@@ -417,6 +417,49 @@ test('a TXT book is indexed without being decoded by the server', async () => {
   assert.equal(body.items[0]!.title, '长篇');
 });
 
+test('a book whose file is gone is not offered as "continue reading"', async () => {
+  /*
+   * The card and the shelf have to agree about what is visible.
+   *
+   * `/library/continue` used to filter only on `hidden = 0`, while `ShelfService.list`
+   * additionally required a live file. A book whose file was deleted — or whose only
+   * copy sat on a drive that is not plugged in — was therefore still drawn in the
+   * "继续阅读" row, and tapping it made `ShelfService.get` answer 404, which the shell
+   * reports as "这本书不在书架上了". The message was true and the card was the bug.
+   */
+  const session = await createUser('continueuser');
+  await writeFile(join(booksDir, '会消失的书.epub'), await makeEpub({
+    id: 'urn:isbn:9780000000042', title: '会消失的书', creator: '某人',
+  }));
+  await ctx.scanner.scan();
+
+  const listing = await app.inject({ method: 'GET', url: '/api/v1/books?search=%E4%BC%9A%E6%B6%88%E5%A4%B1', headers: auth(session.token) });
+  const book = (listing.json() as { items: Array<{ id: string }> }).items[0]!;
+  const user = ctx.db.get<{ id: string }>('SELECT id FROM users WHERE username = ?', 'continueuser')!;
+  ctx.sync.push(user.id, { progress: [{
+    bookId: book.id, locator: 'r1:0:c0', percentage: 0.3,
+    chapterTitle: '第一章', device: 'test', updatedAt: Date.now(),
+  }] });
+
+  const before = await app.inject({ method: 'GET', url: '/api/v1/library/continue', headers: auth(session.token) });
+  assert.equal((before.json() as { items: unknown[] }).items.length, 1, 'a live book with progress is offered');
+
+  // The file goes away without the progress row being touched, which is exactly the
+  // state a library is in between "the drive was unplugged" and "the next scan".
+  await rm(join(booksDir, '会消失的书.epub'));
+  await ctx.scanner.scan();
+
+  const after = await app.inject({ method: 'GET', url: '/api/v1/library/continue', headers: auth(session.token) });
+  assert.equal(
+    (after.json() as { items: unknown[] }).items.length,
+    0,
+    'a book with no live file must not be offered by the continue row',
+  );
+  // And the shelf agrees, because the two now share the predicate.
+  const shelf = await app.inject({ method: 'GET', url: '/api/v1/books?search=%E4%BC%9A%E6%B6%88%E5%A4%B1', headers: auth(session.token) });
+  assert.equal((shelf.json() as { total: number }).total, 0);
+});
+
 test('an ambiguous "title - author" file name is kept whole rather than guessed at', async () => {
   // `长篇 - 某作者` has no marker to say which side is which, so the conservative
   // rule keeps the whole string as the title. Losing an author costs the reader one

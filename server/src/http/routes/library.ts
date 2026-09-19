@@ -101,6 +101,19 @@ function stringList(value: unknown, field: string): string[] {
   return value as string[];
 }
 
+/**
+ * A positive integer from a query string, or the fallback.
+ *
+ * Junk answers the fallback rather than a 400: a page number is a *position in a
+ * list*, and the honest response to `?page=abc` is the first page, not an error the
+ * reader cannot act on. The service clamps the upper end.
+ */
+function numberParam(value: string | undefined, fallback: number): number {
+  if (value === undefined) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): void {
   const auth = authenticate(ctx);
 
@@ -517,7 +530,14 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
   app.get('/api/v1/library/browse', { preHandler: auth }, async (request) => {
     currentUser(request);
     const query = request.query as Record<string, string | undefined>;
-    return ctx.browse.list(query.path ?? '');
+    /*
+     * `page` and `pageSize` are read here rather than by the service, because they
+     * are *transport*: a query string is text, and every other number in this file
+     * is parsed at the same boundary for the same reason. A directory can hold
+     * thousands of entries, and the response is one page of them — see
+     * `BrowseListing.entries`.
+     */
+    return ctx.browse.list(query.path ?? '', numberParam(query.page, 1), numberParam(query.pageSize, 200));
   });
 
   app.post('/api/v1/library/browse/move', { preHandler: auth }, async (request) => {

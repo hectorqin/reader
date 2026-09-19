@@ -60,7 +60,10 @@ function makeScreen(transport: FakeTransport, calls: string[] = []): { screen: M
     api,
     onClose: () => calls.push('close'),
     onSignedOut: () => calls.push('signed-out'),
-    onNavigate: (path) => calls.push(`navigate:${path}`),
+    onOpenLibrary: (path, page, replace) => calls.push(`library:${path}:${page}:${replace}`),
+    onOpenShelf: (page) => calls.push(`shelf:${page}`),
+    onOpenBook: (book) => calls.push(`book:${book.id}`),
+    onPageChange: (page) => calls.push(`page:${page}`),
   });
   document.body.append(screen.element);
   return { screen, calls };
@@ -155,7 +158,7 @@ describe('library manager', () => {
     // (`#/library/科幻`), so the tap reports the intent and the router writes the
     // URL. That round trip is what makes a folder link shareable and Back leave
     // the manager rather than walk out of it one folder at a time.
-    expect(calls).toEqual(['navigate:科幻']);
+    expect(calls).toEqual(['library:科幻:1:true']);
     expect(transport.requests.filter((request) => request.method !== 'GET')).toHaveLength(0);
   });
 
@@ -180,7 +183,9 @@ describe('library manager', () => {
     // What a deep link, a Back and a forward walk all look like from here.
     await screen.open('科幻');
     expect(screen.element.textContent).toContain('三体.epub');
-    expect(transport.requests.at(-1)?.url).toBe('/api/v1/library/browse?path=%E7%A7%91%E5%B9%BB');
+    // `page` is always sent, even for the first: the path is optional because an
+    // empty one *is* the root, while a page is a position the client asked for.
+    expect(transport.requests.at(-1)?.url).toBe('/api/v1/library/browse?path=%E7%A7%91%E5%B9%BB&page=1');
   });
 
   it('does not send a delete for a selection that was never made', async () => {
@@ -512,6 +517,118 @@ describe('batch management', () => {
     await vi.waitFor(() => {
       expect(screen.element.querySelector('.manager-status')?.textContent).toContain('不是书');
     });
+  });
+});
+
+describe('pagination and the refresh after an upload', () => {
+  /** A listing of `total` entries, with `pageSize` of them on the page asked for. */
+  const many = (total: number, requested: number, pageSize = 200): BrowseListing => {
+    const from = (requested - 1) * pageSize;
+    const count = Math.max(0, Math.min(pageSize, total - from));
+    return listing({
+      entries: Array.from({ length: count }, (_v, i) =>
+        entry({ name: `第${from + i + 1}卷.epub`, path: `第${from + i + 1}卷.epub`, scanned: true, indexed: true }),
+      ),
+      total,
+      dirs: 0,
+      files: total,
+      size: total * 1024,
+    });
+  };
+
+  it('shows the page the route named, and hides the pager on a single page', async () => {
+    const transport = new FakeTransport();
+    transport.respondWith((request) => {
+      const requested = Number(new URL(`http://x${request.url}`).searchParams.get('page') ?? '1');
+      return { status: 200, headers: {}, json: many(requested === 1 ? 12 : 340, requested) };
+    });
+    const { screen } = await makeScreen(transport);
+    await screen.open('', 1);
+    expect(screen.element.querySelector('.manager-pager')).toBeNull();
+
+    await screen.open('', 2);
+    // 340 entries is two pages, and the page comes from the *route* rather than from
+    // a field: a page that lives in this class is one Back and one reload throw away.
+    expect(transport.requests.at(-1)?.url).toBe('/api/v1/library/browse?page=2');
+    expect(screen.element.querySelector('.pager-page[aria-current="page"]')?.textContent).toBe('2');
+  });
+
+  it('reports a page turn to the shell instead of paging itself', async () => {
+    const transport = new FakeTransport();
+    transport.respondWith((request) => {
+      const requested = Number(new URL(`http://x${request.url}`).searchParams.get('page') ?? '1');
+      return { status: 200, headers: {}, json: many(340, requested) };
+    });
+    const { screen, calls } = await makeScreen(transport);
+    await screen.open('', 1);
+    const next = [...screen.element.querySelectorAll<HTMLElement>('.manager-pager .pager-step')].find(
+      (button) => button.getAttribute('aria-label') === '下一页',
+    )!;
+    next.click();
+    // The URL is the state: the screen reports the intent and the shell writes it.
+    expect(calls).toContain('page:2');
+  });
+
+  it('re-reads the directory after an upload, so the new file is on screen', async () => {
+    const transport = new FakeTransport();
+    let listingCount = 0;
+    transport.respondWith((request) => {
+      if (request.url.includes('upload')) {
+        return {
+          status: 200,
+          headers: {},
+          json: {
+            uploaded: [{ path: '三体.epub', originalName: '三体.epub', name: '三体.epub', size: 5, kind: 'file', bookId: 'b1' }],
+            skipped: [],
+            scan: { added: 1, updated: 0, removed: 0, failed: 0, startedAt: 1, finishedAt: 2 },
+          },
+        };
+      }
+      listingCount += 1;
+      // The first read is the empty folder; every read after the upload sees the file.
+      return {
+        status: 200,
+        headers: {},
+        json: listing({
+          entries: listingCount === 1 ? [] : [entry({ name: '三体.epub', path: '三体.epub', scanned: true, indexed: true })],
+          files: listingCount === 1 ? 0 : 1,
+          total: listingCount === 1 ? 0 : 1,
+        }),
+      };
+    });
+    const { screen } = await makeScreen(transport);
+    await screen.open();
+    expect(screen.element.querySelector('.manager-row')).toBeNull();
+
+    const input = screen.element.querySelector<HTMLInputElement>('.manager-upload-input')!;
+    Object.defineProperty(input, 'files', { value: [new File(['x'], '三体.epub')], configurable: true });
+    input.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).not.toBeNull());
+    ([...screen.element.querySelectorAll('.dialog-list .button')].find(
+      (button) => button.textContent === '跳过已有的',
+    ) as HTMLElement).click();
+
+    await vi.waitFor(() => {
+      expect(transport.requests.some((request) => request.url.includes('upload'))).toBe(true);
+    });
+    // The bug this pins: the report was written and nothing else happened, so the row
+    // for the file that had just landed was absent — and a list that does not contain
+    // the thing you just did reads as a failed upload, whatever the message says.
+    await vi.waitFor(() => expect(screen.element.querySelector('.manager-row')).not.toBeNull());
+    expect(screen.element.textContent).toContain('三体.epub');
+    // The report survives the reload: the reload's own status is the directory
+    // summary, and the summary is not an answer to "did it work".
+    expect(screen.element.querySelector('.manager-status')?.textContent).toContain('已入库 1 个文件');
+  });
+
+  it('names the page in the summary when the directory has more than one', async () => {
+    const transport = new FakeTransport();
+    transport.respondWith(() => ({ status: 200, headers: {}, json: many(340, 1) }));
+    const { screen } = await makeScreen(transport);
+    await screen.open('', 1);
+    // "340 个文件" under a screen showing 200 of them is a correct sentence and a
+    // confusing one; naming the page makes the number and the rows agree.
+    expect(screen.element.querySelector('.manager-status')?.textContent).toContain('第 1 / 2 页');
   });
 });
 

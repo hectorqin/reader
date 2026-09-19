@@ -47,7 +47,7 @@ export function ShelfSettingsPanel({
     <div className="panel shelf-settings" hidden={!open}>
       <div className="panel-header">
         <h2>书架设置</h2>
-        <IconButton label="关闭" icon="close" onClick={onClose} />
+        <IconButton label="关闭" icon="xmark" onClick={onClose} />
       </div>
       <div className="panel-body">
         <SectionTitle>封面大小</SectionTitle>

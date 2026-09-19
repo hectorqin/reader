@@ -53,8 +53,35 @@ const SCENES = [
     openBook: true,
     openPanel: '设置',
   },
+  // The two list screens, as a reader flips between them.
+  //
+  // They are separate routes now — the shelf shows the books you *have*, the library
+  // shows the files the server *has* — and each is paginated. Both facts are exactly
+  // the kind that pass every functional assertion while looking wrong: a pager that
+  // is off the bottom of the screen, a switch that reads as a filter, a page number
+  // nobody can see because it is muted to the colour of the paper.
   {
-    name: '10-reader-paged-scrub',
+    name: '10-shelf-paged',
+    label: '书架 · 第二页',
+    what: '分页器在封面下方，当前页是填充状态；书库入口在标题右侧',
+    openShelfAt: '#/shelf/2',
+  },
+  {
+    name: '11-library',
+    label: '书库',
+    what: '面包屑、行、扫描忽略的徽章、以及书架/书库之间的切换',
+    openLibraryAt: '#/library',
+  },
+  {
+    name: '12-library-paged',
+    label: '书库 · 第二页',
+    what: '同一个分页器组件；当前页与首尾页码',
+    openLibraryAt: '#/library',
+    folder: 'folder',
+    page: 2,
+  },
+  {
+    name: '13-reader-paged-scrub',
     label: '阅读页 · 滑杆拖到本章第 3 页',
     what: '分栏模式下拖动底部滑杆：读数与画面都停在本章内，不换章',
     openBook: true,
@@ -631,10 +658,39 @@ async function main() {
       // previous one left behind. The TXT panel scene rendered on the dark theme the
       // night-mode scene had set, which is a screenshot that is not about what its
       // label says it is about — with nothing on the page to say so.
-      await cdp.navigate(`${origin}/#/${scene.openBook ? `book/${encodeURIComponent('review-book')}` : 'shelf'}`);
-      if (!scene.openBook) {
+      // Every scene states the theme it expects, rather than inheriting whatever the
+      // previous one left behind: the TXT panel scene rendered on the dark theme the
+      // night-mode scene had set, which is a screenshot that is not about what its
+      // label says it is about — with nothing on the page to say so.
+      //
+      // A list scene is reached through a *reader's* action rather than a URL: the two
+      // screens have a switch between them, and a deep link proves the URL scheme while
+      // the switch is the thing that breaks.
+      if (scene.openShelfAt) {
+        // The shelf, then a page turn from its own pager — not a URL. The point of
+        // the scene is that the control is *there* and looks like a control, and a
+        // deep link would prove the route exists rather than that the reader can
+        // reach page two.
+        await cdp.navigate(`${origin}/#/shelf`);
+        await cdp.waitFor('document.querySelector(".shelf-screen") !== null', 20_000);
+        await cdp.sleep(600);
+      } else if (scene.openLibraryAt) {
+        // From the shelf, by pressing 书库. The two list screens have a switch
+        // between them, and a deep link proves the URL scheme while the switch is
+        // the thing that breaks.
+        await cdp.navigate(`${origin}/#/shelf`);
+        await cdp.waitFor('document.querySelector(".book-card:not(.skeleton)") !== null', 20_000);
+      } else {
+        await cdp.navigate(`${origin}/#/${scene.openBook ? `book/${encodeURIComponent('review-book')}` : 'shelf'}`);
+      }
+      if (scene.openBook === true || scene.openShelfAt || scene.openLibraryAt) {
+        // Reached: the wait for the screen it renders follows below.
+      } else {
         try {
-          await cdp.waitFor('document.querySelector(".book-card:not(.skeleton)") !== null', 20_000);
+          // With a page in the route the first page's cards may all be
+          // skeletons for one tick; the *frame* is what this waits for, and
+          // the assertion that follows is about the frame.
+          await cdp.waitFor('document.querySelector(".shelf-screen") !== null', 20_000);
         } catch (err) {
           const diag = await cdp.execute(`(() => ({
             url: location.href,
@@ -648,6 +704,48 @@ async function main() {
         }
       }
 
+      /*
+       * A scene can ask to be reached by *navigating like a reader* rather than by a
+       * URL.
+       *
+       * The two list screens have a switch between them, and the shelf's route only
+       * exists once the shell has been told to go there — so a scene for the library
+       * starts from the shelf and presses 书库, exactly as a reader does. That is
+       * what makes the screenshot evidence that the *switch* works, which a deep link
+       * would not be: a deep link proves the URL scheme, and the switch is what
+       * breaks.
+       */
+      if (scene.openLibraryAt) {
+        await cdp.click('button[aria-label="书库"]');
+        await cdp.waitFor('document.querySelector(".manager-row") !== null', 20_000);
+        // The folder and page the scene asked for, walked through the breadcrumb and
+        // the pager rather than typed into the URL — for the same reason.
+        if (scene.folder) {
+          await cdp.clickText('.manager-row .manager-label', scene.folder);
+          // `aria-current` is a boolean attribute rendered as the *string* "true"
+          // by the DOM, so the wait reads the attribute rather than comparing it to
+          // a boolean: a comparison against `true` in an in-page expression is
+          // comparing the string to a boolean, and it is false however the page
+          // renders.
+          await cdp.waitFor(
+            `document.querySelector('.manager-crumb[aria-current="true"]')?.textContent === ${JSON.stringify(scene.folder)}`,
+            10_000,
+          );
+        }
+        if (scene.page) {
+          await cdp.click(`.manager-pager button[aria-label="第 ${scene.page} 页"]`);
+          await cdp.sleep(400);
+        }
+        await cdp.sleep(300);
+      }
+      if (scene.openShelfAt) {
+        // A page turn from the pager, not a URL: the point of the scene is that the
+        // control is there and looks like a control.
+        await cdp.click('.shelf-pager button[aria-label="下一页"]');
+        await cdp.waitFor(`location.hash === '${scene.openShelfAt}'`, 10_000);
+        await cdp.sleep(400);
+      }
+
       if (scene.openBook) {
         // A deep link into the book, which is also the one route the reader is
         // expected to be able to share. If it does not open, that is the finding.
@@ -655,7 +753,7 @@ async function main() {
         await cdp.waitFor('document.querySelector("book-content")?.shadowRoot?.querySelector(".book-flow") !== null', 20_000);
         await cdp.sleep(800);
       }
-      const theme = scene.theme ?? (scene.openBook ? '白' : null);
+      const theme = scene.theme;
       if (theme) {
         await cdp.click('button[aria-label="设置"]');
         await cdp.waitFor('document.querySelector(".panel") !== null');
