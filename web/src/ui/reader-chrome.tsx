@@ -160,7 +160,7 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           somewhere the screen cannot go is worse than one fewer button. */}
       <div className="topbar" hidden={!state.chromeVisible}>
         <TopButton icon="arrow-left" label="返回" onClick={handlers.onBack} />
-        <TopButton icon="menu" label="目录" onClick={handlers.toggleToc} />
+        <TopButton icon="bars" label="目录" onClick={handlers.toggleToc} />
         <TopButton icon="sliders" label="设置" onClick={handlers.toggleSettings} />
       </div>
 
@@ -218,13 +218,13 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           see the toolbar has already found what they were looking for. */}
       {!state.chromeVisible ? (
         <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作" aria-orientation="vertical">
-          <RailButton icon="menu" label="目录" onClick={handlers.toggleToc} />
+          <RailButton icon="bars" label="目录" onClick={handlers.toggleToc} />
           <RailButton
             icon={state.theme === 'dark' ? 'sun' : 'moon'}
             label={state.theme === 'dark' ? '日间' : '夜间'}
             onClick={() => handlers.onSetting({ theme: nextTheme(state.theme) })}
           />
-          <RailButton icon="text-type" label="字号" onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })} />
+          <RailButton icon="font" label="字号" onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })} />
           <RailButton icon="sliders" label="阅读设置" onClick={handlers.toggleSettings} />
         </div>
       ) : null}
@@ -388,7 +388,7 @@ function Panel({
         <div className="panel-header">
           <h2>{title}</h2>
           {subtitle ? <span className="panel-subtitle">{subtitle}</span> : null}
-          <IconButton label="关闭" icon="close" onClick={onClose} />
+          <IconButton label="关闭" icon="xmark" onClick={onClose} />
         </div>
         <div className="panel-body">{children}</div>
       </div>
@@ -408,20 +408,20 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
       <SectionTitle>快捷</SectionTitle>
       <div className="quick-row">
         <QuickButton
-          icon="text-type"
+          icon="font"
           label="字号"
           value={`${Math.round(state.fontScale * 100)}%`}
           onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })}
         />
         <QuickButton
-          icon="text-indent"
+          icon="indent"
           label="段落缩进"
           value={state.showTxtRows ? indentLabel(state.txtIndent) : '—'}
           disabled={!state.showTxtRows}
           onClick={() => handlers.onSetting({ txtIndent: stepIndent(state.txtIndent) })}
         />
         <QuickButton
-          icon="spacing"
+          icon="up-down"
           label="段间距"
           value={state.showTxtRows ? `${state.txtParagraphGap.toFixed(2)} 字` : '—'}
           disabled={!state.showTxtRows}
@@ -702,13 +702,13 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
   const value = Math.max(0, state.sentenceIndex >= 0 ? state.sentenceIndex : state.index);
   return (
     <div className="tts-bar" data-state={state.state}>
-      <IconButton label="上一句" icon="skip-back" onClick={handlers.onSpeechPrevious} />
+      <IconButton label="上一句" icon="backward-step" onClick={handlers.onSpeechPrevious} />
       <IconButton
         label={state.state === 'playing' ? '暂停朗读' : '开始朗读'}
         icon={state.state === 'playing' ? 'pause' : 'play'}
         onClick={handlers.onSpeechToggle}
       />
-      <IconButton label="下一句" icon="skip-forward" onClick={handlers.onSpeechNext} />
+      <IconButton label="下一句" icon="forward-step" onClick={handlers.onSpeechNext} />
       <div className="tts-main">
         <span className="tts-text" title={state.label}>
           {state.label}
@@ -732,7 +732,7 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
       >
         {state.chip}
       </button>
-      <IconButton label="停止朗读" icon="close" onClick={handlers.onStopSpeech} />
+      <IconButton label="停止朗读" icon="xmark" onClick={handlers.onStopSpeech} />
     </div>
   );
 }

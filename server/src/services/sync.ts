@@ -184,6 +184,25 @@ export class SyncService {
     bookId: string; title: string; author: string; percentage: number;
     chapterTitle: string; updatedAt: number; coverUrl: string | null;
   }> {
+    /*
+     * The visibility rule is `ShelfService.list`'s rule, character for character.
+     *
+     * This query used to say `ub.hidden = 0` and stop there, while the shelf said
+     * `ub.hidden = 0 AND EXISTS (a live file)`. So a book whose file had been
+     * deleted — or whose only copy was on a drive that was not plugged in — was
+     * still *offered* here, and opening the card made `ShelfService.get` throw
+     * `book not found`, which the shell reports as "这本书不在书架上了".
+     *
+     * That message is a lie in the one case it fires: the card was drawn by this
+     * endpoint, two lines above the shelf's own grid. The two queries have to
+     * select the same set, and the fix is to make them the same predicate rather
+     * than to teach the client to pre-check — a pre-check would fix the message and
+     * leave a card the reader cannot read.
+     *
+     * `hidden = 0` is still checked here as well as by the `JOIN`: `user_books` is
+     * per user and `p.user_id` is the same user, so this is belt and braces, and it
+     * keeps the predicate readable as "what the shelf would show".
+     */
     const rows = this.db.all<{
       book_id: string; title: string; author: string; percentage: number;
       chapter_title: string; updated_at: number; cover_path: string | null;
@@ -193,6 +212,7 @@ export class SyncService {
        JOIN books b ON b.id = p.book_id
        JOIN user_books ub ON ub.book_id = b.id AND ub.user_id = p.user_id
        WHERE p.user_id = ? AND ub.hidden = 0
+         AND EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)
        ORDER BY p.updated_at DESC LIMIT ?`,
       userId, limit,
     );

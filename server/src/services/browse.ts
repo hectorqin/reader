@@ -68,6 +68,15 @@ export interface BrowseListing {
   /** Breadcrumb segments, each with the path that reaches it. */
   crumbs: Array<{ name: string; path: string }>;
   parent: string | null;
+  /**
+   * This page of the directory's entries.
+   *
+   * Paginated on the server rather than in the client, because a directory here is
+   * a *filesystem* and can hold anything: a `漫画` folder with four thousand scans
+   * is a real library, and sending four thousand rows so the browser can throw 3,940
+   * of them away is the request that makes the screen feel broken. The `total`
+   * below is what the pager is drawn from, so the two have to be one response.
+   */
   entries: BrowseEntry[];
   /** Totals for the *directory*, not for this page of it. */
   total: number;
@@ -105,6 +114,24 @@ export interface MetadataWriter {
   setOverrides(bookId: string, patch: Record<string, unknown>, userId: string): void;
 }
 
+/**
+ * Entries per page of a directory listing.
+ *
+ * 200 is a compromise between two failures. Too small and a folder of images is
+ * thirty pages of nothing, which makes the pager the thing the reader fights
+ * instead of the list. Too large and the first paint of a big folder waits on a
+ * response that is mostly rows nobody will look at — and the reader who is
+ * *lost* in a four-thousand-file folder is exactly the one who needs it to appear
+ * at once.
+ *
+ * It is not a hard limit on the request: a client may ask for less (a test, a
+ * future phone view) and the server honours it, up to a ceiling, so a caller
+ * cannot turn one request into the four-thousand-row response this exists to
+ * avoid.
+ */
+export const BROWSE_PAGE_SIZE = 200;
+const BROWSE_PAGE_SIZE_MAX = 1000;
+
 export class BrowseService {
   constructor(
     private readonly db: Db,
@@ -123,11 +150,11 @@ export class BrowseService {
 
   // ---- reads ----
 
-  list(relPathInput: string): Promise<BrowseListing> {
-    return this.listSync(relPathInput);
+  list(relPathInput: string, page = 1, pageSize = BROWSE_PAGE_SIZE): Promise<BrowseListing> {
+    return this.listSync(relPathInput, page, pageSize);
   }
 
-  private async listSync(relPathInput: string): Promise<BrowseListing> {
+  private async listSync(relPathInput: string, page: number, pageSize: number): Promise<BrowseListing> {
     const relPath = relPathInput === '' ? '' : assertSafeRel(relPathInput);
     const abs = resolveInside(this.config.booksDir, relPath);
     const info = await stat(abs).catch(() => null);
@@ -162,18 +189,29 @@ export class BrowseService {
       });
     }
 
+    /*
+     * The counts describe the whole directory; `entries` is one page of it.
+     *
+     * Both are computed from the same walk, which is the only way they can be
+     * consistent: computing the total separately (a second `readdir`, or a cached
+     * count) would let the summary and the pager disagree with the rows under them
+     * after any change on disk, and the reader has no way to tell which of the three
+     * is the stale one.
+     */
     const stats = {
       total: entries.length,
       dirs: entries.filter((entry) => entry.type === 'dir').length,
       files: entries.filter((entry) => entry.type === 'file').length,
       size: entries.reduce((sum, entry) => sum + entry.size, 0),
     };
+    const size = Math.min(BROWSE_PAGE_SIZE_MAX, Math.max(1, pageSize));
+    const offset = (Math.max(1, page) - 1) * size;
 
     return {
       path: relPath,
       crumbs: crumbsFor(relPath),
       parent: relPath === '' ? null : dirname(relPath).replace(/^\.$/, ''),
-      entries,
+      entries: entries.slice(offset, offset + size),
       ...stats,
       writable: await this.writable(abs),
       name: relPath === '' ? '' : basename(relPath),

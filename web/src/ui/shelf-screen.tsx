@@ -16,15 +16,36 @@ export interface ShelfScreenOptions {
   platform: Platform;
   /** Current shelf preferences, so the screen starts in the reader's own state. */
   settings: AppSettings;
+  /** The page the URL asked for. 1-based; the screen reports every change back. */
+  page: number;
+  /**
+   * The folder and page the library screen was last showing.
+   *
+   * The library owns a URL of its own, so switching to the shelf *leaves* it — and
+   * a reader who switches back expects the folder they were in, not the library
+   * root. The router carries these on the shelf's own route for exactly that
+   * reason (see `Route` in `router.ts`).
+   */
+  libraryPath: string;
+  libraryPage: number;
   onOpenBook(book: Book): void;
   /**
-   * Opens the library manager, optionally at a folder.
+   * Switches to the library screen, at a folder and page.
    *
-   * A path rather than no argument because the manager is a *place* with a URL:
-   * the shelf reports the intent and the router writes `#/library/<path>`, which
-   * is what makes a folder shareable.
+   * Both halves are carried because the library is a *place* the reader was last
+   * in: the path is what makes `#/library/科幻` shareable, and the page is what
+   * makes coming back to the library land where they left it rather than on the
+   * first sixty entries of a folder with four hundred.
    */
-  onOpenManager(path: string): void;
+  onOpenLibrary(path: string, page: number): void;
+  /**
+   * Reports the page the reader turned to, so the URL can follow it.
+   *
+   * A path rather than nothing because the shelf is paginated now, and a page that
+   * lives only in component state is a page that Back, Forward and a reload all
+   * throw away — the three things the router exists to make work.
+   */
+  onPageChange(page: number): void;
   onSignedOut(): void;
   /** Persisted through the app's settings store, like the reader's own. */
   onSettingsChange(patch: Partial<AppSettings>): void;
@@ -38,15 +59,44 @@ const SORTS: Array<{ value: ShelfSort; label: string }> = [
   { value: 'author', label: '作者' },
 ];
 
+/**
+ * Books per page.
+ *
+ * 60 is a grid of about twenty rows at the phone's default density and about five
+ * at the widest, which is enough that turning a page is a deliberate act rather
+ * than a scroll. It is also the same number the shelf used as its infinite-scroll
+ * *chunk*, so a library that felt responsive before still fills the screen in one
+ * request.
+ */
 const PAGE_SIZE = 60;
 
 interface ShelfState {
+  /**
+   * Which page of the list is on screen, and where it came from.
+   *
+   * `page` is what the URL says (the screen is told to show it and never derives
+   * it); `pageCount` is what the last response implies. They are separate because
+   * a search that shrinks the result set must clamp the page *after* the answer
+   * arrives rather than before the request is made.
+   */
+  page: number;
+  pageCount: number;
+  /** What the "书库" switch will open, carried on this route by the shell. */
+  libraryPath: string;
+  libraryPage: number;
   /** Written into the search field; the debounced query is `applied`. */
   search: string;
   query: string;
   items: Book[];
   continueItems: ContinueReadingItem[];
   total: number;
+  /**
+   * True while a page is in flight.
+   *
+   * Distinct from `bootstrapping`, which is about the first paint: this one draws a
+   * spinner *under* a list that already exists, and it is what disables the pager
+   * so two page turns cannot race and land out of order.
+   */
   loading: boolean;
   status: string;
   settingsOpen: boolean;
@@ -175,6 +225,10 @@ export class ShelfScreen {
 
   constructor(private readonly options: ShelfScreenOptions) {
     this.state = {
+      page: options.page > 0 ? options.page : 1,
+      pageCount: 1,
+      libraryPath: options.libraryPath,
+      libraryPage: options.libraryPage,
       search: '',
       query: '',
       items: [],
@@ -209,22 +263,72 @@ export class ShelfScreen {
   }
 
   /**
-   * Refetches the first page and the "continue reading" row.
+   * Shows the page the URL asks for.
+   *
+   * Called by the shell when the route changes *while this screen is already on
+   * screen* — a Back, a Forward, or a link to `#/shelf/3`. The screen is told which
+   * page to show and never derives it from its own state, which is what keeps the
+   * URL and the list from disagreeing after a Back.
+   */
+  async showPage(page: number): Promise<void> {
+    const target = page > 0 ? page : 1;
+    if (target === this.state.page && !this.state.bootstrapping) return;
+    // A page turn scrolls to the top, because the alternative is landing halfway
+    // down page two of a *different* list — and the reader has no way to tell that
+    // the jump was the page turn rather than a lost scroll position.
+    this.lastScrollTop = 0;
+    await this.refresh(target);
+  }
+
+  /**
+   * Fetches one page of the shelf, plus the "continue reading" row.
    *
    * Both in one `Promise.all`, because they are two halves of one screen: fetching
    * them in sequence made the shelf appear and *then* a row appear above it,
    * pushing everything down under the reader's thumb.
+   *
+   * `page` defaults to the page currently shown, so a refresh after a scan lands
+   * the reader back where they were rather than on page one. It is a *replacement*,
+   * not an append: the infinite scroll this screen used to have appended a chunk
+   * and knew nothing about pages, so a list longer than one page grew without
+   * bound and Back had nothing to go back *to*.
    */
-  async refresh(): Promise<void> {
+  async refresh(page = this.state.page): Promise<void> {
+    const requested = page > 0 ? page : 1;
+    // Set before the request, cleared in the `finally`: the pager is drawn from it,
+    // and a pager that stays live while a page is in flight is a pager the reader
+    // can press twice and land two pages away from where they aimed.
+    this.patch({ loading: true });
     try {
-      const [page, continueItems] = await Promise.all([
-        this.options.api.listBooks(this.listQuery(1)),
+      const [result, continueItems] = await Promise.all([
+        this.options.api.listBooks(this.listQuery(requested)),
         this.options.api.continueReading(10).catch(() => [] as ContinueReadingItem[]),
       ]);
-      this.state.total = page.total;
-      await this.options.offline.replaceBooks(page.items);
+      /*
+       * A page past the end is clamped *after* the answer, not before the request.
+       *
+       * The count is the only thing that knows how many pages there are, and asking
+       * for page 9 of a library that shrank to 3 pages while the reader was on it
+       * answers an empty list rather than an error. Left unclamped the reader gets a
+       * blank grid with a page number above it and no way to tell that the list is
+       * fine — so the clamp re-asks for the last real page, once.
+       */
+      const pageCount = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+      const effective = Math.min(requested, pageCount);
+      if (effective !== requested) {
+        if (this.state.page !== effective) this.options.onPageChange(effective);
+        await this.refresh(effective);
+        return;
+      }
+      await this.options.offline.replaceBooks(result.items);
       this.patch({
-        items: sortBooks(page.items, this.sort),
+        page: requested,
+        pageCount,
+        // Sorted *within* the page, never across pages: a page is a continuation of
+        // the server's order, and re-sorting a pageful locally would be right only
+        // by coincidence.
+        items: sortBooks(result.items, this.sort),
+        total: result.total,
         continueItems,
         status: '',
         bootstrapping: false,
@@ -238,7 +342,23 @@ export class ShelfScreen {
       });
     } catch (err) {
       this.handleError(err);
+    } finally {
+      this.patch({ loading: false });
     }
+  }
+
+  /**
+   * Turns to a page, from the pager or from a keyboard.
+   *
+   * The screen does not change its own page directly: it *reports* the intent and
+   * the shell writes the URL, which comes back through `showPage`. That round trip
+   * is what makes a page addressable, and it is why `onPageChange` is called even
+   * when the fetch is already in flight — the URL is the state, not this class.
+   */
+  private goToPage(page: number): void {
+    const target = Math.min(Math.max(1, page), this.state.pageCount);
+    if (target === this.state.page) return;
+    this.options.onPageChange(target);
   }
 
   private listQuery(page: number): ListQuery {
@@ -299,18 +419,19 @@ export class ShelfScreen {
     this.options.onSettingsChange({ shelfSort: sort });
     this.settings.shelfSort = sort;
     this.lastScrollTop = 0;
-    // Ordering changes the whole result set, so a refresh rather than a
+    // Ordering changes the whole result set, so a re-fetch rather than a
     // client-side re-sort: the server is the authority, and it is the only side
-    // that can re-sort a library larger than one page.
-    this.patch({ items: sortBooks(this.state.items, sort), revision: this.state.revision + 1 });
-    void this.refresh();
+    // that can re-sort a library larger than one page. Page one as well, because
+    // "the third page of a different order" is a position the reader never chose.
+    if (this.state.page !== 1) {
+      this.options.onPageChange(1);
+      return;
+    }
+    void this.refresh(1);
   }
 
   private onScroll(scroll: HTMLDivElement): void {
     this.lastScrollTop = scroll.scrollTop;
-    if (scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 400) {
-      void this.loadMore();
-    }
     // Pull-to-refresh fires only when the reader has already overscrolled and lets
     // go — a refresh on every scroll-to-top would fire constantly on a phone.
     if (scroll.scrollTop < 24 && this.atTopSince !== null && Date.now() - this.atTopSince > 400) {
@@ -325,28 +446,6 @@ export class ShelfScreen {
       await this.refresh();
     } finally {
       setTimeout(() => this.patch({ refreshing: false }), 900);
-    }
-  }
-
-  private async loadMore(): Promise<void> {
-    if (this.state.loading || this.state.items.length >= this.state.total) return;
-    this.patch({ loading: true });
-    try {
-      const page = Math.floor(this.state.items.length / PAGE_SIZE) + 1;
-      const result = await this.options.api.listBooks(this.listQuery(page));
-      await this.options.offline.replaceBooks(result.items);
-      this.patch({
-        // Appended the way the server ordered them, not re-sorted: a page is a
-        // *continuation* of the order, and re-sorting it here would be right only
-        // by coincidence.
-        items: [...this.state.items, ...result.items],
-        total: result.total,
-        revision: this.state.revision + 1,
-      });
-    } catch (err) {
-      if (!(err instanceof ApiError) || !err.isConnectivity) this.setStatus('加载更多失败');
-    } finally {
-      this.patch({ loading: false });
     }
   }
 
@@ -407,20 +506,26 @@ export class ShelfScreen {
             </p>
           </div>
           <div className="shelf-head-actions">
-            {/* The manager's entry point travels with the title rather than
+            {/* The library's entry point travels with the title rather than
                 sitting in the toolbar: it is a *place*, not a filter, and the
-                toolbar is where the filters are. */}
-            <IconButton label="书库管理" icon="folder-open" onClick={() => this.options.onOpenManager('')} />
+                toolbar is where the filters are. It carries the folder and page
+                the reader was last in *there*, so switching back and forth is a
+                toggle rather than a reset. */}
+            <IconButton
+              label="书库"
+              icon="folder-open"
+              onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}
+            />
             <IconButton
               label={`书架设置 · ${DENSITY_LABELS[density]}`}
-              icon="settings"
+              icon="gear"
               onClick={() => this.patch({ settingsOpen: !state.settingsOpen })}
             />
           </div>
         </header>
 
         <div className="shelf-search" role="search">
-          <Icon name="search" class="search-glyph" />
+          <Icon name="magnifying-glass" class="search-glyph" />
           <input
             type="search"
             placeholder="搜索书名、作者、系列"
@@ -442,7 +547,7 @@ export class ShelfScreen {
           />
           {state.search.length > 0 ? (
             <button type="button" className="search-clear" aria-label="清除搜索" onClick={() => this.clearSearch()}>
-              <Icon name="close" />
+              <Icon name="xmark" />
             </button>
           ) : null}
         </div>
@@ -498,7 +603,7 @@ export class ShelfScreen {
           {!state.bootstrapping && empty ? (
             hasQuery ? (
               <div className="empty-state">
-                <Icon name="search" class="empty-glyph" />
+                <Icon name="magnifying-glass" class="empty-glyph" />
                 <p>没有匹配的书</p>
                 <p className="muted">换个关键词，或者检查一下作者名的写法</p>
                 <button type="button" className="button" onClick={() => this.clearSearch()}>
@@ -513,8 +618,12 @@ export class ShelfScreen {
                   把书籍放进挂载的目录，扫一次，它们就会出现在这里
                 </p>
                 <div className="empty-actions">
-                  <IconTextButton icon="folder-open" label="打开书库管理" onClick={() => this.options.onOpenManager('')} />
-                  <IconTextButton icon="refresh" label="刷新" onClick={() => void this.manualRefresh()} />
+                  <IconTextButton
+                  icon="folder-open"
+                  label="打开书库"
+                  onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}
+                />
+                  <IconTextButton icon="arrows-rotate" label="刷新" onClick={() => void this.manualRefresh()} />
                 </div>
               </div>
             )
@@ -541,6 +650,19 @@ export class ShelfScreen {
           ) : null}
 
           {state.loading && state.items.length > 0 ? <div className="spinner" /> : null}
+          {/* The pager sits *inside* the section, under the covers it turns: a
+              control that pages a list belongs under that list, and at the top it
+              would be a second toolbar competing with the sort row. It is hidden
+              entirely on a single-page library, because a pager with one page is a
+              control that can only be pressed to no effect. */}
+          {state.pageCount > 1 ? (
+            <Pager
+              page={state.page}
+              pageCount={state.pageCount}
+              busy={state.loading}
+              onGo={(page) => this.goToPage(page)}
+            />
+          ) : null}
           {state.status ? <div className="shelf-status muted">{state.status}</div> : null}
         </section>
 
@@ -701,6 +823,95 @@ function BookCard({
       <div className="title">{book.title || '未命名'}</div>
       <div className="author">{book.author || '未知作者'}</div>
     </button>
+  );
+}
+
+/**
+ * The page control under a list of books.
+ *
+ * ## Why numbered pages rather than a "load more" button
+ *
+ * The shelf used to append a chunk whenever the reader reached the bottom, which
+ * means the list had no length the reader could see and no position they could
+ * return to: closing the app and opening it again started from the top, and the
+ * only record of "I was on the third screenful" was a scroll offset that does not
+ * survive a repaint. A library of two thousand books is a *place*, and a place needs
+ * a position.
+ *
+ * ## Why the window rather than every page
+ *
+ * Two thousand books is 34 pages, and 34 buttons on a phone is a control the reader
+ * has to read instead of press. The window is `1 … n-1 n n+1 … N`, so the two ends
+ * are always one press away and the middle is one press away from wherever they
+ * are — which is every page a reader actually asks for.
+ *
+ * ## Why the arrows stay in the layout when they are disabled
+ *
+ * `disabled` rather than `hidden`: the buttons are in fixed positions, so a control
+ * that disappears at page one moves the page numbers sideways under the reader's
+ * thumb on the way to page two.
+ */
+function Pager({
+  page,
+  pageCount,
+  busy,
+  onGo,
+}: {
+  page: number;
+  pageCount: number;
+  busy: boolean;
+  onGo(page: number): void;
+}): JSX.Element {
+  const numbers: Array<number | 'gap'> = [];
+  const push = (value: number | 'gap'): void => {
+    if (numbers.at(-1) !== value) numbers.push(value);
+  };
+  for (let n = 1; n <= pageCount; n += 1) {
+    // First, last, and the pages around the reader: everything else collapses into
+    // one ellipsis per run, so the control is the same width at 3 pages and at 300.
+    if (n === 1 || n === pageCount || Math.abs(n - page) <= 1) push(n);
+    else push('gap');
+  }
+  return (
+    <nav className="shelf-pager" aria-label="翻页">
+      <button
+        type="button"
+        className="pager-step"
+        aria-label="上一页"
+        disabled={busy || page <= 1}
+        onClick={() => onGo(page - 1)}
+      >
+        <Icon name="chevron-left" />
+      </button>
+      {numbers.map((value, index) =>
+        value === 'gap' ? (
+          <span className="pager-gap" key={`gap-${index}`} aria-hidden="true">
+            …
+          </span>
+        ) : (
+          <button
+            type="button"
+            key={value}
+            className="pager-page"
+            aria-label={`第 ${value} 页`}
+            aria-current={value === page ? 'page' : undefined}
+            disabled={busy}
+            onClick={() => onGo(value)}
+          >
+            {value}
+          </button>
+        ),
+      )}
+      <button
+        type="button"
+        className="pager-step"
+        aria-label="下一页"
+        disabled={busy || page >= pageCount}
+        onClick={() => onGo(page + 1)}
+      >
+        <Icon name="chevron-right" />
+      </button>
+    </nav>
   );
 }
 

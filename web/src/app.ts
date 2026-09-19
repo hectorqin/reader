@@ -213,10 +213,10 @@ export class App {
     if (sameScreen(this.route, route)) return;
     switch (route.name) {
       case 'shelf':
-        this.showShelf();
+        this.showShelf(route);
         return;
       case 'library':
-        this.showManager(route, location);
+        this.showLibrary(route, location);
         return;
       case 'book':
         void this.showBook(route, location);
@@ -265,8 +265,25 @@ export class App {
     if (message) login.reset(message);
   }
 
-  private showShelf(): void {
-    this.route = { name: 'shelf' };
+  /**
+   * The two list screens' shared wiring.
+   *
+   * The shelf and the library are separate routes with separate screens, and every
+   * arrow between them is a navigation rather than a method call. That is what makes
+   * Back mean "the list I was looking at" instead of "some other list", and it is
+   * what lets a reader hand someone `#/library/科幻` and have them land in the folder
+   * with the shelf one tap away.
+   */
+  private showShelf(route: { name: 'shelf'; page: number; libraryPath: string; libraryPage: number }): void {
+    const same = this.route?.name === 'shelf';
+    this.route = route;
+    if (same && this.shelf) {
+      // Already here: tell the existing screen which page to show rather than
+      // rebuilding it, so the reader's search term and their scroll position in the
+      // list survive a page turn.
+      void this.shelf.showPage(route.page);
+      return;
+    }
     this.clearScreens();
     const shelf = new ShelfScreen({
       api: this.api,
@@ -275,8 +292,16 @@ export class App {
       // The shelf's own preferences ride in the same per-device settings store as
       // the reader's, so the two cannot disagree about where a preference lives.
       settings: this.settings,
+      page: route.page,
+      libraryPath: route.libraryPath,
+      libraryPage: route.libraryPage,
       onOpenBook: (book) => this.openBook(book),
-      onOpenManager: (path) => this.router?.navigate({ name: 'library', path }),
+      onOpenLibrary: (path, page) => this.router?.navigate({ name: 'library', path, page, fromShelf: true }),
+      onPageChange: (page) =>
+        this.router?.navigate(
+          { name: 'shelf', page, libraryPath: route.libraryPath, libraryPage: route.libraryPage },
+          { replace: true },
+        ),
       onSignedOut: () => this.handleSignedOut(),
       onSettingsChange: (patch) => {
         void this.settingsStore.update(patch);
@@ -289,32 +314,70 @@ export class App {
   }
 
   /**
-   * A folder in the library.
+   * A folder, or a page of one, in the library.
    *
    * The path comes from the route, and walking into a folder *replaces* it rather
-   * than pushing: the manager is one screen with a breadcrumb, so a reader who
+   * than pushing: the library is one screen with a breadcrumb, so a reader who
    * walked four folders deep expects Back to leave the screen, not to walk out of
-   * it one folder at a time. The breadcrumb is what undoes a walk.
+   * it one folder at a time. The breadcrumb is what undoes a walk — and the
+   * breadcrumb is also why the shelf cannot be a third tab of this screen: a tab
+   * would share the trail with the folders, and Back would then unwind a *tab
+   * switch* as if it were a walk.
    */
-  private showManager(route: { name: 'library'; path: string }, location: RouteLocation): void {
+  private showLibrary(
+    route: { name: 'library'; path: string; page: number; fromShelf: boolean },
+    location: RouteLocation,
+  ): void {
     const same = this.route?.name === 'library';
     this.route = route;
     if (same && this.manager) {
       // Already here: tell the existing screen to walk, rather than rebuilding it
       // and losing the selection the reader had in the folder they came from.
-      void this.manager.open(route.path);
+      void this.manager.open(route.path, route.page);
       return;
     }
     this.clearScreens();
+    /*
+     * The screen asks the *shell* where it is, rather than closing over the route it
+     * was built with.
+     *
+     * This is not a style choice. The screen is built once and then walks through
+     * folders by `replace`-navigating, so a callback that captured `route` would keep
+     * answering with the folder the reader *arrived* in — and the failure is silent
+     * and specific: turning to page two of `#/library/科幻` produced
+     * `#/library/2`, i.e. page two of the root, because `route.path` was still `''`.
+     * One accessor that reads `this.route` is the same fix for the folder, the page
+     * and the shelf's carried location, and it cannot drift from the screen's own
+     * `state.path`.
+     */
+    const here = (): { path: string; page: number; fromShelf: boolean } => {
+      const current = this.route;
+      if (current?.name === 'library') return current;
+      return { path: route.path, page: route.page, fromShelf: route.fromShelf };
+    };
     const manager = new ManagerScreen({
       api: this.api,
       onClose: () => location.back(),
+      onOpenBook: (book) => this.openBook(book),
+      onOpenLibrary: (path, page, replace) =>
+        this.router?.navigate({ name: 'library', path, page, fromShelf: here().fromShelf }, { replace }),
+      onOpenShelf: (page) =>
+        this.router?.navigate({
+          name: 'shelf',
+          page,
+          libraryPath: here().path,
+          libraryPage: here().page,
+        }),
+      onPageChange: (page) =>
+        this.router?.navigate(
+          { name: 'library', path: here().path, page, fromShelf: here().fromShelf },
+          { replace: true },
+        ),
       onSignedOut: () => this.handleSignedOut(),
-      onNavigate: (path) => this.router?.navigate({ name: 'library', path }, { replace: true }),
     });
     this.manager = manager;
     this.root.append(manager.element);
-    void manager.open(route.path);
+    void manager.open(route.path, route.page);
   }
 
   /**
@@ -338,7 +401,7 @@ export class App {
         // screen the reader ends up on, and a silent redirect is how a dead link
         // becomes "the app is broken".
         showToast('这本书不在书架上了');
-        this.router?.navigate({ name: 'shelf' }, { replace: true });
+        this.router?.navigate({ name: 'shelf', page: 1, libraryPath: '', libraryPage: 1 }, { replace: true });
         return;
       }
       this.clearScreens();
@@ -398,6 +461,10 @@ export class App {
     // lets `render` build the screen, so both produce the same history and the same
     // screen. A click used to construct the screen directly, which is exactly how
     // the two paths drifted apart.
+    //
+    // The route carries nothing about *where* the click came from, on purpose: the
+    // router's own trail knows, and `back()` reads it. Encoding the origin here
+    // would be a second, hand-maintained answer to "where does back go".
     this.router?.navigate({ name: 'book', bookId: book.id });
   }
 
