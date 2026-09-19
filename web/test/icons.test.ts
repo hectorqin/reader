@@ -252,9 +252,9 @@ describe('the icon box', () => {
     const { Icon } = await import('../src/ui/icon.tsx');
     const { render } = await import('../src/ui/vendor/preact.ts');
     const host = document.createElement('div');
-    render(Icon({ name: 'close' }), host);
+    render(Icon({ name: 'xmark' }), host);
     const span = host.querySelector('.icon')!;
-    expect(span.textContent).toBe(ICON_CODEPOINTS.close);
+    expect(span.textContent).toBe(ICON_CODEPOINTS.xmark);
     expect(span.getAttribute('aria-hidden')).toBe('true');
     expect(span.hasAttribute('aria-label')).toBe(false);
   });
@@ -263,7 +263,7 @@ describe('the icon box', () => {
     const { Icon } = await import('../src/ui/icon.tsx');
     const { render } = await import('../src/ui/vendor/preact.ts');
     const host = document.createElement('div');
-    render(Icon({ name: 'close', label: '关闭' }), host);
+    render(Icon({ name: 'xmark', label: '关闭' }), host);
     const span = host.querySelector('.icon')!;
     // `role="img"` is what makes a labelled span announce as an image rather than
     // as a stray character, which is what a bare span containing a PUA code point
@@ -337,24 +337,24 @@ describe('icon buttons', () => {
     const { IconButton } = await import('../src/ui/toolkit.tsx');
     const { render } = await import('../src/ui/vendor/preact.ts');
     const host = document.createElement('div');
-    render(IconButton({ label: '目录', icon: 'menu' }), host);
+    render(IconButton({ label: '目录', icon: 'bars' }), host);
     const button = host.querySelector('button')!;
     // The name must be on the *button*: a glyph inside an aria-labelled button is
     // read by some screen readers as well, which is why the glyph is aria-hidden.
     expect(button.getAttribute('aria-label')).toBe('目录');
     const glyph = button.querySelector('.icon')!;
     expect(glyph.getAttribute('aria-hidden')).toBe('true');
-    expect(glyph.textContent).toBe(ICON_CODEPOINTS.menu);
+    expect(glyph.textContent).toBe(ICON_CODEPOINTS.bars);
   });
 
   it('draws every icon button from the icon set rather than from text', async () => {
     const { IconButton } = await import('../src/ui/toolkit.tsx');
     const { render } = await import('../src/ui/vendor/preact.ts');
     const host = document.createElement('div');
-    render(IconButton({ label: '关闭', icon: 'close' }), host);
+    render(IconButton({ label: '关闭', icon: 'xmark' }), host);
     // A regression here is the whole point of the change: the old button took
     // arbitrary children, and Unicode punctuation is what it was given.
     expect(host.querySelector('.icon')).not.toBeNull();
-    expect(host.textContent).toBe(ICON_CODEPOINTS.close);
+    expect(host.textContent).toBe(ICON_CODEPOINTS.xmark);
   });
 });

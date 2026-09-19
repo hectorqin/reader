@@ -340,11 +340,87 @@ export function createReviewServer({ port = 5199 } = {}) {
       return json(reply, { user: session().user });
     }
     if (path === '/api/v1/books') {
-      return json(reply, { items: [book, illustratedBook()], total: 2, page: 1, pageSize: 50 });
+      /*
+       * Enough pages for the shelf's own pager to be worth looking at.
+       *
+       * The shelf is paginated now (60 a page), so a fixture with one book renders a
+       * screen with no pager on it — and a review of "does the pager look right"
+       * against a library that has no second page is a review that passes by
+       * showing nothing. The page is honoured so `#/shelf/2` is a *different* list,
+       * which is what makes the screenshot evidence that the page is real.
+       */
+      const page = Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1;
+      const pageSize = Number.parseInt(url.searchParams.get('pageSize') ?? '60', 10) || 60;
+      const total = 130;
+      const from = (page - 1) * pageSize;
+      const items = Array.from({ length: Math.max(0, Math.min(pageSize, total - from)) }, (_v, i) => ({
+        ...book,
+        // The book at index 0 keeps the *fixture* id, because the reader scenes deep
+        // link to it: a list of purely synthetic ids would make `#/book/<id>` a dead
+        // link and every reader screenshot one of the "这本书不在书架上了" fallback.
+        id: from + i === 0 ? BOOK_ID : `${BOOK_ID}-${from + i}`,
+        title: `${TITLE} 第${from + i + 1}卷`,
+      }));
+      // The illustrated book is appended rather than paged: it exists for one reader
+      // scene that deep links to it, and burying it under 130 synthetic volumes would
+      // make that link depend on the shelf's own pagination arithmetic. `total` counts
+      // it, so the pager still agrees with the list it is counting.
+      return json(reply, { items: [...items, illustratedBook()], total: total + 1, page, pageSize });
     }
     // The shelf asks for its "continue reading" strip in the same breath as the
     // list, and a 404 there makes the shelf render an empty state that looks like a
     // missing library rather than a missing endpoint.
+    /*
+     * The library tree, with enough entries that its pager is on screen.
+     *
+     * Written as a fixture rather than left to 404 because the two list screens are
+     * now separate routes with separate pagination, and a screenshot of `#/library`
+     * against a missing endpoint is a screenshot of an error line — which is a real
+     * defect in a review harness (it certifies a screen nobody has seen).
+     */
+    if (path === '/api/v1/library/browse') {
+      const dir = url.searchParams.get('path') ?? '';
+      const page = Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1;
+      const pageSize = 200;
+      // Two pages of files, so page 2 is a real page rather than an empty one.
+      // Two pages of files in the subfolder, so page 2 is a real page rather than an
+      // empty one — a pager whose second page is blank is a pager that looks broken
+      // and is not.
+      const fileCount = dir === 'folder' ? 340 : 3;
+      const total = dir === 'folder' ? fileCount : fileCount + 1;
+      const all = [
+        ...(dir === '' ? [{ name: 'folder', type: 'dir', path: 'folder' }] : []),
+        ...Array.from({ length: fileCount }, (_v, i) => ({
+          name: i === 0 && dir === '' ? '三体.epub' : `第${i + 1}卷.epub`,
+          type: 'file',
+          path: dir === '' ? `第${i + 1}卷.epub` : `${dir}/第${i + 1}卷.epub`,
+        })),
+      ];
+      const entries = all.map((entry) => ({
+        ...entry,
+        size: 1024 * 512,
+        mtime: Date.now(),
+        mode: 0o644,
+        hidden: false,
+        hiddenByRule: false,
+        scanned: true,
+        ext: 'epub',
+        indexed: true,
+      }));
+      const from = (page - 1) * pageSize;
+      return json(reply, {
+        path: dir,
+        crumbs: dir === '' ? [{ name: '书库', path: '' }] : [{ name: '书库', path: '' }, { name: 'folder', path: 'folder' }],
+        parent: dir === '' ? null : '',
+        entries: entries.slice(from, from + pageSize),
+        total,
+        dirs: entries.filter((entry) => entry.type === 'dir').length,
+        files: entries.filter((entry) => entry.type === 'file').length,
+        size: entries.length * 1024 * 512,
+        writable: true,
+        name: dir,
+      });
+    }
     if (path === '/api/v1/library/continue') {
       // A `ContinueReadingItem` *is* a `Book` with the progress flattened onto it,
       // not a book-with-progress pair — see `ContinueReadingItem` in the client's
@@ -402,6 +478,19 @@ export function createReviewServer({ port = 5199 } = {}) {
       // content type is part of what the client is being reviewed against.
       reply.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
       return reply.end(body);
+    }
+    /*
+     * A single book, which is what a deep link asks for.
+     *
+     * `#/book/<id>` resolves through this endpoint (or the local mirror) before the
+     * reader is built, and a 404 here is answered with a shelf redirect — so a
+     * missing handler makes every reader screenshot a picture of the shelf, with
+     * nothing on it to say the route was the problem. It has to be *after* the
+     * `/manifest`, `/toc`, `/items` and `/assets` handlers above, because those
+     * paths start with the same prefix.
+     */
+    if (path === `/api/v1/books/${BOOK_ID}`) {
+      return json(reply, { book, progress: null });
     }
     if (path === `/api/v1/books/${BOOK_ID}/progress`) {
       return json(reply, null);

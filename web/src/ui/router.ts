@@ -38,9 +38,38 @@
 
 /** A parsed location. */
 export type Route =
-  | { name: 'shelf' }
-  | { name: 'library'; path: string }
+  | {
+      name: 'shelf';
+      /**
+       * Which folder the library was showing when the reader switched to the shelf.
+       *
+       * The library's own path lives in the library's URL, so switching to the
+       * shelf *loses* it — and the reader who switches back expects the folder they
+       * were in, not the library root. This is that path.
+       */
+      libraryPath: string;
+      /** The library page that folder was on, for the same reason. */
+      libraryPage: number;
+      /** The library screen's own page, so the shelf can turn pages at all. */
+      page: number;
+    }
+  | { name: 'library'; path: string; page: number; fromShelf: boolean }
   | { name: 'book'; bookId: string };
+
+/**
+ * Where a screen page sits.
+ *
+ * `shelf` and `library` are siblings in the UI — two entries, two screens — but
+ * `book` is not: it is reached *from* the shelf, and "back" from a book has to
+ * land on the list that reader was actually looking at.
+ */
+export interface RouteContext {
+  /** Which screen a pageful of books belongs to when the URL cannot say. */
+  fromShelf: boolean;
+  /** The library path/page the shelf was last showing. */
+  libraryPath: string;
+  libraryPage: number;
+}
 
 /** What the router hands the shell in addition to the route itself. */
 export interface RouteLocation {
@@ -84,7 +113,7 @@ export interface RouterWindow {
   removeEventListener(type: 'hashchange', listener: () => void): void;
 }
 
-const SHELF: Route = { name: 'shelf' };
+const SHELF: Route = { name: 'shelf', page: 1, libraryPath: '', libraryPage: 1 };
 
 /**
  * Parses a fragment into a route.
@@ -94,14 +123,26 @@ const SHELF: Route = { name: 'shelf' };
  * from an older version of the app — and the failure mode of a strict parser is a
  * blank screen with no way out of it. The shelf is always a valid place to stand.
  */
-export function parseRoute(hash: string): Route {
+export function parseRoute(hash: string, context?: RouteContext): Route {
   const raw = hash.startsWith('#') ? hash.slice(1) : hash;
   const question = raw.indexOf('?');
   const path = question === -1 ? raw : raw.slice(0, question);
   const parts = path.split('/').filter((part) => part.length > 0);
-  if (parts.length === 0) return SHELF;
+  if (parts.length === 0) return shelfRoute(context);
   const [head, ...rest] = parts;
-  if (head === 'shelf') return SHELF;
+  if (head === 'shelf') {
+    /*
+     * A shelf page is the second segment: `#/shelf/2`.
+     *
+     * The shelf is a screenful of covers plus a row of "继续阅读", and the second
+     * block of covers is page two. It needs an address for the same reason the
+     * library does — so that Back out of a book lands on the page the reader was
+     * on, not on the first sixty books of a two-thousand book library.
+     */
+    const raw = rest[0] ?? '';
+    const page = /^\d+$/.test(raw) ? Number.parseInt(raw, 10) : 1;
+    return shelfRoute(context, page > 0 ? page : 1);
+  }
   if (head === 'book') {
     // Tolerates `#/book/<id>` and `#/book/<id>/<anything>`: the reader has no
     // sub-route of its own, so a link one segment too long still opens the book
@@ -111,9 +152,51 @@ export function parseRoute(hash: string): Route {
     return { name: 'book', bookId: safeDecode(raw) };
   }
   if (head === 'library') {
-    return { name: 'library', path: rest.map(safeDecode).join('/') };
+    /*
+     * A folder *page* is its own segment: `#/library/科幻/2`.
+     *
+     * Taking the last numeric segment as a page rather than as a folder name is a
+     * deliberate ambiguity, and it is resolvable because a page is only ever
+     * appended — `routeHash` below is the only place a library URL is built, so the
+     * segment this parser reads is the one it wrote. A folder genuinely named `2`
+     * is reached as `#/library/2`, which has no preceding segment, so it stays a
+     * folder; `#/library/科幻/2` is page two of 科幻, which is what walking into a
+     * folder and turning a page produces.
+     *
+     * The alternative was a query string (`?page=2`) and it is worse here: the
+     * fragment is already the client's private space (see the note at the top), and
+     * a query inside a fragment is one more encoding rule every consumer has to get
+     * right for a value that is a single integer.
+     */
+    const tail = rest.at(-1) ?? '';
+    const isPage = rest.length > 1 && /^\d+$/.test(tail);
+    const segments = (isPage ? rest.slice(0, -1) : rest).map(safeDecode);
+    const page = isPage ? Number.parseInt(tail, 10) : 1;
+    return {
+      name: 'library',
+      path: segments.join('/'),
+      page: page > 0 ? page : 1,
+      fromShelf: context?.fromShelf ?? false,
+    };
   }
-  return SHELF;
+  return shelfRoute(context);
+}
+
+/**
+ * A shelf route, with whatever the URL could not say read from the context.
+ *
+ * `#/shelf` is one URL for every folder, so a browser Back into it lands on the
+ * root unless the context supplies what the reader was actually looking at — and
+ * the reader got to the shelf *from* a folder, so their trail is the only place
+ * that fact exists.
+ */
+function shelfRoute(context?: RouteContext, page = 1): Route {
+  return {
+    name: 'shelf',
+    page,
+    libraryPath: context?.libraryPath ?? '',
+    libraryPage: context?.libraryPage ?? 1,
+  };
 }
 
 /**
@@ -127,13 +210,16 @@ export function parseRoute(hash: string): Route {
 export function routeHash(route: Route): string {
   switch (route.name) {
     case 'shelf':
-      return '#/shelf';
+      // `/1` is the absence of a page: one screen, two URLs, is the thing the
+      // router's equality check exists to prevent, and emitting both here is how
+      // it would happen.
+      return route.page > 1 ? `#/shelf/${route.page}` : '#/shelf';
     case 'book':
       return `#/book/${safeEncode(route.bookId)}`;
     case 'library': {
       const segments = route.path.split('/').filter((segment) => segment.length > 0);
-      if (segments.length === 0) return '#/library';
-      return `#/library/${segments.map(safeEncode).join('/')}`;
+      const head = segments.length === 0 ? '#/library' : `#/library/${segments.map(safeEncode).join('/')}`;
+      return route.page > 1 ? `${head}/${route.page}` : head;
     }
   }
 }
@@ -142,7 +228,11 @@ export function routeHash(route: Route): string {
 export function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
   if (a.name === 'book' && b.name === 'book') return a.bookId === b.bookId;
-  if (a.name === 'library' && b.name === 'library') return a.path === b.path;
+  if (a.name === 'library' && b.name === 'library') return a.path === b.path && a.page === b.page;
+  // The shelf's carried library location is *not* part of its identity: it is what
+  // the switch-back control will show, and treating it as a difference would make
+  // the router repaint (and reset the scroll position of) the same list.
+  if (a.name === 'shelf' && b.name === 'shelf') return true;
   return true;
 }
 
@@ -197,7 +287,67 @@ export class Router {
 
   /** The route currently on screen. */
   current(): Route {
-    return this.last ?? parseRoute(this.win.location.hash);
+    return this.last ?? this.readHash();
+  }
+
+  /**
+   * Parses the current fragment, carrying forward what the URL cannot say.
+   *
+   * Two facts a hash may not encode are read from the last route instead:
+   *
+   *  - **which screen a library page belongs to** (`fromShelf`), because the same
+   *    URL is reachable from both lists and only the trail knows which one the
+   *    reader came through; and
+   *  - **the shelf's own path**, which the old hash carried and the new one does
+   *    not — so a Back into a shelf URL keeps the folder the reader was in rather
+   *    than resetting to the library root.
+   */
+  private readHash(): Route {
+    const previous = this.last;
+    const context: RouteContext = {
+      fromShelf: previous?.name === 'library' && previous.fromShelf,
+      libraryPath: previous?.name === 'library' ? previous.path : '',
+      libraryPage: previous?.name === 'library' ? previous.page : 1,
+    };
+    return this.substitute(parseRoute(this.win.location.hash, context), previous);
+  }
+
+  /**
+   * Carries the parts of the current route that a hash cannot carry.
+   *
+   * `#/shelf` is one URL for every folder, so a browser Back into it would land on
+   * the root. The reader got there from inside a folder, so that is where the URL
+   * should mean — otherwise Back out of a book throws away the folder *and* the
+   * page they were browsing, which is the whole point of keeping the two screens
+   * separable in the first place.
+   */
+  private substitute(route: Route, previous: Route | null): Route {
+    if (route.name === 'shelf') {
+      // A Back into `#/shelf` means the shelf the reader was last on, folder and
+      // page included: the hash has nowhere to put either, and a shelf that resets
+      // to the library root on every Back is a switch that loses the reader's place.
+      if (previous?.name === 'shelf') return { ...previous, page: route.page };
+      return {
+        name: 'shelf',
+        page: route.page,
+        libraryPath: previous?.name === 'library' ? previous.path : '',
+        libraryPage: previous?.name === 'library' ? previous.page : 1,
+      };
+    }
+    if (route.name === 'library' && previous?.name === 'shelf' && !route.fromShelf) {
+      /*
+       * A Back into `#/library` from the shelf: the URL says "a library page" and
+       * nothing about how the reader got there, so the trail is the only thing that
+       * knows the switch was made from the shelf. It matters because it decides
+       * whether leaving the library goes *back* to the shelf or *out* of the app.
+       *
+       * A route already marked `fromShelf` is left alone rather than overwritten:
+       * the flag is on the URL's own meaning as far as the router is concerned, and
+       * this branch only fills in what the hash omitted.
+       */
+      return { ...route, fromShelf: true };
+    }
+    return route;
   }
 
   /**
@@ -215,14 +365,14 @@ export class Router {
       this.options.onChange(this.last!, this.locationFor(this.last!));
       return;
     }
-    const route = parseRoute(location.hash);
+    const route = this.readHash();
     this.track(route);
     this.options.onChange(route, this.locationFor(route));
   }
 
   private dispatch(): void {
     if (this.disposed) return;
-    const route = parseRoute(this.win.location.hash);
+    const route = this.readHash();
     this.track(route);
     this.options.onChange(route, this.locationFor(route));
   }

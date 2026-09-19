@@ -1,6 +1,6 @@
 import { ApiError } from '../api/errors.ts';
 import type { ReaderApi } from '../api/client.ts';
-import type { BrowseEntry, BrowseListing, ConflictPolicy, ShelfAction } from '../api/types.ts';
+import type { Book, BrowseEntry, BrowseListing, ConflictPolicy, ShelfAction } from '../api/types.ts';
 import { formatBytes, formatDate } from './dom.ts';
 import { mountUI } from './mount.ts';
 import { Button, Icon, IconButton } from './toolkit.tsx';
@@ -9,18 +9,30 @@ import { type ComponentChildren, type JSX, useEffect, useRef, useState } from '.
 export interface ManagerScreenOptions {
   api: ReaderApi;
   onClose(): void;
-  onSignedOut(): void;
   /**
-   * Ask to be shown a directory, without doing it.
+   * Ask to be shown a directory and page, without doing it.
    *
-   * The screen does not navigate itself any more: a path is a *route*
+   * The screen does not navigate itself: a path is a *route*
    * (`#/library/<path>`), and folders are exactly the thing a reader wants to
    * send to someone else. So the screen reports the intent, the router writes the
-   * URL, and the router hands the path back through `open(path)` below. The
-   * round trip is what makes Back leave the manager instead of retracing every
-   * folder the reader walked into.
+   * URL, and the router hands the path back through `open(path, page)` below. The
+   * round trip is what makes Back leave the library instead of retracing every
+   * folder the reader walked into — and it is what makes a *page* survivable,
+   * which it was not while the position lived in this class.
+   *
+   * `replace: false` distinguishes the two things this call means: walking into a
+   * folder *replaces* the entry (one screen changing its own argument, so Back
+   * leaves the screen rather than retracing the walk), while switching to the shelf
+   * *pushes* (a different screen, which Back returns from).
    */
-  onNavigate(path: string): void;
+  onOpenLibrary(path: string, page: number, replace: boolean): void;
+  /** Switches to the shelf, carrying the folder this screen was showing. */
+  onOpenShelf(page: number): void;
+  /** Opens a book: an entry that is a book, tapped. */
+  onOpenBook(book: Book): void;
+  /** Reports the page the reader turned to, so the URL can follow it. */
+  onPageChange(page: number): void;
+  onSignedOut(): void;
 }
 
 /** Long-press, in milliseconds, before a touch starts a selection. */
@@ -44,8 +56,25 @@ type Dialog =
       resolve(fields: Record<string, string> | null): void;
     };
 
+/**
+ * Entries per page of the library listing.
+ *
+ * A mirror of the server's own default, declared here because the client computes
+ * the page *count* and the server computes the page — and if the two numbers
+ * disagree the pager offers pages that do not exist. It is the one place that
+ * number appears on this side.
+ */
+const PAGE_SIZE = 200;
+
 interface ManagerState {
   path: string;
+  /**
+   * Which page of the directory is shown.
+   *
+   * Owned by the route, like the path: a page that lives only in this class is a
+   * page that Back, Forward and a reload all throw away.
+   */
+  page: number;
   listing: BrowseListing | null;
   /** Paths ticked for a batch operation. Empty means "navigate" mode. */
   selected: ReadonlySet<string>;
@@ -96,6 +125,7 @@ export class ManagerScreen {
   readonly element: HTMLDivElement;
   private readonly state: ManagerState = {
     path: '',
+    page: 1,
     listing: null,
     selected: new Set<string>(),
     loading: false,
@@ -151,14 +181,32 @@ export class ManagerScreen {
   }
 
   /**
-   * Shows a directory.
+   * Shows a directory, at a page.
    *
-   * The path comes from the URL rather than from this screen's own history, so a
-   * deep link, a Back, and a forward walk all arrive here the same way: the route
-   * is the request, and this method is only the executor.
+   * The path *and the page* come from the URL rather than from this screen's own
+   * history, so a deep link, a Back, and a forward walk all arrive here the same
+   * way: the route is the request, and this method is only the executor. The page is
+   * part of that, and it used to be component state — which meant Back, Forward and
+   * a reload all silently reset a folder to its first sixty entries.
    */
-  async open(path = ''): Promise<void> {
+  async open(path = '', page = 1): Promise<void> {
+    this.state.page = page > 0 ? page : 1;
     await this.load(path);
+  }
+
+  /** Turns to a page. Reported to the shell, which writes it into the URL. */
+  private goToPage(page: number): void {
+    const count = this.pageCount();
+    const target = Math.min(Math.max(1, page), count);
+    if (target === this.state.page) return;
+    this.state.page = target;
+    this.draw();
+    this.options.onPageChange(target);
+  }
+
+  private pageCount(): number {
+    const total = this.state.listing?.total ?? 0;
+    return Math.max(1, Math.ceil(total / PAGE_SIZE));
   }
 
   private async load(path: string): Promise<void> {
@@ -167,7 +215,7 @@ export class ManagerScreen {
     if (!this.state.status) this.setStatus('载入中…');
     this.draw();
     try {
-      const listing = await this.options.api.browse(path);
+      const listing = await this.options.api.browse(path, this.state.page);
       this.state.listing = listing;
       this.state.path = listing.path;
       this.applyWritable(listing.writable);
@@ -241,7 +289,17 @@ export class ManagerScreen {
     return (
       <>
         <div className="panel-header">
-          <IconButton label="返回书架" icon="arrow-left" onClick={() => this.options.onClose()} />
+          <IconButton label="返回" icon="arrow-left" onClick={() => this.options.onClose()} />
+          {/* The two lists are siblings, and this is the arrow between them. It is
+              a *place* (the shelf) rather than a filter, so it sits beside the
+              breadcrumb with the rest of the places; the filter-shaped controls are
+              the two write buttons on the other side. */}
+          <IconButton
+            label="书架"
+            icon="table-columns"
+            class="manager-switch"
+            onClick={() => this.options.onOpenShelf(1)}
+          />
           <div className="manager-crumbs">
             {(listing?.crumbs ?? []).map((crumb, index) => (
               <>
@@ -251,7 +309,7 @@ export class ManagerScreen {
                   key={`${crumb.path}#${index}`}
                   className="manager-crumb"
                   aria-current={index === (listing?.crumbs.length ?? 0) - 1}
-                  onClick={() => this.options.onNavigate(crumb.path)}
+                  onClick={() => this.options.onOpenLibrary(crumb.path, 1, true)}
                 >
                   {crumb.name}
                 </button>
@@ -264,7 +322,7 @@ export class ManagerScreen {
               says. */}
           <IconButton
             label="上传书籍"
-            icon="upload"
+            icon="file-arrow-up"
             hidden={!writable}
             disabled={state.busy}
             onClick={() => this.uploadInput.click()}
@@ -287,7 +345,7 @@ export class ManagerScreen {
           }}
         >
           <div className="manager-list">
-            {listing && listing.entries.length === 0 ? (
+            {listing && listing.total === 0 ? (
               <div className="empty-state">
                 <p>这个文件夹是空的</p>
               </div>
@@ -304,6 +362,19 @@ export class ManagerScreen {
               />
             ))}
           </div>
+          {/* The pager is drawn from the *directory's* total, not from the rows on
+              screen: a folder of four hundred files has two pages, and a pager that
+              counted what it could see would offer one. It is hidden entirely when
+              there is one page, because a control that can only be pressed to no
+              effect is a control the reader learns to distrust. */}
+          {this.pageCount() > 1 ? (
+            <Pager
+              page={state.page}
+              pageCount={this.pageCount()}
+              busy={state.loading}
+              onGo={(page) => this.goToPage(page)}
+            />
+          ) : null}
           <div className="manager-status muted">{state.status || this.summary(listing)}</div>
         </div>
         <SelectionBar
@@ -336,12 +407,23 @@ export class ManagerScreen {
    */
   private summary(listing: BrowseListing | null): string {
     if (listing === null) return '';
-    if (listing.entries.length === 0) {
+    if (listing.total === 0) {
       return listing.writable ? '空文件夹 · 可以用右上角的新建按钮添加子目录' : '空文件夹';
     }
+    /*
+     * The counts are the directory's, and the page is named when there is more
+     * than one.
+     *
+     * "400 个文件" under a screen showing 200 of them is a correct sentence and a
+     * confusing one; saying which page it is makes the number and the rows agree.
+     * The hidden count is taken from what the scanner would skip across the whole
+     * directory rather than from this page, because "3 个被扫描忽略" that changes
+     * as the reader turns pages is a fact about the page, not about the folder.
+     */
     const hidden = listing.entries.filter((entry) => entry.hidden || entry.hiddenByRule).length;
     const parts = [`${listing.dirs} 个文件夹`, `${listing.files} 个文件`, formatBytes(listing.size)];
     if (hidden > 0) parts.push(`${hidden} 个被扫描忽略`);
+    if (this.pageCount() > 1) parts.push(`第 ${this.state.page} / ${this.pageCount()} 页`);
     return parts.join(' · ');
   }
 
@@ -358,8 +440,10 @@ export class ManagerScreen {
       this.toggle(entry);
       return;
     }
-    // A folder is announced to the outside, which turns it into a URL.
-    if (entry.type === 'dir') this.options.onNavigate(entry.path);
+    // A folder is announced to the outside, which turns it into a URL — always at
+    // page one, because page three of the folder the reader just left is not a
+    // place it makes sense to arrive in.
+    if (entry.type === 'dir') this.options.onOpenLibrary(entry.path, 1, true);
   }
 
   // ---- selection actions ----
@@ -494,7 +578,25 @@ export class ManagerScreen {
       const result = await this.options.api.upload(files, this.state.path, policy, (fraction) => {
         this.toast(`上传中… ${Math.round(fraction * 100)}%（${formatBytes(total)}）`);
       });
-      this.reportUpload(result);
+      /*
+       * The directory is re-read before the report, and both are in this `try`.
+       *
+       * This is the bug the issue reports: "上传成功没有刷新目录文件". The report was
+       * written to the status line and nothing else happened, so the row for the file
+       * that had just landed was simply absent from the list — and a list that does
+       * not contain the thing you just did reads as a failed upload, whatever the
+       * message above it says. Reloading is what makes the report *true*.
+       *
+       * It goes through `load` rather than appending the uploaded paths by hand: the
+       * server's upload answers with the paths it *wrote*, and the directory also
+       * gained whatever the scan indexed from them and lost whatever an
+       * `overwrite` replaced. One re-read is both shorter and more correct than
+       * patching three of those four facts.
+       */
+      this.outcome = this.describeUpload(result);
+      await this.load(this.state.path);
+      this.outcome = null;
+      this.toast(this.describeUpload(result));
     } catch (err) {
       this.handleError(err);
     } finally {
@@ -520,7 +622,16 @@ export class ManagerScreen {
     return answer as ConflictPolicy | null;
   }
 
-  private reportUpload(result: Awaited<ReturnType<ReaderApi['upload']>>): void {
+  /**
+   * What an upload did, as a sentence.
+   *
+   * A function rather than a `toast` call because the message now has to survive the
+   * reload the upload triggers: the reload's own status line is the directory
+   * summary, and the summary is not an answer to "did it work". So the sentence is
+   * built once, written into `outcome` for the reload to re-apply, and shown again
+   * by the toast — one wording, two readers of it.
+   */
+  private describeUpload(result: Awaited<ReturnType<ReaderApi['upload']>>): string {
     const parts: string[] = [];
     if (result.uploaded.length > 0) parts.push(`已入库 ${result.uploaded.length} 个文件`);
     if (result.skipped.length > 0) parts.push(`跳过 ${result.skipped.length} 个`);
@@ -530,7 +641,7 @@ export class ManagerScreen {
     // rather than counted: "跳过 1 个" without a name is a dead end.
     const first = result.skipped[0];
     if (first) parts.push(`（${first.name}：${first.reason}）`);
-    this.toast(parts.join(' · '));
+    return parts.join(' · ');
   }
 
   private reportBatch(result: { applied: number; failed: Array<{ path: string; reason: string }> }): string {
@@ -669,6 +780,83 @@ export class ManagerScreen {
 }
 
 /**
+ * The page control under a directory listing.
+ *
+ * The same shape as the shelf's pager, and deliberately not shared with it: the two
+ * page *different* things — one a folder's entries, one the shelf's books — and the
+ * only code they would share is the loop that decides which numbers to draw. A
+ * shared component would take six props to serve two call sites and would need a
+ * third the day either list wants a different window.
+ *
+ * A reader scrolling a two-thousand-file folder is the case this exists for: the
+ * list is not a feed, it is a *place*, and a place needs a position that can be
+ * returned to, linked to, and turned from.
+ */
+function Pager({
+  page,
+  pageCount,
+  busy,
+  onGo,
+}: {
+  page: number;
+  pageCount: number;
+  busy: boolean;
+  onGo(page: number): void;
+}): JSX.Element {
+  const numbers: Array<number | 'gap'> = [];
+  const push = (value: number | 'gap'): void => {
+    if (numbers.at(-1) !== value) numbers.push(value);
+  };
+  for (let n = 1; n <= pageCount; n += 1) {
+    // First, last and the pages around the reader, with the runs between them
+    // collapsed: the same width at three pages and at three hundred.
+    if (n === 1 || n === pageCount || Math.abs(n - page) <= 1) push(n);
+    else push('gap');
+  }
+  return (
+    <nav className="manager-pager" aria-label="翻页">
+      <button
+        type="button"
+        className="pager-step"
+        aria-label="上一页"
+        disabled={busy || page <= 1}
+        onClick={() => onGo(page - 1)}
+      >
+        <Icon name="chevron-left" />
+      </button>
+      {numbers.map((value, index) =>
+        value === 'gap' ? (
+          <span className="pager-gap" key={`gap-${index}`} aria-hidden="true">
+            …
+          </span>
+        ) : (
+          <button
+            type="button"
+            key={value}
+            className="pager-page"
+            aria-label={`第 ${value} 页`}
+            aria-current={value === page ? 'page' : undefined}
+            disabled={busy}
+            onClick={() => onGo(value)}
+          >
+            {value}
+          </button>
+        ),
+      )}
+      <button
+        type="button"
+        className="pager-step"
+        aria-label="下一页"
+        disabled={busy || page >= pageCount}
+        onClick={() => onGo(page + 1)}
+      >
+        <Icon name="chevron-right" />
+      </button>
+    </nav>
+  );
+}
+
+/**
  * One row.
  *
  * Kept a component so the long-press timer lives in the row that owns it: a
@@ -758,14 +946,14 @@ function Row({ entry, selecting, selected, onActivate, onToggle, onMenu }: RowPr
     >
       <span className="manager-check" aria-hidden="true" />
       <div className="manager-name">
-        <Icon name={entry.type === 'dir' ? 'folder' : 'file'} class="manager-icon" />
+        <Icon name={entry.type === 'dir' ? 'folder' : 'file-lines'} class="manager-icon" />
         <span className="manager-label">{entry.name}</span>
       </div>
       <div className="manager-meta muted">{meta}</div>
       {selectable || selecting ? (
         <IconButton
           label={`${entry.name} 的操作`}
-          icon="more"
+          icon="ellipsis"
           class="manager-more"
           onClick={() => {
             cancel();
