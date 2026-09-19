@@ -12,12 +12,12 @@
     {
       "name": "02-reader",
       "label": "阅读页",
-      "what": "顶栏（图标+文字）/ 正文 / 底栏滑杆与上一章下一章 / 状态药丸"
+      "what": "顶栏（图标+文字）/ 右侧快捷列 / 正文 / 底栏「章节内页数」滑杆与上一章下一章"
     },
     {
       "name": "03-reader-no-chrome",
       "label": "阅读页 · 收起工具栏",
-      "what": "顶栏与底栏同时收起，正文占满，右上留快捷列、左上左下留章节与页码"
+      "what": "顶栏、底栏、快捷列一起收起，正文占满，只留章节与页码读数"
     },
     {
       "name": "04-panel-toc",
@@ -63,9 +63,19 @@
       "name": "12-library-paged",
       "label": "书库 · 第二页",
       "what": "同一个分页器组件；当前页与首尾页码"
+    },
+    {
+      "name": "13-reader-paged-scrub",
+      "label": "阅读页 · 滑杆拖到本章第 3 页",
+      "what": "分栏模式下拖动底部滑杆：读数与画面都停在本章内，不换章"
     }
   ],
   "results": [
+    {
+      "name": "展开工具栏: 快捷按钮与两条栏一起出现",
+      "ok": true,
+      "detail": "visible=true 按钮 4 个 pointer-events=auto"
+    },
     {
       "name": "收起工具栏: 顶栏与底栏一起走",
       "ok": true,
@@ -82,9 +92,9 @@
       "detail": "正文 1..844 / 视口 844"
     },
     {
-      "name": "收起工具栏: 右侧仍有快捷按钮",
+      "name": "收起工具栏: 快捷按钮跟着两条栏一起收",
       "ok": true,
-      "detail": "rail=true"
+      "detail": "visible=false pointer-events=none"
     },
     {
       "name": "收起工具栏: 保留章节与页码指示",
@@ -119,12 +129,27 @@
     {
       "name": "底栏: 进度是可拖动的滑杆",
       "ok": true,
-      "detail": "type=range 宽 304px label=\"阅读进度\""
+      "detail": "type=range 宽 304px label=\"章节内页数\""
     },
     {
       "name": "底栏: 有页码与阅读进度读数",
       "ok": true,
       "detail": "page=\"第 1/4 页\" nav=\"阅读进度：0%\""
+    },
+    {
+      "name": "底栏: 滑杆量的是章节内页数，不是全书百分比",
+      "ok": true,
+      "detail": "min=1 max=4 value=1 读数=\"第 1/4 页\"（章节共 4 页）"
+    },
+    {
+      "name": "底栏: 拖动滑杆切到对应页",
+      "ok": true,
+      "detail": "拖到 4 后读数=\"第 4/4 页\""
+    },
+    {
+      "name": "翻页模式: 滑杆拖到第 3 页，仍在本章",
+      "ok": true,
+      "detail": "min=1 max=4 value=3 拖前=\"第 4/4 页\" 拖后=\"第 3/4 页\""
     },
     {
       "name": "状态提示不推动正文",
