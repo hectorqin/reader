@@ -75,8 +75,35 @@ export interface ListOptions {
   format?: string;
   sort?: 'title' | 'author' | 'added' | 'updated';
   order?: 'asc' | 'desc';
+  /**
+   * Restrict the list to books that have a file inside this folder.
+   *
+   * Library-relative and recursive: `''` is the whole library, `'科幻'` is that
+   * folder and everything under it. Prefix matching on `rel_path` rather than a
+   * join against a folder table, because the folder tree is the filesystem's and
+   * the scanner does not keep a second copy of it.
+   *
+   * This is what makes the library screen's *preview* page possible without a new
+   * endpoint: the page is a grid of books, and "books" is the one shape this DTO
+   * has. A client that asked `/library/browse` for a folder and rendered its file
+   * rows as covers would be showing filenames where titles go, and would be missing
+   * every book whose cover lives inside its own archive.
+   */
+  path?: string;
   page?: number;
   pageSize?: number;
+}
+
+/**
+ * Escapes the two characters `LIKE` treats specially.
+ *
+ * `%` and `_` are legal in a filename and both are wildcards; a folder called
+ * `100%` would otherwise match `1000 books` as well. The escape character itself
+ * has to be escaped first, or escaping `%` would produce `\\%` which then means a
+ * literal backslash followed by any run.
+ */
+function escapeLike(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
 export class ShelfService {
@@ -115,6 +142,27 @@ export class ShelfService {
       // and avoids a join table that would complicate the sync payload.
       where.push('b.tags LIKE ?');
       params.push(`%"${options.tag}"%`);
+    }
+    if (options.path) {
+      /*
+       * A folder filter, and the only place `rel_path` is matched by prefix.
+       *
+       * `LIKE 'dir/%'` rather than `LIKE '%dir%'`: the segment boundary matters, so
+       * that a folder named 科学 does not drag in 科幻科学 and a file called
+       * `dir.txt` is not inside the folder `dir`. `escapeLike` handles the two
+       * characters that are wildcards in SQL and legal in a filename, and the
+       * backslash escape is stated explicitly rather than left to whatever the
+       * engine's default happens to be.
+       *
+       * The path is normalised to have no trailing slash first, so `'科幻/'` and
+       * `'科幻'` are one filter and not two.
+       */
+      const prefix = options.path.replace(/\/+$/, '');
+      where.push(`EXISTS (
+        SELECT 1 FROM book_files f
+        WHERE f.book_id = b.id AND f.missing = 0 AND f.rel_path LIKE ? ESCAPE '\\'
+      )`);
+      params.push(`${escapeLike(prefix)}/%`);
     }
 
     const sortColumn = {

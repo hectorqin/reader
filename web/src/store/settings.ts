@@ -14,8 +14,20 @@ const SERVER_KEY = 'reader.server.v1';
 
 /** How densely the shelf lays its covers out. */
 export type ShelfDensity = 'compact' | 'cozy' | 'comfortable';
-/** The shelf's default ordering, per device like the rest of the settings. */
-export type ShelfSort = 'updated' | 'added' | 'title' | 'author';
+/**
+ * What the shelf can be ordered by.
+ *
+ * Four keys, and they answer three different questions a reader actually asks:
+ * *where was I* (`recent`, the default), *what did I just put in there* (`added`),
+ * and *what is this book called / who wrote it* (`title`, `author`).
+ *
+ * `recent` is the one the shelf opens on, and it is deliberately not the same
+ * question as `added`: a library that opens on "what did I add last" answers a
+ * question the reader asks once a week, while "where was I" is asked every time
+ * the app is opened. `updated` is kept as an alias of `added` so a stored
+ * preference from an older build keeps working (see `shelf-settings.tsx`).
+ */
+export type ShelfSort = 'recent' | 'added' | 'title' | 'author';
 
 export interface AppSettings extends ViewSettings {
   /** UTF-8 by default; a reader can force another for an odd TXT file. */
@@ -83,7 +95,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   ttsAutoAdvance: true,
   ttsEngine: 'auto',
   shelfDensity: 'cozy',
-  shelfSort: 'updated',
+  shelfSort: 'recent',
   shelfShowAuthor: true,
   shelfShowProgress: true,
 };
@@ -99,8 +111,24 @@ export class SettingsStore {
     const raw = await this.kv.get(KEY);
     if (raw) {
       try {
-        const parsed = JSON.parse(raw) as Partial<AppSettings>;
+        const parsed = JSON.parse(raw) as Partial<AppSettings> & { shelfSort?: string };
         this.settings = { ...DEFAULT_APP_SETTINGS, ...parsed };
+        /*
+         * Two stored values are folded forward, and both are the same repair.
+         *
+         * `updated` used to be the shelf's only date sort and it meant "the file
+         * changed" — which for a library imported once is very nearly "when I added
+         * it". It is now *named* `added`, which is what it always was in practice,
+         * and `updated` no longer exists as a choice; left folded, a reader who had
+         * picked it would open the shelf on a key the sort sheet cannot show and the
+         * server would receive an unknown `sort`.
+         *
+         * `title` and `author` are untouched: they still mean what they meant.
+         */
+        if (this.settings.shelfSort === ('updated' as string)) this.settings.shelfSort = 'added';
+        if (!['recent', 'added', 'title', 'author'].includes(this.settings.shelfSort)) {
+          this.settings.shelfSort = DEFAULT_APP_SETTINGS.shelfSort;
+        }
       } catch {
         this.settings = { ...DEFAULT_APP_SETTINGS };
       }

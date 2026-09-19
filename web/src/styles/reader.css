@@ -1651,123 +1651,21 @@ book-content {
   background: var(--reader-accent);
 }
 
-/* ---- continue reading ---- */
-
-.continue-row {
-  display: flex;
-  gap: 0.65rem;
-  overflow-x: auto;
-  /* Full-bleed, with padding rather than a margin: the first card should start at
-     the gutter, and the last should be able to scroll *to* the gutter. */
-  padding: 0.1rem calc(0.9rem + var(--safe-right)) 0.4rem calc(0.9rem + var(--safe-left));
-  margin-inline: calc(-0.9rem - var(--safe-left)) calc(-0.9rem - var(--safe-right));
-  scrollbar-width: none;
-  scroll-snap-type: x proximity;
-}
-
-.continue-row::-webkit-scrollbar {
-  display: none;
-}
-
-.shelf-section-head + .continue-row {
-  margin-top: 0;
-}
-
-.continue-card {
-  flex: 0 0 6.5rem;
-  width: 6.5rem;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  text-align: start;
-  cursor: pointer;
-  scroll-snap-align: start;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 0;
-}
-
-.continue-card .cover {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 2 / 3;
-  border-radius: 7px;
-  overflow: hidden;
-  background: color-mix(in srgb, var(--reader-line) 70%, var(--reader-surface));
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.14), 0 3px 10px rgb(0 0 0 / 0.06);
-  display: grid;
-  place-items: stretch;
-}
-
-.continue-card .cover img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.continue-card .placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  text-align: center;
-  padding: 0.5rem 0.4rem;
-  line-height: 1.3;
-  word-break: break-word;
-  color: color-mix(in srgb, var(--reader-ink) 72%, transparent);
-  background: linear-gradient(
-    150deg,
-    color-mix(in srgb, var(--reader-accent) 16%, var(--reader-surface)) 0%,
-    color-mix(in srgb, var(--reader-accent) 6%, var(--reader-line)) 100%
-  );
-  overflow: hidden;
-}
-
-/*
- * The progress sits *on* the cover, at its bottom edge.
+/* ---- continue reading: removed, on purpose ----
  *
- * Two reasons it is not a line under the title. It has to be readable at a
- * glance while skimming a horizontal row, and a 4px line beneath the chapter
- * name is not glancing distance from the cover — the eye is on the artwork. And
- * a tinted track over the art reads as "this cover is part done" even when the
- * bar underneath is a thumbnail's worth of pixels, because the *darkening* is
- * what registers. The fill is the accent, so the two rows of the shelf use the
- * same colour for the same meaning.
+ * There used to be a horizontal 继续阅读 row above the grid here: ten cards, the same
+ * ten books that are already on the shelf below, drawn a second time in a strip.
+ * It is gone, and the space it took is the point — the shelf is a grid of covers and
+ * the question the strip answered ("where was I") is now answered by the *order* of
+ * that grid, because 最近阅读 is the default sort. A row that duplicates ten of the
+ * sixty covers under it is not a shortcut, it is the first thing the reader has to
+ * scroll past to reach the books.
+ *
+ * The progress bar it drew is still drawn: on the cover of every card that has been
+ * started, from the same local mirror, which is where it was always more useful.
+ * The timestamps the strip was built from are still fetched, and are now the sort
+ * key (see `shelf-screen.tsx`), so nothing came off the wire.
  */
-.continue-card .progress-track {
-  position: absolute;
-  inset-inline: 0;
-  inset-block-end: 0;
-  height: 5px;
-  background: rgb(0 0 0 / 0.45);
-}
-
-.continue-card .progress-track span {
-  display: block;
-  height: 100%;
-  background: var(--reader-accent);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--reader-accent) 70%, transparent);
-}
-
-.continue-card .title {
-  font-size: 0.75rem;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  min-height: 2.6em;
-}
-
-.continue-card .muted {
-  font-size: 0.68rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 /* ---- the first paint ---- */
 
@@ -2900,11 +2798,13 @@ book-content {
 }
 
 /* ------------------------------------------------------------------ *
- * 书库管理 — the library as a file manager
+ * 书库 — the mount, as a browsing page over a file manager
  *
- * The one screen that shows the mount rather than the catalog, so its job is to
- * stay out of the way: a path you can read at the top, rows that navigate, and
- * the destructive actions behind an explicit selection.
+ * The one screen that shows the mount rather than the catalog. It has two halves —
+ * a grid of the books in a folder, and the file rows — and they share a breadcrumb, a
+ * folder, a page and a route. So its job is to stay out of the way: a path you can
+ * read at the top, a grid or rows that navigate below it, and the destructive actions
+ * behind an explicit selection.
  * ------------------------------------------------------------------ */
 
 /*
@@ -2913,7 +2813,15 @@ book-content {
  * on the flex chain pushes its own content off the bottom instead of scrolling.
  * `position: relative` is what the dialogs and the selection pill are placed
  * against.
+ *
+ * `.manager-screen` is the screen's *former* name and is kept as an alias, because
+ * the only thing the two names share is this one rule — the row, the pager and the
+ * action bar are all still called `.manager-*`, and those names are what the UI
+ * review's scenes and selectors reach for. Deleting the alias would be a rename of
+ * the wrapper with no reader-visible effect and one more way for a stale selector to
+ * silently stop matching.
  */
+.library-screen,
 .manager-screen {
   position: relative;
   display: flex;
@@ -2927,13 +2835,144 @@ book-content {
  *
  * The screens are component trees mounted into a container, and the container
  * must not become a layout box of its own: the styles below are written against
- * `.manager-screen > .manager-body`, and a wrapper in between would break the
+ * `.library-screen > .manager-body`, and a wrapper in between would break the
  * `min-height: 0` chain that lets the list scroll instead of pushing the action
  * bar off the bottom of the phone. `display: contents` makes the host vanish for
  * layout purposes and keeps the tree's children exactly where they were.
  */
+.library-ui,
 .manager-ui {
   display: contents;
+}
+
+/* ---- library: the header's two-page switch ---- */
+
+/*
+ * The switch between the library's two pages, and the reason it is a *segmented*
+ * control rather than a tab strip.
+ *
+ * There are exactly two of them, they are the same shape of choice as the reader's
+ * other segmented controls, and the stylesheet for that already exists — so the
+ * control cannot drift from the rest of the app the way a bespoke tab strip
+ * inevitably does. It is `flex: 0 0 auto` rather than filling the header: the
+ * breadcrumb beside it is the thing that grows, and a control that stretches would
+ * push the crumb off the row on a long path.
+ *
+ * `align-self: center` because the header is `align-items: center` and the buttons
+ * inside the control are shorter than the 40px targets around them; without it the
+ * switch sits a couple of pixels high and reads as misaligned against the two icon
+ * buttons it lives between.
+ */
+.library-tabs {
+  flex: 0 0 auto;
+  font-size: 0.78rem;
+}
+
+.library-tabs button {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/*
+ * The preview grid, inside the file listing's scroller.
+ *
+ * `.manager-body` is a plain scroller and the grid is one child of it, so the two
+ * halves of the library share the scroll container — which is what makes switching
+ * between them not move the header. The padding is the listing's own gutter, and
+ * the bottom padding leaves room for the sticky status line underneath.
+ */
+.library-preview-grid {
+  padding: 0.6rem 0.9rem 0.75rem;
+}
+
+/*
+ * The one line above the grid, when there is something to say about it.
+ *
+ * `:empty` rather than a `hidden` attribute, because the component decides the
+ * sentence and an empty one should cost no space at all: a blank 18px row above a
+ * grid of covers is a gap the reader reads as a rendering mistake.
+ */
+.library-preview-hint {
+  padding: 0.5rem 0.9rem 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.library-preview-hint:empty {
+  display: none;
+}
+
+/*
+ * A preview card: the shelf's card, with a *second* control on it.
+ *
+ * The card was a `<button>` on the shelf, and it cannot be one here — a button
+ * inside a button is invalid, and the browser fixes it by hoisting the inner one
+ * out of the outer, which puts the shelve control somewhere else on the page. So
+ * the open target is an inner button and the card is a plain box that positions it.
+ *
+ * `position: relative` is what the shelve control is placed against, and the control
+ * sits at the cover's *bottom-left*, opposite the format badge: the two would
+ * otherwise overlap on a compact cover, and the badge is the quieter of the two so
+ * it is the one that keeps its corner.
+ */
+.book-card.is-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.book-card.is-row .book-open {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  width: 100%;
+}
+
+/*
+ * 加入书架, on the cover of a book that is not on the shelf.
+ *
+ * A pill over the artwork rather than a row under the title: the row under the title
+ * is where the author lives, and a control that appears and disappears there would
+ * make one card in a row taller than its neighbours — which is the ragged baseline
+ * the grid's two-line title exists to prevent. Over the cover it costs nothing, and
+ * it is on the artwork the reader is already looking at.
+ *
+ * It is *absent* rather than disabled for a book that is already shelved: a control
+ * that can only be pressed to no effect is a control the reader learns to distrust,
+ * and "this one is mine already" is not a state that needs saying on every card.
+ */
+.book-card .book-shelve {
+  position: absolute;
+  inset-block-start: 0.3rem;
+  inset-inline-start: 0.3rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.15rem 0.4rem;
+  background: color-mix(in srgb, var(--reader-accent) 92%, transparent);
+  color: #fff;
+  font-size: 0.6rem;
+  font-family: inherit;
+  line-height: 1.5;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.book-card .book-shelve .icon {
+  font-size: 0.7rem;
 }
 
 .manager-crumbs {
@@ -3167,7 +3206,10 @@ book-content {
  * rather than removed: the row still has to line up with the others, and a
  * column that appears and disappears with the deployment reads as a bug.
  */
-.manager-screen[data-writable='false'] .manager-more {
+/* The read-only dimming, on the screen element the library actually uses. The
+   `.manager-screen` alias above is kept only for the base layout rule, which the two
+   names share; a state selector belongs to the screen, not to the alias. */
+.library-screen[data-writable='false'] .manager-more {
   opacity: 0.35;
 }
 

@@ -27,7 +27,9 @@ describe('shareable links', () => {
 
   it('resolves a library folder link, including Chinese names and spaces', () => {
     const route = parseRoute('#/library/%E7%A7%91%E5%B9%BB/%E5%88%98%E6%85%88%E6%AC%A3%20%E4%BD%9C%E5%93%81');
-    expect(route).toEqual({ name: 'library', path: '科幻/刘慈欣 作品', page: 1, fromShelf: false });
+    // The library's browsing half is the default, so the link carries no view
+    // segment — which is what keeps `#/library/<path>` the same URL it always was.
+    expect(route).toEqual({ name: 'library', path: '科幻/刘慈欣 作品', page: 1, view: 'preview', fromShelf: false });
     expect(routeHash(route)).toBe('#/library/%E7%A7%91%E5%B9%BB/%E5%88%98%E6%85%88%E6%AC%A3%20%E4%BD%9C%E5%93%81');
   });
 

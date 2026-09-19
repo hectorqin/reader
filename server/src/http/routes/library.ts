@@ -131,6 +131,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       ...(q.series !== undefined ? { series: q.series } : {}),
       ...(q.tag !== undefined ? { tag: q.tag } : {}),
       ...(q.format !== undefined ? { format: q.format } : {}),
+      ...(q.path !== undefined ? { path: q.path } : {}),
       ...(q.sort !== undefined ? { sort: q.sort as 'title' } : {}),
       ...(q.order !== undefined ? { order: q.order as 'asc' } : {}),
       ...(q.page !== undefined ? { page: Number.parseInt(q.page, 10) || 1 } : {}),

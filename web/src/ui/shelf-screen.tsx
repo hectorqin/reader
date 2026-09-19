@@ -1,12 +1,12 @@
 import { ApiError } from '../api/errors.ts';
 import type { ListQuery, ReaderApi } from '../api/client.ts';
-import type { Book, ContinueReadingItem } from '../api/types.ts';
+import type { Book } from '../api/types.ts';
 import type { OfflineStore } from '../store/offline.ts';
 import type { Platform } from '../core/platform.ts';
 import type { AppSettings, ShelfSort } from '../store/settings.ts';
 import { mountUI } from './mount.ts';
-import { DENSITY_LABELS, ShelfSettingsPanel } from './shelf-settings.tsx';
-import { sortBooks, shelfOrder } from './shelf-order.ts';
+import { DENSITY_LABELS, SHELF_SORTS, ShelfSettingsPanel } from './shelf-settings.tsx';
+import { isLocalSort, shelfOrder, shelfServerSort, sortBooks, type ReadingTimes } from './shelf-order.ts';
 import { Icon, IconButton, IconTextButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useState } from './vendor/preact.ts';
 
@@ -30,14 +30,26 @@ export interface ShelfScreenOptions {
   libraryPage: number;
   onOpenBook(book: Book): void;
   /**
-   * Switches to the library screen, at a folder and page.
+   * Switches to the library screen, at a folder and page — and, by default, on the
+   * *browsing* half of it. See `onOpenLibraryView` for the other half.
    *
-   * Both halves are carried because the library is a *place* the reader was last
-   * in: the path is what makes `#/library/科幻` shareable, and the page is what
-   * makes coming back to the library land where they left it rather than on the
-   * first sixty entries of a folder with four hundred.
+   * Both halves of the location are carried because the library is a *place* the
+   * reader was last in: the path is what makes `#/library/科幻` shareable, and the
+   * page is what makes coming back to the library land where they left it rather
+   * than on the first sixty entries of a folder with four hundred.
    */
   onOpenLibrary(path: string, page: number): void;
+  /**
+   * Switches to the library screen's *file manager*.
+   *
+   * The shelf has one entry point to the library and it used to open the browsing
+   * half, because that was the only half there was. The screen now has two — books
+   * to browse, files to manage (see `LibraryScreen`) — and the shelf's own button
+   * is about *books*, so it opens the preview page. This callback is the other
+   * direction, kept so the two can be switched between without going back to the
+   * shelf first.
+   */
+  onOpenLibraryManager(path: string): void;
   /**
    * Reports the page the reader turned to, so the URL can follow it.
    *
@@ -51,13 +63,43 @@ export interface ShelfScreenOptions {
   onSettingsChange(patch: Partial<AppSettings>): void;
 }
 
-/** Sort options, in the order the sheet shows them. */
-const SORTS: Array<{ value: ShelfSort; label: string }> = [
-  { value: 'updated', label: '最近更新' },
-  { value: 'added', label: '最近入库' },
-  { value: 'title', label: '书名' },
-  { value: 'author', label: '作者' },
-];
+/**
+ * Sort options, in the order the toolbar and the sheet show them.
+ *
+ * The list itself lives beside the settings sheet that offers the same four as a
+ * *default*, because the two are one list: a value in one and not the other is a
+ * setting the reader can store but never select.
+ *
+ * Two of the four are about *time* and they are two different times — when the
+ * reader last read the book, and when the book arrived in the library — which is
+ * exactly the pair that used to be collapsed into "最近更新". 最近阅读 comes first
+ * because it is the default, and a row of chips whose default is buried in the
+ * middle makes the reader hunt for the state they are already in.
+ *
+ * 最近入库 stays. It was very nearly dropped in favour of 最近阅读, and keeping both
+ * is right for a reason the report gives: they answer questions that are asked at
+ * different times. "Where was I" is asked every time the app is opened; "what did
+ * I just put in there" is the question a reader has *after a scan*, which is
+ * precisely when neither 书名 nor 作者 is the sort they want.
+ */
+const SORTS: Array<{ value: ShelfSort; label: string }> = SHELF_SORTS;
+
+/**
+ * How many books a client-side sort fetches.
+ *
+ * `recent` orders the whole shelf by reading time, and it therefore cannot use the
+ * server's pagination — sorting one page and paginating it would be a different
+ * order from "the shelf sorted by recency", which is what the label says. So the
+ * pages are read and stitched here, and this is the ceiling on how many.
+ *
+ * 500 is chosen to match the server's own `pageSize` maximum many times over while
+ * still being one round trip on a LAN: six requests at the documented default of
+ * 200, all issued at once. A library larger than this loses the tail of its
+ * never-opened books from *this one sort* — which is stated in the subtitle rather
+ * than hidden, and is the correct trade against opening a 3000-book shelf by
+ * reading three thousand rows through a phone.
+ */
+const RECENT_WINDOW = 500;
 
 /**
  * Books per page.
@@ -88,7 +130,33 @@ interface ShelfState {
   search: string;
   query: string;
   items: Book[];
-  continueItems: ContinueReadingItem[];
+  /**
+   * When each book was last read, for the 最近阅读 ordering.
+   *
+   * Fetched even when the sort is something else, and not out of laziness: it is
+   * *also* what draws the progress bar on every cover, so the shelf already had
+   * this data and was throwing the timestamps away. Keeping them means the default
+   * sort costs no extra request.
+   */
+  readingTimes: ReadingTimes;
+  /**
+   * Whether `readingTimes` has been filled in at all.
+   *
+   * Distinct from "it is empty", which is true both before the first answer and for
+   * a reader who has never opened a book. Without the distinction the shelf would
+   * paint 最近阅读 with every book tied at zero for one frame and then reorder
+   * itself — the shelf shuffling under the reader's thumb, which is the exact thing
+   * the tie-break in `shelf-order.ts` exists to prevent.
+   */
+  readingTimesLoaded: boolean;
+  /**
+   * How many books the last 最近阅读 sort could not place.
+   *
+   * Non-zero only for a library bigger than `RECENT_WINDOW`, and reported in the
+   * subtitle rather than hidden: a sort that silently drops the books it cannot
+   * order is a shelf with books missing from it.
+   */
+  unsortedTail: number;
   total: number;
   /**
    * True while a page is in flight.
@@ -113,21 +181,6 @@ interface ShelfState {
   bootstrapping: boolean;
   /** Bumped after a mutation so the cached cover URLs re-key, not re-fetch. */
   revision: number;
-}
-
-/**
- * A section label above a row of the shelf.
- *
- * A `<h2>` rather than styled text, because both sections are real landmarks: a
- * screen reader should be able to jump between "继续阅读" and the shelf itself,
- * and the two bands genuinely are different lists.
- */
-function SectionHeading({ label }: { label: string }): JSX.Element {
-  return (
-    <div className="shelf-section-head">
-      <h2 className="shelf-section-title">{label}</h2>
-    </div>
-  );
 }
 
 /**
@@ -232,7 +285,9 @@ export class ShelfScreen {
       search: '',
       query: '',
       items: [],
-      continueItems: [],
+      readingTimes: new Map(),
+      readingTimesLoaded: false,
+      unsortedTail: 0,
       total: 0,
       loading: false,
       status: '',
@@ -254,9 +309,13 @@ export class ShelfScreen {
     await this.options.offline.load();
     const cached = this.options.offline.books();
     if (cached.length > 0) {
-      this.patch({ items: sortBooks(cached, this.sort) });
+      // The cached list is drawn before the first request, and that is also why the
+      // reading times are kicked off here rather than inside `refresh`: the default
+      // sort needs them, and waiting for two round trips to show a list the device
+      // already holds is the wrong trade on a train.
+      this.patch({ items: sortBooks(cached, this.sort, this.state.readingTimes) });
     }
-    await this.refresh();
+    await Promise.all([this.loadReadingTimes(), this.refresh()]);
     // The skeleton is cleared by `refresh` on both paths (success clears it with
     // the first page, failure clears it in `handleError`), so this is only for the
     // case where a screen is disposed mid-flight and never draws again.
@@ -281,17 +340,55 @@ export class ShelfScreen {
   }
 
   /**
-   * Fetches one page of the shelf, plus the "continue reading" row.
+   * The timestamps the 最近阅读 ordering is built from.
    *
-   * Both in one `Promise.all`, because they are two halves of one screen: fetching
-   * them in sequence made the shelf appear and *then* a row appear above it,
-   * pushing everything down under the reader's thumb.
+   * One request for the whole shelf, through the same endpoint the 继续阅读 row used
+   * to be drawn from — so removing that row took nothing off the wire, it only
+   * stopped it drawing a second copy of books that are already on the grid.
+   *
+   * A failure is swallowed into "no times yet" rather than into the status line:
+   * this is a *sort key*, and a reader who cannot reach the continue endpoint can
+   * still read their shelf in every other order. An error banner about an ordering
+   * would be a worse answer than the ordering falling back to the server's.
+   */
+  private async loadReadingTimes(limit = RECENT_WINDOW): Promise<void> {
+    try {
+      const items = await this.options.api.continueReading(limit);
+      const times = new Map<string, number>();
+      for (const item of items) {
+        // `lastReadAt` is null for a progress row that has never been pushed; the
+        // book is then "read at unknown time", which is *not* the same as never
+        // read, and it sorts by the time the row was last written instead.
+        times.set(item.id, item.lastReadAt ?? item.updatedAt ?? 0);
+      }
+      this.patch({ readingTimes: times, readingTimesLoaded: true });
+      // The grid on screen was sorted with the old map, so it is re-sorted now —
+      // otherwise the first paint of a cold start would be in server order and the
+      // second in reading order, which is the shelf shuffling itself.
+      if (isLocalSort(this.sort)) this.patch({ items: sortBooks(this.state.items, this.sort, times) });
+    } catch {
+      // Left unloaded: `refresh` decides what to do about it, because only it knows
+      // what is on screen.
+    }
+  }
+
+  /**
+   * Fetches one page of the shelf.
    *
    * `page` defaults to the page currently shown, so a refresh after a scan lands
    * the reader back where they were rather than on page one. It is a *replacement*,
    * not an append: the infinite scroll this screen used to have appended a chunk
    * and knew nothing about pages, so a list longer than one page grew without
    * bound and Back had nothing to go back *to*.
+   *
+   * ## The two shapes of a sort
+   *
+   * A **server-side** sort pages, because the server is what does the ordering and
+   * its order is therefore a property of the whole result set. A **client-side**
+   * sort (only 最近阅读) cannot: the shelf would be sorting one pageful of sixty and
+   * drawing it under a pager that claims "page 1 of 34", which is a wrong answer to
+   * the question the label asks. So that sort reads a window of the shelf in one
+   * go, sorts it here, and slices its own page out of the result.
    */
   async refresh(page = this.state.page): Promise<void> {
     const requested = page > 0 ? page : 1;
@@ -300,10 +397,11 @@ export class ShelfScreen {
     // can press twice and land two pages away from where they aimed.
     this.patch({ loading: true });
     try {
-      const [result, continueItems] = await Promise.all([
-        this.options.api.listBooks(this.listQuery(requested)),
-        this.options.api.continueReading(10).catch(() => [] as ContinueReadingItem[]),
-      ]);
+      if (isLocalSort(this.sort)) {
+        await this.refreshByRecency(requested);
+        return;
+      }
+      const result = await this.options.api.listBooks(this.listQuery(requested));
       /*
        * A page past the end is clamped *after* the answer, not before the request.
        *
@@ -329,22 +427,101 @@ export class ShelfScreen {
         // by coincidence.
         items: sortBooks(result.items, this.sort),
         total: result.total,
-        continueItems,
+        unsortedTail: 0,
         status: '',
         bootstrapping: false,
         revision: this.state.revision + 1,
       });
-      const scroll = this.scrollRef.current;
-      // Restored after the render, because the list is empty for one tick and a
-      // scroll position with nothing to scroll to is clamped to zero.
-      if (scroll) requestAnimationFrame(() => {
-        scroll.scrollTop = this.lastScrollTop;
-      });
+      this.restoreScroll();
     } catch (err) {
       this.handleError(err);
     } finally {
       this.patch({ loading: false });
     }
+  }
+
+  /**
+   * The 最近阅读 page, assembled from a window of the whole shelf.
+   *
+   * The window is fetched in `PAGE_SIZE`-sized chunks *in parallel*, because the
+   * server's own `pageSize` cap is what it is and because a shelf that opens with
+   * six sequential round trips is a shelf that opens slowly on exactly the network
+   * (a phone, away from home) where the local mirror cannot help.
+   *
+   * The page number the reader asked for is *not* clamped to what the window holds:
+   * the pager for this sort is drawn over the window, so the two always agree, and
+   * clamping against the server's total instead would offer pages of a list that
+   * has been reordered.
+   */
+  private async refreshByRecency(requested: number): Promise<void> {
+    if (!this.state.readingTimesLoaded) await this.loadReadingTimes();
+    const times = this.state.readingTimes;
+
+    const first = await this.options.api.listBooks({ ...this.listQuery(1), pageSize: PAGE_SIZE });
+    const window = Math.min(first.total, RECENT_WINDOW);
+    const chunkCount = Math.max(1, Math.ceil(window / PAGE_SIZE));
+    const rest =
+      chunkCount > 1
+        ? await Promise.all(
+            Array.from({ length: chunkCount - 1 }, (_value, index) =>
+              this.options.api
+                .listBooks({ ...this.listQuery(index + 2), pageSize: PAGE_SIZE })
+                // A chunk that fails is skipped rather than failing the screen: the
+                // shelf is a list, and losing the tail of it is a smaller failure
+                // than losing all of it.
+                .then((page) => page.items)
+                .catch(() => [] as Book[]),
+            ),
+          )
+        : [];
+    const all = [first.items, ...rest].flat();
+
+    /*
+     * The clamp here is against the *window*, and it is applied after the sort.
+     *
+     * A URL can name page nine of a shelf that has shrunk to three, and the answer
+     * is the last real page rather than an empty grid — the same rule the server
+     * sort follows, asked of a different authority. It is reported to the shell so
+     * that Back does not return to the empty page.
+     */
+    const pageCount = Math.max(1, Math.ceil(all.length / PAGE_SIZE));
+    const effective = Math.min(requested, pageCount);
+    if (effective !== requested) {
+      if (this.state.page !== effective) this.options.onPageChange(effective);
+      await this.refresh(effective);
+      return;
+    }
+
+    const sorted = sortBooks(all, 'recent', times);
+    const start = (requested - 1) * PAGE_SIZE;
+    await this.options.offline.replaceBooks(all);
+    this.patch({
+      page: requested,
+      pageCount,
+      items: sorted.slice(start, start + PAGE_SIZE),
+      total: first.total,
+      // How much of the shelf this ordering could not place, for the subtitle. It is
+      // zero for every library that fits the window, which is nearly all of them.
+      unsortedTail: Math.max(0, first.total - all.length),
+      status: '',
+      bootstrapping: false,
+      revision: this.state.revision + 1,
+    });
+    this.restoreScroll();
+  }
+
+  /**
+   * Puts the scroll position back after a render.
+   *
+   * Restored in the next frame, because the list is empty for one tick and a scroll
+   * position with nothing to scroll to is clamped to zero.
+   */
+  private restoreScroll(): void {
+    const scroll = this.scrollRef.current;
+    if (!scroll) return;
+    requestAnimationFrame(() => {
+      scroll.scrollTop = this.lastScrollTop;
+    });
   }
 
   /**
@@ -361,13 +538,24 @@ export class ShelfScreen {
     this.options.onPageChange(target);
   }
 
-  private listQuery(page: number): ListQuery {
+  /**
+   * The request for one page of the shelf.
+   *
+   * `sort` is translated through `shelfServerSort`, which is what keeps 最近阅读 from
+   * being sent to a server that has never heard of it — that ordering is done here,
+   * over a window, and the request it rides on is an `added` page the client is
+   * about to re-sort. Sending the client's own vocabulary would be a 400 the day the
+   * server validates the parameter, and a silently-different order every day before
+   * that.
+   */
+  private listQuery(page: number, pageSize = PAGE_SIZE): ListQuery {
+    const sort = shelfServerSort(this.sort);
     return {
       ...(this.state.query ? { search: this.state.query } : {}),
-      sort: this.sort,
-      order: shelfOrder(this.sort),
+      sort,
+      order: shelfOrder(sort),
       page,
-      pageSize: PAGE_SIZE,
+      pageSize,
     };
   }
 
@@ -461,8 +649,22 @@ export class ShelfScreen {
       if (err.isConnectivity) {
         const cached = this.options.offline.books();
         if (cached.length > 0) {
+          /*
+           * The offline list is a *pageful* of the cached shelf, sliced here.
+           *
+           * The mirror holds whatever has been seen — for the 最近阅读 sort that is
+           * the whole window, and for a server sort it is the pages the reader has
+           * actually visited. Drawing all of it would be showing a list longer than
+           * the one the pager describes, so the same slice is applied as online.
+           */
+          const sorted = sortBooks(cached, this.sort, this.state.readingTimes);
+          const start = isLocalSort(this.sort) ? (this.state.page - 1) * PAGE_SIZE : 0;
+          const items = isLocalSort(this.sort) ? sorted.slice(start, start + PAGE_SIZE) : sorted;
           this.patch({
-            items: sortBooks(cached, this.sort),
+            items,
+            ...(isLocalSort(this.sort)
+              ? { pageCount: Math.max(1, Math.ceil(sorted.length / PAGE_SIZE)) }
+              : {}),
             status: `离线模式 · ${cached.length} 本可读`,
             revision: this.state.revision + 1,
           });
@@ -506,19 +708,28 @@ export class ShelfScreen {
             </p>
           </div>
           <div className="shelf-head-actions">
-            {/* The library's entry point travels with the title rather than
-                sitting in the toolbar: it is a *place*, not a filter, and the
-                toolbar is where the filters are. It carries the folder and page
-                the reader was last in *there*, so switching back and forth is a
-                toggle rather than a reset. */}
+            {/*
+              The library's entry point travels with the title rather than sitting
+              in the toolbar: it is a *place*, not a filter, and the toolbar is where
+              the filters are. It carries the folder and page the reader was last in
+              *there*, so switching back and forth is a toggle rather than a reset.
+
+              The two glyphs are `books` and `tune`, and the pair they replaced —
+              `folder-open` and `gear` — was the reported complaint about this row.
+              See `tools/icons/paths.mjs`: at 18px a folder's four strokes and a
+              gear's twelve teeth are the two densest shapes in the set, and a header
+              that also carries a 24px title cannot afford either. The replacements
+              say the same two things with fewer, longer strokes, and they are drawn
+              to the set's own weight so they do not read as a different family.
+            */}
             <IconButton
               label="书库"
-              icon="folder-open"
+              icon="books"
               onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}
             />
             <IconButton
               label={`书架设置 · ${DENSITY_LABELS[density]}`}
-              icon="gear"
+              icon="tune"
               onClick={() => this.patch({ settingsOpen: !state.settingsOpen })}
             />
           </div>
@@ -552,27 +763,10 @@ export class ShelfScreen {
           ) : null}
         </div>
 
-        {state.continueItems.length > 0 ? (
-          <section className="shelf-section" aria-label="继续阅读">
-            <SectionHeading label="继续阅读" />
-            <div className="continue-row">
-              {state.continueItems.map((item) => (
-                <ContinueCard
-                  key={item.id}
-                  item={item}
-                  revision={state.revision}
-                  api={this.options.api}
-                  onOpen={() => this.options.onOpenBook(item)}
-                />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
         <section className="shelf-section" aria-label={hasQuery ? '搜索结果' : '全部书籍'}>
           <div className="shelf-toolbar">
             {hasQuery || state.total > 0 ? (
-              <span className="shelf-count muted">
+              <span className="shelf-count muted" data-testid="shelf-count">
                 {hasQuery ? `找到 ${state.total} 本` : `共 ${state.total} 本`}
               </span>
             ) : (
@@ -619,10 +813,10 @@ export class ShelfScreen {
                 </p>
                 <div className="empty-actions">
                   <IconTextButton
-                  icon="folder-open"
-                  label="打开书库"
-                  onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}
-                />
+                    icon="books"
+                    label="打开书库"
+                    onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}
+                  />
                   <IconTextButton icon="arrows-rotate" label="刷新" onClick={() => void this.manualRefresh()} />
                 </div>
               </div>
@@ -683,12 +877,22 @@ export class ShelfScreen {
    * count is already known from the local mirror — the one number a reader wants
    * on opening a library is how big it is, and a blank line while the server
    * thinks is a worse answer than a slightly stale one.
+   *
+   * It names the order, now that the order is a *choice* with four answers rather
+   * than an implicit one: a reader who cannot see which of "最近阅读" and "最近入库"
+   * is in effect has no way to tell why a book is where it is. That sentence also
+   * has to be true of the 最近阅读 window, so a library bigger than it says so here
+   * rather than quietly showing a shorter list under a bigger count.
    */
   private subtitle(total: number): string {
-    if (this.settings.shelfSort === 'title' && total > 0) return `按书名排列 · ${total} 本`;
-    if (this.settings.shelfSort === 'author' && total > 0) return `按作者排列 · ${total} 本`;
-    if (this.settings.shelfSort === 'added' && total > 0) return `最近入库 · ${total} 本`;
-    if (total > 0) return `继续上次没读完的 · 共 ${total} 本`;
+    if (total > 0) {
+      const label = SORTS.find((option) => option.value === this.sort)?.label ?? '';
+      const base = this.sort === 'recent' ? `最近阅读 · 共 ${total} 本` : `按${label}排列 · ${total} 本`;
+      if (this.state.unsortedTail > 0) {
+        return `${base}（其中 ${this.state.unsortedTail} 本未参与排序）`;
+      }
+      return base;
+    }
     return '自部署书库';
   }
 
@@ -912,43 +1116,5 @@ function Pager({
         <Icon name="chevron-right" />
       </button>
     </nav>
-  );
-}
-
-function ContinueCard({
-  item,
-  revision,
-  api,
-  onOpen,
-}: {
-  item: ContinueReadingItem;
-  revision: number;
-  api: ReaderApi;
-  onOpen(): void;
-}): JSX.Element {
-  const url = useCoverUrl(api, item.coverUrl, revision);
-  const width = `${Math.round(Math.min(1, Math.max(0, item.percentage)) * 100)}%`;
-  return (
-    <button type="button" className="continue-card" onClick={onOpen}>
-      <div
-        className="cover"
-        style="aspect-ratio:2/3;border-radius:6px;overflow:hidden;background:var(--reader-line);display:grid;place-items:center;"
-      >
-        {url ? (
-          <img src={url} alt="" style="width:100%;height:100%;object-fit:cover;display:block;" />
-        ) : (
-          <div className="placeholder">{item.title.slice(0, 8)}</div>
-        )}
-      </div>
-      <div className="title" style="font-size:.8rem;margin-top:.3rem;">
-        {item.title}
-      </div>
-      <div className="muted" style="font-size:.7rem;">
-        {item.chapterTitle || `${Math.round(item.percentage * 100)}%`}
-      </div>
-      <div className="progress-track">
-        <span style={`width:${width}`} />
-      </div>
-    </button>
   );
 }

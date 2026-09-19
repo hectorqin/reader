@@ -62,7 +62,21 @@ interface Harness {
   transport: FakeTransport;
 }
 
-async function makeScreen(transport: FakeTransport, page = 1): Promise<Harness> {
+/**
+ * Builds the shelf.
+ *
+ * `shelfSort` defaults to `added` here, which is *not* the app's default — the app
+ * opens on 最近阅读. The distinction is the tests' own: 最近阅读 is a client-side order
+ * that reads a window of the shelf and slices its page out of it, so a test about the
+ * *pager's* arithmetic has to pick a sort the server pages for, or it would be
+ * measuring the window logic instead of the pager. The default is asserted on its own,
+ * below.
+ */
+async function makeScreen(
+  transport: FakeTransport,
+  page = 1,
+  sort: 'recent' | 'added' | 'title' | 'author' = 'added',
+): Promise<Harness> {
   const platform = makePlatform(transport);
   const sessions: SessionStore = {
     load: async () => null,
@@ -76,12 +90,13 @@ async function makeScreen(transport: FakeTransport, page = 1): Promise<Harness> 
     api,
     offline: new OfflineStore(platform.kv),
     platform,
-    settings: { ...DEFAULT_APP_SETTINGS },
+    settings: { ...DEFAULT_APP_SETTINGS, shelfSort: sort },
     page,
     libraryPath: '',
     libraryPage: 1,
     onOpenBook: (entry) => calls.push(`book:${entry.id}`),
     onOpenLibrary: (path, target) => calls.push(`library:${path}:${target}`),
+    onOpenLibraryManager: (path) => calls.push(`library-files:${path}`),
     onPageChange: (target) => calls.push(`page:${target}`),
     onSignedOut: () => calls.push('signed-out'),
     onSettingsChange: (patch) => calls.push(`settings:${JSON.stringify(patch)}`),
@@ -230,6 +245,7 @@ describe('the shelf pager', () => {
       libraryPage: 4,
       onOpenBook: () => {},
       onOpenLibrary: (path, target) => calls.push(`${path}:${target}`),
+      onOpenLibraryManager: () => {},
       onPageChange: () => {},
       onSignedOut: () => {},
       onSettingsChange: () => {},
@@ -259,81 +275,106 @@ describe('the shelf pager', () => {
     expect(requestedPages(transport)).toEqual([1]);
   });
 
-  it('opens a continue card through the same book object the shelf uses', async () => {
-    /*
-     * The defect in #40, at the layer the reader touches.
-     *
-     * The server answered `/library/continue` with the *progress row's* naming —
-     * `{ bookId, title, author, percentage, chapterTitle, updatedAt, coverUrl }` —
-     * while the card is typed as `ContinueReadingItem extends Book` and the tap path
-     * reads `book.id`. Nothing failed loudly: `title` and `coverUrl` are spelled the
-     * same in both shapes, so the card drew correctly, and tapping it handed the
-     * shell `{ id: undefined }` — i.e. `#/book/undefined`, which 404s and surfaces as
-     * "这本书不在书架上了".
-     *
-     * The request here is the *real* one (no item field is spelled `bookId`), and the
-     * assertion is on what the tap passes on, because that is the value the shell
-     * routes with. A test that asserted the card *rendered* passed before the fix.
-     */
+  it('offers 最近阅读 first and defaults to it', async () => {
     const transport = new FakeTransport();
-    transport.respondWith((request) => {
-      if (request.url.startsWith('/api/v1/library/continue')) {
-        return { status: 200, headers: {}, json: { items: [{ ...book(1), percentage: 0.4, chapterTitle: '第二章', lastReadAt: Date.now() }] } };
-      }
-      return { status: 200, headers: {}, json: page(0, 0, 0) };
-    });
-    const { screen, calls } = await makeScreen(transport);
+    transport.respondWith((request) =>
+      request.url.startsWith('/api/v1/books')
+        ? { status: 200, headers: {}, json: page(0, 3, 3) }
+        : { status: 200, headers: {}, json: { items: [] } },
+    );
+    // Built with the *app's* default rather than the harness's: this is the one test
+    // that is about which sort the shelf opens on.
+    const { screen } = await makeScreen(transport, 1, 'recent');
     await screen.show();
-    const card = screen.element.querySelector<HTMLElement>('.continue-card');
-    expect(card, 'a continue card must be drawn').toBeTruthy();
-    card!.click();
-    expect(calls).toContain('book:b1');
-    expect(calls).not.toContain('book:undefined');
+    const chips = [...screen.element.querySelectorAll<HTMLElement>('.chip')];
+    // The label order is the order the reader reads, and the default has to be the
+    // first one: a row of chips whose default is buried in the middle makes the
+    // reader hunt for the state they are already in.
+    expect(chips.map((chip) => chip.textContent)).toEqual(['最近阅读', '最近入库', '书名', '作者']);
+    expect(chips[0]!.getAttribute('aria-pressed')).toBe('true');
   });
 
-  it('fills in a missing id from the field the old server sent', async () => {
-    /*
-     * The compatibility direction, and it is deliberate rather than defensive.
-     *
-     * The upstream bug was a *naming* drift between two hand-written types, and the
-     * one thing that made it expensive was that it was silent: a reader on an older
-     * server (or the Android WebView, which caches the client separately from the
-     * API) got a card that drew and a tap that went nowhere, with no error anywhere.
-     * Accepting `bookId` as a synonym means the tap works either way round, so the
-     * fix cannot be half-deployed into a broken state.
-     */
+  it('keeps 最近入库 as a choice, because it answers a different question', async () => {
     const transport = new FakeTransport();
-    transport.respondWith((request) => {
-      if (request.url.startsWith('/api/v1/library/continue')) {
-        return { status: 200, headers: {}, json: { items: [{ bookId: 'legacy-1', title: '旧服务端的书', author: '', percentage: 0.2, chapterTitle: '', updatedAt: 1, coverUrl: null }] } };
-      }
-      return { status: 200, headers: {}, json: page(0, 0, 0) };
-    });
-    const { screen, calls } = await makeScreen(transport);
+    transport.respondWith((request) =>
+      request.url.startsWith('/api/v1/books')
+        ? { status: 200, headers: {}, json: page(0, 3, 3) }
+        : { status: 200, headers: {}, json: { items: [] } },
+    );
+    const { screen, calls } = await makeScreen(transport, 1, 'recent');
     await screen.show();
-    screen.element.querySelector<HTMLElement>('.continue-card')?.click();
-    expect(calls).toContain('book:legacy-1');
+    const chip = [...screen.element.querySelectorAll<HTMLElement>('.chip')].find(
+      (button) => button.textContent === '最近入库',
+    )!;
+    chip.click();
+    await vi.waitFor(() => expect(calls.some((call) => call.startsWith('settings:'))).toBe(true));
+    // "Where was I" is asked every time the app opens; "what did I just add" is asked
+    // after a scan. Collapsing them into one chip would answer neither.
+    expect(calls.some((call) => call.includes('"shelfSort":"added"'))).toBe(true);
+    expect(screen.element.querySelector('.chip[aria-pressed="true"]')?.textContent).toBe('最近入库');
   });
 
-  it('does not draw a card it cannot open', async () => {
+  it('orders the whole shelf by reading time, not by the file list order', async () => {
     /*
-     * And the last line of defence.
+     * The default sort, at the layer that decides it.
      *
-     * A card whose book has no id at all is a card with a dead tap — the exact
-     * symptom reported as "提示书本不在书架上". Dropping it is better than drawing it:
-     * the reader loses one shortcut from a row of many, instead of gaining a control
-     * that lies about being one.
+     * 最近阅读 is a *client-side* order: the server has no reading-time sort, so the
+     * shelf reads a window of books and re-sorts it here. The failure this guards
+     * against is the quiet one — sending the client's own sort word to a server that
+     * does not know it, which answers the default order under the label 最近阅读.
      */
     const transport = new FakeTransport();
     transport.respondWith((request) => {
       if (request.url.startsWith('/api/v1/library/continue')) {
-        return { status: 200, headers: {}, json: { items: [{ title: '没有 id 的书', author: '', percentage: 0.2, chapterTitle: '', coverUrl: null }] } };
+        return {
+          status: 200,
+          headers: {},
+          json: { items: [{ ...book(3), percentage: 0.5, chapterTitle: '第一章', lastReadAt: 900 }] },
+        };
       }
-      return { status: 200, headers: {}, json: page(0, 0, 0) };
+      if (request.url.startsWith('/api/v1/books')) {
+        // Served in `added` order, which is deliberately *not* reading order.
+        return { status: 200, headers: {}, json: page(0, 3, 3) };
+      }
+      return { status: 200, headers: {}, json: {} };
     });
     const { screen } = await makeScreen(transport);
     await screen.show();
+    const titles = [...screen.element.querySelectorAll('.book-card .title')].map((node) => node.textContent);
+    // Book 3 was read and books 1 and 2 never were, so it comes first — and the two
+    // never-opened books keep their relative order at the bottom.
+    expect(titles[0]).toBe(book(3).title);
+    // And the sort word that reached the wire is one the server knows.
+    const sorts = transport.requests
+      .filter((request) => request.url.startsWith('/api/v1/books?'))
+      .map((request) => new URL(`http://x${request.url}`).searchParams.get('sort'));
+    expect(new Set(sorts)).toEqual(new Set(['added']));
+  });
+
+  it('draws no 继续阅读 row above the grid', async () => {
+    /*
+     * The reported defect, as a fact about the screen.
+     *
+     * The row was ten cards duplicating ten of the covers below it. Its data is still
+     * fetched — it is the sort key now — so an assertion that the *request* is gone
+     * would be wrong; what has to be gone is the drawing.
+     */
+    const transport = new FakeTransport();
+    transport.respondWith((request) => {
+      if (request.url.startsWith('/api/v1/library/continue')) {
+        return {
+          status: 200,
+          headers: {},
+          json: { items: [{ ...book(1), percentage: 0.4, chapterTitle: '第二章', lastReadAt: Date.now() }] },
+        };
+      }
+      return { status: 200, headers: {}, json: page(0, 3, 3) };
+    });
+    const { screen } = await makeScreen(transport);
+    await screen.show();
+    expect(screen.element.querySelector('.continue-row')).toBeNull();
     expect(screen.element.querySelector('.continue-card')).toBeNull();
+    expect(screen.element.querySelector('.book-card')).not.toBeNull();
   });
 
   it('goes back to page one when the sort changes', async () => {

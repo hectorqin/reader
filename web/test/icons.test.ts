@@ -320,7 +320,15 @@ describe('the stylesheet', () => {
   it('is applied by every icon button, including the hand-built ones', () => {
     // The glyph has to be `.icon` for any of the above to reach it, and a button that
     // builds its own markup is where that gets forgotten.
-    const sources = ['toolkit.tsx', 'shelf-screen.tsx', 'manager-screen.tsx', 'reader-chrome.tsx', 'shelf-settings.tsx'];
+    const sources = [
+      'toolkit.tsx',
+      'shelf-screen.tsx',
+      'library-screen.tsx',
+      'reader-chrome.tsx',
+      'shelf-settings.tsx',
+      'dialog.tsx',
+      'pager.tsx',
+    ];
     for (const source of sources) {
       const text = readFileSync(join(process.cwd(), 'src/ui', source), 'utf8');
       // A raw `<button className="icon-button">` is the shape that drifts; the primitive

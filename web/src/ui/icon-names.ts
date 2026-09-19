@@ -47,6 +47,8 @@ export const ICON_CODEPOINTS = {
   'font': '\ue925',
   'up-down': '\ue926',
   'gear': '\ue927',
+  'books': '\ue928',
+  'tune': '\ue929',
 } as const;
 
 export type IconName = keyof typeof ICON_CODEPOINTS;

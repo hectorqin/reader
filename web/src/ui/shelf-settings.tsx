@@ -31,6 +31,21 @@ export const DENSITY_LABELS: Record<AppSettings['shelfDensity'], string> = {
   comfortable: '宽松',
 };
 
+/**
+ * The sort choices, shared with the shelf's own toolbar.
+ *
+ * Exported rather than duplicated because the two *are* one list: the sheet picks
+ * the default and the chips pick this session's, and a value that exists in one
+ * and not the other is a setting the reader can store but never select. The order
+ * is the shelf's, so the two controls read the same way round.
+ */
+export const SHELF_SORTS: Array<{ value: AppSettings['shelfSort']; label: string }> = [
+  { value: 'recent', label: '最近阅读' },
+  { value: 'added', label: '最近入库' },
+  { value: 'title', label: '书名' },
+  { value: 'author', label: '作者' },
+];
+
 export interface ShelfSettingsOptions {
   settings: AppSettings;
   onPatch(patch: Partial<AppSettings>): void;
@@ -80,12 +95,7 @@ export function ShelfSettingsPanel({
         <div className="notice">书架上的排序按钮会记住最后一次选择，这里设置的是首次打开时的默认值。</div>
         <Segmented
           label="默认排序"
-          options={[
-            { value: 'updated', label: '最近更新' },
-            { value: 'added', label: '最近入库' },
-            { value: 'title', label: '书名' },
-            { value: 'author', label: '作者' },
-          ]}
+          options={SHELF_SORTS}
           value={settings.shelfSort}
           onChange={(value) => onPatch({ shelfSort: value })}
         />

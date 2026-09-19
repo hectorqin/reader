@@ -128,6 +128,28 @@ export class FakeTransport {
   countMatching(predicate: (request: RecordedRequest) => boolean): number {
     return this.requests.filter(predicate).length;
   }
+
+  /**
+   * A library folder: the file listing, and no books in it.
+   *
+   * The library screen asks two endpoints — `/library/browse` for the rows and
+   * `/books` for the books in the same folder — because it has two pages. A suite
+   * that is about the *file* page has no opinion about the other one, but the other
+   * one still has to answer: a transport that replies `{}` to `/books` makes the
+   * screen read `undefined.items`, which surfaces as "books is not iterable" against
+   * whichever assertion the test was actually making.
+   *
+   * Answering `{ items: [] }` to everything *else* is what keeps a suite about one
+   * endpoint from having to enumerate the others.
+   */
+  respondWithBoth(payload: unknown, status = 200): void {
+    this.respondWith((request) => {
+      const json = request.url.startsWith('/api/v1/books')
+        ? { items: [], total: 0, page: 1, pageSize: 60 }
+        : payload;
+      return { status, headers: {}, json };
+    });
+  }
 }
 
 export interface TestPlatform extends Platform {

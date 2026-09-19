@@ -36,6 +36,18 @@
  * the cost is one `#`.
  */
 
+/**
+ * Which half of the library screen is showing.
+ *
+ * `preview` is a grid of the books in a folder; `files` is the file manager. They
+ * are two pages of *one* route rather than two routes, and the reason is Back: the
+ * switch between them is a tab, and a tab that is its own history entry means Back
+ * walks through the tabs instead of leaving the screen. The hash carries it
+ * instead — `#/library/preview/科幻` — so a link to a folder can say which half of
+ * it the reader meant, and Back still leaves the library.
+ */
+export type LibraryView = 'preview' | 'files';
+
 /** A parsed location. */
 export type Route =
   | {
@@ -53,7 +65,7 @@ export type Route =
       /** The library screen's own page, so the shelf can turn pages at all. */
       page: number;
     }
-  | { name: 'library'; path: string; page: number; fromShelf: boolean }
+  | { name: 'library'; path: string; page: number; view: LibraryView; fromShelf: boolean }
   | { name: 'book'; bookId: string };
 
 /**
@@ -153,29 +165,40 @@ export function parseRoute(hash: string, context?: RouteContext): Route {
   }
   if (head === 'library') {
     /*
-     * A folder *page* is its own segment: `#/library/科幻/2`.
+     * A library URL is `#/library[/<view>][/<folder>…][/<page>]`.
      *
-     * Taking the last numeric segment as a page rather than as a folder name is a
-     * deliberate ambiguity, and it is resolvable because a page is only ever
-     * appended — `routeHash` below is the only place a library URL is built, so the
-     * segment this parser reads is the one it wrote. A folder genuinely named `2`
-     * is reached as `#/library/2`, which has no preceding segment, so it stays a
-     * folder; `#/library/科幻/2` is page two of 科幻, which is what walking into a
-     * folder and turning a page produces.
+     * Three optional parts, and all three are read from the *tail* for the same
+     * reason: a page is a number and a view is one of two known words, so both are
+     * recognisable, and everything left is a folder. That is what makes a folder
+     * genuinely named `preview` reachable as `#/library/files/preview` — the view
+     * segment is only consumed when it is the *first* thing after the route, which
+     * is the position `routeHash` writes it in.
      *
-     * The alternative was a query string (`?page=2`) and it is worse here: the
-     * fragment is already the client's private space (see the note at the top), and
-     * a query inside a fragment is one more encoding rule every consumer has to get
-     * right for a value that is a single integer.
+     * The ambiguity is resolvable for the same reason it always was: `routeHash`
+     * below is the only place a library URL is built, so the segment this parser
+     * reads is the one it wrote. A page is only ever appended; a folder named `2`
+     * is `#/library/2` with no preceding segment; and a view is only ever first.
+     *
+     * The alternative was a query string (`?page=2&view=files`) and it is worse
+     * here: the fragment is already the client's private space (see the note at the
+     * top), and a query inside a fragment is one more encoding rule every consumer
+     * has to get right for a value that is a single integer and one of two words.
      */
     const tail = rest.at(-1) ?? '';
     const isPage = rest.length > 1 && /^\d+$/.test(tail);
-    const segments = (isPage ? rest.slice(0, -1) : rest).map(safeDecode);
+    const withoutPage = isPage ? rest.slice(0, -1) : rest;
+    const head2 = withoutPage[0] ?? '';
+    const isView = head2 === 'preview' || head2 === 'files';
+    const segments = (isView ? withoutPage.slice(1) : withoutPage).map(safeDecode);
     const page = isPage ? Number.parseInt(tail, 10) : 1;
     return {
       name: 'library',
       path: segments.join('/'),
       page: page > 0 ? page : 1,
+      // The preview is the default because it is the *reader's* half: a reader
+      // following a library link almost always means "show me the books in here",
+      // and the file manager is the screen they arrive at deliberately.
+      view: isView ? (head2 as LibraryView) : 'preview',
       fromShelf: context?.fromShelf ?? false,
     };
   }
@@ -218,7 +241,11 @@ export function routeHash(route: Route): string {
       return `#/book/${safeEncode(route.bookId)}`;
     case 'library': {
       const segments = route.path.split('/').filter((segment) => segment.length > 0);
-      const head = segments.length === 0 ? '#/library' : `#/library/${segments.map(safeEncode).join('/')}`;
+      // The view segment is omitted when it is the default, so the two URLs for one
+      // place (`#/library` and `#/library/preview`) cannot both exist and make the
+      // router's equality check see a difference where there is none.
+      const parts = [...(route.view === 'preview' ? [] : [route.view]), ...segments];
+      const head = parts.length === 0 ? '#/library' : `#/library/${parts.map(safeEncode).join('/')}`;
       return route.page > 1 ? `${head}/${route.page}` : head;
     }
   }
@@ -228,7 +255,13 @@ export function routeHash(route: Route): string {
 export function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
   if (a.name === 'book' && b.name === 'book') return a.bookId === b.bookId;
-  if (a.name === 'library' && b.name === 'library') return a.path === b.path && a.page === b.page;
+  if (a.name === 'library' && b.name === 'library') {
+    // The view is *not* part of the identity: switching between the two pages of the
+    // library is one screen changing its own argument, so a repaint for it would
+    // throw away the reader's scroll position for no visible reason. The page and
+    // the path do belong to it, because those are where the reader *is*.
+    return a.path === b.path && a.page === b.page;
+  }
   // The shelf's carried library location is *not* part of its identity: it is what
   // the switch-back control will show, and treating it as a difference would make
   // the router repaint (and reset the scroll position of) the same list.
