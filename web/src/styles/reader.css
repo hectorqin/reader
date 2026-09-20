@@ -1190,7 +1190,7 @@ book-content {
  */
 .search-glyph {
   position: absolute;
-  inset-inline-start: 0.7rem;
+  inset-inline-start: 1.5rem;
   inset-block: 0;
   margin-block: auto;
   /*
