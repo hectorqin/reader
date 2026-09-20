@@ -529,6 +529,47 @@ async function audit(cdp, origin, scenes, results) {
       : '没有找到阅读指示',
   );
 
+  // "reading-indicator 应该是紧贴顶部/底部，并且占用一整行".
+  //
+  // Both halves of that are geometry, and both were wrong: each readout was a paper
+  // pill the width of its own words, floated ~10px inside the edge. A pill ends
+  // wherever the words end, so the chapter name and the page count had two different
+  // right edges, and neither reached the edge of the glass. The row is what makes them
+  // read as something the screen drew rather than as fragments of the page, so it is
+  // asserted as three numbers: full width, flush to its own edge, and one row each.
+  const indicatorRows = await cdp.evaluate(`(() => {
+    const stage = document.querySelector('.stage')?.getBoundingClientRect();
+    const a = document.querySelector('.indicator-chapter')?.getBoundingClientRect();
+    const b = document.querySelector('.indicator-progress')?.getBoundingClientRect();
+    if (!stage || !a || !b) return null;
+    return {
+      width: Math.round(stage.width),
+      chapter: { top: Math.round(a.top), left: Math.round(a.left), width: Math.round(a.width) },
+      progress: { bottom: Math.round(b.bottom), right: Math.round(b.right), width: Math.round(b.width) },
+      viewportBottom: window.innerHeight,
+    };
+  })()`);
+  check(
+    '收起工具栏: 章节名占满一整行并紧贴顶部',
+    indicatorRows !== null &&
+      Math.abs(indicatorRows.chapter.width - indicatorRows.width) <= 1 &&
+      indicatorRows.chapter.top <= 1 &&
+      indicatorRows.chapter.left <= 1,
+    indicatorRows
+      ? `行 ${indicatorRows.chapter.width}px / 屏宽 ${indicatorRows.width}，top=${indicatorRows.chapter.top}`
+      : '没有找到阅读指示',
+  );
+  check(
+    '收起工具栏: 页码占满一整行并紧贴底部',
+    indicatorRows !== null &&
+      Math.abs(indicatorRows.progress.width - indicatorRows.width) <= 1 &&
+      Math.abs(indicatorRows.progress.bottom - indicatorRows.viewportBottom) <= 1 &&
+      indicatorRows.progress.right >= indicatorRows.width - 1,
+    indicatorRows
+      ? `行 ${indicatorRows.progress.width}px / 屏宽 ${indicatorRows.width}，bottom=${indicatorRows.progress.bottom}/${indicatorRows.viewportBottom}`
+      : '没有找到阅读指示',
+  );
+
   // A tap in an outer third pages, and *only* pages.
   //
   // The report is "在点击左右两边时只需要翻页、不需要显示工具栏，只有在中间点击时才需要
@@ -562,6 +603,51 @@ async function audit(cdp, origin, scenes, results) {
   await cdp.sleep(600);
   const afterMiddle = await cdp.evaluate(`document.querySelector('.reader-screen').dataset.chrome`);
   check('点中间切换工具栏', afterMiddle === 'visible', `点击中间后 ${afterMiddle}`);
+
+  // A page turn must not lose the offset it just moved to.
+  //
+  // The report is "虽然有左右翻页的动画，但是动画结束后又有一个重新渲染章节内容并滚动到
+  // 下一页的动画": a slide, then the page jumping to where it was always going. The cause
+  // was the clip on `data-animating` — it sat on `.book-flow`, which *is* the horizontal
+  // scroller in paged mode, so setting the attribute replaced the scroll container with
+  // one that cannot scroll and discarded `scrollLeft`. The animation played over the old
+  // page, and the offset came back a frame after the attribute was cleared.
+  //
+  // Asserted by *holding the attribute* rather than by racing the animation: the offset
+  // has to survive the animating state itself, which is the property, and a timing check
+  // would only catch it on a machine slow enough to observe the wrong frame. The reader
+  // is switched to 翻页 mode first, because that is the mode whose scroller is the flow.
+  // The chrome is visible here — the check just above put it there — so the settings
+  // button is on screen and can be clicked.
+  await cdp.click('button[aria-label="设置"]');
+  await cdp.waitFor('document.querySelector(".panel") !== null');
+  await cdp.clickText('.segmented button', '翻页');
+  await cdp.sleep(300);
+  await cdp.click('button[aria-label="关闭"]');
+  await cdp.sleep(400);
+  const turnKeepsOffset = await cdp.run(`
+    const host = document.querySelector('book-content');
+    const flow = host.shadowRoot.querySelector('.book-flow');
+    if (!flow) return { missing: true };
+    // Move to the second page by the same arithmetic the turn uses, then hold the
+    // animating state the way the turn does and read the offset back.
+    flow.scrollLeft = flow.clientWidth;
+    const target = Math.round(flow.scrollLeft);
+    host.setAttribute('data-animating', 'slide-next-x');
+    const during = Math.round(flow.scrollLeft);
+    const overflow = getComputedStyle(flow).overflow;
+    host.removeAttribute('data-animating');
+    const after = Math.round(flow.scrollLeft);
+    flow.scrollLeft = 0;
+    return { target, during, after, overflow };
+  `);
+  check(
+    '翻页: 动画期间不丢滚动位置（动画后不再跳页）',
+    !turnKeepsOffset.missing && turnKeepsOffset.during === turnKeepsOffset.target && turnKeepsOffset.target > 0,
+    turnKeepsOffset.missing
+      ? '没有找到阅读面'
+      : `目标 ${turnKeepsOffset.target} → 动画中 ${turnKeepsOffset.during} → 动画后 ${turnKeepsOffset.after}，overflow=${turnKeepsOffset.overflow}`,
+  );
 
   for (const scene of scenes) {
     if (scene.openPanel) {

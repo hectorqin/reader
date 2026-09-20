@@ -312,10 +312,43 @@ const FLOW_STYLESHEET = `
  * of the mapping, which keeps the arithmetic out of CSS and the keyframes free of
  * data-mode branching.
  */
-:host([data-animating]) .book-flow {
-  /* The animation is a *page* move, so it is clipped to the page: without this a
-     column that slides in from the right is drawn outside the reading surface for
-     the length of the animation, over the page margin and the rail. */
+/*
+ * The clip, and which element may carry it.
+ *
+ * A page turn is a *page* move, so the translation has to be clipped to the page:
+ * without a clip a column that slides in from the right is drawn outside the reading
+ * surface for the length of the animation, over the page margin and the rail.
+ *
+ * The rule that matters is *which box* gets the clip, because the clip has to land
+ * on a box that is **not** the scroller. 'overflow' is the scroll container: an
+ * 'overflow: clip' on the element the reader scrolls replaces it with a box that
+ * cannot scroll, and a box that cannot scroll has no scroll offset. The turn had
+ * already written the new offset (see ReaderView.stepColumn), so the attribute then
+ * discarded it, the animation played over the *old* page, and the offset reappeared
+ * one frame after data-animating was cleared. That is the reported double move: a
+ * slide, then the page jumping to where it was always supposed to land.
+ *
+ * Which box is the scroller depends on the mode — ReaderView.scroller says so, and
+ * this is the same statement in CSS:
+ *
+ *  - **paged**: the horizontal scroller is .book-flow itself, so the clip goes on
+ *    the *host*, which is only a frame in this mode;
+ *  - **scroll**: the scroller is the host element itself (it is 'book-content' with
+ *    the class 'book-host', and reader.css gives it overflow-y: auto), so the clip
+ *    goes on .book-flow, which is merely tall content here.
+ *
+ * Two rules for one attribute, then, and neither is a special case: each puts the clip
+ * on the box the reader does *not* scroll. The mode comes from data-paginated, which
+ * the host already carries for the column layout — a second attribute saying the same
+ * thing would be a second thing to keep in agreement.
+ */
+:host([data-animating][data-paginated='true']) {
+  /* Not the scroller in paged mode, so it may clip. clip rather than hidden
+     because the host must not become a scroll container of its own. */
+  overflow: clip;
+}
+:host([data-animating]:not([data-paginated='true'])) .book-flow {
+  /* Not the scroller in scroll mode, so *it* may clip. */
   overflow: clip;
 }
 :host([data-animating^='slide']) .book-flow {
