@@ -496,39 +496,68 @@ describe('batch management', () => {
     });
   });
 
-  it('takes books off the shelf only after saying the files are untouched', async () => {
+  it('has no shelf controls at all, on a row or in the batch bar', async () => {
+    /*
+     * #40: 「书库管理页面去掉 从书架拿掉 按钮」.
+     *
+     * The shelf directions used to live here — on the row menu and on the batch bar,
+     * next to 删除 and 移动… Both of those write to the *mount*; a shelf write changes a
+     * `user_books` row and touches no file at all. So 下架 was the one control on the
+     * screen whose consequence did not match the page's promise, in a menu where the
+     * entry beside it deletes the book from disk.
+     *
+     * It answered to the wrong audience as well: this half of the library is the
+     * administrator's (the route is guarded — §3.4.4), while a shelf belongs to each
+     * reader. The two directions now live on the two screens a reader owns: the shelf's
+     * card menu and the browsing page's card (§3.5.2 / §3.5.3).
+     *
+     * This test is the negative half, and it is the one that keeps the button from
+     * growing back: the menu still opens and still offers the disk actions, and neither
+     * it nor the batch bar mentions a shelf in any wording.
+     */
     const transport = new FakeTransport();
-    transport.respondWith((request) =>
-      request.url.includes('/browse/shelf')
-        ? { status: 200, headers: {}, json: { applied: 2, books: ['a', 'b'], failed: [] } }
-        : { status: 200, headers: {}, json: twoBooks() },
-    );
+    transport.respondWithBoth(listing({
+      writable: true,
+      entries: [
+        entry({ name: '在架.epub', path: '在架.epub', scanned: true, indexed: true, shelfState: 'on' }),
+        entry({ name: '下架.epub', path: '下架.epub', scanned: true, indexed: true, shelfState: 'off' }),
+      ],
+    }));
     const { screen } = makeScreen(transport);
     await screen.open('', 1);
-    await selectAll(screen);
-    const shelve = [...screen.element.querySelectorAll('.manager-actions .button')].find(
-      (button) => button.textContent === '下架',
-    ) as HTMLElement;
-    shelve.click();
 
-    // The confirmation has to say the files survive: this is one word away from a
-    // delete in the same bar, and the two mean opposite things.
-    await vi.waitFor(() => expect(screen.element.querySelector('.dialog p')?.textContent).toContain('文件一个都不会动'));
-    const confirm = [...screen.element.querySelectorAll('.dialog-actions .button')].find(
-      (button) => button.textContent === '删除',
-    ) as HTMLElement;
-    confirm.click();
+    (screen.element.querySelector<HTMLElement>('.manager-row .manager-more')!).click();
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).not.toBeNull());
+    const menu = [...screen.element.querySelectorAll<HTMLElement>('.dialog-list .button')].map((b) => b.textContent);
+    expect(menu).toContain('删除');
+    expect(menu).not.toContain('从书架拿掉');
+    expect(menu).not.toContain('放回书架');
+    expect(menu).not.toContain('下架');
+    expect(menu).not.toContain('加入书架');
 
-    await vi.waitFor(() => {
-      expect(transport.requests.some((request) => request.url.endsWith('/browse/shelf'))).toBe(true);
-    });
-    expect(JSON.parse(String(transport.requests.find((r) => r.url.endsWith('/browse/shelf'))!.body))).toEqual({
-      paths: ['卷一.epub', '卷二.epub'],
-      action: 'remove',
-    });
-    // And no delete was ever sent.
-    expect(transport.requests.some((request) => request.url.endsWith('/browse/delete'))).toBe(false);
+    // The dialog answers a promise the screen owns, so it is dismissed the way a
+    // reader dismisses it — by choosing 选择 — which also starts the selection the
+    // batch bar below is asserted on.
+    ([...screen.element.querySelectorAll<HTMLElement>('.dialog-list .button')].find(
+      (button) => button.textContent === '选择',
+    )!).click();
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).toBeNull());
+    // The second row is still unselected, so tick it through the same sheet.
+    (screen.element.querySelector<HTMLElement>('.manager-more')!).click();
+    await vi.waitFor(() => expect(screen.element.querySelector('.dialog-list')).not.toBeNull());
+    ([...screen.element.querySelectorAll<HTMLElement>('.dialog-list .button')].find(
+      (button) => button.textContent === '选择',
+    )!).click();
+    const bar = [...screen.element.querySelectorAll('.manager-actions .button')].map((button) => button.textContent);
+    expect(bar).toContain('删除');
+    expect(bar).not.toContain('下架');
+    expect(bar).not.toContain('加入书架');
+    expect(
+      transport.requests.some((request) => request.url.endsWith('/browse/shelf')),
+      'the file page must not write to a shelf at all',
+    ).toBe(false);
   });
+
 
   it('marks the book that is not on the shelf, and only that one', async () => {
     /*
@@ -540,6 +569,11 @@ describe('batch management', () => {
      * The negative half of the assertion matters as much as the positive: a badge on
      * every row is a column of noise that hides the one row that is the exception, and
      * the exception is the reader's whole reason for being here.
+     *
+     * The badge *survives* the removal of the buttons (#40), and the distinction is the
+     * point: the *write* did not belong on this screen, but the *answer* does. A reader
+     * hunting for a book that is missing from their shelf is standing right here, and
+     * two identical rows would explain nothing.
      */
     const transport = new FakeTransport();
     transport.respondWithBoth(listing({
@@ -562,70 +596,6 @@ describe('batch management', () => {
     expect(badgeOf('文件夹')).toBeUndefined();
   });
 
-  it('offers "放回书架" for a book that is off the shelf, and sends the add', async () => {
-    /*
-     * The reported "需要手动加入" was *half* a bug in the UI and half one in the API.
-     *
-     * The UI half: the row menu answered "从书架拿掉" whatever the book's state, so a
-     * reader looking at a book that was missing from their shelf had no control that
-     * said otherwise — and the batch bar only ever called `remove`. Selecting the book
-     * and looking for "put it back" found nothing.
-     */
-    const transport = new FakeTransport();
-    transport.respondWith((request) =>
-      request.url.includes('/browse/shelf')
-        ? { status: 200, headers: {}, json: { applied: 1, books: ['a'], failed: [] } }
-        : { status: 200, headers: {}, json: listing({
-            writable: true,
-            entries: [entry({ name: '下架.epub', path: '下架.epub', scanned: true, indexed: true, shelfState: 'off' })],
-          }) },
-    );
-    const { screen } = makeScreen(transport);
-    await screen.open('', 1);
-
-    // The row's own menu, which is the single-book path.
-    ([...screen.element.querySelectorAll<HTMLElement>('.manager-row .manager-more')][0]!).click();
-    await vi.waitFor(() => expect(screen.element.querySelector('.dialog')).not.toBeNull());
-    const putBack = [...screen.element.querySelectorAll<HTMLElement>('.dialog-options .button, .dialog button')]
-      .find((button) => button.textContent === '放回书架');
-    expect(putBack, 'a book off the shelf must offer "放回书架"').toBeTruthy();
-    // And it must *not* offer to take it off, which is the action that was there before.
-    const takeOff = [...screen.element.querySelectorAll<HTMLElement>('.dialog button')]
-      .find((button) => button.textContent === '从书架拿掉');
-    expect(takeOff).toBeUndefined();
-    putBack!.click();
-
-    await vi.waitFor(() => {
-      expect(transport.requests.some((request) => request.url.endsWith('/browse/shelf'))).toBe(true);
-    });
-    expect(JSON.parse(String(transport.requests.find((r) => r.url.endsWith('/browse/shelf'))!.body))).toEqual({
-      paths: ['下架.epub'],
-      action: 'add',
-    });
-  });
-
-  it('shows both shelf directions in the batch bar', async () => {
-    /*
-     * The batch bar needs them *both*, unconditionally.
-     *
-     * A selection can hold a mixture — some on the shelf, some off it — and the
-     * reader's intent is "make these match", which has a direction. Hiding one of the
-     * two behind a state check would mean a mixed selection could only be pushed one
-     * way, and the way it could not go is the one the report was about.
-     */
-    const transport = new FakeTransport();
-    transport.respondWithBoth(listing({
-      writable: true,
-      entries: [entry({ name: '下架.epub', path: '下架.epub', scanned: true, indexed: true, shelfState: 'off' })],
-    }));
-    const { screen } = makeScreen(transport);
-    await screen.open('', 1);
-    await selectAll(screen);
-    const labels = [...screen.element.querySelectorAll('.manager-actions .button')].map((button) => button.textContent);
-    expect(labels).toContain('下架');
-    expect(labels).toContain('加入书架');
-  });
-
   it('keeps the form actions out of the fields-scan scroller', async () => {
     const transport = new FakeTransport();
     transport.json(twoBooks());
@@ -645,32 +615,6 @@ describe('batch management', () => {
     const actions = screen.element.querySelector('.dialog-actions')!;
     expect(fields.contains(actions)).toBe(false);
     expect(fields.querySelectorAll('.dialog-field')).toHaveLength(7);
-  });
-
-  it('would rather say nothing than guess when a path is not a book', async () => {
-    const transport = new FakeTransport();
-    transport.respondWith(
-      withEmptyBooks((request) =>
-        request.url.includes('/browse/shelf')
-          ? { status: 200, headers: {}, json: { applied: 0, books: [], failed: [{ path: '空目录', reason: 'NOT_A_BOOK' }] } }
-          : { status: 200, headers: {}, json: listing({ entries: [entry({ name: '空目录', type: 'dir', path: '空目录' })], writable: true }) },
-      ),
-    );
-    const { screen } = makeScreen(transport);
-    await screen.open('', 1);
-    await selectAll(screen);
-    const shelve = [...screen.element.querySelectorAll('.manager-actions .button')].find(
-      (button) => button.textContent === '下架',
-    ) as HTMLElement;
-    shelve.click();
-    await vi.waitFor(() => expect(screen.element.querySelector('.dialog-actions')).not.toBeNull());
-    ([...screen.element.querySelectorAll('.dialog-actions .button')].find(
-      (button) => button.textContent === '删除',
-    ) as HTMLElement).click();
-
-    await vi.waitFor(() => {
-      expect(screen.element.querySelector('.manager-status')?.textContent).toContain('不是书');
-    });
   });
 });
 

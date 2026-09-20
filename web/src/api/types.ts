@@ -60,6 +60,19 @@ export interface Book {
    * the sort falls back to `updatedAt`.
    */
   addedAt?: number;
+  /**
+   * Whether *this* account's shelf holds the book.
+   *
+   * Present only when the list was asked for in **library** scope (`scope=library`,
+   * which is what the browsing page asks): on the shelf every row is on the shelf by
+   * definition, so the server leaves the field out rather than sending a constant the
+   * client would eventually draw.
+   *
+   * It is what makes 「加入书架」 a statement about the book in front of the reader —
+   * the browsing page's cards are drawn from the *index*, and whether each one is
+   * already on the shelf is the one thing that decides whether it gets a control.
+   */
+  shelfState?: 'on' | 'off';
 }
 
 export interface BookListPage {

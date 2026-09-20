@@ -68,6 +68,15 @@ export interface ListQuery {
    * are different questions (see `library-screen.tsx`).
    */
   path?: string;
+  /**
+   * Which set to list: the reader's shelf (default), or the library's index.
+   *
+   * `scope: 'library'` answers "what is in this folder" — every indexed book, each
+   * carrying `shelfState` — instead of "what is on my shelf". The browsing page is
+   * the only caller: it is the page that has to show a book the reader has *not*
+   * shelved, in order to offer to shelve it.
+   */
+  scope?: 'shelf' | 'library';
   page?: number;
   pageSize?: number;
 }
@@ -390,13 +399,25 @@ export class ReaderApi {
    * Nothing on disk changes. Kept a separate call from move/delete because the
    * two are one word apart in a list of rows and could not be more different in
    * consequence.
+   *
+   * **Two ways to name the target, and the caller must pick one.** The file
+   * manager has *paths* (that is what a row is), and a shelf card has a *book id*
+   * (that is what a card is).
+   *
+   * The `bookIds` form is the fix for 「从书架移除时，找不到「xxx」在磁盘上的路径」.
+   * The shelf used to send paths it had reconstructed by matching a book's *title*
+   * against filenames in the library root — a guess that fails whenever the
+   * metadata title is not the filename (which is the normal case for anything the
+   * scanner read a title out of) and whenever the file is in a subfolder or past
+   * the first page. The server has the real mapping in `book_files`, so the card
+   * sends the id it already holds and no title has to match anything.
    */
   async browseBatchShelf(
-    paths: string[],
+    target: { paths: string[] } | { bookIds: string[] },
     action: ShelfAction,
     options: RequestOptions = {},
   ): Promise<BatchResult> {
-    return this.call('/api/v1/library/browse/shelf', 'POST', { paths, action }, options);
+    return this.call('/api/v1/library/browse/shelf', 'POST', { ...target, action }, options);
   }
 
   /** Whether the mount accepts an upload at all; asked before sending bytes. */

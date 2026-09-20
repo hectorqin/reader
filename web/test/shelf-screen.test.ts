@@ -484,18 +484,26 @@ describe('taking a book off the shelf', () => {
     [...screen.element.querySelectorAll<HTMLElement>('.dialog-list button')][0]!.click();
     await vi.waitFor(() => expect(screen.element.textContent).toContain('取消'));
     [...screen.element.querySelectorAll<HTMLElement>('.dialog-actions button')].at(-1)!.click();
-    await vi.waitFor(() => expect(screen.element.textContent).toContain('下架 1 本'));
+    // The report is the reader's words: the menu item was 「从书架拿掉」, and a status
+    // line answering 「下架 1 本」 would be a second name for the thing they just pressed.
+    await vi.waitFor(() => expect(screen.element.textContent).toContain('从书架拿掉 1 本'));
     expect(offline.books().map((entry) => entry.id)).not.toContain('b1');
   });
 
-  it('writes the file path the card stands for, not the book id', async () => {
+  it('writes the book id the card holds, and never guesses a path', async () => {
     /*
-     * The join, at the only place it can go wrong.
+     * The write names the book by **id**, and that is the fix for the second half of
+     * 「找不到「xxx」在磁盘上的路径」.
      *
-     * A card knows a `Book`: an id, a title, and the `source` the scanner recorded.
-     * The endpoint takes *library paths*. Sending the id would be a 400 the reader
-     * reads as "the button is broken", and the two are only connectable through the
-     * file listing — which is why the shelf fetches it.
+     * The card used to reconstruct a library path by listing the root and matching the
+     * book's title against the filenames it found. That only lands when a book's title
+     * is its own filename — false for anything whose metadata the scanner read — and
+     * cannot see past the root's first page. When it missed, the reader was told the
+     * book could not be found on disk, *after* asking for it to be taken off their own
+     * shelf: a place where the file's name has no bearing on anything.
+     *
+     * So the assertion is not just "a request went out" but "the request carries the id,
+     * and no directory listing was consulted to produce it".
      */
     const transport = new FakeTransport();
     serveShelf(transport, [book(1)]);
@@ -516,9 +524,56 @@ describe('taking a book off the shelf', () => {
     );
     const payload = JSON.parse(
       String(transport.requests.find((request) => request.url.includes('/browse/shelf'))!.body),
-    ) as { paths: string[]; action: string };
+    ) as { paths?: string[]; bookIds?: string[]; action: string };
     expect(payload.action).toBe('remove');
-    expect(payload.paths).toEqual(['第1卷.epub']);
+    expect(payload.bookIds).toEqual(['b1']);
+    // No path, and no listing to make one from: the reader presses a card, not a file.
+    expect(payload.paths).toBeUndefined();
+    expect(
+      transport.requests.some(
+        (request) => request.url.startsWith('/api/v1/library/browse') && request.url.includes('page='),
+      ),
+      'the shelf must not look the book up on disk in order to take it off the shelf',
+    ).toBe(false);
+  });
+
+  it('takes a book off the shelf even when its title is nothing like its filename', async () => {
+    /*
+     * The exact report: a book whose metadata title is a long sentence (the scanner
+     * reads it out of the file) and whose name on disk is something else entirely.
+     *
+     * Under the old join this was the normal case *failing*: `findEntry` matched the
+     * title's stem against the listing and found nothing, so the removal answered
+     * 「找不到「半小时漫画宇宙大爆炸（半小时读完138亿年宇宙史，一口气搞懂大爆炸、奇点、黑洞、
+     * 引力波、暗物质……混子哥陈磊新作！）」在磁盘上的路径」 — a sentence about a book the
+     * reader was looking at. The id form cannot fail this way, and this asserts it
+     * through the same path a reader would: open the menu, confirm, check the body.
+     */
+    const transport = new FakeTransport();
+    const longTitled: Book = {
+      ...book(1),
+      id: 'b-long',
+      title: '半小时漫画宇宙大爆炸（半小时读完138亿年宇宙史，一口气搞懂大爆炸、奇点、黑洞、引力波、暗物质……混子哥陈磊新作！）',
+      source: 'half-hour-universe',
+    };
+    serveShelf(transport, [longTitled]);
+    const { screen } = await makeScreen(transport);
+    await screen.show();
+    screen.element.querySelector<HTMLElement>(`[aria-label="${longTitled.title} 的操作"]`)!.click();
+    [...screen.element.querySelectorAll<HTMLElement>('button')]
+      .find((button) => button.textContent?.trim() === '从书架拿掉')!
+      .click();
+    await vi.waitFor(() => expect(screen.element.textContent).toContain('取消'));
+    [...screen.element.querySelectorAll<HTMLElement>('.dialog-actions button')].at(-1)!.click();
+    await vi.waitFor(() =>
+      expect(transport.requests.some((request) => request.url.includes('/browse/shelf'))).toBe(true),
+    );
+    const payload = JSON.parse(
+      String(transport.requests.find((request) => request.url.includes('/browse/shelf'))!.body),
+    ) as { bookIds?: string[]; action: string };
+    expect(payload.bookIds).toEqual(['b-long']);
+    // And nothing was reported as unfindable.
+    expect(screen.element.textContent).not.toContain('找不到');
   });
 
   it('drops the book from the list it just wrote about', async () => {

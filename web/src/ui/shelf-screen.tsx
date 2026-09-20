@@ -8,7 +8,7 @@ import { mountUI } from './mount.ts';
 import { DialogView, type Dialog, type DialogAnswer } from './dialog.tsx';
 import { DENSITY_LABELS, SHELF_SORTS, ShelfSettingsPanel } from './shelf-settings.tsx';
 import { isLocalSort, shelfOrder, shelfServerSort, sortBooks, type ReadingTimes } from './shelf-order.ts';
-import { describeShelfAction, entriesByName, findEntry } from './shelf-membership.ts';
+import { describeShelfAction } from './shelf-membership.ts';
 import { Icon, IconButton, IconTextButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useState } from './vendor/preact.ts';
 
@@ -729,13 +729,19 @@ export class ShelfScreen {
    * folder and finding a file in order to drop one book is the shape of a missing
    * control, not of a control that lives somewhere else.
    *
-   * ## Why the path has to be looked up
+   * ## Why the write carries the book id, not a path
    *
-   * A card knows a `Book` — an id, a title, and the `source` the scanner recorded — and
-   * the endpoint takes *library paths*. The two are joined by the file listing, which is
-   * why the removal reads one directory rather than trusting the book's title: a book
-   * whose metadata was edited by hand no longer matches its own filename, and
-   * `findEntry` is the one implementation of that join (see `shelf-membership.ts`).
+   * The card holds a `Book` — an id and whatever the scanner recorded — and it used to
+   * turn that into a path by listing the library root and matching the title against
+   * filenames. That guess is the bug this replaced: it only works when a book's title
+   * is its filename, which is false for anything the scanner read a title out of, and
+   * it cannot see past the root's first page at all. When it missed, the reader was
+   * told the book could not be found on disk — after asking for it to be taken off
+   * their own shelf, a place the file's name has nothing to do with.
+   *
+   * The server has the real mapping (`book_files.book_id` → path), so the id goes in
+   * the request and there is nothing left to guess. Who owns the *confirmation* does
+   * not change: the dialog is still asked before the write.
    *
    * ## Why it asks
    *
@@ -746,14 +752,6 @@ export class ShelfScreen {
    */
   private async removeBook(book: Book): Promise<void> {
     if (this.state.busy) return;
-    // Asked for *first*, and before the confirmation: the two dialogs answer different
-    // questions, and a reader who confirms a removal the screen cannot perform would be
-    // told "找不到路径" after saying yes to something that looked possible.
-    const path = await this.pathFor(book);
-    if (path === null) {
-      this.setStatus(`找不到「${book.title}」在磁盘上的路径`);
-      return;
-    }
     const ok = await this.confirm(
       `把「${book.title}」从书架拿掉？`,
       '只是从你的书架上拿掉，磁盘上的文件一个都不会动，随时可以放回来。',
@@ -761,7 +759,7 @@ export class ShelfScreen {
     if (!ok) return;
     this.patch({ busy: true });
     try {
-      const result = await this.options.api.browseBatchShelf([path], 'remove');
+      const result = await this.options.api.browseBatchShelf({ bookIds: [book.id] }, 'remove');
       // The message outlives the refresh: the reload's own status is the directory
       // summary, and a summary is not an answer to "did the book move".
       const report = describeShelfAction('remove', result);
@@ -790,30 +788,6 @@ export class ShelfScreen {
       this.handleError(err);
     } finally {
       this.patch({ busy: false });
-    }
-  }
-
-  /**
-   * The library path a card stands for, or `null` when this screen cannot name it.
-   *
-   * The listing is fetched on the press rather than kept in state, because the shelf
-   * has no other use for it: the grid draws books, and holding a directory listing to
-   * serve one context action would be a copy of the library screen's state that nothing
-   * keeps current.
-   *
-   * The book's own folder is not known either — `BookDto` has no path — so the root is
-   * what is asked for and the entries are matched on the stems of the names the scanner
-   * could have recorded. A book on a later page of the root is reported rather than
-   * guessed at, which is the same trade the browsing page makes for its own card
-   * control: no control that reports "找不到路径" is better than one that lies.
-   */
-  private async pathFor(book: Book): Promise<string | null> {
-    try {
-      const listing = await this.options.api.browse('', 1);
-      return findEntry(entriesByName(listing.entries), book)?.path ?? null;
-    } catch (err) {
-      if (err instanceof ApiError && err.isAuthFailure) this.options.onSignedOut();
-      return null;
     }
   }
 

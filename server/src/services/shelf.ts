@@ -38,12 +38,27 @@ export interface BookDto {
    * order change the moment a phone lost its connection.
    */
   addedAt: number;
+  /**
+   * Whether *this account's* shelf holds the book.
+   *
+   * Only answered when the caller asked for the **library** rather than the shelf
+   * (`scope: 'library'`, which is what the library's browsing page asks for): on the
+   * shelf the answer is "on" for every row by construction, and a field that is
+   * always true is a field a client will eventually draw.
+   *
+   * It exists because the browsing page could describe a *folder* and not the
+   * reader's relationship to it, so the one screen whose job is "here is what is in
+   * the library, add it to your shelf" could not say which of the two a card was.
+   */
+  shelfState?: 'on' | 'off';
 }
 
 interface BookRow {
   id: string;
   /** `user_books.added_at`; selected alongside the book's own columns. */
   added_at?: number;
+  /** `user_books.hidden`, or `null` when there is no row at all. */
+  shelf_hidden?: number | null;
   identifier: string | null;
   content_hash: string;
   format: string;
@@ -90,6 +105,16 @@ export interface ListOptions {
    * every book whose cover lives inside its own archive.
    */
   path?: string;
+  /**
+   * Which set to list: the reader's shelf, or the library's index.
+   *
+   * The shelf is the default and the only thing the shelf screen ever wants. The
+   * library is what the browsing page asks for — every indexed book inside a folder,
+   * with `BookDto.shelfState` saying whether this account has it — which is the only
+   * way a page whose purpose is 「把这本书加入书架」 can be shown a book that is not
+   * on the shelf yet.
+   */
+  scope?: 'shelf' | 'library';
   page?: number;
   pageSize?: number;
 }
@@ -117,8 +142,33 @@ export class ShelfService {
   list(userId: string, options: ListOptions = {}): { items: BookDto[]; total: number; page: number; pageSize: number } {
     const page = Math.max(1, options.page ?? 1);
     const pageSize = Math.min(200, Math.max(1, options.pageSize ?? 50));
-    const where: string[] = ['ub.user_id = ?', 'ub.hidden = 0', 'EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)'];
-    const params: Array<string | number> = [userId];
+    /*
+     * Two scopes, and the difference is *which set* the reader is asking about.
+     *
+     *  - **`shelf`** (the default) is "what can I read": a `user_books` row that is
+     *    not hidden, and a live file behind it.
+     *  - **`library`** is "what is in the folder": every indexed book with a live
+     *    file, whether or not this account has it on their shelf, each row carrying
+     *    `shelfState`.
+     *
+     * `library` exists because the browsing page could only ever list books that
+     * were *already* on the shelf — it read this same endpoint — so its 「加入书架」
+     * control was drawn from a set that could not contain an off-shelf book, i.e.
+     * the one action the page exists for could never appear. Reading the index
+     * instead is what makes "这个文件夹里的书" true of the folder rather than of the
+     * reader's shelf.
+     *
+     * The `user_books` join is a `LEFT JOIN` in that scope rather than no join at
+     * all: `added_at` is the 最近入库 sort key and `hidden` is the flag behind
+     * `shelfState`, and a *missing* row and a `hidden = 1` row are the same answer
+     * to the reader ("not on my shelf") arriving by two different routes.
+     */
+    const scope = options.scope ?? 'shelf';
+    const library = scope === 'library';
+    const where: string[] = library
+      ? ['EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)']
+      : ['ub.user_id = ?', 'ub.hidden = 0', 'EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)'];
+    const params: Array<string | number> = library ? [] : [userId];
 
     if (options.search) {
       where.push('(b.title LIKE ? OR b.author LIKE ? OR b.series LIKE ? OR b.isbn = ?)');
@@ -173,19 +223,38 @@ export class ShelfService {
     }[options.sort ?? 'added'];
     const order = options.order === 'asc' ? 'ASC' : 'DESC';
     const whereSql = where.join(' AND ');
+    /*
+     * Sorting by `added` in library scope sorts on `ub.added_at`, which is `NULL` for a
+     * book the reader has no `user_books` row for — and that is the right order:
+     * `NULL` is the smallest value, so `DESC` puts the never-shelved books *last*,
+     * which is the honest place for a book that has never been 「入库」 for this reader.
+     * `BookDto.addedAt` still falls back to the book's own timestamp so the field is
+     * never zero, but the *order* is the shelf's, not the file's.
+     */
+    const orderColumn = sortColumn;
+    const join = library
+      ? 'LEFT JOIN user_books ub ON ub.book_id = b.id AND ub.user_id = ?'
+      : 'JOIN user_books ub ON ub.book_id = b.id';
+    const joinParams: Array<string | number> = library ? [userId] : [];
+    /*
+     * `hidden` is selected only in library scope: on the shelf every row is
+     * `hidden = 0` by construction, and a selected constant would become a field the
+     * client reads as if it could say something.
+     */
+    const shelfColumn = library ? ', ub.hidden AS shelf_hidden' : '';
 
     const totalRow = this.db.get<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM books b JOIN user_books ub ON ub.book_id = b.id WHERE ${whereSql}`,
-      ...params,
+      `SELECT COUNT(*) AS n FROM books b ${join} WHERE ${whereSql}`,
+      ...joinParams, ...params,
     );
 
     const rows = this.db.all<BookRow>(
-      `SELECT ${BOOK_COLUMNS.split(',').map((c) => `b.${c.trim()}`).join(', ')}, ub.added_at
-       FROM books b JOIN user_books ub ON ub.book_id = b.id
+      `SELECT ${BOOK_COLUMNS.split(',').map((c) => `b.${c.trim()}`).join(', ')}, ub.added_at${shelfColumn}
+       FROM books b ${join}
        WHERE ${whereSql}
-       ORDER BY ${sortColumn} ${order}, b.title ASC
+       ORDER BY ${orderColumn} ${order}, b.title ASC
        LIMIT ? OFFSET ?`,
-      ...params, pageSize, (page - 1) * pageSize,
+      ...joinParams, ...params, pageSize, (page - 1) * pageSize,
     );
 
     return { items: rows.map((row) => this.toDto(row)), total: totalRow?.n ?? 0, page, pageSize };
@@ -278,6 +347,13 @@ export class ShelfService {
       // join, so the fallback is the book's own timestamp rather than 0 — a zero
       // would sort every such book to the bottom of "最近入库".
       addedAt: row.added_at ?? row.updated_at,
+      // Present only when a projection actually selected `shelf_hidden`: a `null`
+      // flag (no row) and a `1` (a row written by `remove`) are both "off", and
+      // *omitting* the field on the shelf's own list is what keeps "always on"
+      // from being drawn.
+      ...(row.shelf_hidden === undefined
+        ? {}
+        : { shelfState: row.shelf_hidden === 0 ? ('on' as const) : ('off' as const) }),
     };
   }
 

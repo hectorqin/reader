@@ -1,6 +1,6 @@
 import { ApiError } from '../api/errors.ts';
 import type { ReaderApi } from '../api/client.ts';
-import type { Book, BrowseEntry, BrowseListing, ShelfAction } from '../api/types.ts';
+import type { Book, BrowseEntry, BrowseListing } from '../api/types.ts';
 import type { OfflineStore } from '../store/offline.ts';
 import type { AppSettings } from '../store/settings.ts';
 import { formatBytes, formatDate } from './dom.ts';
@@ -9,12 +9,7 @@ import { DialogView, METADATA_FIELDS, type Dialog, type DialogAnswer } from './d
 import { Pager } from './pager.tsx';
 import { ShelfSettingsPanel } from './shelf-settings.tsx';
 import { sortBooks } from './shelf-order.ts';
-import {
-  describeShelfAction,
-  entriesByName,
-  findEntry,
-  SHELF_ACTION_LABELS,
-} from './shelf-membership.ts';
+import { describeShelfAction, SHELF_ACTION_LABELS } from './shelf-membership.ts';
 import { Button, Icon, IconButton, IconTextButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useRef, useState } from './vendor/preact.ts';
 
@@ -252,15 +247,23 @@ export class LibraryBrowseScreen {
     if (!this.state.status) this.draw();
     this.draw();
     try {
-      // Both in one `Promise.all`, because they are two halves of one folder: the
-      // file listing is what names the *files*, and the book listing is what the grid
-      // needs. The join between the two is what makes 加入书架 possible at all (see
-      // `shelvableTitles`), so the listing is fetched even though a shop shows no rows.
+      /*
+       * Both in one `Promise.all`, because they are two halves of one folder.
+       *
+       * The book list is what the grid draws. The file listing is fetched for the
+       * *other* half of the library — the header's counts, the empty state's "N 个文件里
+       * 没有被扫描成书的" — and it is no longer needed to make 加入书架 possible: that
+       * write carries a book id, so this page never has to reconstruct a path from a
+       * filename.
+       */
       const [listing, books] = await Promise.all([
         this.options.api.browse(path, 1),
         this.options.api
           .listBooks({
             path,
+            // The *index*, not the reader's shelf. A shop that only showed books the
+            // reader already owns would be a shop with nothing to add.
+            scope: 'library',
             ...(this.state.query ? { search: this.state.query } : {}),
             page: this.state.page,
             pageSize: BOOK_PAGE_SIZE,
@@ -326,52 +329,52 @@ export class LibraryBrowseScreen {
   }
 
   /**
-   * *Can this book be shelved from here* — and the count for the line above the grid.
+   * The books on this page that are **not** on the reader's shelf.
    *
-   * The question is deliberately not "is this book on the shelf", and the difference
-   * is the whole reason this is one function rather than a set membership test at the
-   * card. The endpoint takes **paths**, and a book DTO has no path: the file the book
-   * lives in is only knowable from the browse listing, which is *paged*. So on page
-   * two of a folder, a book whose file is on page one cannot be shelved from here —
-   * and the honest answer is to draw no control, rather than a control that reports
-   * "找不到这些书在磁盘上的路径" when it is pressed.
+   * ## Why this is a set of ids rather than a set of titles
    *
-   * Three states come out of this and the card reads all three:
+   * This used to answer the question by joining each book onto the *file listing*,
+   * because the endpoint took paths and a book had none: the two were connected by
+   * matching the book's title against the filenames in the folder. That join is a
+   * guess, and it is the bug #40 reported twice over:
    *
-   *  - **file here, `shelfState: 'on'`** → nothing to do, no control;
-   *  - **file here, `shelfState: 'off'`** → 加入书架, which is the page's whole point;
-   *  - **file not on this page** → no control, because this page cannot name it.
+   *  - it only lands when a book's title happens to be its filename, which is false
+   *    for anything the scanner read a title out of;
+   *  - the listing is *paged*, so a book whose file was not on this page reported no
+   *    path at all — and a card that cannot name its file got no control, which is
+   *    why this library could hold a book and offer no way to shelve it.
    *
-   * The count is of the second group, from the page the reader is looking at: a line
-   * that counted the *folder* would disagree with the badges under it.
+   * The server knows which book is in which file, so the write carries the **book
+   * id** now and the join is gone. That also removes the `'off'`-is-only-knowable-for-
+   * files-on-this-page state: `scope=library` marks every book with `shelfState`,
+   * whether or not its file landed on the listing's first page.
+   *
+   * ## The count and the control are one set
+   *
+   * `offShelf` is the size of exactly this set, and the line above the grid and the
+   * badges below it are drawn from the same answer. The alternative — a line that
+   * counted the *folder* — is a sentence that disagrees with the thing under it.
    */
-  private shelvableTitles(): Set<string> {
-    const byName = entriesByName(this.state.listing?.entries ?? []);
-    const shelvable = new Set<string>();
+  private offShelfIds(): Set<string> {
+    const offShelf = new Set<string>();
     for (const book of this.state.books) {
-      const entry = findEntry(byName, book);
-      // `'on'` and `null` are both "nothing to offer": the first is already on the
-      // shelf, and the second is a file the server does not index as a book — a page
-      // image, a stray `.nfo` — which the shelf endpoint would refuse anyway.
-      if (entry?.shelfState === 'off') shelvable.add(book.title);
+      // Only `'off'` gets a control. `'on'` is already there, and `undefined` is a
+      // client talking to a server that predates the field — in which case offering
+      // the button would be offering a write whose answer nobody can predict.
+      if (book.shelfState === 'off') offShelf.add(book.id);
     }
-    this.state.offShelf = shelvable.size;
-    return shelvable;
-  }
-
-  private shelvePaths(books: Book[]): string[] {
-    const byName = entriesByName(this.state.listing?.entries ?? []);
-    return [...new Set(books.map((book) => findEntry(byName, book)?.path).filter((path): path is string => !!path))];
+    this.state.offShelf = offShelf.size;
+    return offShelf;
   }
 
   private async shelveBooks(books: Book[]): Promise<void> {
-    const paths = this.shelvePaths(books);
-    if (paths.length === 0 || this.state.busy) return;
+    const ids = [...new Set(books.map((book) => book.id))];
+    if (ids.length === 0 || this.state.busy) return;
     this.state.busy = true;
     this.state.status = `${SHELF_ACTION_LABELS.add}…`;
     this.draw();
     try {
-      const result = await this.options.api.browseBatchShelf(paths, 'add');
+      const result = await this.options.api.browseBatchShelf({ bookIds: ids }, 'add');
       this.outcome = describeShelfAction('add', result);
       // Read the folder back *before* the report is shown, in the same `try`: the
       // control on the card is drawn from `shelfState`, and a page that keeps offering
@@ -596,7 +599,7 @@ export class LibraryBrowseScreen {
         </div>
       );
     }
-    const shelvable = this.shelvableTitles();
+    const offShelf = this.offShelfIds();
     return (
       <>
         <div className="library-preview-hint muted">
@@ -616,7 +619,7 @@ export class LibraryBrowseScreen {
               api={this.options.api}
               progress={this.options.offline.progressFor(book.id)}
               onOpen={() => this.options.onOpenBook(book)}
-              {...(shelvable.has(book.title) ? { onShelve: () => void this.shelveBooks([book]) } : {})}
+              {...(offShelf.has(book.id) ? { onShelve: () => void this.shelveBooks([book]) } : {})}
             />
           ))}
         </div>
@@ -789,28 +792,34 @@ export class LibraryFilesScreen {
     if (entry.type === 'dir') this.openFolder(entry.path);
   }
 
+  /**
+   * One row's actions.
+   *
+   * ## Why the shelf actions are not here
+   *
+   * They used to be: the menu offered 「从书架拿掉」/「放回书架」 per the row's
+   * `shelfState`, and the batch bar offered both. #40 asked for the removal button to
+   * go, and the reason holds beyond personal taste — **this page writes to the disk,
+   * and shelf membership is not a disk fact.**
+   *
+   * Every other entry in this list (重命名, 移动, 删除, 改资料, 上传) changes what is on
+   * the mount. 「从书架拿掉」 changes a row in `user_books` and touches no file, so it was
+   * the one control here whose consequence did not match the page's promise, in a menu
+   * where the entry next to it deletes the book from disk.
+   *
+   * It is also the wrong *audience*: this screen is the administrator's (the route is
+   * guarded — §3.4.4), and a shelf is a per-reader thing. The reader's own directions
+   * belong on the two screens the reader owns: the shelf's card menu (§3.5.2) and the
+   * browsing page's card, which is where a book that is not on the shelf can be added.
+   */
   private async openEntryMenu(entry: BrowseEntry): Promise<void> {
     if (!this.writable) {
       this.toast('书库是只读挂载，无法修改');
       return;
     }
-    /*
-     * The shelf entry names the action that applies to *this* book.
-     *
-     * `shelfState` is `'on'`, `'off'` or `null`, and only one of the three means
-     * anything here: `null` is a folder or a non-book. Offering "从书架拿掉" for a
-     * book that is already off the shelf answers the same word whatever the book's
-     * state, so a reader looking at a book *missing* from their shelf had no way to
-     * put it back.
-     */
     const action = await this.pick(`「${entry.name}」`, [
       { value: 'select', label: '选择' },
       { value: 'metadata', label: '改资料' },
-      ...(entry.shelfState === 'on'
-        ? [{ value: 'shelve:remove', label: '从书架拿掉' }]
-        : entry.shelfState === 'off'
-          ? [{ value: 'shelve:add', label: '放回书架' }]
-          : []),
       { value: 'rename', label: '重命名' },
       { value: 'move', label: '移动到…' },
       { value: 'delete', label: '删除' },
@@ -824,8 +833,6 @@ export class LibraryFilesScreen {
     // batch ticked earlier and now off screen.
     this.select([entry.path]);
     if (action === 'metadata') return this.promptBatchMetadata();
-    if (action === 'shelve:add') return this.batchShelf('add');
-    if (action === 'shelve:remove') return this.batchShelf('remove');
     if (action === 'rename') return this.promptRename(entry.path, entry.name);
     if (action === 'move') return this.promptMove();
     if (action === 'delete') return this.confirmDelete();
@@ -881,30 +888,6 @@ export class LibraryFilesScreen {
       () => this.options.api.browseBatchMetadata(paths, fields),
       `改资料（${paths.length} 项）`,
       (result) => this.reportMetadataBatch(result),
-    );
-  }
-
-  /**
-   * Puts books on the caller's shelf, or takes them off it.
-   *
-   * Only `remove` confirms, and only `remove` needs to: it is the one that takes
-   * something away. Adding is the reader saying "show me this", and a dialog in front
-   * of it would be a dialog in front of the repair.
-   */
-  private async batchShelf(action: ShelfAction, paths = this.selectedList()): Promise<void> {
-    if (paths.length === 0) return;
-    const label = SHELF_ACTION_LABELS[action];
-    if (action === 'remove') {
-      const ok = await this.confirm(
-        `${label} ${paths.length} 项？`,
-        '只是从你的书架上拿掉，磁盘上的文件一个都不会动，随时可以放回来。',
-      );
-      if (!ok) return;
-    }
-    await this.mutate(
-      () => this.options.api.browseBatchShelf(paths, action),
-      `${label}（${paths.length} 项）`,
-      (result) => describeShelfAction(action, result),
     );
   }
 
@@ -1169,8 +1152,6 @@ export class LibraryFilesScreen {
           onClear={() => this.select([])}
           onRename={(path, name) => void this.promptRename(path, name)}
           onMetadata={() => void this.promptBatchMetadata()}
-          onShelve={() => void this.batchShelf('remove')}
-          onUnshelve={() => void this.batchShelf('unhide')}
           onMove={() => void this.promptMove()}
           onDelete={() => void this.confirmDelete()}
         />
@@ -1476,8 +1457,6 @@ interface SelectionBarProps {
   onClear(): void;
   onRename(path: string, name: string): void;
   onMetadata(): void;
-  onShelve(): void;
-  onUnshelve(): void;
   onMove(): void;
   onDelete(): void;
 }
@@ -1495,14 +1474,12 @@ function SelectionBar(props: SelectionBarProps): JSX.Element {
           ) : null}
           <Button onClick={props.onMetadata}>改资料</Button>
           {/*
-            Both shelf directions are shown, and shown *always*: a selection can hold
-            a mixture and the reader's intent is "make these match", which has a
-            direction. Hiding one of the two behind a state check would mean a
-            selection that is half on and half off the shelf could only be pushed one
-            way.
+            No shelf directions here any more (#40). Everything else on this bar writes
+            to the mount; 下架 wrote a `user_books` row and touched no file, so it was the
+            one button whose consequence did not match the page. The reader's two
+            directions live on the two screens the reader owns — the shelf and the
+            browsing page — where the book in front of them is the book being shelved.
           */}
-          <Button onClick={props.onShelve}>下架</Button>
-          <Button onClick={props.onUnshelve}>加入书架</Button>
           <Button onClick={props.onMove}>移动…</Button>
           <Button className="danger" onClick={props.onDelete}>
             删除
