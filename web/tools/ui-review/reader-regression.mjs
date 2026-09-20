@@ -57,6 +57,28 @@ try {
     assert.equal((await read()).y, after.y, `${label} close must preserve position`);
   }
   await cdp.clickText('.reader-actions button', '界面');
+  const beforeReadouts = await read();
+  for (const [label, mode] of [['顶部左侧','book'],['顶部右侧','chapter'],['底部左侧','time'],['底部右侧','progress']]) {
+    await cdp.run(`const el=document.querySelector('select[aria-label="${label}"]');el.value='${mode}';el.dispatchEvent(new Event('change',{bubbles:true}));`);
+    await cdp.sleep(100);
+    const next = await read();
+    for (const key of ['x','y','page','pages','top','height']) assert.equal(next[key], beforeReadouts[key], 'readout setting preserves '+key);
+  }
+  const modes = await cdp.evaluate('Array.from(document.querySelectorAll(".reading-indicator span"),el=>el.dataset.mode)');
+  assert.deepEqual(modes, ['book','chapter','time','progress']);
+  await cdp.screenshot('../docs/ui-review/mobile/readout-settings.png');
+  await cdp.click('.panel button[aria-label="关闭"]');
+  await cdp.tapMiddle();
+  await cdp.screenshot('../docs/ui-review/mobile/readout-custom.png');
+  await cdp.navigate(`${origin}/#/shelf`);
+  await cdp.navigate(`${origin}/#/book/${BOOK_ID}`);
+  await cdp.waitFor('Number(document.querySelector(".progress-scrubber")?.max) > 1');
+  assert.deepEqual(await cdp.evaluate('Array.from(document.querySelectorAll(".reading-indicator span"),el=>el.dataset.mode)'), modes, 'readout settings survive reopening');
+  await cdp.clickText('.reader-actions button', '界面');
+  for (const [label, mode] of [['顶部左侧','chapter'],['顶部右侧','none'],['底部左侧','progress'],['底部右侧','time']]) {
+    await cdp.run(`const el=document.querySelector('select[aria-label="${label}"]');el.value='${mode}';el.dispatchEvent(new Event('change',{bubbles:true}));`);
+    await cdp.sleep(100);
+  }
   await cdp.clickText('.panel button', '浅绿');
   await cdp.click('.panel button[aria-label="关闭"]');
   await cdp.sleep(300);

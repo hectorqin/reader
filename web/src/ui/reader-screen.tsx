@@ -9,7 +9,7 @@ import type { Platform } from '../core/platform.ts';
 import { ReaderView, type Position, type ViewSettings } from './reader-view.ts';
 import { makeAssetSigner } from '../net/asset-url.ts';
 import { attachGestures } from './gestures.ts';
-import type { AppSettings } from '../store/settings.ts';
+import { READOUT_FIELDS, type AppSettings } from '../store/settings.ts';
 import { createStagedDoc, isStagedKind, windowIndexOf } from '../formats/windowed.ts';
 import type { BookDoc } from '../formats/types.ts';
 import type { TocEntry } from '../api/types.ts';
@@ -1134,7 +1134,10 @@ export class ReaderScreen {
   private async updateSetting(patch: Partial<AppSettings>): Promise<void> {
     this.options.onSettingsChange(patch);
     Object.assign(this.settings, patch);
-    this.view?.applySettings(this.viewSettings());
+    // Reading information changes only the chrome, never the book's pagination.
+    if (Object.keys(patch).some(key => !READOUT_FIELDS.some(field => field.key === key))) {
+      this.view?.applySettings(this.viewSettings());
+    }
     this.patch({});
     // Fixed-layout fit and direction changes are structural, so the current page
     // has to be re-rendered rather than merely re-styled.
@@ -1558,6 +1561,10 @@ function emptyChromeSettings(): Partial<ChromeState> {
       shelfSort: 'recent',
       shelfShowAuthor: true,
       shelfShowProgress: true,
+      readoutTopLeft: 'chapter',
+      readoutTopRight: 'none',
+      readoutBottomLeft: 'progress',
+      readoutBottomRight: 'time',
     },
     { layout: 'reflowable', format: '', availability: { system: false, native: false, http: false, preferred: null }, engine: null, voices: [] },
   );
@@ -1598,6 +1605,10 @@ function settingsView(
   const activeEngine = context.engine ?? context.availability.preferred;
   return {
     mode: settings.mode,
+    readoutTopLeft: settings.readoutTopLeft,
+    readoutTopRight: settings.readoutTopRight,
+    readoutBottomLeft: settings.readoutBottomLeft,
+    readoutBottomRight: settings.readoutBottomRight,
     fontScale: settings.fontScale,
     lineHeight: settings.lineHeight,
     theme: settings.theme,
