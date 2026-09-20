@@ -325,7 +325,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     if (ctx.sources?.chapters.has(id)) {
       const payload = await withSignal(request, reply, (signal) => ctx.sources!.chapters.asset(user.id, id, ref, signal));
       reply.header('x-content-type-options', 'nosniff');
-      reply.header('content-security-policy', "default-src 'none'; sandbox");
+      reply.header('content-security-policy', "default-src 'none'; img-src data:; sandbox");
       return sendAssetPayload(request, reply, payload);
     }
 

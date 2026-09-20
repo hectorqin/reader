@@ -262,7 +262,7 @@ pdf / 单图没有独立目录，回落到 items。
 
 响应带 `Cache-Control: private, max-age=31536000, immutable`：文件资源由内容身份寻址；章节资源引用同时包含目录 revision，所以同一个资源 URL 的内容保持不变。
 
-章节资源返回 `text/plain; charset=utf-8`，另带 `X-Content-Type-Options: nosniff` 和限制内容执行的 CSP。客户端必须按纯文本转义排版，即使正文包含 HTML 字符也不能直接交给 HTML 渲染器。正文读取后持久缓存，来源禁用或插件卸载不影响缓存命中；未缓存内容仍需要可用来源。旧 revision 的已缓存正文可读，未缓存正文返回 `409 CHAPTER_SNAPSHOT_EXPIRED`，客户端可重新打开当前目录。
+章节资源按 manifest 的 `mediaType` 返回 `text/plain; charset=utf-8` 或清洗后的 `text/html; charset=utf-8`，带 `nosniff` 和 `default-src 'none'; img-src data:; sandbox` CSP。纯文本必须转义排版；HTML 只保留白名单标签，图片经插件通道获取、校验 PNG/JPEG/GIF/WebP 签名并转为 data URL。脚本、样式、表单、外部链接、SVG 和任意网络图片被移除。正文读取后持久缓存，来源禁用或插件卸载不影响缓存命中；旧 revision 已缓存正文可读，未缓存正文返回 `409 CHAPTER_SNAPSHOT_EXPIRED`。
 
 ### `POST /books/:id/refresh`
 
@@ -277,7 +277,7 @@ pdf / 单图没有独立目录，回落到 items。
     "mediaType": "text/plain; charset=utf-8", "format": "html" }] }
 ```
 
-`format: "html"` 表示客户端将纯文本排版为 HTML，不表示资源含可信 HTML。该接口无需请求体；文件书返回 `400 SOURCE_UNSUPPORTED`，其他用户的章节书返回 404。刷新失败保留旧目录；同一目录保持 revision 不变；插件应在正文变化时更新 `ManifestSnapshot.version`。阅读进度和笔记不重写，插章后仍以稳定 href 定位。它是手动刷新接口，没有后台追更或预下载副作用。
+`format: "html"` 表示客户端将纯文本排版为 HTML，不表示资源含 HTML；富文本条目省略 `format`、声明 `mediaType: text/html`，目录 `kind` 为 `reflowable`。该接口无需请求体；文件书返回 `400 SOURCE_UNSUPPORTED`，其他用户章节书返回 404。刷新失败保留旧目录；同一目录保持 revision 不变；正文变化时插件须更新 `ManifestSnapshot.version`。进度和笔记不重写，插章后以稳定 href 定位。手动刷新会更新检查时间和新增章计数，但不会自动开启订阅或预下载正文。
 
 ### 文件资源的流式与子资源行为
 
@@ -837,7 +837,7 @@ Content-Type: application/json
 
 返回 `201 { "source": {...} }`。可指定 `id`（2～80 位字母、数字、下划线或短横线），省略则自动生成。`sourceType` 和 `pluginId` 从 `/sources/types` 读取。`local` 仅接受空配置，使用宿主 `BOOKS_DIR`。
 
-`config` 不能包含密码。OPDS 的 `url` 必须是 HTTP(S) 地址；Feed 和下载链接默认限制在该 origin。需要跨 origin 获取文件时，管理员可在 config 中增加 `allowedOrigins`（如 `["https://cdn.example.test"]`）。Basic 凭据不会转发到附加 origin。当前只支持通过 `PATCH /sources/:id` 更新 `enabled`，未提供修改名称/URL/config 或删除来源的接口。
+`config` 不能包含密码。OPDS 的 `url` 必须是 HTTP(S) 地址；Feed 和下载链接默认限制在该 origin。跨 origin 获取文件须配置 `allowedOrigins`；Basic 凭据不转发到附加 origin。管理员可 `PATCH /sources/:id` 更新 `name/config/enabled`，配置仍由提供者校验，修改 config 会清除该来源所有用户的凭据，防止向新地址发送旧凭据；来源有在途调用时修改 config 返回 `409 SOURCE_BUSY`。`DELETE /sources/:id` 只允许删除没有已获取内容的非内置来源，否则返回 `409 SOURCE_IN_USE`。Web 的 `#/sources` 提供对应表单。
 
 ### 来源浏览、搜索和详情
 
@@ -882,9 +882,19 @@ GET /api/v1/sources/:id/publications/:publicationRef/manifest
 GET /api/v1/sources/:id/publications/:publicationRef/resource?ref=<resource-ref>
 ```
 
-上述来源级资源接口只返回 JSON：文本用 `text`，二进制小资源用 `base64`，用于插件开发调试。实际入库阅读只接受 UTF-8 `text/plain`；章节目录最多 10,000 项及 2 MiB，单章最多 2 MiB，同时受 RPC 消息上限约束。HTML、图片及其他富文本暂不接入阅读器。
+上述来源级资源接口只返回 JSON：文本用 `text`，二进制资源用 `base64`。入库阅读接受 UTF-8 `text/plain`、`text/html`、`application/xhtml+xml`；目录最多 10,000 项及 2 MiB，原始正文最多 2 MiB。HTML 插图仅接受 `src="reader-res:<插件资源引用>"`，由同一来源的 `readResource` 返回图片；每章最多 32 个不同图片，单图 2 MiB，清洗与内嵌后的章节总计不超过 8 MiB，整章加载限时 60 秒。所有插件响应仍受单条 RPC 2 MiB 上限约束（含 base64）。
 
-服务端和设备分别缓存已读正文。Web 客户端保存目录和正文时按服务器、账号及 resourceRef 隔离；断网或服务端 5xx 时可回退本账号缓存，授权失败或资源不存在时不回退。设备断网只能阅读已缓存章节；当前没有整书预下载、缓存总配额或后台追更。
+服务端和设备分别缓存已读正文（含已内嵌图片）。Web 按服务器、账号及 resourceRef 隔离；断网或 5xx 时目录可回退本账号缓存，授权失败或资源不存在时不回退。没有整书预下载和缓存总配额。后台目录检查由下面的订阅接口控制。
+
+### 自动追更订阅
+
+`GET /subscriptions` 返回 `{ "subscriptions": [...] }`，只列当前用户书架中的章节书：`bookId/title/enabled/intervalMinutes/nextCheckAt/lastCheckAt/lastSuccessAt/lastError/failures/newChapters`，时间为毫秒，未检查时间为 null。默认关闭、间隔 60 分钟。
+
+`PATCH /books/:id/subscription` 接受 `{ "enabled": true, "intervalMinutes": 60 }` 或 `{ "acknowledge": true }`。间隔为 15～10080 分钟的整数；`acknowledge` 只清除新增章提示。管理员不能操作他人的章节书。
+
+单实例服务每分钟扫描一次，每轮最多顺序处理 20 本；开始时写入 5 分钟执行租约，崩溃重启后到期重试。暂停来源、禁用账号或隐藏书籍时跳过。失败按订阅间隔和指数退避的较大值重试，保留旧目录及上次成功时间；不预下载正文，不发外部通知。状态中的错误是代码，不包含上游消息。浏览器关闭不影响调度；阅读中不会自动替换当前目录，用户刷新或重开时采用新版本。
+
+插件类型可声明 `credentialKeys: [{ "key": "access-token", "label": "访问令牌" }]`；同时声明 `permissions.credentials: true` 后，宿主仅将该类型声明的当前用户键值放进 RPC `context.credentials`。凭据不出现在来源列表或普通 config 中。`AUTH_REQUIRED` 表示来源凭据问题，客户端不应退出 reader 账号。
 
 ### 插件管理（管理员）
 

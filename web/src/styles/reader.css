@@ -3930,3 +3930,23 @@ book-content {
     scroll-behavior: auto !important;
   }
 }
+/* Source management shares the reader's type and colour tokens. */
+.sources-screen { display:flex; flex-direction:column; min-height:0; height:100%; flex:1; }
+.sources-header { display:flex; align-items:center; gap:1rem; padding:1rem; border-bottom:1px solid var(--reader-line); }
+.sources-header h1 { font-size:1.25rem; flex:1; margin:0; }
+.sources-tabs { display:flex; flex-wrap:wrap; gap:.5rem; padding:.75rem 1rem; }
+.sources-body { overflow:auto; padding:0 1rem 2rem; flex:1; }
+.sources-card { max-width:64rem; margin:0 auto 1rem; padding:1rem; border:1px solid var(--reader-line); border-radius:1rem; }
+.sources-card h2 { margin:.25rem 0 1rem; font-size:1.1rem; }
+.sources-card label { display:flex; flex-direction:column; gap:.4rem; margin:.75rem 0; }
+.sources-card input:not([type=checkbox]), .sources-card select, .sources-card textarea { width:100%; box-sizing:border-box; padding:.65rem; border:1px solid var(--reader-line); border-radius:.5rem; background:var(--reader-surface); color:inherit; font:inherit; }
+.sources-card textarea { min-height:6rem; }
+.sources-row { display:flex; flex-wrap:wrap; gap:1rem; align-items:center; justify-content:space-between; padding:1rem 0; border-top:1px solid var(--reader-line); }
+.sources-row > div:first-child { flex:1 1 15rem; min-width:0; overflow-wrap:anywhere; }
+.sources-row small { display:block; margin-top:.35rem; opacity:.75; }
+.sources-actions { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
+.sources-actions label { margin:0; }
+.sources-card .sources-consent { flex-direction:row; align-items:center; }
+.sources-search { display:flex; align-items:end; gap:.5rem; margin:1rem 0; }
+.sources-search label { flex:1; margin:0; }
+.source-description { max-height:6rem; overflow:auto; font-size:.9rem; white-space:pre-wrap; }

@@ -20,6 +20,12 @@ const CAPABILITIES = new Set<SourceCapability>([
 ]);
 
 function assertDescriptor(descriptor: SourceDescriptor): void {
+  if (descriptor.credentialKeys !== undefined && (!Array.isArray(descriptor.credentialKeys) ||
+      descriptor.credentialKeys.length > 16 || descriptor.credentialKeys.some((field) =>
+        !field || !/^[a-z][a-z0-9_.-]{0,63}$/.test(field.key) || typeof field.label !== 'string' || !field.label.trim()) ||
+      new Set(descriptor.credentialKeys.map((field) => field.key)).size !== descriptor.credentialKeys.length)) {
+    throw new SourceRegistryError('invalid credential fields');
+  }
   if (!ID_RE.test(descriptor.id)) throw new SourceRegistryError(`invalid source id: ${descriptor.id}`);
   if (!descriptor.label.trim()) throw new SourceRegistryError(`source ${descriptor.id} has an empty label`);
   if (!descriptor.version.trim()) throw new SourceRegistryError(`source ${descriptor.id} has no version`);

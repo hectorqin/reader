@@ -13,6 +13,7 @@ import { Icon, IconButton, IconTextButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useState } from './vendor/preact.ts';
 
 export interface ShelfScreenOptions {
+  onOpenSources?(): void;
   api: ReaderApi;
   offline: OfflineStore;
   platform: Platform;
@@ -856,6 +857,7 @@ export class ShelfScreen {
               icon="library"
               onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}
             />
+            {this.options.onOpenSources && <button type="button" className="button" onClick={this.options.onOpenSources}>书源</button>}
             <IconButton
               label={`书架设置 · ${DENSITY_LABELS[density]}`}
               icon="tune"

@@ -70,6 +70,7 @@ export type LibraryView = 'browse' | 'files';
 
 /** A parsed location. */
 export type Route =
+  | { name: 'sources' }
   | {
       name: 'shelf';
       /**
@@ -176,6 +177,7 @@ export function parseRoute(hash: string, context?: RouteContext): Route {
   const parts = pathOf(raw).split('/').filter((part) => part.length > 0);
   if (parts.length === 0) return shelfRoute(context);
   const [head, ...rest] = parts;
+  if (head === 'sources') return { name: 'sources' };
   if (head === 'shelf') {
     /*
      * A shelf page is the second segment: `#/shelf/2`.
@@ -295,6 +297,7 @@ function shelfRoute(context?: RouteContext, page = 1): Route {
  */
 export function routeHash(route: Route): string {
   switch (route.name) {
+    case 'sources': return '#/sources';
     case 'shelf':
       // `/1` is the absence of a page: one screen, two URLs, is the thing the
       // router's equality check exists to prevent, and emitting both here is how

@@ -16,6 +16,7 @@ import { OfflineStore } from './store/offline.ts';
 import { publicationScope } from './store/publications.ts';
 import { SettingsStore, DEFAULT_APP_SETTINGS, type AppSettings } from './store/settings.ts';
 import { ShelfScreen } from './ui/shelf-screen.tsx';
+import { SourcesScreen } from './ui/sources-screen.tsx';
 import { ReaderScreen } from './ui/reader-screen.tsx';
 import { LoginScreen } from './ui/login-screen.tsx';
 import { LibraryBrowseScreen, LibraryFilesScreen } from './ui/library-screen.tsx';
@@ -81,6 +82,7 @@ export class App {
   private isAdmin = false;
 
   private shelf: ShelfScreen | null = null;
+  private sources: SourcesScreen | null = null;
   private reader: ReaderScreen | null = null;
   /**
    * The library, as two screens: the browsing page and the file manager.
@@ -261,6 +263,14 @@ export class App {
       return;
     }
     switch (route.name) {
+      case 'sources':
+        this.clearScreens();
+        this.route = route;
+        this.sources = new SourcesScreen({ api: this.api, admin: this.isAdmin, onBack: () => location.back(),
+          onOpen: (book) => this.openBook(book), onSignedOut: () => this.handleSignedOut() });
+        this.root.append(this.sources.element);
+        void this.sources.show();
+        return;
       case 'shelf':
         this.showShelf(route);
         return;
@@ -273,6 +283,8 @@ export class App {
   }
 
   private clearScreens(): void {
+    this.sources?.dispose();
+    this.sources = null;
     this.reader?.dispose();
     this.reader = null;
     this.shelf?.dispose();
@@ -339,6 +351,7 @@ export class App {
     }
     this.clearScreens();
     const shelf = new ShelfScreen({
+      onOpenSources: () => this.router?.navigate({ name: 'sources' }),
       api: this.api,
       offline: this.offline,
       platform: this.platform,

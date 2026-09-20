@@ -34,6 +34,13 @@ async function setup() {
 }
 
 describe('requests across an account change', () => {
+  it('keeps the reader signed in when an OPDS source requires separate credentials', async () => {
+    const env = await setup();
+    env.transport.respondWith(() => ({ status: 401, headers: {}, json: { error: { code: 'AUTH_REQUIRED', message: 'OPDS password required' } } }));
+    await expect(env.api.sourceCatalog('private')).rejects.toMatchObject({ code: 'AUTH_REQUIRED', isAuthFailure: false });
+    expect(env.api.currentSession()?.user.id).toBe('a');
+    expect(env.transport.requests).toHaveLength(1);
+  });
   it('rotates an expired token before loading chapter bytes through the same guarded request path', async () => {
     const env = await setup();
     env.transport.respondWith((request) => {

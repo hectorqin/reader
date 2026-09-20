@@ -89,9 +89,18 @@ export class ProcessPlugin {
 
   providers(): readonly SourceProvider[] {
     return this.manifest.sourceTypes.map((type) => {
-      const context = (ctx: SourceContext) => ({ instance: ctx.instance, userId: ctx.userId });
-      const call = <T>(method: string, ctx: SourceContext, args: Record<string, unknown>): Promise<T> =>
-        this.request(method, { sourceType: type.id, context: context(ctx), ...args }, ctx.signal) as Promise<T>;
+      const call = async <T>(method: string, ctx: SourceContext, args: Record<string, unknown>): Promise<T> => {
+        const credentials: Record<string, string> = Object.create(null);
+        if (this.manifest.permissions?.credentials) {
+          for (const { key } of type.credentialKeys ?? []) {
+            const value = await ctx.credentials?.get(key, ctx.signal);
+            if (value !== undefined) credentials[key] = value;
+          }
+        }
+        return this.request(method, {
+          sourceType: type.id, context: { instance: ctx.instance, userId: ctx.userId, credentials }, ...args,
+        }, ctx.signal) as Promise<T>;
+      };
       const provider: SourceProvider = {
         descriptor: { ...type, version: this.manifest.version },
         validateConfig: async (config) => {

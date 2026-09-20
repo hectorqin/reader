@@ -102,6 +102,27 @@ async function click(screen: ReaderScreen, label: string): Promise<void> {
 }
 
 describe('chapter publication reading', () => {
+  it('renders cached rich chapters with images without requesting an external origin, including offline reopening', async () => {
+    const kv = new MemoryKv(); const blobs = new MemoryBlobs();
+    const first = await setup(kv, blobs);
+    const rich = content(['rich']); rich.kind = 'reflowable';
+    delete rich.items[0]!.format; rich.items[0]!.mediaType = 'text/html; charset=utf-8';
+    const html = '<h2>插图章节</h2><p>含有<strong>强调</strong>的正文。</p><img alt="插图" src="data:image/png;base64,iVBORw0KGgo=">';
+    first.transport.respondWith((request) => {
+      if (request.url.endsWith('/manifest')) return { status: 200, headers: {}, json: manifest(rich) };
+      if (request.url.includes('/assets?')) return { status: 200, headers: {}, bytes: new TextEncoder().encode(html) };
+      return { status: 200, headers: {}, json: { progress: null } };
+    });
+    await first.screen.open(book);
+    expect(body(first.screen)?.querySelector('strong')?.textContent).toBe('强调');
+    expect(body(first.screen)?.querySelector('img')?.getAttribute('src')).toMatch(/^data:image\/png/);
+    first.screen.dispose(); screens.splice(screens.indexOf(first.screen), 1); await first.offline.flush();
+    const second = await setup(kv, blobs); second.transport.failWith(new ApiError('offline', 'offline'));
+    await second.screen.open(book);
+    expect(body(second.screen)?.querySelector('h2')?.textContent).toBe('插图章节');
+    expect(body(second.screen)?.querySelector('img')?.getAttribute('src')).toMatch(/^data:image\/png/);
+    expect(second.transport.requests.some((request) => request.url.includes('/assets?'))).toBe(false);
+  });
   it('ignores delayed chapter callbacks after disposal and an offline account switch', async () => {
     const env = await setup();
     let release!: () => void;

@@ -22,8 +22,15 @@ function parameter(value: unknown, name: string, required = false): string | und
 export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): void {
   const auth = authenticate(ctx);
   const host = ctx.sources ??= new SourceHost(ctx.db, ctx.config, () => ctx.shelf, app.log);
-  app.addHook('onReady', () => host.plugins.loadInstalled());
-  app.addHook('onClose', () => host.plugins.close());
+  app.addHook('onReady', async () => { await host.plugins.loadInstalled(); host.updates.start(); });
+  app.addHook('onClose', async () => { await host.updates.stop(); await host.plugins.close(); });
+
+  app.get('/api/v1/subscriptions', { preHandler: auth }, async (request) => ({ subscriptions: host.updates.list(currentUser(request).id) }));
+  app.patch('/api/v1/books/:id/subscription', { preHandler: auth }, async (request) => {
+    const user = currentUser(request); const { id } = request.params as { id: string };
+    ctx.shelf.get(user.id, id);
+    return { subscription: host.updates.configure(user.id, id, (request.body ?? {}) as Record<string, unknown>) };
+  });
 
   app.get('/api/v1/sources/types', { preHandler: auth }, async () => ({
     types: host.registry.list().map(({ pluginId, builtin, provider }) => ({
@@ -50,10 +57,15 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
   app.patch('/api/v1/sources/:id', { preHandler: auth }, async (request) => {
     requireAdmin(request);
     const { id } = request.params as { id: string };
-    const enabled = (request.body as Record<string, unknown> | null)?.enabled;
-    if (typeof enabled !== 'boolean') throw badRequest('enabled must be boolean');
-    host.setEnabled(id, enabled);
+    const patch = (request.body ?? {}) as Record<string, unknown>;
+    if (!['name', 'config', 'enabled'].some((key) => key in patch)) throw badRequest('no source changes provided');
+    await host.update(id, patch);
     return { source: host.list(true).find((source) => source.id === id) };
+  });
+  app.delete('/api/v1/sources/:id', { preHandler: auth }, async (request) => {
+    requireAdmin(request);
+    host.remove((request.params as { id: string }).id);
+    return { ok: true };
   });
   app.put('/api/v1/sources/:id/credentials/:key', { preHandler: auth }, async (request) => {
     const user = currentUser(request);

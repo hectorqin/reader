@@ -19,6 +19,7 @@ export interface SourceDescriptor {
   readonly capabilities: readonly SourceCapability[];
   /** JSON Schema for an instance's public configuration, when applicable. */
   readonly configSchema?: unknown;
+  readonly credentialKeys?: readonly { key: string; label: string }[];
 }
 
 export interface SourceInstance {
@@ -213,6 +214,7 @@ export interface PluginSourceType {
   readonly label: string;
   readonly capabilities: readonly SourceCapability[];
   readonly configSchema?: unknown;
+  readonly credentialKeys?: readonly { key: string; label: string }[];
 }
 
 export interface PluginManifest {

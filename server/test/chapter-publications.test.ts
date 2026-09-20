@@ -7,6 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { Db } from '../src/db/index.ts';
 import { SCHEMA_SQL } from '../src/db/schema.ts';
 import { ChapterPublications, MAX_CHAPTER_BYTES } from '../src/publications/chapters.ts';
+import { ChapterUpdates } from '../src/services/chapter-updates.ts';
 import type { SourceContext, SourceProvider } from '../src/sources/types.ts';
 
 async function fixture() {
@@ -36,6 +37,58 @@ async function fixture() {
   });
   return { root, db, context, provider, chapters, setItems(next: typeof items) { items = next; } };
 }
+
+test('rich chapter snapshots cache sanitised HTML and images across reloads', async () => {
+  const f = await fixture();
+  try {
+    f.setItems([{ id: 'rich', seq: 0, title: '图文', kind: 'chapter', mediaType: 'text/html', ref: 'rich' }]);
+    f.provider.readResource = async (_ctx, request) => request.ref === 'pic'
+      ? { mediaType: 'image/png', data: Buffer.from('89504e470d0a1a0a', 'hex') }
+      : { mediaType: 'text/html', text: '<p>图文<strong>正文</strong><img src="reader-res:pic"></p><script>evil()</script>' };
+    const id = await f.chapters.acquire(f.provider, f.context, { entryRef: 'book' }, 'book', { ref: 'book', title: '图文' });
+    const manifest = f.chapters.manifest('u1', id);
+    assert.equal(manifest.kind, 'reflowable'); assert.equal(manifest.items[0]!.format, undefined);
+    const resource = await f.chapters.asset('u1', id, manifest.items[0]!.resourceRef!);
+    assert.equal(resource.contentType, 'text/html; charset=utf-8');
+    assert.match(resource.data!.toString(), /data:image\/png;base64,/); assert.doesNotMatch(resource.data!.toString(), /script|evil/);
+    f.provider.readResource = async () => { throw new Error('offline'); };
+    assert.deepEqual((await f.chapters.asset('u1', id, manifest.items[0]!.resourceRef!)).data, resource.data);
+  } finally { f.db.close(); await rm(f.root, { recursive: true, force: true }); }
+});
+
+test('durable subscriptions update once, accumulate new chapters, retry failures and respect account/shelf state', async () => {
+  const f = await fixture();
+  let now = 1000;
+  try {
+    const id = await f.chapters.acquire(f.provider, f.context, { entryRef: 'book' }, 'book', { ref: 'book', title: '远程书' });
+    let updates = new ChapterUpdates(f.db, f.chapters, () => now);
+    assert.throws(() => updates.configure('other', id, { enabled: true }), { code: 'BOOK_NOT_FOUND' });
+    assert.throws(() => updates.configure('u1', id, { intervalMinutes: 1 }), { code: 'BAD_REQUEST' });
+    updates.configure('u1', id, { enabled: true, intervalMinutes: 15 });
+    f.setItems([{ id: 'three', seq: 0, title: '新章', kind: 'chapter', mediaType: 'text/plain', ref: 'new' }]);
+    await Promise.all([updates.runDue(), updates.runDue()]);
+    assert.equal(updates.list('u1')[0]!.newChapters, 1);
+    assert.equal(updates.list('u1')[0]!.lastSuccessAt, now);
+    updates = new ChapterUpdates(f.db, f.chapters, () => now);
+    await updates.runDue(); assert.equal(updates.list('u1')[0]!.newChapters, 1);
+    now += 15 * 60_000;
+    const original = f.provider.getManifest;
+    f.provider.getManifest = async () => { throw new Error('upstream secret must not leak'); };
+    await updates.runDue();
+    assert.equal(updates.list('u1')[0]!.lastError, 'UPDATE_FAILED');
+    assert.equal(updates.list('u1')[0]!.lastSuccessAt, 1000);
+    assert.ok(updates.list('u1')[0]!.nextCheckAt > now);
+    f.provider.getManifest = original;
+    updates.configure('u1', id, { acknowledge: true, enabled: false });
+    assert.equal(updates.list('u1')[0]!.newChapters, 0);
+    const snapshot = f.chapters.manifest('u1', id).revision;
+    updates.configure('u1', id, { enabled: true });
+    f.db.run('UPDATE user_books SET hidden = 1 WHERE book_id = ?', id);
+    await updates.runDue(); assert.equal(f.chapters.manifest('u1', id).revision, snapshot);
+    assert.equal(updates.list('u1').length, 0);
+    await updates.stop();
+  } finally { f.db.close(); await rm(f.root, { recursive: true, force: true }); }
+});
 
 test('chapter acquisition creates isolated stable publication and caches plain text assets', async () => {
   const f = await fixture();
@@ -77,7 +130,7 @@ test('refresh keeps stable href, versions resource refs, and leaves old cached b
 test('unsupported manifest media is rejected before creating a publication', async () => {
   const f = await fixture();
   try {
-    f.setItems([{ id: 'bad', seq: 0, title: '坏', kind: 'chapter', mediaType: 'text/html', ref: 'bad' }]);
+    f.setItems([{ id: 'bad', seq: 0, title: '坏', kind: 'chapter', mediaType: 'application/javascript', ref: 'bad' }]);
     await assert.rejects(() => f.chapters.acquire(f.provider, f.context, { entryRef: 'book' }, 'book', { ref: 'book', title: '坏' }), { code: 'UNSUPPORTED_FORMAT' });
     assert.equal(f.db.get<{ count: number }>('SELECT count(*) AS count FROM books')!.count, 0);
   } finally { f.db.close(); await rm(f.root, { recursive: true, force: true }); }
@@ -104,6 +157,29 @@ test('old database gains content_hash_kind as an additive migration', async () =
       } finally { upgraded.close(); }
     }
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('old plain chapter caches survive media type migration and repeated restart', async () => {
+  const f = await fixture();
+  try {
+    const id = await f.chapters.acquire(f.provider, f.context, { entryRef: 'book' }, 'book', { ref: 'book', title: '旧缓存' });
+    const ref = f.chapters.manifest('u1', id).items[0]!.resourceRef!;
+    const original = await f.chapters.asset('u1', id, ref);
+    f.db.run('ALTER TABLE chapter_resources DROP COLUMN media_type');
+    for (let restart = 0; restart < 2; restart += 1) {
+      const upgraded = new Db(join(f.root, 'reader.db'));
+      try {
+        const chapters = new ChapterPublications(upgraded, {
+          manifest: async () => { throw new Error('source unavailable'); },
+          resource: async () => { throw new Error('source unavailable'); },
+        });
+        const cached = await chapters.asset('u1', id, ref);
+        assert.equal(cached.contentType, 'text/plain; charset=utf-8');
+        assert.deepEqual(cached.data, original.data);
+        assert.deepEqual(upgraded.all('PRAGMA foreign_key_check'), []);
+      } finally { upgraded.close(); }
+    }
+  } finally { f.db.close(); await rm(f.root, { recursive: true, force: true }); }
 });
 
 test('a refresh racing with an uncached resource never labels new bytes with an old revision', async () => {
