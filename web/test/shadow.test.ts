@@ -331,6 +331,29 @@ describe('BookShadowHost', () => {
     expect(sheet).not.toContain('.book-host[');
   });
 
+  it('clips a page turn on the box the reader does not scroll', () => {
+    // The clip has to land on a box that is *not* the scroll container, and which box
+    // that is depends on the mode — `ReaderView.scroller` says so. An `overflow: clip`
+    // on the scroller replaces it with a box that cannot scroll, and a box that cannot
+    // scroll has no scroll offset: the turn had already written the new offset, the
+    // attribute then discarded it, the animation played over the *old* page, and the
+    // offset reappeared one frame after `data-animating` was cleared. That is the
+    // reader's report — a slide, then the page jumping to where it was always going.
+    //
+    // So this asserts the *pair*: the clip is on the host in paged mode (where the flow
+    // is the scroller) and on the flow in scroll mode (where the host is). A single
+    // selector for both would be the bug, whichever one it named.
+    const host = createBookHost();
+    const sheet = host.shadow.querySelector('style')?.textContent ?? '';
+    const paged = /:host\(\[data-animating\]\[data-paginated='true'\]\) \{[^}]*\}/.exec(sheet)?.[0] ?? '';
+    const scroll = /:host\(\[data-animating\]:not\(\[data-paginated='true'\]\)\) \.book-flow \{[^}]*\}/.exec(sheet)?.[0] ?? '';
+    expect(paged).toContain('overflow: clip');
+    expect(scroll).toContain('overflow: clip');
+    // And the old form — the clip unconditionally on the flow, which is the scroller in
+    // paged mode — is gone, because it is the defect rather than a simplification.
+    expect(sheet).not.toMatch(/:host\(\[data-animating\]\) \.book-flow \{[^}]*overflow: clip/);
+  });
+
   it('separates two paginated columns by exactly two page margins', () => {
     // The page margin is padding *inside* the scrolling box, so the page the reader
     // sees is `clientWidth` wide while a page *step* was `clientWidth - 2 * margin`.

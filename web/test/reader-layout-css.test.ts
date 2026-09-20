@@ -111,6 +111,44 @@ describe('the reading surface fills the screen', () => {
     }
   });
 
+  it('makes each reading readout a full-width row flush to its edge', () => {
+    // "reading-indicator 应该是紧贴顶部/底部，并且占用一整行": a readout used to be a
+    // paper pill the width of its own text, floated a little inside the edge. A sticker
+    // that ends wherever the words end gives the chapter name and the page count two
+    // different right edges, and over the chapter's own heading it read as a fragment of
+    // body text rather than something the screen drew — the "很奇怪，不整洁" in the report.
+    //
+    // So each readout is a *row*: the paper spans the stage and the words are inset
+    // inside it. Asserted as the pair of properties that make it a row rather than a
+    // pill — full width, and no horizontal shrink — because either one alone leaves the
+    // old look reachable.
+    // The row geometry is one rule for both readouts, so it is read by its own
+    // selector list rather than by either name alone.
+    // The shared rule is reached by either name: `rule()` matches the selector list
+    // the rule declares, so the first of the two names finds the row geometry.
+    const row = rule('.indicator-chapter');
+    expect(row).not.toBe('');
+    expect(declaration(row, 'display')).toBe('block');
+    expect(declaration(row, 'width')).toBe('100%');
+    expect(declaration(row, 'background')).toBe('var(--reader-paper)');
+  });
+
+  it('puts the page insets on the readout text and not on the row', () => {
+    // The paper reaches the very edge of the glass — under the notch and the cutout —
+    // so the safe insets move the *text* inward instead of leaving a strip of page
+    // showing beside the band. The container therefore carries no padding at all: an
+    // inset on it would be the strip this avoids.
+    const box = rule('.reading-indicator');
+    expect(declaration(box, 'padding')).toBeUndefined();
+    expect(declaration(box, 'align-items')).toBe('stretch');
+    // The two rows carry the safe insets on their own inner edges, in their own
+    // rules — read from the sheet's text, because the selector is the *second* rule
+    // for each name and a by-name lookup returns the shared row rule above it.
+    const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(text).toMatch(/\.indicator-chapter \{[^}]*padding-block-start: calc\(0\.35rem \+ var\(--safe-top\)\)/);
+    expect(text).toMatch(/\.indicator-progress \{[^}]*padding-block-end: calc\(0\.35rem \+ var\(--safe-bottom\)\)/);
+  });
+
   it('paints the read-aloud bar above the page it floats over', () => {
     // The bar is a sibling of the absolutely positioned stage host. A static
     // sibling is laid out behind the stage, which paints at --reader-layer-page:

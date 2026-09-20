@@ -673,12 +673,27 @@ book-content {
  * unrelated positioned siblings. One declared number on each side is what makes
  * the order a fact of this stylesheet (see the layer scale with the other tokens).
  *
- * The bleed of paper behind each readout is a `background` on the label rather than
- * a full-width scrim: the reader asked to see the page, and a translucent strip
- * across the top and bottom would be a third bar. One line's worth of the page's own
- * colour behind each label covers only what it has to — and it is what makes the
- * number legible when the line of text underneath happens to be exactly that line,
- * which is the case the reader photographed.
+ * ## Why each readout is a full-width row
+ *
+ * The two readouts used to be small paper pills the width of their own text, floated
+ * a little inside the top and bottom edges. That is the report: "reading-indicator
+ * 应该是紧贴顶部/底部，并且占用一整行，现在看起来很奇怪，不整洁". A pill as wide as
+ * its own words is a *sticker* — it lands wherever the words end, so the chapter name
+ * and the page count have two different right edges, and it reads as a fragment left
+ * on the page rather than as a readout the screen drew. Over the chapter's own
+ * heading it looked worse still: one line of body text sitting under a narrower strip
+ * of the same colour, which is the "很奇怪" in the screenshot.
+ *
+ * So a readout is now a *row*: the paper runs the full width of the stage, flush
+ * against the top and bottom edges, with the words inset to the page margin inside
+ * it. The row is what makes the two readouts one band each rather than two floating
+ * labels, and the flush edge is what stops them from looking like they were dropped
+ * slightly inside the screen.
+ *
+ * No safe-area padding is added to the *row*: the paper reaches the very edge of the
+ * glass, and the safe insets move the *text* inward, so the colour still runs under
+ * the notch and the cutout rather than leaving a strip of page showing beside it.
+ * That is why the safe values appear on the labels below and not here.
  */
 .reading-indicator {
   position: absolute;
@@ -688,9 +703,7 @@ book-content {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  align-items: flex-start;
-  padding: calc(0.6rem + var(--safe-top)) calc(var(--reader-indicator-inset) + var(--safe-right))
-    calc(0.6rem + var(--safe-bottom)) calc(var(--reader-indicator-inset) + var(--safe-left));
+  align-items: stretch;
   font-size: var(--text-meta);
   color: var(--reader-muted);
   /* A slow fade of its own, offset by the chrome's duration: the indicator comes
@@ -703,27 +716,49 @@ book-content {
   to { opacity: 1; }
 }
 
-.indicator-chapter {
-  /* A label over the book's own text, so it is capped to the page's measure and
-     ellipsised rather than allowed to run past the column. */
-  max-width: 100%;
+/*
+ * The row itself.
+ *
+ * `display: block` and `width: 100%` so the paper spans the stage rather than the
+ * text, and the height comes from one line plus the readout's own breathing room —
+ * a `min-height` would be a second, invented number to keep in agreement with the
+ * font size. The paper is the page's own colour (not a translucent scrim) so the
+ * line of text underneath is *covered* rather than tinted; the reader is reading a
+ * readout at that moment, not the page.
+ */
+.indicator-chapter,
+.indicator-progress {
+  display: block;
+  width: 100%;
+  background: var(--reader-paper);
+  padding-block: 0.35rem;
+  /* The text is inset to the page margin and the safe area; the paper is not. */
+  padding-inline: calc(var(--reader-indicator-inset) + var(--safe-left))
+    calc(var(--reader-indicator-inset) + var(--safe-right));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.indicator-chapter {
+  /* The chapter name is the longer of the two, so it is the one that can be
+     ellipsised when a title runs past the row. */
   font-size: var(--text-label);
-  background: var(--reader-paper);
-  padding: 0 0.25rem;
-  margin-inline-start: -0.25rem;
-  border-radius: 3px;
+  padding-block-start: calc(0.35rem + var(--safe-top));
+  /* A hairline between the readout and the page, on the inner edge only.
+     The paper behind a readout is the page's own colour, so without a line the row
+     is invisible on a plain chapter — and the chapter name at the top then reads as
+     a stray duplicate of the heading underneath it, which is the "很奇怪" in the
+     report. One rule in the shared line colour turns it into a band the screen drew.
+     The outer edge has no line: it is the edge of the screen. */
+  border-block-end: 1px solid var(--reader-line);
 }
 
 .indicator-progress {
   font-variant-numeric: tabular-nums;
   color: var(--reader-ink);
-  background: var(--reader-paper);
-  padding: 0 0.25rem;
-  margin-inline-start: -0.25rem;
-  border-radius: 3px;
+  padding-block-end: calc(0.35rem + var(--safe-bottom));
+  border-block-start: 1px solid var(--reader-line);
 }
 
 @media (prefers-reduced-motion: reduce) {
