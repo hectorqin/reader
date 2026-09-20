@@ -191,6 +191,15 @@ export class ReaderView {
    * read end to end would end up with 1200 of them.
    */
   private detachChapterLinks: (() => void) | null = null;
+  /**
+   * The trim currently written to the host, so a re-measure cannot write it twice.
+   *
+   * Kept as a field rather than read back off the element, because reading the value
+   * back is exactly what makes the loop in `syncPageTrim` possible: the write is seen
+   * by the host so an observer fires, and the observer has to be able to tell that the
+   * value it would write is the one already there.
+   */
+  private trimApplied: number | null = null;
 
   constructor(options: ReaderViewOptions) {
     this.options = options;
@@ -797,9 +806,14 @@ export class ReaderView {
       ...(this.options.signAssetUrl ? { signAssetUrl: this.options.signAssetUrl } : {}),
     });
     await hydrateResources(this.host.shadow, this.resolver);
-    // Images load asynchronously and change the flow height, which invalidates
-    // any offset measured before they arrive.
+    // The page's own geometry is decided here, once the text is in the DOM: the grid
+    // the chapter is set on is how tall a page may be before its last line is cut, and
+    // that is the *first* measurement a chapter render owes the reader. Images then
+    // load asynchronously and change the flow height, which invalidates any offset
+    // measured before they arrive — so the trim is re-synced on the same callback.
+    this.syncPageTrim();
     this.waitForImages().then(() => {
+      this.syncPageTrim();
       this.restoreOffset();
       this.refreshSpokenChunks();
       this.emitPosition();
@@ -889,6 +903,9 @@ export class ReaderView {
   private restoreOffset(): void {
     const scroller = this.scroller;
     if (this.doc.layout === 'fixed') return;
+    // Before the offset is applied, because the page's height decides which offsets
+    // exist: a trim applied afterwards would move the reader by the trim.
+    this.syncPageTrim();
     if (this.settings.mode === 'paged') {
       const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
       scroller.scrollLeft = max * this.sectionOffset;
@@ -919,6 +936,8 @@ export class ReaderView {
     this.resizeObserver?.disconnect();
     if (typeof ResizeObserver === 'undefined') return;
     this.resizeObserver = new ResizeObserver(() => {
+      // A rotation changes the viewport, and the page's line grid with it: the trim is
+      // recomputed before the offset is restored for the same reason as everywhere else.
       this.restoreOffset();
       this.emitPosition();
     });
@@ -1009,14 +1028,218 @@ export class ReaderView {
     // Ceil: the last screen is a screen even when it shows only a line, and its text
     // would otherwise be reachable only by scrolling past what the footer calls the
     // last page.
-    return Math.max(1, Math.ceil(range / this.screenHeight()) + 1);
+    return Math.max(1, Math.ceil(range / this.pageExtent()) + 1);
   }
 
-  /** The top scroll offset of a page, spread across the scrollable range. */
+  /**
+   * How far a page's text runs, measured from the top of the page.
+   *
+   * The viewport trimmed down to a *whole number of lines*, which is the second half
+   * of what "a page" means and the half a page turn cannot get from the offset alone.
+   *
+   * A page is `clientHeight` tall and the text is set on a grid of `L`. Only when
+   * `clientHeight` is a multiple of `L` does the last line of the page end exactly at
+   * the bottom edge; in every other case it sticks out by the remainder, and the
+   * reading surface — which is a clipped box — cuts its descender. That is the line
+   * the reader reported, and no amount of choosing the right offset can prevent it:
+   * the *page* has to be a whole number of lines, so the extent is the viewport
+   * floored to the grid.
+   *
+   * `L` is read from the rendered boxes rather than from `line-height`, because the
+   * setting is `inherit` by default — the book's own value, which this stylesheet
+   * does not guess at. The measurement is one page's worth: see `lineBoxes`.
+   *
+   * A page shorter by less than one line is a page the footer still counts correctly,
+   * because the page *count* and the page *offsets* are both derived from this number
+   * (see `screenCount` and `screenOffset`) — the pairing the comment above is about.
+   */
+  private pageExtent(): number {
+    const line = this.lineHeight();
+    if (line <= 0) return this.pageHeight();
+    const whole = Math.floor(this.pageHeight() / line) * line;
+    // Never collapse the page on a pathological metric: a page has to be at least a
+    // few lines, and the count is derived from this number, so a small one would make
+    // a chapter unpagable rather than merely tight.
+    return whole >= line * 3 ? whole : this.pageHeight();
+  }
+
+  /**
+   * The height of the page *as drawn*, before the trim the grid asks for.
+   *
+   * Recovered by adding the trim back rather than read off the element, and that is
+   * the whole reason this method exists. `clientHeight` is the height *after* the trim
+   * — the trim is an inset on this very box — so computing the extent from it closes a
+   * loop: a shorter box asks for a bigger trim, a bigger trim shortens the box again,
+   * and the page walks down the chapter a pixel per measurement. The number this
+   * returns does not move when the trim does, which is what makes it usable as the
+   * input to the trim.
+   */
+  private pageHeight(): number {
+    return Math.max(1, this.screenHeight() + this.pageTrim());
+  }
+
+  /** The trim currently applied to the host, in pixels. */
+  private pageTrim(): number {
+    if (this.trimApplied !== null) return this.trimApplied;
+    const value = Number.parseFloat(this.host.style.getPropertyValue('--reader-page-trim'));
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  /**
+   * Publishes the grid's remainder as the trim the stylesheet applies.
+   *
+   * Called wherever the page can change shape — a chapter render, a rotation, a
+   * restore — and never from `pageExtent` itself, which is the read side of the same
+   * number and would close the loop described in `pageHeight`.
+   */
+  private syncPageTrim(): void {
+    const line = this.lineHeight();
+    if (line <= 0) {
+      this.trimApplied = null;
+      this.host.style.removeProperty('--reader-page-trim');
+      return;
+    }
+    const page = this.pageHeight();
+    const trim = page - Math.floor(page / line) * line;
+    // Only when it *changes*, and that is not an optimisation — it is what stops a loop.
+    // The trim is applied to the host, and the host has a `ResizeObserver` on it (see
+    // `attachResizeObserver`) which restores the offset; a write on every call therefore
+    // re-enters this method from the observer, and the two keep re-measuring and
+    // re-writing each other. Writing only a *different* value terminates: the second call
+    // computes the same trim, sees it, and returns without touching the DOM.
+    if (this.trimApplied === trim) return;
+    this.trimApplied = trim;
+    this.host.style.setProperty('--reader-page-trim', `${trim}px`);
+  }
+
+  /**
+   * One line's height, from the boxes that are on screen.
+   *
+   * The smallest gap between two neighbouring line tops, which is one line where the
+   * text has no leading and never more. An underestimate is the safe direction: it
+   * makes a page one line *shorter* rather than one line too long, and a page that is
+   * a line short still shows whole lines.
+   */
+  private lineHeight(): number {
+    const lines = this.lineBoxes();
+    let smallest = Number.POSITIVE_INFINITY;
+    for (let i = 1; i < lines.length; i += 1) {
+      const gap = lines[i]!.top - lines[i - 1]!.top;
+      if (gap > 0.5 && gap < smallest) smallest = gap;
+    }
+    return Number.isFinite(smallest) ? smallest : 0;
+  }
+
+  /**
+   * The top scroll offset of a page, spread across the scrollable range and then
+   * snapped to a line.
+   *
+   * ## Why the offset is snapped to a line
+   *
+   * A page turn has to land *between two lines*. The fraction of the scroll range is
+   * almost never a line boundary: on a 2120px chapter in a 795px viewport it lands at
+   * 663px, and the line box that happens to be there starts at 19px — fourteen of its
+   * pixels above the top edge of the reading surface. The reader is looking at part of
+   * a line at the top of every page after the first, which is the "翻页后，遮挡了一部分
+   * 文字" in the report as much as the readouts are: the strip that covers it is only
+   * what makes it *visible*, and the line is already cut before anything is drawn over
+   * it.
+   *
+   * The two edges are answered by two different numbers, and keeping them apart is what
+   * makes the turn land where it should:
+   *
+   *  - **where the page starts** is this method's question, and it is answered by
+   *    snapping the offset *up* to the next line top (`snapToLine`);
+   *  - **how much of the text a page holds** is the other half, and it is answered by
+   *    `pageExtent`, which floors the viewport to the line grid so the page's last line
+   *    does not overhang the bottom edge.
+   *
+   * Doing both by moving the offset is the mistake the first version of this made: an
+   * offset that rounds down keeps the top of the page whole and lets the foot overhang,
+   * and one that keeps walking until the last line fits lands the reader at the bottom
+   * of the page they have already read.
+   *
+   * The first page is left at zero rather than snapped, because a chapter starts at its
+   * own first line and moving it down by half a line would hide the heading.
+   */
   private screenOffset(page: number): number {
     const total = this.screenCount();
     if (total <= 1) return 0;
-    return (this.scrollRange() * page) / (total - 1);
+    if (page === 0) return 0;
+    const target = (this.scrollRange() * page) / (total - 1);
+    return this.snapToLine(target);
+  }
+
+  /**
+   * The first line top at or after a scroll offset.
+   *
+   * The *first*, and not the nearest: a page starts where the reader left off, and it is
+   * the page's end that the bottom edge constrains (`pageExtent`). Rounding down to the
+   * nearest boundary would keep the top whole and let the last line overhang; rounding
+   * down and then walking forward until the last line fits would put the reader at the
+   * foot of the page they have already read.
+   *
+   * Measured from the chapter's own line boxes rather than from a font metric:
+   * `line-height` is `inherit` by default — the book's own value, which the reader's
+   * stylesheet deliberately does not guess at — so the grid is a property of the text
+   * that was actually rendered, and `getClientRects` is the only thing that knows it.
+   *
+   * The scan stops at the first line that starts at or after the offset, so it is a
+   * handful of comparisons rather than a walk of the chapter — but the *list* is built
+   * per chapter render, not per press. Moving this to a per-press scan of the visible
+   * band is the obvious next step if a very long chapter ever measures slow.
+   */
+  private snapToLine(offset: number): number {
+    for (const line of this.lineBoxes()) {
+      if (line.bottom <= offset) continue;
+      return line.top;
+    }
+    return offset;
+  }
+
+  /**
+   * The chapter's line boxes, as tops and bottoms in the scroller's own space.
+   *
+   * Tops and bottoms both, because a page has two edges: the offset is a line *top* and
+   * the page's height is bracketed by line *bottoms*. A list of tops alone cannot
+   * answer the second question, which is how the last line of every turned page came to
+   * be clipped by its own descender.
+   *
+   * `rect.top` is a *viewport* coordinate and the host's own rect says where the
+   * scroller sits on screen, so the content coordinate is the rect minus the host's,
+   * plus the offset the scroller is currently showing. The `scrollTop` term is not
+   * optional: without it the grid is measured *relative to the page the reader is
+   * looking at*, so every turn re-measures a grid that has already moved with them —
+   * turn one lands, turn two snaps back a line, and the reader alternates between two
+   * neighbouring pages.
+   *
+   * Measured from the rendered boxes rather than from a font metric, because
+   * `line-height` is `inherit` by default — the book's own value, which this stylesheet
+   * deliberately does not guess at — so the only thing that knows the grid the text is
+   * set on is the text that was rendered.
+   */
+  private lineBoxes(): Array<{ top: number; bottom: number }> {
+    const flow = this.host.flow;
+    const hostTop = this.host.getBoundingClientRect().top;
+    const scrollTop = this.host.scrollTop;
+    const lines: Array<{ top: number; bottom: number }> = [];
+    const root = flow.firstElementChild;
+    if (!root) return lines;
+    for (const block of root.querySelectorAll('p, h1, h2, h3, h4, h5, h6, li, blockquote, div')) {
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      // `getClientRects` is the only API that knows where a *line* is, and a test
+      // environment that does not implement it (jsdom lays nothing out) returns no
+      // list at all. An empty grid is the honest answer there: the page is left
+      // untrimmed rather than trimmed to a number nobody measured, which is what the
+      // `line <= 0` branches above and below already decide.
+      const rects = typeof range.getClientRects === 'function' ? range.getClientRects() : [];
+      for (const rect of rects) {
+        lines.push({ top: rect.top - hostTop + scrollTop, bottom: rect.bottom - hostTop + scrollTop });
+      }
+    }
+    lines.sort((a, b) => a.top - b.top);
+    return lines;
   }
 
   /** How far the chapter can actually scroll. */

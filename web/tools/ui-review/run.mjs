@@ -338,6 +338,10 @@ async function audit(cdp, origin, scenes, results) {
           pointerEvents: getComputedStyle(el).pointerEvents,
         };
       })(),
+      indicatorTop: (() => {
+        const el = document.querySelector('.indicator-chapter');
+        return el ? Math.round(el.getBoundingClientRect().height) : null;
+      })(),
       indicator: (() => {
         const el = document.querySelector('.reading-indicator');
         if (!el) return null;
@@ -354,6 +358,7 @@ async function audit(cdp, origin, scenes, results) {
     };
   })()`);
   const hiddenTextTop = hidden.missing ? null : hidden.textTop;
+  const hiddenTopInset = hidden.missing ? null : hidden.indicatorTop;
   check(
     '收起工具栏: 顶栏与底栏一起走',
     !hidden.missing && hidden.attribute === 'hidden' && hidden.topbarVisibility === 'hidden' && hidden.footerVisibility === 'hidden',
@@ -364,17 +369,32 @@ async function audit(cdp, origin, scenes, results) {
     !hidden.missing && hidden.topbarPointerEvents === 'none' && hidden.footerPointerEvents === 'none',
     hidden.missing ? 'n/a' : `topbar=${hidden.topbarPointerEvents} footer=${hidden.footerPointerEvents}`,
   );
-  // The page is the screen in *both* states, and the property asserted is the one
-  // the reader reported: showing or hiding the chrome must not move a single line.
-  // It has to be measured on the *chapter's own first block* — the element the
-  // reader is reading — and compared against the same measurement taken with the
-  // chrome visible.
+  // The page's *drawn* geometry must not move when the chrome does: showing or hiding
+  // the toolbar is a repaint, not a re-measure, and the reader reported it as the text
+  // jumping under their finger.
+  //
+  // Measured on the *slot* rather than on the chapter's first block, and the change is
+  // the answer to a report that came later: "reading-indicator 是浮动的，导致翻页后，遮挡
+  // 了一部分文字". The immersion readouts are 25px and 24px tall, and a line of body text
+  // is 19px, so the two rows used to be *drawn over* the sentence at each end of the
+  // page — cut through the middle of its glyphs. Making the rows readable means the page
+  // makes room for them, and making room means the first line moves down by exactly the
+  // height of the top row.
+  //
+  // What must stay true is that the movement is *exactly* that, and the same at both
+  // ends: the reading surface is the slot less the two rows, so the text is not
+  // re-measured, re-typeset or re-paginated — only looked at through a shorter window.
+  // Asserting "no movement at all" would be asserting the defect.
   check(
-    '收起工具栏: 正文一行的位置不变（工具栏是浮层）',
-    !hidden.missing && visibleChromeTextTop !== null && hiddenTextTop !== null && Math.abs(hiddenTextTop - visibleChromeTextTop) <= 1,
-    hidden.missing || visibleChromeTextTop === null || hiddenTextTop === null
+    '收起工具栏: 正文只是让出读数行的高度，没有被重新排版',
+    !hidden.missing &&
+      visibleChromeTextTop !== null &&
+      hiddenTextTop !== null &&
+      hiddenTopInset !== null &&
+      Math.abs(hiddenTextTop - visibleChromeTextTop - hiddenTopInset) <= 2,
+    hidden.missing || visibleChromeTextTop === null || hiddenTextTop === null || hiddenTopInset === null
       ? 'n/a'
-      : `正文首行 y: 显示时 ${visibleChromeTextTop} / 收起后 ${hiddenTextTop}`,
+      : `正文首行 y: 显示时 ${visibleChromeTextTop} / 收起后 ${hiddenTextTop}，读数行高 ${hiddenTopInset}px`,
   );
   // And the page *fills* the screen, which is the other half of the report:
   // "内容要铺满，不要预留 stage". The stage used to carry the bars' own heights as
@@ -588,19 +608,112 @@ async function audit(cdp, origin, scenes, results) {
   //
   // The chrome is hidden first, so the assertion is about a state the reader can
   // actually be in, and the page readout is read before and after.
-  const beforeThird = await cdp.evaluate(
-    `(() => ({ chrome: document.querySelector('.reader-screen').dataset.chrome, page: document.querySelector('.progress-page')?.textContent ?? '', value: Number(document.querySelector('.progress-scrubber')?.value ?? '0') }))()`,
-  );
+  //
+  // The readout is the *immersion* one, and that is the repair rather than a detail:
+  // `.progress-page` is the footer's own label, and the footer is `visibility: hidden`
+  // with the chrome down — `textContent` on a hidden element is still the last value it
+  // was given, so reading it in this state compared the page *before* the tap with
+  // itself and reported "does not advance" for a turn that had worked all along. The
+  // page count that is on screen while the chrome is hidden is the one the reader is
+  // looking at, and it is the one this has to read.
+  const pageReadout = `(() => ({
+    chrome: document.querySelector('.reader-screen').dataset.chrome,
+    page: document.querySelector('.indicator-progress')?.textContent.trim() ?? '',
+    value: Number(document.querySelector('.progress-scrubber')?.value ?? '0'),
+  }))()`;
+  // Read on a reader in **scroll** mode, which is the mode a page turn turns a
+  // *screenful* in, and the mode the scene above left behind. A 翻页 scene selects the
+  // paged layout, in which the chapter is one screen wide and a tap in the right third
+  // moves between columns — a page turn that changes what is on screen without changing
+  // which page of the chapter the reader is *on*, because paged mode reports one page
+  // per chapter screen... unless the chapter really has several, which this fixture's
+  // does not. The assertion is about a number that advances, so it is made where a
+  // number advances: a scroll-mode chapter of several screens.
+  //
+  // Set through the panel rather than by reaching into the view, because the mode is a
+  // setting and the panel is how a reader changes it.
+  await cdp.tapMiddle();
+  await cdp.sleep(400);
+  await cdp.click('button[aria-label="设置"]');
+  await cdp.waitFor('document.querySelector(".panel") !== null');
+  await cdp.clickText('.segmented button', '滚动');
+  await cdp.sleep(400);
+  await cdp.click('button[aria-label="关闭"]');
+  await cdp.sleep(400);
+  await cdp.tapMiddle();
+  await cdp.sleep(500);
+  const beforeThird = await cdp.evaluate(pageReadout);
   await cdp.tapThird(0.85);
   await cdp.sleep(600);
-  const afterThird = await cdp.evaluate(
-    `(() => ({ chrome: document.querySelector('.reader-screen').dataset.chrome, page: document.querySelector('.progress-page')?.textContent ?? '', value: Number(document.querySelector('.progress-scrubber')?.value ?? '0') }))()`,
-  );
+  const afterThird = await cdp.evaluate(pageReadout);
   check(
     '点右侧只翻页: 页码前进, 工具栏保持收起',
-    afterThird.chrome === 'hidden' && beforeThird.chrome === 'hidden' && afterThird.value > beforeThird.value,
+    afterThird.chrome === 'hidden' && beforeThird.chrome === 'hidden' && afterThird.page !== beforeThird.page,
     `收起前 ${beforeThird.chrome}(${beforeThird.page}) → 点击后 ${afterThird.chrome}(${afterThird.page})`,
   );
+
+  /*
+   * And the readouts do not *cover* the text — "reading-indicator 是浮动的，导致翻页后，
+   * 遮挡了一部分文字".
+   *
+   * The check above is about paint order and it passed while this defect was fully
+   * reproducible, which is exactly why this one exists: a readout drawn on top of a
+   * line is legible, and the line under it is cut through the middle of its glyphs.
+   * Whether the reader can read the page is a *different* question from which of the
+   * two boxes wins, and it is the one the report asked.
+   *
+   * Measured as geometry, and on the real text rather than on a proxy: every line box
+   * in the chapter is compared against the two rows, and a line that crosses a row's
+   * edge is a line the reader is looking at half of. A tolerance of one pixel absorbs
+   * the sub-pixel rounding the browser does on `getClientRects`, and the two rows are
+   * taken from their own rects rather than from a constant, so this check cannot agree
+   * with a row height that no longer exists.
+   *
+   * A *page turn* is performed first, because that is where the report is: the first
+   * page of a chapter can be clean while every page after it is not, if the turn lands
+   * mid-line. So the turn is part of the check rather than a precondition of it — and it
+   * is a turn in the reader's own gesture (a tap in the outer third), not a scroll
+   * assignment, so the arithmetic that decides where a page starts is the one under
+   * test.
+   */
+  await cdp.tapThird(0.85);
+  await cdp.sleep(500);
+  const covered = await cdp.evaluate(`(() => {
+    const flow = document.querySelector('book-content')?.shadowRoot?.querySelector('.book-flow');
+    const rows = ['.indicator-chapter', '.indicator-progress'].map((selector) => {
+      const el = document.querySelector(selector);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { selector, top: r.top, bottom: r.bottom, text: el.textContent.trim() };
+    }).filter(Boolean);
+    if (!flow || rows.length === 0) return { missing: true };
+    const eps = 1;
+    const cuts = [];
+    for (const block of flow.querySelectorAll('p, h1, h2, h3, li, blockquote')) {
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      const rects = typeof range.getClientRects === 'function' ? range.getClientRects() : [];
+      for (const rect of rects) {
+        for (const row of rows) {
+          // A line is cut when it *crosses* an edge of a row: entirely above or
+          // entirely below is a line on another page, which is not a defect.
+          if (rect.top < row.bottom - eps && rect.bottom > row.bottom + eps) cuts.push({ row: row.selector, text: block.textContent.trim().slice(0, 12), line: [Math.round(rect.top), Math.round(rect.bottom)], edge: Math.round(row.bottom) });
+          if (rect.top < row.top - eps && rect.bottom > row.top + eps) cuts.push({ row: row.selector, text: block.textContent.trim().slice(0, 12), line: [Math.round(rect.top), Math.round(rect.bottom)], edge: Math.round(row.top) });
+        }
+      }
+    }
+    return { missing: false, rows: rows.map((r) => [Math.round(r.top), Math.round(r.bottom)]), cuts };
+  })()`);
+  check(
+    '收起工具栏: 翻页后正文不被读数行拦腰截断',
+    covered.missing === false && covered.cuts.length === 0,
+    covered.missing
+      ? '没有找到阅读面或阅读指示'
+      : covered.cuts.length === 0
+        ? `读数行 ${JSON.stringify(covered.rows)}，没有半截行`
+        : `有 ${covered.cuts.length} 行被截断：${JSON.stringify(covered.cuts.slice(0, 3))}`,
+  );
+
 
   // The middle third is the only way back to the controls, so it is asserted as
   // such right after: the outer-third check above leaves the chrome hidden, and the
