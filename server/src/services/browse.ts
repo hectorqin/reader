@@ -511,6 +511,61 @@ export class BrowseService {
   }
 
   /**
+   * The same two writes, addressed by *book id*.
+   *
+   * ## Why this exists, and why it is the fix for 「找不到「xxx」在磁盘上的路径」
+   *
+   * A shelf card holds a `Book`: an id, and whatever the scanner recorded about it.
+   * The write endpoint takes *library paths*. The client used to bridge the gap by
+   * listing the library root and matching the two by filename stem, which is a join
+   * that only works when the book's title happens to be its filename:
+   *
+   *  - a book whose metadata title was renamed by hand (`半小时漫画宇宙大爆炸（半小时读完
+   *    138亿年宇宙史，一口气搞懂大爆炸、奇点、黑洞、引力波、暗物质……混子哥陈磊新作！）`)
+   *    carries a title nothing on disk is called, so the lookup finds nothing;
+   *  - a book in a subfolder, or past page one of the root, is not in the listing the
+   *    lookup ever read;
+   *  - and when the lookup failed the reader was told the book could not be *found*,
+   *    after having asked for it to be taken off their own shelf.
+   *
+   * The mapping the client was guessing at already exists here: `book_files` names
+   * the path for every id. So the client sends the id it has, and the answer cannot
+   * depend on what the file is called.
+   *
+   * A path is *not* accepted as a synonym: an id that names no book is reported as
+   * the failure it is, rather than resolved to some path by luck.
+   */
+  batchShelfByBookIds(bookIds: string[], action: 'add' | 'remove' | 'hide' | 'unhide', userId: string): BatchResult {
+    if (bookIds.length === 0) throw badRequest('no book ids given', 'NO_BOOK_IDS');
+    const result = emptyBatch();
+    const now = Date.now();
+    for (const input of bookIds) {
+      if (typeof input !== 'string' || input.length === 0) {
+        throw badRequest('bookIds must contain strings', 'BAD_BOOK_ID');
+      }
+      /*
+       * `book_files` rather than `books`: the path is a property of the *file*, and a
+       * book whose last file is missing has a row in `books` and none to point at.
+       * Reporting that one as a failure is the honest answer — the shelf's own
+       * predicate already says a book with no live file is not on the shelf.
+       */
+      const file = this.db.get<{ book_id: string }>(
+        'SELECT book_id FROM book_files WHERE book_id = ? AND missing = 0 LIMIT 1',
+        input,
+      );
+      if (!file) {
+        result.failed.push({ path: input, reason: 'NO_LIVE_FILE' });
+        continue;
+      }
+      this.setShelfState(file.book_id, userId, action, now);
+      result.applied += 1;
+      result.books.push(file.book_id);
+    }
+    result.books = [...new Set(result.books)];
+    return result;
+  }
+
+  /**
    * The book ids a library path stands for.
    *
    * A file path is one book. A *folder* stands for everything the scanner

@@ -204,6 +204,16 @@ describe('the browsing half of the library', () => {
     // A grid without the path would show the whole library under a breadcrumb that
     // says 科幻, which is a right-looking screen with the wrong books on it.
     expect(new URL(`http://x${bookRequests[0]!.url}`).searchParams.get('path')).toBe('科幻');
+    /*
+     * And it asks for the *index*, not the reader's shelf (`scope=library`).
+     *
+     * This is the half that made the page's own action unreachable: without it the
+     * endpoint answers with books that are on the shelf already, so every card came
+     * back `shelfState: 'on'` and 「加入书架」 could not appear on any of them — the one
+     * control the page exists for was drawn from a set that could not contain a book
+     * needing it.
+     */
+    expect(new URL(`http://x${bookRequests[0]!.url}`).searchParams.get('scope')).toBe('library');
   });
 
   it('filters by the query, and reports the query with the folder and the page', async () => {
@@ -250,14 +260,16 @@ describe('the browsing half of the library', () => {
     expect(calls).toEqual([]);
   });
 
-  it('shelves a file that is on disk but not on the reader’s shelf', async () => {
+  it('shelves a book that is on disk but not on the reader’s shelf', async () => {
     /*
      * The action this page exists for.
      *
-     * The card knows a *book*; the shelf endpoint takes *paths*. The two are joined by
-     * the browse listing the same folder produced, and the assertion is on the path
-     * that reached the wire — a join that picks the wrong row shelves a different
-     * book, which is the failure a screenshot cannot show.
+     * The card holds a *book* and the write names it by **id**. That is the fix for
+     * 「找不到「xxx」在磁盘上的路径」, and it is asserted on the wire rather than on the
+     * screen because the failure it replaces was silent: the old code matched the
+     * book's title against filenames in the folder listing, so a book whose metadata
+     * title differs from its filename produced *no path at all* — the card then got no
+     * control, or a control that reported the book could not be found.
      */
     const transport = new FakeTransport();
     serveFolder(
@@ -270,7 +282,7 @@ describe('the browsing half of the library', () => {
         total: 2,
         files: 2,
       }),
-      [book(1), book(2)],
+      [book(1, { shelfState: 'on' }), book(2, { shelfState: 'off' })],
     );
     const { screen } = makeScreen(transport);
     await screen.open('', 1, '');
@@ -283,9 +295,46 @@ describe('the browsing half of the library', () => {
       expect(transport.requests.some((request) => request.url.includes('/browse/shelf'))).toBe(true),
     );
     const write = transport.requests.find((request) => request.url.includes('/browse/shelf'))!;
-    const payload = JSON.parse(String(write.body)) as { paths: string[]; action: string };
+    const payload = JSON.parse(String(write.body)) as { bookIds?: string[]; paths?: string[]; action: string };
     expect(payload.action).toBe('add');
-    expect(payload.paths).toEqual(['第2卷.epub']);
+    expect(payload.bookIds).toEqual(['b2']);
+    // No path is composed anywhere: the file's name is not the reader's business, and
+    // a title that does not match one must not be able to stop the write.
+    expect(payload.paths).toBeUndefined();
+  });
+
+  it('offers the control for a book whose title is nothing like its filename', async () => {
+    /*
+     * The reported case, on the page that has to render it.
+     *
+     * `shelfState` comes from the *books* list now, not from a filename join, so a book
+     * the scanner titled out of its own metadata gets the control like any other. Under
+     * the join this card drew nothing — the listing's row was matched by the title's
+     * stem and found no row — which is the other half of 「书库的书……需要手动加入」.
+     */
+    const transport = new FakeTransport();
+    const longTitled = book(1, {
+      shelfState: 'off',
+      title: '半小时漫画宇宙大爆炸（半小时读完138亿年宇宙史，一口气搞懂大爆炸、奇点、黑洞、引力波、暗物质……混子哥陈磊新作！）',
+      source: 'half-hour-universe',
+    });
+    serveFolder(
+      transport,
+      listing({ entries: [entry('half-hour.epub', { shelfState: 'off' })], total: 1, files: 1 }),
+      [longTitled],
+    );
+    const { screen } = makeScreen(transport);
+    await screen.open('', 1, '');
+    const shelve = screen.element.querySelector<HTMLElement>(`[aria-label="把${longTitled.title}加入书架"]`);
+    expect(shelve, 'a book whose title is not its filename must still be shelvable').not.toBeNull();
+    shelve!.click();
+    await vi.waitFor(() =>
+      expect(transport.requests.some((request) => request.url.includes('/browse/shelf'))).toBe(true),
+    );
+    const payload = JSON.parse(
+      String(transport.requests.find((request) => request.url.includes('/browse/shelf'))!.body),
+    ) as { bookIds?: string[] };
+    expect(payload.bookIds).toEqual(['b1']);
   });
 
   it('offers 上传 on the browsing page, because this is where a reader lands', async () => {
@@ -390,7 +439,13 @@ describe('the browsing half of the library', () => {
  * that could not tell them *why* the book was missing — nor put it back.
  */
 describe('the shelf pair on the browsing page', () => {
-  /** Serves one folder, letting the shelf state of a path change between reads. */
+  /**
+   * Serves one folder, letting the shelf state of a book change between reads.
+   *
+   * The state lives on the **book**, not on the file listing: `shelfState` is answered
+   * by the list the page is actually drawn from (`scope=library`), which is what makes
+   * the control a statement about the book in front of the reader.
+   */
   function serveMutable(
     transport: FakeTransport,
     state: { shelfState: 'on' | 'off' },
@@ -407,15 +462,20 @@ describe('the shelf pair on the browsing page', () => {
         return {
           status: 200,
           headers: {},
-          json: listing({
-            entries: [entry('第2卷.epub', { shelfState: state.shelfState })],
-            total: 1,
-            files: 1,
-          }),
+          json: listing({ entries: [entry('第2卷.epub')], total: 1, files: 1 }),
         };
       }
       if (request.url.startsWith('/api/v1/books')) {
-        return { status: 200, headers: {}, json: { items: books, total: books.length, page: 1, pageSize: 60 } };
+        return {
+          status: 200,
+          headers: {},
+          json: {
+            items: books.map((b) => ({ ...b, shelfState: state.shelfState })),
+            total: books.length,
+            page: 1,
+            pageSize: 60,
+          },
+        };
       }
       return { status: 200, headers: {}, json: { items: [] } };
     });
@@ -425,9 +485,9 @@ describe('the shelf pair on the browsing page', () => {
     /*
      * The write is NOT the end of the interaction — the *re-read* is.
      *
-     * `shelfState` comes from the listing, so a card that keeps drawing 加入书架 after
-     * the book has been added is a page whose every remaining control is a no-op, and
-     * the reader's next press teaches them the button does not work. The listing is
+     * `shelfState` is what draws the control, so a card that keeps offering 加入书架
+     * after the book has been added is a page whose every remaining control is a no-op,
+     * and the reader's next press teaches them the button does not work. The list is
      * re-read inside the same `try` as the write, before the report is shown, which is
      * the order the upload path already used and for the same reason.
      */
@@ -438,14 +498,14 @@ describe('the shelf pair on the browsing page', () => {
     await screen.open('', 1, '');
     expect(screen.element.querySelector('[aria-label="把第2卷加入书架"]')).not.toBeNull();
 
+    const booksReadsBefore = transport.requests.filter((request) =>
+      request.url.startsWith('/api/v1/books?')).length;
     state.shelfState = 'on';
-    const browseReadsBefore = transport.requests.filter((request) =>
-      request.url.startsWith('/api/v1/library/browse?')).length;
     screen.element.querySelector<HTMLElement>('[aria-label="把第2卷加入书架"]')!.click();
     await vi.waitFor(() =>
       expect(
-        transport.requests.filter((request) => request.url.startsWith('/api/v1/library/browse?')).length,
-      ).toBeGreaterThan(browseReadsBefore),
+        transport.requests.filter((request) => request.url.startsWith('/api/v1/books?')).length,
+      ).toBeGreaterThan(booksReadsBefore),
     );
     await vi.waitFor(() =>
       expect(screen.element.querySelector('[aria-label="把第2卷加入书架"]')).toBeNull(),
@@ -459,8 +519,8 @@ describe('the shelf pair on the browsing page', () => {
     /*
      * `已更新 1 本` is true and useless: the reader pressed 加入书架, and the one thing
      * they are checking is whether the book moved. The sentence is built from the
-     * *action*, which is also why the file page's batch bar and this card cannot
-     * describe the same write two different ways.
+     * *action*, which is also why no two screens can describe the same write two
+     * different ways.
      */
     const transport = new FakeTransport();
     serveMutable(transport, { shelfState: 'off' }, [book(2)]);
@@ -475,10 +535,12 @@ describe('the shelf pair on the browsing page', () => {
     /*
      * The gap the file manager could not cover.
      *
-     * The 文件 page can do this, but it is the administrator's screen: a member never
-     * sees it at all (the route is guarded), so before this the only way back onto the
-     * shelf for a member was a batch selection on a page they cannot open. The browse
-     * page is the reader's half, so the direction has to exist here.
+     * The 文件 page used to be able to do this, but it is the administrator's screen: a
+     * member never sees it at all (the route is guarded), so the only way back onto the
+     * shelf for a member was a batch selection on a page they cannot open. #40 moved the
+     * directions to the screens the reader owns, and this is the one that has to show a
+     * book the reader has *not* shelved — which is exactly the set the shelf itself
+     * cannot display.
      */
     const transport = new FakeTransport();
     serveMutable(transport, { shelfState: 'off' }, [book(2)]);
@@ -490,9 +552,8 @@ describe('the shelf pair on the browsing page', () => {
     );
     const payload = JSON.parse(
       String(transport.requests.find((request) => request.url.includes('/browse/shelf'))!.body),
-    ) as { paths: string[]; action: string };
+    ) as { bookIds?: string[]; action: string };
     expect(payload.action).toBe('add');
-    // The *file* is what the endpoint takes, and the join to it is the page's own.
-    expect(payload.paths).toEqual(['第2卷.epub']);
+    expect(payload.bookIds).toEqual(['b2']);
   });
 });

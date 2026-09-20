@@ -425,6 +425,17 @@ export function createReviewServer({ port = 5199 } = {}) {
    */
   const shelved = new Set();
   /*
+   * The *book* ids the review has shelved, which is what the preview page's list is
+   * drawn from now.
+   *
+   * The page asks for the **library** (`scope=library`) rather than the reader's shelf,
+   * so each entry carries `shelfState` — and the state a card reads comes from *this*
+   * list, not from the file listing's copy of it. Keeping both sets in step is what
+   * makes the scene after the press show a control that has gone: a fixture that only
+   * recorded paths would answer `'off'` again on the reload and certify the bug.
+   */
+  const shelvedBooks = new Set();
+  /*
    * The body of each request that had one, collected *before* the handler runs.
    *
    * The server's callback cannot await, and the handler is `async` — so reading a
@@ -573,9 +584,11 @@ export function createReviewServer({ port = 5199 } = {}) {
         // link to it: a list of purely synthetic ids would make `#/book/<id>` a dead
         // link and every reader screenshot one of the "这本书不在书架上了" fallback.
         id: from + i === 0 ? BOOK_ID : `${BOOK_ID}-${from + i}`,
-        // Inside a folder the file is named `第<N>卷.epub` (see the browse fixture), and
-        // the preview joins a book to its file by that name — so the titles have to
-        // line up or every card would offer 加入书架 for a book already on the shelf.
+        // Titled `… 第<N>卷` to line up with the file names in the browse fixture. The
+        // *join* between a book and its file is the server's now (a card writes by id),
+        // so this is no longer load-bearing for 加入书架 — but the two lists describing
+        // the same folder should still describe the same books, or the screenshots
+        // disagree with each other.
         title: `${TITLE} 第${from + i + 1}卷`,
       }));
       // The illustrated book is appended rather than paged: it exists for one reader
@@ -604,8 +617,31 @@ export function createReviewServer({ port = 5199 } = {}) {
       const listed = search === '' ? items : items.filter((item) => item.title.includes(search));
       const matched = listed.length + 1;
       const from2 = (page - 1) * pageSize;
+      const answer = [...listed, illustratedBook()].slice(from2, from2 + pageSize);
+      /*
+       * `scope=library` is the *index*, not the shelf, and the difference is the whole
+       * browsing page: a shop has to show a book the reader has not shelved in order to
+       * offer to shelve it. Only the shelf's own list is drawn from `items` alone; the
+       * library's carries `shelfState` per book, exactly as the real endpoint does.
+       *
+       * The state is `shelvedBooks` rather than the file listing's `shelved` set,
+       * because a card reads *this* list — a fixture that answered the state from the
+       * other one would leave the control on screen after the write and the screenshot
+       * would be of the feature not working.
+       */
+      if (url.searchParams.get('scope') === 'library') {
+        return json(reply, {
+          items: answer.map((entry, index) => ({
+            ...entry,
+            shelfState: shelvedBooks.has(entry.id) || index !== 0 ? 'on' : 'off',
+          })),
+          total: search === '' ? total + 1 : matched,
+          page,
+          pageSize,
+        });
+      }
       return json(reply, {
-        items: [...listed, illustratedBook()].slice(from2, from2 + pageSize),
+        items: answer,
         total: search === '' ? total + 1 : matched,
         page,
         pageSize,
@@ -631,16 +667,17 @@ export function createReviewServer({ port = 5199 } = {}) {
       // empty one — a pager whose second page is blank is a pager that looks broken
       // and is not.
       /*
-       * The file names and the book titles are the *same* names, on purpose.
+       * The file listing and the book list describe the *same* folder.
        *
-       * The preview page joins a book to the file it lives in by stripping the
-       * extension — the two DTOs share no path, so the filename is the only join there
-       * is. A fixture where the file listing said `第1卷.epub` and the book list said
-       * `剑来 第1卷` would render every card with a 加入书架 badge, because nothing
-       * would ever match: a screenshot of the feature failing, certified as passing.
+       * The two halves are drawn from different endpoints — this one is the filesystem,
+       * the preview page is the index — and the file names line up with the book titles
+       * so a screenshot of either describes the same three volumes. The join that used
+       * to be load-bearing (a card matched its book's title to a filename here in order
+       * to name a path) is gone: the write carries a book id, so a fixture that
+       * disagreed about names could no longer break 加入书架 — it would only make the
+       * two screenshots disagree with each other.
        *
-       * Root holds the first three volumes (so the preview's grid and the file list
-       * describe the same three books) plus a folder to walk into; the folder holds
+       * Root holds the first three volumes plus a folder to walk into; the folder holds
        * enough files for a real second page.
        */
       const fileCount = dir === 'folder' ? 340 : 3;
@@ -675,13 +712,16 @@ export function createReviewServer({ port = 5199 } = {}) {
          * the scene's label names it.
          */
         /*
-         * One book is deliberately *off* the shelf, and one is deliberately `null`.
+         * One file is deliberately *off* the shelf, and one is deliberately `null`.
          *
-         * `'off'` is the state the preview page exists to repair: a file that is on
-         * disk and a book that is not on the reader's shelf, which neither the shelf
-         * nor the file list could fix in one tap. `null` is a file the server does not
-         * index as a book at all — a folder, a stray file — and the page must draw *no*
-         * control for it, because the shelf endpoint would refuse the write.
+         * This listing answers the *file* page (§3.4), whose badge is what a reader
+         * looks at when a book is missing from their shelf — so the marks stay here even
+         * though the shelf directions no longer do (#40 removed them from this screen).
+         * `null` is a file the server does not index as a book at all — a folder, a
+         * stray file — and the page must draw no badge for it.
+         *
+         * The preview page reads `shelfState` from the *book* list instead, for the same
+         * reason: two screens, two sources, one question.
          */
         shelfState:
           entry.type === 'dir'
@@ -854,8 +894,16 @@ export function createReviewServer({ port = 5199 } = {}) {
        * that answered "not a book" for a book would be a *second* failure mode rather
        * than a review of the first one.
        */
-      for (const entry of bodies.get(request) ?? []) shelved.add(entry);
-      return json(reply, { applied: 1, books: [], failed: [] });
+      const payload = bodies.get(request) ?? {};
+      if (Array.isArray(payload.paths)) for (const entry of payload.paths) shelved.add(entry);
+      /*
+       * A body may name the write by `paths` (the file manager had them) or by
+       * `bookIds` (a card has an id — see `browseBatchShelf`). The preview page uses the
+       * id form now, so *this* is the set that has to be recorded for its reload to
+       * answer `'on'`.
+       */
+      if (Array.isArray(payload.bookIds)) for (const id of payload.bookIds) shelvedBooks.add(id);
+      return json(reply, { applied: 1, books: payload.bookIds ?? [], failed: [] });
     }
     if (
       path === '/api/v1/library/browse/metadata' ||

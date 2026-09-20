@@ -1495,6 +1495,27 @@ async function audit(cdp, origin, scenes, results) {
     `头部控件=${browse.header.join(' / ') || '（空）'}`,
   );
   /*
+   * 浏览页的「加入书架」角标 —— #40 的第三条要求，量的是**卡片上有几个控件**。
+   *
+   * The count matters and not just the presence: the control is drawn for the books
+   * that are *off* the shelf, and the page it was asked for is one where a reader who
+   * took a book off their shelf can put it back. A page that drew the badge on nothing
+   * (because it was listing the shelf, which cannot contain an off-shelf book) and a
+   * page that drew it on everything (because it stopped reading `shelfState`) both
+   * look like a working page in a screenshot, and both are the defect.
+   */
+  const offShelfCards = await cdp.evaluate(
+    'document.querySelectorAll(".library-browse-grid .book-shelve").length',
+  );
+  const offShelfHint = await cdp.evaluate(
+    'document.querySelector(".library-preview-hint")?.textContent ?? ""',
+  );
+  check(
+    '书库: 浏览页只给不在书架的书画「加入书架」，且不是全给',
+    offShelfCards > 0 && offShelfCards < browse.cards && /这一页有 \d+ 本还不在书架上/.test(offShelfHint),
+    `角标 ${offShelfCards} 个 / 卡片 ${browse.cards} 张，提示="${offShelfHint.trim()}"`,
+  );
+  /*
    * The search *works*, which is the half a screenshot cannot show.
    *
    * Typed rather than set: the field is debounced and the debounce is what turns the
@@ -1561,6 +1582,27 @@ async function audit(cdp, origin, scenes, results) {
     '书库: 文件管理页的入口是「浏览书籍」，不是页签',
     filesPage.header.includes('浏览书籍') && !filesPage.header.includes('预览'),
     `头部控件=${filesPage.header.join(' / ') || '（空）'}`,
+  );
+  /*
+   * 书库管理页没有上架/下架 —— #40 的第一条要求，量的是**整页的文本**而不是某一个按钮。
+   *
+   * Asserted on the whole document's text rather than on the batch bar's labels,
+   * because the two places the direction used to live (the row menu and the bar) are
+   * different components and a check on one of them would pass while the other grew
+   * the button back. The file listing deliberately still carries the 「不在书架」 badge,
+   * so the *words* are the only thing that can be asserted: the badge says which books
+   * are missing, the removed control was the one that could do something about it.
+   */
+  const filesText = await cdp.evaluate('document.querySelector(".library-files-screen").textContent');
+  check(
+    '书库: 文件管理页没有「下架 / 从书架拿掉 / 加入书架」任何一处',
+    !/从书架拿掉|加入书架|下架/.test(filesText),
+    `页面文本命中=${(filesText.match(/从书架拿掉|加入书架|下架/g) ?? []).join(',') || '无'}`,
+  );
+  check(
+    '书库: 文件管理页仍然标出不在书架的书（徽章不是控件）',
+    filesText.includes('不在书架'),
+    `徽章=${filesText.includes('不在书架')}`,
   );
 
   /*

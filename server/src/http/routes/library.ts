@@ -132,6 +132,11 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       ...(q.tag !== undefined ? { tag: q.tag } : {}),
       ...(q.format !== undefined ? { format: q.format } : {}),
       ...(q.path !== undefined ? { path: q.path } : {}),
+      // `scope=library` is the *index* rather than the reader's shelf: every book in
+      // a folder, each carrying `shelfState`. It is what the browsing page asks, and
+      // the only reason a card on it can offer 加入书架 at all. Any other value is
+      // the shelf, which is where the parameter's absence already pointed.
+      ...(q.scope === 'library' ? { scope: 'library' as const } : {}),
       ...(q.sort !== undefined ? { sort: q.sort as 'title' } : {}),
       ...(q.order !== undefined ? { order: q.order as 'asc' } : {}),
       ...(q.page !== undefined ? { page: Number.parseInt(q.page, 10) || 1 } : {}),
@@ -618,16 +623,33 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
    * Nothing on disk changes, and that is the point: "hide these forty scans from
    * my shelf" and "move these forty scans into a folder" are one word apart in a
    * list of rows and could not be more different in consequence.
+   *
+   * **Addressed by `paths` or by `bookIds`**, and exactly one of the two: the file
+   * manager selects files and has paths, while a shelf card holds a `Book` and has an
+   * id. The id form is what fixed 「找不到「xxx」在磁盘上的路径」 — the client used to
+   * reconstruct a path from a title, which is a guess that fails on every book whose
+   * metadata was renamed and on every book not on the first page of the root.
    */
   app.post('/api/v1/library/browse/shelf', { preHandler: auth }, async (request) => {
     const user = currentUser(request);
-    const body = (request.body ?? {}) as { paths?: unknown; action?: unknown };
-    const paths = stringList(body.paths, 'paths');
+    const body = (request.body ?? {}) as { paths?: unknown; bookIds?: unknown; action?: unknown };
     const action = body.action;
     if (action !== 'add' && action !== 'remove' && action !== 'hide' && action !== 'unhide') {
       throw badRequest('action must be one of add, remove, hide, unhide', 'BAD_ACTION');
     }
-    return ctx.browse.batchShelf(paths, action, user.id);
+    /*
+     * Both given, or neither, is refused rather than merged: the two address the same
+     * write in two vocabularies, and a body carrying both is a client that does not
+     * know which one it meant. Merging them would apply the action twice to a book
+     * that is named both ways, and the report would count it twice.
+     */
+    const hasPaths = Array.isArray(body.paths) && body.paths.length > 0;
+    const hasIds = Array.isArray(body.bookIds) && body.bookIds.length > 0;
+    if (hasPaths === hasIds) {
+      throw badRequest('send exactly one of paths or bookIds', 'AMBIGUOUS_TARGETS');
+    }
+    if (hasIds) return ctx.browse.batchShelfByBookIds(stringList(body.bookIds, 'bookIds'), action, user.id);
+    return ctx.browse.batchShelf(stringList(body.paths, 'paths'), action, user.id);
   });
 
   // ---- uploads ----

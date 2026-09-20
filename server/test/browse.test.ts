@@ -593,3 +593,247 @@ describe('the shelf add/remove pair', () => {
     assert.ok((folder.json() as { applied: number }).applied >= 2, '一个目录代表它下面所有的书');
   });
 });
+
+/**
+ * 按书 id 下架 —— the fix for 「从书架移除时，找不到「xxx」在磁盘上的路径」。
+ *
+ * The client used to name the book by *path*, which it reconstructed by matching the
+ * book's title against the filenames in the library root's first page. Both halves of
+ * that guess are asserted here as broken-in-the-old-way, because each one is a silent
+ * failure on its own:
+ *
+ *  - a title that is not the filename (the normal case — the scanner reads titles out
+ *    of the files) matched nothing, so the reader was told the book could not be found
+ *    on disk *after* asking for it to be taken off their own shelf;
+ *  - a file that is not in the root's first page was not in the listing at all.
+ *
+ * The id cannot fail either way: `book_files` already names the path for every id, and
+ * neither the title nor the file's location in the tree is consulted.
+ */
+describe('naming a shelf write by book id', () => {
+  const DIR = '按id下架';
+
+  test('takes a book off the shelf by id, whatever its title is called', async () => {
+    await mkdir(join(booksDir, DIR), { recursive: true });
+    // The file is called `f1.epub`; the book's title is a sentence. This is the shape
+    // of the reported screenshot, and it is the shape the title→filename join cannot
+    // resolve.
+    const longTitle = '半小时漫画宇宙大爆炸（半小时读完138亿年宇宙史，一口气搞懂大爆炸）';
+    await writeFile(join(booksDir, `${DIR}/f1.epub`), await makeEpub(longTitle, 'urn:by-id'));
+    await ctx.scanner.scan();
+
+    const row = ctx.db.get<{ id: string }>('SELECT id FROM books WHERE title = ?', longTitle);
+    assert.ok(row, 'the book must have been indexed');
+
+    const before = await app.inject({ method: 'GET', url: '/api/v1/books?pageSize=200', headers: auth() });
+    assert.ok(
+      (before.json() as { items: Array<{ title: string }> }).items.some((b) => b.title === longTitle),
+      'it starts on the shelf',
+    );
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { bookIds: [row.id], action: 'remove' },
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const result = res.json() as { applied: number; books: string[]; failed: unknown[] };
+    assert.equal(result.applied, 1, 'the write must land');
+    assert.deepEqual(result.books, [row.id]);
+    assert.equal(result.failed.length, 0, 'nothing may be reported as unfindable');
+
+    const after = await app.inject({ method: 'GET', url: '/api/v1/books?pageSize=200', headers: auth() });
+    assert.equal(
+      (after.json() as { items: Array<{ title: string }> }).items.some((b) => b.title === longTitle),
+      false,
+      '下架 must actually take it off',
+    );
+  });
+
+  test('finds a book whose file is nowhere near the root', async () => {
+    /*
+     * The other half of the guess: the old lookup read the *root's* first page, so a
+     * book three folders down had no path to report at all. The id does not care where
+     * the file lives.
+     */
+    const deep = `${DIR}/一层/两层/三层`;
+    await mkdir(join(booksDir, deep), { recursive: true });
+    await writeFile(join(booksDir, `${deep}/深处.epub`), await makeEpub('深处', 'urn:deep'));
+    await ctx.scanner.scan();
+    const row = ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '深处'")!;
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { bookIds: [row.id], action: 'remove' },
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    assert.equal((res.json() as { applied: number }).applied, 1);
+  });
+
+  test('reports a book with no live file rather than guessing one', async () => {
+    /*
+     * A book whose last file went away has a `books` row and no `book_files` row that is
+     * not missing. There is no path to report, and the honest answer is a failure —
+     * inventing one would write shelf state for a book the reader cannot open, and the
+     * shelf's own predicate already says such a book is not on the shelf.
+     */
+    const res = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { bookIds: ['no-such-book-id'], action: 'remove' },
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const result = res.json() as { applied: number; failed: Array<{ reason: string }> };
+    assert.equal(result.applied, 0);
+    assert.deepEqual(result.failed.map((f) => f.reason), ['NO_LIVE_FILE']);
+  });
+
+  test('refuses a body that names the same write two ways', async () => {
+    /*
+     * `paths` and `bookIds` are two vocabularies for one write; a body carrying both is
+     * a client that does not know which it meant, and merging them would apply the
+     * action twice to a book named both ways and *count* it twice.
+     */
+    const both = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { paths: ['x.epub'], bookIds: ['b1'], action: 'remove' },
+    });
+    assert.equal(both.statusCode, 400, both.body);
+    const neither = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { action: 'remove' },
+    });
+    assert.equal(neither.statusCode, 400, neither.body);
+  });
+});
+
+/**
+ * 书库的浏览页问的是**索引**，不是读者自己的书架。
+ *
+ * It read the shelf endpoint before, so its grid could only ever contain books that
+ * were already shelved — which made 「加入书架」, the one action the page exists for, a
+ * control drawn from a set that could not contain a book needing it.
+ */
+describe('the library scope of the book list', () => {
+  const DIR = '书库范围';
+
+  test('lists a book that is off the shelf, with the flag that says so', async () => {
+    await mkdir(join(booksDir, DIR), { recursive: true });
+    await writeFile(join(booksDir, `${DIR}/在架.epub`), await makeEpub('范围在架', 'urn:scope-on'));
+    await writeFile(join(booksDir, `${DIR}/离架.epub`), await makeEpub('范围离架', 'urn:scope-off'));
+    await ctx.scanner.scan();
+
+    const off = ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '范围离架'")!;
+    const remove = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { bookIds: [off.id], action: 'remove' },
+    });
+    assert.equal(remove.statusCode, 200, remove.body);
+
+    // The shelf does not hold it — that is what "off the shelf" means, and it is why
+    // this page could not have been drawn from the shelf.
+    const shelf = await app.inject({ method: 'GET', url: '/api/v1/books?pageSize=200', headers: auth() });
+    assert.equal(
+      (shelf.json() as { items: Array<{ title: string }> }).items.some((b) => b.title === '范围离架'),
+      false,
+    );
+
+    // The index does, and says which of the two each book is.
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/v1/books?scope=library&path=${encodeURIComponent(DIR)}&pageSize=200`,
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const items = (res.json() as { items: Array<{ title: string; shelfState?: string }> }).items;
+    const byTitle = new Map(items.map((b) => [b.title, b]));
+    assert.equal(byTitle.get('范围离架')?.shelfState, 'off', '不在书架的书必须带 off');
+    assert.equal(byTitle.get('范围在架')?.shelfState, 'on');
+  });
+
+  test('lists a book the reader has no `user_books` row for at all', async () => {
+    /*
+     * The case the `LEFT JOIN` exists for, and the one an account that was granted the
+     * whole library cannot show: a reader who has *never* had a row for a book — not a
+     * `hidden = 1` row from a removal, no row at all.
+     *
+     * An inner join answers this with an empty page, and every other test still passes:
+     * the admin's rows cover the library, and a *removed* book keeps its row (that is
+     * what makes the removal reversible). So the failure mode is "the browsing page is
+     * empty for a new account", which is the opposite of the page's purpose and is
+     * invisible in a suite where everybody already has everything.
+     */
+    const newcomer = ctx.db.get<{ id: string }>(
+      "SELECT id FROM users WHERE username = '范围新人'",
+    ) ?? null;
+    if (!newcomer) {
+      ctx.db.run(
+        `INSERT INTO users (id, username, display_name, password_hash, role, disabled, created_at, updated_at)
+         VALUES ('u-scope-new', '范围新人', '范围新人', 'x', 'member', 0, 0, 0)`,
+      );
+    }
+    const reader = 'u-scope-new';
+
+    // The same service call the route makes, against an account with no rows.
+    const listed = ctx.shelf.list(reader, { scope: 'library', path: DIR, pageSize: 100 });
+    assert.equal(listed.items.length, 2, '索引里的书必须在，不管读者有没有那一行');
+    assert.deepEqual(
+      listed.items.map((book) => book.shelfState).sort(),
+      ['off', 'off'],
+      '没有行和 hidden = 1 都是「不在我的书架上」',
+    );
+    assert.equal(listed.total, 2, '计数走的是同一个 join');
+
+    /*
+     * And a book the reader shelved sorts above the ones they never did.
+     *
+     * In this scope `added_at` is `NULL` for a book with no row, and the honest place
+     * for "when did I get this book" with no answer is *last* under `DESC` — not first.
+     * A sort that put them on top would answer 「最近入库」 with the books that have
+     * never been 「入库」 for this reader at all, which is the sort lying about the one
+     * thing it is for.
+     */
+    const shelved = ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '范围在架'")!;
+    ctx.db.run(
+      'INSERT OR IGNORE INTO user_books (user_id, book_id, added_at, hidden) VALUES (?,?,?,0)',
+      reader, shelved.id, Date.now(),
+    );
+    const recent = ctx.shelf.list(reader, { scope: 'library', path: DIR, pageSize: 100, sort: 'added' });
+    assert.equal(recent.items[0]?.id, shelved.id, '上架过的那本在从没上架过的书前面');
+  });
+
+  test('filters and pages the index the same way, with the flag intact', async () => {
+    /*
+     * `scope=library` shares the whole query builder with the shelf — the search, the
+     * path prefix, the pager — and the one thing that could silently break by sharing
+     * it is the `LEFT JOIN`: a stray `ub.user_id = ?` in the `WHERE` would turn the
+     * join back into an inner one (dropping every book the reader has never shelved,
+     * i.e. exactly the books this page is for), and a `COUNT(*)` over a join with a
+     * different parameter order would count the wrong rows.
+     */
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/books?scope=library&search=%E8%8C%83%E5%9B%B4&pageSize=1&page=1',
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const body = res.json() as { items: Array<{ title: string; shelfState?: string }>; total: number };
+    assert.equal(body.total, 2, 'both books match the search');
+    assert.equal(body.items.length, 1, 'and the page is one row');
+    assert.ok(
+      body.items[0]!.shelfState === 'on' || body.items[0]!.shelfState === 'off',
+      'the flag survives the filter and the page',
+    );
+  });
+
+  test('leaves the field off the shelf’s own list, where it would always be true', async () => {
+    /*
+     * A constant field is a field a client eventually draws. The shelf's list is "books
+     * that are on the shelf", so `shelfState` there would be `'on'` on every row by
+     * construction — noise that reads as information.
+     */
+    const res = await app.inject({ method: 'GET', url: '/api/v1/books?pageSize=5', headers: auth() });
+    assert.equal(res.statusCode, 200, res.body);
+    const items = (res.json() as { items: Array<{ shelfState?: string }> }).items;
+    assert.ok(items.length > 0);
+    assert.ok(items.every((b) => b.shelfState === undefined));
+  });
+});
