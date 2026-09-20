@@ -651,9 +651,9 @@ book-content {
  *
  * Two quiet readouts pinned to the corners of the stage, drawn only while the
  * chrome is hidden. `position: absolute` inside `.reader-screen` (which is
- * `position: relative`) so they can sit over the top and bottom of the text
- * without being part of the flow — they must not take height from the page, or
- * showing them would re-measure the columns and move the text.
+ * `position: relative`) so they can sit at the top and bottom of the text without
+ * being part of the flow — they must not take height from *the page*, or showing
+ * them would re-measure the columns and move the text.
  *
  * `pointer-events: none` because they are readouts, not controls: a tap on the
  * chapter name has to reach the tap zone underneath it and turn the page (or
@@ -684,7 +684,7 @@ book-content {
  * heading it looked worse still: one line of body text sitting under a narrower strip
  * of the same colour, which is the "很奇怪" in the screenshot.
  *
- * So a readout is now a *row*: the paper runs the full width of the stage, flush
+ * So a readout is a *row*: the paper runs the full width of the stage, flush
  * against the top and bottom edges, with the words inset to the page margin inside
  * it. The row is what makes the two readouts one band each rather than two floating
  * labels, and the flush edge is what stops them from looking like they were dropped
@@ -694,6 +694,54 @@ book-content {
  * glass, and the safe insets move the *text* inward, so the colour still runs under
  * the notch and the cutout rather than leaving a strip of page showing beside it.
  * That is why the safe values appear on the labels below and not here.
+ *
+ * ## Why the rows are opaque, and why that is not a paint-order question
+ *
+ * Two rounds of reports are behind this block, and they are one defect seen from
+ * two sides:
+ *
+ *  1. the readouts were painted *under* the chapter's own text (the `z-index`
+ *     paragraph above), and then
+ *  2. *after* that was fixed — "reading-indicator 是浮动的，导致翻页后，遮挡了一部分文字".
+ *
+ * The second is the important one, because it says what the first fix did **not**
+ * answer. The number a readout carries at the top and bottom of the screen is
+ * 30px and 27px (measured at the phone size this product is used at), and a line
+ * of 16px/1.2 body text is 19px tall: the sentence those two rows sat on was cut
+ * **through the middle of its glyphs** in scroll mode, not merely overlapped. Making
+ * the readouts win the paint order only decides *who* is legible, and in immersion
+ * the page does not move to make room — so there is no version of "draw the row over
+ * the line" in which the reader can read both.
+ *
+ * The correction is therefore not a `z-index` at all: the row is opaque paper and it
+ * is an **isolated band**, so the text it discloses never lies underneath it. The
+ * page is inset by exactly the height of the two rows while the chrome is hidden
+ * (see the `[data-chrome='hidden']` rules below), which is the one thing "the
+ * indicator is not floating" can mean — the rows own the top and bottom of the
+ * screen rather than borrowing them from the first and last line.
+ *
+ * That inset is applied to the *book host* rather than to the flow inside the shadow
+ * root, and both halves of that matter:
+ *
+ *  - **the host**, because that is the box the paginator and the scroll position are
+ *    measured against (see `.book-host`), and the reader's restored position is a
+ *    percentage of it. The spacer method — real blocks inside the flow — was the
+ *    alternative, and it is the one that cannot be used: a chapter *adds its own*
+ *    height when the reader scrolls to the end (a short chapter last on screen, the
+ *    next chapter appended), so the position the reader had before a turn is no
+ *    longer the position they land on afterwards. An inset does not change the
+ *    height of the content, so the chapter a reader left is the chapter they return
+ *    to. This is what "翻页后" in the report is about;
+ *  - **the box**, not the flow, because the reading column's own rules live in the
+ *    shadow root (`ui/shadow.ts`) and its padding is the reader's page margin. The
+ *    host is the frame around that column: insetting it takes nothing from the
+ *    column's geometry, so the text is neither re-measured nor re-typeset — it is
+ *    the viewport that shrinks.
+ *
+ * The two facts hold together because the inset depends on the height of the rows,
+ * and the rows are pinned *inside* the same box: whichever of the three supported
+ * sizes the text lands on, the rows take their own height off the top and bottom and
+ * the page keeps the whole middle.
  */
 .reading-indicator {
   position: absolute;
@@ -711,26 +759,49 @@ book-content {
   animation: indicator-in var(--motion-duration) var(--motion-ease);
 }
 
-@keyframes indicator-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+/*
+ * The page makes room for the two rows, and only while they exist.
+ *
+ * The inset is on the *book host* rather than on the flow inside the shadow root,
+ * for the two reasons the block above sets out: the host is what the paginator and
+ * the restored scroll position are measured against, and the flow's own padding is
+ * the reader's page margin. Nothing about the column's geometry changes here — the
+ * frame around it shortens — so no chapter is re-typeset and no offset is
+ * invalidated by hiding or showing the chrome.
+ *
+ * `--reader-readout-top` / `--reader-readout-bottom` carry the heights, because the
+ * same two numbers have to be the inset *and* the row. A row's height is its content,
+ * and the tokens below are that content written once: one line at the readout's own
+ * font size, the breathing room above and below it, and the hairline the rule adds —
+ * because `box-sizing: border-box` does not shrink a box whose height is its content,
+ * so an inset that forgot the border would be 1px short and clip the last line by
+ * exactly that much. Derived here rather than measured in the page, because an inset
+ * that reads the row's own height back is a feedback loop: the row's height is inside
+ * the box the inset shortens.
+ *
+ * The bottom row is the shorter of the two: the chapter name carries the safe-area
+ * inset on its outer edge and the page count does not, so the two are not the same
+ * number and must not be given one. Both are `line-height: 1` in the row rules below
+ * — a normal line box is ~1.2em, a height these tokens cannot see.
+ */
+:root {
+  --reader-readout-top: calc(var(--text-label) + 0.35rem * 2 + var(--safe-top) + 1px);
+  --reader-readout-bottom: calc(var(--text-meta) + 0.35rem * 2 + var(--safe-bottom) + 1px);
 }
 
 /*
- * The row itself.
- *
- * `display: block` and `width: 100%` so the paper spans the stage rather than the
- * text, and the height comes from one line plus the readout's own breathing room —
- * a `min-height` would be a second, invented number to keep in agreement with the
- * font size. The paper is the page's own colour (not a translucent scrim) so the
- * line of text underneath is *covered* rather than tinted; the reader is reading a
- * readout at that moment, not the page.
+ * `line-height: 1` on both rows is load-bearing rather than tidy: the page's inset is
+ * computed from these two heights (see the tokens above), and a normal line box is
+ * ~1.2em — a height the token cannot see, so the inset would be 20% short of the row
+ * and the last line of the page would be cut by exactly that much. One line, one
+ * known height, and what the token says is what the row is.
  */
 .indicator-chapter,
 .indicator-progress {
   display: block;
   width: 100%;
   background: var(--reader-paper);
+  line-height: 1;
   padding-block: 0.35rem;
   /* The text is inset to the page margin and the safe area; the paper is not. */
   padding-inline: calc(var(--reader-indicator-inset) + var(--safe-left))
@@ -761,8 +832,50 @@ book-content {
   border-block-start: 1px solid var(--reader-line);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .reading-indicator { animation: none; }
+/*
+ * The page is a whole number of lines, and the surface the reader looks through is
+ * exactly that tall.
+ *
+ * `--reader-page-trim` is the remainder of the viewport divided by the line height,
+ * published by the view (`syncPageTrim`) because only the rendered text knows the grid
+ * the book is set on: `line-height` is `inherit` by default, so the reader's own
+ * stylesheet has no number to divide by. Floored away, the page holds a whole number of
+ * lines and its last line ends at the glass; left in, the strip at the foot of the page
+ * shows the first line of the *next* page with its descenders sliced off.
+ *
+ * Carried on `inset-block-end`, and the three reasons are worth stating because each
+ * one is a way this can be got wrong:
+ *
+ *  - **an inset, not a `height`.** The host is absolutely positioned, so its top and
+ *    bottom are already two statements about where the box is; a height would be a
+ *    third, trying to agree with both. One inset says one more thing — where the box
+ *    ends — and composes with the readout rows instead of replacing them;
+ *  - **not padding.** The host is `border-box` (the document-wide rule), so a
+ *    padding-bottom shortens the *content* box and leaves `clientHeight` — the number
+ *    the page arithmetic and the offsets are built on — at its old value. The page
+ *    would then be measured one height and drawn another, which is the disagreement
+ *    this removes rather than a second version of it;
+ *  - **off the bottom, not the top.** The top edge is the line the reader is meant to
+ *    start on; trimming it would push the first line under the chapter name's row,
+ *    which is the same defect at the other end of the same page.
+ *
+ * The write is the view's and the read is the stylesheet's, and the trim applies only
+ * while the readouts do: with the chrome up the two rows are not on screen, the footer
+ * floats over the page instead of taking height from it (see `.footer`), and there is
+ * nothing to make room for. Scoping the rule to the hidden state is what keeps the
+ * reading column at the same block inset in both states — which is the property that
+ * makes showing and hiding the toolbar a pure repaint rather than a re-measure.
+ *
+ * `0px` until the view has measured a chapter, which is the correct first frame: the
+ * trim is a correction to a page whose line grid is known, and guessing one before that
+ * would clip text to a number nobody computed.
+ */
+.reader-screen[data-chrome='hidden'] .book-host {
+  inset-block-start: var(--reader-readout-top);
+  /* The row's height and the grid's remainder, in one expression: they are independent
+     corrections to the same edge — one is chrome and one is the text's own metric — so
+     they add rather than replacing one another. */
+  inset-block-end: calc(var(--reader-readout-bottom) + var(--reader-page-trim, 0px));
 }
 
 /*
