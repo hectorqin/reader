@@ -111,42 +111,11 @@ describe('the reading surface fills the screen', () => {
     }
   });
 
-  it('makes each reading readout a full-width row flush to its edge', () => {
-    // "reading-indicator 应该是紧贴顶部/底部，并且占用一整行": a readout used to be a
-    // paper pill the width of its own text, floated a little inside the edge. A sticker
-    // that ends wherever the words end gives the chapter name and the page count two
-    // different right edges, and over the chapter's own heading it read as a fragment of
-    // body text rather than something the screen drew — the "很奇怪，不整洁" in the report.
-    //
-    // So each readout is a *row*: the paper spans the stage and the words are inset
-    // inside it. Asserted as the pair of properties that make it a row rather than a
-    // pill — full width, and no horizontal shrink — because either one alone leaves the
-    // old look reachable.
-    // The row geometry is one rule for both readouts, so it is read by its own
-    // selector list rather than by either name alone.
-    // The shared rule is reached by either name: `rule()` matches the selector list
-    // the rule declares, so the first of the two names finds the row geometry.
-    const row = rule('.indicator-chapter');
-    expect(row).not.toBe('');
-    expect(declaration(row, 'display')).toBe('block');
-    expect(declaration(row, 'width')).toBe('100%');
-    expect(declaration(row, 'background')).toBe('var(--reader-paper)');
-  });
-
-  it('puts the page insets on the readout text and not on the row', () => {
-    // The paper reaches the very edge of the glass — under the notch and the cutout —
-    // so the safe insets move the *text* inward instead of leaving a strip of page
-    // showing beside the band. The container therefore carries no padding at all: an
-    // inset on it would be the strip this avoids.
+  it('keeps the reading information in a single bottom strip', () => {
     const box = rule('.reading-indicator');
-    expect(declaration(box, 'padding')).toBeUndefined();
-    expect(declaration(box, 'align-items')).toBe('stretch');
-    // The two rows carry the safe insets on their own inner edges, in their own
-    // rules — read from the sheet's text, because the selector is the *second* rule
-    // for each name and a by-name lookup returns the shared row rule above it.
-    const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(text).toMatch(/\.indicator-chapter \{[^}]*padding-block-start: calc\(0\.35rem \+ var\(--safe-top\)\)/);
-    expect(text).toMatch(/\.indicator-progress \{[^}]*padding-block-end: calc\(0\.35rem \+ var\(--safe-bottom\)\)/);
+    expect(declaration(box, 'bottom')).toBe('0');
+    expect(declaration(box, 'display')).toBe('flex');
+    expect(declaration(box, 'pointer-events')).toBe('none');
   });
 
   it('paints the read-aloud bar above the page it floats over', () => {
@@ -169,65 +138,11 @@ describe('the reading surface fills the screen', () => {
     expect(declaration(controls, 'flex')).toBe('1 1 0');
   });
 
-  it('takes the readout rows out of the page instead of drawing over the text', () => {
-    // "reading-indicator 是浮动的，导致翻页后，遮挡了一部分文字".
-    //
-    // This is *not* a z-index question, and that is the whole point of asserting it
-    // here. The rows already won the paint order (see the `--reader-layer-readout`
-    // check above); the report is that winning it is not the same as the text being
-    // readable. The rows are 25px and 24px tall at the phone size this product is
-    // used at, and a line of body text is 19px — so in immersion the sentence under
-    // each row was cut through the middle of its glyphs, and no paint order makes
-    // half a line whole.
-    //
-    // The correction is that the reading surface is inset by the two rows while they
-    // are on screen, so the text that discloses is never under one of them. Asserted
-    // as the three things that make it work:
-    //
-    //  1. the tokens exist, so the row's height is a number the page can be inset by;
-    //  2. the inset is on `inset-block-end`/`-start` rather than on a height or a
-    //     padding, because the host is `border-box` and a padding would shorten the
-    //     content box while leaving `clientHeight` — the number the page arithmetic
-    //     and the restored offset are built on — where it was;
-    //  3. the rows are `line-height: 1`, or the token is 20% short of the row and the
-    //     last line of the page is cut by exactly that much.
-    const root = css.replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(root).toMatch(/--reader-readout-top: calc\(/);
-    expect(root).toMatch(/--reader-readout-bottom: calc\(/);
-    const hidden = rule(".reader-screen[data-chrome='hidden'] .book-host");
-    expect(hidden).not.toBe('');
-    expect(declaration(hidden, 'inset-block-start')).toBe('var(--reader-readout-top)');
-    expect(declaration(hidden, 'inset-block-end')).toContain('var(--reader-readout-bottom)');
-    // Not a height and not a padding: see (2) above. Either would leave the measured
-    // box and the drawn box as two different numbers.
-    expect(declaration(hidden, 'height')).toBeUndefined();
-    expect(declaration(hidden, 'block-size')).toBeUndefined();
-    expect(declaration(hidden, 'padding')).toBeUndefined();
-    expect(declaration(hidden, 'padding-block-end')).toBeUndefined();
-    const row = rule('.indicator-chapter');
-    expect(declaration(row, 'line-height')).toBe('1');
-  });
-
-  it('ends the page on a whole line, from a trim the view publishes', () => {
-    // The second half of the same report, and the half the inset does *not* answer.
-    // A page whose height is not a whole multiple of the line height ends with its
-    // last line sticking out past the bottom edge, and the reading surface — which is
-    // a clipped box — cuts that line's descenders. The strip is then blamed for a cut
-    // it did not make, and moving the strip changes nothing.
-    //
-    // So the page's own height is floored to the text's line grid and the remainder is
-    // taken off the bottom edge as an inset. It is published by the view because
-    // `line-height` is `inherit` by default — the book's own value, which this
-    // stylesheet deliberately does not guess at — so the grid is only knowable from the
-    // rendered boxes.
-    const hidden = rule(".reader-screen[data-chrome='hidden'] .book-host");
-    const inset = declaration(hidden, 'inset-block-end') ?? '';
-    expect(inset).toContain('var(--reader-page-trim');
-    // An `inset-block-end` and not a `padding-block-end`: the host is `border-box`, so
-    // a padding would leave `clientHeight` untouched and the page would be measured one
-    // height and drawn another.
-    const trimUse = css.replace(/\/\*[\s\S]*?\*\//g, '');
-    expect(trimUse).toContain('--reader-page-trim');
-    expect(trimUse).not.toMatch(/padding-block-end:\s*var\(--reader-page-trim/);
+  it('uses the same reading geometry with chrome visible and hidden', () => {
+    expect(rule(".reader-screen[data-chrome='hidden'] .book-host")).toBe('');
+    const body = rule('.reader-screen .book-host');
+    expect(declaration(body, 'inset-block-start')).toBe('var(--safe-top)');
+    expect(declaration(body, 'inset-block-end')).toContain('var(--reader-page-trim');
+    expect(declaration(body, 'inset-block-end')).toContain('var(--safe-bottom)');
   });
 });

@@ -28,27 +28,6 @@
  * Host shell: the viewer, not the book. Safe to style freely.
  * ------------------------------------------------------------------ */
 
-/*
- * The icon font.
- *
- * Declared here rather than in a separate sheet so the face and the token that
- * sizes it are in one place. `format('truetype')` and a relative URL because the
- * bundle is loaded from `file://` inside the Android WebView, where an absolute path
- * resolves to the app's assets root rather than to the bundle.
- *
- * `font-display: block` is deliberate: icons are UI, not text. With `swap` a
- * browser paints the fallback glyph — a literal private-use code point box — for one
- * frame, and a row of tofu boxes flashing on every cold start reads as a broken app.
- * The font is 16KB inside the bundle, so there is no network round trip to hide.
- */
-@font-face {
-  font-family: 'Reader Icons';
-  src: url('./reader-icons.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: block;
-}
-
 :root {
   --reader-ink: #1a1a1a;
   --reader-paper: #fbfaf7;
@@ -207,7 +186,7 @@
   --reader-layer-bar: 10;     /* the two floating bars, over the page */
   --reader-layer-rail: 14;    /* the quick-action column */
   --reader-layer-panel: 20;   /* sheets and their scrim */
-  --reader-layer-readout: 30; /* the immersion readouts, above the page they describe */
+  --reader-layer-readout: 5;  /* above the page, below bars and sheets */
 
   /*
    * The reading indicator's own inset.
@@ -646,270 +625,8 @@ book-content {
   white-space: nowrap;
 }
 
-/*
- * The reading indicator.
- *
- * Two quiet readouts pinned to the corners of the stage, drawn only while the
- * chrome is hidden. `position: absolute` inside `.reader-screen` (which is
- * `position: relative`) so they can sit at the top and bottom of the text without
- * being part of the flow — they must not take height from *the page*, or showing
- * them would re-measure the columns and move the text.
- *
- * `pointer-events: none` because they are readouts, not controls: a tap on the
- * chapter name has to reach the tap zone underneath it and turn the page (or
- * bring the chrome back), not be swallowed by a label.
- *
- * What the two readouts must therefore do is be drawn *over* the page, and they
- * were not — the chapter name and the page count were painted over by the chapter's
- * own text.
- *
- * The cause is worth stating exactly, because the number was not the problem. A
- * `z-index` orders boxes *within one stacking context*; these two are siblings of
- * the reading surface inside the screen's, so with neither declaring a `z-index`
- * they were painted in **document order** — and `.book-host` comes later in the
- * tree than the indicator, because the reading surface is appended before the
- * chrome is rendered. It is `position: absolute`, so it is a positioned box like
- * them, and the `z-index: 12` the indicator carried did nothing across two
- * unrelated positioned siblings. One declared number on each side is what makes
- * the order a fact of this stylesheet (see the layer scale with the other tokens).
- *
- * ## Why each readout is a full-width row
- *
- * The two readouts used to be small paper pills the width of their own text, floated
- * a little inside the top and bottom edges. That is the report: "reading-indicator
- * 应该是紧贴顶部/底部，并且占用一整行，现在看起来很奇怪，不整洁". A pill as wide as
- * its own words is a *sticker* — it lands wherever the words end, so the chapter name
- * and the page count have two different right edges, and it reads as a fragment left
- * on the page rather than as a readout the screen drew. Over the chapter's own
- * heading it looked worse still: one line of body text sitting under a narrower strip
- * of the same colour, which is the "很奇怪" in the screenshot.
- *
- * So a readout is a *row*: the paper runs the full width of the stage, flush
- * against the top and bottom edges, with the words inset to the page margin inside
- * it. The row is what makes the two readouts one band each rather than two floating
- * labels, and the flush edge is what stops them from looking like they were dropped
- * slightly inside the screen.
- *
- * No safe-area padding is added to the *row*: the paper reaches the very edge of the
- * glass, and the safe insets move the *text* inward, so the colour still runs under
- * the notch and the cutout rather than leaving a strip of page showing beside it.
- * That is why the safe values appear on the labels below and not here.
- *
- * ## Why the rows are opaque, and why that is not a paint-order question
- *
- * Two rounds of reports are behind this block, and they are one defect seen from
- * two sides:
- *
- *  1. the readouts were painted *under* the chapter's own text (the `z-index`
- *     paragraph above), and then
- *  2. *after* that was fixed — "reading-indicator 是浮动的，导致翻页后，遮挡了一部分文字".
- *
- * The second is the important one, because it says what the first fix did **not**
- * answer. The number a readout carries at the top and bottom of the screen is
- * 30px and 27px (measured at the phone size this product is used at), and a line
- * of 16px/1.2 body text is 19px tall: the sentence those two rows sat on was cut
- * **through the middle of its glyphs** in scroll mode, not merely overlapped. Making
- * the readouts win the paint order only decides *who* is legible, and in immersion
- * the page does not move to make room — so there is no version of "draw the row over
- * the line" in which the reader can read both.
- *
- * The correction is therefore not a `z-index` at all: the row is opaque paper and it
- * is an **isolated band**, so the text it discloses never lies underneath it. The
- * page is inset by exactly the height of the two rows while the chrome is hidden
- * (see the `[data-chrome='hidden']` rules below), which is the one thing "the
- * indicator is not floating" can mean — the rows own the top and bottom of the
- * screen rather than borrowing them from the first and last line.
- *
- * That inset is applied to the *book host* rather than to the flow inside the shadow
- * root, and both halves of that matter:
- *
- *  - **the host**, because that is the box the paginator and the scroll position are
- *    measured against (see `.book-host`), and the reader's restored position is a
- *    percentage of it. The spacer method — real blocks inside the flow — was the
- *    alternative, and it is the one that cannot be used: a chapter *adds its own*
- *    height when the reader scrolls to the end (a short chapter last on screen, the
- *    next chapter appended), so the position the reader had before a turn is no
- *    longer the position they land on afterwards. An inset does not change the
- *    height of the content, so the chapter a reader left is the chapter they return
- *    to. This is what "翻页后" in the report is about;
- *  - **the box**, not the flow, because the reading column's own rules live in the
- *    shadow root (`ui/shadow.ts`) and its padding is the reader's page margin. The
- *    host is the frame around that column: insetting it takes nothing from the
- *    column's geometry, so the text is neither re-measured nor re-typeset — it is
- *    the viewport that shrinks.
- *
- * The two facts hold together because the inset depends on the height of the rows,
- * and the rows are pinned *inside* the same box: whichever of the three supported
- * sizes the text lands on, the rows take their own height off the top and bottom and
- * the page keeps the whole middle.
- */
-.reading-indicator {
-  position: absolute;
-  inset: 0;
-  z-index: var(--reader-layer-readout);
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: stretch;
-  font-size: var(--text-meta);
-  color: var(--reader-muted);
-  /* A slow fade of its own, offset by the chrome's duration: the indicator comes
-     up as the bars go down, so the reader never sees an empty screen. */
-  animation: indicator-in var(--motion-duration) var(--motion-ease);
-}
-
-/*
- * The page makes room for the two rows, and only while they exist.
- *
- * The inset is on the *book host* rather than on the flow inside the shadow root,
- * for the two reasons the block above sets out: the host is what the paginator and
- * the restored scroll position are measured against, and the flow's own padding is
- * the reader's page margin. Nothing about the column's geometry changes here — the
- * frame around it shortens — so no chapter is re-typeset and no offset is
- * invalidated by hiding or showing the chrome.
- *
- * `--reader-readout-top` / `--reader-readout-bottom` carry the heights, because the
- * same two numbers have to be the inset *and* the row. A row's height is its content,
- * and the tokens below are that content written once: one line at the readout's own
- * font size, the breathing room above and below it, and the hairline the rule adds —
- * because `box-sizing: border-box` does not shrink a box whose height is its content,
- * so an inset that forgot the border would be 1px short and clip the last line by
- * exactly that much. Derived here rather than measured in the page, because an inset
- * that reads the row's own height back is a feedback loop: the row's height is inside
- * the box the inset shortens.
- *
- * The bottom row is the shorter of the two: the chapter name carries the safe-area
- * inset on its outer edge and the page count does not, so the two are not the same
- * number and must not be given one. Both are `line-height: 1` in the row rules below
- * — a normal line box is ~1.2em, a height these tokens cannot see.
- */
-:root {
-  --reader-readout-top: calc(var(--text-label) + 0.35rem * 2 + var(--safe-top) + 1px);
-  --reader-readout-bottom: calc(var(--text-meta) + 0.35rem * 2 + var(--safe-bottom) + 1px);
-}
-
-/*
- * `line-height: 1` on both rows is load-bearing rather than tidy: the page's inset is
- * computed from these two heights (see the tokens above), and a normal line box is
- * ~1.2em — a height the token cannot see, so the inset would be 20% short of the row
- * and the last line of the page would be cut by exactly that much. One line, one
- * known height, and what the token says is what the row is.
- */
-.indicator-chapter,
-.indicator-progress {
-  display: block;
-  width: 100%;
-  background: var(--reader-paper);
-  line-height: 1;
-  padding-block: 0.35rem;
-  /* The text is inset to the page margin and the safe area; the paper is not. */
-  padding-inline: calc(var(--reader-indicator-inset) + var(--safe-left))
-    calc(var(--reader-indicator-inset) + var(--safe-right));
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.indicator-chapter {
-  /* The chapter name is the longer of the two, so it is the one that can be
-     ellipsised when a title runs past the row. */
-  font-size: var(--text-label);
-  padding-block-start: calc(0.35rem + var(--safe-top));
-  /* A hairline between the readout and the page, on the inner edge only.
-     The paper behind a readout is the page's own colour, so without a line the row
-     is invisible on a plain chapter — and the chapter name at the top then reads as
-     a stray duplicate of the heading underneath it, which is the "很奇怪" in the
-     report. One rule in the shared line colour turns it into a band the screen drew.
-     The outer edge has no line: it is the edge of the screen. */
-  border-block-end: 1px solid var(--reader-line);
-}
-
-.indicator-progress {
-  font-variant-numeric: tabular-nums;
-  color: var(--reader-ink);
-  padding-block-end: calc(0.35rem + var(--safe-bottom));
-  border-block-start: 1px solid var(--reader-line);
-}
-
-/*
- * The page is a whole number of lines, and the surface the reader looks through is
- * exactly that tall.
- *
- * `--reader-page-trim` is the remainder of the viewport divided by the line height,
- * published by the view (`syncPageTrim`) because only the rendered text knows the grid
- * the book is set on: `line-height` is `inherit` by default, so the reader's own
- * stylesheet has no number to divide by. Floored away, the page holds a whole number of
- * lines and its last line ends at the glass; left in, the strip at the foot of the page
- * shows the first line of the *next* page with its descenders sliced off.
- *
- * Carried on `inset-block-end`, and the three reasons are worth stating because each
- * one is a way this can be got wrong:
- *
- *  - **an inset, not a `height`.** The host is absolutely positioned, so its top and
- *    bottom are already two statements about where the box is; a height would be a
- *    third, trying to agree with both. One inset says one more thing — where the box
- *    ends — and composes with the readout rows instead of replacing them;
- *  - **not padding.** The host is `border-box` (the document-wide rule), so a
- *    padding-bottom shortens the *content* box and leaves `clientHeight` — the number
- *    the page arithmetic and the offsets are built on — at its old value. The page
- *    would then be measured one height and drawn another, which is the disagreement
- *    this removes rather than a second version of it;
- *  - **off the bottom, not the top.** The top edge is the line the reader is meant to
- *    start on; trimming it would push the first line under the chapter name's row,
- *    which is the same defect at the other end of the same page.
- *
- * The write is the view's and the read is the stylesheet's, and the trim applies only
- * while the readouts do: with the chrome up the two rows are not on screen, the footer
- * floats over the page instead of taking height from it (see `.footer`), and there is
- * nothing to make room for. Scoping the rule to the hidden state is what keeps the
- * reading column at the same block inset in both states — which is the property that
- * makes showing and hiding the toolbar a pure repaint rather than a re-measure.
- *
- * `0px` until the view has measured a chapter, which is the correct first frame: the
- * trim is a correction to a page whose line grid is known, and guessing one before that
- * would clip text to a number nobody computed.
- */
-.reader-screen[data-chrome='hidden'] .book-host {
-  inset-block-start: var(--reader-readout-top);
-  /* The row's height and the grid's remainder, in one expression: they are independent
-     corrections to the same edge — one is chrome and one is the text's own metric — so
-     they add rather than replacing one another. */
-  inset-block-end: calc(var(--reader-readout-bottom) + var(--reader-page-trim, 0px));
-}
-
-/*
- * The icon glyph.
- *
- * An icon is one character of a private-use font, so it is laid out as text — and the
- * only thing that decides where a character lands is the font's own metrics. That is why
- * this rule is three lines and not a geometry puzzle, and it is also what went wrong:
- * the rule used to say `line-height: 0; display: inline-block; width: 1em; height: 1em`,
- * which replaces the font's line box with a 1em box anchored at the baseline. The box
- * then extends *downward* from the baseline while the glyph's ink is drawn *around* it,
- * so the ink ended up at the box's top edge with the whole em empty beneath it. Every
- * container in this stylesheet centres its children, the box was centred correctly, and
- * the ink was half an em away from where the box said it was — measured at 0.496em
- * across `menu`, `close` and `folder`, i.e. half the box, in every row, at every size.
- *
- * So the box is the font's line box (`line-height: 1`) and the font's line box is
- * symmetric: `tools/icons/build.mjs` declares an ascent and descent of half the em each
- * and draws every glyph inside it, so centring the line centres the ink. `width: 1em` is
- * kept because it is the one thing the layout needs that the font cannot supply — a
- * predictable advance width, so a row of icons and labels is a row and not a function of
- * which glyphs happen to be in it.
- *
- * `vertical-align: middle` is for the rows that are *not* flex or grid — a glyph inline
- * in a paragraph of text, which is where `baseline` would otherwise apply and put the
- * icon's baseline on the text's, half an em low. In a flex or grid container (most of
- * this app's chrome) it is inert and the container's own alignment does the work, which
- * is the point: the icon needs no special case in either.
- *
- * `font-synthesis: none` matters for a private-use glyph: some engines will synthesise a
- * bold or oblique from the regular face, and a synthesised icon is a smeared icon.
- */
+/* Shared sizing for the SVG icon primitive. */
 .icon {
-  font-family: 'Reader Icons', sans-serif;
   font-size: 1.15rem;
   font-style: normal;
   font-weight: 400;
@@ -3930,3 +3647,98 @@ book-content {
     scroll-behavior: auto !important;
   }
 }
+
+/* Mobile reading: the surface and its information strip never resize with chrome. */
+[data-theme='green'] {
+  --reader-ink: #23392c;
+  --reader-paper: #d5ecd7;
+  --reader-surface: #e8f2e8;
+  --reader-muted: #617a65;
+  --reader-line: #bdd6bf;
+  --reader-accent: #497553;
+}
+svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; vertical-align: middle; }
+.reader-screen { --reader-footer-height: calc(8.5rem + var(--safe-bottom)); }
+.reader-screen .book-host {
+  inset-block-start: var(--safe-top);
+  inset-block-end: calc(1.8rem + var(--safe-bottom) + var(--reader-page-trim, 0px));
+}
+.reading-indicator {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  height: calc(1.8rem + var(--safe-bottom));
+  padding: 0.35rem max(1.25rem, var(--safe-right)) var(--safe-bottom) max(1.25rem, var(--safe-left));
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--reader-muted);
+  background: var(--reader-paper);
+  border-top: 1px solid color-mix(in srgb, var(--reader-line) 50%, transparent);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  z-index: var(--reader-layer-readout);
+  pointer-events: none;
+}
+.indicator-chapter { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.indicator-progress { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.reader-screen .topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  height: auto;
+  min-height: calc(4.5rem + var(--safe-top));
+  padding: calc(0.6rem + var(--safe-top)) 1rem 0.6rem;
+  background: var(--reader-surface);
+  border: 0;
+  box-shadow: 0 2px 12px #0000000a;
+}
+.reader-heading { min-width: 0; display: grid; gap: 0.3rem; }
+.reader-heading strong { font-size: 1.05rem; font-weight: 600; }
+.reader-heading span { font-size: 0.75rem; color: var(--reader-muted); }
+.reader-heading strong, .reader-heading span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reader-screen .footer {
+  height: var(--reader-footer-height);
+  padding: 0.5rem 1rem calc(0.4rem + var(--safe-bottom));
+  background: var(--reader-surface);
+  border: 0;
+  box-shadow: 0 -2px 12px #0000000a;
+}
+.reader-screen .progress-row { display: flex; align-items: center; gap: 0.75rem; padding: 0; min-height: 3rem; }
+.reader-screen .nav-chapter { flex: 0 0 auto; font-size: 0.8rem; padding: 0.35rem 0; min-height: 44px; }
+.reader-scrub { flex: 1; min-width: 0; display: grid; text-align: center; }
+.reader-screen .progress-scrubber { width: 100%; min-height: 28px; margin: 0; }
+.reader-screen .progress-page { font-size: 0.65rem; color: var(--reader-muted); }
+.reader-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.25rem; }
+.reader-actions .top-button { min-width: 0; max-width: none; min-height: 60px; padding: 0.45rem 0; gap: 0.45rem; }
+.reader-actions .icon { font-size: 1.4rem; }
+.reader-actions .top-button-label { font-size: 0.75rem; font-weight: 400; }
+.reader-screen .reader-rail {
+  top: auto;
+  bottom: calc(var(--reader-footer-height) + 1rem);
+  left: auto;
+  right: max(1rem, var(--safe-right));
+  width: auto;
+  max-height: none;
+  padding: 0;
+  transform: none;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.reader-screen .rail-button { width: 48px; height: 48px; border-radius: 50%; background: var(--reader-surface); box-shadow: 0 3px 12px #00000020; }
+.reader-screen .rail-button .icon { font-size: 1.5rem; }
+.reader-screen .panel { border-radius: 20px 20px 0 0; max-height: 62%; background: var(--reader-surface); box-shadow: 0 -6px 30px #00000018; }
+.reader-screen .panel-header { padding: 0.5rem 1.25rem 0.75rem; }
+.reader-screen .panel-body { padding-inline: 1.25rem; }
+.reader-screen .panel .field { padding-block: 0.8rem; }
+.reader-screen .panel .tts-bar { position: static; border-radius: 12px; width: auto; transform: none; margin-bottom: 1rem; }
+.reader-screen .panel-header > .icon-button { margin-inline-start: auto; }
+.reader-screen .panel .field { grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr); gap: 0.75rem; padding-block: 0.5rem; }
+.reader-screen .field input[type='range'] { min-height: 32px; }
+.reader-screen .field input[type='range']::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--reader-line); }
+.reader-screen .field input[type='range']::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; margin-top: -7px; border-radius: 50%; background: var(--reader-accent); }
+.reader-screen .field input[type='range']::-moz-range-track { height: 4px; border-radius: 2px; background: var(--reader-line); }
+.reader-screen .field input[type='range']::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--reader-accent); }

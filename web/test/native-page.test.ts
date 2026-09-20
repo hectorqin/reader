@@ -206,6 +206,17 @@ describe('serialisePage', () => {
 });
 
 describe('androidPageHost', () => {
+  it('gives the browser a PDF blob instead of an empty fixed page', async () => {
+    const { loadPdf } = await import('../src/formats/pdf.ts');
+    const pdf = await loadPdf(new TextEncoder().encode('%PDF-1.7 fixture'));
+    const reader = view(pdf);
+    try {
+      await reader.open(0);
+      const frame = flowOf(reader).querySelector('iframe');
+      expect(frame).not.toBeNull();
+      expect(frame?.src).toMatch(/^blob:/);
+    } finally { reader.dispose(); }
+  });
   function bridge(overrides: Partial<AndroidBridge> = {}): AndroidBridge {
     return {
       shellVersion: () => 2,

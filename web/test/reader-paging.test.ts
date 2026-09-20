@@ -122,6 +122,34 @@ describe('page turns in scroll mode', () => {
     document.body.append(container);
   });
 
+  it('keeps a turned page when a later viewport observation restores the offset', async () => {
+    let resize: (() => void) | undefined;
+    const previousObserver = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      constructor(callback: () => void) { resize = callback; }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    const view = scrollingView(container, 4);
+    try {
+      await view.open(0, 0);
+      await view.next();
+      const before = view.position();
+      expect(before.pageInChapter).toBe(2);
+      resize?.();
+      expect(view.position().locator).toBe(before.locator);
+      expect(view.position().pageInChapter).toBe(2);
+      await view.seekPageInChapter(2);
+      view.applySettings({ theme: 'green' });
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      expect(view.position().pageInChapter).toBe(3);
+    } finally {
+      view.dispose();
+      globalThis.ResizeObserver = previousObserver;
+    }
+  });
+
   it('walks back page by page and reports the page it is on', async () => {
     // The regression: `previous()` decided whether it had room by comparing
     // `scrollTop` against 8, then *subtracted* 0.9 of a screen. The two numbers do
