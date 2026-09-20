@@ -350,6 +350,7 @@ describe('PDF loading', () => {
     expect(doc.format).toBe('pdf');
     expect(doc.layout).toBe('fixed');
     expect(doc.sections).toHaveLength(1);
+    expect((doc.sections[0] as { document?: { bytes: Uint8Array } }).document?.bytes).toEqual(utf8('%PDF-1.7 fake'));
   });
 });
 

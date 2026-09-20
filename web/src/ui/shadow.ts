@@ -77,6 +77,8 @@ import { BOOK_RESOURCE_MARKER } from '../formats/book-resource.ts';
  */
 const TXT_STYLESHEET = `
 .txt-body {
+  font-size: 1.125em;
+  line-height: var(--reader-txt-line-height, 1.8);
   /* Declared on the wrapper rather than on each paragraph so one property can be
      changed in one place, and so a paragraph that the file's own text already
      indented is not indented twice. */

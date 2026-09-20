@@ -64,7 +64,7 @@ export async function loadBook(ctx: LoadContext, options: LoadOptions = {}): Pro
       return { doc: await loadComicDirectory(options.comicPages, resolve), notes: [] };
     }
     case 'pdf':
-      return { doc: await loadPdf(), notes: [] };
+      return { doc: await loadPdf(ctx.bytes), notes: [] };
     default:
       throw new Error(`不支持的格式：${ctx.fileName || '未知文件'}`);
   }

@@ -94,7 +94,7 @@ export interface ViewSettings {
   mode: 'scroll' | 'paged';
   fontScale: number;
   lineHeight: string;
-  theme: 'light' | 'sepia' | 'dark';
+  theme: 'light' | 'sepia' | 'green' | 'dark';
   /** Fixed-layout only. */
   fit: 'contain' | 'width';
   direction: 'ltr' | 'rtl';
@@ -362,6 +362,8 @@ export class ReaderView {
 
   applySettings(next?: Partial<ViewSettings>): void {
     const previous = this.settings;
+    // Capture the live position before typography changes its scroll extent.
+    if (next) this.measureWithin();
     if (next) this.settings = { ...this.settings, ...next };
     document.documentElement.dataset['theme'] = this.settings.theme;
     this.host.setAttribute('data-paginated', String(this.settings.mode === 'paged'));
@@ -369,6 +371,7 @@ export class ReaderView {
     // `inherit` is what keeps the author's line-height; only an explicit user
     // choice replaces it.
     this.container.style.setProperty('--reader-line-height', this.settings.lineHeight);
+    this.container.style.setProperty('--reader-txt-line-height', this.settings.lineHeight === 'inherit' ? '1.8' : this.settings.lineHeight);
     // Same reasoning for the font stack: the default is `inherit`, so a book
     // that ships its own stack keeps it. The reader's choice is offered first so
     // a book that ships *nothing* looks like the rest of their library.
@@ -835,6 +838,7 @@ export class ReaderView {
         ...(section.path ? { path: section.path } : {}),
         ...(section.image ? { mediaType: section.image.mediaType } : {}),
         ...(section.image ? { bytes: section.image.bytes } : {}),
+        ...(section.document ? { bytes: section.document.bytes, mediaType: section.document.mediaType } : {}),
         fit: this.settings.fit,
       });
       if (drawn) {
@@ -862,6 +866,12 @@ export class ReaderView {
       img.decoding = 'async';
       img.draggable = false;
       wrapper.append(img);
+    } else if (section.document) {
+      const frame = document.createElement('iframe');
+      frame.className = 'pdf-frame';
+      frame.title = section.label;
+      frame.src = this.objectUrl(section.document.bytes, section.document.mediaType);
+      wrapper.append(frame);
     } else if (section.html) {
       const frame = document.createElement('iframe');
       frame.className = 'pdf-frame';
@@ -893,11 +903,18 @@ export class ReaderView {
     if (this.settings.mode === 'paged') {
       const width = scroller.scrollWidth;
       if (width <= 0) return this.sectionOffset;
-      return Math.min(1, Math.max(0, scroller.scrollLeft / Math.max(1, width - scroller.clientWidth)));
+      const within = Math.min(1, Math.max(0, scroller.scrollLeft / Math.max(1, width - scroller.clientWidth)));
+      this.sectionOffset = within;
+      return within;
     }
     const limit = scroller.scrollHeight - scroller.clientHeight;
     if (limit <= 0) return 0;
-    return Math.min(1, Math.max(0, scroller.scrollTop / limit));
+    const within = Math.min(1, Math.max(0, scroller.scrollTop / limit));
+    // ResizeObserver re-anchors after the viewport changes. Keep the latest
+    // position, rather than the offset used when the chapter was opened, so a
+    // chrome repaint cannot send a reader back to page one.
+    this.sectionOffset = within;
+    return within;
   }
 
   private restoreOffset(): void {
@@ -1107,7 +1124,9 @@ export class ReaderView {
     // re-enters this method from the observer, and the two keep re-measuring and
     // re-writing each other. Writing only a *different* value terminates: the second call
     // computes the same trim, sees it, and returns without touching the DOM.
-    if (this.trimApplied === trim) return;
+    // Text rectangles are rounded to subpixels. Treat subpixel noise as the
+    // same trim so ResizeObserver cannot oscillate on an unchanged layout.
+    if (this.trimApplied !== null && Math.abs(this.trimApplied - trim) < 0.5) return;
     this.trimApplied = trim;
     this.host.style.setProperty('--reader-page-trim', `${trim}px`);
   }

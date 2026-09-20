@@ -12,12 +12,12 @@
     {
       "name": "02-reader",
       "label": "阅读页",
-      "what": "顶栏（图标+文字）/ 右侧快捷列 / 正文 / 底栏「章节内页数」滑杆与上一章下一章"
+      "what": "顶部书名 / 日夜快捷按钮 / 正文 / 本章滑杆与四个底部入口"
     },
     {
       "name": "03-reader-no-chrome",
       "label": "阅读页 · 收起工具栏",
-      "what": "顶栏、底栏、快捷列一起收起，正文占满，只留章节与页码读数"
+      "what": "工具栏一起收起，正文保持原位置，底部只留书名、页码与进度"
     },
     {
       "name": "04-panel-toc",
@@ -92,219 +92,14 @@
   ],
   "results": [
     {
-      "name": "展开工具栏: 快捷按钮与两条栏一起出现",
+      "name": "手机阅读交互回归",
       "ok": true,
-      "detail": "visible=true 按钮 3 个 pointer-events=auto"
-    },
-    {
-      "name": "快捷列: 整组控件都在页内",
-      "ok": true,
-      "detail": "列 y=186..335 / 屏高 844"
-    },
-    {
-      "name": "快捷列: 装不下的控件有滚动条，说明还有更多",
-      "ok": true,
-      "detail": "溢出 否 overflow-y=true 滚动条 0px"
-    },
-    {
-      "name": "快捷列: 只留页面内就能完成的调整",
-      "ok": true,
-      "detail": "按钮 3 个：日间 / 字号 / 听书"
-    },
-    {
-      "name": "快捷列: 不含打开面板的五个入口",
-      "ok": true,
-      "detail": "列内控件：日间 / 字号 / 听书"
-    },
-    {
-      "name": "快捷列: 听书在列内",
-      "ok": true,
-      "detail": "列内控件：日间 / 字号 / 听书"
-    },
-    {
-      "name": "快捷列(420px 短屏): 列在页内，超出的控件能滚到",
-      "ok": true,
-      "detail": "列底 242 / 屏高 420，滚动条 0px，滚到底后末个控件可见=true"
-    },
-    {
-      "name": "收起工具栏: 顶栏与底栏一起走",
-      "ok": true,
-      "detail": "state=hidden 顶栏 hidden / 底栏 hidden"
-    },
-    {
-      "name": "收起工具栏: 两条栏都不可见，也不可点",
-      "ok": true,
-      "detail": "topbar=none footer=none"
-    },
-    {
-      "name": "收起工具栏: 正文只是让出读数行的高度，没有被重新排版",
-      "ok": true,
-      "detail": "正文首行 y: 显示时 24 / 收起后 49，读数行高 25px"
-    },
-    {
-      "name": "正文铺满: 页面不为工具栏预留高度",
-      "ok": true,
-      "detail": "padding 0/0px, 页面 844px / 屏高 844"
-    },
-    {
-      "name": "工具栏是浮动层，不占正文的高度",
-      "ok": true,
-      "detail": "topbar=absolute footer=absolute"
-    },
-    {
-      "name": "收起工具栏: 快捷按钮跟着两条栏一起收",
-      "ok": true,
-      "detail": "visible=false pointer-events=none"
-    },
-    {
-      "name": "收起工具栏: 保留章节与页码指示",
-      "ok": true,
-      "detail": "chapter=\"第一章 惊蛰\" progress=\"第 1/3 页 0%\""
-    },
-    {
-      "name": "收起工具栏: 阅读指示不吃手势",
-      "ok": true,
-      "detail": "pointer-events=none"
-    },
-    {
-      "name": "收起工具栏: 章节名画在正文之上",
-      "ok": true,
-      "detail": "层级 30 vs 正文 1，y=0..25 文本=\"第一章 惊蛰\""
-    },
-    {
-      "name": "收起工具栏: 章节名自带底色，不被正文透出",
-      "ok": true,
-      "detail": "background=rgb(22, 23, 26)"
-    },
-    {
-      "name": "收起工具栏: 页码读数画在正文之上",
-      "ok": true,
-      "detail": "层级 30 vs 正文 1，y=820..844 文本=\"第 1/3 页 0%\""
-    },
-    {
-      "name": "收起工具栏: 页码读数自带底色，不被正文透出",
-      "ok": true,
-      "detail": "background=rgb(22, 23, 26)"
-    },
-    {
-      "name": "收起工具栏: 章节名与页码左边对齐",
-      "ok": true,
-      "detail": "章节名 left=0 页码 left=0"
-    },
-    {
-      "name": "收起工具栏: 章节名占满一整行并紧贴顶部",
-      "ok": true,
-      "detail": "行 390px / 屏宽 390，top=0"
-    },
-    {
-      "name": "收起工具栏: 页码占满一整行并紧贴底部",
-      "ok": true,
-      "detail": "行 390px / 屏宽 390，bottom=844/844"
-    },
-    {
-      "name": "点右侧只翻页: 页码前进, 工具栏保持收起",
-      "ok": true,
-      "detail": "收起前 hidden(第 1/3 页 0%) → 点击后 hidden(第 2/3 页 40%)"
-    },
-    {
-      "name": "收起工具栏: 翻页后正文不被读数行拦腰截断",
-      "ok": true,
-      "detail": "读数行 [[0,25],[820,844]]，没有半截行"
-    },
-    {
-      "name": "点中间切换工具栏",
-      "ok": true,
-      "detail": "点击中间后 visible"
-    },
-    {
-      "name": "翻页: 动画期间不丢滚动位置（动画后不再跳页）",
-      "ok": true,
-      "detail": "目标 390 → 动画中 390 → 动画后 390，overflow=hidden"
-    },
-    {
-      "name": "目录: 面板不遮住整页",
-      "ok": true,
-      "detail": "面板从 y=321 开始，正文区 y=0"
-    },
-    {
-      "name": "目录: 面板留出可预览的正文",
-      "ok": true,
-      "detail": "正文可见高度 321px"
-    },
-    {
-      "name": "目录: 面板有遮罩和把手",
-      "ok": true,
-      "detail": "scrim=true grip=true"
-    },
-    {
-      "name": "目录: 面板高度不超过阅读区",
-      "ok": true,
-      "detail": "面板 523px / 阅读区 844px"
-    },
-    {
-      "name": "顶栏: 三个按钮左右两边对齐",
-      "ok": true,
-      "detail": "左 12px / 右 12px，两道间隙 136px / 136px"
-    },
-    {
-      "name": "底栏: 页码与下一章右边对齐，滑杆与上一章左边对齐",
-      "ok": true,
-      "detail": "页码右 12px / 下一章右 12px；上一章左 12px / 滑杆左 12px"
-    },
-    {
-      "name": "顶栏与底栏共用同一条内边距",
-      "ok": true,
-      "detail": "顶栏 12px / 底栏 12px"
-    },
-    {
-      "name": "底栏: 进度是可拖动的滑杆",
-      "ok": true,
-      "detail": "type=range 宽 308px label=\"章节内页数\""
-    },
-    {
-      "name": "底栏: 有页码与阅读进度读数",
-      "ok": true,
-      "detail": "page=\"第 1/3 页\" nav=\"阅读进度：0%\""
-    },
-    {
-      "name": "底栏: 滑杆量的是章节内页数，不是全书百分比",
-      "ok": true,
-      "detail": "min=1 max=3 value=1 读数=\"第 1/3 页\"（章节共 3 页）"
-    },
-    {
-      "name": "底栏: 拖动滑杆切到对应页",
-      "ok": true,
-      "detail": "拖到 3 后读数=\"第 3/3 页\""
-    },
-    {
-      "name": "翻页模式: 滑杆拖到第 3 页，仍在本章",
-      "ok": true,
-      "detail": "min=1 max=3 value=3 拖前=\"第 3/3 页\" 拖后=\"第 3/3 页\""
-    },
-    {
-      "name": "状态提示不推动正文",
-      "ok": true,
-      "detail": "正文顶部 y: 0 / 0 / 0"
-    },
-    {
-      "name": "触控目标不小于 28px",
-      "ok": true,
-      "detail": "8 个控件全部合格"
-    },
-    {
-      "name": "每个控件都有可读的名字",
-      "ok": true,
-      "detail": "8 个控件全部有名字"
-    },
-    {
-      "name": "没有横向溢出",
-      "ok": true,
-      "detail": "document 溢出 0px"
+      "detail": "reader-regression.mjs: 显隐、翻页、面板、主题、EPUB、漫画、PDF 加载、320px 窄屏"
     },
     {
       "name": "翻页不再每次都发两次 sync",
       "ok": true,
-      "detail": "8 次翻页 + 6 秒静默：1 次 POST / 0 次 GET（共 1 次 sync 请求）"
+      "detail": "8 次翻页 + 6 秒静默：2 次 POST / 0 次 GET（共 2 次 sync 请求）"
     },
     {
       "name": "EPUB: 章节里的图片真的画出来了",
@@ -339,7 +134,7 @@
     {
       "name": "搜索框: 放大镜与输入框中线对齐",
       "ok": true,
-      "detail": "放大镜中线 97.7 / 输入框中线 98.1（偏差 -0.4px，字形 16px，框高 44.203125px）"
+      "detail": "放大镜中线 98.1 / 输入框中线 98.1（偏差 0.0px，字形 16.796875px，框高 44.203125px）"
     },
     {
       "name": "书架: 第一个排序是「最近阅读」且默认选中",
@@ -439,12 +234,12 @@
     {
       "name": "书架标题栏: 两个图标都画出来了，且不超出各自的按钮",
       "ok": true,
-      "detail": "书库: 18.4×18 in 40 box, inside=true | 书架设置 · 适中: 18.4×18 in 40 box, inside=true"
+      "detail": "书库: 18.4×18.4 in 40 box, inside=true | 书架设置 · 适中: 18.4×18.4 in 40 box, inside=true"
     },
     {
       "name": "书架标题栏: 图标不比标题大（同一行的视觉重量）",
       "ok": true,
-      "detail": "图标 18 vs 标题 28 | 图标 18 vs 标题 28"
+      "detail": "图标 18.4 vs 标题 28 | 图标 18.4 vs 标题 28"
     }
   ],
   "failures": []
