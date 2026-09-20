@@ -208,7 +208,7 @@ export class ReaderScreen {
           handlers={{
             onBack: () => this.options.onBack(),
             toggleToc: () => this.toggleToc(),
-            toggleSettings: () => this.toggleSettings(),
+            toggleSettings: (tab) => this.toggleSettings(tab),
             onSetting: (patch) => void this.updateSetting(patch),
             onSpeechSetting: (patch) => this.updateSpeechSetting(patch),
             onVoice: (voice) => this.updateSpeechSetting({ ttsVoice: voice }),
@@ -806,9 +806,9 @@ export class ReaderScreen {
     this.patch({ tocOpen: open, settingsOpen: false });
   }
 
-  private toggleSettings(): void {
-    const open = !this.chrome.settingsOpen;
-    this.patch({ settingsOpen: open, tocOpen: false });
+  private toggleSettings(tab: 'appearance' | 'behavior' | 'speech' = 'behavior'): void {
+    const open = !this.chrome.settingsOpen || this.chrome.settingsTab !== tab;
+    this.patch({ settingsOpen: open, settingsTab: tab, tocOpen: false });
     if (!open) return;
     // Re-read the voice list on every open: a Bluetooth headset paired while the
     // book was open adds a voice, and Chrome only reports it asynchronously.

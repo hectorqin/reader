@@ -101,6 +101,7 @@ export class CDP {
       deviceScaleFactor: scale,
       mobile: true,
     });
+    await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 });
     return cdp;
   }
 

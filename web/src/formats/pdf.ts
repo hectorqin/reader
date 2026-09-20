@@ -18,7 +18,7 @@ import type { BookDoc, RenderMode } from './types.ts';
  * book was scanned (`book.pageCount`). When it is missing, the UI degrades to
  * percentage-only progress rather than showing a fake page number.
  */
-export async function loadPdf(): Promise<BookDoc> {
+export async function loadPdf(bytes: Uint8Array = new Uint8Array()): Promise<BookDoc> {
   return {
     format: 'pdf',
     layout: 'fixed',
@@ -31,6 +31,7 @@ export async function loadPdf(): Promise<BookDoc> {
         id: 'pdf',
         label: 'PDF',
         html: '',
+        document: { mediaType: 'application/pdf', bytes },
         depth: 0,
       },
     ],

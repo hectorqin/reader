@@ -19,7 +19,7 @@ import type { AppSettings } from '../store/settings.ts';
 import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ComponentChildren, type JSX } from './vendor/preact.ts';
 import { IconButton, SectionTitle } from './toolkit.tsx';
-import { ICON_CODEPOINT_TABLE, type IconName } from './icon-names.ts';
+import { Icon, type IconName } from './icon.tsx';
 
 /**
  * A table-of-contents row.
@@ -59,6 +59,7 @@ export interface ChromeState {
   chapterLabel: string;
   tocOpen: boolean;
   settingsOpen: boolean;
+  settingsTab?: 'appearance' | 'behavior' | 'speech';
   toc: ChromeTocEntry[];
   currentSectionId: string;
   /** 1-based position of the current page inside its chapter, and the count. */
@@ -111,7 +112,7 @@ export interface ChromeState {
 export interface ChromeHandlers {
   onBack(): void;
   toggleToc(): void;
-  toggleSettings(): void;
+  toggleSettings(tab?: 'appearance' | 'behavior' | 'speech'): void;
   onSetting(patch: Partial<AppSettings>): void;
   onSpeechSetting(patch: Partial<AppSettings>): void;
   onVoice(value: string): void;
@@ -150,190 +151,52 @@ export interface ReaderChromeProps {
 }
 
 export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX.Element {
+  const fixed = state.layout === 'fixed';
+  const totalPages = Math.max(1, state.chapterPages);
+  const currentPage = Math.min(totalPages, Math.max(1, state.pageInChapter));
+  const pageLabel = '本章第 ' + currentPage + '/' + totalPages + ' 页';
+  const tab = state.settingsTab ?? 'behavior';
   return (
     <>
-      {/* The top bar.
-          —
-          A row of labelled buttons, not a title with a back arrow. The reference
-          layout is a toolbar the reader *scans*: five controls of equal weight,
-          each an icon over its own name, so nothing has to be learned and nothing
-          is announced twice. The book's title lived here before; it is still on
-          screen when the chrome is hidden (see `.reading-indicator`), which is
-          where a reader actually looks for it — a title that disappears with the
-          toolbar was the reason the indicator had to exist at all.
-          Buttons are kept to the ones this screen can really do. The reference's
-          首页/书架/书源/目录/设置 collapses to 返回/目录/设置 here because there is
-          no book-source browser *inside* the reader: a button that navigates
-          somewhere the screen cannot go is worse than one fewer button. */}
       <div className="topbar" hidden={!state.chromeVisible}>
-        <TopButton icon="arrow-left" label="返回" onClick={handlers.onBack} />
-        <TopButton icon="menu" label="目录" onClick={handlers.toggleToc} />
-        <TopButton icon="sliders" label="设置" onClick={handlers.toggleSettings} />
+        <IconButton label="返回" icon="arrow-left" onClick={handlers.onBack} />
+        <div className="reader-heading"><strong>{state.title}</strong><span>{state.chapterLabel}</span></div>
       </div>
-
-      {/* Outside the flex flow: see the comment on `.status-bar`. It has to be a
-          sibling of the stage rather than a child of it, because the stage's slot
-          measures the space between the chrome and a strip that came and went would
-          change that measurement on every sync. */}
-      <div
-        className="status-bar"
-        hidden={state.statusState === 'idle' && state.statusText === ''}
-        data-state={state.statusState}
-        role="status"
-        aria-live="polite"
-      >
-        <span className="status-dot" aria-hidden="true" />
-        <span className="status-text">{state.statusText}</span>
+      <div className="status-bar" hidden={state.statusState === 'idle' && state.statusText === ''}
+        data-state={state.statusState} role="status" aria-live="polite">
+        <span className="status-dot" aria-hidden="true" /><span className="status-text">{state.statusText}</span>
       </div>
-
       <StageHost stage={stage} />
-
-      {/* The reading indicator.
-          —
-          What is left on screen when the chrome is hidden. The reference keeps two
-          quiet facts pinned to the corners — which chapter, and how far in — and
-          nothing else. That is the difference between "沉浸式" and "the app stopped
-          drawing": a reader who has hidden the toolbar still wants to know where
-          they are, and making them tap to find out is what the hidden state was
-          supposed to save them from.
-          Both live in the page margin at the very top and bottom of the stage, are
-          `pointer-events: none` (they are readouts, not controls), and are drawn
-          only while the chrome is hidden so they do not double up with it. */}
-      {!state.chromeVisible ? (
-        <div className="reading-indicator" aria-hidden="true">
-          <span className="indicator-chapter">{state.chapterLabel}</span>
-          <span className="indicator-progress">
-            {state.chapterPages > 0 ? `第 ${state.pageInChapter}/${state.chapterPages} 页 ` : ''}
-            {percentOf(state.progress)}
-          </span>
-        </div>
-      ) : null}
-
-      {/* The quick-action rail.
-          —
-          A column of controls on the right edge, shown **and hidden with the two
-          bars**. That pairing is the request, and it is also the coherent reading
-          of what the rail is for: it is a second way to reach the two things a
-          reader changes *while reading* — the theme and the voice — so it belongs
-          to the same "the reader has asked for the controls" state as the bars.
-          Drawn while the chrome was hidden, it was the one piece of chrome that
-          survived immersion — a reader who tapped to hide the navigation still had
-          controls floating over the right edge of the text, which is not the "only
-          the page" they asked for.
-          It is drawn unconditionally and collapsed by `data-chrome` in CSS, exactly
-          like the two bars: `visibility: hidden` at the end of the fade is what
-          takes it out of reach of both a finger and a screen reader, and one
-          attribute for three bands is what makes "the chrome is hidden" a single
-          fact.
-
-          ## What is in it, and why the list is exactly this short
-          —
-          Three controls, and the report that decided them is the whole of it:
-          "竖排工具栏去掉 目录、字体、行距、边距、设置这几个按钮". Those five are
-          destinations, not adjustments: 目录 opens a sheet, 设置 opens a sheet, and
-          字体/行距/边距 are *steps* of values whose full range lives in the 设置
-          sheet — so a reader who wanted any of the five was already going to open a
-          sheet, and putting them on the rail as well made it a second, worse copy of
-          the settings panel floating over the text.
-          What is left is the two that are genuinely adjusted *in place*, plus 听书:
-           - 主题 (light → sepia → night): a single tap that changes the whole page,
-             and the one control a reader in the dark reaches for without wanting to
-             open anything;
-           - 字号 (one step): the other half of the same "the text is not right"
-             moment, and a step up/down is faster than finding a slider;
-           - 听书: the one control a reader reaches for *without* leaving the page,
-             because they are about to look away from the screen.
-          Every one of them is a destination the screen can actually reach: a button
-          that does nothing is worse than a missing one. */}
-      <div
-        className="reader-rail"
-        role="toolbar"
-        aria-label="阅读快捷操作"
-        aria-orientation="vertical"
-      >
-        <RailButton
-          icon={state.theme === 'dark' ? 'sun' : 'moon'}
-          label={state.theme === 'dark' ? '日间' : '夜间'}
-          onClick={() => handlers.onSetting({ theme: nextTheme(state.theme) })}
-        />
-        <RailButton
-          icon="text-size"
-          label="字号"
-          onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })}
-        />
-        <RailButton
-          icon={state.tts.active ? 'pause' : 'volume'}
-          label={state.tts.active ? '暂停朗读' : '听书'}
-          pressed={state.tts.active}
-          onClick={handlers.onSpeechToggle}
-        />
+      <div className="reading-indicator" aria-hidden="true">
+        <span className="indicator-chapter">{state.title || state.chapterLabel}</span>
+        <span className="indicator-progress">{currentPage}/{totalPages} · {percentOf(state.progress)}</span>
       </div>
-
-      {/* The bottom bar.
-          —
-          Two rows, and the split is the reference's: a scrubber the reader can
-          drag to any page **of this chapter**, then a navigation row with the
-          chapter buttons at the ends and the reading progress in the middle. The
-          scrubber replaces the old 3px bar plus the "本章 x/y 页" readout — a bar
-          that only reports could not be used to *go* anywhere, and the reader who
-          wanted the end of the chapter had to tap the next button forty times.
-          It is scoped to the chapter, not the book: the readout beside it says
-          "第 3/9 页", and the reference's own screenshot shows the thumb near the
-          middle at page 25 of 32 — a book-wide bar would be two thirds of the way
-          across and blank in a chapter that is one of a thousand. The whole-book
-          number is still on screen, as the "阅读进度" readout below, which is the
-          row that *reports*; the slider is the row that *moves*. */}
+      <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作">
+        <RailButton icon={state.theme === 'dark' ? 'sun' : 'moon'}
+          label={state.theme === 'dark' ? '日间' : '夜间'}
+          onClick={() => handlers.onSetting({ theme: state.theme === 'dark' ? 'light' : 'dark' })} />
+      </div>
       <div className="footer" hidden={!state.chromeVisible}>
         <div className="progress-row">
-          <input
-            className="progress-scrubber"
-            type="range"
-            min={1}
-            max={Math.max(1, state.chapterPages)}
-            step={1}
-            // The *page*, not the whole-book fraction. The readout beside the thumb
-            // names a page in this chapter, so the control has to move by the same
-            // unit; a book-percentage slider next to "第 3/9 页" is two answers to
-            // two different questions sharing one thumb.
-            value={Math.min(Math.max(1, state.pageInChapter), Math.max(1, state.chapterPages))}
-            aria-label="章节内页数"
-            aria-valuetext={
-              state.chapterPages > 0 ? `第 ${state.pageInChapter}/${state.chapterPages} 页` : '章节内页数'
-            }
-            disabled={state.chapterPages <= 1}
-            onInput={(event) =>
-              handlers.onScrubPage(Number((event.currentTarget as HTMLInputElement).value))
-            }
-          />
-          <span className="progress-page">
-            {state.chapterPages > 0 ? `第 ${state.pageInChapter}/${state.chapterPages} 页` : ''}
-          </span>
+          <button type="button" className="nav-chapter" disabled={state.navigating || state.chapterIndex <= 1}
+            onClick={() => handlers.onChapter(-1)}>{fixed ? '上一页' : '上一章'}</button>
+          <div className="reader-scrub">
+            <input className="progress-scrubber" type="range" min={1} max={totalPages} step={1}
+              value={currentPage} aria-label="章节内页数"
+              aria-valuetext={pageLabel} disabled={totalPages <= 1 || state.navigating}
+              onInput={(event) => handlers.onScrubPage(Number((event.currentTarget as HTMLInputElement).value))} />
+            <span className="progress-page">{pageLabel}</span>
+          </div>
+          <button type="button" className="nav-chapter" disabled={state.navigating || state.chapterIndex >= state.chapterCount}
+            onClick={() => handlers.onChapter(1)}>{fixed ? '下一页' : '下一章'}</button>
         </div>
-        <div className="footer-row chapter-nav">
-          <button
-            type="button"
-            className="nav-chapter"
-            disabled={state.navigating || state.chapterIndex <= 1}
-            onClick={() => handlers.onChapter(-1)}
-          >
-            <span className="icon" aria-hidden="true">{iconGlyph('chevron-left')}</span>
-            上一章
-          </button>
-          <span className="nav-progress">阅读进度：{percentOf(state.progress)}</span>
-          <button
-            type="button"
-            className="nav-chapter"
-            disabled={state.navigating || state.chapterIndex >= state.chapterCount}
-            onClick={() => handlers.onChapter(1)}
-          >
-            下一章
-            <span className="icon" aria-hidden="true">{iconGlyph('chevron-right')}</span>
-          </button>
+        <div className="reader-actions">
+          <TopButton icon="menu" label="目录" onClick={handlers.toggleToc} />
+          <TopButton icon="volume" label="朗读" onClick={() => handlers.toggleSettings('speech')} />
+          <TopButton icon="text-size" label="界面" onClick={() => handlers.toggleSettings('appearance')} />
+          <TopButton icon="settings" label="设置" onClick={() => handlers.toggleSettings('behavior')} />
         </div>
       </div>
-
-      {state.tts.active ? <SpeechBar state={state.tts} handlers={handlers} /> : null}
-
       {state.tocOpen ? (
         <Panel title="目录" subtitle={`${state.toc.length} 章`} onClose={handlers.toggleToc}>
           {state.toc.length === 0 ? (
@@ -370,8 +233,11 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
       ) : null}
 
       {state.settingsOpen ? (
-        <Panel title="阅读设置" onClose={handlers.toggleSettings}>
-          <SettingsBody state={state} handlers={handlers} />
+        <Panel title={tab === 'appearance' ? '界面' : tab === 'speech' ? '朗读' : '阅读设置'} onClose={() => handlers.toggleSettings(tab)}>
+          {tab === 'speech' ? <>
+            {state.tts.active ? <SpeechBar state={state.tts} handlers={handlers} /> : null}
+            <SpeechSettings state={state} handlers={handlers} />
+          </> : <SettingsBody state={state} handlers={handlers} />}
         </Panel>
       ) : null}
     </>
@@ -453,52 +319,8 @@ function Panel({
 function SettingsBody({ state, handlers }: { state: ChromeState; handlers: ChromeHandlers }): JSX.Element {
   return (
     <>
-      {/* The three controls a reader reaches for most often are also the three
-          the old bottom toolbar spent most of its width on. They are a row of
-          large targets at the top of the sheet rather than a toolbar over the
-          text, because the sheet is where the reader already is when they decide
-          the text is too small — and a toolbar that stays on screen to serve them
-          is a toolbar that covers the book for everyone else. */}
-      <SectionTitle>快捷</SectionTitle>
-      <div className="quick-row">
-        <QuickButton
-          icon="text-size"
-          label="字号"
-          value={`${Math.round(state.fontScale * 100)}%`}
-          onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })}
-        />
-        <QuickButton
-          icon="indent"
-          label="段落缩进"
-          value={state.showTxtRows ? indentLabel(state.txtIndent) : '—'}
-          disabled={!state.showTxtRows}
-          onClick={() => handlers.onSetting({ txtIndent: stepIndent(state.txtIndent) })}
-        />
-        <QuickButton
-          icon="line-height"
-          label="段间距"
-          value={state.showTxtRows ? `${state.txtParagraphGap.toFixed(2)} 字` : '—'}
-          disabled={!state.showTxtRows}
-          onClick={() => handlers.onSetting({ txtParagraphGap: stepGap(state.txtParagraphGap) })}
-        />
-        <QuickButton
-          icon={state.theme === 'dark' ? 'sun' : 'moon'}
-          label="主题"
-          value={THEME_LABELS[state.theme] ?? state.theme}
-          onClick={() => handlers.onSetting({ theme: nextTheme(state.theme) })}
-        />
-      </div>
-
-      <SectionTitle>排版</SectionTitle>
-      <SegmentedRow
-        label="翻页方式"
-        options={[
-          { value: 'scroll', label: '滚动' },
-          { value: 'paged', label: '翻页' },
-        ]}
-        value={state.mode}
-        onChange={(value) => handlers.onSetting({ mode: value as AppSettings['mode'] })}
-      />
+      {(state.settingsTab ?? 'behavior') === 'appearance' ? <>
+      {state.layout !== 'fixed' ? <>
       <SliderRow
         label="字号"
         value={state.fontScale}
@@ -551,11 +373,13 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         value={state.fontFamily}
         onChange={(value) => handlers.onSetting({ fontFamily: value })}
       />
+      </> : null}
       <SegmentedRow
         label="主题"
         options={[
           { value: 'light', label: '白' },
           { value: 'sepia', label: '米黄' },
+          { value: 'green', label: '浅绿' },
           { value: 'dark', label: '夜间' },
         ]}
         value={state.theme}
@@ -613,6 +437,18 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         </>
       ) : null}
 
+      </> : <>
+      {state.layout !== 'fixed' ?
+      <SegmentedRow
+        label="翻页方式"
+        options={[
+          { value: 'scroll', label: '滚动' },
+          { value: 'paged', label: '翻页' },
+        ]}
+        value={state.mode}
+        onChange={(value) => handlers.onSetting({ mode: value as AppSettings['mode'] })}
+      />
+      : null}
       <SectionTitle>翻页</SectionTitle>
       <SegmentedRow
         label="点击区域"
@@ -659,8 +495,7 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         />
       ) : null}
 
-      <SectionTitle>朗读</SectionTitle>
-      <SpeechSettings state={state} handlers={handlers} />
+      </>}
     </>
   );
 }
@@ -736,7 +571,7 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
         onChange={(value) => handlers.onSpeechSetting({ ttsAutoAdvance: value === 'auto' })}
       />
       <button type="button" className="button" onClick={handlers.onSpeakFromHere}>
-        从头朗读这一章
+        从当前位置朗读
       </button>
     </>
   );
@@ -876,6 +711,8 @@ function SliderRow({
       </label>
       <input
         type="range"
+        aria-label={label}
+        aria-valuetext={format(value)}
         min={min}
         max={max}
         step={step}
@@ -901,7 +738,7 @@ function SelectRow({
   return (
     <div className="field">
       <label>{label}</label>
-      <select value={value} onChange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}>
+      <select aria-label={label} value={value} onChange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -924,7 +761,7 @@ function SelectRow({
 function TopButton({ icon, label, onClick }: { icon: IconName; label: string; onClick(): void }): JSX.Element {
   return (
     <button type="button" className="top-button" aria-label={label} onClick={onClick}>
-      <span className="icon" aria-hidden="true">{iconGlyph(icon)}</span>
+      <Icon name={icon} />
       <span className="top-button-label">{label}</span>
     </button>
   );
@@ -958,103 +795,13 @@ function RailButton({
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
       onClick={onClick}
     >
-      <span className="icon" aria-hidden="true">{iconGlyph(icon)}</span>
+      <Icon name={icon} />
     </button>
   );
 }
 
-/** The glyph for an icon name, from the generated code point table. */
-function iconGlyph(name: IconName): string {
-  return ICON_CODEPOINT_TABLE[name];
-}
 
-/**
- * A labelled quick-action tile.
- *
- * A tap rather than a slider for the three controls a reader nudges most: a slider
- * is the right control for "any value in this range" and the wrong one for "one
- * step bigger", which is what a reader actually wants when the text looks small.
- * The full range is still in the rows below, so the tile is a shortcut and never
- * the only way to reach a value.
- */
-function QuickButton({
-  icon,
-  label,
-  value,
-  disabled,
-  onClick,
-}: {
-  icon: IconName;
-  label: string;
-  value: string;
-  disabled?: boolean;
-  onClick(): void;
-}): JSX.Element {
-  return (
-    <button
-      type="button"
-      className="quick-button"
-      disabled={disabled}
-      aria-label={`${label} ${value}`}
-      onClick={onClick}
-    >
-      <span className="icon" aria-hidden="true">{iconGlyph(icon)}</span>
-      <span className="quick-label">{label}</span>
-      <span className="quick-value">{value}</span>
-    </button>
-  );
-}
-
-/** The next font scale in the ladder, so a tap lands on a round percentage. */
-const FONT_SCALE_LADDER = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2.0, 2.2];
-
-function stepFontScale(current: number, direction: 1 | -1): number {
-  const index = FONT_SCALE_LADDER.findIndex((value) => value >= current - 0.001);
-  const at = index === -1 ? FONT_SCALE_LADDER.length - 1 : index;
-  const next = Math.min(FONT_SCALE_LADDER.length - 1, Math.max(0, at + direction));
-  return FONT_SCALE_LADDER[next] ?? current;
-}
-
-/** Paragraph indent, cycling 无 → 1 → 2 → 3 → 4 characters and back. */
-const INDENT_LADDER = [0, 1, 2, 3, 4];
-
-function stepIndent(current: number): number {
-  const index = INDENT_LADDER.findIndex((value) => value > current + 0.001);
-  return index === -1 ? INDENT_LADDER[0]! : INDENT_LADDER[index]!;
-}
-
-/** Paragraph spacing, cycling in quarter-character steps and back to none. */
-const GAP_LADDER = [0, 0.25, 0.5, 0.75, 1, 1.25];
-
-function stepGap(current: number): number {
-  const index = GAP_LADDER.findIndex((value) => value > current + 0.001);
-  return index === -1 ? GAP_LADDER[0]! : GAP_LADDER[index]!;
-}
-
-function indentLabel(indent: number): string {
-  return indent === 0 ? '无' : `${indent.toFixed(2)} 字`;
-}
-
-/**
- * Line height, as the settings sheet's own ladder.
- *
- * The value is a *string*, because "原书" (`inherit`) is one of the choices and is
- * not a number — the book's own line height is the default and the setting has to
- * be able to mean "do not touch it". The sheet's `SegmentedRow` is the only reader
- * of this list now that the rail no longer steps it, and it stays declared here
- * because it *is* the ladder: a second copy inside the sheet is how the two would
- * drift apart.
- */
 const LINE_HEIGHT_LADDER = ['inherit', '1.4', '1.6', '1.8', '2.1'];
-
-const THEME_LADDER: Array<AppSettings['theme']> = ['light', 'sepia', 'dark'];
-
-const THEME_LABELS: Record<string, string> = { light: '白', sepia: '米黄', dark: '夜间' };
-
-function nextTheme(theme: AppSettings['theme']): AppSettings['theme'] {
-  const index = THEME_LADDER.indexOf(theme);
-  return THEME_LADDER[(index + 1) % THEME_LADDER.length] ?? 'light';
-}
 
 /** The progress fraction as a percentage, clamped. */
 function percentOf(fraction: number): string {
