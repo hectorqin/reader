@@ -111,9 +111,10 @@ describe('the reading surface fills the screen', () => {
     }
   });
 
-  it('keeps the reading information in a single bottom strip', () => {
+  it('keeps reading information in fixed top and bottom strips', () => {
     const box = rule('.reading-indicator');
-    expect(declaration(box, 'bottom')).toBe('0');
+    expect(declaration(rule('.reading-indicator-top'), 'top')).toBe('0');
+    expect(declaration(rule('.reading-indicator-bottom'), 'bottom')).toBe('0');
     expect(declaration(box, 'display')).toBe('flex');
     expect(declaration(box, 'pointer-events')).toBe('none');
   });
@@ -141,7 +142,7 @@ describe('the reading surface fills the screen', () => {
   it('uses the same reading geometry with chrome visible and hidden', () => {
     expect(rule(".reader-screen[data-chrome='hidden'] .book-host")).toBe('');
     const body = rule('.reader-screen .book-host');
-    expect(declaration(body, 'inset-block-start')).toBe('var(--safe-top)');
+    expect(declaration(body, 'inset-block-start')).toBe('calc(1.8rem + var(--safe-top))');
     expect(declaration(body, 'inset-block-end')).toContain('var(--reader-page-trim');
     expect(declaration(body, 'inset-block-end')).toContain('var(--safe-bottom)');
   });

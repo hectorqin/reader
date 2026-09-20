@@ -3660,29 +3660,30 @@ book-content {
 svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; vertical-align: middle; }
 .reader-screen { --reader-footer-height: calc(8.5rem + var(--safe-bottom)); }
 .reader-screen .book-host {
-  inset-block-start: var(--safe-top);
+  inset-block-start: calc(1.8rem + var(--safe-top));
   inset-block-end: calc(1.8rem + var(--safe-bottom) + var(--reader-page-trim, 0px));
 }
 .reading-indicator {
   position: absolute;
   inset-inline: 0;
-  bottom: 0;
-  height: calc(1.8rem + var(--safe-bottom));
-  padding: 0.35rem max(1.25rem, var(--safe-right)) var(--safe-bottom) max(1.25rem, var(--safe-left));
+  padding-inline: max(1.25rem, var(--safe-left)) max(1.25rem, var(--safe-right));
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
   color: var(--reader-muted);
   background: var(--reader-paper);
-  border-top: 1px solid color-mix(in srgb, var(--reader-line) 50%, transparent);
   font-size: 0.72rem;
   line-height: 1.2;
   z-index: var(--reader-layer-readout);
   pointer-events: none;
 }
-.indicator-chapter { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.indicator-progress { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.reading-indicator-top { top: 0; height: calc(1.8rem + var(--safe-top)); padding-top: calc(0.5rem + var(--safe-top)); }
+.reading-indicator-bottom { bottom: 0; height: calc(1.8rem + var(--safe-bottom)); padding-top: 0.35rem; padding-bottom: var(--safe-bottom); }
+.reading-indicator > span { min-width: 0; flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.indicator-left { text-align: start; }
+.indicator-right { text-align: end; }
+.reading-indicator > span:empty { flex: 0; }
 .reader-screen .topbar {
   display: flex;
   align-items: center;

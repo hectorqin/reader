@@ -16,6 +16,8 @@
  */
 
 import type { AppSettings } from '../store/settings.ts';
+import { DEFAULT_APP_SETTINGS, READOUT_FIELDS, READOUT_OPTIONS, type ReadoutMode } from '../store/settings.ts';
+import { ReaderIndicators } from './reader-indicators.tsx';
 import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ComponentChildren, type JSX } from './vendor/preact.ts';
 import { IconButton, SectionTitle } from './toolkit.tsx';
@@ -49,6 +51,10 @@ export interface SpeechBarState {
 }
 
 export interface ChromeState {
+  readoutTopLeft?: ReadoutMode;
+  readoutTopRight?: ReadoutMode;
+  readoutBottomLeft?: ReadoutMode;
+  readoutBottomRight?: ReadoutMode;
   title: string;
   author: string;
   chromeVisible: boolean;
@@ -167,10 +173,7 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
         <span className="status-dot" aria-hidden="true" /><span className="status-text">{state.statusText}</span>
       </div>
       <StageHost stage={stage} />
-      <div className="reading-indicator" aria-hidden="true">
-        <span className="indicator-chapter">{state.title || state.chapterLabel}</span>
-        <span className="indicator-progress">{currentPage}/{totalPages} · {percentOf(state.progress)}</span>
-      </div>
+      <ReaderIndicators state={state} />
       <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作">
         <RailButton icon={state.theme === 'dark' ? 'sun' : 'moon'}
           label={state.theme === 'dark' ? '日间' : '夜间'}
@@ -320,6 +323,13 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
   return (
     <>
       {(state.settingsTab ?? 'behavior') === 'appearance' ? <>
+      <SectionTitle>阅读信息</SectionTitle>
+      {READOUT_FIELDS.map(({ key, label }) => (
+        <SelectRow key={key} label={label} options={READOUT_OPTIONS}
+          value={state[key] ?? DEFAULT_APP_SETTINGS[key]}
+          onChange={(value) => handlers.onSetting({ [key]: value as ReadoutMode })} />
+      ))}
+      <SectionTitle>正文与主题</SectionTitle>
       {state.layout !== 'fixed' ? <>
       <SliderRow
         label="字号"
@@ -802,10 +812,5 @@ function RailButton({
 
 
 const LINE_HEIGHT_LADDER = ['inherit', '1.4', '1.6', '1.8', '2.1'];
-
-/** The progress fraction as a percentage, clamped. */
-function percentOf(fraction: number): string {
-  return `${Math.round(Math.min(1, Math.max(0, fraction)) * 100)}%`;
-}
 
 export type { SpeechEngineKind };
