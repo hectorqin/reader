@@ -26,6 +26,8 @@ import {
 import type { NativeSpeechBridge } from '../android-bridge.ts';
 import { mountUI } from './mount.ts';
 import { ReaderChrome, type ChromeState, type ChromeTocEntry } from './reader-chrome.tsx';
+import { PublicationCache, publicationScope } from '../store/publications.ts';
+import { parseLocator } from './locator.ts';
 
 export interface ReaderScreenOptions {
   api: ReaderApi;
@@ -180,10 +182,18 @@ export class ReaderScreen {
   private pendingPosition: Position | null = null;
   private readonly settings: AppSettings;
   private readonly listeners: Array<() => void> = [];
+  private readonly viewListeners: Array<() => void> = [];
+  private readonly publicationCache: PublicationCache;
   private loadingToken = 0;
+  private viewEpoch = 0;
 
   constructor(private readonly options: ReaderScreenOptions) {
     this.settings = { ...options.settings };
+    this.publicationCache = new PublicationCache(
+      options.platform.kv,
+      options.platform.blobs,
+      publicationScope(options.api.baseUrl || (typeof location !== 'undefined' ? location.origin : ''), options.api.currentSession()?.user.id ?? ''),
+    );
 
     // The stage is created here and never re-created: `ReaderView` attaches to it
     // on every chapter, and a container the tree replaced would take the reader's
@@ -216,6 +226,7 @@ export class ReaderScreen {
             onSwitchEngine: (kind) => this.switchSpeechEngine(kind),
             onTocEntry: (ref) => void this.goToChapterRef(ref),
             onChapter: (delta) => void this.goToChapter(delta),
+            onRefresh: () => void this.refreshPublication(),
             onScrubPage: (page) => void this.scrubToPage(page),
             onTurnPage: (direction) => void this.turnPage(direction),
             onSpeechToggle: () => this.toggleSpeech(),
@@ -236,12 +247,12 @@ export class ReaderScreen {
   async open(book: Book): Promise<void> {
     const token = ++this.loadingToken;
     this.book = book;
-    this.patch({ title: book.title, author: book.author });
+    this.patch({ title: book.title, author: book.author, canRefresh: book.format === 'chapters' });
     this.setStatus('loading', '正在载入…');
     this.setChromeVisible(true);
 
     try {
-      this.manifest = await this.options.api.manifest(book.id);
+      this.manifest = await this.loadManifest(book);
       if (token !== this.loadingToken) return;
 
       // A staged book is read through the windowed contract and never downloads
@@ -312,11 +323,13 @@ export class ReaderScreen {
     // checked, not just the success, and a response that is not a list falls back
     // exactly like a failed request does.
     let toc: TocEntry[] = [];
-    try {
-      const fetched = await this.options.api.toc(book.id);
-      if (Array.isArray(fetched)) toc = fetched;
-    } catch {
-      // Covered by the fallback below.
+    if (book.format !== 'chapters') {
+      try {
+        const fetched = await this.options.api.toc(book.id);
+        if (Array.isArray(fetched)) toc = fetched;
+      } catch {
+        // Covered by the fallback below.
+      }
     }
     if (toc.length === 0) {
       toc = (content.items ?? []).map((item) => ({
@@ -327,6 +340,11 @@ export class ReaderScreen {
       }));
     }
     if (token !== this.loadingToken) return null;
+
+    this.patch({ toc: toc.map((entry) => ({
+      id: entry.href, label: entry.title, depth: entry.level,
+      ...(entry.spine === undefined ? {} : { spine: entry.spine }),
+    })) });
 
     this.content = content;
     const doc = createStagedDoc({
@@ -360,19 +378,26 @@ export class ReaderScreen {
    */
   private async readStagedSection(
     book: Book,
-    item: { href: string; kind: string; mediaType: string; format?: string },
+    item: { href: string; kind: string; mediaType: string; format?: string; resourceRef?: string },
   ): Promise<{ html?: string; image?: { mediaType: string; bytes: Uint8Array } }> {
     const ref = renditionRef(item);
     // Keyed by the rendition, not just the section: a client that read the plain
     // text before this change and the markup after it must not serve the cached
     // plain text for a chapter it is now rendering as a document.
-    const cacheKey = `section:${book.id}:${ref}`;
-    const cached = await this.options.platform.blobs.get(cacheKey);
+    const legacyCacheKey = `section:${book.id}:${ref}`;
+    const cached = book.format === 'chapters'
+      ? await this.publicationCache.resource(book.id, ref)
+      : await this.options.platform.blobs.get(legacyCacheKey);
     const blob = cached ? new Blob([toArrayBuffer(cached)]) : await this.options.api.asset(book.id, ref);
     if (!cached) {
       // Cached per section, not per book, so a partially read book is partially
       // readable offline and re-opening one does not re-fetch what was read.
-      await this.options.platform.blobs.put(cacheKey, new Uint8Array(await blob.arrayBuffer()));
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      if (book.format === 'chapters') {
+        await this.publicationCache.putResource(book.id, ref, bytes).catch(() => undefined);
+      } else {
+        await this.options.platform.blobs.put(legacyCacheKey, bytes).catch(() => undefined);
+      }
     }
     if (item.kind === 'page') {
       return { image: { mediaType: item.mediaType, bytes: new Uint8Array(await blob.arrayBuffer()) } };
@@ -382,15 +407,19 @@ export class ReaderScreen {
 
   dispose(): void {
     this.loadingToken += 1;
+    this.viewEpoch += 1;
     this.tts?.dispose();
     this.tts = null;
     this.flushProgress();
+    this.book = null;
     if (this.progressTimer) clearTimeout(this.progressTimer);
     if (this.statusTimer) clearTimeout(this.statusTimer);
     this.detachGestures?.();
     this.detachGestures = null;
     for (const off of this.listeners) off();
     this.listeners.length = 0;
+    for (const off of this.viewListeners) off();
+    this.viewListeners.length = 0;
     this.view?.dispose();
     this.view = null;
     this.doc = null;
@@ -404,6 +433,82 @@ export class ReaderScreen {
   }
 
   // ---- loading ----
+
+  private async loadManifest(book: Book): Promise<Manifest> {
+    try {
+      const manifest = await this.options.api.manifest(book.id);
+      if (book.format === 'chapters') {
+        await this.publicationCache.putManifest(book.id, manifest).catch(() => undefined);
+      }
+      return manifest;
+    } catch (error) {
+      // Authentication failures must never be hidden behind cached content.
+      if (error instanceof ApiError && !error.isConnectivity && error.kind !== 'server') throw error;
+      if (book.format === 'chapters') {
+        const cached = await this.publicationCache.manifest(book.id);
+        if (cached) return cached;
+      }
+      throw error;
+    }
+  }
+
+  private async refreshPublication(): Promise<void> {
+    const book = this.book;
+    const previousManifest = this.manifest;
+    if (!book || book.format !== 'chapters' || !previousManifest || this.chrome.refreshing || this.navigating) return;
+    const token = this.loadingToken;
+    const previousHrefs = new Set(previousManifest.content?.items.map((item) => item.href));
+    this.patch({ refreshing: true });
+    this.setStatus('loading', '正在刷新目录…');
+    try {
+      const content = await this.options.api.refreshPublication(book.id);
+      if (token !== this.loadingToken) return;
+      const toc = content.items.map((item) => ({ id: item.href, label: item.title, depth: 0, spine: item.seq }));
+      const doc = createStagedDoc({
+        kind: content.kind, content, toc, orderedByBook: true,
+        loader: { read: (item) => this.readStagedSection(book, item) },
+      });
+      (doc as BookDoc & { staged?: unknown }).staged = doc;
+      let locator = this.view?.position().locator ?? '';
+      let parsed = locator ? parseLocator(locator, doc) : null;
+      let index = parsed ? doc.sections.findIndex((section) => section.id === parsed?.sectionId) : 0;
+      // Fetch the landing chapter before replacing the current view. A failed
+      // refresh or an unavailable new resource must leave the old page readable.
+      while (doc.sections.length) {
+        await doc.loadSection(index);
+        if (token !== this.loadingToken) return;
+        // The reader may keep scrolling while the source is being refreshed,
+        // or a chapter request started before refresh may finish meanwhile.
+        locator = this.view?.position().locator ?? '';
+        const latest = locator ? parseLocator(locator, doc) : null;
+        const latestIndex = latest ? doc.sections.findIndex((section) => section.id === latest.sectionId) : 0;
+        parsed = latest;
+        if (index === latestIndex) break;
+        index = latestIndex;
+      }
+      const manifest: Manifest = { ...previousManifest, ...content, content };
+      if (token !== this.loadingToken) return;
+      this.stopSpeech();
+      this.flushProgress();
+      this.manifest = manifest;
+      this.content = content;
+      this.doc = doc;
+      void this.publicationCache.putManifest(book.id, manifest).catch(() => undefined);
+      this.patch({ toc });
+      this.afterDocLoaded();
+      await this.view?.open(index, parsed?.offset ?? 0);
+      const added = content.items.filter((item) => !previousHrefs.has(item.href)).length;
+      this.flashStatus(locator && !parsed
+        ? '目录已更新，原章节已移除，从开头开始'
+        : added > 0 ? `目录已更新，新增 ${added} 章` : '目录已更新，暂无新章节', 3200);
+    } catch (error) {
+      if (token !== this.loadingToken) return;
+      if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
+      else this.flashStatus('刷新目录失败，已保留当前章节', 3200);
+    } finally {
+      if (token === this.loadingToken) this.patch({ refreshing: false });
+    }
+  }
 
   private async fetchBookBytes(book: Book, manifest: Manifest): Promise<Uint8Array> {
     const cacheKey = `book:${book.id}`;
@@ -500,6 +605,10 @@ export class ReaderScreen {
    * for a diff to describe.
    */
   private buildView(): void {
+    const epoch = ++this.viewEpoch;
+    this.detachGestures?.();
+    for (const off of this.viewListeners) off();
+    this.viewListeners.length = 0;
     this.view?.dispose();
     if (!this.doc) return;
     const doc = this.doc;
@@ -517,17 +626,21 @@ export class ReaderScreen {
       doc,
       ...(this.options.pageHost ? { pageHost: this.options.pageHost } : {}),
       ...(signAssetUrl ? { signAssetUrl } : {}),
-      onPositionChange: (position) => this.onPosition(position),
+      onPositionChange: (position) => {
+        if (epoch === this.viewEpoch) this.onPosition(position);
+      },
       // A book's own table-of-contents page is a chapter like any other, and its
       // links are the same destination the 目录 panel offers. Routing them through
       // `goToChapterRef` rather than through the browser is what makes a tap on
       // "第三章" a chapter change — window fetch included — instead of a download of
       // another chapter's document.
       onChapterLink: (ref) => {
+        if (epoch !== this.viewEpoch) return false;
         void this.goToChapterRef(ref);
         return true;
       },
       onChapterChange: (index, section) => {
+        if (epoch !== this.viewEpoch) return;
         // One patch, and `syncTocPosition` folds its own correction into the same
         // one rather than issuing a second. A chapter change is the one moment
         // several pieces of chrome move together (label, section, progress, the
@@ -555,7 +668,7 @@ export class ReaderScreen {
       // screen, the footer's page counter stayed at 1, and — because a position
       // change is also what schedules the progress write — a reader could scroll
       // through a whole chapter and have the app believe they never moved.
-      this.listeners.push(
+      this.viewListeners.push(
         addDebouncedListener(this.view.elementHost, 'scroll', () => this.onPosition(this.view?.position() ?? null), 250),
       );
     }
@@ -578,7 +691,7 @@ export class ReaderScreen {
     // Hardware keys, which is how a Bluetooth page-turner and an Android volume
     // rocker reach the reader (the shell maps them to ArrowLeft/Right). Space is
     // the desktop convention and costs nothing.
-    this.listeners.push(
+    this.viewListeners.push(
       bindKeys(this.element, (key) => {
         if (key === 'ArrowRight' || key === 'PageDown') void this.turnPage('next');
         else if (key === 'ArrowLeft' || key === 'PageUp') void this.turnPage('previous');
@@ -616,9 +729,16 @@ export class ReaderScreen {
    * detached node, which sounds exactly like the reader being ignored.
    */
   private async turnPage(direction: 'next' | 'previous'): Promise<void> {
+    if (this.chrome.refreshing) return;
     const view = this.view;
     if (!view) return;
-    const moved = direction === 'next' ? await view.next() : await view.previous();
+    let moved: boolean;
+    try {
+      moved = direction === 'next' ? await view.next() : await view.previous();
+    } catch (error) {
+      this.handleLoadError(error);
+      return;
+    }
     if (!moved) {
       this.flashStatus(direction === 'next' ? '已经是最后一页' : '已经是第一页');
       return;
@@ -874,6 +994,11 @@ export class ReaderScreen {
     if (this.chrome.toc.length > 0) return;
 
     let entries: ChromeTocEntry[] = [];
+    if (book.format === 'chapters' && this.content) {
+      entries = this.content.items.map((item) => ({ id: item.href, label: item.title, depth: 0, spine: item.seq }));
+      this.patch({ toc: entries });
+      return;
+    }
     try {
       const toc = await this.options.api.toc(book.id);
       entries = toc.map((entry) => ({
@@ -945,7 +1070,7 @@ export class ReaderScreen {
    */
   private async goToChapterRef(ref: string): Promise<void> {
     const view = this.view;
-    if (!view || this.navigating) return;
+    if (!view || this.navigating || this.chrome.refreshing) return;
     const book = this.book;
     if (!book) return;
 
@@ -954,7 +1079,7 @@ export class ReaderScreen {
     // The overwhelmingly common case: the chapter is one the window already
     // holds. No network, no window, no second render.
     if (local >= 0) {
-      await view.open(local, 0);
+      try { await view.open(local, 0); } catch (error) { this.handleLoadError(error); }
       return;
     }
     if (!this.content) return;
@@ -1033,6 +1158,7 @@ export class ReaderScreen {
    * network write by 1.5s, so a drag does not produce a request per frame.
    */
   private async scrubToPage(page: number): Promise<void> {
+    if (this.chrome.refreshing) return;
     const view = this.view;
     if (!view) return;
     await view.seekPageInChapter(page - 1);
@@ -1053,7 +1179,7 @@ export class ReaderScreen {
    */
   private async goToChapter(delta: 1 | -1): Promise<void> {
     const view = this.view;
-    if (!view || this.navigating) return;
+    if (!view || this.navigating || this.chrome.refreshing) return;
     // The *whole-book* position, not the window-local index: `sectionCount` is
     // the loaded window's length (forty chapters, or one comic volume), so a
     // reader at the last chapter of a window would be told "已经是最后一章" while
@@ -1105,7 +1231,7 @@ export class ReaderScreen {
     // not one — the two meet only through the window's own offset.
     const local = spine - view.windowOffset;
     if (local >= 0 && local < view.sectionCount) {
-      await view.open(local, 0);
+      try { await view.open(local, 0); } catch (error) { this.handleLoadError(error); }
       return;
     }
     this.navigating = true;
@@ -1478,7 +1604,9 @@ export class ReaderScreen {
         return;
       }
       if (err.isConnectivity) {
-        this.setStatus('offline', '这本书还没有下载，连上服务端后可读');
+        this.setStatus('offline', this.book?.format === 'chapters'
+          ? '这一章尚未缓存，连上服务端后可读'
+          : '这本书还没有下载，连上服务端后可读');
         return;
       }
       this.setStatus('error', err.message);

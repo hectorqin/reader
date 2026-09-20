@@ -1,8 +1,9 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.ts';
 import { authenticate, currentUser, requireAdmin } from '../auth.ts';
 import { badRequest } from '../../lib/errors.ts';
 import { SourceHost } from '../../services/source-host.ts';
+import { withSignal } from '../request-signal.ts';
 
 function textBody(body: unknown, name: string): string {
   const value = (body as Record<string, unknown> | null)?.[name];
@@ -134,13 +135,4 @@ function pageLimit(value?: string): number | undefined {
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number < 1 || number > 200) throw badRequest('limit must be an integer between 1 and 200');
   return number;
-}
-
-async function withSignal<T>(request: FastifyRequest, reply: FastifyReply, action: (signal: AbortSignal) => Promise<T>): Promise<T> {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  request.raw.once('aborted', abort);
-  reply.raw.once('close', abort);
-  try { return await action(controller.signal); }
-  finally { request.raw.removeListener('aborted', abort); reply.raw.removeListener('close', abort); }
 }

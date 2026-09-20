@@ -58,6 +58,8 @@ export interface ContentItem {
   mediaType: string;
   /** Where the bytes come from. Opaque to the HTTP layer. */
   href: string;
+  /** Versioned bytes reference, when a publication's stable href outlives its content. */
+  resourceRef?: string;
   /**
    * How the bytes should be read, when the format can produce more than one
    * rendition of the same unit.
@@ -119,6 +121,8 @@ export interface BookFileEntry {
 }
 
 export interface Manifest {
+  /** Snapshot identity for mutable publications. */
+  revision?: string;
   kind: BookKind;
   total: number;
   groups: ContentGroup[];

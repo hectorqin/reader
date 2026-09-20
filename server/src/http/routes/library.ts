@@ -16,6 +16,7 @@ import {
 } from '../../indexer/formats/index.ts';
 import { sendAssetPayload } from '../assets.ts';
 import { FilePublications } from '../../publications/files.ts';
+import { withSignal } from '../request-signal.ts';
 
 /**
  * The handler that owns a book, resolved from its recorded format.
@@ -30,6 +31,13 @@ function resolveHandler(ctx: AppContext, bookId: string, format: string) {
 /** Validated storage context, independent of a book's discovery source. */
 function sourceContext(ctx: AppContext, bookId: string) {
   return new FilePublications(ctx.db, ctx.config).context(bookId);
+}
+
+/** Stored chapter snapshots and local files share the reader's content contract. */
+async function contentManifest(ctx: AppContext, userId: string, bookId: string, format: string) {
+  if (ctx.sources?.chapters.has(bookId)) return ctx.sources.chapters.manifest(userId, bookId);
+  const handler = resolveHandler(ctx, bookId, format);
+  return handler ? handler.manifest({ ...sourceContext(ctx, bookId), bookId }) : null;
 }
 
 /**
@@ -141,13 +149,10 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
-    const handler = resolveHandler(ctx, id, book.format);
     const query = request.query as Record<string, string | undefined>;
     const requested = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
 
-    const content = handler
-      ? await handler.manifest({ ...sourceContext(ctx, id), bookId: id })
-      : null;
+    const content = await contentManifest(ctx, user.id, id, book.format);
 
     /**
      * One window, chosen by the client or by the server.
@@ -164,7 +169,9 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
      * needs to draw the first screen, which is what that parameter-less call was
      * always for.
      */
-    const wantsAll = query.group === 'all';
+    // A mutable chapter publication ships one complete snapshot. Clients derive
+    // TOC and windows from it so a concurrent refresh cannot mix two revisions.
+    const wantsAll = query.group === 'all' || book.format === 'chapters';
     const groupIndex = wantsAll
       ? null
       : requested !== null && Number.isFinite(requested)
@@ -209,6 +216,14 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     };
   });
 
+  app.post('/api/v1/books/:id/refresh', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    ctx.shelf.get(user.id, id);
+    if (!ctx.sources?.chapters.has(id)) throw badRequest('this book has no remote chapter directory', 'SOURCE_UNSUPPORTED');
+    return withSignal(request, reply, (signal) => ctx.sources!.refreshPublication(user.id, id, signal));
+  });
+
   /**
    * Streams the whole book file.
    *
@@ -220,6 +235,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
+    if (book.format === 'chapters') throw badRequest('fetch individual chapters from the manifest', 'CHAPTER_BOOK');
     return sendAssetPayload(request, reply, await new FilePublications(ctx.db, ctx.config).content(id, book.format));
   });
 
@@ -234,10 +250,8 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
-    const handler = resolveHandler(ctx, id, book.format);
-    if (!handler) throw badRequest(`format ${book.format} does not expose items`, 'UNSUPPORTED_FORMAT');
-
-    const manifest = await handler.manifest({ ...sourceContext(ctx, id), bookId: id });
+    const manifest = await contentManifest(ctx, user.id, id, book.format);
+    if (!manifest) throw badRequest(`format ${book.format} does not expose items`, 'UNSUPPORTED_FORMAT');
     const query = request.query as Record<string, string | undefined>;
     const groupIndex = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
 
@@ -272,6 +286,13 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
+    if (ctx.sources?.chapters.has(id)) {
+      const manifest = await ctx.sources.chapters.manifest(user.id, id);
+      return {
+        revision: manifest.revision,
+        toc: manifest.items.map((item) => ({ href: item.href, title: item.title, level: 0, spine: item.seq })),
+      };
+    }
     const handler = resolveHandler(ctx, id, book.format);
     if (!handler) return { toc: [] };
 
@@ -300,6 +321,13 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const ref = (request.query as Record<string, string | undefined>).ref;
     if (!ref) throw badRequest('ref is required');
     if (ref.length > 512) throw badRequest('ref is too long');
+
+    if (ctx.sources?.chapters.has(id)) {
+      const payload = await withSignal(request, reply, (signal) => ctx.sources!.chapters.asset(user.id, id, ref, signal));
+      reply.header('x-content-type-options', 'nosniff');
+      reply.header('content-security-policy', "default-src 'none'; sandbox");
+      return sendAssetPayload(request, reply, payload);
+    }
 
     const handler = resolveHandler(ctx, id, book.format);
     if (!handler) throw badRequest(`format ${book.format} has no assets`, 'UNSUPPORTED_FORMAT');

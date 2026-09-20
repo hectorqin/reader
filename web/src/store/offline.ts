@@ -11,6 +11,7 @@ import type { KeyValueStore } from '../core/platform.ts';
  */
 
 const KEY = 'reader.offline.v1';
+const LEGACY_CLAIM_KEY = 'reader.offline.v1.legacy-claimed';
 
 export interface PendingNote {
   note: Note;
@@ -92,12 +93,34 @@ export class OfflineStore {
   private snapshot: OfflineSnapshot = emptySnapshot();
   private loaded = false;
   private writeChain: Promise<void> = Promise.resolve();
+  private key = KEY;
 
   constructor(private readonly kv: KeyValueStore) {}
 
+  /** Select an account before loading or syncing its shelf and reading state. */
+  async setScope(scope: string, options: { claimLegacy?: boolean } = {}): Promise<void> {
+    const key = `${KEY}:${encodeURIComponent(scope)}`;
+    if (key === this.key) return;
+    await this.writeChain;
+    const claimedBy = await this.kv.get(LEGACY_CLAIM_KEY);
+    if (!claimedBy) await this.kv.set(LEGACY_CLAIM_KEY, options.claimLegacy ? key : 'unclaimed');
+    if (options.claimLegacy && (!claimedBy || claimedBy === key) && !(await this.kv.get(key))) {
+      const legacy = await this.kv.get(KEY);
+      if (legacy) {
+        // Keep the legacy value as a backup. A failed upgrade must never destroy
+        // the only copy of an unsynchronised position or note.
+        await this.kv.set(key, legacy);
+      }
+    }
+    this.key = key;
+    this.snapshot = emptySnapshot();
+    this.loaded = false;
+    await this.load();
+  }
+
   async load(): Promise<OfflineSnapshot> {
     if (this.loaded) return this.snapshot;
-    const raw = await this.kv.get(KEY);
+    const raw = await this.kv.get(this.key);
     if (raw) {
       try {
         this.snapshot = coerceSnapshot(JSON.parse(raw));
@@ -123,7 +146,8 @@ export class OfflineStore {
    */
   private persist(): Promise<void> {
     const payload = JSON.stringify(this.snapshot);
-    this.writeChain = this.writeChain.then(() => this.kv.set(KEY, payload)).catch(() => undefined);
+    const key = this.key;
+    this.writeChain = this.writeChain.then(() => this.kv.set(key, payload)).catch(() => undefined);
     return this.writeChain;
   }
 

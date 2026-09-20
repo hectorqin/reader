@@ -202,7 +202,7 @@ test('duplicate copies collapse into one book', async () => {
 
 test('manual metadata is never overwritten by a rescan, and can be undone', async () => {
   const owner = await login('owner');
-  const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;
+  const book = ctx.db.get<{ id: string }>('SELECT id FROM books WHERE identifier = ?', 'urn:isbn:9787536692930')!;
 
   const patched = await app.inject({
     method: 'PATCH', url: `/api/v1/books/${book.id}/metadata`, headers: auth(owner.token),

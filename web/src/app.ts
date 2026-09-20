@@ -13,6 +13,7 @@ import type { NativePageHost } from './ui/native-page.ts';
 import type { Platform } from './core/platform.ts';
 import { SyncEngine, type SyncStatus } from './core/sync.ts';
 import { OfflineStore } from './store/offline.ts';
+import { publicationScope } from './store/publications.ts';
 import { SettingsStore, DEFAULT_APP_SETTINGS, type AppSettings } from './store/settings.ts';
 import { ShelfScreen } from './ui/shelf-screen.tsx';
 import { ReaderScreen } from './ui/reader-screen.tsx';
@@ -160,7 +161,6 @@ export class App {
     this.settings = await this.settingsStore.load();
     this.sync = new SyncEngine(this.api, this.offline, this.platform);
 
-    await this.offline.load();
     const storedUrl = await this.settingsStore.serverUrl();
     const session = await this.api.restore();
     const baseUrl = storedUrl || this.options.defaultServerUrl || inferDefaultUrl();
@@ -170,6 +170,7 @@ export class App {
       // against is the one that came back.
       session?.user && void this.settingsStore.setServerUrl(baseUrl);
     }
+    if (session) await this.loadAccountCache(true);
 
     document.documentElement.dataset['theme'] = this.settings.theme;
 
@@ -302,10 +303,12 @@ export class App {
     const login = new LoginScreen({
       api: this.api,
       defaultServerUrl: this.api.baseUrl || inferDefaultUrl(),
-      onAuthenticated: () => {
+      onAuthenticated: async () => {
         // The deep link wins over the shelf: this is the whole point of holding
         // it. `#/book/<id>` pasted by a friend lands on the book, not on a shelf
         // the reader has never seen.
+        await this.loadAccountCache();
+        this.isAdmin = this.api.currentSession()?.user.role === 'admin';
         this.enterApp();
         this.sync.start();
       },
@@ -615,6 +618,15 @@ export class App {
     void this.sessions.clear();
     void this.offline.clear();
     this.showLogin('登录已失效，请重新登录');
+  }
+
+  private async loadAccountCache(claimLegacy = false): Promise<void> {
+    const session = this.api.currentSession();
+    if (!session) return;
+    await this.offline.setScope(publicationScope(
+      this.api.baseUrl || (typeof location !== 'undefined' ? location.origin : ''),
+      session.user.id,
+    ), { claimLegacy });
   }
 
   private async createPlatform(): Promise<Platform> {

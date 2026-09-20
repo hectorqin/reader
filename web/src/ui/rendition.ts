@@ -33,7 +33,8 @@
  * is fetched exactly as the server named it, which is the behaviour every other
  * format already relies on.
  */
-export function renditionRef(item: { href: string; format?: string }): string {
+export function renditionRef(item: { href: string; format?: string; resourceRef?: string }): string {
+  if (item.resourceRef) return item.resourceRef;
   if (item.format !== 'html') return item.href;
   if (item.href.startsWith('chapter:')) return `chapter-full:${item.href.slice('chapter:'.length)}`;
   return item.href;

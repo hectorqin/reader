@@ -10,6 +10,7 @@ import { createOpdsProvider } from '../sources/opds.ts';
 import type { SourceContext, SourceInstance, SourceProvider, SourceStorage, CredentialStore } from '../sources/types.ts';
 import { FileAcquisitions } from '../sources/acquisitions.ts';
 import { PluginManager } from '../sources/plugin-manager.ts';
+import { ChapterPublications } from '../publications/chapters.ts';
 
 function json(value: unknown): string { return JSON.stringify(value ?? {}); }
 function parse(value: string): unknown { try { return JSON.parse(value); } catch { return {}; } }
@@ -18,6 +19,7 @@ function parse(value: string): unknown { try { return JSON.parse(value); } catch
 export class SourceHost {
   readonly registry = new SourceRegistry();
   readonly plugins: PluginManager;
+  readonly chapters: ChapterPublications;
   private readonly key: Buffer;
   private readonly acquisitions: FileAcquisitions;
   private activeCalls = 0;
@@ -26,6 +28,12 @@ export class SourceHost {
   constructor(private readonly db: Db, private readonly config: AppConfig, shelf: () => ShelfService, private readonly log?: FastifyBaseLogger) {
     this.key = createHash('sha256').update('reader/source-credentials/v1\0').update(config.jwtSecret).digest();
     this.acquisitions = new FileAcquisitions(db, config);
+    this.chapters = new ChapterPublications(db, {
+      manifest: (userId, sourceId, ref, signal) => this.manifest(userId, sourceId, ref, signal),
+      resource: (userId, sourceId, publicationRef, ref, signal) => this.call(userId, sourceId, (provider, ctx) => provider.readResource
+        ? provider.readResource(ctx, { publicationRef, ref, rendition: 'text' })
+        : Promise.reject(badRequest('source has no chapter resources', 'SOURCE_UNSUPPORTED')), signal),
+    });
     this.registry.registerBuiltin('reader.local', createLocalProvider(db, shelf));
     this.registry.registerBuiltin('reader.opds', createOpdsProvider());
     this.plugins = new PluginManager(db, config.dataDir, this.registry);
@@ -111,12 +119,18 @@ export class SourceHost {
           userId, acquisition.publicationId, Date.now(),
         );
       }
-      if (acquisition.kind !== 'file') return acquisition;
+      if (acquisition.kind !== 'file' && acquisition.kind !== 'chapters') return acquisition;
       const entry = await provider.detail(ctx, entryRef);
-      const bookId = await this.acquisitions.acquire(provider, ctx, { entryRef, optionId }, acquisition, entry);
-      this.log?.info({ sourceId: id, bookId }, 'source file acquired');
+      const bookId = acquisition.kind === 'chapters'
+        ? await this.chapters.acquire(provider, ctx, { entryRef, optionId }, acquisition.publicationRef, entry)
+        : await this.acquisitions.acquire(provider, ctx, { entryRef, optionId }, acquisition, entry);
+      this.log?.info({ sourceId: id, bookId, kind: acquisition.kind }, 'source publication acquired');
       return { kind: 'ready' as const, publicationId: bookId };
     }, signal);
+  }
+
+  refreshPublication(userId: string, bookId: string, signal?: AbortSignal) {
+    return this.chapters.refresh(userId, bookId, signal);
   }
 
   async manifest(userId: string, id: string, ref: string, signal?: AbortSignal) {

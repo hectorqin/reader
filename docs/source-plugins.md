@@ -1,6 +1,6 @@
 # 来源插件系统设计
 
-状态：设计已确定，服务端首个切片已实现
+状态：内置来源、进程插件和章节阅读闭环已实现
 
 适用接口：`/api/v1`，来源插件协议 1
 
@@ -8,7 +8,7 @@
 
 本文定义 reader 对本地书库、OPDS 书库和远程书源的统一扩展架构。目标是让核心程序只维护一套书架、阅读、缓存和任务逻辑；内置 `local`、`opds` 两种来源；远程书源以独立插件开发、安装和升级。
 
-本文区分目标架构和本轮交付。当前已实现 local、OPDS 下载入库、受信任 Node 来源插件及管理接口；外部章节提供目录和资源开发预览，尚未接入书架、离线缓存和追更。交付状态与验证见 §13，调用示例见 [API 参考](api.md#来源与插件)。
+本文区分目标架构和本轮交付。当前已实现 local、OPDS 下载入库、受信任 Node 来源插件及管理接口；外部章节已接入持久化出版物、书架、按章节缓存、手动刷新和既有阅读进度。设备端缓存已读章节，不提供整书预下载或后台自动追更。交付状态与验证见 §13，调用示例见 [API 参考](api.md#来源与插件)。
 
 ## 1. 目标与范围
 
@@ -169,7 +169,7 @@ interface PublicationContent {
 }
 ```
 
-SDK 的 `ResourceResponse` 支持 `mediaType`、`size`（若已知）、`data`、`text` 和 `stream`。内置 OPDS 提供者通过流下载。首个外部进程只支持章节来源，声明 `acquire.file` 会被拒绝；资源使用有大小上限的 `text/base64` JSON，适合章节和小图片。HTTP 开发预览始终返回 JSON，不在应用同源下直接执行插件 HTML。后续资源通道支持背压和取消后，外部插件才适合传输大文件。
+SDK 的 `ResourceResponse` 支持 `mediaType`、`size`（若已知）、`data`、`text` 和 `stream`。内置 OPDS 提供者通过流下载。首个外部进程只支持章节来源，声明 `acquire.file` 会被拒绝；资源通过有大小上限的 `text/base64` JSON 传输。来源级开发预览始终返回 JSON，实际入库阅读只接受 UTF-8 `text/plain`，暂不支持远程 HTML、图片或其他富文本。后续资源通道支持背压和取消后，外部插件才适合传输大文件。
 
 ### 4.3 能力
 
@@ -186,7 +186,7 @@ content.resource
 content.update
 ```
 
-来源级能力决定 UI 是否显示入口；条目级 `options` 决定本书是否支持某种格式、下载或试读。能力缺失统一返回 `CAPABILITY_UNSUPPORTED`。
+来源级能力决定 UI 是否显示入口；条目级 `options` 决定本书是否支持某种格式、下载或试读。当前来源接口的能力缺失返回 `SOURCE_UNSUPPORTED`；完整错误分类目标见 §8.2。
 
 ## 5. 插件包与 SDK
 
@@ -268,11 +268,15 @@ error = { jsonrpc: "2.0", id, error: { code, message, data? } }
 
 ### 6.3 外部远程书源
 
-目标上插件负责搜索、详情、目录快照、正文清洗和图片引用；宿主负责缓存、限流、任务、权限和阅读协议。本轮先实现搜索、详情、获取章节绑定、目录和资源的契约及开发预览；章节 publication 持久化、正文渲染清洗、离线缓存和追更仍待实施。
+目标上插件负责搜索、详情、目录快照、正文清洗和图片引用；宿主负责缓存、限流、任务、权限和阅读协议。插件返回 `chapters` 绑定后，宿主获取目录快照、分配稳定 book ID 并加入调用用户书架；HTTP 返回 `ready/publicationId`，阅读器继续使用 `/books/:id/manifest|toc|assets`。
+
+当前入库阅读只接受 UTF-8 `text/plain`。正文按纯文本下发，客户端负责排版和转义；HTML、图片和其他富文本资源会被拒绝。章节资源第一次读取后持久化，插件禁用或卸载后仍可读取已缓存正文，尚未缓存的章节返回来源不可用。
+
+刷新目录通过 `POST /books/:id/refresh` 显式触发；Web 阅读器目录面板提供“刷新目录”，以稳定章节 href 恢复当前位置。获取或校验失败保留旧目录，界面在目标章节可读后才替换视图。本轮没有定时检查新章、整书预下载或后台追更任务。
 
 ## 7. 数据模型
 
-首个切片使用增量表，保留已有 `books`、`book_files`、`user_books` 和 `reading_progress`，没有新建 `publications` 或重写旧书 ID：
+实现使用增量表，保留已有 `books`、`book_files`、`user_books` 和 `reading_progress`，没有重写旧书 ID：
 
 | 表 | 当前用途 |
 | --- | --- |
@@ -280,43 +284,35 @@ error = { jsonrpc: "2.0", id, error: { code, message, data? } }
 | `source_credentials` | `(source_id, user_id, key)` 对应的加密凭据。 |
 | `acquired_files` | `book_id` 对应的 `DATA_DIR` 相对文件路径和大小，与扫描目录分离。 |
 | `source_acquisitions` | `(source_id, user_id, entry_ref, option_id)` 到 `book_id` 的映射。 |
+| `chapter_publications` | 按用户隔离的章节出版物、来源引用、当前 revision 和目录快照。 |
+| `chapter_snapshots` | 出版物历次目录快照；刷新后保留旧 revision。 |
+| `chapter_resources` | 每个 revision 的章节引用、已缓存正文和正文 SHA-256。 |
 | `plugin_storage` | 宿主 KV，按来源和用户命名空间保存；外部进程尚无反向访问接口。 |
 | `installed_plugins` | 插件 ID、已放置的包目录名及启用状态。 |
 
-来源实例由管理员配置，对登录用户共享。凭据、获取记录和书架属于当前用户；普通用户的来源列表不返回 `config`。禁用来源不删除已下载文件。
+来源实例由管理员配置，对登录用户共享。凭据、获取记录和书架属于当前用户；普通用户的来源列表不返回 `config`。同一插件条目可能因账号返回不同正文，因此章节出版物和缓存也按用户隔离，不与他人共享 book ID。禁用来源不删除已下载文件和章节缓存。
 
-下面是后续接入在线章节时的逻辑模型，不是本轮实际 schema：
+当前章节关系如下：
 
 ```text
-source_instances
-  id, plugin_id, source_type, label, config_json, credential_ref,
-  enabled, state, state_version, created_at, updated_at
-
-source_entries
-  id, source_instance_id, external_ref, metadata_json,
-  last_seen_at, created_at, updated_at
-
-publications
-  id, source_entry_id?, content_kind, media_type, content_version,
-  availability, created_at, updated_at
-
-publication_resources
-  id, publication_id, resource_ref, local_path?, cache_key?,
-  size, media_type, checksum, state, updated_at
-
-shelf_items
-  user_id, publication_id, hidden, created_at, updated_at
-
-reading_states
-  user_id, publication_id, locator_json, percent, updated_at
+books (format=chapters)
+  └─ chapter_publications (book_id, user_id, source_id, publication_ref, revision)
+       └─ chapter_snapshots (book_id, revision, snapshot_json)
+            └─ chapter_resources (book_id, revision, chapter_id, provider_ref, body?)
+  ├─ user_books
+  ├─ reading_progress
+  └─ notes
 ```
 
 约束：
 
-- `source_entries` 的唯一键是 `(source_instance_id, external_ref)`。
+- 章节 book ID 由 `(source_instance_id, user_id, publication_ref)` 派生；唯一约束与之对应。反复获取和重新上架沿用同一个 ID。
 - `external_ref`、OPDS URL、章节序号都不是 `publicationId`。
-- 章节必须有稳定 ID；目录顺序单独保存，插章不会让旧进度指向另一章。
-- 来源失效或插件禁用后，已缓存 publication 仍可读；卸载插件默认保留用户数据。
+- `books.content_hash_kind` 是增量字段，旧数据默认 `file`。章节使用 `manifest`，`content_hash` 为规范化目录的真实 SHA-256，不冒充整书文件哈希，也不参与文件去重。
+- 章节必须有稳定 ID。`href` 由该 ID 派生，顺序单独保存；插章不会让旧进度指向另一章。资源的 `resourceRef` 另含目录 revision，客户端用 href 保存位置，用 resourceRef 取正文和缓存。
+- revision 包含目录内容和插件的可选 `version`。即使目录不变，正文修订时插件也必须改变 `version`；否则宿主继续复用已缓存正文。
+- 同一个 resourceRef 的缓存内容不变。旧 revision 已缓存的章节可继续读；旧 revision 未缓存的章节返回 `409 CHAPTER_SNAPSHOT_EXPIRED`，避免取到上游当前正文后冒充旧版。刷新期间发生的资源请求也遵守此规则。
+- 来源失效或插件禁用后，已缓存出版物仍可读；卸载插件默认保留用户数据。现阶段历史快照和正文尚无总配额及自动淘汰策略。
 - 初期不同来源版本不自动合并进度；未来的作品聚合只提供迁移建议。
 - 插件状态写入自己的 namespace，状态迁移失败时保持旧版本或回滚。
 
@@ -366,9 +362,9 @@ QUOTA_EXCEEDED      缓存或下载配额不足
 - 内置 OPDS 的网络请求经过宿主校验：允许 origin、重定向目标、Basic 凭据转发、超时和响应大小；普通 OPDS 链接不能跳到未配置的 origin。
 - 外部 Node 插件当前是受信任进程，仍拥有本机 Node 的网络、文件和子进程权限；manifest 权限声明和 `SourceContext` 可选能力尚未构成 OS 级网络沙箱。管理员只能安装信任的包。
 - 插件凭据不出现在普通配置、前端 DTO 和日志中。
-- 外部插件资源预览只返回 JSON 文本或 base64，不作为应用同源 HTML 执行；章节 HTML 清洗和受控 `reader-res:` 缓存属于后续阅读接入。
+- 外部插件资源预览只返回 JSON 文本或 base64；入库章节只接受纯文本，并带 `nosniff` 和限制内容执行的 CSP。阅读器自行转义正文，不执行插件 HTML；远程富文本和图片清洗属于后续工作。
 - 本地和已获取文件路径通过宿主 `resolveInside()` 校验；外部插件直接读写路径的能力目前依赖管理员信任，系统沙箱属于后续工作。
-- 当前硬限制是宿主来源调用 60 秒、插件 RPC 30 秒、单条 JSON 2 MiB、文件获取 256 MiB；CPU/内存和域名权限的强制隔离属于后续工作。
+- 当前硬限制是宿主来源调用 60 秒、插件 RPC 30 秒、单条 JSON 2 MiB、文件获取 256 MiB；章节目录最多 10,000 项及 2 MiB，单章纯文本最多 2 MiB（仍受 RPC 消息上限约束）。CPU/内存和域名权限的强制隔离属于后续工作。
 - 插件安装及来源实例配置需要管理员权限；实例配置共享，凭据按用户隔离。
 
 manifest 中的权限声明用于宿主授权和展示，不能单独视为安全沙箱；运行不可信插件需要容器或操作系统策略。
@@ -394,6 +390,7 @@ GET    /sources/:id/entries?ref=...     详情
 POST   /sources/:id/acquire             获取内容，body 传 entryRef
 GET    /sources/:id/publications/:publicationRef/manifest
 GET    /sources/:id/publications/:publicationRef/resource?ref=...
+POST   /books/:id/refresh               获取并提交新的章节目录快照
 ```
 
 HTTP 返回宿主 DTO，凭据不回显。插件管理均需管理员权限；来源浏览、搜索、获取和当前用户凭据设置需登录。来源的 URL、名称和 config 更新、来源删除、插件包上传及升级尚无接口。请求参数、响应和可运行示例见 [API 参考](api.md#来源与插件)。
@@ -438,11 +435,11 @@ HTTP 返回宿主 DTO，凭据不回显。插件管理均需管理员权限；�
 - 凭据和缓存按用户/来源实例隔离。
 - 插件崩溃、禁用、升级失败时，书架和已缓存 publication 仍可访问。
 
-宿主 API 继续遵循现有长期兼容策略：只增加字段和端点，不改变已有字段语义。数据库迁移按可回滚的小步骤提交；旧书先映射为 `local` publication，远程来源不伪造 `content_hash`。
+宿主阅读 API 继续遵循现有长期兼容策略：为章节增加 `revision/resourceRef` 字段和刷新端点，已有文件资源形状保持不变。数据库迁移只新增表和带默认值的列；章节使用明确标记的目录哈希，不伪造整书文件哈希。设备端章节目录、正文、书架和进度缓存按服务地址与用户隔离；升级时恢复已有会话可一次性迁移旧书架、进度和待同步操作，新账号登录不认领旧缓存。
 
 ## 13. 本轮实施状态与后续工作
 
-本轮交付服务端扩展接口和 OPDS 下载阅读闭环。状态截至 2026-09-20；后续条目不能视为已交付。
+本轮交付服务端扩展接口、OPDS 下载阅读闭环和纯文本章节阅读闭环。状态截至 2026-09-20；后续条目不能视为已交付。
 
 | 工作 | 本轮状态 | 说明 |
 | --- | --- | --- |
@@ -458,8 +455,15 @@ HTTP 返回宿主 DTO，凭据不回显。插件管理均需管理员权限；�
 | 最小外部来源示例 | 已实现并测试 | `examples/plugins/demo-chapters`，提供静态示例目录和正文，不联网。 |
 | 插件安装 UI、包上传、在线升级与状态回滚 | 后续 | 本轮不承诺完整插件市场和包管理。 |
 | 后台下载任务、断点恢复、JobManager | 后续 | 当前完整文件会持久化，下载过程本身没有后台任务及恢复机制。 |
-| 外部章节写入书架、离线缓存与追更 | 后续 | 先可调用插件目录/资源，再接入持久化出版物。 |
+| 外部章节写入书架与阅读 | 已实现并测试 | 私有稳定 book ID、现有 manifest/items/toc/assets、书架、继续阅读和进度。 |
+| 目录快照与服务端章节缓存 | 已实现并测试 | 稳定 href、revision 资源引用、已读缓存、失败保留旧目录、禁用/卸载/重启后缓存可读。 |
+| Web 章节阅读与设备离线缓存 | 已实现 | 目录与已读章节按服务器和用户持久缓存；断网或服务端 5xx 时回退；授权及资源不存在错误不回退。 |
+| 手动刷新目录 | 已实现 | 阅读器目录面板入口；恢复当前章节位置；无后台追更。 |
+| 远程富文本、图片、整书预缓存、缓存配额与淘汰 | 后续 | 当前只支持 UTF-8 纯文本，设备仅已读章节可离线。 |
+| 自动检查新章与追更任务 | 后续 | 当前只有显式刷新 API 和阅读器按钮。 |
 | 反向宿主能力 RPC、凭据和配额强制隔离 | 后续 | 类型预留不等于运行策略已生效。 |
 | 容器/操作系统沙箱 | 后续 | 首个版本仅允许运行管理员信任的插件。 |
 
-验证结果：在 `server` 目录运行 `npm test`，共 264 项，263 通过、0 失败、1 项因 Windows 不支持 Unix 目录权限位而明确跳过；`npm run typecheck` 与生产 `npm run build` 通过。覆盖新增来源、插件进程、管理接口、OPDS 下载、用户隔离、并发限额、参数校验与既有本地阅读回归。测试均使用本地 HTTP fixture 或示例插件，未验证特定公网 OPDS 服务或第三方采集站点。
+验证覆盖来源、插件进程、管理接口、OPDS 下载、用户隔离、并发限额、参数校验与既有本地阅读回归。章节端到端测试使用真实 Node 进程和可变目录 fixture，覆盖获取幂等、插章定位、版本缓存、旧快照拒绝、刷新失败、禁用/卸载/扫描/重启和 HTML 资源拒绝；核心测试另覆盖迁移、请求与刷新并发及资源边界。测试均使用本地 HTTP fixture 或示例插件，未验证特定公网 OPDS 服务或第三方采集站点。
+
+本轮验证结果：服务端 `npm test` 274 通过、1 项因 Windows 不支持 Unix 目录权限位而跳过；Web `npm test` 547 通过；两端类型检查和生产构建通过。真实 Chrome 验证了刷新按钮显示、插入章节后保留当前章节及新增章节提示。全页 UI 评审另有两项未通过（沉浸分页顶行截断、书架操作按钮透明度），未纳入本轮修复；Android 安装包未构建。

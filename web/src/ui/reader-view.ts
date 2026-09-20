@@ -480,7 +480,7 @@ export class ReaderView {
     // A staged section has no body until it is asked for. Doing it here, rather
     // than in the loader, is what keeps "opening a book" and "showing a chapter"
     // from both needing to know about windows.
-    if (this.staged) await this.staged.loadSection(index).catch(() => null);
+    if (this.staged) await this.staged.loadSection(index);
     this.sectionIndex = index;
     this.sectionOffset = Math.min(1, Math.max(0, offset));
     this.releaseObjectUrl();

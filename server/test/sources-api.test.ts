@@ -363,7 +363,11 @@ test('trusted example plugins can be installed, queried, disabled, reloaded afte
   assert.equal(browse.json().items[0].ref, 'demo-book');
   const acquired = await h.app.inject({ method: 'POST', url: '/api/v1/sources/demo-instance/acquire', headers: auth(h.admin), payload: { entryRef: 'demo-book' } });
   assert.equal(acquired.statusCode, 200, acquired.body);
-  assert.deepEqual(acquired.json(), { kind: 'chapters', publicationRef: 'demo-book' });
+  assert.equal(acquired.json().kind, 'ready');
+  const publicationId = acquired.json().publicationId as string;
+  const book = await h.app.inject({ method: 'GET', url: `/api/v1/books/${publicationId}`, headers: auth(h.admin) });
+  assert.equal(book.statusCode, 200, book.body);
+  assert.equal(book.json().book.format, 'chapters');
   const manifest = await h.app.inject({ method: 'GET', url: '/api/v1/sources/demo-instance/publications/demo-book/manifest', headers: auth(h.admin) });
   assert.equal(manifest.statusCode, 200, manifest.body);
   const resource = await h.app.inject({ method: 'GET', url: '/api/v1/sources/demo-instance/publications/demo-book/resource?ref=chapter-one', headers: auth(h.admin) });
