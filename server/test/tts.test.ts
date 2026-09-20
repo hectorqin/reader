@@ -124,6 +124,7 @@ before(async () => {
 
 after(async () => {
   await app?.close();
+  ctx?.db.close();
   await new Promise<void>((resolve) => upstream?.close(() => resolve()));
   await rm(root, { recursive: true, force: true });
 });
@@ -131,6 +132,7 @@ after(async () => {
 /** Rebuilds the instance so the environment (`TTS_URL`) is read fresh. */
 beforeEach(async () => {
   await app?.close();
+  ctx?.db.close();
   await buildInstance();
   if (!token) {
     const res = await app.inject({
@@ -146,6 +148,7 @@ beforeEach(async () => {
 test('an instance with no TTS_URL reports http:false rather than 404', async () => {
   delete process.env.TTS_URL;
   await app.close();
+  ctx.db.close();
   await buildInstance();
 
   const res = await app.inject({ method: 'GET', url: '/api/v1/tts/voices', headers: auth() });
@@ -160,6 +163,7 @@ test('an instance with no TTS_URL reports http:false rather than 404', async () 
 test('synthesis is refused with a clear error when TTS_URL is unset', async () => {
   delete process.env.TTS_URL;
   await app.close();
+  ctx.db.close();
   await buildInstance();
 
   const res = await app.inject({
@@ -173,6 +177,7 @@ test('synthesis is refused with a clear error when TTS_URL is unset', async () =
 test('a sentence is proxied to the upstream service and streamed back as audio', async () => {
   process.env.TTS_URL = upstreamUrl;
   await app.close();
+  ctx.db.close();
   await buildInstance();
   upstreamBehaviour = 'audio';
 
@@ -192,6 +197,7 @@ test('a sentence is proxied to the upstream service and streamed back as audio',
 test('an upstream that answers HTML is refused instead of served as silence', async () => {
   process.env.TTS_URL = upstreamUrl;
   await app.close();
+  ctx.db.close();
   await buildInstance();
   upstreamBehaviour = 'html';
 
@@ -206,6 +212,7 @@ test('an upstream that answers HTML is refused instead of served as silence', as
 test('an upstream error is reported as such, not as a 200', async () => {
   process.env.TTS_URL = upstreamUrl;
   await app.close();
+  ctx.db.close();
   await buildInstance();
   upstreamBehaviour = 'error';
 
@@ -220,6 +227,7 @@ test('an upstream error is reported as such, not as a 200', async () => {
 test('an over-long utterance is refused before it reaches the upstream', async () => {
   process.env.TTS_URL = upstreamUrl;
   await app.close();
+  ctx.db.close();
   await buildInstance();
   upstreamBehaviour = 'audio';
   lastUpstreamQuery = '';
@@ -236,6 +244,7 @@ test('an over-long utterance is refused before it reaches the upstream', async (
 test('the voice list is passed through from the upstream service', async () => {
   process.env.TTS_URL = upstreamUrl;
   await app.close();
+  ctx.db.close();
   await buildInstance();
 
   const res = await app.inject({ method: 'GET', url: '/api/v1/tts/voices', headers: auth() });
@@ -248,6 +257,7 @@ test('the voice list is passed through from the upstream service', async () => {
 test('the audio route requires a token, in the header or the query', async () => {
   process.env.TTS_URL = upstreamUrl;
   await app.close();
+  ctx.db.close();
   await buildInstance();
 
   const anonymous = await app.inject({ method: 'GET', url: '/api/v1/tts?text=hello' });

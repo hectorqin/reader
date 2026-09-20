@@ -124,6 +124,8 @@ export interface RequestOptions {
 export class ReaderApi {
   private session: Session | null = null;
   private refreshPromise: Promise<Session> | null = null;
+  private sessionGeneration = 0;
+  private sessionWrites: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<(session: Session | null) => void>();
 
   constructor(
@@ -138,12 +140,18 @@ export class ReaderApi {
   private currentBaseUrl = '';
 
   setBaseUrl(url: string): void {
-    this.currentBaseUrl = url.replace(/\/+$/, '');
+    const next = url.replace(/\/+$/, '');
+    if (next !== this.currentBaseUrl) {
+      this.sessionGeneration += 1;
+      this.refreshPromise = null;
+    }
+    this.currentBaseUrl = next;
   }
 
   async restore(): Promise<Session | null> {
     const stored = await this.sessions.load();
     if (!stored) return null;
+    this.sessionGeneration += 1;
     this.session = stored;
     return stored;
   }
@@ -157,20 +165,30 @@ export class ReaderApi {
     return () => this.listeners.delete(listener);
   }
 
-  private async setSession(session: Session | null): Promise<void> {
+  private async setSession(session: Session | null, rotation = false): Promise<void> {
+    if (!rotation) {
+      this.sessionGeneration += 1;
+      this.refreshPromise = null;
+    }
+    const generation = this.sessionGeneration;
     this.session = session;
-    if (session) await this.sessions.save(session);
-    else await this.sessions.clear();
+    const write = this.sessionWrites.catch(() => undefined).then(() =>
+      session ? this.sessions.save(session) : this.sessions.clear());
+    this.sessionWrites = write;
+    await write;
+    if (generation !== this.sessionGeneration) return;
     for (const listener of this.listeners) listener(session);
   }
 
   async signOut(): Promise<void> {
+    const generation = this.sessionGeneration;
     const refreshToken = this.session?.refreshToken;
     if (refreshToken) {
       // Best effort: a failed revocation must not trap the user in a session
       // they asked to leave. The local credentials are cleared either way.
       await this.call('/api/v1/auth/logout', 'POST', { refreshToken }).catch(() => undefined);
     }
+    if (generation !== this.sessionGeneration) return;
     await this.setSession(null);
   }
 
@@ -227,6 +245,10 @@ export class ReaderApi {
     return this.get<Manifest>(`/api/v1/books/${encodeURIComponent(id)}/manifest`, options);
   }
 
+  async refreshPublication(id: string, options: RequestOptions = {}): Promise<BookContent> {
+    return this.call<BookContent>(`/api/v1/books/${encodeURIComponent(id)}/refresh`, 'POST', undefined, options);
+  }
+
   /**
    * One addressable resource, as bytes.
    *
@@ -236,16 +258,10 @@ export class ReaderApi {
    * different window.
    */
   async asset(id: string, ref: string, options: RequestOptions = {}): Promise<Blob> {
-    const response = await this.platform.transport.send({
-      url: `/api/v1/books/${encodeURIComponent(id)}/assets?ref=${encodeURIComponent(ref)}`,
-      method: 'GET',
-      headers: {
-        accept: '*/*',
-        ...(this.session ? { authorization: `Bearer ${this.session.accessToken}` } : {}),
-      },
-      binary: true,
-      ...(options.signal ? { signal: options.signal } : {}),
-    });
+    const response = await this.request(
+      `/api/v1/books/${encodeURIComponent(id)}/assets?ref=${encodeURIComponent(ref)}`,
+      'GET', undefined, { ...options, binary: true },
+    );
     if (response.status >= 400) {
       throw new ApiError(errorForStatus(response.status), 'resource request failed', 'ASSET_FAILED', response.status);
     }
@@ -565,8 +581,11 @@ export class ReaderApi {
     body: unknown,
     options: RequestOptions & { binary?: boolean } = {},
   ): Promise<import('../core/platform.ts').HttpResponse> {
+    const generation = this.sessionGeneration;
+    const assertCurrent = (): void => this.assertSession(generation);
     const attempt = async (token: string | null) => {
-      const headers: Record<string, string> = { accept: 'application/json' };
+      assertCurrent();
+      const headers: Record<string, string> = { accept: options.binary ? '*/*' : 'application/json' };
       if (body !== undefined) headers['content-type'] = 'application/json';
       if (token) headers.authorization = `Bearer ${token}`;
       return this.platform.transport.send({
@@ -581,8 +600,11 @@ export class ReaderApi {
 
     const token = this.session?.accessToken ?? null;
     try {
-      return await attempt(token);
+      const response = await attempt(token);
+      assertCurrent();
+      return response;
     } catch (err) {
+      assertCurrent();
       if (!(err instanceof ApiError)) throw err;
       this.platform.reportError?.(err);
       // Only an expired access token is worth a retry, and only if there is a
@@ -594,21 +616,26 @@ export class ReaderApi {
         (err.code === 'TOKEN_EXPIRED' || err.code === '' || err.code === 'NO_TOKEN') &&
         this.session?.refreshToken !== undefined;
       if (!retryable) {
-        if (err.isAuthFailure) await this.setSession(null);
+        if (err.isAuthFailure) await this.clearSessionIfCurrent(generation);
         throw err;
       }
-      const refreshed = await this.refreshSession();
+      const refreshed = await this.refreshSession(generation);
+      assertCurrent();
       try {
-        return await attempt(refreshed.accessToken);
+        const response = await attempt(refreshed.accessToken);
+        assertCurrent();
+        return response;
       } catch (retryErr) {
-        if (retryErr instanceof ApiError && retryErr.isAuthFailure) await this.setSession(null);
+        assertCurrent();
+        if (retryErr instanceof ApiError && retryErr.isAuthFailure) await this.clearSessionIfCurrent(generation);
         throw retryErr;
       }
     }
   }
 
   /** De-duplicated refresh: concurrent callers share one rotation. */
-  private refreshSession(): Promise<Session> {
+  private refreshSession(generation: number): Promise<Session> {
+    this.assertSession(generation);
     if (this.refreshPromise) return this.refreshPromise;
     const refreshToken = this.session?.refreshToken;
     if (!refreshToken) return Promise.reject(new ApiError('unauthorized', 'no refresh token'));
@@ -621,21 +648,39 @@ export class ReaderApi {
           headers: { 'content-type': 'application/json', accept: 'application/json' },
           body: JSON.stringify({ refreshToken }),
         });
+        this.assertSession(generation);
         const session = response.json as Session;
         if (!session?.accessToken) throw new ApiError('unauthorized', 'refresh returned no session');
-        await this.setSession(session);
+        if (session.user.id !== this.session?.user.id) throw new ApiError('unauthorized', 'refresh returned another account');
+        await this.setSession(session, true);
+        this.assertSession(generation);
         return session;
       } catch (err) {
+        this.assertSession(generation);
         if (err instanceof ApiError) {
           // A rejected refresh token is terminal: the user must sign in again.
-          await this.setSession(null);
+          await this.clearSessionIfCurrent(generation);
         }
         throw err;
       } finally {
-        this.refreshPromise = null;
+        if (generation === this.sessionGeneration) this.refreshPromise = null;
       }
     })();
     return this.refreshPromise;
+  }
+
+  private assertSession(generation: number): void {
+    if (generation !== this.sessionGeneration) {
+      throw new ApiError('aborted', 'account or server changed', 'ACCOUNT_CHANGED');
+    }
+  }
+
+  private async clearSessionIfCurrent(generation: number): Promise<void> {
+    this.assertSession(generation);
+    await this.setSession(null);
+    // Clearing changes the generation once. A further change while persistent
+    // storage was being written belongs to a new login and invalidates this error.
+    this.assertSession(generation + 1);
   }
 }
 

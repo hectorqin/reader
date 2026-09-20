@@ -1,0 +1,16 @@
+{
+  "id": "reader.source.demo",
+  "name": "Demo chapter source",
+  "version": "0.1.0",
+  "apiVersion": 1,
+  "runtime": "node",
+  "entry": "main.mjs",
+  "sourceTypes": [
+    {
+      "id": "demo-chapters",
+      "label": "示例章节书源",
+      "capabilities": ["browse", "search", "detail", "acquire.chapters", "content.manifest", "content.resource"],
+      "configSchema": { "type": "object", "properties": {}, "additionalProperties": false }
+    }
+  ]
+}

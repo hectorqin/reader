@@ -43,6 +43,14 @@ function build() {
   return { transport, platform, api, offline, engine };
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+const SECOND_SESSION = { ...SESSION, user: { ...SESSION.user, id: 'u2', username: 'other' }, accessToken: 'access-other' };
+
 describe('ReaderApi', () => {
   it('attaches the bearer token once a session exists', async () => {
     const { api, transport } = build();
@@ -276,6 +284,134 @@ describe('OfflineStore', () => {
 });
 
 describe('SyncEngine', () => {
+  it('discards an old account pull and its finally while the new account is syncing', async () => {
+    const { api, transport, offline, engine } = build();
+    transport.json(SESSION);
+    await api.login('me', 'password12');
+    await offline.setScope('account-a');
+    const oldStarted = deferred<void>();
+    const oldResponse = deferred<{ status: number; headers: {}; json: unknown }>();
+    const newStarted = deferred<void>();
+    const newResponse = deferred<{ status: number; headers: {}; json: unknown }>();
+    transport.respondWith((request) => {
+      if (request.headers.authorization === 'Bearer access-1') {
+        oldStarted.resolve();
+        return oldResponse.promise;
+      }
+      newStarted.resolve();
+      return newResponse.promise;
+    });
+    const oldRun = engine.syncNow();
+    await oldStarted.promise;
+    engine.stop();
+    transport.json(SECOND_SESSION);
+    await api.login('other', 'password12');
+    await offline.setScope('account-b');
+    transport.respondWith(() => { newStarted.resolve(); return newResponse.promise; });
+    engine.start();
+    await newStarted.promise;
+    oldResponse.resolve({ status: 200, headers: {}, json: {
+      serverTime: 900,
+      progress: [{ bookId: 'private-a', locator: 'private', percentage: 0, chapterTitle: '', device: 'a', updatedAt: 1 }],
+      notes: [{ id: 'private-note', bookId: 'private-a', type: 'note', locator: '', text: 'account A secret', comment: '', color: '', updatedAt: 1 }],
+    } });
+    await oldRun;
+    expect(offline.current.progress).toEqual({});
+    expect(offline.current.notes).toEqual({});
+    expect(offline.current.serverTime).toBe(0);
+    expect(engine.status().state).toBe('syncing');
+    const count = transport.requests.length;
+    await engine.syncNow();
+    expect(transport.requests).toHaveLength(count);
+    newResponse.resolve({ status: 200, headers: {}, json: { serverTime: 5, progress: [], notes: [] } });
+    await vi.waitFor(() => expect(engine.status().state).toBe('idle'));
+    expect(offline.current.serverTime).toBe(5);
+    engine.stop();
+    await offline.setScope('account-b');
+    expect(offline.current.notes).toEqual({});
+  });
+
+  it.each(['syncNow', 'flush'] as const)('does not acknowledge an old %s push against the new account outbox', async (method) => {
+    const { api, transport, offline, engine, platform } = build();
+    transport.json(SESSION);
+    await api.login('me', 'password12');
+    await offline.setScope('account-a');
+    const progress = { bookId: 'shared-id', locator: 'account A position', percentage: 0.5, chapterTitle: '', device: 'a', updatedAt: 1 };
+    await offline.setProgress(progress);
+    const started = deferred<void>();
+    const response = deferred<{ status: number; headers: {}; json: unknown }>();
+    transport.respondWith(() => { started.resolve(); return response.promise; });
+    const oldRun = engine[method]();
+    await started.promise;
+    engine.stop();
+    transport.json(SECOND_SESSION);
+    await api.login('other', 'password12');
+    await offline.setScope('account-b');
+    await offline.setProgress({ ...progress, locator: 'account B position' });
+    platform.setOnline(false);
+    engine.start();
+    response.resolve({ status: 200, headers: {}, json: { accepted: 1, rejected: 3, serverTime: 900, progress: [], notes: [] } });
+    await oldRun;
+    await vi.waitFor(() => expect(engine.status().state).toBe('offline'));
+    expect(offline.current.dirtyProgress).toEqual(['shared-id']);
+    expect(offline.current.progress['shared-id']!.locator).toBe('account B position');
+    expect(offline.current.serverTime).toBe(0);
+    expect(engine.rejected()).toBe(0);
+    engine.stop();
+  });
+
+  it('stops the remaining chunks of the old account batch after switching accounts', async () => {
+    const { api, transport, offline, engine } = build();
+    transport.json(SESSION);
+    await api.login('me', 'password12');
+    await offline.setScope('account-a');
+    for (let index = 0; index < 1001; index += 1) {
+      await offline.setProgress({ bookId: `a-${index}`, locator: 'private', percentage: 0, chapterTitle: '', device: 'a', updatedAt: 1 });
+    }
+    const started = deferred<void>();
+    const response = deferred<{ status: number; headers: {}; json: unknown }>();
+    transport.respondWith(() => { started.resolve(); return response.promise; });
+    const oldRun = engine.syncNow();
+    await started.promise;
+    engine.stop();
+    transport.json(SECOND_SESSION);
+    await api.login('other', 'password12');
+    await offline.setScope('account-b');
+    transport.json({ accepted: 1, rejected: 0, serverTime: 2, progress: [], notes: [] });
+    response.resolve({ status: 200, headers: {}, json: { accepted: 1000, rejected: 0, serverTime: 1, progress: [], notes: [] } });
+    await oldRun;
+    expect(transport.countMatching((request) => request.url === '/api/v1/sync')).toBe(1);
+    expect(offline.current.serverTime).toBe(0);
+    expect(offline.current.progress).toEqual({});
+    await offline.setScope('account-a');
+    expect(offline.current.dirtyProgress).toHaveLength(1001);
+  });
+
+  it('clears account-specific note ownership when restarting for another account', async () => {
+    const { api, transport, offline, engine, platform } = build();
+    transport.json(SESSION);
+    await api.login('me', 'password12');
+    await offline.setScope('account-a');
+    transport.json({ serverTime: 1, progress: [], notes: [
+      { id: 'n1', bookId: 'private-a', type: 'note', locator: '', text: 'private', comment: '', color: '', updatedAt: 1 },
+    ] });
+    await engine.syncNow();
+    engine.stop();
+    transport.json(SECOND_SESSION);
+    await api.login('other', 'password12');
+    await offline.setScope('account-b');
+    await offline.deleteNote('n1');
+    platform.setOnline(false);
+    engine.start();
+    await vi.waitFor(() => expect(engine.status().state).toBe('offline'));
+    transport.json({ accepted: 0, rejected: 1, serverTime: 2, progress: [], notes: [] });
+    await engine.flush();
+    const sent = JSON.parse(bodyText(transport.requests.at(-1)!));
+    expect(sent.notes[0].bookId).toBe('');
+    expect(sent.notes[0].bookId).not.toBe('private-a');
+    engine.stop();
+  });
+
   it('pushes the outbox and then pulls only the delta', async () => {
     const { api, transport, offline, engine, platform } = build();
     transport.json(SESSION);

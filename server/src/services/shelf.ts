@@ -135,9 +135,9 @@ export class ShelfService {
   constructor(private readonly db: Db) {}
 
   /**
-   * Books visible to a user. Only rows that still have a live file are
-   * returned, so a book whose file was deleted disappears from the shelf even
-   * if its progress row survives for a later restore.
+   * Books with a live file, managed download or account-owned chapter snapshot.
+   * A missing local file disappears while its progress survives for a restore;
+   * a disabled plugin leaves already acquired chapters on the shelf.
    */
   list(userId: string, options: ListOptions = {}): { items: BookDto[]; total: number; page: number; pageSize: number } {
     const page = Math.max(1, options.page ?? 1);
@@ -167,7 +167,9 @@ export class ShelfService {
     const library = scope === 'library';
     const where: string[] = library
       ? ['EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)']
-      : ['ub.user_id = ?', 'ub.hidden = 0', 'EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)'];
+      : ['ub.user_id = ?', 'ub.hidden = 0', `(EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)
+          OR EXISTS (SELECT 1 FROM acquired_files a WHERE a.book_id = b.id)
+          OR EXISTS (SELECT 1 FROM chapter_publications c WHERE c.book_id = b.id AND c.user_id = ub.user_id))`];
     const params: Array<string | number> = library ? [] : [userId];
 
     if (options.search) {

@@ -226,6 +226,7 @@ before(async () => {
 
 after(async () => {
   await app.close();
+  ctx.db.close();
   await rm(root, { recursive: true, force: true });
 });
 

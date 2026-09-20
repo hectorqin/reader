@@ -8,7 +8,7 @@ import { type JSX } from './vendor/preact.ts';
 export interface LoginScreenOptions {
   api: ReaderApi;
   defaultServerUrl: string;
-  onAuthenticated(): void;
+  onAuthenticated(): void | Promise<void>;
   onServerUrlChange(url: string): Promise<void>;
 }
 
@@ -234,7 +234,7 @@ export class LoginScreen {
         await this.options.api.login(username, password);
       }
       await this.options.onServerUrlChange(url);
-      this.options.onAuthenticated();
+      await this.options.onAuthenticated();
     } catch (err) {
       this.patch({ error: describeSubmitError(err) });
     } finally {

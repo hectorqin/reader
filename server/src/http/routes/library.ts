@@ -12,32 +12,11 @@ import {
   capabilities,
   contentTypeFor,
   directoryHandlerForFormat,
-  fileHandlerForFormat,
   type ContentItem,
 } from '../../indexer/formats/index.ts';
 import { sendAssetPayload } from '../assets.ts';
-
-/**
- * The single live path backing a book, if it is file-backed.
- *
- * A directory book has no file to stream, so the caller is told which of the two
- * shapes it is rather than being handed a path that may not exist.
- */
-function resolveBookSource(
-  ctx: AppContext,
-  bookId: string,
-  format: string,
-): { relPath: string; isDirectory: boolean } | null {
-  const file = ctx.db.get<{ rel_path: string }>(
-    'SELECT rel_path FROM book_files WHERE book_id = ? AND missing = 0 ORDER BY rel_path LIMIT 1',
-    bookId,
-  );
-  if (!file) return null;
-  // Directory books are recorded under a path with no extension; a file handler
-  // for the format means the path is a real file.
-  const isDirectory = format === 'comic-dir' || fileHandlerForFormat(format) === null;
-  return { relPath: file.rel_path, isDirectory };
-}
+import { FilePublications } from '../../publications/files.ts';
+import { withSignal } from '../request-signal.ts';
 
 /**
  * The handler that owns a book, resolved from its recorded format.
@@ -45,20 +24,20 @@ function resolveBookSource(
  * A missing file still has a handler; only the manifest and asset calls fail.
  */
 function resolveHandler(ctx: AppContext, bookId: string, format: string) {
-  void ctx;
   void bookId;
-  return fileHandlerForFormat(format) ?? directoryHandlerForFormat(format) ?? null;
+  return new FilePublications(ctx.db, ctx.config).handler(format);
 }
 
-/** Absolute path plus library-relative path for a book's backing store. */
+/** Validated storage context, independent of a book's discovery source. */
 function sourceContext(ctx: AppContext, bookId: string) {
-  const file = ctx.db.get<{ rel_path: string }>(
-    'SELECT rel_path FROM book_files WHERE book_id = ? AND missing = 0 ORDER BY rel_path LIMIT 1',
-    bookId,
-  );
-  if (!file) throw notFound('no available file for this book', 'FILE_MISSING');
-  const relPath = assertSafeRel(file.rel_path);
-  return { relPath, absPath: resolveInside(ctx.config.booksDir, relPath) };
+  return new FilePublications(ctx.db, ctx.config).context(bookId);
+}
+
+/** Stored chapter snapshots and local files share the reader's content contract. */
+async function contentManifest(ctx: AppContext, userId: string, bookId: string, format: string) {
+  if (ctx.sources?.chapters.has(bookId)) return ctx.sources.chapters.manifest(userId, bookId);
+  const handler = resolveHandler(ctx, bookId, format);
+  return handler ? handler.manifest({ ...sourceContext(ctx, bookId), bookId }) : null;
 }
 
 /**
@@ -170,13 +149,10 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
-    const handler = resolveHandler(ctx, id, book.format);
     const query = request.query as Record<string, string | undefined>;
     const requested = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
 
-    const content = handler
-      ? await handler.manifest({ ...sourceContext(ctx, id), bookId: id })
-      : null;
+    const content = await contentManifest(ctx, user.id, id, book.format);
 
     /**
      * One window, chosen by the client or by the server.
@@ -193,7 +169,9 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
      * needs to draw the first screen, which is what that parameter-less call was
      * always for.
      */
-    const wantsAll = query.group === 'all';
+    // A mutable chapter publication ships one complete snapshot. Clients derive
+    // TOC and windows from it so a concurrent refresh cannot mix two revisions.
+    const wantsAll = query.group === 'all' || book.format === 'chapters';
     const groupIndex = wantsAll
       ? null
       : requested !== null && Number.isFinite(requested)
@@ -230,26 +208,20 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       //
       // This is a contract, not an inventory: `/books/:id/file` serves exactly the
       // paths named here, and nothing else.
-      files: content && handler && 'files' in handler && handler.files
-        ? (await handler.files({ ...sourceContext(ctx, id), bookId: id })).map((file) => ({
-            rel_path: file.relPath,
-            // The handler's own reference, passed through untouched. It is what
-            // makes the listed path fetchable: a directory book addresses a page
-            // as `page:<volume>:<page>`, and only its handler knows where the
-            // volumes begin.
-            ref: file.ref,
-            size: file.size,
-            missing: file.missing,
-          }))
-        : ctx.db.all<{ rel_path: string; size: number; missing: number }>(
-            'SELECT rel_path, size, missing FROM book_files WHERE book_id = ? ORDER BY rel_path',
-            id,
-          ),
+      files: await new FilePublications(ctx.db, ctx.config).files(id, book.format),
       // `content` is null only for a book whose format exposes no addressable
       // structure at all; the client then falls back to the raw file.
       content: windowed,
       ...(windowed ? { items: windowed.items, groups: windowed.groups, kind: windowed.kind, total: windowed.total } : {}),
     };
+  });
+
+  app.post('/api/v1/books/:id/refresh', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    ctx.shelf.get(user.id, id);
+    if (!ctx.sources?.chapters.has(id)) throw badRequest('this book has no remote chapter directory', 'SOURCE_UNSUPPORTED');
+    return withSignal(request, reply, (signal) => ctx.sources!.refreshPublication(user.id, id, signal));
   });
 
   /**
@@ -263,29 +235,8 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
-    const source = resolveBookSource(ctx, id, book.format);
-    if (!source) throw notFound('no available file for this book', 'FILE_MISSING');
-
-    // Directory books have no file to stream; the client caches page by page.
-    if (source.isDirectory) {
-      throw badRequest(
-        'this book is backed by a directory; fetch pages from the manifest instead',
-        'DIRECTORY_BOOK',
-      );
-    }
-
-    const abs = resolveInside(ctx.config.booksDir, assertSafeRel(source.relPath));
-    if (!existsSync(abs)) throw notFound('file is no longer on disk', 'FILE_MISSING');
-
-    return sendAssetPayload(request, reply, {
-      stream: createReadStream(abs),
-      contentType: contentTypeFor(source.relPath),
-      filename: source.relPath.split('/').pop() ?? 'book',
-      size: (await stat(abs)).size,
-      seekable: true,
-      etag: id,
-      lastModified: (await stat(abs)).mtimeMs,
-    });
+    if (book.format === 'chapters') throw badRequest('fetch individual chapters from the manifest', 'CHAPTER_BOOK');
+    return sendAssetPayload(request, reply, await new FilePublications(ctx.db, ctx.config).content(id, book.format));
   });
 
   /**
@@ -299,10 +250,8 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
-    const handler = resolveHandler(ctx, id, book.format);
-    if (!handler) throw badRequest(`format ${book.format} does not expose items`, 'UNSUPPORTED_FORMAT');
-
-    const manifest = await handler.manifest({ ...sourceContext(ctx, id), bookId: id });
+    const manifest = await contentManifest(ctx, user.id, id, book.format);
+    if (!manifest) throw badRequest(`format ${book.format} does not expose items`, 'UNSUPPORTED_FORMAT');
     const query = request.query as Record<string, string | undefined>;
     const groupIndex = query.group !== undefined ? Number.parseInt(query.group, 10) : null;
 
@@ -337,6 +286,13 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const user = currentUser(request);
     const { id } = request.params as { id: string };
     const book = ctx.shelf.get(user.id, id);
+    if (ctx.sources?.chapters.has(id)) {
+      const manifest = await ctx.sources.chapters.manifest(user.id, id);
+      return {
+        revision: manifest.revision,
+        toc: manifest.items.map((item) => ({ href: item.href, title: item.title, level: 0, spine: item.seq })),
+      };
+    }
     const handler = resolveHandler(ctx, id, book.format);
     if (!handler) return { toc: [] };
 
@@ -365,6 +321,13 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const ref = (request.query as Record<string, string | undefined>).ref;
     if (!ref) throw badRequest('ref is required');
     if (ref.length > 512) throw badRequest('ref is too long');
+
+    if (ctx.sources?.chapters.has(id)) {
+      const payload = await withSignal(request, reply, (signal) => ctx.sources!.chapters.asset(user.id, id, ref, signal));
+      reply.header('x-content-type-options', 'nosniff');
+      reply.header('content-security-policy', "default-src 'none'; sandbox");
+      return sendAssetPayload(request, reply, payload);
+    }
 
     const handler = resolveHandler(ctx, id, book.format);
     if (!handler) throw badRequest(`format ${book.format} has no assets`, 'UNSUPPORTED_FORMAT');
@@ -399,6 +362,11 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     // legitimate one. Without this a traversal inside a directory book passes the
     // "is it under the folder" test.
     const wanted = normalizeRel(query.path);
+    const publications = new FilePublications(ctx.db, ctx.config);
+    const managed = publications.managed(id);
+    if (managed && managed.rel_path === wanted) {
+      return sendAssetPayload(request, reply, await publications.content(id, book.format));
+    }
 
     // Two shapes of book, and each owns a different set of paths.
     //

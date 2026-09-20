@@ -135,6 +135,14 @@ describe('ReaderChrome', () => {
     }
   });
 
+  it('offers refresh only in the chapter publication contents panel and disables it while busy', () => {
+    expect(paint({ tocOpen: true }).textContent).not.toContain('刷新目录');
+    let tree = paint({ tocOpen: true, canRefresh: true });
+    expect([...tree.querySelectorAll('button')].find((button) => button.textContent?.includes('刷新目录'))?.disabled).toBe(false);
+    tree = paint({ tocOpen: true, canRefresh: true, refreshing: true });
+    expect([...tree.querySelectorAll('button')].find((button) => button.textContent?.includes('正在刷新目录'))?.disabled).toBe(true);
+  });
+
   it('uses chapter pages for the slider even when the book has many fixed pages', () => {
     const tree = paint({ layout: 'fixed', chapterIndex: 50, chapterCount: 100, chapterPages: 1, pageInChapter: 1 });
     const slider = tree.querySelector<HTMLInputElement>('.progress-scrubber')!;

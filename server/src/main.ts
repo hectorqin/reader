@@ -30,6 +30,7 @@ async function main(): Promise<void> {
     shelf: undefined,
     sync: undefined,
     log: undefined,
+    sources: undefined,
   } as unknown as AppContext;
 
   const app = buildApp(ctx);

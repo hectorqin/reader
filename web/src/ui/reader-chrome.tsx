@@ -20,7 +20,7 @@ import { DEFAULT_APP_SETTINGS, READOUT_FIELDS, READOUT_OPTIONS, type ReadoutMode
 import { ReaderIndicators } from './reader-indicators.tsx';
 import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ComponentChildren, type JSX } from './vendor/preact.ts';
-import { IconButton, SectionTitle } from './toolkit.tsx';
+import { IconButton, IconTextButton, SectionTitle } from './toolkit.tsx';
 import { Icon, type IconName } from './icon.tsx';
 
 /**
@@ -76,6 +76,8 @@ export interface ChromeState {
   chapterCount: number;
   /** True while a window is being fetched, so the chapter buttons can say so. */
   navigating: boolean;
+  canRefresh?: boolean;
+  refreshing?: boolean;
   tts: SpeechBarState;
   layout: string;
   format: string;
@@ -126,6 +128,7 @@ export interface ChromeHandlers {
   onSwitchEngine(kind: AppSettings['ttsEngine']): void;
   onTocEntry(ref: string): void;
   onChapter(delta: 1 | -1): void;
+  onRefresh?(): void;
   /**
    * Jump to a page *inside the current chapter*, from the footer scrubber.
    *
@@ -202,6 +205,14 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
       </div>
       {state.tocOpen ? (
         <Panel title="目录" subtitle={`${state.toc.length} 章`} onClose={handlers.toggleToc}>
+          {state.canRefresh ? (
+            <IconTextButton
+              icon="refresh"
+              label={state.refreshing ? '正在刷新目录…' : '刷新目录'}
+              disabled={state.refreshing || state.navigating}
+              onClick={() => handlers.onRefresh?.()}
+            />
+          ) : null}
           {state.toc.length === 0 ? (
             <div className="empty-state">这本书没有目录</div>
           ) : (

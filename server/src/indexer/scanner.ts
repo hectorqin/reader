@@ -234,6 +234,8 @@ export class Scanner {
       this.db.run(
         `DELETE FROM books
          WHERE id NOT IN (SELECT DISTINCT book_id FROM book_files WHERE missing = 0)
+           AND id NOT IN (SELECT book_id FROM acquired_files)
+           AND id NOT IN (SELECT book_id FROM chapter_publications)
            AND id NOT IN (SELECT DISTINCT book_id FROM user_books)`,
       );
 

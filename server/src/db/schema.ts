@@ -16,6 +16,7 @@
  */
 export const MIGRATIONS_SQL = `
 ALTER TABLE book_files ADD COLUMN parse_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE books ADD COLUMN content_hash_kind TEXT NOT NULL DEFAULT 'file';
 `;
 
 export const SCHEMA_SQL = `
@@ -48,10 +49,11 @@ CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens(user_id);
 -- file would otherwise wipe the reader's progress and highlights, which is the
 -- single most common complaint about self-hosted libraries.
 CREATE TABLE IF NOT EXISTS books (
-  id             TEXT PRIMARY KEY,          -- stable identity: dc:identifier + content hash
+  id             TEXT PRIMARY KEY,          -- stable file identity, or source + user + publication ref for chapters
   identifier     TEXT,                      -- EPUB dc:identifier, when present
-  content_hash   TEXT NOT NULL,             -- sha256 of the file bytes
-  -- Format id owned by the handler registry (epub | pdf | cbz | txt | image | comic-dir).
+  content_hash   TEXT NOT NULL,             -- sha256 of bytes or the canonical manifest, according to content_hash_kind
+  content_hash_kind TEXT NOT NULL DEFAULT 'file', -- file | manifest
+  -- Format id (epub | pdf | cbz | txt | image | comic-dir | chapters).
   -- Open set on purpose: adding a format must not require a schema migration.
   format         TEXT NOT NULL,
   title          TEXT NOT NULL DEFAULT '',
@@ -99,6 +101,81 @@ CREATE TABLE IF NOT EXISTS book_files (
   last_seen  INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_files_book ON book_files(book_id);
+
+-- Configurations contain no credentials. Built-in and installed source types
+-- share this table; disabling a source never removes acquired content.
+CREATE TABLE IF NOT EXISTS source_instances (
+  id TEXT PRIMARY KEY,
+  plugin_id TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  config_json TEXT NOT NULL DEFAULT '{}',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS source_credentials (
+  source_id TEXT NOT NULL REFERENCES source_instances(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  encrypted_value TEXT NOT NULL,
+  PRIMARY KEY (source_id, user_id, key)
+);
+-- Host-managed files are deliberately separate from the scanned books mount.
+CREATE TABLE IF NOT EXISTS acquired_files (
+  book_id TEXT PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
+  rel_path TEXT NOT NULL UNIQUE,
+  size INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS source_acquisitions (
+  source_id TEXT NOT NULL REFERENCES source_instances(id),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  entry_ref TEXT NOT NULL,
+  option_id TEXT NOT NULL DEFAULT '',
+  book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  PRIMARY KEY (source_id, user_id, entry_ref, option_id)
+);
+-- Chapter publications belong to one account: the same provider reference may
+-- resolve differently with another account's credentials. Their identity is
+-- independent of both the current directory and the location of its chapters.
+CREATE TABLE IF NOT EXISTS chapter_publications (
+  book_id TEXT PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  source_id TEXT NOT NULL REFERENCES source_instances(id),
+  publication_ref TEXT NOT NULL,
+  revision TEXT NOT NULL,
+  version TEXT,
+  snapshot_json TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  UNIQUE (source_id, user_id, publication_ref)
+);
+-- Keep prior snapshots and their already fetched bytes so an open reader can
+-- finish its old directory after another device refreshes it.
+CREATE TABLE IF NOT EXISTS chapter_snapshots (
+  book_id TEXT NOT NULL REFERENCES chapter_publications(book_id) ON DELETE CASCADE,
+  revision TEXT NOT NULL,
+  snapshot_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (book_id, revision)
+);
+CREATE TABLE IF NOT EXISTS chapter_resources (
+  book_id TEXT NOT NULL,
+  revision TEXT NOT NULL,
+  chapter_id TEXT NOT NULL,
+  provider_ref TEXT NOT NULL,
+  body TEXT,
+  content_hash TEXT,
+  PRIMARY KEY (book_id, revision, chapter_id),
+  FOREIGN KEY (book_id, revision) REFERENCES chapter_snapshots(book_id, revision) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS plugin_storage (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS installed_plugins (
+  plugin_id TEXT PRIMARY KEY,
+  folder TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1
+);
 
 -- Per-user library state. Kept separate from books so that a rescan can never
 -- clobber a user's own edits.

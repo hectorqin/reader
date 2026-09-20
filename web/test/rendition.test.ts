@@ -19,6 +19,11 @@ import { renditionRef } from '../src/ui/rendition.ts';
  * client no longer produces it, which is what the rename is.
  */
 describe('the reference a section is fetched under', () => {
+  it('uses a plugin revision reference without changing the saved chapter identity', () => {
+    expect(renditionRef({
+      href: 'chapter:stable-id', format: 'html', resourceRef: 'chapter-resource:revision:stable-id',
+    })).toBe('chapter-resource:revision:stable-id');
+  });
   it('asks for the whole chapter, under the name that says so', () => {
     // The name is the point: this reference stopped being HTML when the server
     // stopped typesetting, and a reference whose name lies about its content is how

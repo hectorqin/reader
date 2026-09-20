@@ -97,6 +97,9 @@ export interface ContentItem {
   mediaType: string;
   /** Opaque, format-specific reference. Pass it back unchanged. */
   href: string;
+  /** Versioned resource identity, separate from the stable locator href. */
+  resourceRef?: string;
+  format?: 'text' | 'html';
   /** Byte length when the format knows it cheaply. */
   size?: number;
 }
@@ -124,6 +127,7 @@ export interface ContentGroup {
  * request narrowed the items to one window.
  */
 export interface BookContent {
+  revision?: string;
   kind: 'reflowable' | 'paged' | 'text' | 'document' | 'single-image';
   total: number;
   groups: ContentGroup[];
@@ -145,6 +149,7 @@ export interface TocEntry {
 }
 
 export interface Manifest {
+  revision?: string;
   book: Book;
   contentUrl: string;
   coverUrl: string | null;

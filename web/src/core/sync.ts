@@ -29,6 +29,12 @@ const RETRY_MAX_MS = 120_000;
  */
 const SCHEDULE_DELAY_MS = 2_500;
 
+interface SyncRun {
+  generation: number;
+  account: string;
+  signal: AbortSignal;
+}
+
 /**
  * Keeps local state and the server in step, and never surfaces a connectivity
  * failure to the reader as an error (product design §8.2, "三态切换不能报错").
@@ -49,6 +55,9 @@ export class SyncEngine {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private backoff = RETRY_BASE_MS;
   private running = false;
+  private generation = 0;
+  private stopped = false;
+  private controller = new AbortController();
   private rejectedCount = 0;
   /**
    * A push that has been asked for but not yet started.
@@ -119,7 +128,16 @@ export class SyncEngine {
 
   start(): void {
     if (this.unwatch) return;
+    this.stopped = false;
+    if (this.controller.signal.aborted) this.controller = new AbortController();
+    this.noteBooks.clear();
+    this.rememberNoteBooks();
+    this.rejectedCount = 0;
+    this.backoff = RETRY_BASE_MS;
+    this.message = '';
+    const generation = this.generation;
     this.unwatch = this.platform.onConnectivityChange((connectivity) => {
+      if (this.stopped || generation !== this.generation) return;
       if (connectivity === 'online') {
         // Coming back online is the moment the user expects their last pages
         // to be pushed, so do not wait for the next poll.
@@ -133,6 +151,14 @@ export class SyncEngine {
   }
 
   stop(): void {
+    // Transport cancellation is best-effort (a response may already be queued).
+    // The generation also retires every continuation before it can mutate the
+    // account now selected by the shared OfflineStore or issue another chunk.
+    this.generation += 1;
+    this.stopped = true;
+    this.controller.abort();
+    this.running = false;
+    this.noteBooks.clear();
     this.unwatch?.();
     this.unwatch = null;
     if (this.timer) clearTimeout(this.timer);
@@ -161,9 +187,11 @@ export class SyncEngine {
    * costs one empty request and loses nothing.
    */
   schedule(delay = SCHEDULE_DELAY_MS): void {
-    if (!this.api.currentSession()) return;
+    if (this.stopped || !this.api.currentSession()) return;
+    const run = this.captureRun();
     if (this.requested) clearTimeout(this.requested);
     this.requested = setTimeout(() => {
+      if (!this.isCurrent(run)) return;
       this.requested = null;
       void this.syncNow();
     }, delay);
@@ -186,11 +214,14 @@ export class SyncEngine {
    * 在一直请求" and as a shelf that never picks up another device's progress.
    */
   private scheduleNext(delay: number, force = false): void {
+    if (this.stopped || !this.api.currentSession()) return;
+    const run = this.captureRun();
     // A backoff retry *replaces* the poll rather than waiting behind it: the poll
     // is 30 seconds away, and a failure that retries in 2 has to be allowed to.
     if (this.timer && !force) return;
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
+      if (!this.isCurrent(run)) return;
       this.timer = null;
       void this.syncNow();
     }, delay);
@@ -204,6 +235,7 @@ export class SyncEngine {
    * the same time.
    */
   async syncNow(): Promise<void> {
+    if (this.stopped) return;
     if (this.running) {
       // A run is already in flight and will arm the next poll itself. Re-arming
       // here would be a second timer, and the loser would fire a duplicate cycle.
@@ -222,10 +254,12 @@ export class SyncEngine {
       this.scheduleNext(IDLE_INTERVAL_MS);
       return;
     }
+    const run = this.captureRun();
     this.running = true;
     this.setState('syncing');
     try {
       const connectivity = await this.platform.connectivity();
+      this.assertCurrent(run);
       if (connectivity === 'offline') {
         this.setState('offline', '离线，进度会缓存在本机');
         this.scheduleNext(IDLE_INTERVAL_MS);
@@ -243,20 +277,26 @@ export class SyncEngine {
       //
       // A push that had nothing to send (an idle poll) returns null, and then the
       // pull is the real work — that is the poll's whole purpose.
-      const pushed = await this.pushOutbox();
-      const pull = pushed ?? (await this.api.pull(this.offline.current.serverTime));
+      const pushed = await this.pushOutbox(run);
+      this.assertCurrent(run);
+      const pull = pushed ?? (await this.api.pull(this.offline.current.serverTime, undefined, { signal: run.signal }));
+      this.assertCurrent(run);
       await this.offline.applyPulled(pull);
+      this.assertCurrent(run);
       this.rememberNoteBooks();
 
       this.backoff = RETRY_BASE_MS;
       // A rejection message has to survive the state transition to idle,
       // otherwise the reader never learns that a record was dropped.
       this.setState('idle', this.rejectedCount > 0 ? `${this.rejectedCount} 条记录被服务端拒绝` : this.message);
-      this.scheduleNext(IDLE_INTERVAL_MS);
+      if (this.isCurrent(run)) this.scheduleNext(IDLE_INTERVAL_MS);
     } catch (err) {
-      this.handleFailure(err);
+      // A terminal auth response clears ReaderApi's session before arriving
+      // here. Surface that failure only while this lifecycle is still current.
+      if (!this.stopped && run.generation === this.generation &&
+          (run.account === this.accountKey() || !this.api.currentSession())) this.handleFailure(err);
     } finally {
-      this.running = false;
+      if (run.generation === this.generation) this.running = false;
     }
   }
 
@@ -268,7 +308,8 @@ export class SyncEngine {
    * the record's own update will still be dirty after this returns, so the next
    * cycle picks it up instead of it being cleared by a response that predates it.
    */
-  private async pushOutbox(): Promise<SyncPull | null> {
+  private async pushOutbox(run: SyncRun): Promise<SyncPull | null> {
+    this.assertCurrent(run);
     const batch = this.offline.outbox();
     const deletes: NoteInput[] = batch.deletes.map((id) => ({
       id,
@@ -313,18 +354,21 @@ export class SyncEngine {
     // predates the writes that came after it.
     let merged: SyncPull | null = null;
     for (let index = 0; index < batches; index += 1) {
+      this.assertCurrent(run);
       const offset = index * CHUNK;
       const progressChunk = batch.progress.slice(offset, offset + CHUNK);
       const noteChunk = notes.slice(offset, offset + CHUNK);
       const result = await this.api.push({
         ...(progressChunk.length > 0 ? { progress: progressChunk } : {}),
         ...(noteChunk.length > 0 ? { notes: noteChunk } : {}),
-      });
+      }, { signal: run.signal });
+      this.assertCurrent(run);
       serverTime = Math.max(serverTime, result.serverTime);
       rejected += result.rejected;
       merged = result;
     }
     await this.offline.markDelivered(batch, serverTime);
+    this.assertCurrent(run);
     // Rejections are informational. The server refuses records it can never
     // accept (unknown book, malformed locator), and retrying them forever would
     // block every later flush behind a permanently bad entry. The count is kept
@@ -382,11 +426,27 @@ export class SyncEngine {
     }
   }
 
+  private accountKey(): string {
+    return JSON.stringify([this.api.baseUrl.replace(/\/+$/, ''), this.api.currentSession()?.user.id ?? '']);
+  }
+
+  private captureRun(): SyncRun {
+    return { generation: this.generation, account: this.accountKey(), signal: this.controller.signal };
+  }
+
+  private isCurrent(run: SyncRun): boolean {
+    return !this.stopped && run.generation === this.generation && run.account === this.accountKey();
+  }
+
+  private assertCurrent(run: SyncRun): void {
+    if (!this.isCurrent(run)) throw new ApiError('aborted', 'synchronisation account changed');
+  }
+
   /** Force a synchronous flush, used when the app goes to the background. */
   async flush(): Promise<void> {
-    if (!this.api.currentSession()) return;
+    if (this.stopped || !this.api.currentSession()) return;
     try {
-      await this.pushOutbox();
+      await this.pushOutbox(this.captureRun());
     } catch {
       // Nothing to do: the outbox is durable and the next attempt will retry.
     }

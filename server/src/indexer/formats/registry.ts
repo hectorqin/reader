@@ -58,6 +58,8 @@ export interface ContentItem {
   mediaType: string;
   /** Where the bytes come from. Opaque to the HTTP layer. */
   href: string;
+  /** Versioned bytes reference, when a publication's stable href outlives its content. */
+  resourceRef?: string;
   /**
    * How the bytes should be read, when the format can produce more than one
    * rendition of the same unit.
@@ -119,6 +121,8 @@ export interface BookFileEntry {
 }
 
 export interface Manifest {
+  /** Snapshot identity for mutable publications. */
+  revision?: string;
   kind: BookKind;
   total: number;
   groups: ContentGroup[];
@@ -182,7 +186,7 @@ export type ProgressReporter = (scanned: number) => void;
 export interface HandlerContext {
   /** Library-relative path, forward slashes. */
   relPath: string;
-  /** Absolute path, guaranteed inside the read-only books root. */
+  /** Absolute path validated by the host: the books mount or managed DATA_DIR content. */
   absPath: string;
   /**
    * Book id, available once the book exists. Handlers that emit links back into

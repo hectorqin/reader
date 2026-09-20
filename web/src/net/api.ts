@@ -20,6 +20,7 @@ export interface ContentItem {
   kind: 'chapter' | 'page';
   mediaType: string;
   href: string;
+  resourceRef?: string;
   /**
    * Which rendition of the unit this item refers to.
    *
@@ -43,6 +44,7 @@ export interface ContentGroup {
 }
 
 export interface BookContent {
+  revision?: string;
   kind: 'reflowable' | 'paged' | 'text' | 'document' | 'single-image';
   total: number;
   groups: ContentGroup[];
@@ -95,6 +97,7 @@ export interface ManifestFile {
 }
 
 export interface ManifestResponse {
+  revision?: string;
   book: BookDto;
   contentUrl: string;
   coverUrl: string | null;
@@ -216,6 +219,10 @@ export class ApiClient {
   async manifest(bookId: string, group?: number): Promise<ManifestResponse> {
     const query = group === undefined ? '' : `?group=${group}`;
     return this.request('GET', `/api/v1/books/${encodeURIComponent(bookId)}/manifest${query}`);
+  }
+
+  async refreshPublication(bookId: string): Promise<BookContent> {
+    return this.request('POST', `/api/v1/books/${encodeURIComponent(bookId)}/refresh`);
   }
 
   /**
