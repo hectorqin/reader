@@ -166,6 +166,19 @@
   --reader-band-inset: 0.75rem;
 
   /*
+   * The surface a floating band is drawn on.
+   *
+   * Translucent, with a blur, and that is what makes a bar over the text usable
+   * now that the page is not inset for it: the reader can see the line the bar
+   * covers *through* the bar, so the toolbar stops being a thing that hides a
+   * paragraph. `color-mix` against the theme's own surface rather than a fixed
+   * rgba, so the three themes get their own tint from one value; the fallback is
+   * the opaque surface, which is what a host without `color-mix` draws and which
+   * is exactly the old behaviour.
+   */
+  --reader-surface-float: color-mix(in srgb, var(--reader-surface) 88%, transparent);
+
+  /*
    * The reader's own paint order, weakest first.
    *
    * The three numbers exist because the reading surface and the chrome are
@@ -275,26 +288,29 @@ body {
  * and that is the whole of the "内容会上下滑动" fix: with the stage in flow, the
  * two bars took height out of it, so showing or hiding the chrome resized the page
  * and moved every line on it. Here the page is the screen, always, in both states.
+ *
+ * ## No block inset: the page *is* the screen
+ * —
+ * This rule used to reserve the bars' own heights as `padding-block`, on the
+ * reasoning that a floating bar must not cover a line the reader is reading. The
+ * reasoning was sound and the result was the report: "内容要铺满，不要预留 stage".
+ * Reserving the bars' height means the reading column is permanently 9rem shorter
+ * than the phone, in *both* chrome states — so a reader who has hidden the toolbar
+ * and wants the whole screen for the book still loses the top and bottom bands to
+ * empty paper, and the last line of every page sits 5.6rem above the bottom edge
+ * for no reason at all.
+ *
+ * The column keeps its own `padding-block` (see `FLOW_STYLESHEET`), which is the
+ * reader's *page* padding and is symmetric — the text is not flush with the glass
+ * even when the bars are gone. What it is not is a variable reserve for chrome
+ * that may not be there: the page occupies the whole slot and the bars are drawn
+ * over it, which is what "浮动" means and what makes the text stand still when
+ * they come and go.
  */
 .stage-host {
   display: flex;
   position: absolute;
   inset: 0;
-  /*
-   * The space the two floating bars occupy, kept clear of the text.
-   *
-   * Constant, and that is the entire point. The bars are a layer now, so they no
-   * longer take height out of the page — but they do cover it, and a bar drawn over
-   * the first line of a chapter is a bar that has hidden something the reader was
-   * reading. So the page is inset by exactly the bars' own heights: the text is
-   * never underneath them, and the inset does not change when they come or go, so
-   * the text never moves either.
-   *
-   * `--reader-chrome-top` is the top bar's height and `--reader-chrome-bottom` the
-   * footer's, both declared on `.reader-screen`: one number per bar, read by the bar
-   * itself and by this rule, so the clearance and the bar cannot drift apart.
-   */
-  padding-block: var(--reader-chrome-top) var(--reader-chrome-bottom);
 }
 
 /*
@@ -500,7 +516,11 @@ book-content {
   /* The band inset on both sides, so the outermost glyphs are the same distance
      from the device edge as every control in the footer below them. */
   padding-inline: var(--reader-band-inset);
-  background: var(--reader-surface);
+  /* A floating band over the page, not a solid shelf above it: the reader has to be
+     able to read the line it covers. See `--reader-surface-float`. */
+  background: var(--reader-surface-float);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   /* Same hairline treatment as the footer, so the two edges of the reading area
      are the same weight. */
   border-bottom: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
@@ -2076,7 +2096,10 @@ book-content {
   inset-inline: 0;
   bottom: 0;
   z-index: var(--reader-layer-bar);
-  background: var(--reader-surface);
+  /* The same floating surface as the top bar — over the page, see above. */
+  background: var(--reader-surface-float);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   /* A hairline that survives a dark theme and a bright page equally: one solid
      colour has to fight whichever side it borders, and this is the one place the
      footer meets the paper. */
@@ -2245,8 +2268,11 @@ book-content {
  * them. It used to be drawn only while the chrome was hidden, which made it the one
  * piece of chrome that survived immersion: a reader who tapped to get "just the
  * page" still had a floating column over the right edge of the text. The rail holds
- * the same destinations the top bar names (目录 / 主题 / 字号 / 设置), so it belongs to
- * the same state — the reader has asked for the controls — and it goes with them.
+ * the two adjustments a reader makes from the page itself (主题 / 字号) plus 听书, so it
+ * belongs to the same state the bars do — the reader has asked for the controls — and
+ * it goes with them. The five destinations that used to be here (目录 / 字体 / 行距 /
+ * 页边距 / 设置) are gone: all five open or reach a sheet, and a second, worse copy of
+ * the settings panel floating over the text is not a shortcut.
  *
  * Positioned in the *page margin* rather than over the text, which is why it can be
  * on screen while a reader is reading: the reading column is capped by
@@ -2442,17 +2468,40 @@ book-content {
 /* ---- read-aloud bar ---- */
 
 /*
- * The bar sits above the footer and, unlike the footer, is *not* hidden with the
- * chrome: a reader listening while walking needs the play/pause without the
- * header covering the sentence being read.
+ * The bar floats over the bottom of the page, and that is a *fix*, not a style
+ * choice.
+ *
+ * It used to be an ordinary flex child of `.reader-screen`. The screen is a flex
+ * column whose first child is `.stage-host`, and the stage host is
+ * `position: absolute; inset: 0` — it covers the whole screen so the page does not
+ * resize when the bars come and go. A static sibling in that column is therefore
+ * laid out *behind* the reading surface, which paints at `--reader-layer-page`.
+ * The bar was drawn, its buttons were focusable, and the stage was painted over
+ * all of it: the reader could see the sentence being read and could not press
+ * anything. That is the whole of "没法停止" — the stop button existed and was
+ * unreachable, which reads as a control that does nothing.
+ *
+ * So it is a layer with the bars' own z-index (`--reader-layer-bar`), pinned above
+ * the bottom edge and above the footer's own height, which is where its controls
+ * have to be to be hit by a thumb. Unlike the footer it is *not* hidden with the
+ * chrome: a reader listening while walking needs play/pause without the header
+ * covering the sentence being read.
+ *
+ * `--reader-chrome-bottom` is the footer's own height, read here rather than
+ * guessed, so the two bands cannot overlap however the footer's rows change.
  */
 .tts-bar {
+  position: absolute;
+  inset-inline: 0;
+  bottom: var(--reader-chrome-bottom);
+  z-index: var(--reader-layer-bar);
   display: flex;
   align-items: center;
   gap: 0.35rem;
   padding: 0.35rem 0.5rem;
-  padding-bottom: calc(0.35rem + env(safe-area-inset-bottom));
-  background: var(--reader-surface);
+  background: var(--reader-surface-float);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-top: 1px solid var(--reader-line);
 }
 
@@ -2460,24 +2509,91 @@ book-content {
   display: none;
 }
 
-.tts-bar .tts-main {
-  flex: 1 1 auto;
-  min-width: 0;
+/*
+ * Two rows, stacked: the transport controls, then the sentence with its scrubber.
+ *
+ * A column rather than a single flex row because the single row could not fit —
+ * see the comment on `.tts-bar`. The two rows take the full width of the bar, so
+ * the five controls split it evenly and none of them is ever clipped.
+ */
+.tts-bar .tts-row {
   display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.tts-bar .tts-controls {
+  /* Every control the same width, including the chip: a row whose cells are
+     sized by their contents leaves the widest one (the ✕, whose label is a
+     glyph) flush to the edge and the others bunched. Equal cells read as one
+     transport, which is what the row is. */
+  gap: var(--space-1);
+}
+
+.tts-bar .tts-controls > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* The chip is a text control in a row of icons, so its own padding is dropped:
+   the cell's width is the equal share, not the label's. */
+.tts-bar .tts-chip {
+  appearance: none;
+  border: 1px solid color-mix(in srgb, var(--reader-line) 90%, transparent);
+  background: var(--reader-surface);
+  color: var(--reader-muted);
+  border-radius: 999px;
+  height: 2.75rem;
+  min-width: 0;
+  padding: 0 0.4rem;
+  font: inherit;
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.tts-bar .tts-chip:active {
+  background: color-mix(in srgb, var(--reader-ink) 8%, transparent);
+}
+
+/*
+ * Stop is the one destructive control on the bar and it is drawn as such.
+ *
+ * It is not a warning colour: this is a reading app, and a red button in the
+ * middle of a page is a louder statement than "stop the voice". The accent fill
+ * is enough to separate it from the three transport buttons beside it, which is
+ * the whole job — the reader who wants the voice to stop has to be able to pick
+ * this control out of a row of five at a glance.
+ */
+.tts-bar .tts-stop {
+  background: color-mix(in srgb, var(--reader-accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--reader-accent) 45%, transparent);
+  color: var(--reader-ink);
+}
+
+.tts-bar .tts-progress {
+  gap: var(--space-2);
+  padding-inline: 0.15rem;
 }
 
 .tts-bar .tts-text {
+  flex: 0 1 auto;
+  max-width: 40%;
   font-size: 0.78rem;
-  color: var(--reader-ink);
+  color: var(--reader-muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .tts-range {
-  width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
   margin: 0;
   accent-color: var(--reader-accent);
 }

@@ -518,6 +518,15 @@ export class ReaderScreen {
       ...(this.options.pageHost ? { pageHost: this.options.pageHost } : {}),
       ...(signAssetUrl ? { signAssetUrl } : {}),
       onPositionChange: (position) => this.onPosition(position),
+      // A book's own table-of-contents page is a chapter like any other, and its
+      // links are the same destination the 目录 panel offers. Routing them through
+      // `goToChapterRef` rather than through the browser is what makes a tap on
+      // "第三章" a chapter change — window fetch included — instead of a download of
+      // another chapter's document.
+      onChapterLink: (ref) => {
+        void this.goToChapterRef(ref);
+        return true;
+      },
       onChapterChange: (index, section) => {
         // One patch, and `syncTocPosition` folds its own correction into the same
         // one rather than issuing a second. A chapter change is the one moment
@@ -631,27 +640,22 @@ export class ReaderScreen {
    *      The gesture layer cannot enforce this — it sees the stage, and the panel
    *      is a sibling — so it is enforced here.
    *   2. **The middle third toggles the chrome**, in both directions.
-   *   3. **The outer thirds turn the page**, honouring the reader's handedness —
-   *      and while the chrome is hidden they *also* bring it back.
+   *   3. **The outer thirds turn the page**, and *only* that.
    *
-   * The third rule is the one that changed, and the report behind it is the reason:
-   * "点击左右侧翻页时工具栏不能显示出来". The outer thirds used to *replace* the page
-   * turn with a reveal whenever the chrome was hidden, on the reasoning that a
-   * hidden bar leaves the reader no other way back. That reasoning was sound and the
-   * result was not: the reader tapped the right third to read the next page, got no
-   * next page, and — because they were already reading, not looking for controls —
-   * did not notice a toolbar had arrived. Both complaints ("翻页没反应" and "工具栏
-   * 显示不出来") are the same tap described from the two directions it can fail.
+   * The third rule is the one that changed, and the report behind it is the whole
+   * of it: "在点击左右两边时只需要翻页、不需要显示工具栏，只有在中间点击时才需要切换
+   * 工具栏显隐". The outer thirds used to page-turn *and* force the chrome back on
+   * whenever it was hidden, on the reasoning that a hidden bar leaves the reader no
+   * other way back. The reasoning was sound and the result fights the gesture: a
+   * reader who tapped the right third to go forward got the next page *and* a
+   * toolbar across the text they had just turned to, so the immersive state was
+   * impossible to stay in — every page turn undid it. And the reader who *did* want
+   * the toolbar back had a dedicated, discoverable way to ask for it: the middle
+   * third.
    *
-   * So the tap does both: it turns the page, and it brings the chrome back. There is
-   * no ambiguity to resolve, because the two are not alternatives — the reader wants
-   * to go forward *and* to have the controls, and one gesture can serve both without
-   * either being guessed at.
-   *
-   * While the chrome is *shown* the outer thirds still only turn the page. Letting a
-   * tap re-show a bar that is already on screen would be the other half of the same
-   * mistake, and it is the behaviour the reader would notice immediately: every
-   * page turn would flash the top and bottom bars.
+   * So the two gestures are now disjoint, one meaning each, which is the property
+   * the old version lacked: 左/右 = 翻页, 中 = 显隐工具栏. Nothing is revealed by a
+   * page turn, and nothing is turned by a tap that asked for the controls.
    */
   private onTapZone(zone: 'previous' | 'toggle-chrome' | 'next'): void {
     if (this.chrome.tocOpen || this.chrome.settingsOpen) return;
@@ -661,13 +665,13 @@ export class ReaderScreen {
       return;
     }
 
-    // Read before the turn, because a page turn does not change it and the reveal
-    // must be decided from the state the reader was in when they tapped.
-    const wasHidden = !this.chromeVisible;
+    // The page turn, and nothing else: the chrome's visibility is the middle
+    // third's business alone (see the doc comment above). `tapZone` decides which
+    // physical side is *forward*, so a left-handed reader can put next-page under
+    // the thumb that holds the phone.
     const reversed = this.settings.tapZone === 'reversed';
     const forward = reversed ? zone === 'previous' : zone === 'next';
     void this.turnPage(forward ? 'next' : 'previous');
-    if (wasHidden) this.setChromeVisible(true);
   }
 
   private async restorePosition(book: Book, token: number): Promise<void> {

@@ -372,9 +372,36 @@ export class HttpTtsEngine {
     this.options.onError?.(message);
   }
 
+  /**
+   * A detached, hidden audio element.
+   *
+   * `new Audio()` is already detached, and it is given `display: none` anyway —
+   * belt and braces, for the host that hands one in. A media element is not a
+   * control the reader should ever see: it has no transport the reader wants
+   * (the bar has play/pause/stop, and the sentence scrubber), and a WebView that
+   * *does* render one draws a black rectangle with a native player in it over the
+   * book. The reader reported exactly that as "audio 需要隐藏", and the honest fix
+   * is that no code path may put a visible element on screen at all.
+   *
+   * `aria-hidden` is the other half: a screen reader must not be told about a
+   * player that is not part of the UI, or it announces a second set of controls
+   * beside the bar's.
+   */
   private createAudio(): HTMLAudioElement {
-    if (this.options.createAudio) return this.options.createAudio();
-    return new Audio();
+    const audio = this.options.createAudio ? this.options.createAudio() : new Audio();
+    // Written defensively: this runs against a real media element in every
+    // production host, and against a test double that models only the media API
+    // the engine actually uses. A bare `audio.style.display` would make every
+    // engine test depend on an element implementation that has nothing to do with
+    // what is under test.
+    try {
+      audio.setAttribute('aria-hidden', 'true');
+      audio.setAttribute('tabindex', '-1');
+      if (audio.style) audio.style.display = 'none';
+    } catch {
+      // A double with no element API; the element is not in the document either.
+    }
+    return audio;
   }
 
   private stopAudio(): void {

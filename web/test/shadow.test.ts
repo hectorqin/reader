@@ -323,8 +323,34 @@ describe('BookShadowHost', () => {
     const host = createBookHost();
     const sheet = host.shadow.querySelector('style')?.textContent ?? '';
     expect(sheet).toContain(":host([data-paginated='true']) .book-flow");
-    expect(sheet).toContain(":host([data-animating='slide-next']) .book-flow");
+    // The page-turn selector carries the *axis* as well as the style and direction:
+    // a paged turn is horizontal and a scroll-mode turn is vertical, and the axis
+    // has to come from the selector because the two modes share one host.
+    expect(sheet).toContain(":host([data-animating='slide-next-x']) .book-flow");
+    expect(sheet).toContain(":host([data-animating='slide-next-y']) .book-flow");
     expect(sheet).not.toContain('.book-host[');
+  });
+
+  it('separates two paginated columns by exactly two page margins', () => {
+    // The page margin is padding *inside* the scrolling box, so the page the reader
+    // sees is `clientWidth` wide while a page *step* was `clientWidth - 2 * margin`.
+    // The two disagree by the margin, which is why the right edge of every page
+    // showed the first characters of the next one — the bleed reported as
+    // "左右翻页的样式不对". A gap of both margins makes the step equal the page and
+    // draws the gutter between columns at the same time.
+    const host = createBookHost();
+    const sheet = host.shadow.querySelector('style')?.textContent ?? '';
+    expect(sheet).toContain('column-gap: calc(var(--reader-page-margin, 1.5rem) * 2)');
+  });
+
+  it('declares border-box for the shadow tree, which the document cannot reach', () => {
+    // The app's own universal `box-sizing: border-box` is a *document* selector, and
+    // a document selector cannot match a shadow tree's elements. The reading column
+    // is width 100% plus the reader's page margin, which under the initial
+    // `content-box` is a box wider than the page it is paginated into.
+    const host = createBookHost();
+    const sheet = host.shadow.querySelector('style')?.textContent ?? '';
+    expect(sheet).toContain('box-sizing: border-box');
   });
 
   it('keeps the layout sheet when a chapter replaces the book styles', () => {

@@ -162,20 +162,20 @@ async function audit(cdp, origin, scenes, results) {
   );
 
   /*
-   * The rail holds the whole set of controls the reader reaches for, and every one
-   * of them is reachable.
+   * The rail holds the two adjustments a reader makes *from the page* plus 听书, and
+   * nothing that opens a sheet.
    *
-   * The standing report is "竖排工具栏显示为 主题切换、听书", and its shape decided
-   * these checks. The rail was a column with no height ceiling and no scrolling, so
-   * on a screen short enough it simply ran off the bottom: the reader sees what fits,
-   * concludes that is what the rail does, and reports the two they can see. Two
-   * properties answer that, and both are measured rather than read from the CSS:
+   * The report is "竖排工具栏去掉 目录、字体、行距、边距、设置这几个按钮", and the
+   * reasoning behind it is the one worth keeping in a comment: all five are
+   * *destinations*, not adjustments — 目录 and 设置 open a sheet, and 字体/行距/边距 are
+   * steps of values whose full range lives in that sheet — so a rail that also carried
+   * them was a second, worse copy of the settings panel floating over the text. What
+   * is left is what a reader changes without wanting to open anything.
    *
-   *  - **the column is inside the page**, so its last control is not drawn off the
-   *    bottom of the screen;
-   *  - **the controls it cannot fit are reachable** — the column scrolls, and it
-   *    looks scrollable, because a control that can only be found by scrolling has to
-   *    advertise the scroll or it does not exist as far as the reader is concerned.
+   * The column still has to stay inside the page however short the screen is, and the
+   * controls it cannot fit still have to be reachable — the column scrolls, and it
+   * looks scrollable, because a control that can only be found by scrolling has to
+   * advertise the scroll or it does not exist as far as the reader is concerned.
    */
   const rail = await cdp.evaluate(`(() => {
     const el = document.querySelector('.reader-rail');
@@ -207,9 +207,19 @@ async function audit(cdp, origin, scenes, results) {
       : `溢出 ${rail.overflows ? '是' : '否'} overflow-y=${rail.scrollable} 滚动条 ${rail.scrollbarWidth}px`,
   );
   check(
-    '快捷列: 一列里含整组快捷操作，而不是只露出前几个',
-    !rail.missing && rail.labels.length >= 7,
+    '快捷列: 只留页面内就能完成的调整',
+    !rail.missing &&
+      rail.labels.includes('听书') &&
+      rail.labels.some((label) => label === '夜间' || label === '日间') &&
+      rail.labels.includes('字号'),
     rail.missing ? '没有找到快捷按钮列' : `按钮 ${rail.labels.length} 个：${rail.labels.join(' / ')}`,
+  );
+  // The five the report asked to remove. Asserted by *name* rather than by count,
+  // because "four controls" would pass on a rail that had dropped the wrong one.
+  check(
+    '快捷列: 不含打开面板的五个入口',
+    !rail.missing && !rail.labels.some((label) => ['目录', '字体', '行距', '页边距', '设置', '阅读设置'].includes(label)),
+    rail.missing ? '没有找到快捷按钮列' : `列内控件：${rail.labels.join(' / ')}`,
   );
   // The read-aloud control is on the rail, which is the report's own example
   // ("听书"). It matters because it is the one adjustment a reader makes *without*
@@ -326,19 +336,48 @@ async function audit(cdp, origin, scenes, results) {
     !hidden.missing && hidden.topbarPointerEvents === 'none' && hidden.footerPointerEvents === 'none',
     hidden.missing ? 'n/a' : `topbar=${hidden.topbarPointerEvents} footer=${hidden.footerPointerEvents}`,
   );
-  // The page is the screen in *both* states, and the assertion is on the text rather
-  // than on the stage: the stage is inset by the bars' height deliberately (see
-  // `--reader-chrome-*`), so "the page fills the viewport" is the wrong property to
-  // ask for. The property that matters is the one the reader reported: showing or
-  // hiding the chrome must not move a single line. It has to be measured on the
-  // *chapter's own first block* — the element the reader is reading — and compared
-  // against the same measurement taken with the chrome visible.
+  // The page is the screen in *both* states, and the property asserted is the one
+  // the reader reported: showing or hiding the chrome must not move a single line.
+  // It has to be measured on the *chapter's own first block* — the element the
+  // reader is reading — and compared against the same measurement taken with the
+  // chrome visible.
   check(
     '收起工具栏: 正文一行的位置不变（工具栏是浮层）',
     !hidden.missing && visibleChromeTextTop !== null && hiddenTextTop !== null && Math.abs(hiddenTextTop - visibleChromeTextTop) <= 1,
     hidden.missing || visibleChromeTextTop === null || hiddenTextTop === null
       ? 'n/a'
       : `正文首行 y: 显示时 ${visibleChromeTextTop} / 收起后 ${hiddenTextTop}`,
+  );
+  // And the page *fills* the screen, which is the other half of the report:
+  // "内容要铺满，不要预留 stage". The stage used to carry the bars' own heights as
+  // `padding-block`, so the reading column was permanently 9rem shorter than the
+  // phone in *both* chrome states — a reader who had hidden the toolbar and wanted
+  // the whole screen for the book still lost the top and bottom bands to empty
+  // paper. Measured as "the stage reserves no block padding", which is the cause,
+  // rather than as "the text reaches the edge", which a chapter's own margin makes
+  // false.
+  const stageBox = await cdp.evaluate(`(() => {
+    const stage = document.querySelector('.stage-host');
+    const host = document.querySelector('.stage');
+    if (!stage || !host) return null;
+    const style = getComputedStyle(stage);
+    return {
+      paddingTop: parseFloat(style.paddingTop) || 0,
+      paddingBottom: parseFloat(style.paddingBottom) || 0,
+      stageTop: Math.round(host.getBoundingClientRect().top),
+      stageBottom: Math.round(host.getBoundingClientRect().bottom),
+      viewport: window.innerHeight,
+    };
+  })()`);
+  check(
+    '正文铺满: 页面不为工具栏预留高度',
+    stageBox !== null &&
+      stageBox.paddingTop <= 0.5 &&
+      stageBox.paddingBottom <= 0.5 &&
+      stageBox.stageBottom - stageBox.stageTop >= stageBox.viewport - 2,
+    stageBox === null
+      ? 'n/a'
+      : `padding ${stageBox.paddingTop}/${stageBox.paddingBottom}px, 页面 ${stageBox.stageBottom - stageBox.stageTop}px / 屏高 ${stageBox.viewport}`,
   );
   // The bars float over the page, so they must be *positioned* — a bar back in the
   // flow is a bar that takes height out of the page and moves the text, which is the
@@ -468,20 +507,18 @@ async function audit(cdp, origin, scenes, results) {
       : '没有找到阅读指示',
   );
 
-  // A tap in an outer third pages *and* brings the chrome back.
+  // A tap in an outer third pages, and *only* pages.
   //
-  // The report is "点击左右侧翻页时工具栏不能显示出来", and it is one tap described
-  // from both of the directions it can fail. The outer thirds used to *replace* the
-  // page turn with a reveal while the chrome was hidden, on the reasoning that a
-  // hidden bar leaves no other way back — so a reader who tapped the right third to
-  // read on got no next page, and a toolbar they were not looking for. Asserting
-  // both halves is the only way to state the fix: either one alone passes on the
-  // behaviour that was reported.
+  // The report is "在点击左右两边时只需要翻页、不需要显示工具栏，只有在中间点击时才需要
+  // 切换工具栏显隐", and it is one tap described from both of the directions it can
+  // fail. The outer thirds used to page-turn *and* force the chrome back while it
+  // was hidden, on the reasoning that a hidden bar leaves no other way back — so the
+  // immersive state was impossible to stay in, because every page turn undid it.
+  // Both halves have to be asserted: a check on the page number alone passes on the
+  // behaviour that was reported, and so does a check on the chrome alone.
   //
-  // The page readout is read before and after, and the chrome is hidden first, so the
-  // assertion is about a state the reader can actually be in. The measurement is
-  // skipped rather than failed when the chapter has only one page — there is nothing
-  // to turn, and a check that failed there would be asserting about the fixture.
+  // The chrome is hidden first, so the assertion is about a state the reader can
+  // actually be in, and the page readout is read before and after.
   const beforeThird = await cdp.evaluate(
     `(() => ({ chrome: document.querySelector('.reader-screen').dataset.chrome, page: document.querySelector('.progress-page')?.textContent ?? '', value: Number(document.querySelector('.progress-scrubber')?.value ?? '0') }))()`,
   );
@@ -491,16 +528,18 @@ async function audit(cdp, origin, scenes, results) {
     `(() => ({ chrome: document.querySelector('.reader-screen').dataset.chrome, page: document.querySelector('.progress-page')?.textContent ?? '', value: Number(document.querySelector('.progress-scrubber')?.value ?? '0') }))()`,
   );
   check(
-    '点右侧翻页: 既翻页又把工具栏叫回来',
-    afterThird.chrome === 'visible' && beforeThird.chrome === 'hidden' && afterThird.value > beforeThird.value,
+    '点右侧只翻页: 页码前进, 工具栏保持收起',
+    afterThird.chrome === 'hidden' && beforeThird.chrome === 'hidden' && afterThird.value > beforeThird.value,
     `收起前 ${beforeThird.chrome}(${beforeThird.page}) → 点击后 ${afterThird.chrome}(${afterThird.page})`,
   );
 
-  // The panel checks that follow need the chrome *up*, and it already is: the check
-  // above deliberately ends with it visible, because that is half of what it asserts.
-  // Tapping the middle to "restore" it would hide it and leave every panel check
-  // waiting for a button it cannot reach.
-  await cdp.sleep(200);
+  // The middle third is the only way back to the controls, so it is asserted as
+  // such right after: the outer-third check above leaves the chrome hidden, and the
+  // panel checks below need it up.
+  await cdp.tapMiddle();
+  await cdp.sleep(600);
+  const afterMiddle = await cdp.evaluate(`document.querySelector('.reader-screen').dataset.chrome`);
+  check('点中间切换工具栏', afterMiddle === 'visible', `点击中间后 ${afterMiddle}`);
 
   for (const scene of scenes) {
     if (scene.openPanel) {

@@ -13,6 +13,7 @@ import { escapeHtml, textToChapterHtml } from '../formats/segments.ts';
 import { bookPercentage, formatLocator, parseLocator } from './locator.ts';
 import { collectSpokenChunks, type SpokenChunk } from '../render/tts-text.ts';
 import { adoptWindow } from '../formats/windowed.ts';
+import { BOOK_RESOURCE_MARKER, chapterRefFromLink } from '../formats/book-resource.ts';
 
 export interface ReaderViewOptions {
   container: HTMLElement;
@@ -35,6 +36,21 @@ export interface ReaderViewOptions {
   /** Called on every position change, throttled by the caller via the view. */
   onPositionChange?: (position: Position) => void;
   onChapterChange?: (index: number, section: Section) => void;
+  /**
+   * A link *inside* a chapter that points at another chapter.
+   *
+   * The reader's own table of contents is not the only one a book has: an EPUB
+   * ships a `nav`/`toc` document as a spine item like any other chapter, and a
+   * reader who opens it and taps "第三章" is asking for a chapter change, not for
+   * a file download. The href the tap carries has already been rewritten by the
+   * server to point at the asset endpoint, so the view answers it with the
+   * chapter reference (`xhtml:<path>`) the same way the 目录 panel does, and the
+   * screen routes it through the same jump — window fetch included.
+   *
+   * Returns whether the reference was understood; a link this view cannot place
+   * is left to the gesture layer rather than swallowed silently.
+   */
+  onChapterLink?(ref: string): boolean;
   /**
    * Native renderer for fixed-layout pages, when the host has one.
    *
@@ -165,6 +181,16 @@ export class ReaderView {
   private animationTimer: ReturnType<typeof setTimeout> | null = null;
   private spokenChunks: SpokenChunk[] = [];
   private speechHighlight: HTMLElement | null = null;
+  /**
+   * The chapter-link listener, bound once to the shadow root.
+   *
+   * Once, not per chapter: `setContent` replaces the *children* of `.book-flow`
+   * and never the shadow root, so a listener on the root survives every chapter
+   * change while the anchors it sees are always the current chapter's. A listener
+   * added per render would be a listener per chapter, and a book of 1200 chapters
+   * read end to end would end up with 1200 of them.
+   */
+  private detachChapterLinks: (() => void) | null = null;
 
   constructor(options: ReaderViewOptions) {
     this.options = options;
@@ -179,7 +205,62 @@ export class ReaderView {
     this.host.className = 'book-host';
     this.resolver = new ResourceResolver(options.doc.resources);
     this.container.append(this.host);
+    this.bindChapterLinks();
     this.applySettings();
+  }
+
+  /**
+   * Routes a tap on a link inside the book.
+   *
+   * Captured on the shadow root rather than on each anchor, and in the *capture*
+   * phase so it runs before the browser's own action. Two things have to be true
+   * and only one of them is about this client:
+   *
+   *  - **A chapter link must be a chapter change.** The server rewrote the href to
+   *    the asset endpoint, so without this the tap is a download of another
+   *    chapter's *document* rendered as a file — which is what "点击目录页的章节没
+   *    有跳转" looks like from the reader's side. `onChapterLink` answers whether
+   *    the reference was understood, and only an understood one is consumed, so a
+   *    footnote target or an image the book linked to still behaves like a link.
+   *  - **Everything else must not escape the reader.** An unhandled `<a>` in a book
+   *    is, by default, a navigation: a tap on an outbound link would replace the
+   *    whole app with a web page, and the reader would have to find their way back
+   *    to a book they were halfway through. In a WebView shell there is no way
+   *    back at all. So a link this client does not recognise is prevented from
+   *    navigating, which is the same rule `sanitiseInjectedContent` applies to
+   *    `target="_blank"`.
+   */
+  private bindChapterLinks(): void {
+    const onClick = (event: Event): void => {
+      const target = event.target;
+      const anchor = target instanceof Element ? target.closest('a[href]') : null;
+      // Walked from the *event's* target, which is inside the shadow tree because
+      // this listener is on the root that owns it — a `closest` on the host would
+      // stop at the shadow boundary and find nothing.
+      if (!anchor) return;
+      const href = anchor.getAttribute('href');
+      if (!href) return;
+      const ref = chapterRefFromLink(href, anchor.baseURI);
+      if (ref && this.options.onChapterLink?.(ref)) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      // A fragment-only link is the book's own footnote machinery, and the browser
+      // has to perform it: scrolling to the note is exactly what the reader asked
+      // for. Anything else would leave the reader, so it is refused.
+      if (href.trim().startsWith('#')) return;
+      const resolved = resolveWithinBook(href, anchor.baseURI);
+      if (resolved === 'external') {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      // A link to a resource the book owns (an image, a stylesheet) is left alone:
+      // the browser's own download/preview behaviour is the honest answer to "open
+      // this picture", and it cannot leave the book.
+    };
+    this.host.shadow.addEventListener('click', onClick, true);
+    this.detachChapterLinks = () => this.host.shadow.removeEventListener('click', onClick, true);
   }
 
   get settingsSnapshot(): ViewSettings {
@@ -314,13 +395,26 @@ export class ReaderView {
   animatePage(direction: 'next' | 'previous' | 'none'): void {
     if (this.settings.pageAnimation === 'none' || direction === 'none') return;
     if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const value = `${this.settings.pageAnimation}-${direction}`;
+    // The *axis* is the mode's, and the attribute carries it.
+    //
+    // A page turn moves the reader along the axis the page is defined on: in paged
+    // mode a page is a column, so a turn is horizontal; in scroll mode a page is a
+    // screenful, so the same turn is vertical. Animating both with the horizontal
+    // keyframes meant a scroll-mode reader saw the text slide sideways and land
+    // where it always was — the animation described a movement that had not
+    // happened, which is exactly what "翻页的样式不对" looks like.
+    //
+    // Fixed layout has no page *positions* to animate between (each page is a
+    // different document), so it takes the horizontal pair: a comic page sliding in
+    // from the direction the reader turned is the convention the format has.
+    const axis = this.doc.layout === 'fixed' || this.settings.mode === 'paged' ? 'x' : 'y';
+    const value = `${this.settings.pageAnimation}-${direction}-${axis}`;
     this.host.setAttribute('data-animating', value);
     if (this.animationTimer !== null) clearTimeout(this.animationTimer);
     this.animationTimer = setTimeout(() => {
       this.animationTimer = null;
       this.host.removeAttribute('data-animating');
-    }, 220);
+    }, 240);
   }
 
   /**
@@ -541,6 +635,8 @@ export class ReaderView {
     this.resizeObserver = null;
     if (this.animationTimer !== null) clearTimeout(this.animationTimer);
     this.animationTimer = null;
+    this.detachChapterLinks?.();
+    this.detachChapterLinks = null;
     this.clearSpeechHighlight();
     this.releaseObjectUrl();
     this.resolver.dispose();
@@ -1245,4 +1341,36 @@ function rangeRect(range: Range): DOMRect | null {
   } catch {
     return null;
   }
+}
+
+
+/**
+ * Whether a link in a chapter stays inside the book.
+ *
+ * Three answers, because the three cases are handled differently:
+ *
+ *  - `'internal'` — a fragment (`#note7`) or the book's own resource. The browser
+ *    performs it: the note anchors have to work, and an image the book linked to
+ *    is a page the reader may want to see.
+ *  - `'external'` — anything else, which the click handler refuses. A book that
+ *    contains a link to a website must not be able to replace the reader with one.
+ *  - `'unknown'` — a URL that cannot even be parsed, which is refused the same way
+ *    as external: an unparseable href has no correct destination.
+ */
+function resolveWithinBook(href: string, baseURI: string): 'internal' | 'external' | 'unknown' {
+  const trimmed = href.trim();
+  if (trimmed.startsWith('#')) return 'internal';
+  let url: URL;
+  try {
+    url = new URL(trimmed, baseURI);
+  } catch {
+    return 'unknown';
+  }
+  if (url.protocol === 'blob:' || url.protocol === 'data:') return 'internal';
+  if (url.origin !== window.location.origin) return 'external';
+  // A same-origin address is not automatically the book's: the app itself is served
+  // from this origin, and a link to `/` would leave the reader as surely as a link
+  // to another host. The book's own resources are the ones the sanitiser kept, which
+  // the marker identifies.
+  return url.searchParams.has(BOOK_RESOURCE_MARKER) ? 'internal' : 'external';
 }

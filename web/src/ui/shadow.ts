@@ -211,6 +211,33 @@ const CHAPTER_CONTENT_STYLESHEET = `
 `;
 
 const FLOW_STYLESHEET = `
+/*
+ * The box model, re-declared for the shadow tree.
+ *
+ * The document's own universal box-sizing rule (see styles/reader.css) does **not**
+ * reach in here: a shadow root is a separate tree, and a document selector cannot
+ * match a shadow tree's elements. So every element inside the book was laid out with
+ * the initial content-box, while every element outside it was border-box — and the
+ * one place that difference shows is the reading column, which is width 100% *plus*
+ * the reader's page margin. On a 390px phone that is a 390px column with 24px of
+ * padding on each side: a 438px box inside a 390px scroller, so the column is 48px
+ * wider than the page it is paginated into and the next column bleeds into the page
+ * margin. The reader sees the first characters of the next page down the right edge
+ * of the current one, which is the reported "左右翻页的样式不对" as much as the
+ * animation is.
+ *
+ * Declared on the host as well as on its descendants, because the book's own markup
+ * is inside this tree too and has to agree with the app's box model about every box
+ * the reader's own CSS sizes.
+ */
+:host {
+  box-sizing: border-box;
+}
+:host *,
+:host *::before,
+:host *::after {
+  box-sizing: border-box;
+}
 .book-flow {
   position: relative;
   max-inline-size: var(--reader-measure, 42rem);
@@ -242,12 +269,30 @@ const FLOW_STYLESHEET = `
  * page boundaries and the last column of every chapter is unreachable. A percentage
  * is the width of the box the column actually sits in, which is what "one page"
  * means.
+ *
+ * ## The gap is the page margin, and it is load-bearing
+ *
+ * The page margin is padding-inline on the flow, which means it is *inside* the
+ * scrolling box: the first column's text starts M from the left edge, and the next
+ * column's text starts column-width + gap further along. With a gap of zero that
+ * distance is clientWidth - 2M, so the page the reader is looking at is
+ * clientWidth wide while a page *step* is clientWidth - 2M — and the M px at the
+ * right edge of every page are the first characters of the next one. That is the
+ * bleed the reader photographed down the right edge ("左右翻页的样式不对"), and it is
+ * a geometry bug rather than an animation one.
+ *
+ * Setting the gap to *both* margins makes the two agree: a step is
+ * (clientWidth - 2M) + 2M = clientWidth, exactly one screen, and the M px between
+ * two columns is the margin that belongs between them anyway — the page margin on
+ * the *inside* edge of a two-page spread, which is the shape a paginated book has.
+ * So one declaration makes the step equal the page and draws the gutter at the same
+ * time, and the reader's own page-margin control moves both together.
  */
 :host([data-paginated='true']) .book-flow {
   height: 100%;
   max-inline-size: none;
   padding-block: 0;
-  column-gap: 0;
+  column-gap: calc(var(--reader-page-margin, 1.5rem) * 2);
   columns: 1;
   column-width: 100%;
   column-fill: auto;
@@ -256,26 +301,82 @@ const FLOW_STYLESHEET = `
 :host([data-paginated='true']) .book-flow > * {
   break-inside: auto;
 }
-:host([data-animating='slide-next']) .book-flow {
-  animation: slide-next 180ms ease-out;
+/*
+ * The page-turn animations.
+ *
+ * The attribute carries three things — style, direction and *axis* — because the
+ * axis is not the animation's to guess. A page turn moves the reader along the axis
+ * the page is defined on: paged mode's page is a column, so the move is horizontal;
+ * scroll mode's page is a screenful, so the same turn is vertical. ReaderView puts
+ * the mode in the attribute (see animatePage) and the selectors below are the whole
+ * of the mapping, which keeps the arithmetic out of CSS and the keyframes free of
+ * data-mode branching.
+ */
+:host([data-animating]) .book-flow {
+  /* The animation is a *page* move, so it is clipped to the page: without this a
+     column that slides in from the right is drawn outside the reading surface for
+     the length of the animation, over the page margin and the rail. */
+  overflow: clip;
 }
-:host([data-animating='slide-previous']) .book-flow {
-  animation: slide-previous 180ms ease-out;
+:host([data-animating^='slide']) .book-flow {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
 }
-:host([data-animating='fade-next']) .book-flow {
-  animation: fade-next 160ms ease-out;
+:host([data-animating='slide-next-x']) .book-flow { animation-name: slide-next-x; }
+:host([data-animating='slide-previous-x']) .book-flow { animation-name: slide-previous-x; }
+:host([data-animating='slide-next-y']) .book-flow { animation-name: slide-next-y; }
+:host([data-animating='slide-previous-y']) .book-flow { animation-name: slide-previous-y; }
+:host([data-animating^='fade']) .book-flow {
+  animation-duration: 160ms;
+  animation-timing-function: ease-out;
 }
-:host([data-animating='fade-previous']) .book-flow {
-  animation: fade-previous 160ms ease-out;
+:host([data-animating='fade-next-x']) .book-flow,
+:host([data-animating='fade-next-y']) .book-flow { animation-name: fade-next; }
+:host([data-animating='fade-previous-x']) .book-flow,
+:host([data-animating='fade-previous-y']) .book-flow { animation-name: fade-previous; }
+/*
+ * A page turn moves a page's worth of text, not a few pixels of wobble.
+ *
+ * The old keyframes translated by 8px and dropped the opacity to 0.4, and that is
+ * what the report — "左右翻页的样式不对" — is looking at. Eight pixels on a 390px
+ * screen is 2% of a page: it reads as the text twitching rather than as a page
+ * being turned, and the 0.4 opacity makes the *whole* page flash grey on every
+ * turn, which is worse in a night theme than no animation at all.
+ *
+ * The correction is a real slide of one page's extent, expressed as a percentage of
+ * the flow rather than in pixels: in paged mode the flow *is* one column wide (see
+ * the paged rule above), so a 100% translate is exactly one page and the incoming
+ * page starts one page away. The animation is a transform on the already-
+ * repositioned flow, which is why it composites and why it cannot disturb the
+ * column layout the paginator measured — the scroll offset is set *first*, and the
+ * animation only draws the result. The -y pair is the same statement about a
+ * screenful in scroll mode.
+ *
+ * No opacity on the slide. A fade belongs to the fade-* pair, which is the setting's
+ * own alternative for a reader who finds motion distracting; combining the two means
+ * neither style is available on its own.
+ */
+@keyframes slide-next-x {
+  from { transform: translateX(100%); }
+  to { transform: none; }
 }
-@keyframes slide-next {
-  from { transform: translateX(8px); opacity: 0.4; }
-  to { transform: none; opacity: 1; }
+@keyframes slide-previous-x {
+  from { transform: translateX(-100%); }
+  to { transform: none; }
 }
-@keyframes slide-previous {
-  from { transform: translateX(-8px); opacity: 0.4; }
-  to { transform: none; opacity: 1; }
+@keyframes slide-next-y {
+  from { transform: translateY(100%); }
+  to { transform: none; }
 }
+@keyframes slide-previous-y {
+  from { transform: translateY(-100%); }
+  to { transform: none; }
+}
+/*
+ * The fade stays subtle on purpose: it is the *no-motion* alternative, and a deep
+ * fade on a settings choice called "淡入" is a second, louder animation. The pair
+ * is asymmetric with the slide for that reason, not by oversight.
+ */
 @keyframes fade-next {
   from { opacity: 0.35; }
   to { opacity: 1; }
