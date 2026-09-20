@@ -50,4 +50,22 @@ export const ICON_CODEPOINTS = {
   'tune': '\ue928',
 } as const;
 
-export type IconName = keyof typeof ICON_CODEPOINTS;
+/** Code points kept as aliases, the way the two spellings of 退出 coexist. */
+export const ICON_ALIASES = {
+  'font': '\ue924',
+  'volume-high': '\ue916',
+  'backward-step': '\ue913',
+  'forward-step': '\ue914',
+  'bars': '\ue900',
+  'gear': '\ue926',
+  'xmark': '\ue908',
+  'magnifying-glass': '\ue907',
+  'books': '\ue927',
+} as const;
+
+export const ICON_CODEPOINT_TABLE = {
+  ...ICON_CODEPOINTS,
+  ...ICON_ALIASES,
+} as const;
+
+export type IconName = keyof typeof ICON_CODEPOINT_TABLE;

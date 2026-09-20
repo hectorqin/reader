@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ICON_CODEPOINTS } from '../src/ui/icon-names.ts';
+import { ICON_ALIASES, ICON_CODEPOINTS, ICON_CODEPOINT_TABLE } from '../src/ui/icon-names.ts';
 import { GLYPHS } from '../tools/icons/paths.mjs';
 import { pathToSubpaths } from '../tools/icons/path.mjs';
 
@@ -55,7 +55,7 @@ function fontCodePoints(): Set<number> {
 
 describe('the icon font and its code point table', () => {
   const mapped = fontCodePoints();
-  const table = Object.values(ICON_CODEPOINTS).map((value) => value.codePointAt(0)!);
+  const table = Object.values(ICON_CODEPOINT_TABLE).map((value) => value.codePointAt(0)!);
 
   it('maps every code point the table declares', () => {
     // A code point in the table that the font does not map is a missing-glyph box.
@@ -74,8 +74,14 @@ describe('the icon font and its code point table', () => {
   });
 
   it('has one code point per icon, with no duplicates', () => {
-    expect(new Set(table).size).toBe(table.length);
-    expect(mapped.size).toBe(table.length);
+    // Counted on the *distinct* code points rather than on the table's length,
+    // because the table carries aliases: `font` and `text-size` are two spellings
+    // of one glyph, and a set that maps a code point twice is a rename, not a
+    // second icon. What has to hold either way is that the font draws exactly the
+    // code points the table names — no more, no fewer.
+    const distinct = new Set(table);
+    expect(distinct.size).toBe(Object.keys(ICON_CODEPOINTS).length);
+    expect(mapped.size).toBe(distinct.size);
   });
 
   it('was built from the same glyph names as the table', () => {
@@ -153,6 +159,23 @@ describe('the icon font and its code point table', () => {
     const names = Object.keys(GLYPHS);
     const borrowed = names.filter((name) => BORROWED.includes(name));
     expect(borrowed, `these names are another set's: ${borrowed.join(', ')}`).toEqual([]);
+    // The *table* may keep a borrowed spelling as an alias so that code written
+    // against the set this repository is based on keeps compiling. What it may not
+    // do is add a glyph under one: a borrowed name on our own artwork is what the
+    // list above is about.
+    const aliasNames = Object.keys(ICON_ALIASES);
+    const borrowedAliases = aliasNames.filter((name) => BORROWED.includes(name));
+    expect(borrowedAliases.length, `an alias is a borrowed name: ${borrowedAliases.join(', ')}`).toBeGreaterThan(0);
+  });
+
+  it('points every alias at a code point the font already draws', () => {
+    // An alias is a second *spelling*, not a second glyph: two names for one code
+    // point is a rename, a name for a code point nothing draws is a missing-glyph
+    // box that no other assertion here can see.
+    const drawn = new Set(Object.values(ICON_CODEPOINTS));
+    for (const [name, code] of Object.entries(ICON_ALIASES)) {
+      expect(drawn.has(code), `${name} points at 0x${code.codePointAt(0)!.toString(16)}, which no glyph uses`).toBe(true);
+    }
   });
 
   it('names every glyph after the thing it draws, in the vocabulary the UI uses', () => {
@@ -174,7 +197,7 @@ describe('the icon font and its code point table', () => {
     const names = Object.keys(GLYPHS);
     names.forEach((name, index) => {
       const expected = 0xe900 + index;
-      expect((ICON_CODEPOINTS as Record<string, string>)[name]!.codePointAt(0)).toBe(expected);
+      expect((ICON_CODEPOINT_TABLE as Record<string, string>)[name]!.codePointAt(0)).toBe(expected);
     });
   });
 });

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReaderView } from '../src/ui/reader-view.ts';
 import { createStagedDoc } from '../src/formats/windowed.ts';
 import type { BookContent, ContentItem } from '../src/net/api.ts';
@@ -406,12 +406,24 @@ describe('ReaderView appearance settings', () => {
       const view = make(container, reflowableDoc(2));
       view.applySettings({ pageAnimation: 'slide' });
       view.animatePage('next');
-      expect(container.querySelector('book-content')?.getAttribute('data-animating')).toBe('slide-next');
+      // Scroll mode (the default) turns a *screenful*, so the axis is `y`; the
+      // paged case is asserted in the paged-mode test below.
+      expect(container.querySelector('book-content')?.getAttribute('data-animating')).toBe('slide-next-y');
       vi.runAllTimers();
       expect(container.querySelector('book-content')?.getAttribute('data-animating')).toBeNull();
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('turns a *page* on a paged turn but a *screenful* on a scroll-mode one', () => {
+    // The axis is the mode's, and the attribute is where the stylesheet reads it
+    // from: a horizontal keyframe in scroll mode animated a movement that had not
+    // happened, which is the reported "翻页的样式不对".
+    const view = make(container, reflowableDoc(2));
+    view.applySettings({ pageAnimation: 'slide', mode: 'paged' });
+    view.animatePage('previous');
+    expect(container.querySelector('book-content')?.getAttribute('data-animating')).toBe('slide-previous-x');
   });
 
   it('does not animate when the reader turned animation off', () => {
@@ -592,5 +604,93 @@ describe('plain-text chapters are typeset by the reader', () => {
     const shadow = shadowOf(container);
     expect(shadow.querySelector('.txt-body')).toBeNull();
     expect(shadow.querySelector('p')?.getAttribute('data-authored')).toBe('1');
+  });
+});
+
+
+/**
+ * A link *inside* a chapter that points at another chapter.
+ *
+ * An EPUB ships its own table of contents as a spine item, so a reader who opens it
+ * and taps 第三章 is asking for a chapter change. The href they tap has already been
+ * rewritten by the server to point at the asset endpoint — left unhandled, the tap
+ * downloads another chapter's document and the reader sees a broken page instead of
+ * the chapter they asked for.
+ */
+describe('ReaderView chapter links', () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+    document.body.append(container);
+  });
+
+  afterEach(() => {
+    container.remove();
+  });
+
+  /** A chapter document whose body contains one link the server rewrote. */
+  function docWithLink(href: string, id = 'nav.xhtml'): BookDoc {
+    const doc = reflowableDoc(1);
+    return {
+      ...doc,
+      sections: [{ id, label: '目录', html: `<p><a href="${href}">第三章</a></p>`, depth: 0 }],
+    };
+  }
+
+  function clickLink(view: ReaderView): boolean {
+    const anchor = view.elementHost.shadow.querySelector('a');
+    if (!anchor) throw new Error('no anchor rendered');
+    return anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }));
+  }
+
+  it('routes a chapter link to the screen instead of letting the browser fetch it', async () => {
+    // The marker is in the URL, so the sanitiser keeps it — that is the point of
+    // the pair (marker + same origin). `document.baseURI` is jsdom's about:blank,
+    // so the URL is built against it rather than against a made-up origin.
+    const origin = document.baseURI;
+    const href = new URL(
+      `/api/v1/books/b1/assets?__reader-book-resource__=1&ref=OEBPS/ch3.xhtml`,
+      origin,
+    ).href;
+    const seen: string[] = [];
+    const view = new ReaderView({
+      container,
+      doc: docWithLink(href),
+      onChapterLink: (ref) => {
+        seen.push(ref);
+        return true;
+      },
+    });
+    await view.open(0, 0);
+    // The click is *not* dispatched by default: a consumed chapter link must not
+    // also be a navigation.
+    expect(clickLink(view)).toBe(false);
+    expect(seen).toEqual(['xhtml:OEBPS/ch3.xhtml']);
+    view.dispose();
+  });
+
+  it('refuses a link that would leave the reader', async () => {
+    // An outbound link in a book must not be able to replace the app with a web
+    // page: in a WebView shell there is no way back to the book at all. The
+    // sanitiser drops the attribute outright, which is stronger than refusing the
+    // tap — there is no href left for the browser to follow, and no listener that
+    // has to be correct for the rule to hold.
+    const view = new ReaderView({
+      container,
+      doc: docWithLink('https://example.com/'),
+    });
+    await view.open(0, 0);
+    const anchor = view.elementHost.shadow.querySelector('a');
+    expect(anchor?.hasAttribute('href')).toBe(false);
+    expect(clickLink(view)).toBe(true);
+    view.dispose();
+  });
+
+  it('lets the browser perform an in-document footnote link', async () => {
+    const view = new ReaderView({ container, doc: docWithLink('#note3') });
+    await view.open(0, 0);
+    expect(clickLink(view)).toBe(true);
+    view.dispose();
   });
 });

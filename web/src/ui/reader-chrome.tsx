@@ -19,7 +19,7 @@ import type { AppSettings } from '../store/settings.ts';
 import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ComponentChildren, type JSX } from './vendor/preact.ts';
 import { IconButton, SectionTitle } from './toolkit.tsx';
-import { ICON_CODEPOINTS, type IconName } from './icon-names.ts';
+import { ICON_CODEPOINT_TABLE, type IconName } from './icon-names.ts';
 
 /**
  * A table-of-contents row.
@@ -213,63 +213,53 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           —
           A column of controls on the right edge, shown **and hidden with the two
           bars**. That pairing is the request, and it is also the coherent reading
-          of what the rail is for: the rail is a second way to reach the same
-          destinations the top bar names (目录 / 主题 / 字号 / 设置), so it belongs to
-          the same "the reader has asked for the controls" state as the bars. Drawn
-          while the chrome is hidden, it was the one piece of chrome that survived
-          immersion — a reader who tapped to hide the navigation still had controls
-          floating over the right edge of the text, which is not the "only the
-          page" they asked for.
-          It is still *not* the toolbar's duplicate: the rail holds the controls a
-          reader nudges while reading and is a floating column in the page margin
-          rather than a band, so it covers no line of text on a wide screen.
-          Drawn unconditionally and collapsed by `data-chrome` in CSS, exactly like
-          the two bars: `visibility: hidden` at the end of the fade is what takes it
-          out of reach of both a finger and a screen reader, and one attribute for
-          three bands is what makes "the chrome is hidden" a single fact.
+          of what the rail is for: it is a second way to reach the two things a
+          reader changes *while reading* — the theme and the voice — so it belongs
+          to the same "the reader has asked for the controls" state as the bars.
+          Drawn while the chrome was hidden, it was the one piece of chrome that
+          survived immersion — a reader who tapped to hide the navigation still had
+          controls floating over the right edge of the text, which is not the "only
+          the page" they asked for.
+          It is drawn unconditionally and collapsed by `data-chrome` in CSS, exactly
+          like the two bars: `visibility: hidden` at the end of the fade is what
+          takes it out of reach of both a finger and a screen reader, and one
+          attribute for three bands is what makes "the chrome is hidden" a single
+          fact.
 
-          ## What is in it, and why the list is not shorter
+          ## What is in it, and why the list is exactly this short
           —
-          The rail used to hold four controls, and the standing report was "竖排
-          工具栏显示为 主题切换、听书" — which is what a reader sees when the row
-          they are looking at is a *scroll container* that nothing told them was
-          one. Every control past the fourth on a short phone screen was below the
-          fold of a 200px column with no scrollbar, no fade and no hint that it
-          continued; a rail whose contents depend on the height of the phone is a
-          rail whose contents the reader cannot enumerate. Two things follow, and
-          both are stated in CSS rather than left to the layout:
-           - the column scrolls when it must (`.reader-rail`), and its scrollbar is
-             drawn rather than hidden — a control the reader must scroll to reach
-             has to look scrollable, or it is a control that does not exist;
-           - the buttons are one *step* of the settings each, so the rail is the
-             whole set of adjustments the top bar reaches, not a sample of them:
-             目录 / 主题 / 字号 / 行距 / 页边距 / 听书 / 设置. The read-aloud control
-             was the one a reader could only reach by discovering the settings sheet,
-             and it is the one they reach for *without* leaving the page.
-          Every one of them is a destination the screen can actually reach: a
-          button that does nothing is worse than a missing one. */}
+          Three controls, and the report that decided them is the whole of it:
+          "竖排工具栏去掉 目录、字体、行距、边距、设置这几个按钮". Those five are
+          destinations, not adjustments: 目录 opens a sheet, 设置 opens a sheet, and
+          字体/行距/边距 are *steps* of values whose full range lives in the 设置
+          sheet — so a reader who wanted any of the five was already going to open a
+          sheet, and putting them on the rail as well made it a second, worse copy of
+          the settings panel floating over the text.
+          What is left is the two that are genuinely adjusted *in place*, plus 听书:
+           - 主题 (light → sepia → night): a single tap that changes the whole page,
+             and the one control a reader in the dark reaches for without wanting to
+             open anything;
+           - 字号 (one step): the other half of the same "the text is not right"
+             moment, and a step up/down is faster than finding a slider;
+           - 听书: the one control a reader reaches for *without* leaving the page,
+             because they are about to look away from the screen.
+          Every one of them is a destination the screen can actually reach: a button
+          that does nothing is worse than a missing one. */}
       <div
         className="reader-rail"
         role="toolbar"
         aria-label="阅读快捷操作"
         aria-orientation="vertical"
       >
-        <RailButton icon="menu" label="目录" onClick={handlers.toggleToc} />
         <RailButton
           icon={state.theme === 'dark' ? 'sun' : 'moon'}
           label={state.theme === 'dark' ? '日间' : '夜间'}
           onClick={() => handlers.onSetting({ theme: nextTheme(state.theme) })}
         />
-        <RailButton icon="text-size" label="字号" onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })} />
         <RailButton
-          icon="line-height"
-          label="行距"
-          onClick={() => handlers.onSetting({ lineHeight: stepLineHeight(state.lineHeight) })}
-        />
-        <RailButton
-          icon="indent"
-          label="页边距"
-          onClick={() => handlers.onSetting({ pageMargin: stepPageMargin(state.pageMargin) })}
+          icon="text-size"
+          label="字号"
+          onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })}
         />
         <RailButton
           icon={state.tts.active ? 'pause' : 'volume'}
@@ -277,7 +267,6 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           pressed={state.tts.active}
           onClick={handlers.onSpeechToggle}
         />
-        <RailButton icon="sliders" label="阅读设置" onClick={handlers.toggleSettings} />
       </div>
 
       {/* The bottom bar.
@@ -765,16 +754,55 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
 function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: ChromeHandlers }): JSX.Element {
   const max = Math.max(0, (state.sentenceTotal || state.total) - 1);
   const value = Math.max(0, state.sentenceIndex >= 0 ? state.sentenceIndex : state.index);
+  const playing = state.state === 'playing';
   return (
-    <div className="tts-bar" data-state={state.state}>
-      <IconButton label="上一句" icon="step-backward" onClick={handlers.onSpeechPrevious} />
-      <IconButton
-        label={state.state === 'playing' ? '暂停朗读' : '开始朗读'}
-        icon={state.state === 'playing' ? 'pause' : 'play'}
-        onClick={handlers.onSpeechToggle}
-      />
-      <IconButton label="下一句" icon="step-forward" onClick={handlers.onSpeechNext} />
-      <div className="tts-main">
+    <div className="tts-bar" data-state={state.state} role="group" aria-label="朗读控制">
+      {/* The controls are one row of their own, and the sentence with its scrubber
+          is the row below.
+
+          The bar used to be a single row: previous, play/pause, next, the sentence
+          and its range, the count chip, and an ✕ — seven things across a phone.
+          The flex row gave the sentence `flex: 1`, so *it* was the only thing that
+          shrank, and on a 360px screen the last control (停止) was pushed past the
+          right edge and clipped. The reader's report is the honest description of
+          the result: "没法停止" — there was a stop button, and it was off the
+          screen. Two rows rather than a scrollable one, because a control the
+          reader has to go looking for is a control that does not exist (the same
+          argument the rail's own scrollbar is built on).
+
+          Every control is `flex: 1` so the five of them divide the width evenly
+          and the row always fits: no fixed widths to run out of, and the targets
+          grow with the screen instead of huddling in the middle of a tablet. */}
+      <div className="tts-row tts-controls">
+        <IconButton label="上一句" icon="step-backward" onClick={handlers.onSpeechPrevious} />
+        <IconButton
+          label={playing ? '暂停朗读' : '继续朗读'}
+          icon={playing ? 'pause' : 'play'}
+          onClick={handlers.onSpeechToggle}
+        />
+        <IconButton label="下一句" icon="step-forward" onClick={handlers.onSpeechNext} />
+        <button
+          type="button"
+          className="tts-chip"
+          aria-label="从头朗读这一章"
+          onClick={handlers.onSpeakFromHere}
+        >
+          {state.chip}
+        </button>
+        {/* Stop is last and it is the one destructive control, so it is separated
+            by its own colour rather than by position alone. `stop` rather than
+            `close`: the ✕ read as "close this bar", which is what pause does not
+            do — the reader who wanted the voice to stop pressed it, got a hidden
+            bar, and heard the book keep reading. Stop is now a square, which is
+            the universal transport glyph for exactly this. */}
+        <IconButton
+          label="停止朗读"
+          icon="stop"
+          class="tts-stop"
+          onClick={handlers.onStopSpeech}
+        />
+      </div>
+      <div className="tts-row tts-progress">
         <span className="tts-text" title={state.label}>
           {state.label}
         </span>
@@ -789,15 +817,6 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
           onInput={(event) => handlers.onSpeechScrub(Number((event.currentTarget as HTMLInputElement).value))}
         />
       </div>
-      <button
-        type="button"
-        className="chip"
-        aria-label={state.total > 0 ? '朗读句数' : '从头朗读'}
-        onClick={handlers.onSpeakFromHere}
-      >
-        {state.chip}
-      </button>
-      <IconButton label="停止朗读" icon="close" onClick={handlers.onStopSpeech} />
     </div>
   );
 }
@@ -946,7 +965,7 @@ function RailButton({
 
 /** The glyph for an icon name, from the generated code point table. */
 function iconGlyph(name: IconName): string {
-  return ICON_CODEPOINTS[name];
+  return ICON_CODEPOINT_TABLE[name];
 }
 
 /**
@@ -1017,32 +1036,16 @@ function indentLabel(indent: number): string {
 }
 
 /**
- * Line height, cycling the settings row's own ladder.
+ * Line height, as the settings sheet's own ladder.
  *
  * The value is a *string*, because "原书" (`inherit`) is one of the choices and is
  * not a number — the book's own line height is the default and the setting has to
- * be able to mean "do not touch it". So the rail steps through the same list the
- * sheet renders rather than through arithmetic on a number: a rail that computed
- * its own values would sooner or later land on one the sheet's rows do not offer,
- * and the reader would see the control jump to a position its own options do not
- * include.
+ * be able to mean "do not touch it". The sheet's `SegmentedRow` is the only reader
+ * of this list now that the rail no longer steps it, and it stays declared here
+ * because it *is* the ladder: a second copy inside the sheet is how the two would
+ * drift apart.
  */
 const LINE_HEIGHT_LADDER = ['inherit', '1.4', '1.6', '1.8', '2.1'];
-
-function stepLineHeight(current: string): string {
-  const index = LINE_HEIGHT_LADDER.indexOf(current);
-  return LINE_HEIGHT_LADDER[(index + 1) % LINE_HEIGHT_LADDER.length] ?? 'inherit';
-}
-
-/** Page margin, cycling the slider's own range and wrapping at both ends. */
-const PAGE_MARGIN_MIN = 0;
-const PAGE_MARGIN_MAX = 4;
-const PAGE_MARGIN_STEP = 0.25;
-
-function stepPageMargin(current: number): number {
-  const next = Number((current + PAGE_MARGIN_STEP).toFixed(2));
-  return next > PAGE_MARGIN_MAX + 0.001 ? PAGE_MARGIN_MIN : next;
-}
 
 const THEME_LADDER: Array<AppSettings['theme']> = ['light', 'sepia', 'dark'];
 

@@ -25,7 +25,7 @@
  * is decorative", rather than omitting the attribute and leaving it ambiguous.
  */
 
-import { ICON_CODEPOINTS, type IconName } from './icon-names.ts';
+import { ICON_CODEPOINT_TABLE, type IconName } from './icon-names.ts';
 import { type JSX } from './vendor/preact.ts';
 
 export type { IconName };
@@ -55,7 +55,7 @@ export function Icon({ name, label, class: className }: IconProps): JSX.Element 
       role={label ? 'img' : undefined}
       aria-label={label ?? undefined}
     >
-      {ICON_CODEPOINTS[name]}
+      {ICON_CODEPOINT_TABLE[name]}
     </span>
   );
 }
