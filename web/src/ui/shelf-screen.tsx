@@ -5,8 +5,10 @@ import type { OfflineStore } from '../store/offline.ts';
 import type { Platform } from '../core/platform.ts';
 import type { AppSettings, ShelfSort } from '../store/settings.ts';
 import { mountUI } from './mount.ts';
+import { DialogView, type Dialog, type DialogAnswer } from './dialog.tsx';
 import { DENSITY_LABELS, SHELF_SORTS, ShelfSettingsPanel } from './shelf-settings.tsx';
 import { isLocalSort, shelfOrder, shelfServerSort, sortBooks, type ReadingTimes } from './shelf-order.ts';
+import { describeShelfAction, entriesByName, findEntry } from './shelf-membership.ts';
 import { Icon, IconButton, IconTextButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useState } from './vendor/preact.ts';
 
@@ -180,6 +182,15 @@ interface ShelfState {
   bootstrapping: boolean;
   /** Bumped after a mutation so the cached cover URLs re-key, not re-fetch. */
   revision: number;
+  /**
+   * The question the screen is waiting on an answer to.
+   *
+   * Held as state rather than as an appended overlay so "there is one dialog and it is
+   * the current question" is not a rule anybody has to keep (see `dialog.tsx`).
+   */
+  dialog: Dialog | null;
+  /** True while a shelf write is in flight, so two presses cannot race. */
+  busy: boolean;
 }
 
 /**
@@ -294,6 +305,8 @@ export class ShelfScreen {
       refreshing: false,
       bootstrapping: true,
       revision: 0,
+      dialog: null,
+      busy: false,
     };
     this.settings = { ...options.settings };
     this.sort = options.settings.shelfSort;
@@ -678,6 +691,147 @@ export class ShelfScreen {
     this.setStatus(err instanceof Error ? err.message : '出错了');
   }
 
+  // ---- taking a book off the shelf ----
+
+  /**
+   * The actions a shelf card has.
+   *
+   * One item today, and still a *menu*: the entry point is what makes the direction
+   * discoverable, and a bare 「从书架拿掉」 button on every cover would be a destructive
+   * control under the thumb of a reader who is trying to open the book. The same shape
+   * the file manager's rows use, so "the ⋯ is where the actions are" is one habit
+   * across the two screens.
+   */
+  private async openBookMenu(book: Book): Promise<void> {
+    if (this.state.busy) return;
+    const action = await new Promise<string | null>((resolve) => {
+      this.patch({
+        dialog: {
+          kind: 'pick',
+          title: `「${book.title}」`,
+          options: [{ value: 'shelf:remove', label: '从书架拿掉' }],
+          resolve: (answer) => resolve(answer),
+        },
+      });
+    });
+    if (action === 'shelf:remove') await this.removeBook(book);
+  }
+
+  /**
+   * Asks, then takes a book off the reader's shelf.
+   *
+   * ## Why this is on the shelf at all
+   *
+   * The library's file page can do the same write, and for an admin it has always been
+   * reachable — but the *shelf* is where a reader stands when they decide a book should
+   * not be there, and a member cannot open the file page at all (it is the
+   * administrator's half, and the route is guarded). Leaving the shelf, walking to a
+   * folder and finding a file in order to drop one book is the shape of a missing
+   * control, not of a control that lives somewhere else.
+   *
+   * ## Why the path has to be looked up
+   *
+   * A card knows a `Book` — an id, a title, and the `source` the scanner recorded — and
+   * the endpoint takes *library paths*. The two are joined by the file listing, which is
+   * why the removal reads one directory rather than trusting the book's title: a book
+   * whose metadata was edited by hand no longer matches its own filename, and
+   * `findEntry` is the one implementation of that join (see `shelf-membership.ts`).
+   *
+   * ## Why it asks
+   *
+   * `remove` is the only shelf action that takes something away, and it is also the one
+   * whose consequence readers misread. The body says the file is untouched in as many
+   * words, because that is the actual question: the reader's first fear is that 下架
+   * deleted their book.
+   */
+  private async removeBook(book: Book): Promise<void> {
+    if (this.state.busy) return;
+    // Asked for *first*, and before the confirmation: the two dialogs answer different
+    // questions, and a reader who confirms a removal the screen cannot perform would be
+    // told "找不到路径" after saying yes to something that looked possible.
+    const path = await this.pathFor(book);
+    if (path === null) {
+      this.setStatus(`找不到「${book.title}」在磁盘上的路径`);
+      return;
+    }
+    const ok = await this.confirm(
+      `把「${book.title}」从书架拿掉？`,
+      '只是从你的书架上拿掉，磁盘上的文件一个都不会动，随时可以放回来。',
+    );
+    if (!ok) return;
+    this.patch({ busy: true });
+    try {
+      const result = await this.options.api.browseBatchShelf([path], 'remove');
+      // The message outlives the refresh: the reload's own status is the directory
+      // summary, and a summary is not an answer to "did the book move".
+      const report = describeShelfAction('remove', result);
+      // The list is the point of the action, so it is re-read rather than patched: a
+      // card deleted locally would leave the count and the pager disagreeing with the
+      // server about what the shelf holds.
+      await this.refresh();
+      /*
+       * The local mirror is told explicitly, *after* the refresh — and it is not
+       * redundant with it.
+       *
+       * `refresh` calls `replaceBooks`, which only ever *adds* to the mirror: it cannot
+       * know that a book it was not sent is one the reader just removed. So without this
+       * the removed book stays in the cache and comes back on the next cold start,
+       * because the shelf draws `offline.books()` on its first frame and only *then*
+       * replaces it with the server's answer — and offline it never gets replaced at all.
+       *
+       * The order is part of the fix: doing it before the refresh would work only when
+       * the server's list has already stopped containing the book, which is exactly the
+       * assumption that makes a mirror a cache with a bug in it. `result.books` is the
+       * server's own list of what it changed, so it is the authority either way.
+       */
+      await this.options.offline.removeBooks(result.books ?? []);
+      this.setStatus(report);
+    } catch (err) {
+      this.handleError(err);
+    } finally {
+      this.patch({ busy: false });
+    }
+  }
+
+  /**
+   * The library path a card stands for, or `null` when this screen cannot name it.
+   *
+   * The listing is fetched on the press rather than kept in state, because the shelf
+   * has no other use for it: the grid draws books, and holding a directory listing to
+   * serve one context action would be a copy of the library screen's state that nothing
+   * keeps current.
+   *
+   * The book's own folder is not known either — `BookDto` has no path — so the root is
+   * what is asked for and the entries are matched on the stems of the names the scanner
+   * could have recorded. A book on a later page of the root is reported rather than
+   * guessed at, which is the same trade the browsing page makes for its own card
+   * control: no control that reports "找不到路径" is better than one that lies.
+   */
+  private async pathFor(book: Book): Promise<string | null> {
+    try {
+      const listing = await this.options.api.browse('', 1);
+      return findEntry(entriesByName(listing.entries), book)?.path ?? null;
+    } catch (err) {
+      if (err instanceof ApiError && err.isAuthFailure) this.options.onSignedOut();
+      return null;
+    }
+  }
+
+  /** One question, one answer, held in state so the tree can be a function of it. */
+  private confirm(title: string, body: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      this.patch({ dialog: { kind: 'confirm', title, body, resolve } });
+    });
+  }
+
+  private closeDialog(answer: DialogAnswer): void {
+    const dialog = this.state.dialog;
+    this.state = { ...this.state, dialog: null };
+    this.draw();
+    if (dialog?.kind === 'confirm') dialog.resolve(answer === true);
+    if (dialog?.kind === 'pick') dialog.resolve(typeof answer === 'string' ? answer : null);
+  }
+
   // ---- the tree ----
 
   private view(): JSX.Element {
@@ -838,7 +992,9 @@ export class ShelfScreen {
                   progress={this.options.offline.progressFor(book.id)}
                   revision={state.revision}
                   api={this.options.api}
+                  busy={state.busy}
                   onOpen={() => this.options.onOpenBook(book)}
+                  onRemove={() => void this.openBookMenu(book)}
                 />
               ))}
             </div>
@@ -867,6 +1023,9 @@ export class ShelfScreen {
           onPatch={(patch) => this.applySettings(patch)}
           onClose={() => this.patch({ settingsOpen: false })}
         />
+        {state.dialog ? (
+          <DialogView dialog={state.dialog} onClose={(answer) => this.closeDialog(answer)} destructive="从书架拿掉" />
+        ) : null}
       </ShelfScroller>
     );
   }
@@ -900,6 +1059,9 @@ export class ShelfScreen {
   dispose(): void {
     if (this.searchTimer) clearTimeout(this.searchTimer);
     this.searchTimer = null;
+    // A dialog holds a promise the screen owes an answer to; unmounting without
+    // resolving it leaves the caller waiting forever on a screen that is gone.
+    this.closeDialog(null);
     this.ui.unmount();
   }
 }
@@ -1003,31 +1165,62 @@ function BookCard({
   progress,
   revision,
   api,
+  busy,
   onOpen,
+  onRemove,
 }: {
   book: Book;
   progress: { percentage: number } | undefined;
   revision: number;
   api: ReaderApi;
+  busy: boolean;
   onOpen(): void;
+  /** Absent while a write is in flight, so a second press cannot race the first. */
+  onRemove?: () => void;
 }): JSX.Element {
   const url = useCoverUrl(api, book.coverUrl, revision);
+  /*
+   * The card is a *container* with two actions in it, not one button with a menu
+   * inside — a button inside a button is invalid markup, and the browser's recovery
+   * from it is to move the inner one out, which is a layout nobody designed.
+   *
+   * The menu is an icon button rather than a swipe or a long press: the shelf is
+   * scrolled vertically on a phone, so a horizontal gesture fights the scroll it sits
+   * in, and a long press has no affordance at all — the same argument the file
+   * manager's rows already make.
+   */
   return (
-    <button type="button" className="book-card" aria-label={`${book.title} ${book.author}`.trim()} onClick={onOpen}>
-      <div className="cover">
-        {url ? <img src={url} alt="" loading="lazy" /> : <div className="placeholder">{book.title.slice(0, 12) || '无封面'}</div>}
-        <span className="format-badge">{book.format}</span>
-        {/* Drawn from the local mirror, which the sync engine keeps current — so
-            it is correct offline, with no extra request per card. */}
-        {progress && progress.percentage > 0.005 ? (
-          <div className="cover-progress">
-            <span style={`width:${Math.round(Math.min(1, Math.max(0, progress.percentage)) * 100)}%`} />
-          </div>
-        ) : null}
-      </div>
-      <div className="title">{book.title || '未命名'}</div>
-      <div className="author">{book.author || '未知作者'}</div>
-    </button>
+    <div className="book-card">
+      <button
+        type="button"
+        className="book-open"
+        aria-label={`${book.title} ${book.author}`.trim()}
+        onClick={onOpen}
+      >
+        <div className="cover">
+          {url ? <img src={url} alt="" loading="lazy" /> : <div className="placeholder">{book.title.slice(0, 12) || '无封面'}</div>}
+          <span className="format-badge">{book.format}</span>
+          {/* Drawn from the local mirror, which the sync engine keeps current — so
+              it is correct offline, with no extra request per card. */}
+          {progress && progress.percentage > 0.005 ? (
+            <div className="cover-progress">
+              <span style={`width:${Math.round(Math.min(1, Math.max(0, progress.percentage)) * 100)}%`} />
+            </div>
+          ) : null}
+        </div>
+        <div className="title">{book.title || '未命名'}</div>
+        <div className="author">{book.author || '未知作者'}</div>
+      </button>
+      {onRemove ? (
+        <IconButton
+          label={`${book.title} 的操作`}
+          icon="more"
+          class="book-more"
+          disabled={busy}
+          onClick={onRemove}
+        />
+      ) : null}
+    </div>
   );
 }
 

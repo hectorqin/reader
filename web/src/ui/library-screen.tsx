@@ -9,6 +9,12 @@ import { DialogView, METADATA_FIELDS, type Dialog, type DialogAnswer } from './d
 import { Pager } from './pager.tsx';
 import { ShelfSettingsPanel } from './shelf-settings.tsx';
 import { sortBooks } from './shelf-order.ts';
+import {
+  describeShelfAction,
+  entriesByName,
+  findEntry,
+  SHELF_ACTION_LABELS,
+} from './shelf-membership.ts';
 import { Button, Icon, IconButton, IconTextButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useRef, useState } from './vendor/preact.ts';
 
@@ -121,16 +127,6 @@ const FILE_PAGE_SIZE = 200;
  * page is a deliberate act rather than a scroll.
  */
 const BOOK_PAGE_SIZE = 60;
-
-/** What each shelf action is called, in the reader's words. */
-const SHELF_ACTION_LABELS: Record<ShelfAction, string> = {
-  add: '加入书架',
-  remove: '下架',
-  // Aliases of the two above: the server accepts both spellings and folds them into
-  // one write, so the labels are the same words rather than a second verb.
-  hide: '下架',
-  unhide: '加入书架',
-};
 
 /* ------------------------------------------------------------------ *
  * The browsing half — the reader's page
@@ -350,12 +346,7 @@ export class LibraryBrowseScreen {
    * that counted the *folder* would disagree with the badges under it.
    */
   private shelvableTitles(): Set<string> {
-    const entries = this.state.listing?.entries ?? [];
-    const byName = new Map<string, BrowseEntry>();
-    for (const entry of entries) {
-      if (entry.type !== 'file') continue;
-      byName.set(stem(entry.name), entry);
-    }
+    const byName = entriesByName(this.state.listing?.entries ?? []);
     const shelvable = new Set<string>();
     for (const book of this.state.books) {
       const entry = findEntry(byName, book);
@@ -369,11 +360,7 @@ export class LibraryBrowseScreen {
   }
 
   private shelvePaths(books: Book[]): string[] {
-    const byName = new Map<string, BrowseEntry>();
-    for (const entry of this.state.listing?.entries ?? []) {
-      if (entry.type !== 'file') continue;
-      byName.set(stem(entry.name), entry);
-    }
+    const byName = entriesByName(this.state.listing?.entries ?? []);
     return [...new Set(books.map((book) => findEntry(byName, book)?.path).filter((path): path is string => !!path))];
   }
 
@@ -381,12 +368,14 @@ export class LibraryBrowseScreen {
     const paths = this.shelvePaths(books);
     if (paths.length === 0 || this.state.busy) return;
     this.state.busy = true;
-    this.state.status = '加入书架…';
+    this.state.status = `${SHELF_ACTION_LABELS.add}…`;
     this.draw();
     try {
       const result = await this.options.api.browseBatchShelf(paths, 'add');
-      const applied = (result as { applied?: number }).applied ?? 0;
-      this.outcome = `已加入书架 ${applied} 本`;
+      this.outcome = describeShelfAction('add', result);
+      // Read the folder back *before* the report is shown, in the same `try`: the
+      // control on the card is drawn from `shelfState`, and a page that keeps offering
+      // 加入书架 for a book it just added is a page whose next press does nothing.
       await this.load(this.state.path);
       this.outcome = null;
     } catch (err) {
@@ -891,7 +880,7 @@ export class LibraryFilesScreen {
     await this.mutate(
       () => this.options.api.browseBatchMetadata(paths, fields),
       `改资料（${paths.length} 项）`,
-      (result) => this.reportBatch(result),
+      (result) => this.reportMetadataBatch(result),
     );
   }
 
@@ -915,7 +904,7 @@ export class LibraryFilesScreen {
     await this.mutate(
       () => this.options.api.browseBatchShelf(paths, action),
       `${label}（${paths.length} 项）`,
-      (result) => this.reportBatch(result),
+      (result) => describeShelfAction(action, result),
     );
   }
 
@@ -968,14 +957,20 @@ export class LibraryFilesScreen {
   }
 
   /**
-   * What a batch write did, as a sentence.
+   * What a metadata batch did, as a sentence.
+   *
+   * Distinct from `describeShelfAction`, and the distinction is the point: a metadata
+   * edit has no reader-facing verb (`已更新 3 本` is the honest summary of "three books
+   * were retitled"), while a shelf action does (`加入书架 3 本`). Sharing one sentence
+   * between them is how "the reader pressed 加入书架 and was told a batch was updated"
+   * happens, which is a page that cannot answer what it was just asked.
    *
    * Defensive about the response's shape, and not out of caution: this runs in a
    * `.then` on a request whose *answer* is the only thing that says how many books
    * were touched, and a server that answers a batch with an empty body would make the
    * sentence throw.
    */
-  private reportBatch(result: { applied?: number; failed?: Array<{ path: string; reason: string }> }): string {
+  private reportMetadataBatch(result: { applied?: number; failed?: Array<{ path: string; reason: string }> }): string {
     const applied = result.applied ?? 0;
     const failed = result.failed ?? [];
     if (applied === 0 && failed.length > 0) {
@@ -1218,41 +1213,6 @@ export class LibraryFilesScreen {
     this.closeDialog(null);
     this.ui.unmount();
   }
-}
-
-/**
- * A file's name without its extension.
- *
- * This is the join between a *book* and the *file* it lives in, and it is the only
- * one available: `BookDto` carries a title and a `source` (the embedded metadata's
- * own idea of where it came from) but never a path, while the browse listing carries
- * paths and filenames. Stripping the extension is what makes `第1卷` and `第1卷.epub`
- * the same thing.
- *
- * Defensive about the input because both sides are user data: a `source` may be empty
- * (a book with no embedded metadata) and a title may be empty (a renamed file). An
- * empty stem simply matches nothing, which is the correct answer.
- */
-function stem(name: string | undefined | null): string {
-  if (!name) return '';
-  const dot = name.lastIndexOf('.');
-  return dot <= 0 ? name : name.slice(0, dot);
-}
-
-/**
- * The join between a book and the file it lives in, by filename stem.
- *
- * `BookDto` carries a title and a `source` but never a path, and `BrowseEntry` carries
- * a path and a filename but no title. The only thing the two have in common is the
- * *name*, so this is how a card finds the row it is about — and it tries all three of
- * the names the server's own scanner could have matched the book by, because a book
- * whose metadata was edited by hand no longer matches its filename.
- *
- * An empty stem matches nothing, which is the correct answer for a book with no title
- * or a file with no name.
- */
-function findEntry(byName: Map<string, BrowseEntry>, book: Book): BrowseEntry | undefined {
-  return byName.get(stem(book.title)) ?? byName.get(stem(book.source)) ?? byName.get(stem(book.id));
 }
 
 /**

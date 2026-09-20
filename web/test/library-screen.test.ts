@@ -380,3 +380,119 @@ describe('the browsing half of the library', () => {
     expect(calls.at(-1)).toBe('browse::1:刘慈欣:true');
   });
 });
+
+/**
+ * 书架的加入 / 移除，在书库页上。
+ *
+ * The report that produced these assertions was 「补全完善书架的加入、移除逻辑」, and
+ * the half that was missing is the one only this screen can see: a reader who took a
+ * book off their shelf, reopened 书库, browser-cached everything, and found a page
+ * that could not tell them *why* the book was missing — nor put it back.
+ */
+describe('the shelf pair on the browsing page', () => {
+  /** Serves one folder, letting the shelf state of a path change between reads. */
+  function serveMutable(
+    transport: FakeTransport,
+    state: { shelfState: 'on' | 'off' },
+    books: Book[],
+  ): void {
+    transport.respondWith((request) => {
+      if (request.url.includes('/browse/shelf')) {
+        // The write answers with the batch result, which is what the sentence the
+        // reader sees is built from — a fixture that answered `{}` would make every
+        // report read `0 本` and the assertion meaningless.
+        return { status: 200, headers: {}, json: { applied: 1, books: ['b2'], failed: [] } };
+      }
+      if (request.url.startsWith('/api/v1/library/browse')) {
+        return {
+          status: 200,
+          headers: {},
+          json: listing({
+            entries: [entry('第2卷.epub', { shelfState: state.shelfState })],
+            total: 1,
+            files: 1,
+          }),
+        };
+      }
+      if (request.url.startsWith('/api/v1/books')) {
+        return { status: 200, headers: {}, json: { items: books, total: books.length, page: 1, pageSize: 60 } };
+      }
+      return { status: 200, headers: {}, json: { items: [] } };
+    });
+  }
+
+  it('re-reads the folder after a shelve, so the control disappears rather than lying', async () => {
+    /*
+     * The write is NOT the end of the interaction — the *re-read* is.
+     *
+     * `shelfState` comes from the listing, so a card that keeps drawing 加入书架 after
+     * the book has been added is a page whose every remaining control is a no-op, and
+     * the reader's next press teaches them the button does not work. The listing is
+     * re-read inside the same `try` as the write, before the report is shown, which is
+     * the order the upload path already used and for the same reason.
+     */
+    const transport = new FakeTransport();
+    const state: { shelfState: 'on' | 'off' } = { shelfState: 'off' };
+    serveMutable(transport, state, [book(2)]);
+    const { screen } = makeScreen(transport);
+    await screen.open('', 1, '');
+    expect(screen.element.querySelector('[aria-label="把第2卷加入书架"]')).not.toBeNull();
+
+    state.shelfState = 'on';
+    const browseReadsBefore = transport.requests.filter((request) =>
+      request.url.startsWith('/api/v1/library/browse?')).length;
+    screen.element.querySelector<HTMLElement>('[aria-label="把第2卷加入书架"]')!.click();
+    await vi.waitFor(() =>
+      expect(
+        transport.requests.filter((request) => request.url.startsWith('/api/v1/library/browse?')).length,
+      ).toBeGreaterThan(browseReadsBefore),
+    );
+    await vi.waitFor(() =>
+      expect(screen.element.querySelector('[aria-label="把第2卷加入书架"]')).toBeNull(),
+    );
+    // The message says *what the reader did*, not what a generic batch write did:
+    // `已更新 1 本` is not an answer to "did my book come back".
+    expect(screen.element.textContent).toContain('加入书架 1 本');
+  });
+
+  it('says what the reader did, not that a batch was updated', async () => {
+    /*
+     * `已更新 1 本` is true and useless: the reader pressed 加入书架, and the one thing
+     * they are checking is whether the book moved. The sentence is built from the
+     * *action*, which is also why the file page's batch bar and this card cannot
+     * describe the same write two different ways.
+     */
+    const transport = new FakeTransport();
+    serveMutable(transport, { shelfState: 'off' }, [book(2)]);
+    const { screen } = makeScreen(transport);
+    await screen.open('', 1, '');
+    screen.element.querySelector<HTMLElement>('[aria-label="把第2卷加入书架"]')!.click();
+    await vi.waitFor(() => expect(screen.element.textContent).toContain('加入书架 1 本'));
+    expect(screen.element.textContent).not.toContain('已更新');
+  });
+
+  it('lets a book that is off the shelf be put back in one press, with no selection', async () => {
+    /*
+     * The gap the file manager could not cover.
+     *
+     * The 文件 page can do this, but it is the administrator's screen: a member never
+     * sees it at all (the route is guarded), so before this the only way back onto the
+     * shelf for a member was a batch selection on a page they cannot open. The browse
+     * page is the reader's half, so the direction has to exist here.
+     */
+    const transport = new FakeTransport();
+    serveMutable(transport, { shelfState: 'off' }, [book(2)]);
+    const { screen } = makeScreen(transport);
+    await screen.open('', 1, '');
+    screen.element.querySelector<HTMLElement>('[aria-label="把第2卷加入书架"]')!.click();
+    await vi.waitFor(() =>
+      expect(transport.requests.some((request) => request.url.includes('/browse/shelf'))).toBe(true),
+    );
+    const payload = JSON.parse(
+      String(transport.requests.find((request) => request.url.includes('/browse/shelf'))!.body),
+    ) as { paths: string[]; action: string };
+    expect(payload.action).toBe('add');
+    // The *file* is what the endpoint takes, and the join to it is the page's own.
+    expect(payload.paths).toEqual(['第2卷.epub']);
+  });
+});

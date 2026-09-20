@@ -60,6 +60,7 @@ interface Harness {
   screen: ShelfScreen;
   calls: string[];
   transport: FakeTransport;
+  offline: OfflineStore;
 }
 
 /**
@@ -86,9 +87,10 @@ async function makeScreen(
   const api = new ReaderApi(platform, sessions);
   api.setBaseUrl('http://nas:8080');
   const calls: string[] = [];
+  const offline = new OfflineStore(platform.kv);
   const screen = new ShelfScreen({
     api,
-    offline: new OfflineStore(platform.kv),
+    offline,
     platform,
     settings: { ...DEFAULT_APP_SETTINGS, shelfSort: sort },
     page,
@@ -102,7 +104,7 @@ async function makeScreen(
     onSettingsChange: (patch) => calls.push(`settings:${JSON.stringify(patch)}`),
   });
   document.body.append(screen.element);
-  return { screen, calls, transport };
+  return { screen, calls, transport, offline };
 }
 
 /** The `page` each `listBooks` request asked for, in order. */
@@ -395,5 +397,174 @@ describe('the shelf pager', () => {
     // and page three of an order they have not seen has no relation to the page they
     // were on.
     expect(calls).toContain('page:1');
+  });
+});
+
+/**
+ * 书架的移除 —— the one direction the shelf itself was missing.
+ *
+ * The report asked for the pair to be completed, and the shelf is where a reader
+ * stands when they decide a book should not be there: the library page is a place
+ * they *went to*, and reaching it to drop one book means leaving the shelf, finding
+ * the file and coming back. So the control belongs on the card.
+ *
+ * The two properties asserted here are the ones a wrong implementation gets wrong
+ * silently: the *path* the write carries (a card knows a book, the endpoint takes a
+ * file) and the list the reader is left looking at.
+ */
+describe('taking a book off the shelf', () => {
+  function serveShelf(transport: FakeTransport, books: Book[]): void {
+    transport.respondWith((request) => {
+      if (request.url.includes('/browse/shelf')) {
+        return { status: 200, headers: {}, json: { applied: 1, books: ['b1'], failed: [] } };
+      }
+      if (request.url.startsWith('/api/v1/books')) {
+        return { status: 200, headers: {}, json: { items: books, total: books.length, page: 1, pageSize: 60 } };
+      }
+      if (request.url.startsWith('/api/v1/library/browse')) {
+        return {
+          status: 200,
+          headers: {},
+          json: {
+            path: '', crumbs: [{ name: '书库', path: '' }], parent: null,
+            entries: [{ name: '第1卷.epub', path: '第1卷.epub', type: 'file', size: 0, mtime: 0, mode: 0o644,
+              hidden: false, hiddenByRule: false, scanned: true, ext: 'epub', indexed: true, shelfState: 'on' }],
+            total: 1, dirs: 0, files: 1, size: 0, writable: true, name: '',
+          },
+        };
+      }
+      return { status: 200, headers: {}, json: { items: [] } };
+    });
+  }
+
+  it('asks the reader before it takes a book away', async () => {
+    /*
+     * `remove` is the only shelf action that takes something away, so it is the only
+     * one that asks. It is also the one whose wording has to be exact: the reader's
+     * first fear is that 下架 deleted the file, and a dialog that does not say so in
+     * as many words is a dialog they will not press.
+     */
+    const transport = new FakeTransport();
+    serveShelf(transport, [book(1)]);
+    const { screen } = await makeScreen(transport);
+    await screen.show();
+    const menu = screen.element.querySelector<HTMLElement>('[aria-label="第1卷 的操作"]')!;
+    expect(menu, 'a card needs a way to its own actions').not.toBeNull();
+    menu.click();
+    const item = [...screen.element.querySelectorAll<HTMLElement>('button')].find(
+      (button) => button.textContent?.trim() === '从书架拿掉',
+    )!;
+    expect(item, 'the shelf must offer the direction that is missing from it').not.toBeNull();
+    item.click();
+    await vi.waitFor(() => expect(screen.element.textContent).toContain('从书架拿掉'));
+    // The dialog names the book and says the file is untouched.
+    expect(screen.element.textContent).toContain('第1卷');
+    expect(screen.element.textContent).toContain('磁盘');
+    // Nothing has been written yet — the second press is what writes.
+    expect(transport.requests.some((request) => request.url.includes('/browse/shelf'))).toBe(false);
+  });
+
+  it('drops the book from the offline mirror too, so it does not come back', async () => {
+    /*
+     * The mirror is drawn *before* the first request on every open (`show()` renders
+     * `offline.books()` and only then replaces it), so a removal the mirror does not
+     * hear about is a book that comes back on the next cold start — and, offline, stays.
+     *
+     * That is the failure this asserts against, and it is the one a screenshot cannot
+     * show: the shelf looks correct immediately after the write, because the list was
+     * re-read from the server. It is the *second* launch that is wrong.
+     */
+    const transport = new FakeTransport();
+    serveShelf(transport, [book(1)]);
+    const { screen, offline } = await makeScreen(transport);
+    await screen.show();
+    await offline.load();
+    expect(offline.books().map((entry) => entry.id)).toContain('b1');
+    screen.element.querySelector<HTMLElement>('[aria-label="第1卷 的操作"]')!.click();
+    [...screen.element.querySelectorAll<HTMLElement>('.dialog-list button')][0]!.click();
+    await vi.waitFor(() => expect(screen.element.textContent).toContain('取消'));
+    [...screen.element.querySelectorAll<HTMLElement>('.dialog-actions button')].at(-1)!.click();
+    await vi.waitFor(() => expect(screen.element.textContent).toContain('下架 1 本'));
+    expect(offline.books().map((entry) => entry.id)).not.toContain('b1');
+  });
+
+  it('writes the file path the card stands for, not the book id', async () => {
+    /*
+     * The join, at the only place it can go wrong.
+     *
+     * A card knows a `Book`: an id, a title, and the `source` the scanner recorded.
+     * The endpoint takes *library paths*. Sending the id would be a 400 the reader
+     * reads as "the button is broken", and the two are only connectable through the
+     * file listing — which is why the shelf fetches it.
+     */
+    const transport = new FakeTransport();
+    serveShelf(transport, [book(1)]);
+    const { screen } = await makeScreen(transport);
+    await screen.show();
+    screen.element.querySelector<HTMLElement>('[aria-label="第1卷 的操作"]')!.click();
+    const item = [...screen.element.querySelectorAll<HTMLElement>('button')].find(
+      (button) => button.textContent?.trim() === '从书架拿掉',
+    )!;
+    item.click();
+    await vi.waitFor(() => expect(screen.element.textContent).toContain('取消'));
+    // The confirm button is named after the *action*, not "确认": "确认" does not say
+    // what is about to happen, and this is the one dialog where that matters.
+    const confirm = [...screen.element.querySelectorAll<HTMLElement>('.dialog-actions button')].at(-1)!;
+    confirm.click();
+    await vi.waitFor(() =>
+      expect(transport.requests.some((request) => request.url.includes('/browse/shelf'))).toBe(true),
+    );
+    const payload = JSON.parse(
+      String(transport.requests.find((request) => request.url.includes('/browse/shelf'))!.body),
+    ) as { paths: string[]; action: string };
+    expect(payload.action).toBe('remove');
+    expect(payload.paths).toEqual(['第1卷.epub']);
+  });
+
+  it('drops the book from the list it just wrote about', async () => {
+    /*
+     * The list is the point of the action, so it has to change.
+     *
+     * A re-read of the page is not equivalent to removing the card: the reader's list
+     * shrinks by one book and the request would also *reorder* nothing they asked to
+     * have reordered. Refetching the page is the honest answer — the server is the
+     * authority on what the shelf holds — and it is what makes a page turn not land
+     * on a book the reader just removed.
+     */
+    const transport = new FakeTransport();
+    const books = [book(1), book(2)];
+    transport.respondWith((request) => {
+      if (request.url.includes('/browse/shelf')) {
+        return { status: 200, headers: {}, json: { applied: 1, books: ['b1'], failed: [] } };
+      }
+      if (request.url.startsWith('/api/v1/books')) {
+        const after = transport.requests.some((entry) => entry.url.includes('/browse/shelf'));
+        const items = after ? books.slice(1) : books;
+        return { status: 200, headers: {}, json: { items, total: items.length, page: 1, pageSize: 60 } };
+      }
+      if (request.url.startsWith('/api/v1/library/browse')) {
+        return {
+          status: 200, headers: {},
+          json: {
+            path: '', crumbs: [{ name: '书库', path: '' }], parent: null,
+            entries: [{ name: '第1卷.epub', path: '第1卷.epub', type: 'file', size: 0, mtime: 0, mode: 0o644,
+              hidden: false, hiddenByRule: false, scanned: true, ext: 'epub', indexed: true, shelfState: 'on' }],
+            total: 1, dirs: 0, files: 1, size: 0, writable: true, name: '',
+          },
+        };
+      }
+      return { status: 200, headers: {}, json: { items: [] } };
+    });
+    const { screen } = await makeScreen(transport);
+    await screen.show();
+    expect(screen.element.querySelectorAll('.book-card')).toHaveLength(2);
+    screen.element.querySelector<HTMLElement>('[aria-label="第1卷 的操作"]')!.click();
+    [...screen.element.querySelectorAll<HTMLElement>('button')]
+      .find((button) => button.textContent?.trim() === '从书架拿掉')!
+      .click();
+    await vi.waitFor(() => expect(screen.element.textContent).toContain('取消'));
+    [...screen.element.querySelectorAll<HTMLElement>('.dialog-actions button')].at(-1)!.click();
+    await vi.waitFor(() => expect(screen.element.querySelectorAll('.book-card')).toHaveLength(1));
+    expect(screen.element.querySelector('[aria-label="第1卷 的操作"]')).toBeNull();
   });
 });

@@ -1625,7 +1625,33 @@ book-content {
   }
 }
 
+/*
+ * The card is a *container*, and the press target is the `.book-open` inside it.
+ *
+ * It has to be this way once a card carries a second action: a `<button>` inside a
+ * `<button>` is invalid markup, and what a browser does with it — hoist the inner one
+ * out of its parent — is a layout nobody designed. Both screens that draw a card
+ * therefore put the open-target and the extra control as siblings here, which is also
+ * why `.is-row` (the library's variant) no longer has to override the whole thing.
+ *
+ * `position: relative` is what the extra control is placed against.
+ */
 .book-card {
+  position: relative;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+  width: 100%;
+}
+
+/* The press target: the cover and the two lines under it, and nothing else. */
+.book-card .book-open {
   border: 0;
   padding: 0;
   background: transparent;
@@ -1637,6 +1663,48 @@ book-content {
   gap: 0.3rem;
   min-width: 0;
   width: 100%;
+  font: inherit;
+}
+
+/*
+ * The card's own actions, as a glyph in the top corner.
+ *
+ * `opacity` rather than `display`, and always *focusable*: a control that only exists
+ * on hover does not exist on the device most of these readers use, and one that is
+ * `display: none` until touched cannot be reached by a keyboard or a screen reader at
+ * all. Dimmed is legible enough to find and quiet enough not to compete with the
+ * cover, which is the thing the reader came for.
+ */
+.book-card .book-more {
+  position: absolute;
+  inset-block-start: 0.3rem;
+  inset-inline-end: 0.3rem;
+  /* 1.75rem = 28px at the root size, which is the smallest hit area the UI review
+     accepts and the same floor the top bar's own controls are held to. A corner glyph
+     over a cover is exactly the control a finger misses. */
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--reader-surface) 82%, transparent);
+  color: var(--reader-ink);
+  opacity: 0.55;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.18);
+  transition: opacity var(--motion-duration) var(--motion-ease);
+}
+
+.book-card .book-more:hover,
+.book-card .book-more:focus-visible,
+.book-card .book-more:active {
+  opacity: 1;
+}
+
+/* A pointer can hover, so the glyph can afford to be invisible until it does; a
+   finger cannot, so the rule is scoped to hosts that have one. */
+@media (hover: hover) {
+  .book-card .book-more {
+    opacity: 0;
+  }
 }
 
 /*
@@ -1678,7 +1746,7 @@ book-content {
     box-shadow var(--motion-duration) var(--motion-ease);
 }
 
-.book-card:active .cover {
+.book-card .book-open:active .cover {
   transform: scale(0.975);
   box-shadow: 0 1px 2px rgb(0 0 0 / 0.16);
 }
@@ -1977,6 +2045,7 @@ book-content {
   }
 
   .book-card .cover,
+  .book-card .book-more,
   .book-grid.is-skeleton .cover,
   .book-grid.is-skeleton .skeleton-line {
     animation: none;
@@ -3235,20 +3304,6 @@ book-content {
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-}
-
-.book-card.is-row .book-open {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-  text-align: start;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  min-width: 0;
-  width: 100%;
 }
 
 /*
