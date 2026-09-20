@@ -86,6 +86,7 @@ before(async () => {
 
 after(async () => {
   await app.close();
+  ctx.db.close();
   await rm(root, { recursive: true, force: true });
 });
 
@@ -187,10 +188,13 @@ test('progress and notes survive a library re-organisation', async () => {
 });
 
 test('duplicate copies collapse into one book', async () => {
+  // Generate once: ZIP headers include timestamps, so re-generating an EPUB
+  // is not a byte-identical copy when this suite crosses a clock boundary.
+  const bytes = await makeEpub({ id: 'urn:test:duplicate-copy', title: '副本测试', creator: '测试作者' });
+  await writeFile(join(booksDir, '副本原书.epub'), bytes);
+  await ctx.scanner.scan();
   const before = ctx.db.all<{ id: string }>('SELECT id FROM books');
-  await writeFile(join(booksDir, '备份 三体.epub'), await makeEpub({
-    id: 'urn:isbn:9787536692930', title: '三体', creator: '刘慈欣', series: '地球往事', index: '1',
-  }));
+  await writeFile(join(booksDir, '副本备份.epub'), bytes);
   await ctx.scanner.scan();
   const after = ctx.db.all<{ id: string }>('SELECT id FROM books');
   assert.equal(after.length, before.length, 'a byte-identical copy must not create a new book');

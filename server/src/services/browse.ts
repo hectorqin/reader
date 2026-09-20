@@ -544,14 +544,16 @@ export class BrowseService {
         throw badRequest('bookIds must contain strings', 'BAD_BOOK_ID');
       }
       /*
-       * `book_files` rather than `books`: the path is a property of the *file*, and a
-       * book whose last file is missing has a row in `books` and none to point at.
-       * Reporting that one as a failure is the honest answer — the shelf's own
-       * predicate already says a book with no live file is not on the shelf.
+       * Local files belong to the shared library. Managed downloads can only be
+       * added or removed by a user with an acquisition record, even if another
+       * account supplies their book id. Neither path grants access from an id alone.
        */
       const file = this.db.get<{ book_id: string }>(
-        'SELECT book_id FROM book_files WHERE book_id = ? AND missing = 0 LIMIT 1',
-        input,
+        `SELECT book_id FROM book_files WHERE book_id = ? AND missing = 0
+         UNION SELECT f.book_id FROM acquired_files f
+           JOIN source_acquisitions a ON a.book_id = f.book_id
+           WHERE f.book_id = ? AND a.user_id = ? LIMIT 1`,
+        input, input, userId,
       );
       if (!file) {
         result.failed.push({ path: input, reason: 'NO_LIVE_FILE' });

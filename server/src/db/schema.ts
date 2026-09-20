@@ -100,6 +100,48 @@ CREATE TABLE IF NOT EXISTS book_files (
 );
 CREATE INDEX IF NOT EXISTS idx_files_book ON book_files(book_id);
 
+-- Configurations contain no credentials. Built-in and installed source types
+-- share this table; disabling a source never removes acquired content.
+CREATE TABLE IF NOT EXISTS source_instances (
+  id TEXT PRIMARY KEY,
+  plugin_id TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  name TEXT NOT NULL,
+  config_json TEXT NOT NULL DEFAULT '{}',
+  enabled INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS source_credentials (
+  source_id TEXT NOT NULL REFERENCES source_instances(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  encrypted_value TEXT NOT NULL,
+  PRIMARY KEY (source_id, user_id, key)
+);
+-- Host-managed files are deliberately separate from the scanned books mount.
+CREATE TABLE IF NOT EXISTS acquired_files (
+  book_id TEXT PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE,
+  rel_path TEXT NOT NULL UNIQUE,
+  size INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS source_acquisitions (
+  source_id TEXT NOT NULL REFERENCES source_instances(id),
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  entry_ref TEXT NOT NULL,
+  option_id TEXT NOT NULL DEFAULT '',
+  book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  PRIMARY KEY (source_id, user_id, entry_ref, option_id)
+);
+CREATE TABLE IF NOT EXISTS plugin_storage (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS installed_plugins (
+  plugin_id TEXT PRIMARY KEY,
+  folder TEXT NOT NULL,
+  enabled INTEGER NOT NULL DEFAULT 1
+);
+
 -- Per-user library state. Kept separate from books so that a rescan can never
 -- clobber a user's own edits.
 CREATE TABLE IF NOT EXISTS user_books (

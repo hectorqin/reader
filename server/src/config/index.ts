@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /**
  * Runtime configuration.
@@ -98,13 +98,16 @@ function loadOrCreateSecret(dataDir: string, file = 'token.secret'): string {
 export function loadConfig(): AppConfig {
   const booksDir = resolve(process.env.BOOKS_DIR ?? '/books');
   const dataDir = resolve(process.env.DATA_DIR ?? join(process.cwd(), DATA_DIR_DEFAULT_NAME));
-  mkdirSync(dataDir, { recursive: true });
-
-  if (booksDir === dataDir || dataDir.startsWith(`${booksDir}/`)) {
+  const dataRelativeToBooks = relative(booksDir, dataDir);
+  const insideBooks = dataRelativeToBooks === '' || (
+    dataRelativeToBooks !== '..' && !dataRelativeToBooks.startsWith(`..${sep}`) && !isAbsolute(dataRelativeToBooks)
+  );
+  if (insideBooks) {
     throw new Error(
       `DATA_DIR (${dataDir}) must not live inside BOOKS_DIR (${booksDir}); the library mount is read-only.`,
     );
   }
+  mkdirSync(dataDir, { recursive: true });
 
   return {
     booksDir,

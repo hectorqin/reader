@@ -7,6 +7,7 @@ import { registerLibraryRoutes } from './routes/library.ts';
 import { registerSyncRoutes } from './routes/sync.ts';
 import { registerTtsRoutes } from './routes/tts.ts';
 import { registerWebRoutes } from './routes/web.ts';
+import { registerSourceRoutes } from './routes/sources.ts';
 import { isOriginAllowed, resolveCorsOrigin } from './cors.ts';
 
 export function buildApp(ctx: AppContext): FastifyInstance {
@@ -20,6 +21,9 @@ export function buildApp(ctx: AppContext): FastifyInstance {
     // JSON request (a sync batch, a batch metadata edit) hold 400MB of heap.
     bodyLimit: 8 * 1024 * 1024,
     trustProxy: true,
+    // Source publications use opaque plugin-owned references, often longer than
+    // the router's default 100-character parameter limit.
+    routerOptions: { maxParamLength: 16_384 },
   });
 
   registerErrorHandler(app);
@@ -58,6 +62,7 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerLibraryRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
   registerTtsRoutes(app, ctx);
+  registerSourceRoutes(app, ctx);
   // Registered last: the SPA fallback must not shadow an API route.
   registerWebRoutes(app, ctx);
 

@@ -12,6 +12,8 @@
 | 渲染层 | `web/` | TypeScript + Vite，EPUB 精排、TXT、漫画、PDF |
 | Android 壳 | `android/` | Kotlin + WebView，复用上面那一份渲染层 |
 
+服务端已提供内置 local / OPDS 来源与受信任进程插件接口。OPDS 下载后复用现有书架和阅读器；插件章节目前提供开发接口，管理界面与章节书架接入仍在后续计划中。见 [插件设计与实施状态](docs/source-plugins.md) 和 [API 与示例插件安装](docs/api.md#来源与插件)。
+
 ---
 
 ## 一条命令跑起来

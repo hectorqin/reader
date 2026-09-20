@@ -250,7 +250,8 @@ export class SyncService {
        FROM reading_progress p
        JOIN user_books ub ON ub.book_id = p.book_id AND ub.user_id = p.user_id
        WHERE p.user_id = ? AND ub.hidden = 0
-         AND EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = p.book_id AND f.missing = 0)
+         AND (EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = p.book_id AND f.missing = 0)
+              OR EXISTS (SELECT 1 FROM acquired_files a WHERE a.book_id = p.book_id))
        ORDER BY p.updated_at DESC LIMIT ?`,
       userId, limit,
     );

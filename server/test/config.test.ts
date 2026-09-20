@@ -10,7 +10,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, chmod, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, chmod, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config/index.ts';
@@ -84,6 +84,10 @@ test('READER_TOKEN_SECRET wins and skips the file entirely', async () => {
 });
 
 test('an unwritable DATA_DIR fails with the fix, not a bare EACCES', async (t) => {
+  if (process.platform === 'win32') {
+    t.skip('Windows does not enforce Unix directory permission bits');
+    return;
+  }
   if (process.getuid?.() === 0) {
     // root bypasses the permission bits, so the failure cannot be reproduced.
     t.skip('running as root; permission bits are not enforced');
@@ -117,14 +121,43 @@ test('an unwritable DATA_DIR fails with the fix, not a bare EACCES', async (t) =
   }
 });
 
-test('DATA_DIR inside BOOKS_DIR is refused at boot', async () => {
+test('DATA_DIR inside BOOKS_DIR is refused before creating the directory', async () => {
   const root = await mkdtemp(join(tmpdir(), 'reader-config-'));
   const booksDir = join(root, 'books');
+  const dataDir = join(booksDir, 'nested', 'data');
   await mkdir(booksDir, { recursive: true });
 
   try {
-    await withEnv({ DATA_DIR: join(booksDir, 'data'), BOOKS_DIR: booksDir }, () => {
+    await withEnv({ DATA_DIR: dataDir, BOOKS_DIR: booksDir }, async () => {
       assert.throws(() => loadConfig(), /must not live inside BOOKS_DIR/);
+      await assert.rejects(stat(join(booksDir, 'nested')), { code: 'ENOENT' });
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('DATA_DIR equal to BOOKS_DIR is refused before creating either directory', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'reader-config-'));
+  const booksDir = join(root, 'not-created');
+  try {
+    await withEnv({ DATA_DIR: booksDir, BOOKS_DIR: booksDir }, async () => {
+      assert.throws(() => loadConfig(), /must not live inside BOOKS_DIR/);
+      await assert.rejects(stat(booksDir), { code: 'ENOENT' });
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a sibling DATA_DIR sharing the BOOKS_DIR prefix is permitted', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'reader-config-'));
+  const booksDir = join(root, 'books');
+  const dataDir = join(root, 'books-data');
+  try {
+    await withEnv({ DATA_DIR: dataDir, BOOKS_DIR: booksDir }, async () => {
+      assert.equal(loadConfig().dataDir, dataDir);
+      assert.ok((await stat(dataDir)).isDirectory());
     });
   } finally {
     await rm(root, { recursive: true, force: true });

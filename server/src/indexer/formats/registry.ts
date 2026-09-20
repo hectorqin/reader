@@ -182,7 +182,7 @@ export type ProgressReporter = (scanned: number) => void;
 export interface HandlerContext {
   /** Library-relative path, forward slashes. */
   relPath: string;
-  /** Absolute path, guaranteed inside the read-only books root. */
+  /** Absolute path validated by the host: the books mount or managed DATA_DIR content. */
   absPath: string;
   /**
    * Book id, available once the book exists. Handlers that emit links back into

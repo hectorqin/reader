@@ -8,6 +8,7 @@ import type { SyncService } from '../services/sync.ts';
 import type { TtsService } from '../services/tts.ts';
 import type { BrowseService } from '../services/browse.ts';
 import type { UploadService } from '../services/uploads.ts';
+import type { SourceHost } from '../services/source-host.ts';
 
 export interface AppContext {
   config: AppConfig;
@@ -36,6 +37,7 @@ export interface AppContext {
    * is to write.
    */
   uploads: UploadService;
+  sources?: SourceHost;
   log: FastifyBaseLogger;
 }
 

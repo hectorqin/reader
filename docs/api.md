@@ -781,6 +781,142 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 ---
 
+## 来源与插件
+
+来源接口把本地书、OPDS 和外部章节插件统一成同一组发现与获取操作。来源实例由管理员创建；来源配置在实例级共享，登录凭据通过用户级凭据接口保存。插件运行在独立的受信任 Node 进程中，安装前必须确认它拥有服务端操作系统权限。
+
+### `GET /sources/types`
+
+返回当前已注册的内置和外部来源类型：
+
+```json
+{
+  "types": [
+    { "id": "local", "pluginId": "reader.local", "builtin": true, "label": "本地书库", "version": "1.0.0", "capabilities": ["browse", "search", "detail"] },
+    { "id": "opds", "pluginId": "reader.opds", "builtin": true, "label": "OPDS", "version": "1.0.0", "capabilities": ["browse", "search", "detail", "acquire.file"] }
+  ]
+}
+```
+
+### `GET /sources`
+
+登录用户可以看到来源实例，响应为 `{ "sources": [...] }`；每项有 `id/pluginId/sourceType/name/enabled/descriptor`，只有管理员返回 `config`。服务端启动时自动创建 `local` 实例。
+
+### `POST /sources` — 管理员
+
+创建来源：
+
+```http
+POST /api/v1/sources
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{"pluginId":"reader.opds","sourceType":"opds","name":"家庭 OPDS","config":{"url":"https://books.example.test/opds","username":"reader"}}
+```
+
+返回 `201 { "source": {...} }`。可指定 `id`（2～80 位字母、数字、下划线或短横线），省略则自动生成。`sourceType` 和 `pluginId` 从 `/sources/types` 读取。`local` 仅接受空配置，使用宿主 `BOOKS_DIR`。
+
+`config` 不能包含密码。OPDS 的 `url` 必须是 HTTP(S) 地址；Feed 和下载链接默认限制在该 origin。需要跨 origin 获取文件时，管理员可在 config 中增加 `allowedOrigins`（如 `["https://cdn.example.test"]`）。Basic 凭据不会转发到附加 origin。当前只支持通过 `PATCH /sources/:id` 更新 `enabled`，未提供修改名称/URL/config 或删除来源的接口。
+
+### 来源浏览、搜索和详情
+
+```text
+GET /api/v1/sources/:id/browse?ref=<optional>&cursor=<optional>&limit=<1..200>
+GET /api/v1/sources/:id/search?q=<query>&cursor=<optional>&limit=<1..200>
+GET /api/v1/sources/:id/entries?ref=<entry-ref>
+```
+
+目录响应形如 `{ "items": [...], "navigation": [...], "nextCursor": "...", "title": "..." }`；可选字段可省略。`ref` 和 `cursor` 是来源拥有的不透明值，客户端只保存并原样回传。条目返回 `ref`、标题、作者、封面和 `options`；不要从 `ref` 推断 URL 或拼接下一页地址。引用和查询参数必须为非空字符串且不超过 16,384 字符；路径中的 `publicationRef` 需要 URL 编码，路由允许最大 16,384 字符的参数。
+
+### 凭据与来源启停
+
+```http
+PUT /api/v1/sources/:id/credentials/password
+Authorization: Bearer <user-token>
+Content-Type: application/json
+
+{"value":"用户自己的 OPDS 密码"}
+```
+
+返回 `{ "ok": true }`。`value` 必须为字符串，允许空密码，最大 16,384 字符。密码按 `(sourceId, userId, key)` 隔离并以 AES-256-GCM 加密保存，普通来源列表不会回显。管理员可用 `PATCH /api/v1/sources/:id` 携带 `{ "enabled": false }` 暂停来源；已获取到 `DATA_DIR/acquired` 的书不会被删除。
+
+### 获取内容、目录和章节资源
+
+```http
+POST /api/v1/sources/:id/acquire
+Authorization: Bearer <user-token>
+Content-Type: application/json
+
+{"entryRef":"<entry-ref>","optionId":"<option-id>"}
+```
+
+内置 `local` 直接返回已有书的 `publicationId`。OPDS 文件会同步下载，成功响应为 `{ "kind":"ready", "publicationId":"<book-id>" }`；单文件上限 256 MiB，下载完成后计算真实 SHA-256，写入 `DATA_DIR/acquired`，复用现有格式解析和阅读端点，并将书加入当前用户书架。取消、超限或解析失败不会留下临时文件。
+
+章节插件返回 `{ "kind":"chapters", "publicationRef":"..." }`，随后调用：
+
+```text
+GET /api/v1/sources/:id/publications/:publicationRef/manifest
+GET /api/v1/sources/:id/publications/:publicationRef/resource?ref=<resource-ref>
+```
+
+首个进程插件版本的资源接口只返回 JSON：章节文本用 `text`，二进制小资源用 `base64`；不会把插件返回的 HTML 作为应用页面执行。章节 publication 的书架、离线缓存和追更尚未接入。
+
+### 插件管理（管理员）
+
+插件包需要管理员预先放入 `DATA_DIR/plugins/<folder>`，当前安装接口只接受目录名，不上传或解压包：
+
+```http
+POST /api/v1/plugins
+Authorization: Bearer <admin-token>
+Content-Type: application/json
+
+{"folder":"demo-chapters","trusted":true}
+```
+
+启停和卸载：
+
+```text
+GET    /api/v1/plugins
+PATCH  /api/v1/plugins/:id       body: {"enabled":true|false}
+DELETE /api/v1/plugins/:id       保留来源实例、已获取书和数据
+```
+
+安装返回 `201 { "plugin": {...} }`，列表返回 `{ "plugins": [...] }`，启停返回 `{ "plugin": {...} }`，卸载返回 `{ "ok": true }`。插件状态包含 `pluginId/builtin/enabled/sourceTypes/runtime`，外部插件还带 `folder/name/version`，加载失败时有 `error`。卸载会移除注册和安装记录，保留包文件、来源实例、凭据和书籍数据。
+
+禁用或插件进程故障不会删除已下载文件。当前没有包上传、在线升级或回滚接口；内置 `reader.local` 和 `reader.opds` 不可卸载、禁用或替换。已安装插件失败后可用 `PATCH ... {"enabled":true}` 重新加载。
+
+### 可运行示例：demo-chapters
+
+仓库中的 [`examples/plugins/demo-chapters`](../examples/plugins/demo-chapters) 是一个不联网的静态章节插件。按以下步骤验证完整调用链（服务端已启动且已有管理员令牌）：
+
+```powershell
+# 在仓库根目录执行；改为服务端实际使用的 DATA_DIR 和管理员令牌。
+$readerDataDir = 'D:\reader-data'
+$readerApi = 'http://localhost:8080/api/v1'
+$readerHeaders = @{ Authorization = 'Bearer <admin-token>' }
+New-Item -ItemType Directory -Force (Join-Path $readerDataDir 'plugins')
+Copy-Item -Recurse examples/plugins/demo-chapters (Join-Path $readerDataDir 'plugins/demo-chapters')
+
+Invoke-RestMethod -Method Post -Uri "$readerApi/plugins" -Headers $readerHeaders `
+  -ContentType 'application/json' -Body '{"folder":"demo-chapters","trusted":true}'
+$createdSource = Invoke-RestMethod -Method Post -Uri "$readerApi/sources" -Headers $readerHeaders `
+  -ContentType 'application/json' -Body '{"pluginId":"reader.source.demo","sourceType":"demo-chapters","name":"Demo chapters","config":{}}'
+$readerSourceId = $createdSource.source.id
+
+Invoke-RestMethod -Uri "$readerApi/sources/$readerSourceId/browse" -Headers $readerHeaders
+Invoke-RestMethod -Uri "$readerApi/sources/$readerSourceId/entries?ref=demo-book" -Headers $readerHeaders
+Invoke-RestMethod -Method Post -Uri "$readerApi/sources/$readerSourceId/acquire" -Headers $readerHeaders `
+  -ContentType 'application/json' -Body '{"entryRef":"demo-book"}'
+Invoke-RestMethod -Uri "$readerApi/sources/$readerSourceId/publications/demo-book/manifest" -Headers $readerHeaders
+Invoke-RestMethod -Uri "$readerApi/sources/$readerSourceId/publications/demo-book/resource?ref=chapter-one" -Headers $readerHeaders
+```
+
+资源响应中的 `text` 应包含“这是通过独立 Node 进程提供的示例章节”。普通成员也可使用自己的令牌调用浏览与章节端点；只有安装插件、创建和启停来源需要管理员。
+
+宿主来源调用预算为 60 秒，同一来源实例最多 2 个并发调用，宿主总计最多 8 个，超限立即返回 `429 RATE_LIMITED`。插件每次 RPC 预算 30 秒、单条 JSON 消息上限 2 MiB（包含 base64 开销）；超时、取消或协议错误会终止整个插件进程及其在途请求。外部进程暂不支持 `acquire.file`，大文件获取由内置 OPDS 提供。
+
+---
+
 ## 管理员
 
 ### `GET /admin/users`
@@ -807,7 +943,7 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 → `{ "providers": [ { "id": "none", "displayName": "...", "enabled": true } ] }`
 
-第一版只有 `none`。在线源接入后会自动出现在这里。
+第一版只有 `none`。此处是元数据补全 provider，与 `/sources` 内容来源独立；安装书源插件不会改变该列表。
 
 ---
 
@@ -850,6 +986,30 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 | `TTS_DISABLED` | 400 | 该实例没有配置 `TTS_URL`，无法使用 HTTP 朗读 |
 | `TTS_UPSTREAM` | 400 | 上游合成服务不可达、超时、报错，或返回的不是音频 |
 | `TEXT_TOO_LONG` | 400 | 单条语句超过 800 字，请客户端先切句 |
+| `INVALID_SOURCE_CONFIG` | 400 | 来源配置不符合内置来源要求 |
+| `SOURCE_UNSUPPORTED` | 400 | 来源未声明或未实现请求能力 |
+| `SOURCE_DISABLED` | 400 | 来源实例已停用 |
+| `SOURCE_NOT_FOUND` | 404 | 来源实例不存在 |
+| `SOURCE_TYPE_NOT_FOUND` | 404 | 来源类型未安装 |
+| `ENTRY_NOT_FOUND` | 404 | 来源条目不存在 |
+| `AUTH_REQUIRED` | 401 | 来源需要凭据或凭据无法解密 |
+| `OPDS_UNSAFE_URL` | 400 | OPDS 链接跳转到未允许的 origin 或包含 URL 凭据 |
+| `RESOURCE_TOO_LARGE` | 413 | OPDS Feed 或资源超过大小限制 |
+| `ACQUISITION_TOO_LARGE` | 413 | 获取文件超过 256 MiB 上限 |
+| `INVALID_RESOURCE` | 400 | 获取内容为空、媒体类型不匹配或解析失败 |
+| `PLUGIN_TRUST_REQUIRED` | 400 | 安装受信任进程插件时未显式确认权限 |
+| `PLUGIN_UNAVAILABLE` | 404 / 503 | 来源插件未注册，或进程不可用 |
+| `RATE_LIMITED` | 429 | 上游限流或宿主来源并发达到上限 |
+| `PLUGIN_TIMEOUT` | 504 | 插件单次 RPC 超过 30 秒 |
+| `PLUGIN_PROTOCOL_ERROR` | 502 | 插件返回了不符合协议的 JSON |
+| `PLUGIN_INCOMPATIBLE` | 400 | 安装包的 API 版本或运行时不受支持 |
+| `PLUGIN_PACKAGE_NOT_FOUND` | 404 | 插件目录、清单或入口文件不存在 |
+| `PLUGIN_INVALID_MANIFEST` | 400 | 插件清单 JSON 或字段不合法 |
+| `PLUGIN_PATH_ESCAPE` | 400 | 插件目录不在 `DATA_DIR/plugins` 内 |
+| `PLUGIN_ALREADY_INSTALLED` | 409 | 插件 ID 或目录已安装 |
+| `BUILTIN_PLUGIN_IMMUTABLE` | 400 | 内置来源不能停用、卸载或替换 |
+| `SOURCE_TIMEOUT` | 504 | 宿主来源调用超过 60 秒 |
+| `SOURCE_CANCELLED` | 499 | 客户端断开或主动取消来源调用 |
 | `INTERNAL` | 500 | 服务端错误 |
 
 ## 客户端应当遵守的约定

@@ -167,7 +167,7 @@ export class ShelfService {
     const library = scope === 'library';
     const where: string[] = library
       ? ['EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)']
-      : ['ub.user_id = ?', 'ub.hidden = 0', 'EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)'];
+      : ['ub.user_id = ?', 'ub.hidden = 0', '(EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0) OR EXISTS (SELECT 1 FROM acquired_files a WHERE a.book_id = b.id))'];
     const params: Array<string | number> = library ? [] : [userId];
 
     if (options.search) {
