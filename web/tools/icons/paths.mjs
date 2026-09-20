@@ -8,87 +8,75 @@
  * mixing a font from one family with glyphs from another is what makes a UI look
  * assembled rather than designed.
  *
- * ## The keys are Font Awesome names
+ * ## The names are the product's, and they are ours
  *
- * Every key is the **Font Awesome 6 free `solid` class name without the `fa-`
- * prefix** — `bars` for `fa-bars`, `magnifying-glass` for `fa-magnifying-glass`,
- * `gear` for `fa-gear`. That is not a rename for its own sake. The names are the
- * vocabulary the rest of the UI reads (`<IconButton icon="magnifying-glass">`), and
- * when they are invented per project the same idea gets three names in three files
- * and nobody can tell which glyph a name will draw without opening this file.
- * Borrowing the names from an open-source set means "the magnifier" has one spelling
- * everywhere, and anyone who knows the set already knows what the name draws.
+ * Every key is an English noun for the *thing the reader sees*, borrowed from the
+ * vocabulary that is already all over this codebase and the web at large: `menu`,
+ * `search`, `close`, `settings`, `library`, `shelf`. Nothing here is invented for the
+ * sake of being different — 菜单 is `menu`, not `hamburger-glyph`, and anyone who has
+ * written a web UI can guess what `arrow-left` draws.
  *
- * It does *not* mean the outlines are Font Awesome's. They are re-drawn here on one
- * grid at one stroke width, because that is what this generator can compile into a
- * font (see `docs/ui.md` §1) — and because stacking a set's names on another set's
- * outlines would be exactly the mixing the paragraph above is against. The name is a
- * label, the geometry is ours. `test/icons.test.ts` pins the mapping both ways.
+ * The set used to borrow the **Font Awesome 6** names verbatim (`bars`,
+ * `magnifying-glass`, `xmark`, `gear`, `table-columns`, `arrows-rotate`, …). It was
+ * reverted, and the reason is worth keeping: a borrowed name is a **claim about
+ * another product's artwork**. `magnifying-glass` is also the name of a Font Awesome
+ * glyph, so a reader who knows that set opens this file expecting the glyph they know
+ * and finds a different one — every time, for every borrowed name. The vocabulary was
+ * supposed to stop "the magnifier has three names"; what it actually did was make the
+ * one name untrustworthy. The geometry was never Font Awesome's, so the names should
+ * not have been either. See `docs/ui.md` §1.2.
+ *
+ * ## What the names have to satisfy
+ *
+ *  - **one glyph per idea**, so a control and its label and its test cannot drift onto
+ *    different shapes;
+ *  - **the name says what it draws**, because that is the only thing that makes a
+ *    name better than a code point;
+ *  - **no two glyphs share a path**, which `test/icons.test.ts` pins by comparing the
+ *    flattened geometry rather than the strings.
  *
  * Only absolute/relative M, L, H, V, C, Q, A and Z are used; see `path.mjs`.
  */
 export const GLYPHS = {
-  'bars': 'M4 6h16M4 12h16M4 18h16',
-  'chevron-left': 'M15 5l-7 7 7 7',
-  'chevron-right': 'M9 5l7 7-7 7',
-  'arrow-left': 'M11 5l-7 7 7 7M4 12h16',
-  'folder': 'M3 7h6l2 2.5h10V19H3z',
-  'file-lines': 'M6.5 3h7l4.5 4.5V21h-11.5z',
-  'sliders': 'M4 8h16M4 16h16M10 4.8v6.4M14 12.8v6.4',
-  'magnifying-glass': 'M10.5 17a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13zM15.5 15.5L20 20',
-  'xmark': 'M6 6l12 12M18 6L6 18',
+  'menu': 'M4 7h16M4 12h16M4 17h16',
+  'chevron-left': 'M14.5 5.5L8 12l6.5 6.5',
+  'chevron-right': 'M9.5 5.5L16 12l-6.5 6.5',
+  'arrow-left': 'M10.5 5.5L4 12l6.5 6.5M4 12h16',
+  'folder': 'M4 6.5h5l1.8 2H20V19H4z',
+  'file-text': 'M7 3.5h6.5L18 8v12.5H7zM13.5 3.5V8H18M10 12h5M10 15.5h5',
+  'sliders': 'M5 8.5h14M5 15.5h14M9.5 5.5v6M14.5 12.5v6',
+  'search': 'M11 16.5a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11zM15 15l4.5 4.5',
+  'close': 'M6.5 6.5l11 11M17.5 6.5l-11 11',
   'plus': 'M12 5v14M5 12h14',
-  'check': 'M5 12.5l4.5 4.5L19 7.5',
-  'file-arrow-up': 'M12 20V6M7 11l5-5 5 5M5 4h14',
-  'trash-can': 'M5 7h14M9 7V4h6v3M7 7l1 13h8l1-13M11 10v7M13 10v7',
-  'file-arrow-down': 'M12 4v14M7 13l5 5 5-5M5 20h14',
-  'arrows-rotate': 'M18.5 12A6.5 6.5 0 1 1 16.4 7M18.5 3.8v4h-4',
+  'check': 'M5.5 12.5l4.5 4.5L18.5 7',
+  'upload': 'M12 20V6.5M7.5 11L12 6.5l4.5 4.5M5 4h14',
+  'trash': 'M5 7h14M9.5 7V4h5v3M7 7l1 13h8l1-13M11 10.5v6M13 10.5v6',
+  'download': 'M12 4v13.5M7.5 13l4.5 4.5 4.5-4.5M5 20h14',
+  'refresh': 'M19 12a7 7 0 1 1-2.3-5.2M19 3.5v4.2h-4.2',
   'book': 'M12 7.2c-1.4-1.2-3.2-1.9-5.4-1.9H4.8v12.4h1.8c2.2 0 4 .7 5.4 1.9M12 7.2c1.4-1.2 3.2-1.9 5.4-1.9h1.8v12.4h-1.8c-2.2 0-4 .7-5.4 1.9M12 7.2v12.4',
-  'table-columns': 'M4 5.5h16M4 18.5h16M8 5.5v13M16 5.5v13',
+  'shelf': 'M4 5.5h16M4 18.5h16M8 5.5v13M16 5.5v13',
   'play': 'M8 5l11 7-11 7z',
-  'pause': 'M9 5v14M15 5v14',
-  'backward-step': 'M18 6v12l-9-6zM6 6v12',
-  'forward-step': 'M6 6v12l9-6zM18 6v12',
+  'pause': 'M9.5 5.5v13M14.5 5.5v13',
+  'step-backward': 'M17.5 6v12l-8-6zM6.5 6v12',
+  'step-forward': 'M6.5 6v12l8-6zM17.5 6v12',
   'stop': 'M7 7h10v10H7z',
-  'volume-high': 'M4 10v4h3l4.5 3.5V6.5L7 10zM15.5 9.8a3 3 0 0 1 0 4.4M18.4 7.4a6.2 6.2 0 0 1 0 9.2',
+  'volume': 'M4 10v4h3l4.5 3.5V6.5L7 10zM15.5 9.8a3 3 0 0 1 0 4.4M18.4 7.4a6.2 6.2 0 0 1 0 9.2',
   'moon': 'M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z',
   'sun': 'M12 16.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zM12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6',
   'eye': 'M2.5 12S6 6.8 12 6.8 21.5 12 21.5 12 18 17.2 12 17.2 2.5 12 2.5 12zM12 14.6a2.6 2.6 0 1 0 0-5.2 2.6 2.6 0 0 0 0 5.2z',
-  'circle-info': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.6v.4',
-  'triangle-exclamation': 'M12 4l9 16H3zM12 10v4M12 17v.4',
+  'info': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 11v6M12 7.6v.4',
+  'warning': 'M12 4l9 16H3zM12 10v4M12 17v.4',
   'clock': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7.5V12l3 2',
-  'folder-open': 'M3 7h6l2 2.5h10V11M3 7v12h5l2-3h11l-2 3H3',
-  'ellipsis': 'M6.2 12h.06M12 12h.06M17.8 12h.06',
-  'pen': 'M4 20h4L20 8l-4-4L4 16zM14 6l4 4',
-  'arrow-down-wide-short': 'M7 5v14M4 16l3 3 3-3M13 6h7M13 11h5M13 16h3',
-  'power-off': 'M12 3v8M7.5 6.5a7 7 0 1 0 9 0',
-  'right-from-bracket': 'M14 5H6v14h8M11 12h10M18 9l3 3-3 3',
-  'circle-plus': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8.5v7M8.5 12h7',
+  'more': 'M6.2 12h.06M12 12h.06M17.8 12h.06',
+  'edit': 'M4 20h4L20 8l-4-4L4 16zM14 6l4 4',
+  'sort': 'M7 5v14M4 16l3 3 3-3M13 6h7M13 11h5M13 16h3',
+  'logout': 'M12 3v8M7.5 6.5a7 7 0 1 0 9 0',
+  'sign-out': 'M14 5H6v14h8M11 12h10M18 9l3 3-3 3',
+  'add-circle': 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8.5v7M8.5 12h7',
   'indent': 'M4 5h16M8 10h12M8 14h12M4 10v4M4 20h16',
-  'font': 'M5 6V4.5h14V6M12 4.5V19M9.5 19h5',
-  'up-down': 'M4 4h16M4 20h16M12 7v10M9.5 9.5L12 7l2.5 2.5M9.5 14.5L12 17l2.5-2.5',
-  'gear': 'M12 6.2L13.68 3.57L15.29 4.05L15.22 7.18L16.1 7.9L19.15 7.22L19.95 8.71L17.69 10.87L17.8 12L20.43 13.68L19.95 15.29L16.82 15.22L16.1 16.1L16.78 19.15L15.29 19.95L13.13 17.69L12 17.8L10.32 20.43L8.71 19.95L8.78 16.82L7.9 16.1L4.85 16.78L4.05 15.29L6.31 13.13L6.2 12L3.57 10.32L4.05 8.71L7.18 8.78L7.9 7.9L7.22 4.85L8.71 4.05L10.87 6.31ZM12 9.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6z',
-  // The two shelf-header controls, re-drawn from the shapes the report rejected.
-  //
-  // The complaint was "顶部右侧的两个 icon 太丑了", and the reason is visible in the
-  // geometry rather than in the taste: the pair was `folder-open` and `gear`. The
-  // folder is an *outline with an open flap*, so it reads as a stack of four
-  // strokes at 18px, and the gear is a twelve-lobed cog whose teeth and hub merge
-  // into a grey rosette at the same size. On a header that also carries a 24px
-  // title, two dense multi-stroke glyphs are the two noisiest things on the row.
-  //
-  // The replacements are the same *ideas* drawn at the set's own weight with the
-  // fewest strokes that still say them:
-  //
-  //  - `books` is the library: three book spines on a shelf, so it stays a book
-  //    shape (the product is a reader, not a file browser) while plainly meaning
-  //    "more than one".
-  //  - `sliders` already exists for settings; the header uses a *tune* shape whose
-  //    two knobs are on one horizontal line, which is one stroke fewer than
-  //    `sliders`' two rails and reads as a control rather than as a list.
-  //
-  // Both are drawn with the ends inside the 24-unit grid rather than at its edge,
-  // which is what keeps them from looking larger than the glyphs beside them.
-  'books': 'M4.5 5.2h3.4v14H4.5zM10.3 5.2h3.4v14h-3.4zM16.6 5.8l3.2.7-2.9 13.3-3.2-.7z',
+  'text-size': 'M5 6V4.5h14V6M12 4.5V19M9.5 19h5',
+  'line-height': 'M4 4h16M4 20h16M12 7v10M9.5 9.5L12 7l2.5 2.5M9.5 14.5L12 17l2.5-2.5',
+  'settings': 'M12 15.4a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8zM19.6 12a7.6 7.6 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7.6 7.6 0 0 0-2.1-1.2L14.6 3H9.4L9 5.7a7.6 7.6 0 0 0-2.1 1.2l-2.4-1-2 3.4 2 1.5a7.6 7.6 0 0 0 0 2.4l-2 1.5 2 3.4 2.4-1a7.6 7.6 0 0 0 2.1 1.2l.4 2.7h5.2l.4-2.7a7.6 7.6 0 0 0 2.1-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z',
+  'library': 'M4.5 5.2h3.4v14H4.5zM10.3 5.2h3.4v14h-3.4zM16.6 5.8l3.2.7-2.9 13.3-3.2-.7z',
   'tune': 'M4 8.5h9M17 8.5h3M4 15.5h3M11 15.5h9M15 6.5v4M9 13.5v4',
 };

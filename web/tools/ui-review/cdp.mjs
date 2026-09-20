@@ -267,11 +267,29 @@ export class CDP {
     await this.#clickAt(box.x, box.y);
   }
 
-  /** Clicks the first element matching `selector` whose trimmed text is `text`. */
+  /**
+   * Clicks the first element matching `selector` whose visible label is `text`.
+   *
+   * Compared on the element's *label* rather than on `textContent`, and the difference
+   * is not pedantry: an icon is a private-use character inside the control, so the raw
+   * text of a button with a glyph beside its words is the glyph followed by the words
+   * — `"\ue927浏览书籍"`, which never equals `"浏览书籍"`. The helper used to compare
+   * the raw text, which worked for as long as every control it was asked for happened
+   * to be pure text.
+   *
+   * The label is the last `<span>` when there is one (which is where `IconTextButton`
+   * puts its words) and the whole text otherwise. A control with no label at all is
+   * matched on its `aria-label`, so an icon-only button is still reachable by name.
+   */
   async clickText(selector, text) {
-    const box = await this.#centreOf(
-      `[...document.querySelectorAll(${JSON.stringify(selector)})].find((n) => n.textContent.trim() === ${JSON.stringify(text)})`,
-    );
+    const box = await this.#centreOf(`(() => {
+      const match = [...document.querySelectorAll(${JSON.stringify(selector)})].find((n) => {
+        const spans = [...n.querySelectorAll('span')];
+        const label = (spans.length > 0 ? spans[spans.length - 1].textContent : n.textContent) ?? '';
+        return label.trim() === ${JSON.stringify(text)} || n.getAttribute('aria-label') === ${JSON.stringify(text)};
+      });
+      return match ?? null;
+    })()`);
     if (!box) throw new Error(`no visible ${selector} with text ${text}`);
     await this.#clickAt(box.x, box.y);
   }

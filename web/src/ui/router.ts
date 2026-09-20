@@ -37,16 +37,36 @@
  */
 
 /**
- * Which half of the library screen is showing.
+ * Which half of the library is showing.
  *
- * `preview` is a grid of the books in a folder; `files` is the file manager. They
- * are two pages of *one* route rather than two routes, and the reason is Back: the
- * switch between them is a tab, and a tab that is its own history entry means Back
- * walks through the tabs instead of leaving the screen. The hash carries it
- * instead — `#/library/preview/科幻` — so a link to a folder can say which half of
- * it the reader meant, and Back still leaves the library.
+ * `browse` is the *reader's* half: a grid of the books in a folder, with a search
+ * field over it, laid out like a shop — this is the page a reader browses and the
+ * page a link to `#/library/科幻` opens. `files` is the *administrator's* half: the
+ * file manager, which is where books are uploaded, renamed, moved and deleted.
+ *
+ * ## Why these are two routes and not two pages of one
+ *
+ * They were one route with a `view` segment for one round of the review (#40), and
+ * the report that split them is the right one: *「两者列表显示逻辑不一样」*. The two
+ * halves do not share a list, a query, an ordering or an audience —
+ *
+ *  - the browse half asks `/books?path=…&search=…` and renders covers of *books*,
+ *    which is the same shape the shelf renders, so it belongs on a page a reader
+ *    can link to and land on;
+ *  - the files half asks `/library/browse?path=…` and renders *rows of files*, and
+ *    every control on it writes to the server's disk.
+ *
+ * A `view` segment made the second one reachable by URL from a link meant for the
+ * first, and made "which half am I on" a property of a tab rather than of the place
+ * the reader is. As two routes, `#/library/科幻` is unambiguously the browsing page,
+ * `#/library/files/科幻` is unambiguously the file manager, and Back from either is
+ * the place the reader came from rather than the other half of the same screen.
+ *
+ * The cost is that switching between them is a *navigation* rather than a tab
+ * switch — Back returns to the half you were on. That is the correct reading of two
+ * screens with different audiences, and it is what the report asked for.
  */
-export type LibraryView = 'preview' | 'files';
+export type LibraryView = 'browse' | 'files';
 
 /** A parsed location. */
 export type Route =
@@ -65,7 +85,23 @@ export type Route =
       /** The library screen's own page, so the shelf can turn pages at all. */
       page: number;
     }
-  | { name: 'library'; path: string; page: number; view: LibraryView; fromShelf: boolean }
+  | {
+      name: 'library';
+      path: string;
+      page: number;
+      /** Which half — see `LibraryView`. `files` is the administrator's. */
+      view: LibraryView;
+      /** The reader came here from the shelf, so leaving goes back there. */
+      fromShelf: boolean;
+      /**
+       * What is typed in the browsing half's search field.
+       *
+       * Carried in the route rather than in the screen because a search *is* a
+       * place: "科幻 books matching 刘慈欣" is a URL a reader can send, and a query
+       * that lives only in a component is one Back, Forward and a reload all drop.
+       */
+      search: string;
+    }
   | { name: 'book'; bookId: string };
 
 /**
@@ -137,9 +173,7 @@ const SHELF: Route = { name: 'shelf', page: 1, libraryPath: '', libraryPage: 1 }
  */
 export function parseRoute(hash: string, context?: RouteContext): Route {
   const raw = hash.startsWith('#') ? hash.slice(1) : hash;
-  const question = raw.indexOf('?');
-  const path = question === -1 ? raw : raw.slice(0, question);
-  const parts = path.split('/').filter((part) => part.length > 0);
+  const parts = pathOf(raw).split('/').filter((part) => part.length > 0);
   if (parts.length === 0) return shelfRoute(context);
   const [head, ...rest] = parts;
   if (head === 'shelf') {
@@ -165,44 +199,73 @@ export function parseRoute(hash: string, context?: RouteContext): Route {
   }
   if (head === 'library') {
     /*
-     * A library URL is `#/library[/<view>][/<folder>…][/<page>]`.
+     * A library URL is
+     *   `#/library[/files][/<folder>…][/<page>][?q=<search>]`.
      *
-     * Three optional parts, and all three are read from the *tail* for the same
-     * reason: a page is a number and a view is one of two known words, so both are
-     * recognisable, and everything left is a folder. That is what makes a folder
-     * genuinely named `preview` reachable as `#/library/files/preview` — the view
-     * segment is only consumed when it is the *first* thing after the route, which
-     * is the position `routeHash` writes it in.
+     * Three optional parts and one query. The path parts are read from the *tail*
+     * for the same reason as before: a page is a number and `files` is one known
+     * word, so both are recognisable, and everything left is a folder. That is what
+     * makes a folder genuinely named `files` reachable as `#/library/files/files` —
+     * the view segment is only consumed when it is the *first* thing after the
+     * route, which is the position `routeHash` writes it in.
      *
-     * The ambiguity is resolvable for the same reason it always was: `routeHash`
-     * below is the only place a library URL is built, so the segment this parser
-     * reads is the one it wrote. A page is only ever appended; a folder named `2`
-     * is `#/library/2` with no preceding segment; and a view is only ever first.
-     *
-     * The alternative was a query string (`?page=2&view=files`) and it is worse
-     * here: the fragment is already the client's private space (see the note at the
-     * top), and a query inside a fragment is one more encoding rule every consumer
-     * has to get right for a value that is a single integer and one of two words.
+     * The search is a real query string (`?q=…`) rather than another path segment,
+     * and this is the one place where a query *is* the right answer: it is free
+     * text, it is optional, it sits *outside* the folder path so a folder can still
+     * contain a slash-free name that looks like a search term, and it is what a
+     * browser's own form of the same page would use. `parseRoute` already strips a
+     * query before splitting the path (see the top of this function), so a shared
+     * link carrying someone else's tracking parameter still resolves to the
+     * folder — only `q` is read, and everything else is ignored.
      */
     const tail = rest.at(-1) ?? '';
     const isPage = rest.length > 1 && /^\d+$/.test(tail);
     const withoutPage = isPage ? rest.slice(0, -1) : rest;
     const head2 = withoutPage[0] ?? '';
-    const isView = head2 === 'preview' || head2 === 'files';
-    const segments = (isView ? withoutPage.slice(1) : withoutPage).map(safeDecode);
+    const isFiles = head2 === 'files';
+    const segments = (isFiles ? withoutPage.slice(1) : withoutPage).map(safeDecode);
     const page = isPage ? Number.parseInt(tail, 10) : 1;
     return {
       name: 'library',
       path: segments.join('/'),
       page: page > 0 ? page : 1,
-      // The preview is the default because it is the *reader's* half: a reader
-      // following a library link almost always means "show me the books in here",
-      // and the file manager is the screen they arrive at deliberately.
-      view: isView ? (head2 as LibraryView) : 'preview',
+      // The browsing half is the default, and it is the default *of the URL* rather
+      // than of the screen: a reader following a library link almost always means
+      // "show me the books in here", and the file manager is where an administrator
+      // arrives deliberately. So `#/library/科幻` opens covers and
+      // `#/library/files/科幻` opens rows, with no second segment needed for the
+      // common case.
+      view: isFiles ? 'files' : 'browse',
       fromShelf: context?.fromShelf ?? false,
+      search: safeDecode(searchParam(raw)),
     };
   }
   return shelfRoute(context);
+}
+
+/**
+ * The part of a fragment before its query.
+ *
+ * A URL is user input and arrives with whatever the sender's client appended to it —
+ * `?from=share`, a utm campaign, a tracking parameter nobody asked for. Those are
+ * *ignored* rather than rejected (an unknown query is not an error), which is why the
+ * path is split off once here instead of at every use: the only query parameter this
+ * app reads is `q` on the library, and everything else has to be unable to change
+ * where a link lands.
+ */
+function pathOf(raw: string): string {
+  const question = raw.indexOf('?');
+  return question === -1 ? raw : raw.slice(0, question);
+}
+
+/** One query parameter of a fragment, or '' when it is absent. */
+function searchParam(raw: string, name = 'q'): string {
+  const question = raw.indexOf('?');
+  if (question === -1) return '';
+  // `URLSearchParams` on the raw tail rather than a regex: `+` means space, `%xx` is
+  // decoded, and a `?`/`&` inside the value is handled by the parser rather than by a
+  // pattern that will be wrong for one of them.
+  return new URLSearchParams(raw.slice(question + 1)).get(name) ?? '';
 }
 
 /**
@@ -241,12 +304,19 @@ export function routeHash(route: Route): string {
       return `#/book/${safeEncode(route.bookId)}`;
     case 'library': {
       const segments = route.path.split('/').filter((segment) => segment.length > 0);
-      // The view segment is omitted when it is the default, so the two URLs for one
-      // place (`#/library` and `#/library/preview`) cannot both exist and make the
-      // router's equality check see a difference where there is none.
-      const parts = [...(route.view === 'preview' ? [] : [route.view]), ...segments];
+      /*
+       * `files` is written only for the file manager, so `#/library` and
+       * `#/library/browse` cannot both exist and make the router's equality check
+       * see a difference where there is none — the same rule the page segment has
+       * always followed.
+       */
+      const parts = [...(route.view === 'files' ? ['files'] : []), ...segments];
       const head = parts.length === 0 ? '#/library' : `#/library/${parts.map(safeEncode).join('/')}`;
-      return route.page > 1 ? `${head}/${route.page}` : head;
+      const paged = route.page > 1 ? `${head}/${route.page}` : head;
+      // The query is written last and only when it is not empty: an empty `?q=` is a
+      // different URL that means the same thing, and a screen with two URLs is a Back
+      // that appears to have done nothing.
+      return route.search === '' ? paged : `${paged}?q=${safeEncode(route.search)}`;
     }
   }
 }
@@ -256,11 +326,14 @@ export function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
   if (a.name === 'book' && b.name === 'book') return a.bookId === b.bookId;
   if (a.name === 'library' && b.name === 'library') {
-    // The view is *not* part of the identity: switching between the two pages of the
-    // library is one screen changing its own argument, so a repaint for it would
-    // throw away the reader's scroll position for no visible reason. The page and
-    // the path do belong to it, because those are where the reader *is*.
-    return a.path === b.path && a.page === b.page;
+    /*
+     * The folder, the page and the search are where the reader *is*; the two halves
+     * are two routes rather than two pages now, so they never meet here. The search
+     * belongs in the list for the reason the page does: a query changes which books
+     * are on screen, so treating it as "the same place" would leave the URL changed
+     * and the grid not.
+     */
+    return a.path === b.path && a.page === b.page && a.search === b.search;
   }
   // The shelf's carried library location is *not* part of its identity: it is what
   // the switch-back control will show, and treating it as a difference would make
@@ -367,18 +440,26 @@ export class Router {
         libraryPage: previous?.name === 'library' ? previous.page : 1,
       };
     }
-    if (route.name === 'library' && previous?.name === 'shelf' && !route.fromShelf) {
+    if (route.name === 'library') {
       /*
-       * A Back into `#/library` from the shelf: the URL says "a library page" and
-       * nothing about how the reader got there, so the trail is the only thing that
-       * knows the switch was made from the shelf. It matters because it decides
-       * whether leaving the library goes *back* to the shelf or *out* of the app.
+       * Two facts about a library route that the hash cannot always say, filled in
+       * from the trail that the URL left behind.
        *
-       * A route already marked `fromShelf` is left alone rather than overwritten:
-       * the flag is on the URL's own meaning as far as the router is concerned, and
-       * this branch only fills in what the hash omitted.
+       * **`fromShelf`.** A Back into `#/library` from the shelf says "a library page"
+       * and nothing about how the reader got there, and it matters because it decides
+       * whether leaving the library goes *back* to the shelf or *out* of the app. A
+       * route already marked `fromShelf` is left alone rather than overwritten: the
+       * flag is on the URL's own meaning as far as the router is concerned, and this
+       * branch only fills in what the hash omitted.
+       *
+       * **The search.** `#/library/科幻` carries no query, so a Back that lands on it
+       * after the reader cleared the field would silently re-run the *previous*
+       * search. The hash is the URL and the URL is the truth, so an empty query in the
+       * hash means an empty query — there is deliberately nothing to carry here. The
+       * note is kept because this is the line somebody will want to add it to, and it
+       * would be wrong.
        */
-      return { ...route, fromShelf: true };
+      if (previous?.name === 'shelf' && !route.fromShelf) return { ...route, fromShelf: true };
     }
     return route;
   }

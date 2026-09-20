@@ -40,16 +40,15 @@ export interface ShelfScreenOptions {
    */
   onOpenLibrary(path: string, page: number): void;
   /**
-   * Switches to the library screen's *file manager*.
+   * Switches to the library's *file manager*, for an administrator.
    *
-   * The shelf has one entry point to the library and it used to open the browsing
-   * half, because that was the only half there was. The screen now has two — books
-   * to browse, files to manage (see `LibraryScreen`) — and the shelf's own button
-   * is about *books*, so it opens the preview page. This callback is the other
-   * direction, kept so the two can be switched between without going back to the
-   * shelf first.
+   * The two halves of the library are two screens now (see `library-screen.tsx`),
+   * and this is the one the shelf offers only to an admin: it is where books are
+   * uploaded, renamed, moved and deleted, so a member would find a page whose every
+   * control answers 403. Absent rather than disabled for that reader — a control that
+   * can only be pressed to no effect teaches them to distrust every other control.
    */
-  onOpenLibraryManager(path: string): void;
+  onOpenLibraryManager?: (path: string) => void;
   /**
    * Reports the page the reader turned to, so the URL can follow it.
    *
@@ -714,17 +713,19 @@ export class ShelfScreen {
               the filters are. It carries the folder and page the reader was last in
               *there*, so switching back and forth is a toggle rather than a reset.
 
-              The two glyphs are `books` and `tune`, and the pair they replaced —
-              `folder-open` and `gear` — was the reported complaint about this row.
-              See `tools/icons/paths.mjs`: at 18px a folder's four strokes and a
-              gear's twelve teeth are the two densest shapes in the set, and a header
-              that also carries a 24px title cannot afford either. The replacements
-              say the same two things with fewer, longer strokes, and they are drawn
-              to the set's own weight so they do not read as a different family.
+              The two glyphs are `library` and `tune`. The row has now been through
+              two rounds of "这个 icon 还是很丑" (#40), and the second round is the
+              reason the *names* changed as well as the shapes: `gear` and
+              `magnifying-glass` were Font Awesome's names on our own outlines, so
+              anyone who knows that set opens `paths.mjs` expecting Font Awesome's
+              artwork and finds a different shape. The set is ours, so it is named
+              ours (`settings`, `search`, `menu` — see `docs/ui.md` §1.2), and the
+              header's two are drawn as few long strokes at 18px: `library` is three
+              spines on a shelf, and `tune` is one rail with two knobs.
             */}
             <IconButton
               label="书库"
-              icon="books"
+              icon="library"
               onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}
             />
             <IconButton
@@ -736,7 +737,7 @@ export class ShelfScreen {
         </header>
 
         <div className="shelf-search" role="search">
-          <Icon name="magnifying-glass" class="search-glyph" />
+          <Icon name="search" class="search-glyph" />
           <input
             type="search"
             placeholder="搜索书名、作者、系列"
@@ -758,7 +759,7 @@ export class ShelfScreen {
           />
           {state.search.length > 0 ? (
             <button type="button" className="search-clear" aria-label="清除搜索" onClick={() => this.clearSearch()}>
-              <Icon name="xmark" />
+              <Icon name="close" />
             </button>
           ) : null}
         </div>
@@ -797,7 +798,7 @@ export class ShelfScreen {
           {!state.bootstrapping && empty ? (
             hasQuery ? (
               <div className="empty-state">
-                <Icon name="magnifying-glass" class="empty-glyph" />
+                <Icon name="search" class="empty-glyph" />
                 <p>没有匹配的书</p>
                 <p className="muted">换个关键词，或者检查一下作者名的写法</p>
                 <button type="button" className="button" onClick={() => this.clearSearch()}>
@@ -813,11 +814,11 @@ export class ShelfScreen {
                 </p>
                 <div className="empty-actions">
                   <IconTextButton
-                    icon="books"
+                    icon="library"
                     label="打开书库"
                     onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}
                   />
-                  <IconTextButton icon="arrows-rotate" label="刷新" onClick={() => void this.manualRefresh()} />
+                  <IconTextButton icon="refresh" label="刷新" onClick={() => void this.manualRefresh()} />
                 </div>
               </div>
             )

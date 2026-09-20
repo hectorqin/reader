@@ -19,7 +19,7 @@ import type { AppSettings } from '../store/settings.ts';
 import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ComponentChildren, type JSX } from './vendor/preact.ts';
 import { IconButton, SectionTitle } from './toolkit.tsx';
-import { ICON_CODEPOINTS, type IconName } from './icon-names.ts';
+import { ICON_CODEPOINT_TABLE, type IconName } from './icon-names.ts';
 
 /**
  * A table-of-contents row.
@@ -167,7 +167,7 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           somewhere the screen cannot go is worse than one fewer button. */}
       <div className="topbar" hidden={!state.chromeVisible}>
         <TopButton icon="arrow-left" label="返回" onClick={handlers.onBack} />
-        <TopButton icon="bars" label="目录" onClick={handlers.toggleToc} />
+        <TopButton icon="menu" label="目录" onClick={handlers.toggleToc} />
         <TopButton icon="sliders" label="设置" onClick={handlers.toggleSettings} />
       </div>
 
@@ -257,12 +257,12 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           onClick={() => handlers.onSetting({ theme: nextTheme(state.theme) })}
         />
         <RailButton
-          icon="font"
+          icon="text-size"
           label="字号"
           onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })}
         />
         <RailButton
-          icon={state.tts.active ? 'pause' : 'volume-high'}
+          icon={state.tts.active ? 'pause' : 'volume'}
           label={state.tts.active ? '暂停朗读' : '听书'}
           pressed={state.tts.active}
           onClick={handlers.onSpeechToggle}
@@ -442,7 +442,7 @@ function Panel({
         <div className="panel-header">
           <h2>{title}</h2>
           {subtitle ? <span className="panel-subtitle">{subtitle}</span> : null}
-          <IconButton label="关闭" icon="xmark" onClick={onClose} />
+          <IconButton label="关闭" icon="close" onClick={onClose} />
         </div>
         <div className="panel-body">{children}</div>
       </div>
@@ -462,7 +462,7 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
       <SectionTitle>快捷</SectionTitle>
       <div className="quick-row">
         <QuickButton
-          icon="font"
+          icon="text-size"
           label="字号"
           value={`${Math.round(state.fontScale * 100)}%`}
           onClick={() => handlers.onSetting({ fontScale: stepFontScale(state.fontScale, 1) })}
@@ -475,7 +475,7 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
           onClick={() => handlers.onSetting({ txtIndent: stepIndent(state.txtIndent) })}
         />
         <QuickButton
-          icon="up-down"
+          icon="line-height"
           label="段间距"
           value={state.showTxtRows ? `${state.txtParagraphGap.toFixed(2)} 字` : '—'}
           disabled={!state.showTxtRows}
@@ -774,13 +774,13 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
           and the row always fits: no fixed widths to run out of, and the targets
           grow with the screen instead of huddling in the middle of a tablet. */}
       <div className="tts-row tts-controls">
-        <IconButton label="上一句" icon="backward-step" onClick={handlers.onSpeechPrevious} />
+        <IconButton label="上一句" icon="step-backward" onClick={handlers.onSpeechPrevious} />
         <IconButton
           label={playing ? '暂停朗读' : '继续朗读'}
           icon={playing ? 'pause' : 'play'}
           onClick={handlers.onSpeechToggle}
         />
-        <IconButton label="下一句" icon="forward-step" onClick={handlers.onSpeechNext} />
+        <IconButton label="下一句" icon="step-forward" onClick={handlers.onSpeechNext} />
         <button
           type="button"
           className="tts-chip"
@@ -791,7 +791,7 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
         </button>
         {/* Stop is last and it is the one destructive control, so it is separated
             by its own colour rather than by position alone. `stop` rather than
-            `xmark`: the ✕ read as "close this bar", which is what pause does not
+            `close`: the ✕ read as "close this bar", which is what pause does not
             do — the reader who wanted the voice to stop pressed it, got a hidden
             bar, and heard the book keep reading. Stop is now a square, which is
             the universal transport glyph for exactly this. */}
@@ -965,7 +965,7 @@ function RailButton({
 
 /** The glyph for an icon name, from the generated code point table. */
 function iconGlyph(name: IconName): string {
-  return ICON_CODEPOINTS[name];
+  return ICON_CODEPOINT_TABLE[name];
 }
 
 /**

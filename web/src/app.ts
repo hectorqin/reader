@@ -17,7 +17,7 @@ import { SettingsStore, DEFAULT_APP_SETTINGS, type AppSettings } from './store/s
 import { ShelfScreen } from './ui/shelf-screen.tsx';
 import { ReaderScreen } from './ui/reader-screen.tsx';
 import { LoginScreen } from './ui/login-screen.tsx';
-import { LibraryScreen } from './ui/library-screen.tsx';
+import { LibraryBrowseScreen, LibraryFilesScreen } from './ui/library-screen.tsx';
 import { el } from './ui/dom.ts';
 import { Router, type LibraryView, type Route, type RouteLocation } from './ui/router.ts';
 
@@ -64,23 +64,39 @@ export class App {
   private settingsStore!: SettingsStore;
   private sync!: SyncEngine;
   private settings: AppSettings = { ...DEFAULT_APP_SETTINGS };
+  /**
+   * The signed-in account's role, which decides one thing: whether the library's
+   * *file manager* is reachable at all.
+   *
+   * `null` until the server has answered — and every write page is treated as
+   * admin-only while it is unknown, because "we have not asked yet" must not be a
+   * moment during which a member can open the page that deletes files. `member` is
+   * the honest default for the same reason: it is the role with fewer powers.
+   *
+   * A boolean rather than the `User` because the role is the only field any screen
+   * branches on, and a field that holds a whole session object is a field that
+   * eventually holds a token where a component can see it.
+   */
+  private isAdmin = false;
 
   private shelf: ShelfScreen | null = null;
   private reader: ReaderScreen | null = null;
   /**
-   * The library: a browsing page and a file manager over one place.
+   * The library, as two screens: the browsing page and the file manager.
    *
-   * A screen rather than a panel because it navigates: it has its own path, its own
-   * back action and its own selection state, and a panel over the shelf would have
-   * to reimplement all three badly. The path is a route, so "its own path" is
-   * literal — `#/library/preview/科幻/刘慈欣`.
+   * They are deliberately *not* one screen with two tabs. The browsing page answers
+   * "what is in here" for a reader — a grid of covers, a search field, one action per
+   * card — and the file manager answers "where is my book and let me move it" for an
+   * administrator, where every control writes to the disk. Their lists, their
+   * toolbars, their page sizes and their audiences have nothing in common, so sharing
+   * a header made both worse (#40: 「两者列表显示逻辑不一样」).
    *
-   * It replaced two screens, and the pairing is the point: the file manager could
-   * say *where a book is* and the shelf could say *which books are mine*, and
-   * neither could say "this file is not on your shelf, tap here to put it there" —
-   * which is the one action the library exists to offer. See `library-screen.tsx`.
+   * Each is a route of its own (`#/library/科幻` and `#/library/files/科幻`), so a
+   * link a reader is handed opens the page a reader can use, and the file manager is
+   * somewhere an administrator navigates to on purpose.
    */
-  private library: LibraryScreen | null = null;
+  private browse: LibraryBrowseScreen | null = null;
+  private files: LibraryFilesScreen | null = null;
   /**
    * Native fixed-layout renderer, present only in the Android shell.
    *
@@ -163,7 +179,7 @@ export class App {
       // also the one place the session is checked, so a deep link into a book
       // cannot get in ahead of it.
       try {
-        await this.api.me();
+        this.isAdmin = (await this.api.me()).role === 'admin';
         this.enterApp();
         this.sync.start();
       } catch (err) {
@@ -227,6 +243,22 @@ export class App {
      * `showShelf`/`showLibrary`/`showBook` compare what *they* need, and nothing
      * downstream has to guess whether "same" means "nothing to do".
      */
+    /*
+     * The file manager is admin-only, and the guard is *here* rather than on the
+     * button that leads to it.
+     *
+     * A route is a URL and a URL is user input: it arrives from a bookmark, from a
+     * chat message, from a link built by hand — and the page behind it can delete
+     * files from the server's disk. Hiding the button is a *hint* to the reader that
+     * the page is not theirs; this is the check. A member who follows such a link
+     * lands on the browsing half of the same folder rather than on an error page,
+     * because the library is a place they are allowed to be and the folder is the
+     * part of it the link was actually about.
+     */
+    if (route.name === 'library' && route.view === 'files' && !this.isAdmin) {
+      this.showLibrary({ ...route, view: 'browse' }, location);
+      return;
+    }
     switch (route.name) {
       case 'shelf':
         this.showShelf(route);
@@ -244,8 +276,10 @@ export class App {
     this.reader = null;
     this.shelf?.dispose();
     this.shelf = null;
-    this.library?.dispose();
-    this.library = null;
+    this.browse?.dispose();
+    this.browse = null;
+    this.files?.dispose();
+    this.files = null;
     this.root.replaceChildren();
   }
 
@@ -313,9 +347,23 @@ export class App {
       libraryPage: route.libraryPage,
       onOpenBook: (book) => this.openBook(book),
       onOpenLibrary: (path, page) =>
-        this.router?.navigate({ name: 'library', path, page, view: 'preview', fromShelf: true }),
-      onOpenLibraryManager: (path) =>
-        this.router?.navigate({ name: 'library', path, page: 1, view: 'files', fromShelf: true }),
+        this.router?.navigate({ name: 'library', path, page, view: 'browse', fromShelf: true, search: '' }),
+      // Only offered to an admin, and only ever a *hint*: the route itself is
+      // guarded in `render` below, because a URL is user input and a hidden button
+      // is not a permission check.
+      ...(this.isAdmin
+        ? {
+            onOpenLibraryManager: (path: string) =>
+              this.router?.navigate({
+                name: 'library',
+                path,
+                page: 1,
+                view: 'files',
+                fromShelf: true,
+                search: '',
+              }),
+          }
+        : {}),
       onPageChange: (page) =>
         this.router?.navigate(
           { name: 'shelf', page, libraryPath: route.libraryPath, libraryPage: route.libraryPage },
@@ -333,86 +381,141 @@ export class App {
   }
 
   /**
-   * A folder, a page of one, and which half of the library is showing.
+   * The library: which half, which folder, which page, which query.
    *
-   * The path comes from the route, and walking into a folder *replaces* it rather
-   * than pushing: the library is one screen with a breadcrumb, so a reader who walked
-   * four folders deep expects Back to leave the screen, not to walk out of it one
-   * folder at a time.
+   * One entry point for two screens, because the *route* is one route with a `view`
+   * on it, and because both halves ask the shell the same question — "where am I" —
+   * through the same accessor. See `browse` / `files` on the class for why the two
+   * halves are two screens rather than two tabs.
    *
-   * Switching between the library's two pages is `replace`d for the same reason and
-   * one more: the two are *tabs*, and a tab that pushed would make Back walk through
-   * the tabs instead of leaving the screen — which is why the view lives in the hash
-   * rather than being separate routes.
+   * Walking into a folder and turning a page *replace* the entry rather than pushing:
+   * each is one screen changing its own argument, so a reader who walked four folders
+   * deep expects Back to leave the library. Moving *between* the two halves pushes,
+   * because that is a step from one screen to another and Back should return to the
+   * one they were on.
    */
   private showLibrary(
-    route: { name: 'library'; path: string; page: number; view: LibraryView; fromShelf: boolean },
+    route: {
+      name: 'library';
+      path: string;
+      page: number;
+      view: LibraryView;
+      fromShelf: boolean;
+      search: string;
+    },
     location: RouteLocation,
   ): void {
-    const same = this.route?.name === 'library';
-    this.route = route;
-    if (same && this.library) {
-      // Already here: tell the existing screen to walk or to switch tabs, rather than
-      // rebuilding it and losing the selection the reader had in the folder they came
-      // from.
-      void this.library.open(route.path, route.page, route.view);
-      return;
-    }
-    this.clearScreens();
     /*
      * The screen asks the *shell* where it is, rather than closing over the route it
      * was built with.
      *
-     * This is not a style choice. The screen is built once and then walks through
-     * folders and tabs by `replace`-navigating, so a callback that captured `route`
-     * would keep answering with the folder the reader *arrived* in — and the failure
-     * is silent and specific: turning to page two of `#/library/preview/科幻`
-     * produced `#/library/2`, i.e. page two of the root, because `route.path` was
-     * still `''`. One accessor that reads `this.route` is the same fix for the
-     * folder, the page, the view and the shelf's carried location, and it cannot
-     * drift from the screen's own `state`.
+     * This is not a style choice. A screen is built once and then walks through
+     * folders by `replace`-navigating, so a callback that captured `route` would keep
+     * answering with the folder the reader *arrived* in — and the failure is silent
+     * and specific: turning to page two of `#/library/科幻` produces `#/library/2`,
+     * i.e. page two of the root, because `route.path` was still `''`. One accessor
+     * that reads `this.route` is the same fix for the folder, the page, the query and
+     * the shelf's carried location, and it cannot drift from the screen's own state.
      */
-    const here = (): { path: string; page: number; view: LibraryView; fromShelf: boolean } => {
+    const here = (): {
+      path: string;
+      page: number;
+      view: LibraryView;
+      fromShelf: boolean;
+      search: string;
+    } => {
       const current = this.route;
       if (current?.name === 'library') return current;
-      return { path: route.path, page: route.page, view: route.view, fromShelf: route.fromShelf };
+      return { path: route.path, page: route.page, view: route.view, fromShelf: route.fromShelf, search: route.search };
     };
-    const library = new LibraryScreen({
+
+    /*
+     * Leaving the library goes back to the shelf when the reader *came* from it, and
+     * out of the app otherwise.
+     *
+     * That is what `fromShelf` is for: a link to `#/library/科幻` pasted into a fresh
+     * tab has no shelf behind it, and `location.back()` would push a shelf the reader
+     * has never seen into their history — so Back would then return them to a screen
+     * they did not ask for. The router's own trail answers the same question where it
+     * can, and this is the fallback.
+     */
+    const close = (): void => location.back();
+
+    const common = {
       api: this.api,
       offline: this.offline,
       settings: this.settings,
-      onSettingsChange: (patch) => {
+      onSettingsChange: (patch: Partial<AppSettings>): void => {
         void this.settingsStore.update(patch);
         this.settings = { ...this.settings, ...patch };
       },
-      view: route.view,
+      onOpenBook: (book: Book) => this.openBook(book),
+      onClose: close,
+      onSignedOut: () => this.handleSignedOut(),
+    };
+
+    if (route.view === 'files') {
+      const same = this.route?.name === 'library' && this.files !== null;
+      this.route = route;
+      if (same && this.files) {
+        void this.files.open(route.path, route.page);
+        return;
+      }
+      this.clearScreens();
+      const files = new LibraryFilesScreen({
+        ...common,
+        path: route.path,
+        page: route.page,
+        fromShelf: route.fromShelf,
+        // A *push*, so Back returns to the page the reader was reading. The other
+        // direction is pushed from the browsing screen for the same reason.
+        onOpenBrowse: (path) =>
+          this.router?.navigate(
+            { name: 'library', path, page: 1, view: 'browse', fromShelf: here().fromShelf, search: '' },
+          ),
+        onOpenLibrary: (path, page, replace) =>
+          this.router?.navigate(
+            { name: 'library', path, page, view: 'files', fromShelf: here().fromShelf, search: '' },
+            { replace },
+          ),
+      });
+      this.files = files;
+      this.root.append(files.element);
+      void files.open(route.path, route.page);
+      return;
+    }
+
+    const same = this.route?.name === 'library' && this.browse !== null;
+    this.route = route;
+    if (same && this.browse) {
+      void this.browse.open(route.path, route.page, route.search);
+      return;
+    }
+    this.clearScreens();
+    const browse = new LibraryBrowseScreen({
+      ...common,
       path: route.path,
       page: route.page,
+      search: route.search,
       fromShelf: route.fromShelf,
-      onClose: () => {
-        /*
-         * Leaving the library goes back to the shelf when the reader *came* from it,
-         * and out of the app otherwise.
-         *
-         * That is what `fromShelf` is for: a link to `#/library/preview/科幻` pasted
-         * into a fresh tab has no shelf behind it, and `location.back()` would push
-         * a shelf the reader has never seen into their history — so Back would then
-         * return them to a screen they did not ask for. The router's own trail
-         * answers the same question where it can, and this is the fallback.
-         */
-        location.back();
-      },
-      onOpenBook: (book) => this.openBook(book),
-      onOpenLibrary: (path, page, view, replace) =>
+      onOpenFiles: () =>
+        this.router?.navigate({
+          name: 'library',
+          path: here().path,
+          page: 1,
+          view: 'files',
+          fromShelf: here().fromShelf,
+          search: '',
+        }),
+      onOpenBrowse: (path, page, search, replace) =>
         this.router?.navigate(
-          { name: 'library', path, page, view, fromShelf: here().fromShelf },
+          { name: 'library', path, page, view: 'browse', fromShelf: here().fromShelf, search },
           { replace },
         ),
-      onSignedOut: () => this.handleSignedOut(),
     });
-    this.library = library;
-    this.root.append(library.element);
-    void library.open(route.path, route.page, route.view);
+    this.browse = browse;
+    this.root.append(browse.element);
+    void browse.open(route.path, route.page, route.search);
   }
 
   /**
