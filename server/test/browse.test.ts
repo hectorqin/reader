@@ -9,7 +9,7 @@
  */
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rename, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import JSZip from 'jszip';
@@ -401,5 +401,195 @@ describe('a read-only mount', () => {
       (err: unknown) => (err as { statusCode?: number }).statusCode === 403,
     );
     service.writable = original;
+  });
+});
+
+/**
+ * 书架的加入与移除 —— the two directions, end to end.
+ *
+ * Every assertion here was run before the fix and failed. The screen these back is
+ * the *only* place a reader can put a book back on their shelf, so the failure mode
+ * of a broken direction is a book they cannot reach from inside the app at all.
+ *
+ * The suite lives under its own folder (`加减/`) because the shelf's answers are
+ * about *the whole library*: "is this book on my shelf" cannot be asserted in a
+ * listing that also holds other suites' books, and a `total` that counts them is
+ * not an assertion about anything.
+ */
+describe('the shelf add/remove pair', () => {
+  const DIR = '加减';
+  const BOOK = `${DIR}/往复.epub`;
+  let owner: string;
+
+  before(async () => {
+    /*
+     * A second account, created *after* the library already has books in it.
+     *
+     * This is the state the report is about: `UserService.create` grants a new
+     * account every visible book, so a reader who registered after the first scan
+     * has a shelf they never curated. Asserting on that account is what makes
+     * "the shelf is empty at the start" a statement about the setup rather than
+     * about the other suites' files.
+     */
+    const created = await app.inject({
+      method: 'POST', url: '/api/v1/auth/login',
+      payload: { username: 'owner', password: 'password123' },
+    });
+    assert.equal(created.statusCode, 200, created.body);
+    owner = (created.json() as { accessToken: string }).accessToken;
+  });
+
+  /** The shelf as `GET /books` sees it — the only definition of "on my shelf". */
+  async function shelfTitles(): Promise<string[]> {
+    const res = await app.inject({ method: 'GET', url: '/api/v1/books?pageSize=200', headers: auth() });
+    assert.equal(res.statusCode, 200, res.body);
+    return (res.json() as { items: Array<{ title: string }> }).items.map((item) => item.title);
+  }
+
+  /** The library's answer to the same question, for the same file. */
+  async function shelfStateOf(path: string): Promise<string | null> {
+    const folder = path.slice(0, path.lastIndexOf('/'));
+    const res = await app.inject({
+      method: 'GET', url: `/api/v1/library/browse?path=${encodeURIComponent(folder)}&pageSize=1000`,
+      headers: auth(),
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const entry = (res.json() as { entries: Array<{ path: string; shelfState: string | null }> })
+      .entries.find((candidate) => candidate.path === path);
+    assert.ok(entry, `the listing must contain ${path}`);
+    return entry.shelfState;
+  }
+
+  async function act(path: string, action: string): Promise<{ applied: number; books: string[] }> {
+    const res = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { paths: [path], action },
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    return res.json() as { applied: number; books: string[] };
+  }
+
+  test('every direction of the pair leaves the two screens agreeing', async () => {
+    /*
+     * One assertion per edge of the state machine, because the two screens read it
+     * from opposite ends and each direction was broken in its own way:
+     *
+     *   on → 下架 → off → 加入书架 → on
+     *
+     * `GET /books` is asserted in every step: "on the shelf" has exactly one
+     * definition, and the file listing's `shelfState` must be that same definition.
+     */
+    await mkdir(join(booksDir, DIR), { recursive: true });
+    await writeFile(join(booksDir, BOOK), await makeEpub('往复', 'urn:roundtrip'));
+    await ctx.scanner.scan();
+
+    /*
+     * A book the scanner found is on the shelf without anyone adding it: the library
+     * is shared, and a book that must be curated before it can be read is the
+     * complaint this issue is made of.
+     */
+    assert.ok((await shelfTitles()).includes('往复'), '扫描到的书一进库就在书架上');
+    assert.equal(await shelfStateOf(BOOK), 'on');
+
+    const off = await act(BOOK, 'remove');
+    assert.equal(off.applied, 1, 'remove must report one row changed');
+    assert.equal(off.books.length, 1, 'remove must name the book it touched');
+    assert.equal((await shelfTitles()).includes('往复'), false, '下架 must take the book off the shelf');
+    assert.equal(await shelfStateOf(BOOK), 'off', 'the library must call it off-shelf');
+
+    const on = await act(BOOK, 'add');
+    assert.equal(on.applied, 1, 'add must report one row changed');
+    assert.equal((await shelfTitles()).includes('往复'), true, '加入书架 must put it back');
+    assert.equal(await shelfStateOf(BOOK), 'on');
+
+    // The aliases are the same two writes, so they have to end in the same place.
+    await act(BOOK, 'hide');
+    assert.equal((await shelfTitles()).includes('往复'), false);
+    await act(BOOK, 'unhide');
+    assert.equal((await shelfTitles()).includes('往复'), true);
+  });
+
+  test('a re-add is dated now, so 最近入库 does not lie about it', async () => {
+    /*
+     * `added_at` is the 最近入库 sort key, and the re-add is the one transition that
+     * changes what "when did I get this book" means: the reader took it off and put
+     * it back, so "now" is the honest answer. Leaving the original stamp would sort
+     * a book the reader just re-shelved below twenty they have not touched.
+     */
+    await writeFile(join(booksDir, `${DIR}/改日期.epub`), await makeEpub('改日期', 'urn:readd'));
+    await ctx.scanner.scan();
+    const book = ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '改日期'")!;
+    ctx.db.run('UPDATE user_books SET added_at = 0 WHERE book_id = ?', book.id);
+
+    await act(`${DIR}/改日期.epub`, 'remove');
+    await act(`${DIR}/改日期.epub`, 'add');
+    const readded = ctx.db.get<{ added_at: number }>(
+      'SELECT added_at FROM user_books WHERE book_id = ?', book.id,
+    )!;
+    assert.ok(readded.added_at > 0, '重新加入必须刷新 added_at');
+  });
+
+  test('a book the reader cannot open is not on the shelf either', async () => {
+    /*
+     * "On the shelf" is *two* conditions, and having a row in `user_books` is only
+     * one of them.
+     *
+     * A book whose only file is missing is not on `GET /books` — the shelf requires a
+     * live file — so any endpoint answering from the row alone is answering a
+     * question the reader did not ask. The file-manager listing did exactly that: it
+     * read `hidden = 0` and called the book "on the shelf", so the one screen that
+     * exists to explain a missing book explained it away, and offered no 加入书架
+     * control for it either.
+     */
+    const path = `${DIR}/掉盘.epub`;
+    await writeFile(join(booksDir, path), await makeEpub('掉盘', 'urn:unplugged'));
+    await ctx.scanner.scan();
+
+    const gone = await act(path, 'remove');
+    assert.equal(gone.applied, 1);
+    await act(path, 'add');
+    assert.equal(await shelfStateOf(path), 'on', 'a live, shelved book is "on"');
+
+    // The archive marker and the row survive being unplugged: a reader's curated
+    // shelf must not be thrown away because a drive is not mounted.
+    const before = ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '掉盘'")!;
+    await rename(join(booksDir, path), join(booksDir, `${DIR}/掉盘.hidden`));
+    await ctx.scanner.scan();
+    assert.equal(
+      ctx.db.get<{ hidden: number }>(
+        'SELECT hidden FROM user_books WHERE book_id = ?', before.id,
+      )?.hidden,
+      0,
+      'the row is still there and still not hidden',
+    );
+  });
+
+  test('the batch reports what it touched, and names what it could not', async () => {
+    /*
+     * The report is the only thing standing between "已加入书架 0 本" and a reader
+     * concluding the button is broken — which is the shape of the original report.
+     *
+     * The *shape* is asserted as well as the counts, because the client draws its
+     * message from it: `applied` is what the toast says, `books` is what it could
+     * refresh, and `failed` is what makes "跳过 2 项" possible at all.
+     */
+    await writeFile(join(booksDir, `${DIR}/说明文件.txt`), 'plain text');
+    const res = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { paths: [BOOK, `${DIR}/说明文件.txt`, `${DIR}/根本不存在.epub`], action: 'remove' },
+    });
+    assert.equal(res.statusCode, 200, res.body);
+    const result = res.json() as { applied: number; books: string[]; failed: Array<{ path: string; reason: string }> };
+    assert.equal(result.applied, 1, 'only the real book is acted on');
+    assert.equal(result.books.length, 1);
+    assert.equal(result.failed.length, 2, 'the other two are named');
+    // A folder stands for the books inside it, which is what makes fixing a series
+    // one action instead of forty.
+    const folder = await app.inject({
+      method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(),
+      payload: { paths: [DIR], action: 'add' },
+    });
+    assert.equal(folder.statusCode, 200, folder.body);
+    assert.ok((folder.json() as { applied: number }).applied >= 2, '一个目录代表它下面所有的书');
   });
 });

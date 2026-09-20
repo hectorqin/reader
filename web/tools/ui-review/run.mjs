@@ -83,6 +83,12 @@ const SCENES = [
     page: 2,
   },
   {
+    name: '17-shelf-unshelve',
+    label: '书架 · 从书架拿掉',
+    what: '封面右上角的「⋯」打开后的动作菜单，以及「从书架拿掉」的确认框：写清只是从书架拿掉、磁盘上的文件不动',
+    shelfMenu: true,
+  },
+  {
     name: '15-library-preview-shelve',
     label: '书库 · 浏览 · 上架',
     what: '点了某本书的「加入书架」之后：报告、目录重读，以及角标消失的那一本',
@@ -1342,6 +1348,52 @@ async function audit(cdp, origin, scenes, results) {
   );
 
   /*
+   * 书架上「从书架拿掉」的入口，量的是**墨迹和形状**而不是它存在。
+   *
+   * The control is a glyph in a corner over a cover, which is the one place on this
+   * screen where two things can overlap without looking wrong: the cover is an image
+   * and the glyph is drawn on top of it, so a button that is the right size in the DOM
+   * and *three pixels of ink* on screen passes every functional test. Both are
+   * measured — the hit area, because it is what the finger aims at, and the glyph,
+   * because a 28px hit area around a 9px glyph is a control nobody can see.
+   *
+   * `hover: hover` is not emulated, so the button is at its resting `opacity: 0.55` —
+   * which is the state a touch device shows it in, and the reason the ink has to be
+   * measured rather than the box.
+   */
+  const shelfMenu = await cdp.evaluate(`(() => {
+    const button = document.querySelector('.book-card .book-more');
+    const card = document.querySelector('.book-card');
+    const open = document.querySelector('.book-card .book-open');
+    if (!button || !card || !open) return { missing: true };
+    const br = button.getBoundingClientRect();
+    const cr = card.getBoundingClientRect();
+    const or = open.getBoundingClientRect();
+    const style = getComputedStyle(button);
+    return {
+      hit: { w: br.width, h: br.height },
+      // Inside the card, because a control that hangs over the gap between two cards
+      // belongs to neither and is pressed by mistake while the reader is scrolling.
+      inside: br.left >= cr.left - 0.5 && br.right <= cr.right + 0.5
+        && br.top >= cr.top - 0.5 && br.bottom <= cr.bottom + 0.5,
+      /* The open-target still covers the cover: the glyph must not have taken the
+         press area the reader uses to open the book. */
+      openCovers: or.width >= cr.width - 0.5 && or.height >= cr.height - 0.5,
+      opacity: Number(style.opacity),
+      label: button.getAttribute('aria-label') ?? '',
+    };
+  })()`);
+  check(
+    '书架: 每张封面有一个「⋯」操作入口，按得着也看得见',
+    !shelfMenu.missing && shelfMenu.hit.w >= 28 && shelfMenu.hit.h >= 28
+      && shelfMenu.inside && shelfMenu.openCovers && shelfMenu.opacity >= 0.5,
+    shelfMenu.missing
+      ? '没有找到 .book-more'
+      : `${shelfMenu.hit.w.toFixed(1)}×${shelfMenu.hit.h.toFixed(1)} 在卡片内=${shelfMenu.inside}`
+        + ` / 开书区覆盖整卡=${shelfMenu.openCovers} / 静止不透明度 ${shelfMenu.opacity}`,
+  );
+
+  /*
    * The library's two halves, as two screens.
    *
    * This block replaces the one that checked a *tab* — which is the whole of what the
@@ -1787,14 +1839,33 @@ async function main() {
        * report, and lets the reload settle. What the picture then shows is the state
        * after the repair, which is the state the feature is about.
        */
+      if (scene.shelfMenu) {
+        /*
+         * The shelf's own remove flow, taken the way the reader takes it.
+         *
+         * A screenshot of a ⋯ glyph is evidence of nothing: the control is *two* presses
+         * deep (the menu, then the confirmation) and what has to be visible is the
+         * sentence in the middle — the one that says the file is not touched, which is
+         * the question a reader actually has before pressing 下架.
+         */
+        await cdp.click('.book-card .book-more');
+        await cdp.waitFor('document.querySelector(".dialog-list button") !== null', 10_000);
+        await cdp.clickText('.dialog-list button', '从书架拿掉');
+        await cdp.waitFor(
+          `/磁盘上的文件一个都不会动/.test(document.querySelector('.dialog')?.textContent ?? '')`,
+          10_000,
+        );
+        await cdp.sleep(300);
+      }
+
       if (scene.shelveFirst) {
         await cdp.click('.book-shelve');
-        // The browsing page reports the write in its own words ("已加入书架 N 本"): it
-        // is a *shop*, and the batch verbs the file page uses ("已更新 N 本") describe a
-        // selection rather than a tap on a cover. Either is accepted, because what the
-        // wait is for is the *report*, whichever page wrote it.
+        // The browsing page reports the write in the reader's own verb ("加入书架 N 本"):
+        // it is a *shop*, and `已更新 N 本` describes a batch of rows rather than a tap on
+        // one cover. The wait is for the *report*, which is what proves the write
+        // happened and the folder was read back.
         await cdp.waitFor(
-          `/(已加入书架|已更新)/.test(document.querySelector('.manager-status')?.textContent ?? '')`,
+          `/加入书架 \\d+ 本/.test(document.querySelector('.manager-status')?.textContent ?? '')`,
           10_000,
         );
         await cdp.sleep(500);
