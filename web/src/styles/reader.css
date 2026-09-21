@@ -3896,6 +3896,8 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .shelf-settings .panel-header { padding: .75rem 1rem; flex: none; }
 .shelf-settings .panel-header h2 { flex: 1; }
 .shelf-settings .panel-header > .icon-button { flex: none; margin-inline-start: auto; width: 44px; height: 44px; }
+.shelf-settings .panel-body { padding-top: 0; }
+.shelf-settings .section-title:first-child { margin-top: 0; }
 @media (min-width: 72rem) {
   .collection-header, .library-browse-body { width: 100%; max-width: 68rem; margin-inline: auto; }
 }

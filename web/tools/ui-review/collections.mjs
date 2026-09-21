@@ -67,6 +67,20 @@ try {
     const close = page.locator('.shelf-settings button[aria-label="关闭"]');
     await shot('shelf-settings-' + width);
     assert.equal(await close.evaluate(el => { const r = el.getBoundingClientRect(), p = el.closest('.panel-header').getBoundingClientRect(); return p.right - r.right <= 20 && r.top >= p.top && r.bottom <= p.bottom; }), true);
+    await page.setViewportSize({ width, height: 568 });
+    const body = page.locator('.shelf-settings .panel-body');
+    await body.evaluate(el => { el.scrollTop = 45; });
+    await shot('shelf-settings-sticky-' + width);
+    const sticky = await body.evaluate(el => {
+      const first = el.querySelector('.section-title').getBoundingClientRect();
+      const bounds = el.getBoundingClientRect();
+      const header = el.previousElementSibling.getBoundingClientRect();
+      const hit = document.elementFromPoint(bounds.left + 20, bounds.top + 2);
+      return { gap: first.top - header.bottom, scrolled: el.scrollTop, covered: !!hit?.closest('.section-title') };
+    });
+    assert.ok(sticky.scrolled > 0, 'settings must actually scroll');
+    assert.ok(Math.abs(sticky.gap) <= 1, 'sticky heading must touch the sheet header');
+    assert.equal(sticky.covered, true, 'controls must not show through above the sticky heading');
     await close.click(); assert.equal(await page.locator('.shelf-settings').isVisible(), false);
   }
   await page.setViewportSize({ width: 390, height: 844 });

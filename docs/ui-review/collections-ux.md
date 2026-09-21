@@ -14,6 +14,8 @@
 
 浏览器脚本使用可控 API fixture；没有上传实际文件，也未进行 Android/iOS 真机测试。
 
+书架设置吸顶修复：移除滚动区域顶部内边距，并取消首个分组标题的负外边距，避免标题吸顶时露出下方控件。Web 构建及浏览器检查通过；在 320/390/1280px 宽、568px 高的视口实际滚动面板，验证吸顶标题与面板头部无间隙，顶部命中区域始终由标题覆盖。截图为 `collections-shelf-settings-sticky-*.png`。
+
 ```powershell
 npm --prefix web run build
 $env:CHROME_PATH='C:\Program Files\Google\Chrome\Application\chrome.exe'
