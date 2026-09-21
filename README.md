@@ -481,14 +481,6 @@ cd android
 
 ## 从源码开发
 
-```bash
-# 服务端
-cd server
-npm install
-npm test            # 137 个测试用例
-npm run typecheck
-npm run dev         # 开发模式，热重载
-
 # 指向一个测试书库
 BOOKS_DIR=/tmp/books DATA_DIR=/tmp/data npm run dev
 ```
@@ -497,7 +489,7 @@ BOOKS_DIR=/tmp/books DATA_DIR=/tmp/data npm run dev
 # 客户端（另开一个终端）
 cd web
 npm install
-npm test            # 336 个测试用例（307 vitest + 29 node:test）
+npm test            # Vitest 与 node:test
 npm run dev         # http://localhost:5174，自动把 /api 代理到 8080
 npm run build       # 产出 web/dist，服务端会在 / 上直接托管
 ```

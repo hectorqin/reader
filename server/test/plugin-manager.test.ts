@@ -80,6 +80,24 @@ test('installation registers a real provider and lists builtins alongside the pe
   } finally { await f.dispose(); }
 });
 
+test('npm packages support scopes, restart and reject traversal or outside links', async () => {
+  const f = await fixture();
+  try {
+    await f.package('node_modules/@reader/source');
+    await f.manager.install('npm:@reader/source');
+    assert.equal((await f.registry.require('test.plugin', 'test').provider.detail(context(), 'book')).title, 'Book');
+    await f.manager.close();
+    const restarted = f.restart(); await restarted.loadInstalled();
+    assert.equal(restarted.list().find(p => p.pluginId === 'test.plugin')?.folder, 'npm:@reader/source');
+    for (const input of ['npm:../outside', 'npm:@reader/../../outside', 'npm:source@latest', 'npm:C:\\outside', 'npm:']) {
+      await assert.rejects(restarted.install(input), { code: 'PLUGIN_INVALID_FOLDER' });
+    }
+    const outside = join(f.root, 'outside'); await mkdir(outside);
+    await symlink(outside, join(f.dataDir, 'plugins', 'node_modules', 'escape'), process.platform === 'win32' ? 'junction' : 'dir');
+    await assert.rejects(restarted.install('npm:escape'), { code: 'PLUGIN_PATH_ESCAPE' });
+  } finally { await f.dispose(); }
+});
+
 test('disable stops in-flight work, rejects retained providers, and persists across restart', async () => {
   const f = await fixture();
   try {

@@ -171,13 +171,18 @@ export class PluginManager {
   }
 
   private async packageDirectory(folder: string): Promise<string> {
-    if (typeof folder !== 'string' || !/^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,126}[a-zA-Z0-9_-])?$/.test(folder)) {
-      throw pluginError(400, 'PLUGIN_INVALID_FOLDER', 'Plugin folder must be a single directory name');
+    const npmName = typeof folder === 'string' && folder.startsWith('npm:') ? folder.slice(4) : undefined;
+    if (npmName !== undefined ? !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(npmName) || npmName.length > 214
+      : typeof folder !== 'string' || !/^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,126}[a-zA-Z0-9_-])?$/.test(folder)) {
+      throw pluginError(400, 'PLUGIN_INVALID_FOLDER', 'Use a single directory name or npm:package-name');
     }
     const data = await realpath(this.dataDir);
     const root = await realpath(resolve(data, 'plugins'));
     if (!inside(data, root)) throw pluginError(400, 'PLUGIN_PATH_ESCAPE', 'Plugin root must remain within DATA_DIR');
-    const directory = await realpath(join(root, folder));
+    const packageRoot = npmName === undefined ? root : await realpath(join(root, 'node_modules'));
+    if (npmName !== undefined && !inside(root, packageRoot)) throw pluginError(400, 'PLUGIN_PATH_ESCAPE', 'npm packages must remain within DATA_DIR/plugins');
+    const directory = await realpath(join(packageRoot, npmName ?? folder));
+    if (!inside(packageRoot, directory)) throw pluginError(400, 'PLUGIN_PATH_ESCAPE', 'Plugin must remain within its package root');
     if (!inside(root, directory)) throw pluginError(400, 'PLUGIN_PATH_ESCAPE', 'Plugin package must remain within DATA_DIR/plugins');
     const manifest = await realpath(join(directory, 'plugin.json'));
     if (!inside(directory, manifest)) {
