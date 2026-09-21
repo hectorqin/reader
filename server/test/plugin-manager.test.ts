@@ -80,6 +80,43 @@ test('installation registers a real provider and lists builtins alongside the pe
   } finally { await f.dispose(); }
 });
 
+test('generic extension pages and durable scheduled tasks work without provider-specific host code', async () => {
+  const f = await fixture();
+  try {
+    const directory = await f.package();
+    await writeFile(join(directory, 'plugin.json'), JSON.stringify({
+      id: 'test.plugin', name: 'Generic', version: '1', apiVersion: 1, runtime: 'node', entry: 'main.mjs',
+      permissions: { storage: true }, sourceTypes: [{ id: 'test', label: 'Test', capabilities: ['detail'] }],
+      extensions: { pages: [{ id: 'settings', title: 'Settings' }], tasks: [{ id: 'poll', intervalMinutes: 5 }] },
+    }));
+    await writeFile(join(directory, 'main.mjs'), `
+      import { createInterface } from 'node:readline';
+      import { readFile, writeFile } from 'node:fs/promises';
+      import { join } from 'node:path';
+      for await (const line of createInterface({ input: process.stdin })) {
+        const { id, method, params } = JSON.parse(line), path = join(params.host.dataDir, 'state.json');
+        let n = 0; try { n = JSON.parse(await readFile(path, 'utf8')); } catch {}
+        if (method === 'extension.task') { n++; await writeFile(path, JSON.stringify(n)); }
+        if (method === 'extension.action') { n = Number(params.values.count); await writeFile(path, JSON.stringify(n)); }
+        const result = method === 'extension.task' ? {} : { title: String(n), forms: [], sections: [] };
+        process.stdout.write(JSON.stringify({jsonrpc:'2.0', id, result}) + '\\n');
+      }
+    `);
+    const info = await f.manager.install('example'); assert.equal(info.extensions?.pages?.[0]?.id, 'settings');
+    assert.equal((await f.manager.page('test.plugin', 'settings', 'admin')).title, '0');
+    await f.manager.page('test.plugin', 'settings', 'admin', 'set', { count: 4 });
+    await Promise.all([f.manager.runTasks(1000), f.manager.runTasks(1000)]);
+    assert.equal((await f.manager.page('test.plugin', 'settings', 'admin')).title, '5');
+    await f.manager.close();
+    const restarted = f.restart(); await restarted.loadInstalled(); await restarted.runTasks(1001);
+    assert.equal((await restarted.page('test.plugin', 'settings', 'admin')).title, '5', 'task deadline and plugin data survive restart');
+    await restarted.runTasks(301001); assert.equal((await restarted.page('test.plugin', 'settings', 'admin')).title, '6');
+    await assert.rejects(restarted.page('test.plugin', 'missing', 'admin'), { code: 'PAGE_NOT_FOUND' });
+    await restarted.setEnabled('test.plugin', false); await restarted.runTasks(700000);
+    await assert.rejects(restarted.page('test.plugin', 'settings', 'admin'), { code: 'PLUGIN_UNAVAILABLE' });
+  } finally { await f.dispose(); }
+});
+
 test('npm packages support scopes, restart and reject traversal or outside links', async () => {
   const f = await fixture();
   try {

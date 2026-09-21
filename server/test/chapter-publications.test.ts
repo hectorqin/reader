@@ -56,6 +56,40 @@ test('rich chapter snapshots cache sanitised HTML and images across reloads', as
   } finally { f.db.close(); await rm(f.root, { recursive: true, force: true }); }
 });
 
+test('switching keeps book identity, old cache and subscriptions; failures never replace the binding', async () => {
+  const f = await fixture();
+  try {
+    const book = await f.chapters.acquire(f.provider, f.context, { entryRef: 'book' }, 'book', { ref: 'book', title: '远程书' });
+    const previous = f.chapters.manifest('u1', book);
+    const old = await f.chapters.asset('u1', book, previous.items[0]!.resourceRef!);
+    const updates = new ChapterUpdates(f.db, f.chapters); updates.configure('u1', book, { enabled: true });
+    const replacement: SourceProvider = { ...f.provider,
+      async getManifest(_ctx, ref) { return { publicationRef: ref, items: [{ id: 'alternative', seq: 0, title: '第二章', kind: 'chapter', mediaType: 'text/html', ref: 'alternative-body' }] }; },
+      async readResource() { throw new Error('offline'); },
+    };
+    await assert.rejects(f.chapters.switchSource(replacement, f.context, book, 'new', 'new', 'alternative', previous.revision), /offline/);
+    assert.equal(f.chapters.binding('u1', book).publication_ref, 'book');
+    await assert.rejects(f.chapters.switchSource(replacement, f.context, book, 'new', 'new', 'missing', previous.revision));
+    await assert.rejects(f.chapters.switchSource(replacement, f.context, book, 'new', 'new', 'alternative', 'stale'), { code: 'CHAPTER_SNAPSHOT_EXPIRED' });
+    assert.throws(() => f.chapters.binding('other', book), { code: 'BOOK_NOT_FOUND' });
+    replacement.readResource = async () => ({ mediaType: 'text/html', text: '<p>新源正文</p><script>evil()</script>' });
+    const switched = await f.chapters.switchSource(replacement, f.context, book, 'new', 'new', 'alternative', previous.revision);
+    assert.equal(f.chapters.binding('u1', book).publication_ref, 'new');
+    assert.equal(switched.href, switched.content.items[0]!.href);
+    assert.equal(updates.list('u1')[0]!.enabled, true);
+    assert.deepEqual((await f.chapters.asset('u1', book, previous.items[0]!.resourceRef!)).data, old.data);
+    const body = await f.chapters.asset('u1', book, switched.content.items[0]!.resourceRef!);
+    assert.match(body.data!.toString(), /新源正文/); assert.doesNotMatch(body.data!.toString(), /script|evil/);
+    const acquiredAgain = await f.chapters.acquire(replacement, f.context, { entryRef: 'new' }, 'new', { ref: 'new', title: '远程书' });
+    assert.equal(acquiredAgain, book);
+    const original = await f.chapters.acquire(f.provider, f.context, { entryRef: 'book' }, 'book', { ref: 'book', title: '远程书' });
+    assert.notEqual(original, book); assert.equal(f.chapters.binding('u1', original).publication_ref, 'book');
+    await assert.rejects(f.chapters.switchSource(f.provider, f.context, book, 'book', 'book', 'one', switched.content.revision), { code: 'SOURCE_ALREADY_ACQUIRED' });
+    assert.equal(f.chapters.binding('u1', book).publication_ref, 'new');
+    await updates.stop();
+  } finally { f.db.close(); await rm(f.root, { recursive: true, force: true }); }
+});
+
 test('durable subscriptions update once, accumulate new chapters, retry failures and respect account/shelf state', async () => {
   const f = await fixture();
   let now = 1000;

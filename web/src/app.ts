@@ -1,3 +1,4 @@
+import { PluginPageScreen } from './ui/plugin-page-screen.tsx';
 import { ReaderApi, type SessionStore } from './api/client.ts';
 import { ApiError } from './api/errors.ts';
 import type { Book, Session } from './api/types.ts';
@@ -83,6 +84,7 @@ export class App {
 
   private shelf: ShelfScreen | null = null;
   private sources: SourcesScreen | null = null;
+  private pluginPage: PluginPageScreen | null = null;
   private reader: ReaderScreen | null = null;
   /**
    * The library, as two screens: the browsing page and the file manager.
@@ -263,6 +265,11 @@ export class App {
       return;
     }
     switch (route.name) {
+      case 'plugin-page':
+        this.clearScreens(); this.route = route;
+        this.pluginPage = new PluginPageScreen({ api: this.api, pluginId: route.pluginId, pageId: route.pageId,
+          onBack: () => location.back(), onSignedOut: () => this.handleSignedOut() });
+        this.root.append(this.pluginPage.element); void this.pluginPage.show(); return;
       case 'sources':
         this.clearScreens();
         this.route = route;
@@ -283,6 +290,7 @@ export class App {
   }
 
   private clearScreens(): void {
+    this.pluginPage?.dispose(); this.pluginPage = null;
     this.sources?.dispose();
     this.sources = null;
     this.reader?.dispose();

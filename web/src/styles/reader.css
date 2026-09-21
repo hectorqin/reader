@@ -3664,8 +3664,8 @@ book-content {
 .sources-actions { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
 .sources-actions label { margin:0; }
 .sources-card .sources-consent { flex-direction:row; align-items:center; }
-.sources-search { display:flex; align-items:end; gap:.5rem; margin:1rem 0; }
-.sources-search label { flex:1; margin:0; }
+.sources-search { display:flex; flex-wrap:wrap; align-items:end; gap:.5rem; margin:1rem 0; }
+.sources-search label { flex:1 1 12rem; min-width:0; margin:0; }
 .source-description { max-height:6rem; overflow:auto; font-size:.9rem; white-space:pre-wrap; }
 
 /* Mobile reading: the surface and its information strip never resize with chrome. */
@@ -3763,3 +3763,9 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reader-screen .field input[type='range']::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; margin-top: -7px; border-radius: 50%; background: var(--reader-accent); }
 .reader-screen .field input[type='range']::-moz-range-track { height: 4px; border-radius: 2px; background: var(--reader-line); }
 .reader-screen .field input[type='range']::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--reader-accent); }
+
+.sources-card h3, .sources-body > p { overflow-wrap:anywhere; }
+.sources-card form + form { margin-top:.65rem; }
+section[aria-label="切换书源"] { padding:.75rem 0; overflow-wrap:anywhere; }
+section[aria-label="切换书源"] select { display:block; width:100%; padding:.6rem; margin:.5rem 0; color:inherit; background:var(--reader-surface); }
+section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; padding:.5rem; }

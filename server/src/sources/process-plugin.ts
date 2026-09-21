@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto';
+import { searchFilterFields } from './extensions.ts';
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { readFile, realpath, stat, mkdir } from 'node:fs/promises';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { AppError } from '../lib/errors.ts';
 import { validatePluginManifest } from './registry.ts';
@@ -22,6 +24,7 @@ export class PluginError extends AppError {
 }
 
 export interface ProcessPluginOptions {
+  readonly dataRoot?: string;
   readonly timeoutMs?: number;
   /** Applies to each JSON line and limits the first version's inline resource payloads. */
   readonly maxMessageBytes?: number;
@@ -45,6 +48,7 @@ export class ProcessPlugin {
   private readonly pending = new Map<number, PendingRequest>();
   private readonly exits = new Set<Promise<void>>();
   private readonly timeoutMs: number;
+  private dataDir?: string;
   private readonly maxMessageBytes: number;
 
   private constructor(
@@ -80,7 +84,12 @@ export class ProcessPlugin {
     if (!(await stat(entry)).isFile()) {
       throw new PluginError('PLUGIN_INVALID', 'plugin entry must be a file');
     }
-    return new ProcessPlugin(manifest, root, entry, options);
+    const plugin = new ProcessPlugin(manifest, root, entry, options);
+    if (options.dataRoot && manifest.permissions?.storage) {
+      plugin.dataDir = resolve(options.dataRoot, createHash('sha256').update(manifest.id).digest('hex'));
+      await mkdir(plugin.dataDir, { recursive: true });
+    }
+    return plugin;
   }
 
   status(): PluginRuntimeStatus {
@@ -109,6 +118,8 @@ export class ProcessPlugin {
         detail: async (ctx, entryRef) => decodeCatalogEntry(await call('detail', ctx, { entryRef })),
         acquire: async (ctx, request) => decodeChapterAcquisition(await call('acquire', ctx, { request })),
       };
+      if (type.capabilities.includes('search.filters')) provider.searchFilters = async (ctx) => searchFilterFields(await call('searchFilters', ctx, {}));
+      if (type.capabilities.includes('content.alternatives')) provider.alternatives = async (ctx, request) => decodeCatalogPage(await call('alternatives', ctx, { request }));
       if (type.capabilities.includes('browse')) {
         provider.browse = async (ctx, request) => decodeCatalogPage(await call('browse', ctx, { request }));
       }
@@ -127,6 +138,10 @@ export class ProcessPlugin {
       }
       return provider;
     });
+  }
+
+  invoke(method: 'extension.page' | 'extension.action' | 'extension.task', params: Record<string, unknown>): Promise<unknown> {
+    return this.request(method, params);
   }
 
   async close(): Promise<void> {
@@ -180,7 +195,7 @@ export class ProcessPlugin {
       return Promise.reject(error);
     }
     const id = ++this.sequence;
-    const line = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
+    const line = JSON.stringify({ jsonrpc: '2.0', id, method, params: { ...params, host: { dataDir: this.dataDir } } }) + '\n';
     if (Buffer.byteLength(line) > this.maxMessageBytes) {
       return Promise.reject(new PluginError('PLUGIN_MESSAGE_TOO_LARGE', 'plugin request exceeds the message limit'));
     }

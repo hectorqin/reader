@@ -71,6 +71,7 @@ export type LibraryView = 'browse' | 'files';
 /** A parsed location. */
 export type Route =
   | { name: 'sources' }
+  | { name: 'plugin-page'; pluginId: string; pageId: string }
   | {
       name: 'shelf';
       /**
@@ -177,6 +178,9 @@ export function parseRoute(hash: string, context?: RouteContext): Route {
   const parts = pathOf(raw).split('/').filter((part) => part.length > 0);
   if (parts.length === 0) return shelfRoute(context);
   const [head, ...rest] = parts;
+  if (head === 'plugins' && rest.length === 2) {
+    try { return { name: 'plugin-page', pluginId: decodeURIComponent(rest[0]!), pageId: decodeURIComponent(rest[1]!) }; } catch { return shelfRoute(context); }
+  }
   if (head === 'sources') return { name: 'sources' };
   if (head === 'shelf') {
     /*
@@ -297,6 +301,7 @@ function shelfRoute(context?: RouteContext, page = 1): Route {
  */
 export function routeHash(route: Route): string {
   switch (route.name) {
+    case 'plugin-page': return '#/plugins/' + encodeURIComponent(route.pluginId) + '/' + encodeURIComponent(route.pageId);
     case 'sources': return '#/sources';
     case 'shelf':
       // `/1` is the absence of a page: one screen, two URLs, is the thing the
@@ -327,6 +332,7 @@ export function routeHash(route: Route): string {
 /** Whether two routes point at the same place. Used to skip a redundant repaint. */
 export function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
+  if (a.name === 'plugin-page' && b.name === 'plugin-page') return a.pluginId === b.pluginId && a.pageId === b.pageId;
   if (a.name === 'book' && b.name === 'book') return a.bookId === b.bookId;
   if (a.name === 'library' && b.name === 'library') {
     /*
@@ -347,6 +353,7 @@ export function sameRoute(a: Route, b: Route): boolean {
 
 /** Where a "back" from this route lands when the app has no trail of its own. */
 export function parentOf(route: Route): Route {
+  if (route.name === 'plugin-page') return { name: 'sources' };
   return route.name === 'shelf' ? SHELF : SHELF;
 }
 

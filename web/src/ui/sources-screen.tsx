@@ -1,3 +1,4 @@
+import type { ExtensionField } from '../api/sources.ts';
 import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { Book } from '../api/types.ts';
 import type { ChapterSubscription, SourceEntry, SourceInstance, SourcePage, SourcePlugin, SourceType } from '../api/sources.ts';
@@ -24,8 +25,10 @@ export class SourcesScreen {
   private editor: Editor | null = null;
   private selected: SourceInstance | null = null;
   private page: SourcePage | null = null;
-  private path: Array<{ ref?: string; query?: string; cursor?: string }> = [];
+  private path: Array<{ ref?: string; query?: string; cursor?: string; filters?: Record<string, string> }> = [];
   private query = '';
+  private filters: ExtensionField[] = [];
+  private filterValues: Record<string, string> = {};
   private credentialValues: Record<string, string> = {};
   private folder = '';
   private trusted = false;
@@ -69,15 +72,18 @@ export class SourcesScreen {
     await this.options.api.saveSource(editor.id, { name: editor.name, config, ...(!editor.id ? { pluginId: type.pluginId, sourceType: type.id } : {}) });
     this.editor = null; await this.reload(); this.message = '来源已保存；修改连接配置后请重新保存个人凭据。';
   }
-  private async catalog(query: { ref?: string; query?: string; cursor?: string }, push = true): Promise<void> {
+  private async catalog(query: { ref?: string; query?: string; cursor?: string; filters?: Record<string, string> }, push = true): Promise<void> {
     if (!this.selected) return;
     const page = await this.options.api.sourceCatalog(this.selected.id, query);
     this.page = page; if (push) this.path.push(query);
   }
   private select(source: SourceInstance): void {
     this.selected = source; this.page = null; this.path = []; this.query = ''; this.credentialValues = {}; this.acquired = null;
-    if (source.descriptor?.capabilities.includes('browse')) void this.run(() => this.catalog({}));
-    else this.draw();
+    this.filters = []; this.filterValues = {};
+    void this.run(async () => {
+      if (source.descriptor?.capabilities.includes('search.filters')) this.filters = await this.options.api.sourceFilters(source.id);
+      if (source.descriptor?.capabilities.includes('browse')) await this.catalog({});
+    });
   }
   private async acquire(entry: SourceEntry, optionId?: string): Promise<void> {
     if (!this.selected) return;
@@ -145,7 +151,11 @@ export class SourcesScreen {
           }); }}><h3>我的登录凭据</h3>{this.selected.descriptor?.credentialKeys?.map((field) => <label key={field.key}>{field.label}
             <input type="password" autoComplete="off" value={this.credentialValues[field.key] ?? ''} onInput={(event) => { this.credentialValues[field.key] = event.currentTarget.value; }} /></label>)}
             <Button type="submit" disabled={this.busy}>保存个人凭据</Button></form>}
-          {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.run(() => this.catalog({ query: this.query.trim() })); }}>
+          {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.run(() => this.catalog({ query: this.query.trim(), filters: { ...this.filterValues } })); }}>
+            {this.filters.map(field => <label key={field.key}>{field.label}<select value={this.filterValues[field.key] ?? ''} disabled={this.busy}
+              onChange={event => { this.filterValues[field.key] = event.currentTarget.value; this.draw(); }}>
+              {field.options?.map(option => <option value={option.value}>{option.label}</option>)}
+            </select></label>)}
             <label>搜索书籍<input type="search" required value={this.query} onInput={(event) => { this.query = event.currentTarget.value; }} /></label><Button type="submit" disabled={this.busy}>搜索</Button></form>}
           {this.path.length > 1 && <Button disabled={this.busy} onClick={() => void this.run(async () => { const previous = this.path[this.path.length - 2]!; await this.catalog(previous, false); this.path.pop(); })}>上一页目录</Button>}
           {this.page?.title && <h3>{this.page.title}</h3>}
@@ -188,6 +198,7 @@ export class SourcesScreen {
         </form>
         {this.plugins.map((plugin) => <article className="sources-row" key={plugin.pluginId}><div><strong>{plugin.name ?? plugin.pluginId}</strong>
           <small>{plugin.version} · {plugin.builtin ? '内置' : plugin.enabled ? '已启用' : '已停用'}{plugin.error ? ` · ${plugin.error.message}` : ''}{plugin.runtime?.state === 'failed' ? ' · 运行失败，请重启插件' : ''}</small></div>
+          {plugin.enabled && plugin.extensions?.pages?.map(page => <a className="button" href={'#/plugins/' + encodeURIComponent(plugin.pluginId) + '/' + encodeURIComponent(page.id)}>{page.title}</a>)}
           {!plugin.builtin && <div className="sources-actions"><Button disabled={this.busy} onClick={() => void this.run(async () => { await this.options.api.enablePlugin(plugin.pluginId, !plugin.enabled); await this.reload(); })}>{plugin.enabled ? '停用' : '启用'}</Button>
             {plugin.runtime?.state === 'failed' && <Button disabled={this.busy} onClick={() => void this.run(async () => { await this.options.api.enablePlugin(plugin.pluginId, true); await this.reload(); })}>重启插件</Button>}
             <Button disabled={this.busy} onClick={() => void this.run(async () => { await this.options.api.uninstallPlugin(plugin.pluginId); await this.reload(); this.message = '插件已卸载，书籍及已缓存内容保留。'; })}>卸载</Button></div>}

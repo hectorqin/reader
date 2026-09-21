@@ -1,9 +1,12 @@
+import type { ExtensionField, PluginExtensions } from './extensions.ts';
 import type { Readable } from 'node:stream';
 
 /** Stable source capabilities exposed to the host and clients. */
 export type SourceCapability =
   | 'browse'
   | 'search'
+  | 'search.filters'
+  | 'content.alternatives'
   | 'detail'
   | 'acquire.file'
   | 'acquire.chapters'
@@ -87,6 +90,7 @@ export interface BrowseRequest {
 }
 
 export interface SearchRequest {
+  readonly filters?: Record<string, string>;
   readonly query: string;
   readonly cursor?: string;
   readonly limit?: number;
@@ -192,6 +196,9 @@ export interface ResourceResponse {
 
 export interface SourceProvider {
   readonly descriptor: SourceDescriptor;
+  /** Dynamic select fields; keys and option values are opaque to the host. */
+  searchFilters?(ctx: SourceContext): Promise<ExtensionField[]>;
+  alternatives?(ctx: SourceContext, request: SearchRequest & { publicationRef: string; authors?: readonly string[] }): Promise<CatalogPage>;
   validateConfig?(config: unknown): void | Promise<void>;
   browse?(ctx: SourceContext, request: BrowseRequest): Promise<CatalogPage>;
   search?(ctx: SourceContext, request: SearchRequest): Promise<CatalogPage>;
@@ -218,6 +225,7 @@ export interface PluginSourceType {
 }
 
 export interface PluginManifest {
+  readonly extensions?: PluginExtensions;
   readonly id: string;
   readonly name: string;
   readonly version: string;

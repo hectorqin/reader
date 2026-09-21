@@ -1,3 +1,4 @@
+import { extensionValues } from '../../sources/extensions.ts';
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.ts';
 import { authenticate, currentUser, requireAdmin } from '../auth.ts';
@@ -22,7 +23,7 @@ function parameter(value: unknown, name: string, required = false): string | und
 export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): void {
   const auth = authenticate(ctx);
   const host = ctx.sources ??= new SourceHost(ctx.db, ctx.config, () => ctx.shelf, app.log);
-  app.addHook('onReady', async () => { await host.plugins.loadInstalled(); host.updates.start(); });
+  app.addHook('onReady', async () => { await host.plugins.loadInstalled(); host.updates.start(); host.plugins.startTasks(); });
   app.addHook('onClose', async () => { await host.updates.stop(); await host.plugins.close(); });
 
   app.get('/api/v1/subscriptions', { preHandler: auth }, async (request) => ({ subscriptions: host.updates.list(currentUser(request).id) }));
@@ -84,10 +85,10 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
   });
   app.get('/api/v1/sources/:id/search', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request); const { id } = request.params as { id: string };
-    const q = request.query as { q?: string; cursor?: string; limit?: string };
+    const q = request.query as { q?: string; cursor?: string; limit?: string; filters?: string };
     const query = parameter(q.q, 'q', true)!;
     return withSignal(request, reply, (signal) => host.search(user.id, id, {
-      query, cursor: parameter(q.cursor, 'cursor'), limit: pageLimit(q.limit),
+      query, cursor: parameter(q.cursor, 'cursor'), limit: pageLimit(q.limit), filters: searchFilters(q.filters),
     }, signal));
   });
   app.get('/api/v1/sources/:id/entries', { preHandler: auth }, async (request, reply) => {
@@ -115,6 +116,36 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     if (resource.stream) { resource.stream.destroy(); throw badRequest('streaming preview is not supported'); }
     return { mediaType: resource.mediaType, ...(resource.text !== undefined ? { text: resource.text } : {}),
       ...(resource.data ? { base64: Buffer.from(resource.data).toString('base64') } : {}) };
+  });
+  app.get('/api/v1/sources/:id/search-filters', { preHandler: auth }, async (request, reply) => {
+    return withSignal(request, reply, signal => host.searchFilters(currentUser(request).id, (request.params as { id: string }).id, signal));
+  });
+  app.get('/api/v1/books/:id/source-options', { preHandler: auth }, async request => {
+    const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id, id);
+    return { canSwitch: host.chapters.has(id) && host.canSwitch(user.id, id) };
+  });
+  app.get('/api/v1/books/:id/alternatives', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id, id);
+    const cursor = parameter((request.query as { cursor?: string }).cursor, 'cursor');
+    return withSignal(request, reply, signal => host.alternatives(user.id, id, cursor, signal));
+  });
+  app.post('/api/v1/books/:id/switch-preview', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id, id);
+    const ref = textBody(request.body, 'entryRef');
+    return withSignal(request, reply, signal => host.switchPreview(user.id, id, ref, signal));
+  });
+  app.post('/api/v1/books/:id/switch-source', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id, id);
+    const ref = textBody(request.body, 'entryRef'), chapter = textBody(request.body, 'chapterId'), revision = textBody(request.body, 'revision');
+    return withSignal(request, reply, signal => host.switchSource(user.id, id, ref, chapter, revision, signal));
+  });
+  app.get('/api/v1/plugins/:id/pages/:pageId', { preHandler: auth }, async request => {
+    requireAdmin(request); const { id, pageId } = request.params as { id: string; pageId: string };
+    return host.plugins.page(id, pageId, currentUser(request).id);
+  });
+  app.post('/api/v1/plugins/:id/pages/:pageId', { preHandler: auth }, async request => {
+    requireAdmin(request); const { id, pageId } = request.params as { id: string; pageId: string };
+    return host.plugins.page(id, pageId, currentUser(request).id, textBody(request.body, 'action'), (request.body as Record<string, unknown>).values ?? {});
   });
   app.get('/api/v1/plugins', { preHandler: auth }, async (request) => {
     requireAdmin(request);
@@ -147,4 +178,14 @@ function pageLimit(value?: string): number | undefined {
   const number = Number(value);
   if (!Number.isSafeInteger(number) || number < 1 || number > 200) throw badRequest('limit must be an integer between 1 and 200');
   return number;
+}
+
+function searchFilters(value?: string): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+  try {
+    if (typeof value !== 'string' || value.length > 16384) throw new Error();
+    const filters = extensionValues(JSON.parse(value));
+    if (Object.values(filters).some(item => typeof item !== 'string')) throw new Error();
+    return filters as Record<string, string>;
+  } catch { throw badRequest('Invalid search filters'); }
 }

@@ -102,6 +102,34 @@ async function click(screen: ReaderScreen, label: string): Promise<void> {
 }
 
 describe('chapter publication reading', () => {
+  it('switches from the contents panel only after chapter selection and preserves the old view on failure', async () => {
+    const env = await setup(); let failSwitch = true;
+    env.transport.respondWith(request => {
+      if (request.url.endsWith('/source-options')) return { status: 200, headers: {}, json: { canSwitch: true } };
+      if (request.url.endsWith('/manifest')) return { status: 200, headers: {}, json: manifest(content(['a', 'b'])) };
+      if (request.url.endsWith('/alternatives')) return { status: 200, headers: {}, json: { items: [{ ref: 'other-book', title: '同一本书', authors: ['作者'], description: '其它书源' }] } };
+      if (request.url.endsWith('/switch-preview')) return { status: 200, headers: {}, json: { chapters: [{ id: 'x', title: '另一个章节' }] } };
+      if (request.url.endsWith('/switch-source')) return failSwitch
+        ? { status: 502, headers: {}, json: { error: { code: 'SOURCE_ERROR', message: '正文获取失败' } } }
+        : { status: 200, headers: {}, json: { content: content(['x', 'y'], 'r2'), href: 'chapter:x' } };
+      if (request.url.includes('/assets?')) return { status: 200, headers: {}, bytes: new TextEncoder().encode(new URL(request.url, 'http://test').searchParams.get('ref')!) };
+      return { status: 200, headers: {}, json: { progress: null } };
+    });
+    await env.screen.open(book); await click(env.screen, '目录'); await click(env.screen, '切换书源');
+    await vi.waitFor(() => expect(env.screen.element.textContent).toContain('其它书源')); await click(env.screen, '查看此源目录');
+    await vi.waitFor(() => expect(env.screen.element.querySelector('section[aria-label="切换书源"] select')).not.toBeNull());
+    const submit = [...env.screen.element.querySelectorAll('button')].find(button => button.textContent === '确认换源并阅读')!;
+    expect(submit.disabled).toBe(true);
+    const select = env.screen.element.querySelector<HTMLSelectElement>('section[aria-label="切换书源"] select')!;
+    select.value = 'x'; select.dispatchEvent(new Event('change', { bubbles: true })); await click(env.screen, '确认换源并阅读');
+    await vi.waitFor(() => expect(env.screen.element.textContent).toContain('正文获取失败'));
+    expect(body(env.screen)?.textContent).toContain('resource:r1:a');
+    expect(env.screen.element.querySelectorAll('.toc-list li')).toHaveLength(2);
+    failSwitch = false; await click(env.screen, '确认换源并阅读');
+    await vi.waitFor(() => expect(body(env.screen)?.textContent).toContain('resource:r2:x'));
+    await vi.waitFor(() => expect(env.offline.current.progress[book.id]?.locator).toContain('chapter:x'));
+    expect(env.screen.element.textContent).toContain('已切换书源');
+  });
   it('renders cached rich chapters with images without requesting an external origin, including offline reopening', async () => {
     const kv = new MemoryKv(); const blobs = new MemoryBlobs();
     const first = await setup(kv, blobs);

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Db } from '../db/index.ts';
 import type { AssetPayload, Manifest } from '../indexer/formats/registry.ts';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.ts';
@@ -71,13 +71,22 @@ export class ChapterPublications {
     provider: SourceProvider, context: SourceContext, request: AcquireRequest,
     publicationRef: string, entry: CatalogEntry,
   ): Promise<string> {
-    const bookId = hash(JSON.stringify(['reader/chapter-publication/v1', context.instance.id, context.userId, publicationRef]));
-    return this.serial(`publication:${bookId}`, async () => {
+    const identity = hash(JSON.stringify(['reader/chapter-publication/v1', context.instance.id, context.userId, publicationRef]));
+    return this.serial(`publication:${identity}`, async () => {
       context.signal.throwIfAborted();
+      // A book keeps its id when switching providers. Reacquiring its former
+      // binding must not silently return the replacement edition.
+      const bound = this.db.get<{ book_id: string }>('SELECT book_id FROM chapter_publications WHERE user_id = ? AND source_id = ? AND publication_ref = ?', context.userId, context.instance.id, publicationRef);
+      const bookId = bound?.book_id ?? (this.has(identity) ? hash(randomUUID()) : identity);
       if (!this.has(bookId)) {
         if (!provider.getManifest || !provider.readResource) throw badRequest('source has no chapter content', 'SOURCE_UNSUPPORTED');
         const snapshot = this.normalize(await provider.getManifest(context, publicationRef), publicationRef);
         context.signal.throwIfAborted();
+        const changed = this.db.get<{ book_id: string }>('SELECT book_id FROM chapter_publications WHERE source_id = ? AND user_id = ? AND publication_ref = ?', context.instance.id, context.userId, publicationRef);
+        if (changed) {
+          this.db.transaction(() => this.addAcquisition(context, request, changed.book_id, Date.now()));
+          return changed.book_id;
+        }
         const snapshotJson = JSON.stringify(snapshot);
         const revision = hash(snapshotJson);
         const now = Date.now();
@@ -168,6 +177,47 @@ export class ChapterPublications {
         body, contentHash, bookId, revision!, chapterId!,
       );
       return this.payload(body, contentHash, resource.media_type);
+    });
+  }
+
+  binding(userId: string, bookId: string) { return this.owned(userId, bookId); }
+
+  switchSource(provider: SourceProvider, context: SourceContext, bookId: string, entryRef: string, publicationRef: string, chapterId: string, expectedRevision: string) {
+    this.owned(context.userId, bookId);
+    return this.serial('publication:' + bookId, async () => {
+      const previous = this.owned(context.userId, bookId);
+      if (previous.source_id !== context.instance.id) throw badRequest('alternative belongs to another source instance');
+      if (previous.revision !== expectedRevision) throw conflict('Directory changed; reload before switching', 'CHAPTER_SNAPSHOT_EXPIRED');
+      const checkBinding = () => {
+        if (this.db.get('SELECT book_id FROM chapter_publications WHERE source_id = ? AND user_id = ? AND publication_ref = ? AND book_id <> ?',
+          context.instance.id, context.userId, publicationRef, bookId)) {
+          throw conflict('该版本已作为另一本书加入书架，请从书架打开', 'SOURCE_ALREADY_ACQUIRED');
+        }
+      };
+      checkBinding();
+      if (!provider.getManifest || !provider.readResource) throw badRequest('source has no chapter content');
+      const snapshot = this.normalize(await provider.getManifest(context, publicationRef), publicationRef);
+      const chapter = snapshot.items.find(item => item.id === chapterId);
+      if (!chapter) throw conflict('Selected chapter is no longer available');
+      const response = await provider.readResource(context, { publicationRef, ref: chapter.ref });
+      if (chapterMedia(response.mediaType) !== chapterMedia(chapter.mediaType)) { response.stream?.destroy(); throw badRequest('Invalid chapter media type'); }
+      let body = this.readBody(response, context.signal);
+      if (chapterMedia(chapter.mediaType).startsWith('text/html')) body = await richContent(body,
+        imageRef => provider.readResource!(context, { publicationRef, ref: imageRef }));
+      context.signal.throwIfAborted();
+      const snapshotJson = JSON.stringify(snapshot), revision = hash(snapshotJson), now = Date.now();
+      this.db.transaction(() => {
+        checkBinding();
+        this.saveSnapshot(bookId, revision, snapshot, snapshotJson, now);
+        this.db.run('UPDATE chapter_resources SET body = ?, content_hash = ? WHERE book_id = ? AND revision = ? AND chapter_id = ?', body, hash(body), bookId, revision, hash(chapterId));
+        this.db.run('UPDATE chapter_publications SET publication_ref = ?, revision = ?, version = ?, snapshot_json = ?, updated_at = ? WHERE book_id = ?',
+          publicationRef, revision, snapshot.version ?? null, snapshotJson, now, bookId);
+        this.db.run('UPDATE books SET content_hash = ?, page_count = ?, updated_at = ? WHERE id = ?', revision, snapshot.items.length, now, bookId);
+        this.db.run('DELETE FROM source_acquisitions WHERE book_id = ? AND user_id = ?', bookId, context.userId);
+        this.addAcquisition(context, { entryRef }, bookId, now);
+        this.db.run('UPDATE chapter_subscriptions SET new_chapters = 0, generation = generation + 1 WHERE book_id = ?', bookId);
+      });
+      return { content: this.manifest(context.userId, bookId), href: 'chapter:' + hash(chapterId) };
     });
   }
 

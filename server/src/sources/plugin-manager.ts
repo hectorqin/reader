@@ -1,3 +1,4 @@
+import { extensionPage, extensionValues, type PluginExtensions } from './extensions.ts';
 import { realpath, stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Db } from '../db/index.ts';
@@ -15,6 +16,7 @@ interface ManagedPlugin {
 }
 
 export interface PluginInfo {
+  extensions?: PluginExtensions;
   pluginId: string;
   folder?: string;
   builtin: boolean;
@@ -43,6 +45,63 @@ export class PluginManager {
   private readonly managed = new Map<string, ManagedPlugin>();
   private pending: Promise<void> = Promise.resolve();
   private closed = false;
+  private taskTimer?: ReturnType<typeof setInterval>;
+  private taskRun?: Promise<void>;
+  private readonly extensionBusy = new Set<string>();
+
+  startTasks(): void {
+    if (this.taskTimer || this.closed) return;
+    this.taskTimer = setInterval(() => { void this.runTasks().catch(() => undefined); }, 60_000);
+    this.taskTimer.unref(); void this.runTasks().catch(() => undefined);
+  }
+
+  runTasks(now = Date.now()): Promise<void> {
+    if (this.taskRun) return this.taskRun;
+    if (this.closed) return Promise.resolve();
+    const work = async () => {
+      for (const [id, managed] of this.managed) {
+        for (const task of managed.plugin?.manifest.extensions?.tasks ?? []) {
+          if (this.closed || !managed.active) break;
+          if (this.extensionBusy.has(id)) continue;
+          const key = 'plugin-task:' + id + ':' + task.id;
+          const saved = this.db.get<{ value: string }>('SELECT value FROM plugin_storage WHERE key = ?', key);
+          const previous = saved ? JSON.parse(saved.value) : { next: 0, failures: 0 };
+          if (previous.next > now) continue;
+          let failures = 0;
+          this.extensionBusy.add(id);
+          try {
+            if (managed.plugin!.status().state === 'failed') await managed.plugin!.close();
+            if (!managed.active || this.closed) break;
+            await managed.plugin!.invoke('extension.task', { taskId: task.id });
+          } catch { failures = previous.failures + 1; }
+          finally { this.extensionBusy.delete(id); }
+          if (this.closed) break;
+          const minutes = failures ? Math.min(1440, Math.max(task.intervalMinutes, 2 ** Math.min(failures, 10))) : task.intervalMinutes;
+          this.db.run('INSERT INTO plugin_storage (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+            key, JSON.stringify({ next: now + minutes * 60_000, failures, lastError: failures ? 'TASK_FAILED' : null }));
+        }
+      }
+    };
+    this.taskRun = work().finally(() => { this.taskRun = undefined; });
+    return this.taskRun;
+  }
+
+  async page(pluginId: string, pageId: string, userId: string, action?: string, values: unknown = {}) {
+    if (this.closed) throw pluginError(503, 'PLUGIN_UNAVAILABLE', 'Plugin manager is closed');
+    const managed = this.managed.get(pluginId);
+    if (!managed?.active || !managed.plugin) throw pluginError(404, 'PLUGIN_UNAVAILABLE', 'Plugin is unavailable');
+    if (!managed.plugin.manifest.extensions?.pages?.some(page => page.id === pageId)) throw pluginError(404, 'PAGE_NOT_FOUND', 'Plugin page is not declared');
+    if (action !== undefined && !/^[a-z][a-z0-9._-]{0,63}$/.test(action)) throw pluginError(400, 'INVALID_ACTION', 'Invalid action');
+    const input = extensionValues(values);
+    if (action && this.extensionBusy.has(pluginId)) throw pluginError(429, 'PLUGIN_BUSY', '插件正在更新，请稍后重试');
+    if (action) this.extensionBusy.add(pluginId);
+    try {
+      return extensionPage(await managed.plugin.invoke(action ? 'extension.action' : 'extension.page', {
+        pageId, userId, action, values: input,
+      }));
+    } finally { if (action) this.extensionBusy.delete(pluginId); }
+  }
+
 
   constructor(private readonly db: Db, private readonly dataDir: string, private readonly registry: SourceRegistry) {}
 
@@ -139,7 +198,9 @@ export class PluginManager {
     return this.enqueue(async () => {
       if (this.closed) return;
       this.closed = true;
+      clearInterval(this.taskTimer);
       const outcomes = await Promise.allSettled([...this.managed.values()].map((managed) => this.stop(managed)));
+      await this.taskRun;
       const failure = outcomes.find((outcome) => outcome.status === 'rejected');
       if (failure?.status === 'rejected') throw failure.reason;
     }, true);
@@ -193,7 +254,7 @@ export class PluginManager {
   }
 
   private async loadPackage(folder: string): Promise<ProcessPlugin> {
-    try { return await ProcessPlugin.load(await this.packageDirectory(folder)); }
+    try { return await ProcessPlugin.load(await this.packageDirectory(folder), { dataRoot: join(this.dataDir, 'plugin-data') }); }
     catch (error) { throw this.packageInputError(error); }
   }
 
@@ -274,6 +335,7 @@ export class PluginManager {
     const managed = this.managed.get(row.plugin_id);
     return {
       pluginId: row.plugin_id, folder: row.folder, builtin: false, enabled: row.enabled === 1,
+      extensions: managed?.plugin?.manifest.extensions,
       name: managed?.plugin?.manifest.name, version: managed?.plugin?.manifest.version,
       sourceTypes: managed?.providers.map((provider) => provider.descriptor) ?? [],
       runtime: managed?.plugin?.status() ?? null, error: managed?.error,

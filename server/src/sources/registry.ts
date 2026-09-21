@@ -1,3 +1,4 @@
+import { extensionDeclarations } from './extensions.ts';
 import type {
   PluginManifest,
   SourceCapability,
@@ -15,7 +16,7 @@ export class SourceRegistryError extends Error {
 
 const ID_RE = /^[a-z][a-z0-9._-]{0,127}$/;
 const CAPABILITIES = new Set<SourceCapability>([
-  'browse', 'search', 'detail', 'acquire.file', 'acquire.chapters',
+  'search.filters', 'content.alternatives', 'browse', 'search', 'detail', 'acquire.file', 'acquire.chapters',
   'content.manifest', 'content.resource', 'content.update',
 ]);
 
@@ -56,6 +57,8 @@ function assertProvider(provider: SourceProvider): void {
   };
   requireMethod('browse', 'browse');
   requireMethod('search', 'search');
+  requireMethod('search.filters', 'searchFilters');
+  requireMethod('content.alternatives', 'alternatives');
   requireMethod('content.manifest', 'getManifest');
   requireMethod('content.resource', 'readResource');
   requireMethod('content.update', 'getManifest');
@@ -146,6 +149,7 @@ export function validatePluginManifest(input: unknown): PluginManifest {
   if (!ID_RE.test(id)) throw new SourceRegistryError(`invalid plugin id: ${id}`);
   const manifest: PluginManifest = {
     id,
+    extensions: extensionDeclarations(value.extensions),
     name: requiredString('name'),
     version: requiredString('version'),
     apiVersion: value.apiVersion as number,

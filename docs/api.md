@@ -1063,3 +1063,16 @@ Invoke-RestMethod -Method Post -Uri "$readerApi/books/$readerBookId/refresh" -He
    （`ADMIN_REQUIRED`、`PATH_TRAVERSAL`、`READ_ONLY_MOUNT`）。
    只有前者该清掉凭据跳登录页；把后者也当会话失效，会把读者在读只读挂载上
    改个文件名时踢下线，顺手把他存的令牌也删了。按 `error.code` 判断，不要只看状态码。
+
+
+### 插件扩展与换源
+
+- 管理员 `GET /api/v1/plugins/:id/pages/:pageId`：已声明配置页，返回通用 title/description/forms/sections。
+- 管理员 `POST /api/v1/plugins/:id/pages/:pageId`：`{action,values}`，返回更新后的页面。插件清单的 extensions.pages 提供入口。
+- `GET /api/v1/sources/:id/search-filters`：插件声明的选择字段；搜索接口接受 JSON 编码的 `filters` 查询参数，值为字符串映射。
+- `GET /api/v1/books/:id/source-options`：`{canSwitch}`，限本人有权限的书籍。
+- `GET /api/v1/books/:id/alternatives?cursor=…`：候选 CatalogPage。
+- `POST /api/v1/books/:id/switch-preview`：`{entryRef}` → `{chapters:[{id,title}]}`。
+- `POST /api/v1/books/:id/switch-source`：`{entryRef,chapterId,revision}` → `{content,href}`；所选正文验证成功后事务切换，保留 bookId。目录变更返回冲突，客户端刷新再选择。
+
+后台任务 RPC、持久化及限制见[插件扩展设计](plugin-extensions.md)。页面只接受声明式数据，不执行插件提供的浏览器脚本。

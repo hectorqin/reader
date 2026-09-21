@@ -134,9 +134,43 @@ export class SourceHost {
     return this.call(userId, id, (provider, ctx) => provider.browse
       ? provider.browse(ctx, request) : Promise.reject(badRequest('source does not support browse', 'SOURCE_UNSUPPORTED')), signal);
   }
-  async search(userId: string, id: string, request: { query: string; cursor?: string; limit?: number }, signal?: AbortSignal) {
+  async search(userId: string, id: string, request: { query: string; cursor?: string; limit?: number; filters?: Record<string, string> }, signal?: AbortSignal) {
     return this.call(userId, id, (provider, ctx) => provider.search
       ? provider.search(ctx, request) : Promise.reject(badRequest('source does not support search', 'SOURCE_UNSUPPORTED')), signal);
+  }
+  async searchFilters(userId: string, id: string, signal?: AbortSignal) {
+    return this.call(userId, id, (provider, ctx) => provider.searchFilters?.(ctx) ?? Promise.resolve([]), signal);
+  }
+  async alternatives(userId: string, bookId: string, cursor?: string, signal?: AbortSignal) {
+    const binding = this.chapters.binding(userId, bookId);
+    const book = this.db.get<{ title: string; author: string }>('SELECT title, author FROM books WHERE id = ?', bookId)!;
+    return this.call(userId, binding.source_id, (provider, ctx) => provider.alternatives
+      ? provider.alternatives(ctx, { publicationRef: binding.publication_ref, query: book.title, authors: [book.author], cursor })
+      : Promise.resolve({ items: [] }), signal);
+  }
+  canSwitch(userId: string, bookId: string): boolean {
+    const binding = this.chapters.binding(userId, bookId);
+    const row = this.instance(binding.source_id);
+    return !!row.enabled && !!this.registry.get(row.plugin_id, row.source_type)?.provider.alternatives;
+  }
+  async switchPreview(userId: string, bookId: string, entryRef: string, signal?: AbortSignal) {
+    const binding = this.chapters.binding(userId, bookId);
+    return this.call(userId, binding.source_id, async (provider, ctx) => {
+      if (!provider.alternatives) throw badRequest('source does not support alternatives');
+      const acquisition = await provider.acquire(ctx, { entryRef });
+      if (acquisition.kind !== 'chapters' || !provider.getManifest) throw badRequest('alternative has no chapters');
+      const snapshot = await provider.getManifest(ctx, acquisition.publicationRef);
+      return { chapters: snapshot.items.map(item => ({ id: item.id, title: item.title })) };
+    }, signal);
+  }
+  async switchSource(userId: string, bookId: string, entryRef: string, chapterId: string, revision: string, signal?: AbortSignal) {
+    const binding = this.chapters.binding(userId, bookId);
+    return this.call(userId, binding.source_id, async (provider, ctx) => {
+      if (!provider.alternatives) throw badRequest('source does not support alternatives');
+      const acquisition = await provider.acquire(ctx, { entryRef });
+      if (acquisition.kind !== 'chapters') throw badRequest('alternative has no chapters');
+      return this.chapters.switchSource(provider, ctx, bookId, entryRef, acquisition.publicationRef, chapterId, revision);
+    }, signal);
   }
   async detail(userId: string, id: string, ref: string, signal?: AbortSignal) {
     return this.call(userId, id, (provider, ctx) => provider.detail(ctx, ref), signal);
