@@ -179,6 +179,7 @@ export class ReaderView {
   private resizeObserver: ResizeObserver | null = null;
   private currentObjectUrl: string | null = null;
   private animationTimer: ReturnType<typeof setTimeout> | null = null;
+  private pageTurnDistance: number | null = null;
   private spokenChunks: SpokenChunk[] = [];
   private speechHighlight: HTMLElement | null = null;
   /**
@@ -420,6 +421,10 @@ export class ReaderView {
     // different document), so it takes the horizontal pair: a comic page sliding in
     // from the direction the reader turned is the convention the format has.
     const axis = this.doc.layout === 'fixed' || this.settings.mode === 'paged' ? 'x' : 'y';
+    // In scroll mode the flow is an entire chapter, so percentages of its height
+    // cannot describe a page turn. Use the actual displacement (including a short
+    // final screen), or one viewport when entering a different chapter.
+    this.host.style.setProperty('--reader-turn-distance', `${this.pageTurnDistance ?? this.host.clientHeight}px`);
     const value = `${this.settings.pageAnimation}-${direction}-${axis}`;
     this.host.setAttribute('data-animating', value);
     if (this.animationTimer !== null) clearTimeout(this.animationTimer);
@@ -584,6 +589,7 @@ export class ReaderView {
    * from the same measurement, and a step is exactly one of it.
    */
   async next(): Promise<boolean> {
+    this.pageTurnDistance = null;
     if (this.doc.layout === 'fixed') return this.stepFixed(1);
     if (this.settings.mode === 'paged') {
       const advanced = this.stepColumn(1);
@@ -596,6 +602,7 @@ export class ReaderView {
   }
 
   async previous(): Promise<boolean> {
+    this.pageTurnDistance = null;
     if (this.doc.layout === 'fixed') return this.stepFixed(-1);
     if (this.settings.mode === 'paged') {
       const moved = this.stepColumn(-1);
@@ -1001,7 +1008,9 @@ export class ReaderView {
     const page = this.scrollPage();
     const target = page + delta;
     if (target < 0 || target >= this.screenCount()) return false;
+    const before = scroller.scrollTop;
     scroller.scrollTop = this.screenOffset(target);
+    this.pageTurnDistance = Math.abs(scroller.scrollTop - before);
     this.emitPosition();
     return true;
   }
@@ -1186,7 +1195,9 @@ export class ReaderView {
     if (total <= 1) return 0;
     if (page === 0) return 0;
     const target = (this.scrollRange() * page) / (total - 1);
-    return this.snapToLine(target);
+    // A line beyond the scroll range cannot be reached. Keep the page boundary
+    // at the same clamped position the browser actually accepts at chapter end.
+    return Math.min(this.scrollRange(), this.snapToLine(target));
   }
 
   /**
