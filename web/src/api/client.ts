@@ -229,6 +229,11 @@ export class ReaderApi {
 
   // ---- shelf ----
 
+  async sourcePage(id: string, pageId: string, action?: string, values?: Record<string, unknown>): Promise<ExtensionPage> {
+    const path = '/api/v1/sources/' + encodeURIComponent(id) + '/pages/' + encodeURIComponent(pageId);
+    return action ? this.call(path, 'POST', { action, values }) : this.get(path);
+  }
+
   async pluginPage(id: string, pageId: string, action?: string, values?: Record<string, unknown>): Promise<ExtensionPage> {
     const path = '/api/v1/plugins/' + encodeURIComponent(id) + '/pages/' + encodeURIComponent(pageId);
     return action ? this.call(path, 'POST', { action, values }) : this.get(path);

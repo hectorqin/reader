@@ -3769,3 +3769,22 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 section[aria-label="切换书源"] { padding:.75rem 0; overflow-wrap:anywhere; }
 section[aria-label="切换书源"] select { display:block; width:100%; padding:.6rem; margin:.5rem 0; color:inherit; background:var(--reader-surface); }
 section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; padding:.5rem; }
+
+/* Generic declarative extension pages, scoped to the selected source instance. */
+.extension-screen .sources-body { width: 100%; max-width: 64rem; margin-inline: auto; box-sizing: border-box; }
+.extension-description { color: var(--muted, #777); margin: 0 0 16px; line-height: 1.6; }
+.extension-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border, #ddd); margin-bottom: 20px; }
+.extension-tabs button { flex: 1; padding: 12px 8px; background: transparent; color: inherit; border: 0; border-bottom: 3px solid transparent; cursor: pointer; font: inherit; }
+.extension-tabs button[aria-selected="true"] { border-bottom-color: currentColor; font-weight: 700; }
+.extension-tabs button:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
+.extension-screen h2 { font-size: 1rem; margin: 20px 0 12px; }
+.extension-screen h3 { margin: 0 0 8px; }
+.extension-item-heading { display: flex; gap: 16px; align-items: start; justify-content: space-between; }
+.extension-item-heading > div { min-width: 0; }
+.extension-item-heading > button { flex-shrink: 0; }
+.extension-item .source-description { margin: 0; overflow-wrap: anywhere; }
+.extension-actions:not([hidden]) { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.extension-actions form:has(label) { flex-basis: 100%; }
+.extension-screen input:not([type=checkbox]), .extension-screen textarea, .extension-screen select { box-sizing: border-box; max-width: 100%; }
+.extension-screen textarea { min-height: 9rem; }
+.extension-empty { padding: 28px 16px; text-align: center; color: var(--muted, #777); line-height: 1.7; }

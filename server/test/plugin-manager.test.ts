@@ -292,3 +292,52 @@ test('changed package identity is refused on restart and lifecycle mutations rem
     await assert.rejects(restarted.setEnabled('test.plugin', true), { code: 'PLUGIN_MANAGER_CLOSED' });
   } finally { await f.dispose(); }
 });
+
+test('source extension pages and schedules isolate instances, persist and skip paused/deleted sources', async () => {
+  const f = await fixture();
+  try {
+    const directory = await f.package();
+    await writeFile(join(directory, 'plugin.json'), JSON.stringify({
+      id: 'test.plugin', name: 'Generic', version: '1', apiVersion: 1, runtime: 'node', entry: 'main.mjs', permissions: { storage: true },
+      sourceTypes: [{ id: 'test', label: 'Test', capabilities: ['detail'], extensions: {
+        pages: [{ id: 'settings', title: 'Settings' }], tasks: [{ id: 'poll', intervalMinutes: 5 }],
+      } }],
+    }));
+    await writeFile(join(directory, 'main.mjs'), `
+      import { createInterface } from 'node:readline';
+      import { mkdir, readFile, writeFile } from 'node:fs/promises';
+      import { join } from 'node:path';
+      for await (const line of createInterface({ input: process.stdin })) {
+        const { id, method, params } = JSON.parse(line), directory = params.host.instanceDataDir;
+        await mkdir(directory, { recursive: true });
+        const path = join(directory, 'state.json');
+        let n = 0; try { n = JSON.parse(await readFile(path, 'utf8')); } catch {}
+        if (method === 'extension.task') n++;
+        if (method === 'extension.action') n = Number(params.values.count);
+        await writeFile(path, JSON.stringify(n));
+        const result = { title: params.context.instance.name, description: String(n), forms: [] };
+        process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\\n');
+      }
+    `);
+    await f.manager.install('example');
+    for (const id of ['a', 'b']) f.db.run('INSERT INTO source_instances (id, plugin_id, source_type, name, config_json, enabled, created_at) VALUES (?, ?, ?, ?, ?, 1, 0)', id, 'test.plugin', 'test', id, '{}');
+    await f.manager.sourcePage('a', 'settings', 'admin', 'save', { count: 10 });
+    assert.equal((await f.manager.sourcePage('b', 'settings', 'admin')).description, '0');
+    await assert.rejects(f.manager.page('test.plugin', 'settings', 'admin'), { code: 'PAGE_NOT_FOUND' });
+    await assert.rejects(f.manager.sourcePage('a', 'unknown', 'admin'), { code: 'PAGE_NOT_FOUND' });
+    await Promise.all([f.manager.runTasks(1000), f.manager.runTasks(1000)]);
+    assert.equal((await f.manager.sourcePage('a', 'settings', 'admin')).description, '11');
+    assert.equal((await f.manager.sourcePage('b', 'settings', 'admin')).description, '1');
+    await f.manager.close(); const restarted = f.restart(); await restarted.loadInstalled();
+    await restarted.runTasks(2000);
+    assert.equal((await restarted.sourcePage('a', 'settings', 'admin')).description, '11');
+    f.db.run('UPDATE source_instances SET enabled = 0 WHERE id = ?', 'a');
+    await restarted.runTasks(400000);
+    assert.equal((await restarted.sourcePage('a', 'settings', 'admin')).description, '11');
+    assert.equal((await restarted.sourcePage('b', 'settings', 'admin')).description, '2');
+    f.db.run('DELETE FROM source_instances WHERE id = ?', 'b');
+    await restarted.runTasks(800000);
+    await assert.rejects(restarted.sourcePage('b', 'settings', 'admin'), { code: 'SOURCE_NOT_FOUND' });
+    assert.equal(f.db.all('SELECT key FROM plugin_storage WHERE key LIKE ?', 'source-task:%').length, 2);
+  } finally { await f.dispose(); }
+});

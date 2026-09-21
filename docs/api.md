@@ -1067,8 +1067,9 @@ Invoke-RestMethod -Method Post -Uri "$readerApi/books/$readerBookId/refresh" -He
 
 ### 插件扩展与换源
 
+- 管理员 `GET /api/v1/sources/:id/pages/:pageId`：来源实例的声明页面，返回 `title/description/notice/forms/sections/tabs/activeTab`。
+- 管理员 `POST /api/v1/sources/:id/pages/:pageId`：`{action,values}`，操作当前实例并返回页面；入口来自 sourceType 的 `extensions.pages`。暂停来源仍可管理，插件停用后不可访问。
 - 管理员 `GET /api/v1/plugins/:id/pages/:pageId`：已声明配置页，返回通用 title/description/forms/sections。
-- 管理员 `POST /api/v1/plugins/:id/pages/:pageId`：`{action,values}`，返回更新后的页面。插件清单的 extensions.pages 提供入口。
 - `GET /api/v1/sources/:id/search-filters`：插件声明的选择字段；搜索接口接受 JSON 编码的 `filters` 查询参数，值为字符串映射。
 - `GET /api/v1/books/:id/source-options`：`{canSwitch}`，限本人有权限的书籍。
 - `GET /api/v1/books/:id/alternatives?cursor=…`：候选 CatalogPage。

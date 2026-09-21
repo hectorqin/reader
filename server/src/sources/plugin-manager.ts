@@ -5,8 +5,9 @@ import type { Db } from '../db/index.ts';
 import { AppError } from '../lib/errors.ts';
 import { ProcessPlugin } from './process-plugin.ts';
 import { SourceRegistry, SourceRegistryError } from './registry.ts';
-import type { PluginRuntimeStatus, SourceDescriptor, SourceProvider } from './types.ts';
+import type { PluginRuntimeStatus, SourceDescriptor, SourceProvider, SourceInstance } from './types.ts';
 
+interface InstanceRow { id: string; plugin_id: string; source_type: string; name: string; config_json: string; enabled: number }
 interface InstalledPlugin { plugin_id: string; folder: string; enabled: number }
 interface ManagedPlugin {
   plugin?: ProcessPlugin;
@@ -60,21 +61,33 @@ export class PluginManager {
     if (this.closed) return Promise.resolve();
     const work = async () => {
       for (const [id, managed] of this.managed) {
-        for (const task of managed.plugin?.manifest.extensions?.tasks ?? []) {
+        const candidates = (managed.plugin?.manifest.extensions?.tasks ?? []).map(task => ({ task, sourceId: undefined as string | undefined }));
+        for (const row of this.db.all<InstanceRow>('SELECT * FROM source_instances WHERE plugin_id = ? AND enabled = 1', id)) {
+          const type = managed.plugin?.manifest.sourceTypes.find(type => type.id === row.source_type);
+          candidates.push(...(type?.extensions?.tasks ?? []).map(task => ({ task, sourceId: row.id })));
+        }
+        for (const { task, sourceId } of candidates) {
           if (this.closed || !managed.active) break;
-          if (this.extensionBusy.has(id)) continue;
-          const key = 'plugin-task:' + id + ':' + task.id;
+          const busyKey = sourceId ? JSON.stringify([id, sourceId]) : id;
+          if (this.extensionBusy.has(busyKey)) continue;
+          const key = sourceId ? 'source-task:' + JSON.stringify([id, sourceId, task.id]) : 'plugin-task:' + id + ':' + task.id;
+          const instance = sourceId ? this.sourceInstance(sourceId) : undefined;
+          if (sourceId && (!instance?.enabled || instance.pluginId !== id)) continue;
           const saved = this.db.get<{ value: string }>('SELECT value FROM plugin_storage WHERE key = ?', key);
           const previous = saved ? JSON.parse(saved.value) : { next: 0, failures: 0 };
           if (previous.next > now) continue;
           let failures = 0;
-          this.extensionBusy.add(id);
+          this.extensionBusy.add(busyKey);
           try {
             if (managed.plugin!.status().state === 'failed') await managed.plugin!.close();
             if (!managed.active || this.closed) break;
-            await managed.plugin!.invoke('extension.task', { taskId: task.id });
+            const current = sourceId ? this.sourceInstance(sourceId) : undefined;
+            if (sourceId && (!current?.enabled || current.pluginId !== id)) continue;
+            await managed.plugin!.invoke('extension.task', { taskId: task.id,
+              ...(current ? { sourceType: current.sourceType, context: { instance: current, userId: '' } } : {}),
+            });
           } catch { failures = previous.failures + 1; }
-          finally { this.extensionBusy.delete(id); }
+          finally { this.extensionBusy.delete(busyKey); }
           if (this.closed) break;
           const minutes = failures ? Math.min(1440, Math.max(task.intervalMinutes, 2 ** Math.min(failures, 10))) : task.intervalMinutes;
           this.db.run('INSERT INTO plugin_storage (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
@@ -86,20 +99,35 @@ export class PluginManager {
     return this.taskRun;
   }
 
-  async page(pluginId: string, pageId: string, userId: string, action?: string, values: unknown = {}) {
+  private sourceInstance(id: string): SourceInstance | undefined {
+    const row = this.db.get<InstanceRow>('SELECT * FROM source_instances WHERE id = ?', id);
+    return row ? { id: row.id, pluginId: row.plugin_id, sourceType: row.source_type, name: row.name,
+      config: JSON.parse(row.config_json), enabled: row.enabled === 1 } : undefined;
+  }
+
+  async sourcePage(sourceId: string, pageId: string, userId: string, action?: string, values: unknown = {}) {
+    const instance = this.sourceInstance(sourceId);
+    if (!instance) throw pluginError(404, 'SOURCE_NOT_FOUND', 'Source instance is unavailable');
+    return this.page(instance.pluginId, pageId, userId, action, values, instance);
+  }
+
+  async page(pluginId: string, pageId: string, userId: string, action?: string, values: unknown = {}, instance?: SourceInstance) {
     if (this.closed) throw pluginError(503, 'PLUGIN_UNAVAILABLE', 'Plugin manager is closed');
     const managed = this.managed.get(pluginId);
     if (!managed?.active || !managed.plugin) throw pluginError(404, 'PLUGIN_UNAVAILABLE', 'Plugin is unavailable');
-    if (!managed.plugin.manifest.extensions?.pages?.some(page => page.id === pageId)) throw pluginError(404, 'PAGE_NOT_FOUND', 'Plugin page is not declared');
+    const extensions = instance ? managed.plugin.manifest.sourceTypes.find(type => type.id === instance.sourceType)?.extensions : managed.plugin.manifest.extensions;
+    if (!extensions?.pages?.some(page => page.id === pageId)) throw pluginError(404, 'PAGE_NOT_FOUND', 'Plugin page is not declared');
     if (action !== undefined && !/^[a-z][a-z0-9._-]{0,63}$/.test(action)) throw pluginError(400, 'INVALID_ACTION', 'Invalid action');
     const input = extensionValues(values);
-    if (action && this.extensionBusy.has(pluginId)) throw pluginError(429, 'PLUGIN_BUSY', '插件正在更新，请稍后重试');
-    if (action) this.extensionBusy.add(pluginId);
+    const busyKey = instance ? JSON.stringify([pluginId, instance.id]) : pluginId;
+    if (action && this.extensionBusy.has(busyKey)) throw pluginError(429, 'PLUGIN_BUSY', '插件正在更新，请稍后重试');
+    if (action) this.extensionBusy.add(busyKey);
     try {
       return extensionPage(await managed.plugin.invoke(action ? 'extension.action' : 'extension.page', {
         pageId, userId, action, values: input,
+        ...(instance ? { sourceType: instance.sourceType, context: { instance, userId } } : {}),
       }));
-    } finally { if (action) this.extensionBusy.delete(pluginId); }
+    } finally { if (action) this.extensionBusy.delete(busyKey); }
   }
 
 

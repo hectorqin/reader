@@ -9,9 +9,13 @@ export interface ExtensionForm {
   id: string; title: string; submit: string; fields: ExtensionField[];
   values?: Record<string, string | number | boolean>;
 }
-export interface ExtensionPage {
-  title: string; description?: string; forms: ExtensionForm[];
-  sections?: Array<{ title: string; items: Array<{ title: string; description?: string; forms?: ExtensionForm[] }> }>;
+export interface ExtensionContent {
+  forms: ExtensionForm[];
+  sections?: Array<{ title: string; emptyText?: string; items: Array<{ title: string; description?: string; collapsible?: boolean; forms?: ExtensionForm[] }> }>;
+}
+export interface ExtensionPage extends ExtensionContent {
+  title: string; description?: string; notice?: string; activeTab?: string;
+  tabs?: Array<ExtensionContent & { id: string; title: string; description?: string }>;
 }
 export interface PluginExtensions {
   pages?: Array<{ id: string; title: string }>;
@@ -72,13 +76,26 @@ export function extensionPage(input: unknown): ExtensionPage {
       extensionFields(form.fields); if (form.values !== undefined) extensionValues(form.values);
     }
   };
-  forms(input.forms);
-  if (input.sections !== undefined) {
-    check(Array.isArray(input.sections) && input.sections.length <= 16);
-    for (const section of input.sections) {
-      record(section); label(section.title); check(Array.isArray(section.items) && section.items.length <= 200);
-      for (const item of section.items) { record(item); label(item.title); if (item.description !== undefined) label(item.description); if (item.forms !== undefined) forms(item.forms); }
+  const content = (input: Record<string, unknown>) => {
+    forms(input.forms);
+    if (input.sections !== undefined) {
+      check(Array.isArray(input.sections) && input.sections.length <= 16);
+      for (const section of input.sections) {
+        record(section); label(section.title); if (section.emptyText !== undefined) label(section.emptyText); check(Array.isArray(section.items) && section.items.length <= 200);
+        for (const item of section.items) { record(item); label(item.title); if (item.description !== undefined) label(item.description); if (item.forms !== undefined) forms(item.forms); if (item.collapsible !== undefined) check(typeof item.collapsible === 'boolean'); }
+      }
+    }
+  };
+  content(input);
+  if (input.notice !== undefined) label(input.notice);
+  const ids = new Set<string>();
+  if (input.tabs !== undefined) {
+    check(Array.isArray(input.tabs) && input.tabs.length > 0 && input.tabs.length <= 16);
+    for (const tab of input.tabs) {
+      record(tab); check(typeof tab.id === 'string' && identifier.test(tab.id) && !ids.has(tab.id)); ids.add(tab.id);
+      label(tab.title); if (tab.description !== undefined) label(tab.description); content(tab);
     }
   }
+  if (input.activeTab !== undefined) check(typeof input.activeTab === 'string' && ids.has(input.activeTab));
   return input as unknown as ExtensionPage;
 }

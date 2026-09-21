@@ -52,3 +52,35 @@ it('uses provider-defined search filter keys and retains filters across paginati
   await vi.waitFor(() => expect(transport.requests.filter(request => request.url.includes('/search?'))).toHaveLength(2));
   for (const request of transport.requests.filter(request => request.url.includes('/search?'))) expect(new URL(request.url, 'http://test').searchParams.get('filters')).toBe('{"region":"asia"}');
 });
+
+it('keeps tab drafts and refresh selection, follows action navigation and uses source instance endpoints', async () => {
+  const { api, transport } = fixture();
+  const route = { name: 'source-page' as const, sourceId: 'custom/one', pageId: 'settings' };
+  expect(parseRoute(routeHash(route))).toEqual(route);
+  expect(sameRoute(route, { ...route, sourceId: 'two' })).toBe(false);
+  expect(parentOf(route)).toEqual({ name: 'sources' });
+  transport.respondWith(request => ({ status: 200, headers: {}, json: {
+    title: '我的书源', forms: [], ...(request.method === 'POST' ? { activeTab: 'sources', notice: '已保存' } : {}), tabs: [
+      { id: 'sources', title: '书源管理', forms: [], sections: [{ title: '列表', items: [{ title: 'A', collapsible: true,
+        forms: [{ id: 'save', title: '', submit: '保存', fields: [] }] }] }] },
+      { id: 'import', title: '导入书源', forms: [{ id: 'import', title: 'JSON', submit: '导入', fields: [{ key: 'json', label: '规则', type: 'textarea' }] }] },
+    ],
+  } }));
+  const screen = new PluginPageScreen({ api, ...route, onBack() {}, onSignedOut() {} }); screens.push(screen); document.body.append(screen.element);
+  await screen.show();
+  const tabs = () => [...screen.element.querySelectorAll<HTMLButtonElement>('[role=tab]')];
+  expect(screen.element.querySelector('.extension-actions')?.hasAttribute('hidden')).toBe(true);
+  (screen.element.querySelector('[aria-expanded]') as HTMLButtonElement).click();
+  expect(screen.element.querySelector('[aria-expanded]')?.getAttribute('aria-expanded')).toBe('true');
+  tabs()[1]!.click();
+  const textarea = screen.element.querySelector('textarea')!; textarea.value = '{"draft":true}'; textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  tabs()[0]!.click(); expect(screen.element.querySelector('textarea')).toBeNull();
+  tabs()[1]!.click(); expect(screen.element.querySelector('textarea')!.value).toBe('{"draft":true}');
+  await screen.show(); expect(screen.element.querySelector('[aria-selected=true]')?.textContent).toBe('导入书源');
+  tabs()[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }));
+  expect(document.activeElement?.textContent).toBe('书源管理');
+  tabs()[1]!.click(); screen.element.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
+  await vi.waitFor(() => expect(screen.element.querySelector('[aria-selected=true]')?.textContent).toBe('书源管理'));
+  expect(screen.element.querySelector('[role=status]')?.textContent).toBe('已保存');
+  expect(transport.requests.every(request => request.url.endsWith('/sources/custom%2Fone/pages/settings'))).toBe(true);
+});

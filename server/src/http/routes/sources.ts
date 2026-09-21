@@ -139,6 +139,14 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     const ref = textBody(request.body, 'entryRef'), chapter = textBody(request.body, 'chapterId'), revision = textBody(request.body, 'revision');
     return withSignal(request, reply, signal => host.switchSource(user.id, id, ref, chapter, revision, signal));
   });
+  app.get('/api/v1/sources/:id/pages/:pageId', { preHandler: auth }, async request => {
+    requireAdmin(request); const { id, pageId } = request.params as { id: string; pageId: string };
+    return host.plugins.sourcePage(id, pageId, currentUser(request).id);
+  });
+  app.post('/api/v1/sources/:id/pages/:pageId', { preHandler: auth }, async request => {
+    requireAdmin(request); const { id, pageId } = request.params as { id: string; pageId: string };
+    return host.plugins.sourcePage(id, pageId, currentUser(request).id, textBody(request.body, 'action'), (request.body as Record<string, unknown>).values ?? {});
+  });
   app.get('/api/v1/plugins/:id/pages/:pageId', { preHandler: auth }, async request => {
     requireAdmin(request); const { id, pageId } = request.params as { id: string; pageId: string };
     return host.plugins.page(id, pageId, currentUser(request).id);

@@ -12,27 +12,17 @@
 
 ## 声明式页面与持久化
 
-manifest 可选声明：
+实例扩展在 manifest 的 `sourceTypes[].extensions` 下声明（以下为扩展示意）：
 
-```json
-{
-  "permissions": { "storage": true },
-  "extensions": {
-    "pages": [{ "id": "library", "title": "书源订阅与管理" }],
-    "tasks": [{ "id": "subscriptions", "intervalMinutes": 1 }]
-  }
-}
-```
+GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{sourceType,context:{instance,userId},pageId,action,values}`。宿主根据 sourceId 从数据库解析插件与实例，客户端不能伪造上下文；暂停的来源仍可管理，停用插件则不可访问页面。普通读者无页面读取及写入权限。
 
-第一版页面均为管理员共享配置。独立地址 `#/plugins/<pluginId>/<pageId>`，从插件管理入口打开。GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{pageId,userId,action,values}`。返回同一 Page DTO：`title/description/forms/sections`。Form 包含 `id/title/submit/fields/values`，fields 支持 text、textarea、number、boolean、select；values 携带不透明行 ID。一次动作完成后返回新页面，客户端不推断订阅或书源结构。
+返回 Page DTO：`title/description/notice/forms/sections/tabs/activeTab`。每个 Tab 包含 `id/title/description/forms/sections`，页面公共内容和当前 Tab 同时渲染。Form 包含 `id/title/submit/fields/values`，fields 支持 text、textarea、number、boolean、select；values 携带不透明行 ID。section 支持 `emptyText`，item 支持 `collapsible`。一次动作返回新页面；可选 activeTab 请求切换到指定 Tab，否则保留当前选择。纯 Tab 切换保留输入草稿，提交或刷新后以服务端新页面为准。
 
-宿主校验声明、页面结构、选项和输入配额；未声明页面拒绝访问。渲染器只呈现文本，不接受 HTML、JS、iframe 或任意前端代码。授权在 HTTP 层执行，隐藏入口不代替鉴权。普通账号可搜索和管理自己的书籍，但不能修改共享规则。
-
-storage 权限启用后，每个 RPC 获得 `host.dataDir = DATA_DIR/plugin-data/<SHA256(pluginId)>`。数据与 npm 包目录分离，停用、升级、卸载均保留。插件自行管理数据格式及原子写入；书源订阅不进入 reader 专属业务表。
+宿主校验声明、页面结构、选项和输入配额；未声明页面拒绝访问。渲染器只呈现文本，不接受 HTML、JS、iframe 或任意前端代码。授权在 HTTP 层执行，隐藏入口不代替鉴权。
 
 ## 后台任务
 
-宿主每分钟检查启用插件的声明任务，调用 `extension.task({taskId})`，单实例串行、同轮合并。下一执行时点和失败次数持久保存在通用 `plugin_storage`；重启后恢复，失败延迟重试。停用或关闭会终止插件，停用期间不执行。此调度器独立于章节追更。
+宿主每分钟检查启用插件及启用来源实例的声明任务。实例任务调用 `extension.task({taskId,sourceType,context:{instance,userId:""}})`，不携带个人凭据；全局任务继续使用 `{taskId}`。任务串行、同轮合并，执行前重新确认实例仍存在且启用。同一实例的后台任务与管理写入互斥，不阻塞其它实例的配置；下一执行时点和失败次数以插件、实例、任务组合键保存在通用 `plugin_storage`，重启恢复，失败退避。暂停/删除实例后不再调度它，停用插件或关闭宿主会终止进程。此调度独立于章节追更。
 
 ## 通用搜索选项
 
@@ -50,10 +40,13 @@ storage 权限启用后，每个 RPC 获得 `host.dataDir = DATA_DIR/plugin-data
 
 ## 升级及验证
 
+## 验证方式
+
+生产 bundle 的 Chrome 验证脚本覆盖 390px 手机和 1280px 桌面布局、从自定义来源入口进入、三个 Tab、规则展开与编辑、订阅启停、搜索筛选和目录换源。运行 `node web/tools/ui-review/plugin-extensions.mjs`（仓库根目录，预先构建 Web；CHROME_PATH 可指定浏览器），截图输出到 docs/ui-review/plugin-*.png。
+
 ## 本次验证（2026-09-21）
 
-服务端全量 285 通过、1 项 Windows 文件权限位测试跳过；Web 531 项 Vitest 与 29 项 Node 测试通过；包 14 项测试通过，含真实 Chromium 规则和独立 tarball 安装。Web 既有图标测试在默认高并发下超时，使用 `npx vitest run --maxWorkers=2 --minWorkers=1` 全量复核通过。服务端类型检查、构建与 Web 生产构建通过。
-
-生产 bundle 的 Chrome 实测覆盖 390px 手机和 1280px 桌面配置页、订阅启停、搜索筛选、失败换源保持原文和成功换源选章，无水平溢出或页面脚本错误。可运行 `node web/tools/ui-review/plugin-extensions.mjs`（仓库根目录，预先构建 Web；可通过 CHROME_PATH 指定浏览器）。截图位于 docs/ui-review/plugin-*.png。
-
-示例公网订阅链接本次检查返回 22 条文本书源，已通过插件真实订阅流程导入，保存了下次检查时间且无订阅错误；没有对 22 个采集站点逐一认证。npm 版本 0.2.0 已打包，未发布公共 registry，未构建 Android APK。
+- 服务端全量 287 通过，1 项 Windows 文件权限位测试跳过；类型检查与构建通过。
+- Web 全量 532 项 Vitest（maxWorkers=2）及 29 项 Node 测试通过，生产构建通过。
+- 插件原有 14 项测试通过（含真实 Chromium 和独立 tarball 安装）；新增 Tab 声明测试及 Catalog 回归 3 项通过，共覆盖 15 项插件测试。
+- Chrome 生产界面检查通过：390px 手机、1280px 桌面、来源实例入口、Tab 切换、规则编辑、订阅启停、筛选及换源。

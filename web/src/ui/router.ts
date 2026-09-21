@@ -71,6 +71,7 @@ export type LibraryView = 'browse' | 'files';
 /** A parsed location. */
 export type Route =
   | { name: 'sources' }
+  | { name: 'source-page'; sourceId: string; pageId: string }
   | { name: 'plugin-page'; pluginId: string; pageId: string }
   | {
       name: 'shelf';
@@ -180,6 +181,9 @@ export function parseRoute(hash: string, context?: RouteContext): Route {
   const [head, ...rest] = parts;
   if (head === 'plugins' && rest.length === 2) {
     try { return { name: 'plugin-page', pluginId: decodeURIComponent(rest[0]!), pageId: decodeURIComponent(rest[1]!) }; } catch { return shelfRoute(context); }
+  }
+  if (head === 'sources' && rest.length === 2) {
+    try { return { name: 'source-page', sourceId: decodeURIComponent(rest[0]!), pageId: decodeURIComponent(rest[1]!) }; } catch { return shelfRoute(context); }
   }
   if (head === 'sources') return { name: 'sources' };
   if (head === 'shelf') {
@@ -301,6 +305,7 @@ function shelfRoute(context?: RouteContext, page = 1): Route {
  */
 export function routeHash(route: Route): string {
   switch (route.name) {
+    case 'source-page': return '#/sources/' + encodeURIComponent(route.sourceId) + '/' + encodeURIComponent(route.pageId);
     case 'plugin-page': return '#/plugins/' + encodeURIComponent(route.pluginId) + '/' + encodeURIComponent(route.pageId);
     case 'sources': return '#/sources';
     case 'shelf':
@@ -332,6 +337,7 @@ export function routeHash(route: Route): string {
 /** Whether two routes point at the same place. Used to skip a redundant repaint. */
 export function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
+  if (a.name === 'source-page' && b.name === 'source-page') return a.sourceId === b.sourceId && a.pageId === b.pageId;
   if (a.name === 'plugin-page' && b.name === 'plugin-page') return a.pluginId === b.pluginId && a.pageId === b.pageId;
   if (a.name === 'book' && b.name === 'book') return a.bookId === b.bookId;
   if (a.name === 'library' && b.name === 'library') {
@@ -353,7 +359,7 @@ export function sameRoute(a: Route, b: Route): boolean {
 
 /** Where a "back" from this route lands when the app has no trail of its own. */
 export function parentOf(route: Route): Route {
-  if (route.name === 'plugin-page') return { name: 'sources' };
+  if (route.name === 'plugin-page' || route.name === 'source-page') return { name: 'sources' };
   return route.name === 'shelf' ? SHELF : SHELF;
 }
 

@@ -1,4 +1,5 @@
 export interface SourceType {
+  extensions?: { pages?: Array<{ id: string; title: string }> };
   id: string; pluginId: string; label: string; version: string; builtin: boolean; capabilities: string[];
   configSchema?: { properties?: Record<string, { type?: string; title?: string; default?: unknown }>; required?: string[] };
   credentialKeys?: Array<{ key: string; label: string }>;
@@ -34,7 +35,11 @@ export interface ExtensionField {
   value?: string | number | boolean; options?: Array<{ value: string; label: string }>;
 }
 export interface ExtensionForm { id: string; title: string; submit: string; fields: ExtensionField[]; values?: Record<string, string | number | boolean> }
-export interface ExtensionPage {
-  title: string; description?: string; forms: ExtensionForm[];
-  sections?: Array<{ title: string; items: Array<{ title: string; description?: string; forms?: ExtensionForm[] }> }>;
+export interface ExtensionContent {
+  forms: ExtensionForm[];
+  sections?: Array<{ title: string; emptyText?: string; items: Array<{ title: string; description?: string; collapsible?: boolean; forms?: ExtensionForm[] }> }>;
+}
+export interface ExtensionPage extends ExtensionContent {
+  title: string; description?: string; notice?: string; activeTab?: string;
+  tabs?: Array<ExtensionContent & { id: string; title: string; description?: string }>;
 }

@@ -112,7 +112,9 @@ export class SourcesScreen {
           {this.sources.map((source) => <div className="sources-row" key={source.id}>
             <div><strong>{source.name}</strong><small>{source.descriptor?.label ?? '插件未启用或未安装'} · {source.enabled ? '已启用' : '已暂停'}</small></div>
             <div className="sources-actions"><Button disabled={this.busy || !source.enabled || !source.descriptor} onClick={() => this.select(source)}>打开</Button>
-              {this.options.admin && <><Button disabled={this.busy || !source.descriptor} onClick={() => this.edit(source)}>配置</Button>
+              {this.options.admin && <>
+                {source.descriptor?.extensions?.pages?.map(page => <a className="button" href={'#/sources/' + encodeURIComponent(source.id) + '/' + encodeURIComponent(page.id)}>{page.title}</a>)}
+                <Button disabled={this.busy || !source.descriptor} onClick={() => this.edit(source)}>基本设置</Button>
               <Button disabled={this.busy} onClick={() => void this.run(async () => { await this.options.api.saveSource(source.id, { enabled: !source.enabled }); await this.reload(); })}>{source.enabled ? '暂停' : '启用'}</Button></>}
             </div></div>)}
         </section>

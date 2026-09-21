@@ -265,9 +265,10 @@ export class App {
       return;
     }
     switch (route.name) {
+      case 'source-page':
       case 'plugin-page':
         this.clearScreens(); this.route = route;
-        this.pluginPage = new PluginPageScreen({ api: this.api, pluginId: route.pluginId, pageId: route.pageId,
+        this.pluginPage = new PluginPageScreen({ api: this.api, ...(route.name === 'source-page' ? { sourceId: route.sourceId } : { pluginId: route.pluginId }), pageId: route.pageId,
           onBack: () => location.back(), onSignedOut: () => this.handleSignedOut() });
         this.root.append(this.pluginPage.element); void this.pluginPage.show(); return;
       case 'sources':

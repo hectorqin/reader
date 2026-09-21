@@ -195,7 +195,10 @@ export class ProcessPlugin {
       return Promise.reject(error);
     }
     const id = ++this.sequence;
-    const line = JSON.stringify({ jsonrpc: '2.0', id, method, params: { ...params, host: { dataDir: this.dataDir } } }) + '\n';
+    const instanceId = (params.context as { instance?: { id?: string } } | undefined)?.instance?.id;
+    const instanceDataDir = this.dataDir && instanceId
+      ? resolve(this.dataDir, 'sources', createHash('sha256').update(instanceId).digest('hex')) : undefined;
+    const line = JSON.stringify({ jsonrpc: '2.0', id, method, params: { ...params, host: { dataDir: this.dataDir, instanceDataDir } } }) + '\n';
     if (Buffer.byteLength(line) > this.maxMessageBytes) {
       return Promise.reject(new PluginError('PLUGIN_MESSAGE_TOO_LARGE', 'plugin request exceeds the message limit'));
     }

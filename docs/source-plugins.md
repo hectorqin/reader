@@ -470,3 +470,5 @@ HTTP 返回宿主 DTO，凭据不回显。插件和来源配置管理需管理�
 ## 通用配置页、任务、筛选与换源
 
 已实现 manifest.extensions.pages/tasks、独立数据目录、声明式页面、通用后台任务、search.filters 与 content.alternatives。详情、责任分配和失败语义见[扩展设计](plugin-extensions.md)。这些扩展不依赖具体插件 ID。
+
+### 0.3 实例配置作用域

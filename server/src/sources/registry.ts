@@ -21,6 +21,7 @@ const CAPABILITIES = new Set<SourceCapability>([
 ]);
 
 function assertDescriptor(descriptor: SourceDescriptor): void {
+  extensionDeclarations(descriptor.extensions);
   if (descriptor.credentialKeys !== undefined && (!Array.isArray(descriptor.credentialKeys) ||
       descriptor.credentialKeys.length > 16 || descriptor.credentialKeys.some((field) =>
         !field || !/^[a-z][a-z0-9_.-]{0,63}$/.test(field.key) || typeof field.label !== 'string' || !field.label.trim()) ||

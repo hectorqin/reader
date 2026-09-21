@@ -15,6 +15,7 @@ export type SourceCapability =
   | 'content.update';
 
 export interface SourceDescriptor {
+  readonly extensions?: PluginExtensions;
   /** Stable source type id, e.g. `local`, `opds`, or a plugin-defined id. */
   readonly id: string;
   readonly label: string;
@@ -217,6 +218,7 @@ export interface SourceRegistration {
 }
 
 export interface PluginSourceType {
+  readonly extensions?: PluginExtensions;
   readonly id: string;
   readonly label: string;
   readonly capabilities: readonly SourceCapability[];
