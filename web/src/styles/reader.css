@@ -3853,6 +3853,38 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .source-modal-content { overflow-y: auto; overscroll-behavior: contain; padding: 0 1rem 1rem; }
 .source-modal-actions { display: flex; flex-wrap: wrap; gap: .5rem; padding: .75rem 1rem; border-top: 1px solid var(--reader-line); flex: none; }
 .source-modal-actions button { min-height: 44px; }
+
+/* Collection pages share a quiet heading, labelled destinations and useful empty states. */
+.shelf-head { align-items: center; padding-top: calc(1.25rem + var(--safe-top)); padding-bottom: .85rem; }
+.shelf-head-actions { margin-top: 0; }
+.shelf-head .icon-button, .collection-heading .icon-button { width: 44px; height: 44px; border-radius: .8rem; }
+.shelf-subtitle { margin-top: .45rem; line-height: 1.5; }
+.collection-header { padding: calc(1.25rem + var(--safe-top)) calc(.9rem + var(--safe-right)) .75rem calc(.9rem + var(--safe-left)); flex: none; }
+.collection-heading { display: flex; align-items: center; gap: .5rem; }
+.collection-heading-text { flex: 1; min-width: 0; }
+.collection-heading h1 { margin: 0; font-size: 1.5rem; font-weight: 650; letter-spacing: -.02em; line-height: 1.15; }
+.collection-heading p { margin: .45rem 0 0; font-size: .78rem; line-height: 1.5; }
+.collection-links { display: flex; gap: .65rem; margin-top: .85rem; }
+.shelf-links { max-width: calc(var(--shelf-measure) - 1.8rem); margin: 0 auto .9rem; padding-inline: calc(.9rem + var(--safe-left)) calc(.9rem + var(--safe-right)); }
+.collection-link.button { display: flex; align-items: center; gap: .6rem; flex: 1; min-width: 0; min-height: 48px; padding: .7rem .85rem; font-size: .875rem; border-radius: .8rem; background: color-mix(in srgb, var(--reader-accent) 4%, var(--reader-paper)); border-color: color-mix(in srgb, var(--reader-line) 65%, transparent); text-align: start; }
+.collection-link > span { flex: 1; }
+.collection-link[hidden] { display: none; }
+.collection-link > .icon:first-child { color: var(--reader-accent); }
+.collection-link > .icon:last-child { color: var(--reader-muted); font-size: .8rem; }
+.shelf-screen .shelf-search input, .library-search input { border-radius: .85rem; min-height: 48px; }
+.library-browse-screen .library-search { margin-top: .35rem; }
+.library-path { margin-top: .75rem; padding: .25rem 0 0; }
+.library-path .manager-crumb { min-height: 44px; }
+.collection-empty.empty-state { width: calc(100% - 2rem); max-width: 30rem; margin: clamp(1.5rem, 7vh, 4rem) auto 2rem; padding: 1.75rem 1.25rem; gap: .7rem; border: 1px solid var(--reader-line); border-radius: 1.25rem; background: color-mix(in srgb, var(--reader-surface) 45%, var(--reader-paper)); }
+.collection-empty .empty-glyph { box-sizing: content-box; width: 30px; height: 30px; padding: 1rem; border-radius: 1.1rem; background: color-mix(in srgb, var(--reader-accent) 9%, transparent); color: var(--reader-accent); opacity: 1; margin-bottom: .5rem; }
+.collection-empty p { font-size: 1.1rem; line-height: 1.5; }
+.collection-empty p.muted { max-width: 23rem; font-size: .875rem; line-height: 1.8; text-wrap: pretty; }
+.collection-empty .empty-actions { margin-top: .6rem; gap: .65rem; }
+.collection-empty .button { min-height: 44px; font-size: .875rem; }
+.library-browse-body > .manager-status { background: transparent; border: 0; margin: .75rem auto; }
+@media (min-width: 72rem) {
+  .collection-header, .library-browse-body { width: 100%; max-width: 68rem; margin-inline: auto; }
+}
 @media (max-width: 600px) {
   .source-entry-actions { flex-direction: column; gap: 0; }
   .source-entry-top { align-items: center; }

@@ -479,14 +479,18 @@ export class LibraryBrowseScreen {
     const listing = state.listing;
     return (
       <>
-        <div className="panel-header library-header">
-          <IconButton label="返回" icon="arrow-left" onClick={() => this.options.onClose()} />
-          {/* The way to the other half. A *place*, not a filter, so it is a labelled
-              control rather than a bare glyph: the reader has to know that pressing
-              it leaves the books and opens a file manager, because that page can
-              delete things. */}
-          <IconTextButton label="文件管理" icon="folder" onClick={() => this.options.onOpenFiles()} />
-          <div className="manager-crumbs">
+        <header className="library-header collection-header">
+          <div className="collection-heading">
+            <IconButton label="返回" icon="arrow-left" onClick={() => this.options.onClose()} />
+            <div className="collection-heading-text"><h1>书库</h1><p className="muted">浏览本地书籍，发现下一本好书</p></div>
+            <IconButton label={'书架设置 · ' + this.options.settings.shelfDensity} icon="tune" onClick={() => this.patch({ settingsOpen: !state.settingsOpen })} />
+          </div>
+          <nav className="collection-links" aria-label="书库操作">
+            <button type="button" className="button collection-link" onClick={() => this.options.onOpenFiles()}><Icon name="folder" /><span>文件管理</span><Icon name="chevron-right" /></button>
+            <button type="button" aria-label="上传书籍" hidden={!listing?.writable} className="button collection-link" disabled={state.busy} onClick={() => this.uploadInput.click()}><Icon name="upload" /><span>上传书籍</span><Icon name="chevron-right" /></button>
+          </nav>
+          {(listing?.crumbs.length ?? 0) > 1 && <>
+          <div className="manager-crumbs library-path" aria-label="当前文件夹">
             {(listing?.crumbs ?? []).map((crumb, index) => (
               <>
                 {index > 0 ? <span className="manager-crumb-sep">/</span> : null}
@@ -502,19 +506,8 @@ export class LibraryBrowseScreen {
               </>
             ))}
           </div>
-          <IconButton
-            label="上传书籍"
-            icon="upload"
-            hidden={listing?.writable === false}
-            disabled={state.busy}
-            onClick={() => this.uploadInput.click()}
-          />
-          <IconButton
-            label={`书架设置 · ${this.options.settings.shelfDensity}`}
-            icon="tune"
-            onClick={() => this.patch({ settingsOpen: !state.settingsOpen })}
-          />
-        </div>
+          </>}
+        </header>
 
         <div className="manager-body library-browse-body">
           {/*
@@ -558,7 +551,7 @@ export class LibraryBrowseScreen {
               onGo={(page) => this.goToPage(page)}
             />
           ) : null}
-          <div className="manager-status muted">{state.status || this.summary()}</div>
+          {(state.status || state.total > 0) && <div className="manager-status muted">{state.status || this.summary()}</div>}
         </div>
 
         {state.dialog ? (
@@ -577,24 +570,30 @@ export class LibraryBrowseScreen {
   private grid(): ComponentChildren {
     const state = this.state;
     if (state.books.length === 0) {
+      if (state.bootstrapping) return null;
+      const hasFiles = (state.listing?.files ?? 0) > 0;
+      const writable = state.listing?.writable === true;
       const hasQuery = state.query.length > 0;
       return (
-        <div className="empty-state">
+        <div className="empty-state collection-empty">
           <Icon name={hasQuery ? 'search' : 'book'} class="empty-glyph" />
-          <p>{hasQuery ? '没有匹配的书' : '这个文件夹里没有可阅读的书'}</p>
+          <p>{hasQuery ? '没有匹配的书' : hasFiles ? '这个文件夹里没有可阅读的书' : '书库还没有书'}</p>
           <p className="muted">
             {hasQuery
               ? `「${state.query}」在这个文件夹里没有匹配`
-              : `${state.listing?.files ?? 0} 个文件里没有被扫描成书的，文件页能看到每一行的原因`}
+              : hasFiles ? '这里有 ' + state.listing!.files + ' 个文件，可在文件管理中查看识别结果。'
+              : writable ? '上传 EPUB、TXT 等书籍，开始建立你的书库。' : '管理员添加书籍后，就能在这里浏览并加入书架。'}
           </p>
           <div className="empty-actions">
             {hasQuery ? (
-              <button type="button" className="button" onClick={() => this.clearSearch()}>
+              <button type="button" className="button primary" onClick={() => this.clearSearch()}>
                 清除搜索
               </button>
-            ) : (
-              <IconTextButton label="文件管理" icon="folder" onClick={() => this.options.onOpenFiles()} />
-            )}
+            ) : !hasFiles && writable ? (
+              <IconTextButton className="primary" label="上传第一本书" icon="upload" disabled={state.busy} onClick={() => this.uploadInput.click()} />
+            ) : hasFiles ? (
+              <IconTextButton className="primary" label="文件管理" icon="folder" onClick={() => this.options.onOpenFiles()} />
+            ) : null}
           </div>
         </div>
       );

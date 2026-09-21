@@ -256,7 +256,8 @@ describe('the browsing half of the library', () => {
     );
     void walker;
     void walkerCalls;
-    expect(screen.element.querySelector('.manager-crumb')).not.toBeNull();
+    expect(screen.element.querySelector('.library-header h1')?.textContent).toBe('书库');
+    expect(screen.element.querySelector('.library-path')).toBeNull();
     expect(calls).toEqual([]);
   });
 
@@ -345,7 +346,7 @@ describe('the browsing half of the library', () => {
     // The empty state sends the reader here, so the fix has to be here too. It is a
     // write, and the file page's own upload is the same call — one endpoint, two
     // pages that can open it.
-    expect(screen.element.querySelector('.panel-header [aria-label="上传书籍"]')).not.toBeNull();
+    expect(screen.element.querySelector('.library-header [aria-label="上传书籍"]')).not.toBeNull();
   });
 
   it('hides 上传 on a read-only mount', async () => {
