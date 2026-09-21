@@ -65,9 +65,19 @@ try {
     await page.setViewportSize({ width, height: 844 });
     await page.locator('.shelf-head button[aria-label^=书架设置]').click();
     const close = page.locator('.shelf-settings button[aria-label="关闭"]');
+    await page.locator('.shelf-settings .panel-body').evaluate(el => { el.scrollTop = 0; });
     await shot('shelf-settings-' + width);
     assert.equal(await close.evaluate(el => { const r = el.getBoundingClientRect(), p = el.closest('.panel-header').getBoundingClientRect(); return p.right - r.right <= 20 && r.top >= p.top && r.bottom <= p.bottom; }), true);
-    await page.setViewportSize({ width, height: 568 });
+    if (width >= 1280) {
+      const desktopPanel = await page.locator('.shelf-settings').evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return { rightGap: innerWidth - r.right, width: r.width, top: r.top, bottom: innerHeight - r.bottom };
+      });
+      assert.ok(desktopPanel.width >= 400 && desktopPanel.width <= 450, 'desktop settings should be a compact side panel');
+      assert.ok(desktopPanel.rightGap <= 20 && desktopPanel.top >= 10 && desktopPanel.bottom >= 10, 'desktop settings should sit inside the viewport');
+      assert.equal(await page.locator('.shelf-discovery').evaluate(el => getComputedStyle(el).display), 'flex');
+    }
+    await page.setViewportSize({ width, height: width >= 1024 ? 420 : 568 });
     const body = page.locator('.shelf-settings .panel-body');
     await body.evaluate(el => { el.scrollTop = 45; });
     await shot('shelf-settings-sticky-' + width);
@@ -95,11 +105,45 @@ try {
   const chooser = page.waitForEvent('filechooser'); await button('上传书籍').click(); await chooser;
   await page.goto(base + '/#/library/files/folder'); await page.reload(); await button('返回').click(); await page.waitForURL('**/#/library/files');
   await button('返回').click(); await page.waitForURL('**/#/library');
+  // Real desktop sizes, including a narrow window and a full-HD monitor.
+  for (const [width, height] of [[1024, 768], [1366, 768], [1920, 1080]]) {
+    await page.setViewportSize({ width, height });
+    await page.goto(base + '/#/shelf'); await page.locator('.book-grid .book-card').first().waitFor();
+    await shot('shelf-desktop-' + width);
+    const trigger = page.locator('.shelf-head button[aria-label^=书架设置]');
+    await trigger.click();
+    await page.locator('.shelf-settings .panel-body').evaluate(el => { el.scrollTop = 0; });
+    await shot('settings-desktop-' + width);
+    if (width === 1366) {
+      await page.evaluate(() => document.documentElement.dataset.theme = 'dark');
+      await shot('settings-desktop-dark');
+      await page.evaluate(() => document.documentElement.dataset.theme = 'light');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await shot('settings-resized-mobile');
+      assert.equal(await page.locator('.shelf-settings').evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return Math.abs(r.left) < 1 && Math.abs(r.right - innerWidth) < 1 && Math.abs(r.bottom - innerHeight) < 1;
+      }), true, 'resizing an open desktop panel restores the mobile bottom sheet');
+      await page.setViewportSize({ width, height });
+    }
+    await page.locator('.shelf-settings button[aria-label="关闭"]').press('Escape');
+    assert.equal(await page.locator('.shelf-settings').isVisible(), false);
+    assert.equal(await trigger.evaluate(el => document.activeElement === el), true, 'closing settings restores keyboard focus');
+    await page.goto(base + '/#/library'); await page.locator('.library-browse-grid .book-card').first().waitFor();
+    await shot('library-desktop-' + width);
+    await page.goto(base + '/#/library/files'); await page.locator('.manager-row').first().waitFor();
+    assert.equal(await page.locator('.manager-row').first().evaluate(el => {
+      const name = el.querySelector('.manager-name').getBoundingClientRect();
+      const meta = el.querySelector('.manager-meta').getBoundingClientRect();
+      return meta.left >= name.right && meta.top < name.bottom;
+    }), true, 'desktop file metadata occupies a separate column');
+    await shot('files-desktop-' + width);
+  }
   // A member cannot reach file management even through a direct link.
   await page.route('**/api/v1/auth/me', async route => { const response = await route.fetch(); const json = await response.json(); json.user.role = 'member'; await route.fulfill({ json }); });
   await page.goto(base + '/#/library/files'); await page.reload(); await page.locator('.library-browse-screen').waitFor();
   assert.equal(await button('文件管理').count(), 0); assert.equal(await button('上传书籍').count(), 0);
   assert.equal(await page.locator('.manager-upload-input').count(), 0);
   assert.deepEqual(errors, []);
-  console.log('PASS collection UI: browsing without upload/settings, admin file actions, member guard, hierarchical back, sheet close alignment, long filenames, 320/390/1280px');
+  console.log('PASS collection UI: permissions, navigation, sticky settings, desktop sidebar and keyboard focus, file columns, dark theme, responsive resize; 320/390/1024/1280/1366/1920px');
 } finally { await browser.close(); await server.close(); }

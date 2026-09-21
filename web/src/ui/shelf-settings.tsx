@@ -23,7 +23,7 @@
 
 import type { AppSettings } from '../store/settings.ts';
 import { IconButton, SectionTitle, Segmented, SwitchRow } from './toolkit.tsx';
-import type { JSX } from './vendor/preact.ts';
+import { type JSX, useLayoutEffect, useRef } from './vendor/preact.ts';
 
 export const DENSITY_LABELS: Record<AppSettings['shelfDensity'], string> = {
   compact: '紧凑',
@@ -58,8 +58,16 @@ export function ShelfSettingsPanel({
   onPatch,
   onClose,
 }: ShelfSettingsOptions & { open: boolean }): JSX.Element {
+  const panel = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const trigger = document.activeElement;
+    panel.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
+    return () => { if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true }); };
+  }, [open]);
   return (
-    <div className="panel shelf-settings" hidden={!open}>
+    <div className="panel shelf-settings" ref={panel} role="dialog" aria-label="书架设置" hidden={!open}
+      onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }}>
       <div className="panel-header">
         <h2>书架设置</h2>
         <IconButton label="关闭" icon="close" onClick={onClose} />

@@ -20,7 +20,7 @@ import type { AppSettings } from '../store/settings.ts';
 import { DEFAULT_APP_SETTINGS, READOUT_FIELDS, READOUT_OPTIONS, type ReadoutMode } from '../store/settings.ts';
 import { ReaderIndicators } from './reader-indicators.tsx';
 import type { SpeechEngineKind } from '../render/speech.ts';
-import { type ComponentChildren, type JSX } from './vendor/preact.ts';
+import { type ComponentChildren, type JSX, useLayoutEffect, useRef } from './vendor/preact.ts';
 import { Button, IconButton, IconTextButton, SectionTitle } from './toolkit.tsx';
 import { Icon, type IconName } from './icon.tsx';
 
@@ -216,7 +216,7 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
         </div>
       </div>
       {state.tocOpen ? (
-        <Panel title="目录" subtitle={`${state.toc.length} 章`} onClose={handlers.toggleToc}>
+        <Panel title="目录" placement="start" subtitle={`${state.toc.length} 章`} onClose={handlers.toggleToc}>
           {state.canRefresh ? (
             <IconTextButton
               icon="refresh"
@@ -307,7 +307,7 @@ function StageHost({ stage }: { stage: HTMLElement }): JSX.Element {
 }
 
 /**
- * A half-screen sheet over the reading area.
+ * A bottom sheet on phones and a side panel on desktop.
  *
  * Bottom sheet rather than a full-screen page, and the comment on `.panel` in the
  * stylesheet is where the reasoning lives. What belongs here is the *interaction*:
@@ -327,22 +327,31 @@ function StageHost({ stage }: { stage: HTMLElement }): JSX.Element {
  */
 function Panel({
   title,
+  placement = 'end',
   subtitle,
   onClose,
   children,
 }: {
   title: string;
+  placement?: 'start' | 'end';
   subtitle?: string;
   onClose(): void;
   children: ComponentChildren;
 }): JSX.Element {
+  const panel = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const trigger = document.activeElement;
+    panel.current?.querySelector<HTMLButtonElement>('.panel-header button')?.focus({ preventScroll: true });
+    return () => { if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true }); };
+  }, []);
   return (
     <>
       {/* `onClick` on the scrim rather than a document listener: the scrim *is* the
           dismiss control, so it should be a node the reader can hit, with the same
           processing as any other tap on the page. */}
       <div className="scrim" onClick={onClose} role="presentation" />
-      <div className="panel" role="group" aria-label={title}>
+      <div className="panel" data-placement={placement} ref={panel} role="group" aria-label={title}
+        onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }}>
         <div className="panel-grip" aria-hidden="true" />
         <div className="panel-header">
           <h2>{title}</h2>

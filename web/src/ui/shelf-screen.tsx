@@ -845,36 +845,38 @@ export class ShelfScreen {
           </div>
         </header>
 
-        <nav className="collection-links shelf-links" aria-label="发现书籍">
-          <button type="button" className="button collection-link" aria-label="书库" onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}><Icon name="library" /><span>书库</span><Icon name="chevron-right" /></button>
-          {this.options.onOpenSources && <button type="button" className="button collection-link" onClick={this.options.onOpenSources}><Icon name="search" /><span>书源</span><Icon name="chevron-right" /></button>}
-        </nav>
-        <div className="shelf-search" role="search">
-          <Icon name="search" class="search-glyph" />
-          <input
-            type="search"
-            placeholder="搜索书名、作者、系列"
-            aria-label="搜索书库"
-            enterKeyHint="search"
-            value={state.search}
-            onInput={(event) => this.onSearchInput((event.currentTarget as HTMLInputElement).value)}
-            onKeyDown={(event) => {
-              // `search` inputs fire a non-standard `search` event on clear, but
-              // only in some browsers; Enter is the one that is reliable
-              // everywhere and it also means "stop waiting for the debounce".
-              if (event.key === 'Enter') {
-                if (this.searchTimer) clearTimeout(this.searchTimer);
-                this.searchTimer = null;
-                this.patch({ query: state.search.trim() });
-                void this.refresh();
-              }
-            }}
-          />
-          {state.search.length > 0 ? (
-            <button type="button" className="search-clear" aria-label="清除搜索" onClick={() => this.clearSearch()}>
-              <Icon name="close" />
-            </button>
-          ) : null}
+        <div className="shelf-discovery">
+          <nav className="collection-links shelf-links" aria-label="发现书籍">
+            <button type="button" className="button collection-link" aria-label="书库" onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}><Icon name="library" /><span>书库</span><Icon name="chevron-right" /></button>
+            {this.options.onOpenSources && <button type="button" className="button collection-link" onClick={this.options.onOpenSources}><Icon name="search" /><span>书源</span><Icon name="chevron-right" /></button>}
+          </nav>
+          <div className="shelf-search" role="search">
+            <Icon name="search" class="search-glyph" />
+            <input
+              type="search"
+              placeholder="搜索书名、作者、系列"
+              aria-label="搜索书库"
+              enterKeyHint="search"
+              value={state.search}
+              onInput={(event) => this.onSearchInput((event.currentTarget as HTMLInputElement).value)}
+              onKeyDown={(event) => {
+                // `search` inputs fire a non-standard `search` event on clear, but
+                // only in some browsers; Enter is the one that is reliable
+                // everywhere and it also means "stop waiting for the debounce".
+                if (event.key === 'Enter') {
+                  if (this.searchTimer) clearTimeout(this.searchTimer);
+                  this.searchTimer = null;
+                  this.patch({ query: state.search.trim() });
+                  void this.refresh();
+                }
+              }}
+            />
+            {state.search.length > 0 ? (
+              <button type="button" className="search-clear" aria-label="清除搜索" onClick={() => this.clearSearch()}>
+                <Icon name="close" />
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <section className="shelf-section" aria-label={hasQuery ? '搜索结果' : '全部书籍'}>

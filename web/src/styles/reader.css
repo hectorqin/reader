@@ -3898,8 +3898,51 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .shelf-settings .panel-header > .icon-button { flex: none; margin-inline-start: auto; width: 44px; height: 44px; }
 .shelf-settings .panel-body { padding-top: 0; }
 .shelf-settings .section-title:first-child { margin-top: 0; }
-@media (min-width: 72rem) {
-  .collection-header, .library-browse-body { width: 100%; max-width: 68rem; margin-inline: auto; }
+.shelf-discovery { display: contents; }
+/* Desktop keeps navigation compact and settings beside the collection. */
+@media (min-width: 64rem) {
+  .shelf { --shelf-measure: 80rem; }
+  .shelf-head, .shelf-discovery, .shelf-section { width: calc(100% - 3rem); }
+  .shelf-head { padding-top: 2rem; padding-bottom: 1.25rem; }
+  .shelf-discovery { display: flex; align-items: center; gap: 1.5rem; max-width: var(--shelf-measure); margin: 0 auto 1rem; padding-inline: .9rem; }
+  .shelf-discovery .shelf-links { flex: none; margin: 0; padding: 0; }
+  .shelf-discovery .shelf-search { flex: 1; max-width: 36rem; margin: 0 0 0 auto; }
+  .collection-link.button { flex: none; min-width: 9rem; min-height: 44px; }
+  .collection-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem 2rem; padding-top: 2rem; }
+  .collection-header .collection-links { margin-top: 0; }
+  .collection-header .manager-crumbs { grid-column: 1 / -1; }
+  .collection-header, .library-browse-body, .library-files-screen .manager-body { width: calc(100% - 3rem); max-width: 80rem; margin-inline: auto; }
+  .library-files-screen .manager-row { grid-template-columns: 24px minmax(0, 1fr) minmax(15rem, 22rem) 44px; min-height: 64px; padding-block: .5rem; }
+  .library-files-screen .manager-check { grid-row: 1; }
+  .library-files-screen .manager-meta { grid-column: 3; grid-row: 1; justify-content: flex-end; padding-left: 0; }
+  .library-files-screen .manager-more { grid-column: 4; grid-row: 1; }
+  .shelf-settings.panel { inset: 1rem 1rem auto auto; width: 26rem; height: min(42rem, calc(100dvh - 2rem)); max-height: calc(100dvh - 2rem); border: 1px solid var(--reader-line); border-radius: 1rem; box-shadow: 0 12px 48px #0003; overflow: hidden; animation-name: shelf-settings-in; }
+  .shelf-settings .switch-field { grid-template-columns: minmax(0, 1fr) auto; }
+  .sources-header { padding-inline: max(1rem, calc((100% - 64rem) / 2)); padding-block: 1.5rem; }
+  .sources-hub .sources-tabs [role=tab], .extension-tabs button { flex: 0 1 auto; min-width: 9rem; padding-inline: 1.5rem; }
+  .sources-hub .sources-body { width: 100%; max-width: 66rem; margin-inline: auto; }
+  .reader-screen { --reader-footer-height: 5.5rem; }
+  .reader-screen .topbar { padding-inline: max(2rem, calc((100% - 68rem) / 2)); }
+  .reader-screen .footer { display: flex; align-items: center; gap: 2rem; inset-inline: 2rem; bottom: 1rem; width: calc(100% - 4rem); max-width: 68rem; height: 4.5rem; margin-inline: auto; padding: .5rem 1rem; border: 1px solid var(--reader-line); border-radius: 1rem; }
+  .reader-screen .progress-row { flex: 1; min-width: 0; }
+  .reader-screen .reader-actions { display: flex; gap: .25rem; }
+  .reader-screen .reader-actions .top-button { flex-direction: row; min-width: 4.75rem; min-height: 44px; padding: .5rem; }
+  .reader-screen .reader-actions .icon { font-size: 1.1rem; }
+  .reader-screen .reader-rail { right: max(2rem, calc((100% - 68rem) / 2)); }
+  .reader-screen .panel { inset: 1rem 1rem 1rem auto; width: 26rem; height: calc(100% - 2rem); max-height: none; border: 1px solid var(--reader-line); border-radius: 1rem; overflow: hidden; animation-name: shelf-settings-in; }
+  .reader-screen .panel[data-placement='start'] { inset-inline: 1rem auto; width: 23rem; animation-name: reader-contents-in; }
+  .reader-screen .panel-grip { display: none; }
+  .reader-screen .panel-header { flex: none; padding: .75rem 1.25rem; }
+  .reader-screen .panel-body { padding-top: 0; }
+  .reader-screen .section-title:first-child { margin-top: 0; }
+}
+@keyframes reader-contents-in {
+  from { opacity: 0; transform: translateX(-1rem); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes shelf-settings-in {
+  from { opacity: 0; transform: translateX(1rem); }
+  to { opacity: 1; transform: translateX(0); }
 }
 @media (max-width: 600px) {
   .source-entry-actions { flex-direction: column; gap: 0; }
