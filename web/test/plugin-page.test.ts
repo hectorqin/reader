@@ -45,8 +45,10 @@ it('uses provider-defined search filter keys and retains filters across paginati
   });
   const screen = new SourcesScreen({ api, admin: false, onOpen() {}, onBack() {}, onSignedOut() {} }); screens.push(screen); document.body.append(screen.element); await screen.show();
   const click = (label: string) => [...screen.element.querySelectorAll('button')].find(button => button.textContent === label)!.click();
-  click('打开'); await vi.waitFor(() => expect(screen.element.querySelector('select')).not.toBeNull());
-  const select = screen.element.querySelector('select')!; select.value = 'asia'; select.dispatchEvent(new Event('change', { bubbles: true }));
+  const picker = screen.element.querySelector<HTMLSelectElement>('[aria-label="选择来源"]')!;
+  picker.value = 's1'; picker.dispatchEvent(new Event('change', { bubbles: true }));
+  await vi.waitFor(() => expect(screen.element.querySelector('.sources-search select')).not.toBeNull());
+  const select = screen.element.querySelector<HTMLSelectElement>('.sources-search select')!; select.value = 'asia'; select.dispatchEvent(new Event('change', { bubbles: true }));
   const input = screen.element.querySelector<HTMLInputElement>('input[type=search]')!; input.value = '测试'; input.dispatchEvent(new Event('input', { bubbles: true })); click('搜索');
   await vi.waitFor(() => expect(screen.element.textContent).toContain('下一页')); click('下一页');
   await vi.waitFor(() => expect(transport.requests.filter(request => request.url.includes('/search?'))).toHaveLength(2));

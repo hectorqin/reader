@@ -2,11 +2,12 @@ import type { ExtensionField } from '../api/sources.ts';
 import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { Book } from '../api/types.ts';
 import type { ChapterSubscription, SourceEntry, SourceInstance, SourcePage, SourcePlugin, SourceType } from '../api/sources.ts';
+import { Modal } from './modal.tsx';
 import { mountUI } from './mount.ts';
 import { Button, IconButton, Icon } from './toolkit.tsx';
 
 interface Options { api: ReaderApi; admin: boolean; onBack(): void; onOpen(book: Book): void; onSignedOut(): void }
-type SourceTab = 'sources' | 'updates' | 'plugins';
+type SourceTab = 'search' | 'sources' | 'updates' | 'plugins';
 interface Editor { id: string | null; typeKey: string; name: string; config: Record<string, unknown>; raw: string }
 const keyFor = (type: { pluginId: string; id: string }) => `${type.pluginId}/${type.id}`;
 const date = (value: number | null) => value ? new Date(value).toLocaleString() : '尚未检查';
@@ -23,7 +24,8 @@ export class SourcesScreen {
   private sources: SourceInstance[] = [];
   private plugins: SourcePlugin[] = [];
   private subscriptions: ChapterSubscription[] = [];
-  private tab: SourceTab = 'sources';
+  private tab: SourceTab = 'search';
+  private credentialsOpen = false;
   private managing: string | null = null;
   private editor: Editor | null = null;
   private selected: SourceInstance | null = null;
@@ -52,7 +54,10 @@ export class SourcesScreen {
       if (this.disposed) return;
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
       else this.message = error instanceof Error ? error.message : '操作失败，请重试';
-    } finally { this.busy = false; this.draw(); }
+    } finally {
+      this.busy = false; this.draw();
+      this.element.querySelector<HTMLElement>('dialog [role=alert]')?.focus();
+    }
   }
   private async reload(): Promise<void> {
     const [types, sources, subscriptions, plugins] = await Promise.all([
@@ -61,21 +66,23 @@ export class SourcesScreen {
     ]);
     this.types = types; this.sources = sources; this.subscriptions = subscriptions; this.plugins = plugins;
     if (this.savedSource) this.savedSource = sources.find(source => source.id === this.savedSource?.id) ?? null;
-    if (this.selected) this.selected = sources.find((source) => source.id === this.selected?.id) ?? null;
+    if (this.selected) {
+      this.selected = sources.find(source => source.id === this.selected?.id && source.enabled && source.descriptor) ?? null;
+      if (!this.selected) { this.page = null; this.filters = []; this.credentialValues = {}; }
+    }
   }
   private edit(source?: SourceInstance): void {
     const type = source ? this.types.find((t) => t.pluginId === source.pluginId && t.id === source.sourceType) : this.types.find((t) => t.id === 'opds') ?? this.types[0];
     if (!type) return;
     this.editor = { id: source?.id ?? null, typeKey: keyFor(type), name: source?.name ?? '', config: { ...source?.config }, raw: JSON.stringify(source?.config ?? {}, null, 2) };
-    this.draw(); this.element.querySelector('.source-editor')?.scrollIntoView?.({ block: 'start' });
+    this.message = ''; this.draw();
   }
   private async save(): Promise<void> {
     const editor = this.editor; if (!editor) return;
     const type = this.types.find((t) => keyFor(t) === editor.typeKey)!;
     const config = type.configSchema?.properties ? editor.config : JSON.parse(editor.raw);
     this.savedSource = await this.options.api.saveSource(editor.id, { name: editor.name, config, ...(!editor.id ? { pluginId: type.pluginId, sourceType: type.id } : {}) });
-    this.editor = null; await this.reload(); this.message = this.savedSource?.descriptor?.extensions?.pages?.length ? '来源已保存，接下来可以配置此书源。' : editor.id ? '来源已保存；修改连接配置后请重新保存个人凭据。' : '来源已创建，可以打开书库。';
-    this.draw(); this.element.querySelector('.source-next-step')?.scrollIntoView?.({ block: 'start' });
+    this.editor = null; await this.reload(); this.message = this.savedSource?.descriptor?.extensions?.pages?.length ? '来源已保存，接下来可以配置此书源。' : editor.id ? '来源已保存；修改连接配置后请重新保存个人凭据。' : '来源已创建，可在“搜书”中选择此来源。';
   }
   private async catalog(query: { ref?: string; query?: string; cursor?: string; filters?: Record<string, string> }, push = true): Promise<void> {
     if (!this.selected) return;
@@ -88,7 +95,7 @@ export class SourcesScreen {
     void this.run(async () => {
       if (source.descriptor?.capabilities.includes('search.filters')) this.filters = await this.options.api.sourceFilters(source.id);
       if (source.descriptor?.capabilities.includes('browse')) await this.catalog({});
-      this.draw(); this.element.querySelector('.source-catalog')?.scrollIntoView?.({ block: 'start' });
+      this.draw();
     });
   }
   private async acquire(entry: SourceEntry, optionId?: string): Promise<void> {
@@ -101,13 +108,15 @@ export class SourcesScreen {
     this.message = '已加入书架，可在“自动追更”中开启检查。';
   }
   private changeTab(tab: SourceTab): void {
-    this.tab = tab; this.managing = null; this.draw();
+    this.tab = tab; this.managing = null; this.message = ''; this.draw();
     const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0;
   }
   private view() {
     const type = this.types.find((t) => keyFor(t) === this.editor?.typeKey);
     const tabs: Array<{ id: SourceTab; title: string }> = [
-      { id: 'sources', title: '书源' }, { id: 'updates', title: '自动追更' },
+      { id: 'search', title: '搜书' },
+      ...(this.options.admin ? [{ id: 'sources' as const, title: '书源管理' }] : []),
+      { id: 'updates', title: '自动追更' },
       ...(this.options.admin ? [{ id: 'plugins' as const, title: '插件管理' }] : []),
     ];
     return <>
@@ -125,13 +134,13 @@ export class SourcesScreen {
           event.preventDefault(); this.changeTab(tabs[next]!.id);
           this.element.querySelector<HTMLElement>('#sources-tab-' + tabs[next]!.id)?.focus();
         }}>{tab.title}{tab.id === 'updates' && this.subscriptions.some(s => s.newChapters > 0) && <span className="sources-tab-dot" aria-label="有更新" />}</button>)}</nav>
-      {(this.busy || this.message) && <div role="status" className="notice">{this.busy ? '正在处理…' : this.message}</div>}
-      <main className="sources-body" role="tabpanel" id={'sources-panel-' + this.tab} aria-labelledby={'sources-tab-' + this.tab} tabIndex={0}>
-      {this.tab === 'sources' && <>
+      {!this.editor && !this.credentialsOpen && (this.busy || this.message) && <div role="status" className="notice">{this.busy ? '正在处理…' : this.message}</div>}
+      <main key="body" className="sources-body" role="tabpanel" id={'sources-panel-' + this.tab} aria-labelledby={'sources-tab-' + this.tab} tabIndex={0}>
+      {this.tab === 'sources' && this.options.admin && <>
         {!!this.savedSource?.descriptor?.extensions?.pages?.length && <section className="sources-card source-next-step"><strong>{this.savedSource!.name}</strong>
           <p>可为此书源单独管理订阅和规则。</p>{this.savedSource!.descriptor!.extensions!.pages!.map(page => <a className="button primary" href={'#/sources/' + encodeURIComponent(this.savedSource!.id) + '/' + encodeURIComponent(page.id)}>{page.title}</a>)}
         </section>}
-        <section className="sources-card sources-list"><div className="sources-list-heading"><h2>我的来源 <span className="source-count">{this.sources.length}</span></h2>
+        <section key="source-list" className="sources-card sources-list"><div className="sources-list-heading"><h2>我的来源 <span className="source-count">{this.sources.length}</span></h2>
           {this.options.admin && <Button className="source-add" disabled={this.busy} onClick={() => this.edit()}><Icon name="plus" />添加来源</Button>}
         </div>
           {this.sources.map(source => <article className="sources-row source-entry" key={source.id}>
@@ -139,7 +148,6 @@ export class SourcesScreen {
               <small>{source.descriptor?.label ?? '插件未启用或未安装'}</small>
               <span className={'source-state' + (source.enabled ? ' is-enabled' : '')}>{source.enabled ? '已启用' : '已暂停'}</span>
             </div><div className="source-entry-actions">
-              <Button className="source-open" disabled={this.busy || !source.enabled || !source.descriptor} onClick={() => { this.managing = null; this.select(source); }}>打开</Button>
               {this.options.admin && <button type="button" className="source-manage-trigger" disabled={this.busy}
                 aria-expanded={this.managing === source.id} aria-controls={'source-manage-' + source.id}
                 onClick={() => { this.managing = this.managing === source.id ? null : source.id; this.draw(); }}
@@ -150,7 +158,7 @@ export class SourcesScreen {
                 this.element.querySelectorAll<HTMLElement>('.source-manage-trigger')[this.sources.indexOf(source)]?.focus();
               } }}>
               {source.descriptor?.extensions?.pages?.map(page => <a className="source-management-link" href={'#/sources/' + encodeURIComponent(source.id) + '/' + encodeURIComponent(page.id)}>{page.title}<Icon name="chevron-right" /></a>)}
-              <button className="source-management-link" type="button" disabled={this.busy || !source.descriptor} onClick={() => { this.managing = null; this.edit(source); }}>基本设置<Icon name="chevron-right" /></button>
+              <button className="source-management-link" type="button" disabled={this.busy || !source.descriptor} onClick={() => this.edit(source)}>基本设置<Icon name="chevron-right" /></button>
               <button className="source-management-link source-toggle" type="button" disabled={this.busy} onClick={() => void this.run(async () => {
                 await this.options.api.saveSource(source.id, { enabled: !source.enabled }); await this.reload(); this.managing = null;
                 this.message = source.enabled ? '来源已暂停' : '来源已启用';
@@ -158,41 +166,16 @@ export class SourcesScreen {
             </div>}
           </article>)}
         </section>
-        {this.editor && <section className="sources-card source-editor"><h2>{this.editor.id ? '编辑来源' : '添加来源'}</h2>
-          <form onSubmit={(event) => { event.preventDefault(); void this.run(() => this.save()); }}>
-            <label>来源类型<select disabled={this.busy || !!this.editor.id} value={this.editor.typeKey} onChange={(event) => {
-              this.editor!.typeKey = event.currentTarget.value; this.editor!.config = {}; this.editor!.raw = '{}'; this.draw();
-            }}>{this.types.map((t) => <option value={keyFor(t)}>{t.label}</option>)}</select></label>
-            <label>名称<input required maxLength={128} value={this.editor.name} onInput={(event) => { this.editor!.name = event.currentTarget.value; }} /></label>
-            {type?.configSchema?.properties ? Object.entries(type.configSchema.properties).map(([key, field]) => <label key={key}>{field.title ?? key}
-              {field.type === 'array' || field.type === 'object' ? <textarea aria-label={field.title ?? key} value={JSON.stringify(this.editor!.config[key] ?? (field.type === 'array' ? [] : {}), null, 2)}
-                onChange={(event) => { try { this.editor!.config[key] = JSON.parse(event.currentTarget.value); event.currentTarget.setCustomValidity(''); } catch { event.currentTarget.setCustomValidity('请输入有效 JSON'); } }} />
-                : field.type === 'boolean' ? <input type="checkbox" checked={this.editor!.config[key] === true}
-                  onChange={(event) => { this.editor!.config[key] = event.currentTarget.checked; }} />
-                : <input type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'} step={field.type === 'number' ? 'any' : '1'} required={type.configSchema?.required?.includes(key)} value={String(this.editor!.config[key] ?? '')}
-                  onInput={(event) => { const value = event.currentTarget.value;
-                    if (!value && !type.configSchema?.required?.includes(key)) delete this.editor!.config[key];
-                    else this.editor!.config[key] = field.type === 'number' || field.type === 'integer' ? Number(value) : value;
-                  }} />}
-            </label>) : <label>配置（JSON）<textarea value={this.editor.raw} onInput={(event) => { this.editor!.raw = event.currentTarget.value; }} /></label>}
-            <p className="notice">配置不包含密码。修改连接配置会清除该来源保存的个人凭据。</p>
-            <div className="sources-actions"><Button type="submit" disabled={this.busy}>保存来源</Button>
-              <Button disabled={this.busy} onClick={() => { this.editor = null; this.draw(); }}>取消</Button>
-              {this.editor.id && <Button disabled={this.busy || type?.id === 'local'} onClick={() => void this.run(async () => {
-                await this.options.api.removeSource(this.editor!.id!); this.editor = null; await this.reload();
-              })}>删除空来源</Button>}</div>
-          </form></section>}
+      </>}
+      {this.tab === 'search' && <>
+        <section className="sources-card source-picker"><h2>搜书</h2>
+          <label>选择来源<select aria-label="选择来源" disabled={this.busy} value={this.selected?.id ?? ''} onChange={event => {
+            const source = this.sources.find(source => source.id === event.currentTarget.value); if (source) this.select(source);
+          }}><option value="" disabled>请选择一个来源</option>{this.sources.filter(source => source.enabled && source.descriptor).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
+          {!this.selected && <p className="muted">{this.sources.some(source => source.enabled && source.descriptor) ? '选择来源后，即可搜索书籍或浏览目录。' : '暂无可用来源，请先添加或启用来源。'}</p>}
+        </section>
         {this.selected && <section className="sources-card source-catalog"><h2>{this.selected.name}</h2>
-          {(this.selected.descriptor?.credentialKeys?.length ?? 0) > 0 && <form onSubmit={(event) => { event.preventDefault(); void this.run(async () => {
-            const source = this.selected!;
-            for (const field of source.descriptor?.credentialKeys ?? []) {
-              if (this.disposed) return;
-              if (field.key in this.credentialValues) await this.options.api.sourceCredential(source.id, field.key, this.credentialValues[field.key]!);
-            }
-            this.credentialValues = {}; this.message = '个人凭据已保存，不会回显。';
-          }); }}><h3>我的登录凭据</h3>{this.selected.descriptor?.credentialKeys?.map((field) => <label key={field.key}>{field.label}
-            <input type="password" autoComplete="off" value={this.credentialValues[field.key] ?? ''} onInput={(event) => { this.credentialValues[field.key] = event.currentTarget.value; }} /></label>)}
-            <Button type="submit" disabled={this.busy}>保存个人凭据</Button></form>}
+          {(this.selected.descriptor?.credentialKeys?.length ?? 0) > 0 && <Button disabled={this.busy} onClick={() => { this.credentialsOpen = true; this.message = ''; this.draw(); }}>登录凭据</Button>}
           {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.run(() => this.catalog({ query: this.query.trim(), filters: { ...this.filterValues } })); }}>
             {this.filters.map(field => <label key={field.key}>{field.label}<select aria-label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy}
               onChange={event => { this.filterValues[field.key] = event.currentTarget.value; this.draw(); }}>
@@ -247,6 +230,43 @@ export class SourcesScreen {
         </article>)}
       </section>}
       </main>
+        {this.editor && <Modal title={this.editor.id ? '编辑来源' : '添加来源'} busy={this.busy} onClose={() => { this.editor = null; this.message = ''; this.draw(); }}>
+          <form className="sources-card source-editor source-modal-form" onSubmit={(event) => { event.preventDefault(); void this.run(() => this.save()); }}>
+            <div className="source-modal-content">
+            {(this.busy || this.message) && <p className="notice" tabIndex={-1} role={this.busy ? 'status' : 'alert'}>{this.busy ? '正在保存…' : this.message}</p>}
+            <label>来源类型<select disabled={this.busy || !!this.editor.id} value={this.editor.typeKey} onChange={(event) => {
+              this.editor!.typeKey = event.currentTarget.value; this.editor!.config = {}; this.editor!.raw = '{}'; this.draw();
+            }}>{this.types.map((t) => <option value={keyFor(t)}>{t.label}</option>)}</select></label>
+            <label>名称<input autoFocus required disabled={this.busy} maxLength={128} value={this.editor.name} onInput={(event) => { this.editor!.name = event.currentTarget.value; }} /></label>
+            {type?.configSchema?.properties ? Object.entries(type.configSchema.properties).map(([key, field]) => <label key={key}>{field.title ?? key}
+              {field.type === 'array' || field.type === 'object' ? <textarea disabled={this.busy} aria-label={field.title ?? key} value={JSON.stringify(this.editor!.config[key] ?? (field.type === 'array' ? [] : {}), null, 2)}
+                onChange={(event) => { try { this.editor!.config[key] = JSON.parse(event.currentTarget.value); event.currentTarget.setCustomValidity(''); } catch { event.currentTarget.setCustomValidity('请输入有效 JSON'); } }} />
+                : field.type === 'boolean' ? <input disabled={this.busy} type="checkbox" checked={this.editor!.config[key] === true}
+                  onChange={(event) => { this.editor!.config[key] = event.currentTarget.checked; }} />
+                : <input disabled={this.busy} type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'} step={field.type === 'number' ? 'any' : '1'} required={type.configSchema?.required?.includes(key)} value={String(this.editor!.config[key] ?? '')}
+                  onInput={(event) => { const value = event.currentTarget.value;
+                    if (!value && !type.configSchema?.required?.includes(key)) delete this.editor!.config[key];
+                    else this.editor!.config[key] = field.type === 'number' || field.type === 'integer' ? Number(value) : value;
+                  }} />}
+            </label>) : <label>配置（JSON）<textarea disabled={this.busy} value={this.editor.raw} onInput={(event) => { this.editor!.raw = event.currentTarget.value; }} /></label>}
+            <p className="notice">配置不包含密码。修改连接配置会清除该来源保存的个人凭据。</p>
+            </div><footer className="source-modal-actions"><Button className="primary" type="submit" disabled={this.busy}>保存来源</Button>
+              <Button disabled={this.busy} onClick={() => { this.editor = null; this.message = ''; this.draw(); }}>取消</Button>
+              {this.editor.id && <Button disabled={this.busy || type?.id === 'local'} onClick={() => void this.run(async () => {
+                await this.options.api.removeSource(this.editor!.id!); this.editor = null; await this.reload();
+              })}>删除空来源</Button>}</footer>
+          </form></Modal>}
+          {this.credentialsOpen && this.selected && <Modal title="我的登录凭据" busy={this.busy} onClose={() => { this.credentialsOpen = false; this.credentialValues = {}; this.message = ''; this.draw(); }}><form className="sources-card source-modal-form" onSubmit={(event) => { event.preventDefault(); void this.run(async () => {
+            const source = this.selected!;
+            for (const field of source.descriptor?.credentialKeys ?? []) {
+              if (this.disposed) return;
+              if (field.key in this.credentialValues) await this.options.api.sourceCredential(source.id, field.key, this.credentialValues[field.key]!);
+            }
+            this.credentialValues = {}; this.credentialsOpen = false; this.message = '个人凭据已保存，不会回显。';
+          }); }}><div className="source-modal-content">{(this.busy || this.message) && <p className="notice" tabIndex={-1} role={this.busy ? 'status' : 'alert'}>{this.busy ? '正在保存…' : this.message}</p>}{this.selected.descriptor?.credentialKeys?.map((field) => <label key={field.key}>{field.label}
+            <input autoFocus disabled={this.busy} type="password" autoComplete="off" value={this.credentialValues[field.key] ?? ''} onInput={(event) => { this.credentialValues[field.key] = event.currentTarget.value; }} /></label>)}
+            </div><footer className="source-modal-actions"><Button className="primary" type="submit" disabled={this.busy}>保存个人凭据</Button></footer></form></Modal>}
+
     </>;
   }
 }

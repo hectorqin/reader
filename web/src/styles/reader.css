@@ -3836,13 +3836,23 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .source-state::before { content: ''; display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: currentColor; vertical-align: middle; margin-right: .35rem; }
 .source-state.is-enabled { color: var(--reader-accent); }
 .source-entry-actions { display: flex; align-items: center; gap: .6rem; flex-shrink: 0; }
-.source-open { min-height: 44px; color: var(--reader-accent); border-color: color-mix(in srgb, var(--reader-accent) 30%, var(--reader-line)); background: color-mix(in srgb, var(--reader-accent) 7%, var(--reader-surface)); }
 .source-manage-trigger { display: inline-flex; align-items: center; justify-content: center; gap: .25rem; min-height: 44px; padding: .4rem; border: 0; background: transparent; font: inherit; font-size: .85rem; color: var(--reader-muted); cursor: pointer; }
 .source-manage-trigger[aria-expanded=true] .icon { transform: rotate(90deg); }
 .source-management { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1rem; margin-top: .85rem; padding: .5rem .75rem; border-radius: .6rem; background: color-mix(in srgb, var(--reader-ink) 4%, transparent); }
 .source-management-link { display: inline-flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 44px; padding: .5rem 0; border: 0; background: transparent; color: var(--reader-ink); font: inherit; font-size: .85rem; text-decoration: none; cursor: pointer; }
 .source-management-link:disabled, .source-manage-trigger:disabled, .sources-hub [role=tab]:disabled { opacity: .5; cursor: default; }
 .source-toggle { color: var(--reader-muted); }
+.sources-hub .sources-tabs [role=tab] { font-size: .9rem; }
+.source-picker label { max-width: 32rem; }
+.source-modal { color: var(--reader-ink); background: var(--reader-paper); border: 1px solid var(--reader-line); border-radius: 1rem; padding: 0; width: min(36rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: hidden; }
+.source-modal[open] { display: flex; flex-direction: column; }
+.source-modal::backdrop { background: #0007; }
+.source-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 1rem; border-bottom: 1px solid var(--reader-line); flex: none; }
+.source-modal-header h2 { margin: 0; font-size: 1.15rem; }
+.source-modal-form.sources-card { display: flex; flex-direction: column; margin: 0; border: 0; padding: 0; width: 100%; min-height: 0; overflow: hidden; }
+.source-modal-content { overflow-y: auto; overscroll-behavior: contain; padding: 0 1rem 1rem; }
+.source-modal-actions { display: flex; flex-wrap: wrap; gap: .5rem; padding: .75rem 1rem; border-top: 1px solid var(--reader-line); flex: none; }
+.source-modal-actions button { min-height: 44px; }
 @media (max-width: 600px) {
   .source-entry-actions { flex-direction: column; gap: 0; }
   .source-entry-top { align-items: center; }
