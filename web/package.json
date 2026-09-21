@@ -16,7 +16,8 @@
     "ui:review:only": "node tools/ui-review/run.mjs"
   },
   "dependencies": {
-    "jszip": "^3.10.1"
+    "jszip": "^3.10.1",
+    "lucide-preact": "^1.47.0"
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",

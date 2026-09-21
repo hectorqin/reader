@@ -1,61 +1,34 @@
-/**
- * The icon primitive.
- *
- * ## Why a font, and not inline SVG
- *
- * The UI needs roughly thirty glyphs, in two colours, at four sizes, in one bundle
- * that has to work from `file://` in a WebView. Inline SVG would mean thirty small
- * components, each carrying its own `viewBox`, `stroke-width` and `fill` — which is
- * exactly how an icon set becomes visually inconsistent, because every one of those
- * three is a place where an individual glyph can drift. A font makes the glyph a
- * *character*: it inherits `font-size` and `color` from wherever it sits, scales
- * with the layout, and cannot carry divergent stroke geometry because there is no
- * per-glyph geometry in the UI layer at all.
- *
- * The set is generated (see `tools/icons/`) from one stroke width on one 24-unit
- * grid, which is what the optical consistency actually rests on.
- *
- * ## Why the accessible name is required
- *
- * An icon button with no text is a button whose name screen readers cannot read, so
- * `label` is not optional in `IconButtonProps` and it is not optional here either.
- * The glyph itself is always `aria-hidden` — it is punctuation, not content — and the
- * label is what carries the meaning. Where the label would repeat adjacent visible
- * text the caller passes `label={null}`, which is the explicit way to say "this glyph
- * is decorative", rather than omitting the attribute and leaving it ambiguous.
- */
-
-import { ICON_CODEPOINT_TABLE, type IconName } from './icon-names.ts';
-import { type JSX } from './vendor/preact.ts';
-
+import {
+  Menu, ChevronLeft, ChevronRight, ArrowLeft, Folder, FileText, SlidersHorizontal,
+  Search, X, Plus, Check, Upload, Trash2, Download, RefreshCw, BookOpen,
+  Library, Play, Pause, SkipBack, SkipForward, Square, Headphones, Moon, Sun,
+  Eye, Info, TriangleAlert, Clock, Ellipsis, Pencil, ArrowDownUp, LogOut,
+  CirclePlus, IndentIncrease, Type, MoveVertical, Settings, SlidersVertical,
+} from 'lucide-preact';
+import type { IconName } from './icon-names.ts';
+import type { JSX } from './vendor/preact.ts';
 export type { IconName };
-
-export interface IconProps {
-  name: IconName;
-  /**
-   * Accessible name. `null` marks the glyph decorative; the surrounding control is
-   * then responsible for being reachable by name.
-   */
-  label?: string | null;
-  /** Extra classes, for sizing or colour. */
-  class?: string;
-}
-
-/**
- * Renders one glyph from the icon font.
- *
- * The element is a `<span>` rather than an `<svg>` or an `<i>`: `i` is italic text
- * and inherits font-style, and `svg` would promise geometry that is not there.
- */
+const ICONS = {
+  menu: Menu, 'chevron-left': ChevronLeft, 'chevron-right': ChevronRight,
+  'arrow-left': ArrowLeft, folder: Folder, 'file-text': FileText,
+  sliders: SlidersHorizontal, search: Search, close: X, plus: Plus, check: Check,
+  upload: Upload, trash: Trash2, download: Download, refresh: RefreshCw,
+  book: BookOpen, shelf: Library, play: Play, pause: Pause,
+  'step-backward': SkipBack, 'step-forward': SkipForward, stop: Square,
+  volume: Headphones, moon: Moon, sun: Sun, eye: Eye, info: Info,
+  warning: TriangleAlert, clock: Clock, more: Ellipsis, edit: Pencil,
+  sort: ArrowDownUp, logout: LogOut, 'sign-out': LogOut, 'add-circle': CirclePlus,
+  indent: IndentIncrease, 'text-size': Type, 'line-height': MoveVertical,
+  settings: Settings, library: Library, tune: SlidersVertical,
+  font: Type, 'volume-high': Headphones, 'backward-step': SkipBack,
+  'forward-step': SkipForward, bars: Menu, gear: Settings, xmark: X,
+  'magnifying-glass': Search, books: Library,
+} satisfies Record<IconName, typeof Menu>;
+export interface IconProps { name: IconName; label?: string | null; class?: string; }
+/** Shared geometry and stroke weight, independent of font rendering. */
 export function Icon({ name, label, class: className }: IconProps): JSX.Element {
-  return (
-    <span
-      className={className ? `icon ${className}` : 'icon'}
-      aria-hidden={label ? undefined : 'true'}
-      role={label ? 'img' : undefined}
-      aria-label={label ?? undefined}
-    >
-      {ICON_CODEPOINT_TABLE[name]}
-    </span>
-  );
+  const Glyph = ICONS[name];
+  return <Glyph class={className ? 'icon ' + className : 'icon'} size="1em"
+    strokeWidth={1.8} aria-hidden={label ? undefined : true}
+    role={label ? 'img' : undefined} aria-label={label ?? undefined} />;
 }

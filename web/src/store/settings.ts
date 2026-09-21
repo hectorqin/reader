@@ -29,7 +29,26 @@ export type ShelfDensity = 'compact' | 'cozy' | 'comfortable';
  */
 export type ShelfSort = 'recent' | 'added' | 'title' | 'author';
 
+export type ReadoutMode = 'none' | 'book' | 'chapter' | 'progress' | 'time';
+export const READOUT_FIELDS = [
+  { key: 'readoutTopLeft', label: '顶部左侧' },
+  { key: 'readoutTopRight', label: '顶部右侧' },
+  { key: 'readoutBottomLeft', label: '底部左侧' },
+  { key: 'readoutBottomRight', label: '底部右侧' },
+] as const;
+export const READOUT_OPTIONS: Array<{ value: ReadoutMode; label: string }> = [
+  { value: 'none', label: '不显示' },
+  { value: 'book', label: '书名' },
+  { value: 'chapter', label: '章节名' },
+  { value: 'progress', label: '章节进度' },
+  { value: 'time', label: '时间' },
+];
+
 export interface AppSettings extends ViewSettings {
+  readoutTopLeft: ReadoutMode;
+  readoutTopRight: ReadoutMode;
+  readoutBottomLeft: ReadoutMode;
+  readoutBottomRight: ReadoutMode;
   /** UTF-8 by default; a reader can force another for an odd TXT file. */
   txtEncoding: string;
   /** Only meaningful for fixed-layout books. */
@@ -72,6 +91,10 @@ export interface AppSettings extends ViewSettings {
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
+  readoutTopLeft: 'chapter',
+  readoutTopRight: 'none',
+  readoutBottomLeft: 'progress',
+  readoutBottomRight: 'time',
   mode: 'scroll',
   fontScale: 1,
   lineHeight: 'inherit',
@@ -113,6 +136,11 @@ export class SettingsStore {
       try {
         const parsed = JSON.parse(raw) as Partial<AppSettings> & { shelfSort?: string };
         this.settings = { ...DEFAULT_APP_SETTINGS, ...parsed };
+        for (const { key } of READOUT_FIELDS) {
+          if (!READOUT_OPTIONS.some(option => option.value === this.settings[key])) {
+            this.settings[key] = DEFAULT_APP_SETTINGS[key];
+          }
+        }
         /*
          * Two stored values are folded forward, and both are the same repair.
          *

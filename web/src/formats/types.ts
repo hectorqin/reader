@@ -30,6 +30,8 @@ export interface Section {
   html?: string;
   /** Binary payload, for fixed-layout formats (comic page, PDF page raster). */
   image?: { mediaType: string; bytes: Uint8Array };
+  /** A complete fixed-layout document rendered by the browser or native host. */
+  document?: { mediaType: string; bytes: Uint8Array };
   /** Blob URL or data URL for the image, resolved lazily by the renderer. */
   imageUrl?: string;
   /** Depth in the navigation tree, 0 for top level. */

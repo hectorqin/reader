@@ -129,7 +129,7 @@ describe('ReaderChrome', () => {
     const labels = [...(rail?.querySelectorAll('.rail-button') ?? [])].map((button) =>
       button.getAttribute('aria-label'),
     );
-    expect(labels).toEqual(['夜间', '字号', '听书']);
+    expect(labels).toEqual(['夜间']);
     for (const gone of ['目录', '字体', '行距', '页边距', '阅读设置']) {
       expect(labels).not.toContain(gone);
     }
@@ -143,8 +143,29 @@ describe('ReaderChrome', () => {
     expect([...tree.querySelectorAll('button')].find((button) => button.textContent?.includes('正在刷新目录'))?.disabled).toBe(true);
   });
 
+  it('uses chapter pages for the slider even when the book has many fixed pages', () => {
+    const tree = paint({ layout: 'fixed', chapterIndex: 50, chapterCount: 100, chapterPages: 1, pageInChapter: 1 });
+    const slider = tree.querySelector<HTMLInputElement>('.progress-scrubber')!;
+    expect(slider.max).toBe('1');
+    expect(slider.value).toBe('1');
+    expect(slider.disabled).toBe(true);
+    expect(slider.getAttribute('aria-label')).toBe('章节内页数');
+  });
+
+  it('separates appearance and behavior settings and omits text controls for comics', () => {
+    let tree = paint({ settingsOpen: true, settingsTab: 'appearance' });
+    expect(tree.querySelector('.panel')?.textContent).toContain('浅绿');
+    expect(tree.querySelector('.panel')?.textContent).not.toContain('点击区域');
+    tree = paint({ settingsOpen: true, settingsTab: 'behavior' });
+    expect(tree.querySelector('.panel')?.textContent).toContain('点击区域');
+    expect(tree.querySelector('.panel')?.textContent).not.toContain('字号');
+    tree = paint({ settingsOpen: true, settingsTab: 'appearance', layout: 'fixed' });
+    expect(tree.querySelector('.panel')?.textContent).not.toContain('字号');
+  });
+
   it('draws every read-aloud control, including stop, in their own row', () => {
     const tree = paint({
+      settingsOpen: true, settingsTab: 'speech',
       tts: {
         active: true,
         state: 'playing',
@@ -178,6 +199,7 @@ describe('ReaderChrome', () => {
     // ✕ read as "close this bar", which is not what stop does: the reader who wanted
     // the voice to stop pressed it, the bar disappeared, and the book kept reading.
     const tree = paint({
+      settingsOpen: true, settingsTab: 'speech',
       tts: {
         active: true,
         state: 'playing',
