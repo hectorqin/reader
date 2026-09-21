@@ -342,6 +342,7 @@ export function createOpdsProvider(options: OpdsProviderOptions = {}): SourcePro
     descriptor: {
       id: 'opds', label: 'OPDS', version: '1.0.0',
       capabilities: ['browse', 'search', 'detail', 'acquire.file'],
+      credentialKeys: [{ key: 'password', label: 'OPDS 密码' }],
       configSchema: {
         type: 'object', required: ['url'], additionalProperties: false,
         properties: {

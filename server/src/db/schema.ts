@@ -17,6 +17,7 @@
 export const MIGRATIONS_SQL = `
 ALTER TABLE book_files ADD COLUMN parse_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE books ADD COLUMN content_hash_kind TEXT NOT NULL DEFAULT 'file';
+ALTER TABLE chapter_resources ADD COLUMN media_type TEXT NOT NULL DEFAULT 'text/plain';
 `;
 
 export const SCHEMA_SQL = `
@@ -162,6 +163,7 @@ CREATE TABLE IF NOT EXISTS chapter_resources (
   revision TEXT NOT NULL,
   chapter_id TEXT NOT NULL,
   provider_ref TEXT NOT NULL,
+  media_type TEXT NOT NULL DEFAULT 'text/plain; charset=utf-8',
   body TEXT,
   content_hash TEXT,
   PRIMARY KEY (book_id, revision, chapter_id),
@@ -171,6 +173,19 @@ CREATE TABLE IF NOT EXISTS plugin_storage (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chapter_subscriptions (
+  book_id TEXT PRIMARY KEY REFERENCES chapter_publications(book_id) ON DELETE CASCADE,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  interval_minutes INTEGER NOT NULL DEFAULT 60,
+  next_check_at INTEGER NOT NULL DEFAULT 0,
+  last_check_at INTEGER,
+  last_success_at INTEGER,
+  last_error TEXT,
+  failures INTEGER NOT NULL DEFAULT 0,
+  new_chapters INTEGER NOT NULL DEFAULT 0,
+  generation INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_chapter_due ON chapter_subscriptions(enabled, next_check_at);
 CREATE TABLE IF NOT EXISTS installed_plugins (
   plugin_id TEXT PRIMARY KEY,
   folder TEXT NOT NULL,

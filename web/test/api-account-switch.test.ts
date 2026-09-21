@@ -34,6 +34,13 @@ async function setup() {
 }
 
 describe('requests across an account change', () => {
+  it('keeps the reader signed in when an OPDS source requires separate credentials', async () => {
+    const env = await setup();
+    env.transport.respondWith(() => ({ status: 401, headers: {}, json: { error: { code: 'AUTH_REQUIRED', message: 'OPDS password required' } } }));
+    await expect(env.api.sourceCatalog('private')).rejects.toMatchObject({ code: 'AUTH_REQUIRED', isAuthFailure: false });
+    expect(env.api.currentSession()?.user.id).toBe('a');
+    expect(env.transport.requests).toHaveLength(1);
+  });
   it('rotates an expired token before loading chapter bytes through the same guarded request path', async () => {
     const env = await setup();
     env.transport.respondWith((request) => {
@@ -90,4 +97,14 @@ describe('requests across an account change', () => {
     delayed.resolve(ok({ items: ['a-private-book'] }));
     expect(await old).toMatchObject({ kind: 'aborted' });
   });
+});
+
+it('extracts and persists the nested registration session for authenticated requests and reload', async () => {
+  const env = await setup(), registered = session('new-admin');
+  registered.user.role = 'admin';
+  env.transport.respondWith(request => request.url.endsWith('/register') ? ok({ user: registered.user, session: registered }) : ok({ user: registered.user }));
+  expect(await env.api.register('new-admin', 'password123')).toEqual(registered);
+  expect(env.stored()).toEqual(registered);
+  await env.api.restore(); await env.api.me();
+  expect(env.transport.requests.at(-1)?.headers.authorization).toBe('Bearer access-new-admin');
 });

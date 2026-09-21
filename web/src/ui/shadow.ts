@@ -384,8 +384,9 @@ const FLOW_STYLESHEET = `
  * page starts one page away. The animation is a transform on the already-
  * repositioned flow, which is why it composites and why it cannot disturb the
  * column layout the paginator measured — the scroll offset is set *first*, and the
- * animation only draws the result. The -y pair is the same statement about a
- * screenful in scroll mode.
+ * animation only draws the result. In scroll mode the flow is an entire chapter;
+ * the -y pair uses the actual scroll displacement supplied by ReaderView, so it
+ * starts at the previous visible position even when the last step is shorter.
  *
  * No opacity on the slide. A fade belongs to the fade-* pair, which is the setting's
  * own alternative for a reader who finds motion distracting; combining the two means
@@ -400,11 +401,11 @@ const FLOW_STYLESHEET = `
   to { transform: none; }
 }
 @keyframes slide-next-y {
-  from { transform: translateY(100%); }
+  from { transform: translateY(var(--reader-turn-distance)); }
   to { transform: none; }
 }
 @keyframes slide-previous-y {
-  from { transform: translateY(-100%); }
+  from { transform: translateY(calc(-1 * var(--reader-turn-distance))); }
   to { transform: none; }
 }
 /*

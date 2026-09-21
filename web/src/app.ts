@@ -1,3 +1,4 @@
+import { PluginPageScreen } from './ui/plugin-page-screen.tsx';
 import { ReaderApi, type SessionStore } from './api/client.ts';
 import { ApiError } from './api/errors.ts';
 import type { Book, Session } from './api/types.ts';
@@ -16,11 +17,12 @@ import { OfflineStore } from './store/offline.ts';
 import { publicationScope } from './store/publications.ts';
 import { SettingsStore, DEFAULT_APP_SETTINGS, type AppSettings } from './store/settings.ts';
 import { ShelfScreen } from './ui/shelf-screen.tsx';
+import { SourcesScreen } from './ui/sources-screen.tsx';
 import { ReaderScreen } from './ui/reader-screen.tsx';
 import { LoginScreen } from './ui/login-screen.tsx';
 import { LibraryBrowseScreen, LibraryFilesScreen } from './ui/library-screen.tsx';
 import { el } from './ui/dom.ts';
-import { Router, type LibraryView, type Route, type RouteLocation } from './ui/router.ts';
+import { Router, parentOf, type LibraryView, type Route, type RouteLocation } from './ui/router.ts';
 
 /**
  * Application shell: routing, lifecycle and the wiring between the layers.
@@ -81,6 +83,8 @@ export class App {
   private isAdmin = false;
 
   private shelf: ShelfScreen | null = null;
+  private sources: SourcesScreen | null = null;
+  private pluginPage: PluginPageScreen | null = null;
   private reader: ReaderScreen | null = null;
   /**
    * The library, as two screens: the browsing page and the file manager.
@@ -261,6 +265,20 @@ export class App {
       return;
     }
     switch (route.name) {
+      case 'source-page':
+      case 'plugin-page':
+        this.clearScreens(); this.route = route;
+        this.pluginPage = new PluginPageScreen({ api: this.api, ...(route.name === 'source-page' ? { sourceId: route.sourceId } : { pluginId: route.pluginId }), pageId: route.pageId,
+          onBack: () => location.back(), onSignedOut: () => this.handleSignedOut() });
+        this.root.append(this.pluginPage.element); void this.pluginPage.show(); return;
+      case 'sources':
+        this.clearScreens();
+        this.route = route;
+        this.sources = new SourcesScreen({ api: this.api, admin: this.isAdmin, onBack: () => location.back(),
+          onOpen: (book) => this.openBook(book), onSignedOut: () => this.handleSignedOut() });
+        this.root.append(this.sources.element);
+        void this.sources.show();
+        return;
       case 'shelf':
         this.showShelf(route);
         return;
@@ -273,6 +291,9 @@ export class App {
   }
 
   private clearScreens(): void {
+    this.pluginPage?.dispose(); this.pluginPage = null;
+    this.sources?.dispose();
+    this.sources = null;
     this.reader?.dispose();
     this.reader = null;
     this.shelf?.dispose();
@@ -339,6 +360,7 @@ export class App {
     }
     this.clearScreens();
     const shelf = new ShelfScreen({
+      onOpenSources: () => this.router?.navigate({ name: 'sources' }),
       api: this.api,
       offline: this.offline,
       platform: this.platform,
@@ -467,6 +489,7 @@ export class App {
       this.clearScreens();
       const files = new LibraryFilesScreen({
         ...common,
+        onClose: () => this.router?.navigate(parentOf({ name: 'library', ...here() }), { replace: true }),
         path: route.path,
         page: route.page,
         fromShelf: route.fromShelf,
@@ -497,6 +520,7 @@ export class App {
     this.clearScreens();
     const browse = new LibraryBrowseScreen({
       ...common,
+      admin: this.isAdmin,
       path: route.path,
       page: route.page,
       search: route.search,

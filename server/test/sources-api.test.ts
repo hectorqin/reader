@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { cp, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -75,6 +75,26 @@ async function harness() {
     async close() { await stop(); await rm(root, { recursive: true, force: true }); },
   };
 }
+
+test('source editing validates configuration, clears destination credentials and keeps acquired sources', async (t) => {
+  const h = await harness(); t.after(() => h.close());
+  const member = await h.member();
+  const create = await h.app.inject({ method: 'POST', url: '/api/v1/sources', headers: auth(h.admin), payload: {
+    id: 'editable', pluginId: 'reader.opds', sourceType: 'opds', name: 'Before', config: { url: 'https://one.test/opds' },
+  } });
+  assert.equal(create.statusCode, 201, create.body);
+  await h.app.inject({ method: 'PUT', url: '/api/v1/sources/editable/credentials/password', headers: auth(member), payload: { value: 'private' } });
+  const forbidden = await h.app.inject({ method: 'PATCH', url: '/api/v1/sources/editable', headers: auth(member), payload: { name: 'bad' } });
+  assert.equal(forbidden.statusCode, 403);
+  const edited = await h.app.inject({ method: 'PATCH', url: '/api/v1/sources/editable', headers: auth(h.admin), payload: { name: 'After', config: { url: 'https://two.test/opds' } } });
+  assert.equal(edited.statusCode, 200, edited.body); assert.equal(edited.json().source.name, 'After');
+  assert.equal(h.ctx.db.get<{ count: number }>('SELECT count(*) AS count FROM source_credentials WHERE source_id = ?', 'editable')!.count, 0);
+  const invalid = await h.app.inject({ method: 'PATCH', url: '/api/v1/sources/editable', headers: auth(h.admin), payload: { config: { url: 'file:///secret' } } });
+  assert.equal(invalid.statusCode, 400);
+  const removed = await h.app.inject({ method: 'DELETE', url: '/api/v1/sources/editable', headers: auth(h.admin) });
+  assert.equal(removed.statusCode, 200, removed.body);
+  assert.equal((await h.app.inject({ method: 'DELETE', url: '/api/v1/sources/local', headers: auth(h.admin) })).statusCode, 400);
+});
 
 async function opdsFixture() {
   const body = '第一章 远程下载\n\n这是经 OPDS 获取的本地可读正文。\n\n第二章 继续阅读\n\n下载后继续复用现有书架和阅读进度。';

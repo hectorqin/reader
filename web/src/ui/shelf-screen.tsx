@@ -13,6 +13,7 @@ import { Icon, IconButton, IconTextButton } from './toolkit.tsx';
 import { type ComponentChildren, type JSX, useEffect, useState } from './vendor/preact.ts';
 
 export interface ShelfScreenOptions {
+  onOpenSources?(): void;
   api: ReaderApi;
   offline: OfflineStore;
   platform: Platform;
@@ -835,27 +836,7 @@ export class ShelfScreen {
             </p>
           </div>
           <div className="shelf-head-actions">
-            {/*
-              The library's entry point travels with the title rather than sitting
-              in the toolbar: it is a *place*, not a filter, and the toolbar is where
-              the filters are. It carries the folder and page the reader was last in
-              *there*, so switching back and forth is a toggle rather than a reset.
-
-              The two glyphs are `library` and `tune`. The row has now been through
-              two rounds of "这个 icon 还是很丑" (#40), and the second round is the
-              reason the *names* changed as well as the shapes: `gear` and
-              `magnifying-glass` were Font Awesome's names on our own outlines, so
-              anyone who knows that set opens `paths.mjs` expecting Font Awesome's
-              artwork and finds a different shape. The set is ours, so it is named
-              ours (`settings`, `search`, `menu` — see `docs/ui.md` §1.2), and the
-              header's two are drawn as few long strokes at 18px: `library` is three
-              spines on a shelf, and `tune` is one rail with two knobs.
-            */}
-            <IconButton
-              label="书库"
-              icon="library"
-              onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}
-            />
+            {empty && !hasQuery && <IconButton label="刷新" icon="refresh" disabled={state.loading} onClick={() => void this.manualRefresh()} />}
             <IconButton
               label={`书架设置 · ${DENSITY_LABELS[density]}`}
               icon="tune"
@@ -864,36 +845,42 @@ export class ShelfScreen {
           </div>
         </header>
 
-        <div className="shelf-search" role="search">
-          <Icon name="search" class="search-glyph" />
-          <input
-            type="search"
-            placeholder="搜索书名、作者、系列"
-            aria-label="搜索书库"
-            enterKeyHint="search"
-            value={state.search}
-            onInput={(event) => this.onSearchInput((event.currentTarget as HTMLInputElement).value)}
-            onKeyDown={(event) => {
-              // `search` inputs fire a non-standard `search` event on clear, but
-              // only in some browsers; Enter is the one that is reliable
-              // everywhere and it also means "stop waiting for the debounce".
-              if (event.key === 'Enter') {
-                if (this.searchTimer) clearTimeout(this.searchTimer);
-                this.searchTimer = null;
-                this.patch({ query: state.search.trim() });
-                void this.refresh();
-              }
-            }}
-          />
-          {state.search.length > 0 ? (
-            <button type="button" className="search-clear" aria-label="清除搜索" onClick={() => this.clearSearch()}>
-              <Icon name="close" />
-            </button>
-          ) : null}
+        <div className="shelf-discovery">
+          <nav className="collection-links shelf-links" aria-label="发现书籍">
+            <button type="button" className="button collection-link" aria-label="书库" onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}><Icon name="library" /><span>书库</span><Icon name="chevron-right" /></button>
+            {this.options.onOpenSources && <button type="button" className="button collection-link" onClick={this.options.onOpenSources}><Icon name="search" /><span>书源</span><Icon name="chevron-right" /></button>}
+          </nav>
+          <div className="shelf-search" role="search">
+            <Icon name="search" class="search-glyph" />
+            <input
+              type="search"
+              placeholder="搜索书名、作者、系列"
+              aria-label="搜索书库"
+              enterKeyHint="search"
+              value={state.search}
+              onInput={(event) => this.onSearchInput((event.currentTarget as HTMLInputElement).value)}
+              onKeyDown={(event) => {
+                // `search` inputs fire a non-standard `search` event on clear, but
+                // only in some browsers; Enter is the one that is reliable
+                // everywhere and it also means "stop waiting for the debounce".
+                if (event.key === 'Enter') {
+                  if (this.searchTimer) clearTimeout(this.searchTimer);
+                  this.searchTimer = null;
+                  this.patch({ query: state.search.trim() });
+                  void this.refresh();
+                }
+              }}
+            />
+            {state.search.length > 0 ? (
+              <button type="button" className="search-clear" aria-label="清除搜索" onClick={() => this.clearSearch()}>
+                <Icon name="close" />
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <section className="shelf-section" aria-label={hasQuery ? '搜索结果' : '全部书籍'}>
-          <div className="shelf-toolbar">
+          {(!empty || hasQuery) && <div className="shelf-toolbar">
             {hasQuery || state.total > 0 ? (
               <span className="shelf-count muted" data-testid="shelf-count">
                 {hasQuery ? `找到 ${state.total} 本` : `共 ${state.total} 本`}
@@ -915,7 +902,7 @@ export class ShelfScreen {
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
 
           <div className="shelf-refresh" hidden={!state.refreshing}>
             {state.refreshing ? '正在刷新…' : ''}
@@ -925,7 +912,7 @@ export class ShelfScreen {
 
           {!state.bootstrapping && empty ? (
             hasQuery ? (
-              <div className="empty-state">
+              <div className="empty-state collection-empty">
                 <Icon name="search" class="empty-glyph" />
                 <p>没有匹配的书</p>
                 <p className="muted">换个关键词，或者检查一下作者名的写法</p>
@@ -934,19 +921,20 @@ export class ShelfScreen {
                 </button>
               </div>
             ) : (
-              <div className="empty-state">
+              <div className="empty-state collection-empty">
                 <Icon name="book" class="empty-glyph" />
-                <p>书库还是空的</p>
+                <p>书架还没有书</p>
                 <p className="muted">
-                  把书籍放进挂载的目录，扫一次，它们就会出现在这里
+                  从书库挑选喜欢的书，或通过书源搜索，加入书架后就能开始阅读。
                 </p>
                 <div className="empty-actions">
+                  {this.options.onOpenSources && <IconTextButton className="primary" icon="search" label="去搜书" onClick={this.options.onOpenSources} />}
                   <IconTextButton
+                    className={this.options.onOpenSources ? '' : 'primary'}
                     icon="library"
                     label="打开书库"
                     onClick={() => this.options.onOpenLibrary(state.libraryPath, state.libraryPage)}
                   />
-                  <IconTextButton icon="refresh" label="刷新" onClick={() => void this.manualRefresh()} />
                 </div>
               </div>
             )
@@ -1027,7 +1015,7 @@ export class ShelfScreen {
       }
       return base;
     }
-    return '自部署书库';
+    return '收藏好书，随时接着读';
   }
 
   dispose(): void {

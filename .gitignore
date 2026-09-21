@@ -1,5 +1,6 @@
 # dependencies
 node_modules/
+*.tgz
 
 # build output
 server/dist/

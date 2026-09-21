@@ -1,3 +1,4 @@
+import type { ExtensionField, ExtensionPage } from './sources.ts';
 import { ApiError, errorForStatus, parseErrorBody } from './errors.ts';
 import type {
   BatchResult,
@@ -22,6 +23,7 @@ import type {
   User,
 } from './types.ts';
 import type { Platform } from '../core/platform.ts';
+import type { SourceType, SourceInstance, SourcePlugin, SourceEntry, SourcePage, SourceAcquisition, ChapterSubscription } from './sources.ts';
 
 export interface SessionStore {
   load(): Promise<Session | null>;
@@ -199,7 +201,7 @@ export class ReaderApi {
   }
 
   async register(username: string, password: string, displayName?: string): Promise<Session> {
-    const session = await this.call<Session>('/api/v1/auth/register', 'POST', {
+    const { session } = await this.call<{ user: User; session: Session }>('/api/v1/auth/register', 'POST', {
       username,
       password,
       ...(displayName ? { displayName } : {}),
@@ -226,6 +228,58 @@ export class ReaderApi {
   }
 
   // ---- shelf ----
+
+  async sourcePage(id: string, pageId: string, action?: string, values?: Record<string, unknown>): Promise<ExtensionPage> {
+    const path = '/api/v1/sources/' + encodeURIComponent(id) + '/pages/' + encodeURIComponent(pageId);
+    return action ? this.call(path, 'POST', { action, values }) : this.get(path);
+  }
+
+  async pluginPage(id: string, pageId: string, action?: string, values?: Record<string, unknown>): Promise<ExtensionPage> {
+    const path = '/api/v1/plugins/' + encodeURIComponent(id) + '/pages/' + encodeURIComponent(pageId);
+    return action ? this.call(path, 'POST', { action, values }) : this.get(path);
+  }
+  async sourceFilters(id: string): Promise<ExtensionField[]> { return this.get('/api/v1/sources/' + encodeURIComponent(id) + '/search-filters'); }
+  async sourceOptions(id: string): Promise<{ canSwitch: boolean }> { return this.get('/api/v1/books/' + encodeURIComponent(id) + '/source-options'); }
+  async alternatives(id: string, cursor?: string): Promise<SourcePage> { return this.get('/api/v1/books/' + encodeURIComponent(id) + '/alternatives' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : '')); }
+  async switchPreview(id: string, entryRef: string): Promise<{ chapters: Array<{ id: string; title: string }> }> {
+    return this.call('/api/v1/books/' + encodeURIComponent(id) + '/switch-preview', 'POST', { entryRef });
+  }
+  async switchSource(id: string, entryRef: string, chapterId: string, revision: string): Promise<{ content: BookContent; href: string }> {
+    return this.call('/api/v1/books/' + encodeURIComponent(id) + '/switch-source', 'POST', { entryRef, chapterId, revision });
+  }
+  async sourceTypes(): Promise<SourceType[]> { return (await this.get<{ types: SourceType[] }>('/api/v1/sources/types')).types; }
+  async sources(): Promise<SourceInstance[]> { return (await this.get<{ sources: SourceInstance[] }>('/api/v1/sources')).sources; }
+  async plugins(): Promise<SourcePlugin[]> { return (await this.get<{ plugins: SourcePlugin[] }>('/api/v1/plugins')).plugins; }
+  async saveSource(id: string | null, input: Record<string, unknown>): Promise<SourceInstance> {
+    return (await this.call<{ source: SourceInstance }>(`/api/v1/sources${id ? `/${encodeURIComponent(id)}` : ''}`, id ? 'PATCH' : 'POST', input)).source;
+  }
+  async removeSource(id: string): Promise<void> { await this.call(`/api/v1/sources/${encodeURIComponent(id)}`, 'DELETE'); }
+  async sourceCredential(id: string, key: string, value: string): Promise<void> {
+    await this.call(`/api/v1/sources/${encodeURIComponent(id)}/credentials/${encodeURIComponent(key)}`, 'PUT', { value });
+  }
+  async installPlugin(folder: string): Promise<void> { await this.call('/api/v1/plugins', 'POST', { folder, trusted: true }); }
+  async enablePlugin(id: string, enabled: boolean): Promise<void> { await this.call(`/api/v1/plugins/${encodeURIComponent(id)}`, 'PATCH', { enabled }); }
+  async uninstallPlugin(id: string): Promise<void> { await this.call(`/api/v1/plugins/${encodeURIComponent(id)}`, 'DELETE'); }
+  async sourceCatalog(id: string, query: { ref?: string; query?: string; cursor?: string; filters?: Record<string, string> } = {}): Promise<SourcePage> {
+    const params = new URLSearchParams();
+    if (query.ref) params.set('ref', query.ref);
+    if (query.query) params.set('q', query.query);
+    if (query.cursor) params.set('cursor', query.cursor);
+    if (query.filters) params.set('filters', JSON.stringify(query.filters));
+    return this.get(`/api/v1/sources/${encodeURIComponent(id)}/${query.query ? 'search' : 'browse'}?${params}`);
+  }
+  async sourceDetail(id: string, ref: string): Promise<SourceEntry> {
+    return this.get(`/api/v1/sources/${encodeURIComponent(id)}/entries?ref=${encodeURIComponent(ref)}`);
+  }
+  async acquireSource(id: string, entryRef: string, optionId?: string): Promise<SourceAcquisition> {
+    return this.call(`/api/v1/sources/${encodeURIComponent(id)}/acquire`, 'POST', { entryRef, ...(optionId ? { optionId } : {}) });
+  }
+  async subscriptions(): Promise<ChapterSubscription[]> {
+    return (await this.get<{ subscriptions: ChapterSubscription[] }>('/api/v1/subscriptions')).subscriptions;
+  }
+  async configureSubscription(id: string, patch: { enabled?: boolean; intervalMinutes?: number; acknowledge?: boolean }): Promise<void> {
+    await this.call(`/api/v1/books/${encodeURIComponent(id)}/subscription`, 'PATCH', patch);
+  }
 
   async listBooks(query: ListQuery = {}, options: RequestOptions = {}): Promise<BookListPage> {
     const params = new URLSearchParams();

@@ -11,6 +11,7 @@ import type { SourceContext, SourceInstance, SourceProvider, SourceStorage, Cred
 import { FileAcquisitions } from '../sources/acquisitions.ts';
 import { PluginManager } from '../sources/plugin-manager.ts';
 import { ChapterPublications } from '../publications/chapters.ts';
+import { ChapterUpdates } from './chapter-updates.ts';
 
 function json(value: unknown): string { return JSON.stringify(value ?? {}); }
 function parse(value: string): unknown { try { return JSON.parse(value); } catch { return {}; } }
@@ -20,6 +21,7 @@ export class SourceHost {
   readonly registry = new SourceRegistry();
   readonly plugins: PluginManager;
   readonly chapters: ChapterPublications;
+  readonly updates: ChapterUpdates;
   private readonly key: Buffer;
   private readonly acquisitions: FileAcquisitions;
   private activeCalls = 0;
@@ -31,10 +33,11 @@ export class SourceHost {
     this.chapters = new ChapterPublications(db, {
       manifest: (userId, sourceId, ref, signal) => this.manifest(userId, sourceId, ref, signal),
       resource: (userId, sourceId, publicationRef, ref, signal) => this.call(userId, sourceId, (provider, ctx) => provider.readResource
-        ? provider.readResource(ctx, { publicationRef, ref, rendition: 'text' })
+        ? provider.readResource(ctx, { publicationRef, ref })
         : Promise.reject(badRequest('source has no chapter resources', 'SOURCE_UNSUPPORTED')), signal),
     });
     this.registry.registerBuiltin('reader.local', createLocalProvider(db, shelf));
+    this.updates = new ChapterUpdates(db, this.chapters);
     this.registry.registerBuiltin('reader.opds', createOpdsProvider());
     this.plugins = new PluginManager(db, config.dataDir, this.registry);
     this.ensureLocal();
@@ -84,6 +87,39 @@ export class SourceHost {
     this.db.run('UPDATE source_instances SET enabled = ? WHERE id = ?', enabled ? 1 : 0, id);
   }
 
+  async update(id: string, patch: { name?: unknown; config?: unknown; enabled?: unknown }): Promise<void> {
+    const row = this.instance(id);
+    const name = patch.name ?? row.name;
+    if (typeof name !== 'string' || !name.trim() || name.length > 128) throw badRequest('invalid source name');
+    if (patch.enabled !== undefined && typeof patch.enabled !== 'boolean') throw badRequest('enabled must be boolean');
+    const configuration = patch.config === undefined ? row.config_json : json(patch.config);
+    if (configuration.length > 64 * 1024) throw badRequest('source configuration is too large');
+    if (patch.config !== undefined) {
+      const registration = this.registry.get(row.plugin_id, row.source_type);
+      if (!registration) throw notFound('source type is unavailable', 'SOURCE_TYPE_NOT_FOUND');
+      await registration.provider.validateConfig?.(patch.config);
+      if (this.registry.get(row.plugin_id, row.source_type) !== registration) throw conflict('plugin changed; retry');
+    }
+    if (this.instance(id).config_json !== row.config_json) throw conflict('configuration changed; reload and retry');
+    if (configuration !== row.config_json && (this.activeSources.get(id) ?? 0) > 0) throw conflict('source is busy; retry configuration when current calls finish', 'SOURCE_BUSY');
+    this.db.transaction(() => {
+      this.db.run('UPDATE source_instances SET name = ?, config_json = ?, enabled = ? WHERE id = ?',
+        name.trim(), configuration, patch.enabled === undefined ? row.enabled : Number(patch.enabled), id);
+      // Changing a destination must not forward existing users' secrets to it.
+      if (configuration !== row.config_json) this.db.run('DELETE FROM source_credentials WHERE source_id = ?', id);
+    });
+  }
+
+  remove(id: string): void {
+    const row = this.instance(id);
+    if (row.plugin_id === 'reader.local') throw badRequest('the built-in local source cannot be removed');
+    if (this.db.get('SELECT book_id FROM source_acquisitions WHERE source_id = ? LIMIT 1', id) ||
+        this.db.get('SELECT book_id FROM chapter_publications WHERE source_id = ? LIMIT 1', id)) {
+      throw conflict('source has acquired books; disable it instead', 'SOURCE_IN_USE');
+    }
+    this.db.run('DELETE FROM source_instances WHERE id = ?', id);
+  }
+
   setCredential(sourceId: string, userId: string, name: string, value: string): void {
     if (!/^[a-z][a-z0-9_.-]{0,63}$/.test(name) || value.length > 16_384) throw badRequest('invalid credential');
     this.instance(sourceId);
@@ -98,9 +134,43 @@ export class SourceHost {
     return this.call(userId, id, (provider, ctx) => provider.browse
       ? provider.browse(ctx, request) : Promise.reject(badRequest('source does not support browse', 'SOURCE_UNSUPPORTED')), signal);
   }
-  async search(userId: string, id: string, request: { query: string; cursor?: string; limit?: number }, signal?: AbortSignal) {
+  async search(userId: string, id: string, request: { query: string; cursor?: string; limit?: number; filters?: Record<string, string> }, signal?: AbortSignal) {
     return this.call(userId, id, (provider, ctx) => provider.search
       ? provider.search(ctx, request) : Promise.reject(badRequest('source does not support search', 'SOURCE_UNSUPPORTED')), signal);
+  }
+  async searchFilters(userId: string, id: string, signal?: AbortSignal) {
+    return this.call(userId, id, (provider, ctx) => provider.searchFilters?.(ctx) ?? Promise.resolve([]), signal);
+  }
+  async alternatives(userId: string, bookId: string, cursor?: string, signal?: AbortSignal) {
+    const binding = this.chapters.binding(userId, bookId);
+    const book = this.db.get<{ title: string; author: string }>('SELECT title, author FROM books WHERE id = ?', bookId)!;
+    return this.call(userId, binding.source_id, (provider, ctx) => provider.alternatives
+      ? provider.alternatives(ctx, { publicationRef: binding.publication_ref, query: book.title, authors: [book.author], cursor })
+      : Promise.resolve({ items: [] }), signal);
+  }
+  canSwitch(userId: string, bookId: string): boolean {
+    const binding = this.chapters.binding(userId, bookId);
+    const row = this.instance(binding.source_id);
+    return !!row.enabled && !!this.registry.get(row.plugin_id, row.source_type)?.provider.alternatives;
+  }
+  async switchPreview(userId: string, bookId: string, entryRef: string, signal?: AbortSignal) {
+    const binding = this.chapters.binding(userId, bookId);
+    return this.call(userId, binding.source_id, async (provider, ctx) => {
+      if (!provider.alternatives) throw badRequest('source does not support alternatives');
+      const acquisition = await provider.acquire(ctx, { entryRef });
+      if (acquisition.kind !== 'chapters' || !provider.getManifest) throw badRequest('alternative has no chapters');
+      const snapshot = await provider.getManifest(ctx, acquisition.publicationRef);
+      return { chapters: snapshot.items.map(item => ({ id: item.id, title: item.title })) };
+    }, signal);
+  }
+  async switchSource(userId: string, bookId: string, entryRef: string, chapterId: string, revision: string, signal?: AbortSignal) {
+    const binding = this.chapters.binding(userId, bookId);
+    return this.call(userId, binding.source_id, async (provider, ctx) => {
+      if (!provider.alternatives) throw badRequest('source does not support alternatives');
+      const acquisition = await provider.acquire(ctx, { entryRef });
+      if (acquisition.kind !== 'chapters') throw badRequest('alternative has no chapters');
+      return this.chapters.switchSource(provider, ctx, bookId, entryRef, acquisition.publicationRef, chapterId, revision);
+    }, signal);
   }
   async detail(userId: string, id: string, ref: string, signal?: AbortSignal) {
     return this.call(userId, id, (provider, ctx) => provider.detail(ctx, ref), signal);
@@ -130,7 +200,7 @@ export class SourceHost {
   }
 
   refreshPublication(userId: string, bookId: string, signal?: AbortSignal) {
-    return this.chapters.refresh(userId, bookId, signal);
+    return this.updates.check(userId, bookId, signal);
   }
 
   async manifest(userId: string, id: string, ref: string, signal?: AbortSignal) {

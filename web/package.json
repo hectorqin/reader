@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "icons": "node tools/icons/build.mjs",
     "ui:review": "npm run build && node tools/ui-review/run.mjs",
-    "ui:review:only": "node tools/ui-review/run.mjs"
+    "ui:review:only": "node tools/ui-review/run.mjs",
+    "ui:sources": "npm run build && node --import ../server/node_modules/tsx/dist/loader.mjs tools/ui-review/sources-e2e.mjs"
   },
   "dependencies": {
     "jszip": "^3.10.1",

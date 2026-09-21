@@ -1,8 +1,9 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { Db } from '../db/index.ts';
 import type { AssetPayload, Manifest } from '../indexer/formats/registry.ts';
 import { AppError, badRequest, conflict, notFound } from '../lib/errors.ts';
 import { decodeManifest } from '../sources/protocol.ts';
+import { chapterMedia, richContent } from './rich-content.ts';
 import type {
   AcquireRequest, CatalogEntry, ManifestSnapshot, ResourceResponse, SourceContext, SourceProvider,
 } from '../sources/types.ts';
@@ -27,6 +28,7 @@ interface PublicationRow {
 
 interface ResourceRow {
   provider_ref: string;
+  media_type: string;
   body: string | null;
   content_hash: string | null;
 }
@@ -35,16 +37,7 @@ function hash(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
-function isPlainUtf8(type: string): boolean {
-  const [mediaType, ...parameters] = type.split(';');
-  if (mediaType?.trim().toLowerCase() !== 'text/plain') return false;
-  return parameters.every((parameter) => {
-    const [name, value] = parameter.split('=');
-    return name?.trim().toLowerCase() !== 'charset' || /^(?:utf-8|utf8)$/i.test((value ?? '').trim().replace(/^"|"$/g, ''));
-  });
-}
-
-/** Stable reader identities, versioned directories and cached plain-text chapters. */
+/** Stable reader identities, versioned directories and passive cached chapters. */
 export class ChapterPublications {
   private readonly queues = new Map<string, Promise<unknown>>();
 
@@ -58,7 +51,7 @@ export class ChapterPublications {
     const publication = this.owned(userId, bookId);
     const snapshot = JSON.parse(publication.snapshot_json) as ManifestSnapshot;
     return {
-      kind: 'text', revision: publication.revision, total: snapshot.items.length,
+      kind: snapshot.items.some((item) => chapterMedia(item.mediaType).startsWith('text/html')) ? 'reflowable' : 'text', revision: publication.revision, total: snapshot.items.length,
       groups: snapshot.items.length ? [{ id: 'chapters', seq: 0, title: '章节', count: snapshot.items.length, offset: 0 }] : [],
       items: snapshot.items.map((item, seq) => {
         const id = hash(item.id);
@@ -67,7 +60,8 @@ export class ChapterPublications {
           resourceRef: `chapter-resource:${publication.revision}:${id}`,
           // The TXT reader typesets plain characters itself; never label a
           // plugin's characters as HTML or run a markup parser over them.
-          mediaType: 'text/plain; charset=utf-8', format: 'html',
+          mediaType: chapterMedia(item.mediaType),
+          ...(chapterMedia(item.mediaType).startsWith('text/plain') ? { format: 'html' as const } : {}),
         };
       }),
     };
@@ -77,13 +71,22 @@ export class ChapterPublications {
     provider: SourceProvider, context: SourceContext, request: AcquireRequest,
     publicationRef: string, entry: CatalogEntry,
   ): Promise<string> {
-    const bookId = hash(JSON.stringify(['reader/chapter-publication/v1', context.instance.id, context.userId, publicationRef]));
-    return this.serial(`publication:${bookId}`, async () => {
+    const identity = hash(JSON.stringify(['reader/chapter-publication/v1', context.instance.id, context.userId, publicationRef]));
+    return this.serial(`publication:${identity}`, async () => {
       context.signal.throwIfAborted();
+      // A book keeps its id when switching providers. Reacquiring its former
+      // binding must not silently return the replacement edition.
+      const bound = this.db.get<{ book_id: string }>('SELECT book_id FROM chapter_publications WHERE user_id = ? AND source_id = ? AND publication_ref = ?', context.userId, context.instance.id, publicationRef);
+      const bookId = bound?.book_id ?? (this.has(identity) ? hash(randomUUID()) : identity);
       if (!this.has(bookId)) {
         if (!provider.getManifest || !provider.readResource) throw badRequest('source has no chapter content', 'SOURCE_UNSUPPORTED');
         const snapshot = this.normalize(await provider.getManifest(context, publicationRef), publicationRef);
         context.signal.throwIfAborted();
+        const changed = this.db.get<{ book_id: string }>('SELECT book_id FROM chapter_publications WHERE source_id = ? AND user_id = ? AND publication_ref = ?', context.instance.id, context.userId, publicationRef);
+        if (changed) {
+          this.db.transaction(() => this.addAcquisition(context, request, changed.book_id, Date.now()));
+          return changed.book_id;
+        }
         const snapshotJson = JSON.stringify(snapshot);
         const revision = hash(snapshotJson);
         const now = Date.now();
@@ -136,6 +139,7 @@ export class ChapterPublications {
   }
 
   asset(userId: string, bookId: string, ref: string, signal?: AbortSignal): Promise<AssetPayload> {
+    signal = signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000);
     this.owned(userId, bookId);
     const match = /^chapter-resource:([a-f0-9]{64}):([a-f0-9]{64})$/.exec(ref);
     if (!match) return Promise.reject(badRequest('chapter assets require the manifest resourceRef', 'INVALID_RESOURCE'));
@@ -144,14 +148,25 @@ export class ChapterPublications {
       signal?.throwIfAborted();
       const publication = this.owned(userId, bookId);
       const resource = this.db.get<ResourceRow>(
-        'SELECT provider_ref, body, content_hash FROM chapter_resources WHERE book_id = ? AND revision = ? AND chapter_id = ?',
+        'SELECT provider_ref, media_type, body, content_hash FROM chapter_resources WHERE book_id = ? AND revision = ? AND chapter_id = ?',
         bookId, revision!, chapterId!,
       );
       if (!resource) throw notFound('chapter resource does not exist', 'RESOURCE_GONE');
-      if (resource.body !== null) return this.payload(resource.body, resource.content_hash!);
+      resource.media_type = chapterMedia(resource.media_type);
+      if (resource.body !== null) return this.payload(resource.body, resource.content_hash!, resource.media_type);
       this.requireCurrent(publication, revision!);
       const response = await this.loader.resource(userId, publication.source_id, publication.publication_ref, resource.provider_ref, signal);
-      const body = this.readBody(response, signal);
+      if (chapterMedia(response.mediaType) !== resource.media_type) {
+        response.stream?.destroy();
+        throw badRequest('chapter resource type differs from its manifest', 'INVALID_RESOURCE');
+      }
+      let body = this.readBody(response, signal);
+      if (resource.media_type.startsWith('text/html')) {
+        body = await richContent(body, (imageRef) => {
+          signal?.throwIfAborted();
+          return this.loader.resource(userId, publication.source_id, publication.publication_ref, imageRef, signal);
+        });
+      }
       signal?.throwIfAborted();
       // The provider protocol cannot request an old version. If a refresh won
       // while this request was in flight, never cache new bytes as old content.
@@ -161,7 +176,48 @@ export class ChapterPublications {
         'UPDATE chapter_resources SET body = ?, content_hash = ? WHERE book_id = ? AND revision = ? AND chapter_id = ?',
         body, contentHash, bookId, revision!, chapterId!,
       );
-      return this.payload(body, contentHash);
+      return this.payload(body, contentHash, resource.media_type);
+    });
+  }
+
+  binding(userId: string, bookId: string) { return this.owned(userId, bookId); }
+
+  switchSource(provider: SourceProvider, context: SourceContext, bookId: string, entryRef: string, publicationRef: string, chapterId: string, expectedRevision: string) {
+    this.owned(context.userId, bookId);
+    return this.serial('publication:' + bookId, async () => {
+      const previous = this.owned(context.userId, bookId);
+      if (previous.source_id !== context.instance.id) throw badRequest('alternative belongs to another source instance');
+      if (previous.revision !== expectedRevision) throw conflict('Directory changed; reload before switching', 'CHAPTER_SNAPSHOT_EXPIRED');
+      const checkBinding = () => {
+        if (this.db.get('SELECT book_id FROM chapter_publications WHERE source_id = ? AND user_id = ? AND publication_ref = ? AND book_id <> ?',
+          context.instance.id, context.userId, publicationRef, bookId)) {
+          throw conflict('该版本已作为另一本书加入书架，请从书架打开', 'SOURCE_ALREADY_ACQUIRED');
+        }
+      };
+      checkBinding();
+      if (!provider.getManifest || !provider.readResource) throw badRequest('source has no chapter content');
+      const snapshot = this.normalize(await provider.getManifest(context, publicationRef), publicationRef);
+      const chapter = snapshot.items.find(item => item.id === chapterId);
+      if (!chapter) throw conflict('Selected chapter is no longer available');
+      const response = await provider.readResource(context, { publicationRef, ref: chapter.ref });
+      if (chapterMedia(response.mediaType) !== chapterMedia(chapter.mediaType)) { response.stream?.destroy(); throw badRequest('Invalid chapter media type'); }
+      let body = this.readBody(response, context.signal);
+      if (chapterMedia(chapter.mediaType).startsWith('text/html')) body = await richContent(body,
+        imageRef => provider.readResource!(context, { publicationRef, ref: imageRef }));
+      context.signal.throwIfAborted();
+      const snapshotJson = JSON.stringify(snapshot), revision = hash(snapshotJson), now = Date.now();
+      this.db.transaction(() => {
+        checkBinding();
+        this.saveSnapshot(bookId, revision, snapshot, snapshotJson, now);
+        this.db.run('UPDATE chapter_resources SET body = ?, content_hash = ? WHERE book_id = ? AND revision = ? AND chapter_id = ?', body, hash(body), bookId, revision, hash(chapterId));
+        this.db.run('UPDATE chapter_publications SET publication_ref = ?, revision = ?, version = ?, snapshot_json = ?, updated_at = ? WHERE book_id = ?',
+          publicationRef, revision, snapshot.version ?? null, snapshotJson, now, bookId);
+        this.db.run('UPDATE books SET content_hash = ?, page_count = ?, updated_at = ? WHERE id = ?', revision, snapshot.items.length, now, bookId);
+        this.db.run('DELETE FROM source_acquisitions WHERE book_id = ? AND user_id = ?', bookId, context.userId);
+        this.addAcquisition(context, { entryRef }, bookId, now);
+        this.db.run('UPDATE chapter_subscriptions SET new_chapters = 0, generation = generation + 1 WHERE book_id = ?', bookId);
+      });
+      return { content: this.manifest(context.userId, bookId), href: 'chapter:' + hash(chapterId) };
     });
   }
 
@@ -189,15 +245,14 @@ export class ChapterPublications {
       throw badRequest('invalid chapter directory version', 'INVALID_MANIFEST');
     }
     for (const item of snapshot.items) {
-      if (item.kind !== 'chapter' || !isPlainUtf8(item.mediaType)) {
-        throw badRequest('chapter publications currently support UTF-8 plain text only', 'UNSUPPORTED_FORMAT');
-      }
+      if (item.kind !== 'chapter') throw badRequest('chapter publications require chapter items', 'UNSUPPORTED_FORMAT');
+      chapterMedia(item.mediaType);
     }
     return {
       publicationRef,
       ...(snapshot.version === undefined ? {} : { version: snapshot.version }),
       items: [...snapshot.items].sort((left, right) => left.seq - right.seq).map((item, seq) => ({
-        id: item.id, seq, title: item.title, kind: 'chapter', mediaType: 'text/plain; charset=utf-8', ref: item.ref,
+        id: item.id, seq, title: item.title, kind: 'chapter', mediaType: chapterMedia(item.mediaType), ref: item.ref,
       })),
     };
   }
@@ -209,8 +264,8 @@ export class ChapterPublications {
     );
     for (const item of snapshot.items) {
       this.db.run(
-        'INSERT OR IGNORE INTO chapter_resources (book_id, revision, chapter_id, provider_ref) VALUES (?, ?, ?, ?)',
-        bookId, revision, hash(item.id), item.ref,
+        'INSERT OR IGNORE INTO chapter_resources (book_id, revision, chapter_id, provider_ref, media_type) VALUES (?, ?, ?, ?, ?)',
+        bookId, revision, hash(item.id), item.ref, chapterMedia(item.mediaType),
       );
     }
   }
@@ -232,7 +287,7 @@ export class ChapterPublications {
   private readBody(resource: ResourceResponse, signal?: AbortSignal): string {
     try {
       signal?.throwIfAborted();
-      if (!isPlainUtf8(resource.mediaType)) throw badRequest('chapter resource must be UTF-8 plain text', 'INVALID_RESOURCE');
+      chapterMedia(resource.mediaType);
       const bodies = Number(resource.text !== undefined) + Number(resource.data !== undefined) + Number(resource.stream !== undefined);
       if (bodies !== 1) throw badRequest('chapter resource must contain exactly one body', 'INVALID_RESOURCE');
       // Chapter RPCs are bounded messages. A stream returned after the host call
@@ -254,9 +309,9 @@ export class ChapterPublications {
     }
   }
 
-  private payload(body: string, contentHash: string): AssetPayload {
+  private payload(body: string, contentHash: string, contentType = 'text/plain; charset=utf-8'): AssetPayload {
     const data = Buffer.from(body, 'utf8');
-    return { data, contentType: 'text/plain; charset=utf-8', size: data.byteLength, etag: contentHash };
+    return { data, contentType, size: data.byteLength, etag: contentHash };
   }
 
   private serial<T>(key: string, action: () => Promise<T>): Promise<T> {

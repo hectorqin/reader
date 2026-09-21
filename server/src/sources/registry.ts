@@ -1,3 +1,4 @@
+import { extensionDeclarations } from './extensions.ts';
 import type {
   PluginManifest,
   SourceCapability,
@@ -15,11 +16,18 @@ export class SourceRegistryError extends Error {
 
 const ID_RE = /^[a-z][a-z0-9._-]{0,127}$/;
 const CAPABILITIES = new Set<SourceCapability>([
-  'browse', 'search', 'detail', 'acquire.file', 'acquire.chapters',
+  'search.filters', 'content.alternatives', 'browse', 'search', 'detail', 'acquire.file', 'acquire.chapters',
   'content.manifest', 'content.resource', 'content.update',
 ]);
 
 function assertDescriptor(descriptor: SourceDescriptor): void {
+  extensionDeclarations(descriptor.extensions);
+  if (descriptor.credentialKeys !== undefined && (!Array.isArray(descriptor.credentialKeys) ||
+      descriptor.credentialKeys.length > 16 || descriptor.credentialKeys.some((field) =>
+        !field || !/^[a-z][a-z0-9_.-]{0,63}$/.test(field.key) || typeof field.label !== 'string' || !field.label.trim()) ||
+      new Set(descriptor.credentialKeys.map((field) => field.key)).size !== descriptor.credentialKeys.length)) {
+    throw new SourceRegistryError('invalid credential fields');
+  }
   if (!ID_RE.test(descriptor.id)) throw new SourceRegistryError(`invalid source id: ${descriptor.id}`);
   if (!descriptor.label.trim()) throw new SourceRegistryError(`source ${descriptor.id} has an empty label`);
   if (!descriptor.version.trim()) throw new SourceRegistryError(`source ${descriptor.id} has no version`);
@@ -50,6 +58,8 @@ function assertProvider(provider: SourceProvider): void {
   };
   requireMethod('browse', 'browse');
   requireMethod('search', 'search');
+  requireMethod('search.filters', 'searchFilters');
+  requireMethod('content.alternatives', 'alternatives');
   requireMethod('content.manifest', 'getManifest');
   requireMethod('content.resource', 'readResource');
   requireMethod('content.update', 'getManifest');
@@ -140,6 +150,7 @@ export function validatePluginManifest(input: unknown): PluginManifest {
   if (!ID_RE.test(id)) throw new SourceRegistryError(`invalid plugin id: ${id}`);
   const manifest: PluginManifest = {
     id,
+    extensions: extensionDeclarations(value.extensions),
     name: requiredString('name'),
     version: requiredString('version'),
     apiVersion: value.apiVersion as number,

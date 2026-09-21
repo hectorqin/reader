@@ -51,6 +51,8 @@ export class ApiError extends Error {
    * the client cannot classify.
    */
   get isAuthFailure(): boolean {
+    // Source credentials are independent of the reader account session.
+    if (this.code === 'AUTH_REQUIRED') return false;
     if (this.kind === 'unauthorized') return true;
     if (this.kind !== 'forbidden') return false;
     return AUTH_FAILURE_CODES.has(this.code);

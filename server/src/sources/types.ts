@@ -1,9 +1,12 @@
+import type { ExtensionField, PluginExtensions } from './extensions.ts';
 import type { Readable } from 'node:stream';
 
 /** Stable source capabilities exposed to the host and clients. */
 export type SourceCapability =
   | 'browse'
   | 'search'
+  | 'search.filters'
+  | 'content.alternatives'
   | 'detail'
   | 'acquire.file'
   | 'acquire.chapters'
@@ -12,6 +15,7 @@ export type SourceCapability =
   | 'content.update';
 
 export interface SourceDescriptor {
+  readonly extensions?: PluginExtensions;
   /** Stable source type id, e.g. `local`, `opds`, or a plugin-defined id. */
   readonly id: string;
   readonly label: string;
@@ -19,6 +23,7 @@ export interface SourceDescriptor {
   readonly capabilities: readonly SourceCapability[];
   /** JSON Schema for an instance's public configuration, when applicable. */
   readonly configSchema?: unknown;
+  readonly credentialKeys?: readonly { key: string; label: string }[];
 }
 
 export interface SourceInstance {
@@ -86,6 +91,7 @@ export interface BrowseRequest {
 }
 
 export interface SearchRequest {
+  readonly filters?: Record<string, string>;
   readonly query: string;
   readonly cursor?: string;
   readonly limit?: number;
@@ -191,6 +197,9 @@ export interface ResourceResponse {
 
 export interface SourceProvider {
   readonly descriptor: SourceDescriptor;
+  /** Dynamic select fields; keys and option values are opaque to the host. */
+  searchFilters?(ctx: SourceContext): Promise<ExtensionField[]>;
+  alternatives?(ctx: SourceContext, request: SearchRequest & { publicationRef: string; authors?: readonly string[] }): Promise<CatalogPage>;
   validateConfig?(config: unknown): void | Promise<void>;
   browse?(ctx: SourceContext, request: BrowseRequest): Promise<CatalogPage>;
   search?(ctx: SourceContext, request: SearchRequest): Promise<CatalogPage>;
@@ -209,13 +218,16 @@ export interface SourceRegistration {
 }
 
 export interface PluginSourceType {
+  readonly extensions?: PluginExtensions;
   readonly id: string;
   readonly label: string;
   readonly capabilities: readonly SourceCapability[];
   readonly configSchema?: unknown;
+  readonly credentialKeys?: readonly { key: string; label: string }[];
 }
 
 export interface PluginManifest {
+  readonly extensions?: PluginExtensions;
   readonly id: string;
   readonly name: string;
   readonly version: string;

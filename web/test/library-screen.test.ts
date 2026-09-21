@@ -121,7 +121,7 @@ function makeScreen(
     api,
     offline: new OfflineStore(platform.kv),
     settings: { ...DEFAULT_APP_SETTINGS },
-    onSettingsChange: (patch) => calls.push(`settings:${JSON.stringify(patch)}`),
+    admin: true,
     path: '',
     page: 1,
     search: '',
@@ -256,7 +256,8 @@ describe('the browsing half of the library', () => {
     );
     void walker;
     void walkerCalls;
-    expect(screen.element.querySelector('.manager-crumb')).not.toBeNull();
+    expect(screen.element.querySelector('.library-header h1')?.textContent).toBe('书库');
+    expect(screen.element.querySelector('.library-path')).toBeNull();
     expect(calls).toEqual([]);
   });
 
@@ -337,27 +338,16 @@ describe('the browsing half of the library', () => {
     expect(payload.bookIds).toEqual(['b1']);
   });
 
-  it('offers 上传 on the browsing page, because this is where a reader lands', async () => {
-    const transport = new FakeTransport();
-    serveFolder(transport, listing({ entries: [entry('a.epub')], total: 1, files: 1 }), [book(1)]);
-    const { screen } = makeScreen(transport);
-    await screen.open('', 1, '');
-    // The empty state sends the reader here, so the fix has to be here too. It is a
-    // write, and the file page's own upload is the same call — one endpoint, two
-    // pages that can open it.
-    expect(screen.element.querySelector('.panel-header [aria-label="上传书籍"]')).not.toBeNull();
-  });
-
-  it('hides 上传 on a read-only mount', async () => {
-    const transport = new FakeTransport();
-    serveFolder(transport, listing({ writable: false, entries: [entry('a.epub')], total: 1, files: 1 }), [book(1)]);
-    const { screen } = makeScreen(transport);
-    await screen.open('', 1, '');
-    // `:ro` is the documented deployment, so the common case is "this page can only
-    // look" — and a button that can only answer 403 teaches the reader to distrust
-    // every other button.
-    const upload = screen.element.querySelector<HTMLElement>('[aria-label="上传书籍"]')!;
-    expect(upload.hasAttribute('hidden')).toBe(true);
+  it('keeps upload and shelf settings out of browsing for admins and members', async () => {
+    for (const admin of [true, false]) {
+      const transport = new FakeTransport(); serveFolder(transport, listing(), []);
+      const { screen } = makeScreen(transport, { admin }); await screen.open('', 1, '');
+      expect(screen.element.querySelector('[aria-label="上传书籍"]')).toBeNull();
+      expect(screen.element.querySelector('input[type=file]')).toBeNull();
+      expect(screen.element.querySelector('.shelf-settings')).toBeNull();
+      expect(screen.element.textContent?.includes('文件管理')).toBe(admin);
+      screen.dispose();
+    }
   });
 
   it('offers the file manager from the empty state when a folder has no books', async () => {

@@ -10,9 +10,6 @@
 | --- | --- | --- |
 | 服务端 | `server/` | Node.js + TypeScript，单容器，扫描书库并同步进度 |
 | 渲染层 | `web/` | TypeScript + Vite，EPUB 精排、TXT、漫画、PDF |
-| Android 壳 | `android/` | Kotlin + WebView，复用上面那一份渲染层 |
-
-服务端已提供内置 local / OPDS 来源与受信任进程插件接口。OPDS 下载和插件纯文本章节均接入现有书架与阅读器；章节支持稳定阅读进度、已读缓存和手动刷新目录。插件与来源配置目前使用管理 API，远程富文本、整书预缓存和自动追更仍待实现。见 [插件设计与实施状态](docs/source-plugins.md) 和 [API 与示例插件安装](docs/api.md#来源与插件)。
 
 ---
 
@@ -139,12 +136,7 @@ volumes:
 | 引擎 | 声音来自 | 什么时候用 |
 | --- | --- | --- |
 | 系统语音（原生） | Android 外壳的 `TextToSpeech` | Android 客户端默认 |
-| 系统语音（浏览器） | 浏览器 / WebView 的 `speechSynthesis` | Web 端默认 |
 | HTTP 朗读 | 服务端 `TTS_URL` 指向的合成服务 | 前两者不可用时 |
-
-**为什么 Android 要用原生引擎**：WebView 自带的合成器和系统的是**两个引擎**，
-手机上系统装好的中文语音经常不在 WebView 的语音列表里——于是读者听到英文或听不到声音，
-而 Web 层拿到的列表本身就是缺的，无从修起。这是「朗读没有中文声音」最常见的原因。
 
 **HTTP 朗读**：给没有 `speechSynthesis` 的浏览器（比如 Linux 上的 Firefox）、
 或者没有中文语音的设备用。服务端只做代理，不内置合成模型——容器体积和 NAS 的 CPU 预算
@@ -346,21 +338,10 @@ Back 走的是「离开书库」而不是「切回上一个页面」。
 
 ### 两端的关系
 
-Android 端**不重写渲染**。它是一个 Kotlin 原生外壳，只负责文件缓存、手势、账号与书架，
-渲染复用同一份 `web/` 产物。原因很直接：排版策略一旦出现两份实现，就一定会分叉，
-而「忠于精排」正是这个产品的差异点。外壳只做 WebView 做不到或做不好的事：
-
-- **连通性**：WebView 里的 `navigator.onLine` 只要有网卡就说「在线」——
   连上一个没有出口的 Wi-Fi 时它会骗人，客户端于是转圈而不是读缓存。
   Android 侧用系统的 `NET_CAPABILITY_VALIDATED` 判断。
 - **稳定的设备名**：UA 里的型号会随 Chrome 升级变化，作为「上次在哪个设备读的」标签不可靠。
 - **原生提示**：一行 Kotlin 的 Toast，不用在 Web 层造一套通知 UI。
-
-还有一条刻意的例外：**固定版式的整页图由原生画**。一页漫画或一张扫描图在 WebView 里
-要走完解码、样式布局、合成三次开销，而屏幕上的结果和 `ImageView` 一模一样；
-对一章文字这些都是必要的，对「把这张图画满屏」则全是白付的。
-规则是「只画整页图，且全有或全无」——画不了就交给 WebView，绝不出现空白页。
-EPUB 永远留在 WebView：文字排版是差异点，只能有一份实现。
 
 ### 离线合并语义
 
@@ -500,14 +481,6 @@ cd android
 
 ## 从源码开发
 
-```bash
-# 服务端
-cd server
-npm install
-npm test            # 137 个测试用例
-npm run typecheck
-npm run dev         # 开发模式，热重载
-
 # 指向一个测试书库
 BOOKS_DIR=/tmp/books DATA_DIR=/tmp/data npm run dev
 ```
@@ -516,7 +489,7 @@ BOOKS_DIR=/tmp/books DATA_DIR=/tmp/data npm run dev
 # 客户端（另开一个终端）
 cd web
 npm install
-npm test            # 336 个测试用例（307 vitest + 29 node:test）
+npm test            # Vitest 与 node:test
 npm run dev         # http://localhost:5174，自动把 /api 代理到 8080
 npm run build       # 产出 web/dist，服务端会在 / 上直接托管
 ```
@@ -572,13 +545,6 @@ web/src/
     reader-icons.ttf   图标字体（生成物，见 tools/icons/）
   tools/icons/      图标字体的生成器：描边路径 → 字体
 
-android/app/src/main/java/cool/cnb/reader/
-  MainActivity.kt            单 Activity，只做三件事
-  web/WebHost.kt             WebView 配置与资源装载
-  bridge/ReaderBridge.kt     暴露给 JS 的原生方法
-  bridge/ConnectivityMonitor.kt  真正的连通性判断
-```
-
 ### 技术选型说明
 
 - **Node.js 22+（`engines: >=22`，内置 `node:sqlite` 与 `scrypt` 所在的最低版本）+ TypeScript + Fastify**：单容器体积可控（约 150MB），迭代最快，
@@ -602,13 +568,11 @@ android/app/src/main/java/cool/cnb/reader/
   `font-size`，因此没有可以漂移的几何——而三十个内联 SVG 组件里，颜色、尺寸、线宽
   每一项都是单个字形可以漂移的位置。
 - **界面用 URL 表达**：每个屏幕都有地址——`#/shelf`、`#/book/<id>`、`#/library/<路径>`。
-  用 fragment 而不是路径，是因为同一份产物要被 WebView（`appassets.androidplatform.net`，
   没有服务端）和 reader 服务端（没有客户端路由回落）同时加载，只有 fragment 在两边都成立。
   换来的是：一本书可以分享、可以收藏、刷新不丢；Android 返回手势和浏览器返回键
   走应用自己的屏幕轨迹；走进书库子目录用 `replace`，所以返回是退出管理器而不是逐层退目录。
   带着链接进来而尚未登录时，链接会等在登录页后面，登录后直接落到那本书。
 - **单文件 bundle、相对路径**：产物要被两个宿主消费——服务端托管给浏览器、Android 打进
-  assets。`file://` 或 WebView 里加载同源分片会踩平台特异性，所以 `inlineDynamicImports`
   打成一份，`base: './'`。这条约束也是选 Preact 而不是 React/Vue 的关键：
   `preact/compat` 不进包、没有 `react-dom`，只引入 `preact` 与 `preact/hooks`，
   两个模块压缩前合计约 15KB。

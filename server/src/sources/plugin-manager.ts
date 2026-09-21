@@ -1,11 +1,13 @@
+import { extensionPage, extensionValues, type PluginExtensions } from './extensions.ts';
 import { realpath, stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Db } from '../db/index.ts';
 import { AppError } from '../lib/errors.ts';
 import { ProcessPlugin } from './process-plugin.ts';
 import { SourceRegistry, SourceRegistryError } from './registry.ts';
-import type { PluginRuntimeStatus, SourceDescriptor, SourceProvider } from './types.ts';
+import type { PluginRuntimeStatus, SourceDescriptor, SourceProvider, SourceInstance } from './types.ts';
 
+interface InstanceRow { id: string; plugin_id: string; source_type: string; name: string; config_json: string; enabled: number }
 interface InstalledPlugin { plugin_id: string; folder: string; enabled: number }
 interface ManagedPlugin {
   plugin?: ProcessPlugin;
@@ -15,6 +17,7 @@ interface ManagedPlugin {
 }
 
 export interface PluginInfo {
+  extensions?: PluginExtensions;
   pluginId: string;
   folder?: string;
   builtin: boolean;
@@ -43,6 +46,90 @@ export class PluginManager {
   private readonly managed = new Map<string, ManagedPlugin>();
   private pending: Promise<void> = Promise.resolve();
   private closed = false;
+  private taskTimer?: ReturnType<typeof setInterval>;
+  private taskRun?: Promise<void>;
+  private readonly extensionBusy = new Set<string>();
+
+  startTasks(): void {
+    if (this.taskTimer || this.closed) return;
+    this.taskTimer = setInterval(() => { void this.runTasks().catch(() => undefined); }, 60_000);
+    this.taskTimer.unref(); void this.runTasks().catch(() => undefined);
+  }
+
+  runTasks(now = Date.now()): Promise<void> {
+    if (this.taskRun) return this.taskRun;
+    if (this.closed) return Promise.resolve();
+    const work = async () => {
+      for (const [id, managed] of this.managed) {
+        const candidates = (managed.plugin?.manifest.extensions?.tasks ?? []).map(task => ({ task, sourceId: undefined as string | undefined }));
+        for (const row of this.db.all<InstanceRow>('SELECT * FROM source_instances WHERE plugin_id = ? AND enabled = 1', id)) {
+          const type = managed.plugin?.manifest.sourceTypes.find(type => type.id === row.source_type);
+          candidates.push(...(type?.extensions?.tasks ?? []).map(task => ({ task, sourceId: row.id })));
+        }
+        for (const { task, sourceId } of candidates) {
+          if (this.closed || !managed.active) break;
+          const busyKey = sourceId ? JSON.stringify([id, sourceId]) : id;
+          if (this.extensionBusy.has(busyKey)) continue;
+          const key = sourceId ? 'source-task:' + JSON.stringify([id, sourceId, task.id]) : 'plugin-task:' + id + ':' + task.id;
+          const instance = sourceId ? this.sourceInstance(sourceId) : undefined;
+          if (sourceId && (!instance?.enabled || instance.pluginId !== id)) continue;
+          const saved = this.db.get<{ value: string }>('SELECT value FROM plugin_storage WHERE key = ?', key);
+          const previous = saved ? JSON.parse(saved.value) : { next: 0, failures: 0 };
+          if (previous.next > now) continue;
+          let failures = 0;
+          this.extensionBusy.add(busyKey);
+          try {
+            if (managed.plugin!.status().state === 'failed') await managed.plugin!.close();
+            if (!managed.active || this.closed) break;
+            const current = sourceId ? this.sourceInstance(sourceId) : undefined;
+            if (sourceId && (!current?.enabled || current.pluginId !== id)) continue;
+            await managed.plugin!.invoke('extension.task', { taskId: task.id,
+              ...(current ? { sourceType: current.sourceType, context: { instance: current, userId: '' } } : {}),
+            });
+          } catch { failures = previous.failures + 1; }
+          finally { this.extensionBusy.delete(busyKey); }
+          if (this.closed) break;
+          const minutes = failures ? Math.min(1440, Math.max(task.intervalMinutes, 2 ** Math.min(failures, 10))) : task.intervalMinutes;
+          this.db.run('INSERT INTO plugin_storage (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+            key, JSON.stringify({ next: now + minutes * 60_000, failures, lastError: failures ? 'TASK_FAILED' : null }));
+        }
+      }
+    };
+    this.taskRun = work().finally(() => { this.taskRun = undefined; });
+    return this.taskRun;
+  }
+
+  private sourceInstance(id: string): SourceInstance | undefined {
+    const row = this.db.get<InstanceRow>('SELECT * FROM source_instances WHERE id = ?', id);
+    return row ? { id: row.id, pluginId: row.plugin_id, sourceType: row.source_type, name: row.name,
+      config: JSON.parse(row.config_json), enabled: row.enabled === 1 } : undefined;
+  }
+
+  async sourcePage(sourceId: string, pageId: string, userId: string, action?: string, values: unknown = {}) {
+    const instance = this.sourceInstance(sourceId);
+    if (!instance) throw pluginError(404, 'SOURCE_NOT_FOUND', 'Source instance is unavailable');
+    return this.page(instance.pluginId, pageId, userId, action, values, instance);
+  }
+
+  async page(pluginId: string, pageId: string, userId: string, action?: string, values: unknown = {}, instance?: SourceInstance) {
+    if (this.closed) throw pluginError(503, 'PLUGIN_UNAVAILABLE', 'Plugin manager is closed');
+    const managed = this.managed.get(pluginId);
+    if (!managed?.active || !managed.plugin) throw pluginError(404, 'PLUGIN_UNAVAILABLE', 'Plugin is unavailable');
+    const extensions = instance ? managed.plugin.manifest.sourceTypes.find(type => type.id === instance.sourceType)?.extensions : managed.plugin.manifest.extensions;
+    if (!extensions?.pages?.some(page => page.id === pageId)) throw pluginError(404, 'PAGE_NOT_FOUND', 'Plugin page is not declared');
+    if (action !== undefined && !/^[a-z][a-z0-9._-]{0,63}$/.test(action)) throw pluginError(400, 'INVALID_ACTION', 'Invalid action');
+    const input = extensionValues(values);
+    const busyKey = instance ? JSON.stringify([pluginId, instance.id]) : pluginId;
+    if (action && this.extensionBusy.has(busyKey)) throw pluginError(429, 'PLUGIN_BUSY', '插件正在更新，请稍后重试');
+    if (action) this.extensionBusy.add(busyKey);
+    try {
+      return extensionPage(await managed.plugin.invoke(action ? 'extension.action' : 'extension.page', {
+        pageId, userId, action, values: input,
+        ...(instance ? { sourceType: instance.sourceType, context: { instance, userId } } : {}),
+      }));
+    } finally { if (action) this.extensionBusy.delete(busyKey); }
+  }
+
 
   constructor(private readonly db: Db, private readonly dataDir: string, private readonly registry: SourceRegistry) {}
 
@@ -139,7 +226,9 @@ export class PluginManager {
     return this.enqueue(async () => {
       if (this.closed) return;
       this.closed = true;
+      clearInterval(this.taskTimer);
       const outcomes = await Promise.allSettled([...this.managed.values()].map((managed) => this.stop(managed)));
+      await this.taskRun;
       const failure = outcomes.find((outcome) => outcome.status === 'rejected');
       if (failure?.status === 'rejected') throw failure.reason;
     }, true);
@@ -171,13 +260,18 @@ export class PluginManager {
   }
 
   private async packageDirectory(folder: string): Promise<string> {
-    if (typeof folder !== 'string' || !/^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,126}[a-zA-Z0-9_-])?$/.test(folder)) {
-      throw pluginError(400, 'PLUGIN_INVALID_FOLDER', 'Plugin folder must be a single directory name');
+    const npmName = typeof folder === 'string' && folder.startsWith('npm:') ? folder.slice(4) : undefined;
+    if (npmName !== undefined ? !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(npmName) || npmName.length > 214
+      : typeof folder !== 'string' || !/^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,126}[a-zA-Z0-9_-])?$/.test(folder)) {
+      throw pluginError(400, 'PLUGIN_INVALID_FOLDER', 'Use a single directory name or npm:package-name');
     }
     const data = await realpath(this.dataDir);
     const root = await realpath(resolve(data, 'plugins'));
     if (!inside(data, root)) throw pluginError(400, 'PLUGIN_PATH_ESCAPE', 'Plugin root must remain within DATA_DIR');
-    const directory = await realpath(join(root, folder));
+    const packageRoot = npmName === undefined ? root : await realpath(join(root, 'node_modules'));
+    if (npmName !== undefined && !inside(root, packageRoot)) throw pluginError(400, 'PLUGIN_PATH_ESCAPE', 'npm packages must remain within DATA_DIR/plugins');
+    const directory = await realpath(join(packageRoot, npmName ?? folder));
+    if (!inside(packageRoot, directory)) throw pluginError(400, 'PLUGIN_PATH_ESCAPE', 'Plugin must remain within its package root');
     if (!inside(root, directory)) throw pluginError(400, 'PLUGIN_PATH_ESCAPE', 'Plugin package must remain within DATA_DIR/plugins');
     const manifest = await realpath(join(directory, 'plugin.json'));
     if (!inside(directory, manifest)) {
@@ -188,7 +282,7 @@ export class PluginManager {
   }
 
   private async loadPackage(folder: string): Promise<ProcessPlugin> {
-    try { return await ProcessPlugin.load(await this.packageDirectory(folder)); }
+    try { return await ProcessPlugin.load(await this.packageDirectory(folder), { dataRoot: join(this.dataDir, 'plugin-data') }); }
     catch (error) { throw this.packageInputError(error); }
   }
 
@@ -269,6 +363,7 @@ export class PluginManager {
     const managed = this.managed.get(row.plugin_id);
     return {
       pluginId: row.plugin_id, folder: row.folder, builtin: false, enabled: row.enabled === 1,
+      extensions: managed?.plugin?.manifest.extensions,
       name: managed?.plugin?.manifest.name, version: managed?.plugin?.manifest.version,
       sourceTypes: managed?.providers.map((provider) => provider.descriptor) ?? [],
       runtime: managed?.plugin?.status() ?? null, error: managed?.error,

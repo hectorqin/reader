@@ -185,6 +185,7 @@ export class ReaderScreen {
   private readonly viewListeners: Array<() => void> = [];
   private readonly publicationCache: PublicationCache;
   private loadingToken = 0;
+  private alternativeRef = '';
   private viewEpoch = 0;
 
   constructor(private readonly options: ReaderScreenOptions) {
@@ -227,6 +228,11 @@ export class ReaderScreen {
             onTocEntry: (ref) => void this.goToChapterRef(ref),
             onChapter: (delta) => void this.goToChapter(delta),
             onRefresh: () => void this.refreshPublication(),
+            onAlternatives: cursor => void this.loadAlternatives(cursor),
+            onAlternative: (ref, title) => void this.previewAlternative(ref, title),
+            onAlternativeChapter: id => this.patch({ alternativeChapter: id }),
+            onSwitchSource: () => void this.switchSource(),
+            onCancelSwitch: () => this.patch({ alternatives: null, alternativeChapters: undefined, alternativeChapter: '' }),
             onScrubPage: (page) => void this.scrubToPage(page),
             onTurnPage: (direction) => void this.turnPage(direction),
             onSpeechToggle: () => this.toggleSpeech(),
@@ -247,13 +253,20 @@ export class ReaderScreen {
   async open(book: Book): Promise<void> {
     const token = ++this.loadingToken;
     this.book = book;
-    this.patch({ title: book.title, author: book.author, canRefresh: book.format === 'chapters' });
+    this.patch({ title: book.title, author: book.author, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null });
     this.setStatus('loading', '正在载入…');
     this.setChromeVisible(true);
 
     try {
       this.manifest = await this.loadManifest(book);
       if (token !== this.loadingToken) return;
+      if (book.format === 'chapters' && typeof this.options.api.sourceOptions === 'function') {
+        void this.options.api.sourceOptions(book.id).then(options => {
+          if (token === this.loadingToken) this.patch({ canSwitch: options.canSwitch });
+        }).catch(error => {
+          if (token === this.loadingToken && error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
+        });
+      }
 
       // A staged book is read through the windowed contract and never downloads
       // the file. That is the whole answer to "客户端需要下载完整的书籍，那消耗太大":
@@ -452,10 +465,63 @@ export class ReaderScreen {
     }
   }
 
+  private async sourceAction(action: () => Promise<void>): Promise<void> {
+    if (this.chrome.switching || this.chrome.refreshing || this.navigating) return;
+    const token = this.loadingToken; this.patch({ switching: true });
+    try { await action(); }
+    catch (error) {
+      if (token !== this.loadingToken) return;
+      if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
+      else this.flashStatus(error instanceof Error ? error.message : '换源操作失败', 5000);
+    } finally { if (token === this.loadingToken) this.patch({ switching: false }); }
+  }
+  private async loadAlternatives(cursor?: string): Promise<void> {
+    const book = this.book, token = this.loadingToken; if (!book) return;
+    await this.sourceAction(async () => {
+      const page = await this.options.api.alternatives(book.id, cursor);
+      if (token === this.loadingToken) this.patch({ alternatives: page, alternativeChapters: undefined, alternativeChapter: '' });
+    });
+  }
+  private async previewAlternative(ref: string, title: string): Promise<void> {
+    const book = this.book, token = this.loadingToken; if (!book) return;
+    await this.sourceAction(async () => {
+      const preview = await this.options.api.switchPreview(book.id, ref);
+      if (token !== this.loadingToken) return;
+      this.alternativeRef = ref;
+      const label = this.chrome.toc.find(entry => entry.id === this.chrome.currentSectionId)?.label;
+      const matching = preview.chapters.filter(chapter => chapter.title === label);
+      this.patch({ alternativeChapters: preview.chapters, alternativeTitle: title, alternativeChapter: matching.length === 1 ? matching[0]!.id : '' });
+    });
+  }
+  private async switchSource(): Promise<void> {
+    const book = this.book, previous = this.manifest, token = this.loadingToken;
+    if (!book || !previous || !this.alternativeRef || !this.chrome.alternativeChapter) return;
+    await this.sourceAction(async () => {
+      this.flushProgress();
+      const result = await this.options.api.switchSource(book.id, this.alternativeRef, this.chrome.alternativeChapter!, String(this.content?.revision ?? previous.content?.revision ?? previous.revision));
+      if (token !== this.loadingToken) return;
+      const content = result.content, toc = content.items.map(item => ({ id: item.href, label: item.title, depth: 0, spine: item.seq }));
+      const doc = createStagedDoc({ kind: content.kind, content, toc, orderedByBook: true, loader: { read: item => this.readStagedSection(book, item) } });
+      (doc as BookDoc & { staged?: unknown }).staged = doc;
+      const index = doc.sections.findIndex(section => section.id === result.href);
+      if (index < 0) throw new Error('新目录中找不到已选章节，请刷新目录');
+      await doc.loadSection(index);
+      if (token !== this.loadingToken) return;
+      this.stopSpeech();
+      this.pendingPosition = null; if (this.progressTimer) clearTimeout(this.progressTimer);
+      this.manifest = { ...previous, ...content, content }; this.content = content; this.doc = doc;
+      void this.publicationCache.putManifest(book.id, this.manifest).catch(() => undefined);
+      this.patch({ toc, alternatives: null, alternativeChapters: undefined, tocOpen: false });
+      this.afterDocLoaded(); await this.view?.open(index, 0);
+      this.onPosition(this.view?.position() ?? null); this.flushProgress();
+      this.flashStatus('已切换书源，从所选章节开头继续阅读', 4000);
+    });
+  }
+
   private async refreshPublication(): Promise<void> {
     const book = this.book;
     const previousManifest = this.manifest;
-    if (!book || book.format !== 'chapters' || !previousManifest || this.chrome.refreshing || this.navigating) return;
+    if (!book || book.format !== 'chapters' || !previousManifest || this.chrome.refreshing || this.chrome.switching || this.navigating) return;
     const token = this.loadingToken;
     const previousHrefs = new Set(previousManifest.content?.items.map((item) => item.href));
     this.patch({ refreshing: true });
@@ -1070,7 +1136,7 @@ export class ReaderScreen {
    */
   private async goToChapterRef(ref: string): Promise<void> {
     const view = this.view;
-    if (!view || this.navigating || this.chrome.refreshing) return;
+    if (!view || this.navigating || this.chrome.refreshing || this.chrome.switching) return;
     const book = this.book;
     if (!book) return;
 
@@ -1179,7 +1245,7 @@ export class ReaderScreen {
    */
   private async goToChapter(delta: 1 | -1): Promise<void> {
     const view = this.view;
-    if (!view || this.navigating || this.chrome.refreshing) return;
+    if (!view || this.navigating || this.chrome.refreshing || this.chrome.switching) return;
     // The *whole-book* position, not the window-local index: `sectionCount` is
     // the loaded window's length (forty chapters, or one comic volume), so a
     // reader at the last chapter of a window would be told "已经是最后一章" while
