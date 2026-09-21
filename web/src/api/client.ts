@@ -201,7 +201,7 @@ export class ReaderApi {
   }
 
   async register(username: string, password: string, displayName?: string): Promise<Session> {
-    const session = await this.call<Session>('/api/v1/auth/register', 'POST', {
+    const { session } = await this.call<{ user: User; session: Session }>('/api/v1/auth/register', 'POST', {
       username,
       password,
       ...(displayName ? { displayName } : {}),

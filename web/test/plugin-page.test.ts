@@ -84,3 +84,25 @@ it('keeps tab drafts and refresh selection, follows action navigation and uses s
   expect(screen.element.querySelector('[role=status]')?.textContent).toBe('已保存');
   expect(transport.requests.every(request => request.url.endsWith('/sources/custom%2Fone/pages/settings'))).toBe(true);
 });
+
+it('preserves unrelated tab drafts after actions and requires inline confirmation before deletion', async () => {
+  const { api, transport } = fixture();
+  const payload = { title: '实例', forms: [], tabs: [
+    { id: 'rules', title: '规则', forms: [{ id: 'delete', title: '', submit: '删除', confirm: '删除当前规则？', fields: [] }] },
+    { id: 'draft', title: '草稿', forms: [{ id: 'import', title: '', submit: '保存草稿', fields: [{ key: 'json', label: 'JSON', type: 'textarea' }] }] },
+  ] };
+  transport.respondWith(request => ({ status: 200, headers: {}, json: { ...payload, ...(request.method === 'POST' ? { notice: '删除成功' } : {}) } }));
+  const screen = new PluginPageScreen({ api, sourceId: 'one', pageId: 'settings', onBack() {}, onSignedOut() {} }); screens.push(screen); document.body.append(screen.element);
+  await screen.show();
+  const tab = (name: string) => [...screen.element.querySelectorAll<HTMLButtonElement>('[role=tab]')].find(button => button.textContent === name)!;
+  const button = (name: string) => [...screen.element.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === name)!;
+  tab('草稿').click(); const area = screen.element.querySelector('textarea')!; area.value = 'unsaved'; area.dispatchEvent(new Event('input', { bubbles: true }));
+  tab('规则').click(); button('删除').click();
+  expect(screen.element.querySelector('[role=group]')?.textContent).toContain('删除当前规则？');
+  expect(transport.requests.filter(request => request.method === 'POST')).toHaveLength(0);
+  button('取消').click(); expect(screen.element.querySelector('[role=group]')).toBeNull();
+  button('删除').click(); button('确认删除').click();
+  await vi.waitFor(() => expect(screen.element.querySelector('[role=status]')?.textContent).toBe('删除成功'));
+  expect(document.activeElement?.getAttribute('role')).toBe('status');
+  tab('草稿').click(); expect(screen.element.querySelector('textarea')?.value).toBe('unsaved');
+});

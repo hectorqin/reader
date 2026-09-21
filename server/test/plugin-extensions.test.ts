@@ -22,3 +22,12 @@ test('tabbed extension pages enforce bounded content and declared active tabs', 
   }
   assert.throws(() => extensionPage({ title: 'x', forms: [], tabs: [tab], activeTab: 'missing' }));
 });
+
+test('extension UX hints are validated without allowing executable or unbounded values', () => {
+  assert.doesNotThrow(() => extensionPage({ title: 'x', forms: [{ id: 'save', title: '', submit: 'Save', layout: 'inline', confirm: 'Delete?', fields: [{ key: 'count', label: 'Count', type: 'number', min: 1, max: 100, placeholder: '1' }] }], noticeKind: 'error' }));
+  for (const field of [{ min: Infinity }, { min: 2, max: 1 }, { placeholder: {} }]) {
+    assert.throws(() => extensionFields([{ key: 'n', label: 'N', type: 'number', ...field }]));
+  }
+  assert.throws(() => extensionPage({ title: 'x', forms: [], noticeKind: 'html' }));
+  assert.throws(() => extensionPage({ title: 'x', forms: [{ id: 'save', title: '', submit: 'Save', fields: [], confirm: {} }] }));
+});

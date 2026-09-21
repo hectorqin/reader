@@ -31,15 +31,17 @@ export interface ChapterSubscription {
 }
 
 export interface ExtensionField {
+  placeholder?: string; min?: number; max?: number;
   key: string; label: string; type: 'text' | 'textarea' | 'number' | 'boolean' | 'select'; required?: boolean;
   value?: string | number | boolean; options?: Array<{ value: string; label: string }>;
 }
-export interface ExtensionForm { id: string; title: string; submit: string; fields: ExtensionField[]; values?: Record<string, string | number | boolean> }
+export interface ExtensionForm {
+  layout?: 'inline'; confirm?: string; id: string; title: string; submit: string; fields: ExtensionField[]; values?: Record<string, string | number | boolean> }
 export interface ExtensionContent {
   forms: ExtensionForm[];
   sections?: Array<{ title: string; emptyText?: string; items: Array<{ title: string; description?: string; collapsible?: boolean; forms?: ExtensionForm[] }> }>;
 }
 export interface ExtensionPage extends ExtensionContent {
-  title: string; description?: string; notice?: string; activeTab?: string;
+  title: string; description?: string; notice?: string; noticeKind?: 'info' | 'error'; activeTab?: string;
   tabs?: Array<ExtensionContent & { id: string; title: string; description?: string }>;
 }

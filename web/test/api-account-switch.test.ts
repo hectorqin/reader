@@ -98,3 +98,13 @@ describe('requests across an account change', () => {
     expect(await old).toMatchObject({ kind: 'aborted' });
   });
 });
+
+it('extracts and persists the nested registration session for authenticated requests and reload', async () => {
+  const env = await setup(), registered = session('new-admin');
+  registered.user.role = 'admin';
+  env.transport.respondWith(request => request.url.endsWith('/register') ? ok({ user: registered.user, session: registered }) : ok({ user: registered.user }));
+  expect(await env.api.register('new-admin', 'password123')).toEqual(registered);
+  expect(env.stored()).toEqual(registered);
+  await env.api.restore(); await env.api.me();
+  expect(env.transport.requests.at(-1)?.headers.authorization).toBe('Bearer access-new-admin');
+});

@@ -1,11 +1,13 @@
 import { badRequest } from '../lib/errors.ts';
 
 export interface ExtensionField {
+  placeholder?: string; min?: number; max?: number;
   key: string; label: string; type: 'text' | 'textarea' | 'number' | 'boolean' | 'select';
   required?: boolean; value?: string | number | boolean;
   options?: Array<{ value: string; label: string }>;
 }
 export interface ExtensionForm {
+  layout?: 'inline'; confirm?: string;
   id: string; title: string; submit: string; fields: ExtensionField[];
   values?: Record<string, string | number | boolean>;
 }
@@ -14,7 +16,7 @@ export interface ExtensionContent {
   sections?: Array<{ title: string; emptyText?: string; items: Array<{ title: string; description?: string; collapsible?: boolean; forms?: ExtensionForm[] }> }>;
 }
 export interface ExtensionPage extends ExtensionContent {
-  title: string; description?: string; notice?: string; activeTab?: string;
+  title: string; description?: string; notice?: string; noticeKind?: 'info' | 'error'; activeTab?: string;
   tabs?: Array<ExtensionContent & { id: string; title: string; description?: string }>;
 }
 export interface PluginExtensions {
@@ -53,6 +55,9 @@ export function extensionFields(input: unknown): ExtensionField[] {
   for (const field of input) {
     record(field); check(typeof field.key === 'string' && identifier.test(field.key) && !keys.has(field.key)); keys.add(field.key);
     label(field.label); check(['text', 'textarea', 'number', 'boolean', 'select'].includes(String(field.type)));
+    if (field.placeholder !== undefined) label(field.placeholder);
+    for (const bound of [field.min, field.max]) if (bound !== undefined) check(field.type === 'number' && typeof bound === 'number' && Number.isFinite(bound));
+    if (field.min !== undefined && field.max !== undefined) check(Number(field.min) <= Number(field.max));
     if (field.value !== undefined) extensionValues({ value: field.value });
     if (field.required !== undefined) check(typeof field.required === 'boolean');
     if (field.type === 'select') {
@@ -73,6 +78,8 @@ export function extensionPage(input: unknown): ExtensionPage {
     check(Array.isArray(value) && value.length <= 32);
     for (const form of value) {
       record(form); check(typeof form.id === 'string' && identifier.test(form.id)); label(form.title); label(form.submit);
+      if (form.layout !== undefined) check(form.layout === 'inline');
+      if (form.confirm !== undefined) label(form.confirm);
       extensionFields(form.fields); if (form.values !== undefined) extensionValues(form.values);
     }
   };
@@ -88,6 +95,7 @@ export function extensionPage(input: unknown): ExtensionPage {
   };
   content(input);
   if (input.notice !== undefined) label(input.notice);
+  if (input.noticeKind !== undefined) check(['info', 'error'].includes(String(input.noticeKind)));
   const ids = new Set<string>();
   if (input.tabs !== undefined) {
     check(Array.isArray(input.tabs) && input.tabs.length > 0 && input.tabs.length <= 16);

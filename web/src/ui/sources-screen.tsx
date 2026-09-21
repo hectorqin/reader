@@ -17,6 +17,7 @@ export class SourcesScreen {
   private disposed = false;
   private busy = false;
   private message = '';
+  private savedSource: SourceInstance | null = null;
   private types: SourceType[] = [];
   private sources: SourceInstance[] = [];
   private plugins: SourcePlugin[] = [];
@@ -57,20 +58,22 @@ export class SourcesScreen {
       this.options.admin ? this.options.api.plugins() : Promise.resolve([]),
     ]);
     this.types = types; this.sources = sources; this.subscriptions = subscriptions; this.plugins = plugins;
+    if (this.savedSource) this.savedSource = sources.find(source => source.id === this.savedSource?.id) ?? null;
     if (this.selected) this.selected = sources.find((source) => source.id === this.selected?.id) ?? null;
   }
   private edit(source?: SourceInstance): void {
     const type = source ? this.types.find((t) => t.pluginId === source.pluginId && t.id === source.sourceType) : this.types.find((t) => t.id === 'opds') ?? this.types[0];
     if (!type) return;
     this.editor = { id: source?.id ?? null, typeKey: keyFor(type), name: source?.name ?? '', config: { ...source?.config }, raw: JSON.stringify(source?.config ?? {}, null, 2) };
-    this.draw();
+    this.draw(); this.element.querySelector('.source-editor')?.scrollIntoView?.({ block: 'start' });
   }
   private async save(): Promise<void> {
     const editor = this.editor; if (!editor) return;
     const type = this.types.find((t) => keyFor(t) === editor.typeKey)!;
     const config = type.configSchema?.properties ? editor.config : JSON.parse(editor.raw);
-    await this.options.api.saveSource(editor.id, { name: editor.name, config, ...(!editor.id ? { pluginId: type.pluginId, sourceType: type.id } : {}) });
-    this.editor = null; await this.reload(); this.message = '来源已保存；修改连接配置后请重新保存个人凭据。';
+    this.savedSource = await this.options.api.saveSource(editor.id, { name: editor.name, config, ...(!editor.id ? { pluginId: type.pluginId, sourceType: type.id } : {}) });
+    this.editor = null; await this.reload(); this.message = this.savedSource?.descriptor?.extensions?.pages?.length ? '来源已保存，接下来可以配置此书源。' : editor.id ? '来源已保存；修改连接配置后请重新保存个人凭据。' : '来源已创建，可以打开书库。';
+    this.draw(); this.element.querySelector('.source-next-step')?.scrollIntoView?.({ block: 'start' });
   }
   private async catalog(query: { ref?: string; query?: string; cursor?: string; filters?: Record<string, string> }, push = true): Promise<void> {
     if (!this.selected) return;
@@ -83,6 +86,7 @@ export class SourcesScreen {
     void this.run(async () => {
       if (source.descriptor?.capabilities.includes('search.filters')) this.filters = await this.options.api.sourceFilters(source.id);
       if (source.descriptor?.capabilities.includes('browse')) await this.catalog({});
+      this.draw(); this.element.querySelector('.source-catalog')?.scrollIntoView?.({ block: 'start' });
     });
   }
   private async acquire(entry: SourceEntry, optionId?: string): Promise<void> {
@@ -104,9 +108,12 @@ export class SourcesScreen {
         <Button onClick={() => { this.tab = 'updates'; this.draw(); }}>自动追更{this.subscriptions.some((s) => s.newChapters > 0) ? ' · 有更新' : ''}</Button>
         {this.options.admin && <Button onClick={() => { this.tab = 'plugins'; this.draw(); }}>插件管理</Button>}
       </nav>
-      <div role="status" className="notice">{this.busy ? '正在处理…' : this.message}</div>
+      {(this.busy || this.message) && <div role="status" className="notice">{this.busy ? '正在处理…' : this.message}</div>}
       <main className="sources-body">
       {this.tab === 'sources' && <>
+        {!!this.savedSource?.descriptor?.extensions?.pages?.length && <section className="sources-card source-next-step"><strong>{this.savedSource!.name}</strong>
+          <p>可为此书源单独管理订阅和规则。</p>{this.savedSource!.descriptor!.extensions!.pages!.map(page => <a className="button primary" href={'#/sources/' + encodeURIComponent(this.savedSource!.id) + '/' + encodeURIComponent(page.id)}>{page.title}</a>)}
+        </section>}
         <section className="sources-card"><h2>我的来源</h2>
           {this.options.admin && <Button disabled={this.busy} onClick={() => this.edit()}>添加来源</Button>}
           {this.sources.map((source) => <div className="sources-row" key={source.id}>
@@ -118,7 +125,7 @@ export class SourcesScreen {
               <Button disabled={this.busy} onClick={() => void this.run(async () => { await this.options.api.saveSource(source.id, { enabled: !source.enabled }); await this.reload(); })}>{source.enabled ? '暂停' : '启用'}</Button></>}
             </div></div>)}
         </section>
-        {this.editor && <section className="sources-card"><h2>{this.editor.id ? '编辑来源' : '添加来源'}</h2>
+        {this.editor && <section className="sources-card source-editor"><h2>{this.editor.id ? '编辑来源' : '添加来源'}</h2>
           <form onSubmit={(event) => { event.preventDefault(); void this.run(() => this.save()); }}>
             <label>来源类型<select disabled={this.busy || !!this.editor.id} value={this.editor.typeKey} onChange={(event) => {
               this.editor!.typeKey = event.currentTarget.value; this.editor!.config = {}; this.editor!.raw = '{}'; this.draw();
@@ -142,7 +149,7 @@ export class SourcesScreen {
                 await this.options.api.removeSource(this.editor!.id!); this.editor = null; await this.reload();
               })}>删除空来源</Button>}</div>
           </form></section>}
-        {this.selected && <section className="sources-card"><h2>{this.selected.name}</h2>
+        {this.selected && <section className="sources-card source-catalog"><h2>{this.selected.name}</h2>
           {(this.selected.descriptor?.credentialKeys?.length ?? 0) > 0 && <form onSubmit={(event) => { event.preventDefault(); void this.run(async () => {
             const source = this.selected!;
             for (const field of source.descriptor?.credentialKeys ?? []) {
@@ -154,7 +161,7 @@ export class SourcesScreen {
             <input type="password" autoComplete="off" value={this.credentialValues[field.key] ?? ''} onInput={(event) => { this.credentialValues[field.key] = event.currentTarget.value; }} /></label>)}
             <Button type="submit" disabled={this.busy}>保存个人凭据</Button></form>}
           {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.run(() => this.catalog({ query: this.query.trim(), filters: { ...this.filterValues } })); }}>
-            {this.filters.map(field => <label key={field.key}>{field.label}<select value={this.filterValues[field.key] ?? ''} disabled={this.busy}
+            {this.filters.map(field => <label key={field.key}>{field.label}<select aria-label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy}
               onChange={event => { this.filterValues[field.key] = event.currentTarget.value; this.draw(); }}>
               {field.options?.map(option => <option value={option.value}>{option.label}</option>)}
             </select></label>)}

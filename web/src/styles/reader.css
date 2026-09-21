@@ -3788,3 +3788,30 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .extension-screen input:not([type=checkbox]), .extension-screen textarea, .extension-screen select { box-sizing: border-box; max-width: 100%; }
 .extension-screen textarea { min-height: 9rem; }
 .extension-empty { padding: 28px 16px; text-align: center; color: var(--muted, #777); line-height: 1.7; }
+
+.extension-toolbar { flex: none; width: 100%; max-width: 64rem; margin-inline: auto; padding: 0 1rem; box-sizing: border-box; }
+.extension-toolbar .extension-tabs { margin-bottom: .75rem; border-color: var(--reader-line); }
+.extension-toolbar .notice { margin: 0 0 .75rem; overflow-wrap: anywhere; }
+.extension-toolbar .extension-error { color: #a32c22; border: 1px solid currentColor; background: var(--reader-surface); }
+.extension-description, .extension-empty { color: var(--reader-muted); }
+.extension-screen .sources-header h1 { min-width: 0; overflow-wrap: anywhere; }
+.extension-form-inline { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
+.extension-form-inline h3 { flex-basis: 100%; }
+.extension-screen .extension-form-inline label { flex: 1 1 14rem; min-width: 0; margin: 0; }
+.extension-screen .extension-form-inline label[data-field-type=number] { flex: 0 1 15rem; }
+.extension-screen label[data-field-type=boolean] { flex-direction: row; align-items: center; }
+.extension-screen input[type=checkbox] { width: 1.25rem; height: 1.25rem; }
+.extension-actions form + form { margin-top: 0; }
+.extension-actions .extension-form-inline { border-top: 1px solid var(--reader-line); padding-top: .75rem; }
+.extension-confirm { border: 1px solid var(--reader-line); border-radius: .5rem; padding: .75rem; margin-top: .5rem; }
+.extension-confirm p { margin: 0 0 .75rem; }
+.extension-confirm button + button { margin-inline-start: .5rem; }
+.extension-screen button, .source-next-step .button { min-height: 44px; }
+.source-catalog, .source-editor { scroll-margin-top: 1rem; }
+@media (max-width: 600px) {
+  .extension-screen .extension-form-inline label { flex-basis: 100%; }
+  .extension-screen .extension-form-inline label[data-field-type=number] { flex: 1 1 9rem; }
+  .extension-item-heading { gap: .75rem; }
+}
+[data-theme='dark'] .extension-toolbar .extension-error { color: #ffaaa0; }
+.extension-tabs button:disabled { opacity: .55; cursor: default; }
