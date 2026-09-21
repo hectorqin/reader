@@ -632,7 +632,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
    * rather than two.
    */
   app.post('/api/v1/library/upload', { preHandler: auth }, async (request) => {
-    const user = currentUser(request);
+    requireAdmin(request);
     if (!request.isMultipart()) {
       throw badRequest('expected multipart/form-data', 'NOT_MULTIPART');
     }
@@ -689,7 +689,6 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
 
     ensureTarget(target);
     if (staged.length === 0) throw badRequest('no file was uploaded', 'NO_FILES');
-    void user;
     return ctx.uploads.commit(staged, target, policy);
   });
 
@@ -701,7 +700,8 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
    * uploading 400MB it cannot store. Not cached: a mount is remounted far more
    * often than this is called.
    */
-  app.get('/api/v1/library/upload', { preHandler: auth }, async () => {
+  app.get('/api/v1/library/upload', { preHandler: auth }, async (request) => {
+    requireAdmin(request);
     const listing = await ctx.browse.list('');
     return { writable: listing.writable };
   });

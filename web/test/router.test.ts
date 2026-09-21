@@ -502,3 +502,9 @@ describe('router navigation', () => {
     expect(router.current()).toEqual({ name: 'book', bookId: 'a' });
   });
 });
+
+it('backs out of file management through its folder hierarchy and then browsing', () => {
+  expect(parentOf(parseRoute('#/library/files/a/b'))).toMatchObject({ name: 'library', view: 'files', path: 'a', page: 1 });
+  expect(parentOf(parseRoute('#/library/files/a'))).toMatchObject({ name: 'library', view: 'files', path: '', page: 1 });
+  expect(parentOf(parseRoute('#/library/files'))).toMatchObject({ name: 'library', view: 'browse', path: '', page: 1 });
+});

@@ -360,6 +360,9 @@ export function sameRoute(a: Route, b: Route): boolean {
 /** Where a "back" from this route lands when the app has no trail of its own. */
 export function parentOf(route: Route): Route {
   if (route.name === 'plugin-page' || route.name === 'source-page') return { name: 'sources' };
+  if (route.name === 'library' && route.view === 'files') {
+    return { ...route, path: route.path.split('/').slice(0, -1).join('/'), page: 1, search: '', view: route.path ? 'files' : 'browse' };
+  }
   return route.name === 'shelf' ? SHELF : SHELF;
 }
 

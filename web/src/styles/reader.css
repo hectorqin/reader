@@ -3882,6 +3882,20 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .collection-empty .empty-actions { margin-top: .6rem; gap: .65rem; }
 .collection-empty .button { min-height: 44px; font-size: .875rem; }
 .library-browse-body > .manager-status { background: transparent; border: 0; margin: .75rem auto; }
+.file-manager-header .manager-crumbs { margin-top: .75rem; padding: .25rem 0; }
+.file-manager-header .manager-crumb { min-height: 44px; }
+.library-files-screen .manager-list { margin: .5rem 1rem; border: 1px solid var(--reader-line); border-radius: 1rem; overflow: hidden; }
+.library-files-screen .manager-row { grid-template-columns: 24px minmax(0, 1fr) 44px; gap: .4rem .65rem; padding: .9rem .75rem; }
+.library-files-screen .manager-check { grid-column: 1; grid-row: 1 / 3; }
+.library-files-screen .manager-name { grid-column: 2; grid-row: 1; }
+.library-files-screen .manager-label { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.5; }
+.library-files-screen .manager-meta { grid-column: 2; grid-row: 2; flex-wrap: wrap; gap: .3rem .65rem; white-space: normal; padding-left: 1.5rem; }
+.library-files-screen .manager-more { grid-column: 3; grid-row: 1 / 3; width: 44px; height: 44px; }
+.library-files-screen .manager-status { position: static; border: 0; background: transparent; padding: .5rem 1rem 1rem; }
+.shelf-settings.panel { position: fixed; }
+.shelf-settings .panel-header { padding: .75rem 1rem; flex: none; }
+.shelf-settings .panel-header h2 { flex: 1; }
+.shelf-settings .panel-header > .icon-button { flex: none; margin-inline-start: auto; width: 44px; height: 44px; }
 @media (min-width: 72rem) {
   .collection-header, .library-browse-body { width: 100%; max-width: 68rem; margin-inline: auto; }
 }

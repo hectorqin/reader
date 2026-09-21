@@ -18,6 +18,12 @@ try {
     if (empty && url.pathname === '/api/v1/library/browse') return route.fulfill({ json: {
       path: '', crumbs: [{ name: '书库', path: '' }], parent: null, entries: [], total: files, files, dirs: 0, size: 0, writable,
     } });
+    if (!empty && url.pathname === '/api/v1/library/browse') {
+      const response = await route.fetch(), json = await response.json();
+      const file = json.entries.find(entry => entry.type === 'file');
+      if (file) file.name = 'DanXiaoShiManHuaYuZhou_胆小师漫画宇宙_第一卷_完整修订版.epub';
+      return route.fulfill({ json });
+    }
     if (url.pathname === '/api/v1/sources/types') return route.fulfill({ json: { types: [] } });
     if (url.pathname === '/api/v1/sources') return route.fulfill({ json: { sources: [] } });
     if (url.pathname === '/api/v1/plugins') return route.fulfill({ json: { plugins: [] } });
@@ -27,7 +33,7 @@ try {
   const button = name => page.getByRole('button', { name, exact: true });
   async function shot(name) {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, name + ' page overflow');
-    assert.equal(await page.locator('.collection-links').evaluate(el => el.scrollWidth > el.clientWidth), false, name + ' navigation overflow');
+    if (await page.locator('.collection-links').count()) assert.equal(await page.locator('.collection-links').evaluate(el => el.scrollWidth > el.clientWidth), false, name + ' navigation overflow');
     await page.screenshot({ path: 'docs/ui-review/collections-' + name + '.png', animations: 'disabled' });
   }
   await page.goto(base);
@@ -41,22 +47,45 @@ try {
   await page.getByText('书库还没有书', { exact: true }).waitFor();
   assert.equal(await page.getByText('0 本', { exact: true }).count(), 0);
   for (const width of [320, 390, 1280]) { await page.setViewportSize({ width, height: 844 }); await shot('library-empty-' + width); }
-  const chooser = page.waitForEvent('filechooser'); await button('上传第一本书').click(); await chooser;
+  assert.equal(await button('上传书籍').count(), 0);
+  assert.equal(await page.locator('.library-header button[aria-label^=书架设置]').count(), 0);
   await page.evaluate(() => document.documentElement.dataset.theme = 'dark'); await shot('library-empty-dark');
   await page.evaluate(() => document.documentElement.dataset.theme = 'light');
-  writable = false; await page.reload(); await page.getByText('管理员添加书籍后，就能在这里浏览并加入书架。').waitFor();
-  assert.equal(await button('上传书籍').isVisible(), false); assert.equal(await button('上传第一本书').count(), 0);
+  writable = false; await page.reload(); await page.getByText('前往文件管理添加书籍，再回到这里浏览。').waitFor();
+  assert.equal(await button('上传书籍').count(), 0); assert.equal(await button('上传第一本书').count(), 0);
   await page.setViewportSize({ width: 390, height: 844 }); await shot('library-readonly');
   files = 3; await page.reload(); await page.getByText('这里有 3 个文件，可在文件管理中查看识别结果。').waitFor();
   await page.locator('.empty-actions').getByRole('button', { name: '文件管理', exact: true }).click();
   await page.locator('.library-files-screen').waitFor();
+  await page.getByText('当前目录只读', { exact: true }).waitFor();
+  assert.equal(await button('上传书籍').count(), 0);
+  await button('返回').click(); await page.waitForURL('**/#/library');
   empty = false; await page.goto(base + '/#/shelf'); await page.locator('.book-grid .book-card').first().waitFor(); await shot('shelf-books');
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.locator('.shelf-head button[aria-label^=书架设置]').click();
+    const close = page.locator('.shelf-settings button[aria-label="关闭"]');
+    await shot('shelf-settings-' + width);
+    assert.equal(await close.evaluate(el => { const r = el.getBoundingClientRect(), p = el.closest('.panel-header').getBoundingClientRect(); return p.right - r.right <= 20 && r.top >= p.top && r.bottom <= p.bottom; }), true);
+    await close.click(); assert.equal(await page.locator('.shelf-settings').isVisible(), false);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: '按书名排序', exact: true }).click();
   await button('书库').click(); await page.locator('.library-browse-grid .book-card').first().waitFor(); await shot('library-books');
   await page.goto(base + '/#/library/folder'); await page.locator('.library-path').waitFor(); await shot('library-folder');
   await page.getByRole('button', { name: '书库', exact: true }).click(); await page.waitForURL('**/#/library');
   await page.getByRole('searchbox').fill('不存在的关键词'); await page.getByRole('searchbox').press('Enter');
   await page.getByText('没有匹配的书', { exact: true }).waitFor(); await shot('library-no-results'); await button('清除搜索').last().click();
+  await page.goto(base + '/#/library/files'); await page.getByRole('heading', { name: '文件管理', exact: true }).waitFor();
+  for (const width of [320, 390, 1280]) { await page.setViewportSize({ width, height: 844 }); await shot('files-' + width); }
+  const chooser = page.waitForEvent('filechooser'); await button('上传书籍').click(); await chooser;
+  await page.goto(base + '/#/library/files/folder'); await page.reload(); await button('返回').click(); await page.waitForURL('**/#/library/files');
+  await button('返回').click(); await page.waitForURL('**/#/library');
+  // A member cannot reach file management even through a direct link.
+  await page.route('**/api/v1/auth/me', async route => { const response = await route.fetch(); const json = await response.json(); json.user.role = 'member'; await route.fulfill({ json }); });
+  await page.goto(base + '/#/library/files'); await page.reload(); await page.locator('.library-browse-screen').waitFor();
+  assert.equal(await button('文件管理').count(), 0); assert.equal(await button('上传书籍').count(), 0);
+  assert.equal(await page.locator('.manager-upload-input').count(), 0);
   assert.deepEqual(errors, []);
-  console.log('PASS collection UI: empty/populated shelf and library, 320/390/1280px, dark mode, readonly, upload entry, source entry, folders, sort and search');
+  console.log('PASS collection UI: browsing without upload/settings, admin file actions, member guard, hierarchical back, sheet close alignment, long filenames, 320/390/1280px');
 } finally { await browser.close(); await server.close(); }

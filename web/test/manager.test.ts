@@ -160,7 +160,7 @@ describe('library manager', () => {
     expect(matches).toHaveLength(1);
     expect(matches[0]!.method).toBe('GET');
     // The mkdir button is the only write affordance outside selection mode.
-    const buttons = [...screen.element.querySelectorAll<HTMLButtonElement>('.icon-button')];
+    const buttons = [...screen.element.querySelectorAll<HTMLButtonElement>('button')];
     const mkdir = buttons.find((button) => button.getAttribute('aria-label') === '新建文件夹');
     expect(mkdir?.hidden).toBe(true);
   });
@@ -428,7 +428,7 @@ describe('uploading from the manager', () => {
     transport.respondWithBoth(listing({ writable: false, entries: [] }));
     const { screen } = makeScreen(transport);
     await screen.open('', 1);
-    const buttons = [...screen.element.querySelectorAll<HTMLButtonElement>('.icon-button')];
+    const buttons = [...screen.element.querySelectorAll<HTMLButtonElement>('button')];
     expect(buttons.find((button) => button.getAttribute('aria-label') === '上传书籍')?.hidden).toBe(true);
   });
 });
@@ -755,4 +755,12 @@ describe('error classification', () => {
     expect(new ApiError('forbidden', 'account disabled', 'ACCOUNT_DISABLED', 403).isAuthFailure).toBe(true);
     expect(new ApiError('unauthorized', 'token expired', 'TOKEN_EXPIRED', 401).isAuthFailure).toBe(true);
   });
+});
+
+it('opens a folder menu without also navigating into that folder', async () => {
+  const transport = new FakeTransport(); transport.respondWithBoth(listing({ entries: [entry({ name: '子目录', type: 'dir' })], total: 1, dirs: 1 }));
+  const { screen, calls } = makeScreen(transport); await screen.open('', 1);
+  screen.element.querySelector<HTMLButtonElement>('.manager-more')!.click();
+  expect(screen.element.querySelector('.dialog-list')).not.toBeNull(); expect(calls).toEqual([]);
+  screen.dispose();
 });

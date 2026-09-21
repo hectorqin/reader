@@ -22,7 +22,7 @@ import { ReaderScreen } from './ui/reader-screen.tsx';
 import { LoginScreen } from './ui/login-screen.tsx';
 import { LibraryBrowseScreen, LibraryFilesScreen } from './ui/library-screen.tsx';
 import { el } from './ui/dom.ts';
-import { Router, type LibraryView, type Route, type RouteLocation } from './ui/router.ts';
+import { Router, parentOf, type LibraryView, type Route, type RouteLocation } from './ui/router.ts';
 
 /**
  * Application shell: routing, lifecycle and the wiring between the layers.
@@ -489,6 +489,7 @@ export class App {
       this.clearScreens();
       const files = new LibraryFilesScreen({
         ...common,
+        onClose: () => this.router?.navigate(parentOf({ name: 'library', ...here() }), { replace: true }),
         path: route.path,
         page: route.page,
         fromShelf: route.fromShelf,
@@ -519,6 +520,7 @@ export class App {
     this.clearScreens();
     const browse = new LibraryBrowseScreen({
       ...common,
+      admin: this.isAdmin,
       path: route.path,
       page: route.page,
       search: route.search,

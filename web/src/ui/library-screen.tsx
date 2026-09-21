@@ -7,7 +7,6 @@ import { formatBytes, formatDate } from './dom.ts';
 import { mountUI } from './mount.ts';
 import { DialogView, METADATA_FIELDS, type Dialog, type DialogAnswer } from './dialog.tsx';
 import { Pager } from './pager.tsx';
-import { ShelfSettingsPanel } from './shelf-settings.tsx';
 import { sortBooks } from './shelf-order.ts';
 import { describeShelfAction, SHELF_ACTION_LABELS } from './shelf-membership.ts';
 import { Button, Icon, IconButton, IconTextButton } from './toolkit.tsx';
@@ -61,8 +60,8 @@ export interface LibraryBrowseScreenOptions {
   api: ReaderApi;
   offline: OfflineStore;
   settings: AppSettings;
-  /** The screen's own preferences (density, author visibility), persisted like the shelf's. */
-  onSettingsChange(patch: Partial<AppSettings>): void;
+  /** Whether this reader may open the file manager. */
+  admin: boolean;
   /** The folder, page and search the route asks for. */
   path: string;
   page: number;
@@ -144,9 +143,6 @@ interface BrowseState {
   bootstrapping: boolean;
   busy: boolean;
   status: string;
-  settingsOpen: boolean;
-  /** A question the screen is waiting on an answer to (the upload conflict policy). */
-  dialog: Dialog | null;
   /** Bumped after a mutation so the cached cover URLs re-key, not re-fetch. */
   revision: number;
 }
@@ -172,7 +168,6 @@ interface BrowseState {
 export class LibraryBrowseScreen {
   readonly element: HTMLDivElement;
   private readonly ui: ReturnType<typeof mountUI>;
-  private readonly uploadInput = document.createElement('input');
   private readonly draw: () => void;
   /** The message a completed write left for the next render. */
   private outcome: string | null = null;
@@ -184,22 +179,11 @@ export class LibraryBrowseScreen {
     this.element.className = 'library-screen library-browse-screen';
     this.element.dataset['view'] = 'browse';
 
-    // A file input lives outside the tree and is never re-created, so its `files`
-    // list and its focus survive every re-render. On some WebViews a file input
-    // removed from the document loses its value, and the second upload after a
-    // cancel would then send nothing.
-    this.uploadInput.type = 'file';
-    this.uploadInput.multiple = true;
-    this.uploadInput.className = 'manager-upload-input';
-    this.uploadInput.setAttribute('aria-hidden', 'true');
-    this.uploadInput.tabIndex = -1;
-    this.uploadInput.addEventListener('change', () => void this.handlePicked());
-
     const host = document.createElement('div');
     // `display: contents`, so the host adds no layout box and the screen stays the
     // flex column its children are written against.
     host.className = 'library-ui';
-    this.element.append(host, this.uploadInput);
+    this.element.append(host);
 
     this.state = {
       path: options.path,
@@ -214,8 +198,6 @@ export class LibraryBrowseScreen {
       bootstrapping: true,
       busy: false,
       status: '',
-      settingsOpen: false,
-      dialog: null,
       revision: 0,
     };
 
@@ -389,66 +371,6 @@ export class LibraryBrowseScreen {
     }
   }
 
-  /**
-   * Uploads picked files into the folder being browsed.
-   *
-   * The shop is where a reader *lands*, so 上传 is offered here as well as on the file
-   * page. The two do exactly the same things — same endpoint, same conflict question,
-   * same reload-then-report order — because the alternative is a reader who has just
-   * been told "这个文件夹是空的" having to find the administrator's page to fix it.
-   */
-  private async handlePicked(): Promise<void> {
-    const files = [...(this.uploadInput.files ?? [])];
-    this.uploadInput.value = '';
-    if (files.length === 0) return;
-    if (this.state.listing?.writable === false) {
-      this.toast('书库是只读挂载，无法上传');
-      return;
-    }
-    const policy = await this.pickConflictPolicy();
-    if (!policy) return;
-    const total = files.reduce((sum, file) => sum + file.size, 0);
-    this.state.busy = true;
-    this.draw();
-    try {
-      const result = await this.options.api.upload(files, this.state.path, policy, (fraction) => {
-        this.toast(`上传中… ${Math.round(fraction * 100)}%（${formatBytes(total)}）`);
-      });
-      /*
-       * The folder is re-read *before* the report, and both are in this `try`.
-       *
-       * A report with no reload is a grid that does not contain the thing just
-       * uploaded, which reads as a failed upload whatever the message above it says.
-       */
-      this.outcome = describeUpload(result);
-      await this.load(this.state.path);
-      this.outcome = null;
-      this.toast(describeUpload(result));
-    } catch (err) {
-      this.handleError(err);
-    } finally {
-      this.state.busy = false;
-      this.draw();
-    }
-  }
-
-  private async pickConflictPolicy(): Promise<'rename' | 'skip' | 'overwrite' | 'fail' | null> {
-    return new Promise((resolve) => {
-      this.state.dialog = {
-        kind: 'pick',
-        title: '同名文件怎么办？',
-        options: [
-          { value: 'rename', label: '两份都留（加 (2)）' },
-          { value: 'skip', label: '跳过已有的' },
-          { value: 'overwrite', label: '覆盖（会替换原文件）' },
-          { value: 'fail', label: '有重名就整批不动' },
-        ],
-        resolve: (answer) => resolve(answer as 'rename' | 'skip' | 'overwrite' | 'fail' | null),
-      };
-      this.draw();
-    });
-  }
-
   private toast(text: string): void {
     this.state.status = text;
     this.draw();
@@ -467,11 +389,6 @@ export class LibraryBrowseScreen {
     this.toast(err instanceof Error ? err.message : '出错了');
   }
 
-  private patch(patch: Partial<BrowseState>): void {
-    Object.assign(this.state, patch);
-    this.draw();
-  }
-
   // ---- the tree ----
 
   private view(): ComponentChildren {
@@ -483,12 +400,10 @@ export class LibraryBrowseScreen {
           <div className="collection-heading">
             <IconButton label="返回" icon="arrow-left" onClick={() => this.options.onClose()} />
             <div className="collection-heading-text"><h1>书库</h1><p className="muted">浏览本地书籍，发现下一本好书</p></div>
-            <IconButton label={'书架设置 · ' + this.options.settings.shelfDensity} icon="tune" onClick={() => this.patch({ settingsOpen: !state.settingsOpen })} />
           </div>
-          <nav className="collection-links" aria-label="书库操作">
+          {this.options.admin && <nav className="collection-links" aria-label="书库操作">
             <button type="button" className="button collection-link" onClick={() => this.options.onOpenFiles()}><Icon name="folder" /><span>文件管理</span><Icon name="chevron-right" /></button>
-            <button type="button" aria-label="上传书籍" hidden={!listing?.writable} className="button collection-link" disabled={state.busy} onClick={() => this.uploadInput.click()}><Icon name="upload" /><span>上传书籍</span><Icon name="chevron-right" /></button>
-          </nav>
+          </nav>}
           {(listing?.crumbs.length ?? 0) > 1 && <>
           <div className="manager-crumbs library-path" aria-label="当前文件夹">
             {(listing?.crumbs ?? []).map((crumb, index) => (
@@ -554,15 +469,6 @@ export class LibraryBrowseScreen {
           {(state.status || state.total > 0) && <div className="manager-status muted">{state.status || this.summary()}</div>}
         </div>
 
-        {state.dialog ? (
-          <DialogView dialog={state.dialog} onClose={(answer) => this.closeDialog(answer)} destructive="删除" />
-        ) : null}
-        <ShelfSettingsPanel
-          open={state.settingsOpen}
-          settings={this.options.settings}
-          onPatch={(patch) => this.options.onSettingsChange(patch)}
-          onClose={() => this.patch({ settingsOpen: false })}
-        />
       </>
     );
   }
@@ -572,7 +478,6 @@ export class LibraryBrowseScreen {
     if (state.books.length === 0) {
       if (state.bootstrapping) return null;
       const hasFiles = (state.listing?.files ?? 0) > 0;
-      const writable = state.listing?.writable === true;
       const hasQuery = state.query.length > 0;
       return (
         <div className="empty-state collection-empty">
@@ -581,17 +486,15 @@ export class LibraryBrowseScreen {
           <p className="muted">
             {hasQuery
               ? `「${state.query}」在这个文件夹里没有匹配`
-              : hasFiles ? '这里有 ' + state.listing!.files + ' 个文件，可在文件管理中查看识别结果。'
-              : writable ? '上传 EPUB、TXT 等书籍，开始建立你的书库。' : '管理员添加书籍后，就能在这里浏览并加入书架。'}
+              : hasFiles ? (this.options.admin ? '这里有 ' + state.listing!.files + ' 个文件，可在文件管理中查看识别结果。' : '当前文件夹暂时没有可阅读的书籍，请联系管理员。')
+              : this.options.admin ? '前往文件管理添加书籍，再回到这里浏览。' : '管理员添加书籍后，就能在这里浏览并加入书架。'}
           </p>
           <div className="empty-actions">
             {hasQuery ? (
               <button type="button" className="button primary" onClick={() => this.clearSearch()}>
                 清除搜索
               </button>
-            ) : !hasFiles && writable ? (
-              <IconTextButton className="primary" label="上传第一本书" icon="upload" disabled={state.busy} onClick={() => this.uploadInput.click()} />
-            ) : hasFiles ? (
+            ) : this.options.admin ? (
               <IconTextButton className="primary" label="文件管理" icon="folder" onClick={() => this.options.onOpenFiles()} />
             ) : null}
           </div>
@@ -636,17 +539,9 @@ export class LibraryBrowseScreen {
     return parts.join(' · ');
   }
 
-  private closeDialog(answer: DialogAnswer): void {
-    const dialog = this.state.dialog;
-    this.state.dialog = null;
-    this.draw();
-    if (dialog?.kind === 'pick') dialog.resolve(answer as string | null);
-  }
-
   dispose(): void {
     if (this.searchTimer) clearTimeout(this.searchTimer);
     this.searchTimer = null;
-    this.state.dialog = null;
     this.ui.unmount();
   }
 }
@@ -1065,9 +960,16 @@ export class LibraryFilesScreen {
     const listing = this.state.listing;
     return (
       <>
-        <div className="panel-header library-header">
-          <IconButton label="返回" icon="arrow-left" onClick={() => this.options.onClose()} />
-          <IconTextButton label="浏览书籍" icon="book" onClick={() => this.options.onOpenBrowse(this.state.path)} />
+        <header className="collection-header file-manager-header">
+          <div className="collection-heading">
+            <IconButton label="返回" icon="arrow-left" onClick={() => this.options.onClose()} />
+            <div className="collection-heading-text"><h1>文件管理</h1><p className="muted">管理书库中的文件与文件夹</p></div>
+          </div>
+          <nav className="collection-links" aria-label="文件操作">
+            <button type="button" className="button collection-link" aria-label="上传书籍" hidden={!this.writable} disabled={this.state.busy} onClick={() => this.uploadInput.click()}><Icon name="upload" /><span>上传书籍</span></button>
+            <button type="button" className="button collection-link" aria-label="新建文件夹" hidden={!this.writable} disabled={this.state.busy} onClick={() => void this.promptMkdir()}><Icon name="plus" /><span>新建文件夹</span></button>
+            {!this.writable && <p className="muted">当前目录只读</p>}
+          </nav>
           <div className="manager-crumbs">
             {(listing?.crumbs ?? []).map((crumb, index) => (
               <>
@@ -1084,24 +986,7 @@ export class LibraryFilesScreen {
               </>
             ))}
           </div>
-          {/* Hidden rather than omitted, with `hidden` as the state: a control that
-              can only answer 403 teaches the reader to distrust every other control,
-              and *which* controls are missing is what this says. */}
-          <IconButton
-            label="上传书籍"
-            icon="upload"
-            hidden={!this.writable}
-            disabled={this.state.busy}
-            onClick={() => this.uploadInput.click()}
-          />
-          <IconButton
-            label="新建文件夹"
-            icon="plus"
-            hidden={!this.writable}
-            disabled={this.state.busy}
-            onClick={() => void this.promptMkdir()}
-          />
-        </div>
+        </header>
 
         <div
           className="manager-body"
@@ -1115,8 +1000,9 @@ export class LibraryFilesScreen {
           {this.state.loading && listing === null ? <div className="spinner" /> : null}
           <div className="manager-list">
             {listing && listing.total === 0 ? (
-              <div className="empty-state">
-                <p>这个文件夹是空的</p>
+              <div className="empty-state collection-empty">
+                <Icon name="folder" class="empty-glyph" /><p>这个文件夹是空的</p>
+                <p className="muted">{this.writable ? '使用上方的上传或新建文件夹，整理你的书库。' : '当前目录只读，可以浏览已有文件。'}</p>
               </div>
             ) : null}
             {(listing?.entries ?? []).map((entry) => (
@@ -1175,7 +1061,7 @@ export class LibraryFilesScreen {
   private summary(listing: BrowseListing | null): string {
     if (listing === null) return '载入中…';
     if (listing.total === 0) {
-      return listing.writable ? '空文件夹 · 可以用右上角的新建按钮添加子目录' : '空文件夹';
+      return listing.writable ? '空文件夹 · 可以使用上方的新建文件夹按钮添加子目录' : '空文件夹';
     }
     /*
      * The counts are the directory's, and the page is named when there is more than
@@ -1398,6 +1284,7 @@ function Row({ entry, selecting, selected, onActivate, onToggle, onMenu }: RowPr
         onActivate();
       }}
       onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           onActivate();
@@ -1431,8 +1318,8 @@ function Row({ entry, selecting, selected, onActivate, onToggle, onMenu }: RowPr
           label={`${entry.name} 的操作`}
           icon="more"
           class="manager-more"
-          onClick={() => {
-            cancel();
+          onClick={(event) => {
+            event.stopPropagation(); cancel();
             onMenu();
           }}
         />

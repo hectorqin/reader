@@ -481,6 +481,19 @@ describe('uploading a book', () => {
     assert.equal(res.statusCode, 200);
     assert.equal((res.json() as { writable: boolean }).writable, true);
   });
+
+  test('members cannot probe or upload, and rejected uploads leave the library unchanged', async () => {
+    await ctx.users.createAsAdmin({ username: 'upload-member', password: 'password123', role: 'member' });
+    const member = await ctx.users.login('upload-member', 'password123');
+    const headers = { authorization: `Bearer ${member.accessToken}` };
+    const before = await readdir(booksDir);
+    const probe = await app.inject({ method: 'GET', url: '/api/v1/library/upload', headers });
+    assert.equal(probe.statusCode, 403);
+    const body = multipart([{ field: 'files', filename: 'member-forbidden.txt', content: Buffer.from('not allowed') }]);
+    const upload = await app.inject({ method: 'POST', url: '/api/v1/library/upload', headers: { ...headers, 'content-type': body.contentType }, payload: body.body });
+    assert.equal(upload.statusCode, 403);
+    assert.deepEqual(await readdir(booksDir), before);
+  });
 });
 
 describe('uploading an archive', () => {
