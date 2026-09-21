@@ -36,7 +36,11 @@ try {
     await page.goto(base + '/#/book/' + BOOK_ID);
     await page.waitForFunction(() => Number(document.querySelector('.progress-scrubber')?.max) > 1);
     await shot('toolbar-' + width);
-    assert.ok(await page.locator('.footer').evaluate(el => el.getBoundingClientRect().width <= 1088), 'desktop controls have a bounded width');
+    assert.ok(await page.locator('.footer').evaluate(el => el.getBoundingClientRect().width <= 800), 'desktop controls stay within the reading column');
+    assert.equal(await page.locator('.topbar').evaluate(el => {
+      const bar=el.getBoundingClientRect(), book=document.querySelector('book-content').getBoundingClientRect();
+      return Math.abs(bar.left-book.left)<1 && Math.abs(bar.right-book.right)<1;
+    }), true, 'book header aligns with the paper');
     for (const label of ['目录', '界面', '设置', '朗读']) {
       const before = await surface();
       const trigger = page.locator('.reader-actions').getByRole('button', { name: label, exact: true });
@@ -66,6 +70,22 @@ try {
     await page.mouse.click(width / 2, height / 2);
     await page.locator('.reader-screen[data-chrome=visible]').waitFor();
   }
+  await page.locator('.reader-actions').getByRole('button', {name:'设置',exact:true}).click();
+  await page.locator('.panel').getByRole('button',{name:'翻页',exact:true}).click();
+  await page.locator('.panel button[aria-label="关闭"]').click();
+  await page.locator('.progress-scrubber').fill('2');
+  await page.waitForFunction(() => document.querySelector('.progress-page')?.textContent?.includes('第 2/'));
+  await shot('paged');
+  const paged = await surface();
+  await page.locator('.reader-actions').getByRole('button',{name:'目录',exact:true}).click();
+  await page.locator('.panel button[aria-label="关闭"]').press('Escape');
+  assert.deepEqual(await surface(),paged,'side panels preserve the selected page in paged mode');
+  await page.getByRole('button',{name:'夜间',exact:true}).click();
+  await shot('dark');
+  await page.locator('.reader-actions').getByRole('button',{name:'界面',exact:true}).click();
+  await shot('dark-settings');
+  await page.locator('.panel button[aria-label="关闭"]').click();
+  await page.getByRole('button',{name:'日间',exact:true}).click();
   await page.setViewportSize({ width: 1024, height: 420 });
   await page.locator('.reader-actions').getByRole('button', { name: '界面', exact: true }).click();
   const body = page.locator('.panel-body');
