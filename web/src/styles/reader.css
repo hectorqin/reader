@@ -3815,3 +3815,37 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 }
 [data-theme='dark'] .extension-toolbar .extension-error { color: #ffaaa0; }
 .extension-tabs button:disabled { opacity: .55; cursor: default; }
+
+/* Source hub: navigation tabs, one primary action per row, secondary settings on demand. */
+.sources-hub .sources-tabs { flex: none; flex-wrap: nowrap; gap: 0; padding: 0 1rem; width: 100%; max-width: 66rem; margin: 0 auto 1rem; }
+.sources-hub .sources-tabs [role=tab] { flex: 1; min-width: 0; min-height: 52px; padding: .85rem .35rem; border: 0; border-bottom: 2px solid var(--reader-line); background: transparent; color: var(--reader-muted); font: inherit; cursor: pointer; }
+.sources-hub .sources-tabs [aria-selected=true] { color: var(--reader-ink); border-bottom-color: var(--reader-accent); font-weight: 650; }
+.sources-hub .sources-tabs [role=tab]:focus-visible, .source-manage-trigger:focus-visible, .source-management-link:focus-visible { outline: var(--focus-ring); outline-offset: -2px; }
+.sources-tab-dot { display: inline-block; width: 6px; height: 6px; margin: 0 0 .2rem .35rem; border-radius: 50%; background: var(--reader-accent); }
+.sources-list-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .5rem; }
+.sources-list-heading h2 { margin: 0; }
+.source-count { margin-inline-start: .3rem; font-size: .8rem; color: var(--reader-muted); font-weight: 400; }
+.source-add { display: inline-flex; align-items: center; gap: .3rem; min-height: 44px; padding: .5rem .7rem; }
+.sources-list .source-entry { display: block; padding: 1rem 0; }
+.sources-list .source-entry:last-child { padding-bottom: 0; }
+.source-entry-top { display: flex; align-items: center; gap: 1rem; }
+.source-entry-info { flex: 1; min-width: 0; }
+.source-entry-info strong { display: block; line-height: 1.5; }
+.source-entry-info small { font-size: .8rem; color: var(--reader-muted); opacity: 1; }
+.source-state { display: inline-block; font-size: .72rem; color: var(--reader-muted); margin-top: .5rem; }
+.source-state::before { content: ''; display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: currentColor; vertical-align: middle; margin-right: .35rem; }
+.source-state.is-enabled { color: var(--reader-accent); }
+.source-entry-actions { display: flex; align-items: center; gap: .6rem; flex-shrink: 0; }
+.source-open { min-height: 44px; color: var(--reader-accent); border-color: color-mix(in srgb, var(--reader-accent) 30%, var(--reader-line)); background: color-mix(in srgb, var(--reader-accent) 7%, var(--reader-surface)); }
+.source-manage-trigger { display: inline-flex; align-items: center; justify-content: center; gap: .25rem; min-height: 44px; padding: .4rem; border: 0; background: transparent; font: inherit; font-size: .85rem; color: var(--reader-muted); cursor: pointer; }
+.source-manage-trigger[aria-expanded=true] .icon { transform: rotate(90deg); }
+.source-management { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem 1rem; margin-top: .85rem; padding: .5rem .75rem; border-radius: .6rem; background: color-mix(in srgb, var(--reader-ink) 4%, transparent); }
+.source-management-link { display: inline-flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 44px; padding: .5rem 0; border: 0; background: transparent; color: var(--reader-ink); font: inherit; font-size: .85rem; text-decoration: none; cursor: pointer; }
+.source-management-link:disabled, .source-manage-trigger:disabled, .sources-hub [role=tab]:disabled { opacity: .5; cursor: default; }
+.source-toggle { color: var(--reader-muted); }
+@media (max-width: 600px) {
+  .source-entry-actions { flex-direction: column; gap: 0; }
+  .source-entry-top { align-items: center; }
+  .source-management-link { width: 100%; }
+  .source-management-link + .source-management-link { border-top: 1px solid var(--reader-line); }
+}

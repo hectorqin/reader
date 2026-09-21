@@ -64,7 +64,7 @@ describe('sources and subscriptions UI', () => {
     await click(screen.element, '打开'); await click(screen.element, '下载 EPUB');
     expect(JSON.parse(bodyText(transport.requests.find((request) => request.url.endsWith('/acquire'))))).toEqual({ entryRef: 'book-ref', optionId: 'epub' });
     await click(screen.element, '阅读《来源小说》'); expect(onOpen).toHaveBeenCalledWith({ id: 'book1', title: '来源小说' });
-    await click(screen.element, '自动追更 · 有更新'); await click(screen.element, '开启追更');
+    await click(screen.element, '自动追更'); await click(screen.element, '开启追更');
     expect(JSON.parse(bodyText(transport.requests.find((request) => request.url.endsWith('/subscription'))))).toEqual({ enabled: true });
   });
   it('requires the explicit trust control before installing and offers plugin lifecycle actions', async () => {
@@ -77,4 +77,26 @@ describe('sources and subscriptions UI', () => {
     expect(JSON.parse(bodyText(transport.requests.find((request) => request.url.endsWith('/plugins') && request.method === 'POST')))).toEqual({ folder: 'npm:external-source', trusted: true });
     await click(screen.element, '停用'); expect(transport.requests.some((request) => request.url.endsWith('/plugins/remote') && request.method === 'PATCH')).toBe(true);
   });
+});
+
+it('uses keyboard tabs and reveals source settings only through management', async () => {
+  const { screen, transport } = await setup();
+  const tabs = [...screen.element.querySelectorAll<HTMLButtonElement>('[role=tab]')];
+  expect(tabs).toHaveLength(3); expect(tabs[0]!.getAttribute('aria-selected')).toBe('true');
+  expect(screen.element.querySelector('[role=tabpanel]')?.getAttribute('aria-labelledby')).toBe(tabs[0]!.id);
+  expect(screen.element.textContent).not.toContain('基本设置');
+  await click(screen.element, '管理'); expect(screen.element.textContent).toContain('基本设置');
+  expect(screen.element.querySelector('.source-manage-trigger')?.getAttribute('aria-expanded')).toBe('true');
+  screen.element.querySelector('.source-management')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  expect(screen.element.querySelector('.source-management')).toBeNull();
+  expect(document.activeElement?.textContent).toBe('管理');
+  await click(screen.element, '管理'); await click(screen.element, '暂停');
+  expect(JSON.parse(bodyText(transport.requests.find(request => request.url.endsWith('/sources/source-1') && request.method === 'PATCH')))).toEqual({ enabled: false });
+  expect(screen.element.querySelector('.source-management')).toBeNull();
+  tabs[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  expect(document.activeElement?.textContent).toBe('自动追更');
+  expect(tabs[1]!.getAttribute('aria-selected')).toBe('true');
+  tabs[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+  expect(tabs[2]!.getAttribute('aria-selected')).toBe('true');
+  expect(screen.element.querySelector('[role=tabpanel]')?.getAttribute('aria-labelledby')).toBe(tabs[2]!.id);
 });

@@ -3,9 +3,10 @@ import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { Book } from '../api/types.ts';
 import type { ChapterSubscription, SourceEntry, SourceInstance, SourcePage, SourcePlugin, SourceType } from '../api/sources.ts';
 import { mountUI } from './mount.ts';
-import { Button, IconButton } from './toolkit.tsx';
+import { Button, IconButton, Icon } from './toolkit.tsx';
 
 interface Options { api: ReaderApi; admin: boolean; onBack(): void; onOpen(book: Book): void; onSignedOut(): void }
+type SourceTab = 'sources' | 'updates' | 'plugins';
 interface Editor { id: string | null; typeKey: string; name: string; config: Record<string, unknown>; raw: string }
 const keyFor = (type: { pluginId: string; id: string }) => `${type.pluginId}/${type.id}`;
 const date = (value: number | null) => value ? new Date(value).toLocaleString() : '尚未检查';
@@ -22,7 +23,8 @@ export class SourcesScreen {
   private sources: SourceInstance[] = [];
   private plugins: SourcePlugin[] = [];
   private subscriptions: ChapterSubscription[] = [];
-  private tab: 'sources' | 'updates' | 'plugins' = 'sources';
+  private tab: SourceTab = 'sources';
+  private managing: string | null = null;
   private editor: Editor | null = null;
   private selected: SourceInstance | null = null;
   private page: SourcePage | null = null;
@@ -36,7 +38,7 @@ export class SourcesScreen {
   private acquired: Book | null = null;
 
   constructor(private readonly options: Options) {
-    this.element.className = 'sources-screen';
+    this.element.className = 'sources-screen sources-hub';
     this.ui = mountUI(this.element, () => this.view(), null);
   }
   async show(): Promise<void> { await this.run(() => this.reload()); }
@@ -98,32 +100,63 @@ export class SourcesScreen {
     this.subscriptions = await this.options.api.subscriptions();
     this.message = '已加入书架，可在“自动追更”中开启检查。';
   }
+  private changeTab(tab: SourceTab): void {
+    this.tab = tab; this.managing = null; this.draw();
+    const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0;
+  }
   private view() {
     const type = this.types.find((t) => keyFor(t) === this.editor?.typeKey);
+    const tabs: Array<{ id: SourceTab; title: string }> = [
+      { id: 'sources', title: '书源' }, { id: 'updates', title: '自动追更' },
+      ...(this.options.admin ? [{ id: 'plugins' as const, title: '插件管理' }] : []),
+    ];
     return <>
       <header className="sources-header"><IconButton label="返回" icon="arrow-left" onClick={this.options.onBack} /><h1>书源与追更</h1>
         <Button disabled={this.busy} onClick={() => void this.run(() => this.reload())}>刷新</Button></header>
-      <nav className="sources-tabs" aria-label="书源功能">
-        <Button onClick={() => { this.tab = 'sources'; this.draw(); }}>书源</Button>
-        <Button onClick={() => { this.tab = 'updates'; this.draw(); }}>自动追更{this.subscriptions.some((s) => s.newChapters > 0) ? ' · 有更新' : ''}</Button>
-        {this.options.admin && <Button onClick={() => { this.tab = 'plugins'; this.draw(); }}>插件管理</Button>}
-      </nav>
+      <nav className="sources-tabs" role="tablist" aria-label="书源功能">{tabs.map((tab, index) => <button key={tab.id} type="button"
+        role="tab" id={'sources-tab-' + tab.id} aria-controls={'sources-panel-' + tab.id} aria-selected={this.tab === tab.id}
+        tabIndex={this.tab === tab.id ? 0 : -1} disabled={this.busy} onClick={() => this.changeTab(tab.id)} onKeyDown={event => {
+          let next = index;
+          if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+          else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+          else if (event.key === 'Home') next = 0;
+          else if (event.key === 'End') next = tabs.length - 1;
+          else return;
+          event.preventDefault(); this.changeTab(tabs[next]!.id);
+          this.element.querySelector<HTMLElement>('#sources-tab-' + tabs[next]!.id)?.focus();
+        }}>{tab.title}{tab.id === 'updates' && this.subscriptions.some(s => s.newChapters > 0) && <span className="sources-tab-dot" aria-label="有更新" />}</button>)}</nav>
       {(this.busy || this.message) && <div role="status" className="notice">{this.busy ? '正在处理…' : this.message}</div>}
-      <main className="sources-body">
+      <main className="sources-body" role="tabpanel" id={'sources-panel-' + this.tab} aria-labelledby={'sources-tab-' + this.tab} tabIndex={0}>
       {this.tab === 'sources' && <>
         {!!this.savedSource?.descriptor?.extensions?.pages?.length && <section className="sources-card source-next-step"><strong>{this.savedSource!.name}</strong>
           <p>可为此书源单独管理订阅和规则。</p>{this.savedSource!.descriptor!.extensions!.pages!.map(page => <a className="button primary" href={'#/sources/' + encodeURIComponent(this.savedSource!.id) + '/' + encodeURIComponent(page.id)}>{page.title}</a>)}
         </section>}
-        <section className="sources-card"><h2>我的来源</h2>
-          {this.options.admin && <Button disabled={this.busy} onClick={() => this.edit()}>添加来源</Button>}
-          {this.sources.map((source) => <div className="sources-row" key={source.id}>
-            <div><strong>{source.name}</strong><small>{source.descriptor?.label ?? '插件未启用或未安装'} · {source.enabled ? '已启用' : '已暂停'}</small></div>
-            <div className="sources-actions"><Button disabled={this.busy || !source.enabled || !source.descriptor} onClick={() => this.select(source)}>打开</Button>
-              {this.options.admin && <>
-                {source.descriptor?.extensions?.pages?.map(page => <a className="button" href={'#/sources/' + encodeURIComponent(source.id) + '/' + encodeURIComponent(page.id)}>{page.title}</a>)}
-                <Button disabled={this.busy || !source.descriptor} onClick={() => this.edit(source)}>基本设置</Button>
-              <Button disabled={this.busy} onClick={() => void this.run(async () => { await this.options.api.saveSource(source.id, { enabled: !source.enabled }); await this.reload(); })}>{source.enabled ? '暂停' : '启用'}</Button></>}
-            </div></div>)}
+        <section className="sources-card sources-list"><div className="sources-list-heading"><h2>我的来源 <span className="source-count">{this.sources.length}</span></h2>
+          {this.options.admin && <Button className="source-add" disabled={this.busy} onClick={() => this.edit()}><Icon name="plus" />添加来源</Button>}
+        </div>
+          {this.sources.map(source => <article className="sources-row source-entry" key={source.id}>
+            <div className="source-entry-top"><div className="source-entry-info"><strong>{source.name}</strong>
+              <small>{source.descriptor?.label ?? '插件未启用或未安装'}</small>
+              <span className={'source-state' + (source.enabled ? ' is-enabled' : '')}>{source.enabled ? '已启用' : '已暂停'}</span>
+            </div><div className="source-entry-actions">
+              <Button className="source-open" disabled={this.busy || !source.enabled || !source.descriptor} onClick={() => { this.managing = null; this.select(source); }}>打开</Button>
+              {this.options.admin && <button type="button" className="source-manage-trigger" disabled={this.busy}
+                aria-expanded={this.managing === source.id} aria-controls={'source-manage-' + source.id}
+                onClick={() => { this.managing = this.managing === source.id ? null : source.id; this.draw(); }}
+                onKeyDown={event => { if (event.key === 'Escape') { this.managing = null; this.draw(); } }}>管理<Icon name="chevron-right" /></button>}
+            </div></div>
+            {this.options.admin && this.managing === source.id && <div className="source-management" id={'source-manage-' + source.id} role="group" aria-label={source.name + '管理'}
+              onKeyDown={event => { if (event.key === 'Escape') { this.managing = null; this.draw();
+                this.element.querySelectorAll<HTMLElement>('.source-manage-trigger')[this.sources.indexOf(source)]?.focus();
+              } }}>
+              {source.descriptor?.extensions?.pages?.map(page => <a className="source-management-link" href={'#/sources/' + encodeURIComponent(source.id) + '/' + encodeURIComponent(page.id)}>{page.title}<Icon name="chevron-right" /></a>)}
+              <button className="source-management-link" type="button" disabled={this.busy || !source.descriptor} onClick={() => { this.managing = null; this.edit(source); }}>基本设置<Icon name="chevron-right" /></button>
+              <button className="source-management-link source-toggle" type="button" disabled={this.busy} onClick={() => void this.run(async () => {
+                await this.options.api.saveSource(source.id, { enabled: !source.enabled }); await this.reload(); this.managing = null;
+                this.message = source.enabled ? '来源已暂停' : '来源已启用';
+              })}>{source.enabled ? '暂停' : '启用'}</button>
+            </div>}
+          </article>)}
         </section>
         {this.editor && <section className="sources-card source-editor"><h2>{this.editor.id ? '编辑来源' : '添加来源'}</h2>
           <form onSubmit={(event) => { event.preventDefault(); void this.run(() => this.save()); }}>
