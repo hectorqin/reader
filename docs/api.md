@@ -913,17 +913,19 @@ GET /api/v1/sources/:id/publications/:publicationRef/resource?ref=<resource-ref>
 
 ### 插件管理（管理员）
 
-插件包需要管理员预先部署。`folder` 接受 `DATA_DIR/plugins/<folder>` 下的单个目录名，或 `npm:包名`（含 `npm:@scope/name`），后者从 `DATA_DIR/plugins/node_modules` 加载。接口不下载 npm 包、不运行安装脚本、不上传或解压包；包名中不接受版本或路径遍历。
+管理员可以直接安装 npm 包或上传 `.tgz`，成功后自动启用。npm 包名支持作用域与可选版本/标签，拒绝 URL、本地路径、别名及安装参数。服务端使用 npm 安装，禁用生命周期脚本；每次安装有独立依赖目录，失败清理本次目录，不修改已有插件。重复插件 ID 返回 409，内置插件不能覆盖。
 
 ```http
 POST /api/v1/plugins
 Authorization: Bearer <admin-token>
 Content-Type: application/json
 
-{"folder":"demo-chapters","trusted":true}
+{"package":"reader-source-example@1.0.0","trusted":true}
 ```
 
-npm 包部署到服务端后，使用 `{"folder":"npm:reader-source-example","trusted":true}` 激活。来源类型、配置与扩展入口由插件清单声明。
+上传接口：`POST /api/v1/plugins/upload`，使用 `multipart/form-data`，字段 `trusted=true` 和单个 `file`（`.tgz`，最大 100 MiB）。字段顺序不限。包应由 `npm pack` 生成，包含 `package.json`、`plugin.json` 和已构建的入口文件。上传包未包含的依赖仍会从 npm 仓库下载。来源类型、配置与扩展入口由插件清单声明。
+
+原目录加载接口仍可使用 `{"folder":"demo-chapters","trusted":true}`，或 `{"folder":"npm:reader-source-example","trusted":true}` 加载预部署在 `DATA_DIR/plugins` 或其 `node_modules` 下的包。新安装的 `folder` 是服务端生成的存储标识，客户端不应自行构造。
 
 启停和卸载：
 
@@ -935,7 +937,7 @@ DELETE /api/v1/plugins/:id       保留来源实例、已获取书和数据
 
 安装返回 `201 { "plugin": {...} }`，列表返回 `{ "plugins": [...] }`，启停返回 `{ "plugin": {...} }`，卸载返回 `{ "ok": true }`。插件状态包含 `pluginId/builtin/enabled/sourceTypes/runtime`，外部插件还带 `folder/name/version`，加载失败时有 `error`。卸载会移除注册和安装记录，保留包文件、来源实例、凭据和书籍数据。
 
-禁用或插件进程故障不会删除已下载文件、章节目录及已缓存正文。当前没有包上传、在线升级或回滚接口；内置 `reader.local` 和 `reader.opds` 不可卸载、禁用或替换。已安装插件失败后可用 `PATCH ... {"enabled":true}` 重新加载。
+禁用或插件进程故障不会删除已下载文件、章节目录及已缓存正文。当前没有覆盖升级或版本回滚接口；内置 `reader.local` 和 `reader.opds` 不可卸载、禁用或替换。已安装插件失败后可用 `PATCH ... {"enabled":true}` 重新加载。同一服务实例同时只处理一次安装，冲突返回 `409 PLUGIN_INSTALL_BUSY`；npm 下载限时 5 分钟，失败返回 `502 PLUGIN_INSTALL_FAILED`，缺失 npm 返回 `503 NPM_UNAVAILABLE`。
 
 ### 可运行示例：demo-chapters
 

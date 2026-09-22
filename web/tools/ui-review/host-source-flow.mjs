@@ -1,7 +1,10 @@
 // Run from server: node --import tsx ../web/tools/ui-review/sources-e2e.mjs
 // Real HTTP server, SQLite, stdio plugin and production Web; uses a self-contained example source.
 import assert from 'node:assert/strict';
-import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { chromium } from 'playwright';
@@ -14,14 +17,16 @@ import { SyncService } from '../../../server/src/services/sync.ts';
 import { TtsService } from '../../../server/src/services/tts.ts';
 import { BrowseService } from '../../../server/src/services/browse.ts';
 import { UploadService } from '../../../server/src/services/uploads.ts';
+import { pluginArchive } from '../../../server/test/helpers/plugin-package.ts';
 
 const repo = resolve(import.meta.dirname, '../../..');
 const root = await mkdtemp(join(tmpdir(), 'reader-ui-e2e-'));
-const shots = join(repo, 'docs/ui-review');
+const shots = process.env.UI_REVIEW_DIR || join(repo, 'docs/ui-review');
 const config = { booksDir: join(root, 'books'), dataDir: join(root, 'data'), host: '127.0.0.1', port: 0,
   jwtSecret: 'isolated-end-to-end-fixture-secret', accessTokenTtl: 86400, refreshTokenTtl: 86400,
   scanInterval: 0, watchInterval: 0, logLevel: 'silent', publicUrl: '', corsOrigins: [], webDir: join(repo, 'web/dist') };
-let app, db, browser, page;
+let app, db, browser, page, registry;
+const previousRegistry = process.env.npm_config_registry;
 const button = name => page.getByRole('button', { name, exact: true });
 const tab = name => page.getByRole('tab', { name, exact: true });
 async function idle() { await page.waitForFunction(() => !document.querySelector('[role=status]')?.textContent?.includes('正在处理')); }
@@ -39,8 +44,21 @@ async function addSource(name) {
 }
 try {
   await Promise.all([mkdir(config.booksDir), mkdir(config.dataDir), mkdir(shots, { recursive: true })]);
-  const pkg = join(repo, 'examples/plugins/demo-chapters'), installed = join(config.dataDir, 'plugins/node_modules/reader-source-example');
-  await mkdir(installed, { recursive: true }); await cp(pkg, installed, { recursive: true });
+  const cli = process.env.npm_execpath || join(dirname(process.execPath), 'node_modules/npm/bin/npm-cli.js');
+  const { stdout } = await promisify(execFile)(process.execPath, [cli, 'pack', '--ignore-scripts', '--json', '--pack-destination', root],
+    { cwd: join(repo, 'examples/plugins/demo-chapters'), windowsHide: true });
+  const archive = join(root, JSON.parse(stdout)[0].filename);
+  let registryUrl = '';
+  registry = createServer((request, response) => {
+    if (request.url === '/example.tgz') { response.end(pluginArchive('reader-source-example', 'test.registry')); return; }
+    response.setHeader('content-type', 'application/json');
+    response.end(JSON.stringify({ name: 'reader-source-example', 'dist-tags': { latest: '1.0.0' }, versions: {
+      '1.0.0': { name: 'reader-source-example', version: '1.0.0', dist: { tarball: registryUrl + '/example.tgz' } },
+    } }));
+  });
+  await new Promise(resolve => registry.listen(0, '127.0.0.1', resolve));
+  registryUrl = `http://127.0.0.1:${registry.address().port}`;
+  process.env.npm_config_registry = registryUrl;
   db = openDatabase(config); const ctx = { config, db }; app = buildApp(ctx); ctx.log = app.log;
   ctx.scanner = new Scanner(db, config, { info() {}, warn() {} }); ctx.users = new UserService(db, config);
   ctx.shelf = new ShelfService(db); ctx.sync = new SyncService(db, ctx.shelf); ctx.tts = new TtsService(config);
@@ -54,8 +72,21 @@ try {
   await page.locator('input[autocomplete=username]').fill('e2e-admin'); await page.locator('input[type=password]').fill('password123');
   await button('注册并登录').click(); await page.locator('.shelf-screen').waitFor();
   await page.goto(base + '/#/sources'); await tab('插件管理').click();
-  await page.getByLabel('已部署的插件目录或 npm 包').fill('npm:reader-source-example'); await page.getByLabel('我信任这个插件的代码').check();
-  await button('安装插件').click(); await page.getByText('Demo chapter source', { exact: true }).waitFor();
+  for (const width of [320, 390, 1280]) { await page.setViewportSize({ width, height: 844 }); await shot('plugin-install-' + width); }
+  await tab('上传安装包').click();
+  for (const width of [320, 1280]) { await page.setViewportSize({ width, height: 844 }); await shot('plugin-upload-' + width); }
+  await page.getByLabel('npm pack 安装包').setInputFiles(archive);
+  assert.equal(await button('上传并启用').isDisabled(), true);
+  await page.getByLabel('我信任这个插件的代码').check();
+  await button('上传并启用').click(); await page.getByText('Demo chapter source', { exact: true }).waitFor();
+  assert.ok((await page.locator('[role=status]').innerText()).includes('插件已安装并启用'));
+  assert.equal(await page.getByLabel('npm pack 安装包').inputValue(), '');
+  await tab('从 npm 安装').click();
+  await page.getByLabel('npm 包名', { exact: true }).fill('reader-source-example@latest');
+  await page.getByLabel('我信任这个插件的代码').check();
+  await button('安装并启用').click(); await page.getByText('Upload example', { exact: true }).waitFor();
+  await shot('plugins-enabled-desktop');
+  await page.setViewportSize({ width: 390, height: 844 });
   await tab('书源管理').click(); await addSource('示例章节源'); await addSource('第二个章节源');
   await page.reload(); await tab('书源管理').click(); await page.locator('.sources-row').getByText('示例章节源', { exact: true }).waitFor();
   await tab('书源管理').focus(); await page.keyboard.press('ArrowRight');
@@ -82,12 +113,14 @@ try {
   await page.locator('book-content').getByText('这是通过独立 Node 进程提供的示例章节。',{exact:false}).waitFor();
   await page.setViewportSize({width:390,height:844}); await shot('reader-mobile');
   assert.deepEqual(errors, []);
-  console.log('PASS real HTTP + SQLite + stdio plugin + production Web: registration, npm activation, independent instances, tabs, layout, streamed search, acquisition and chapter reading');
+  console.log('PASS real HTTP + SQLite + stdio plugin + production Web: registration, tgz upload, npm registry install, auto-enable, independent instances, tabs, layout, streamed search, acquisition and chapter reading');
 } catch (error) {
   if (page) { await page.screenshot({ path: join(shots, 'sources-e2e-failure.png') }); console.error((await page.locator('body').innerText()).slice(-4500)); }
   throw error;
 } finally {
   await browser?.close(); await app?.close(); db?.close();
+  if (registry) await new Promise(resolve => registry.close(resolve));
+  if (previousRegistry === undefined) delete process.env.npm_config_registry; else process.env.npm_config_registry = previousRegistry;
   assert.equal(dirname(resolve(root)), resolve(tmpdir())); assert.ok(basename(root).startsWith('reader-ui-e2e-'));
   await rm(root, { recursive: true, force: true });
 }

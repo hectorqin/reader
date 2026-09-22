@@ -3945,6 +3945,16 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .shelf-settings .panel-body { padding-top: 0; }
 .shelf-settings .section-title:first-child { margin-top: 0; }
 .shelf-discovery { display: contents; }
+.plugin-install { margin-block: 1rem 1.5rem; border: 1px solid var(--reader-line); border-radius: .85rem; overflow: hidden; }
+.plugin-install-tabs { display: flex; border-bottom: 1px solid var(--reader-line); }
+.plugin-install-tabs button { flex: 1; min-height: 44px; padding: .75rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--reader-muted); font: inherit; cursor: pointer; }
+.plugin-install-tabs button[aria-selected=true] { border-bottom-color: var(--reader-accent); color: var(--reader-ink); font-weight: 600; }
+.plugin-install form { display: flex; flex-direction: column; gap: .85rem; padding: 1.25rem; margin: 0; min-width: 0; }
+.plugin-install form[hidden] { display: none; }
+.plugin-install small { color: var(--reader-muted); line-height: 1.5; }
+.plugin-install input { width: 100%; min-width: 0; box-sizing: border-box; }
+.plugin-install input[type=file] { padding: .5rem; }
+.plugin-install .button { align-self: flex-start; }
 /* Desktop keeps navigation compact and settings beside the collection. */
 @media (min-width: 64rem) {
   .shelf { --shelf-measure: var(--collection-measure); }

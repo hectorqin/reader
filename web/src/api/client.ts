@@ -261,7 +261,13 @@ export class ReaderApi {
   async sourceCredential(id: string, key: string, value: string): Promise<void> {
     await this.call(`/api/v1/sources/${encodeURIComponent(id)}/credentials/${encodeURIComponent(key)}`, 'PUT', { value });
   }
-  async installPlugin(folder: string): Promise<void> { await this.call('/api/v1/plugins', 'POST', { folder, trusted: true }); }
+  async installPlugin(packageName: string): Promise<void> { await this.call('/api/v1/plugins', 'POST', { package: packageName, trusted: true }); }
+  async uploadPlugin(file: File): Promise<void> {
+    const form = new FormData();
+    form.append('trusted', 'true');
+    form.append('file', file, file.name);
+    await this.call('/api/v1/plugins/upload', 'POST', form);
+  }
   async enablePlugin(id: string, enabled: boolean): Promise<void> { await this.call(`/api/v1/plugins/${encodeURIComponent(id)}`, 'PATCH', { enabled }); }
   async uninstallPlugin(id: string): Promise<void> { await this.call(`/api/v1/plugins/${encodeURIComponent(id)}`, 'DELETE'); }
   async sourceCatalog(id: string, query: { ref?: string; cursor?: string } = {}, options: RequestOptions = {}): Promise<SourcePage> {
@@ -669,13 +675,14 @@ export class ReaderApi {
     const attempt = async (token: string | null) => {
       assertCurrent();
       const headers: Record<string, string> = { accept: options.stream ? 'text/event-stream' : options.binary ? '*/*' : 'application/json' };
-      if (body !== undefined) headers['content-type'] = 'application/json';
+      const multipart = typeof FormData !== 'undefined' && body instanceof FormData;
+      if (body !== undefined && !multipart) headers['content-type'] = 'application/json';
       if (token) headers.authorization = `Bearer ${token}`;
       return this.platform.transport.send({
         url: path,
         method,
         headers,
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        ...(body !== undefined ? { body: multipart ? body as FormData : JSON.stringify(body) } : {}),
         ...(options.binary ? { binary: true } : {}),
         ...(options.stream ? { stream: true } : {}),
         ...(options.signal ? { signal: options.signal } : {}),

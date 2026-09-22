@@ -1,0 +1,7 @@
+{
+  "name": "reader-source-demo-chapters",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": ["plugin.json", "main.mjs"]
+}

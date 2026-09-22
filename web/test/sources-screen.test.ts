@@ -161,14 +161,68 @@ describe('sources and subscriptions UI', () => {
   });
   it('requires the explicit trust control before installing and offers plugin lifecycle actions', async () => {
     const { screen, transport } = await setup();
-    await click(screen.element, '插件管理'); expect(button(screen.element, '安装插件').disabled).toBe(true);
-    input(screen.element, '已部署的插件目录或 npm 包', 'npm:reader-source-example');
+    await click(screen.element, '插件管理'); expect(button(screen.element, '安装并启用').disabled).toBe(true);
+    input(screen.element, 'npm 包名', 'reader-source-example');
     const trusted = screen.element.querySelector<HTMLInputElement>('input[type=checkbox]')!;
     trusted.checked = true; trusted.dispatchEvent(new Event('change', { bubbles: true }));
-    await click(screen.element, '安装插件');
-    expect(JSON.parse(bodyText(transport.requests.find((request) => request.url.endsWith('/plugins') && request.method === 'POST')))).toEqual({ folder: 'npm:reader-source-example', trusted: true });
+    await click(screen.element, '安装并启用');
+    await vi.waitFor(() => expect(screen.element.textContent).toContain('插件已安装并启用'));
+    expect(JSON.parse(bodyText(transport.requests.find((request) => request.url.endsWith('/plugins') && request.method === 'POST')))).toEqual({ package: 'reader-source-example', trusted: true });
     await click(screen.element, '停用'); expect(transport.requests.some((request) => request.url.endsWith('/plugins/remote') && request.method === 'PATCH')).toBe(true);
   });
+});
+
+it('uploads a tgz with trust and no JSON content type; reports activation and resets the picker', async () => {
+  const { screen, transport } = await setup();
+  await click(screen.element, '插件管理');
+  await click(screen.element, '上传安装包');
+  const picker = screen.element.querySelector<HTMLInputElement>('input[type=file]')!;
+  const file = new File(['tar'], 'example.tgz', { type: 'application/gzip' });
+  Object.defineProperty(picker, 'files', { configurable: true, value: [file] });
+  picker.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(button(screen.element, '上传并启用').disabled).toBe(true);
+  const trust = screen.element.querySelector<HTMLInputElement>('input[type=checkbox]')!;
+  trust.checked = true; trust.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(button(screen.element, '上传并启用').disabled).toBe(false);
+  // jsdom's required-file validator does not use an overridden FileList.
+  picker.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await vi.waitFor(() => expect(screen.element.textContent).toContain('插件已安装并启用'));
+  const request = transport.requests.find(r => r.url.endsWith('/plugins/upload'))!;
+  expect(request.body).toBeInstanceOf(FormData);
+  expect((request.body as FormData).get('trusted')).toBe('true');
+  expect(((request.body as FormData).get('file') as File).name).toBe('example.tgz');
+  expect(request.headers['content-type']).toBeUndefined();
+  expect(screen.element.querySelector<HTMLInputElement>('input[type=file]')!.value).toBe('');
+  expect(button(screen.element, '上传并启用').disabled).toBe(true);
+});
+
+it('keeps install drafts on failure and disables duplicate submission while installing', async () => {
+  const { screen, api } = await setup(); await click(screen.element, '插件管理');
+  let fail!: (error: Error) => void;
+  vi.spyOn(api, 'installPlugin').mockImplementation(() => new Promise((_resolve, reject) => { fail = reject; }));
+  input(screen.element, 'npm 包名', '@reader/example@latest');
+  const trust = screen.element.querySelector<HTMLInputElement>('input[type=checkbox]')!;
+  trust.checked = true; trust.dispatchEvent(new Event('change', { bubbles: true }));
+  button(screen.element, '安装并启用').click();
+  await vi.waitFor(() => expect(screen.element.textContent).toContain('正在安装插件'));
+  expect(button(screen.element, '安装并启用').disabled).toBe(true);
+  expect(button(screen.element, '上传并启用').disabled).toBe(true);
+  fail(new Error('npm 仓库暂不可用'));
+  await vi.waitFor(() => expect(screen.element.textContent).toContain('npm 仓库暂不可用'));
+  expect(screen.element.querySelector<HTMLInputElement>('input:not([type])')!.value).toBe('@reader/example@latest');
+  expect(button(screen.element, '安装并启用').disabled).toBe(false);
+});
+
+it('rejects non-tgz and oversized uploads before sending a request', async () => {
+  const { screen, transport } = await setup(); await click(screen.element, '插件管理');
+  await click(screen.element, '上传安装包');
+  const picker = screen.element.querySelector<HTMLInputElement>('input[type=file]')!;
+  for (const file of [new File(['zip'], 'plugin.zip'), Object.defineProperty(new File([], 'large.tgz'), 'size', { value: 101 * 1024 * 1024 })]) {
+    Object.defineProperty(picker, 'files', { configurable: true, value: [file] });
+    picker.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(button(screen.element, '上传并启用').disabled).toBe(true);
+  }
+  expect(transport.requests.some(r => r.url.endsWith('/plugins/upload'))).toBe(false);
 });
 
 it('uses keyboard tabs and reveals source settings only through management', async () => {

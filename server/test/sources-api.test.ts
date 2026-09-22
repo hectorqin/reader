@@ -17,6 +17,7 @@ import { TtsService } from '../src/services/tts.ts';
 import { BrowseService } from '../src/services/browse.ts';
 import { UploadService } from '../src/services/uploads.ts';
 import type { CatalogPage, SourceProvider } from '../src/sources/types.ts';
+import { pluginArchive } from './helpers/plugin-package.ts';
 
 interface Session { token: string; id: string }
 function streamEvents(body: string): Array<{ event: string; data: any }> {
@@ -25,6 +26,37 @@ function streamEvents(body: string): Array<{ event: string; data: any }> {
   }));
 }
 const searchPayload = { query: 'book', sessionId: 'test-search-session' };
+
+test('web plugin upload enforces admin, trust and file validation, installs enabled and restores on restart', async t => {
+  const h = await harness(); t.after(() => h.close());
+  const member = await h.member();
+  const body = (filename = 'example.tgz', trust = true, bytes = pluginArchive()) => Buffer.concat([
+    Buffer.from('--plugin-upload\r\nContent-Disposition: form-data; name="file"; filename="' + filename + '"\r\nContent-Type: application/gzip\r\n\r\n'), bytes,
+    Buffer.from('\r\n--plugin-upload\r\nContent-Disposition: form-data; name="trusted"\r\n\r\n' + trust + '\r\n--plugin-upload--\r\n'),
+  ]);
+  const upload = (session: Session, payload: Buffer) => h.app.inject({ method: 'POST', url: '/api/v1/plugins/upload',
+    headers: { ...auth(session), 'content-type': 'multipart/form-data; boundary=plugin-upload' }, payload });
+  assert.equal((await upload(member, body())).statusCode, 403);
+  assert.equal((await upload(h.admin, body('example.zip'))).statusCode, 400);
+  assert.equal((await upload(h.admin, body('example.tgz', false))).json().error.code, 'PLUGIN_TRUST_REQUIRED');
+  const invalid = await upload(h.admin, body('example.tgz', true, Buffer.from('not a tarball')));
+  assert.equal(invalid.statusCode, 502, invalid.body);
+  assert.deepEqual(await readdir(join(h.dataDir, 'plugins')), []);
+  const response = await upload(h.admin, body());
+  assert.equal(response.statusCode, 201, response.body);
+  assert.equal(response.json().plugin.enabled, true);
+  assert.equal(response.json().plugin.pluginId, 'test.upload');
+  assert.equal((await upload(h.admin, body())).statusCode, 409);
+  await h.restart();
+  const list = await h.app.inject({ method: 'GET', url: '/api/v1/plugins', headers: auth(h.admin) });
+  assert.equal(list.json().plugins.find((plugin: { pluginId: string }) => plugin.pluginId === 'test.upload').enabled, true);
+  const untrusted = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(h.admin), payload: { package: 'example' } });
+  assert.equal(untrusted.json().error.code, 'PLUGIN_TRUST_REQUIRED');
+  const path = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(h.admin), payload: { package: '../package', trusted: true } });
+  assert.equal(path.json().error.code, 'PLUGIN_INVALID_PACKAGE');
+  const denied = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(member), payload: { package: 'example', trusted: true } });
+  assert.equal(denied.statusCode, 403);
+});
 
 function auth(session: Session) { return { authorization: `Bearer ${session.token}` }; }
 

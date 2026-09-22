@@ -6,6 +6,9 @@ import { badRequest } from '../../lib/errors.ts';
 import { SourceHost } from '../../services/source-host.ts';
 import { withSignal } from '../request-signal.ts';
 import { searchResponse } from '../search-stream.ts';
+import { createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+import { PluginInstaller, PLUGIN_UPLOAD_LIMIT } from '../../sources/plugin-installer.ts';
 
 function textBody(body: unknown, name: string): string {
   const value = (body as Record<string, unknown> | null)?.[name];
@@ -35,6 +38,7 @@ function searchResultLimit(value: unknown, max = 10000): number | undefined {
 export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): void {
   const auth = authenticate(ctx);
   const host = ctx.sources ??= new SourceHost(ctx.db, ctx.config, () => ctx.shelf, app.log);
+  const installer = new PluginInstaller(ctx.config.dataDir, host.plugins);
   app.addHook('onReady', async () => { await host.plugins.loadInstalled(); host.updates.start(); host.plugins.startTasks(); });
   app.addHook('onClose', async () => { await host.updates.stop(); await host.plugins.close(); });
 
@@ -185,9 +189,36 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     requireAdmin(request);
     const body = request.body as Record<string, unknown> | null;
     if (body?.trusted !== true) throw badRequest('trusted must be true: installed plugins execute with server OS privileges', 'PLUGIN_TRUST_REQUIRED');
-    const plugin = await host.plugins.install(textBody(body, 'folder'));
+    const plugin = body?.package !== undefined
+      ? await installer.installPackage(textBody(body, 'package').trim())
+      : await host.plugins.install(textBody(body, 'folder'));
     reply.status(201);
     return { plugin };
+  });
+  app.post('/api/v1/plugins/upload', { preHandler: auth }, async (request, reply) => {
+    requireAdmin(request);
+    if (!request.isMultipart()) throw badRequest('请上传 .tgz 安装包。', 'NOT_MULTIPART');
+    const plugin = await installer.installArchive(async target => {
+      let trusted = false;
+      let received = false;
+      for await (const part of request.parts({ limits: { fileSize: PLUGIN_UPLOAD_LIMIT, files: 1, fields: 1, parts: 2 } })) {
+        if (part.type === 'field') {
+          if (part.fieldname !== 'trusted' || part.value !== 'true') throw badRequest('请确认信任插件代码。', 'PLUGIN_TRUST_REQUIRED');
+          trusted = true;
+        } else {
+          if (part.fieldname !== 'file' || !part.filename.toLowerCase().endsWith('.tgz')) {
+            part.file.resume();
+            throw badRequest('只支持 npm pack 生成的 .tgz 安装包。', 'PLUGIN_INVALID_PACKAGE');
+          }
+          await pipeline(part.file, createWriteStream(target, { flags: 'wx' }));
+          if (part.file.truncated) throw badRequest('安装包不能超过 100 MiB。', 'PLUGIN_PACKAGE_TOO_LARGE');
+          received = true;
+        }
+      }
+      if (!trusted) throw badRequest('请确认信任插件代码。', 'PLUGIN_TRUST_REQUIRED');
+      if (!received) throw badRequest('请选择 .tgz 安装包。', 'PLUGIN_INVALID_PACKAGE');
+    });
+    return reply.status(201).send({ plugin });
   });
   app.patch('/api/v1/plugins/:id', { preHandler: auth }, async (request) => {
     requireAdmin(request);

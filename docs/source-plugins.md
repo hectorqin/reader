@@ -329,9 +329,9 @@ books (format=chapters)
                                禁用 / 故障
 ```
 
-当前安装流程：管理员将包放在 `DATA_DIR/plugins/<folder>`，调用安装接口并显式传 `trusted: true`。宿主校验真实路径、manifest、入口和来源类型，保存安装记录；启动时自动恢复启用的插件。启用、禁用、卸载串行执行，禁用先注销提供者再终止进程；卸载移除安装记录，保留包文件、来源实例和已有用户数据。内置 `reader.local`、`reader.opds` 不允许卸载或替换。
+当前安装流程：管理员在 Web 输入 npm 包名或上传 `.tgz`，显式确认信任代码。服务端在 `DATA_DIR/plugins` 中创建独立依赖目录，使用 npm 安装并禁用生命周期脚本，校验真实路径、manifest、入口和来源类型，保存安装记录并自动启用。失败清理本次目录，不影响已有插件；重复安装不会覆盖已装版本。预部署目录加载接口仍保留。启动时自动恢复启用的插件。启用、禁用、卸载串行执行，禁用先注销提供者再终止进程；卸载移除安装记录，保留包文件、来源实例和已有用户数据。内置 `reader.local`、`reader.opds` 不允许卸载或替换。
 
-后续包上传及升级流程（尚未实现）：
+后续在线升级流程（尚未实现）：
 
 1. 校验包、manifest、API 版本、哈希/签名和权限。
 2. 将包解压到版本目录，不覆盖当前运行版本。
@@ -378,7 +378,8 @@ manifest 中的权限声明用于宿主授权和展示，不能单独视为安�
 
 ```text
 GET    /plugins                         插件及版本状态
-POST   /plugins                         安装已放入 plugins 目录的受信任插件
+POST   /plugins                         安装 npm 包（package）或加载预部署目录（folder）
+POST   /plugins/upload                  上传 .tgz，安装并启用
 PATCH  /plugins/:id                     启用/禁用（enabled）
 DELETE /plugins/:id                     卸载注册（保留包文件和数据）
 
@@ -396,7 +397,7 @@ GET    /sources/:id/publications/:publicationRef/resource?ref=...
 POST   /books/:id/refresh               获取并提交新的章节目录快照
 ```
 
-HTTP 返回宿主 DTO，凭据不回显。插件和来源配置管理需管理员权限；浏览、获取和个人凭据需登录。`PATCH /sources/:id` 更新名称/config/启停，config 变更清除所有用户的该来源凭据；有在途来源调用时拒绝变更 config。`DELETE` 只移除无获取记录的非本地来源。Web `#/sources` 根据类型 schema 绘制配置表单，普通成员只有浏览、凭据和个人追更操作。插件可声明 credentialKeys 与 credentials 权限，宿主只按调用用户向进程传递明确声明的键。包上传和在线升级尚未实现。
+HTTP 返回宿主 DTO，凭据不回显。插件和来源配置管理需管理员权限；浏览、获取和个人凭据需登录。`PATCH /sources/:id` 更新名称/config/启停，config 变更清除所有用户的该来源凭据；有在途来源调用时拒绝变更 config。`DELETE` 只移除无获取记录的非本地来源。Web `#/sources` 根据类型 schema 绘制配置表单，普通成员只有浏览、凭据和个人追更操作。插件可声明 credentialKeys 与 credentials 权限，宿主只按调用用户向进程传递明确声明的键。已支持 Web 上传安装包；覆盖升级尚未实现。
 
 ## 11. 分阶段实施
 
@@ -455,9 +456,9 @@ HTTP 返回宿主 DTO，凭据不回显。插件和来源配置管理需管理�
 | 来源管理与配置 UI | 已实现并测试 | 创建、编辑、启停、删除空来源、浏览/搜索、获取及个人凭据。 |
 | 内置 local 与本地内容 seam | 已实现并测试 | 保留现有 book ID、书架及阅读接口，集中本地与下载文件解析。 |
 | 受信任 Node ProcessRunner | 已实现并测试 | JSON-RPC、30 秒调用预算、硬取消、异常退出、2 MiB 消息上限。 |
-| 插件安装、启停、卸载与启动恢复 | 已实现并测试 | 包由管理员预置到 `DATA_DIR/plugins`；卸载保留数据和包文件。 |
+| 插件安装、启停、卸载与启动恢复 | 已实现并测试 | Web 安装 npm 包或上传 .tgz；失败清理本次目录，卸载保留数据和包文件。 |
 | 最小外部来源示例 | 已实现并测试 | `examples/plugins/demo-chapters`，提供静态示例目录和正文，不联网。 |
-| 插件安装 UI | 已实现 | 安装预部署目录或 `npm:包名`、启停、重启失败进程、卸载；包上传、在线升级和回滚仍后续。 |
+| 插件安装 UI | 已实现 | 输入 npm 包名或上传 .tgz 后自动启用、启停、重启失败进程、卸载；覆盖升级和版本回滚仍后续。 |
 | 后台下载任务、断点恢复、JobManager | 后续 | 当前完整文件会持久化，下载过程本身没有后台任务及恢复机制。 |
 | 外部章节写入书架与阅读 | 已实现并测试 | 私有稳定 book ID、现有 manifest/items/toc/assets、书架、继续阅读和进度。 |
 | 目录快照与服务端章节缓存 | 已实现并测试 | 稳定 href、revision 资源引用、已读缓存、失败保留旧目录、禁用/卸载/重启后缓存可读。 |

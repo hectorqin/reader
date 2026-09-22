@@ -260,6 +260,18 @@ export class PluginManager {
   }
 
   private async packageDirectory(folder: string): Promise<string> {
+    const installed = /^installed:([a-f0-9-]{36}):((?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*)$/.exec(folder);
+    if (installed) {
+      const data = await realpath(this.dataDir);
+      const root = await realpath(join(data, 'plugins'));
+      const workspace = await realpath(join(root, installed[1]!));
+      const directory = await realpath(join(workspace, 'node_modules', installed[2]!));
+      const manifest = await realpath(join(directory, 'plugin.json'));
+      if (!inside(data, root) || !inside(root, workspace) || !inside(workspace, directory) || !inside(directory, manifest)) {
+        throw pluginError(400, 'PLUGIN_PATH_ESCAPE', 'Installed package must remain within DATA_DIR/plugins');
+      }
+      return directory;
+    }
     const npmName = typeof folder === 'string' && folder.startsWith('npm:') ? folder.slice(4) : undefined;
     if (npmName !== undefined ? !/^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/.test(npmName) || npmName.length > 214
       : typeof folder !== 'string' || !/^[a-zA-Z0-9](?:[a-zA-Z0-9._-]{0,126}[a-zA-Z0-9_-])?$/.test(folder)) {

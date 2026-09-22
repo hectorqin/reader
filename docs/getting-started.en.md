@@ -90,7 +90,9 @@ As an administrator, add an OPDS source under Sources (书源) and configure its
 
 ### External source plugins
 
-Administrators can deploy a trusted plugin directory or npm package under `DATA_DIR/plugins`, then load it in Sources → Plugin management. For npm packages, enter `npm:<package-name>`; package installation is performed on the server, not by this page. Add a source instance using the plugin’s source type and configure it from that instance’s management entry. One plugin can provide several independent instances. Capabilities and runtime dependencies are defined by each plugin.
+In Sources → Plugin management, administrators can confirm that they trust the plugin, then enter an npm package name (optionally with a version or tag) or upload a `.tgz` archive produced by `npm pack` (up to 100 MiB). Successful installations are enabled automatically; no manual deployment is needed. Add a source instance using the plugin’s source type and configure it from that instance’s management entry. One plugin can provide several independent instances. Capabilities and runtime dependencies are defined by each plugin.
+
+Plugins run with server process privileges. Only install trusted code. The server needs Node.js and npm, plus network access for npm packages and dependencies not bundled in uploaded archives. npm lifecycle scripts are disabled, so plugins must ship prebuilt runtime files. Installation files and temporary files stay in `DATA_DIR`, never in the books directory.
 
 See the [plugin protocol](source-plugins.md) and [extension pages](plugin-extensions.md).
 

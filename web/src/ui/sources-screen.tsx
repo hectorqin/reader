@@ -45,6 +45,10 @@ export class SourcesScreen {
   private filterValues: Record<string, string> = {};
   private credentialValues: Record<string, string> = {};
   private folder = '';
+  private pluginFile: File | null = null;
+  private pluginFileVersion = 0;
+  private installing = false;
+  private installMethod: 'npm' | 'upload' = 'npm';
   private trusted = false;
   private acquired: Book | null = null;
 
@@ -79,6 +83,18 @@ export class SourcesScreen {
       this.selected = sources.find(source => source.id === this.selected?.id && source.enabled && source.descriptor) ?? null;
       if (!this.selected) { this.page = null; this.filters = []; this.credentialValues = {}; }
     }
+  }
+  private async installPlugin(upload: boolean): Promise<void> {
+    if (!this.trusted || (upload && !this.pluginFile)) return;
+    await this.run(async () => {
+      this.installing = true; this.draw();
+      try {
+        if (upload) await this.options.api.uploadPlugin(this.pluginFile!);
+        else await this.options.api.installPlugin(this.folder.trim());
+        this.folder = ''; this.pluginFile = null; this.pluginFileVersion++; this.trusted = false;
+        await this.reload(); this.message = '插件已安装并启用，可前往“书源管理”添加来源。';
+      } finally { this.installing = false; }
+    });
   }
   private edit(source?: SourceInstance): void {
     const type = source ? this.types.find((t) => t.pluginId === source.pluginId && t.id === source.sourceType) : this.types.find((t) => t.id === 'opds') ?? this.types[0];
@@ -204,7 +220,7 @@ export class SourcesScreen {
           event.preventDefault(); this.changeTab(tabs[next]!.id);
           this.element.querySelector<HTMLElement>('#sources-tab-' + tabs[next]!.id)?.focus();
         }}>{tab.title}{tab.id === 'updates' && this.subscriptions.some(s => s.newChapters > 0) && <span className="sources-tab-dot" aria-label="有更新" />}</button>)}</nav>
-      {!this.editor && !this.credentialsOpen && (this.working || this.message) && <div role="status" className="notice">{this.working ? '正在处理…' : this.message}</div>}
+      {!this.editor && !this.credentialsOpen && (this.working || this.message) && <div role="status" className="notice">{this.installing ? '正在安装插件并启用，请稍候…' : this.working ? '正在处理…' : this.message}</div>}
       <main key="body" className="sources-body" role="tabpanel" id={'sources-panel-' + this.tab} aria-labelledby={'sources-tab-' + this.tab} tabIndex={0}>
       {this.tab === 'sources' && this.options.admin && <>
         {!!this.savedSource?.descriptor?.extensions?.pages?.length && <section className="sources-card source-next-step"><strong>{this.savedSource!.name}</strong>
@@ -294,12 +310,34 @@ export class SourcesScreen {
           </div></article>)}
       </section>}
       {this.tab === 'plugins' && this.options.admin && <section className="sources-card"><h2>插件管理</h2>
-        <form onSubmit={(event) => { event.preventDefault(); if (!this.trusted) return; void this.run(async () => { await this.options.api.installPlugin(this.folder); this.folder = ''; this.trusted = false; await this.reload(); }); }}>
-          <label>已部署的插件目录或 npm 包<input required value={this.folder} placeholder="npm:reader-source-example" onInput={(event) => { this.folder = event.currentTarget.value; }} /></label>
-          <p className="notice">支持插件目录名，或管理员已安装的 npm:包名。插件以服务端权限运行，部署方式见插件说明。</p>
-          <label className="sources-consent"><input type="checkbox" checked={this.trusted} onChange={(event) => { this.trusted = event.currentTarget.checked; this.draw(); }} />我信任这个插件的代码</label>
-          <Button type="submit" disabled={this.busy || !this.trusted}>安装插件</Button>
-        </form>
+        <p className="notice">插件以服务端权限运行。安装前请确认来源可信；npm 安装需要服务端能够访问 npm 仓库。</p>
+        <label className="sources-consent"><input type="checkbox" disabled={this.busy} checked={this.trusted} onChange={(event) => { this.trusted = event.currentTarget.checked; this.draw(); }} />我信任这个插件的代码</label>
+        <div className="plugin-install">
+          <div className="plugin-install-tabs" role="tablist" aria-label="插件安装方式">
+            {(['npm', 'upload'] as const).map(method => <button type="button" role="tab" id={'install-tab-' + method}
+              aria-controls={'install-panel-' + method} aria-selected={this.installMethod === method} tabIndex={this.installMethod === method ? 0 : -1}
+              disabled={this.busy} onClick={() => { this.installMethod = method; this.draw(); }} onKeyDown={event => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                event.preventDefault(); this.installMethod = event.key === 'Home' ? 'npm' : event.key === 'End' ? 'upload' : method === 'npm' ? 'upload' : 'npm';
+                this.draw(); this.element.querySelector<HTMLElement>('#install-tab-' + this.installMethod)?.focus();
+              }}>{method === 'npm' ? '从 npm 安装' : '上传安装包'}</button>)}
+          </div>
+          <form hidden={this.installMethod !== 'npm'} role="tabpanel" id="install-panel-npm" aria-labelledby="install-tab-npm" onSubmit={(event) => { event.preventDefault(); void this.installPlugin(false); }}>
+            <label>npm 包名<input required disabled={this.busy} value={this.folder} placeholder="reader-source-example 或 @scope/package" onInput={(event) => { this.folder = event.currentTarget.value; this.draw(); }} /></label>
+            <small>支持包名、@scope/包名，以及包名@版本或标签。</small>
+            <Button type="submit" disabled={this.busy || !this.trusted || !this.folder.trim()}>安装并启用</Button>
+          </form>
+          <form hidden={this.installMethod !== 'upload'} role="tabpanel" id="install-panel-upload" aria-labelledby="install-tab-upload" onSubmit={(event) => { event.preventDefault(); void this.installPlugin(true); }}>
+            <label>npm pack 安装包<input key={this.pluginFileVersion} required disabled={this.busy} type="file" accept=".tgz,application/gzip,application/x-gzip" onChange={(event) => {
+              const file = event.currentTarget.files?.[0] ?? null;
+              const error = file && (!file.name.toLowerCase().endsWith('.tgz') ? '请选择 .tgz 安装包。' : file.size > 100 * 1024 * 1024 ? '安装包不能超过 100 MiB。' : '');
+              this.pluginFile = error ? null : file; this.message = error || ''; this.draw();
+            }} /></label>
+            <small>仅支持 .tgz 文件，最大 100 MiB。未打包的依赖仍需联网下载。</small>
+            <Button type="submit" disabled={this.busy || !this.trusted || !this.pluginFile}>上传并启用</Button>
+          </form>
+        </div>
+        <h3>已安装插件</h3>
         {this.plugins.map((plugin) => <article className="sources-row" key={plugin.pluginId}><div><strong>{plugin.name ?? plugin.pluginId}</strong>
           <small>{plugin.version} · {plugin.builtin ? '内置' : plugin.enabled ? '已启用' : '已停用'}{plugin.error ? ` · ${plugin.error.message}` : ''}{plugin.runtime?.state === 'failed' ? ' · 运行失败，请重启插件' : ''}</small></div>
           {plugin.enabled && plugin.extensions?.pages?.map(page => <a className="button" href={'#/plugins/' + encodeURIComponent(plugin.pluginId) + '/' + encodeURIComponent(page.id)}>{page.title}</a>)}
