@@ -27,6 +27,7 @@ A self-hosted library and reader for browsers and Android, with EPUB typography,
 | OPDS | Browsing, search, pagination, and book acquisition |
 | Remote source plugins | Multi-source search, chapter reading, rich text and images, catalog refresh, and automatic update tracking |
 
+
 ## Get started
 
 Prepare Docker, Docker Compose, and a directory of books. After starting the service, open `http://<your-host>:8080`. The first registered account becomes the administrator.

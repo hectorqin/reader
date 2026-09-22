@@ -35,4 +35,3 @@ These records describe checks at specific delivery points. Use tests and CI for 
 - [书源界面 / Source UI](ui-review/sources-ux.md)
 - [书库与阅读界面 / Library and reader UI](ui-review/collections-ux.md)
 - [书源搜索 / Source search](ui-review/source-search.md)
-- [搜索性能 / Search performance](ui-review/source-search-performance.md)

@@ -93,3 +93,5 @@ Check whether the mount uses `:ro`. After switching to `:rw` and recreating the 
 Check that the mounted files are readable and supported, then wait for scanning or trigger a scan as an administrator. The scanner skips directories such as `.git`, `@eaDir`, and `#recycle` and does not follow symlinks. Use the library file page to inspect the actual directory.
 
 ### Remote source searches fail
+
+Check the source address, current account credentials and the error details shown next to the search results. Verify that the source and its plugin are enabled. Runtime dependencies and provider-specific configuration are documented by the plugin author.

@@ -5,13 +5,27 @@
 ## Requirements
 
 - Node.js 24 is recommended to match the current container and CI. The server uses built-in `node:sqlite`.
-- npm and Git. Server, Web, and the source plugin have separate package manifests and lockfiles; there is no root-level npm script.
-- Chromium for browser-rule tests and UI reviews.
+- npm and Git. Server and Web have separate package manifests and lockfiles; there is no root-level npm script.
+- Chromium for UI reviews.
 - For Android: JDK 17+, Android SDK 35, and Build Tools 35.0.1. The Web asset script requires a POSIX shell; Windows users can use Git Bash or WSL.
 
 Unless noted otherwise, run commands from the repository root.
 
 ## Install dependencies
+
+```sh
+npm ci --prefix server
+npm ci --prefix web
+```
+
+For browser UI reviews, install Chromium from the Web directory:
+
+```sh
+cd web
+npx playwright install chromium
+```
+
+Linux CI can use `npx playwright install --with-deps chromium` to install system dependencies too. Alternatively, point `CHROME_PATH` at an existing Chrome/Chromium executable.
 
 ## Start development servers
 
@@ -53,8 +67,9 @@ npm run build --prefix server
 npm run typecheck --prefix web
 npm test --prefix web
 npm run build --prefix web
+```
 
-Web tests use both Vitest and Node's test runner. Plugin tests include real Chromium; prepare it as described above. Historical test counts are not a substitute for current results.
+Web tests use both Vitest and Node's test runner. UI reviews use real Chromium; prepare it as described above. Historical test counts are not a substitute for current results.
 
 For UI changes, run `npm run ui:review --prefix web`; source workflows have `npm run ui:sources --prefix web`. See [UI review (中文)](ui-review/README.md) for tooling and requirements. Reviews generate screenshots and reports; screenshots are ignored by Git by default.
 
@@ -101,6 +116,7 @@ Use `gradlew.bat` from a native Windows terminal. The output is `android/app/bui
 | `web/src/formats` | EPUB, TXT, comics, and other format handling |
 | `web/src/ui`, `styles` | Preact UI, reading stage, and styles |
 | `web/src/core`, `store` | Platform capabilities, synchronization, and offline storage |
+| `android/app/src/main/java/cool/cnb/reader` | Android Activity, WebView, native image and speech bridges |
 
 Preact manages UI state; the reading stage handles content layout and measurement. Shadow DOM isolates book styles, and icons use Lucide SVG. Both the server and Android consume the Web build. See [architecture (中文)](architecture.md) and [UI guidelines (中文)](ui.md) for details.
 

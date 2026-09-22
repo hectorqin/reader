@@ -88,6 +88,12 @@ The shelf contains readable books; the library lets you browse the disk director
 
 As an administrator, add an OPDS source under Sources (书源) and configure its server URL. If authentication is required, set credentials for your current account. Open the source to browse or search its catalog and acquire books for your shelf.
 
+### External source plugins
+
+Administrators can deploy a trusted plugin directory or npm package under `DATA_DIR/plugins`, then load it in Sources → Plugin management. For npm packages, enter `npm:<package-name>`; package installation is performed on the server, not by this page. Add a source instance using the plugin’s source type and configure it from that instance’s management entry. One plugin can provide several independent instances. Capabilities and runtime dependencies are defined by each plugin.
+
+See the [plugin protocol](source-plugins.md) and [extension pages](plugin-extensions.md).
+
 ## 5. Upgrade and back up
 
 Back up both the book and data directories before upgrading. For a simple file-based SQLite backup, stop the service and copy the entire `/data` directory, including database auxiliary files, to avoid copying inconsistent live state.

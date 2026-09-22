@@ -5,13 +5,27 @@
 ## 环境
 
 - 推荐 Node.js 24，与当前容器和 CI 保持一致；服务端使用内置 `node:sqlite`。
-- npm、Git；服务端、Web 和书源插件各有独立 `package.json` 与锁文件，仓库根目录没有统一 npm 脚本。
-- 运行浏览器规则测试或 UI 评审需要 Chromium。
+- npm、Git；服务端和 Web 各有独立 `package.json` 与锁文件，仓库根目录没有统一 npm 脚本。
+- UI 评审需要 Chromium。
 - 构建 Android 另需 JDK 17+、Android SDK 35、Build Tools 35.0.1；Web 资源构建脚本需要 POSIX shell（Windows 可使用 Git Bash 或 WSL）。
 
 以下命令从仓库根目录执行。
 
 ## 安装依赖
+
+```sh
+npm ci --prefix server
+npm ci --prefix web
+```
+
+界面评审使用 Chromium，在 Web 目录安装：
+
+```sh
+cd web
+npx playwright install chromium
+```
+
+Linux CI 可使用 `npx playwright install --with-deps chromium` 安装所需系统库。也可设置 `CHROME_PATH` 指向现有 Chrome/Chromium。
 
 ## 启动开发服务
 
@@ -53,8 +67,9 @@ npm run build --prefix server
 npm run typecheck --prefix web
 npm test --prefix web
 npm run build --prefix web
+```
 
-Web 测试同时包含 Vitest 和 Node 测试。插件测试包含真实 Chromium；浏览器缺失时按上面的步骤准备环境。不要把历史测试数量当作当前验证结果。
+Web 测试同时包含 Vitest 和 Node 测试。UI 评审使用真实 Chromium；浏览器缺失时按上面的步骤准备环境。不要把历史测试数量当作当前验证结果。
 
 UI 改动可运行 `npm run ui:review --prefix web`，书源流程可运行 `npm run ui:sources --prefix web`。评审工具及环境说明见 [UI 评审](ui-review/README.md)，会生成截图和报告；截图目录默认不纳入 Git。
 
@@ -101,6 +116,7 @@ Windows 原生终端使用 `gradlew.bat`。产物为 `android/app/build/outputs/
 | `web/src/formats` | EPUB、TXT、漫画等格式处理 |
 | `web/src/ui`、`styles` | Preact 界面、阅读舞台和样式 |
 | `web/src/core`、`store` | 平台能力、同步、离线存储 |
+| `android/app/src/main/java/cool/cnb/reader` | Android Activity、WebView、原生图片和语音桥接 |
 
 界面状态使用 Preact，阅读内容布局与测量由阅读舞台管理；书籍样式通过 Shadow DOM 隔离，图标使用 Lucide SVG。Web 产物由服务端和 Android 共同使用。详细取舍见[架构文档](architecture.md)和[界面规范](ui.md)。
 

@@ -162,11 +162,11 @@ describe('sources and subscriptions UI', () => {
   it('requires the explicit trust control before installing and offers plugin lifecycle actions', async () => {
     const { screen, transport } = await setup();
     await click(screen.element, '插件管理'); expect(button(screen.element, '安装插件').disabled).toBe(true);
-    input(screen.element, '已部署的插件目录或 npm 包', 'npm:external-source');
+    input(screen.element, '已部署的插件目录或 npm 包', 'npm:reader-source-example');
     const trusted = screen.element.querySelector<HTMLInputElement>('input[type=checkbox]')!;
     trusted.checked = true; trusted.dispatchEvent(new Event('change', { bubbles: true }));
     await click(screen.element, '安装插件');
-    expect(JSON.parse(bodyText(transport.requests.find((request) => request.url.endsWith('/plugins') && request.method === 'POST')))).toEqual({ folder: 'npm:external-source', trusted: true });
+    expect(JSON.parse(bodyText(transport.requests.find((request) => request.url.endsWith('/plugins') && request.method === 'POST')))).toEqual({ folder: 'npm:reader-source-example', trusted: true });
     await click(screen.element, '停用'); expect(transport.requests.some((request) => request.url.endsWith('/plugins/remote') && request.method === 'PATCH')).toBe(true);
   });
 });
