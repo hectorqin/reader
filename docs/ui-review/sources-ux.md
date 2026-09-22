@@ -8,7 +8,7 @@
 
 ```sh
 npm run ui:sources --prefix web
-node web/tools/ui-review/plugin-extensions.mjs
+node web/tools/ui-review/host-extension-page.mjs
 node web/tools/ui-review/source-search.mjs
 ```
 
