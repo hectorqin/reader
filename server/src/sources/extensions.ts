@@ -13,6 +13,7 @@ export interface ExtensionForm {
 }
 export interface ExtensionContent {
   forms: ExtensionForm[];
+  outputs?: Array<{ title: string; text: string; format: 'text' | 'log' | 'json' }>;
   sections?: Array<{ title: string; emptyText?: string; items: Array<{ title: string; description?: string; collapsible?: boolean; forms?: ExtensionForm[] }> }>;
 }
 export interface ExtensionPage extends ExtensionContent {
@@ -85,6 +86,14 @@ export function extensionPage(input: unknown): ExtensionPage {
   };
   const content = (input: Record<string, unknown>) => {
     forms(input.forms);
+    if (input.outputs !== undefined) {
+      check(Array.isArray(input.outputs) && input.outputs.length <= 8);
+      for (const output of input.outputs) {
+        record(output); label(output.title);
+        check(typeof output.text === 'string' && output.text.length <= 65536);
+        check(['text', 'log', 'json'].includes(String(output.format)));
+      }
+    }
     if (input.sections !== undefined) {
       check(Array.isArray(input.sections) && input.sections.length <= 16);
       for (const section of input.sections) {

@@ -2,7 +2,7 @@ import { relative, resolve, sep } from 'node:path';
 import { forbidden } from './errors.ts';
 
 /**
- * Resolve a library-relative path against the read-only books root.
+ * Resolve a library-relative path against the configured books root.
  *
  * Every filesystem access in the server must go through this helper: it is the
  * single choke point that prevents path traversal (`../../etc/passwd`) from

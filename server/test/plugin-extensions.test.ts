@@ -31,3 +31,11 @@ test('extension UX hints are validated without allowing executable or unbounded 
   assert.throws(() => extensionPage({ title: 'x', forms: [], noticeKind: 'html' }));
   assert.throws(() => extensionPage({ title: 'x', forms: [{ id: 'save', title: '', submit: 'Save', fields: [], confirm: {} }] }));
 });
+
+test('read-only extension outputs are text-only and bounded', () => {
+  const output = { title: 'Log', text: '<script>plain text</script>\n200 OK', format: 'log' };
+  assert.equal(extensionPage({ title: 'Debug', forms: [], outputs: [output] }).outputs?.[0]?.text, output.text);
+  for (const outputs of [[{ ...output, format: 'html' }], [{ ...output, text: {} }], [{ ...output, text: 'x'.repeat(65537) }], Array(9).fill(output)]) {
+    assert.throws(() => extensionPage({ title: 'Debug', forms: [], outputs }));
+  }
+});

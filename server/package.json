@@ -2,7 +2,7 @@
   "name": "reader-server",
   "version": "0.1.0",
   "private": true,
-  "description": "Self-hosted精品书库 server: mount your own book directory read-only, sync shelves/progress/notes across clients.",
+  "description": "Self-hosted精品书库 server: mount your own book directory, optionally read-only, and sync shelves/progress/notes across clients.",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "engines": {

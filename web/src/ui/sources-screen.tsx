@@ -295,7 +295,7 @@ export class SourcesScreen {
       </section>}
       {this.tab === 'plugins' && this.options.admin && <section className="sources-card"><h2>插件管理</h2>
         <form onSubmit={(event) => { event.preventDefault(); if (!this.trusted) return; void this.run(async () => { await this.options.api.installPlugin(this.folder); this.folder = ''; this.trusted = false; await this.reload(); }); }}>
-          <label>已部署的插件目录或 npm 包<input required value={this.folder} placeholder="npm:external-source" onInput={(event) => { this.folder = event.currentTarget.value; }} /></label>
+          <label>已部署的插件目录或 npm 包<input required value={this.folder} placeholder="npm:reader-source-example" onInput={(event) => { this.folder = event.currentTarget.value; }} /></label>
           <p className="notice">支持插件目录名，或管理员已安装的 npm:包名。插件以服务端权限运行，部署方式见插件说明。</p>
           <label className="sources-consent"><input type="checkbox" checked={this.trusted} onChange={(event) => { this.trusted = event.currentTarget.checked; this.draw(); }} />我信任这个插件的代码</label>
           <Button type="submit" disabled={this.busy || !this.trusted}>安装插件</Button>

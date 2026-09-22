@@ -26,7 +26,7 @@ import { isPageExtension, supportedExtensions } from '../indexer/formats/index.t
  *     `scanned`), so the UI can explain rather than hide.
  *  2. **Writes go only where the mount allows them.** Every mutating call
  *     resolves the target through `resolveInside` and probes write permission
- *     before doing anything, so a read-only mount (the documented deployment)
+ *     before doing anything, so a read-only mount
  *     answers a clean 403 instead of an `EROFS` stack trace.
  *
  * The mount is the security boundary, and there is no second one: a user who can

@@ -49,12 +49,12 @@ services:
       #   TTS_VOICES_URL: ""               # defaults to <TTS_URL>/voices
       #   TTS_CACHE_BYTES: "268435456"     # audio cache cap in /data; 0 disables
     volumes:
-      # --- your books, mounted READ-ONLY ---
-      # The server NEVER writes to this directory. Replace the left-hand side
-      # with the path to your own library.
+      # --- your books ---
+      # Use :ro for a browse-only deployment. Use :rw if an administrator
+      # should upload, rename, move or delete files from the web file manager.
       - /path/to/your/books:/books:ro
-      # --- everything the server writes lives here ---
-      # SQLite database, cover cache, scan journal.
+      # --- server-owned writable data ---
+      # SQLite database, cover cache, scan journal, upload staging and plugins.
       - ./data:/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

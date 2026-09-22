@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { createServer } from 'node:http';
 import { ProcessPlugin } from '../src/sources/process-plugin.ts';
 import { SourceRegistry, validatePluginManifest } from '../src/sources/registry.ts';
 import { decodeCatalogPage, decodeChapterAcquisition, decodeManifest } from '../src/sources/protocol.ts';

@@ -84,7 +84,7 @@ const SKIP_DIRS = new Set(['.git', '@eaDir', '#recycle', '.DS_Store', 'lost+foun
  * Library scanner.
  *
  * Responsibilities:
- *  - walk the read-only mount and decide which format owns each path
+ *  - walk the configured book directory and decide which format owns each path
  *  - detect changes cheaply (size + mtime) before hashing anything
  *  - write the index into DATA_DIR, never into the library
  *
@@ -640,7 +640,7 @@ export class Scanner {
 
     let coverPath: string | undefined;
     if (parsed.cover) {
-      // Covers are cached in DATA_DIR, never mirrored into the read-only mount.
+      // Covers are cached in DATA_DIR, never written beside the books.
       coverPath = await this.persistCover(bookId, parsed.cover);
     }
 

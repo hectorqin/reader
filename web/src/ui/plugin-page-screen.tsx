@@ -61,7 +61,7 @@ export class PluginPageScreen {
       {form.fields.map(field => <label key={field.key} data-field-type={field.type}>{field.label}
         {field.type === 'textarea' ? <textarea aria-label={field.label} placeholder={field.placeholder} required={field.required} disabled={this.busy} value={String(data[field.key] ?? '')} onInput={event => { data[field.key] = event.currentTarget.value; }} />
           : field.type === 'boolean' ? <input aria-label={field.label} type="checkbox" disabled={this.busy} checked={data[field.key] === true} onChange={event => { data[field.key] = event.currentTarget.checked; }} />
-          : field.type === 'select' ? <select aria-label={field.label} disabled={this.busy} value={String(data[field.key] ?? '')} onChange={event => { data[field.key] = event.currentTarget.value; }}>
+          : field.type === 'select' ? <select aria-label={field.label} required={field.required} disabled={this.busy} value={String(data[field.key] ?? '')} onChange={event => { data[field.key] = event.currentTarget.value; }}>
             {field.options?.map(option => <option value={option.value}>{option.label}</option>)}
           </select> : <input aria-label={field.label} placeholder={field.placeholder} min={field.min} max={field.max} required={field.required} disabled={this.busy} type={field.type === 'number' ? 'number' : 'text'} value={String(data[field.key] ?? '')}
             onInput={event => { data[field.key] = field.type === 'number' ? Number(event.currentTarget.value) : event.currentTarget.value; }} />}
@@ -89,6 +89,10 @@ export class PluginPageScreen {
           </article>;
         })}
       </section>)}
+      {content.outputs?.map(output => <details className="sources-card extension-output" open key={output.title}>
+        <summary>{output.title}</summary>
+        <pre tabIndex={0} aria-label={output.title} data-format={output.format}>{output.text}</pre>
+      </details>)}
     </>;
   }
   private selectTab(id: string) {

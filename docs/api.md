@@ -302,6 +302,14 @@ pdf / 单图没有独立目录，回落到 items。
 其他任何端点（含触发扫描、写元数据）都不接受 URL 里的令牌 —— URL 会进日志、
 进历史、进 `Referer`，能改状态的令牌不该走那条路。
 
+**epub 章节返回的是重写过的 HTML。** 章节内的相对资源引用（`images/pic.png`）已经被
+服务端改写成指向本端点的绝对地址。客户端直接把 HTML 交给 WebView 即可，不需要自己
+解析路径。绝对 URL、`data:` URI 和文内锚点（`#note7`）保持原样，所以脚注和外链仍然可用。
+服务端重写出的地址带 `?__reader-book-resource__=1` 作为标记，客户端据此把它和书自己
+写的外链区分开：带标记**且**同源的才允许取回，其余一律丢弃（书不能借阅读会话去访问
+第三方）。标记是一本书也能写出来的字符串，所以它单独不构成许可，两个条件一起才是书
+伪造不出来的组合。
+
 **这三条允许名单决定的是「能不能取」，不是「怎么取」。** 重写出来的地址还要**带令牌**
 才真的能取到：章节文档里的 `<img src>`、`<link href>` 和 CSS 的 `url(...)` 都是浏览器
 自己发起的请求，用的是文档里的原始地址，读不到客户端内存里的会话。客户端在注入章节时
@@ -338,7 +346,7 @@ pdf / 单图没有独立目录，回落到 items。
 
 书架回答「我能读什么」，这一组端点回答「磁盘上有什么」。两者的差别不是冗余：
 书籍 DTO 里从来不带路径，所以「刚扫完目录但书架上看不到这本书」在本组端点之外
-没有任何地方能解释清楚。这也是唯一会**写** `BOOKS_DIR` 的一组端点。
+没有任何地方能解释清楚。这也是会**写** `BOOKS_DIR` 的一组端点（前提是挂载可写）。
 
 路径都是**书库内相对路径**，`''` 表示根目录；每一个都会过
 `resolveInside`，逃逸直接被拒。
@@ -460,16 +468,15 @@ pdf / 单图没有独立目录，回落到 items。
             "startedAt": 1789537864820, "finishedAt": 1789537864831 } }
 ```
 
-**这是唯一会往 `/books` 里写新字节的端点。** 部署文档要求挂载只读，文件管理器也照此
-行事，所以在此之前加一本书只能走 SMB 再等扫描——对运维是合理流程，对家里其他人是不可能
-的任务，而自部署书库就是给他们用的。
+**这是往 `/books` 写入新书籍字节的端点。** `BOOKS_DIR` 可以按需以只读方式挂载，
+也可以以可写方式挂载以启用管理员文件管理。改名、移动、删除和新建目录等端点同样会修改
+可写书库中的目录项；只读挂载时所有这些写操作统一返回 `403 READ_ONLY_MOUNT`。
 
-三条规则让它是个例外而不是个洞：
+上传流程：
 
-- **字节完整、且已经落在同一个文件系统上，才会进书库。** 请求体先流到
-  `DATA_DIR/uploads` 的暂存文件（服务端自己的可写空间），只有写完的文件才 `rename`
-  进 `BOOKS_DIR`。传到 90% 断线、信号没了、密码错了，都不可能留下半本书，
-  因为书库里从不出现半本书。
+- **接收完成后才写入书库。** 请求体先流到 `DATA_DIR/uploads` 的暂存文件，
+  接收中断不会把未接收完整的文件写入 `BOOKS_DIR`。同文件系统通过 `rename` 移入；
+  不同文件系统遇到 `EXDEV` 时复制到目标，再删除暂存文件。跨文件系统复制不具备原子性。
 - **名字不是路径。** 客户端送的是文件名，不是路径：斜杠、`..`、控制字符、会让扫描器
   看不见的前导点，一律改写或拒绝，再过一遍 `resolveInside`。`C:\Users\me\我的书\三体.epub`
   只会取最后一段。
@@ -494,7 +501,7 @@ pdf / 单图没有独立目录，回落到 items。
 上传进的每一个字节都复制进了 `DATA_DIR`，请求结束（成功或失败）即删——
 一个上传不进去第二次的书库比没有这个功能更糟。
 
-挂载只读 → 在写入任何东西之前就 `403 READ_ONLY_MOUNT`。
+挂载只读 → 写入 `BOOKS_DIR` 前返回 `403 READ_ONLY_MOUNT`；请求暂存位于 `DATA_DIR`。
 `GET /library/upload` 返回 `{ "writable": true }`，让客户端在开始传 400MB 之前先问一句。
 
 ### `POST /library/browse/metadata`
@@ -916,6 +923,8 @@ Content-Type: application/json
 {"folder":"demo-chapters","trusted":true}
 ```
 
+npm 包部署到服务端后，使用 `{"folder":"npm:reader-source-example","trusted":true}` 激活。来源类型、配置与扩展入口由插件清单声明。
+
 启停和卸载：
 
 ```text
@@ -1015,7 +1024,7 @@ Invoke-RestMethod -Method Post -Uri "$readerApi/books/$readerBookId/refresh" -He
 | `UNSUPPORTED_FORMAT` | 400 | 该格式不提供可寻址结构 |
 | `EMPTY_ASSET` | 400 | 资源既没有数据也没有流 |
 | `ADMIN_REQUIRED` | 403 | 需要管理员权限 |
-| `READ_ONLY_MOUNT` | 403 | 书库是只读挂载，无法改名 / 移动 / 删除 |
+| `READ_ONLY_MOUNT` | 403 | 书库目录不可写，无法上传 / 改名 / 移动 / 删除 / 新建目录 |
 | `DIR_NOT_FOUND` | 404 | 目录不存在 |
 | `NOT_A_DIRECTORY` | 400 | 目标不是目录 |
 | `PATH_NOT_FOUND` | 404 | 路径不存在 |
@@ -1086,6 +1095,7 @@ Invoke-RestMethod -Method Post -Uri "$readerApi/books/$readerBookId/refresh" -He
 - 管理员 `GET /api/v1/sources/:id/pages/:pageId`：来源实例的声明页面，返回 `title/description/notice/forms/sections/tabs/activeTab`。
 - 管理员 `POST /api/v1/sources/:id/pages/:pageId`：`{action,values}`，操作当前实例并返回页面；入口来自 sourceType 的 `extensions.pages`。暂停来源仍可管理，插件停用后不可访问。
 - 管理员 `GET /api/v1/plugins/:id/pages/:pageId`：已声明配置页，返回通用 title/description/forms/sections。
+- 管理员 `POST /api/v1/plugins/:id/pages/:pageId`：`{action,values}`，返回更新后的页面。插件清单顶层 extensions.pages 提供全局入口。
 - `GET /api/v1/sources/:id/search-filters`：插件声明的选择字段；搜索接口接受 JSON 编码的 `filters` 查询参数，值为字符串映射。
 - `GET /api/v1/books/:id/source-options`：`{canSwitch}`，限本人有权限的书籍。
 - `GET /api/v1/books/:id/alternatives?cursor=…`：候选 CatalogPage。

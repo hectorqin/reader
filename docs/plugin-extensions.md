@@ -1,34 +1,34 @@
-# 插件页面、多书源搜索与换源
+# 插件扩展页面、搜索与换源
 
-## 目标与职责
+Reader 保留 local 与 OPDS 内置，通过通用协议接入独立 Node.js 插件。宿主负责能力校验、权限、进程与任务调度、缓存和通用界面；来源业务由插件实现。一个插件可添加成多个独立配置的来源实例。
 
-| 模块 | 职责 |
-| --- | --- |
-| PluginManager / ProcessPlugin | 校验扩展声明、管理员页面 RPC、独立数据目录、持久任务时点与退避、进程启停 |
-| SourceProvider | 动态搜索选项、透传筛选条件、返回同书候选 |
-| ChapterPublications | 校验私有书籍、换源事务、稳定 bookId、目录修订和旧缓存 |
-| PluginPageScreen / ReaderScreen | 通用表单列表、搜索选择框、候选目录与明确章节选择 |
-| Catalog / Library（npm 包） | 订阅拉取与合并、多规则管理、搜索调度、引用路由、账号引擎隔离 |
+## 页面与存储
 
-## 声明式页面与持久化
-
-实例扩展在 manifest 的 `sourceTypes[].extensions` 下声明（以下为扩展示意）：
+实例页面和后台任务在清单的 `sourceTypes[].extensions` 中声明，全局入口使用顶层 `extensions`。实例页面地址为 `#/sources/<sourceId>/<pageId>`，从自定义书源的管理入口打开。插件管理页负责安装、启停和卸载。
 
 GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{sourceType,context:{instance,userId},pageId,action,values}`。宿主根据 sourceId 从数据库解析插件与实例，客户端不能伪造上下文；暂停的来源仍可管理，停用插件则不可访问页面。普通读者无页面读取及写入权限。
 
-返回 Page DTO：`title/description/notice/forms/sections/tabs/activeTab`。每个 Tab 包含 `id/title/description/forms/sections`，页面公共内容和当前 Tab 同时渲染。Form 包含 `id/title/submit/fields/values`，可选 `layout: "inline"` 和 `confirm` 声明紧凑布局及行内二次确认，fields 支持 text、textarea、number、boolean、select；values 携带不透明行 ID。Field 可选 `placeholder/min/max`，Page 可选 `noticeKind: "info" | "error"`；所有字段由宿主验证。section 支持 `emptyText`，item 支持 `collapsible`。一次动作返回新页面；可选 activeTab 请求切换到指定 Tab，否则保留当前选择。纯 Tab 切换保留输入草稿。提交后保留其它声明未变化的表单草稿；服务端改变表单声明或主动刷新时以新页面为准。
+返回 Page DTO：`title/description/notice/forms/sections/tabs/activeTab`。每个 Tab 包含 `id/title/description/forms/sections/outputs`，页面公共内容和当前 Tab 同时渲染。Form 包含 `id/title/submit/fields/values`，可选 `layout: "inline"` 和 `confirm` 声明紧凑布局及行内二次确认，fields 支持 text、textarea、number、boolean、select；values 携带不透明行 ID。Field 可选 `placeholder/min/max`，Page 可选 `noticeKind: "info" | "error"`；所有字段由宿主验证。section 支持 `emptyText`，item 支持 `collapsible`。`outputs` 用于调试日志、JSON 或普通文本，格式为 `{title,text,format:"text"|"log"|"json"}`，宿主以纯文本块渲染并限制数量与大小，不执行内容。一次动作返回新页面；可选 activeTab 请求切换到指定 Tab，否则保留当前选择。纯 Tab 切换保留输入草稿。提交后保留其它声明未变化的表单草稿；服务端改变表单声明或主动刷新时以新页面为准。
 
 宿主校验声明、页面结构、选项和输入配额；未声明页面拒绝访问。渲染器只呈现文本，不接受 HTML、JS、iframe 或任意前端代码。授权在 HTTP 层执行，隐藏入口不代替鉴权。
+
+启用 storage 权限后，RPC 获得 `host.dataDir = DATA_DIR/plugin-data/<SHA256(pluginId)>`；带实例上下文时还获得 `host.instanceDataDir = host.dataDir/sources/<SHA256(sourceId)>`。插件负责创建目录和原子写入；数据与 npm 包目录分离，停用、升级、卸载均保留。这是受信任插件的约定，不是操作系统沙箱。
 
 ## 后台任务
 
 宿主每分钟检查启用插件及启用来源实例的声明任务。实例任务调用 `extension.task({taskId,sourceType,context:{instance,userId:""}})`，不携带个人凭据；全局任务继续使用 `{taskId}`。任务串行、同轮合并，执行前重新确认实例仍存在且启用。同一实例的后台任务与管理写入互斥，不阻塞其它实例的配置；下一执行时点和失败次数以插件、实例、任务组合键保存在通用 `plugin_storage`，重启恢复，失败退避。暂停/删除实例后不再调度它，停用插件或关闭宿主会终止进程。此调度独立于章节追更。
 
-## 通用搜索选项
+## 搜索
 
 声明 `search.filters`，实现 `searchFilters(ctx)`，返回带不透明 key/value 的选择字段；`SearchRequest.filters` 为字符串映射，宿主只验证结构与大小。搜索历史与下一页保留筛选条件。
 
-## 通用换源
+前端通过 `POST /api/v1/sources/:id/search` 建立一次 Streamable HTTP 请求，使用 `text/event-stream` 持续接收 `results`，并以 `done` 或 `error` 结束；收到结果后立即合并展示。宿主在服务端按插件返回的 `nextCursor` 拉取后续批次或普通分页，直到游标耗尽、达到请求的 `resultLimit` 或被取消。插件内部的游标分页仍保留，前端不再通过轮询获取结果。停止搜索或断开连接会取消在途搜索，已收到的结果保留。
+
+`CatalogPage.errors` 使用 `{source,code,message}` 表达部分失败，由宿主校验。成功条目保留；插件提供脱敏信息，宿主不解释业务错误码。声明 `search.session` 时须同时声明 `search.cancel` 并实现取消接口。宿主按用户与来源隔离会话，前端保留查询、筛选和已收到结果。
+
+## 换源
+
+声明 `content.alternatives` 并实现 `alternatives(ctx,{publicationRef,query,authors,cursor})`，返回普通 CatalogPage。宿主从当前用户私有书籍解析绑定与标题，不接受客户端指定他人的来源上下文。
 
 1. 目录面板根据 `source-options.canSwitch` 显示换源入口，用户搜索候选。
 2. 点击候选取得其目录。唯一同名章节可预选，否则必须手动选择；确认后从所选章开头阅读，不推测百分比或沿用旧章内偏移。
@@ -38,15 +38,6 @@ GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{sourc
 
 重新获取现绑定复用当前书籍 ID；重新加入换源前版本创建独立记录，不会误返回换源后的版本。换源限同一来源实例内提供的候选，跨插件/跨实例不是本版功能。如果目标版本已作为另一条书籍记录入库，返回 SOURCE_ALREADY_ACQUIRED，需从书架打开已有版本，以免合并或覆盖另一本书的笔记和进度。
 
-## 升级及验证
+## 验证
 
-## 验证方式
-
-生产 bundle 的 Chrome 验证脚本覆盖 390px 手机和 1280px 桌面布局、从自定义来源入口进入、三个 Tab、规则展开与编辑、订阅启停、搜索筛选和目录换源。运行 `node web/tools/ui-review/plugin-extensions.mjs`（仓库根目录，预先构建 Web；CHROME_PATH 可指定浏览器），截图输出到 docs/ui-review/plugin-*.png。
-
-## 本次验证（2026-09-21）
-
-- 服务端全量 287 通过，1 项 Windows 文件权限位测试跳过；类型检查与构建通过。
-- Web 全量 532 项 Vitest（maxWorkers=2）及 29 项 Node 测试通过，生产构建通过。
-- 插件原有 14 项测试通过（含真实 Chromium 和独立 tarball 安装）；新增 Tab 声明测试及 Catalog 回归 3 项通过，共覆盖 15 项插件测试。
-- Chrome 生产界面检查通过：390px 手机、1280px 桌面、来源实例入口、Tab 切换、规则编辑、订阅启停、筛选及换源。
+服务端测试覆盖实例隔离、页面与任务权限、暂停、删除、重启、协议校验和换源事务；Web 测试覆盖通用 Tab、表单草稿、错误反馈与搜索取消。浏览器验证入口见[UI/UX 评审](ui-review/sources-ux.md)。插件业务测试由插件维护者负责。

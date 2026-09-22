@@ -9,8 +9,8 @@ const base = await server.listen();
 const chrome = process.env.CHROME_PATH || (existsSync('C:/Program Files/Google/Chrome/Application/chrome.exe') ? 'C:/Program Files/Google/Chrome/Application/chrome.exe' : undefined);
 const browser = await chromium.launch({ headless: true, executablePath: chrome });
 const descriptor = { id: 'aggregate', pluginId: 'fixture.generic', label: '多来源', capabilities: ['search', 'search.filters'] };
-const errors = [{ source: '得奇小说网', code: 'HTTP_ERROR', message: '站点返回 HTTP 错误（404），请稍后重试或换源。' },
-  { source: '艾途小说', code: 'ORIGIN_DENIED', message: '请求跳转到了未授权的域名，请在此书源的管理页面检查允许访问的域名。' }];
+const errors = [{ source: '示例来源 A', code: 'HTTP_ERROR', message: '站点返回 HTTP 错误（404），请稍后重试或换源。' },
+  { source: '示例来源 B', code: 'SOURCE_UNAVAILABLE', message: '请求跳转到了未授权的域名，请在此书源的管理页面检查允许访问的域名。' }];
 let mode = 'failed'; const requests = [];
 try {
   const page = await browser.newPage(); const failures = [];
@@ -28,7 +28,7 @@ try {
     else if (path.endsWith('/demo/search')) {
       requests.push(route.request().postDataJSON());
       const last = true;
-      json = { title: '本批：艾途小说 / 得奇小说网 / 就爱文学', batch: { completed: last ? 6 : 3, total: 6 },
+      json = { title: '本批：示例来源 B / 示例来源 A / 就爱文学', batch: { completed: last ? 6 : 3, total: 6 },
         items: mode === 'partial' ? [{ ref: 'book', title: '斗破苍穹', authors: ['天蚕土豆'], description: '【示例书源】这里是斗气的世界，没有花哨艳丽的魔法，有的仅仅是繁衍到巅峰的斗气。', options: [{ id: 'read', label: '加入书架' }] }] : [],
         ...(mode !== 'empty' ? { errors } : {}), ...(!last ? { nextCursor: 'batch2' } : {}) };
     }

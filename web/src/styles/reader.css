@@ -3849,6 +3849,10 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 }
 [data-theme='dark'] .extension-toolbar .extension-error { color: #ffaaa0; }
 .extension-tabs button:disabled { opacity: .55; cursor: default; }
+.extension-output { min-width: 0; }
+.extension-output summary { font-weight: 650; cursor: pointer; padding-block: .35rem; }
+.extension-output pre { max-height: 26rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: .75rem 0 0; padding: 1rem; background: var(--reader-surface); border: 1px solid var(--reader-line); border-radius: .5rem; font: .8125rem/1.7 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.extension-output pre:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
 /* Source hub: navigation tabs, one primary action per row, secondary settings on demand. */
 .sources-hub .sources-tabs { flex: none; flex-wrap: nowrap; gap: 0; padding: 0 1rem; width: 100%; max-width: 66rem; margin: 0 auto 1rem; }

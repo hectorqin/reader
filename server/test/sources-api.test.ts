@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { cp, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -151,7 +151,7 @@ test('built-in source discovery and administrative boundaries preserve configura
   const payload = { id: 'secured-opds', pluginId: 'reader.opds', sourceType: 'opds', name: 'OPDS', config: { url: 'http://127.0.0.1:9999/catalog', username: 'private-config-user' } };
   const deniedCreate = await h.app.inject({ method: 'POST', url: '/api/v1/sources', headers: auth(member), payload });
   assert.equal(deniedCreate.statusCode, 403, deniedCreate.body);
-  const deniedInstall = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(member), payload: { folder: 'demo-chapters', trusted: true } });
+  const deniedInstall = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(member), payload: { folder: 'npm:reader-source-example', trusted: true } });
   assert.equal(deniedInstall.statusCode, 403, deniedInstall.body);
   const deniedList = await h.app.inject({ method: 'GET', url: '/api/v1/plugins', headers: auth(member) });
   assert.equal(deniedList.statusCode, 403, deniedList.body);
@@ -375,10 +375,10 @@ test('source host enforces per-source and global concurrency limits and releases
 test('trusted example plugins can be installed, queried, disabled, reloaded after restart and uninstalled', async (t) => {
   const h = await harness(); t.after(() => h.close());
   await mkdir(join(h.dataDir, 'plugins'));
-  await cp(resolve(import.meta.dirname, '../../examples/plugins/demo-chapters'), join(h.dataDir, 'plugins', 'demo-chapters'), { recursive: true });
-  const untrusted = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(h.admin), payload: { folder: 'demo-chapters', trusted: false } });
+  await cp(resolve(import.meta.dirname, '../../examples/plugins/demo-chapters'), join(h.dataDir, 'plugins', 'node_modules', 'reader-source-example'), { recursive: true });
+  const untrusted = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(h.admin), payload: { folder: 'npm:reader-source-example', trusted: false } });
   assert.ok(untrusted.statusCode >= 400 && untrusted.statusCode < 500, untrusted.body);
-  const installed = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(h.admin), payload: { folder: 'demo-chapters', trusted: true } });
+  const installed = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(h.admin), payload: { folder: 'npm:reader-source-example', trusted: true } });
   assert.equal(installed.statusCode, 201, installed.body);
   const pluginId = 'reader.source.demo';
   const created = await h.app.inject({ method: 'POST', url: '/api/v1/sources', headers: auth(h.admin), payload: {

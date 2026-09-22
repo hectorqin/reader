@@ -42,6 +42,7 @@ export interface ExtensionForm {
   layout?: 'inline'; confirm?: string; id: string; title: string; submit: string; fields: ExtensionField[]; values?: Record<string, string | number | boolean> }
 export interface ExtensionContent {
   forms: ExtensionForm[];
+  outputs?: Array<{ title: string; text: string; format: 'text' | 'log' | 'json' }>;
   sections?: Array<{ title: string; emptyText?: string; items: Array<{ title: string; description?: string; collapsible?: boolean; forms?: ExtensionForm[] }> }>;
 }
 export interface ExtensionPage extends ExtensionContent {

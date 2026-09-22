@@ -120,17 +120,19 @@ function input(root: HTMLElement, label: string, value: string) {
 describe('sources and subscriptions UI', () => {
   it('renders declared numeric defaults and bounds and saves the configured value', async () => {
     const { screen, api } = await setup();
-    const descriptor = { ...opds, configSchema: { properties: { parallel: { type: 'integer', title: '并发数量', default: 3, minimum: 1, maximum: 10 } } } };
+    const descriptor = { ...opds, configSchema: { properties: { parallel: { type: 'integer', title: '并发数量', default: 3, minimum: 1, maximum: 10 }, crossOrigin: { type: 'boolean', title: '允许跨域', default: false } } } };
     vi.spyOn(api, 'sourceTypes').mockResolvedValue([descriptor]);
     const save = vi.spyOn(api, 'saveSource').mockResolvedValue(source);
     await screen.show(); await click(screen.element, '书源管理'); await click(screen.element, '添加来源');
     input(screen.element, '名称', '并发测试');
+    const checkbox = screen.element.querySelector<HTMLInputElement>('input[type=checkbox]')!;
+    expect(checkbox.checked).toBe(false); checkbox.click(); expect(checkbox.checked).toBe(true);
     const field = screen.element.querySelector<HTMLInputElement>('input[type=number]')!;
     expect(field.value).toBe('3'); expect(field.min).toBe('1'); expect(field.max).toBe('10'); expect(field.step).toBe('1');
     input(screen.element, '并发数量', '11'); expect(field.validity.rangeOverflow).toBe(true);
     input(screen.element, '并发数量', '1.5'); expect(field.validity.stepMismatch).toBe(true);
     input(screen.element, '并发数量', '4'); await click(screen.element, '保存来源');
-    expect(save).toHaveBeenCalledWith(null, expect.objectContaining({ config: { parallel: 4 } }));
+    expect(save).toHaveBeenCalledWith(null, expect.objectContaining({ config: { parallel: 4, crossOrigin: true } }));
   });
 
   it('provides a stable route and separates member browsing from admin configuration', async () => {
@@ -160,11 +162,11 @@ describe('sources and subscriptions UI', () => {
   it('requires the explicit trust control before installing and offers plugin lifecycle actions', async () => {
     const { screen, transport } = await setup();
     await click(screen.element, '插件管理'); expect(button(screen.element, '安装插件').disabled).toBe(true);
-    input(screen.element, '已部署的插件目录或 npm 包', 'npm:external-source');
+    input(screen.element, '已部署的插件目录或 npm 包', 'npm:reader-source-example');
     const trusted = screen.element.querySelector<HTMLInputElement>('input[type=checkbox]')!;
     trusted.checked = true; trusted.dispatchEvent(new Event('change', { bubbles: true }));
     await click(screen.element, '安装插件');
-    expect(JSON.parse(bodyText(transport.requests.find((request) => request.url.endsWith('/plugins') && request.method === 'POST')))).toEqual({ folder: 'npm:external-source', trusted: true });
+    expect(JSON.parse(bodyText(transport.requests.find((request) => request.url.endsWith('/plugins') && request.method === 'POST')))).toEqual({ folder: 'npm:reader-source-example', trusted: true });
     await click(screen.element, '停用'); expect(transport.requests.some((request) => request.url.endsWith('/plugins/remote') && request.method === 'PATCH')).toBe(true);
   });
 });
