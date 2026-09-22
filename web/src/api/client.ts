@@ -1,3 +1,4 @@
+import { eventStream } from './event-stream.ts';
 import type { ExtensionField, ExtensionPage } from './sources.ts';
 import { ApiError, errorForStatus, parseErrorBody } from './errors.ts';
 import type {
@@ -127,6 +128,7 @@ export class ReaderApi {
   private session: Session | null = null;
   private refreshPromise: Promise<Session> | null = null;
   private sessionGeneration = 0;
+  private readonly streams = new Set<AbortController>();
   private sessionWrites: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<(session: Session | null) => void>();
 
@@ -144,6 +146,7 @@ export class ReaderApi {
   setBaseUrl(url: string): void {
     const next = url.replace(/\/+$/, '');
     if (next !== this.currentBaseUrl) {
+      for (const stream of this.streams) stream.abort();
       this.sessionGeneration += 1;
       this.refreshPromise = null;
     }
@@ -169,6 +172,7 @@ export class ReaderApi {
 
   private async setSession(session: Session | null, rotation = false): Promise<void> {
     if (!rotation) {
+      for (const stream of this.streams) stream.abort();
       this.sessionGeneration += 1;
       this.refreshPromise = null;
     }
@@ -260,15 +264,35 @@ export class ReaderApi {
   async installPlugin(folder: string): Promise<void> { await this.call('/api/v1/plugins', 'POST', { folder, trusted: true }); }
   async enablePlugin(id: string, enabled: boolean): Promise<void> { await this.call(`/api/v1/plugins/${encodeURIComponent(id)}`, 'PATCH', { enabled }); }
   async uninstallPlugin(id: string): Promise<void> { await this.call(`/api/v1/plugins/${encodeURIComponent(id)}`, 'DELETE'); }
-  async sourceCatalog(id: string, query: { ref?: string; query?: string; cursor?: string; filters?: Record<string, string>; sessionId?: string; resultLimit?: number } = {}, options: RequestOptions = {}): Promise<SourcePage> {
+  async sourceCatalog(id: string, query: { ref?: string; cursor?: string } = {}, options: RequestOptions = {}): Promise<SourcePage> {
     const params = new URLSearchParams();
     if (query.ref) params.set('ref', query.ref);
-    if (query.query) params.set('q', query.query);
     if (query.cursor) params.set('cursor', query.cursor);
-    if (query.filters) params.set('filters', JSON.stringify(query.filters));
-    if (query.sessionId) params.set('sessionId', query.sessionId);
-    if (query.resultLimit !== undefined) params.set('resultLimit', String(query.resultLimit));
-    return this.get(`/api/v1/sources/${encodeURIComponent(id)}/${query.query ? 'search' : 'browse'}?${params}`, options);
+    return this.get(`/api/v1/sources/${encodeURIComponent(id)}/browse?${params}`, options);
+  }
+  async *searchSource(id: string, query: { query: string; sessionId: string; cursor?: string; filters?: Record<string, string>; resultLimit?: number }, options: RequestOptions = {}): AsyncGenerator<SourcePage> {
+    const generation = this.sessionGeneration, controller = new AbortController();
+    const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+    this.streams.add(controller);
+    try {
+      const response = await this.request(`/api/v1/sources/${encodeURIComponent(id)}/search`, 'POST', query, { ...options, signal, stream: true });
+      if (!response.stream) throw new ApiError('server', '搜索结果流缺失', 'INVALID_STREAM');
+      for await (const event of eventStream(response.stream, signal)) {
+        this.assertSession(generation);
+        let data: unknown;
+        try { data = JSON.parse(event.data); } catch { throw new ApiError('server', '搜索事件格式错误', 'INVALID_STREAM'); }
+        if (event.event === 'done') return;
+        if (event.event === 'error') {
+          const error = data as { message?: string; code?: string; status?: number };
+          throw new ApiError(errorForStatus(error.status ?? 500), error.message ?? '搜索失败', error.code ?? 'SEARCH_FAILED', error.status ?? 500);
+        }
+        if (event.event !== 'results' || !data || typeof data !== 'object' || !Array.isArray((data as SourcePage).items)) {
+          throw new ApiError('server', '无效的搜索事件', 'INVALID_STREAM');
+        }
+        yield data as SourcePage;
+      }
+      throw new ApiError('offline', '搜索连接中断，已保留收到的结果，可继续搜索。', 'STREAM_INTERRUPTED');
+    } finally { controller.abort(); this.streams.delete(controller); }
   }
   async cancelSourceSearch(id: string, sessionId: string): Promise<void> {
     await this.call(`/api/v1/sources/${encodeURIComponent(id)}/search/cancel`, 'POST', { sessionId });
@@ -638,13 +662,13 @@ export class ReaderApi {
     path: string,
     method: string,
     body: unknown,
-    options: RequestOptions & { binary?: boolean } = {},
+    options: RequestOptions & { binary?: boolean; stream?: boolean } = {},
   ): Promise<import('../core/platform.ts').HttpResponse> {
     const generation = this.sessionGeneration;
     const assertCurrent = (): void => this.assertSession(generation);
     const attempt = async (token: string | null) => {
       assertCurrent();
-      const headers: Record<string, string> = { accept: options.binary ? '*/*' : 'application/json' };
+      const headers: Record<string, string> = { accept: options.stream ? 'text/event-stream' : options.binary ? '*/*' : 'application/json' };
       if (body !== undefined) headers['content-type'] = 'application/json';
       if (token) headers.authorization = `Bearer ${token}`;
       return this.platform.transport.send({
@@ -653,6 +677,7 @@ export class ReaderApi {
         headers,
         ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         ...(options.binary ? { binary: true } : {}),
+        ...(options.stream ? { stream: true } : {}),
         ...(options.signal ? { signal: options.signal } : {}),
       });
     };
@@ -660,6 +685,7 @@ export class ReaderApi {
     const token = this.session?.accessToken ?? null;
     try {
       const response = await attempt(token);
+      if (generation !== this.sessionGeneration) await response.stream?.cancel().catch(() => {});
       assertCurrent();
       return response;
     } catch (err) {
@@ -682,6 +708,7 @@ export class ReaderApi {
       assertCurrent();
       try {
         const response = await attempt(refreshed.accessToken);
+        if (generation !== this.sessionGeneration) await response.stream?.cancel().catch(() => {});
         assertCurrent();
         return response;
       } catch (retryErr) {

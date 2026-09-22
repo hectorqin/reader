@@ -5,6 +5,7 @@ import { authenticate, currentUser, requireAdmin } from '../auth.ts';
 import { badRequest } from '../../lib/errors.ts';
 import { SourceHost } from '../../services/source-host.ts';
 import { withSignal } from '../request-signal.ts';
+import { searchResponse } from '../search-stream.ts';
 
 function textBody(body: unknown, name: string): string {
   const value = (body as Record<string, unknown> | null)?.[name];
@@ -23,10 +24,10 @@ function searchSessionId(value?: string): string | undefined {
   if (value !== undefined && !/^[a-zA-Z0-9_-]{16,80}$/.test(value)) throw badRequest('invalid search session id');
   return value;
 }
-function searchResultLimit(value?: string): number | undefined {
+function searchResultLimit(value: unknown, max = 10000): number | undefined {
   if (value === undefined) return undefined;
-  const limit = Number(value);
-  if (!Number.isInteger(limit) || limit < 1 || limit > 10000) throw badRequest('resultLimit must be an integer from 1 to 10000');
+  const limit = value;
+  if (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > max) throw badRequest(`${max === 200 ? 'limit' : 'resultLimit'} must be an integer from 1 to ${max}`);
   return limit;
 }
 
@@ -94,14 +95,18 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
       ref: parameter(q.ref, 'ref'), cursor: parameter(q.cursor, 'cursor'), limit: pageLimit(q.limit),
     }, signal));
   });
-  app.get('/api/v1/sources/:id/search', { preHandler: auth }, async (request, reply) => {
-    const user = currentUser(request); const { id } = request.params as { id: string };
-    const q = request.query as { q?: string; cursor?: string; limit?: string; filters?: string; sessionId?: string; resultLimit?: string };
-    const query = parameter(q.q, 'q', true)!;
-    return withSignal(request, reply, (signal) => host.search(user.id, id, {
-      query, cursor: parameter(q.cursor, 'cursor'), limit: pageLimit(q.limit), filters: searchFilters(q.filters),
-      sessionId: searchSessionId(q.sessionId), resultLimit: searchResultLimit(q.resultLimit),
-    }, signal));
+  app.post('/api/v1/sources/:id/search', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request), { id } = request.params as { id: string };
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const query = parameter(body.query, 'query', true)!;
+    const sessionId = searchSessionId(parameter(body.sessionId, 'sessionId', true))!;
+    const search = { query, sessionId, cursor: parameter(body.cursor, 'cursor'),
+      limit: searchResultLimit(body.limit, 200), resultLimit: searchResultLimit(body.resultLimit),
+      filters: searchFilters(body.filters === undefined ? undefined : JSON.stringify(body.filters)) };
+    reply.header('content-type', 'text/event-stream; charset=utf-8');
+    reply.header('cache-control', 'no-cache, no-transform');
+    reply.header('x-accel-buffering', 'no');
+    return reply.send(searchResponse(request, reply, host, user.id, id, search));
   });
   app.post('/api/v1/sources/:id/search/cancel', { preHandler: auth }, async request => {
     const sessionId = searchSessionId(textBody(request.body, 'sessionId'))!;

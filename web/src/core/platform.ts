@@ -23,6 +23,8 @@ export interface HttpRequest {
   body?: string | FormData;
   /** Binary response mode: used for book bodies and covers. */
   binary?: boolean;
+  /** Return the response body without buffering it (Streamable HTTP). */
+  stream?: boolean;
   /**
    * Called with `loaded / total` while the body is being sent.
    *
@@ -44,6 +46,7 @@ export interface HttpResponse {
   json?: unknown;
   /** Present for `binary` requests. */
   bytes?: Uint8Array;
+  stream?: ReadableStream<Uint8Array>;
   /** Raw text, used to build a useful error when JSON parsing fails. */
   text?: string;
 }

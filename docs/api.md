@@ -835,11 +835,27 @@ Content-Type: application/json
 
 ```text
 GET /api/v1/sources/:id/browse?ref=<optional>&cursor=<optional>&limit=<1..200>
-GET /api/v1/sources/:id/search?q=<query>&cursor=<optional>&limit=<1..200>
+POST /api/v1/sources/:id/search
 GET /api/v1/sources/:id/entries?ref=<entry-ref>
 ```
 
-目录响应形如 `{ "items": [...], "navigation": [...], "nextCursor": "...", "title": "..." }`；可选字段可省略。`ref` 和 `cursor` 是来源拥有的不透明值，客户端只保存并原样回传。条目返回 `ref`、标题、作者、封面和 `options`；不要从 `ref` 推断 URL 或拼接下一页地址。引用和查询参数必须为非空字符串且不超过 16,384 字符；路径中的 `publicationRef` 需要 URL 编码，路由允许最大 16,384 字符的参数。
+浏览仍返回普通 JSON 目录响应。搜索使用 Streamable HTTP：请求体为 `{ "query": "...", "sessionId": "...", "cursor": "...", "filters": {}, "resultLimit": 10000 }`，响应为 `text/event-stream`，持续发送 `results`、最终 `done` 或 `error` 事件。`results.data` 是 CatalogPage，客户端边收边合并；断开连接会取消在途搜索。`ref` 和 `cursor` 是来源拥有的不透明值，客户端只保存并原样回传。条目返回 `ref`、标题、作者、封面和 `options`；不要从 `ref` 推断 URL 或拼接下一页地址。引用和查询参数必须为非空字符串且不超过 16,384 字符；路径中的 `publicationRef` 需要 URL 编码，路由允许最大 16,384 字符的参数。
+
+搜索请求必须携带 Bearer 凭据。`sessionId` 必填，由 16–80 个字母、数字、`_` 或 `-` 组成；继续同一次搜索时保留该值并回传最后收到的 `nextCursor`，新关键词或筛选条件使用新的值。可选 `limit` 为每页 1–200 条，`resultLimit` 为 1–10000 条，默认上限 10000 条。旧 GET 搜索接口已移除。
+
+```text
+event: results
+data: {"items":[{"ref":"book-1","title":"示例书籍"}],"nextCursor":"opaque-cursor","batch":{"completed":1,"total":2}}
+
+event: results
+data: {"items":[],"batch":{"completed":2,"total":2}}
+
+event: done
+data: {"reason":"complete"}
+
+```
+
+服务端在同一响应中自动消费后续分页。`done.reason` 为 `complete` 或 `limit`；错误事件形如 `{"code":"SEARCH_FAILED","message":"搜索中断，已保留收到的结果。","status":500}`。响应开始前的鉴权或参数错误使用普通 HTTP 错误响应，响应开始后的错误通过 `error` 事件返回。没有收到 `done` 或 `error` 就结束连接属于异常中断，客户端保留已收到的结果，不自动重放搜索。停止搜索时中止流；`POST /api/v1/sources/:id/search/cancel`（body 为 `{"sessionId":"..."}`）同时支持取消插件内部搜索任务。
 
 ### 凭据与来源启停
 

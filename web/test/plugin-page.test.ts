@@ -40,7 +40,9 @@ it('uses provider-defined search filter keys and retains filters across paginati
     else if (request.url.endsWith('/sources')) json = { sources: [{ ...descriptor, id: 's1', name: '第三方', sourceType: 'custom', enabled: true, descriptor }] };
     else if (request.url.endsWith('/subscriptions')) json = { subscriptions: [] };
     else if (request.url.endsWith('/search-filters')) json = [{ key: 'region', label: '地区', type: 'select', options: [{ value: '', label: '全部' }, { value: 'asia', label: '亚洲' }] }];
-    else if (request.url.includes('/search?')) json = { items: [], nextCursor: 'next' };
+    else if (request.url.endsWith('/search')) return { status: 200, headers: {}, stream: new ReadableStream({ start(controller) {
+      controller.enqueue(new TextEncoder().encode('event: results\ndata: {"items":[],"nextCursor":"next"}\n\nevent: done\ndata: {}\n\n')); controller.close();
+    } }) };
     return { status: 200, headers: {}, json };
   });
   const screen = new SourcesScreen({ api, admin: false, onOpen() {}, onBack() {}, onSignedOut() {} }); screens.push(screen); document.body.append(screen.element); await screen.show();
@@ -51,8 +53,8 @@ it('uses provider-defined search filter keys and retains filters across paginati
   const select = screen.element.querySelector<HTMLSelectElement>('.sources-search select')!; select.value = 'asia'; select.dispatchEvent(new Event('change', { bubbles: true }));
   const input = screen.element.querySelector<HTMLInputElement>('input[type=search]')!; input.value = '测试'; input.dispatchEvent(new Event('input', { bubbles: true })); click('搜索');
   await vi.waitFor(() => expect(screen.element.textContent).toContain('加载更多结果')); click('加载更多结果');
-  await vi.waitFor(() => expect(transport.requests.filter(request => request.url.includes('/search?'))).toHaveLength(2));
-  for (const request of transport.requests.filter(request => request.url.includes('/search?'))) expect(new URL(request.url, 'http://test').searchParams.get('filters')).toBe('{"region":"asia"}');
+  await vi.waitFor(() => expect(transport.requests.filter(request => request.url.endsWith('/search'))).toHaveLength(2));
+  for (const request of transport.requests.filter(request => request.url.endsWith('/search'))) expect(JSON.parse(bodyText(request)).filters).toEqual({ region: 'asia' });
 });
 
 it('keeps tab drafts and refresh selection, follows action navigation and uses source instance endpoints', async () => {

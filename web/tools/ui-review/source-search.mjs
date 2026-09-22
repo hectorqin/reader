@@ -26,12 +26,13 @@ try {
       { key: 'source', label: '书源', type: 'select', options: [{ value: '', label: '全部书源' }, { value: 'one', label: '示例书源' }] },
     ];
     else if (path.endsWith('/demo/search')) {
-      requests.push(Object.fromEntries(url.searchParams));
-      const last = !!url.searchParams.get('cursor');
+      requests.push(route.request().postDataJSON());
+      const last = true;
       json = { title: '本批：艾途小说 / 得奇小说网 / 就爱文学', batch: { completed: last ? 6 : 3, total: 6 },
         items: mode === 'partial' ? [{ ref: 'book', title: '斗破苍穹', authors: ['天蚕土豆'], description: '【示例书源】这里是斗气的世界，没有花哨艳丽的魔法，有的仅仅是繁衍到巅峰的斗气。', options: [{ id: 'read', label: '加入书架' }] }] : [],
         ...(mode !== 'empty' ? { errors } : {}), ...(!last ? { nextCursor: 'batch2' } : {}) };
     }
+    if (path.endsWith('/demo/search')) return route.fulfill({ contentType: 'text/event-stream', body: 'event: results\ndata: ' + JSON.stringify(json) + '\n\nevent: done\ndata: {}\n\n' });
     if (json !== undefined) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(json) });
     return route.continue();
   });
@@ -55,7 +56,8 @@ try {
     mode = 'partial'; await page.getByRole('button', { name: '搜索', exact: true }).click();
     await page.locator('.search-progress').filter({ hasText: '搜索完成' }).waitFor();
     assert.equal(await page.locator('.catalog-book').count(), 1, 'repeated entries merge by ref');
-    assert.equal(requests.at(-1).cursor, 'batch2');
+    assert.equal(requests.at(-1).query, '斗破苍穹');
+    assert.equal(requests.at(-1).filters.group, 'fiction');
     assert.equal(await page.locator('.catalog-errors').evaluate(el => el.open), false);
     await page.locator('.catalog-errors summary').focus(); await page.keyboard.press('Enter');
     assert.equal(await page.locator('.catalog-errors').evaluate(el => el.open), true);
