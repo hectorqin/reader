@@ -1,7 +1,7 @@
 export interface SourceType {
   extensions?: { pages?: Array<{ id: string; title: string }> };
   id: string; pluginId: string; label: string; version: string; builtin: boolean; capabilities: string[];
-  configSchema?: { properties?: Record<string, { type?: string; title?: string; default?: unknown }>; required?: string[] };
+  configSchema?: { properties?: Record<string, { type?: string; title?: string; default?: unknown; minimum?: number; maximum?: number }>; required?: string[] };
   credentialKeys?: Array<{ key: string; label: string }>;
 }
 export interface SourceInstance {
@@ -14,6 +14,8 @@ export interface SourceEntry {
 }
 export interface SourcePage {
   items: SourceEntry[]; navigation?: Array<{ ref: string; title: string }>; nextCursor?: string; title?: string;
+  errors?: Array<{ source: string; code: string; message: string }>;
+  batch?: { completed: number; total: number };
 }
 export interface SourceAcquisition {
   kind: 'ready' | 'action-required'; publicationId?: string;

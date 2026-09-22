@@ -1,4 +1,5 @@
 import type { SourcePage } from '../api/sources.ts';
+import { CatalogFeedback } from './catalog-feedback.tsx';
 /**
  * The reader's chrome: everything around the page.
  *
@@ -227,9 +228,9 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           ) : null}
           {state.canSwitch && <Button type="button" disabled={state.switching || state.refreshing || state.navigating} onClick={() => handlers.onAlternatives?.()}>切换书源</Button>}
           {state.switching && <p role="status">正在获取书源内容…</p>}
-          {state.alternatives && <section aria-label="切换书源"><h3>选择其它书源</h3><p>{state.alternatives.title}</p>
+          {state.alternatives && <section aria-label="切换书源"><h3>选择其它书源</h3><CatalogFeedback page={state.alternatives} />
             <p>请核对书名、作者，并选择新目录中的章节。原书签和笔记仍关联原章节。</p>
-            {!state.alternatives.items.length && <p>本批没有同名书籍，可继续下一批。</p>}
+            {!state.alternatives.items.length && <p>{state.alternatives.errors?.length ? '本批暂未返回书籍，请查看失败原因。' : '本批没有同名书籍。'}{state.alternatives.nextCursor ? '可继续下一批。' : ''}</p>}
             {state.alternatives.items.map(entry => <div className="sources-row"><div><strong>{entry.title}</strong><small>{entry.authors?.join(' / ')}</small><p>{entry.description}</p></div>
               <Button type="button" disabled={state.switching === true} onClick={() => handlers.onAlternative?.(entry.ref, entry.title)}>查看此源目录</Button></div>)}
             {state.alternatives.nextCursor && <Button type="button" disabled={state.switching === true} onClick={() => handlers.onAlternatives?.(state.alternatives?.nextCursor)}>下一批书源</Button>}

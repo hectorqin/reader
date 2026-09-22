@@ -6,6 +6,7 @@ export type SourceCapability =
   | 'browse'
   | 'search'
   | 'search.filters'
+  | 'search.cancel'
   | 'content.alternatives'
   | 'detail'
   | 'acquire.file'
@@ -102,6 +103,15 @@ export interface CatalogPage {
   readonly navigation?: readonly NavigationEntry[];
   readonly nextCursor?: string;
   readonly title?: string;
+  readonly errors?: readonly CatalogError[];
+  /** Finite provider batches; nextCursor advances automatically until completed === total. */
+  readonly batch?: { readonly completed: number; readonly total: number };
+}
+
+export interface CatalogError {
+  readonly source: string;
+  readonly code: string;
+  readonly message: string;
 }
 
 export interface NavigationEntry {

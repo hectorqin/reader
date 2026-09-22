@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest';
 import { ICON_ALIASES, ICON_CODEPOINTS, ICON_CODEPOINT_TABLE } from '../src/ui/icon-names.ts';
 import { GLYPHS } from '../tools/icons/paths.mjs';
 import { pathToSubpaths } from '../tools/icons/path.mjs';
+import { Icon } from '../src/ui/icon.tsx';
+import { IconButton } from '../src/ui/toolkit.tsx';
+import { render } from '../src/ui/vendor/preact.ts';
 
 /**
  * The icon set's contract with the font.
@@ -313,9 +316,7 @@ describe('the font metrics', () => {
 });
 
 describe('the icon box', () => {
-  it('renders the glyph and hides it from assistive technology when decorative', async () => {
-    const { Icon } = await import('../src/ui/icon.tsx');
-    const { render } = await import('../src/ui/vendor/preact.ts');
+  it('renders the glyph and hides it from assistive technology when decorative', () => {
     const host = document.createElement('div');
     render(Icon({ name: 'close' }), host);
     const span = host.querySelector('.icon')!;
@@ -325,9 +326,7 @@ describe('the icon box', () => {
     expect(span.hasAttribute('aria-label')).toBe(false);
   });
 
-  it('exposes a label as its accessible name when it is not decorative', async () => {
-    const { Icon } = await import('../src/ui/icon.tsx');
-    const { render } = await import('../src/ui/vendor/preact.ts');
+  it('exposes a label as its accessible name when it is not decorative', () => {
     const host = document.createElement('div');
     render(Icon({ name: 'close', label: '关闭' }), host);
     const span = host.querySelector('.icon')!;
@@ -407,9 +406,7 @@ describe('the stylesheet', () => {
 });
 
 describe('icon buttons', () => {
-  it('carries the label as the accessible name and hides the glyph', async () => {
-    const { IconButton } = await import('../src/ui/toolkit.tsx');
-    const { render } = await import('../src/ui/vendor/preact.ts');
+  it('carries the label as the accessible name and hides the glyph', () => {
     const host = document.createElement('div');
     render(IconButton({ label: '目录', icon: 'menu' }), host);
     const button = host.querySelector('button')!;
@@ -421,9 +418,7 @@ describe('icon buttons', () => {
     expect(glyph.tagName.toLowerCase()).toBe('svg');
   });
 
-  it('draws every icon button from the icon set rather than from text', async () => {
-    const { IconButton } = await import('../src/ui/toolkit.tsx');
-    const { render } = await import('../src/ui/vendor/preact.ts');
+  it('draws every icon button from the icon set rather than from text', () => {
     const host = document.createElement('div');
     render(IconButton({ label: '关闭', icon: 'close' }), host);
     // A regression here is the whole point of the change: the old button took

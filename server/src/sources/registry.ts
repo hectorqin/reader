@@ -16,7 +16,7 @@ export class SourceRegistryError extends Error {
 
 const ID_RE = /^[a-z][a-z0-9._-]{0,127}$/;
 const CAPABILITIES = new Set<SourceCapability>([
-  'search.filters', 'content.alternatives', 'browse', 'search', 'detail', 'acquire.file', 'acquire.chapters',
+  'search.filters', 'search.cancel', 'content.alternatives', 'browse', 'search', 'detail', 'acquire.file', 'acquire.chapters',
   'content.manifest', 'content.resource', 'content.update',
 ]);
 
@@ -32,6 +32,7 @@ function assertDescriptor(descriptor: SourceDescriptor): void {
   if (!descriptor.label.trim()) throw new SourceRegistryError(`source ${descriptor.id} has an empty label`);
   if (!descriptor.version.trim()) throw new SourceRegistryError(`source ${descriptor.id} has no version`);
   const capabilities = new Set(descriptor.capabilities);
+  if (capabilities.has('search.cancel') && !capabilities.has('search')) throw new SourceRegistryError('search.cancel requires search');
   for (const capability of capabilities) {
     if (!CAPABILITIES.has(capability)) throw new SourceRegistryError(`unsupported capability: ${capability}`);
   }

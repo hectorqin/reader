@@ -50,7 +50,7 @@ it('uses provider-defined search filter keys and retains filters across paginati
   await vi.waitFor(() => expect(screen.element.querySelector('.sources-search select')).not.toBeNull());
   const select = screen.element.querySelector<HTMLSelectElement>('.sources-search select')!; select.value = 'asia'; select.dispatchEvent(new Event('change', { bubbles: true }));
   const input = screen.element.querySelector<HTMLInputElement>('input[type=search]')!; input.value = '测试'; input.dispatchEvent(new Event('input', { bubbles: true })); click('搜索');
-  await vi.waitFor(() => expect(screen.element.textContent).toContain('下一页')); click('下一页');
+  await vi.waitFor(() => expect(screen.element.textContent).toContain('加载更多结果')); click('加载更多结果');
   await vi.waitFor(() => expect(transport.requests.filter(request => request.url.includes('/search?'))).toHaveLength(2));
   for (const request of transport.requests.filter(request => request.url.includes('/search?'))) expect(new URL(request.url, 'http://test').searchParams.get('filters')).toBe('{"region":"asia"}');
 });

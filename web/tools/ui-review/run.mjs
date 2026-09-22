@@ -63,19 +63,19 @@ const SCENES = [
   {
     name: '10-shelf-paged',
     label: '书架 · 第二页',
-    what: '没有「继续阅读」横排；默认按最近阅读排序（第一个 chip 是填充态）；分页器在封面下方；书库入口在标题右侧',
+    what: '没有「继续阅读」横排；默认按最近阅读排序（第一个 chip 是填充态）；分页器在封面下方；书库与书源入口在标题下方',
     openShelfAt: '#/shelf/2',
   },
   {
     name: '11-library',
     label: '书库 · 浏览',
-    what: '书库是读者那一半：约等于商城的布局——搜索框在最上面，封面网格铺满窗口，「加入书架」只画在不在书架的书上，右上角是文件管理入口和封面大小',
+    what: '搜索框与封面网格；「加入书架」只画在不在书架的书上，管理员可进入文件管理；没有上传或书架设置入口',
     openLibraryAt: '#/library',
   },
   {
     name: '12-library-files',
     label: '书库 · 文件管理',
-    what: '另一半、也是管理员那一页：面包屑 + 文件行、「书籍」徽章、不在书架的书带「不在书架」标记，右上角是上传/新建，左上是回浏览页的入口',
+    what: '管理员文件页：面包屑与文件行、书籍状态徽章、上传与新建；返回按钮在子目录回上级，在根目录回书库浏览页',
     openLibraryAt: '#/library/files',
     // A folder is walked from the file page, so this scene *is* the switch — see the
     // note in the driver.
@@ -132,7 +132,7 @@ const LABEL_OF = `
     const words = [...node.querySelectorAll('span')]
       .map((span) => span.textContent.trim())
       .filter((text) => text.length > 0 && [...text].every((ch) => ch.codePointAt(0) < 0xe000));
-    return words.join(' ') || node.getAttribute('aria-label') || '';
+    return node.getAttribute('aria-label') || words.join(' ') || node.textContent.trim();
   };
 `;
 
@@ -601,7 +601,7 @@ async function audit(cdp, origin, scenes, results) {
     const screen = document.querySelector('.library-browse-screen');
     const cards = document.querySelectorAll('.book-card');
     const pills = [...document.querySelectorAll('.book-shelve')].map((node) => node.getAttribute('aria-label'));
-    const header = [...document.querySelectorAll('.panel-header button')].map(labelOf);
+    const header = [...screen.querySelectorAll('.collection-header button')].filter(node => node.getClientRects().length > 0).map(labelOf);
     const search = document.querySelector('.library-search');
     const field = document.querySelector('.library-search input');
     const sr = search?.getBoundingClientRect();
@@ -615,6 +615,7 @@ async function audit(cdp, origin, scenes, results) {
       rows: document.querySelectorAll('.manager-row').length,
       pills,
       header,
+      uploadInput: screen.querySelector('input[type="file"]') !== null,
       hasSearch: search !== null,
       searchLabel: field?.getAttribute('aria-label') ?? '',
       /*
@@ -667,8 +668,9 @@ async function audit(cdp, origin, scenes, results) {
     `网格 ${browse.gridWidth}px / 窗口 ${browse.viewport}px，封面占 ${browse.rowCount} 行`,
   );
   check(
-    '书库: 浏览页不放「新建文件夹」，只放上传和去文件管理的入口',
-    !browse.header.includes('新建文件夹') && browse.header.includes('上传书籍') && browse.header.includes('文件管理'),
+    '书库: 浏览页提供文件管理入口，不放上传、新建或书架设置',
+    browse.header.includes('文件管理') && !browse.uploadInput
+      && !browse.header.some(label => /上传|新建文件夹|书架设置/.test(label)),
     `头部控件=${browse.header.join(' / ') || '（空）'}`,
   );
   /*
@@ -729,13 +731,14 @@ async function audit(cdp, origin, scenes, results) {
     `hash=${searched.hash} 字段="${searched.field}"`,
   );
 
-  await cdp.navigate(`${origin}/#/library/files`);
+  // Enter through the actual admin action; a deep link alone misses broken navigation.
+  await cdp.clickText('.library-browse-screen .collection-header button', '文件管理');
   await cdp.waitFor('document.querySelector(".library-files-screen") !== null', 20_000);
   await cdp.waitFor('document.querySelector(".manager-row") !== null', 20_000);
   await cdp.sleep(400);
   const filesPage = await cdp.evaluate(`(() => {
     ${LABEL_OF}
-    const header = [...document.querySelectorAll('.panel-header button')].map(labelOf);
+    const header = [...document.querySelectorAll('.library-files-screen .collection-header button')].filter(node => node.getClientRects().length > 0).map(labelOf);
     return {
       view: document.querySelector('.library-screen')?.dataset.view,
       rows: document.querySelectorAll('.manager-row').length,
@@ -756,8 +759,8 @@ async function audit(cdp, origin, scenes, results) {
     `右上角=${filesPage.header.join(' / ') || '（空）'}，搜索框=${filesPage.hasSearch}`,
   );
   check(
-    '书库: 文件管理页的入口是「浏览书籍」，不是页签',
-    filesPage.header.includes('浏览书籍') && !filesPage.header.includes('预览'),
+    '书库: 文件管理页提供返回按钮，不使用浏览页签',
+    filesPage.header.includes('返回') && !filesPage.header.includes('预览'),
     `头部控件=${filesPage.header.join(' / ') || '（空）'}`,
   );
   /*
@@ -790,7 +793,7 @@ async function audit(cdp, origin, scenes, results) {
    * *leaves* the file manager for the browsing page and that Back comes home. A tab
    * would satisfy neither: it would keep one history entry and the same URL.
    */
-  await cdp.clickText('.panel-header button', '浏览书籍');
+  await cdp.click('.library-files-screen .collection-header button[aria-label="返回"]');
   await cdp.waitFor('document.querySelector(".library-browse-screen") !== null', 20_000);
   await cdp.sleep(500);
   const switched = await cdp.evaluate(`(() => ({
@@ -806,8 +809,7 @@ async function audit(cdp, origin, scenes, results) {
   );
 
   /*
-   * The two shelf-header glyphs, which is the one part of this change that is purely
-   * about how it looks.
+   * The shelf settings glyph belongs in the heading; discovery links live below it.
    *
    * Measured as *ink* rather than as a name: a font can map a code point and still
    * draw a shape that reads as noise at 18px, and the complaint was that the previous
@@ -824,13 +826,10 @@ async function audit(cdp, origin, scenes, results) {
     const title = document.querySelector('.shelf-title')?.getBoundingClientRect();
     return buttons.map((button) => {
       const glyph = button.querySelector('.icon');
-      const range = document.createRange();
-      range.selectNodeContents(glyph);
       const ink = glyph.getBoundingClientRect();
       const box = button.getBoundingClientRect();
       return {
         name: button.getAttribute('aria-label'),
-        code: glyph.textContent.codePointAt(0),
         inkWidth: Math.round(ink.width * 10) / 10,
         inkHeight: Math.round(ink.height * 10) / 10,
         inside: ink.left >= box.left - 0.5 && ink.right <= box.right + 0.5
@@ -841,8 +840,9 @@ async function audit(cdp, origin, scenes, results) {
     });
   })()`);
   check(
-    '书架标题栏: 两个图标都画出来了，且不超出各自的按钮',
-    headGlyphs.length === 2 && headGlyphs.every((glyph) => glyph.inkWidth > 0 && glyph.inkHeight > 0 && glyph.inside),
+    '书架标题栏: 书架设置图标可见，且不超出按钮',
+    headGlyphs.some(glyph => glyph.name?.startsWith('书架设置'))
+      && headGlyphs.every((glyph) => glyph.inkWidth > 0 && glyph.inkHeight > 0 && glyph.inside),
     headGlyphs
       .map((glyph) => `${glyph.name}: ${glyph.inkWidth}×${glyph.inkHeight} in ${glyph.box} box, inside=${glyph.inside}`)
       .join(' | '),

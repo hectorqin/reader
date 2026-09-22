@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ReaderApi } from '../src/api/client.ts';
+import type { SourcePage } from '../src/api/sources.ts';
 import { SourcesScreen } from '../src/ui/sources-screen.tsx';
 import { FakeTransport, makePlatform, bodyText } from './helpers/env.ts';
 import { parseRoute, routeHash } from '../src/ui/router.ts';
@@ -17,7 +18,7 @@ beforeAll(() => {
 async function chooseSource(root: HTMLElement) {
   const select = root.querySelector<HTMLSelectElement>('[aria-label="选择来源"]')!;
   select.value = 'source-1'; select.dispatchEvent(new Event('change', { bubbles: true }));
-  await vi.waitFor(() => expect(root.querySelector('[role=status]')?.textContent ?? '').not.toMatch(/正在处理|正在保存/));
+  await vi.waitFor(() => expect([...root.querySelectorAll('[role=status]')].map(el => el.textContent).join('')).not.toMatch(/正在处理|正在保存/));
 }
 afterEach(() => { screens.splice(0).forEach((screen) => screen.dispose()); document.body.replaceChildren(); });
 async function setup(admin = true) {
@@ -40,13 +41,89 @@ async function setup(admin = true) {
   await screen.show();
   return { api, screen, transport, onOpen };
 }
+
+it('separates partial failures from results and distinguishes unavailable from empty searches', async () => {
+  const { screen, api } = await setup();
+  await chooseSource(screen.element);
+  const catalog = vi.spyOn(api, 'sourceCatalog');
+  const errors = [{ source: '测试来源', code: 'HTTP_ERROR', message: '站点返回 HTTP 503' }];
+  catalog.mockResolvedValueOnce({ items: [{ ref: 'ok', title: '成功结果' }], errors, title: '本批来源' });
+  input(screen.element, '搜索书籍', '小说'); await click(screen.element, '搜索');
+  expect(screen.element.querySelector('.catalog-summary')?.textContent).toContain('已找到 1 本书');
+  expect(screen.element.querySelector('details')?.open).toBe(false);
+  expect(screen.element.textContent).toContain('成功结果');
+  catalog.mockResolvedValueOnce({ items: [], errors, nextCursor: 'more' });
+  await click(screen.element, '搜索');
+  expect(screen.element.querySelector('details')?.open).toBe(true);
+  expect(screen.element.textContent).toContain('部分来源搜索失败');
+  expect(screen.element.textContent).toContain('加载更多结果');
+  expect(screen.element.textContent).not.toContain('没有找到匹配书籍');
+  catalog.mockResolvedValueOnce({ items: [] });
+  await click(screen.element, '加载更多结果');
+  expect(catalog).toHaveBeenLastCalledWith('source-1', { query: '小说', filters: {}, cursor: 'more' }, {});
+  expect(screen.element.querySelector('details')).not.toBeNull();
+  catalog.mockResolvedValueOnce({ items: [] });
+  input(screen.element, '搜索书籍', '新关键词'); await click(screen.element, '搜索');
+  expect(screen.element.querySelector('details')).toBeNull();
+  expect(screen.element.textContent).toContain('没有找到匹配书籍');
+  expect(screen.element.querySelector('.catalog-pagination')).toBeNull();
+});
+
+it('merges batches by ref, stops in flight, ignores stale replies and resumes from the pending cursor', async () => {
+  const { screen, api } = await setup();
+  await chooseSource(screen.element);
+  const descriptor = { ...opds, capabilities: ['browse', 'search', 'search.cancel'] };
+  vi.spyOn(api, 'sourceTypes').mockResolvedValue([descriptor]);
+  vi.spyOn(api, 'sources').mockResolvedValue([{ ...source, descriptor }]);
+  await screen.show(); await chooseSource(screen.element);
+  let resolve!: (page: SourcePage) => void;
+  const first = { ref: 'first', title: '第一批结果' };
+  const catalog = vi.spyOn(api, 'sourceCatalog')
+    .mockResolvedValueOnce({ items: [first, first], batch: { completed: 3, total: 7 }, nextCursor: 'second' })
+    .mockImplementationOnce(() => new Promise<SourcePage>(done => { resolve = done; }));
+  input(screen.element, '搜索书籍', '斗罗');
+  button(screen.element, '搜索').click();
+  await vi.waitFor(() => expect(catalog).toHaveBeenCalledTimes(2));
+  expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(1);
+  const signal = catalog.mock.calls[1]![2]!.signal!;
+  button(screen.element, '停止搜索').click();
+  await vi.waitFor(() => expect(screen.element.textContent).toContain('已停止搜索'));
+  expect(signal.aborted).toBe(true);
+  expect(screen.element.textContent).toContain('第一批结果');
+  resolve({ items: [{ ref: 'late', title: '迟到结果' }], batch: { completed: 1, total: 1 } });
+  await new Promise(resolveTick => setTimeout(resolveTick, 10));
+  expect(screen.element.textContent).not.toContain('迟到结果');
+  expect(catalog).toHaveBeenCalledTimes(2);
+  catalog.mockResolvedValueOnce({ items: [first, { ref: 'second', title: '第二批结果' }], batch: { completed: 6, total: 7 }, nextCursor: 'third' })
+    .mockResolvedValueOnce({ items: [{ ref: 'third', title: '第三批结果' }], batch: { completed: 7, total: 7 } });
+  await click(screen.element, '继续搜索');
+  expect(catalog.mock.calls[2]![1]!.cursor).toBe('second');
+  expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(3);
+  expect(screen.element.textContent).toContain('搜索完成');
+  expect(screen.element.textContent).toContain('7 / 7');
+  catalog.mockResolvedValueOnce({ items: [{ ref: 'new', title: '新搜索结果' }] });
+  input(screen.element, '搜索书籍', '新关键词'); await click(screen.element, '搜索');
+  expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(1);
+  expect(screen.element.textContent).not.toContain('第一批结果');
+});
+
+it('does not auto-page a single-source catalog and stops loops in malformed batch responses', async () => {
+  const { screen, api } = await setup(); await chooseSource(screen.element);
+  const catalog = vi.spyOn(api, 'sourceCatalog').mockResolvedValueOnce({ items: [], nextCursor: 'page2' });
+  input(screen.element, '搜索书籍', 'query'); await click(screen.element, '搜索');
+  expect(catalog).toHaveBeenCalledTimes(1); expect(button(screen.element, '加载更多结果')).toBeDefined();
+  catalog.mockResolvedValue({ items: [], batch: { completed: 3, total: 9 }, nextCursor: 'same' });
+  await click(screen.element, '搜索');
+  expect(screen.element.textContent).toContain('搜索进度没有推进');
+  expect(catalog).toHaveBeenCalledTimes(3);
+});
 function button(root: HTMLElement, label: string) {
   const found = [...root.querySelectorAll('button')].find((element) => element.textContent?.trim() === label || element.getAttribute('aria-label') === label);
   expect(found, label).toBeDefined(); return found!;
 }
 async function click(root: HTMLElement, label: string) {
   button(root, label).click();
-  await vi.waitFor(() => expect(root.querySelector('[role=status]')?.textContent ?? '').not.toMatch(/正在处理|正在保存/));
+  await vi.waitFor(() => expect([...root.querySelectorAll('[role=status]')].map(el => el.textContent).join('')).not.toMatch(/正在处理|正在保存|正在搜索/));
 }
 function input(root: HTMLElement, label: string, value: string) {
   const element = [...root.querySelectorAll('label')].find((item) => item.textContent?.startsWith(label))?.querySelector('input');
@@ -54,6 +131,21 @@ function input(root: HTMLElement, label: string, value: string) {
 }
 
 describe('sources and subscriptions UI', () => {
+  it('renders declared numeric defaults and bounds and saves the configured value', async () => {
+    const { screen, api } = await setup();
+    const descriptor = { ...opds, configSchema: { properties: { parallel: { type: 'integer', title: '并发数量', default: 3, minimum: 1, maximum: 10 } } } };
+    vi.spyOn(api, 'sourceTypes').mockResolvedValue([descriptor]);
+    const save = vi.spyOn(api, 'saveSource').mockResolvedValue(source);
+    await screen.show(); await click(screen.element, '书源管理'); await click(screen.element, '添加来源');
+    input(screen.element, '名称', '并发测试');
+    const field = screen.element.querySelector<HTMLInputElement>('input[type=number]')!;
+    expect(field.value).toBe('3'); expect(field.min).toBe('1'); expect(field.max).toBe('10'); expect(field.step).toBe('1');
+    input(screen.element, '并发数量', '11'); expect(field.validity.rangeOverflow).toBe(true);
+    input(screen.element, '并发数量', '1.5'); expect(field.validity.stepMismatch).toBe(true);
+    input(screen.element, '并发数量', '4'); await click(screen.element, '保存来源');
+    expect(save).toHaveBeenCalledWith(null, expect.objectContaining({ config: { parallel: 4 } }));
+  });
+
   it('provides a stable route and separates member browsing from admin configuration', async () => {
     expect(parseRoute('#/sources')).toEqual({ name: 'sources' }); expect(routeHash({ name: 'sources' })).toBe('#/sources');
     const { screen, transport } = await setup(false);

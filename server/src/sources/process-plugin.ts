@@ -205,6 +205,17 @@ export class ProcessPlugin {
     return new Promise((resolveRequest, reject) => {
       const cancel = () => {
         if (!this.pending.has(id)) return;
+        const type = this.manifest.sourceTypes.find(type => type.id === params.sourceType);
+        if (method === 'search' && type?.capabilities.includes('search.cancel')) {
+          // A cancelled request must not later time out unrelated calls.
+          // onMessage ignores any late acknowledgement from the plugin.
+          const pending = this.pending.get(id);
+          this.pending.delete(id);
+          pending?.cleanup();
+          child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id } }) + '\n');
+          reject(new PluginError('PLUGIN_CANCELLED', 'search cancelled'));
+          return;
+        }
         // Killing the worker is the only hard cancellation available for trusted
         // stdio plugins. Other calls in the same process fail with it.
         this.fail(new PluginError('PLUGIN_CANCELLED', 'plugin process stopped because a request was cancelled'));

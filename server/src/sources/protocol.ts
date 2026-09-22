@@ -47,6 +47,22 @@ export function decodeCatalogPage(input: unknown): CatalogPage {
   for (const key of ['title', 'nextCursor']) {
     if (value[key] !== undefined && typeof value[key] !== 'string') invalid(`invalid plugin catalog ${key}`);
   }
+  if (value.errors !== undefined) {
+    if (!Array.isArray(value.errors)) invalid('plugin catalog errors must be an array');
+    for (const entry of value.errors) {
+      const error = object(entry, 'catalog error');
+      string(error.source, 'catalog error source');
+      string(error.code, 'catalog error code');
+      string(error.message, 'catalog error message');
+    }
+  }
+  if (value.batch !== undefined) {
+    const batch = object(value.batch, 'catalog batch');
+    if (!Number.isSafeInteger(batch.completed) || !Number.isSafeInteger(batch.total)
+      || (batch.completed as number) < 0 || (batch.total as number) < (batch.completed as number)
+      || (batch.total as number) > 10000) invalid('invalid plugin catalog batch progress');
+    if ((batch.completed as number) < (batch.total as number) && !value.nextCursor) invalid('unfinished catalog batch requires a cursor');
+  }
   if (value.navigation !== undefined) {
     if (!Array.isArray(value.navigation)) invalid('plugin navigation must be an array');
     for (const entry of value.navigation) {
