@@ -19,6 +19,12 @@ import { UploadService } from '../src/services/uploads.ts';
 import type { CatalogPage, SourceProvider } from '../src/sources/types.ts';
 
 interface Session { token: string; id: string }
+function streamEvents(body: string): Array<{ event: string; data: any }> {
+  return body.split('\n\n').filter(frame => frame.startsWith('event:')).map(frame => ({
+    event: /^event: (.+)/m.exec(frame)![1]!, data: JSON.parse(/^data: (.+)/m.exec(frame)![1]!),
+  }));
+}
+const searchPayload = { query: 'book', sessionId: 'test-search-session' };
 
 function auth(session: Session) { return { authorization: `Bearer ${session.token}` }; }
 
@@ -179,10 +185,11 @@ test('source query validation rejects repeated text parameters and invalid page 
     const response = await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/browse?${query}`, headers: auth(h.admin) });
     assert.equal(response.statusCode, 400, `${query}: ${response.body}`);
   }
-  for (const query of ['q=first&q=second', 'q=', 'q=valid&cursor=one&cursor=two']) {
-    const response = await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/search?${query}`, headers: auth(h.admin) });
-    assert.equal(response.statusCode, 400, `${query}: ${response.body}`);
+  for (const payload of [{ query: ['one', 'two'] }, { query: '' }, { query: 'valid', cursor: ['one', 'two'] }, { query: 'valid', resultLimit: true }, { query: 'valid', limit: 201 }]) {
+    const response = await h.app.inject({ method: 'POST', url: '/api/v1/sources/local/search', headers: auth(h.admin), payload: { ...searchPayload, ...payload } });
+    assert.equal(response.statusCode, 400, response.body);
   }
+  assert.equal((await h.app.inject({ method: 'GET', url: '/api/v1/sources/local/search?q=book', headers: auth(h.admin) })).statusCode, 404);
 });
 
 test('local source acquisition restores the existing publication to the requesting users shelf', async (t) => {
@@ -427,14 +434,14 @@ test('search sessions pass generic options and cancellation remains available wi
       assert.deepEqual(request.filters, { group: 'chosen' });
       entered++; if (entered === 2) ready();
       await new Promise<void>(resolve => { held.push(resolve); });
-      return { items: [], batch: { completed: 0, total: 2 }, nextCursor: 'opaque-heartbeat' };
+      return { items: [], batch: { completed: 2, total: 2 } };
     },
     async cancelSearch(ctx, sessionId) { stopped.push({ user: ctx.userId, source: ctx.instance.id, session: sessionId }); }
   };
   h.ctx.sources!.registry.register({ pluginId: 'reader.sessions', provider });
   await h.ctx.sources!.create({ id: 'session-test', pluginId: 'reader.sessions', sourceType: 'sessions', name: 'session test', config: {} });
-  const url = '/api/v1/sources/session-test/search?q=test&sessionId=search-session-id&resultLimit=3&filters=' + encodeURIComponent(JSON.stringify({ group: 'chosen' }));
-  const requests = [h.app.inject({ method: 'GET', url, headers: auth(member) }), h.app.inject({ method: 'GET', url, headers: auth(h.admin) })];
+  const url = '/api/v1/sources/session-test/search', payload = { query: 'test', sessionId: 'search-session-id', resultLimit: 3, filters: { group: 'chosen' } };
+  const requests = [h.app.inject({ method: 'POST', url, payload, headers: auth(member) }), h.app.inject({ method: 'POST', url, payload, headers: auth(h.admin) })];
   try {
     await full;
     const response = await h.app.inject({ method: 'POST', url: '/api/v1/sources/session-test/search/cancel', headers: auth(member), payload: { sessionId: 'search-session-id' } });
@@ -442,7 +449,61 @@ test('search sessions pass generic options and cancellation remains available wi
     assert.deepEqual(stopped, [{ user: member.id, source: 'session-test', session: 'search-session-id' }]);
     assert.equal((await h.app.inject({ method: 'POST', url: '/api/v1/sources/session-test/search/cancel', payload: { sessionId: 'search-session-id' } })).statusCode, 401);
   } finally { held.forEach(release => release()); await Promise.all(requests); }
-  for (const query of ['sessionId=bad', 'sessionId=search-session-id&sessionId=other-session-id', 'resultLimit=0', 'resultLimit=10001', 'resultLimit=1.5']) {
-    assert.equal((await h.app.inject({ method: 'GET', url: '/api/v1/sources/session-test/search?q=book&' + query, headers: auth(member) })).statusCode, 400, query);
+  for (const invalid of [{ sessionId: 'bad' }, { sessionId: ['search-session-id', 'other-session-id'] }, { resultLimit: 0 }, { resultLimit: 10001 }, { resultLimit: 1.5 }]) {
+    assert.equal((await h.app.inject({ method: 'POST', url, payload: { ...payload, ...invalid }, headers: auth(member) })).statusCode, 400);
   }
+});
+
+test('Streamable HTTP sends results before completion and disconnect cancels pending work', { timeout: 10000 }, async t => {
+  const h = await harness(); t.after(() => h.close());
+  let entered!: () => void, cancelled!: () => void, closed!: () => void;
+  const waiting = new Promise<void>(resolve => { entered = resolve; });
+  const aborted = new Promise<void>(resolve => { cancelled = resolve; });
+  const cleanup = new Promise<void>(resolve => { closed = resolve; });
+  const cursors: Array<string | undefined> = [];
+  const provider: SourceProvider = {
+    descriptor: { id: 'streaming', label: 'Stream', version: '1', capabilities: ['search', 'search.cancel', 'search.session', 'detail'] },
+    async detail(_ctx, ref) { return { ref, title: ref }; },
+    async acquire() { return { kind: 'action-required', action: { type: 'external', label: 'Test' } }; },
+    async search(ctx, request) {
+      cursors.push(request.cursor);
+      if (!request.cursor) return { items: [{ ref: 'first', title: '首条中文结果' }], batch: { completed: 1, total: 2 }, nextCursor: 'resume-here' };
+      entered();
+      return new Promise((_, reject) => { ctx.signal.addEventListener('abort', () => { cancelled(); reject(ctx.signal.reason); }, { once: true }); });
+    },
+    async cancelSearch() { closed(); }
+  };
+  h.ctx.sources!.registry.register({ pluginId: 'reader.streaming', provider });
+  await h.ctx.sources!.create({ id: 'stream-test', pluginId: 'reader.streaming', sourceType: 'streaming', name: 'stream test', config: {} });
+  const base = await h.app.listen({ port: 0, host: '127.0.0.1' });
+  const controller = new AbortController(); t.after(() => controller.abort());
+  const response = await fetch(base + '/api/v1/sources/stream-test/search', { method: 'POST', headers: { ...auth(h.admin), 'content-type': 'application/json', accept: 'text/event-stream' }, body: JSON.stringify(searchPayload), signal: controller.signal });
+  assert.match(response.headers.get('content-type')!, /text\/event-stream/); assert.equal(response.headers.get('x-accel-buffering'), 'no');
+  const reader = response.body!.getReader(), decoder = new TextDecoder(); let text = '';
+  while (!text.includes('首条中文结果')) { const part = await reader.read(); assert.equal(part.done, false); text += decoder.decode(part.value, { stream: true }); }
+  await waiting; assert.deepEqual(cursors, [undefined, 'resume-here']); assert.doesNotMatch(text, /event: done/);
+  controller.abort(); await Promise.all([aborted, cleanup]); await reader.cancel().catch(() => {});
+});
+
+test('stream errors retain earlier events and caps prevent extra provider calls', async t => {
+  const h = await harness(); t.after(() => h.close()); let calls = 0;
+  const provider: SourceProvider = {
+    descriptor: { id: 'stream-error', label: 'Stream', version: '1', capabilities: ['search', 'detail'] },
+    async detail(_ctx, ref) { return { ref, title: ref }; },
+    async acquire() { return { kind: 'action-required', action: { type: 'external', label: 'Test' } }; },
+    async search(_ctx, request) {
+      calls++;
+      if (request.cursor) return { items: [], batch: { completed: 1, total: 2 }, nextCursor: 'same' };
+      return { items: [{ ref: 'one', title: 'one' }, { ref: 'one', title: 'duplicate' }, { ref: 'two', title: 'two' }], batch: { completed: 1, total: 2 }, nextCursor: 'same' };
+    }
+  };
+  h.ctx.sources!.registry.register({ pluginId: 'reader.stream-error', provider });
+  await h.ctx.sources!.create({ id: 'stream-error', pluginId: 'reader.stream-error', sourceType: 'stream-error', name: 'stream error', config: {} });
+  const response = await h.app.inject({ method: 'POST', url: '/api/v1/sources/stream-error/search', headers: auth(h.admin), payload: searchPayload });
+  const events = streamEvents(response.body); assert.equal(events[0]!.data.items.length, 2);
+  assert.equal(events.at(-1)!.event, 'error'); assert.equal(events.at(-1)!.data.code, 'INVALID_CURSOR');
+  calls = 0;
+  const limited = await h.app.inject({ method: 'POST', url: '/api/v1/sources/stream-error/search', headers: auth(h.admin), payload: { ...searchPayload, resultLimit: 1 } });
+  const result = streamEvents(limited.body); assert.equal(calls, 1); assert.equal(result[0]!.data.items.length, 1);
+  assert.equal(result[0]!.data.limitReached, true); assert.equal(result.at(-1)!.data.reason, 'limit');
 });

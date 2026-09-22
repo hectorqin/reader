@@ -141,7 +141,7 @@ export class SourceHost {
   async cancelSearch(userId: string, id: string, sessionId: string) {
     // Cancellation must still get through when normal request slots are occupied.
     const row = this.instance(id), provider = this.registry.get(row.plugin_id, row.source_type)?.provider;
-    if (!provider?.cancelSearch) throw badRequest('source has no search sessions', 'SOURCE_UNSUPPORTED');
+    if (!provider?.cancelSearch) return;
     await provider.cancelSearch(this.context(row, userId, AbortSignal.timeout(5000)), sessionId);
   }
   async searchFilters(userId: string, id: string, signal?: AbortSignal) {

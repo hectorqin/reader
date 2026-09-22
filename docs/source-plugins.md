@@ -384,7 +384,7 @@ POST   /sources                         创建来源实例
 PATCH  /sources/:id                     仅修改 enabled
 PUT    /sources/:id/credentials/:key    设置当前用户凭据
 GET    /sources/:id/browse              浏览目录
-GET    /sources/:id/search              搜索
+POST   /sources/:id/search              Streamable HTTP 搜索（SSE results/done/error 事件）
 GET    /sources/:id/entries?ref=...     详情
 POST   /sources/:id/acquire             获取内容，body 传 entryRef
 GET    /sources/:id/publications/:publicationRef/manifest

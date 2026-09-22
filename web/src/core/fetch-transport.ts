@@ -43,6 +43,14 @@ export class FetchTransport implements Transport {
       headers[key.toLowerCase()] = value;
     });
 
+    if (request.stream) {
+      if (!response.ok) throw await this.toError(response);
+      if (!response.body || !/^text\/event-stream(?:;|$)/i.test(headers['content-type'] ?? '')) {
+        await response.body?.cancel();
+        throw new ApiError('server', '服务器没有返回搜索结果流', 'INVALID_STREAM');
+      }
+      return { status: response.status, headers, stream: response.body };
+    }
     if (request.binary) {
       if (!response.ok) throw await this.toError(response);
       const buffer = new Uint8Array(await response.arrayBuffer());

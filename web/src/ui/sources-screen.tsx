@@ -131,27 +131,20 @@ export class SourcesScreen {
     const source = this.selected, run = new AbortController();
     const request = append ? this.searchRequest : { query: this.query.trim(), filters: { ...this.filterValues } };
     if (!request?.query) return;
-    let cursor = append ? this.page?.nextCursor : undefined;
+    const cursor = append ? this.page?.nextCursor : undefined;
     if (append && (this.searchState === 'limited' || (!cursor && !this.searchSession))) return;
     if (!append) { this.page = null; this.path = []; this.acquired = null; }
-    if (!append) this.searchSession = source.descriptor?.capabilities.includes('search.session') ? { sourceId: source.id, id: searchId() } : null;
+    if (!append) this.searchSession = { sourceId: source.id, id: searchId() };
     const session = this.searchSession;
     this.searchRequest = request; this.searchRun = run; this.searchState = 'searching'; this.message = ''; this.draw();
     const current = () => !this.disposed && this.searchRun === run;
-    const seen = new Set<string>();
     try {
       await this.searchStop;
       if (!current()) return;
-      do {
-        const key = cursor ?? '';
-        if (seen.has(key)) throw new Error('来源返回了重复的搜索游标，请重新搜索。');
-        seen.add(key);
-        // Legacy providers may terminate their whole worker on abort. Only declared
-        // cooperative search providers receive the signal; stale replies are always ignored.
-        const page = await this.options.api.sourceCatalog(source.id, { ...request, ...(cursor ? { cursor } : {}), ...(session ? { sessionId: session.id, resultLimit: 10000 } : {}) },
-          source.descriptor?.capabilities.includes('search.cancel') ? { signal: run.signal } : {});
+      for await (const page of this.options.api.searchSource(source.id,
+        { ...request, ...(cursor ? { cursor } : {}), sessionId: session!.id, resultLimit: 10000 }, { signal: run.signal })) {
         if (!current()) return;
-        if (page.batch && this.page?.batch && (page.batch.completed < this.page.batch.completed || (!session && page.batch.completed === this.page.batch.completed))) throw new Error('来源搜索进度没有推进，请重新搜索。');
+        if (page.batch && this.page?.batch && (page.batch.completed < this.page.batch.completed)) throw new Error('来源搜索进度没有推进，请重新搜索。');
         const entries = new Map((this.page?.items ?? []).map(entry => [entry.ref, entry]));
         for (const entry of page.items) { if (entries.has(entry.ref) || entries.size < 10000) entries.set(entry.ref, entry); }
         const errors = new Map((this.page?.errors ?? []).map(error => [error.source + '\0' + error.code, error]));
@@ -162,9 +155,7 @@ export class SourcesScreen {
           this.message = '已达到单次搜索结果上限，请缩小搜索范围后重新搜索。';
           this.searchState = 'limited'; delete this.page.nextCursor; this.cancelSession(); break;
         }
-        cursor = page.batch && (session || page.batch.completed < page.batch.total) ? page.nextCursor : undefined;
-        if (cursor) await new Promise<void>(resolve => setTimeout(resolve, 0));
-      } while (cursor && current());
+      }
       if (current() && this.searchState === 'searching') this.searchState = 'complete';
     } catch (error) {
       if (!current()) return;
@@ -278,7 +269,7 @@ export class SourcesScreen {
             {(entry.options?.length ? entry.options : [{ id: '', label: '加入书架' }]).map((option) => <Button className="primary" disabled={this.busy || option.available === false}
               onClick={() => void this.run(() => this.acquire(entry, option.id))}>{option.label}</Button>)}</div>
           </article>)}
-          {this.searchState !== 'idle' && this.searchState !== 'limited' && (this.page?.nextCursor || (this.searchSession && this.searchState === 'stopped')) && !this.searchRun && <div className="catalog-pagination"><Button disabled={this.busy} onClick={() => void this.search(true)}>{this.page?.batch || this.searchSession ? '继续搜索' : '加载更多结果'}</Button></div>}
+          {this.searchState !== 'idle' && this.searchState !== 'limited' && (this.page?.nextCursor || (this.searchSession && (this.searchState === 'stopped' || this.searchState === 'error'))) && !this.searchRun && <div className="catalog-pagination"><Button disabled={this.busy} onClick={() => void this.search(true)}>{this.page?.batch || !this.page ? '继续搜索' : '加载更多结果'}</Button></div>}
           {this.searchState === 'idle' && (this.path.length > 1 || this.page?.nextCursor) && <nav className="catalog-pagination" aria-label="搜索结果翻页">
             {this.path.length > 1 && <Button disabled={this.busy} onClick={() => void this.run(async () => { const previous = this.path[this.path.length - 2]!; await this.catalog(previous, false); this.path.pop(); })}>上一页</Button>}
             {this.page?.nextCursor && <Button disabled={this.busy} onClick={() => void this.run(() => this.catalog({ ...this.path.at(-1), cursor: this.page!.nextCursor! }))}>下一页</Button>}
