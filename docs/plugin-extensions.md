@@ -28,6 +28,8 @@ GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{sourc
 
 声明 `search.filters`，实现 `searchFilters(ctx)`，返回带不透明 key/value 的选择字段；`SearchRequest.filters` 为字符串映射，宿主只验证结构与大小。搜索历史与下一页保留筛选条件。
 
+前端通过 `POST /api/v1/sources/:id/search` 建立一次 Streamable HTTP 请求，使用 `text/event-stream` 持续接收 `results`，并以 `done` 或 `error` 结束；收到结果后立即合并展示。宿主在服务端按插件返回的 `nextCursor` 拉取后续批次或普通分页，直到游标耗尽、达到请求的 `resultLimit` 或被取消。插件内部的游标分页仍保留，前端不再通过轮询获取结果。停止搜索或断开连接会取消在途搜索，已收到的结果保留。
+
 ## 通用换源
 
 1. 目录面板根据 `source-options.canSwitch` 显示换源入口，用户搜索候选。

@@ -464,12 +464,11 @@ pdf / 单图没有独立目录，回落到 items。
 也可以以可写方式挂载以启用管理员文件管理。改名、移动、删除和新建目录等端点同样会修改
 可写书库中的目录项；只读挂载时所有这些写操作统一返回 `403 READ_ONLY_MOUNT`。
 
-三条规则保证写入可恢复、可校验且不会留下半本书：
+上传流程：
 
-- **字节完整、且已经落在同一个文件系统上，才会进书库。** 请求体先流到
-  `DATA_DIR/uploads` 的暂存文件（服务端自己的可写空间），只有写完的文件才 `rename`
-  进 `BOOKS_DIR`。传到 90% 断线、信号没了、密码错了，都不可能留下半本书，
-  因为书库里从不出现半本书。
+- **接收完成后才写入书库。** 请求体先流到 `DATA_DIR/uploads` 的暂存文件，
+  接收中断不会把未接收完整的文件写入 `BOOKS_DIR`。同文件系统通过 `rename` 移入；
+  不同文件系统遇到 `EXDEV` 时复制到目标，再删除暂存文件。跨文件系统复制不具备原子性。
 - **名字不是路径。** 客户端送的是文件名，不是路径：斜杠、`..`、控制字符、会让扫描器
   看不见的前导点，一律改写或拒绝，再过一遍 `resolveInside`。`C:\Users\me\我的书\三体.epub`
   只会取最后一段。
@@ -494,7 +493,7 @@ pdf / 单图没有独立目录，回落到 items。
 上传进的每一个字节都复制进了 `DATA_DIR`，请求结束（成功或失败）即删——
 一个上传不进去第二次的书库比没有这个功能更糟。
 
-挂载只读 → 在写入任何东西之前就 `403 READ_ONLY_MOUNT`。
+挂载只读 → 写入 `BOOKS_DIR` 前返回 `403 READ_ONLY_MOUNT`；请求暂存位于 `DATA_DIR`。
 `GET /library/upload` 返回 `{ "writable": true }`，让客户端在开始传 400MB 之前先问一句。
 
 ### `POST /library/browse/metadata`
@@ -1015,7 +1014,7 @@ Invoke-RestMethod -Method Post -Uri "$readerApi/books/$readerBookId/refresh" -He
 | `UNSUPPORTED_FORMAT` | 400 | 该格式不提供可寻址结构 |
 | `EMPTY_ASSET` | 400 | 资源既没有数据也没有流 |
 | `ADMIN_REQUIRED` | 403 | 需要管理员权限 |
-| `READ_ONLY_MOUNT` | 403 | 书库是只读挂载，无法改名 / 移动 / 删除 |
+| `READ_ONLY_MOUNT` | 403 | 书库目录不可写，无法上传 / 改名 / 移动 / 删除 / 新建目录 |
 | `DIR_NOT_FOUND` | 404 | 目录不存在 |
 | `NOT_A_DIRECTORY` | 400 | 目标不是目录 |
 | `PATH_NOT_FOUND` | 404 | 路径不存在 |

@@ -14,17 +14,15 @@ import type { Scanner, ScanResult } from '../indexer/scanner.ts';
 /**
  * Uploading books into the library. BOOKS_DIR may be mounted read-only for a
  * browse-only deployment or writable for administrator file management. When
- * writable, uploads use a DATA_DIR staging area and publish complete files
- * atomically, so a failed request never leaves a partial book in the library.
- * The same boundary and validation rules apply to uploads, moves and deletes:
+ * writable, uploads stage incoming bytes in DATA_DIR before moving them into
+ * BOOKS_DIR. Placement uses rename on one filesystem or copy/unlink across
+ * filesystems; the latter is not atomic.
  *
  *  1. **Nothing is written to the library until its bytes are complete.** The
  *     stream goes to a scratch file in `DATA_DIR/uploads`, which is the
  *     server's own writable space, and only a finished file is moved into
- *     `BOOKS_DIR` (with a cross-filesystem copy fallback). A request that dies at 90%,
- *     a client that runs out of signal, a wrong password — none of them can
- *     leave half a book behind, because a half book never exists inside the
- *     library at all.
+ *     `BOOKS_DIR` (with a cross-filesystem copy fallback). An interrupted incoming
+ *     stream therefore does not write an incomplete download to BOOKS_DIR.
  *  2. **The name is not the path.** A client sends a file name, never a path:
  *     slashes, `..`, control characters and the leading dots that would hide a
  *     file from the scanner are all rewritten or refused. `resolveInside` is
@@ -132,9 +130,8 @@ export function parseConflictPolicy(value: unknown): ConflictPolicy {
  *
  * The fallback still behaves like a move: `copyFile` + `unlink` leaves no
  * scratch copy behind, and it is only reached after `rename` has already said
- * the two paths cannot share an inode. A `copyFile` that dies halfway leaves a
- * partial destination, which `rollback` removes along with everything else the
- * failed request wrote — the same guarantee a failed rename had.
+ * the two paths cannot share an inode. Cross-filesystem placement is not atomic;
+ * readers may observe the destination while it is being copied.
  */
 export async function moveIntoLibrary(
   source: string,
@@ -380,10 +377,8 @@ export class UploadService {
   /**
    * Move a finished file into the library under a free name.
    *
-   * `rename` rather than copy, and both paths on the same filesystem, so a file
-   * appears in the library already complete: a reader whose library is being
-   * watched by a scanner must never see a partially written book, and a
-   * same-filesystem rename is atomic where a `write()` into the library is not.
+   * The incoming file is already staged in DATA_DIR. moveIntoLibrary uses an
+   * atomic rename on the same filesystem and a copy fallback across mounts.
    *
    * `subdir` is how an archive member keeps the structure it arrived in. A comic
    * stored as `系列/第01卷/001.jpg` is a *directory book* to the scanner, and
