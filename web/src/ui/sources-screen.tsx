@@ -3,6 +3,7 @@ import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { Book } from '../api/types.ts';
 import type { ChapterSubscription, SourceEntry, SourceInstance, SourcePage, SourcePlugin, SourceType } from '../api/sources.ts';
 import { Modal } from './modal.tsx';
+import { CatalogFeedback } from './catalog-feedback.tsx';
 import { mountUI } from './mount.ts';
 import { Button, IconButton, Icon } from './toolkit.tsx';
 
@@ -11,13 +12,21 @@ type SourceTab = 'search' | 'sources' | 'updates' | 'plugins';
 interface Editor { id: string | null; typeKey: string; name: string; config: Record<string, unknown>; raw: string }
 const keyFor = (type: { pluginId: string; id: string }) => `${type.pluginId}/${type.id}`;
 const date = (value: number | null) => value ? new Date(value).toLocaleString() : '尚未检查';
+// getRandomValues also works when a self-hosted Reader is opened over LAN HTTP.
+const searchId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
 
 /** Source configuration and browsing use the same declared provider capabilities. */
 export class SourcesScreen {
   readonly element = document.createElement('div');
   private readonly ui: ReturnType<typeof mountUI>;
   private disposed = false;
-  private busy = false;
+  private working = false;
+  private searchRun: AbortController | null = null;
+  private searchState: 'idle' | 'searching' | 'stopped' | 'complete' | 'error' | 'limited' = 'idle';
+  private searchSession: { sourceId: string; id: string } | null = null;
+  private searchStop: Promise<void> = Promise.resolve();
+  private searchRequest: { query: string; filters: Record<string, string> } | null = null;
+  private get busy(): boolean { return this.working || this.searchRun !== null; }
   private message = '';
   private savedSource: SourceInstance | null = null;
   private types: SourceType[] = [];
@@ -44,18 +53,18 @@ export class SourcesScreen {
     this.ui = mountUI(this.element, () => this.view(), null);
   }
   async show(): Promise<void> { await this.run(() => this.reload()); }
-  dispose(): void { this.disposed = true; this.credentialValues = {}; this.ui.unmount(); }
+  dispose(): void { this.disposed = true; this.stopSearch(); this.credentialValues = {}; this.ui.unmount(); }
   private draw(): void { if (!this.disposed) this.ui.update(null); }
   private async run(action: () => Promise<void>): Promise<void> {
     if (this.busy || this.disposed) return;
-    this.busy = true; this.message = ''; this.draw();
+    this.working = true; this.message = ''; this.draw();
     try { await action(); }
     catch (error) {
       if (this.disposed) return;
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
       else this.message = error instanceof Error ? error.message : '操作失败，请重试';
     } finally {
-      this.busy = false; this.draw();
+      this.working = false; this.draw();
       this.element.querySelector<HTMLElement>('dialog [role=alert]')?.focus();
     }
   }
@@ -87,9 +96,14 @@ export class SourcesScreen {
   private async catalog(query: { ref?: string; query?: string; cursor?: string; filters?: Record<string, string> }, push = true): Promise<void> {
     if (!this.selected) return;
     const page = await this.options.api.sourceCatalog(this.selected.id, query);
-    this.page = page; if (push) this.path.push(query);
+    this.page = page;
+    if (push) {
+      if (query.query !== undefined && !query.cursor) this.path = [query];
+      else this.path.push(query);
+    }
   }
   private select(source: SourceInstance): void {
+    this.stopSearch(); this.searchState = 'idle'; this.searchRequest = null;
     this.selected = source; this.page = null; this.path = []; this.query = ''; this.credentialValues = {}; this.acquired = null;
     this.filters = []; this.filterValues = {};
     void this.run(async () => {
@@ -97,6 +111,70 @@ export class SourcesScreen {
       if (source.descriptor?.capabilities.includes('browse')) await this.catalog({});
       this.draw();
     });
+  }
+  private stopSearch(): void {
+    if (!this.searchRun) return;
+    const run = this.searchRun; this.searchRun = null;
+    this.searchState = 'stopped'; run.abort(); this.draw();
+    this.cancelSession();
+  }
+  private cancelSession(): void {
+    const session = this.searchSession;
+    if (session) this.searchStop = this.options.api.cancelSourceSearch(session.sourceId, session.id).catch(() => {
+      if (this.searchSession === session && this.searchState === 'stopped') {
+        this.message = '停止请求未确认，后台搜索将在连接空闲后自动停止。'; this.draw();
+      }
+    });
+  }
+  private async search(append = false): Promise<void> {
+    if (this.busy || !this.selected || this.disposed) return;
+    const source = this.selected, run = new AbortController();
+    const request = append ? this.searchRequest : { query: this.query.trim(), filters: { ...this.filterValues } };
+    if (!request?.query) return;
+    let cursor = append ? this.page?.nextCursor : undefined;
+    if (append && (this.searchState === 'limited' || (!cursor && !this.searchSession))) return;
+    if (!append) { this.page = null; this.path = []; this.acquired = null; }
+    if (!append) this.searchSession = source.descriptor?.capabilities.includes('search.session') ? { sourceId: source.id, id: searchId() } : null;
+    const session = this.searchSession;
+    this.searchRequest = request; this.searchRun = run; this.searchState = 'searching'; this.message = ''; this.draw();
+    const current = () => !this.disposed && this.searchRun === run;
+    const seen = new Set<string>();
+    try {
+      await this.searchStop;
+      if (!current()) return;
+      do {
+        const key = cursor ?? '';
+        if (seen.has(key)) throw new Error('来源返回了重复的搜索游标，请重新搜索。');
+        seen.add(key);
+        // Legacy providers may terminate their whole worker on abort. Only declared
+        // cooperative search providers receive the signal; stale replies are always ignored.
+        const page = await this.options.api.sourceCatalog(source.id, { ...request, ...(cursor ? { cursor } : {}), ...(session ? { sessionId: session.id, resultLimit: 10000 } : {}) },
+          source.descriptor?.capabilities.includes('search.cancel') ? { signal: run.signal } : {});
+        if (!current()) return;
+        if (page.batch && this.page?.batch && (page.batch.completed < this.page.batch.completed || (!session && page.batch.completed === this.page.batch.completed))) throw new Error('来源搜索进度没有推进，请重新搜索。');
+        const entries = new Map((this.page?.items ?? []).map(entry => [entry.ref, entry]));
+        for (const entry of page.items) { if (entries.has(entry.ref) || entries.size < 10000) entries.set(entry.ref, entry); }
+        const errors = new Map((this.page?.errors ?? []).map(error => [error.source + '\0' + error.code, error]));
+        for (const error of page.errors ?? []) errors.set(error.source + '\0' + error.code, error);
+        this.page = { ...page, items: [...entries.values()], errors: [...errors.values()] };
+        this.draw();
+        if (entries.size >= 10000 || (page.limitReached && !page.nextCursor)) {
+          this.message = '已达到单次搜索结果上限，请缩小搜索范围后重新搜索。';
+          this.searchState = 'limited'; delete this.page.nextCursor; this.cancelSession(); break;
+        }
+        cursor = page.batch && (session || page.batch.completed < page.batch.total) ? page.nextCursor : undefined;
+        if (cursor) await new Promise<void>(resolve => setTimeout(resolve, 0));
+      } while (cursor && current());
+      if (current() && this.searchState === 'searching') this.searchState = 'complete';
+    } catch (error) {
+      if (!current()) return;
+      this.searchState = 'error';
+      this.cancelSession();
+      if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
+      else this.message = error instanceof Error ? error.message : '搜索失败，已保留找到的书籍。';
+    } finally {
+      if (current()) { this.searchRun = null; this.draw(); }
+    }
   }
   private async acquire(entry: SourceEntry, optionId?: string): Promise<void> {
     if (!this.selected) return;
@@ -108,6 +186,7 @@ export class SourcesScreen {
     this.message = '已加入书架，可在“自动追更”中开启检查。';
   }
   private changeTab(tab: SourceTab): void {
+    this.stopSearch();
     this.tab = tab; this.managing = null; this.message = ''; this.draw();
     const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0;
   }
@@ -134,7 +213,7 @@ export class SourcesScreen {
           event.preventDefault(); this.changeTab(tabs[next]!.id);
           this.element.querySelector<HTMLElement>('#sources-tab-' + tabs[next]!.id)?.focus();
         }}>{tab.title}{tab.id === 'updates' && this.subscriptions.some(s => s.newChapters > 0) && <span className="sources-tab-dot" aria-label="有更新" />}</button>)}</nav>
-      {!this.editor && !this.credentialsOpen && (this.busy || this.message) && <div role="status" className="notice">{this.busy ? '正在处理…' : this.message}</div>}
+      {!this.editor && !this.credentialsOpen && (this.working || this.message) && <div role="status" className="notice">{this.working ? '正在处理…' : this.message}</div>}
       <main key="body" className="sources-body" role="tabpanel" id={'sources-panel-' + this.tab} aria-labelledby={'sources-tab-' + this.tab} tabIndex={0}>
       {this.tab === 'sources' && this.options.admin && <>
         {!!this.savedSource?.descriptor?.extensions?.pages?.length && <section className="sources-card source-next-step"><strong>{this.savedSource!.name}</strong>
@@ -168,33 +247,42 @@ export class SourcesScreen {
         </section>
       </>}
       {this.tab === 'search' && <>
-        <section className="sources-card source-picker"><h2>搜书</h2>
+        <section className="sources-card source-picker"><div><h2>搜书</h2><p className="muted">选择来源，发现想读的书。</p></div>
           <label>选择来源<select aria-label="选择来源" disabled={this.busy} value={this.selected?.id ?? ''} onChange={event => {
             const source = this.sources.find(source => source.id === event.currentTarget.value); if (source) this.select(source);
           }}><option value="" disabled>请选择一个来源</option>{this.sources.filter(source => source.enabled && source.descriptor).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
           {!this.selected && <p className="muted">{this.sources.some(source => source.enabled && source.descriptor) ? '选择来源后，即可搜索书籍或浏览目录。' : '暂无可用来源，请先添加或启用来源。'}</p>}
         </section>
-        {this.selected && <section className="sources-card source-catalog"><h2>{this.selected.name}</h2>
+        {this.selected && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>
           {(this.selected.descriptor?.credentialKeys?.length ?? 0) > 0 && <Button disabled={this.busy} onClick={() => { this.credentialsOpen = true; this.message = ''; this.draw(); }}>登录凭据</Button>}
-          {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.run(() => this.catalog({ query: this.query.trim(), filters: { ...this.filterValues } })); }}>
+          {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.search(); }}>
             {this.filters.map(field => <label key={field.key}>{field.label}<select aria-label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy}
               onChange={event => { this.filterValues[field.key] = event.currentTarget.value; this.draw(); }}>
               {field.options?.map(option => <option value={option.value}>{option.label}</option>)}
             </select></label>)}
-            <label>搜索书籍<input type="search" required value={this.query} onInput={(event) => { this.query = event.currentTarget.value; }} /></label><Button type="submit" disabled={this.busy}>搜索</Button></form>}
-          {this.path.length > 1 && <Button disabled={this.busy} onClick={() => void this.run(async () => { const previous = this.path[this.path.length - 2]!; await this.catalog(previous, false); this.path.pop(); })}>上一页目录</Button>}
-          {this.page?.title && <h3>{this.page.title}</h3>}
+            <label className="source-keyword">搜索书籍<input type="search" placeholder="输入书名或作者" disabled={this.busy} required value={this.query} onInput={(event) => { this.query = event.currentTarget.value; }} /></label>
+            {this.searchRun ? <Button key="stop" type="button" className="search-stop" onClick={event => { event.preventDefault(); this.stopSearch(); }}><Icon name="stop" />停止搜索</Button> : <Button key="search" className="primary" type="submit" disabled={this.busy}><Icon name="search" />搜索</Button>}</form>}
+          {this.searchState !== 'idle' && <div className="search-progress" role="status">
+            <span>{({ searching: '正在搜索', stopped: '已停止搜索', complete: '搜索完成', error: '搜索中断', limited: '已达到结果上限' })[this.searchState]}{this.page?.batch ? ` · 已检查 ${this.page.batch.completed} / ${this.page.batch.total} 个来源` : ''} · 已找到 {this.page?.items.length ?? 0} 本书</span>
+            {this.page?.batch && <progress aria-label="书源搜索进度" max={Math.max(1, this.page.batch.total)} value={this.page.batch.completed} />}
+            {this.searchState === 'searching' && <small>结果会自动合并，可随时停止。</small>}
+          </div>}
+          {this.page && <CatalogFeedback page={this.page} merged={this.searchState !== 'idle'} searching={this.searchState === 'searching'} />}
           {this.page?.navigation?.map((entry) => <Button disabled={this.busy} onClick={() => void this.run(() => this.catalog({ ref: entry.ref }))}>{entry.title}</Button>)}
-          {this.page?.items.length === 0 && <p>这里还没有书籍。可以进入分类或换一个关键词。</p>}
-          {this.page?.items.map((entry) => <article className="sources-row" key={entry.ref}>
+          {this.page?.items.length === 0 && !this.searchRun && <div className="catalog-empty"><Icon name={this.page.errors?.length ? 'warning' : 'search'} /><strong>{this.searchState === 'stopped' ? '搜索已停止，暂未找到书籍' : this.page.errors?.length ? '暂未返回书籍，部分来源搜索失败' : '没有找到匹配书籍'}</strong><p>{this.page.errors?.length ? '请查看失败原因，或调整搜索范围后重试。' : '试试其他关键词，或调整搜索范围。'}</p></div>}
+          {this.page?.items.map((entry) => <article className="sources-row catalog-book" key={entry.ref}>
             <div><strong>{entry.title}</strong><small>{entry.authors?.join(' / ')}</small><p className="source-description">{entry.description}</p></div>
             <div className="sources-actions"><Button disabled={this.busy} onClick={() => void this.run(async () => {
               const detail = await this.options.api.sourceDetail(this.selected!.id, entry.ref); Object.assign(entry, detail);
             })}>详情</Button>
-            {(entry.options?.length ? entry.options : [{ id: '', label: '加入书架' }]).map((option) => <Button disabled={this.busy || option.available === false}
+            {(entry.options?.length ? entry.options : [{ id: '', label: '加入书架' }]).map((option) => <Button className="primary" disabled={this.busy || option.available === false}
               onClick={() => void this.run(() => this.acquire(entry, option.id))}>{option.label}</Button>)}</div>
           </article>)}
-          {this.page?.nextCursor && <Button disabled={this.busy} onClick={() => void this.run(() => this.catalog({ ...this.path.at(-1), cursor: this.page!.nextCursor! }))}>下一页</Button>}
+          {this.searchState !== 'idle' && this.searchState !== 'limited' && (this.page?.nextCursor || (this.searchSession && this.searchState === 'stopped')) && !this.searchRun && <div className="catalog-pagination"><Button disabled={this.busy} onClick={() => void this.search(true)}>{this.page?.batch || this.searchSession ? '继续搜索' : '加载更多结果'}</Button></div>}
+          {this.searchState === 'idle' && (this.path.length > 1 || this.page?.nextCursor) && <nav className="catalog-pagination" aria-label="搜索结果翻页">
+            {this.path.length > 1 && <Button disabled={this.busy} onClick={() => void this.run(async () => { const previous = this.path[this.path.length - 2]!; await this.catalog(previous, false); this.path.pop(); })}>上一页</Button>}
+            {this.page?.nextCursor && <Button disabled={this.busy} onClick={() => void this.run(() => this.catalog({ ...this.path.at(-1), cursor: this.page!.nextCursor! }))}>下一页</Button>}
+          </nav>}
           {this.acquired && <Button onClick={() => this.options.onOpen(this.acquired!)}>阅读《{this.acquired.title}》</Button>}
         </section>}
       </>}
@@ -243,7 +331,7 @@ export class SourcesScreen {
                 onChange={(event) => { try { this.editor!.config[key] = JSON.parse(event.currentTarget.value); event.currentTarget.setCustomValidity(''); } catch { event.currentTarget.setCustomValidity('请输入有效 JSON'); } }} />
                 : field.type === 'boolean' ? <input disabled={this.busy} type="checkbox" checked={this.editor!.config[key] === true}
                   onChange={(event) => { this.editor!.config[key] = event.currentTarget.checked; }} />
-                : <input disabled={this.busy} type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'} step={field.type === 'number' ? 'any' : '1'} required={type.configSchema?.required?.includes(key)} value={String(this.editor!.config[key] ?? '')}
+                : <input disabled={this.busy} min={field.minimum} max={field.maximum} type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'} step={field.type === 'number' ? 'any' : '1'} required={type.configSchema?.required?.includes(key)} value={String(this.editor!.config[key] ?? field.default ?? '')}
                   onInput={(event) => { const value = event.currentTarget.value;
                     if (!value && !type.configSchema?.required?.includes(key)) delete this.editor!.config[key];
                     else this.editor!.config[key] = field.type === 'number' || field.type === 'integer' ? Number(value) : value;

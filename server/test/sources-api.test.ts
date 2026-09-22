@@ -411,3 +411,38 @@ test('trusted example plugins can be installed, queried, disabled, reloaded afte
   const instances = await h.app.inject({ method: 'GET', url: '/api/v1/sources', headers: auth(h.admin) });
   assert.ok(instances.json().sources.some((source: { id: string }) => source.id === 'demo-instance'), 'uninstall keeps instance configuration');
 });
+
+test('search sessions pass generic options and cancellation remains available with saturated search slots', { timeout: 10000 }, async t => {
+  const h = await harness(); t.after(() => h.close());
+  const member = await h.member(), stopped: Array<{ user: string; source: string; session: string }> = [];
+  let entered = 0, ready!: () => void;
+  const full = new Promise<void>(resolve => { ready = resolve; });
+  const held: Array<() => void> = [];
+  const provider: SourceProvider = {
+    descriptor: { id: 'sessions', label: 'Sessions', version: '1', capabilities: ['search', 'search.cancel', 'search.session', 'detail'] },
+    async detail(_ctx, ref) { return { ref, title: ref }; },
+    async acquire() { return { kind: 'action-required', action: { type: 'external', label: 'Test' } }; },
+    async search(_ctx, request) {
+      assert.equal(request.sessionId, 'search-session-id'); assert.equal(request.resultLimit, 3);
+      assert.deepEqual(request.filters, { group: 'chosen' });
+      entered++; if (entered === 2) ready();
+      await new Promise<void>(resolve => { held.push(resolve); });
+      return { items: [], batch: { completed: 0, total: 2 }, nextCursor: 'opaque-heartbeat' };
+    },
+    async cancelSearch(ctx, sessionId) { stopped.push({ user: ctx.userId, source: ctx.instance.id, session: sessionId }); }
+  };
+  h.ctx.sources!.registry.register({ pluginId: 'reader.sessions', provider });
+  await h.ctx.sources!.create({ id: 'session-test', pluginId: 'reader.sessions', sourceType: 'sessions', name: 'session test', config: {} });
+  const url = '/api/v1/sources/session-test/search?q=test&sessionId=search-session-id&resultLimit=3&filters=' + encodeURIComponent(JSON.stringify({ group: 'chosen' }));
+  const requests = [h.app.inject({ method: 'GET', url, headers: auth(member) }), h.app.inject({ method: 'GET', url, headers: auth(h.admin) })];
+  try {
+    await full;
+    const response = await h.app.inject({ method: 'POST', url: '/api/v1/sources/session-test/search/cancel', headers: auth(member), payload: { sessionId: 'search-session-id' } });
+    assert.equal(response.statusCode, 200, response.body);
+    assert.deepEqual(stopped, [{ user: member.id, source: 'session-test', session: 'search-session-id' }]);
+    assert.equal((await h.app.inject({ method: 'POST', url: '/api/v1/sources/session-test/search/cancel', payload: { sessionId: 'search-session-id' } })).statusCode, 401);
+  } finally { held.forEach(release => release()); await Promise.all(requests); }
+  for (const query of ['sessionId=bad', 'sessionId=search-session-id&sessionId=other-session-id', 'resultLimit=0', 'resultLimit=10001', 'resultLimit=1.5']) {
+    assert.equal((await h.app.inject({ method: 'GET', url: '/api/v1/sources/session-test/search?q=book&' + query, headers: auth(member) })).statusCode, 400, query);
+  }
+});

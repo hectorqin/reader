@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { createServer } from 'node:http';
 import { ProcessPlugin } from '../src/sources/process-plugin.ts';
 import { SourceRegistry, validatePluginManifest } from '../src/sources/registry.ts';
-import { decodeChapterAcquisition, decodeManifest } from '../src/sources/protocol.ts';
+import { decodeCatalogPage, decodeChapterAcquisition, decodeManifest } from '../src/sources/protocol.ts';
 import type { PluginManifest, SourceContext, SourceProvider } from '../src/sources/types.ts';
 
 function context(signal = new AbortController().signal): SourceContext {
@@ -23,6 +24,22 @@ const manifest: PluginManifest = {
   id: 'test.source', name: 'Test', version: '1.0.0', apiVersion: 1, runtime: 'node', entry: 'main.mjs',
   sourceTypes: [{ id: 'test', label: 'Test', capabilities: ['detail'] }],
 };
+
+test('catalog protocol preserves partial failures and rejects malformed diagnostics', () => {
+  const errors = [{ source: 'A', code: 'HTTP_ERROR', message: 'HTTP 503' }];
+  assert.deepEqual(decodeCatalogPage({ items: [{ ref: 'b', title: 'Book' }], errors }).errors, errors);
+  assert.deepEqual(decodeCatalogPage({ items: [] }).items, []);
+  for (const invalid of [null, {}, ['failed'], [{ source: 'A', code: 'X' }], [{ ...errors[0], message: {} }]]) {
+    assert.throws(() => decodeCatalogPage({ items: [], errors: invalid }), { code: 'PLUGIN_PROTOCOL_ERROR' });
+  }
+  assert.deepEqual(decodeCatalogPage({ items: [], batch: { completed: 0, total: 0 } }).batch, { completed: 0, total: 0 });
+  for (const batch of [{ completed: -1, total: 4 }, { completed: 5, total: 4 }, { completed: 1.5, total: 4 }, { completed: 1, total: 10001 }, { completed: '1', total: 4 }]) {
+    assert.throws(() => decodeCatalogPage({ items: [], batch, nextCursor: 'next' }), { code: 'PLUGIN_PROTOCOL_ERROR' });
+  }
+  assert.throws(() => decodeCatalogPage({ items: [], batch: { completed: 1, total: 4 } }), { code: 'PLUGIN_PROTOCOL_ERROR' });
+  assert.equal(decodeCatalogPage({ items: [], batch: { completed: 1, total: 4 }, limitReached: true }).limitReached, true);
+  assert.throws(() => decodeCatalogPage({ items: [], limitReached: 'yes' }), { code: 'PLUGIN_PROTOCOL_ERROR' });
+});
 
 async function fixture(code: string): Promise<{ directory: string; dispose(): Promise<void> }> {
   const directory = await mkdtemp(join(tmpdir(), 'reader-plugin-'));
@@ -51,6 +68,12 @@ test('registry separates plugin namespaces and rejects unsupported advertised ca
     pluginId: 'reader.invalid',
     provider: { ...provider, descriptor: { ...provider.descriptor, capabilities: ['acquire.chapters'] } },
   }), /chapter manifest and resources/);
+  assert.throws(() => registry.register({ pluginId: 'reader.invalid', provider: {
+    ...provider, search: async () => ({ items: [] }), descriptor: { ...provider.descriptor, capabilities: ['search', 'search.session'] },
+  } }), /search.session requires search.cancel/);
+  assert.throws(() => registry.register({ pluginId: 'reader.invalid', provider: {
+    ...provider, search: async () => ({ items: [] }), descriptor: { ...provider.descriptor, capabilities: ['search', 'search.cancel', 'search.session'] },
+  } }), /does not implement cancelSearch/);
 });
 
 test('plugin manifest rejects API version mismatch and duplicate or incomplete source types', () => {
@@ -115,6 +138,38 @@ test('cancellation kills an uncooperative worker and rejects its concurrent call
     }
     assert.equal(plugin.status().pendingRequests, 0);
     assert.equal(plugin.status().state, 'failed');
+  } finally {
+    await plugin.close();
+    await source.dispose();
+  }
+});
+
+test('cooperative cancellation clears the deadline even without an acknowledgement', async () => {
+  const source = await fixture(`
+    import { createInterface } from 'node:readline';
+    createInterface({ input: process.stdin }).on('line', line => {
+      const request = JSON.parse(line);
+      if (request.method === 'search' || request.method === '$/cancelRequest') return;
+      if (request.method === 'detail') process.stdout.write(JSON.stringify({
+        jsonrpc: '2.0', id: request.id, result: { ref: 'book', title: 'Still available' }
+      }) + '\\n');
+    });
+  `);
+  await writeFile(join(source.directory, 'plugin.json'), JSON.stringify({ ...manifest,
+    sourceTypes: [{ id: 'test', label: 'Test', capabilities: ['detail', 'search', 'search.cancel'] }],
+  }));
+  const plugin = await ProcessPlugin.load(source.directory, { timeoutMs: 2000 });
+  try {
+    const provider = plugin.providers()[0]!;
+    const controller = new AbortController();
+    const rejected = assert.rejects(provider.search!(context(controller.signal), { query: 'slow' }), { code: 'PLUGIN_CANCELLED' });
+    await provider.detail(context(), 'book');
+    controller.abort();
+    await rejected;
+    assert.equal(plugin.status().pendingRequests, 0);
+    await new Promise(resolve => setTimeout(resolve, 2100));
+    assert.equal(plugin.status().state, 'running');
+    assert.equal((await provider.detail(context(), 'book')).title, 'Still available');
   } finally {
     await plugin.close();
     await source.dispose();

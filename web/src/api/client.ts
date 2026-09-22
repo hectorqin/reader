@@ -260,13 +260,18 @@ export class ReaderApi {
   async installPlugin(folder: string): Promise<void> { await this.call('/api/v1/plugins', 'POST', { folder, trusted: true }); }
   async enablePlugin(id: string, enabled: boolean): Promise<void> { await this.call(`/api/v1/plugins/${encodeURIComponent(id)}`, 'PATCH', { enabled }); }
   async uninstallPlugin(id: string): Promise<void> { await this.call(`/api/v1/plugins/${encodeURIComponent(id)}`, 'DELETE'); }
-  async sourceCatalog(id: string, query: { ref?: string; query?: string; cursor?: string; filters?: Record<string, string> } = {}): Promise<SourcePage> {
+  async sourceCatalog(id: string, query: { ref?: string; query?: string; cursor?: string; filters?: Record<string, string>; sessionId?: string; resultLimit?: number } = {}, options: RequestOptions = {}): Promise<SourcePage> {
     const params = new URLSearchParams();
     if (query.ref) params.set('ref', query.ref);
     if (query.query) params.set('q', query.query);
     if (query.cursor) params.set('cursor', query.cursor);
     if (query.filters) params.set('filters', JSON.stringify(query.filters));
-    return this.get(`/api/v1/sources/${encodeURIComponent(id)}/${query.query ? 'search' : 'browse'}?${params}`);
+    if (query.sessionId) params.set('sessionId', query.sessionId);
+    if (query.resultLimit !== undefined) params.set('resultLimit', String(query.resultLimit));
+    return this.get(`/api/v1/sources/${encodeURIComponent(id)}/${query.query ? 'search' : 'browse'}?${params}`, options);
+  }
+  async cancelSourceSearch(id: string, sessionId: string): Promise<void> {
+    await this.call(`/api/v1/sources/${encodeURIComponent(id)}/search/cancel`, 'POST', { sessionId });
   }
   async sourceDetail(id: string, ref: string): Promise<SourceEntry> {
     return this.get(`/api/v1/sources/${encodeURIComponent(id)}/entries?ref=${encodeURIComponent(ref)}`);

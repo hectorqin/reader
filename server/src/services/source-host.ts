@@ -7,7 +7,7 @@ import { AppError, badRequest, conflict, notFound } from '../lib/errors.ts';
 import { SourceRegistry } from '../sources/registry.ts';
 import { createLocalProvider } from '../sources/local.ts';
 import { createOpdsProvider } from '../sources/opds.ts';
-import type { SourceContext, SourceInstance, SourceProvider, SourceStorage, CredentialStore } from '../sources/types.ts';
+import type { SourceContext, SourceInstance, SourceProvider, SourceStorage, CredentialStore, SearchRequest } from '../sources/types.ts';
 import { FileAcquisitions } from '../sources/acquisitions.ts';
 import { PluginManager } from '../sources/plugin-manager.ts';
 import { ChapterPublications } from '../publications/chapters.ts';
@@ -134,9 +134,15 @@ export class SourceHost {
     return this.call(userId, id, (provider, ctx) => provider.browse
       ? provider.browse(ctx, request) : Promise.reject(badRequest('source does not support browse', 'SOURCE_UNSUPPORTED')), signal);
   }
-  async search(userId: string, id: string, request: { query: string; cursor?: string; limit?: number; filters?: Record<string, string> }, signal?: AbortSignal) {
+  async search(userId: string, id: string, request: SearchRequest, signal?: AbortSignal) {
     return this.call(userId, id, (provider, ctx) => provider.search
       ? provider.search(ctx, request) : Promise.reject(badRequest('source does not support search', 'SOURCE_UNSUPPORTED')), signal);
+  }
+  async cancelSearch(userId: string, id: string, sessionId: string) {
+    // Cancellation must still get through when normal request slots are occupied.
+    const row = this.instance(id), provider = this.registry.get(row.plugin_id, row.source_type)?.provider;
+    if (!provider?.cancelSearch) throw badRequest('source has no search sessions', 'SOURCE_UNSUPPORTED');
+    await provider.cancelSearch(this.context(row, userId, AbortSignal.timeout(5000)), sessionId);
   }
   async searchFilters(userId: string, id: string, signal?: AbortSignal) {
     return this.call(userId, id, (provider, ctx) => provider.searchFilters?.(ctx) ?? Promise.resolve([]), signal);

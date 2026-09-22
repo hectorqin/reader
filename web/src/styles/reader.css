@@ -3665,8 +3665,41 @@ book-content {
 .sources-actions { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
 .sources-actions label { margin:0; }
 .sources-card .sources-consent { flex-direction:row; align-items:center; }
-.sources-search { display:flex; flex-wrap:wrap; align-items:end; gap:.5rem; margin:1rem 0; }
-.sources-search label { flex:1 1 12rem; min-width:0; margin:0; }
+.sources-search { display:flex; flex-wrap:wrap; align-items:end; gap:.85rem; margin:1rem 0 1.5rem; }
+.sources-search label { flex:1 1 10rem; min-width:0; margin:0; font-size:.85rem; color:var(--reader-muted); }
+.sources-search .source-keyword { flex:2 1 18rem; }
+.sources-search button { min-height:44px; gap:.5rem; }
+.sources-search input, .sources-search select { min-height:44px; color:var(--reader-ink); }
+.catalog-feedback { margin:1rem 0; padding-top:1.25rem; border-top:1px solid var(--reader-line); }
+.search-progress { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem 1rem; padding:1rem; border-radius:.75rem; background:color-mix(in srgb,var(--reader-accent) 6%,var(--reader-paper)); font-size:.9rem; }
+.search-progress progress { width:10rem; max-width:100%; height:.45rem; accent-color:var(--reader-accent); }
+.search-progress small { color:var(--reader-muted); }
+.search-stop { border-color:var(--reader-accent); }
+.catalog-summary { display:flex; flex-wrap:wrap; gap:.5rem 1rem; justify-content:space-between; align-items:center; }
+.catalog-summary strong { font-size:1rem; }
+.catalog-summary span { display:flex; align-items:center; gap:.4rem; color:var(--reader-muted); font-size:.85rem; }
+.catalog-context { color:var(--reader-muted); font-size:.82rem; line-height:1.7; overflow-wrap:anywhere; margin:.4rem 0 .75rem; }
+.catalog-errors { padding:.7rem 1rem; border:1px solid var(--reader-line); border-radius:.75rem; background:color-mix(in srgb,var(--reader-muted) 5%,var(--reader-paper)); }
+.catalog-errors summary { cursor:pointer; font-size:.85rem; color:var(--reader-muted); }
+.catalog-errors summary:focus-visible { outline:2px solid var(--reader-accent); outline-offset:4px; }
+.catalog-errors ul { list-style:none; margin:.6rem 0 0; padding:0; }
+.catalog-errors li { display:grid; grid-template-columns:minmax(7rem,1fr) minmax(0,3fr) auto; align-items:baseline; gap:.3rem 1rem; padding:.6rem 0; border-top:1px solid var(--reader-line); font-size:.84rem; overflow-wrap:anywhere; }
+.catalog-errors li strong { font-weight:500; }
+.catalog-errors li p { margin:0; line-height:1.6; color:var(--reader-muted); }
+.catalog-errors code { font-size:.7rem; color:var(--reader-muted); }
+.catalog-empty { display:flex; flex-direction:column; align-items:center; gap:.8rem; text-align:center; padding:2.5rem 1rem; }
+.catalog-empty > .icon { font-size:1.7rem; color:var(--reader-muted); }
+.catalog-empty p { margin:0; font-size:.9rem; color:var(--reader-muted); line-height:1.7; }
+.catalog-book { padding:1.4rem 0; align-items:flex-start; }
+.catalog-book strong { font-size:1.05rem; }
+.catalog-book .source-description { line-height:1.75; color:var(--reader-muted); margin:.7rem 0 0; }
+.catalog-book .sources-actions { padding-top:.2rem; }
+.catalog-pagination { display:flex; justify-content:flex-end; gap:.6rem; padding-top:1rem; border-top:1px solid var(--reader-line); }
+@media (max-width: 640px) {
+  .catalog-errors li { grid-template-columns:minmax(0,1fr); }
+  .sources-search .source-keyword { flex-basis:100%; }
+  .sources-search > button { width:100%; }
+}
 .source-description { max-height:6rem; overflow:auto; font-size:.9rem; white-space:pre-wrap; }
 
 /* Mobile reading: the surface and its information strip never resize with chrome. */
@@ -3845,6 +3878,14 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .source-toggle { color: var(--reader-muted); }
 .sources-hub .sources-tabs [role=tab] { font-size: .9rem; }
 .source-picker label { max-width: 32rem; }
+@media (min-width: 768px) {
+  .source-picker { display:flex; align-items:center; flex-wrap:wrap; gap:1rem 2rem; }
+  .source-picker > div { flex:1; }
+  .source-picker > div h2 { margin:0 0 .35rem; }
+  .source-picker > div p { margin:0; font-size:.85rem; }
+  .source-picker > label { flex:1; margin:0; font-size:.85rem; color:var(--reader-muted); }
+  .source-picker > p { flex-basis:100%; margin:0; }
+}
 .source-modal { color: var(--reader-ink); background: var(--reader-paper); border: 1px solid var(--reader-line); border-radius: 1rem; padding: 0; width: min(36rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: hidden; }
 .source-modal[open] { display: flex; flex-direction: column; }
 .source-modal::backdrop { background: #0007; }

@@ -6,6 +6,8 @@ export type SourceCapability =
   | 'browse'
   | 'search'
   | 'search.filters'
+  | 'search.cancel'
+  | 'search.session'
   | 'content.alternatives'
   | 'detail'
   | 'acquire.file'
@@ -91,6 +93,10 @@ export interface BrowseRequest {
 }
 
 export interface SearchRequest {
+  /** Opt-in rolling search identity, scoped to the current user and instance. */
+  readonly sessionId?: string;
+  /** Total unique results across a session, distinct from a single page's limit. */
+  readonly resultLimit?: number;
   readonly filters?: Record<string, string>;
   readonly query: string;
   readonly cursor?: string;
@@ -98,10 +104,20 @@ export interface SearchRequest {
 }
 
 export interface CatalogPage {
+  readonly limitReached?: boolean;
   readonly items: readonly CatalogEntry[];
   readonly navigation?: readonly NavigationEntry[];
   readonly nextCursor?: string;
   readonly title?: string;
+  readonly errors?: readonly CatalogError[];
+  /** Finite source progress. Session cursors also drain buffered results and heartbeats. */
+  readonly batch?: { readonly completed: number; readonly total: number };
+}
+
+export interface CatalogError {
+  readonly source: string;
+  readonly code: string;
+  readonly message: string;
 }
 
 export interface NavigationEntry {
@@ -203,6 +219,7 @@ export interface SourceProvider {
   validateConfig?(config: unknown): void | Promise<void>;
   browse?(ctx: SourceContext, request: BrowseRequest): Promise<CatalogPage>;
   search?(ctx: SourceContext, request: SearchRequest): Promise<CatalogPage>;
+  cancelSearch?(ctx: SourceContext, sessionId: string): Promise<void>;
   detail(ctx: SourceContext, entryRef: string): Promise<CatalogEntry>;
   acquire(ctx: SourceContext, request: AcquireRequest): Promise<Acquisition>;
   /** Resolve a file acquisition without exposing arbitrary network access to the host. */
