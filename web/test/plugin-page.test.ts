@@ -12,6 +12,24 @@ function fixture() {
   const api = new ReaderApi(makePlatform(transport), { async load() { return null; }, async save() {}, async clear() {} });
   return { api, transport };
 }
+it('renders generic log and JSON outputs as bounded text blocks in the selected tab', async () => {
+  const { api, transport } = fixture();
+  transport.respondWith(() => ({ status: 200, headers: {}, json: { title: '诊断', forms: [], tabs: [
+    { id: 'config', title: '配置', forms: [] },
+    { id: 'diagnostic', title: '诊断', forms: [], outputs: [
+      { title: '运行日志', format: 'log', text: '<img src=x onerror=alert(1)>\n200 OK' },
+      { title: '结果', format: 'json', text: '{"count":1}' },
+    ] },
+  ] } }));
+  const screen = new PluginPageScreen({ api, sourceId: 'third-party', pageId: 'diagnostics', onBack() {}, onSignedOut() {} });
+  screens.push(screen); document.body.append(screen.element); await screen.show();
+  expect(screen.element.querySelector('pre')).toBeNull();
+  screen.element.querySelectorAll<HTMLButtonElement>('[role=tab]')[1]!.click();
+  expect(screen.element.querySelectorAll('.extension-output')).toHaveLength(2);
+  expect(screen.element.querySelector('pre')?.textContent).toContain('<img src=x onerror=alert(1)>');
+  expect(screen.element.querySelector('img')).toBeNull();
+  expect(screen.element.querySelector('pre')?.tabIndex).toBe(0);
+});
 it('renders generic plugin forms as text and submits typed values on an independent route', async () => {
   const { api, transport } = fixture();
   const route = { name: 'plugin-page' as const, pluginId: 'third.party', pageId: 'settings' };

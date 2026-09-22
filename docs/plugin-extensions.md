@@ -16,7 +16,7 @@
 
 GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{sourceType,context:{instance,userId},pageId,action,values}`。宿主根据 sourceId 从数据库解析插件与实例，客户端不能伪造上下文；暂停的来源仍可管理，停用插件则不可访问页面。普通读者无页面读取及写入权限。
 
-返回 Page DTO：`title/description/notice/forms/sections/tabs/activeTab`。每个 Tab 包含 `id/title/description/forms/sections`，页面公共内容和当前 Tab 同时渲染。Form 包含 `id/title/submit/fields/values`，可选 `layout: "inline"` 和 `confirm` 声明紧凑布局及行内二次确认，fields 支持 text、textarea、number、boolean、select；values 携带不透明行 ID。Field 可选 `placeholder/min/max`，Page 可选 `noticeKind: "info" | "error"`；所有字段由宿主验证。section 支持 `emptyText`，item 支持 `collapsible`。一次动作返回新页面；可选 activeTab 请求切换到指定 Tab，否则保留当前选择。纯 Tab 切换保留输入草稿。提交后保留其它声明未变化的表单草稿；服务端改变表单声明或主动刷新时以新页面为准。
+返回 Page DTO：`title/description/notice/forms/sections/tabs/activeTab`。每个 Tab 包含 `id/title/description/forms/sections/outputs`，页面公共内容和当前 Tab 同时渲染。Form 包含 `id/title/submit/fields/values`，可选 `layout: "inline"` 和 `confirm` 声明紧凑布局及行内二次确认，fields 支持 text、textarea、number、boolean、select；values 携带不透明行 ID。Field 可选 `placeholder/min/max`，Page 可选 `noticeKind: "info" | "error"`；所有字段由宿主验证。section 支持 `emptyText`，item 支持 `collapsible`。`outputs` 用于调试日志、JSON 或普通文本，格式为 `{title,text,format:"text"|"log"|"json"}`，宿主以纯文本块渲染并限制数量与大小，不执行内容。一次动作返回新页面；可选 activeTab 请求切换到指定 Tab，否则保留当前选择。纯 Tab 切换保留输入草稿。提交后保留其它声明未变化的表单草稿；服务端改变表单声明或主动刷新时以新页面为准。
 
 宿主校验声明、页面结构、选项和输入配额；未声明页面拒绝访问。渲染器只呈现文本，不接受 HTML、JS、iframe 或任意前端代码。授权在 HTTP 层执行，隐藏入口不代替鉴权。
 
@@ -42,7 +42,7 @@ GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{sourc
 
 ## 验证方式
 
-生产 bundle 的 Chrome 验证脚本覆盖 390px 手机和 1280px 桌面布局、从自定义来源入口进入、三个 Tab、规则展开与编辑、订阅启停、搜索筛选和目录换源。运行 `node web/tools/ui-review/plugin-extensions.mjs`（仓库根目录，预先构建 Web；CHROME_PATH 可指定浏览器），截图输出到 docs/ui-review/plugin-*.png。
+生产 bundle 的 Chrome 验证脚本覆盖 390px 手机和 1280px 桌面布局、从自定义来源入口进入、四个 Tab、规则展开与编辑、订阅启停、书源调试、搜索筛选和目录换源。运行 `node web/tools/ui-review/plugin-extensions.mjs`（仓库根目录，预先构建 Web；CHROME_PATH 可指定浏览器），截图输出到 docs/ui-review/plugin-*.png。
 
 ## 本次验证（2026-09-21）
 
