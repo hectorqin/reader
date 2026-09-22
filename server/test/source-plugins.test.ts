@@ -37,6 +37,8 @@ test('catalog protocol preserves partial failures and rejects malformed diagnost
     assert.throws(() => decodeCatalogPage({ items: [], batch, nextCursor: 'next' }), { code: 'PLUGIN_PROTOCOL_ERROR' });
   }
   assert.throws(() => decodeCatalogPage({ items: [], batch: { completed: 1, total: 4 } }), { code: 'PLUGIN_PROTOCOL_ERROR' });
+  assert.equal(decodeCatalogPage({ items: [], batch: { completed: 1, total: 4 }, limitReached: true }).limitReached, true);
+  assert.throws(() => decodeCatalogPage({ items: [], limitReached: 'yes' }), { code: 'PLUGIN_PROTOCOL_ERROR' });
 });
 
 async function fixture(code: string): Promise<{ directory: string; dispose(): Promise<void> }> {
@@ -66,6 +68,12 @@ test('registry separates plugin namespaces and rejects unsupported advertised ca
     pluginId: 'reader.invalid',
     provider: { ...provider, descriptor: { ...provider.descriptor, capabilities: ['acquire.chapters'] } },
   }), /chapter manifest and resources/);
+  assert.throws(() => registry.register({ pluginId: 'reader.invalid', provider: {
+    ...provider, search: async () => ({ items: [] }), descriptor: { ...provider.descriptor, capabilities: ['search', 'search.session'] },
+  } }), /search.session requires search.cancel/);
+  assert.throws(() => registry.register({ pluginId: 'reader.invalid', provider: {
+    ...provider, search: async () => ({ items: [] }), descriptor: { ...provider.descriptor, capabilities: ['search', 'search.cancel', 'search.session'] },
+  } }), /does not implement cancelSearch/);
 });
 
 test('plugin manifest rejects API version mismatch and duplicate or incomplete source types', () => {

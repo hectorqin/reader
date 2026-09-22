@@ -16,7 +16,7 @@ export class SourceRegistryError extends Error {
 
 const ID_RE = /^[a-z][a-z0-9._-]{0,127}$/;
 const CAPABILITIES = new Set<SourceCapability>([
-  'search.filters', 'search.cancel', 'content.alternatives', 'browse', 'search', 'detail', 'acquire.file', 'acquire.chapters',
+  'search.filters', 'search.cancel', 'search.session', 'content.alternatives', 'browse', 'search', 'detail', 'acquire.file', 'acquire.chapters',
   'content.manifest', 'content.resource', 'content.update',
 ]);
 
@@ -33,6 +33,7 @@ function assertDescriptor(descriptor: SourceDescriptor): void {
   if (!descriptor.version.trim()) throw new SourceRegistryError(`source ${descriptor.id} has no version`);
   const capabilities = new Set(descriptor.capabilities);
   if (capabilities.has('search.cancel') && !capabilities.has('search')) throw new SourceRegistryError('search.cancel requires search');
+  if (capabilities.has('search.session') && !capabilities.has('search.cancel')) throw new SourceRegistryError('search.session requires search.cancel');
   for (const capability of capabilities) {
     if (!CAPABILITIES.has(capability)) throw new SourceRegistryError(`unsupported capability: ${capability}`);
   }
@@ -59,6 +60,7 @@ function assertProvider(provider: SourceProvider): void {
   };
   requireMethod('browse', 'browse');
   requireMethod('search', 'search');
+  requireMethod('search.session', 'cancelSearch');
   requireMethod('search.filters', 'searchFilters');
   requireMethod('content.alternatives', 'alternatives');
   requireMethod('content.manifest', 'getManifest');

@@ -119,6 +119,7 @@ export class ProcessPlugin {
         acquire: async (ctx, request) => decodeChapterAcquisition(await call('acquire', ctx, { request })),
       };
       if (type.capabilities.includes('search.filters')) provider.searchFilters = async (ctx) => searchFilterFields(await call('searchFilters', ctx, {}));
+      if (type.capabilities.includes('search.session')) provider.cancelSearch = async (ctx, sessionId) => { await call('searchCancel', ctx, { sessionId }); };
       if (type.capabilities.includes('content.alternatives')) provider.alternatives = async (ctx, request) => decodeCatalogPage(await call('alternatives', ctx, { request }));
       if (type.capabilities.includes('browse')) {
         provider.browse = async (ctx, request) => decodeCatalogPage(await call('browse', ctx, { request }));

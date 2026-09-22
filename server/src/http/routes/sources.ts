@@ -19,6 +19,17 @@ function parameter(value: unknown, name: string, required = false): string | und
   return value;
 }
 
+function searchSessionId(value?: string): string | undefined {
+  if (value !== undefined && !/^[a-zA-Z0-9_-]{16,80}$/.test(value)) throw badRequest('invalid search session id');
+  return value;
+}
+function searchResultLimit(value?: string): number | undefined {
+  if (value === undefined) return undefined;
+  const limit = Number(value);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 10000) throw badRequest('resultLimit must be an integer from 1 to 10000');
+  return limit;
+}
+
 /** Source discovery and plugin management. All provider-specific behaviour stays in SourceHost. */
 export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): void {
   const auth = authenticate(ctx);
@@ -85,11 +96,17 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
   });
   app.get('/api/v1/sources/:id/search', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request); const { id } = request.params as { id: string };
-    const q = request.query as { q?: string; cursor?: string; limit?: string; filters?: string };
+    const q = request.query as { q?: string; cursor?: string; limit?: string; filters?: string; sessionId?: string; resultLimit?: string };
     const query = parameter(q.q, 'q', true)!;
     return withSignal(request, reply, (signal) => host.search(user.id, id, {
       query, cursor: parameter(q.cursor, 'cursor'), limit: pageLimit(q.limit), filters: searchFilters(q.filters),
+      sessionId: searchSessionId(q.sessionId), resultLimit: searchResultLimit(q.resultLimit),
     }, signal));
+  });
+  app.post('/api/v1/sources/:id/search/cancel', { preHandler: auth }, async request => {
+    const sessionId = searchSessionId(textBody(request.body, 'sessionId'))!;
+    await host.cancelSearch(currentUser(request).id, (request.params as { id: string }).id, sessionId);
+    return { ok: true };
   });
   app.get('/api/v1/sources/:id/entries', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request); const { id } = request.params as { id: string };

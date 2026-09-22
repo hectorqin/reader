@@ -107,6 +107,22 @@ it('merges batches by ref, stops in flight, ignores stale replies and resumes fr
   expect(screen.element.textContent).not.toContain('第一批结果');
 });
 
+it('continues into later available sources after a partial batch failure', async () => {
+  const { screen, api } = await setup(); await chooseSource(screen.element);
+  const descriptor = { ...opds, capabilities: ['search'] };
+  vi.spyOn(api, 'sourceTypes').mockResolvedValue([descriptor]);
+  vi.spyOn(api, 'sources').mockResolvedValue([{ ...source, descriptor }]);
+  await screen.show(); await chooseSource(screen.element);
+  const catalog = vi.spyOn(api, 'sourceCatalog')
+    .mockResolvedValueOnce({ items: [{ ref: 'one', title: '第一来源结果' }], errors: [{ source: '失效来源', code: 'HTTP_ERROR', message: '站点暂不可用' }], batch: { completed: 2, total: 5 }, nextCursor: 'remaining' })
+    .mockResolvedValueOnce({ items: [{ ref: 'two', title: '后续来源结果' }], batch: { completed: 5, total: 5 } });
+  input(screen.element, '搜索书籍', '继续测试'); await click(screen.element, '搜索');
+  expect(catalog).toHaveBeenCalledTimes(2);
+  expect(screen.element.textContent).toContain('后续来源结果');
+  expect(screen.element.textContent).toContain('搜索完成');
+  expect(screen.element.textContent).toContain('站点暂不可用');
+});
+
 it('does not auto-page a single-source catalog and stops loops in malformed batch responses', async () => {
   const { screen, api } = await setup(); await chooseSource(screen.element);
   const catalog = vi.spyOn(api, 'sourceCatalog').mockResolvedValueOnce({ items: [], nextCursor: 'page2' });
@@ -261,4 +277,58 @@ it('prevents closing while saving and preserves the form on failure', async () =
   await vi.waitFor(() => expect(dialog.querySelector('[role=alert]')?.textContent).toBe('请稍后重试'));
   dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
   expect(screen.element.querySelector('dialog')).toBeNull();
+});
+
+async function sessionSetup() {
+  const value = await setup();
+  const descriptor = { ...opds, capabilities: ['search', 'search.cancel', 'search.session'] };
+  vi.spyOn(value.api, 'sourceTypes').mockResolvedValue([descriptor]);
+  vi.spyOn(value.api, 'sources').mockResolvedValue([{ ...source, descriptor }]);
+  await value.screen.show(); await chooseSource(value.screen.element);
+  return value;
+}
+
+it('polls rolling heartbeats and drains completed-source buffers through the last cursor', async () => {
+  const { screen, api } = await sessionSetup();
+  const catalog = vi.spyOn(api, 'sourceCatalog')
+    .mockResolvedValueOnce({ items: [], batch: { completed: 0, total: 2 }, nextCursor: 'heartbeat' })
+    .mockResolvedValueOnce({ items: [], batch: { completed: 0, total: 2 }, nextCursor: 'second' })
+    .mockResolvedValueOnce({ items: [{ ref: 'one', title: '结果一' }], batch: { completed: 2, total: 2 }, nextCursor: 'buffered' })
+    .mockResolvedValueOnce({ items: [{ ref: 'two', title: '结果二' }], batch: { completed: 2, total: 2 } });
+  input(screen.element, '搜索书籍', '查询'); await click(screen.element, '搜索');
+  expect(catalog).toHaveBeenCalledTimes(4);
+  expect(new Set(catalog.mock.calls.map(call => call[1]?.sessionId)).size).toBe(1);
+  expect(catalog.mock.calls[0]?.[1]?.resultLimit).toBe(10000);
+  expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(2);
+  expect(screen.element.textContent).toContain('搜索完成');
+});
+
+it('stops before the first response and waits for cancellation before resuming the session', async () => {
+  const { screen, api } = await sessionSetup();
+  let stopped!: () => void;
+  const cancel = vi.spyOn(api, 'cancelSourceSearch').mockImplementationOnce(() => new Promise<void>(resolve => { stopped = resolve; }));
+  const catalog = vi.spyOn(api, 'sourceCatalog').mockImplementationOnce(() => new Promise(() => {}))
+    .mockResolvedValueOnce({ items: [{ ref: 'resumed', title: '恢复结果' }], batch: { completed: 2, total: 2 } });
+  input(screen.element, '搜索书籍', '查询'); button(screen.element, '搜索').click();
+  await vi.waitFor(() => expect(catalog).toHaveBeenCalledTimes(1));
+  const id = catalog.mock.calls[0]![1]!.sessionId;
+  await click(screen.element, '停止搜索'); expect(cancel).toHaveBeenCalledWith('source-1', id);
+  button(screen.element, '继续搜索').click(); await new Promise(resolve => setTimeout(resolve, 10));
+  expect(catalog).toHaveBeenCalledTimes(1);
+  stopped(); await vi.waitFor(() => expect(screen.element.textContent).toContain('搜索完成'));
+  expect(catalog.mock.calls[1]![1]!.sessionId).toBe(id);
+  expect(screen.element.textContent).toContain('恢复结果');
+});
+
+it('drains buffered limited results then cancels and hides continue', async () => {
+  const { screen, api } = await sessionSetup();
+  const cancel = vi.spyOn(api, 'cancelSourceSearch').mockResolvedValue();
+  const catalog = vi.spyOn(api, 'sourceCatalog')
+    .mockResolvedValueOnce({ items: [{ ref: 'one', title: '上限结果一' }], batch: { completed: 1, total: 8 }, limitReached: true, nextCursor: 'buffer' })
+    .mockResolvedValueOnce({ items: [{ ref: 'two', title: '上限结果二' }], batch: { completed: 1, total: 8 }, limitReached: true });
+  input(screen.element, '搜索书籍', '查询'); await click(screen.element, '搜索');
+  expect(catalog).toHaveBeenCalledTimes(2); expect(cancel).toHaveBeenCalledTimes(1);
+  expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(2);
+  expect(screen.element.textContent).toContain('已达到结果上限');
+  expect(screen.element.querySelector('.catalog-pagination')).toBeNull();
 });

@@ -13,6 +13,7 @@ export interface SourceEntry {
   options?: Array<{ id: string; label: string; available?: boolean }>;
 }
 export interface SourcePage {
+  limitReached?: boolean;
   items: SourceEntry[]; navigation?: Array<{ ref: string; title: string }>; nextCursor?: string; title?: string;
   errors?: Array<{ source: string; code: string; message: string }>;
   batch?: { completed: number; total: number };
