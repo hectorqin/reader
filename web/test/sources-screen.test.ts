@@ -120,17 +120,19 @@ function input(root: HTMLElement, label: string, value: string) {
 describe('sources and subscriptions UI', () => {
   it('renders declared numeric defaults and bounds and saves the configured value', async () => {
     const { screen, api } = await setup();
-    const descriptor = { ...opds, configSchema: { properties: { parallel: { type: 'integer', title: '并发数量', default: 3, minimum: 1, maximum: 10 } } } };
+    const descriptor = { ...opds, configSchema: { properties: { parallel: { type: 'integer', title: '并发数量', default: 3, minimum: 1, maximum: 10 }, crossOrigin: { type: 'boolean', title: '允许跨域', default: false } } } };
     vi.spyOn(api, 'sourceTypes').mockResolvedValue([descriptor]);
     const save = vi.spyOn(api, 'saveSource').mockResolvedValue(source);
     await screen.show(); await click(screen.element, '书源管理'); await click(screen.element, '添加来源');
     input(screen.element, '名称', '并发测试');
+    const checkbox = screen.element.querySelector<HTMLInputElement>('input[type=checkbox]')!;
+    expect(checkbox.checked).toBe(false); checkbox.click(); expect(checkbox.checked).toBe(true);
     const field = screen.element.querySelector<HTMLInputElement>('input[type=number]')!;
     expect(field.value).toBe('3'); expect(field.min).toBe('1'); expect(field.max).toBe('10'); expect(field.step).toBe('1');
     input(screen.element, '并发数量', '11'); expect(field.validity.rangeOverflow).toBe(true);
     input(screen.element, '并发数量', '1.5'); expect(field.validity.stepMismatch).toBe(true);
     input(screen.element, '并发数量', '4'); await click(screen.element, '保存来源');
-    expect(save).toHaveBeenCalledWith(null, expect.objectContaining({ config: { parallel: 4 } }));
+    expect(save).toHaveBeenCalledWith(null, expect.objectContaining({ config: { parallel: 4, crossOrigin: true } }));
   });
 
   it('provides a stable route and separates member browsing from admin configuration', async () => {
