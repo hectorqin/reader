@@ -5,12 +5,12 @@ import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 /**
  * Runtime configuration.
  *
- * Hard constraint (product design §6): the book library directory is mounted
- * READ-ONLY. This server must never write into it. Every write (sqlite db,
- * extracted cover cache, scan journal) goes into DATA_DIR instead.
+ * BOOKS_DIR follows filesystem permissions: a read-only mount supports reading,
+ * while a writable mount enables administrator file management. Server-owned
+ * state (database, cover cache, scan journal) stays in DATA_DIR, outside BOOKS_DIR.
  */
 export interface AppConfig {
-  /** Read-only mount of the user's book directory. */
+  /** User's book directory; may be mounted read-only or writable. */
   booksDir: string;
   /** Writable directory owned by this server. Never inside booksDir. */
   dataDir: string;
@@ -104,7 +104,7 @@ export function loadConfig(): AppConfig {
   );
   if (insideBooks) {
     throw new Error(
-      `DATA_DIR (${dataDir}) must not live inside BOOKS_DIR (${booksDir}); the library mount is read-only.`,
+      `DATA_DIR (${dataDir}) must not live inside BOOKS_DIR (${booksDir}); server-owned data must stay outside the book directory.`,
     );
   }
   mkdirSync(dataDir, { recursive: true });

@@ -12,23 +12,16 @@ import { ZipArchive, ZipError } from '../indexer/formats/zip-reader.ts';
 import type { Scanner, ScanResult } from '../indexer/scanner.ts';
 
 /**
- * Uploading books into the library — the one thing this product's deployment
- * model makes awkward.
+ * Uploading books into the library. BOOKS_DIR may be mounted read-only for a
+ * browse-only deployment or writable for administrator file management. When
+ * writable, uploads use a DATA_DIR staging area and publish complete files
+ * atomically, so a failed request never leaves a partial book in the library.
+ * The same boundary and validation rules apply to uploads, moves and deletes:
  *
- * The design mounts `BOOKS_DIR` **read-only** and the file-manager screen
- * follows that rule, so until now the only way to add a book was to reach the
- * NAS over SMB and then wait for a scan. That is a reasonable workflow for the
- * operator and an impossible one for every other member of the household, which
- * is exactly who a self-hosted library is for.
- *
- * So this is the single deliberate exception to "the server never writes into
- * the library", and it is written around three rules that keep it an exception
- * rather than a hole:
- *
- *  1. **Nothing is written to the library until its bytes are complete and
- *     already on the same filesystem.** The stream goes to a scratch file in
- *     `DATA_DIR/uploads`, which is the server's own writable space, and only a
- *     finished file is `rename`d into `BOOKS_DIR`. A request that dies at 90%,
+ *  1. **Nothing is written to the library until its bytes are complete.** The
+ *     stream goes to a scratch file in `DATA_DIR/uploads`, which is the
+ *     server's own writable space, and only a finished file is moved into
+ *     `BOOKS_DIR` (with a cross-filesystem copy fallback). A request that dies at 90%,
  *     a client that runs out of signal, a wrong password — none of them can
  *     leave half a book behind, because a half book never exists inside the
  *     library at all.
