@@ -25,7 +25,7 @@ export class SourcesScreen {
   private searchRun: AbortController | null = null;
   private searchState: 'idle' | 'searching' | 'stopped' | 'complete' | 'error' | 'limited' = 'idle';
   private searchSession: { sourceId: string; id: string } | null = null;
-  private searchStop: Promise<void> = Promise.resolve();
+  private searchMenu = false;
   private searchRequest: { query: string; filters: Record<string, string> } | null = null;
   private get busy(): boolean { return this.working || this.searchRun !== null; }
   private message = '';
@@ -61,8 +61,8 @@ export class SourcesScreen {
   async show(): Promise<void> { await this.run(() => this.reload()); }
   dispose(): void { this.disposed = true; this.stopSearch(); this.credentialValues = {}; this.ui.unmount(); }
   private draw(): void { if (!this.disposed) this.ui.update(null); }
-  private async run(action: () => Promise<void>): Promise<void> {
-    if (this.busy || this.disposed) return;
+  private async run(action: () => Promise<void>, duringSearch = false): Promise<void> {
+    if (this.working || (!duringSearch && this.searchRun) || this.disposed) return;
     this.working = true; this.message = ''; this.messageError = false; this.draw();
     try { await action(); }
     catch (error) {
@@ -120,7 +120,7 @@ export class SourcesScreen {
     }
   }
   private select(source: SourceInstance): void {
-    this.stopSearch(); this.searchState = 'idle'; this.searchRequest = null;
+    this.stopSearch(); this.searchState = 'idle'; this.searchRequest = null; this.searchSession = null; this.searchMenu = false;
     this.selected = source; this.page = null; this.path = []; this.query = ''; this.credentialValues = {}; this.acquired = null;
     this.filters = []; this.filterValues = {};
     void this.run(async () => {
@@ -133,15 +133,12 @@ export class SourcesScreen {
     if (!this.searchRun) return;
     const run = this.searchRun; this.searchRun = null;
     this.searchState = 'stopped'; run.abort(); this.draw();
-    this.cancelSession();
   }
-  private cancelSession(): void {
-    const session = this.searchSession;
-    if (session) this.searchStop = this.options.api.cancelSourceSearch(session.sourceId, session.id).catch(() => {
-      if (this.searchSession === session && this.searchState === 'stopped') {
-        this.message = '停止请求未确认，后台搜索将在连接空闲后自动停止。'; this.draw();
-      }
-    });
+  private get canResume(): boolean {
+    return !!this.searchSession && !!this.searchRequest && this.searchState !== 'limited'
+      && !!(this.page?.nextCursor || this.searchState === 'stopped' || this.searchState === 'error')
+      && this.query.trim() === this.searchRequest.query
+      && JSON.stringify(this.filterValues) === JSON.stringify(this.searchRequest.filters);
   }
   private async search(append = false): Promise<void> {
     if (this.busy || !this.selected || this.disposed) return;
@@ -149,14 +146,14 @@ export class SourcesScreen {
     const request = append ? this.searchRequest : { query: this.query.trim(), filters: { ...this.filterValues } };
     if (!request?.query) return;
     const cursor = append ? this.page?.nextCursor : undefined;
-    if (append && (this.searchState === 'limited' || (!cursor && !this.searchSession))) return;
+    if (append && !this.canResume) return;
+    this.searchMenu = false;
     if (!append) { this.page = null; this.path = []; this.acquired = null; }
     if (!append) this.searchSession = { sourceId: source.id, id: searchId() };
     const session = this.searchSession;
     this.searchRequest = request; this.searchRun = run; this.searchState = 'searching'; this.message = ''; this.messageError = false; this.draw();
     const current = () => !this.disposed && this.searchRun === run;
     try {
-      await this.searchStop;
       if (!current()) return;
       for await (const page of this.options.api.searchSource(source.id,
         { ...request, ...(cursor ? { cursor } : {}), sessionId: session!.id, resultLimit: 10000 }, { signal: run.signal })) {
@@ -170,14 +167,13 @@ export class SourcesScreen {
         this.draw();
         if (entries.size >= 10000 || (page.limitReached && !page.nextCursor)) {
           this.message = '已达到单次搜索结果上限，请缩小搜索范围后重新搜索。';
-          this.searchState = 'limited'; delete this.page.nextCursor; this.cancelSession(); break;
+          this.searchState = 'limited'; delete this.page.nextCursor; break;
         }
       }
       if (current() && this.searchState === 'searching') this.searchState = 'complete';
     } catch (error) {
       if (!current()) return;
       this.searchState = 'error';
-      this.cancelSession();
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
       else { this.message = error instanceof Error ? error.message : '搜索失败，已保留找到的书籍。'; this.messageError = true; }
     } finally {
@@ -200,6 +196,7 @@ export class SourcesScreen {
   }
   private view() {
     const type = this.types.find((t) => keyFor(t) === this.editor?.typeKey);
+    const resume = this.canResume && (this.searchState === 'stopped' || this.searchState === 'error');
     const tabs: Array<{ id: SourceTab; title: string }> = [
       { id: 'search', title: '搜书' },
       ...(this.options.admin ? [{ id: 'sources' as const, title: '书源管理' }] : []),
@@ -263,30 +260,50 @@ export class SourcesScreen {
         </section>
         {this.selected && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>
           {(this.selected.descriptor?.credentialKeys?.length ?? 0) > 0 && <Button disabled={this.busy} onClick={() => { this.credentialsOpen = true; this.message = ''; this.draw(); }}>登录凭据</Button>}
-          {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.search(); }}>
+          {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.search(resume); }}>
             {this.filters.map(field => <label key={field.key}>{field.label}<select aria-label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy}
               onChange={event => { this.filterValues[field.key] = event.currentTarget.value; this.draw(); }}>
               {field.options?.map(option => <option value={option.value}>{option.label}</option>)}
             </select></label>)}
-            <label className="source-keyword">搜索书籍<input type="search" placeholder="输入书名或作者" disabled={this.busy} required value={this.query} onInput={(event) => { this.query = event.currentTarget.value; }} /></label>
-            {this.searchRun ? <Button key="stop" type="button" className="search-stop" onClick={event => { event.preventDefault(); this.stopSearch(); }}><Icon name="stop" />停止搜索</Button> : <Button key="search" className="primary" type="submit" disabled={this.busy}><Icon name="search" />搜索</Button>}</form>}
+            <label className="source-keyword">搜索书籍<input type="search" placeholder="输入书名或作者" disabled={this.busy} required value={this.query} onInput={(event) => { this.query = event.currentTarget.value; this.draw(); }} /></label>
+            {this.searchRun ? <Button key="stop" type="button" className="search-stop" onClick={event => { event.preventDefault(); this.stopSearch(); }}><Icon name="stop" />停止搜索</Button>
+              : <div key="search" className="search-split" onBlur={event => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) { this.searchMenu = false; this.draw(); }
+              }} onKeyDown={event => {
+                if (event.key === 'Escape') { this.searchMenu = false; this.draw(); this.element.querySelector<HTMLButtonElement>('.search-menu-toggle')?.focus(); }
+                if (this.searchMenu && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+                  event.preventDefault(); const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role=menuitem]:not(:disabled)')];
+                  const index = items.indexOf(document.activeElement as HTMLButtonElement);
+                  const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (event.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
+                  items[next]?.focus();
+                }
+              }}>
+                <Button className="primary" type="submit" disabled={this.busy}><Icon name={resume ? 'play' : 'search'} />{resume ? '继续搜索' : '搜索'}</Button>
+                {this.searchRequest && <><button type="button" className="button primary search-menu-toggle" aria-label="搜索选项" aria-haspopup="menu" aria-expanded={this.searchMenu} aria-controls="source-search-menu" disabled={this.busy}
+                  onClick={() => { this.searchMenu = !this.searchMenu; this.draw(); }}><Icon name="chevron-right" /></button>
+                  {this.searchMenu && <div id="source-search-menu" className="search-menu" role="menu" aria-label="搜索选项">
+                    <button type="button" role="menuitem" aria-label="继续搜索" disabled={!this.canResume} onClick={() => void this.search(true)}><Icon name="play" /><span>继续搜索<small>保留结果，继续未完成的来源</small></span></button>
+                    <button type="button" role="menuitem" aria-label="重新搜索" onClick={() => void this.search(false)}><Icon name="refresh" /><span>重新搜索<small>清空结果，从头搜索</small></span></button>
+                  </div>}</>}
+              </div>}</form>}
           {this.searchState !== 'idle' && <div className="search-progress" role="status">
             <span>{({ searching: '正在搜索', stopped: '已停止搜索', complete: '搜索完成', error: '搜索中断', limited: '已达到结果上限' })[this.searchState]}{this.page?.batch ? ` · 已检查 ${this.page.batch.completed} / ${this.page.batch.total} 个来源` : ''} · 已找到 {this.page?.items.length ?? 0} 本书</span>
             {this.page?.batch && <progress aria-label="书源搜索进度" max={Math.max(1, this.page.batch.total)} value={this.page.batch.completed} />}
-            {this.searchState === 'searching' && <small>结果会自动合并，可随时停止。</small>}
+            {this.searchState === 'searching' && <small>可查看详情、加入书架，或随时停止。</small>}
           </div>}
           {this.page && <CatalogFeedback page={this.page} merged={this.searchState !== 'idle'} searching={this.searchState === 'searching'} />}
           {this.page?.navigation?.map((entry) => <Button disabled={this.busy} onClick={() => void this.run(() => this.catalog({ ref: entry.ref }))}>{entry.title}</Button>)}
           {this.page?.items.length === 0 && !this.searchRun && <div className="catalog-empty"><Icon name={this.page.errors?.length ? 'warning' : 'search'} /><strong>{this.searchState === 'stopped' ? '搜索已停止，暂未找到书籍' : this.page.errors?.length ? '暂未返回书籍，部分来源搜索失败' : '没有找到匹配书籍'}</strong><p>{this.page.errors?.length ? '请查看失败原因，或调整搜索范围后重试。' : '试试其他关键词，或调整搜索范围。'}</p></div>}
           {this.page?.items.map((entry) => <article className="sources-row catalog-book" key={entry.ref}>
             <div><strong>{entry.title}</strong><small>{entry.authors?.join(' / ')}</small><p className="source-description">{entry.description}</p></div>
-            <div className="sources-actions"><Button disabled={this.busy} onClick={() => void this.run(async () => {
-              const detail = await this.options.api.sourceDetail(this.selected!.id, entry.ref); Object.assign(entry, detail);
-            })}>详情</Button>
-            {(entry.options?.length ? entry.options : [{ id: '', label: '加入书架' }]).map((option) => <Button className="primary" disabled={this.busy || option.available === false}
-              onClick={() => void this.run(() => this.acquire(entry, option.id))}>{option.label}</Button>)}</div>
+            <div className="sources-actions"><Button disabled={this.working} onClick={() => void this.run(async () => {
+              const detail = await this.options.api.sourceDetail(this.selected!.id, entry.ref);
+              const current = this.page?.items.find(item => item.ref === entry.ref); if (current) Object.assign(current, detail);
+            }, true)}>详情</Button>
+            {(entry.options?.length ? entry.options : [{ id: '', label: '加入书架' }]).map((option) => <Button className="primary" disabled={this.working || option.available === false}
+              onClick={() => void this.run(() => this.acquire(entry, option.id), true)}>{option.label}</Button>)}</div>
           </article>)}
-          {this.searchState !== 'idle' && this.searchState !== 'limited' && (this.page?.nextCursor || (this.searchSession && (this.searchState === 'stopped' || this.searchState === 'error'))) && !this.searchRun && <div className="catalog-pagination"><Button disabled={this.busy} onClick={() => void this.search(true)}>{this.page?.batch || !this.page ? '继续搜索' : '加载更多结果'}</Button></div>}
+          {this.searchState === 'complete' && this.page?.nextCursor && <div className="catalog-pagination"><Button disabled={this.busy || !this.canResume} onClick={() => void this.search(true)}>加载更多结果</Button></div>}
           {this.searchState === 'idle' && (this.path.length > 1 || this.page?.nextCursor) && <nav className="catalog-pagination" aria-label="搜索结果翻页">
             {this.path.length > 1 && <Button disabled={this.busy} onClick={() => void this.run(async () => { const previous = this.path[this.path.length - 2]!; await this.catalog(previous, false); this.path.pop(); })}>上一页</Button>}
             {this.page?.nextCursor && <Button disabled={this.busy} onClick={() => void this.run(() => this.catalog({ ...this.path.at(-1), cursor: this.page!.nextCursor! }))}>下一页</Button>}

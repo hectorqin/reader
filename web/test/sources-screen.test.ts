@@ -71,7 +71,6 @@ it('separates partial failures, preserves single-source pagination and clears ol
 
 it('merges events from one stream, aborts on stop, ignores late data and resumes the last received cursor', async () => {
   const { screen, api } = await setup(); await chooseSource(screen.element);
-  const cancel = vi.spyOn(api, 'cancelSourceSearch').mockResolvedValue();
   let resolve!: (page: SourcePage) => void;
   const first = { ref: 'first', title: '第一批结果' };
   const search = vi.spyOn(api, 'searchSource').mockImplementationOnce(() => pages(
@@ -81,7 +80,7 @@ it('merges events from one stream, aborts on stop, ignores late data and resumes
   await vi.waitFor(() => expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(1));
   expect(search).toHaveBeenCalledTimes(1);
   const signal = search.mock.calls[0]![2]!.signal!;
-  await click(screen.element, '停止搜索'); expect(signal.aborted).toBe(true); expect(cancel).toHaveBeenCalledTimes(1);
+  await click(screen.element, '停止搜索'); expect(signal.aborted).toBe(true);
   resolve({ items: [{ ref: 'late', title: '迟到结果' }] }); await new Promise(done => setTimeout(done, 10));
   expect(screen.element.textContent).not.toContain('迟到结果');
   search.mockImplementationOnce(() => pages(
@@ -330,28 +329,56 @@ it('consumes heartbeats and buffered results through one HTTP stream', async () 
   expect(screen.element.textContent).toContain('搜索完成');
 });
 
-it('stops before the first event and waits for cancellation before resuming', async () => {
-  const { screen, api } = await sessionSetup(); let stopped!: () => void;
-  const cancel = vi.spyOn(api, 'cancelSourceSearch').mockImplementationOnce(() => new Promise<void>(resolve => { stopped = resolve; }));
+it('stops before the first event by disconnecting and resumes without a cancel HTTP request', async () => {
+  const { screen, api, transport } = await sessionSetup();
   const search = vi.spyOn(api, 'searchSource').mockImplementationOnce(() => pages(new Promise(() => {})))
     .mockImplementationOnce(() => pages({ items: [{ ref: 'resumed', title: '恢复结果' }], batch: { completed: 2, total: 2 } }));
   input(screen.element, '搜索书籍', '查询'); button(screen.element, '搜索').click();
   await vi.waitFor(() => expect(search).toHaveBeenCalledTimes(1));
   const id = search.mock.calls[0]![1].sessionId;
-  await click(screen.element, '停止搜索'); expect(cancel).toHaveBeenCalledWith('source-1', id);
-  button(screen.element, '继续搜索').click(); await new Promise(resolve => setTimeout(resolve, 10)); expect(search).toHaveBeenCalledTimes(1);
-  stopped(); await vi.waitFor(() => expect(screen.element.textContent).toContain('搜索完成'));
+  await click(screen.element, '停止搜索'); expect(search.mock.calls[0]![2]!.signal!.aborted).toBe(true);
+  expect(transport.requests.some(request => request.url.endsWith('/search/cancel'))).toBe(false);
+  button(screen.element, '继续搜索').click(); await vi.waitFor(() => expect(screen.element.textContent).toContain('搜索完成'));
   expect(search.mock.calls[1]![1].sessionId).toBe(id);
 });
 
 it('drains limited result events then cancels and hides continue', async () => {
   const { screen, api } = await sessionSetup();
-  const cancel = vi.spyOn(api, 'cancelSourceSearch').mockResolvedValue();
   const search = vi.spyOn(api, 'searchSource').mockImplementationOnce(() => pages(
     { items: [{ ref: 'one', title: '结果一' }], batch: { completed: 1, total: 8 }, limitReached: true, nextCursor: 'buffer' },
     { items: [{ ref: 'two', title: '结果二' }], batch: { completed: 1, total: 8 }, limitReached: true }));
   input(screen.element, '搜索书籍', '查询'); await click(screen.element, '搜索');
-  expect(search).toHaveBeenCalledTimes(1); expect(cancel).toHaveBeenCalledTimes(1);
+  expect(search).toHaveBeenCalledTimes(1);
   expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(2);
   expect(screen.element.textContent).toContain('已达到结果上限'); expect(screen.element.querySelector('.catalog-pagination')).toBeNull();
+});
+
+it('allows details and acquisition while search continues, then offers restart in a dropdown', async () => {
+  const { screen, api } = await sessionSetup();
+  let finish!: (page: SourcePage) => void;
+  const search = vi.spyOn(api, 'searchSource').mockImplementationOnce(() => pages(
+    { items: [{ ref: 'one', title: '搜索结果' }], batch: { completed: 1, total: 3 }, nextCursor: 'resume' },
+    new Promise<SourcePage>(resolve => { finish = resolve; })));
+  const detail = vi.spyOn(api, 'sourceDetail').mockResolvedValue({ ref: 'one', title: '详情标题' });
+  const acquire = vi.spyOn(api, 'acquireSource').mockResolvedValue({ kind: 'ready', publicationId: 'book1' });
+  input(screen.element, '搜索书籍', '查询'); button(screen.element, '搜索').click();
+  await vi.waitFor(() => expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(1));
+  expect(button(screen.element, '详情').disabled).toBe(false);
+  button(screen.element, '详情').click();
+  await vi.waitFor(() => expect(detail).toHaveBeenCalledTimes(1));
+  await vi.waitFor(() => expect(screen.element.textContent).toContain('详情标题'));
+  expect(button(screen.element, '加入书架').disabled).toBe(false);
+  button(screen.element, '加入书架').click();
+  await vi.waitFor(() => expect(acquire).toHaveBeenCalledTimes(1));
+  await vi.waitFor(() => expect(noticeText()).toContain('已加入书架'));
+  expect(search.mock.calls[0]![2]!.signal!.aborted).toBe(false);
+  await click(screen.element, '停止搜索'); finish({ items: [] });
+  expect(button(screen.element, '继续搜索').closest('.sources-search')).not.toBeNull();
+  await click(screen.element, '搜索选项');
+  search.mockImplementationOnce(() => pages({ items: [{ ref: 'new', title: '新结果' }] }));
+  await click(screen.element, '重新搜索');
+  await vi.waitFor(() => expect(screen.element.textContent).toContain('新结果'));
+  expect(search.mock.calls[1]![1].sessionId).not.toBe(search.mock.calls[0]![1].sessionId);
+  expect(search.mock.calls[1]![1].cursor).toBeUndefined();
+  expect(screen.element.textContent).not.toContain('详情标题');
 });

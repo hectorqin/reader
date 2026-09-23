@@ -300,9 +300,6 @@ export class ReaderApi {
       throw new ApiError('offline', '搜索连接中断，已保留收到的结果，可继续搜索。', 'STREAM_INTERRUPTED');
     } finally { controller.abort(); this.streams.delete(controller); }
   }
-  async cancelSourceSearch(id: string, sessionId: string): Promise<void> {
-    await this.call(`/api/v1/sources/${encodeURIComponent(id)}/search/cancel`, 'POST', { sessionId });
-  }
   async sourceDetail(id: string, ref: string): Promise<SourceEntry> {
     return this.get(`/api/v1/sources/${encodeURIComponent(id)}/entries?ref=${encodeURIComponent(ref)}`);
   }

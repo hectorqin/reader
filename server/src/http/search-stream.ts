@@ -5,7 +5,8 @@ import type { CatalogPage, SearchRequest } from '../sources/types.ts';
 import type { SourceHost } from '../services/source-host.ts';
 
 const frame = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-const connections = new WeakMap<SourceHost, Map<string, AbortController>>();
+interface Connection { controller: AbortController; closed: Promise<void> }
+const connections = new WeakMap<SourceHost, Map<string, Connection>>();
 
 /** One authenticated POST response carries every result page of a search. */
 export function searchResponse(request: FastifyRequest, reply: FastifyReply, host: SourceHost, userId: string, sourceId: string, search: SearchRequest): Readable {
@@ -13,7 +14,11 @@ export function searchResponse(request: FastifyRequest, reply: FastifyReply, hos
   let active = connections.get(host);
   if (!active) { active = new Map(); connections.set(host, active); }
   const key = JSON.stringify([userId, sourceId, search.sessionId]);
-  active.get(key)?.abort(); active.set(key, controller);
+  const previousConnection = active.get(key);
+  previousConnection?.controller.abort();
+  let release!: () => void;
+  const connection = { controller, closed: new Promise<void>(resolve => { release = resolve; }) };
+  active.set(key, connection);
   request.raw.once('aborted', abort); reply.raw.once('close', abort);
   async function* events() {
     let cursor = search.cursor, previous: CatalogPage['batch'], complete = false;
@@ -21,6 +26,8 @@ export function searchResponse(request: FastifyRequest, reply: FastifyReply, hos
     const limit = search.resultLimit ?? 10000;
     try {
       yield ': search connected\n\n';
+      // A resumed stream must not race the previous connection's session stop.
+      await previousConnection?.closed;
       do {
         controller.signal.throwIfAborted();
         const key = cursor ?? '';
@@ -52,11 +59,14 @@ export function searchResponse(request: FastifyRequest, reply: FastifyReply, hos
     } finally {
       controller.abort();
       request.raw.removeListener('aborted', abort); reply.raw.removeListener('close', abort);
-      if (active!.get(key) === controller) {
-        active!.delete(key);
+      try {
+        await previousConnection?.closed;
         if (search.sessionId && (!complete || previous)) await host.cancelSearch(userId, sourceId, search.sessionId).catch(error => {
           request.log.warn({ err: error, sourceId }, 'search session cancellation failed');
         });
+      } finally {
+        if (active!.get(key) === connection) active!.delete(key);
+        release();
       }
     }
   }

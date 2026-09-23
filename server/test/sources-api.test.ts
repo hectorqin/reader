@@ -564,3 +564,41 @@ test('stream errors retain earlier events and caps prevent extra provider calls'
   const result = streamEvents(limited.body); assert.equal(calls, 1); assert.equal(result[0]!.data.items.length, 1);
   assert.equal(result[0]!.data.limitReached, true); assert.equal(result.at(-1)!.data.reason, 'limit');
 });
+
+test('resuming a disconnected stream waits for its previous cleanup before polling again', { timeout: 10000 }, async t => {
+  const h = await harness(); t.after(() => h.close());
+  let entered!: () => void, stopping!: () => void, release!: () => void;
+  const waiting = new Promise<void>(resolve => { entered = resolve; });
+  const stopped = new Promise<void>(resolve => { stopping = resolve; });
+  const cleanup = new Promise<void>(resolve => { release = resolve; });
+  t.after(() => release());
+  let calls = 0, stops = 0;
+  const provider: SourceProvider = {
+    descriptor: { id: 'resume', label: 'Resume', version: '1', capabilities: ['search', 'search.cancel', 'search.session', 'detail'] },
+    async detail(_ctx, ref) { return { ref, title: ref }; },
+    async acquire() { return { kind: 'action-required', action: { type: 'external', label: 'Test' } }; },
+    async search(ctx) {
+      calls++;
+      if (calls === 1) return { items: [{ ref: 'first', title: 'First' }], nextCursor: 'next' };
+      if (calls === 2) { entered(); return new Promise((_, reject) => ctx.signal.addEventListener('abort', () => reject(ctx.signal.reason), { once: true })); }
+      return { items: [{ ref: 'second', title: 'Resumed' }] };
+    },
+    async cancelSearch() { stops++; stopping(); await cleanup; },
+  };
+  h.ctx.sources!.registry.register({ pluginId: 'reader.resume', provider });
+  await h.ctx.sources!.create({ id: 'resume-test', pluginId: 'reader.resume', sourceType: 'resume', name: 'resume', config: {} });
+  const base = await h.app.listen({ port: 0, host: '127.0.0.1' });
+  const controller = new AbortController(); t.after(() => controller.abort());
+  const headers = { ...auth(h.admin), 'content-type': 'application/json' };
+  const response = await fetch(base + '/api/v1/sources/resume-test/search', { method: 'POST', headers, body: JSON.stringify(searchPayload), signal: controller.signal });
+  const reader = response.body!.getReader();
+  await reader.read(); await waiting;
+  controller.abort(); await stopped;
+  const resumed = await fetch(base + '/api/v1/sources/resume-test/search', { method: 'POST', headers, body: JSON.stringify({ ...searchPayload, cursor: 'next' }) });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(calls, 2, 'old cleanup must finish before the next poll');
+  release();
+  assert.match(await resumed.text(), /Resumed/);
+  assert.equal(calls, 3); assert.equal(stops, 1);
+  await reader.cancel().catch(() => {});
+});

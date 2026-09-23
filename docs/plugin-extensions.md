@@ -26,7 +26,7 @@ GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{sourc
 
 前端通过 `POST /api/v1/sources/:id/search` 建立一次 Streamable HTTP 请求，使用 `text/event-stream` 持续接收 `results`，并以 `done` 或 `error` 结束；收到结果后立即合并展示。宿主在服务端按插件返回的 `nextCursor` 拉取后续批次或普通分页，直到游标耗尽、达到请求的 `resultLimit` 或被取消。插件内部的游标分页仍保留，前端不再通过轮询获取结果。停止搜索或断开连接会取消在途搜索，已收到的结果保留。
 
-`CatalogPage.errors` 使用 `{source,code,message}` 表达部分失败，由宿主校验。成功条目保留；插件提供脱敏信息，宿主不解释业务错误码。声明 `search.session` 时须同时声明 `search.cancel` 并实现取消接口。宿主按用户与来源隔离会话，前端保留查询、筛选和已收到结果。
+`CatalogPage.errors` 使用 `{source,code,message}` 表达部分失败，由宿主校验。成功条目保留；插件提供脱敏信息，宿主不解释业务错误码。声明 `search.session` 时须同时声明 `search.cancel` 并实现取消接口。宿主按用户与来源隔离会话，前端保留查询、筛选和已收到结果。Web 通过断开结果流停止搜索，宿主负责取消在途调用与暂停插件会话；继续搜索沿用会话及最后收到的游标，重新搜索使用新会话。插件应将搜索轮询与详情/获取操作解耦，并把请求取消信号传到底层任务，避免停止后留下阻塞队列。
 
 ## 换源
 

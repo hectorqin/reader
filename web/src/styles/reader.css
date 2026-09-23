@@ -3529,6 +3529,15 @@ book-content {
 .search-progress progress { width:10rem; max-width:100%; height:.45rem; accent-color:var(--reader-accent); }
 .search-progress small { color:var(--reader-muted); }
 .search-stop { border-color:var(--reader-accent); }
+.search-split { display:flex; position:relative; flex:none; }
+.search-split > .primary:first-child { border-radius:var(--reader-radius, .75rem) 0 0 var(--reader-radius, .75rem); }
+.search-split > .primary:only-child { border-radius:var(--reader-radius, .75rem); }
+.search-split .search-menu-toggle { border-radius:0 var(--reader-radius, .75rem) var(--reader-radius, .75rem) 0; padding-inline:.65rem; border-left:1px solid var(--reader-line); }
+.search-menu-toggle .icon { transform:rotate(90deg); }
+.search-menu { position:absolute; right:0; top:calc(100% + .45rem); z-index:5; width:min(17rem, calc(100vw - 4rem)); padding:.35rem; border:1px solid var(--reader-line); border-radius:.8rem; background:var(--reader-paper); box-shadow:0 8px 24px #0002; }
+.search-menu button { display:flex; align-items:center; width:100%; padding:.65rem .75rem; text-align:left; border:0; background:transparent; color:var(--reader-ink); border-radius:.5rem; }
+.search-menu button:hover, .search-menu button:focus-visible { background:color-mix(in srgb, var(--reader-accent) 12%, transparent); }
+.search-menu small { display:block; margin-top:.2rem; color:var(--reader-muted); font-size:.75rem; }
 .catalog-summary { display:flex; flex-wrap:wrap; gap:.5rem 1rem; justify-content:space-between; align-items:center; }
 .catalog-summary strong { font-size:1rem; }
 .catalog-summary span { display:flex; align-items:center; gap:.4rem; color:var(--reader-muted); font-size:.85rem; }
@@ -3553,6 +3562,8 @@ book-content {
   .catalog-errors li { grid-template-columns:minmax(0,1fr); }
   .sources-search .source-keyword { flex-basis:100%; }
   .sources-search > button { width:100%; }
+  .sources-search > .search-split { width:100%; }
+  .search-split > .primary:first-child { flex:1; }
 }
 .source-description { max-height:6rem; overflow:auto; font-size:.9rem; white-space:pre-wrap; }
 
