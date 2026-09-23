@@ -90,10 +90,10 @@ export class SourcesScreen {
     await this.run(async () => {
       this.installing = true; this.draw();
       try {
-        if (upload) await this.options.api.uploadPlugin(this.pluginFile!);
-        else await this.options.api.installPlugin(this.folder.trim());
+        const plugin = upload ? await this.options.api.uploadPlugin(this.pluginFile!) : await this.options.api.installPlugin(this.folder.trim());
         this.folder = ''; this.pluginFile = null; this.pluginFileVersion++; this.trusted = false;
-        await this.reload(); this.message = '插件已安装并启用，可前往“书源管理”添加来源。';
+        await this.reload();
+        this.message = plugin?.updated ? `插件已更新至 ${plugin.version} 并启用，书源配置和数据已保留。` : '插件已安装并启用，可前往“书源管理”添加来源。';
       } finally { this.installing = false; }
     });
   }
@@ -329,6 +329,7 @@ export class SourcesScreen {
       </section>}
       {this.tab === 'plugins' && this.options.admin && <section className="sources-card"><h2>插件管理</h2>
         <p className="notice">插件以服务端权限运行。安装前请确认来源可信；npm 安装需要服务端能够访问 npm 仓库。</p>
+        <p className="muted">更新已有插件：上传新版安装包或输入 npm 包名与版本即可，书源配置和数据会保留，无需卸载。</p>
         <label className="sources-consent"><input type="checkbox" disabled={this.busy} checked={this.trusted} onChange={(event) => { this.trusted = event.currentTarget.checked; this.draw(); }} />我信任这个插件的代码</label>
         <div className="plugin-install">
           <div className="plugin-install-tabs" role="tablist" aria-label="插件安装方式">

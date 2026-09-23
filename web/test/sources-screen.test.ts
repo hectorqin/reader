@@ -382,3 +382,22 @@ it('allows details and acquisition while search continues, then offers restart i
   expect(search.mock.calls[1]![1].cursor).toBeUndefined();
   expect(screen.element.textContent).not.toContain('详情标题');
 });
+
+it('uploads a newer plugin package in place and reports the new version without uninstalling', async () => {
+  const { screen, api, transport } = await setup();
+  const plugin = { pluginId: 'remote', name: '远程插件', version: '2.0.0', builtin: false, enabled: true, updated: true, previousVersion: '1.0.0' };
+  vi.spyOn(api, 'uploadPlugin').mockResolvedValue(plugin);
+  vi.spyOn(api, 'plugins').mockResolvedValue([plugin]);
+  await click(screen.element, '插件管理');
+  expect(screen.element.textContent).toContain('无需卸载');
+  await click(screen.element, '上传安装包');
+  const picker = screen.element.querySelector<HTMLInputElement>('input[type=file]')!;
+  Object.defineProperty(picker, 'files', { configurable: true, value: [new File(['archive'], 'example-2.0.0.tgz')] });
+  picker.dispatchEvent(new Event('change', { bubbles: true }));
+  const trust = screen.element.querySelector<HTMLInputElement>('input[type=checkbox]')!;
+  trust.checked = true; trust.dispatchEvent(new Event('change', { bubbles: true }));
+  picker.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  await vi.waitFor(() => expect(noticeText()).toContain('插件已更新至 2.0.0 并启用'));
+  expect(screen.element.textContent).toContain('2.0.0');
+  expect(transport.requests.some(request => request.method === 'DELETE')).toBe(false);
+});

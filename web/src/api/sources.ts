@@ -23,6 +23,7 @@ export interface SourceAcquisition {
   action?: { label: string; url?: string };
 }
 export interface SourcePlugin {
+  updated?: boolean; previousVersion?: string;
   extensions?: { pages?: Array<{ id: string; title: string }> };
   pluginId: string; builtin: boolean; name?: string; version?: string; folder?: string; enabled: boolean;
   runtime?: { state: string } | null; error?: { code: string; message: string };

@@ -1,12 +1,12 @@
 import { gzipSync } from 'node:zlib';
 
 /** Small npm-compatible tar fixture, so installation tests do not contact a registry. */
-export function pluginArchive(name = '@reader/example', pluginId = 'test.upload', valid = true): Buffer {
+export function pluginArchive(name = '@reader/example', pluginId = 'test.upload', valid = true, version = '1.0.0'): Buffer {
   const files: Record<string, string> = {
-    'package.json': JSON.stringify({ name, version: '1.0.0', scripts: {
+    'package.json': JSON.stringify({ name, version, scripts: {
       postinstall: 'node -e "require(\'fs\').writeFileSync(\'lifecycle-ran\', \'yes\')"',
     } }),
-    'plugin.json': valid ? JSON.stringify({ id: pluginId, name: 'Upload example', version: '1.0.0',
+    'plugin.json': valid ? JSON.stringify({ id: pluginId, name: 'Upload example', version,
       apiVersion: 1, runtime: 'node', entry: 'main.mjs', sourceTypes: [{ id: 'test', label: 'Test', capabilities: ['detail'] }] }) : '{}',
     'main.mjs': `import { createInterface } from 'node:readline';
       createInterface({ input: process.stdin }).on('line', line => {

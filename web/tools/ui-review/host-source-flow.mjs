@@ -98,6 +98,15 @@ try {
   await page.getByLabel('npm 包名', { exact: true }).fill('reader-source-example@latest');
   await page.getByLabel('我信任这个插件的代码').check();
   await button('安装并启用').click(); await page.getByText('Upload example', { exact: true }).waitFor();
+  // Upload another version of the same plugin; no uninstall or source deletion.
+  await tab('上传安装包').click();
+  await page.getByLabel('npm pack 安装包').setInputFiles({ name: 'example-1.1.0.tgz', mimeType: 'application/gzip',
+    buffer: pluginArchive('reader-source-example', 'test.registry', true, '1.1.0') });
+  await page.getByLabel('我信任这个插件的代码').check();
+  await button('上传并启用').click();
+  await page.getByRole('status').filter({ hasText: '插件已更新至 1.1.0 并启用' }).waitFor();
+  assert.equal(await page.locator('.sources-row').filter({ hasText: 'Upload example' }).count(), 1);
+  assert.ok((await page.locator('.sources-row').filter({ hasText: 'Upload example' }).innerText()).includes('1.1.0'));
   await shot('plugins-enabled-desktop');
   await page.setViewportSize({ width: 390, height: 844 });
   await tab('书源管理').click(); await addSource('示例章节源'); await addSource('第二个章节源');

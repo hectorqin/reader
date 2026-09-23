@@ -939,7 +939,9 @@ DELETE /api/v1/plugins/:id       保留来源实例、已获取书和数据
 
 安装返回 `201 { "plugin": {...} }`，列表返回 `{ "plugins": [...] }`，启停返回 `{ "plugin": {...} }`，卸载返回 `{ "ok": true }`。插件状态包含 `pluginId/builtin/enabled/sourceTypes/runtime`，外部插件还带 `folder/name/version`，加载失败时有 `error`。卸载会移除注册和安装记录，保留包文件、来源实例、凭据和书籍数据。
 
-禁用或插件进程故障不会删除已下载文件、章节目录及已缓存正文。当前没有覆盖升级或版本回滚接口；内置 `reader.local` 和 `reader.opds` 不可卸载、禁用或替换。已安装插件失败后可用 `PATCH ... {"enabled":true}` 重新加载。同一服务实例同时只处理一次安装，冲突返回 `409 PLUGIN_INSTALL_BUSY`；npm 下载限时 5 分钟，失败返回 `502 PLUGIN_INSTALL_FAILED`，缺失 npm 返回 `503 NPM_UNAVAILABLE`。
+禁用或插件进程故障不会删除已下载文件、章节目录及已缓存正文。npm 安装和上传包遇到相同插件 ID、不同版本时，会先在独立目录安装、校验已有来源能力和配置，再切换并启用；配置、凭据、订阅、插件数据目录和书架记录均保留。成功响应的 `plugin` 附带 `updated:true` 和可用的 `previousVersion`，相同版本返回 `409 PLUGIN_ALREADY_INSTALLED`。新版缺少已有实例能力返回 `409 PLUGIN_UPDATE_INCOMPATIBLE`，旧插件仍有在途操作返回 `409 PLUGIN_BUSY`。校验或切换失败保留旧安装记录和提供者；不自动回滚插件自行修改的数据。预部署目录加载不自动覆盖，一键版本回滚尚未提供。
+
+内置 `reader.local` 和 `reader.opds` 不可卸载、禁用或替换。已安装插件失败后可用 `PATCH ... {"enabled":true}` 重新加载。同一服务实例同时只处理一次安装，冲突返回 `409 PLUGIN_INSTALL_BUSY`；npm 下载限时 5 分钟，失败返回 `502 PLUGIN_INSTALL_FAILED`，缺失 npm 返回 `503 NPM_UNAVAILABLE`。
 
 ### 可运行示例：demo-chapters
 

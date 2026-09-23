@@ -99,7 +99,7 @@ export class PluginInstaller {
       // Remove download artifacts before committing. Package files and dependency layout stay intact.
       await rm(join(directory, 'upload.tgz'), { force: true });
       await rm(join(directory, '.npm-cache'), { recursive: true, force: true });
-      const plugin = await this.manager.install(`installed:${id}:${name}`);
+      const plugin = await this.manager.install(`installed:${id}:${name}`, { replace: true });
       committed = true;
       return plugin;
     } finally {

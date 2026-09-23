@@ -47,9 +47,15 @@ test('web plugin upload enforces admin, trust and file validation, installs enab
   assert.equal(response.json().plugin.enabled, true);
   assert.equal(response.json().plugin.pluginId, 'test.upload');
   assert.equal((await upload(h.admin, body())).statusCode, 409);
+  const updated = await upload(h.admin, body('example-new.tgz', true, pluginArchive(undefined, undefined, true, '1.1.0')));
+  assert.equal(updated.statusCode, 201, updated.body);
+  assert.equal(updated.json().plugin.updated, true);
+  assert.equal(updated.json().plugin.previousVersion, '1.0.0');
+  assert.equal(updated.json().plugin.version, '1.1.0');
   await h.restart();
   const list = await h.app.inject({ method: 'GET', url: '/api/v1/plugins', headers: auth(h.admin) });
   assert.equal(list.json().plugins.find((plugin: { pluginId: string }) => plugin.pluginId === 'test.upload').enabled, true);
+  assert.equal(list.json().plugins.find((plugin: { pluginId: string }) => plugin.pluginId === 'test.upload').version, '1.1.0');
   const untrusted = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(h.admin), payload: { package: 'example' } });
   assert.equal(untrusted.json().error.code, 'PLUGIN_TRUST_REQUIRED');
   const path = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(h.admin), payload: { package: '../package', trusted: true } });

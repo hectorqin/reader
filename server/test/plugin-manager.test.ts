@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { access, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Db } from '../src/db/index.ts';
@@ -339,5 +339,62 @@ test('source extension pages and schedules isolate instances, persist and skip p
     await restarted.runTasks(800000);
     await assert.rejects(restarted.sourcePage('b', 'settings', 'admin'), { code: 'SOURCE_NOT_FOUND' });
     assert.equal(f.db.all('SELECT key FROM plugin_storage WHERE key LIKE ?', 'source-task:%').length, 2);
+  } finally { await f.dispose(); }
+});
+
+for (const failure of ['runtime', 'configuration', 'capabilities', 'database'] as const) test(`failed ${failure} validation or switch preserves the installed plugin`, async () => {
+  const f = await fixture();
+  try {
+    await f.package(); await f.manager.install('example');
+    f.db.run("INSERT INTO source_instances (id, plugin_id, source_type, name, config_json, enabled, created_at) VALUES ('keep', 'test.plugin', 'test', 'Keep', '{}', 1, 0)");
+    const old = f.registry.require('test.plugin', 'test').provider;
+    assert.equal((await old.detail(context(), 'book')).title, 'Book');
+    const directory = await f.package('update');
+    const path = join(directory, 'plugin.json'), manifest = JSON.parse(await readFile(path, 'utf8'));
+    manifest.version = '2.0.0';
+    if (failure === 'capabilities') manifest.sourceTypes[0].id = 'other';
+    await writeFile(path, JSON.stringify(manifest));
+    if (failure === 'runtime') await writeFile(join(directory, 'main.mjs'), 'process.exit(1)');
+    if (failure === 'configuration') await writeFile(join(directory, 'main.mjs'), WORKER.replace("const result =", "if(request.method === 'validateConfig') { process.stdout.write(JSON.stringify({jsonrpc:'2.0', id:request.id, error:{code:'INVALID_CONFIG',message:'saved configuration rejected'}})+'\\n'); return; } const result ="));
+    if (failure === 'database') f.db.run("CREATE TRIGGER reject_upgrade BEFORE UPDATE ON installed_plugins BEGIN SELECT RAISE(ABORT, 'test upgrade write failure'); END");
+    await assert.rejects(f.manager.install('update', { replace: true }));
+    assert.equal(f.manager.list().find(plugin => plugin.pluginId === 'test.plugin')?.version, '1.0.0');
+    assert.equal(f.db.get<{folder: string}>("SELECT folder FROM installed_plugins WHERE plugin_id = 'test.plugin'")?.folder, 'example');
+    assert.equal(f.registry.require('test.plugin', 'test').provider, old);
+    assert.equal((await old.detail(context(), 'book')).title, 'Book');
+  } finally { await f.dispose(); }
+});
+
+test('upgrade refuses in-flight operations and invalidates old provider references after a successful switch', async () => {
+  const f = await fixture();
+  try {
+    await f.package(); await f.manager.install('example');
+    const directory = await f.package('update');
+    const path = join(directory, 'plugin.json'), manifest = JSON.parse(await readFile(path, 'utf8'));
+    manifest.version = '2.0.0'; await writeFile(path, JSON.stringify(manifest));
+    const provider = f.registry.require('test.plugin', 'test').provider;
+    const controller = new AbortController();
+    const pending = assert.rejects(provider.detail({ ...context(), signal: controller.signal }, 'hang'), { code: 'PLUGIN_CANCELLED' });
+    await assert.rejects(f.manager.install('update', { replace: true }), { code: 'PLUGIN_BUSY' });
+    assert.equal(f.manager.list().find(plugin => plugin.pluginId === 'test.plugin')?.runtime?.state, 'running');
+    controller.abort(); await pending;
+    const result = await f.manager.install('update', { replace: true });
+    assert.equal(result.version, '2.0.0');
+    await assert.rejects(provider.detail(context(), 'book'), { code: 'PLUGIN_UNAVAILABLE' });
+    assert.equal((await f.registry.require('test.plugin', 'test').provider.detail(context(), 'book')).title, 'Book');
+  } finally { await f.dispose(); }
+});
+
+test('a disabled plugin can be upgraded and enabled after restarting the manager', async () => {
+  const f = await fixture();
+  try {
+    await f.package(); await f.manager.install('example'); await f.manager.setEnabled('test.plugin', false);
+    await f.manager.close(); const manager = f.restart(); await manager.loadInstalled();
+    const directory = await f.package('update');
+    const path = join(directory, 'plugin.json'), manifest = JSON.parse(await readFile(path, 'utf8'));
+    manifest.version = '2.0.0'; await writeFile(path, JSON.stringify(manifest));
+    const result = await manager.install('update', { replace: true });
+    assert.equal(result.version, '2.0.0'); assert.equal(result.enabled, true);
+    assert.equal((await f.registry.require('test.plugin', 'test').provider.detail(context(), 'book')).title, 'Book');
   } finally { await f.dispose(); }
 });

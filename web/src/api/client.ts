@@ -261,12 +261,12 @@ export class ReaderApi {
   async sourceCredential(id: string, key: string, value: string): Promise<void> {
     await this.call(`/api/v1/sources/${encodeURIComponent(id)}/credentials/${encodeURIComponent(key)}`, 'PUT', { value });
   }
-  async installPlugin(packageName: string): Promise<void> { await this.call('/api/v1/plugins', 'POST', { package: packageName, trusted: true }); }
-  async uploadPlugin(file: File): Promise<void> {
+  async installPlugin(packageName: string): Promise<SourcePlugin> { return (await this.call<{ plugin: SourcePlugin }>('/api/v1/plugins', 'POST', { package: packageName, trusted: true })).plugin; }
+  async uploadPlugin(file: File): Promise<SourcePlugin> {
     const form = new FormData();
     form.append('trusted', 'true');
     form.append('file', file, file.name);
-    await this.call('/api/v1/plugins/upload', 'POST', form);
+    return (await this.call<{ plugin: SourcePlugin }>('/api/v1/plugins/upload', 'POST', form)).plugin;
   }
   async enablePlugin(id: string, enabled: boolean): Promise<void> { await this.call(`/api/v1/plugins/${encodeURIComponent(id)}`, 'PATCH', { enabled }); }
   async uninstallPlugin(id: string): Promise<void> { await this.call(`/api/v1/plugins/${encodeURIComponent(id)}`, 'DELETE'); }

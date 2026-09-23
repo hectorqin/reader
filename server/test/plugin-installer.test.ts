@@ -50,6 +50,24 @@ test('invalid package and interrupted upload leave no installation behind', asyn
   assert.deepEqual(f.manager.list(), []);
 });
 
+test('uploading a new version upgrades the existing plugin and retains source configuration across restart', async t => {
+  const f = await fixture(t);
+  const old = await f.installer.installArchive(target => writeFile(target, pluginArchive()));
+  f.db.run("INSERT INTO source_instances (id, plugin_id, source_type, name, config_json, enabled, created_at) VALUES ('keep', 'test.upload', 'test', 'Keep', '{\"custom\":true}', 1, 0)");
+  f.db.run("INSERT INTO plugin_storage (key, value) VALUES ('keep', 'state')");
+  const upgraded = await f.installer.installArchive(target => writeFile(target, pluginArchive(undefined, undefined, true, '1.1.0')));
+  assert.equal(upgraded.version, '1.1.0');
+  assert.equal(upgraded.enabled, true);
+  assert.notEqual(upgraded.folder, old.folder);
+  assert.equal(f.db.all('SELECT * FROM installed_plugins').length, 1);
+  assert.equal(f.db.get<{ config_json: string }>("SELECT config_json FROM source_instances WHERE id = 'keep'")?.config_json, '{"custom":true}');
+  assert.equal(f.db.get<{ value: string }>("SELECT value FROM plugin_storage WHERE key = 'keep'")?.value, 'state');
+  await f.manager.close();
+  const restored = new PluginManager(f.db, f.root, f.registry);
+  try { await restored.loadInstalled(); assert.equal(restored.list()[0]?.version, '1.1.0'); }
+  finally { await restored.close(); }
+});
+
 test('npm specs reject options, URLs, local paths and aliases before any npm call', async t => {
   const f = await fixture(t);
   for (const spec of ['--help', '../package', 'file:package.tgz', 'https://example.test/a.tgz', 'git+https://example.test/a', 'x@npm:other', 'x;whoami', '@scope/x/../y', 'x@latest --ignore-scripts=false']) {
@@ -83,15 +101,16 @@ test('plugin root cannot point outside DATA_DIR', async t => {
 });
 
 test('npm name installs through a registry and auto-enables the downloaded scoped package', async t => {
-  const f = await fixture(t), archive = pluginArchive();
+  const f = await fixture(t);
+  let version = '1.0.0';
   let registryUrl = '';
   const requests: string[] = [];
   const server = createServer((request, response) => {
     requests.push(request.url!);
-    if (request.url === '/example.tgz') { response.end(archive); return; }
+    if (request.url === '/example.tgz') { response.end(pluginArchive(undefined, undefined, true, version)); return; }
     response.setHeader('content-type', 'application/json');
-    response.end(JSON.stringify({ name: '@reader/example', 'dist-tags': { latest: '1.0.0' }, versions: {
-      '1.0.0': { name: '@reader/example', version: '1.0.0', dist: { tarball: registryUrl + '/example.tgz' } },
+    response.end(JSON.stringify({ name: '@reader/example', 'dist-tags': { latest: version }, versions: {
+      [version]: { name: '@reader/example', version, dist: { tarball: registryUrl + '/example.tgz' } },
     } }));
   });
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -103,6 +122,10 @@ test('npm name installs through a registry and auto-enables the downloaded scope
     assert.equal(result.enabled, true);
     assert.equal(result.pluginId, 'test.upload');
     assert.ok(requests.includes('/example.tgz'));
+    version = '1.1.0';
+    const updated = await f.installer.installPackage('@reader/example@latest');
+    assert.equal(updated.version, version); assert.equal(updated.updated, true);
+    assert.equal(f.manager.list().length, 1);
   } finally {
     if (previous === undefined) delete process.env.npm_config_registry; else process.env.npm_config_registry = previous;
     await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

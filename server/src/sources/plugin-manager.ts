@@ -17,6 +17,9 @@ interface ManagedPlugin {
 }
 
 export interface PluginInfo {
+  /** Only present on the response to a successful package replacement. */
+  updated?: boolean;
+  previousVersion?: string;
   extensions?: PluginExtensions;
   pluginId: string;
   folder?: string;
@@ -148,14 +151,18 @@ export class PluginManager {
     });
   }
 
-  install(folder: string): Promise<PluginInfo> {
+  install(folder: string, options: { replace?: boolean } = {}): Promise<PluginInfo> {
     return this.enqueue(async () => {
       const plugin = await this.loadPackage(folder);
       let managed: ManagedPlugin | undefined;
       try {
         this.assertExternal(plugin.manifest.id);
-        if (this.rows().some((row) => row.plugin_id === plugin.manifest.id || row.folder === folder)) {
-          throw pluginError(409, 'PLUGIN_ALREADY_INSTALLED', 'This plugin id or package folder is already installed');
+        const existing = this.rows().find(row => row.plugin_id === plugin.manifest.id || row.folder === folder);
+        if (existing) {
+          if (options.replace && existing.plugin_id === plugin.manifest.id && existing.folder !== folder) {
+            return await this.replace(existing, folder, plugin);
+          }
+          throw pluginError(409, 'PLUGIN_ALREADY_INSTALLED', '此插件或安装目录已安装，请上传新版安装包或输入 npm 包名更新。');
         }
         managed = this.prepare(plugin);
         this.register(managed);
@@ -168,6 +175,51 @@ export class PluginManager {
         throw this.packageInputError(error);
       }
     });
+  }
+
+  /** Validate a separate dependency tree before switching the durable package pointer. */
+  private async replace(row: InstalledPlugin, folder: string, plugin: ProcessPlugin): Promise<PluginInfo> {
+    const previous = this.managed.get(row.plugin_id);
+    let oldPlugin = previous?.plugin;
+    if (!oldPlugin) {
+      try { oldPlugin = await this.loadPackage(row.folder); }
+      catch { /* A missing/broken old package can be repaired by uploading a valid replacement. */ }
+    }
+    try {
+      if (oldPlugin?.manifest.version === plugin.manifest.version) {
+        throw pluginError(409, 'PLUGIN_ALREADY_INSTALLED', `已安装此版本（${plugin.manifest.version}），无需重复安装。`);
+      }
+      const candidate = this.prepare(plugin, true);
+      // Existing instances, including disabled ones, must remain usable after switching.
+      for (const instance of this.db.all<InstanceRow>('SELECT * FROM source_instances WHERE plugin_id = ?', row.plugin_id)) {
+        const provider = candidate.providers.find(provider => provider.descriptor.id === instance.source_type);
+        const oldType = oldPlugin?.manifest.sourceTypes.find(type => type.id === instance.source_type);
+        if (!provider || oldType?.capabilities.some(capability => !provider.descriptor.capabilities.includes(capability))) {
+          throw pluginError(409, 'PLUGIN_UPDATE_INCOMPATIBLE', '新版插件缺少已有书源使用的类型或能力，已保留原版本。');
+        }
+        await provider.validateConfig?.(JSON.parse(instance.config_json));
+      }
+      // New work may have arrived during validation. Keep the current process intact
+      // rather than interrupting a search, data write or reader during an update.
+      if (previous?.plugin?.status().pendingRequests || [...this.extensionBusy].some(key => key === row.plugin_id || key.startsWith(JSON.stringify([row.plugin_id]).slice(0, -1) + ','))) {
+        throw pluginError(409, 'PLUGIN_BUSY', '插件仍有操作正在执行，请停止搜索或等待操作完成后重试更新。');
+      }
+      const wasActive = previous?.active;
+      if (previous) this.unregister(previous);
+      try {
+        this.register(candidate);
+        this.db.run('UPDATE installed_plugins SET folder = ?, enabled = 1 WHERE plugin_id = ?', folder, row.plugin_id);
+        this.managed.set(row.plugin_id, candidate);
+      } catch (error) {
+        this.unregister(candidate);
+        if (previous) { previous.active = wasActive!; if (previous.active) this.register(previous); }
+        throw error;
+      }
+      await previous?.plugin?.close();
+      return { ...this.info({ ...row, folder, enabled: 1 }), updated: true, previousVersion: oldPlugin?.manifest.version };
+    } finally {
+      if (oldPlugin && oldPlugin !== previous?.plugin) await oldPlugin.close();
+    }
   }
 
   setEnabled(pluginId: string, enabled: boolean): Promise<PluginInfo> {
@@ -315,8 +367,8 @@ export class PluginManager {
     return error;
   }
 
-  private prepare(plugin: ProcessPlugin): ManagedPlugin {
-    if (this.registry.list().some((registration) => registration.pluginId === plugin.manifest.id)) {
+  private prepare(plugin: ProcessPlugin, replacing = false): ManagedPlugin {
+    if (!replacing && this.registry.list().some((registration) => registration.pluginId === plugin.manifest.id)) {
       throw pluginError(409, 'PLUGIN_SOURCE_CONFLICT', 'The plugin already owns a registered source type');
     }
     const managed: ManagedPlugin = { plugin, providers: [], active: true };
