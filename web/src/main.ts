@@ -1,5 +1,6 @@
 import './styles/reader.css';
 import { App } from './app.ts';
+import { registerPwa } from './core/pwa.ts';
 
 /**
  * Entry point.
@@ -31,6 +32,7 @@ declare global {
   }
 }
 window.readerApp = app;
+registerPwa();
 window.__readerFlush = () => {
   void app.flush();
 };

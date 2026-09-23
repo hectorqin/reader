@@ -11,6 +11,7 @@ The project README introduces reader. Use the guides below for installation, eve
 | --- | --- | --- |
 | 安装、首次登录、添加书籍、更新 / Installation and first steps | [入门指南](getting-started.zh-CN.md) | [Getting started](getting-started.en.md) |
 | 书架、阅读、朗读、来源和离线 / Shelves, reading, TTS, sources, offline | [使用手册](user-guide.zh-CN.md) | Chinese only |
+| 安装到桌面、离线启动和版本更新 / PWA installation, offline startup and updates | [PWA 指南](pwa.zh-CN.md) | Chinese only |
 | 环境变量、目录权限、HTTPS、排错 / Settings, permissions, HTTPS, troubleshooting | [部署配置](configuration.zh-CN.md) | [Configuration](configuration.en.md) |
 | 本地开发、验证、镜像与 Android 构建 / Development, checks, Docker and Android builds | [开发指南](development.zh-CN.md) | [Development](development.en.md) |
 

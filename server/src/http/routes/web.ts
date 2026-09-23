@@ -81,11 +81,9 @@ export function registerWebRoutes(app: FastifyInstance, ctx: AppContext): void {
       return;
     }
     if (existsSync(candidate) && statSync(candidate).isFile()) {
-      // Vite writes content-hashed file names, so a JS/CSS asset is immutable:
-      // its bytes cannot change without the name changing too. `index.html` is
-      // the one file whose name never changes, so it must never be cached or a
-      // deployment would never pick up a new bundle.
-      const immutable = extname(candidate) !== '.html';
+      // The Android-compatible build uses fixed names (client.js, sw.js, etc.).
+      // Only explicitly fingerprinted assets can safely be cached forever.
+      const immutable = raw.startsWith('assets/') && /-[a-zA-Z0-9_-]{6,}\.[^.]+$/.test(raw);
       return sendFile(
         candidate,
         reply,

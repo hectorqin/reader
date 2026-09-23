@@ -23,6 +23,9 @@ before(async () => {
   await writeFile(join(root, 'index.html'), '<!doctype html><title>reader</title>');
   await mkdir(join(root, 'assets'));
   await writeFile(join(root, 'assets', 'index-abc123.js'), 'console.log(1)');
+  await writeFile(join(root, 'assets', 'client.js'), 'console.log(2)');
+  await writeFile(join(root, 'sw.js'), 'self.addEventListener("install", () => {})');
+  await writeFile(join(root, 'manifest.webmanifest'), '{"name":"reader"}');
   // A file one level above the build, to prove traversal is refused.
   await writeFile(join(root, '..', `secret-${process.pid}.txt`), 'do not serve me');
 
@@ -55,6 +58,18 @@ describe('static client hosting', () => {
     assert.equal(res.statusCode, 200);
     assert.match(res.headers['content-type'] as string, /javascript/);
     assert.match(res.headers['cache-control'] as string, /immutable/);
+  });
+
+  test('fixed-name bundles and PWA metadata must revalidate after deployment', async () => {
+    for (const url of ['/assets/client.js', '/sw.js', '/manifest.webmanifest']) {
+      const res = await app.inject({ method: 'GET', url });
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.headers['cache-control'], 'no-cache');
+    }
+    const worker = await app.inject({ method: 'GET', url: '/sw.js' });
+    assert.match(worker.headers['content-type'] as string, /javascript/);
+    const manifest = await app.inject({ method: 'GET', url: '/manifest.webmanifest' });
+    assert.match(manifest.headers['content-type'] as string, /application\/manifest\+json/);
   });
 
 test('an asset is served with its real bytes, not an empty second send', async () => {

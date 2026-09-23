@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import { pwa } from './tools/pwa/build.ts';
 
 // The build output is consumed twice:
 //   - served directly by the server for the browser/H5 build
@@ -9,6 +10,7 @@ import { defineConfig } from 'vitest/config';
 // from file:// cannot fetch sibling chunks over the network, and every extra
 // request through the file protocol is a chance to meet a platform quirk.
 export default defineConfig({
+  plugins: [pwa()],
   base: './',
   build: {
     outDir: 'dist',

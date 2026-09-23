@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "reader 阅读器",
+  "short_name": "reader",
+  "description": "自托管阅读器，支持已下载书籍离线阅读",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fbfaf7",
+  "theme_color": "#fbfaf7",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}
