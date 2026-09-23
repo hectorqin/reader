@@ -309,7 +309,7 @@ Steps to reproduce the behavior:  把你遇到的问题的发生步骤替换掉�
 -
 
 **版本说明**
- - OS: 树莓pi 4, ubuntu 
+ - OS: 树莓pi 4, ubuntu
  - docker 部署
  - hectorqin/reader:openj9-latest
  - chrome 浏览器(桌面端 & 手机端)
@@ -376,7 +376,7 @@ A clear and concise description of what the bug is.  简洁有效的说明。
 **To Reproduce 如何重现问题**
 Steps to reproduce the behavior:  把你遇到的问题的发生步骤替换掉下面的内容：
 1. Go to '...'
-2. 
+2.
 
 ![Image](https://github.com/user-attachments/assets/c3bbb451-fef5-434e-8daa-9077790a67cc)
 点击了  但是没有数据请求
@@ -533,7 +533,7 @@ dnine7@dnine7-GL63-8RE:~/reader$ free -h
 **版本说明**
  - OS: [e.g. win]  说明操作系统   ubuntu 24.10
  - Deploy Method 说明软件部署方式  docker compose
- - Program Version 说明软件版本 3.2.14 
+ - Program Version 说明软件版本 3.2.14
 
 **docker-compose-yaml**
 ```
@@ -619,12 +619,12 @@ networks:
 创建：2025/5/30 14:02:54；关闭：2026/9/23 9:17:30；原因：not_planned；历史评论总数：0。时间为 UTC。
 
 > Reader 完整源码仅开放到 v2.5.4，新版本当前仅开放部分开源源码，见 https://github.com/hectorqin/reader-legado.
-> 
-> 
-> 
-> @jueinin 
-> 
-> 早就是闭源的了 
+>
+>
+>
+> @jueinin
+>
+> 早就是闭源的了
 
  _Originally posted by @rolay in [#498](https://github.com/hectorqin/reader/issues/498#issuecomment-2313894063)_
 
@@ -738,7 +738,7 @@ Docker部署的，书源能正常显示，但是小说却不显示了。并且�
 **版本说明**
  - OS: [e.g. win]  macOS15.4.1
  - Deploy Method 说明软件部署方式  群晖Docker
- 
+
 **Additional context 其他说明**
 AI说是部分服务器未遵循标准，在返回文件时未正确设置 Content-Disposition 头部的 filename* 参数（用于 UTF-8 编码），导致 Safari 无法自动解码文件名。Safari 对非 ASCII 字符（如中文、日文、特殊符号）的处理较严格，若服务器未明确指定 UTF-8 编码，Safari 会直接保留 URL 编码格式，而非尝试解码。
 
@@ -893,7 +893,7 @@ Steps to reproduce the behavior:  把你遇到的问题的发生步骤替换掉�
 
 对应log
 ```
-[f26ccad3] [DefaultDispatcher-worker-2] 12:50:59.249 ERROR YueduApi - onHandlerError: 
+[f26ccad3] [DefaultDispatcher-worker-2] 12:50:59.249 ERROR YueduApi - onHandlerError:
 java.nio.charset.IllegalCharsetNameException: initial-scale=1.0, maximum-scale=1.0, user-scalable=no, width=device-width
 	at java.nio.charset.Charset.checkName(Charset.java:315)
 	at java.nio.charset.Charset.lookup2(Charset.java:484)
@@ -1399,7 +1399,7 @@ Steps to reproduce the behavior:  把你遇到的问题的发生步骤替换掉�
 **版本说明**
 安卓阅读APP 3.23.031210
 本项目的版本 v3.2.10-07270648
-浏览器 火狐、Safari 
+浏览器 火狐、Safari
 部署方式docker
 
 
@@ -1477,7 +1477,7 @@ windows桌面版和安卓app版怎么和服务端连接呢，想要app或者桌�
 **版本说明**
  - OS: [e.g. win]  MacOS最新
  - Deploy Method： Docker
- - Program Version：最新 
+ - Program Version：最新
  - Browser [e.g. chrome, safari]  MacBook Pro， Safari
 
 
@@ -1545,20 +1545,20 @@ windows桌面版和安卓app版怎么和服务端连接呢，想要app或者桌�
 我的nginx设置为：
 server {
    #添加加ssl和http2协议的要求。
-   listen 11loca22 ssl ; #ipv4  
+   listen 11loca22 ssl ; #ipv4
    #修改为自己申请的域名
-   server_name test.com;  
+   server_name test.com;
    ###添加秘钥
    # Mozilla Intermediate configuration
    ssl_protocols  TLSv1.1 TLSv1.2 TLSv1.3;
    #以下协议需要确认硬件是否支持，如果不支持或者不确定可以直接去除
-   ssl_ciphers            ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;   
+   ssl_ciphers            ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
    #以下修改为自己申请的域名公钥和私钥文件地址
    ssl_certificate  ;
    ssl_certificate_key ;
    ##############
    ssl_session_cache shared:SSL:10m;
-   ssl_session_timeout 10m; 
+   ssl_session_timeout 10m;
    if ($server_port !~ 1122){
        rewrite ^(/.*)$ https://$host$1 permanent;
    }
@@ -1579,7 +1579,7 @@ location / {
     gzip_vary on;
     client_max_body_size   50m; #允许上传50MB文件,上传本地书籍需要修改此项大小.如nginx主配置文件已添加,删除此行并修改主配置即可
 #修改为自己需要代理的局域网ip和端口号
-   	proxy_pass http://112.128.1.21:1122/; #阅读   	
+    proxy_pass http://112.128.1.21:1122/; #阅读
 	proxy_http_version 1.1;
         proxy_cache_bypass $http_upgrade;
         proxy_set_header Upgrade           $http_upgrade;
@@ -1593,7 +1593,7 @@ location / {
    }
 
     access_log /var/log/nginx/access.log; #;
-    error_log /var/log/nginx/error.log; # ; 
+    error_log /var/log/nginx/error.log; # ;
 }
 
 
@@ -1682,7 +1682,7 @@ HUAWEI Mate 40
 
 找了下文档和docker的yaml没看到描述此类的配置项，有些书书源多点方便换源，感觉服务器这块，直接检索完全部书源也不是不可以，是否有这个功能呢，有的话在哪里配置呢
 
-## #486 [server]：有充足内存的情况下报错OutOfMemoryError 
+## #486 [server]：有充足内存的情况下报错OutOfMemoryError
 
 原始链接：https://github.com/hectorqin/reader/issues/486
 创建：2024/1/24 13:09:41；关闭：2026/9/23 9:15:16；原因：not_planned；历史评论总数：4。时间为 UTC。
@@ -1725,9 +1725,9 @@ https://github.com/hectorqin/reader/blob/b3f580f49385376b88f92818b5a9dfa874e1f80
 原始链接：https://github.com/hectorqin/reader/issues/484
 创建：2024/1/18 3:25:31；关闭：2026/9/23 9:15:16；原因：not_planned；历史评论总数：5。时间为 UTC。
 
-我采用了reader的docker last版本，然后导入了本地9000多本书籍  
-当我进入书籍页面后发现，加载书籍列表需要非常长的时间（测试估计在30秒左右）  
-然后我看了一下请求，发现 getbookshelf接口的确没有进行分页，而是将所有的书籍返回  
+我采用了reader的docker last版本，然后导入了本地9000多本书籍
+当我进入书籍页面后发现，加载书籍列表需要非常长的时间（测试估计在30秒左右）
+然后我看了一下请求，发现 getbookshelf接口的确没有进行分页，而是将所有的书籍返回
 
 是否有计划下一步进行更新？
 
