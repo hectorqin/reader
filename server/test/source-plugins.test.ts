@@ -108,35 +108,121 @@ test('real example process supports discovery, acquisition and stable chapter re
   }
 });
 
-test('process timeout terminates pending work and requires a reload', async () => {
-  const source = await fixture('process.stdin.resume();');
-  const plugin = await ProcessPlugin.load(source.directory, { timeoutMs: 100 });
+for (const method of ['detail', 'acquire', 'extension.page', 'extension.action', 'extension.task'] as const) {
+  test(`${method} timeout isolates pending work and permits subsequent acquisition`, async () => {
+    const source = await fixture(`
+      import { createInterface } from 'node:readline';
+      let waiting;
+      let slowCalls = 0;
+      const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id, result }) + '\\n');
+      createInterface({ input: process.stdin }).on('line', line => {
+        const request = JSON.parse(line);
+        if (request.method === '$/cancelRequest') {
+          // Simulate a plugin finishing too late, even after receiving cancellation.
+          reply(request.params.id, { ref: 'late', title: 'Late response' });
+          process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.params.id,
+            error: { code: 'LATE_ERROR', message: 'late error' } }) + '\\n');
+          if (waiting) reply(waiting, { kind: 'chapters', publicationRef: 'concurrent' });
+          return;
+        }
+        if (request.params.entryRef === 'slow' || request.params.request?.entryRef === 'slow' || request.params.slow) {
+          slowCalls++;
+          return;
+        }
+        if (request.params.request?.entryRef === 'concurrent') { waiting = request.id; return; }
+        reply(request.id, request.method === 'acquire'
+          ? { kind: 'chapters', publicationRef: 'book' }
+          : { ref: 'book', title: String(process.pid), description: String(slowCalls) });
+      });
+    `);
+    const plugin = await ProcessPlugin.load(source.directory, { timeoutMs: 1000 });
+    try {
+      const provider = plugin.providers()[0]!;
+      const before = await provider.detail(context(), 'ready');
+      const slow = method === 'detail' ? provider.detail(context(), 'slow')
+        : method === 'acquire' ? provider.acquire(context(), { entryRef: 'slow' })
+        : plugin.invoke(method, { slow: true });
+      const timedOut = assert.rejects(slow, { code: 'PLUGIN_TIMEOUT' });
+      // A round trip ensures the slow request started before concurrent acquisition.
+      await provider.detail(context(), 'ready');
+      // Give the second request its own later deadline, including on busy CI hosts.
+      await new Promise(resolve => setTimeout(resolve, 200));
+      const concurrent = Promise.allSettled([provider.acquire(context(), { entryRef: 'concurrent' })]);
+      await timedOut;
+      assert.deepEqual(await concurrent, [{ status: 'fulfilled', value: { kind: 'chapters', publicationRef: 'concurrent' } }]);
+      const after = await provider.detail(context(), 'ready');
+      assert.equal(after.title, before.title, 'the same process must remain available');
+      assert.equal(after.description, '1', 'timed out operations must not be replayed');
+      assert.equal((await provider.acquire(context(), { entryRef: 'book' })).kind, 'chapters');
+      assert.equal(plugin.status().state, 'running');
+      assert.equal(plugin.status().pendingRequests, 0);
+    } finally {
+      await plugin.close();
+      await source.dispose();
+    }
+  });
+}
+
+for (const end of ['abort', 'external timeout', 'deadline'] as const) test(`${end} isolates an uncooperative request`, async () => {
+  const source = await fixture(`
+    import { createInterface } from 'node:readline';
+    createInterface({ input: process.stdin }).on('line', line => {
+      const request = JSON.parse(line);
+      if (request.params.entryRef === 'slow' || request.method === '$/cancelRequest') return;
+      setTimeout(() => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id,
+        result: { ref: 'book', title: 'Available' } }) + '\\n'), 50);
+    });
+  `);
+  const plugin = await ProcessPlugin.load(source.directory, { timeoutMs: 1000 });
   try {
-    await assert.rejects(plugin.providers()[0]!.detail(context(), 'book'), { code: 'PLUGIN_TIMEOUT' });
-    assert.equal(plugin.status().state, 'failed');
+    const provider = plugin.providers()[0]!;
+    await provider.detail(context(), 'ready');
+    const controller = new AbortController();
+    const signal = end === 'external timeout' ? AbortSignal.timeout(10) : controller.signal;
+    const pending = assert.rejects(provider.detail(context(signal), 'slow'), {
+      code: end === 'abort' ? 'PLUGIN_CANCELLED' : 'PLUGIN_TIMEOUT',
+    });
+    const concurrent = Promise.allSettled([provider.detail(context(), 'book')]);
+    if (end === 'abort') controller.abort();
+    await pending;
+    assert.equal((await concurrent)[0]!.status, 'fulfilled');
+    assert.equal((await provider.detail(context(), 'book')).title, 'Available');
     assert.equal(plugin.status().pendingRequests, 0);
-    await assert.rejects(plugin.providers()[0]!.detail(context(), 'book'), { code: 'PLUGIN_UNAVAILABLE' });
+    assert.equal(plugin.status().state, 'running');
   } finally {
     await plugin.close();
     await source.dispose();
   }
 });
 
-test('cancellation kills an uncooperative worker and rejects its concurrent calls', async () => {
+test('already aborted requests do not start a plugin process', async () => {
   const source = await fixture('process.stdin.resume();');
   const plugin = await ProcessPlugin.load(source.directory);
   try {
-    const controller = new AbortController();
-    const pending = plugin.providers()[0]!.detail(context(controller.signal), 'book');
-    const concurrent = plugin.providers()[0]!.detail(context(), 'another-book');
-    const outcomes = Promise.allSettled([pending, concurrent]);
-    controller.abort();
-    for (const result of await outcomes) {
-      assert.equal(result.status, 'rejected');
-      if (result.status === 'rejected') assert.equal(result.reason.code, 'PLUGIN_CANCELLED');
-    }
+    const provider = plugin.providers()[0]!;
+    await assert.rejects(provider.detail(context(AbortSignal.abort()), 'book'), { code: 'PLUGIN_CANCELLED' });
+    await assert.rejects(provider.detail(context(AbortSignal.abort(new DOMException('Timed out', 'TimeoutError'))), 'book'), { code: 'PLUGIN_TIMEOUT' });
+    assert.equal(plugin.status().state, 'stopped');
     assert.equal(plugin.status().pendingRequests, 0);
+  } finally {
+    await plugin.close();
+    await source.dispose();
+  }
+});
+
+for (const failure of ['exit', 'protocol'] as const) test(`actual process ${failure} still fails all pending requests`, async () => {
+  const source = await fixture(failure === 'exit'
+    ? `process.stdin.once('data', () => process.exit(1));`
+    : `process.stdin.once('data', () => process.stdout.write('invalid json\\n'));`);
+  const plugin = await ProcessPlugin.load(source.directory);
+  try {
+    const provider = plugin.providers()[0]!;
+    await Promise.all(['one', 'two'].map(ref => assert.rejects(provider.detail(context(), ref), {
+      code: failure === 'exit' ? 'PLUGIN_UNAVAILABLE' : 'PLUGIN_PROTOCOL_ERROR',
+    })));
     assert.equal(plugin.status().state, 'failed');
+    assert.equal(plugin.status().pendingRequests, 0);
+    await assert.rejects(provider.detail(context(), 'later'), { code: 'PLUGIN_UNAVAILABLE' });
   } finally {
     await plugin.close();
     await source.dispose();

@@ -188,7 +188,10 @@ export class ProcessPlugin {
   }
 
   private request(method: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
-    if (signal?.aborted) return Promise.reject(new PluginError('PLUGIN_CANCELLED', 'plugin request cancelled'));
+    const abortError = () => signal?.reason?.name === 'TimeoutError'
+      ? new PluginError('PLUGIN_TIMEOUT', 'plugin request exceeded its execution deadline')
+      : new PluginError('PLUGIN_CANCELLED', 'plugin request cancelled');
+    if (signal?.aborted) return Promise.reject(abortError());
     let child: ChildProcessWithoutNullStreams;
     try {
       child = this.start();
@@ -217,21 +220,12 @@ export class ProcessPlugin {
         pending.reject(error);
       };
       const cancel = () => {
-        if (!this.pending.has(id)) return;
-        if (cancellationRequest || (method === 'search' && type?.capabilities.includes('search.cancel'))) {
-          // A cancelled request must not later time out unrelated calls.
-          // onMessage ignores any late acknowledgement from the plugin.
-          cancelRequest(new PluginError('PLUGIN_CANCELLED', cancellationRequest ? 'search cancellation was not acknowledged' : 'search cancelled'));
-          return;
-        }
-        // Killing the worker is the only hard cancellation available for trusted
-        // stdio plugins. Other calls in the same process fail with it.
-        this.fail(new PluginError('PLUGIN_CANCELLED', 'plugin process stopped because a request was cancelled'));
+        cancelRequest(abortError());
       };
       const timer = setTimeout(() => {
-        const error = new PluginError('PLUGIN_TIMEOUT', 'plugin request exceeded its execution deadline');
-        if (cancellationRequest) cancelRequest(error);
-        else this.fail(error);
+        // Deadlines belong to individual calls, not the shared plugin process.
+        // Cooperation is best-effort; late responses are discarded by request ID.
+        cancelRequest(new PluginError('PLUGIN_TIMEOUT', 'plugin request exceeded its execution deadline'));
       }, this.timeoutMs);
       timer.unref();
       const cleanup = () => {
@@ -275,7 +269,7 @@ export class ProcessPlugin {
     if (value.jsonrpc !== '2.0' || !Number.isSafeInteger(value.id)) throw new Error('invalid response');
     if (('result' in value) === ('error' in value)) throw new Error('invalid response');
     const pending = this.pending.get(value.id as number);
-    if (!pending) return; // A cooperative cancellation can race an already written response.
+    if (!pending) return; // Cancelled or timed out calls can still return late.
     this.pending.delete(value.id as number);
     pending.cleanup();
     if ('error' in value) {

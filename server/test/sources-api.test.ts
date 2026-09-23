@@ -467,7 +467,7 @@ test('an unacknowledged search stop does not prevent adding a book to the shelf'
   } });
   assert.equal(created.statusCode, 201, created.body);
   const stopped = await h.app.inject({ method: 'POST', url: '/api/v1/sources/cancel-test/search/cancel', headers: auth(h.admin), payload: { sessionId: 'test-search-session' } });
-  assert.equal(stopped.json().error.code, 'PLUGIN_CANCELLED', stopped.body);
+  assert.equal(stopped.json().error.code, 'PLUGIN_TIMEOUT', stopped.body);
   const acquired = await h.app.inject({ method: 'POST', url: '/api/v1/sources/cancel-test/acquire', headers: auth(h.admin), payload: { entryRef: 'demo-book' } });
   assert.equal(acquired.statusCode, 200, acquired.body);
   const bookId = acquired.json().publicationId;
