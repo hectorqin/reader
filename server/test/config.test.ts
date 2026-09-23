@@ -10,12 +10,24 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, chmod, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, chmod, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config/index.ts';
 
 const SECRET_ENV = ['READER_TOKEN_SECRET', 'JWT_SECRET'] as const;
+
+test('refuses to start from a backup or incomplete restore directory', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'reader-config-backup-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  for (const marker of ['reader-backup.json', '.reader-backup-incomplete']) {
+    const data = join(root, marker + '-data'); await mkdir(data);
+    await writeFile(join(data, marker), 'marker');
+    await withEnv({ DATA_DIR: data, BOOKS_DIR: join(root, 'books') }, () => {
+      assert.throws(() => loadConfig(), /backup directory/);
+    });
+  }
+});
 
 async function withEnv(
   vars: Record<string, string | undefined>,

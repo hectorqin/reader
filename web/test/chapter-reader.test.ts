@@ -9,6 +9,7 @@ import { OfflineStore } from '../src/store/offline.ts';
 import { PublicationCache, publicationScope } from '../src/store/publications.ts';
 import { DEFAULT_APP_SETTINGS } from '../src/store/settings.ts';
 import { ReaderScreen } from '../src/ui/reader-screen.tsx';
+import { App } from '../src/app.ts';
 import type { SyncEngine } from '../src/core/sync.ts';
 import { FakeTransport, MemoryBlobs, MemoryKv, makePlatform } from './helpers/env.ts';
 
@@ -105,6 +106,62 @@ async function click(screen: ReaderScreen, label: string): Promise<void> {
 }
 
 describe('chapter publication reading', () => {
+  it('does not save a temporary opening position while waiting for remote progress', async () => {
+    const env = await setup(); serve(env.transport, content(['a', 'b']));
+    const old = { bookId: book.id, locator: 'r1:0.0000:chapter:b', percentage: 0.5,
+      chapterTitle: 'b', device: 'phone', updatedAt: 10 };
+    await env.offline.setProgress(old);
+    let finish!: (value: typeof old) => void;
+    vi.spyOn(env.api, 'getProgress').mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+    const opening = env.screen.open(book);
+    await vi.waitFor(() => expect(finish).toBeDefined());
+    await new Promise(resolve => setTimeout(resolve, 1700));
+    const duringOpen = env.offline.progressFor(book.id);
+    finish({ ...old, updatedAt: 20 }); await opening;
+    expect(duringOpen).toEqual(old);
+  });
+
+  it.each([{ localTime: 10, chapter: 'b' }, { localTime: 30, chapter: 'a' }])(
+    'opens the latest position when the local timestamp is $localTime', async ({ localTime, chapter }) => {
+    const env = await setup();
+    await env.offline.setProgress({ bookId: book.id, locator: 'r1:0.0000:chapter:a', percentage: 0,
+      chapterTitle: 'a', device: 'phone', updatedAt: localTime });
+    env.transport.respondWith(request => {
+      if (request.url.endsWith('/manifest')) return { status: 200, headers: {}, json: manifest(content(['a', 'b'])) };
+      if (request.url.includes('/assets?')) return { status: 200, headers: {}, bytes: new TextEncoder().encode(new URL(request.url, 'http://one.test').searchParams.get('ref')!) };
+      return { status: 200, headers: {}, json: { progress: { bookId: book.id, locator: 'r1:0.0000:chapter:b', percentage: 0.5,
+        chapterTitle: 'b', device: 'new phone', updatedAt: 20 } } };
+    });
+    await env.screen.open(book);
+    expect(body(env.screen)?.textContent).toContain(`resource:r1:${chapter}`);
+  });
+
+  it('flushes the visible chapter before app background sync, without waiting for the reading debounce', async () => {
+    const env = await setup();
+    serve(env.transport, content(['a', 'b']));
+    await env.screen.open(book);
+    // Exercise the actual App lifecycle flush and actual ReaderScreen/OfflineStore.
+    let savedLocator: string | undefined;
+    const sync = { flush: vi.fn(async () => {
+      const persisted = new OfflineStore(env.platform.kv);
+      await persisted.setScope(publicationScope(env.api.baseUrl, 'u1'));
+      savedLocator = persisted.current.progress[book.id]?.locator;
+    }) };
+    await App.prototype.flush.call({ reader: env.screen, offline: env.offline, sync } as unknown as App);
+    expect(sync.flush).toHaveBeenCalledOnce();
+    expect(savedLocator).toContain('chapter:a');
+    expect(env.offline.current.progress[book.id]?.locator).toContain('chapter:a');
+  });
+
+  it('keeps the local reading position when the progress service is unavailable', async () => {
+    const env = await setup(); serve(env.transport, content(['a', 'b']));
+    await env.offline.setProgress({ bookId: book.id, locator: 'r1:0.0000:chapter:b', percentage: 0.5,
+      chapterTitle: 'b', device: 'phone', updatedAt: 10 });
+    vi.spyOn(env.api, 'getProgress').mockRejectedValue(new ApiError('offline', 'offline'));
+    await env.screen.open(book);
+    expect(body(env.screen)?.textContent).toContain('resource:r1:b');
+  });
+
   it('switches from the contents panel only after chapter selection and preserves the old view on failure', async () => {
     const env = await setup(); let failSwitch = true;
     env.transport.respondWith(request => {
@@ -124,7 +181,26 @@ describe('chapter publication reading', () => {
     const submit = [...env.screen.element.querySelectorAll('button')].find(button => button.textContent === '确认换源并阅读')!;
     expect(submit.disabled).toBe(true);
     const select = env.screen.element.querySelector<HTMLSelectElement>('section[aria-label="切换书源"] select')!;
-    select.value = 'x'; select.dispatchEvent(new Event('change', { bubbles: true })); await click(env.screen, '确认换源并阅读');
+    select.value = 'x'; select.dispatchEvent(new Event('change', { bubbles: true }));
+    const quality = vi.spyOn(env.api, 'switchQuality');
+    quality.mockRejectedValueOnce(new ApiError('bad_request', '空章不能读取', 'EMPTY_CHAPTER', 400));
+    await click(env.screen, '检测所选章节 / 重试');
+    await vi.waitFor(() => expect(env.screen.element.textContent).toContain('空章不能读取'));
+    quality.mockResolvedValueOnce({ chapterId: 'x', title: '另一个章节', latestChapter: '末章', characters: 100, images: 0, bytes: 300, elapsedMs: 10 });
+    await click(env.screen, '检测所选章节 / 重试');
+    await vi.waitFor(() => expect(env.screen.element.textContent).toContain('100 字符'));
+    expect(body(env.screen)?.textContent).toContain('resource:r1:a');
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(env.screen.element.querySelector('dialog')?.textContent).not.toContain('100 字符');
+    let finish!: (value: {chapterId:string;title:string;latestChapter:string;characters:number;images:number;bytes:number;elapsedMs:number}) => void;
+    quality.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    await click(env.screen, '检测所选章节 / 重试');
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(quality.mock.calls.at(-1)?.[3]?.signal?.aborted).toBe(true);
+    finish({chapterId:'x',title:'迟到结果',latestChapter:'末章',characters:999,images:0,bytes:999,elapsedMs:1});
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(env.screen.element.querySelector('dialog')?.textContent).not.toContain('999 字符');
+    await click(env.screen, '确认换源并阅读');
     await vi.waitFor(() => expect(noticeText()).toContain('正文获取失败'));
     expect(body(env.screen)?.textContent).toContain('resource:r1:a');
     expect(env.screen.element.querySelector('section[aria-label="切换书源"]')?.textContent).toContain('最新章节');
@@ -310,4 +386,21 @@ describe('legacy offline migration', () => {
     await reopened.setScope('new-account', { claimLegacy: true });
     expect(reopened.current.progress).toEqual({});
   });
+});
+
+it('opens tools, searches the whole book, navigates and returns, and persists a bookmark', async () => {
+ const env = await setup(); serve(env.transport,content(['a','b'])); await env.screen.open(book);
+ await click(env.screen,'工具'); await vi.waitFor(()=>expect(env.screen.element.textContent).toContain('搜索全文'));
+ const input = env.screen.element.querySelector<HTMLInputElement>('input[maxlength="200"]')!;
+ input.value = '正文'; input.dispatchEvent(new Event('input',{bubbles:true}));
+ await vi.waitFor(()=>expect(env.screen.element.querySelector<HTMLButtonElement>('form button')?.disabled).toBe(false));
+ await click(env.screen,'搜索全文');
+ await vi.waitFor(()=>expect(env.screen.element.querySelectorAll('.reading-tool-results li')).toHaveLength(2));
+ const results = env.screen.element.querySelectorAll<HTMLButtonElement>('.reading-tool-results li button'); results[1]!.click();
+ await vi.waitFor(()=>expect(body(env.screen)?.textContent).toContain('resource:r1:b'));
+ await click(env.screen,'工具'); await click(env.screen,'返回原阅读位置');
+ await vi.waitFor(()=>expect(body(env.screen)?.textContent).toContain('resource:r1:a'));
+ await click(env.screen,'工具'); await click(env.screen,'笔记'); await click(env.screen,'添加当前位置书签');
+ await vi.waitFor(()=>expect(env.offline.notesFor(book.id)).toHaveLength(1));
+ expect(env.offline.notesFor(book.id)[0]?.type).toBe('bookmark');
 });

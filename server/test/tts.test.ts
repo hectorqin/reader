@@ -43,7 +43,7 @@ let token = '';
 let upstream: Server | null = null;
 let upstreamUrl = '';
 /** What the stub upstream should answer with on the next call. */
-let upstreamBehaviour: 'audio' | 'html' | 'error' = 'audio';
+let upstreamBehaviour: 'audio' | 'html' | 'error' | 'empty' | 'auth' | 'slow' = 'audio';
 let lastUpstreamQuery = '';
 
 /** Minimal stand-in for an edge-tts-compatible service. */
@@ -57,6 +57,9 @@ function startUpstream(): Promise<void> {
         res.end(JSON.stringify([{ id: 'zh-CN-XiaoxiaoNeural', name: '晓晓', lang: 'zh-CN' }]));
         return;
       }
+      if (upstreamBehaviour === 'empty') { res.writeHead(200, { 'content-type': 'audio/mpeg' }); res.end(); return; }
+      if (upstreamBehaviour === 'auth') { res.writeHead(401); res.end(); return; }
+      if (upstreamBehaviour === 'slow') { res.writeHead(200, { 'content-type': 'audio/mpeg' }); res.flushHeaders(); setTimeout(() => res.end('audio'), 200); return; }
       if (upstreamBehaviour === 'html') {
         res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
         res.end('<html><body>not audio</body></html>');
@@ -206,7 +209,7 @@ test('an upstream that answers HTML is refused instead of served as silence', as
     url: `/api/v1/tts?text=hello&access_token=${token}`,
   });
   assert.equal(res.statusCode, 400);
-  assert.equal((res.json() as { error: { code: string } }).error.code, 'TTS_UPSTREAM');
+  assert.equal((res.json() as { error: { code: string } }).error.code, 'TTS_CONTENT');
 });
 
 test('an upstream error is reported as such, not as a 200', async () => {
@@ -281,4 +284,18 @@ test('the audio route requires a token, in the header or the query', async () =>
 
 function auth(): Record<string, string> {
   return { authorization: `Bearer ${token}` };
+}
+
+test('diagnostic endpoint synthesizes audio and requires header authentication', async () => {
+ const unauth = await app.inject({method:'POST',url:'/api/v1/tts/test',payload:{}}); assert.equal(unauth.statusCode,401);
+ const result = await app.inject({method:'POST',url:'/api/v1/tts/test',headers:{authorization:'Bearer '+token},payload:{}});
+ assert.equal(result.statusCode,200,result.body); assert.ok(result.json().bytes > 0);
+});
+for (const [behaviour,code] of [['empty','TTS_EMPTY'],['auth','TTS_AUTH'],['slow','TTS_TIMEOUT']] as const) {
+ test('diagnosis classifies ' + behaviour, async () => {
+  upstreamBehaviour = behaviour;
+  if (behaviour === 'slow') { process.env.TTS_TIMEOUT_MS = '30'; ctx.tts = new TtsService(ctx.config); }
+  try { const result = await app.inject({method:'POST',url:'/api/v1/tts/test',headers:{authorization:'Bearer '+token},payload:{}}); assert.equal(result.statusCode,400,result.body); assert.equal(result.json().error.code,code); }
+  finally { delete process.env.TTS_TIMEOUT_MS; }
+ });
 }

@@ -31,6 +31,7 @@ async function setup(admin = true) {
   transport.respondWith((request) => {
     let json: unknown = {};
     if (request.url.endsWith('/sources/types')) json = { types: [opds] };
+    else if (request.url.endsWith('/credentials')) json = { state: 'unknown', checkedAt: null, available: true, fields: [{ key: 'password', label: 'OPDS 密码', configured: false }] };
     else if (request.url.endsWith('/sources')) json = { sources: [source], source };
     else if (request.url.endsWith('/plugins')) json = { plugins: [{ pluginId: 'remote', name: '远程插件', enabled: true, builtin: false }] };
     else if (request.url.endsWith('/subscriptions')) json = { subscriptions: [{ bookId: 'book1', title: '追更小说', enabled: false, intervalMinutes: 60, newChapters: 2, lastSuccessAt: 1000, nextCheckAt: 0 }] };
@@ -48,24 +49,63 @@ async function setup(admin = true) {
 
 async function* pages(...values: Array<SourcePage | Promise<SourcePage>>): AsyncGenerator<SourcePage> { for (const value of values) yield await value; }
 
+it('creates external reader credentials, shows the password once and revokes only the chosen client', async () => {
+  const { screen, api } = await setup(false);
+  const item = { id: 'client-1', name: '平板', createdAt: 1, expiresAt: Date.now() + 100000 };
+  const list = vi.spyOn(api, 'opdsCredentials').mockResolvedValue({ credentials: [], catalogUrl: '/opds' });
+  const create = vi.spyOn(api, 'createOpdsCredential').mockResolvedValue({ ...item, username: item.id, password: 'once-secret', catalogUrl: '/opds' });
+  const revoke = vi.spyOn(api, 'revokeOpdsCredential').mockResolvedValue();
+  await click(screen.element, '连接外部阅读器');
+  await vi.waitFor(() => expect(screen.element.querySelector<HTMLInputElement>('dialog input[readonly]')?.value).toContain('/opds'));
+  list.mockResolvedValue({ credentials: [item], catalogUrl: '/opds' });
+  input(screen.element, '客户端名称', '平板'); await vi.waitFor(() => expect(button(screen.element, '创建 OPDS 凭据').disabled).toBe(false)); await click(screen.element, '创建 OPDS 凭据');
+  await vi.waitFor(() => expect(create).toHaveBeenCalledWith('平板'));
+  await vi.waitFor(() => expect([...screen.element.querySelectorAll<HTMLInputElement>('input')].some(field => field.value === 'once-secret')).toBe(true));
+  await vi.waitFor(() => expect(button(screen.element, '关闭弹窗').disabled).toBe(false));
+  await click(screen.element, '关闭弹窗'); await vi.waitFor(() => expect(screen.element.querySelector('dialog')).toBeNull());
+  await click(screen.element, '连接外部阅读器');
+  await vi.waitFor(() => expect(screen.element.textContent).toContain('撤销 平板'));
+  expect([...screen.element.querySelectorAll<HTMLInputElement>('input')].some(field => field.value === 'once-secret')).toBe(false);
+  list.mockResolvedValue({ credentials: [], catalogUrl: '/opds' });
+  await click(screen.element, '撤销 平板'); await vi.waitFor(() => expect(revoke).toHaveBeenCalledWith('client-1'));
+});
+
+it('shows declared capabilities and personal access state without exposing or resubmitting stored secrets', async () => {
+  const { screen, api } = await setup(false); await chooseSource(screen.element);
+  expect(screen.element.querySelector('.source-capabilities')?.textContent).toContain('OPDS 服务端');
+  vi.spyOn(api, 'credentialStatus').mockResolvedValue({ state: 'verification-required', checkedAt: 1000, available: true,
+    fields: [{ key: 'password', label: 'OPDS 密码', configured: true }] });
+  const save = vi.spyOn(api, 'sourceCredential').mockResolvedValue();
+  await click(screen.element, '登录凭据');
+  expect(screen.element.querySelector('dialog')?.textContent).toContain('需要人工验证');
+  expect(screen.element.querySelector('dialog')?.textContent).toContain('已配置');
+  expect(screen.element.querySelector<HTMLInputElement>('input[type=password]')!.value).toBe('');
+  await click(screen.element, '保存个人凭据'); expect(save).not.toHaveBeenCalled();
+  await click(screen.element, '登录凭据'); await click(screen.element, '清空OPDS 密码（保存后删除）');
+  await click(screen.element, '保存个人凭据'); expect(save).toHaveBeenCalledWith('source-1', 'password', '');
+  vi.spyOn(api, 'credentialStatus').mockRejectedValue(new Error('状态暂不可用'));
+  await click(screen.element, '登录凭据'); input(screen.element, 'OPDS 密码', 'replacement');
+  await click(screen.element, '保存个人凭据'); expect(save).toHaveBeenLastCalledWith('source-1', 'password', 'replacement');
+});
+
 it('separates partial failures, preserves single-source pagination and clears old results on a new search', async () => {
   const { screen, api } = await setup(); await chooseSource(screen.element);
   const search = vi.spyOn(api, 'searchSource');
   const errors = [{ source: '测试来源', code: 'HTTP_ERROR', message: '站点返回 HTTP 503' }];
   search.mockImplementationOnce(() => pages({ items: [{ ref: 'ok', title: '成功结果' }], errors }));
   input(screen.element, '搜索书籍', '小说'); await click(screen.element, '搜索');
-  expect(screen.element.querySelector('details')?.open).toBe(false);
+  expect(screen.element.querySelector<HTMLDetailsElement>('details:not(.source-capabilities)')?.open).toBe(false);
   expect(screen.element.textContent).toContain('成功结果');
   search.mockImplementationOnce(() => pages({ items: [], errors, nextCursor: 'more' }));
   await click(screen.element, '搜索');
-  expect(screen.element.querySelector('details')?.open).toBe(true);
+  expect(screen.element.querySelector<HTMLDetailsElement>('details:not(.source-capabilities)')?.open).toBe(true);
   expect(screen.element.textContent).toContain('部分来源搜索失败');
   search.mockImplementationOnce(() => pages({ items: [] })); await click(screen.element, '加载更多结果');
   expect(search.mock.calls.at(-1)?.[1]).toMatchObject({ query: '小说', cursor: 'more', filters: {} });
-  expect(screen.element.querySelector('details')).not.toBeNull();
+  expect(screen.element.querySelector<HTMLDetailsElement>('details:not(.source-capabilities)')).not.toBeNull();
   search.mockImplementationOnce(() => pages({ items: [] }));
   input(screen.element, '搜索书籍', '新关键词'); await click(screen.element, '搜索');
-  expect(screen.element.querySelector('details')).toBeNull();
+  expect(screen.element.querySelector<HTMLDetailsElement>('details:not(.source-capabilities)')).toBeNull();
   expect(screen.element.textContent).toContain('没有找到匹配书籍');
 });
 

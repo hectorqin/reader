@@ -47,6 +47,8 @@ const CHAPTER_PATTERNS: RegExp[] = [
 const MAX_HEADING_LENGTH = 80;
 
 export interface TxtOptions {
+  /** Literal heading prefix; bounded lines avoid untrusted regular expressions. */
+  headingPrefix?: string;
   /** Force an encoding label such as `gb18030`; detected when omitted. */
   encoding?: string;
   /** Split into chapters. When false the whole book is one section. */
@@ -74,7 +76,7 @@ export function loadTxt(ctx: LoadContext, options: TxtOptions = {}): TxtSplitRes
   if (splitChapters) {
     for (const line of lines) {
       const trimmed = line.trim();
-      if (trimmed.length > 0 && trimmed.length <= MAX_HEADING_LENGTH && matchHeading(trimmed)) {
+      if (trimmed.length > 0 && trimmed.length <= MAX_HEADING_LENGTH && (options.headingPrefix ? trimmed.startsWith(options.headingPrefix) : matchHeading(trimmed))) {
         chapters.push({ title: trimmed, start: offset });
       }
       offset += line.length + 1;

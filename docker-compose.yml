@@ -6,7 +6,9 @@
 # automatically becomes the instance admin.
 services:
   reader:
-    image: cnb.cool/hectorqin/reader:latest
+    # CI publishes branch and commit tags; it does not publish :latest.
+    # Pin READER_IMAGE to a published commit tag for repeatable upgrades.
+    image: ${READER_IMAGE:-cnb.cool/hectorqin/reader:main}
     # To build from source instead of pulling the published image. The context is
     # the repository root because the image bakes in the H5 client built from
     # ./web as well as the server.
@@ -15,6 +17,11 @@ services:
     #   dockerfile: server/Dockerfile
     container_name: reader
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     ports:
       - "8080:8080"
     environment:

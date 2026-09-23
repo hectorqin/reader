@@ -1,0 +1,8 @@
+# Use with: docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+services:
+  reader:
+    image: reader:local
+    pull_policy: never
+    build:
+      context: .
+      dockerfile: server/Dockerfile

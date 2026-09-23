@@ -1,3 +1,6 @@
+import { SourceCapabilities } from './source-capabilities.tsx';
+import { OpdsAccess } from './opds-access.tsx';
+import type { CredentialStatus } from '../api/sources.ts';
 import { groupSourceResults } from './source-results.ts';
 import type { ExtensionField } from '../api/sources.ts';
 import { ApiError, type ReaderApi } from '../api/client.ts';
@@ -38,6 +41,8 @@ export class SourcesScreen {
   private subscriptions: ChapterSubscription[] = [];
   private tab: SourceTab = 'search';
   private credentialsOpen = false;
+  private opdsOpen = false;
+  private credentialStatus: CredentialStatus | null = null;
   private managing: string | null = null;
   private editor: Editor | null = null;
   private selected: SourceInstance | null = null;
@@ -94,6 +99,15 @@ export class SourcesScreen {
       const preferred = sources.find(source => source.isDefault && source.enabled && source.descriptor?.capabilities.includes('search'));
       if (preferred) await this.activateSource(preferred);
     }
+  }
+  private async openCredentials(): Promise<void> {
+    this.credentialsOpen = true; this.credentialValues = {}; this.credentialStatus = null;
+    this.draw();
+    await this.run(async () => {
+      const source = this.selected!;
+      const status = await this.options.api.credentialStatus(source.id);
+      if (!this.disposed && this.selected?.id === source.id && this.credentialsOpen) this.credentialStatus = status;
+    });
   }
   private async installPlugin(upload: boolean): Promise<void> {
     if (!this.trusted || (upload && !this.pluginFile)) return;
@@ -287,6 +301,7 @@ export class SourcesScreen {
         </section>
       </>}
       {this.tab === 'search' && <>
+        <section className="sources-card"><Button disabled={this.busy} onClick={() => { this.opdsOpen = true; this.draw(); }}>连接外部阅读器</Button></section>
         <section className="sources-card source-picker"><div><h2>搜书</h2><p className="muted">选择来源，发现想读的书。</p></div>
           <label>选择来源<select aria-label="选择来源" disabled={this.busy} value={this.selected?.id ?? ''} onChange={event => {
             const source = this.sources.find(source => source.id === event.currentTarget.value); if (source) this.select(source);
@@ -294,7 +309,8 @@ export class SourcesScreen {
           {!this.selected && <p className="muted">{this.sources.some(source => source.enabled && source.descriptor) ? '选择来源后，即可搜索书籍或浏览目录。' : '暂无可用来源，请先添加或启用来源。'}</p>}
         </section>
         {this.selected && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>
-          {(this.selected.descriptor?.credentialKeys?.length ?? 0) > 0 && <Button disabled={this.busy} onClick={() => { this.credentialsOpen = true; this.message = ''; this.draw(); }}>登录凭据</Button>}
+          {this.selected.descriptor && <SourceCapabilities type={this.selected.descriptor} />}
+          {(this.selected.descriptor?.credentialKeys?.length ?? 0) > 0 && <Button disabled={this.busy} onClick={() => void this.openCredentials()}>登录凭据</Button>}
           {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.search(resume); }}>
             {this.filters.map(field => <label key={field.key}>{field.label}<select aria-label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy}
               onChange={event => { this.filterValues[field.key] = event.currentTarget.value; this.draw(); }}>
@@ -399,6 +415,7 @@ export class SourcesScreen {
         </article>)}
       </section>}
       </main>
+        {this.opdsOpen && <OpdsAccess api={this.options.api} onSignedOut={this.options.onSignedOut} onClose={() => { this.opdsOpen = false; this.draw(); }} />}
         {activeGroup && <Modal title="书源列表" busy={this.working} onClose={() => { this.resultGroup = null; this.draw(); }}>
           <div className="source-modal-content catalog-source-list">
             <header className="catalog-source-heading"><h3>{activeGroup.entry.title}</h3><p>{activeGroup.entry.authors?.join(' / ') || '作者未知'}</p><small role="status">{activeGroup.entries.length} 条书源{this.searchRun ? ' · 搜索中，列表持续更新' : ''}</small></header>
@@ -452,9 +469,18 @@ export class SourcesScreen {
               if (this.disposed) return;
               if (field.key in this.credentialValues) await this.options.api.sourceCredential(source.id, field.key, this.credentialValues[field.key]!);
             }
-            this.credentialValues = {}; this.credentialsOpen = false; this.message = '个人凭据已保存，不会回显。';
-          }); }}><div className="source-modal-content">{this.selected.descriptor?.credentialKeys?.map((field) => <label key={field.key}>{field.label}
-            <input autoFocus disabled={this.busy} type="password" autoComplete="off" value={this.credentialValues[field.key] ?? ''} onInput={(event) => { this.credentialValues[field.key] = event.currentTarget.value; }} /></label>)}
+            this.credentialValues = {}; this.credentialsOpen = false; this.message = '个人凭据已保存，不会回显。修改过的凭据需重新搜索或浏览检查访问。';
+          }); }}><div className="source-modal-content">
+            <p>未编辑的字段会保留；编辑后留空并保存会删除该项。保存凭据不代表登录有效。</p>
+            {this.credentialStatus ? <div role="status">
+              <p>{({ unknown: '尚未验证访问', reachable: '最近一次访问成功', 'auth-required': '需要登录或凭据已过期', 'verification-required': '需要人工验证' })[this.credentialStatus.state]} · {date(this.credentialStatus.checkedAt)}</p>
+              {!this.credentialStatus.available && <p>来源当前不可用，请联系管理员检查插件。</p>}
+              {this.credentialStatus.state === 'verification-required' && <p>请在站点或插件提供的管理页面完成验证，再重试。Reader 不会绕过验证码。</p>}
+              <p className="muted">这是当前账号最近一次请求的结果，不保证会话仍有效；站点未提供的过期时间无法判断。</p>
+            </div> : <p>尚未取得访问状态，可重试打开凭据页。</p>}
+            {this.selected.descriptor?.credentialKeys?.map((field) => <label key={field.key}>{field.label} · {this.credentialStatus?.fields.find(item => item.key === field.key)?.configured ? '已配置' : this.credentialStatus ? '未配置' : '状态未知'}
+            <input aria-label={field.label} autoFocus disabled={this.busy} type="password" autoComplete="off" value={this.credentialValues[field.key] ?? ''} onInput={(event) => { this.credentialValues[field.key] = event.currentTarget.value; }} />
+            <Button disabled={this.busy} onClick={() => { this.credentialValues[field.key] = ''; this.draw(); }}>清空{field.label}（保存后删除）</Button></label>)}
             </div><footer className="source-modal-actions"><Button className="primary" type="submit" disabled={this.busy}>保存个人凭据</Button></footer></form></Modal>}
 
     </>;

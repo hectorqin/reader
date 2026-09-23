@@ -1,3 +1,5 @@
+import { applyCorrections, emptyOverrides, type ReadingOverrides } from './reading-overrides.ts';
+import { loadTxt } from '../formats/txt.ts';
 import { ApiError } from '../api/errors.ts';
 import { dismissNotice, notify } from './notifications.ts';
 import { renditionRef } from './rendition.ts';
@@ -27,7 +29,10 @@ import {
 import type { NativeSpeechBridge } from '../android-bridge.ts';
 import { mountUI } from './mount.ts';
 import { ReaderChrome, type ChromeState, type ChromeTocEntry } from './reader-chrome.tsx';
-import { PublicationCache, publicationScope } from '../store/publications.ts';
+import { OFFLINE_FILE, PublicationCache, publicationScope } from '../store/publications.ts';
+import { ReadingTools, type SearchSection } from './reading-tools.tsx';
+import { decodeAnchor, searchableText, type TextAnchor } from './text-anchor.ts';
+import { textToChapterHtml } from '../formats/segments.ts';
 import { parseLocator } from './locator.ts';
 
 export interface ReaderScreenOptions {
@@ -179,6 +184,7 @@ export class ReaderScreen {
   private navigating = false;
   private detachGestures: (() => void) | null = null;
   private progressTimer: ReturnType<typeof setTimeout> | null = null;
+  private progressWrite: Promise<void> = Promise.resolve();
   private readonly noticeId = Symbol('reader-status');
   private disposed = false;
   private pendingPosition: Position | null = null;
@@ -187,11 +193,18 @@ export class ReaderScreen {
   private readonly viewListeners: Array<() => void> = [];
   private readonly publicationCache: PublicationCache;
   private loadingToken = 0;
+  private overrides: ReadingOverrides = emptyOverrides();
+  private toolsOpen = false;
+  private toolsSelection: TextAnchor | null = null;
+  private toolsReturn = '';
+  private preview: SpeechEngine | null = null;
+  private previewRun: AbortController | null = null;
   private alternativeRef = '';
   private viewEpoch = 0;
   private alternativesRun: AbortController | null = null;
   private chapterRefresh: AbortController | null = null;
   private alternativeEpoch = 0;
+  private qualityRun: AbortController | null = null;
 
   constructor(private readonly options: ReaderScreenOptions) {
     this.settings = { ...options.settings };
@@ -219,9 +232,19 @@ export class ReaderScreen {
       this.element,
       () => (
         <ReaderChrome
+          tools={this.toolsOpen && this.manifest ? <ReadingTools
+            api={this.options.api} cache={this.publicationCache} offline={this.options.offline}
+            sync={this.options.sync} manifest={this.manifest} selection={this.toolsSelection}
+            locator={this.view?.position()?.locator ?? ''} returnLocator={this.toolsReturn}
+            sections={signal => this.searchSections(signal)} navigate={target => this.navigateTool(target)}
+            overrides={this.overrides} saveOverrides={value => this.saveOverrides(value)} undoOverrides={() => this.undoOverrides()}
+            previewHeadings={prefix => this.previewHeadings(prefix)}
+            onNotes={() => this.paintNotes()} onClose={() => { this.toolsOpen = false; this.patch({}); }}
+            previewSpeech={() => this.previewSpeech()} stopPreview={() => this.stopPreview()} /> : null}
           state={this.chrome}
           stage={this.stage}
           handlers={{
+            onTools: () => this.openTools(),
             onBack: () => this.options.onBack(),
             toggleToc: () => this.toggleToc(),
             toggleSettings: (tab) => this.toggleSettings(tab),
@@ -237,10 +260,11 @@ export class ReaderScreen {
             onRefreshChapter: () => void this.refreshChapter(),
             onAlternatives: cursor => void this.loadAlternatives(cursor),
             onAlternative: (ref, title) => void this.previewAlternative(ref, title),
-            onAlternativeChapter: id => this.patch({ alternativeChapter: id }),
+            onAlternativeChapter: id => { this.qualityRun?.abort(); this.patch({ alternativeChapter: id, alternativeQuality:null, alternativeQualityError:'', alternativeQualityBusy:false }); },
+            onCheckAlternative: () => void this.checkAlternative(),
             onSwitchSource: () => void this.switchSource(),
             onCancelSwitch: () => this.closeAlternatives(),
-            onCancelAlternative: () => this.patch({ alternativeChapters: undefined, alternativeChapter: '' }),
+            onCancelAlternative: () => { this.qualityRun?.abort(); this.patch({ alternativeChapters: undefined, alternativeChapter: '', alternativeQuality:null, alternativeQualityError:'', alternativeQualityBusy:false }); },
             onScrubPage: (page) => void this.scrubToPage(page),
             onTurnPage: (direction) => void this.turnPage(direction),
             onSpeechToggle: () => this.toggleSpeech(),
@@ -261,13 +285,25 @@ export class ReaderScreen {
   async open(book: Book): Promise<void> {
     this.closeAlternatives(); this.chapterRefresh?.abort(); this.chapterRefresh = null;
     const token = ++this.loadingToken;
+    this.toolsOpen = false; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
     this.content = null; this.book = book;
-    this.patch({ title: book.title, author: book.author, description: book.description, bookInfoOpen: false, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null, refreshingChapter: false, sourceName: '', chapterUrl: '' });
+    this.patch({ title: book.title, author: book.author, description: book.description, bookInfoOpen: false, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null, refreshingChapter: false, sourceName: '', chapterUrl: '', toc: [] });
     this.setStatus('loading', '正在载入…');
     this.setChromeVisible(true);
 
     try {
       this.manifest = await this.loadManifest(book);
+      if (token !== this.loadingToken) return;
+      const storedOverrides = await this.publicationCache.overrides(book.id) ?? emptyOverrides();
+      if (token !== this.loadingToken) return;
+      this.overrides = storedOverrides;
+      try {
+        const remote = await this.options.api.readingOverrides(book.id);
+        if (token !== this.loadingToken) return;
+        if (remote && Number.isSafeInteger(remote.version) && Array.isArray(remote.corrections)) {
+          this.overrides = remote; await this.publicationCache.putOverrides(book.id,remote).catch(() => undefined);
+        }
+      } catch (error) { if (error instanceof ApiError && error.isAuthFailure) throw error; }
       if (token !== this.loadingToken) return;
       if (book.format === 'chapters' && typeof this.options.api.sourceOptions === 'function') {
         void this.options.api.sourceOptions(book.id).then(options => {
@@ -326,6 +362,8 @@ export class ReaderScreen {
    * omnibus would otherwise be a 50MB download to show one page of chapter one.
    */
   private async openStaged(book: Book, token: number): Promise<{ doc: BookDoc } | null> {
+    if (book.format === 'txt' && this.overrides.headingPrefix) return null;
+    if (!['chapters', 'txt'].includes(book.format) && await this.publicationCache.resource(book.id, OFFLINE_FILE)) return null;
     const manifest = this.manifest;
     const content = manifest?.content;
     if (!content || !isStagedKind(content.kind)) return null;
@@ -348,9 +386,9 @@ export class ReaderScreen {
     if (book.format !== 'chapters') {
       try {
         const fetched = await this.options.api.toc(book.id);
-        if (Array.isArray(fetched)) toc = fetched;
+        if (Array.isArray(fetched)) { toc = fetched; await this.publicationCache.putToc(book.id, toc).catch(() => undefined); }
       } catch {
-        // Covered by the fallback below.
+        toc = await this.publicationCache.toc(book.id) ?? [];
       }
     }
     if (toc.length === 0) {
@@ -406,20 +444,13 @@ export class ReaderScreen {
     // Keyed by the rendition, not just the section: a client that read the plain
     // text before this change and the markup after it must not serve the cached
     // plain text for a chapter it is now rendering as a document.
-    const legacyCacheKey = `section:${book.id}:${ref}`;
-    const cached = book.format === 'chapters'
-      ? await this.publicationCache.resource(book.id, ref)
-      : await this.options.platform.blobs.get(legacyCacheKey);
+    const cached = await this.publicationCache.resource(book.id, ref);
     const blob = cached ? new Blob([toArrayBuffer(cached)]) : await this.options.api.asset(book.id, ref);
     if (!cached) {
       // Cached per section, not per book, so a partially read book is partially
       // readable offline and re-opening one does not re-fetch what was read.
       const bytes = new Uint8Array(await blob.arrayBuffer());
-      if (book.format === 'chapters') {
-        await this.publicationCache.putResource(book.id, ref, bytes).catch(() => undefined);
-      } else {
-        await this.options.platform.blobs.put(legacyCacheKey, bytes).catch(() => undefined);
-      }
+      await this.publicationCache.putResource(book.id, ref, bytes).catch(() => undefined);
     }
     if (item.kind === 'page') {
       return { image: { mediaType: item.mediaType, bytes: new Uint8Array(await blob.arrayBuffer()) } };
@@ -429,12 +460,13 @@ export class ReaderScreen {
 
   dispose(): void {
     this.closeAlternatives(); this.chapterRefresh?.abort();
+    this.stopPreview();
     this.disposed = true;
     this.loadingToken += 1;
     this.viewEpoch += 1;
     this.tts?.dispose();
     this.tts = null;
-    this.flushProgress();
+    void this.flushProgress().catch(() => undefined);
     this.book = null;
     if (this.progressTimer) clearTimeout(this.progressTimer);
     dismissNotice(this.noticeId);
@@ -456,22 +488,166 @@ export class ReaderScreen {
     this.element.remove();
   }
 
+  private async previewHeadings(prefix: string): Promise<string[]> {
+    if (!this.book || !this.manifest) throw new Error('阅读器已关闭');
+    const bytes = await this.fetchBookBytes(this.book,this.manifest);
+    const result = loadTxt({ bytes,bookId:this.book.id,fileName:'preview.txt' },{ headingPrefix:prefix, ...(this.settings.txtEncoding ? {encoding:this.settings.txtEncoding} : {}) });
+    return result.doc.toc.map(entry => entry.label);
+  }
+  private async saveOverrides(value: ReadingOverrides): Promise<void> {
+    if (!this.book) return;
+    const token = this.loadingToken;
+    const next = await this.options.api.saveReadingOverrides(this.book.id,value);
+    if (token === this.loadingToken) await this.applyOverrides(next);
+  }
+  private async undoOverrides(): Promise<void> {
+    if (!this.book) return;
+    const token = this.loadingToken;
+    const next = await this.options.api.undoReadingOverrides(this.book.id,this.overrides.version);
+    if (token === this.loadingToken) await this.applyOverrides(next);
+  }
+  private async applyOverrides(next: ReadingOverrides): Promise<void> {
+    const book = this.book; if (!book) return;
+    const oldPrefix = this.overrides.headingPrefix;
+    this.overrides = next;
+    await this.publicationCache.putOverrides(book.id,next).catch(() => undefined);
+    if (oldPrefix !== next.headingPrefix) {
+      await this.flushProgress();
+      this.content = null; this.patch({toc:[]});
+      if (!this.manifest) return;
+      const staged = await this.openStaged(book,this.loadingToken);
+      this.doc = staged?.doc ?? (await this.loadDoc(book,this.manifest,await this.fetchBookBytes(book,this.manifest))).doc;
+      this.afterDocLoaded(); await this.view?.open(0,0); this.toolsReturn = '';
+    } else {
+      const position = this.view?.position();
+      if (position) await this.view?.openLocator(position.locator);
+    }
+    this.toolsSelection = null; this.paintNotes(); this.patch({});
+  }
+
+  private openTools(): void {
+    if (!this.manifest || !this.view) return;
+    this.toolsSelection = this.view.selectionAnchor();
+    if (!this.toolsReturn) this.toolsReturn = this.view.position()?.locator ?? '';
+    this.toolsOpen = true;
+    this.patch({ tocOpen: false, settingsOpen: false });
+  }
+
+  private paintNotes(): void {
+    if (!this.book) return;
+    this.view?.paintAnnotations(this.options.offline.notesFor(this.book.id).flatMap(note => {
+      const anchor = decodeAnchor(note.locator);
+      return anchor ? [{ anchor: { ...anchor, sectionId: this.localSectionId(anchor.sectionId) }, color: note.color || '#ffd54f' }] : [];
+    }));
+  }
+
+  private searchText(html: string, sectionId: string): string {
+    const root = new DOMParser().parseFromString(html,'text/html').body;
+    applyCorrections(root,sectionId,this.overrides);
+    return searchableText(root.innerHTML);
+  }
+  private async *searchSections(signal: AbortSignal): AsyncGenerator<SearchSection> {
+    const doc = this.doc, book = this.book, content = this.manifest?.content;
+    if (!doc || !book || doc.layout === 'fixed') throw new Error('此格式暂不支持正文搜索');
+    if (this.content && content) {
+      for (let group = 0; group < Math.max(1, content.groups.length); group++) {
+        signal.throwIfAborted();
+        const window = group === 0 ? content : await this.readWindow(book.id, group, signal);
+        for (const item of window.items) {
+          signal.throwIfAborted();
+          const ref = renditionRef(item);
+          const bytes = await this.publicationCache.resource(book.id, ref);
+          const html = bytes ? new TextDecoder().decode(bytes) : await (await this.options.api.asset(book.id, ref, { signal })).text();
+          yield { id: item.href, title: item.title, text: this.searchText(/(?:xhtml|html|xml)/i.test(item.mediaType) ? html : textToChapterHtml(html),item.href) };
+        }
+      }
+    } else {
+      const lazy = doc as BookDoc & { loadSection?(index: number): Promise<import('../formats/types.ts').Section | null> };
+      for (let i = 0; i < doc.sections.length; i++) {
+        signal.throwIfAborted();
+        const section = lazy.loadSection ? await lazy.loadSection(i) : doc.sections[i];
+        if (section) yield { id: section.id, title: section.label, text: this.searchText(section.bodyIsMarkup === false ? textToChapterHtml(section.html ?? '') : section.html ?? '',section.id) };
+      }
+    }
+  }
+
+  private async readWindow(bookId: string, group: number, signal?: AbortSignal): Promise<BookContent> {
+    try { const content = await this.options.api.items(bookId, group, signal ? { signal } : {}); await this.publicationCache.putWindow(bookId, group, content).catch(() => undefined); return content; }
+    catch (error) {
+      if (error instanceof ApiError && !error.isConnectivity && error.kind !== 'server') throw error;
+      const cached = await this.publicationCache.window(bookId, group);
+      if (cached && cached.revision === this.manifest?.content?.revision) return cached;
+      throw error;
+    }
+  }
+  private localSectionId(id: string): string {
+    if (!this.content && this.book?.format === 'epub') return id.replace(/^xhtml:/, '');
+    if (this.content && this.book?.format === 'epub' && !id.startsWith('xhtml:')) return 'xhtml:' + id;
+    return id;
+  }
+  private compatibleLocator(locator: string): string {
+    const match = /^r1:([^:]+):(.+)$/.exec(locator);
+    return match ? 'r1:' + match[1] + ':' + this.localSectionId(match[2]!) : locator;
+  }
+
+  private async navigateTool(target: TextAnchor | string): Promise<void> {
+    if (!this.view) throw new Error('阅读器已关闭');
+    const locator = typeof target === 'string' ? /^r1:([^:]+):(.+)$/.exec(target) : null;
+    const section = typeof target === 'string' ? locator?.[2] ?? target : target.sectionId;
+    await this.goToChapterRef(section);
+    if (typeof target === 'string') {
+      if (!await this.view.openLocator(this.compatibleLocator(target))) throw new Error('无法恢复此位置，章节可能已更新');
+      if (target === this.toolsReturn) this.toolsReturn = '';
+    } else if (!this.view.showTextAnchor({ ...target, sectionId: this.localSectionId(target.sectionId) })) throw new Error('原文位置已变化，无法准确定位');
+    this.paintNotes();
+  }
+
+  private stopPreview(): void { this.previewRun?.abort(); this.previewRun = null; this.preview?.dispose(); this.preview = null; }
+
+  private async previewSpeech(): Promise<string> {
+    this.stopPreview(); this.tts?.stop();
+    const run = this.previewRun = new AbortController();
+    const requested = this.settings.ttsEngine;
+    const available = this.speechAvailability();
+    const kind = requested === 'auto' ? available.preferred : requested;
+    if (!kind) throw new Error('当前设备没有可用语音，请配置系统语音或 HTTP 服务');
+    if (kind === 'http') {
+      try { await this.options.api.testSpeech(this.settings.ttsVoice, this.settings.ttsRate, { signal: run.signal }); }
+      catch (error) {
+        const labels: Record<string, string> = { TTS_DISABLED: '服务端未配置 HTTP 朗读', TTS_AUTH: '朗读上游鉴权失败，请检查服务端凭据', TTS_TIMEOUT: '朗读上游超时，请重试', TTS_EMPTY: '上游返回空音频', TTS_CONTENT: '上游返回的不是音频，请检查服务地址', TTS_UPSTREAM: '无法访问朗读上游服务' };
+        if (error instanceof ApiError) throw new Error(labels[error.code] ?? error.message);
+        throw error;
+      }
+    }
+    run.signal.throwIfAborted();
+    let failure = '';
+    const engine = createSpeechEngine({ kind, baseUrl: this.options.api.baseUrl,
+      accessToken: () => this.options.api.currentSession()?.accessToken ?? null,
+      nativeBridge: this.options.speechBridge ?? null,
+      onError: message => { failure = message; this.flashStatus(message, 6000); },
+    });
+    if (!engine) throw new Error('所选语音引擎不可用，请切换引擎');
+    this.preview = engine;
+    engine.setRate(this.settings.ttsRate); engine.setPitch(this.settings.ttsPitch);
+    engine.setVolume(this.settings.ttsVolume); engine.setVoice(this.settings.ttsVoice);
+    engine.loadQueue = async from => ({ chunks: from ? [] : [{ text: '这是阅读器朗读试听。愿你享受阅读的时光。', node: null, start: 0, blockIndex: 0 }], startIndex: 0 });
+    await engine.play(0);
+    if (failure) throw new Error(failure);
+    return '已启动试听：' + SPEECH_ENGINE_LABELS[kind] + '；请确认能听到声音';
+  }
+
   // ---- loading ----
 
   private async loadManifest(book: Book): Promise<Manifest> {
     try {
       const manifest = await this.options.api.manifest(book.id);
-      if (book.format === 'chapters') {
-        await this.publicationCache.putManifest(book.id, manifest).catch(() => undefined);
-      }
+      await this.publicationCache.putManifest(book.id, manifest).catch(() => undefined);
       return manifest;
     } catch (error) {
       // Authentication failures must never be hidden behind cached content.
       if (error instanceof ApiError && !error.isConnectivity && error.kind !== 'server') throw error;
-      if (book.format === 'chapters') {
-        const cached = await this.publicationCache.manifest(book.id);
-        if (cached) return cached;
-      }
+      const cached = await this.publicationCache.manifest(book.id);
+      if (cached) return cached;
       throw error;
     }
   }
@@ -487,8 +663,9 @@ export class ReaderScreen {
     } finally { if (token === this.loadingToken) this.patch({ switching: false }); }
   }
   private closeAlternatives(): void {
+    this.qualityRun?.abort(); this.qualityRun = null;
     this.alternativeEpoch++; this.alternativesRun?.abort(); this.alternativesRun = null;
-    this.patch({ alternatives: null, alternativesSearching: false, alternativeChapters: undefined, alternativeChapter: '' });
+    this.patch({ alternatives: null, alternativeChecks: {}, alternativesSearching: false, alternativeChapters: undefined, alternativeChapter: '', alternativeQuality:null, alternativeQualityError:'', alternativeQualityBusy:false });
   }
   private async loadAlternatives(_cursor?: string): Promise<void> {
     const book = this.book, token = this.loadingToken; if (!book) return;
@@ -534,7 +711,9 @@ export class ReaderScreen {
         if (latest === index) break;
         index = latest;
       }
-      this.stopSpeech(); this.flushProgress(); this.doc = doc; this.afterDocLoaded();
+      this.stopSpeech(); await this.flushProgress();
+      if (token !== this.loadingToken || run.signal.aborted) return;
+      this.doc = doc; this.afterDocLoaded();
       await this.view?.open(index, parsed?.offset ?? 0); this.flashStatus('章节内容已更新');
     } catch (error) {
       if (!run.signal.aborted && token === this.loadingToken) {
@@ -545,6 +724,7 @@ export class ReaderScreen {
   }
   private async previewAlternative(ref: string, title: string): Promise<void> {
     const book = this.book, token = this.loadingToken; if (!book) return;
+    this.qualityRun?.abort(); this.qualityRun = null;
     const epoch = ++this.alternativeEpoch;
     await this.sourceAction(async () => {
       const preview = await this.options.api.switchPreview(book.id, ref);
@@ -553,14 +733,34 @@ export class ReaderScreen {
       this.alternativeRef = ref;
       const label = this.chrome.toc.find(entry => entry.id === this.chrome.currentSectionId)?.label;
       const matching = preview.chapters.filter(chapter => chapter.title === label);
-      this.patch({ alternativeChapters: preview.chapters, alternativeTitle: title, alternativeChapter: matching.length === 1 ? matching[0]!.id : '' });
+      this.patch({ alternativeChapters: preview.chapters, alternativeTitle: title, alternativeLatest:preview.latestChapter ?? '', alternativeQuality:null, alternativeQualityError:'', alternativeQualityBusy:false, alternativeChapter: matching.length === 1 ? matching[0]!.id : '' });
     });
+  }
+  private async checkAlternative(): Promise<void> {
+    const book = this.book, ref = this.alternativeRef, chapter = this.chrome.alternativeChapter;
+    if (!book || !ref || !chapter) return;
+    this.qualityRun?.abort(); const run = this.qualityRun = new AbortController();
+    this.patch({alternativeQuality:null,alternativeQualityError:'',alternativeQualityBusy:true});
+    try {
+      const quality = await this.options.api.switchQuality(book.id,ref,chapter,{signal:run.signal});
+      if (!run.signal.aborted && this.qualityRun === run) this.patch({alternativeQuality:quality,alternativeLatest:quality.latestChapter, alternativeChecks:{...this.chrome.alternativeChecks,[ref]:{quality,chapter:quality.title}}});
+    } catch (error) {
+      if (!run.signal.aborted && this.qualityRun === run) {
+        if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
+        else {
+          const message = error instanceof Error ? error.message : '获取正文失败，请重试';
+          const title = this.chrome.alternativeChapters?.find(item => item.id === chapter)?.title ?? chapter;
+          this.patch({alternativeQualityError:message,alternativeChecks:{...this.chrome.alternativeChecks,[ref]:{error:message,chapter:title}}});
+        }
+      }
+    } finally { if (this.qualityRun === run) { this.qualityRun=null; this.patch({alternativeQualityBusy:false}); } }
   }
   private async switchSource(): Promise<void> {
     const book = this.book, previous = this.manifest, token = this.loadingToken;
     if (!book || !previous || !this.alternativeRef || !this.chrome.alternativeChapter) return;
     await this.sourceAction(async () => {
-      this.flushProgress();
+      await this.flushProgress();
+      if (token !== this.loadingToken) return;
       const result = await this.options.api.switchSource(book.id, this.alternativeRef, this.chrome.alternativeChapter!, String(this.content?.revision ?? previous.content?.revision ?? previous.revision));
       if (token !== this.loadingToken) return;
       const content = result.content, toc = content.items.map(item => ({ id: item.href, label: item.title, depth: 0, spine: item.seq }));
@@ -577,7 +777,7 @@ export class ReaderScreen {
       this.closeAlternatives();
       this.patch({ toc, alternatives: null, alternativeChapters: undefined, tocOpen: false });
       this.afterDocLoaded(); await this.view?.open(index, 0);
-      this.onPosition(this.view?.position() ?? null); this.flushProgress();
+      this.onPosition(this.view?.position() ?? null); await this.flushProgress();
       this.flashStatus('已切换书源，从所选章节开头继续阅读', 4000);
     });
   }
@@ -619,7 +819,8 @@ export class ReaderScreen {
       const manifest: Manifest = { ...previousManifest, ...content, content };
       if (token !== this.loadingToken) return;
       this.stopSpeech();
-      this.flushProgress();
+      await this.flushProgress();
+      if (token !== this.loadingToken) return;
       this.manifest = manifest;
       this.content = content;
       this.doc = doc;
@@ -641,17 +842,17 @@ export class ReaderScreen {
   }
 
   private async fetchBookBytes(book: Book, manifest: Manifest): Promise<Uint8Array> {
-    const cacheKey = `book:${book.id}`;
+
     // Offline first, always. A cached book must open with no network at all —
     // that is the whole point of the按书粒度 download.
-    const cached = await this.options.platform.blobs.get(cacheKey);
+    const cached = await this.publicationCache.resource(book.id, OFFLINE_FILE);
     if (cached && cached.byteLength > 0) {
       // Refresh in the background only when the file has not been superseded.
       // Book bytes are immutable per hash, so this is genuinely optional.
       return cached;
     }
     const bytes = await this.options.api.bookBytes(book.id);
-    await this.options.platform.blobs.put(cacheKey, bytes);
+    await this.publicationCache.putResource(book.id, OFFLINE_FILE, bytes).catch(() => undefined);
     void manifest;
     return bytes;
   }
@@ -681,6 +882,7 @@ export class ReaderScreen {
       {
         fileName,
         ...(this.settings.txtEncoding ? { encoding: this.settings.txtEncoding } : {}),
+        ...(this.overrides.headingPrefix ? { headingPrefix: this.overrides.headingPrefix } : {}),
       },
     );
   }
@@ -752,6 +954,7 @@ export class ReaderScreen {
       ...(token ? { accessToken: token } : { accessToken: '' }),
     });
     this.view = new ReaderView({
+      transformText: (root, sectionId) => { applyCorrections(root,sectionId,this.overrides); },
       container: this.stage,
       doc,
       ...(this.options.pageHost ? { pageHost: this.options.pageHost } : {}),
@@ -925,25 +1128,24 @@ export class ReaderScreen {
   }
 
   private async restorePosition(book: Book, token: number): Promise<void> {
-    const local = await this.options.offline.getProgress(book.id);
-    let locator = local?.locator ?? '';
-
-    // Ask the server only when there is nothing local: the local value is what
-    // this device last showed, and a server value from another device would
-    // yank the reader backwards on every open.
-    if (!locator) {
-      try {
-        const remote = await this.options.api.getProgress(book.id);
-        locator = remote?.locator ?? '';
-      } catch (err) {
-        if (err instanceof ApiError && err.isAuthFailure) this.options.onSignedOut();
-        // Anything else (offline, server error) leaves us on the local value.
-      }
+    let latest = await this.options.offline.getProgress(book.id);
+    try {
+      const remote = await this.options.api.getProgress(book.id, { signal: AbortSignal.timeout(5000) });
+      // A newer offline edit wins; a stale device must not reopen its old page
+      // and immediately publish it as a new reading action.
+      const local = await this.options.offline.getProgress(book.id);
+      latest = local ?? latest;
+      if (remote?.locator && (!latest || remote.updatedAt > latest.updatedAt)) latest = remote;
+    } catch (err) {
+      if (err instanceof ApiError && err.isAuthFailure) this.options.onSignedOut();
     }
+    const locator = latest?.locator ?? '';
 
     if (token !== this.loadingToken) return;
     if (locator && this.view) {
-      const restored = await this.view.openLocator(locator);
+      const match = /^r1:([^:]+):(.+)$/.exec(this.compatibleLocator(locator));
+      if (match && this.view.indexOfSection(match[2]!) < 0 && this.content) await this.goToChapterRef(match[2]!);
+      const restored = await this.view.openLocator(this.compatibleLocator(locator));
       if (restored) {
         this.flashStatus('已恢复到上次阅读位置', 2400);
         return;
@@ -980,6 +1182,7 @@ export class ReaderScreen {
    */
   private onPosition(position: Position | null): void {
     if (!position || !this.book) return;
+    this.paintNotes();
 
     const title = position.chapterTitle;
     const sectionId = position.sectionId;
@@ -1002,7 +1205,7 @@ export class ReaderScreen {
     // each one would otherwise be a write to IndexedDB plus a network round trip.
     // 1.5s of stillness is the point at which the reader has decided where they are.
     if (this.progressTimer) clearTimeout(this.progressTimer);
-    this.progressTimer = setTimeout(() => this.flushProgress(), 1500);
+    this.progressTimer = setTimeout(() => { void this.flushProgress().catch(() => undefined); }, 1500);
   }
 
   /**
@@ -1019,13 +1222,16 @@ export class ReaderScreen {
    * `SyncEngine.schedule()` debounces the push across flushes and guarantees a
    * trailing one, so the last page turn of a session still reaches the server.
    */
-  private flushProgress(): void {
+  /** Awaited by the shell before background sync; also retains failed writes for retry. */
+  async flushProgress(): Promise<void> {
+    if (this.progressTimer) clearTimeout(this.progressTimer);
+    this.progressTimer = null;
     const position = this.pendingPosition;
     const book = this.book;
-    if (!position || !book) return;
+    if (!position || !book) return this.progressWrite;
     this.pendingPosition = null;
     const now = Date.now();
-    void this.options.offline
+    this.progressWrite = this.options.offline
       .setProgress({
         bookId: book.id,
         locator: position.locator,
@@ -1035,7 +1241,12 @@ export class ReaderScreen {
         updatedAt: now,
       })
       .then(() => this.options.sync.schedule())
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        if (this.book === book && !this.pendingPosition) this.pendingPosition = position;
+        this.setStatus('error', '阅读位置保存失败，请重试');
+        throw error;
+      });
+    return this.progressWrite;
   }
 
   // ---- chrome ----
@@ -1120,6 +1331,10 @@ export class ReaderScreen {
   private async renderToc(): Promise<void> {
     const book = this.book;
     if (!book) return;
+    if (!this.content && this.doc) {
+      this.patch({ toc: this.doc.toc.map(entry => ({ ...entry, spine: this.doc!.sections.findIndex(section => section.id === entry.id.split('#')[0]) })) });
+      return;
+    }
     // Fetched once per book. The panel is opened and closed constantly and the
     // TOC cannot change under a reader, so refetching it is a request per tap on
     // the ☰ button — which, on a NAS over a tunnel, is a visible pause before the
@@ -1202,17 +1417,19 @@ export class ReaderScreen {
    *    without a word. It is derived from the loaded window's own `seq` instead.
    */
   private async goToChapterRef(ref: string): Promise<void> {
+    const fragment = ref.includes('#') ? ref.slice(ref.indexOf('#') + 1) : '';
+    const sectionRef = this.localSectionId(ref.split('#')[0]!);
     const view = this.view;
     if (!view || this.navigating || this.chrome.refreshing || this.chrome.switching) return;
     const book = this.book;
     if (!book) return;
 
-    const local = view.indexOfSection(ref);
+    const local = view.indexOfSection(sectionRef);
 
     // The overwhelmingly common case: the chapter is one the window already
     // holds. No network, no window, no second render.
     if (local >= 0) {
-      try { await view.open(local, 0); } catch (error) { this.handleLoadError(error); }
+      try { await view.open(local, 0); if (fragment) view.revealFragment(fragment); this.patch({ tocOpen: false }); } catch (error) { this.handleLoadError(error); }
       return;
     }
     if (!this.content) return;
@@ -1221,7 +1438,7 @@ export class ReaderScreen {
     this.patch({ navigating: true });
     this.setStatus('loading', '正在跳到这一章…');
     try {
-      const spine = view.windowIndexOfRef(ref) ?? this.tocSpineFor(ref);
+      const spine = view.windowIndexOfRef(sectionRef) ?? this.tocSpineFor(ref);
       if (spine === null) {
         // A chapter the server's windowing cannot address at all — an image
         // whose reference names a page rather than a position. Saying so is the
@@ -1231,10 +1448,10 @@ export class ReaderScreen {
         return;
       }
       const group = windowIndexOf(this.content ?? this.windowShape(), spine);
-      const content = await this.options.api.items(book.id, group);
+      const content = await this.readWindow(book.id, group);
       const landed = await view.loadWindow(content, spine);
       if (!landed) this.flashStatus('这一章暂时无法跳转', 2600);
-      else this.hideStatus();
+      else { if (fragment) view.revealFragment(fragment); this.patch({ tocOpen: false }); this.hideStatus(); }
     } catch {
       this.flashStatus('无法跳到这一章', 2600);
       this.setStatus('error', '无法跳到这一章');
@@ -1343,7 +1560,7 @@ export class ReaderScreen {
    * when the client genuinely does not know.
    */
   private get chapterCount(): number {
-    return this.manifest?.total ?? this.doc?.sections.length ?? 0;
+    return this.content ? this.manifest?.content?.total ?? this.manifest?.total ?? this.doc?.sections.length ?? 0 : this.doc?.sections.length ?? 0;
   }
 
   /**
@@ -1371,7 +1588,7 @@ export class ReaderScreen {
     this.patch({ navigating: true });
     this.setStatus('loading', '正在切换章节…');
     try {
-      const content = await this.options.api.items(book.id, windowIndexOf(this.content ?? this.windowShape(), spine));
+      const content = await this.readWindow(book.id, windowIndexOf(this.content ?? this.windowShape(), spine));
       const landed = await view.loadWindow(content, spine);
       if (landed) {
         // The loaded window is a new set of sections; the *shape* does not change
@@ -1683,6 +1900,7 @@ export class ReaderScreen {
   private bindSyncStatus(): void {
     const update = (): void => {
       const status = this.options.sync.status();
+      if (status.state === 'idle') this.paintNotes();
       if (status.state === 'syncing') {
         this.setStatus('syncing', '同步中…');
       } else if (status.state === 'offline') {

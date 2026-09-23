@@ -84,6 +84,10 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     host.remove((request.params as { id: string }).id);
     return { ok: true };
   });
+  app.get('/api/v1/sources/:id/credentials', {preHandler:auth}, async request => host.credentialStatus((request.params as {id:string}).id,currentUser(request).id));
+  app.delete('/api/v1/sources/:id/credentials/:key', {preHandler:auth}, async request => {
+    const {id,key} = request.params as {id:string;key:string}; host.deleteCredential(id,currentUser(request).id,key); return {ok:true};
+  });
   app.put('/api/v1/sources/:id/credentials/:key', { preHandler: auth }, async (request) => {
     const user = currentUser(request);
     const { id, key } = request.params as { id: string; key: string };
@@ -172,6 +176,11 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id, id);
     const ref = textBody(request.body, 'entryRef');
     return withSignal(request, reply, signal => host.switchPreview(user.id, id, ref, signal));
+  });
+  app.post('/api/v1/books/:id/switch-quality', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id,id);
+    const ref = textBody(request.body,'entryRef'), chapter = textBody(request.body,'chapterId');
+    return withSignal(request,reply,signal => host.switchQuality(user.id,id,ref,chapter,signal));
   });
   app.post('/api/v1/books/:id/switch-source', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id, id);

@@ -336,3 +336,5 @@ export type ShelfAction = 'add' | 'remove' | 'hide' | 'unhide';
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }
+
+export interface ReadingOverrides { version: number; corrections: Array<{ id: string; anchor: { sectionId: string; start: number; end: number; quote: string; prefix: string; suffix: string }; replacement: string }>; headingPrefix: string }

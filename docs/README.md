@@ -13,6 +13,7 @@ The project README introduces reader. Use the guides below for installation, eve
 | 书架、阅读、朗读、来源和离线 / Shelves, reading, TTS, sources, offline | [使用手册](user-guide.zh-CN.md) | Chinese only |
 | 安装到桌面、离线启动和版本更新 / PWA installation, offline startup and updates | [PWA 指南](pwa.zh-CN.md) | Chinese only |
 | 环境变量、目录权限、HTTPS、排错 / Settings, permissions, HTTPS, troubleshooting | [部署配置](configuration.zh-CN.md) | [Configuration](configuration.en.md) |
+| 数据备份、校验与恢复 / Data backup, verification and restore | [备份恢复](backup.zh-CN.md) | Chinese only |
 | 本地开发、验证、镜像与 Android 构建 / Development, checks, Docker and Android builds | [开发指南](development.zh-CN.md) | [Development](development.en.md) |
 
 ## 技术参考 · Technical reference
@@ -36,3 +37,10 @@ These records describe checks at specific delivery points. Use tests and CI for 
 - [书源界面 / Source UI](ui-review/sources-ux.md)
 - [书库与阅读界面 / Library and reader UI](ui-review/collections-ux.md)
 - [书源搜索 / Source search](ui-review/source-search.md)
+
+- [P1 阅读工具实施与验证](p1-progress-2026-09-23.md)
+
+- [P2 交付与验证记录](p2-progress-2026-09-24.md)
+- [生态互通与客户端覆盖方案](ecosystem-roadmap.zh-CN.md)
+
+- [OPDS 服务端接入与 WebDAV 备份上传](opds-webdav.zh-CN.md)

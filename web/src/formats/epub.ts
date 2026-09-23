@@ -1,3 +1,4 @@
+import { parseNavigation } from './navigation.ts';
 import { BookArchive, dirnameOf, extensionOf, resolveHref } from './zip.ts';
 import type { BookDoc, LoadContext, Resource, Section, TocEntry } from './types.ts';
 
@@ -284,40 +285,16 @@ async function readToc(archive: BookArchive, pkg: Package, sections: Section[]):
   return sections.map((section) => ({ id: section.id, label: section.label, depth: 0 }));
 }
 
-function parseNav(html: string, baseDir: string, sections: Section[]): TocEntry[] {
-  const navBlock = /<nav\b[^>]*epub:type\s*=\s*"toc"[^>]*>([\s\S]*?)<\/nav>/i.exec(html)?.[1]
-    ?? /<nav\b[^>]*>([\s\S]*?)<\/nav>/i.exec(html)?.[1];
-  if (!navBlock) return [];
-  const entries: TocEntry[] = [];
-  const pattern = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(navBlock)) !== null) {
-    const href = attr(match[1] ?? '', 'href');
-    const label = stripTags(match[2] ?? '');
-    if (!href || !label) continue;
-    const id = matchSectionId(resolveHref(baseDir, href), sections);
-    if (!id) continue;
-    entries.push({ id, label, depth: 0 });
-  }
-  return entries;
+function navigationEntries(xml: string, kind: 'nav' | 'ncx', baseDir: string, sections: Section[]): TocEntry[] {
+  return parseNavigation(xml, kind).flatMap(entry => {
+    const resolved = resolveHref(baseDir, entry.href);
+    const id = matchSectionId(resolved, sections);
+    const fragment = entry.href.includes('#') ? entry.href.slice(entry.href.indexOf('#')) : '';
+    return id ? [{ id: id + fragment, label: entry.title, depth: entry.depth }] : [];
+  });
 }
-
-function parseNcx(xml: string, baseDir: string, sections: Section[]): TocEntry[] {
-  const entries: TocEntry[] = [];
-  const pattern = /<navPoint\b[^>]*>([\s\S]*?)<\/navPoint>/gi;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(xml)) !== null) {
-    const block = match[1] ?? '';
-    const src = /<content\b[^>]*src\s*=\s*"([^"]+)"/i.exec(block)?.[1] ?? '';
-    const label = stripTags(/<text\b[^>]*>([\s\S]*?)<\/text>/i.exec(block)?.[1] ?? '');
-    if (!src || !label) continue;
-    const id = matchSectionId(resolveHref(baseDir, src), sections);
-    if (!id) continue;
-    const depth = (block.match(/<navPoint\b/gi)?.length ?? 1) - 1;
-    entries.push({ id, label, depth });
-  }
-  return entries;
-}
+function parseNav(html: string, baseDir: string, sections: Section[]): TocEntry[] { return navigationEntries(html, 'nav', baseDir, sections); }
+function parseNcx(xml: string, baseDir: string, sections: Section[]): TocEntry[] { return navigationEntries(xml, 'ncx', baseDir, sections); }
 
 /** Matches a TOC href to a section, tolerating fragment-only links. */
 function matchSectionId(resolved: string, sections: Section[]): string | null {
@@ -330,7 +307,7 @@ function matchSectionId(resolved: string, sections: Section[]): string | null {
 }
 
 function applyTocLabels(sections: Section[], toc: TocEntry[]): void {
-  const depthById = new Map(toc.map((entry) => [entry.id, entry]));
+  const depthById = new Map([...toc].reverse().map((entry) => [entry.id.split('#')[0], entry]));
   for (const section of sections) {
     const entry = depthById.get(section.id);
     if (entry) {

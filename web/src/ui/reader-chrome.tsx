@@ -1,3 +1,4 @@
+import type { ChapterQuality } from '../api/sources.ts';
 import { Modal } from './modal.tsx';
 import type { SourcePage } from '../api/sources.ts';
 import { CatalogFeedback } from './catalog-feedback.tsx';
@@ -23,7 +24,7 @@ import type { AppSettings } from '../store/settings.ts';
 import { DEFAULT_APP_SETTINGS, READOUT_FIELDS, READOUT_OPTIONS, type ReadoutMode } from '../store/settings.ts';
 import { ReaderIndicators } from './reader-indicators.tsx';
 import type { SpeechEngineKind } from '../render/speech.ts';
-import { type ComponentChildren, type JSX, useLayoutEffect, useRef } from './vendor/preact.ts';
+import { type ComponentChildren, type JSX, useLayoutEffect, useRef, useState } from './vendor/preact.ts';
 import { Button, IconButton, SectionTitle } from './toolkit.tsx';
 import { Icon, type IconName } from './icon.tsx';
 
@@ -92,6 +93,11 @@ export interface ChromeState {
   refreshingChapter?: boolean;
   alternativeChapters?: Array<{ id: string; title: string }> | undefined;
   alternativeChapter?: string;
+  alternativeQuality?: ChapterQuality | null;
+  alternativeChecks?: Record<string, { quality?: ChapterQuality; error?: string; chapter: string }>;
+  alternativeQualityBusy?: boolean;
+  alternativeQualityError?: string;
+  alternativeLatest?: string;
   alternativeTitle?: string;
   refreshing?: boolean;
   tts: SpeechBarState;
@@ -134,6 +140,7 @@ export interface ChromeState {
 }
 
 export interface ChromeHandlers {
+  onTools?(): void;
   onBack(): void;
   toggleToc(): void;
   toggleSettings(tab?: 'appearance' | 'behavior' | 'speech'): void;
@@ -151,6 +158,7 @@ export interface ChromeHandlers {
   onAlternative?(ref: string, title: string): void;
   onAlternativeChapter?(id: string): void;
   onSwitchSource?(): void;
+  onCheckAlternative?(): void;
   onCancelSwitch?(): void;
   onCancelAlternative?(): void;
   /**
@@ -181,9 +189,12 @@ export interface ReaderChromeProps {
    */
   stage: HTMLElement;
   handlers: ChromeHandlers;
+  tools?: ComponentChildren;
 }
 
-export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX.Element {
+export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProps): JSX.Element {
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  let hiddenDepth: number | null = null;
   const fixed = state.layout === 'fixed';
   const totalPages = Math.max(1, state.chapterPages);
   const currentPage = Math.min(totalPages, Math.max(1, state.pageInChapter));
@@ -191,6 +202,7 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
   const tab = state.settingsTab ?? 'behavior';
   return (
     <>
+      {tools}
       <div className="topbar" hidden={!state.chromeVisible}>
         <IconButton label="返回" icon="arrow-left" onClick={handlers.onBack} />
         <button type="button" className="reader-heading reader-book-heading" aria-label="书籍信息" onClick={handlers.onBookInfo}><strong>{state.title}</strong><span>{state.chapterLabel}</span></button>
@@ -223,6 +235,7 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
             onClick={() => handlers.onChapter(1)}>{fixed ? '下一页' : '下一章'}</button>
         </div>
         <div className="reader-actions">
+          {handlers.onTools && <TopButton icon="search" label="工具" onClick={handlers.onTools} />}
           <TopButton icon="menu" label="目录" onClick={handlers.toggleToc} />
           <TopButton icon="volume" label="朗读" onClick={() => handlers.toggleSettings('speech')} />
           <TopButton icon="text-size" label="界面" onClick={() => handlers.toggleSettings('appearance')} />
@@ -241,12 +254,17 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
                 // it would make the list disagree with the chapter count in the
                 // header; and leaving it looking tappable is how the panel accepts a
                 // tap and does nothing, which reads as a broken panel.
-                const reachable = entry.spine !== undefined;
+                if (hiddenDepth !== null && entry.depth > hiddenDepth) return null;
+                hiddenDepth = null;
+                const hasChildren = (state.toc[index + 1]?.depth ?? -1) > entry.depth;
+                if (hasChildren && collapsed.has(entry.id)) hiddenDepth = entry.depth;
+                const reachable = entry.spine !== undefined && entry.spine >= 0;
                 return (
-                  <li key={entry.id} data-section={entry.id}>
+                  <li key={entry.id + index} data-section={entry.id}>
+                    {hasChildren && <button className="toc-collapse" aria-label={entry.label + (collapsed.has(entry.id) ? ' 展开' : ' 折叠')} aria-expanded={!collapsed.has(entry.id)} onClick={() => { const next = new Set(collapsed); if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id); setCollapsed(next); }}>{collapsed.has(entry.id) ? '+' : '−'}</button>}
                     <button
                       type="button"
-                      aria-current={entry.id === state.currentSectionId}
+                      aria-current={entry.id.split('#')[0] === state.currentSectionId}
                       data-unreachable={reachable ? undefined : 'true'}
                       disabled={!reachable}
                       title={reachable ? undefined : '这一章不在当前窗口中'}
@@ -275,11 +293,19 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
               <span className="source-switch-card-heading"><strong>{entry.sourceName || '未命名书源'}</strong><Icon name="chevron-right" /></span>
               <span className="source-switch-book">{entry.title}<span> · {entry.authors?.join(' / ') || '作者未知'}</span></span>
               <span className="source-switch-chapter"><span>最新</span>{entry.latestChapter || '暂无章节信息'}</span>
+              {state.alternativeChecks?.[entry.ref] && <span className="source-switch-chapter">已检测 {state.alternativeChecks[entry.ref]!.chapter}：{state.alternativeChecks[entry.ref]!.quality
+                ? `${state.alternativeChecks[entry.ref]!.quality!.characters} 字符 · ${state.alternativeChecks[entry.ref]!.quality!.elapsedMs} ms`
+                : state.alternativeChecks[entry.ref]!.error}</span>}
             </button>)}</div>
             {!!state.alternatives.errors?.length && <CatalogFeedback page={state.alternatives} merged compact searching={!!state.alternativesSearching} />}
             {state.alternativeChapters && <Modal title="选择阅读章节" busy={!!state.switching} onClose={() => handlers.onCancelAlternative?.()}><div className="alternative-preview source-modal-content"><h4>{state.alternativeTitle}</h4><label>切换后阅读的章节<select value={state.alternativeChapter ?? ''} disabled={state.switching === true} onChange={event => handlers.onAlternativeChapter?.(event.currentTarget.value)}>
               <option value="">请选择章节</option>{state.alternativeChapters.map(chapter => <option value={chapter.id}>{chapter.title}</option>)}
-            </select></label><Button type="button" disabled={state.switching || !state.alternativeChapter} onClick={() => handlers.onSwitchSource?.()}>确认换源并阅读</Button></div></Modal>}
+            </select></label>
+              {state.alternativeLatest && <p>最新章节：{state.alternativeLatest}</p>}
+              <Button disabled={state.switching || state.alternativeQualityBusy || !state.alternativeChapter} onClick={() => handlers.onCheckAlternative?.()}>{state.alternativeQualityBusy ? '正在检测正文…' : '检测所选章节 / 重试'}</Button>
+              {state.alternativeQuality && <div role="status" className="chapter-quality"><strong>正文检测通过</strong><p>{state.alternativeQuality.characters} 字符 · {state.alternativeQuality.images} 张图片 · {(state.alternativeQuality.bytes / 1024).toFixed(1)} KiB · {state.alternativeQuality.elapsedMs} ms</p><p>检测仅说明本次内容可读，不保证章节完整或与原书一致。</p></div>}
+              {state.alternativeQualityError && <p role="alert">{state.alternativeQualityError}</p>}
+              <Button type="button" disabled={state.switching || state.alternativeQualityBusy || !state.alternativeChapter} onClick={() => handlers.onSwitchSource?.()}>确认换源并阅读</Button></div></Modal>}
           </section></Panel>}
 
       {state.settingsOpen ? (
@@ -519,6 +545,8 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
       />
       : null}
       <SectionTitle>翻页</SectionTitle>
+      <Button onClick={() => handlers.onSetting({ pageAnimation: 'none', mode: 'paged', theme: 'light' })}>应用电纸书预设</Button>
+      <p className="muted">浅色、分页、无翻页动画；仅保存到当前设备，可继续单独调整。屏幕刷新由设备控制。</p>
       <SegmentedRow
         label="点击区域"
         options={[

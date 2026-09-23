@@ -98,6 +98,9 @@ function loadOrCreateSecret(dataDir: string, file = 'token.secret'): string {
 export function loadConfig(): AppConfig {
   const booksDir = resolve(process.env.BOOKS_DIR ?? '/books');
   const dataDir = resolve(process.env.DATA_DIR ?? join(process.cwd(), DATA_DIR_DEFAULT_NAME));
+  if (existsSync(join(dataDir, '.reader-backup-incomplete')) || existsSync(join(dataDir, 'reader-backup.json'))) {
+    throw new Error('DATA_DIR is an incomplete operation or backup directory; restore a verified backup to a new directory before starting.');
+  }
   const dataRelativeToBooks = relative(booksDir, dataDir);
   const insideBooks = dataRelativeToBooks === '' || (
     dataRelativeToBooks !== '..' && !dataRelativeToBooks.startsWith(`..${sep}`) && !isAbsolute(dataRelativeToBooks)

@@ -243,4 +243,23 @@ CREATE TABLE IF NOT EXISTS metadata_overrides (
   updated_at INTEGER NOT NULL,
   PRIMARY KEY (book_id, field)
 );
+CREATE TABLE IF NOT EXISTS reading_overrides (user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE, book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE, version INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(user_id,book_id,version));
+
+CREATE TABLE IF NOT EXISTS opds_credentials (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS source_access (
+  source_id TEXT NOT NULL REFERENCES source_instances(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  generation INTEGER NOT NULL DEFAULT 0,
+  state TEXT NOT NULL DEFAULT 'unknown',
+  checked_at INTEGER,
+  PRIMARY KEY(source_id,user_id)
+);
 `;

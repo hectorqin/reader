@@ -147,7 +147,9 @@ export class OfflineStore {
   private persist(): Promise<void> {
     const payload = JSON.stringify(this.snapshot);
     const key = this.key;
-    this.writeChain = this.writeChain.then(() => this.kv.set(key, payload)).catch(() => undefined);
+    // Recover the queue from an earlier failure, but report this write's error
+    // to its caller. Treating disk/quota failure as success loses the outbox.
+    this.writeChain = this.writeChain.catch(() => undefined).then(() => this.kv.set(key, payload));
     return this.writeChain;
   }
 

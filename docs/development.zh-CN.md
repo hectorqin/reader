@@ -81,7 +81,7 @@ UI 改动可运行 `npm run ui:review --prefix web`，书源流程可运行 `npm
 docker build -f server/Dockerfile -t reader:local .
 ```
 
-构建上下文必须是仓库根目录，镜像会同时构建 Web 和服务端。部署时将 Compose 的镜像名改为 `reader:local`，或使用文件内的 `build` 配置。
+构建上下文必须是仓库根目录，镜像会同时构建 Web 和服务端。可执行 `docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build` 使用源码部署；后续管理也保留两个 `-f` 参数。
 
 ### 不使用容器
 

@@ -1,3 +1,4 @@
+import { AppError } from '../src/lib/errors.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
@@ -20,6 +21,49 @@ import type { CatalogPage, SourceProvider } from '../src/sources/types.ts';
 import { pluginArchive } from './helpers/plugin-package.ts';
 
 interface Session { token: string; id: string }
+
+test('personal credential state is private, invalidated on change and ignores stale in-flight access', async t => {
+  const h = await harness(); t.after(() => h.close()); const member = await h.member();
+  const host = h.ctx.sources!;
+  let errorCode = '', release: (() => void) | undefined;
+  const provider: SourceProvider = {
+    descriptor: { id: 'access', label: 'Access', version: '1', capabilities: ['browse'], credentialKeys: [{ key: 'password', label: '密码' }] },
+    async detail() { return { ref: 'book', title: 'Book' }; },
+    async acquire() { return { kind: 'chapters', publicationRef: 'book' }; },
+    async browse() {
+      if (errorCode === 'pending') await new Promise<void>(resolve => { release = resolve; });
+      else if (errorCode) throw new AppError(401, errorCode, '需要重新验证');
+      return { items: [] };
+    },
+  };
+  host.registry.register({ pluginId: 'test.access', provider });
+  await host.create({ id: 'access', pluginId: 'test.access', sourceType: 'access', name: 'Access', config: {} });
+  const url = '/api/v1/sources/access/credentials';
+  const status = async (session = h.admin) => (await h.app.inject({ method: 'GET', url, headers: auth(session) })).json();
+  assert.equal((await h.app.inject({ method: 'GET', url })).statusCode, 401);
+  host.setCredential('access',h.admin.id,'password','secret-value');
+  assert.deepEqual((await status()).fields, [{ key: 'password', label: '密码', configured: true }]);
+  assert.equal((await status(member)).fields[0].configured, false);
+  assert.ok(!JSON.stringify(await status()).includes('secret-value'));
+  await host.browse(h.admin.id,'access',{});
+  assert.equal((await status()).state,'reachable');
+  for (const code of ['AUTH_EXPIRED','VERIFICATION_REQUIRED']) {
+    errorCode = code;
+    await assert.rejects(host.browse(h.admin.id,'access',{}), { code });
+    assert.equal((await status()).state,code === 'AUTH_EXPIRED' ? 'auth-required' : 'verification-required');
+  }
+  assert.equal((await status(member)).state,'unknown');
+  errorCode = 'pending'; const pending = host.browse(h.admin.id,'access',{});
+  host.setCredential('access',h.admin.id,'password','new-secret');
+  release!(); await pending;
+  assert.equal((await status()).state,'unknown'); assert.equal((await status()).checkedAt,null);
+  await h.app.inject({ method: 'DELETE', url: url + '/password', headers: auth(member) });
+  assert.equal((await status()).fields[0].configured,true);
+  await h.app.inject({ method: 'DELETE', url: url + '/password', headers: auth(h.admin) });
+  assert.equal((await status()).fields[0].configured,false);
+  host.setCredential('access',h.admin.id,'password','');
+  assert.equal((await status()).fields[0].configured,false);
+});
 function streamEvents(body: string): Array<{ event: string; data: any }> {
   return body.split('\n\n').filter(frame => frame.startsWith('event:')).map(frame => ({
     event: /^event: (.+)/m.exec(frame)![1]!, data: JSON.parse(/^data: (.+)/m.exec(frame)![1]!),
@@ -637,11 +681,14 @@ test('alternative streams use owned book identity and forced chapter refresh upd
   const response = await h.app.inject({ method: 'POST', url: '/api/v1/books/' + id + '/alternatives', headers: auth(h.admin), payload: { sessionId: 'alternative-session', resultLimit: 3, query: 'untrusted' } });
   assert.equal(response.statusCode, 200); assert.match(String(response.headers['content-type']), /text\/event-stream/);
   assert.deepEqual(streamEvents(response.body).map(event => event.event), ['results', 'results', 'done']); assert.deepEqual(calls, ['first', 'next']);
+  const quality = await h.app.inject({ method: 'POST', url: '/api/v1/books/' + id + '/switch-quality', headers: auth(h.admin), payload: { entryRef: 'book', chapterId: 'ch' } });
+  assert.equal(quality.statusCode, 200, quality.body); assert.equal(quality.json().characters, 3);
+  assert.equal(h.ctx.db.get<{body:string|null}>('SELECT body FROM chapter_resources WHERE book_id=?',id)!.body,null);
   await h.ctx.sources!.chapters.asset(h.admin.id, id, ref); text = 'new';
   const refreshed = await h.app.inject({ method: 'POST', url: '/api/v1/books/' + id + '/refresh-chapter', headers: auth(h.admin), payload: { ref } });
   assert.equal(refreshed.statusCode, 200, refreshed.body); assert.equal(refreshed.body, 'new'); assert.equal(refreshed.headers['cache-control'], 'no-store');
   assert.equal((await h.ctx.sources!.chapters.asset(h.admin.id, id, ref)).data!.toString(), 'new');
-  for (const endpoint of ['alternatives', 'refresh-chapter']) {
+  for (const endpoint of ['alternatives', 'refresh-chapter', 'switch-quality']) {
     const denied = await h.app.inject({ method: 'POST', url: '/api/v1/books/' + id + '/' + endpoint, headers: auth(member), payload: { ref, sessionId: 'alternative-session' } });
     assert.equal(denied.statusCode, 404, denied.body);
   }

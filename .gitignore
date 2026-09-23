@@ -28,3 +28,5 @@ web/dist/
 # reviewer reads, and the part CI asserts on.
 docs/ui-review/*.png
 docs/ui-review/mobile/*.png
+docs/ui-review/p1/*.png
+docs/ui-review/p2/*.png

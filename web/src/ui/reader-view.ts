@@ -14,8 +14,10 @@ import { bookPercentage, formatLocator, parseLocator } from './locator.ts';
 import { collectSpokenChunks, type SpokenChunk } from '../render/tts-text.ts';
 import { adoptWindow } from '../formats/windowed.ts';
 import { BOOK_RESOURCE_MARKER, chapterRefFromLink } from '../formats/book-resource.ts';
+import { anchorRange, selectedAnchor, type TextAnchor } from './text-anchor.ts';
 
 export interface ReaderViewOptions {
+  transformText?(root: HTMLElement, sectionId: string): void;
   container: HTMLElement;
   doc: BookDoc;
   /**
@@ -532,6 +534,65 @@ export class ReaderView {
     };
   }
 
+  selectionAnchor(): TextAnchor | null {
+    const shadow = this.host.shadow as ShadowRoot & { getSelection?: () => Selection | null };
+    return selectedAnchor(this.host.flow, this.doc.sections[this.sectionIndex]?.id ?? '',
+      shadow.getSelection?.() ?? this.host.ownerDocument.getSelection());
+  }
+
+  revealFragment(fragment: string): boolean {
+    let id = fragment;
+    try { id = decodeURIComponent(fragment); } catch { /* literal id */ }
+    const element = this.host.shadow.getElementById(id) ?? [...this.host.flow.querySelectorAll('[name]')].find(e => e.getAttribute('name') === id);
+    if (!element) return false;
+    const range = document.createRange(); range.selectNodeContents(element);
+    this.revealRange(range); return true;
+  }
+
+  showTextAnchor(anchor: TextAnchor): boolean {
+    if (this.doc.sections[this.sectionIndex]?.id !== anchor.sectionId) return false;
+    const range = anchorRange(this.host.flow, anchor);
+    if (!range) return false;
+    this.revealRange(range);
+    this.paintRange(range, '#f5a623', 'search');
+    return true;
+  }
+
+  paintAnnotations(anchors: Array<{ anchor: TextAnchor; color: string }>): void {
+    for (const mark of this.host.flow.querySelectorAll('[data-reader-mark="note"]')) mark.remove();
+    const sectionId = this.doc.sections[this.sectionIndex]?.id;
+    for (const { anchor, color } of anchors) {
+      if (anchor.sectionId !== sectionId) continue;
+      const range = anchorRange(this.host.flow, anchor);
+      if (range) this.paintRange(range, /^#[0-9a-f]{6}$/i.test(color) ? color : '#ffd54f', 'note');
+    }
+  }
+
+  private paintRange(range: Range, color: string, kind: string): void {
+    if (kind === 'search') for (const node of this.host.flow.querySelectorAll('[data-reader-mark="search"]')) node.remove();
+    const box = this.host.flow.getBoundingClientRect();
+    const rects = typeof range.getClientRects === 'function' ? [...range.getClientRects()] : [];
+    for (const rect of rects) {
+      const mark = document.createElement('span'); mark.dataset['readerMark'] = kind;
+      mark.setAttribute('aria-hidden', 'true');
+      mark.style.cssText = `position:absolute;pointer-events:none;background:${color};opacity:.32;left:${rect.left - box.left + this.host.flow.scrollLeft}px;top:${rect.top - box.top + this.host.flow.scrollTop}px;width:${rect.width}px;height:${rect.height}px;`;
+      this.host.flow.append(mark);
+    }
+  }
+
+  private revealRange(range: Range): void {
+    const rect = rangeRect(range);
+    if (rect) {
+      const scroller = this.scroller, box = scroller.getBoundingClientRect();
+      if (this.settings.mode === 'paged') {
+          const stride = this.columnStride(this.columnCount());
+          scroller.scrollLeft = Math.floor((scroller.scrollLeft + rect.left - box.left) / stride) * stride;
+        }
+      else scroller.scrollTop += rect.top - box.top - box.height / 3;
+    }
+    this.emitPosition();
+  }
+
   /**
    * The page the reader is on, and how many the chapter has.
    *
@@ -815,6 +876,7 @@ export class ReaderView {
     sanitiseInjectedContent(this.host.shadow, {
       ...(this.options.signAssetUrl ? { signAssetUrl: this.options.signAssetUrl } : {}),
     });
+    this.options.transformText?.(this.host.flow, section.id);
     await hydrateResources(this.host.shadow, this.resolver);
     // The page's own geometry is decided here, once the text is in the DOM: the grid
     // the chapter is set on is how tall a page may be before its last line is cut, and

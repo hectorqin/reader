@@ -1,3 +1,5 @@
+import type { ChapterQuality, CredentialStatus, OpdsCredential } from './sources.ts';
+import type { ReadingOverrides } from './types.ts';
 import { eventStream } from './event-stream.ts';
 import type { ExtensionField, ExtensionPage } from './sources.ts';
 import { ApiError, errorForStatus, parseErrorBody } from './errors.ts';
@@ -252,7 +254,15 @@ export class ReaderApi {
     const bytes = new Uint8Array(response.bytes ?? []);
     return new Blob([bytes.buffer]);
   }
-  async switchPreview(id: string, entryRef: string): Promise<{ chapters: Array<{ id: string; title: string }> }> {
+  async switchQuality(id: string, entryRef: string, chapterId: string, options: RequestOptions = {}): Promise<ChapterQuality> {
+    return this.call('/api/v1/books/' + encodeURIComponent(id) + '/switch-quality','POST',{entryRef,chapterId},options);
+  }
+  async credentialStatus(id: string): Promise<CredentialStatus> { return this.get('/api/v1/sources/' + encodeURIComponent(id) + '/credentials'); }
+  async opdsCredentials(): Promise<{ credentials: OpdsCredential[]; catalogUrl: string }> { return this.get('/api/v1/opds/credentials'); }
+  async createOpdsCredential(name: string): Promise<OpdsCredential & { username: string; password: string; catalogUrl: string }> { return this.call('/api/v1/opds/credentials', 'POST', { name }); }
+  async revokeOpdsCredential(id: string): Promise<void> { await this.call('/api/v1/opds/credentials/' + encodeURIComponent(id), 'DELETE'); }
+  async deleteCredential(id: string, key: string): Promise<void> { await this.call('/api/v1/sources/' + encodeURIComponent(id) + '/credentials/' + encodeURIComponent(key),'DELETE'); }
+  async switchPreview(id: string, entryRef: string): Promise<{ chapters: Array<{ id: string; title: string }>; latestChapter?: string }> {
     return this.call('/api/v1/books/' + encodeURIComponent(id) + '/switch-preview', 'POST', { entryRef });
   }
   async switchSource(id: string, entryRef: string, chapterId: string, revision: string): Promise<{ content: BookContent; href: string }> {
@@ -402,6 +412,14 @@ export class ReaderApi {
   }
 
   /** Whether this instance has a server-side speech engine, and what it offers. */
+  async readingOverrides(id: string): Promise<ReadingOverrides> { return this.get('/api/v1/books/' + encodeURIComponent(id) + '/reading-overrides'); }
+  async saveReadingOverrides(id: string, value: ReadingOverrides): Promise<ReadingOverrides> { return this.call('/api/v1/books/' + encodeURIComponent(id) + '/reading-overrides','PUT',value); }
+  async undoReadingOverrides(id: string, version: number): Promise<ReadingOverrides> { return this.call('/api/v1/books/' + encodeURIComponent(id) + '/reading-overrides/undo','POST',{version}); }
+
+  async testSpeech(voice: string, speed: number, options: RequestOptions = {}): Promise<{ bytes: number; contentType: string; elapsedMs: number }> {
+    return this.call('/api/v1/tts/test', 'POST', { voice, speed }, options);
+  }
+
   async ttsCapabilities(options: RequestOptions = {}): Promise<TtsCapabilities | null> {
     try {
       return await this.get<TtsCapabilities>('/api/v1/tts/voices', options);

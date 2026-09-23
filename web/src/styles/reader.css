@@ -3631,7 +3631,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reader-scrub { flex: 1; min-width: 0; display: grid; text-align: center; }
 .reader-screen .progress-scrubber { width: 100%; min-height: 28px; margin: 0; }
 .reader-screen .progress-page { font-size: 0.65rem; color: var(--reader-muted); }
-.reader-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.25rem; }
+.reader-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.25rem; }
 .reader-actions .top-button { min-width: 0; max-width: none; min-height: 60px; padding: 0.45rem 0; gap: 0.45rem; }
 .reader-actions .icon { font-size: 1.4rem; }
 .reader-actions .top-button-label { font-size: 0.75rem; font-weight: 400; }
@@ -3941,3 +3941,35 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .source-switch-chapter { display: flex; align-items: baseline; gap: .5rem; font-size: .78rem; line-height: 1.6; color: var(--reader-muted); }
 .source-switch-chapter > span { flex: none; font-size: .7rem; }
 .source-switch .catalog-feedback { margin-top: 1rem; }
+
+/* Reading tools share the reader modal, including narrow phone layouts. */
+.reading-tools { display: grid; gap: 1rem; padding: 1rem; overflow-wrap: anywhere; }
+.reading-tool-tabs { display: flex; flex-wrap: wrap; gap: .5rem; }
+.reading-tool-tabs [aria-pressed="true"] { font-weight: bold; outline: 2px solid currentColor; }
+.reading-tools section { display: grid; gap: .75rem; }
+.reading-tools label { display: grid; gap: .3rem; }
+.reading-tools input, .reading-tools textarea, .reading-tools select { max-width: 100%; min-width: 0; }
+.reading-tools blockquote { margin: 0; max-height: 8rem; overflow: auto; }
+.reading-tool-results { max-height: 45vh; overflow: auto; margin: 0; padding-left: 1.5rem; }
+.reading-tool-results li { margin-block: .6rem; }
+.reading-tool-results span { display: block; white-space: pre-wrap; }
+.reading-tool-range { display: flex; gap: 1rem; }
+.reading-tool-range label { min-width: 0; }
+.toc-list li:has(.toc-collapse) { display: flex; }
+.toc-list .toc-collapse { width: 2rem; flex: 0 0 2rem; justify-content: center; }
+
+.reading-tools { min-height: 0; }
+.reading-tools button, .reading-tools input, .reading-tools textarea, .reading-tools select { font: inherit; }
+.reading-tool-tabs .button { flex: 1 1 auto; min-height: 2.5rem; font-size: .875rem; }
+.reading-tool-tabs .button[aria-pressed="true"] { color: var(--reader-accent); background: var(--reader-surface); outline: none; border-color: var(--reader-accent); }
+.reading-tools input, .reading-tools textarea, .reading-tools select { width: 100%; box-sizing: border-box; border: 1px solid var(--reader-line); border-radius: .5rem; padding: .6rem; background: var(--reader-paper); color: var(--reader-ink); }
+.reading-tools textarea { min-height: 5rem; resize: vertical; }
+.reading-tools form { display: grid; gap: .6rem; }
+.reading-tools p { margin: .3rem 0; font-size: .9rem; line-height: 1.6; }
+.reading-tool-results .button { text-align: start; width: 100%; margin-top: .25rem; }
+.reading-tools blockquote { border-inline-start: 3px solid var(--reader-accent); padding: .5rem .75rem; line-height: 1.6; }
+.source-capabilities { margin-block: 12px; overflow-wrap: anywhere; }
+.source-capabilities summary { cursor: pointer; }
+.source-capabilities dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.source-capabilities dl > div { padding: 8px; border: 1px solid currentColor; border-radius: 6px; }
+.source-capabilities dd { margin: 4px 0 0; }

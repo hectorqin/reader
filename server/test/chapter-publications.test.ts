@@ -10,6 +10,29 @@ import { ChapterPublications, MAX_CHAPTER_BYTES } from '../src/publications/chap
 import { ChapterUpdates } from '../src/services/chapter-updates.ts';
 import type { SourceContext, SourceProvider } from '../src/sources/types.ts';
 
+test('quality inspection is read-only and empty refresh or switch preserves the previous book', async () => {
+  const f = await fixture();
+  try {
+    const book = await f.chapters.acquire(f.provider, f.context, { entryRef: 'book' }, 'book', { ref: 'book', title: '远程书' });
+    const before = f.chapters.manifest('u1', book), ref = before.items[0]!.resourceRef!;
+    const cached = await f.chapters.asset('u1', book, ref);
+    const rows = () => f.db.all('SELECT * FROM chapter_resources WHERE book_id=?', book);
+    const previousRows = rows();
+    const quality = await f.chapters.inspect(f.provider, f.context, 'book', 'one');
+    assert.ok(quality.characters > 0); assert.equal(quality.latestChapter, '第二章');
+    assert.deepEqual(rows(), previousRows);
+    assert.equal(f.chapters.binding('u1', book).publication_ref, 'book');
+    f.provider.readResource = async () => ({ mediaType: 'text/plain', text: ' \n\u200b' });
+    await assert.rejects(f.chapters.asset('u1', book, ref, undefined, true), { code: 'EMPTY_CHAPTER' });
+    await assert.rejects(f.chapters.switchSource(f.provider, f.context, book, 'new', 'book', 'one', before.revision), { code: 'EMPTY_CHAPTER' });
+    assert.deepEqual(rows(), previousRows);
+    assert.deepEqual((await f.chapters.asset('u1', book, ref)).data, cached.data);
+    assert.equal(f.chapters.binding('u1', book).publication_ref, 'book');
+    await assert.rejects(f.chapters.inspect(f.provider, f.context, 'book', 'missing'), { code: 'CHAPTER_GONE' });
+    await assert.rejects(f.chapters.inspect(f.provider, { ...f.context, signal: AbortSignal.abort() }, 'book', 'one'));
+  } finally { f.db.close(); await rm(f.root, { recursive: true, force: true }); }
+});
+
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'reader-chapters-'));
   const db = new Db(join(root, 'reader.db'));

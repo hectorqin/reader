@@ -51,3 +51,7 @@ export interface ExtensionPage extends ExtensionContent {
   title: string; description?: string; notice?: string; noticeKind?: 'info' | 'error'; activeTab?: string;
   tabs?: Array<ExtensionContent & { id: string; title: string; description?: string }>;
 }
+
+export interface ChapterQuality { chapterId:string; title:string; latestChapter:string; characters:number; images:number; bytes:number; elapsedMs:number }
+export interface CredentialStatus { state:'unknown'|'reachable'|'auth-required'|'verification-required'; checkedAt:number|null; available:boolean; fields:Array<{key:string;label:string;configured:boolean}> }
+export interface OpdsCredential { id: string; name: string; createdAt: number; expiresAt: number }

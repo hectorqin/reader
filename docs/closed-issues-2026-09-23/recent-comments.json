@@ -1,0 +1,26 @@
+[
+  {
+    "issue_url": "https://api.github.com/repos/hectorqin/reader/issues/719",
+    "html_url": "https://github.com/hectorqin/reader/issues/719#issuecomment-5772817643",
+    "created_at": "2026-09-22T07:35:24Z",
+    "updated_at": "2026-09-22T07:35:24Z",
+    "author": "eking929",
+    "body": "谢谢你的来信，看到后我会尽快回复！"
+  },
+  {
+    "issue_url": "https://api.github.com/repos/hectorqin/reader/issues/719",
+    "html_url": "https://github.com/hectorqin/reader/issues/719#issuecomment-5773422708",
+    "created_at": "2026-09-22T08:26:51Z",
+    "updated_at": "2026-09-22T08:26:51Z",
+    "author": "hectorqin",
+    "body": "新版本目前聚焦本地书库，暂时不考虑支持远程书源相关功能"
+  },
+  {
+    "issue_url": "https://api.github.com/repos/hectorqin/reader/issues/720",
+    "html_url": "https://github.com/hectorqin/reader/issues/720#issuecomment-5790657565",
+    "created_at": "2026-09-23T07:14:13Z",
+    "updated_at": "2026-09-23T07:14:13Z",
+    "author": "hectorqin",
+    "body": "目前还在开发中，未发布镜像，而且目前只聚焦本地书库，是不支持legado书源的。"
+  }
+]

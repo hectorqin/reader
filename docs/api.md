@@ -1112,3 +1112,22 @@ Invoke-RestMethod -Method Post -Uri "$readerApi/books/$readerBookId/refresh" -He
 - `POST /api/v1/books/:id/switch-source`：`{entryRef,chapterId,revision}` → `{content,href}`；所选正文验证成功后事务切换，保留 bookId。目录变更返回冲突，客户端刷新再选择。
 
 后台任务 RPC、持久化及限制见[插件扩展设计](plugin-extensions.md)。页面只接受声明式数据，不执行插件提供的浏览器脚本。
+
+## Personal reading overrides and TTS diagnostics
+
+All endpoints require the account access token in the Authorization header. Reading overrides additionally check book access.
+
+- GET /api/v1/books/:id/reading-overrides returns { version, headingPrefix, corrections }.
+- PUT /api/v1/books/:id/reading-overrides accepts the same object. A correction contains id, anchor (sectionId, start, end, quote, prefix, suffix), and replacement. The submitted version must match the latest version; stale writes return 409. Up to 500 corrections are allowed, with each quote/replacement at most 4,000 characters. headingPrefix is a literal prefix of at most 60 characters.
+- POST /api/v1/books/:id/reading-overrides/undo accepts { version } and saves the preceding snapshot as a new version. History is scoped to account/book and stored in DATA_DIR/reader.db; it never rewrites library files.
+- POST /api/v1/tts/test accepts { voice?, speed? }, synthesizes a fixed sample and returns { bytes, contentType, elapsedMs, cached }. Failure codes include TTS_DISABLED, TTS_AUTH, TTS_TIMEOUT, TTS_CONTENT, TTS_EMPTY and TTS_UPSTREAM. It does not accept an upstream URL. Audio playback remains GET /api/v1/tts.
+
+### 章节质量和个人凭据状态（P2）
+
+- `POST /api/v1/books/:id/switch-quality`：已登录且拥有该书，body 为 `{ entryRef, chapterId }`。沿当前来源插件获取候选正文，返回 `{ chapterId, title, latestChapter, characters, images, bytes, elapsedMs }`；不写入书架、绑定或正文缓存。耗时包含目录、正文、内嵌图片处理，不含前置 acquire 和网络往返。
+- `switch-preview` 额外返回 `latestChapter`。质量检测按需执行；确认换源时重新获取并验证正文。空白或清洗后为空的正文返回 `EMPTY_CHAPTER`，不覆盖旧缓存/绑定。图片章可通过，字符统计不包含空白与 HTML 标签。
+- `GET /api/v1/sources/:id/credentials`：仅当前账号的 `{ state, checkedAt, available, fields: [{ key, label, configured }] }`，不包含凭据值。state 为 unknown / reachable / auth-required / verification-required。checkedAt 是毫秒时间戳或 null；仅代表最近观察。
+- `DELETE /api/v1/sources/:id/credentials/:key`：只删除当前账号该项。原 PUT 保存空字符串也会删除；保存/删除后访问状态回到 unknown。修改连接配置会清除该来源所有个人凭据并重置状态。
+- 插件抛出 `AUTH_REQUIRED`、`AUTH_EXPIRED` 或 `VERIFICATION_REQUIRED` 时记录访问状态；它们不使 Reader 账号退出。部分搜索错误中出现同类码也会记录；多个站点共用一个实例时只表示其中有站点需要处理。普通网络失败不推断为凭据失效。
+
+- [OPDS 服务端接入与 WebDAV 备份上传](opds-webdav.zh-CN.md)

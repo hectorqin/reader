@@ -149,33 +149,24 @@ export class TtsService {
     const target = this.buildUrl({ text, voice, speed, ...(input.format ? { format: input.format } : {}) });
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), config.timeoutMs);
-    let response: Response;
+    let bytes: Uint8Array, contentType: string;
     try {
-      response = await fetch(target, {
-        method: 'GET',
-        headers: {
-          accept: 'audio/*',
-          ...(config.token ? { authorization: `Bearer ${config.token}` } : {}),
-        },
+      const response = await fetch(target, {
+        method: 'GET', headers: { accept: 'audio/*', ...(config.token ? { authorization: 'Bearer ' + config.token } : {}) },
         signal: controller.signal,
       });
-    } catch (err) {
-      const message = err instanceof Error && err.name === 'AbortError' ? 'timed out' : 'unreachable';
-      throw badRequest(`HTTP TTS service ${message}`, 'TTS_UPSTREAM');
-    } finally {
-      clearTimeout(timer);
-    }
-    if (!response.ok) {
-      throw badRequest(`HTTP TTS service answered ${response.status}`, 'TTS_UPSTREAM');
-    }
-    const contentType = (response.headers.get('content-type') ?? 'audio/mpeg').split(';')[0]!.trim();
-    // A service that answers with HTML is a misconfiguration (a wrong URL landing
-    // on a web page), and streaming that into an `<audio>` element produces the
-    // most confusing possible failure: silence with a 200.
-    if (!contentType.startsWith('audio/')) {
-      throw badRequest(`HTTP TTS service returned ${contentType}, expected audio`, 'TTS_UPSTREAM');
-    }
-    const bytes = new Uint8Array(await response.arrayBuffer());
+      if (!response.ok) throw badRequest('HTTP TTS service answered ' + response.status,
+        response.status === 401 || response.status === 403 ? 'TTS_AUTH' : 'TTS_UPSTREAM');
+      contentType = (response.headers.get('content-type') ?? '').split(';')[0]!.trim();
+      if (!contentType.startsWith('audio/')) throw badRequest('HTTP TTS service returned non-audio content', 'TTS_CONTENT');
+      bytes = new Uint8Array(await response.arrayBuffer());
+      if (!bytes.length) throw badRequest('HTTP TTS service returned empty audio', 'TTS_EMPTY');
+    } catch (error) {
+      if (controller.signal.aborted) throw badRequest('HTTP TTS service timed out', 'TTS_TIMEOUT');
+      if (error && typeof error === 'object' && 'code' in error) throw error;
+      throw badRequest('HTTP TTS service unreachable', 'TTS_UPSTREAM');
+    } finally { clearTimeout(timer); }
+
     this.writeCache(key, bytes, contentType);
     return { bytes, contentType, cached: false };
   }

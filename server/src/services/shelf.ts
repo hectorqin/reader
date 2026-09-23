@@ -83,6 +83,8 @@ const BOOK_COLUMNS = `id, identifier, content_hash, format, title, author, publi
   description, series, series_index, tags, pubdate, cover_path, file_size, page_count, source, updated_at`;
 
 export interface ListOptions {
+  /** Internal publication filtering; applied before pagination for OPDS. */
+  fileFormats?: string[];
   search?: string;
   author?: string;
   series?: string;
@@ -171,6 +173,10 @@ export class ShelfService {
           OR EXISTS (SELECT 1 FROM acquired_files a WHERE a.book_id = b.id)
           OR EXISTS (SELECT 1 FROM chapter_publications c WHERE c.book_id = b.id AND c.user_id = ub.user_id))`];
     const params: Array<string | number> = library ? [] : [userId];
+    if (options.fileFormats) {
+      where.push(`b.format IN (${options.fileFormats.map(() => '?').join(',') || 'NULL'})`);
+      params.push(...options.fileFormats);
+    }
 
     if (options.search) {
       where.push('(b.title LIKE ? OR b.author LIKE ? OR b.series LIKE ? OR b.isbn = ?)');

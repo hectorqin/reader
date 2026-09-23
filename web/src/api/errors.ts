@@ -52,7 +52,7 @@ export class ApiError extends Error {
    */
   get isAuthFailure(): boolean {
     // Source credentials are independent of the reader account session.
-    if (this.code === 'AUTH_REQUIRED') return false;
+    if (['AUTH_REQUIRED','AUTH_EXPIRED','VERIFICATION_REQUIRED'].includes(this.code)) return false;
     if (this.kind === 'unauthorized') return true;
     if (this.kind !== 'forbidden') return false;
     return AUTH_FAILURE_CODES.has(this.code);

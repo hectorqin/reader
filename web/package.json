@@ -17,6 +17,7 @@
     "ui:sources": "npm run build && node --import ../server/node_modules/tsx/dist/loader.mjs tools/ui-review/host-source-flow.mjs"
   },
   "dependencies": {
+    "fast-xml-parser": "^4.5.1",
     "jszip": "^3.10.1",
     "lucide-preact": "^1.47.0",
     "notyf": "^3.10.0"

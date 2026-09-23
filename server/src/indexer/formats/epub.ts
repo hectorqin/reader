@@ -13,6 +13,7 @@ import {
 } from './registry.ts';
 import { parseEpub, extractEpubCover } from '../metadata.ts';
 import { XMLParser } from 'fast-xml-parser';
+import { parseNavigation } from './navigation.ts';
 
 /**
  * EPUB 2/3.
@@ -153,6 +154,7 @@ export const epubHandler = registerFileHandler({
     const archive = await ZipArchive.open(ctx.absPath);
     const pkg = await readPackage(archive);
     const headingCache = new Map<string, string>();
+    if (pkg.toc.length) return pkg.toc;
 
     /**
      * A chapter's own first heading, read only when the package gave no title.
@@ -334,6 +336,7 @@ interface SpineItem {
 interface Package {
   spine: SpineItem[];
   titles: Map<string, string>;
+  toc: TocEntry[];
 }
 
 /**
@@ -358,7 +361,7 @@ async function readPackage(archive: ZipArchive): Promise<Package> {
  * being used as a fallback.
  */
 async function readPackageWith(archive: ZipArchive, withTitles: boolean): Promise<Package> {
-  const empty: Package = { spine: [], titles: new Map() };
+  const empty: Package = { spine: [], titles: new Map(), toc: [] };
   const containerEntry = archive.get('META-INF/container.xml');
   let opfPath = '';
   if (containerEntry) {
@@ -401,9 +404,30 @@ async function readPackageWith(archive: ZipArchive, withTitles: boolean): Promis
    * is what this did) threw all three away for any book whose titles could not
    * be read.
    */
-  if (!withTitles) return { spine, titles: new Map() };
+  if (!withTitles) return { spine, titles: new Map(), toc: [] };
+  const declared = asArray(pkg?.manifest?.item);
+  const nav = declared.find(item => String(item?.['@_properties'] ?? '').split(/\s+/).includes('nav'));
+  const ncx = declared.find(item => item?.['@_media-type'] === 'application/x-dtbncx+xml');
+  let toc: TocEntry[] = [];
+  for (const [item, kind] of [[nav, 'nav'], [ncx, 'ncx']] as const) {
+    if (!item) continue;
+    const path = resolveHref(base, String(item['@_href']));
+    try {
+      const entries = parseNavigation((await archive.read(path, CHAPTER_PROBE_BYTES * 4)).toString('utf8'), kind);
+      toc = entries.flatMap(entry => {
+        const hash = entry.href.indexOf('#');
+        const href = hash < 0 ? entry.href : entry.href.slice(0, hash);
+        const fragment = hash < 0 ? '' : entry.href.slice(hash);
+        const resolved = href ? resolveHref(posix.dirname(path), href) : path;
+        const index = spine.findIndex(s => s.path === resolved);
+        return index < 0 ? [] : [{ href: `xhtml:${resolved}${fragment}`, title: entry.title, level: entry.depth, spine: index }];
+      });
+      if (toc.length) break;
+    } catch { /* Fall back to NCX or spine titles for malformed navigation. */ }
+  }
   const titles = await readTitles(archive, base).catch(() => new Map<string, string>());
-  return { spine, titles };
+  for (const entry of toc) if (!titles.has(spine[entry.spine!]!.path)) titles.set(spine[entry.spine!]!.path, entry.title);
+  return { spine, titles, toc };
 }
 
 /**

@@ -99,6 +99,8 @@ export class SyncService {
           rejected += 1;
           continue;
         }
+        const owner = this.db.get<{user_id:string;book_id:string}>('SELECT user_id,book_id FROM notes WHERE id=?',item.id);
+        if (owner && (owner.user_id !== userId || owner.book_id !== item.bookId)) { rejected++; continue; }
         this.upsertNote(userId, item);
         accepted += 1;
       }
@@ -131,12 +133,14 @@ export class SyncService {
       `INSERT INTO notes (id, user_id, book_id, type, locator, text, comment, color, updated_at, deleted)
        VALUES (?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
+         type = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.type ELSE notes.type END,
          locator = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.locator ELSE notes.locator END,
          text = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.text ELSE notes.text END,
          comment = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.comment ELSE notes.comment END,
          color = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.color ELSE notes.color END,
          deleted = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.deleted ELSE notes.deleted END,
-         updated_at = MAX(excluded.updated_at, notes.updated_at)`,
+         updated_at = MAX(excluded.updated_at, notes.updated_at)
+       WHERE notes.user_id = excluded.user_id AND notes.book_id = excluded.book_id`,
       record.id, userId, record.bookId, record.type ?? 'note', record.locator ?? '',
       record.text ?? '', record.comment ?? '', record.color ?? '',
       record.updatedAt ?? Date.now(), record.deleted ? 1 : 0,

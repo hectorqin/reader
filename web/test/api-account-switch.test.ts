@@ -34,10 +34,10 @@ async function setup() {
 }
 
 describe('requests across an account change', () => {
-  it('keeps the reader signed in when an OPDS source requires separate credentials', async () => {
+  it.each(['AUTH_REQUIRED', 'AUTH_EXPIRED', 'VERIFICATION_REQUIRED'])('keeps the Reader session for source error %s', async code => {
     const env = await setup();
-    env.transport.respondWith(() => ({ status: 401, headers: {}, json: { error: { code: 'AUTH_REQUIRED', message: 'OPDS password required' } } }));
-    await expect(env.api.sourceCatalog('private')).rejects.toMatchObject({ code: 'AUTH_REQUIRED', isAuthFailure: false });
+    env.transport.respondWith(() => ({ status: 401, headers: {}, json: { error: { code, message: '站点需要验证' } } }));
+    await expect(env.api.sourceCatalog('private')).rejects.toMatchObject({ code, isAuthFailure: false });
     expect(env.api.currentSession()?.user.id).toBe('a');
     expect(env.transport.requests).toHaveLength(1);
   });

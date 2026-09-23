@@ -1,3 +1,4 @@
+import { requireChapterContent } from './chapter-quality.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import type { Db } from '../db/index.ts';
 import type { AssetPayload, Manifest } from '../indexer/formats/registry.ts';
@@ -168,6 +169,7 @@ export class ChapterPublications {
           return this.loader.resource(userId, publication.source_id, publication.publication_ref, imageRef, signal);
         });
       }
+      requireChapterContent(body, resource.media_type);
       signal?.throwIfAborted();
       // The provider protocol cannot request an old version. If a refresh won
       // while this request was in flight, never cache new bytes as old content.
@@ -179,6 +181,21 @@ export class ChapterPublications {
       );
       return this.payload(body, contentHash, resource.media_type);
     });
+  }
+
+  async inspect(provider: SourceProvider, context: SourceContext, publicationRef: string, chapterId: string) {
+    if (!provider.getManifest || !provider.readResource) throw badRequest('source has no chapter content');
+    const started = performance.now();
+    const snapshot = this.normalize(await provider.getManifest(context,publicationRef),publicationRef);
+    const chapter = snapshot.items.find(item => item.id === chapterId);
+    if (!chapter) throw notFound('所选章节已不存在，请重新获取目录', 'CHAPTER_GONE');
+    const response = await provider.readResource(context,{publicationRef,ref:chapter.ref});
+    const media = chapterMedia(chapter.mediaType);
+    if (chapterMedia(response.mediaType) !== media) { response.stream?.destroy(); throw badRequest('Invalid chapter media type'); }
+    let body = this.readBody(response,context.signal);
+    if (media.startsWith('text/html')) body = await richContent(body,ref => provider.readResource!(context,{publicationRef,ref}));
+    context.signal.throwIfAborted();
+    return { chapterId, title:chapter.title, latestChapter:snapshot.items.at(-1)?.title ?? '', ...requireChapterContent(body,media), elapsedMs:Math.round(performance.now()-started) };
   }
 
   binding(userId: string, bookId: string) { return this.owned(userId, bookId); }
@@ -205,6 +222,7 @@ export class ChapterPublications {
       let body = this.readBody(response, context.signal);
       if (chapterMedia(chapter.mediaType).startsWith('text/html')) body = await richContent(body,
         imageRef => provider.readResource!(context, { publicationRef, ref: imageRef }));
+      requireChapterContent(body, chapterMedia(chapter.mediaType));
       context.signal.throwIfAborted();
       const snapshotJson = JSON.stringify(snapshot), revision = hash(snapshotJson), now = Date.now();
       this.db.transaction(() => {

@@ -676,10 +676,10 @@ export class App {
   private installLifecycleHooks(): void {
     if (typeof document === 'undefined') return;
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') void this.sync.flush();
+      if (document.visibilityState === 'hidden') void this.flush();
     });
     if (typeof window !== 'undefined') {
-      window.addEventListener('pagehide', () => void this.sync.flush());
+      window.addEventListener('pagehide', () => void this.flush());
     }
   }
 
@@ -693,6 +693,7 @@ export class App {
    */
   async flush(): Promise<void> {
     try {
+      await this.reader?.flushProgress();
       await this.offline.flush();
       await this.sync.flush();
     } catch {

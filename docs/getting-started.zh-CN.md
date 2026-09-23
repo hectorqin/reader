@@ -4,6 +4,8 @@
 
 本文带你完成 Docker 部署、注册账号和读取第一本书。直接从源码运行请看[开发指南](development.zh-CN.md)。
 
+本指南对应当前 Node 版工作区。CI 发布 `main`（开发分支）和提交短哈希标签，没有发布 `latest` 的配置；标签可用性以对应构建成功为准。部署后核对版本，长期使用建议固定提交标签。旧 Java 版镜像、`/storage` 数据和 Legado JSON 书源不与新版直接兼容。
+
 ## 1. 准备环境
 
 - 安装 Docker Engine 或 Docker Desktop，以及 Docker Compose 插件。
@@ -61,6 +63,14 @@ docker compose logs --tail=100 reader
 
 健康检查地址为 `/api/v1/health`。若启动失败、目录为空或无法写入，请看[故障排查](configuration.zh-CN.md#故障排查)。
 
+若镜像尚未发布或无法拉取，可从当前检出的源码构建：
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+此方式仍需能下载 Node 基础镜像和 npm 依赖。后续管理该部署时继续使用同样的两个 `-f` 参数。发布镜像部署可在 `.env` 设置 `READER_IMAGE=cnb.cool/hectorqin/reader:<已发布的提交标签>` 固定版本。
+
 ### 不使用 Compose
 
 在 Linux/macOS 的 POSIX shell 中，也可使用绝对路径启动容器：
@@ -71,7 +81,7 @@ docker run -d --name reader --restart unless-stopped \
   -p 8080:8080 \
   -v /path/to/your/books:/books:ro \
   -v "$(pwd)/data:/data" \
-  cnb.cool/hectorqin/reader:latest
+  cnb.cool/hectorqin/reader:main
 ```
 
 Windows 推荐使用上面的 Compose 配置，避免不同 shell 的路径和换行语法差异。
@@ -90,6 +100,8 @@ Windows 推荐使用上面的 Compose 配置，避免不同 shell 的路径和�
 
 ### 外部书源插件
 
+通用来源插件不是 Legado JSON 解析器。旧版书源 JSON 或订阅链接不能直接当 npm 包安装；只有明确声明支持该格式的独立插件才能提供兼容，是否支持以该插件说明为准。尚无适用插件时，请使用本地书库或 OPDS。
+
 管理员打开「书源 → 插件管理」，确认信任插件代码后，输入 npm 包名（可带版本或标签），或上传 `npm pack` 生成的 `.tgz` 安装包（最大 100 MiB），安装成功后自动启用。无需手动部署包目录。随后在「书源管理」选择插件提供的来源类型创建实例，从该实例的管理入口配置。一个插件可创建多个独立实例；具体功能与运行依赖由插件声明。
 
 插件拥有服务端进程权限，请只安装可信代码。服务端需要 Node.js 和 npm；npm 包及未打包的依赖需要联网下载。安装期间禁用 npm 生命周期脚本，插件应预先构建并打包运行所需文件。所有安装文件与临时文件保存在 `DATA_DIR`，不会写入书库目录。
@@ -97,6 +109,8 @@ Windows 推荐使用上面的 Compose 配置，避免不同 shell 的路径和�
 开发与配置协议见[来源插件](source-plugins.md)和[扩展页面](plugin-extensions.md)。
 
 ## 5. 更新与备份
+
+推荐使用[离线备份与恢复工具](backup.zh-CN.md)，可验证文件清单和数据库完整性，并恢复到新目录。首次从没有维护命令的旧构建升级时，仍可按以下停机复制方式保留完整数据。
 
 更新前备份书籍目录和数据目录。对 SQLite 采用简单文件备份时，先停止服务，再复制完整 `/data`（包括数据库及其辅助文件），避免复制运行中的不一致状态。
 
@@ -108,6 +122,8 @@ docker compose up -d
 ```
 
 不要删除数据目录：其中包含账号、阅读记录、签名密钥和插件状态。插件包需单独升级；替换包前先在界面停用插件。
+
+从旧 Java 版迁移时，先保留其完整备份，使用独立的新数据目录部署新版。本地书文件可挂载到新书库；账号、书架、进度、笔记和旧书源配置目前没有自动迁移工具，不要直接用旧 `/storage` 覆盖新 `/data`。源码构建部署更新时使用两份 Compose 文件重新构建，不能仅执行 `pull`。
 
 ## 下一步
 

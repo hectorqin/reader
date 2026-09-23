@@ -13,6 +13,19 @@ const SESSION = {
   refreshTokenExpiresAt: Date.now() + 86_400_000,
 };
 
+it('reports a failed local progress write and permits retry without losing the outbox', async () => {
+  const kv = new MemoryKv();
+  const offline = new OfflineStore(kv);
+  const progress = { bookId: 'b', locator: 'chapter:12', percentage: 0.5, chapterTitle: '12', device: 'phone', updatedAt: 20 };
+  vi.spyOn(kv, 'set').mockRejectedValueOnce(new Error('disk full'));
+  await expect(offline.setProgress(progress)).rejects.toThrow('disk full');
+  expect(offline.outbox().progress).toEqual([progress]);
+  await offline.setProgress(progress);
+  const restored = new OfflineStore(kv);
+  await restored.load();
+  expect(restored.progressFor('b')).toEqual(progress);
+});
+
 function sessions() {
   const kv = new MemoryKv();
   return {

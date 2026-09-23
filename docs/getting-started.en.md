@@ -4,6 +4,8 @@
 
 This guide takes you through Docker deployment, account registration, and opening your first book. To run from source, use the [development guide](development.en.md).
 
+This guide describes the current Node implementation. CI publishes `main` (development) and short commit tags, not `latest`; availability depends on a successful build. Pin a published commit tag for repeatable deployments. Legacy Java images, `/storage` data and Legado JSON sources are not directly compatible with this version.
+
 ## 1. Prepare your environment
 
 - Install Docker Engine or Docker Desktop and the Docker Compose plugin.
@@ -61,6 +63,14 @@ To allow later self-registration, set `ALLOW_REGISTRATION: "true"` in the Compos
 
 The health endpoint is `/api/v1/health`. For startup failures, missing books, or write errors, see [troubleshooting](configuration.en.md#troubleshooting).
 
+If the image is unavailable, build the checked-out source:
+
+```sh
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+```
+
+This still requires access to the Node base image and npm dependencies. Keep both `-f` arguments for subsequent management commands. For published images, set `READER_IMAGE=cnb.cool/hectorqin/reader:<published-commit-tag>` in `.env` to pin a version.
+
 ### Without Compose
 
 On Linux/macOS with a POSIX shell, you can also run the container using absolute mount paths:
@@ -71,7 +81,7 @@ docker run -d --name reader --restart unless-stopped \
   -p 8080:8080 \
   -v /path/to/your/books:/books:ro \
   -v "$(pwd)/data:/data" \
-  cnb.cool/hectorqin/reader:latest
+  cnb.cool/hectorqin/reader:main
 ```
 
 On Windows, the Compose setup above avoids shell-specific path and line-continuation syntax.
@@ -90,6 +100,8 @@ As an administrator, add an OPDS source under Sources (书源) and configure its
 
 ### External source plugins
 
+The generic plugin host does not parse Legado JSON. Do not enter a legacy JSON file or subscription URL as an npm package. Compatibility requires a separate plugin that explicitly supports that format; otherwise use local books or OPDS.
+
 In Sources → Plugin management, administrators can confirm that they trust the plugin, then enter an npm package name (optionally with a version or tag) or upload a `.tgz` archive produced by `npm pack` (up to 100 MiB). Successful installations are enabled automatically; no manual deployment is needed. Add a source instance using the plugin’s source type and configure it from that instance’s management entry. One plugin can provide several independent instances. Capabilities and runtime dependencies are defined by each plugin.
 
 Plugins run with server process privileges. Only install trusted code. The server needs Node.js and npm, plus network access for npm packages and dependencies not bundled in uploaded archives. npm lifecycle scripts are disabled, so plugins must ship prebuilt runtime files. Installation files and temporary files stay in `DATA_DIR`, never in the books directory.
@@ -97,6 +109,8 @@ Plugins run with server process privileges. Only install trusted code. The serve
 See the [plugin protocol](source-plugins.md) and [extension pages](plugin-extensions.md).
 
 ## 5. Upgrade and back up
+
+The [offline backup and restore tool (中文)](backup.zh-CN.md) checks file hashes and SQLite integrity and restores into a new directory. For older builds without this command, use a stopped-service copy as described below.
 
 Back up both the book and data directories before upgrading. For a simple file-based SQLite backup, stop the service and copy the entire `/data` directory, including database auxiliary files, to avoid copying inconsistent live state.
 
@@ -108,6 +122,8 @@ docker compose up -d
 ```
 
 Keep your data directory: it contains accounts, reading records, signing keys, and plugin state. Plugin packages are upgraded separately; disable the plugin in the UI before replacing its package.
+
+When moving from the legacy Java version, keep a full backup and use a separate new data directory. Existing book files can be mounted, but accounts, shelves, progress, notes and source settings have no automatic migration tool. Do not copy legacy `/storage` over the new `/data`. Source-built deployments must rebuild using both Compose files instead of relying on `pull`.
 
 ## Next steps
 

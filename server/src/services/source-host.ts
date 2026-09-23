@@ -1,3 +1,4 @@
+import { SourceAccess } from './source-access.ts';
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import type { FastifyBaseLogger } from 'fastify';
 import type { AppConfig } from '../config/index.ts';
@@ -22,12 +23,14 @@ export class SourceHost {
   readonly plugins: PluginManager;
   readonly chapters: ChapterPublications;
   readonly updates: ChapterUpdates;
+  private readonly access: SourceAccess;
   private readonly key: Buffer;
   private readonly acquisitions: FileAcquisitions;
   private activeCalls = 0;
   private readonly activeSources = new Map<string, number>();
 
   constructor(private readonly db: Db, private readonly config: AppConfig, shelf: () => ShelfService, private readonly log?: FastifyBaseLogger) {
+    this.access = new SourceAccess(db);
     this.key = createHash('sha256').update('reader/source-credentials/v1\0').update(config.jwtSecret).digest();
     this.acquisitions = new FileAcquisitions(db, config);
     this.chapters = new ChapterPublications(db, {
@@ -112,7 +115,7 @@ export class SourceHost {
       this.db.run('UPDATE source_instances SET name = ?, config_json = ?, enabled = ? WHERE id = ?',
         name.trim(), configuration, patch.enabled === undefined ? row.enabled : Number(patch.enabled), id);
       // Changing a destination must not forward existing users' secrets to it.
-      if (configuration !== row.config_json) this.db.run('DELETE FROM source_credentials WHERE source_id = ?', id);
+      if (configuration !== row.config_json) { this.db.run('DELETE FROM source_credentials WHERE source_id = ?', id); this.access.reset(id); }
     });
   }
 
@@ -126,14 +129,28 @@ export class SourceHost {
     this.db.run('DELETE FROM source_instances WHERE id = ?', id);
   }
 
+  credentialStatus(sourceId: string, userId: string) {
+    const row = this.instance(sourceId), descriptor = this.registry.get(row.plugin_id,row.source_type)?.provider.descriptor;
+    const saved = new Set(this.db.all<{key:string}>('SELECT key FROM source_credentials WHERE source_id=? AND user_id=?',sourceId,userId).map(item=>item.key));
+    return { ...this.access.get(sourceId,userId), available: !!row.enabled && !!descriptor,
+      fields: (descriptor?.credentialKeys ?? []).map(field=>({key:field.key,label:field.label,configured:saved.has(field.key)})) };
+  }
+  deleteCredential(sourceId: string, userId: string, name: string): void {
+    this.instance(sourceId);
+    this.db.transaction(()=>{ this.db.run('DELETE FROM source_credentials WHERE source_id=? AND user_id=? AND key=?',sourceId,userId,name); this.access.reset(sourceId,userId); });
+  }
   setCredential(sourceId: string, userId: string, name: string, value: string): void {
     if (!/^[a-z][a-z0-9_.-]{0,63}$/.test(name) || value.length > 16_384) throw badRequest('invalid credential');
     this.instance(sourceId);
-    this.db.run(
-      `INSERT INTO source_credentials (source_id, user_id, key, encrypted_value) VALUES (?, ?, ?, ?)
+    if (!value) { this.deleteCredential(sourceId,userId,name); return; }
+    this.db.transaction(() => {
+      this.db.run(
+        `INSERT INTO source_credentials (source_id, user_id, key, encrypted_value) VALUES (?, ?, ?, ?)
        ON CONFLICT(source_id, user_id, key) DO UPDATE SET encrypted_value = excluded.encrypted_value`,
-      sourceId, userId, name, this.encrypt(value),
-    );
+        sourceId, userId, name, this.encrypt(value),
+      );
+      this.access.reset(sourceId, userId);
+    });
   }
 
   async browse(userId: string, id: string, request: { ref?: string; cursor?: string; limit?: number }, signal?: AbortSignal) {
@@ -172,8 +189,17 @@ export class SourceHost {
       const acquisition = await provider.acquire(ctx, { entryRef });
       if (acquisition.kind !== 'chapters' || !provider.getManifest) throw badRequest('alternative has no chapters');
       const snapshot = await provider.getManifest(ctx, acquisition.publicationRef);
-      return { chapters: snapshot.items.map(item => ({ id: item.id, title: item.title })) };
+      return { chapters: snapshot.items.map(item => ({ id: item.id, title: item.title })), latestChapter: [...snapshot.items].sort((a,b)=>a.seq-b.seq).at(-1)?.title ?? '' };
     }, signal);
+  }
+  async switchQuality(userId: string, bookId: string, entryRef: string, chapterId: string, signal?: AbortSignal) {
+    const binding = this.chapters.binding(userId,bookId);
+    return this.call(userId,binding.source_id,async (provider,ctx) => {
+      if (!provider.alternatives) throw badRequest('source does not support alternatives');
+      const acquisition = await provider.acquire(ctx,{entryRef});
+      if (acquisition.kind !== 'chapters') throw badRequest('alternative has no chapters');
+      return this.chapters.inspect(provider,ctx,acquisition.publicationRef,chapterId);
+    },signal);
   }
   async switchSource(userId: string, bookId: string, entryRef: string, chapterId: string, revision: string, signal?: AbortSignal) {
     const binding = this.chapters.binding(userId, bookId);
@@ -229,6 +255,7 @@ export class SourceHost {
     if (!row.enabled) throw badRequest('source is disabled', 'SOURCE_DISABLED');
     const registration = this.registry.get(row.plugin_id, row.source_type);
     if (!registration) throw notFound('source plugin is not installed', 'PLUGIN_UNAVAILABLE');
+    const accessVersion = this.access.version(id,userId);
     const active = this.activeSources.get(id) ?? 0;
     if (active >= 2 || this.activeCalls >= 8) {
       throw new AppError(429, 'RATE_LIMITED', 'source is busy; retry after current requests complete');
@@ -240,8 +267,16 @@ export class SourceHost {
     const signal = externalSignal ? AbortSignal.any([externalSignal, controller.signal]) : controller.signal;
     try {
       signal.throwIfAborted();
-      return await action(registration.provider, this.context(row, userId, signal));
+      const result = await action(registration.provider, this.context(row, userId, signal));
+      if (userId && !signal.aborted) {
+        const errors = (result as {errors?:Array<{code?:string}>} | null)?.errors;
+        const state = errors?.some(e=>e.code === 'VERIFICATION_REQUIRED') ? 'verification-required' : errors?.some(e=>['AUTH_REQUIRED','AUTH_EXPIRED'].includes(e.code ?? '')) ? 'auth-required' : errors?.length ? null : 'reachable';
+        if (state) this.access.record(id,userId,accessVersion,state);
+      }
+      return result;
     } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+      if (userId && !signal.aborted && ['AUTH_REQUIRED','AUTH_EXPIRED','VERIFICATION_REQUIRED'].includes(code)) this.access.record(id,userId,accessVersion,code === 'VERIFICATION_REQUIRED' ? 'verification-required' : 'auth-required');
       if (controller.signal.aborted) throw new AppError(504, 'SOURCE_TIMEOUT', 'source request exceeded its execution deadline');
       if (externalSignal?.aborted) throw new AppError(499, 'SOURCE_CANCELLED', 'source request cancelled');
       throw error;
@@ -278,7 +313,7 @@ export class SourceHost {
         return row ? this.decrypt(row.encrypted_value) : undefined;
       },
       set: async (key, value) => this.setCredential(sourceId, userId, key, value),
-      delete: async (key) => this.db.run('DELETE FROM source_credentials WHERE source_id = ? AND user_id = ? AND key = ?', sourceId, userId, key),
+      delete: async (key) => this.deleteCredential(sourceId,userId,key),
     };
   }
   private storage(sourceId: string, userId: string): SourceStorage {

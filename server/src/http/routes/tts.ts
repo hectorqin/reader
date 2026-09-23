@@ -36,6 +36,18 @@ export function registerTtsRoutes(app: FastifyInstance, ctx: AppContext): void {
     return { ...capabilities, voices: await ctx.tts.voices() };
   });
 
+  app.post('/api/v1/tts/test', { preHandler: auth }, async request => {
+    const input = request.body as { voice?: unknown; speed?: unknown } | null;
+    if (input?.voice !== undefined && typeof input.voice !== 'string') throw badRequest('voice must be a string');
+    if (input?.speed !== undefined && (typeof input.speed !== 'number' || !Number.isFinite(input.speed))) throw badRequest('speed must be a number');
+    const started = Date.now();
+    const audio = await ctx.tts.synthesize({ text: '这是阅读器朗读试听。愿你享受阅读的时光。',
+      ...(typeof input?.voice === 'string' ? { voice: input.voice } : {}),
+      ...(typeof input?.speed === 'number' ? { speed: input.speed } : {}),
+    });
+    return { bytes: audio.bytes.length, contentType: audio.contentType, elapsedMs: Date.now() - started, cached: audio.cached };
+  });
+
   app.get('/api/v1/tts', { preHandler: auth }, async (request, reply) => {
     const query = request.query as Record<string, string | undefined>;
     const text = query.text ?? '';
