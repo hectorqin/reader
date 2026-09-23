@@ -2,7 +2,7 @@ import { ApiError } from '../api/errors.ts';
 import type { ReaderApi } from '../api/client.ts';
 import type { InstanceInfo } from '../api/types.ts';
 import { mountUI } from './mount.ts';
-import { Notice } from './toolkit.tsx';
+import { FloatingNotice } from './floating-notice.tsx';
 import { type JSX } from './vendor/preact.ts';
 
 export interface LoginScreenOptions {
@@ -47,6 +47,7 @@ export class LoginScreen {
   private state: LoginState;
   /** The probe's debounce, on the instance so a re-render cannot drop it. */
   private probeTimer: ReturnType<typeof setTimeout> | null = null;
+  private disposed = false;
 
   constructor(private readonly options: LoginScreenOptions) {
     this.state = {
@@ -75,6 +76,7 @@ export class LoginScreen {
   }
 
   private patch(patch: Partial<LoginState>): void {
+    if (this.disposed) return;
     this.state = { ...this.state, ...patch };
     this.draw();
   }
@@ -93,7 +95,7 @@ export class LoginScreen {
         <p className="muted" style="margin:0 0 1.25rem;font-size:.85rem;">
           自部署书库阅读器
         </p>
-        {state.notice ? <Notice>{state.notice}</Notice> : null}
+        <FloatingNotice message={state.busy ? '正在登录…' : state.error || state.notice} busy={state.busy} error={!!state.error || state.noticeKind === 'error'} />
         <div className="field">
           <label>服务端地址</label>
           <input
@@ -145,7 +147,6 @@ export class LoginScreen {
             注册新账号
           </button>
         </div>
-        {state.error ? <div className="error-text">{state.error}</div> : null}
       </form>
     );
   }
@@ -246,6 +247,12 @@ export class LoginScreen {
   reset(message?: string): void {
     this.patch({ password: '', ...(message ? { error: message } : {}) });
     if (message) this.patch({ error: message });
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    if (this.probeTimer) clearTimeout(this.probeTimer);
+    this.ui.unmount();
   }
 }
 

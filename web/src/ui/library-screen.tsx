@@ -1,4 +1,5 @@
 import { ApiError } from '../api/errors.ts';
+import { FloatingNotice } from './floating-notice.tsx';
 import type { ReaderApi } from '../api/client.ts';
 import type { Book, BrowseEntry, BrowseListing } from '../api/types.ts';
 import type { OfflineStore } from '../store/offline.ts';
@@ -171,6 +172,7 @@ export class LibraryBrowseScreen {
   private readonly draw: () => void;
   /** The message a completed write left for the next render. */
   private outcome: string | null = null;
+  private statusError = false;
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
   private state: BrowseState;
 
@@ -352,7 +354,7 @@ export class LibraryBrowseScreen {
   private async shelveBooks(books: Book[]): Promise<void> {
     const ids = [...new Set(books.map((book) => book.id))];
     if (ids.length === 0 || this.state.busy) return;
-    this.state.busy = true;
+    this.statusError = false; this.state.busy = true;
     this.state.status = `${SHELF_ACTION_LABELS.add}…`;
     this.draw();
     try {
@@ -371,7 +373,8 @@ export class LibraryBrowseScreen {
     }
   }
 
-  private toast(text: string): void {
+  private toast(text: string, error = false): void {
+    this.statusError = error;
     this.state.status = text;
     this.draw();
   }
@@ -383,10 +386,10 @@ export class LibraryBrowseScreen {
         this.options.onSignedOut();
         return;
       }
-      this.toast(err.message);
+      this.toast(err.message, true);
       return;
     }
-    this.toast(err instanceof Error ? err.message : '出错了');
+    this.toast(err instanceof Error ? err.message : '出错了', true);
   }
 
   // ---- the tree ----
@@ -466,7 +469,8 @@ export class LibraryBrowseScreen {
               onGo={(page) => this.goToPage(page)}
             />
           ) : null}
-          {(state.status || state.total > 0) && <div className="manager-status muted">{state.status || this.summary()}</div>}
+          <FloatingNotice message={state.status} busy={state.busy && !this.statusError} error={this.statusError} />
+          {state.total > 0 && <div className="manager-status muted">{this.summary()}</div>}
         </div>
 
       </>
@@ -575,6 +579,7 @@ export class LibraryFilesScreen {
   private readonly uploadInput = document.createElement('input');
   private readonly draw: () => void;
   private outcome: string | null = null;
+  private statusError = false;
   private state: FilesState;
 
   constructor(private readonly options: LibraryFilesScreenOptions) {
@@ -796,7 +801,7 @@ export class LibraryFilesScreen {
     const policy = await this.pickConflictPolicy();
     if (!policy) return;
     const total = files.reduce((sum, file) => sum + file.size, 0);
-    this.state.busy = true;
+    this.statusError = false; this.state.busy = true;
     this.draw();
     try {
       const result = await this.options.api.upload(files, this.state.path, policy, (fraction) => {
@@ -870,7 +875,7 @@ export class LibraryFilesScreen {
     describe?: (result: never) => string,
   ): Promise<void> {
     if (this.state.busy) return;
-    this.state.busy = true;
+    this.statusError = false; this.state.busy = true;
     this.toast(`${label}…`);
     this.draw();
     let result: unknown;
@@ -890,7 +895,8 @@ export class LibraryFilesScreen {
     this.draw();
   }
 
-  private toast(text: string): void {
+  private toast(text: string, error = false): void {
+    this.statusError = error;
     this.state.status = text;
     this.draw();
   }
@@ -901,10 +907,10 @@ export class LibraryFilesScreen {
         this.options.onSignedOut();
         return;
       }
-      this.toast(err.message);
+      this.toast(err.message, true);
       return;
     }
-    this.toast(err instanceof Error ? err.message : '出错了');
+    this.toast(err instanceof Error ? err.message : '出错了', true);
   }
 
   private batchMetadataDialog(count: number): Promise<Record<string, string> | null> {
@@ -1026,7 +1032,8 @@ export class LibraryFilesScreen {
               onGo={(page) => this.goToPage(page)}
             />
           ) : null}
-          <div className="manager-status muted">{this.state.status || this.summary(listing)}</div>
+          <FloatingNotice message={this.state.status} busy={this.state.busy && !this.statusError} error={this.statusError} />
+          <div className="manager-status muted">{this.summary(listing)}</div>
         </div>
 
         <SelectionBar

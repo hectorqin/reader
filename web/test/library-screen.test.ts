@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { noticeText } from './helpers/notices.ts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LibraryBrowseScreen } from '../src/ui/library-screen.tsx';
 import { ReaderApi, type SessionStore } from '../src/api/client.ts';
@@ -502,7 +503,7 @@ describe('the shelf pair on the browsing page', () => {
     );
     // The message says *what the reader did*, not what a generic batch write did:
     // `已更新 1 本` is not an answer to "did my book come back".
-    expect(screen.element.textContent).toContain('加入书架 1 本');
+    expect(noticeText()).toContain('加入书架 1 本');
   });
 
   it('says what the reader did, not that a batch was updated', async () => {
@@ -517,7 +518,7 @@ describe('the shelf pair on the browsing page', () => {
     const { screen } = makeScreen(transport);
     await screen.open('', 1, '');
     screen.element.querySelector<HTMLElement>('[aria-label="把第2卷加入书架"]')!.click();
-    await vi.waitFor(() => expect(screen.element.textContent).toContain('加入书架 1 本'));
+    await vi.waitFor(() => expect(noticeText()).toContain('加入书架 1 本'));
     expect(screen.element.textContent).not.toContain('已更新');
   });
 

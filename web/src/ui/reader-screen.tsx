@@ -1,4 +1,5 @@
 import { ApiError } from '../api/errors.ts';
+import { dismissNotice, notify } from './notifications.ts';
 import { renditionRef } from './rendition.ts';
 import type { ReaderApi } from '../api/client.ts';
 import type { Book, BookContent, Manifest, Note } from '../api/types.ts';
@@ -178,7 +179,8 @@ export class ReaderScreen {
   private navigating = false;
   private detachGestures: (() => void) | null = null;
   private progressTimer: ReturnType<typeof setTimeout> | null = null;
-  private statusTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly noticeId = Symbol('reader-status');
+  private disposed = false;
   private pendingPosition: Position | null = null;
   private readonly settings: AppSettings;
   private readonly listeners: Array<() => void> = [];
@@ -419,6 +421,7 @@ export class ReaderScreen {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.loadingToken += 1;
     this.viewEpoch += 1;
     this.tts?.dispose();
@@ -426,7 +429,7 @@ export class ReaderScreen {
     this.flushProgress();
     this.book = null;
     if (this.progressTimer) clearTimeout(this.progressTimer);
-    if (this.statusTimer) clearTimeout(this.statusTimer);
+    dismissNotice(this.noticeId);
     this.detachGestures?.();
     this.detachGestures = null;
     for (const off of this.listeners) off();
@@ -1632,17 +1635,16 @@ export class ReaderScreen {
     update();
   }
 
-  /** A status line that clears itself, for messages with no lasting state. */
+  /** Global feedback; Notyf owns expiration independently of the reading tree. */
   private flashStatus(text: string, after = 1600): void {
-    this.setStatus('idle', text);
-    if (this.statusTimer) clearTimeout(this.statusTimer);
-    this.statusTimer = setTimeout(() => this.hideStatus(), after);
+    this.setStatus('idle', text, after);
   }
 
-  private setStatus(state: string, text: string): void {
-    if (this.statusTimer) clearTimeout(this.statusTimer);
-    this.statusTimer = null;
-    this.patch({ statusState: state, statusText: text });
+  private setStatus(state: string, text: string, duration = 6000): void {
+    if (this.disposed) return;
+    this.chrome.statusState = state;
+    this.chrome.statusText = text;
+    notify(text, { kind: state === 'loading' || state === 'syncing' ? 'loading' : state === 'error' ? 'error' : 'info', duration }, this.noticeId);
   }
 
   /**
@@ -1661,9 +1663,9 @@ export class ReaderScreen {
    * which is the behaviour a status line wants.
    */
   private hideStatus(): void {
-    if (this.statusTimer) clearTimeout(this.statusTimer);
-    this.statusTimer = null;
-    this.patch({ statusState: 'idle', statusText: '' });
+    this.chrome.statusState = 'idle';
+    this.chrome.statusText = '';
+    dismissNotice(this.noticeId);
   }
 
   private handleLoadError(err: unknown): void {

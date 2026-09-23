@@ -82,16 +82,16 @@ try {
   assert.ok((await page.locator('[role=status]').innerText()).includes('插件已安装并启用'));
   for (const width of [390, 1920]) {
     await page.setViewportSize({ width, height: 900 });
-    const bounds = await page.locator('.floating-notice').evaluate(node => {
+    const bounds = await page.locator('.global-notice').evaluate(node => {
       const rect = node.getBoundingClientRect();
-      return { width: rect.width, left: rect.left, right: rect.right, position: getComputedStyle(node).position };
+      return { width: rect.width, left: rect.left, right: rect.right, position: getComputedStyle(node.closest('.notyf')).position };
     });
     assert.equal(bounds.position, 'fixed');
     assert.ok(bounds.width <= 448 && bounds.left >= 16 && bounds.right <= width - 16);
     await shot('plugin-feedback-' + width);
   }
   const beforeDismiss = await page.locator('.sources-body').boundingBox();
-  await button('关闭提示').click(); await page.locator('.floating-notice').waitFor({ state: 'hidden' });
+  await button('关闭提示').click(); await page.locator('.global-notice').waitFor({ state: 'hidden' });
   assert.deepEqual(await page.locator('.sources-body').boundingBox(), beforeDismiss, 'dismissing feedback does not move the page');
   assert.equal(await page.getByLabel('npm pack 安装包').inputValue(), '');
   await tab('从 npm 安装').click();
@@ -149,24 +149,45 @@ try {
     for (const failed of [true, false]) {
       failAction = failed;
       await button('保存配置').click();
-      await page.locator('.floating-notice').getByText('正在处理…', { exact: true }).waitFor();
+      await page.locator('.global-notice').getByText('正在处理…', { exact: true }).waitFor();
       assert.deepEqual(await page.locator('.sources-body').boundingBox(), bodyBounds);
       assert.deepEqual(await page.locator('.extension-toolbar').boundingBox(), toolbarBounds);
       await page.locator('.sources-body').evaluate(node => { node.scrollTop = 180; });
       const scrollTop = await page.locator('.sources-body').evaluate(node => node.scrollTop);
       releaseAction();
-      await page.locator(failed ? '.floating-notice [role=alert]' : '.floating-notice [role=status]').getByText(failed ? '插件暂时不可用，请重启后重试。' : '配置已保存', { exact: true }).waitFor();
+      await page.locator(failed ? '.global-notice [role=alert]' : '.global-notice [role=status]').getByText(failed ? '插件暂时不可用，请重启后重试。' : '配置已保存', { exact: true }).waitFor();
       assert.equal(await page.locator('.sources-body').evaluate(node => node.scrollTop), scrollTop);
       assert.deepEqual(await page.locator('.sources-body').boundingBox(), bodyBounds);
       assert.deepEqual(await page.locator('.extension-toolbar').boundingBox(), toolbarBounds);
-      const notice = await page.locator('.floating-notice').evaluate(node => ({ width: node.getBoundingClientRect().width, position: getComputedStyle(node).position }));
+      const notice = await page.locator('.global-notice').evaluate(node => ({ width: node.getBoundingClientRect().width, position: getComputedStyle(node.closest('.notyf')).position }));
       assert.equal(notice.position, 'fixed'); assert.ok(notice.width <= Math.min(448, width - 32));
       await shot('extension-feedback-' + (failed ? 'error-' : 'success-') + width);
-      await button('关闭提示').click(); await page.locator('.floating-notice').waitFor({ state: 'hidden' });
+      await button('关闭提示').click(); await page.locator('.global-notice').waitFor({ state: 'hidden' });
       assert.deepEqual(await page.locator('.sources-body').boundingBox(), bodyBounds);
       assert.equal(await page.locator('.sources-body').evaluate(node => node.scrollTop), scrollTop);
     }
   }
+  await page.goto(base + '/#/sources'); await tab('书源管理').click();
+  await button('添加来源').click();
+  await page.getByLabel('来源类型').selectOption('reader.source.demo/demo-chapters');
+  await page.getByLabel('名称', { exact: true }).fill('保留的草稿');
+  await page.route('**/api/v1/sources', route => route.request().method() === 'POST'
+    ? route.fulfill({ status: 502, json: { error: { code: 'SAVE_FAILED', message: '保存失败，请稍后重试。' } } })
+    : route.continue());
+  for (const width of [390, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    const before = await page.getByRole('dialog').boundingBox();
+    await button('保存来源').click();
+    await page.locator('dialog .notyf [role=alert]').waitFor();
+    assert.equal(await page.locator('.notyf').count(), 1);
+    assert.deepEqual(await page.getByRole('dialog').boundingBox(), before);
+    assert.equal(await page.getByLabel('名称', { exact: true }).inputValue(), '保留的草稿');
+    await shot('global-notice-dialog-' + width);
+    await button('关闭提示').click(); await page.locator('.global-notice').waitFor({ state: 'hidden' });
+    assert.deepEqual(await page.getByRole('dialog').boundingBox(), before);
+  }
+  await button('取消').click();
+  assert.equal(await page.locator('body > .notyf').count(), 1);
   assert.deepEqual(errors, []);
   console.log('PASS real HTTP + SQLite + stdio plugin + production Web: registration, tgz upload, npm registry install, auto-enable, independent instances, tabs, layout, streamed search, acquisition and chapter reading');
   console.log('PASS extension feedback fixtures: mobile/desktop floating busy/error/success, bounded width and stable content position');

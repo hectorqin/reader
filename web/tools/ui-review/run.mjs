@@ -1085,7 +1085,7 @@ async function main() {
         // one cover. The wait is for the *report*, which is what proves the write
         // happened and the folder was read back.
         await cdp.waitFor(
-          `/加入书架 \\d+ 本/.test(document.querySelector('.manager-status')?.textContent ?? '')`,
+          `/加入书架 \\d+ 本/.test(document.querySelector('.notyf')?.textContent ?? '')`,
           10_000,
         );
         await cdp.sleep(500);

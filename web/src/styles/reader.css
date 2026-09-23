@@ -2313,12 +2313,9 @@ book-content {
   position: absolute;
   inset-inline-end: calc(0.35rem + var(--safe-right));
   /*
-   * Below the top of the screen rather than centred on it. Two reasons, and the
-   * first one is the one that decided the number: the status pill floats over the
-   * top of the reading area at this very inset (see `.status-bar`), and a rail that
-   * started at 12% would put a button underneath it on every sync. The second is
-   * reach: a hand holding a phone at the bottom of the screen reaches this band, and
-   * the centre of the screen is where the reading is.
+   * Below the top of the screen, within comfortable
+   * reach: a hand holding a phone at the bottom of the screen reaches this band.
+   * Keeping controls at the side also leaves the centre clear for reading.
    */
   top: calc(22% + var(--safe-top));
   /*
@@ -2720,165 +2717,6 @@ book-content {
 
 /* ---- status ---- */
 
-/*
- * The status line: a floating pill, not a band.
- *
- * It used to be a full-width strip in the flex column *between* the header and the
- * page, which meant every status change moved the book down by a line and back.
- * On a reader that is the worst possible place for a transient message: the text
- * the reader is looking at jumps, and the jump is caused by a line about syncing
- * that they did not ask for.
- *
- * Floated over the top of the reading area instead, so it can appear and disappear
- * without the page moving at all. It is centred on the text column rather than the
- * screen, so it lands under the reader's eye wherever the column is, and it takes no
- * pointer events — a message that intercepts the tap meant for the page beneath it
- * is a message that costs the reader a page turn.
- */
-.status-bar {
-  position: absolute;
-  inset-inline: 0;
-  /*
-   * Just *below* the top bar rather than over it. It used to sit at
-   * `--space-3 + safe-top`, i.e. inside the 3.4rem band — which put the middle of
-   * the pill on top of the middle button of the top bar, so a reader who had just
-   * opened a book could not see (or reach) 目录 until the message faded. The pill
-   * belongs over the *page*, which is where the reader is looking, and it must not
-   * cover the controls they might be reaching for.
-   */
-  top: calc(var(--reader-chrome-top) + var(--space-2));
-  z-index: 12;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  width: fit-content;
-  max-width: min(28rem, calc(100% - 1.5rem));
-  margin-inline: auto;
-  padding: 0.4rem 0.8rem;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--reader-line) 70%, transparent);
-  background: color-mix(in srgb, var(--reader-surface) 92%, transparent);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 14px color-mix(in srgb, #000 12%, transparent);
-  color: var(--reader-ink);
-  font-size: var(--text-meta);
-  pointer-events: none;
-  animation: status-in var(--motion-duration) var(--motion-ease);
-}
-
-@keyframes status-in {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: none; }
-}
-
-.status-bar[hidden] {
-  display: none;
-}
-
-.status-bar .status-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.status-dot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: var(--reader-muted);
-  flex: 0 0 auto;
-}
-
-/* A syncing dot that *does* something: the only state here that is a process
-   rather than an outcome, so it is the only one that earns an animation. */
-.status-bar[data-state='syncing'] .status-dot {
-  animation: status-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-.status-bar[data-state='syncing'] .status-dot {
-  background: #4a8f5f;
-}
-
-.status-bar[data-state='offline'] .status-dot {
-  background: #c08a2e;
-}
-
-.status-bar[data-state='error'] .status-dot {
-  background: #b6453a;
-}
-
-/*
- * The snackbar.
- *
- * On `document.body`, not inside `#app`: it outlives the screen change it is
- * usually reporting, and a message mounted inside the screen it is about would
- * leave the DOM exactly when the reader starts reading it. It is `fixed` to the
- * bottom, above the safe area, and takes no pointer events, so it can never cover
- * the control the reader is reaching for.
- */
-.app-toast {
-  position: fixed;
-  inset-inline: 0;
-  inset-block-end: calc(1rem + env(safe-area-inset-bottom));
-  margin-inline: auto;
-  width: fit-content;
-  max-width: min(24rem, calc(100vw - 2rem));
-  padding: 0.6rem 1rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--reader-ink) 92%, transparent);
-  color: var(--reader-paper);
-  font-size: 0.82rem;
-  line-height: 1.4;
-  text-align: center;
-  z-index: 60;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(0.75rem);
-  transition:
-    opacity var(--motion-duration) var(--motion-ease),
-    transform var(--motion-duration) var(--motion-ease);
-}
-
-.app-toast[data-shown='true'] {
-  opacity: 1;
-  transform: none;
-}
-
-.floating-notice {
-  display: flex;
-  align-items: center;
-  gap: .65rem;
-  box-sizing: border-box;
-  max-width: min(28rem, calc(100vw - 2rem));
-  max-height: calc(100dvh - 2rem);
-  overflow: auto;
-  padding: .65rem .8rem .65rem 1rem;
-  border: 1px solid var(--reader-line);
-  border-radius: .85rem;
-  background: var(--reader-surface);
-  color: var(--reader-ink);
-  box-shadow: 0 6px 24px #00000014;
-  text-align: start;
-  pointer-events: auto;
-}
-.floating-notice > span { min-width: 0; overflow-wrap: anywhere; }
-.floating-notice .icon-button { flex: none; width: 32px; height: 32px; color: var(--reader-muted); }
-.floating-notice[data-error='true'] { color: #a32c22; }
-[data-theme='dark'] .floating-notice[data-error='true'] { color: #ffaaa0; }
-
-@media (prefers-reduced-motion: reduce) {
-  .app-toast {
-    transition: none;
-    transform: none;
-  }
-}
-
 /* ---- misc ---- */
 
 .empty-state,
@@ -2900,12 +2738,6 @@ book-content {
   padding: 0.6rem 0.75rem;
   font-size: 0.82rem;
   margin-bottom: 0.9rem;
-}
-
-.error-text {
-  color: #b6453a;
-  font-size: 0.85rem;
-  margin-top: 0.5rem;
 }
 
 .muted {

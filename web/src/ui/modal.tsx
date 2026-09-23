@@ -1,5 +1,6 @@
 import { type ComponentChildren, useLayoutEffect, useRef } from './vendor/preact.ts';
 import { IconButton } from './toolkit.tsx';
+import { placeNotifications } from './notifications.ts';
 
 /** Native modal supplies focus containment and makes the background inert. */
 export function Modal({ title, busy, onClose, children }: {
@@ -10,8 +11,10 @@ export function Modal({ title, busy, onClose, children }: {
     const previous = document.activeElement as HTMLElement | null;
     const dialog = ref.current!;
     dialog.showModal();
+    placeNotifications();
     return () => {
       dialog.close();
+      placeNotifications();
       queueMicrotask(() => { if (previous?.isConnected) previous.focus({ preventScroll: true }); });
     };
   }, []);

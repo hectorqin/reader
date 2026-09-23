@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { noticeText } from './helpers/notices.ts';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ReaderApi } from '../src/api/client.ts';
 import type { SourcePage } from '../src/api/sources.ts';
@@ -18,7 +19,7 @@ beforeAll(() => {
 async function chooseSource(root: HTMLElement) {
   const select = root.querySelector<HTMLSelectElement>('[aria-label="选择来源"]')!;
   select.value = 'source-1'; select.dispatchEvent(new Event('change', { bubbles: true }));
-  await vi.waitFor(() => expect([...root.querySelectorAll('[role=status]')].map(el => el.textContent).join('')).not.toMatch(/正在处理|正在保存/));
+  await vi.waitFor(() => expect([...document.querySelectorAll('[role=status]')].map(el => el.textContent).join('')).not.toMatch(/正在处理|正在保存/));
 }
 afterEach(() => { screens.splice(0).forEach((screen) => screen.dispose()); document.body.replaceChildren(); });
 async function setup(admin = true) {
@@ -110,7 +111,7 @@ function button(root: HTMLElement, label: string) {
 }
 async function click(root: HTMLElement, label: string) {
   button(root, label).click();
-  await vi.waitFor(() => expect([...root.querySelectorAll('[role=status]')].map(el => el.textContent).join('')).not.toMatch(/正在处理|正在保存|正在搜索/));
+  await vi.waitFor(() => expect([...document.querySelectorAll('[role=status]')].map(el => el.textContent).join('')).not.toMatch(/正在处理|正在保存|正在搜索/));
 }
 function input(root: HTMLElement, label: string, value: string) {
   const element = [...root.querySelectorAll('label')].find((item) => item.textContent?.startsWith(label))?.querySelector('input');
@@ -166,7 +167,7 @@ describe('sources and subscriptions UI', () => {
     const trusted = screen.element.querySelector<HTMLInputElement>('input[type=checkbox]')!;
     trusted.checked = true; trusted.dispatchEvent(new Event('change', { bubbles: true }));
     await click(screen.element, '安装并启用');
-    await vi.waitFor(() => expect(screen.element.textContent).toContain('插件已安装并启用'));
+    await vi.waitFor(() => expect(noticeText()).toContain('插件已安装并启用'));
     expect(JSON.parse(bodyText(transport.requests.find((request) => request.url.endsWith('/plugins') && request.method === 'POST')))).toEqual({ package: 'reader-source-example', trusted: true });
     await click(screen.element, '停用'); expect(transport.requests.some((request) => request.url.endsWith('/plugins/remote') && request.method === 'PATCH')).toBe(true);
   });
@@ -186,7 +187,7 @@ it('uploads a tgz with trust and no JSON content type; reports activation and re
   expect(button(screen.element, '上传并启用').disabled).toBe(false);
   // jsdom's required-file validator does not use an overridden FileList.
   picker.closest('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-  await vi.waitFor(() => expect(screen.element.textContent).toContain('插件已安装并启用'));
+  await vi.waitFor(() => expect(noticeText()).toContain('插件已安装并启用'));
   const request = transport.requests.find(r => r.url.endsWith('/plugins/upload'))!;
   expect(request.body).toBeInstanceOf(FormData);
   expect((request.body as FormData).get('trusted')).toBe('true');
@@ -204,11 +205,11 @@ it('keeps install drafts on failure and disables duplicate submission while inst
   const trust = screen.element.querySelector<HTMLInputElement>('input[type=checkbox]')!;
   trust.checked = true; trust.dispatchEvent(new Event('change', { bubbles: true }));
   button(screen.element, '安装并启用').click();
-  await vi.waitFor(() => expect(screen.element.textContent).toContain('正在安装插件'));
+  await vi.waitFor(() => expect(noticeText()).toContain('正在安装插件'));
   expect(button(screen.element, '安装并启用').disabled).toBe(true);
   expect(button(screen.element, '上传并启用').disabled).toBe(true);
   fail(new Error('npm 仓库暂不可用'));
-  await vi.waitFor(() => expect(screen.element.textContent).toContain('npm 仓库暂不可用'));
+  await vi.waitFor(() => expect(noticeText()).toContain('npm 仓库暂不可用'));
   expect(screen.element.querySelector<HTMLInputElement>('input:not([type])')!.value).toBe('@reader/example@latest');
   expect(button(screen.element, '安装并启用').disabled).toBe(false);
 });
@@ -258,7 +259,8 @@ it('keeps failed configuration inside the modal and restores focus after cancel 
   const save = vi.spyOn(api, 'saveSource').mockRejectedValueOnce(new Error('测试保存失败'));
   await click(screen.element, '保存来源');
   expect(screen.element.querySelector('dialog [role=alert]')?.textContent).toBe('测试保存失败');
-  expect(document.activeElement?.getAttribute('role')).toBe('alert');
+  expect(screen.element.querySelector('.source-modal-content [role=alert]')).toBeNull();
+  expect(document.querySelector('dialog .notyf [role=alert]')).not.toBeNull();
   expect(screen.element.querySelector<HTMLInputElement>('input[maxlength]')!.value).toBe('草稿名称');
   await click(screen.element, '取消');
   expect(screen.element.querySelector('dialog')).toBeNull();

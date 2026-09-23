@@ -22,6 +22,7 @@ import { ReaderScreen } from './ui/reader-screen.tsx';
 import { LoginScreen } from './ui/login-screen.tsx';
 import { LibraryBrowseScreen, LibraryFilesScreen } from './ui/library-screen.tsx';
 import { el } from './ui/dom.ts';
+import { notify } from './ui/notifications.ts';
 import { Router, parentOf, type LibraryView, type Route, type RouteLocation } from './ui/router.ts';
 
 /**
@@ -83,6 +84,7 @@ export class App {
   private isAdmin = false;
 
   private shelf: ShelfScreen | null = null;
+  private login: LoginScreen | null = null;
   private sources: SourcesScreen | null = null;
   private pluginPage: PluginPageScreen | null = null;
   private reader: ReaderScreen | null = null;
@@ -302,6 +304,8 @@ export class App {
     this.browse = null;
     this.files?.dispose();
     this.files = null;
+    this.login?.dispose();
+    this.login = null;
     this.root.replaceChildren();
   }
 
@@ -321,7 +325,7 @@ export class App {
     this.router = null;
     this.route = null;
     this.clearScreens();
-    const login = new LoginScreen({
+    const login = this.login = new LoginScreen({
       api: this.api,
       defaultServerUrl: this.api.baseUrl || inferDefaultUrl(),
       onAuthenticated: async () => {
@@ -569,7 +573,7 @@ export class App {
         // A snackbar rather than a line on the shelf: the shelf may not be the
         // screen the reader ends up on, and a silent redirect is how a dead link
         // becomes "the app is broken".
-        showToast('这本书不在书架上了');
+        notify('这本书不在书架上了');
         this.router?.navigate({ name: 'shelf', page: 1, libraryPath: '', libraryPage: 1 }, { replace: true });
         return;
       }
@@ -724,33 +728,6 @@ function fallbackHash(): string {
   if (typeof location === 'undefined') return '#/shelf';
   if (location.protocol === 'file:') return '#/shelf';
   return `${location.origin}${location.pathname}#/shelf`;
-}
-
-/**
- * A message that appears over whatever is on screen and leaves by itself.
- *
- * Built by hand rather than as a screen component because it outlives screens: it
- * is appended to `document.body`, so a route change does not take it with it —
- * which is the one case it exists for, a dead link that redirects to the shelf
- * while the explanation is still being read. Purely presentational: it is
- * `aria-live` so a screen reader announces it, and it takes no pointer events so
- * it cannot eat a tap it is covering.
- */
-function showToast(message: string): void {
-  if (typeof document === 'undefined') return;
-  const node = document.createElement('div');
-  node.className = 'app-toast';
-  node.setAttribute('role', 'status');
-  node.setAttribute('aria-live', 'polite');
-  node.textContent = message;
-  document.body.append(node);
-  // Two frames, so the entry transition actually runs: a class added in the same
-  // frame the node is created is coalesced and the toast appears without moving.
-  requestAnimationFrame(() => node.dataset['shown'] = 'true');
-  setTimeout(() => {
-    node.dataset['shown'] = 'false';
-    setTimeout(() => node.remove(), 250);
-  }, 3600);
 }
 
 /**

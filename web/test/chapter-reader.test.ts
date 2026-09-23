@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { noticeText } from './helpers/notices.ts';
 import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ReaderApi } from '../src/api/client.ts';
@@ -122,13 +123,13 @@ describe('chapter publication reading', () => {
     expect(submit.disabled).toBe(true);
     const select = env.screen.element.querySelector<HTMLSelectElement>('section[aria-label="切换书源"] select')!;
     select.value = 'x'; select.dispatchEvent(new Event('change', { bubbles: true })); await click(env.screen, '确认换源并阅读');
-    await vi.waitFor(() => expect(env.screen.element.textContent).toContain('正文获取失败'));
+    await vi.waitFor(() => expect(noticeText()).toContain('正文获取失败'));
     expect(body(env.screen)?.textContent).toContain('resource:r1:a');
     expect(env.screen.element.querySelectorAll('.toc-list li')).toHaveLength(2);
     failSwitch = false; await click(env.screen, '确认换源并阅读');
     await vi.waitFor(() => expect(body(env.screen)?.textContent).toContain('resource:r2:x'));
     await vi.waitFor(() => expect(env.offline.current.progress[book.id]?.locator).toContain('chapter:x'));
-    expect(env.screen.element.textContent).toContain('已切换书源');
+    expect(noticeText()).toContain('已切换书源');
   });
   it('renders cached rich chapters with images without requesting an external origin, including offline reopening', async () => {
     const kv = new MemoryKv(); const blobs = new MemoryBlobs();
@@ -196,7 +197,7 @@ describe('chapter publication reading', () => {
     await click(second.screen, '目录');
     expect(second.screen.element.querySelectorAll('.toc-list li')).toHaveLength(2);
     await click(second.screen, '2章节 b');
-    await vi.waitFor(() => expect(second.screen.element.textContent).toContain('这一章尚未缓存'));
+    await vi.waitFor(() => expect(noticeText()).toContain('这一章尚未缓存'));
     expect(body(second.screen)?.textContent).toContain('resource:r1:a');
     expect(body(second.screen)?.textContent).not.toContain('resource:r1:b');
   });
@@ -210,14 +211,14 @@ describe('chapter publication reading', () => {
     expect(body(screen)?.textContent).toContain('resource:r1:b');
     await click(screen, '目录');
     await click(screen, '刷新目录');
-    await vi.waitFor(() => expect(screen.element.textContent).toContain('新增 1 章'));
+    await vi.waitFor(() => expect(noticeText()).toContain('新增 1 章'));
     expect(body(screen)?.textContent).toContain('resource:r2:b');
     expect(screen.element.querySelector('[aria-current="true"]')?.closest('li')?.getAttribute('data-section')).toBe('chapter:b');
     expect(screen.element.querySelectorAll('.toc-list li')).toHaveLength(3);
 
     transport.failWith(new ApiError('server', 'plugin unavailable', 'PLUGIN_DISABLED', 503));
     await click(screen, '刷新目录');
-    await vi.waitFor(() => expect(screen.element.textContent).toContain('已保留当前章节'));
+    await vi.waitFor(() => expect(noticeText()).toContain('已保留当前章节'));
     expect(body(screen)?.textContent).toContain('resource:r2:b');
     expect(screen.element.querySelectorAll('.toc-list li')).toHaveLength(3);
   });

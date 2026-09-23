@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { noticeText } from './helpers/notices.ts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { LibraryFilesScreen } from '../src/ui/library-screen.tsx';
 import { ReaderApi, type SessionStore } from '../src/api/client.ts';
@@ -327,7 +328,7 @@ describe('library manager', () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     await vi.waitFor(() => {
-      expect(screen.element.querySelector('.manager-status')?.textContent).toContain('read-only');
+      expect(noticeText()).toContain('read-only');
     });
     // A refused operation must not sign the reader out: the 403 here is about the
     // mount, not about their session.
@@ -419,7 +420,7 @@ describe('uploading from the manager', () => {
     // The status line names the file that was *skipped*: a count alone leaves the
     // user with nothing to act on.
     await vi.waitFor(() => {
-      expect(screen.element.querySelector('.manager-status')?.textContent).toContain('坏.zip');
+      expect(noticeText()).toContain('坏.zip');
     });
   });
 
@@ -492,7 +493,7 @@ describe('batch management', () => {
     });
     // The server's count, not a generic "完成".
     await vi.waitFor(() => {
-      expect(screen.element.querySelector('.manager-status')?.textContent).toContain('已更新 2 本');
+      expect(noticeText()).toContain('已更新 2 本');
     });
   });
 
@@ -731,7 +732,7 @@ describe('pagination and the refresh after an upload', () => {
     expect(screen.element.textContent).toContain('三体.epub');
     // The report survives the reload: the reload's own status is the directory
     // summary, and the summary is not an answer to "did it work".
-    expect(screen.element.querySelector('.manager-status')?.textContent).toContain('已入库 1 个文件');
+    expect(noticeText()).toContain('已入库 1 个文件');
   });
 
   it('names the page in the summary when the directory has more than one', async () => {

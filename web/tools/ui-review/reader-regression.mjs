@@ -71,10 +71,13 @@ try {
   await cdp.tapMiddle();
   await cdp.screenshot('../docs/ui-review/mobile/readout-custom.png');
   await cdp.navigate(`${origin}/#/shelf`);
+  await cdp.waitFor('document.querySelector(".shelf-screen") !== null');
   await cdp.navigate(`${origin}/#/book/${BOOK_ID}`);
   await cdp.waitFor('Number(document.querySelector(".progress-scrubber")?.max) > 1');
   assert.deepEqual(await cdp.evaluate('Array.from(document.querySelectorAll(".reading-indicator span"),el=>el.dataset.mode)'), modes, 'readout settings survive reopening');
+  if (await cdp.evaluate('document.querySelector(".reader-screen")?.dataset.chrome === "hidden"')) await cdp.tapMiddle();
   await cdp.clickText('.reader-actions button', '界面');
+  await cdp.waitFor('document.querySelector(\'select[aria-label="顶部左侧"]\') !== null');
   for (const [label, mode] of [['顶部左侧','chapter'],['顶部右侧','none'],['底部左侧','progress'],['底部右侧','time']]) {
     await cdp.run(`const el=document.querySelector('select[aria-label="${label}"]');el.value='${mode}';el.dispatchEvent(new Event('change',{bubbles:true}));`);
     await cdp.sleep(100);

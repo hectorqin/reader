@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "jszip": "^3.10.1",
-    "lucide-preact": "^1.47.0"
+    "lucide-preact": "^1.47.0",
+    "notyf": "^3.10.0"
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",

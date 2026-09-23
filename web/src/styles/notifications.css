@@ -1,0 +1,43 @@
+/* Notyf owns the global stack; the app supplies its palette and compact sizing. */
+body .notyf {
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  gap: .5rem;
+  font: inherit;
+}
+.notyf .global-notice {
+  width: fit-content;
+  max-width: min(28rem, calc(100vw - 2rem));
+  max-height: min(16rem, calc(100dvh - 2rem));
+  overflow: auto;
+  margin: 0;
+  padding: .65rem .8rem .65rem 1rem;
+  border: 1px solid var(--reader-line);
+  border-radius: .85rem;
+  color: var(--reader-ink);
+  box-shadow: 0 6px 24px #00000014;
+  font-size: .82rem;
+  text-align: start;
+  pointer-events: none;
+  animation-duration: .15s;
+}
+.global-notice .notyf__wrapper { gap: .65rem; padding: 0; }
+.global-notice .notyf__message { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; animation: none; opacity: 1; }
+.global-notice .notyf__dismiss { position: relative; width: 32px; height: 32px; margin: 0; flex: none; animation: none; opacity: 1; }
+.global-notice .notyf__dismiss-btn { padding: 0; border-radius: .5rem; color: var(--reader-muted); background: transparent; opacity: 1; pointer-events: auto; }
+.global-notice .notyf__dismiss-btn::before, .global-notice .notyf__dismiss-btn::after { background: currentColor; }
+.global-notice .notyf__dismiss-btn:hover { background: var(--reader-line); }
+.global-notice .notyf__dismiss-btn:focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 2px; }
+.global-notice[data-kind='error'] { color: #a32c22; }
+[data-theme='dark'] .global-notice[data-kind='error'] { color: #ffaaa0; }
+.global-notice[data-kind='success'] { color: #326c46; }
+[data-theme='dark'] .global-notice[data-kind='success'] { color: #9dd9ac; }
+.global-notice[data-kind='loading'] .notyf__wrapper::before {
+  content: ''; width: 14px; height: 14px; flex: none; border: 2px solid var(--reader-line);
+  border-top-color: var(--reader-accent); border-radius: 50%; animation: notice-spin .8s linear infinite;
+}
+.notyf .notyf__toast--disappear { pointer-events: none; animation-delay: 0s; }
+@keyframes notice-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .notyf .global-notice { animation-duration: .001ms; }
+  .global-notice[data-kind='loading'] .notyf__wrapper::before { animation: none; }
+}

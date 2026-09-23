@@ -23,10 +23,6 @@ export function SectionTitle({ children }: { children: ComponentChildren }): JSX
   return <div className="section-title">{children}</div>;
 }
 
-export function Notice({ children }: { children: ComponentChildren }): JSX.Element {
-  return <div className="notice">{children}</div>;
-}
-
 export interface IconButtonProps {
   /** Accessible name. Required: an icon button has no text to fall back on. */
   label: string;

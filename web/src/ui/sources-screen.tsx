@@ -29,6 +29,7 @@ export class SourcesScreen {
   private searchRequest: { query: string; filters: Record<string, string> } | null = null;
   private get busy(): boolean { return this.working || this.searchRun !== null; }
   private message = '';
+  private messageError = false;
   private savedSource: SourceInstance | null = null;
   private types: SourceType[] = [];
   private sources: SourceInstance[] = [];
@@ -62,15 +63,14 @@ export class SourcesScreen {
   private draw(): void { if (!this.disposed) this.ui.update(null); }
   private async run(action: () => Promise<void>): Promise<void> {
     if (this.busy || this.disposed) return;
-    this.working = true; this.message = ''; this.draw();
+    this.working = true; this.message = ''; this.messageError = false; this.draw();
     try { await action(); }
     catch (error) {
       if (this.disposed) return;
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
-      else this.message = error instanceof Error ? error.message : '操作失败，请重试';
+      else { this.message = error instanceof Error ? error.message : '操作失败，请重试'; this.messageError = true; }
     } finally {
       this.working = false; this.draw();
-      this.element.querySelector<HTMLElement>('dialog [role=alert]')?.focus();
     }
   }
   private async reload(): Promise<void> {
@@ -153,7 +153,7 @@ export class SourcesScreen {
     if (!append) { this.page = null; this.path = []; this.acquired = null; }
     if (!append) this.searchSession = { sourceId: source.id, id: searchId() };
     const session = this.searchSession;
-    this.searchRequest = request; this.searchRun = run; this.searchState = 'searching'; this.message = ''; this.draw();
+    this.searchRequest = request; this.searchRun = run; this.searchState = 'searching'; this.message = ''; this.messageError = false; this.draw();
     const current = () => !this.disposed && this.searchRun === run;
     try {
       await this.searchStop;
@@ -179,7 +179,7 @@ export class SourcesScreen {
       this.searchState = 'error';
       this.cancelSession();
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
-      else this.message = error instanceof Error ? error.message : '搜索失败，已保留找到的书籍。';
+      else { this.message = error instanceof Error ? error.message : '搜索失败，已保留找到的书籍。'; this.messageError = true; }
     } finally {
       if (current()) { this.searchRun = null; this.draw(); }
     }
@@ -221,7 +221,7 @@ export class SourcesScreen {
           event.preventDefault(); this.changeTab(tabs[next]!.id);
           this.element.querySelector<HTMLElement>('#sources-tab-' + tabs[next]!.id)?.focus();
         }}>{tab.title}{tab.id === 'updates' && this.subscriptions.some(s => s.newChapters > 0) && <span className="sources-tab-dot" aria-label="有更新" />}</button>)}</nav>
-      {!this.editor && !this.credentialsOpen && (this.working || this.message) && <FloatingNotice busy={this.working} message={this.installing ? '正在安装插件并启用，请稍候…' : this.working ? '正在处理…' : this.message} />}
+      <FloatingNotice busy={this.working} error={this.messageError} message={this.installing ? '正在安装插件并启用，请稍候…' : this.working ? '正在处理…' : this.message} />
       <main key="body" className="sources-body" role="tabpanel" id={'sources-panel-' + this.tab} aria-labelledby={'sources-tab-' + this.tab} tabIndex={0}>
       {this.tab === 'sources' && this.options.admin && <>
         {!!this.savedSource?.descriptor?.extensions?.pages?.length && <section className="sources-card source-next-step"><strong>{this.savedSource!.name}</strong>
@@ -332,7 +332,7 @@ export class SourcesScreen {
             <label>npm pack 安装包<input key={this.pluginFileVersion} required disabled={this.busy} type="file" accept=".tgz,application/gzip,application/x-gzip" onChange={(event) => {
               const file = event.currentTarget.files?.[0] ?? null;
               const error = file && (!file.name.toLowerCase().endsWith('.tgz') ? '请选择 .tgz 安装包。' : file.size > 100 * 1024 * 1024 ? '安装包不能超过 100 MiB。' : '');
-              this.pluginFile = error ? null : file; this.message = error || ''; this.draw();
+              this.pluginFile = error ? null : file; this.message = error || ''; this.messageError = !!error; this.draw();
             }} /></label>
             <small>仅支持 .tgz 文件，最大 100 MiB。未打包的依赖仍需联网下载。</small>
             <Button type="submit" disabled={this.busy || !this.trusted || !this.pluginFile}>上传并启用</Button>
@@ -351,7 +351,6 @@ export class SourcesScreen {
         {this.editor && <Modal title={this.editor.id ? '编辑来源' : '添加来源'} busy={this.busy} onClose={() => { this.editor = null; this.message = ''; this.draw(); }}>
           <form className="sources-card source-editor source-modal-form" onSubmit={(event) => { event.preventDefault(); void this.run(() => this.save()); }}>
             <div className="source-modal-content">
-            {(this.busy || this.message) && <p className="notice" tabIndex={-1} role={this.busy ? 'status' : 'alert'}>{this.busy ? '正在保存…' : this.message}</p>}
             <label>来源类型<select disabled={this.busy || !!this.editor.id} value={this.editor.typeKey} onChange={(event) => {
               this.editor!.typeKey = event.currentTarget.value; this.editor!.config = {}; this.editor!.raw = '{}'; this.draw();
             }}>{this.types.map((t) => <option value={keyFor(t)}>{t.label}</option>)}</select></label>
@@ -381,7 +380,7 @@ export class SourcesScreen {
               if (field.key in this.credentialValues) await this.options.api.sourceCredential(source.id, field.key, this.credentialValues[field.key]!);
             }
             this.credentialValues = {}; this.credentialsOpen = false; this.message = '个人凭据已保存，不会回显。';
-          }); }}><div className="source-modal-content">{(this.busy || this.message) && <p className="notice" tabIndex={-1} role={this.busy ? 'status' : 'alert'}>{this.busy ? '正在保存…' : this.message}</p>}{this.selected.descriptor?.credentialKeys?.map((field) => <label key={field.key}>{field.label}
+          }); }}><div className="source-modal-content">{this.selected.descriptor?.credentialKeys?.map((field) => <label key={field.key}>{field.label}
             <input autoFocus disabled={this.busy} type="password" autoComplete="off" value={this.credentialValues[field.key] ?? ''} onInput={(event) => { this.credentialValues[field.key] = event.currentTarget.value; }} /></label>)}
             </div><footer className="source-modal-actions"><Button className="primary" type="submit" disabled={this.busy}>保存个人凭据</Button></footer></form></Modal>}
 

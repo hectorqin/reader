@@ -18,6 +18,7 @@
 
 import { ApiClient } from '../net/api.ts';
 import { mountUI } from './mount.ts';
+import { FloatingNotice } from './floating-notice.tsx';
 import type { JSX } from './vendor/preact.ts';
 
 export interface AuthHost {
@@ -147,7 +148,7 @@ function AuthPanel({
           }}
         />
       </label>
-      {state.error ? <div className="reader__warning">{state.error}</div> : null}
+      <FloatingNotice message={state.error} error />
       <div className="dialog__actions">
         <button type="button" className="dialog__button dialog__button--primary" disabled={state.busy} onClick={onSubmit}>
           {registering ? '创建并登录' : '登录'}

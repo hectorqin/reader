@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { noticeText } from './helpers/notices.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PluginPageScreen } from '../src/ui/plugin-page-screen.tsx';
 import { SourcesScreen } from '../src/ui/sources-screen.tsx';
@@ -25,12 +26,12 @@ it('shows action errors in a dismissible floating alert without replacing the ta
   const input = screen.element.querySelector('input')!;
   input.value = '保留草稿'; input.dispatchEvent(new Event('input', { bubbles: true }));
   screen.element.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
-  await vi.waitFor(() => expect(screen.element.querySelector('.floating-notice [role=alert]')?.textContent).toBe('插件暂时不可用'));
+  await vi.waitFor(() => expect(noticeText()).toBe('插件暂时不可用'));
   expect(screen.element.querySelector('[role=tabpanel]')).toBe(panel);
   expect(input.value).toBe('保留草稿');
   expect(document.activeElement).toBe(panel);
-  screen.element.querySelector<HTMLButtonElement>('[aria-label="关闭提示"]')!.click();
-  await vi.waitFor(() => expect(screen.element.querySelector('.floating-notice')).toBeNull());
+  document.querySelector<HTMLButtonElement>('.notyf [aria-label="关闭提示"]')!.click();
+  await vi.waitFor(() => expect(document.querySelector('.global-notice')).toBeNull());
   expect(screen.element.querySelector('[role=tabpanel]')).toBe(panel);
 });
 it('renders generic log and JSON outputs as bounded text blocks in the selected tab', async () => {
@@ -124,7 +125,7 @@ it('keeps tab drafts and refresh selection, follows action navigation and uses s
   expect(document.activeElement?.textContent).toBe('书源管理');
   tabs()[1]!.click(); screen.element.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
   await vi.waitFor(() => expect(screen.element.querySelector('[aria-selected=true]')?.textContent).toBe('书源管理'));
-  expect(screen.element.querySelector('[role=status]')?.textContent).toBe('已保存');
+  expect(noticeText()).toBe('已保存');
   expect(transport.requests.every(request => request.url.endsWith('/sources/custom%2Fone/pages/settings'))).toBe(true);
 });
 
@@ -145,9 +146,9 @@ it('preserves unrelated tab drafts after actions and requires inline confirmatio
   expect(transport.requests.filter(request => request.method === 'POST')).toHaveLength(0);
   button('取消').click(); expect(screen.element.querySelector('[role=group]')).toBeNull();
   button('删除').click(); button('确认删除').click();
-  await vi.waitFor(() => expect(screen.element.querySelector('[role=status]')?.textContent).toBe('删除成功'));
+  await vi.waitFor(() => expect(noticeText()).toBe('删除成功'));
   expect(document.activeElement?.getAttribute('role')).toBe('tabpanel');
-  expect(screen.element.querySelector('.floating-notice [role=status]')?.textContent).toBe('删除成功');
+  expect(noticeText()).toBe('删除成功');
   expect(screen.element.querySelector('.extension-toolbar [role=status]')).toBeNull();
   tab('草稿').click(); expect(screen.element.querySelector('textarea')?.value).toBe('unsaved');
 });

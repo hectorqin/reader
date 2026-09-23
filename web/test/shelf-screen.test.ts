@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { noticeText } from './helpers/notices.ts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ShelfScreen } from '../src/ui/shelf-screen.tsx';
 import { ReaderApi, type SessionStore } from '../src/api/client.ts';
@@ -486,7 +487,7 @@ describe('taking a book off the shelf', () => {
     [...screen.element.querySelectorAll<HTMLElement>('.dialog-actions button')].at(-1)!.click();
     // The report is the reader's words: the menu item was 「从书架拿掉」, and a status
     // line answering 「下架 1 本」 would be a second name for the thing they just pressed.
-    await vi.waitFor(() => expect(screen.element.textContent).toContain('从书架拿掉 1 本'));
+    await vi.waitFor(() => expect(noticeText()).toContain('从书架拿掉 1 本'));
     expect(offline.books().map((entry) => entry.id)).not.toContain('b1');
   });
 

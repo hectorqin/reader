@@ -1,5 +1,6 @@
 import type { SourcePage } from '../api/sources.ts';
 import { CatalogFeedback } from './catalog-feedback.tsx';
+import { FloatingNotice } from './floating-notice.tsx';
 /**
  * The reader's chrome: everything around the page.
  *
@@ -184,10 +185,6 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
         <IconButton label="返回" icon="arrow-left" onClick={handlers.onBack} />
         <div className="reader-heading"><strong>{state.title}</strong><span>{state.chapterLabel}</span></div>
       </div>
-      <div className="status-bar" hidden={state.statusState === 'idle' && state.statusText === ''}
-        data-state={state.statusState} role="status" aria-live="polite">
-        <span className="status-dot" aria-hidden="true" /><span className="status-text">{state.statusText}</span>
-      </div>
       <StageHost stage={stage} />
       <ReaderIndicators state={state} />
       <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作">
@@ -227,7 +224,7 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
             />
           ) : null}
           {state.canSwitch && <Button type="button" disabled={state.switching || state.refreshing || state.navigating} onClick={() => handlers.onAlternatives?.()}>切换书源</Button>}
-          {state.switching && <p role="status">正在获取书源内容…</p>}
+          <FloatingNotice message={state.switching ? '正在获取书源内容…' : ''} busy />
           {state.alternatives && <section aria-label="切换书源"><h3>选择其它书源</h3><CatalogFeedback page={state.alternatives} />
             <p>请核对书名、作者，并选择新目录中的章节。原书签和笔记仍关联原章节。</p>
             {!state.alternatives.items.length && <p>{state.alternatives.errors?.length ? '本批暂未返回书籍，请查看失败原因。' : '本批没有同名书籍。'}{state.alternatives.nextCursor ? '可继续下一批。' : ''}</p>}

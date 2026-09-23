@@ -1,4 +1,5 @@
 import { ApiError } from '../api/errors.ts';
+import { FloatingNotice } from './floating-notice.tsx';
 import type { ListQuery, ReaderApi } from '../api/client.ts';
 import type { Book } from '../api/types.ts';
 import type { OfflineStore } from '../store/offline.ts';
@@ -581,7 +582,10 @@ export class ShelfScreen {
     this.draw();
   }
 
-  private setStatus(status: string): void {
+  private statusError = false;
+
+  private setStatus(status: string, error = false): void {
+    this.statusError = error;
     this.patch({ status });
   }
 
@@ -683,13 +687,13 @@ export class ShelfScreen {
           });
           return;
         }
-        this.setStatus('连不上服务端');
+        this.setStatus('连不上服务端', true);
         return;
       }
-      this.setStatus(err.message);
+      this.setStatus(err.message, true);
       return;
     }
-    this.setStatus(err instanceof Error ? err.message : '出错了');
+    this.setStatus(err instanceof Error ? err.message : '出错了', true);
   }
 
   // ---- taking a book off the shelf ----
@@ -976,7 +980,7 @@ export class ShelfScreen {
               onGo={(page) => this.goToPage(page)}
             />
           ) : null}
-          {state.status ? <div className="shelf-status muted">{state.status}</div> : null}
+          <FloatingNotice message={state.status} error={this.statusError} />
         </section>
 
         <ShelfSettingsPanel
