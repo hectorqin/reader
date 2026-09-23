@@ -2850,6 +2850,26 @@ book-content {
   transform: none;
 }
 
+.floating-notice {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  box-sizing: border-box;
+  max-width: min(28rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  padding: .65rem .8rem .65rem 1rem;
+  border: 1px solid var(--reader-line);
+  border-radius: .85rem;
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  box-shadow: 0 6px 24px #00000014;
+  text-align: start;
+  pointer-events: auto;
+}
+.floating-notice > span { min-width: 0; overflow-wrap: anywhere; }
+.floating-notice .icon-button { flex: none; width: 32px; height: 32px; color: var(--reader-muted); }
+
 @media (prefers-reduced-motion: reduce) {
   .app-toast {
     transition: none;

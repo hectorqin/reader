@@ -80,6 +80,19 @@ try {
   await page.getByLabel('我信任这个插件的代码').check();
   await button('上传并启用').click(); await page.getByText('Demo chapter source', { exact: true }).waitFor();
   assert.ok((await page.locator('[role=status]').innerText()).includes('插件已安装并启用'));
+  for (const width of [390, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    const bounds = await page.locator('.floating-notice').evaluate(node => {
+      const rect = node.getBoundingClientRect();
+      return { width: rect.width, left: rect.left, right: rect.right, position: getComputedStyle(node).position };
+    });
+    assert.equal(bounds.position, 'fixed');
+    assert.ok(bounds.width <= 448 && bounds.left >= 16 && bounds.right <= width - 16);
+    await shot('plugin-feedback-' + width);
+  }
+  const beforeDismiss = await page.locator('.sources-body').boundingBox();
+  await button('关闭提示').click(); await page.locator('.floating-notice').waitFor({ state: 'hidden' });
+  assert.deepEqual(await page.locator('.sources-body').boundingBox(), beforeDismiss, 'dismissing feedback does not move the page');
   assert.equal(await page.getByLabel('npm pack 安装包').inputValue(), '');
   await tab('从 npm 安装').click();
   await page.getByLabel('npm 包名', { exact: true }).fill('reader-source-example@latest');

@@ -3,6 +3,7 @@ import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { Book } from '../api/types.ts';
 import type { ChapterSubscription, SourceEntry, SourceInstance, SourcePage, SourcePlugin, SourceType } from '../api/sources.ts';
 import { Modal } from './modal.tsx';
+import { FloatingNotice } from './floating-notice.tsx';
 import { CatalogFeedback } from './catalog-feedback.tsx';
 import { mountUI } from './mount.ts';
 import { Button, IconButton, Icon } from './toolkit.tsx';
@@ -220,7 +221,7 @@ export class SourcesScreen {
           event.preventDefault(); this.changeTab(tabs[next]!.id);
           this.element.querySelector<HTMLElement>('#sources-tab-' + tabs[next]!.id)?.focus();
         }}>{tab.title}{tab.id === 'updates' && this.subscriptions.some(s => s.newChapters > 0) && <span className="sources-tab-dot" aria-label="有更新" />}</button>)}</nav>
-      {!this.editor && !this.credentialsOpen && (this.working || this.message) && <div role="status" className="notice">{this.installing ? '正在安装插件并启用，请稍候…' : this.working ? '正在处理…' : this.message}</div>}
+      {!this.editor && !this.credentialsOpen && (this.working || this.message) && <FloatingNotice busy={this.working} message={this.installing ? '正在安装插件并启用，请稍候…' : this.working ? '正在处理…' : this.message} />}
       <main key="body" className="sources-body" role="tabpanel" id={'sources-panel-' + this.tab} aria-labelledby={'sources-tab-' + this.tab} tabIndex={0}>
       {this.tab === 'sources' && this.options.admin && <>
         {!!this.savedSource?.descriptor?.extensions?.pages?.length && <section className="sources-card source-next-step"><strong>{this.savedSource!.name}</strong>
