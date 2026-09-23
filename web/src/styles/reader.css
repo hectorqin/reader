@@ -2869,6 +2869,8 @@ book-content {
 }
 .floating-notice > span { min-width: 0; overflow-wrap: anywhere; }
 .floating-notice .icon-button { flex: none; width: 32px; height: 32px; color: var(--reader-muted); }
+.floating-notice[data-error='true'] { color: #a32c22; }
+[data-theme='dark'] .floating-notice[data-error='true'] { color: #ffaaa0; }
 
 @media (prefers-reduced-motion: reduce) {
   .app-toast {
@@ -3846,7 +3848,6 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .extension-toolbar { flex: none; width: 100%; max-width: 64rem; margin-inline: auto; padding: 0 1rem; box-sizing: border-box; }
 .extension-toolbar .extension-tabs { margin-bottom: .75rem; border-color: var(--reader-line); }
 .extension-toolbar .notice { margin: 0 0 .75rem; overflow-wrap: anywhere; }
-.extension-toolbar .extension-error { color: #a32c22; border: 1px solid currentColor; background: var(--reader-surface); }
 .extension-description, .extension-empty { color: var(--reader-muted); }
 .extension-screen .sources-header h1 { min-width: 0; overflow-wrap: anywhere; }
 .extension-form-inline { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
@@ -3867,7 +3868,6 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
   .extension-screen .extension-form-inline label[data-field-type=number] { flex: 1 1 9rem; }
   .extension-item-heading { gap: .75rem; }
 }
-[data-theme='dark'] .extension-toolbar .extension-error { color: #ffaaa0; }
 .extension-tabs button:disabled { opacity: .55; cursor: default; }
 .extension-output { min-width: 0; }
 .extension-output summary { font-weight: 650; cursor: pointer; padding-block: .35rem; }

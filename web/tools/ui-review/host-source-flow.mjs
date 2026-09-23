@@ -125,8 +125,51 @@ try {
   await button('加入书架').click(); await button('阅读《插件示例书》').click();
   await page.locator('book-content').getByText('这是通过独立 Node 进程提供的示例章节。',{exact:false}).waitFor();
   await page.setViewportSize({width:390,height:844}); await shot('reader-mobile');
+
+  // Deterministic extension responses exercise the shared page renderer's
+  // busy/error/success feedback without depending on a third-party service.
+  let releaseAction, failAction = true;
+  const extensionPage = { title: '扩展配置', forms: [], tabs: [{ id: 'settings', title: '设置', forms: [
+    { id: 'save', title: '来源设置', submit: '保存配置', fields: [{ key: 'name', label: '配置名称', type: 'text', value: '示例' }] },
+  ], sections: [{ title: '配置项目', items: Array.from({ length: 12 }, (_, index) => ({ title: '项目 ' + index, description: '用于验证操作反馈不会移动内容。' })) }] }] };
+  await page.route('**/api/v1/sources/feedback-fixture/pages/settings', async route => {
+    if (route.request().method() === 'POST') {
+      await new Promise(resolve => { releaseAction = resolve; });
+      if (failAction) return route.fulfill({ status: 502, json: { error: { code: 'PLUGIN_UNAVAILABLE', message: '插件暂时不可用，请重启后重试。' } } });
+      return route.fulfill({ json: { ...extensionPage, notice: '配置已保存' } });
+    }
+    return route.fulfill({ json: extensionPage });
+  });
+  for (const width of [390, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(base + '/#/sources/feedback-fixture/settings');
+    await button('保存配置').waitFor(); await idle();
+    const bodyBounds = await page.locator('.sources-body').boundingBox();
+    const toolbarBounds = await page.locator('.extension-toolbar').boundingBox();
+    for (const failed of [true, false]) {
+      failAction = failed;
+      await button('保存配置').click();
+      await page.locator('.floating-notice').getByText('正在处理…', { exact: true }).waitFor();
+      assert.deepEqual(await page.locator('.sources-body').boundingBox(), bodyBounds);
+      assert.deepEqual(await page.locator('.extension-toolbar').boundingBox(), toolbarBounds);
+      await page.locator('.sources-body').evaluate(node => { node.scrollTop = 180; });
+      const scrollTop = await page.locator('.sources-body').evaluate(node => node.scrollTop);
+      releaseAction();
+      await page.locator(failed ? '.floating-notice [role=alert]' : '.floating-notice [role=status]').getByText(failed ? '插件暂时不可用，请重启后重试。' : '配置已保存', { exact: true }).waitFor();
+      assert.equal(await page.locator('.sources-body').evaluate(node => node.scrollTop), scrollTop);
+      assert.deepEqual(await page.locator('.sources-body').boundingBox(), bodyBounds);
+      assert.deepEqual(await page.locator('.extension-toolbar').boundingBox(), toolbarBounds);
+      const notice = await page.locator('.floating-notice').evaluate(node => ({ width: node.getBoundingClientRect().width, position: getComputedStyle(node).position }));
+      assert.equal(notice.position, 'fixed'); assert.ok(notice.width <= Math.min(448, width - 32));
+      await shot('extension-feedback-' + (failed ? 'error-' : 'success-') + width);
+      await button('关闭提示').click(); await page.locator('.floating-notice').waitFor({ state: 'hidden' });
+      assert.deepEqual(await page.locator('.sources-body').boundingBox(), bodyBounds);
+      assert.equal(await page.locator('.sources-body').evaluate(node => node.scrollTop), scrollTop);
+    }
+  }
   assert.deepEqual(errors, []);
   console.log('PASS real HTTP + SQLite + stdio plugin + production Web: registration, tgz upload, npm registry install, auto-enable, independent instances, tabs, layout, streamed search, acquisition and chapter reading');
+  console.log('PASS extension feedback fixtures: mobile/desktop floating busy/error/success, bounded width and stable content position');
 } catch (error) {
   if (page) { await page.screenshot({ path: join(shots, 'sources-e2e-failure.png') }); console.error((await page.locator('body').innerText()).slice(-4500)); }
   throw error;

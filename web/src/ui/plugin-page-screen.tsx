@@ -2,6 +2,7 @@ import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { ExtensionContent, ExtensionForm, ExtensionPage } from '../api/sources.ts';
 import { mountUI } from './mount.ts';
 import { Button, IconButton } from './toolkit.tsx';
+import { FloatingNotice } from './floating-notice.tsx';
 
 /** Safe declarative UI: plugins supply data and actions, never app-origin HTML. */
 export class PluginPageScreen {
@@ -47,7 +48,7 @@ export class PluginPageScreen {
     } finally {
       this.busy = false; this.draw();
       if (previousTab !== this.activeTab) { const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0; }
-      if (action) (this.element.querySelector<HTMLElement>('[data-extension-feedback]') ?? this.element.querySelector<HTMLElement>('[role=tabpanel]'))?.focus({ preventScroll: true });
+      if (action) (this.element.querySelector<HTMLElement>('[role=tabpanel]') ?? this.element.querySelector<HTMLElement>('.sources-body'))?.focus({ preventScroll: true });
     }
   }
   private form(form: ExtensionForm) {
@@ -119,9 +120,9 @@ export class PluginPageScreen {
             event.preventDefault(); this.selectTab(tabs[next]!.id);
             document.getElementById('extension-tab-' + this.activeTab)?.focus();
           }}>{tab.title}</button>)}</div>}
-        {status && <div data-extension-feedback tabIndex={-1} role={isError ? 'alert' : 'status'} className={isError ? 'notice extension-error' : 'notice'}>{status}</div>}
       </div>
-      <main className="sources-body" aria-busy={this.busy}>
+      {status && <FloatingNotice message={status} busy={this.busy} error={isError} />}
+      <main className="sources-body" aria-busy={this.busy} tabIndex={-1}>
         {this.page?.description && <p className="extension-description">{this.page.description}</p>}
         {this.page && this.content(this.page)}
         {selected && <div key={selected.id} tabIndex={-1} role="tabpanel" id={'extension-panel-' + selected.id} aria-labelledby={'extension-tab-' + selected.id}>

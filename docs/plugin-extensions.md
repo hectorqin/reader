@@ -10,6 +10,8 @@ GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{sourc
 
 返回 Page DTO：`title/description/notice/forms/sections/tabs/activeTab`。每个 Tab 包含 `id/title/description/forms/sections/outputs`，页面公共内容和当前 Tab 同时渲染。Form 包含 `id/title/submit/fields/values`，可选 `layout: "inline"` 和 `confirm` 声明紧凑布局及行内二次确认，fields 支持 text、textarea、number、boolean、select；values 携带不透明行 ID。Field 可选 `placeholder/min/max`，Page 可选 `noticeKind: "info" | "error"`；所有字段由宿主验证。section 支持 `emptyText`，item 支持 `collapsible`。`outputs` 用于调试日志、JSON 或普通文本，格式为 `{title,text,format:"text"|"log"|"json"}`，宿主以纯文本块渲染并限制数量与大小，不执行内容。一次动作返回新页面；可选 activeTab 请求切换到指定 Tab，否则保留当前选择。纯 Tab 切换保留输入草稿。提交后保留其它声明未变化的表单草稿；服务端改变表单声明或主动刷新时以新页面为准。
 
+操作中的状态、`notice` 和请求错误由宿主统一显示为紧凑浮动提示，不占用页面内容高度。完成提示可关闭并自动消失；错误保留 `alert` 语义，操作完成后的焦点回到内容面板，不滚动到提示。需要持续查看的日志和结果仍放在 `outputs`。
+
 宿主校验声明、页面结构、选项和输入配额；未声明页面拒绝访问。渲染器只呈现文本，不接受 HTML、JS、iframe 或任意前端代码。授权在 HTTP 层执行，隐藏入口不代替鉴权。
 
 启用 storage 权限后，RPC 获得 `host.dataDir = DATA_DIR/plugin-data/<SHA256(pluginId)>`；带实例上下文时还获得 `host.instanceDataDir = host.dataDir/sources/<SHA256(sourceId)>`。插件负责创建目录和原子写入；数据与 npm 包目录分离，停用、升级、卸载均保留。这是受信任插件的约定，不是操作系统沙箱。

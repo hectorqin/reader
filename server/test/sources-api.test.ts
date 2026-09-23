@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { cp, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -449,6 +449,31 @@ test('trusted example plugins can be installed, queried, disabled, reloaded afte
   assert.equal(removed.statusCode, 200, removed.body);
   const instances = await h.app.inject({ method: 'GET', url: '/api/v1/sources', headers: auth(h.admin) });
   assert.ok(instances.json().sources.some((source: { id: string }) => source.id === 'demo-instance'), 'uninstall keeps instance configuration');
+});
+
+test('an unacknowledged search stop does not prevent adding a book to the shelf', { timeout: 15000 }, async t => {
+  const h = await harness(); t.after(() => h.close());
+  const directory = join(h.dataDir, 'plugins', 'node_modules', 'reader-source-example');
+  await cp(resolve(import.meta.dirname, '../../examples/plugins/demo-chapters'), directory, { recursive: true });
+  const manifest = JSON.parse(await readFile(join(directory, 'plugin.json'), 'utf8'));
+  manifest.sourceTypes[0].capabilities.push('search.cancel', 'search.session');
+  await writeFile(join(directory, 'plugin.json'), JSON.stringify(manifest));
+  const entry = await readFile(join(directory, 'main.mjs'), 'utf8');
+  await writeFile(join(directory, 'main.mjs'), entry.replace("request.method === '$/cancelRequest'", "['$/cancelRequest', 'searchCancel'].includes(request.method)"));
+  const installed = await h.app.inject({ method: 'POST', url: '/api/v1/plugins', headers: auth(h.admin), payload: { folder: 'npm:reader-source-example', trusted: true } });
+  assert.equal(installed.statusCode, 201, installed.body);
+  const created = await h.app.inject({ method: 'POST', url: '/api/v1/sources', headers: auth(h.admin), payload: {
+    id: 'cancel-test', pluginId: manifest.id, sourceType: 'demo-chapters', name: 'Cancel test', config: {},
+  } });
+  assert.equal(created.statusCode, 201, created.body);
+  const stopped = await h.app.inject({ method: 'POST', url: '/api/v1/sources/cancel-test/search/cancel', headers: auth(h.admin), payload: { sessionId: 'test-search-session' } });
+  assert.equal(stopped.json().error.code, 'PLUGIN_CANCELLED', stopped.body);
+  const acquired = await h.app.inject({ method: 'POST', url: '/api/v1/sources/cancel-test/acquire', headers: auth(h.admin), payload: { entryRef: 'demo-book' } });
+  assert.equal(acquired.statusCode, 200, acquired.body);
+  const bookId = acquired.json().publicationId;
+  assert.ok(h.ctx.db.get('SELECT book_id FROM user_books WHERE user_id = ? AND book_id = ?', h.admin.id, bookId));
+  const book = await h.app.inject({ method: 'GET', url: `/api/v1/books/${bookId}`, headers: auth(h.admin) });
+  assert.equal(book.json().book.format, 'chapters');
 });
 
 test('search sessions pass generic options and cancellation remains available with saturated search slots', { timeout: 10000 }, async t => {

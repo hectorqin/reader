@@ -204,17 +204,24 @@ export class ProcessPlugin {
       return Promise.reject(new PluginError('PLUGIN_MESSAGE_TOO_LARGE', 'plugin request exceeds the message limit'));
     }
     return new Promise((resolveRequest, reject) => {
+      const type = this.manifest.sourceTypes.find(type => type.id === params.sourceType);
+      const cancellationRequest = method === 'searchCancel' && type?.capabilities.includes('search.session');
+      const cancelRequest = (error: PluginError) => {
+        const pending = this.pending.get(id);
+        if (!pending) return;
+        this.pending.delete(id);
+        pending.cleanup();
+        // A stop command may still finish late: keep it running so it can release
+        // the search session, but never let its deadline kill unrelated work.
+        if (!cancellationRequest) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id } }) + '\n');
+        pending.reject(error);
+      };
       const cancel = () => {
         if (!this.pending.has(id)) return;
-        const type = this.manifest.sourceTypes.find(type => type.id === params.sourceType);
-        if (method === 'search' && type?.capabilities.includes('search.cancel')) {
+        if (cancellationRequest || (method === 'search' && type?.capabilities.includes('search.cancel'))) {
           // A cancelled request must not later time out unrelated calls.
           // onMessage ignores any late acknowledgement from the plugin.
-          const pending = this.pending.get(id);
-          this.pending.delete(id);
-          pending?.cleanup();
-          child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id } }) + '\n');
-          reject(new PluginError('PLUGIN_CANCELLED', 'search cancelled'));
+          cancelRequest(new PluginError('PLUGIN_CANCELLED', cancellationRequest ? 'search cancellation was not acknowledged' : 'search cancelled'));
           return;
         }
         // Killing the worker is the only hard cancellation available for trusted
@@ -222,7 +229,9 @@ export class ProcessPlugin {
         this.fail(new PluginError('PLUGIN_CANCELLED', 'plugin process stopped because a request was cancelled'));
       };
       const timer = setTimeout(() => {
-        this.fail(new PluginError('PLUGIN_TIMEOUT', 'plugin request exceeded its execution deadline'));
+        const error = new PluginError('PLUGIN_TIMEOUT', 'plugin request exceeded its execution deadline');
+        if (cancellationRequest) cancelRequest(error);
+        else this.fail(error);
       }, this.timeoutMs);
       timer.unref();
       const cleanup = () => {

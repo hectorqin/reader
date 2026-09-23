@@ -175,6 +175,44 @@ test('cooperative cancellation clears the deadline even without an acknowledgeme
   }
 });
 
+for (const end of ['abort', 'deadline'] as const) test(`search cancellation ${end} does not disable acquisition`, async () => {
+  const source = await fixture(`
+    import { createInterface } from 'node:readline';
+    createInterface({ input: process.stdin }).on('line', line => {
+      const request = JSON.parse(line);
+      if (request.method === 'searchCancel' || request.method === '$/cancelRequest') return;
+      const result = request.method === 'acquire'
+        ? { kind: 'chapters', publicationRef: 'book', title: 'Book' }
+        : { ref: 'book', title: 'Book' };
+      setTimeout(() => process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) + '\\n'), 50);
+    });
+  `);
+  await writeFile(join(source.directory, 'plugin.json'), JSON.stringify({ ...manifest,
+    sourceTypes: [{ id: 'test', label: 'Test', capabilities: ['detail', 'search', 'search.cancel', 'search.session'] }],
+  }));
+  const plugin = await ProcessPlugin.load(source.directory, { timeoutMs: 2000 });
+  try {
+    const provider = plugin.providers()[0]!;
+    await provider.detail(context(), 'book');
+    const controller = new AbortController();
+    const cancelled = assert.rejects(provider.cancelSearch!(context(controller.signal), 'session'), {
+      code: end === 'abort' ? 'PLUGIN_CANCELLED' : 'PLUGIN_TIMEOUT',
+    });
+    if (end === 'deadline') await cancelled;
+    const acquiring = provider.acquire(context(), { entryRef: 'book' });
+    const outcome = Promise.allSettled([acquiring]);
+    if (end === 'abort') controller.abort();
+    await cancelled;
+    assert.deepEqual(await outcome, [{ status: 'fulfilled', value: { kind: 'chapters', publicationRef: 'book', title: 'Book' } }]);
+    assert.equal(plugin.status().state, 'running');
+    assert.equal(plugin.status().pendingRequests, 0);
+    assert.equal((await provider.acquire(context(), { entryRef: 'book' })).kind, 'chapters');
+  } finally {
+    await plugin.close();
+    await source.dispose();
+  }
+});
+
 test('wire validation prevents plugins claiming host books or corrupting chapter identities', () => {
   assert.throws(() => decodeChapterAcquisition({ kind: 'ready', publicationId: 'other-users-book' }), /must acquire chapter/);
   assert.throws(() => decodeChapterAcquisition({ kind: 'action-required', action: { type: 'external', label: 'Open', url: 'javascript:alert(1)' } }), /HTTP or HTTPS/);

@@ -12,6 +12,27 @@ function fixture() {
   const api = new ReaderApi(makePlatform(transport), { async load() { return null; }, async save() {}, async clear() {} });
   return { api, transport };
 }
+it('shows action errors in a dismissible floating alert without replacing the tab or its drafts', async () => {
+  const { api, transport } = fixture();
+  transport.respondWith(request => request.method === 'POST'
+    ? { status: 502, headers: {}, json: { error: { code: 'PLUGIN_UNAVAILABLE', message: '插件暂时不可用' } } }
+    : { status: 200, headers: {}, json: { title: '配置', forms: [], tabs: [{ id: 'settings', title: '设置', forms: [
+      { id: 'save', title: '保存配置', submit: '保存', fields: [{ key: 'value', label: '内容', type: 'text' }] },
+    ] }] } });
+  const screen = new PluginPageScreen({ api, sourceId: 'one', pageId: 'settings', onBack() {}, onSignedOut() {} });
+  screens.push(screen); document.body.append(screen.element); await screen.show();
+  const panel = screen.element.querySelector('[role=tabpanel]');
+  const input = screen.element.querySelector('input')!;
+  input.value = '保留草稿'; input.dispatchEvent(new Event('input', { bubbles: true }));
+  screen.element.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
+  await vi.waitFor(() => expect(screen.element.querySelector('.floating-notice [role=alert]')?.textContent).toBe('插件暂时不可用'));
+  expect(screen.element.querySelector('[role=tabpanel]')).toBe(panel);
+  expect(input.value).toBe('保留草稿');
+  expect(document.activeElement).toBe(panel);
+  screen.element.querySelector<HTMLButtonElement>('[aria-label="关闭提示"]')!.click();
+  await vi.waitFor(() => expect(screen.element.querySelector('.floating-notice')).toBeNull());
+  expect(screen.element.querySelector('[role=tabpanel]')).toBe(panel);
+});
 it('renders generic log and JSON outputs as bounded text blocks in the selected tab', async () => {
   const { api, transport } = fixture();
   transport.respondWith(() => ({ status: 200, headers: {}, json: { title: '诊断', forms: [], tabs: [
@@ -125,6 +146,8 @@ it('preserves unrelated tab drafts after actions and requires inline confirmatio
   button('取消').click(); expect(screen.element.querySelector('[role=group]')).toBeNull();
   button('删除').click(); button('确认删除').click();
   await vi.waitFor(() => expect(screen.element.querySelector('[role=status]')?.textContent).toBe('删除成功'));
-  expect(document.activeElement?.getAttribute('role')).toBe('status');
+  expect(document.activeElement?.getAttribute('role')).toBe('tabpanel');
+  expect(screen.element.querySelector('.floating-notice [role=status]')?.textContent).toBe('删除成功');
+  expect(screen.element.querySelector('.extension-toolbar [role=status]')).toBeNull();
   tab('草稿').click(); expect(screen.element.querySelector('textarea')?.value).toBe('unsaved');
 });
