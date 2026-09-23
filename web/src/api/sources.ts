@@ -9,6 +9,7 @@ export interface SourceInstance {
   config?: Record<string, unknown>; descriptor: SourceType | null;
 }
 export interface SourceEntry {
+  latestChapter?: string; sourceName?: string; coverUrl?: string;
   ref: string; title: string; authors?: string[]; description?: string;
   options?: Array<{ id: string; label: string; available?: boolean }>;
 }

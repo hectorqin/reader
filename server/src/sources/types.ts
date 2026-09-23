@@ -134,6 +134,8 @@ export interface CatalogEntry {
   readonly coverUrl?: string;
   readonly language?: string;
   readonly publishedAt?: string;
+  readonly latestChapter?: string;
+  readonly sourceName?: string;
   readonly options?: readonly AcquisitionOption[];
   readonly metadata?: Readonly<Record<string, unknown>>;
 }
@@ -181,12 +183,14 @@ export interface AcquisitionAction {
 }
 
 export interface ManifestSnapshot {
+  readonly sourceName?: string;
   readonly publicationRef: string;
   readonly version?: string;
   readonly items: readonly ManifestItem[];
 }
 
 export interface ManifestItem {
+  readonly sourceUrl?: string;
   readonly id: string;
   readonly seq: number;
   readonly title: string;

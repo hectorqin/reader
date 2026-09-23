@@ -608,3 +608,41 @@ test('resuming a disconnected stream waits for its previous cleanup before polli
   assert.equal(calls, 3); assert.equal(stops, 1);
   await reader.cancel().catch(() => {});
 });
+
+
+test('alternative streams use owned book identity and forced chapter refresh updates only its cache', async t => {
+  const h = await harness(); t.after(() => h.close()); const member = await h.member();
+  let text = 'old'; const calls: string[] = [];
+  const provider: SourceProvider = {
+    descriptor: { id: 'switch-test', label: 'Test', version: '1', capabilities: ['detail', 'acquire.chapters', 'content.manifest', 'content.resource', 'content.alternatives'] },
+    async detail() { return { ref: 'book', title: 'Expected title', authors: ['Expected author'] }; },
+    async acquire() { return { kind: 'chapters', publicationRef: 'book' }; },
+    async getManifest() { return { publicationRef: 'book', sourceName: 'Example source', items: [{ id: 'ch', seq: 0, title: 'Chapter', kind: 'chapter', mediaType: 'text/plain', ref: 'body', sourceUrl: 'https://example.test/ch' }] }; },
+    async readResource() { return { mediaType: 'text/plain', text }; },
+    async alternatives(ctx, request) {
+      assert.equal(ctx.userId, h.admin.id); assert.equal(request.query, 'Expected title'); assert.deepEqual(request.authors, ['Expected author']);
+      assert.equal(request.sessionId, 'alternative-session'); assert.equal(request.resultLimit, 3);
+      calls.push(request.cursor ?? 'first');
+      return request.cursor ? { items: [{ ref: 'second', title: 'Expected title' }] }
+        : { items: [{ ref: 'first', title: 'Expected title' }], nextCursor: 'next' };
+    },
+    async cancelSearch() {},
+  };
+  h.ctx.sources!.registry.register({ pluginId: 'test.switch', provider });
+  await h.ctx.sources!.create({ id: 'switch-instance', pluginId: 'test.switch', sourceType: 'switch-test', name: 'Switch', config: {} });
+  const acquired = await h.ctx.sources!.acquire(h.admin.id, 'switch-instance', 'book');
+  assert.equal(acquired.kind, 'ready'); if (acquired.kind !== 'ready') return;
+  const id = acquired.publicationId, content = h.ctx.sources!.chapters.manifest(h.admin.id, id), ref = content.items[0]!.resourceRef!;
+  assert.equal(content.sourceName, 'Example source'); assert.equal(content.items[0]!.sourceUrl, 'https://example.test/ch');
+  const response = await h.app.inject({ method: 'POST', url: '/api/v1/books/' + id + '/alternatives', headers: auth(h.admin), payload: { sessionId: 'alternative-session', resultLimit: 3, query: 'untrusted' } });
+  assert.equal(response.statusCode, 200); assert.match(String(response.headers['content-type']), /text\/event-stream/);
+  assert.deepEqual(streamEvents(response.body).map(event => event.event), ['results', 'results', 'done']); assert.deepEqual(calls, ['first', 'next']);
+  await h.ctx.sources!.chapters.asset(h.admin.id, id, ref); text = 'new';
+  const refreshed = await h.app.inject({ method: 'POST', url: '/api/v1/books/' + id + '/refresh-chapter', headers: auth(h.admin), payload: { ref } });
+  assert.equal(refreshed.statusCode, 200, refreshed.body); assert.equal(refreshed.body, 'new'); assert.equal(refreshed.headers['cache-control'], 'no-store');
+  assert.equal((await h.ctx.sources!.chapters.asset(h.admin.id, id, ref)).data!.toString(), 'new');
+  for (const endpoint of ['alternatives', 'refresh-chapter']) {
+    const denied = await h.app.inject({ method: 'POST', url: '/api/v1/books/' + id + '/' + endpoint, headers: auth(member), payload: { ref, sessionId: 'alternative-session' } });
+    assert.equal(denied.statusCode, 404, denied.body);
+  }
+});

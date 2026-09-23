@@ -276,3 +276,24 @@ test('concurrent acquisition and reads are idempotent while failed refresh keeps
     assert.throws(() => f.chapters.refresh('other-user', bookId), { code: 'BOOK_NOT_FOUND' });
   } finally { f.db.close(); await rm(f.root, { recursive: true, force: true }); }
 });
+
+
+test('forced chapter refresh replaces cache atomically and preserves old text on failure', async () => {
+  const f = await fixture();
+  try {
+    const id = await f.chapters.acquire(f.provider, f.context, { entryRef: 'book' }, 'book', { ref: 'book', title: '书' });
+    const ref = f.chapters.manifest('u1', id).items[0]!.resourceRef!;
+    const old = await f.chapters.asset('u1', id, ref);
+    f.provider.readResource = async () => ({ mediaType: 'text/plain', text: '更新后的正文' });
+    assert.deepEqual((await f.chapters.asset('u1', id, ref)).data, old.data);
+    const refreshed = await f.chapters.asset('u1', id, ref, undefined, true);
+    assert.equal(refreshed.data!.toString(), '更新后的正文');
+    f.provider.readResource = async () => { throw new Error('offline'); };
+    await assert.rejects(f.chapters.asset('u1', id, ref, undefined, true), /offline/);
+    assert.deepEqual((await f.chapters.asset('u1', id, ref)).data, refreshed.data);
+    assert.throws(() => f.chapters.asset('other', id, ref, undefined, true), { code: 'BOOK_NOT_FOUND' });
+    f.setItems([{ id: 'new', seq: 0, title: '新', kind: 'chapter', mediaType: 'text/plain', ref: 'new' }]);
+    await f.chapters.refresh('u1', id);
+    await assert.rejects(f.chapters.asset('u1', id, ref, undefined, true), { code: 'CHAPTER_SNAPSHOT_EXPIRED' });
+  } finally { f.db.close(); await rm(f.root, { recursive: true, force: true }); }
+});

@@ -150,10 +150,23 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id, id);
     return { canSwitch: host.chapters.has(id) && host.canSwitch(user.id, id) };
   });
-  app.get('/api/v1/books/:id/alternatives', { preHandler: auth }, async (request, reply) => {
+  app.post('/api/v1/books/:id/alternatives', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id, id);
-    const cursor = parameter((request.query as { cursor?: string }).cursor, 'cursor');
-    return withSignal(request, reply, signal => host.alternatives(user.id, id, cursor, signal));
+    const body = (request.body ?? {}) as Record<string, unknown>;
+    const session = { sessionId: searchSessionId(parameter(body.sessionId, 'sessionId', true))!, resultLimit: searchResultLimit(body.resultLimit) };
+    const binding = host.chapters.binding(user.id, id);
+    reply.header('content-type', 'text/event-stream; charset=utf-8').header('cache-control', 'no-cache, no-transform').header('x-accel-buffering', 'no');
+    return reply.send(searchResponse(request, reply, host, user.id, binding.source_id,
+      { query: '', ...session, cursor: parameter(body.cursor, 'cursor') },
+      (cursor, signal) => host.alternatives(user.id, id, cursor, signal, session)));
+  });
+  app.post('/api/v1/books/:id/refresh-chapter', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id, id);
+    const ref = textBody(request.body, 'ref');
+    const payload = await withSignal(request, reply, signal => host.chapters.asset(user.id, id, ref, signal, true));
+    reply.header('cache-control', 'no-store').header('x-content-type-options', 'nosniff')
+      .header('content-security-policy', "default-src 'none'; img-src data:; sandbox").type(payload.contentType);
+    return reply.send(payload.data);
   });
   app.post('/api/v1/books/:id/switch-preview', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request), { id } = request.params as { id: string }; ctx.shelf.get(user.id, id);

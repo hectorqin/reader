@@ -30,15 +30,19 @@ GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{sourc
 
 ## 换源
 
-声明 `content.alternatives` 并实现 `alternatives(ctx,{publicationRef,query,authors,cursor})`，返回普通 CatalogPage。宿主从当前用户私有书籍解析绑定与标题，不接受客户端指定他人的来源上下文。
+声明 `content.alternatives` 并实现 `alternatives(ctx,{publicationRef,query,authors,cursor,sessionId,resultLimit})`，返回普通 CatalogPage。宿主从当前用户私有书籍解析绑定与标题，不接受客户端指定他人的来源上下文。
 
-1. 目录面板根据 `source-options.canSwitch` 显示换源入口，用户搜索候选。
+1. 阅读顶部工具栏根据 `source-options.canSwitch` 显示换源图标。打开面板即通过 POST 流持续加载候选；关闭面板断开连接，取消后台搜索。插件按书名、作者校验候选，排除当前来源，并在匹配后应用结果上限。
 2. 点击候选取得其目录。唯一同名章节可预选，否则必须手动选择；确认后从所选章开头阅读，不推测百分比或沿用旧章内偏移。
 3. 请求携带旧 revision。宿主与刷新共用书籍串行队列，版本不符返回冲突。获取新目录、确认章节存在、读取正文并清洗/内嵌图片全部成功后才提交数据库事务。
 4. 事务保存新快照和已验证正文、替换 publicationRef、保留 bookId、书架与订阅，清零新增章计数并推进订阅 generation。失败保留原绑定、目录与缓存。
 5. 客户端读到落点正文后才替换阅读视图，并保存新进度。旧修订缓存继续可读；旧笔记/书签保留原 href，不自动迁移到相似章节。其它已打开客户端仍需刷新目录，未缓存旧章节返回快照过期。
 
 重新获取现绑定复用当前书籍 ID；重新加入换源前版本创建独立记录，不会误返回换源后的版本。换源限同一来源实例内提供的候选，跨插件/跨实例不是本版功能。如果目标版本已作为另一条书籍记录入库，返回 SOURCE_ALREADY_ACQUIRED，需从书架打开已有版本，以免合并或覆盖另一本书的笔记和进度。
+
+CatalogEntry 可提供 `sourceName`、`latestChapter`，用于详情弹窗和换源列表。ManifestSnapshot 可提供 `sourceName`，章节可提供 `sourceUrl`（仅 HTTP/HTTPS、无用户名密码）；宿主保存并投影到阅读 DTO，在顶部栏下展示来源和当前章节链接。宿主不解析插件的不透明引用。
+
+目录标题栏的刷新图标仅刷新目录；顶部工具栏的刷新图标强制重新获取当前正文，经过相同的媒体校验、HTML 清洗和图片处理后才覆盖缓存。失败保留原正文和缓存。
 
 ## 验证
 

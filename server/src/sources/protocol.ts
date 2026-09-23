@@ -19,7 +19,7 @@ export function decodeCatalogEntry(input: unknown): CatalogEntry {
   const value = object(input, 'catalog entry');
   string(value.ref, 'entry ref');
   string(value.title, 'entry title');
-  for (const key of ['description', 'coverUrl', 'language', 'publishedAt']) {
+  for (const key of ['description', 'coverUrl', 'language', 'publishedAt', 'latestChapter', 'sourceName']) {
     if (value[key] !== undefined && typeof value[key] !== 'string') invalid(`invalid plugin entry ${key}`);
   }
   if (value.authors !== undefined &&
@@ -99,10 +99,15 @@ export function decodeManifest(input: unknown, publicationRef: string): Manifest
   const value = object(input, 'manifest');
   if (value.publicationRef !== publicationRef) invalid('plugin manifest publication ref does not match the request');
   if (!Array.isArray(value.items)) invalid('plugin manifest items must be an array');
+  if (value.sourceName !== undefined && typeof value.sourceName !== 'string') invalid('invalid source name');
   const ids = new Set<string>();
   const sequences = new Set<number>();
   for (const entry of value.items) {
     const item = object(entry, 'manifest item');
+    if (item.sourceUrl !== undefined) {
+      try { const url = new URL(String(item.sourceUrl)); if (typeof item.sourceUrl !== 'string' || !['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error(); }
+      catch { invalid('chapter source URL must use HTTP or HTTPS without credentials'); }
+    }
     string(item.id, 'chapter id');
     string(item.ref, 'chapter ref');
     string(item.title, 'chapter title');

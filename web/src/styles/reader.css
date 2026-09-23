@@ -3882,3 +3882,32 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
   .source-management-link { width: 100%; }
   .source-management-link + .source-management-link { border-top: 1px solid var(--reader-line); }
 }
+
+/* Reading source actions share the toolbar; provenance occupies its own compact row. */
+.reader-screen .topbar { flex-wrap: wrap; }
+.reader-heading { flex: 1; }
+.reader-top-actions { display: flex; gap: .25rem; flex: none; margin-inline-start: auto; }
+.reader-source-info { flex: 1 0 100%; display: flex; gap: .65rem; align-items: center; min-width: 0; font-size: .7rem; color: var(--reader-muted); border-top: 1px solid var(--reader-line); padding-top: .45rem; }
+.reader-source-info span { flex: 0 1 auto; max-width: 35%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.reader-source-info a { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: inherit; text-decoration: none; }
+.reader-source-info a:hover { text-decoration: underline; }
+.alternative-book { gap: .75rem; padding-block: .85rem; border-bottom: 1px solid var(--reader-line); }
+.alternative-book > div { min-width: 0; flex: 1; }
+.alternative-book small { display: block; color: var(--reader-muted); margin-top: .3rem; }
+.alternative-book strong, .alternative-book p { overflow-wrap: anywhere; }
+.alternative-book button { flex: none; }
+.book-detail { padding-top: 1rem; }
+.book-detail h3 { margin: 0; font-size: 1.35rem; overflow-wrap: anywhere; }
+.book-detail-author { color: var(--reader-muted); }
+.book-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .6rem 1rem; padding-block: .8rem; border-block: 1px solid var(--reader-line); }
+.book-detail dt { color: var(--reader-muted); }
+.book-detail dd { margin: 0; overflow-wrap: anywhere; }
+.book-detail-description { white-space: pre-wrap; line-height: 1.8; overflow-wrap: anywhere; }
+
+.reader-book-heading { padding: 0; border: 0; background: transparent; color: inherit; text-align: start; cursor: pointer; min-height: 44px; }
+
+.reader-screen .alternative-book { display: flex; align-items: center; }
+.alternative-preview { padding-block: 1rem; display: grid; gap: .75rem; }
+.alternative-preview h4 { margin: 0; }
+.alternative-preview label { display: grid; gap: .5rem; }
+.alternative-preview select { width: 100%; min-width: 0; min-height: 44px; }

@@ -1104,7 +1104,8 @@ Invoke-RestMethod -Method Post -Uri "$readerApi/books/$readerBookId/refresh" -He
 - 管理员 `POST /api/v1/plugins/:id/pages/:pageId`：`{action,values}`，返回更新后的页面。插件清单顶层 extensions.pages 提供全局入口。
 - `GET /api/v1/sources/:id/search-filters`：插件声明的选择字段；搜索接口接受 JSON 编码的 `filters` 查询参数，值为字符串映射。
 - `GET /api/v1/books/:id/source-options`：`{canSwitch}`，限本人有权限的书籍。
-- `GET /api/v1/books/:id/alternatives?cursor=…`：候选 CatalogPage。
+- `POST /api/v1/books/:id/alternatives`：请求 `{sessionId,cursor?,resultLimit?}`，以 `text/event-stream` 返回 `results`（CatalogPage）、`done`、`error`，与搜索使用相同的 Streamable HTTP 协议。断开连接取消换源搜索。
+- `POST /api/v1/books/:id/refresh-chapter`：请求 `{ref}`（当前 manifest 的 `resourceRef`），强制重新读取当前修订的章节，返回正文二进制响应；失败保留原缓存，旧修订返回 `CHAPTER_SNAPSHOT_EXPIRED`。
 - `POST /api/v1/books/:id/switch-preview`：`{entryRef}` → `{chapters:[{id,title}]}`。
 - `POST /api/v1/books/:id/switch-source`：`{entryRef,chapterId,revision}` → `{content,href}`；所选正文验证成功后事务切换，保留 bookId。目录变更返回冲突，客户端刷新再选择。
 

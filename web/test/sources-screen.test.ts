@@ -380,7 +380,7 @@ it('allows details and acquisition while search continues, then offers restart i
   await vi.waitFor(() => expect(screen.element.textContent).toContain('新结果'));
   expect(search.mock.calls[1]![1].sessionId).not.toBe(search.mock.calls[0]![1].sessionId);
   expect(search.mock.calls[1]![1].cursor).toBeUndefined();
-  expect(screen.element.textContent).not.toContain('详情标题');
+  expect(screen.element.querySelector('.catalog-book')?.textContent).not.toContain('详情标题');
 });
 
 it('uploads a newer plugin package in place and reports the new version without uninstalling', async () => {

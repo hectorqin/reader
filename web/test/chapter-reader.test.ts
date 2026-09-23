@@ -38,6 +38,8 @@ function manifest(value: BookContent): Manifest {
 }
 
 beforeAll(() => {
+  HTMLDialogElement.prototype.showModal ??= function() { this.setAttribute('open', ''); };
+  HTMLDialogElement.prototype.close ??= function() { this.removeAttribute('open'); };
   vi.stubGlobal('Blob', NodeBlob);
   globalThis.ResizeObserver ??= class {
     observe(): void {}
@@ -108,7 +110,7 @@ describe('chapter publication reading', () => {
     env.transport.respondWith(request => {
       if (request.url.endsWith('/source-options')) return { status: 200, headers: {}, json: { canSwitch: true } };
       if (request.url.endsWith('/manifest')) return { status: 200, headers: {}, json: manifest(content(['a', 'b'])) };
-      if (request.url.endsWith('/alternatives')) return { status: 200, headers: {}, json: { items: [{ ref: 'other-book', title: '同一本书', authors: ['作者'], description: '其它书源' }] } };
+      if (request.url.endsWith('/alternatives')) return { status: 200, headers: {}, stream: new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode('event: results\ndata: ' + JSON.stringify({ items: [{ ref: 'other-book', title: '同一本书', authors: ['作者'], sourceName: '其它书源', latestChapter: '最新章节' }] }) + '\n\nevent: done\ndata: {}\n\n')); controller.close(); } }) };
       if (request.url.endsWith('/switch-preview')) return { status: 200, headers: {}, json: { chapters: [{ id: 'x', title: '另一个章节' }] } };
       if (request.url.endsWith('/switch-source')) return failSwitch
         ? { status: 502, headers: {}, json: { error: { code: 'SOURCE_ERROR', message: '正文获取失败' } } }
@@ -117,7 +119,7 @@ describe('chapter publication reading', () => {
       return { status: 200, headers: {}, json: { progress: null } };
     });
     await env.screen.open(book); await click(env.screen, '目录'); await click(env.screen, '切换书源');
-    await vi.waitFor(() => expect(env.screen.element.textContent).toContain('其它书源')); await click(env.screen, '查看此源目录');
+    await vi.waitFor(() => expect(env.screen.element.querySelector('.alternative-book')?.textContent).toContain('其它书源')); await click(env.screen, '查看此源目录');
     await vi.waitFor(() => expect(env.screen.element.querySelector('section[aria-label="切换书源"] select')).not.toBeNull());
     const submit = [...env.screen.element.querySelectorAll('button')].find(button => button.textContent === '确认换源并阅读')!;
     expect(submit.disabled).toBe(true);
@@ -125,7 +127,7 @@ describe('chapter publication reading', () => {
     select.value = 'x'; select.dispatchEvent(new Event('change', { bubbles: true })); await click(env.screen, '确认换源并阅读');
     await vi.waitFor(() => expect(noticeText()).toContain('正文获取失败'));
     expect(body(env.screen)?.textContent).toContain('resource:r1:a');
-    expect(env.screen.element.querySelectorAll('.toc-list li')).toHaveLength(2);
+    expect(env.screen.element.querySelector('section[aria-label="切换书源"]')?.textContent).toContain('最新章节');
     failSwitch = false; await click(env.screen, '确认换源并阅读');
     await vi.waitFor(() => expect(body(env.screen)?.textContent).toContain('resource:r2:x'));
     await vi.waitFor(() => expect(env.offline.current.progress[book.id]?.locator).toContain('chapter:x'));
@@ -254,6 +256,32 @@ describe('chapter publication reading', () => {
     await scope.setScope(publicationScope('http://one.test', 'u1'));
     expect((await scope.getProgress(book.id))?.locator).toBe('chapter:a');
   });
+});
+
+it('refreshes only the current chapter, updates offline cache and preserves text after errors', async () => {
+  const env = await setup(); const value = content(['a']); value.sourceName = '示例源'; value.items[0]!.sourceUrl = 'https://example.test/a';
+  let fail = false, refreshes = 0;
+  env.transport.respondWith(request => {
+    if (request.url.endsWith('/manifest')) return { status: 200, headers: {}, json: manifest(value) };
+    if (request.url.endsWith('/refresh-chapter')) {
+      refreshes++;
+      return fail ? { status: 502, headers: {}, json: { error: { code: 'SOURCE_ERROR', message: 'offline' } } }
+        : { status: 200, headers: {}, bytes: new TextEncoder().encode('已更新的章节正文') };
+    }
+    if (request.url.includes('/assets?')) return { status: 200, headers: {}, bytes: new TextEncoder().encode('原来的正文') };
+    return { status: 200, headers: {}, json: {} };
+  });
+  await env.screen.open(book);
+  expect(body(env.screen)?.textContent).toContain('原来的正文');
+  expect(env.screen.element.querySelector('.reader-source-info')?.textContent).toContain('示例源');
+  expect(env.screen.element.querySelector('.reader-source-info a')?.getAttribute('href')).toBe('https://example.test/a');
+  await click(env.screen, '刷新当前章节');
+  await vi.waitFor(() => expect(body(env.screen)?.textContent).toContain('已更新的章节正文'));
+  fail = true; await click(env.screen, '刷新当前章节');
+  await vi.waitFor(() => expect(noticeText()).toContain('刷新正文失败'));
+  expect(body(env.screen)?.textContent).toContain('已更新的章节正文'); expect(refreshes).toBe(2);
+  const cache = new PublicationCache(env.platform.kv, env.platform.blobs, publicationScope(env.api.baseUrl, 'u1'));
+  expect(new TextDecoder().decode((await cache.resource(book.id, 'resource:r1:a'))!)).toContain('已更新的章节正文');
 });
 
 describe('legacy offline migration', () => {

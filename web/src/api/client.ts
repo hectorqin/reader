@@ -244,7 +244,14 @@ export class ReaderApi {
   }
   async sourceFilters(id: string): Promise<ExtensionField[]> { return this.get('/api/v1/sources/' + encodeURIComponent(id) + '/search-filters'); }
   async sourceOptions(id: string): Promise<{ canSwitch: boolean }> { return this.get('/api/v1/books/' + encodeURIComponent(id) + '/source-options'); }
-  async alternatives(id: string, cursor?: string): Promise<SourcePage> { return this.get('/api/v1/books/' + encodeURIComponent(id) + '/alternatives' + (cursor ? '?cursor=' + encodeURIComponent(cursor) : '')); }
+  alternatives(id: string, query: { sessionId: string; cursor?: string }, options: RequestOptions = {}): AsyncGenerator<SourcePage> {
+    return this.catalogStream('/api/v1/books/' + encodeURIComponent(id) + '/alternatives', query, options);
+  }
+  async refreshChapter(id: string, ref: string, options: RequestOptions = {}): Promise<Blob> {
+    const response = await this.request('/api/v1/books/' + encodeURIComponent(id) + '/refresh-chapter', 'POST', { ref }, { ...options, binary: true });
+    const bytes = new Uint8Array(response.bytes ?? []);
+    return new Blob([bytes.buffer]);
+  }
   async switchPreview(id: string, entryRef: string): Promise<{ chapters: Array<{ id: string; title: string }> }> {
     return this.call('/api/v1/books/' + encodeURIComponent(id) + '/switch-preview', 'POST', { entryRef });
   }
@@ -277,11 +284,14 @@ export class ReaderApi {
     return this.get(`/api/v1/sources/${encodeURIComponent(id)}/browse?${params}`, options);
   }
   async *searchSource(id: string, query: { query: string; sessionId: string; cursor?: string; filters?: Record<string, string>; resultLimit?: number }, options: RequestOptions = {}): AsyncGenerator<SourcePage> {
+    yield* this.catalogStream('/api/v1/sources/' + encodeURIComponent(id) + '/search', query, options);
+  }
+  private async *catalogStream(path: string, query: unknown, options: RequestOptions): AsyncGenerator<SourcePage> {
     const generation = this.sessionGeneration, controller = new AbortController();
     const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
     this.streams.add(controller);
     try {
-      const response = await this.request(`/api/v1/sources/${encodeURIComponent(id)}/search`, 'POST', query, { ...options, signal, stream: true });
+      const response = await this.request(path, 'POST', query, { ...options, signal, stream: true });
       if (!response.stream) throw new ApiError('server', '搜索结果流缺失', 'INVALID_STREAM');
       for await (const event of eventStream(response.stream, signal)) {
         this.assertSession(generation);

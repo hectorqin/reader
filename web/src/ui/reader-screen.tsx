@@ -189,6 +189,9 @@ export class ReaderScreen {
   private loadingToken = 0;
   private alternativeRef = '';
   private viewEpoch = 0;
+  private alternativesRun: AbortController | null = null;
+  private chapterRefresh: AbortController | null = null;
+  private alternativeEpoch = 0;
 
   constructor(private readonly options: ReaderScreenOptions) {
     this.settings = { ...options.settings };
@@ -229,12 +232,15 @@ export class ReaderScreen {
             onSwitchEngine: (kind) => this.switchSpeechEngine(kind),
             onTocEntry: (ref) => void this.goToChapterRef(ref),
             onChapter: (delta) => void this.goToChapter(delta),
+            onBookInfo: () => this.patch({ bookInfoOpen: !this.chrome.bookInfoOpen }),
             onRefresh: () => void this.refreshPublication(),
+            onRefreshChapter: () => void this.refreshChapter(),
             onAlternatives: cursor => void this.loadAlternatives(cursor),
             onAlternative: (ref, title) => void this.previewAlternative(ref, title),
             onAlternativeChapter: id => this.patch({ alternativeChapter: id }),
             onSwitchSource: () => void this.switchSource(),
-            onCancelSwitch: () => this.patch({ alternatives: null, alternativeChapters: undefined, alternativeChapter: '' }),
+            onCancelSwitch: () => this.closeAlternatives(),
+            onCancelAlternative: () => this.patch({ alternativeChapters: undefined, alternativeChapter: '' }),
             onScrubPage: (page) => void this.scrubToPage(page),
             onTurnPage: (direction) => void this.turnPage(direction),
             onSpeechToggle: () => this.toggleSpeech(),
@@ -253,9 +259,10 @@ export class ReaderScreen {
 
   /** Opens a book: fetch bytes, parse, restore position, start reporting. */
   async open(book: Book): Promise<void> {
+    this.closeAlternatives(); this.chapterRefresh?.abort(); this.chapterRefresh = null;
     const token = ++this.loadingToken;
-    this.book = book;
-    this.patch({ title: book.title, author: book.author, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null });
+    this.content = null; this.book = book;
+    this.patch({ title: book.title, author: book.author, description: book.description, bookInfoOpen: false, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null, refreshingChapter: false, sourceName: '', chapterUrl: '' });
     this.setStatus('loading', '正在载入…');
     this.setChromeVisible(true);
 
@@ -421,6 +428,7 @@ export class ReaderScreen {
   }
 
   dispose(): void {
+    this.closeAlternatives(); this.chapterRefresh?.abort();
     this.disposed = true;
     this.loadingToken += 1;
     this.viewEpoch += 1;
@@ -469,7 +477,7 @@ export class ReaderScreen {
   }
 
   private async sourceAction(action: () => Promise<void>): Promise<void> {
-    if (this.chrome.switching || this.chrome.refreshing || this.navigating) return;
+    if (this.chrome.switching || this.chrome.refreshing || this.chrome.refreshingChapter || this.navigating) return;
     const token = this.loadingToken; this.patch({ switching: true });
     try { await action(); }
     catch (error) {
@@ -478,18 +486,70 @@ export class ReaderScreen {
       else this.flashStatus(error instanceof Error ? error.message : '换源操作失败', 5000);
     } finally { if (token === this.loadingToken) this.patch({ switching: false }); }
   }
-  private async loadAlternatives(cursor?: string): Promise<void> {
+  private closeAlternatives(): void {
+    this.alternativeEpoch++; this.alternativesRun?.abort(); this.alternativesRun = null;
+    this.patch({ alternatives: null, alternativesSearching: false, alternativeChapters: undefined, alternativeChapter: '' });
+  }
+  private async loadAlternatives(_cursor?: string): Promise<void> {
     const book = this.book, token = this.loadingToken; if (!book) return;
-    await this.sourceAction(async () => {
-      const page = await this.options.api.alternatives(book.id, cursor);
-      if (token === this.loadingToken) this.patch({ alternatives: page, alternativeChapters: undefined, alternativeChapter: '' });
-    });
+    this.closeAlternatives();
+    const run = new AbortController(); this.alternativesRun = run;
+    const sessionId = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
+    this.patch({ alternatives: { items: [] }, alternativesSearching: true, tocOpen: false, settingsOpen: false });
+    try {
+      for await (const page of this.options.api.alternatives(book.id, { sessionId }, { signal: run.signal })) {
+        if (run.signal.aborted || token !== this.loadingToken) return;
+        const items = new Map((this.chrome.alternatives?.items ?? []).map(entry => [entry.ref, entry]));
+        for (const entry of page.items) items.set(entry.ref, entry);
+        const errors = new Map([...(this.chrome.alternatives?.errors ?? []), ...(page.errors ?? [])].map(error => [error.source + ':' + error.code, error]));
+        this.patch({ alternatives: { ...page, items: [...items.values()], errors: [...errors.values()] } });
+      }
+    } catch (error) {
+      if (!run.signal.aborted && token === this.loadingToken) this.handleLoadError(error);
+    } finally {
+      if (this.alternativesRun === run) { this.alternativesRun = null; this.patch({ alternativesSearching: false }); }
+    }
+  }
+  private async refreshChapter(): Promise<void> {
+    const book = this.book, content = this.content, token = this.loadingToken;
+    const item = content?.items.find(value => value.href === this.chrome.currentSectionId);
+    if (!book || !content || !item || this.chapterRefresh || this.chrome.refreshing || this.chrome.switching || this.navigating) return;
+    const run = new AbortController(); this.chapterRefresh = run;
+    this.patch({ refreshingChapter: true }); this.setStatus('loading', '正在重新获取当前章节…');
+    try {
+      const blob = await this.options.api.refreshChapter(book.id, item.resourceRef ?? item.href, { signal: run.signal });
+      if (token !== this.loadingToken || run.signal.aborted) return;
+      await this.publicationCache.putResource(book.id, renditionRef(item), new Uint8Array(await blob.arrayBuffer()));
+      const toc = content.items.map(value => ({ id: value.href, label: value.title, depth: 0, spine: value.seq }));
+      const doc = createStagedDoc({ kind: content.kind, content, toc, orderedByBook: true, loader: { read: value => this.readStagedSection(book, value) } });
+      (doc as BookDoc & { staged?: unknown }).staged = doc;
+      // Navigation remains possible during the network request; restore the current landing chapter.
+      let parsed = parseLocator(this.view?.position().locator ?? '', doc);
+      let index = Math.max(0, doc.sections.findIndex(section => section.id === (parsed?.sectionId ?? item.href)));
+      while (true) {
+        await doc.loadSection(index);
+        if (token !== this.loadingToken || run.signal.aborted || this.content !== content) return;
+        parsed = parseLocator(this.view?.position().locator ?? '', doc);
+        const latest = Math.max(0, doc.sections.findIndex(section => section.id === (parsed?.sectionId ?? item.href)));
+        if (latest === index) break;
+        index = latest;
+      }
+      this.stopSpeech(); this.flushProgress(); this.doc = doc; this.afterDocLoaded();
+      await this.view?.open(index, parsed?.offset ?? 0); this.flashStatus('章节内容已更新');
+    } catch (error) {
+      if (!run.signal.aborted && token === this.loadingToken) {
+        if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
+        else this.flashStatus('刷新正文失败，已保留当前章节', 4000);
+      }
+    } finally { if (this.chapterRefresh === run) { this.chapterRefresh = null; this.patch({ refreshingChapter: false }); } }
   }
   private async previewAlternative(ref: string, title: string): Promise<void> {
     const book = this.book, token = this.loadingToken; if (!book) return;
+    const epoch = ++this.alternativeEpoch;
     await this.sourceAction(async () => {
       const preview = await this.options.api.switchPreview(book.id, ref);
       if (token !== this.loadingToken) return;
+      if (epoch !== this.alternativeEpoch) return;
       this.alternativeRef = ref;
       const label = this.chrome.toc.find(entry => entry.id === this.chrome.currentSectionId)?.label;
       const matching = preview.chapters.filter(chapter => chapter.title === label);
@@ -514,6 +574,7 @@ export class ReaderScreen {
       this.pendingPosition = null; if (this.progressTimer) clearTimeout(this.progressTimer);
       this.manifest = { ...previous, ...content, content }; this.content = content; this.doc = doc;
       void this.publicationCache.putManifest(book.id, this.manifest).catch(() => undefined);
+      this.closeAlternatives();
       this.patch({ toc, alternatives: null, alternativeChapters: undefined, tocOpen: false });
       this.afterDocLoaded(); await this.view?.open(index, 0);
       this.onPosition(this.view?.position() ?? null); this.flushProgress();
@@ -980,6 +1041,7 @@ export class ReaderScreen {
   // ---- chrome ----
 
   private setChromeVisible(visible: boolean): void {
+    if (!visible) this.closeAlternatives();
     this.chromeVisible = visible;
     this.element.dataset['chrome'] = visible ? 'visible' : 'hidden';
     this.patch({
@@ -991,11 +1053,13 @@ export class ReaderScreen {
   }
 
   private toggleToc(): void {
+    this.closeAlternatives();
     const open = !this.chrome.tocOpen;
     this.patch({ tocOpen: open, settingsOpen: false });
   }
 
   private toggleSettings(tab: 'appearance' | 'behavior' | 'speech' = 'behavior'): void {
+    this.closeAlternatives();
     const open = !this.chrome.settingsOpen || this.chrome.settingsTab !== tab;
     this.patch({ settingsOpen: open, settingsTab: tab, tocOpen: false });
     if (!open) return;
@@ -1700,6 +1764,8 @@ export class ReaderScreen {
     this.chrome = {
       ...this.chrome,
       ...patch,
+      sourceName: this.content?.sourceName ?? '',
+      chapterUrl: this.content?.items.find(item => item.href === (patch.currentSectionId ?? this.chrome.currentSectionId))?.sourceUrl ?? '',
       ...settingsView(this.settings, {
         layout: this.doc?.layout ?? 'reflowable',
         format: this.doc?.format ?? '',
@@ -1888,7 +1954,7 @@ function bindKeys(target: HTMLElement, handler: (key: string) => void): () => vo
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     // A panel that is open owns the keyboard: the arrow keys are how a range
     // input is adjusted, and the settings panel is a column of range inputs.
-    if (target.querySelector('.panel:not([hidden])')) return;
+    if (target.querySelector('.panel:not([hidden]), dialog[open]')) return;
     handler(event.key);
   };
   target.addEventListener('keydown', onKeyDown);

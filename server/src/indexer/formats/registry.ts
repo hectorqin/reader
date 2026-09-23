@@ -51,6 +51,7 @@ export interface ParsedSource {
 
 /** One addressable unit of a book: a chapter, a page, a volume. */
 export interface ContentItem {
+  sourceUrl?: string;
   id: string;
   seq: number;
   title: string;
@@ -121,6 +122,7 @@ export interface BookFileEntry {
 }
 
 export interface Manifest {
+  sourceName?: string;
   /** Snapshot identity for mutable publications. */
   revision?: string;
   kind: BookKind;

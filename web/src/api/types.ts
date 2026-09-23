@@ -90,6 +90,7 @@ export interface BookFile {
 
 /** One addressable unit of a book: a chapter, a page, a volume. */
 export interface ContentItem {
+  sourceUrl?: string;
   id: string;
   seq: number;
   title: string;
@@ -127,6 +128,7 @@ export interface ContentGroup {
  * request narrowed the items to one window.
  */
 export interface BookContent {
+  sourceName?: string;
   revision?: string;
   kind: 'reflowable' | 'paged' | 'text' | 'document' | 'single-image';
   total: number;

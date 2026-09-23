@@ -1,3 +1,4 @@
+import { Modal } from './modal.tsx';
 import type { SourcePage } from '../api/sources.ts';
 import { CatalogFeedback } from './catalog-feedback.tsx';
 import { FloatingNotice } from './floating-notice.tsx';
@@ -23,7 +24,7 @@ import { DEFAULT_APP_SETTINGS, READOUT_FIELDS, READOUT_OPTIONS, type ReadoutMode
 import { ReaderIndicators } from './reader-indicators.tsx';
 import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ComponentChildren, type JSX, useLayoutEffect, useRef } from './vendor/preact.ts';
-import { Button, IconButton, IconTextButton, SectionTitle } from './toolkit.tsx';
+import { Button, IconButton, SectionTitle } from './toolkit.tsx';
 import { Icon, type IconName } from './icon.tsx';
 
 /**
@@ -83,6 +84,12 @@ export interface ChromeState {
   canSwitch?: boolean;
   switching?: boolean;
   alternatives?: SourcePage | null;
+  alternativesSearching?: boolean;
+  bookInfoOpen?: boolean;
+  description?: string;
+  sourceName?: string;
+  chapterUrl?: string;
+  refreshingChapter?: boolean;
   alternativeChapters?: Array<{ id: string; title: string }> | undefined;
   alternativeChapter?: string;
   alternativeTitle?: string;
@@ -137,12 +144,15 @@ export interface ChromeHandlers {
   onSwitchEngine(kind: AppSettings['ttsEngine']): void;
   onTocEntry(ref: string): void;
   onChapter(delta: 1 | -1): void;
+  onBookInfo?(): void;
   onRefresh?(): void;
+  onRefreshChapter?(): void;
   onAlternatives?(cursor?: string): void;
   onAlternative?(ref: string, title: string): void;
   onAlternativeChapter?(id: string): void;
   onSwitchSource?(): void;
   onCancelSwitch?(): void;
+  onCancelAlternative?(): void;
   /**
    * Jump to a page *inside the current chapter*, from the footer scrubber.
    *
@@ -183,8 +193,14 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
     <>
       <div className="topbar" hidden={!state.chromeVisible}>
         <IconButton label="返回" icon="arrow-left" onClick={handlers.onBack} />
-        <div className="reader-heading"><strong>{state.title}</strong><span>{state.chapterLabel}</span></div>
+        <button type="button" className="reader-heading reader-book-heading" aria-label="书籍信息" onClick={handlers.onBookInfo}><strong>{state.title}</strong><span>{state.chapterLabel}</span></button>
+        <div className="reader-top-actions">
+          {state.canSwitch && <IconButton label="切换书源" icon="sort" disabled={state.switching || state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onAlternatives?.()} />}
+          {state.canRefresh && <IconButton label="刷新当前章节" icon="refresh" disabled={state.switching || state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onRefreshChapter?.()} />}
+        </div>
+        {(state.sourceName || state.chapterUrl) && <div className="reader-source-info"><span>{state.sourceName || '当前书源'}</span>{state.chapterUrl && <a href={state.chapterUrl} target="_blank" rel="noopener noreferrer" title={state.chapterUrl}>{state.chapterUrl}</a>}</div>}
       </div>
+      {state.bookInfoOpen && <Modal title="书籍信息" busy={false} onClose={() => handlers.onBookInfo?.()}><article className="book-detail source-modal-content"><h3>{state.title}</h3><p className="book-detail-author">{state.author || '作者未知'}</p><dl><dt>书源</dt><dd>{state.sourceName || (state.canRefresh ? '远程书源' : '本地书籍')}</dd><dt>当前章节</dt><dd>{state.chapterLabel || '暂无信息'}</dd></dl><h4>内容简介</h4><p className="book-detail-description">{state.description || '暂无简介'}</p></article></Modal>}
       <StageHost stage={stage} />
       <ReaderIndicators state={state} />
       <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作">
@@ -214,28 +230,7 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
         </div>
       </div>
       {state.tocOpen ? (
-        <Panel title="目录" placement="start" subtitle={`${state.toc.length} 章`} onClose={handlers.toggleToc}>
-          {state.canRefresh ? (
-            <IconTextButton
-              icon="refresh"
-              label={state.refreshing ? '正在刷新目录…' : '刷新目录'}
-              disabled={state.refreshing || state.navigating}
-              onClick={() => handlers.onRefresh?.()}
-            />
-          ) : null}
-          {state.canSwitch && <Button type="button" disabled={state.switching || state.refreshing || state.navigating} onClick={() => handlers.onAlternatives?.()}>切换书源</Button>}
-          <FloatingNotice message={state.switching ? '正在获取书源内容…' : ''} busy />
-          {state.alternatives && <section aria-label="切换书源"><h3>选择其它书源</h3><CatalogFeedback page={state.alternatives} />
-            <p>请核对书名、作者，并选择新目录中的章节。原书签和笔记仍关联原章节。</p>
-            {!state.alternatives.items.length && <p>{state.alternatives.errors?.length ? '本批暂未返回书籍，请查看失败原因。' : '本批没有同名书籍。'}{state.alternatives.nextCursor ? '可继续下一批。' : ''}</p>}
-            {state.alternatives.items.map(entry => <div className="sources-row"><div><strong>{entry.title}</strong><small>{entry.authors?.join(' / ')}</small><p>{entry.description}</p></div>
-              <Button type="button" disabled={state.switching === true} onClick={() => handlers.onAlternative?.(entry.ref, entry.title)}>查看此源目录</Button></div>)}
-            {state.alternatives.nextCursor && <Button type="button" disabled={state.switching === true} onClick={() => handlers.onAlternatives?.(state.alternatives?.nextCursor)}>下一批书源</Button>}
-            {state.alternativeChapters && <div><h4>{state.alternativeTitle}</h4><label>切换后阅读的章节<select value={state.alternativeChapter ?? ''} disabled={state.switching === true} onChange={event => handlers.onAlternativeChapter?.(event.currentTarget.value)}>
-              <option value="">请选择章节</option>{state.alternativeChapters.map(chapter => <option value={chapter.id}>{chapter.title}</option>)}
-            </select></label><Button type="button" disabled={state.switching || !state.alternativeChapter} onClick={() => handlers.onSwitchSource?.()}>确认换源并阅读</Button></div>}
-            <Button type="button" disabled={state.switching === true} onClick={() => handlers.onCancelSwitch?.()}>取消换源</Button>
-          </section>}
+        <Panel title="目录" placement="start" subtitle={`${state.toc.length} 章`} onClose={handlers.toggleToc} actions={state.canRefresh ? <IconButton icon="refresh" label="刷新目录" disabled={state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onRefresh?.()} /> : null}>
           {state.toc.length === 0 ? (
             <div className="empty-state">这本书没有目录</div>
           ) : (
@@ -268,6 +263,18 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
           )}
         </Panel>
       ) : null}
+
+      <FloatingNotice message={state.switching ? "正在获取书源内容…" : ""} busy />
+      {state.alternatives && <Panel title="切换书源" onClose={() => handlers.onCancelSwitch?.()}><section aria-label="切换书源">{!!state.alternatives.errors?.length && <CatalogFeedback page={state.alternatives} merged searching={!!state.alternativesSearching} />}
+            <p className="source-description">按书名和作者匹配，选择书源后确认阅读章节。</p><div className="search-progress" role="status">{state.alternativesSearching ? "正在搜索可用书源…" : "搜索完成"} · 已找到 {state.alternatives.items.length} 个{state.alternatives.batch && <progress aria-label="换源搜索进度" max={Math.max(1, state.alternatives.batch.total)} value={state.alternatives.batch.completed} />}</div>
+            {!state.alternatives.items.length && !state.alternativesSearching && <p className="catalog-empty">没有找到书名、作者匹配的其它书源。</p>}
+            {state.alternatives.items.map(entry => <div className="sources-row alternative-book" key={entry.ref}><div><strong>{entry.title}</strong><small>{entry.authors?.join(' / ')}</small><small>{entry.sourceName}</small><p className="source-description">最新章节：{entry.latestChapter || "暂无信息"}</p></div>
+              <IconButton icon="chevron-right" label="查看此源目录" disabled={state.switching === true} onClick={() => handlers.onAlternative?.(entry.ref, entry.title)} /></div>)}
+            {state.alternativeChapters && <Modal title="选择阅读章节" busy={!!state.switching} onClose={() => handlers.onCancelAlternative?.()}><div className="alternative-preview source-modal-content"><h4>{state.alternativeTitle}</h4><label>切换后阅读的章节<select value={state.alternativeChapter ?? ''} disabled={state.switching === true} onChange={event => handlers.onAlternativeChapter?.(event.currentTarget.value)}>
+              <option value="">请选择章节</option>{state.alternativeChapters.map(chapter => <option value={chapter.id}>{chapter.title}</option>)}
+            </select></label><Button type="button" disabled={state.switching || !state.alternativeChapter} onClick={() => handlers.onSwitchSource?.()}>确认换源并阅读</Button></div></Modal>}
+            <Button type="button" disabled={state.switching === true} onClick={() => handlers.onCancelSwitch?.()}>取消换源</Button>
+          </section></Panel>}
 
       {state.settingsOpen ? (
         <Panel title={tab === 'appearance' ? '界面' : tab === 'speech' ? '朗读' : '阅读设置'} onClose={() => handlers.toggleSettings(tab)}>
@@ -327,12 +334,14 @@ function Panel({
   title,
   placement = 'end',
   subtitle,
+  actions,
   onClose,
   children,
 }: {
   title: string;
   placement?: 'start' | 'end';
   subtitle?: string;
+  actions?: ComponentChildren;
   onClose(): void;
   children: ComponentChildren;
 }): JSX.Element {
@@ -354,6 +363,7 @@ function Panel({
         <div className="panel-header">
           <h2>{title}</h2>
           {subtitle ? <span className="panel-subtitle">{subtitle}</span> : null}
+          {actions}
           <IconButton label="关闭" icon="close" onClick={onClose} />
         </div>
         <div className="panel-body">{children}</div>

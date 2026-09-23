@@ -53,6 +53,9 @@ export class SourcesScreen {
   private installMethod: 'npm' | 'upload' = 'npm';
   private trusted = false;
   private acquired: Book | null = null;
+  private detailEntry: SourceEntry | null = null;
+  private detailLoading = false;
+  private detailEpoch = 0;
 
   constructor(private readonly options: Options) {
     this.element.className = 'sources-screen sources-hub';
@@ -180,6 +183,20 @@ export class SourcesScreen {
       if (current()) { this.searchRun = null; this.draw(); }
     }
   }
+  private async showDetail(entry: SourceEntry): Promise<void> {
+    if (!this.selected) return;
+    const sourceId = this.selected.id, epoch = ++this.detailEpoch;
+    this.acquired = null; this.detailEntry = entry; this.detailLoading = true; this.draw();
+    try {
+      const detail = await this.options.api.sourceDetail(sourceId, entry.ref);
+      if (epoch === this.detailEpoch && !this.disposed) this.detailEntry = { ...entry, ...detail };
+    } catch (error) {
+      if (epoch === this.detailEpoch && !this.disposed) {
+        if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
+        else { this.message = error instanceof Error ? error.message : '书籍详情加载失败'; this.messageError = true; }
+      }
+    } finally { if (epoch === this.detailEpoch) { this.detailLoading = false; this.draw(); } }
+  }
   private async acquire(entry: SourceEntry, optionId?: string): Promise<void> {
     if (!this.selected) return;
     const result = await this.options.api.acquireSource(this.selected.id, entry.ref, optionId);
@@ -296,10 +313,7 @@ export class SourcesScreen {
           {this.page?.items.length === 0 && !this.searchRun && <div className="catalog-empty"><Icon name={this.page.errors?.length ? 'warning' : 'search'} /><strong>{this.searchState === 'stopped' ? '搜索已停止，暂未找到书籍' : this.page.errors?.length ? '暂未返回书籍，部分来源搜索失败' : '没有找到匹配书籍'}</strong><p>{this.page.errors?.length ? '请查看失败原因，或调整搜索范围后重试。' : '试试其他关键词，或调整搜索范围。'}</p></div>}
           {this.page?.items.map((entry) => <article className="sources-row catalog-book" key={entry.ref}>
             <div><strong>{entry.title}</strong><small>{entry.authors?.join(' / ')}</small><p className="source-description">{entry.description}</p></div>
-            <div className="sources-actions"><Button disabled={this.working} onClick={() => void this.run(async () => {
-              const detail = await this.options.api.sourceDetail(this.selected!.id, entry.ref);
-              const current = this.page?.items.find(item => item.ref === entry.ref); if (current) Object.assign(current, detail);
-            }, true)}>详情</Button>
+            <div className="sources-actions"><Button onClick={() => void this.showDetail(entry)}>详情</Button>
             {(entry.options?.length ? entry.options : [{ id: '', label: '加入书架' }]).map((option) => <Button className="primary" disabled={this.working || option.available === false}
               onClick={() => void this.run(() => this.acquire(entry, option.id), true)}>{option.label}</Button>)}</div>
           </article>)}
@@ -366,6 +380,16 @@ export class SourcesScreen {
         </article>)}
       </section>}
       </main>
+        {this.detailEntry && <Modal title="书籍信息" busy={this.working} onClose={() => { this.detailEpoch++; this.detailEntry = null; this.detailLoading = false; this.draw(); }}>
+          <article className="book-detail source-modal-content" aria-busy={this.detailLoading}>
+            <h3>{this.detailEntry.title}</h3><p className="book-detail-author">{this.detailEntry.authors?.join(' / ') || '作者未知'}</p>
+            {this.detailLoading && <p role="status">正在加载完整信息…</p>}
+            <dl><dt>书源</dt><dd>{this.detailEntry.sourceName || this.selected?.name}</dd><dt>最新章节</dt><dd>{this.detailEntry.latestChapter || '暂无信息'}</dd></dl>
+            <h4>内容简介</h4><p className="book-detail-description">{this.detailEntry.description || '暂无简介'}</p>
+          </article>
+          <footer className="source-modal-actions">{(this.detailEntry.options?.length ? this.detailEntry.options : [{ id: '', label: '加入书架' }]).map(option => <Button className="primary" disabled={this.working || option.available === false} onClick={() => void this.run(() => this.acquire(this.detailEntry!, option.id), true)}>{option.label}</Button>)}
+          {this.acquired && <Button onClick={() => this.options.onOpen(this.acquired!)}>开始阅读</Button>}</footer>
+        </Modal>}
         {this.editor && <Modal title={this.editor.id ? '编辑来源' : '添加来源'} busy={this.busy} onClose={() => { this.editor = null; this.message = ''; this.draw(); }}>
           <form className="sources-card source-editor source-modal-form" onSubmit={(event) => { event.preventDefault(); void this.run(() => this.save()); }}>
             <div className="source-modal-content">

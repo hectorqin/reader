@@ -9,7 +9,7 @@ interface Connection { controller: AbortController; closed: Promise<void> }
 const connections = new WeakMap<SourceHost, Map<string, Connection>>();
 
 /** One authenticated POST response carries every result page of a search. */
-export function searchResponse(request: FastifyRequest, reply: FastifyReply, host: SourceHost, userId: string, sourceId: string, search: SearchRequest): Readable {
+export function searchResponse(request: FastifyRequest, reply: FastifyReply, host: SourceHost, userId: string, sourceId: string, search: SearchRequest, next?: (cursor: string | undefined, signal: AbortSignal) => Promise<CatalogPage>): Readable {
   const controller = new AbortController(), abort = () => controller.abort();
   let active = connections.get(host);
   if (!active) { active = new Map(); connections.set(host, active); }
@@ -33,7 +33,7 @@ export function searchResponse(request: FastifyRequest, reply: FastifyReply, hos
         const key = cursor ?? '';
         if (seen.has(key)) throw new AppError(502, 'INVALID_CURSOR', '来源返回了重复的搜索游标');
         seen.add(key);
-        const page = await host.search(userId, sourceId, { ...search, cursor }, controller.signal);
+        const page = await (next ? next(cursor, controller.signal) : host.search(userId, sourceId, { ...search, cursor }, controller.signal));
         if (page.batch && previous && (page.batch.total !== previous.total || page.batch.completed < previous.completed)) {
           throw new AppError(502, 'INVALID_PROGRESS', '来源搜索进度异常');
         }

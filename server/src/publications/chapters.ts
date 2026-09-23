@@ -51,12 +51,13 @@ export class ChapterPublications {
     const publication = this.owned(userId, bookId);
     const snapshot = JSON.parse(publication.snapshot_json) as ManifestSnapshot;
     return {
+      sourceName: snapshot.sourceName,
       kind: snapshot.items.some((item) => chapterMedia(item.mediaType).startsWith('text/html')) ? 'reflowable' : 'text', revision: publication.revision, total: snapshot.items.length,
       groups: snapshot.items.length ? [{ id: 'chapters', seq: 0, title: '章节', count: snapshot.items.length, offset: 0 }] : [],
       items: snapshot.items.map((item, seq) => {
         const id = hash(item.id);
         return {
-          id, seq, title: item.title, kind: 'chapter', href: `chapter:${id}`,
+          id, seq, sourceUrl: item.sourceUrl, title: item.title, kind: 'chapter', href: `chapter:${id}`,
           resourceRef: `chapter-resource:${publication.revision}:${id}`,
           // The TXT reader typesets plain characters itself; never label a
           // plugin's characters as HTML or run a markup parser over them.
@@ -138,7 +139,7 @@ export class ChapterPublications {
     });
   }
 
-  asset(userId: string, bookId: string, ref: string, signal?: AbortSignal): Promise<AssetPayload> {
+  asset(userId: string, bookId: string, ref: string, signal?: AbortSignal, force = false): Promise<AssetPayload> {
     signal = signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000);
     this.owned(userId, bookId);
     const match = /^chapter-resource:([a-f0-9]{64}):([a-f0-9]{64})$/.exec(ref);
@@ -153,7 +154,7 @@ export class ChapterPublications {
       );
       if (!resource) throw notFound('chapter resource does not exist', 'RESOURCE_GONE');
       resource.media_type = chapterMedia(resource.media_type);
-      if (resource.body !== null) return this.payload(resource.body, resource.content_hash!, resource.media_type);
+      if (!force && resource.body !== null) return this.payload(resource.body, resource.content_hash!, resource.media_type);
       this.requireCurrent(publication, revision!);
       const response = await this.loader.resource(userId, publication.source_id, publication.publication_ref, resource.provider_ref, signal);
       if (chapterMedia(response.mediaType) !== resource.media_type) {
@@ -249,10 +250,10 @@ export class ChapterPublications {
       chapterMedia(item.mediaType);
     }
     return {
-      publicationRef,
+      publicationRef, sourceName: snapshot.sourceName,
       ...(snapshot.version === undefined ? {} : { version: snapshot.version }),
       items: [...snapshot.items].sort((left, right) => left.seq - right.seq).map((item, seq) => ({
-        id: item.id, seq, title: item.title, kind: 'chapter', mediaType: chapterMedia(item.mediaType), ref: item.ref,
+        id: item.id, seq, sourceUrl: item.sourceUrl, title: item.title, kind: 'chapter', mediaType: chapterMedia(item.mediaType), ref: item.ref,
       })),
     };
   }
