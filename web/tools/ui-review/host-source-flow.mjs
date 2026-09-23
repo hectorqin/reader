@@ -141,9 +141,11 @@ try {
   // Deterministic extension responses exercise the shared page renderer's
   // busy/error/success feedback without depending on a third-party service.
   let releaseAction, failAction = true;
-  const extensionPage = { title: '扩展配置', forms: [], tabs: [{ id: 'settings', title: '设置', forms: [
+  const extensionPage = { title: '扩展配置', activeTab: 'browser', forms: [], tabs: [{ id: 'settings', title: '来源设置', forms: [
     { id: 'save', title: '来源设置', submit: '保存配置', fields: [{ key: 'name', label: '配置名称', type: 'text', value: '示例' }] },
-  ], sections: [{ title: '配置项目', items: Array.from({ length: 12 }, (_, index) => ({ title: '项目 ' + index, description: '用于验证操作反馈不会移动内容。' })) }] }] };
+  ], sections: [{ title: '配置项目', items: Array.from({ length: 12 }, (_, index) => ({ title: '项目 ' + index, description: '用于验证操作反馈不会移动内容。' })) }] },
+    ...['订阅管理', '导入配置', '来源调试', '浏览器'].map((title, index) => ({ id: index === 3 ? 'browser' : 'tab-' + index, title, forms: [], description: title + '的配置内容' })),
+  ] };
   await page.route('**/api/v1/sources/feedback-fixture/pages/settings', async route => {
     if (route.request().method() === 'POST') {
       await new Promise(resolve => { releaseAction = resolve; });
@@ -152,9 +154,40 @@ try {
     }
     return route.fulfill({ json: extensionPage });
   });
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(base + '/#/sources/feedback-fixture/settings');
+    await tab('浏览器').waitFor(); await idle();
+    const assertActiveVisible = async () => {
+      const bounds = await page.locator('.extension-tabs').evaluate(list => {
+        const selected = list.querySelector('[aria-selected=true]').getBoundingClientRect();
+        const viewport = list.getBoundingClientRect();
+        return { left: selected.left, right: selected.right, start: viewport.left, end: viewport.right };
+      });
+      assert.ok(bounds.left >= bounds.start - 1 && bounds.right <= bounds.end + 1, 'selected tab is visible');
+      assert.equal(await page.evaluate(() => window.scrollY), 0);
+    };
+    await assertActiveVisible();
+    await tab('浏览器').focus(); await page.keyboard.press('Home');
+    assert.equal(await tab('来源设置').getAttribute('aria-selected'), 'true');
+    await assertActiveVisible();
+    await shot('extension-tabs-first-' + width);
+    await page.keyboard.press('End');
+    assert.equal(await tab('浏览器').getAttribute('aria-selected'), 'true');
+    await assertActiveVisible();
+    const layout = await page.locator('.extension-tabs').evaluate(list => ({
+      overflow: list.scrollWidth > list.clientWidth,
+      heights: [...list.children].map(item => item.getBoundingClientRect().height),
+    }));
+    assert.equal(layout.overflow, width < 600);
+    assert.ok(layout.heights.every(height => height >= 44 && height < 60), 'tabs stay single-line with touch-sized targets');
+    await shot('extension-tabs-last-' + width);
+  }
+  delete extensionPage.activeTab;
   for (const width of [390, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(base + '/#/sources/feedback-fixture/settings');
+    await tab('来源设置').click();
     await button('保存配置').waitFor(); await idle();
     const bodyBounds = await page.locator('.sources-body').boundingBox();
     const toolbarBounds = await page.locator('.extension-toolbar').boundingBox();

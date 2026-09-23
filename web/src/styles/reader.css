@@ -3672,8 +3672,8 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 /* Generic declarative extension pages, scoped to the selected source instance. */
 .extension-screen .sources-body { width: 100%; max-width: 64rem; margin-inline: auto; box-sizing: border-box; }
 .extension-description { color: var(--muted, #777); margin: 0 0 16px; line-height: 1.6; }
-.extension-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border, #ddd); margin-bottom: 20px; }
-.extension-tabs button { flex: 1; padding: 12px 8px; background: transparent; color: inherit; border: 0; border-bottom: 3px solid transparent; cursor: pointer; font: inherit; }
+.extension-tabs { display: flex; flex-wrap: nowrap; gap: 4px; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; border-bottom: 1px solid var(--border, #ddd); margin-bottom: 20px; }
+.extension-tabs button { flex: 0 0 auto; white-space: nowrap; padding: 12px 16px; background: transparent; color: inherit; border: 0; border-bottom: 3px solid transparent; cursor: pointer; font: inherit; }
 .extension-tabs button[aria-selected="true"] { border-bottom-color: currentColor; font-weight: 700; }
 .extension-tabs button:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
 .extension-screen h2 { font-size: 1rem; margin: 20px 0 12px; }
@@ -3839,7 +3839,8 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
   .shelf-settings .switch-field { grid-template-columns: minmax(0, 1fr) auto; }
   .sources-header { width: calc(100% - 3rem); max-width: var(--collection-measure); margin-inline: auto; padding: 2rem .9rem .75rem; border-bottom: 0; }
   .sources-header h1 { font-size: 1.5rem; font-weight: 650; }
-  .sources-hub .sources-tabs [role=tab], .extension-tabs button { flex: 0 1 auto; min-width: 9rem; padding-inline: 1.5rem; }
+  .sources-hub .sources-tabs [role=tab] { flex: 0 1 auto; min-width: 9rem; padding-inline: 1.5rem; }
+  .extension-tabs button { min-width: 7rem; padding-inline: 1.5rem; }
   .sources-hub .sources-body, .extension-screen .sources-body, .sources-hub .sources-tabs, .extension-toolbar { width: calc(100% - 3rem); max-width: var(--collection-measure); margin-inline: auto; padding-inline: .9rem; }
   .sources-body .sources-card { max-width: none; }
   .reader-screen { --reader-footer-height: 5.5rem; }

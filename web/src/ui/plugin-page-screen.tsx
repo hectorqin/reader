@@ -46,7 +46,7 @@ export class PluginPageScreen {
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
       else this.error = error instanceof Error ? error.message : '操作失败';
     } finally {
-      this.busy = false; this.draw();
+      this.busy = false; this.draw(); this.revealActiveTab();
       if (previousTab !== this.activeTab) { const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0; }
       if (action) (this.element.querySelector<HTMLElement>('[role=tabpanel]') ?? this.element.querySelector<HTMLElement>('.sources-body'))?.focus({ preventScroll: true });
     }
@@ -96,8 +96,17 @@ export class PluginPageScreen {
       </details>)}
     </>;
   }
+  private revealActiveTab() {
+    const list = this.element.querySelector<HTMLElement>('.extension-tabs');
+    const selected = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!list || !selected) return;
+    const viewport = list.getBoundingClientRect(), item = selected.getBoundingClientRect();
+    // Only move the navigation strip; scrolling ancestors would move the page.
+    if (item.left < viewport.left) list.scrollLeft += item.left - viewport.left;
+    else if (item.right > viewport.right) list.scrollLeft += item.right - viewport.right;
+  }
   private selectTab(id: string) {
-    this.activeTab = id; this.error = ''; this.confirmation = undefined; this.draw();
+    this.activeTab = id; this.error = ''; this.confirmation = undefined; this.draw(); this.revealActiveTab();
     const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0;
   }
   private view() {
@@ -118,7 +127,7 @@ export class PluginPageScreen {
             else if (event.key === 'End') next = tabs.length - 1;
             else return;
             event.preventDefault(); this.selectTab(tabs[next]!.id);
-            document.getElementById('extension-tab-' + this.activeTab)?.focus();
+            document.getElementById('extension-tab-' + this.activeTab)?.focus({ preventScroll: true });
           }}>{tab.title}</button>)}</div>}
       </div>
       {status && <FloatingNotice message={status} busy={this.busy} error={isError} />}
