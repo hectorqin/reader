@@ -70,7 +70,8 @@ COPY --from=web --chown=reader:reader /web/dist ./web
 # (a bind mount's uid/gid comes from the host and overrides the chown above),
 # then re-execs the server as `reader`. See the script for the full rationale.
 COPY --chown=root:root server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
+ && chmod 0755 /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 VOLUME ["/data"]
