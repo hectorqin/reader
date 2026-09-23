@@ -3911,3 +3911,23 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .alternative-preview h4 { margin: 0; }
 .alternative-preview label { display: grid; gap: .5rem; }
 .alternative-preview select { width: 100%; min-width: 0; min-height: 44px; }
+
+.catalog-book:has(.catalog-source-count) { display: flex; align-items: center; gap: 1rem; }
+.catalog-book:has(.catalog-source-count) > div { flex: 1; min-width: 0; }
+.catalog-source-count { display: inline-flex; align-items: center; gap: .5rem; flex: none; min-height: 44px; white-space: nowrap; }
+.catalog-source-heading { padding-block: 1rem; border-bottom: 1px solid var(--reader-line); }
+.catalog-source-heading h3 { margin: 0; font-size: 1.15rem; overflow-wrap: anywhere; }
+.catalog-source-heading p { margin: .4rem 0; color: var(--reader-muted); }
+.catalog-source-heading small { color: var(--reader-muted); }
+.catalog-source-item { padding-block: 1rem; border-bottom: 1px solid var(--reader-line); }
+.catalog-source-item:last-child { border-bottom: 0; }
+.catalog-source-item strong { overflow-wrap: anywhere; }
+.catalog-source-item .source-description { margin: .4rem 0 .75rem; }
+.catalog-source-item .sources-actions { justify-content: flex-end; }
+
+@media (min-width: 600px) {
+  .catalog-source-item { display: flex; align-items: center; gap: 1rem; }
+  .catalog-source-item > div:first-child { flex: 1; min-width: 0; }
+  .catalog-source-item .sources-actions { flex: none; }
+  .catalog-source-item .source-description { margin-bottom: 0; }
+}

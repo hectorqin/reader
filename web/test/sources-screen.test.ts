@@ -363,6 +363,8 @@ it('allows details and acquisition while search continues, then offers restart i
   const acquire = vi.spyOn(api, 'acquireSource').mockResolvedValue({ kind: 'ready', publicationId: 'book1' });
   input(screen.element, '搜索书籍', '查询'); button(screen.element, '搜索').click();
   await vi.waitFor(() => expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(1));
+  button(screen.element, '1 条书源').click();
+  await vi.waitFor(() => expect(screen.element.querySelector('dialog[aria-label="书源列表"]')).not.toBeNull());
   expect(button(screen.element, '详情').disabled).toBe(false);
   button(screen.element, '详情').click();
   await vi.waitFor(() => expect(detail).toHaveBeenCalledTimes(1));
@@ -400,4 +402,30 @@ it('uploads a newer plugin package in place and reports the new version without 
   await vi.waitFor(() => expect(noticeText()).toContain('插件已更新至 2.0.0 并启用'));
   expect(screen.element.textContent).toContain('2.0.0');
   expect(transport.requests.some(request => request.method === 'DELETE')).toBe(false);
+});
+
+
+it('groups streamed books, updates an open source list, and acquires the chosen reference', async () => {
+  const { screen, api } = await sessionSetup(); let finish!: (page: SourcePage) => void;
+  const one = { ref: 'source-a-book', title: '斗罗大陆', authors: ['唐家三少'], sourceName: '书源甲', latestChapter: '第一章' };
+  const two = { ...one, ref: 'source-b-book', sourceName: '书源乙', latestChapter: '第二章' };
+  vi.spyOn(api, 'searchSource').mockImplementationOnce(() => pages({ items: [one], nextCursor: 'next' }, new Promise(resolve => { finish = resolve; })));
+  const acquire = vi.spyOn(api, 'acquireSource').mockResolvedValue({ kind: 'ready', publicationId: 'book1' });
+  const detail = vi.spyOn(api, 'sourceDetail').mockResolvedValue(two);
+  input(screen.element, '搜索书籍', '斗罗'); button(screen.element, '搜索').click();
+  await vi.waitFor(() => expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(1));
+  button(screen.element, '1 条书源').click();
+  await vi.waitFor(() => expect(screen.element.querySelector('dialog[aria-label="书源列表"]')).not.toBeNull());
+  finish({ items: [one, two, { ...one, ref: 'other-author', authors: ['同名书作者'] }] });
+  await vi.waitFor(() => expect(screen.element.querySelectorAll('.catalog-source-item')).toHaveLength(2));
+  expect(screen.element.querySelectorAll('.catalog-book')).toHaveLength(2);
+  expect(screen.element.querySelector('.search-progress')?.textContent).toContain('已找到 2 本书');
+  expect(screen.element.querySelector('.catalog-summary')?.textContent).toContain('已找到 2 本书');
+  const item = screen.element.querySelectorAll<HTMLElement>('.catalog-source-item')[1]!;
+  expect(item.textContent).toContain('书源乙'); expect(item.textContent).toContain('第二章');
+  button(item, '详情').click(); await vi.waitFor(() => expect(detail).toHaveBeenCalledWith('source-1', two.ref));
+  const dialog = screen.element.querySelector<HTMLElement>('dialog[aria-label="书籍信息"]')!;
+  button(dialog, '关闭弹窗').click();
+  button(item, '加入书架').click(); await vi.waitFor(() => expect(acquire).toHaveBeenCalledWith('source-1', two.ref, ''));
+  expect(screen.element.querySelector('dialog[aria-label="书源列表"]')).not.toBeNull();
 });

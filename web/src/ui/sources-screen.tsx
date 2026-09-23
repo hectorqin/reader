@@ -1,3 +1,4 @@
+import { groupSourceResults } from './source-results.ts';
 import type { ExtensionField } from '../api/sources.ts';
 import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { Book } from '../api/types.ts';
@@ -53,7 +54,9 @@ export class SourcesScreen {
   private installMethod: 'npm' | 'upload' = 'npm';
   private trusted = false;
   private acquired: Book | null = null;
+  private acquiredRef: string | null = null;
   private detailEntry: SourceEntry | null = null;
+  private resultGroup: string | null = null;
   private detailLoading = false;
   private detailEpoch = 0;
 
@@ -124,6 +127,7 @@ export class SourcesScreen {
   }
   private select(source: SourceInstance): void {
     this.stopSearch(); this.searchState = 'idle'; this.searchRequest = null; this.searchSession = null; this.searchMenu = false;
+    this.resultGroup = null; this.detailEntry = null; this.detailEpoch++;
     this.selected = source; this.page = null; this.path = []; this.query = ''; this.credentialValues = {}; this.acquired = null;
     this.filters = []; this.filterValues = {};
     void this.run(async () => {
@@ -151,7 +155,7 @@ export class SourcesScreen {
     const cursor = append ? this.page?.nextCursor : undefined;
     if (append && !this.canResume) return;
     this.searchMenu = false;
-    if (!append) { this.page = null; this.path = []; this.acquired = null; }
+    if (!append) { this.resultGroup = null; this.detailEntry = null; this.detailEpoch++; this.page = null; this.path = []; this.acquired = null; }
     if (!append) this.searchSession = { sourceId: source.id, id: searchId() };
     const session = this.searchSession;
     this.searchRequest = request; this.searchRun = run; this.searchState = 'searching'; this.message = ''; this.messageError = false; this.draw();
@@ -202,16 +206,20 @@ export class SourcesScreen {
     const result = await this.options.api.acquireSource(this.selected.id, entry.ref, optionId);
     if (result.kind === 'action-required') { this.message = result.action?.label ?? '请先在来源服务完成授权'; return; }
     if (!result.publicationId) throw new Error('来源没有返回书籍');
-    this.acquired = (await this.options.api.getBook(result.publicationId)).book;
+    this.acquired = (await this.options.api.getBook(result.publicationId)).book; this.acquiredRef = entry.ref;
     this.subscriptions = await this.options.api.subscriptions();
     this.message = '已加入书架，可在“自动追更”中开启检查。';
   }
   private changeTab(tab: SourceTab): void {
     this.stopSearch();
+    this.resultGroup = null; this.detailEntry = null; this.detailEpoch++;
     this.tab = tab; this.managing = null; this.message = ''; this.draw();
     const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0;
   }
   private view() {
+    const grouped = this.searchState !== 'idle' && !(this.selected?.descriptor?.builtin && this.selected.sourceType === 'local');
+    const results = groupSourceResults(this.page?.items ?? [], grouped);
+    const activeGroup = results.find(group => group.key === this.resultGroup);
     const type = this.types.find((t) => keyFor(t) === this.editor?.typeKey);
     const resume = this.canResume && (this.searchState === 'stopped' || this.searchState === 'error');
     const tabs: Array<{ id: SourceTab; title: string }> = [
@@ -304,18 +312,19 @@ export class SourcesScreen {
                   </div>}</>}
               </div>}</form>}
           {this.searchState !== 'idle' && <div className="search-progress" role="status">
-            <span>{({ searching: '正在搜索', stopped: '已停止搜索', complete: '搜索完成', error: '搜索中断', limited: '已达到结果上限' })[this.searchState]}{this.page?.batch ? ` · 已检查 ${this.page.batch.completed} / ${this.page.batch.total} 个来源` : ''} · 已找到 {this.page?.items.length ?? 0} 本书</span>
+            <span>{({ searching: '正在搜索', stopped: '已停止搜索', complete: '搜索完成', error: '搜索中断', limited: '已达到结果上限' })[this.searchState]}{this.page?.batch ? ` · 已检查 ${this.page.batch.completed} / ${this.page.batch.total} 个来源` : ''} · 已找到 {results.length} 本书</span>
             {this.page?.batch && <progress aria-label="书源搜索进度" max={Math.max(1, this.page.batch.total)} value={this.page.batch.completed} />}
             {this.searchState === 'searching' && <small>可查看详情、加入书架，或随时停止。</small>}
           </div>}
-          {this.page && <CatalogFeedback page={this.page} merged={this.searchState !== 'idle'} searching={this.searchState === 'searching'} />}
+          {this.page && <CatalogFeedback page={this.page} count={results.length} merged={this.searchState !== 'idle'} searching={this.searchState === 'searching'} />}
           {this.page?.navigation?.map((entry) => <Button disabled={this.busy} onClick={() => void this.run(() => this.catalog({ ref: entry.ref }))}>{entry.title}</Button>)}
           {this.page?.items.length === 0 && !this.searchRun && <div className="catalog-empty"><Icon name={this.page.errors?.length ? 'warning' : 'search'} /><strong>{this.searchState === 'stopped' ? '搜索已停止，暂未找到书籍' : this.page.errors?.length ? '暂未返回书籍，部分来源搜索失败' : '没有找到匹配书籍'}</strong><p>{this.page.errors?.length ? '请查看失败原因，或调整搜索范围后重试。' : '试试其他关键词，或调整搜索范围。'}</p></div>}
-          {this.page?.items.map((entry) => <article className="sources-row catalog-book" key={entry.ref}>
-            <div><strong>{entry.title}</strong><small>{entry.authors?.join(' / ')}</small><p className="source-description">{entry.description}</p></div>
+          {results.map(({ key, entry, entries }) => <article className="sources-row catalog-book" key={key}>
+            <div><strong>{entry.title}</strong><small>{entry.authors?.join(' / ') || '作者未知'}</small>{!grouped && <p className="source-description">{entry.description}</p>}</div>
+            {grouped ? <Button className="catalog-source-count" onClick={() => { this.resultGroup = key; this.draw(); }}><span>{entries.length} 条书源</span><Icon name="chevron-right" /></Button> :
             <div className="sources-actions"><Button onClick={() => void this.showDetail(entry)}>详情</Button>
             {(entry.options?.length ? entry.options : [{ id: '', label: '加入书架' }]).map((option) => <Button className="primary" disabled={this.working || option.available === false}
-              onClick={() => void this.run(() => this.acquire(entry, option.id), true)}>{option.label}</Button>)}</div>
+              onClick={() => void this.run(() => this.acquire(entry, option.id), true)}>{option.label}</Button>)}</div>}
           </article>)}
           {this.searchState === 'complete' && this.page?.nextCursor && <div className="catalog-pagination"><Button disabled={this.busy || !this.canResume} onClick={() => void this.search(true)}>加载更多结果</Button></div>}
           {this.searchState === 'idle' && (this.path.length > 1 || this.page?.nextCursor) && <nav className="catalog-pagination" aria-label="搜索结果翻页">
@@ -380,6 +389,18 @@ export class SourcesScreen {
         </article>)}
       </section>}
       </main>
+        {activeGroup && <Modal title="书源列表" busy={this.working} onClose={() => { this.resultGroup = null; this.draw(); }}>
+          <div className="source-modal-content catalog-source-list">
+            <header className="catalog-source-heading"><h3>{activeGroup.entry.title}</h3><p>{activeGroup.entry.authors?.join(' / ') || '作者未知'}</p><small role="status">{activeGroup.entries.length} 条书源{this.searchRun ? ' · 搜索中，列表持续更新' : ''}</small></header>
+            {activeGroup.entries.map(entry => <article className="catalog-source-item" key={entry.ref}>
+              <div><strong>{entry.sourceName || this.selected?.name || '未命名书源'}</strong><p className="source-description">最新章节：{entry.latestChapter || '暂无信息'}</p></div>
+              <div className="sources-actions"><Button onClick={() => void this.showDetail(entry)}>详情</Button>
+                {(entry.options?.length ? entry.options : [{ id: '', label: '加入书架' }]).map(option => <Button className="primary" disabled={this.working || option.available === false} onClick={() => void this.run(() => this.acquire(entry, option.id), true)}>{option.label}</Button>)}
+              </div>
+            </article>)}
+          </div>
+          {this.acquired && activeGroup.entries.some(entry => entry.ref === this.acquiredRef) && <footer className="source-modal-actions"><Button onClick={() => this.options.onOpen(this.acquired!)}>阅读《{this.acquired.title}》</Button></footer>}
+        </Modal>}
         {this.detailEntry && <Modal title="书籍信息" busy={this.working} onClose={() => { this.detailEpoch++; this.detailEntry = null; this.detailLoading = false; this.draw(); }}>
           <article className="book-detail source-modal-content" aria-busy={this.detailLoading}>
             <h3>{this.detailEntry.title}</h3><p className="book-detail-author">{this.detailEntry.authors?.join(' / ') || '作者未知'}</p>
@@ -388,7 +409,7 @@ export class SourcesScreen {
             <h4>内容简介</h4><p className="book-detail-description">{this.detailEntry.description || '暂无简介'}</p>
           </article>
           <footer className="source-modal-actions">{(this.detailEntry.options?.length ? this.detailEntry.options : [{ id: '', label: '加入书架' }]).map(option => <Button className="primary" disabled={this.working || option.available === false} onClick={() => void this.run(() => this.acquire(this.detailEntry!, option.id), true)}>{option.label}</Button>)}
-          {this.acquired && <Button onClick={() => this.options.onOpen(this.acquired!)}>开始阅读</Button>}</footer>
+          {this.acquired && this.detailEntry.ref === this.acquiredRef && <Button onClick={() => this.options.onOpen(this.acquired!)}>开始阅读</Button>}</footer>
         </Modal>}
         {this.editor && <Modal title={this.editor.id ? '编辑来源' : '添加来源'} busy={this.busy} onClose={() => { this.editor = null; this.message = ''; this.draw(); }}>
           <form className="sources-card source-editor source-modal-form" onSubmit={(event) => { event.preventDefault(); void this.run(() => this.save()); }}>

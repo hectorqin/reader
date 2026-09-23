@@ -131,7 +131,10 @@ try {
   await page.getByLabel('搜索书籍').fill('示例'); await button('搜索').click();
   await page.getByText('插件示例书',{exact:true}).waitFor();
   await shot('search-desktop');
-  await button('加入书架').click(); await button('阅读《插件示例书》').click();
+  await button('1 条书源').click();
+  const sourceList = page.getByRole('dialog', { name: '书源列表', exact: true });
+  await sourceList.getByRole('button', { name: '加入书架', exact: true }).click();
+  await sourceList.getByRole('button', { name: '阅读《插件示例书》', exact: true }).click();
   await page.locator('book-content').getByText('这是通过独立 Node 进程提供的示例章节。',{exact:false}).waitFor();
   await page.setViewportSize({width:390,height:844}); await shot('reader-mobile');
 
