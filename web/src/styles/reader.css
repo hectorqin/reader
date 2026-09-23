@@ -3522,7 +3522,7 @@ book-content {
 .sources-search { display:flex; flex-wrap:wrap; align-items:end; gap:.85rem; margin:1rem 0 1.5rem; }
 .sources-search label { flex:1 1 10rem; min-width:0; margin:0; font-size:.85rem; color:var(--reader-muted); }
 .sources-search .source-keyword { flex:2 1 18rem; }
-.sources-search button { min-height:44px; gap:.5rem; }
+.sources-search button { display:inline-flex; align-items:center; justify-content:center; min-height:44px; gap:.5rem; }
 .sources-search input, .sources-search select { min-height:44px; color:var(--reader-ink); }
 .catalog-feedback { margin:1rem 0; padding-top:1.25rem; border-top:1px solid var(--reader-line); }
 .search-progress { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem 1rem; padding:1rem; border-radius:.75rem; background:color-mix(in srgb,var(--reader-accent) 6%,var(--reader-paper)); font-size:.9rem; }
@@ -3665,9 +3665,6 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 
 .sources-card h3, .sources-body > p { overflow-wrap:anywhere; }
 .sources-card form + form { margin-top:.65rem; }
-section[aria-label="切换书源"] { padding:.75rem 0; overflow-wrap:anywhere; }
-section[aria-label="切换书源"] select { display:block; width:100%; padding:.6rem; margin:.5rem 0; color:inherit; background:var(--reader-surface); }
-section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; padding:.5rem; }
 
 /* Generic declarative extension pages, scoped to the selected source instance. */
 .extension-screen .sources-body { width: 100%; max-width: 64rem; margin-inline: auto; box-sizing: border-box; }
@@ -3892,11 +3889,6 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 .reader-source-info span { flex: 0 1 auto; max-width: 35%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .reader-source-info a { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: inherit; text-decoration: none; }
 .reader-source-info a:hover { text-decoration: underline; }
-.alternative-book { gap: .75rem; padding-block: .85rem; border-bottom: 1px solid var(--reader-line); }
-.alternative-book > div { min-width: 0; flex: 1; }
-.alternative-book small { display: block; color: var(--reader-muted); margin-top: .3rem; }
-.alternative-book strong, .alternative-book p { overflow-wrap: anywhere; }
-.alternative-book button { flex: none; }
 .book-detail { padding-top: 1rem; }
 .book-detail h3 { margin: 0; font-size: 1.35rem; overflow-wrap: anywhere; }
 .book-detail-author { color: var(--reader-muted); }
@@ -3907,7 +3899,6 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
 
 .reader-book-heading { padding: 0; border: 0; background: transparent; color: inherit; text-align: start; cursor: pointer; min-height: 44px; }
 
-.reader-screen .alternative-book { display: flex; align-items: center; }
 .alternative-preview { padding-block: 1rem; display: grid; gap: .75rem; }
 .alternative-preview h4 { margin: 0; }
 .alternative-preview label { display: grid; gap: .5rem; }
@@ -3932,3 +3923,21 @@ section[aria-label="切换书源"] button { margin:.35rem .4rem .35rem 0; paddin
   .catalog-source-item .sources-actions { flex: none; }
   .catalog-source-item .source-description { margin-bottom: 0; }
 }
+.source-default-badge { display: inline-block; margin-inline-start: .6rem; padding: .12rem .45rem; border-radius: .35rem; background: color-mix(in srgb, var(--reader-accent) 10%, transparent); color: var(--reader-accent); font-size: .7rem; font-weight: 500; vertical-align: middle; }
+.source-switch { padding-block: .25rem 1rem; overflow-wrap: anywhere; }
+.source-switch-status { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .65rem; font-size: .85rem; }
+.source-switch-status strong { color: var(--reader-accent); font-size: .8rem; font-weight: 500; }
+.source-switch-status progress { width: 100%; height: 3px; accent-color: var(--reader-accent); }
+.source-switch-hint { margin: .65rem 0 1rem; color: var(--reader-muted); font-size: .75rem; line-height: 1.6; }
+.source-switch-list { display: grid; gap: .7rem; }
+.source-switch-card { display: flex; flex-direction: column; gap: .55rem; width: 100%; min-width: 0; padding: 1rem; border: 1px solid var(--reader-line); border-radius: .85rem; background: var(--reader-paper); color: var(--reader-ink); text-align: start; font: inherit; cursor: pointer; }
+.source-switch-card:hover { border-color: var(--reader-accent); background: color-mix(in srgb, var(--reader-accent) 4%, var(--reader-paper)); }
+.source-switch-card:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
+.source-switch-card:disabled { opacity: .55; cursor: default; }
+.source-switch-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; font-size: .95rem; }
+.source-switch-card-heading .icon { flex: none; color: var(--reader-muted); }
+.source-switch-book { font-size: .82rem; line-height: 1.5; }
+.source-switch-book > span { color: var(--reader-muted); }
+.source-switch-chapter { display: flex; align-items: baseline; gap: .5rem; font-size: .78rem; line-height: 1.6; color: var(--reader-muted); }
+.source-switch-chapter > span { flex: none; font-size: .7rem; }
+.source-switch .catalog-feedback { margin-top: 1rem; }

@@ -429,3 +429,18 @@ it('groups streamed books, updates an open source list, and acquires the chosen 
   button(item, '加入书架').click(); await vi.waitFor(() => expect(acquire).toHaveBeenCalledWith('source-1', two.ref, ''));
   expect(screen.element.querySelector('dialog[aria-label="书源列表"]')).not.toBeNull();
 });
+
+it('loads the default source on entry but ignores a disabled or unavailable default', async () => {
+  const { api, screen } = await setup();
+  const list = vi.spyOn(api, 'sources').mockResolvedValue([{ ...source, isDefault: true }]);
+  const browse = vi.spyOn(api, 'sourceCatalog').mockResolvedValue({ items: [] });
+  await screen.show();
+  expect(screen.element.querySelector<HTMLSelectElement>('[aria-label="选择来源"]')!.value).toBe(source.id);
+  expect(browse).toHaveBeenCalledWith(source.id, {});
+  list.mockResolvedValue([{ ...source, isDefault: true, enabled: false }]);
+  browse.mockClear(); await screen.show();
+  expect(screen.element.querySelector<HTMLSelectElement>('[aria-label="选择来源"]')!.value).toBe('');
+  expect(browse).not.toHaveBeenCalled();
+  list.mockResolvedValue([{ ...source, isDefault: true, descriptor: null }]);
+  await screen.show(); expect(browse).not.toHaveBeenCalled();
+});

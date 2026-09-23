@@ -820,7 +820,9 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 ### `GET /sources`
 
-登录用户可以看到来源实例，响应为 `{ "sources": [...] }`；每项有 `id/pluginId/sourceType/name/enabled/descriptor`，只有管理员返回 `config`。服务端启动时自动创建 `local` 实例。
+登录用户可以看到来源实例，响应为 `{ "sources": [...] }`；每项有 `id/pluginId/sourceType/name/enabled/isDefault/descriptor`，只有管理员返回 `config`。服务端启动时自动创建 `local` 实例。
+
+管理员可发送 `PATCH /api/v1/sources/:id`，请求体为 `{ "isDefault": true }`，将已启用且支持搜索的来源设为全站默认书源。服务端最多保留一个默认来源，并持久保存；`false` 取消默认，暂停或删除来源也会清除其默认状态。进入搜书页时自动选中可用的默认来源，用户仍可手动选择其它来源；插件不可用时跳过默认选择。
 
 ### `POST /sources` — 管理员
 
@@ -836,7 +838,7 @@ Content-Type: application/json
 
 返回 `201 { "source": {...} }`。可指定 `id`（2～80 位字母、数字、下划线或短横线），省略则自动生成。`sourceType` 和 `pluginId` 从 `/sources/types` 读取。`local` 仅接受空配置，使用宿主 `BOOKS_DIR`。
 
-`config` 不能包含密码。OPDS 的 `url` 必须是 HTTP(S) 地址；Feed 和下载链接默认限制在该 origin。跨 origin 获取文件须配置 `allowedOrigins`；Basic 凭据不转发到附加 origin。管理员可 `PATCH /sources/:id` 更新 `name/config/enabled`，配置仍由提供者校验，修改 config 会清除该来源所有用户的凭据，防止向新地址发送旧凭据；来源有在途调用时修改 config 返回 `409 SOURCE_BUSY`。`DELETE /sources/:id` 只允许删除没有已获取内容的非内置来源，否则返回 `409 SOURCE_IN_USE`。Web 的 `#/sources` 提供对应表单。
+`config` 不能包含密码。OPDS 的 `url` 必须是 HTTP(S) 地址；Feed 和下载链接默认限制在该 origin。跨 origin 获取文件须配置 `allowedOrigins`；Basic 凭据不转发到附加 origin。管理员可 `PATCH /sources/:id` 更新 `name/config/enabled/isDefault`，配置仍由提供者校验，修改 config 会清除该来源所有用户的凭据，防止向新地址发送旧凭据；来源有在途调用时修改 config 返回 `409 SOURCE_BUSY`。`DELETE /sources/:id` 只允许删除没有已获取内容的非内置来源，否则返回 `409 SOURCE_IN_USE`。Web 的 `#/sources` 提供对应表单。
 
 ### 来源浏览、搜索和详情
 

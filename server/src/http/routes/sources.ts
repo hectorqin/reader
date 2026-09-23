@@ -75,7 +75,7 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     requireAdmin(request);
     const { id } = request.params as { id: string };
     const patch = (request.body ?? {}) as Record<string, unknown>;
-    if (!['name', 'config', 'enabled'].some((key) => key in patch)) throw badRequest('no source changes provided');
+    if (!['name', 'config', 'enabled', 'isDefault'].some((key) => key in patch)) throw badRequest('no source changes provided');
     await host.update(id, patch);
     return { source: host.list(true).find((source) => source.id === id) };
   });

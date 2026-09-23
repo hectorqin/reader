@@ -265,15 +265,21 @@ export function ReaderChrome({ state, stage, handlers }: ReaderChromeProps): JSX
       ) : null}
 
       <FloatingNotice message={state.switching ? "正在获取书源内容…" : ""} busy />
-      {state.alternatives && <Panel title="切换书源" onClose={() => handlers.onCancelSwitch?.()}><section aria-label="切换书源">{!!state.alternatives.errors?.length && <CatalogFeedback page={state.alternatives} merged searching={!!state.alternativesSearching} />}
-            <p className="source-description">按书名和作者匹配，选择书源后确认阅读章节。</p><div className="search-progress" role="status">{state.alternativesSearching ? "正在搜索可用书源…" : "搜索完成"} · 已找到 {state.alternatives.items.length} 个{state.alternatives.batch && <progress aria-label="换源搜索进度" max={Math.max(1, state.alternatives.batch.total)} value={state.alternatives.batch.completed} />}</div>
+      {state.alternatives && <Panel title="切换书源" onClose={() => handlers.onCancelSwitch?.()}><section className="source-switch" aria-label="切换书源">
+            <div className="source-switch-status" role="status"><span>{state.alternativesSearching ? '正在寻找可用书源' : '书源搜索完成'}</span><strong>{state.alternatives.items.length} 个可选</strong>
+              {state.alternativesSearching && state.alternatives.batch && <progress aria-label="换源搜索进度" max={Math.max(1, state.alternatives.batch.total)} value={state.alternatives.batch.completed} />}
+            </div>
+            <p className="source-switch-hint">已按书名和作者匹配，选择书源后确认章节。</p>
             {!state.alternatives.items.length && !state.alternativesSearching && <p className="catalog-empty">没有找到书名、作者匹配的其它书源。</p>}
-            {state.alternatives.items.map(entry => <div className="sources-row alternative-book" key={entry.ref}><div><strong>{entry.title}</strong><small>{entry.authors?.join(' / ')}</small><small>{entry.sourceName}</small><p className="source-description">最新章节：{entry.latestChapter || "暂无信息"}</p></div>
-              <IconButton icon="chevron-right" label="查看此源目录" disabled={state.switching === true} onClick={() => handlers.onAlternative?.(entry.ref, entry.title)} /></div>)}
+            <div className="source-switch-list">{state.alternatives.items.map(entry => <button type="button" className="source-switch-card" key={entry.ref} aria-label={'查看此源目录：' + (entry.sourceName || entry.title)} disabled={state.switching === true} onClick={() => handlers.onAlternative?.(entry.ref, entry.title)}>
+              <span className="source-switch-card-heading"><strong>{entry.sourceName || '未命名书源'}</strong><Icon name="chevron-right" /></span>
+              <span className="source-switch-book">{entry.title}<span> · {entry.authors?.join(' / ') || '作者未知'}</span></span>
+              <span className="source-switch-chapter"><span>最新</span>{entry.latestChapter || '暂无章节信息'}</span>
+            </button>)}</div>
+            {!!state.alternatives.errors?.length && <CatalogFeedback page={state.alternatives} merged compact searching={!!state.alternativesSearching} />}
             {state.alternativeChapters && <Modal title="选择阅读章节" busy={!!state.switching} onClose={() => handlers.onCancelAlternative?.()}><div className="alternative-preview source-modal-content"><h4>{state.alternativeTitle}</h4><label>切换后阅读的章节<select value={state.alternativeChapter ?? ''} disabled={state.switching === true} onChange={event => handlers.onAlternativeChapter?.(event.currentTarget.value)}>
               <option value="">请选择章节</option>{state.alternativeChapters.map(chapter => <option value={chapter.id}>{chapter.title}</option>)}
             </select></label><Button type="button" disabled={state.switching || !state.alternativeChapter} onClick={() => handlers.onSwitchSource?.()}>确认换源并阅读</Button></div></Modal>}
-            <Button type="button" disabled={state.switching === true} onClick={() => handlers.onCancelSwitch?.()}>取消换源</Button>
           </section></Panel>}
 
       {state.settingsOpen ? (

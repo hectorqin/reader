@@ -119,7 +119,7 @@ describe('chapter publication reading', () => {
       return { status: 200, headers: {}, json: { progress: null } };
     });
     await env.screen.open(book); await click(env.screen, '目录'); await click(env.screen, '切换书源');
-    await vi.waitFor(() => expect(env.screen.element.querySelector('.alternative-book')?.textContent).toContain('其它书源')); await click(env.screen, '查看此源目录');
+    await vi.waitFor(() => expect(env.screen.element.querySelector('.source-switch-card')?.textContent).toContain('其它书源')); await click(env.screen, '查看此源目录：其它书源');
     await vi.waitFor(() => expect(env.screen.element.querySelector('section[aria-label="切换书源"] select')).not.toBeNull());
     const submit = [...env.screen.element.querySelectorAll('button')].find(button => button.textContent === '确认换源并阅读')!;
     expect(submit.disabled).toBe(true);

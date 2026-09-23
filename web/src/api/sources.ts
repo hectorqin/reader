@@ -5,7 +5,7 @@ export interface SourceType {
   credentialKeys?: Array<{ key: string; label: string }>;
 }
 export interface SourceInstance {
-  id: string; pluginId: string; sourceType: string; name: string; enabled: boolean;
+  id: string; pluginId: string; sourceType: string; name: string; enabled: boolean; isDefault?: boolean;
   config?: Record<string, unknown>; descriptor: SourceType | null;
 }
 export interface SourceEntry {

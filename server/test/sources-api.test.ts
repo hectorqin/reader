@@ -646,3 +646,32 @@ test('alternative streams use owned book identity and forced chapter refresh upd
     assert.equal(denied.statusCode, 404, denied.body);
   }
 });
+
+test('default search source is exclusive, persistent, admin-managed and cleared on disable or delete', async t => {
+  const h = await harness(); t.after(() => h.close());
+  const member = await h.member();
+  const patch = (id: string, payload: object, session = h.admin) => h.app.inject({ method: 'PATCH', url: '/api/v1/sources/' + id, headers: auth(session), payload });
+  const defaults = async () => (await h.app.inject({ method: 'GET', url: '/api/v1/sources', headers: auth(member) })).json().sources.filter((s: any) => s.isDefault).map((s: any) => s.id);
+  for (const id of ['one', 'two']) {
+    const response = await h.app.inject({ method: 'POST', url: '/api/v1/sources', headers: auth(h.admin), payload: { id, pluginId: 'reader.opds', sourceType: 'opds', name: id, config: { url: 'https://example.test/opds' } } });
+    assert.equal(response.statusCode, 201, response.body);
+  }
+  assert.equal((await patch('one', { isDefault: true }, member)).statusCode, 403);
+  assert.equal((await patch('one', { isDefault: 'true' })).statusCode, 400);
+  assert.equal((await patch('missing', { isDefault: true })).statusCode, 404);
+  assert.equal((await patch('one', { isDefault: true })).statusCode, 200);
+  assert.deepEqual(await defaults(), ['one']);
+  await h.restart(); assert.deepEqual(await defaults(), ['one']);
+  assert.equal((await patch('two', { isDefault: true })).statusCode, 200);
+  assert.deepEqual(await defaults(), ['two']);
+  assert.equal((await patch('one', { name: '' , isDefault: true })).statusCode, 400);
+  assert.deepEqual(await defaults(), ['two']);
+  await patch('two', { enabled: false }); assert.deepEqual(await defaults(), []);
+  assert.equal((await patch('two', { isDefault: true })).statusCode, 400);
+  assert.equal((await patch('two', { enabled: false, isDefault: true })).statusCode, 400);
+  await patch('two', { enabled: true, isDefault: true }); assert.deepEqual(await defaults(), ['two']);
+  await patch('two', { isDefault: false }); assert.deepEqual(await defaults(), []);
+  await patch('two', { isDefault: true });
+  await h.app.inject({ method: 'DELETE', url: '/api/v1/sources/two', headers: auth(h.admin) });
+  assert.deepEqual(await defaults(), []);
+});

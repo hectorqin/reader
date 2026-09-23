@@ -52,11 +52,11 @@ export class SourceHost {
   }
 
   list(includeConfig = false) {
-    return this.db.all<{ id: string; plugin_id: string; source_type: string; name: string; config_json: string; enabled: number }>(
-      'SELECT id, plugin_id, source_type, name, config_json, enabled FROM source_instances ORDER BY name',
+    return this.db.all<{ id: string; plugin_id: string; source_type: string; name: string; config_json: string; enabled: number; is_default: number }>(
+      'SELECT id, plugin_id, source_type, name, config_json, enabled, is_default FROM source_instances ORDER BY name',
     ).map((row) => ({
       id: row.id, pluginId: row.plugin_id, sourceType: row.source_type, name: row.name,
-      enabled: row.enabled === 1,
+      enabled: row.enabled === 1, isDefault: row.is_default === 1,
       ...(includeConfig ? { config: parse(row.config_json) } : {}),
       descriptor: this.registry.get(row.plugin_id, row.source_type)?.provider.descriptor ?? null,
     }));
@@ -84,14 +84,18 @@ export class SourceHost {
   setEnabled(id: string, enabled: boolean): void {
     const result = this.db.get<{ id: string }>('SELECT id FROM source_instances WHERE id = ?', id);
     if (!result) throw notFound('source instance not found', 'SOURCE_NOT_FOUND');
-    this.db.run('UPDATE source_instances SET enabled = ? WHERE id = ?', enabled ? 1 : 0, id);
+    this.db.run('UPDATE source_instances SET enabled = ?, is_default = CASE WHEN ? = 0 THEN 0 ELSE is_default END WHERE id = ?', enabled ? 1 : 0, enabled ? 1 : 0, id);
   }
 
-  async update(id: string, patch: { name?: unknown; config?: unknown; enabled?: unknown }): Promise<void> {
+  async update(id: string, patch: { name?: unknown; config?: unknown; enabled?: unknown; isDefault?: unknown }): Promise<void> {
     const row = this.instance(id);
     const name = patch.name ?? row.name;
     if (typeof name !== 'string' || !name.trim() || name.length > 128) throw badRequest('invalid source name');
     if (patch.enabled !== undefined && typeof patch.enabled !== 'boolean') throw badRequest('enabled must be boolean');
+    if (patch.isDefault !== undefined && typeof patch.isDefault !== 'boolean') throw badRequest('isDefault must be boolean');
+    if (patch.isDefault === true && (!(patch.enabled ?? row.enabled) || !this.registry.get(row.plugin_id, row.source_type)?.provider.descriptor.capabilities.includes('search'))) {
+      throw badRequest('default source must be enabled and support search');
+    }
     const configuration = patch.config === undefined ? row.config_json : json(patch.config);
     if (configuration.length > 64 * 1024) throw badRequest('source configuration is too large');
     if (patch.config !== undefined) {
@@ -103,6 +107,8 @@ export class SourceHost {
     if (this.instance(id).config_json !== row.config_json) throw conflict('configuration changed; reload and retry');
     if (configuration !== row.config_json && (this.activeSources.get(id) ?? 0) > 0) throw conflict('source is busy; retry configuration when current calls finish', 'SOURCE_BUSY');
     this.db.transaction(() => {
+      if (patch.isDefault === true) this.db.run('UPDATE source_instances SET is_default = 0 WHERE is_default = 1');
+      if (patch.isDefault !== undefined || patch.enabled === false) this.db.run('UPDATE source_instances SET is_default = ? WHERE id = ?', patch.isDefault === true ? 1 : 0, id);
       this.db.run('UPDATE source_instances SET name = ?, config_json = ?, enabled = ? WHERE id = ?',
         name.trim(), configuration, patch.enabled === undefined ? row.enabled : Number(patch.enabled), id);
       // Changing a destination must not forward existing users' secrets to it.

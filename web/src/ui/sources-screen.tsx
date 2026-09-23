@@ -90,6 +90,10 @@ export class SourcesScreen {
       this.selected = sources.find(source => source.id === this.selected?.id && source.enabled && source.descriptor) ?? null;
       if (!this.selected) { this.page = null; this.filters = []; this.credentialValues = {}; }
     }
+    if (!this.selected) {
+      const preferred = sources.find(source => source.isDefault && source.enabled && source.descriptor?.capabilities.includes('search'));
+      if (preferred) await this.activateSource(preferred);
+    }
   }
   private async installPlugin(upload: boolean): Promise<void> {
     if (!this.trusted || (upload && !this.pluginFile)) return;
@@ -126,15 +130,16 @@ export class SourcesScreen {
     }
   }
   private select(source: SourceInstance): void {
+    this.stopSearch(); void this.run(() => this.activateSource(source));
+  }
+  private async activateSource(source: SourceInstance): Promise<void> {
     this.stopSearch(); this.searchState = 'idle'; this.searchRequest = null; this.searchSession = null; this.searchMenu = false;
     this.resultGroup = null; this.detailEntry = null; this.detailEpoch++;
     this.selected = source; this.page = null; this.path = []; this.query = ''; this.credentialValues = {}; this.acquired = null;
     this.filters = []; this.filterValues = {};
-    void this.run(async () => {
-      if (source.descriptor?.capabilities.includes('search.filters')) this.filters = await this.options.api.sourceFilters(source.id);
-      if (source.descriptor?.capabilities.includes('browse')) await this.catalog({});
-      this.draw();
-    });
+    if (source.descriptor?.capabilities.includes('search.filters')) this.filters = await this.options.api.sourceFilters(source.id);
+    if (source.descriptor?.capabilities.includes('browse')) await this.catalog({});
+    this.draw();
   }
   private stopSearch(): void {
     if (!this.searchRun) return;
@@ -253,7 +258,7 @@ export class SourcesScreen {
           {this.options.admin && <Button className="source-add" disabled={this.busy} onClick={() => this.edit()}><Icon name="plus" />添加来源</Button>}
         </div>
           {this.sources.map(source => <article className="sources-row source-entry" key={source.id}>
-            <div className="source-entry-top"><div className="source-entry-info"><strong>{source.name}</strong>
+            <div className="source-entry-top"><div className="source-entry-info"><strong>{source.name}{source.isDefault && <span className="source-default-badge">默认</span>}</strong>
               <small>{source.descriptor?.label ?? '插件未启用或未安装'}</small>
               <span className={'source-state' + (source.enabled ? ' is-enabled' : '')}>{source.enabled ? '已启用' : '已暂停'}</span>
             </div><div className="source-entry-actions">
@@ -268,6 +273,11 @@ export class SourcesScreen {
               } }}>
               {source.descriptor?.extensions?.pages?.map(page => <a className="source-management-link" href={'#/sources/' + encodeURIComponent(source.id) + '/' + encodeURIComponent(page.id)}>{page.title}<Icon name="chevron-right" /></a>)}
               <button className="source-management-link" type="button" disabled={this.busy || !source.descriptor} onClick={() => this.edit(source)}>基本设置<Icon name="chevron-right" /></button>
+              <button className="source-management-link" type="button" disabled={this.busy || (!source.isDefault && (!source.enabled || !source.descriptor?.capabilities.includes('search')))} onClick={() => void this.run(async () => {
+                await this.options.api.saveSource(source.id, { isDefault: !source.isDefault }); await this.reload();
+                if (!source.isDefault && this.selected?.id !== source.id) await this.activateSource(this.sources.find(item => item.id === source.id)!);
+                this.message = source.isDefault ? '已取消默认书源' : '已设为默认书源';
+              })}>{source.isDefault ? '取消默认' : '设为默认'}</button>
               <button className="source-management-link source-toggle" type="button" disabled={this.busy} onClick={() => void this.run(async () => {
                 await this.options.api.saveSource(source.id, { enabled: !source.enabled }); await this.reload(); this.managing = null;
                 this.message = source.enabled ? '来源已暂停' : '来源已启用';
@@ -280,7 +290,7 @@ export class SourcesScreen {
         <section className="sources-card source-picker"><div><h2>搜书</h2><p className="muted">选择来源，发现想读的书。</p></div>
           <label>选择来源<select aria-label="选择来源" disabled={this.busy} value={this.selected?.id ?? ''} onChange={event => {
             const source = this.sources.find(source => source.id === event.currentTarget.value); if (source) this.select(source);
-          }}><option value="" disabled>请选择一个来源</option>{this.sources.filter(source => source.enabled && source.descriptor).map(source => <option key={source.id} value={source.id}>{source.name}</option>)}</select></label>
+          }}><option value="" disabled>请选择一个来源</option>{this.sources.filter(source => source.enabled && source.descriptor).map(source => <option key={source.id} value={source.id}>{source.name}{source.isDefault ? '（默认）' : ''}</option>)}</select></label>
           {!this.selected && <p className="muted">{this.sources.some(source => source.enabled && source.descriptor) ? '选择来源后，即可搜索书籍或浏览目录。' : '暂无可用来源，请先添加或启用来源。'}</p>}
         </section>
         {this.selected && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>

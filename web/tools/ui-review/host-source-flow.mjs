@@ -124,10 +124,19 @@ try {
   await tab('书源管理').click();
   const row = page.locator('.sources-row').filter({hasText:'示例章节源'});
   await row.getByRole('button',{name:'管理',exact:true}).click();
+  await row.getByRole('button', { name: '设为默认', exact: true }).click(); await idle();
+  await row.locator('.source-default-badge').waitFor();
   await shot('hub-management-mobile');
   for (const width of [320,390,1280]) { await page.setViewportSize({width,height:844}); await shot('hub-'+width); }
-  await tab('搜书').click();
-  await page.getByRole('combobox',{name:'选择来源',exact:true}).selectOption({label:'示例章节源'});
+  await page.reload(); await tab('搜书').click();
+  await page.waitForFunction(() => document.querySelector('[aria-label="选择来源"]')?.selectedOptions[0]?.textContent === '示例章节源（默认）');
+  await page.getByLabel('搜索书籍').waitFor();
+  const searchAlignment = await button('搜索').evaluate(node => {
+    const icon = node.querySelector('.icon').getBoundingClientRect();
+    const text = document.createRange(); text.selectNodeContents(node.lastChild); const rect = text.getBoundingClientRect();
+    return Math.abs((icon.top + icon.bottom) / 2 - (rect.top + rect.bottom) / 2);
+  });
+  assert.ok(searchAlignment < 3, 'search icon and text align vertically');
   await page.getByLabel('搜索书籍').fill('示例'); await button('搜索').click();
   await page.getByText('插件示例书',{exact:true}).waitFor();
   await shot('search-desktop');
