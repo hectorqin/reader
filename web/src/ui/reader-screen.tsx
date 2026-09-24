@@ -31,7 +31,8 @@ import { mountUI } from './mount.ts';
 import { ReaderChrome, type ChromeState, type ChromeTocEntry } from './reader-chrome.tsx';
 import { OFFLINE_FILE, PublicationCache, publicationScope } from '../store/publications.ts';
 import { ReadingTools, type SearchSection } from './reading-tools.tsx';
-import { decodeAnchor, searchableText, type TextAnchor } from './text-anchor.ts';
+import { decodeAnchor, encodeAnchor, searchableText, type TextAnchor } from './text-anchor.ts';
+import { AnnotationPopover, type AnnotationTarget } from './annotation-popover.tsx';
 import { textToChapterHtml } from '../formats/segments.ts';
 import { parseLocator } from './locator.ts';
 
@@ -195,6 +196,7 @@ export class ReaderScreen {
   private loadingToken = 0;
   private overrides: ReadingOverrides = emptyOverrides();
   private toolsOpen = false;
+  private annotation: AnnotationTarget | null = null;
   private toolsSelection: TextAnchor | null = null;
   private toolsReturn = '';
   private preview: SpeechEngine | null = null;
@@ -232,7 +234,9 @@ export class ReaderScreen {
       this.element,
       () => (
         <ReaderChrome
-          tools={this.toolsOpen && this.manifest ? <ReadingTools
+          tools={<>{this.annotation && <AnnotationPopover key={this.annotation.note?.id ?? encodeAnchor(this.annotation.anchor)} target={this.annotation}
+            save={(type, comment, color) => this.saveAnnotation(type, comment, color)} remove={() => this.removeAnnotation()}
+            close={() => { this.annotation = null; this.view?.clearSelection(); this.patch({}); }} />}{this.toolsOpen && this.manifest ? <ReadingTools
             api={this.options.api} cache={this.publicationCache} offline={this.options.offline}
             sync={this.options.sync} manifest={this.manifest} selection={this.toolsSelection}
             locator={this.view?.position()?.locator ?? ''} returnLocator={this.toolsReturn}
@@ -240,7 +244,7 @@ export class ReaderScreen {
             overrides={this.overrides} saveOverrides={value => this.saveOverrides(value)} undoOverrides={() => this.undoOverrides()}
             previewHeadings={prefix => this.previewHeadings(prefix)}
             onNotes={() => this.paintNotes()} onClose={() => { this.toolsOpen = false; this.patch({}); }}
-            previewSpeech={() => this.previewSpeech()} stopPreview={() => this.stopPreview()} /> : null}
+            previewSpeech={() => this.previewSpeech()} stopPreview={() => this.stopPreview()} /> : null}</>}
           state={this.chrome}
           stage={this.stage}
           handlers={{
@@ -285,7 +289,7 @@ export class ReaderScreen {
   async open(book: Book): Promise<void> {
     this.closeAlternatives(); this.chapterRefresh?.abort(); this.chapterRefresh = null;
     const token = ++this.loadingToken;
-    this.toolsOpen = false; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
+    this.toolsOpen = false; this.annotation = null; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
     this.content = null; this.book = book;
     this.patch({ title: book.title, author: book.author, description: book.description, bookInfoOpen: false, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null, refreshingChapter: false, sourceName: '', chapterUrl: '', toc: [] });
     this.setStatus('loading', '正在载入…');
@@ -528,6 +532,7 @@ export class ReaderScreen {
   private openTools(): void {
     if (!this.manifest || !this.view) return;
     this.toolsSelection = this.view.selectionAnchor();
+    this.annotation = null;
     if (!this.toolsReturn) this.toolsReturn = this.view.position()?.locator ?? '';
     this.toolsOpen = true;
     this.patch({ tocOpen: false, settingsOpen: false });
@@ -537,8 +542,20 @@ export class ReaderScreen {
     if (!this.book) return;
     this.view?.paintAnnotations(this.options.offline.notesFor(this.book.id).flatMap(note => {
       const anchor = decodeAnchor(note.locator);
-      return anchor ? [{ anchor: { ...anchor, sectionId: this.localSectionId(anchor.sectionId) }, color: note.color || '#ffd54f' }] : [];
+      return anchor && note.type !== 'bookmark' ? [{ id: note.id, anchor: { ...anchor, sectionId: this.localSectionId(anchor.sectionId) }, color: note.color || '#ffd54f' }] : [];
     }));
+  }
+
+  private async saveAnnotation(type: 'highlight' | 'note' | 'bookmark', comment: string, color: string): Promise<void> {
+    if (!this.book || !this.annotation) return;
+    const { anchor, note } = this.annotation;
+    await this.options.offline.upsertNotes([{ id: note?.id ?? crypto.randomUUID(), bookId: this.book.id,
+      type, locator: encodeAnchor(anchor), text: anchor.quote, comment, color, updatedAt: Date.now() }]);
+    this.options.sync.schedule(); this.paintNotes();
+  }
+  private async removeAnnotation(): Promise<void> {
+    if (!this.annotation?.note) return;
+    await this.options.offline.deleteNote(this.annotation.note.id); this.options.sync.schedule(); this.paintNotes();
   }
 
   private searchText(html: string, sectionId: string): string {
@@ -552,12 +569,14 @@ export class ReaderScreen {
     if (this.content && content) {
       for (let group = 0; group < Math.max(1, content.groups.length); group++) {
         signal.throwIfAborted();
-        const window = group === 0 ? content : await this.readWindow(book.id, group, signal);
+        const window = group === 0 ? content : await this.publicationCache.window(book.id, group);
+        if (!window || window.revision !== content.revision) throw new Error('部分目录未缓存，离线搜索不完整；已保留找到的结果');
         for (const item of window.items) {
           signal.throwIfAborted();
           const ref = renditionRef(item);
           const bytes = await this.publicationCache.resource(book.id, ref);
-          const html = bytes ? new TextDecoder().decode(bytes) : await (await this.options.api.asset(book.id, ref, { signal })).text();
+          if (!bytes) throw new Error('部分章节未缓存，离线搜索不完整；已保留找到的结果');
+          const html = new TextDecoder().decode(bytes);
           yield { id: item.href, title: item.title, text: this.searchText(/(?:xhtml|html|xml)/i.test(item.mediaType) ? html : textToChapterHtml(html),item.href) };
         }
       }
@@ -954,6 +973,16 @@ export class ReaderScreen {
       ...(token ? { accessToken: token } : { accessToken: '' }),
     });
     this.view = new ReaderView({
+      onSelection: (anchor, rect) => {
+        if (epoch !== this.viewEpoch || this.toolsOpen || this.annotation?.note || this.element.querySelector('dialog[open]')) return;
+        if (anchor && rect && anchor.quote.trim()) { this.annotation = { anchor, rect }; this.patch({}); }
+      },
+      onAnnotation: (id, rect) => {
+        if (epoch !== this.viewEpoch || !this.book || this.toolsOpen) return;
+        const note = this.options.offline.notesFor(this.book.id).find(note => note.id === id);
+        const anchor = note && decodeAnchor(note.locator);
+        if (note && anchor) { this.view?.clearSelection(); this.annotation = { anchor, rect, note }; this.patch({}); }
+      },
       transformText: (root, sectionId) => { applyCorrections(root,sectionId,this.overrides); },
       container: this.stage,
       doc,
@@ -974,6 +1003,7 @@ export class ReaderScreen {
       },
       onChapterChange: (index, section) => {
         if (epoch !== this.viewEpoch) return;
+        this.annotation = null;
         // One patch, and `syncTocPosition` folds its own correction into the same
         // one rather than issuing a second. A chapter change is the one moment
         // several pieces of chrome move together (label, section, progress, the

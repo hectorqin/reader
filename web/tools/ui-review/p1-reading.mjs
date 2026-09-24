@@ -29,8 +29,8 @@ try {
  const registered=await app.inject({method:'POST',url:'/api/v1/auth/register',payload:{username:'p1-reader',password:'password123'}});assert.equal(registered.statusCode,201);
  const books=db.all('SELECT id,format FROM books'), epub=books.find(b=>b.format==='epub'),txt=books.find(b=>b.format==='txt');
  browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
- const context=await browser.newContext({viewport:{width:390,height:844}}), page=await context.newPage();page.setDefaultTimeout(12000);
- const errors=[];page.on('pageerror',e=>errors.push(e.message));const button=name=>page.getByRole('button',{name,exact:true});
+ const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}), page=await context.newPage();page.setDefaultTimeout(12000);
+ const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(r.url()));const button=name=>page.getByRole('button',{name,exact:true});
  await page.goto(base);await page.locator('input[autocomplete=username]').fill('p1-reader');await page.locator('input[type=password]').fill('password123');await page.locator('button[type=submit]').click();await page.locator('.shelf-screen').waitFor();
  await page.goto(base+'/#/book/'+epub.id);await page.locator('book-content h1').waitFor();assert.ok(await button('设置').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight));await button('工具').click();
  for(const width of [320,390,1280]){await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'tools-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
@@ -42,18 +42,26 @@ try {
  await button('高亮与批注').click();assert.equal(await page.locator('.reading-note-list li').count(),0);await button('全部').click();
  await button('删除笔记').click();assert.equal(await page.locator('.reading-note-list li').count(),1);await button('取消').click();await button('删除笔记').click();await button('确认删除').click();await page.getByText('还没有阅读记录',{exact:true}).waitFor();
  await button('书内搜索').click();
- await page.setViewportSize({width:390,height:844});await page.getByLabel('关键词',{exact:true}).fill('检索目标');await button('搜索全文').click();await page.locator('.reading-tool-results li').nth(1).waitFor();await page.locator('.reading-tool-results li button').nth(1).click();await page.getByRole('dialog').waitFor({state:'hidden'});
+ const assetsBefore=requests.filter(url=>url.includes('/assets?')).length;
+ await page.setViewportSize({width:390,height:844});await page.getByLabel('关键词',{exact:true}).fill('检索目标');await button('搜索全文').click();await page.locator('.reading-tool-results li').nth(1).waitFor();
+ assert.ok(requests.some(url=>url.includes('/search?q=')));assert.equal(requests.filter(url=>url.includes('/assets?')).length,assetsBefore);
+ await page.locator('.reading-tool-results li button').nth(1).click();await page.getByRole('dialog').waitFor({state:'hidden'});
  assert.ok(await page.locator('book-content').evaluate(host=>host.shadowRoot.querySelectorAll('[data-reader-mark="search"]').length)>0);
  await button('工具').click();await button('返回原阅读位置').click();
  await button('目录').click();await page.getByRole('button',{name:'第三层',exact:false}).last().waitFor();await page.getByRole('button',{name:'第一层 折叠',exact:true}).click();assert.equal(await page.getByRole('button',{name:'第三层',exact:false}).count(),0);await page.getByRole('button',{name:'第一层 展开',exact:true}).click();await page.getByRole('button',{name:/3.*第三层/}).click();
  await button('工具').click();await button('离线缓存').click();await button('下载 / 继续').click();await page.getByText('整书已可离线阅读',{exact:false}).waitFor();await page.screenshot({path:join(shots,'offline.png')});await button('关闭弹窗').click();
- await context.route('**/api/**',route=>route.abort('internetdisconnected'));await page.reload();await page.locator('book-content h1').waitFor();await context.unroute('**/api/**');
+ await context.route('**/api/**',route=>route.abort('internetdisconnected'));await page.reload();await page.locator('book-content h1').waitFor();
+ await button('工具').click();await page.getByLabel('关键词',{exact:true}).fill('检索目标');await button('搜索全文').click();await page.locator('.reading-tool-results li').nth(1).waitFor();await page.getByText('离线搜索（仅已缓存内容）',{exact:false}).waitFor();await button('关闭弹窗').click();await context.unroute('**/api/**');
  // Select actual shadow DOM text, then create a persisted personal correction.
  await page.locator('book-content').evaluate(host=>{const node=host.shadowRoot.querySelector('p').firstChild;const range=document.createRange();range.setStart(node,3);range.setEnd(node,7);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);});
- await button('工具').click();assert.equal(await button('笔记').getAttribute('aria-pressed'),'true');await page.getByLabel('批注',{exact:true}).fill('跨设备批注测试');await button('绿色').click();
- await page.screenshot({path:join(shots,'notes-editor-390.png')});
- await button('保存批注').click();await page.getByText('笔记已保存',{exact:true}).waitFor();assert.equal(await page.locator('.reading-note-editor').count(),0);
- await button('关闭弹窗').click();assert.ok(await page.locator('book-content').evaluate(host=>host.shadowRoot.querySelectorAll('[data-reader-mark="note"]').length)>0);
+ await page.getByRole('toolbar',{name:'选中文字操作'}).waitFor();await page.screenshot({path:join(shots,'selection-toolbar-390.png')});
+ await button('批注').click();await page.getByLabel('批注',{exact:true}).fill('跨设备批注测试');await button('绿色').click();
+ await page.screenshot({path:join(shots,'annotation-editor-390.png')});await button('保存批注').click();await page.getByRole('dialog').waitFor({state:'hidden'});
+ const mark=page.locator('book-content [data-reader-mark="note"]').first();await mark.waitFor();await mark.scrollIntoViewIfNeeded();
+ const beforeClick=await page.locator('book-content').evaluate(el=>el.scrollTop);
+ await mark.tap();await page.getByRole('dialog',{name:'批注详情'}).waitFor();assert.equal(await page.locator('book-content').evaluate(el=>el.scrollTop),beforeClick);await page.getByText('跨设备批注测试',{exact:true}).waitFor();await page.screenshot({path:join(shots,'annotation-detail-390.png')});
+ await button('编辑批注').click();await page.getByLabel('批注',{exact:true}).fill('编辑后的批注');await button('保存批注').click();await page.getByRole('dialog').waitFor({state:'hidden'});
+ await mark.click();await page.getByText('编辑后的批注',{exact:true}).waitFor();await button('删除').click();await button('确认删除').click();await mark.waitFor({state:'detached'});
  await page.locator('book-content').evaluate(host=>{const node=host.shadowRoot.querySelector('p').firstChild;const range=document.createRange();range.setStart(node,3);range.setEnd(node,7);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);});
  await button('工具').click();await button('内容整理').click();await page.getByLabel('替换为',{exact:true}).fill('已经修正');await button('保存纠错 / 过滤').click();await page.getByText('纠错已保存，正文已更新').waitFor();await button('关闭弹窗').click();await page.reload();await page.locator('book-content p').filter({hasText:'已经修正'}).waitFor();
  await button('工具').click();await button('内容整理').click();await button('撤销上一次整理修改').click();await page.getByText('已撤销上一次整理修改').waitFor();await button('关闭弹窗').click();assert.ok(!(await page.locator('book-content p').first().innerText()).includes('已经修正'));

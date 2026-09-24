@@ -17,6 +17,8 @@ import {
 import { sendAssetPayload } from '../assets.ts';
 import { FilePublications } from '../../publications/files.ts';
 import { withSignal } from '../request-signal.ts';
+import { searchBookPage } from '../../services/book-search.ts';
+import { ReadingOverrideService } from '../../services/reading-overrides.ts';
 
 /**
  * The handler that owns a book, resolved from its recorded format.
@@ -314,6 +316,26 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
    * route stable as formats evolve and lets each handler decide how to address
    * its own contents.
    */
+  app.get('/api/v1/books/:id/search', { preHandler: auth }, async (request, reply) => {
+    const user = currentUser(request), { id } = request.params as { id: string };
+    const book = ctx.shelf.get(user.id, id), query = request.query as Record<string, string | undefined>;
+    if (typeof query.q !== 'string' || !query.q.trim() || query.q.length > 200) throw badRequest('关键词须为 1–200 个字符');
+    if (query.cursor !== undefined && typeof query.cursor !== 'string') throw badRequest('无效的搜索游标');
+    const manifest = await contentManifest(ctx, user.id, id, book.format);
+    if (!manifest) throw badRequest('此格式暂不支持正文搜索', 'UNSUPPORTED_FORMAT');
+    const overrides = new ReadingOverrideService(ctx.db).get(user.id,id);
+    if (overrides.headingPrefix) throw badRequest('自定义 TXT 目录使用本地搜索','SEARCH_LOCAL_LAYOUT');
+    const chapters = ctx.sources?.chapters.has(id) ? ctx.sources.chapters : undefined;
+    const handler = chapters ? null : resolveHandler(ctx,id,book.format);
+    reply.header('cache-control','no-store');
+    return withSignal(request,reply,signal => searchBookPage(manifest,query.q!.trim(),query.cursor,overrides,async (item, chapterSignal) => {
+      const ref = item.resourceRef ?? (item.format === 'html' && item.href.startsWith('chapter:') ? item.href.replace('chapter:','chapter-full:') : item.href);
+      if (chapters) return chapters.asset(user.id,id,ref,chapterSignal);
+      if (!handler) throw badRequest('此格式暂不支持正文搜索','UNSUPPORTED_FORMAT');
+      return handler.asset({...sourceContext(ctx,id),bookId:id},{ref});
+    },signal,chapters ? 1 : 8));
+  });
+
   app.get('/api/v1/books/:id/assets', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request);
     const { id } = request.params as { id: string };

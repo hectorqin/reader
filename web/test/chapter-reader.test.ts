@@ -85,6 +85,7 @@ async function setup(kv = new MemoryKv(), blobs = new MemoryBlobs(), userId = 'u
 function serve(transport: FakeTransport, current: BookContent, next = current) {
   transport.respondWith((request) => {
     if (request.url.endsWith('/manifest')) return { status: 200, headers: {}, json: manifest(current) };
+    if (request.url.includes('/search?')) return { status:200,headers:{},json:{hits:current.items.map(item=>({title:item.title,excerpt:'正文',anchor:{sectionId:item.href,start:0,end:2,quote:'正文',prefix:'',suffix:''}})),scanned:current.total,total:current.total,failures:[],limited:false} };
     if (request.url.endsWith('/refresh')) return { status: 200, headers: {}, json: next };
     if (request.url.includes('/assets?')) {
       const ref = new URL(request.url, 'http://test').searchParams.get('ref');

@@ -354,6 +354,12 @@ test('OPDS acquisition feeds existing reading, shelf and progress APIs and survi
   const content = await h.app.inject({ method: 'GET', url: `/api/v1/books/${bookId}/content`, headers: auth(member) });
   assert.equal(content.statusCode, 200, content.body);
   assert.equal(content.body, catalog.body);
+  const search = await h.app.inject({method:'GET',url:`/api/v1/books/${bookId}/search?q=OPDS`,headers:auth(member)});
+  assert.equal(search.statusCode,200,search.body);assert.ok(search.json().hits.length>0);assert.equal(search.json().failures.length,0);
+  const deniedSearch=await h.app.inject({method:'GET',url:`/api/v1/books/${bookId}/search?q=OPDS`,headers:auth(h.admin)});
+  assert.equal(deniedSearch.statusCode,404);
+  const invalidSearch=await h.app.inject({method:'GET',url:`/api/v1/books/${bookId}/search?q=`,headers:auth(member)});
+  assert.equal(invalidSearch.statusCode,400);
   const shelf = await h.app.inject({ method: 'GET', url: '/api/v1/books', headers: auth(member) });
   assert.ok(shelf.json().items.some((book: { id: string }) => book.id === bookId), shelf.body);
   const progress = await h.app.inject({ method: 'PUT', url: `/api/v1/sync/progress/${bookId}`, headers: auth(member), payload: {
@@ -686,6 +692,10 @@ test('alternative streams use owned book identity and forced chapter refresh upd
   assert.equal(h.ctx.db.get<{body:string|null}>('SELECT body FROM chapter_resources WHERE book_id=?',id)!.body,null);
   await h.ctx.sources!.chapters.asset(h.admin.id, id, ref); text = 'new';
   const refreshed = await h.app.inject({ method: 'POST', url: '/api/v1/books/' + id + '/refresh-chapter', headers: auth(h.admin), payload: { ref } });
+  const chapterSearch=await h.app.inject({method:'GET',url:'/api/v1/books/'+id+'/search?q=new',headers:auth(h.admin)});
+  assert.equal(chapterSearch.statusCode,200,chapterSearch.body);assert.equal(chapterSearch.json().hits.length,1);
+  assert.equal(chapterSearch.json().hits[0].anchor.sectionId,content.items[0]!.href);
+  assert.equal((await h.app.inject({method:'GET',url:'/api/v1/books/'+id+'/search?q=new',headers:auth(member)})).statusCode,404);
   assert.equal(refreshed.statusCode, 200, refreshed.body); assert.equal(refreshed.body, 'new'); assert.equal(refreshed.headers['cache-control'], 'no-store');
   assert.equal((await h.ctx.sources!.chapters.asset(h.admin.id, id, ref)).data!.toString(), 'new');
   for (const endpoint of ['alternatives', 'refresh-chapter', 'switch-quality']) {

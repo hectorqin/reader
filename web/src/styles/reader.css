@@ -3975,6 +3975,15 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reading-tool-empty strong { font-weight: 500; }
 .reading-tool-empty .button { margin-top: .75rem; }
 .reading-tool-feedback { padding: .6rem .75rem; border-radius: .5rem; background: var(--reader-surface); color: var(--reader-accent); }
+.annotation-popover { position: fixed; z-index: 60; box-sizing: border-box; padding: .6rem; border: 1px solid var(--reader-line); border-radius: .75rem; box-shadow: 0 6px 28px #0003; background: var(--reader-paper); color: var(--reader-ink); font: 14px/1.5 system-ui,sans-serif; }
+.annotation-actions { display: flex; gap: .25rem; }
+.annotation-actions button { flex: 1; min-height: 44px; border: 0; border-radius: .4rem; background: transparent; color: var(--reader-accent); font: inherit; cursor: pointer; }
+.annotation-actions button:hover { background: var(--reader-surface); }
+.annotation-popover blockquote, .annotation-editor blockquote { margin: .3rem 0 .75rem; padding: .5rem .75rem; border-inline-start: 3px solid var(--reader-accent); max-height: 6rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.annotation-comment { margin: .5rem; max-height: 8rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.annotation-editor { display: grid; gap: 1rem; padding-top: 1rem; }
+.annotation-editor label { display: grid; gap: .5rem; }
+.annotation-editor textarea { box-sizing: border-box; width: 100%; min-height: 6rem; padding: .75rem; font: inherit; border: 1px solid var(--reader-line); border-radius: .5rem; background: var(--reader-paper); color: var(--reader-ink); resize: vertical; }
 .reading-tool-advanced { border-top: 1px solid var(--reader-line); padding-top: .5rem; }
 .reading-tool-advanced summary { padding: .6rem 0; cursor: pointer; font-size: .9rem; }
 .reading-tool-advanced > div { display: grid; gap: .75rem; padding-top: .5rem; }

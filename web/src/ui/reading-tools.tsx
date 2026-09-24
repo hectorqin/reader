@@ -8,6 +8,7 @@ import type { SyncEngine } from '../core/sync.ts';
 import { PublicationCache } from '../store/publications.ts';
 import { OfflineDownload, type DownloadState } from '../core/offline-download.ts';
 import { decodeAnchor, encodeAnchor, findText, type SearchHit, type TextAnchor } from './text-anchor.ts';
+import { ApiError } from '../api/errors.ts';
 
 export interface SearchSection { id: string; title: string; text: string }
 export interface ReadingToolsProps {
@@ -27,6 +28,8 @@ export function ReadingTools(props: ReadingToolsProps) {
   const [tab, setTab] = useState<'search' | 'notes' | 'offline' | 'speech' | 'edit'>(props.selection ? 'notes' : 'search');
   const [query, setQuery] = useState(''), [hits, setHits] = useState<SearchHit[]>([]);
   const [scanned, setScanned] = useState(0), [searching, setSearching] = useState(false);
+  const [searchMode, setSearchMode] = useState('服务端搜索'), [searchTotal, setSearchTotal] = useState(0);
+  const [searchFailures, setSearchFailures] = useState<Array<{title: string; code: string}>>([]);
   const [message, setMessage] = useState('');
   const [replacement, setReplacement] = useState(''), [prefix, setPrefix] = useState(props.overrides.headingPrefix);
   const [headingPreview, setHeadingPreview] = useState<string[] | null>(null), [saving, setSaving] = useState(false);
@@ -68,8 +71,26 @@ export function ReadingTools(props: ReadingToolsProps) {
   async function search() {
     searchRun.current?.abort(); const run = searchRun.current = new AbortController();
     setHits([]); setScanned(0); setSearching(true); setMessage('');
+    setSearchFailures([]); setSearchTotal(0); setSearchMode('服务端搜索');
     const found: SearchHit[] = []; let count = 0;
     try {
+      try {
+        let cursor: string | undefined; const failed: Array<{title: string; code: string}> = [];
+        do {
+          const page = await props.api.searchBook(bookId,query.trim(),cursor,{signal:run.signal});
+          run.signal.throwIfAborted();
+          found.push(...page.hits.slice(0,200-found.length)); failed.push(...page.failures);
+          if (alive.current) { setHits([...found]); setScanned(page.scanned); setSearchTotal(page.total); setSearchFailures([...failed]); }
+          if (page.limited || found.length >= 200) { setMessage('已显示前 200 个命中，请缩小关键词范围'); break; }
+          cursor = page.nextCursor;
+        } while (cursor);
+        return;
+      } catch (error) {
+        run.signal.throwIfAborted();
+        if (!(error instanceof ApiError) || (!error.isConnectivity && error.code !== 'SEARCH_LOCAL_LAYOUT')) throw error;
+        found.length = 0; setHits([]); setSearchFailures([]); setSearchTotal(0);
+        setSearchMode(error.code === 'SEARCH_LOCAL_LAYOUT' ? '本地搜索（自定义目录）' : '离线搜索（仅已缓存内容）');
+      }
       for await (const section of props.sections(run.signal)) {
         run.signal.throwIfAborted();
         found.push(...findText(section.id, section.title, section.text, query.trim(), 200 - found.length));
@@ -104,7 +125,8 @@ export function ReadingTools(props: ReadingToolsProps) {
         <h3>书内搜索</h3>
         <form className="reading-tool-search" onSubmit={event => { event.preventDefault(); if (query.trim()) void search(); }}><label>关键词<input placeholder="输入要查找的文字" value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} /></label><button className="button primary" disabled={searching || !query.trim()}>搜索全文</button></form>
         {searching && <button className="button" onClick={() => { searchRun.current?.abort(); setSearching(false); }}>停止搜索</button>}
-        <p role="status">已扫描 {scanned} 章，找到 {hits.length} 处</p>
+        <p role="status">{searchMode} · 已扫描 {scanned}{searchTotal ? ` / ${searchTotal}` : ''} 章，找到 {hits.length} 处</p>
+        {!!searchFailures.length && <details className="reading-tool-advanced"><summary>{searchFailures.length} 章读取失败，搜索结果可能不完整</summary><ul>{searchFailures.map((failure,index)=><li key={index}>{failure.title} · {failure.code}</li>)}</ul></details>}
         <button className="button" disabled={!returnTo} onClick={() => void action(async () => { await props.navigate(returnTo); props.onClose(); })}>返回原阅读位置</button>
         <ol className="reading-tool-results">{hits.map((hit, index) => <li key={index}><button className="button" onClick={() => void action(async () => { await props.navigate(hit.anchor); props.onClose(); })}><strong>{hit.title}</strong><span>{hit.excerpt}</span></button></li>)}</ol>
       </section>}

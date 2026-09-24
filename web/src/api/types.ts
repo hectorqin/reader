@@ -337,4 +337,10 @@ export interface ApiErrorBody {
   error: { code: string; message: string };
 }
 
+export interface BookSearchPage {
+  hits: Array<{title: string; excerpt: string; anchor: {sectionId: string; start: number; end: number; quote: string; prefix: string; suffix: string}}>;
+  scanned: number; total: number; limited: boolean; nextCursor?: string;
+  failures: Array<{title: string; code: string}>;
+}
+
 export interface ReadingOverrides { version: number; corrections: Array<{ id: string; anchor: { sectionId: string; start: number; end: number; quote: string; prefix: string; suffix: string }; replacement: string }>; headingPrefix: string }

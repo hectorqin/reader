@@ -17,6 +17,8 @@ import { BOOK_RESOURCE_MARKER, chapterRefFromLink } from '../formats/book-resour
 import { anchorRange, selectedAnchor, type TextAnchor } from './text-anchor.ts';
 
 export interface ReaderViewOptions {
+  onSelection?(anchor: TextAnchor | null, rect: DOMRect | null): void;
+  onAnnotation?(id: string, rect: DOMRect): void;
   transformText?(root: HTMLElement, sectionId: string): void;
   container: HTMLElement;
   doc: BookDoc;
@@ -194,6 +196,7 @@ export class ReaderView {
    * read end to end would end up with 1200 of them.
    */
   private detachChapterLinks: (() => void) | null = null;
+  private detachSelection: (() => void) | null = null;
   /**
    * The trim currently written to the host, so a re-measure cannot write it twice.
    *
@@ -218,6 +221,21 @@ export class ReaderView {
     this.resolver = new ResourceResolver(options.doc.resources);
     this.container.append(this.host);
     this.bindChapterLinks();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const changed = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        const anchor = this.selectionAnchor();
+        const range = anchor ? anchorRange(this.host.flow, anchor) : null;
+        this.options.onSelection?.(anchor, range && typeof range.getBoundingClientRect === 'function' ? range.getBoundingClientRect() : null);
+      }, 160);
+    };
+    this.host.ownerDocument.addEventListener('selectionchange', changed);
+    this.host.shadow.addEventListener('pointerup', changed);
+    this.host.shadow.addEventListener('keyup', changed);
+    const contextMenu = (event: Event) => { if (this.selectionAnchor()) { event.preventDefault(); changed(); } };
+    this.host.shadow.addEventListener('contextmenu',contextMenu);
+    this.detachSelection = () => { clearTimeout(timer); this.host.ownerDocument.removeEventListener('selectionchange', changed); this.host.shadow.removeEventListener('pointerup', changed); this.host.shadow.removeEventListener('keyup', changed); this.host.shadow.removeEventListener('contextmenu',contextMenu); };
     this.applySettings();
   }
 
@@ -558,24 +576,32 @@ export class ReaderView {
     return true;
   }
 
-  paintAnnotations(anchors: Array<{ anchor: TextAnchor; color: string }>): void {
+  clearSelection(): void {
+    (this.host.shadow as ShadowRoot & {getSelection?: () => Selection | null}).getSelection?.()?.removeAllRanges();
+    this.host.ownerDocument.getSelection()?.removeAllRanges();
+  }
+
+  paintAnnotations(anchors: Array<{ id?: string; anchor: TextAnchor; color: string }>): void {
     for (const mark of this.host.flow.querySelectorAll('[data-reader-mark="note"]')) mark.remove();
     const sectionId = this.doc.sections[this.sectionIndex]?.id;
-    for (const { anchor, color } of anchors) {
+    for (const { id, anchor, color } of anchors) {
       if (anchor.sectionId !== sectionId) continue;
       const range = anchorRange(this.host.flow, anchor);
-      if (range) this.paintRange(range, /^#[0-9a-f]{6}$/i.test(color) ? color : '#ffd54f', 'note');
+      if (range) this.paintRange(range, /^#[0-9a-f]{6}$/i.test(color) ? color : '#ffd54f', 'note', id);
     }
   }
 
-  private paintRange(range: Range, color: string, kind: string): void {
+  private paintRange(range: Range, color: string, kind: string, id?: string): void {
     if (kind === 'search') for (const node of this.host.flow.querySelectorAll('[data-reader-mark="search"]')) node.remove();
     const box = this.host.flow.getBoundingClientRect();
     const rects = typeof range.getClientRects === 'function' ? [...range.getClientRects()] : [];
     for (const rect of rects) {
-      const mark = document.createElement('span'); mark.dataset['readerMark'] = kind;
-      mark.setAttribute('aria-hidden', 'true');
-      mark.style.cssText = `position:absolute;pointer-events:none;background:${color};opacity:.32;left:${rect.left - box.left + this.host.flow.scrollLeft}px;top:${rect.top - box.top + this.host.flow.scrollTop}px;width:${rect.width}px;height:${rect.height}px;`;
+      const mark = document.createElement(id ? 'button' : 'span'); mark.dataset['readerMark'] = kind;
+      if (id) {
+        mark.dataset['noteId'] = id; mark.setAttribute('aria-label', '查看高亮或批注'); mark.setAttribute('type', 'button');
+        mark.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); this.options.onAnnotation?.(id, mark.getBoundingClientRect()); });
+      } else mark.setAttribute('aria-hidden', 'true');
+      mark.style.cssText = `position:absolute;pointer-events:${id ? 'auto' : 'none'};cursor:${id ? 'pointer' : 'default'};border:0;padding:0;margin:0;min-width:0;min-height:0;background:${color};opacity:.32;left:${rect.left - box.left + this.host.flow.scrollLeft}px;top:${rect.top - box.top + this.host.flow.scrollTop}px;width:${rect.width}px;height:${rect.height}px;`;
       this.host.flow.append(mark);
     }
   }
@@ -711,6 +737,7 @@ export class ReaderView {
   }
 
   dispose(): void {
+    this.detachSelection?.(); this.detachSelection = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     if (this.animationTimer !== null) clearTimeout(this.animationTimer);

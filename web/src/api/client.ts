@@ -391,6 +391,11 @@ export class ReaderApi {
     return this.get<BookContent>(`/api/v1/books/${encodeURIComponent(id)}/items${query}`, options);
   }
 
+  async searchBook(id: string, query: string, cursor: string | undefined, options: RequestOptions = {}): Promise<import('./types.ts').BookSearchPage> {
+    const params = new URLSearchParams({q:query}); if (cursor) params.set('cursor',cursor);
+    return this.get(`/api/v1/books/${encodeURIComponent(id)}/search?${params}`,options);
+  }
+
   /**
    * The book's complete table of contents.
    *
