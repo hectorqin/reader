@@ -1,0 +1,9 @@
+.confirmation-host { position: fixed; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: transparent; overflow: hidden; color: var(--reader-ink); }
+.confirmation-host::backdrop { background: transparent; }
+.confirmation-host .swal2-container { padding: 1.25rem; }
+.confirmation-host .reader-confirm-popup { width: 26rem; padding: 1.5rem; border: 1px solid var(--reader-line); border-radius: 1rem; background: var(--reader-paper); color: var(--reader-ink); font: inherit; box-shadow: 0 20px 70px #0003; }
+.reader-confirm-popup .swal2-title { padding: 0; font-size: 1.2rem; }
+.reader-confirm-popup .swal2-html-container { padding: 0; margin: 1rem 0; color: var(--reader-muted); font-size: .95rem; line-height: 1.7; overflow-wrap: anywhere; }
+.reader-confirm-popup .swal2-icon { margin: 0 auto 1rem; font-size: .7rem; }
+.reader-confirm-popup .swal2-actions { gap: .75rem; margin: .5rem 0 0; width: 100%; }
+.reader-confirm-popup .swal2-actions button { flex: 1; min-height: 48px; }

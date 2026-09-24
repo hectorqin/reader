@@ -20,7 +20,8 @@
     "fast-xml-parser": "^4.5.1",
     "jszip": "^3.10.1",
     "lucide-preact": "^1.47.0",
-    "notyf": "^3.10.0"
+    "notyf": "^3.10.0",
+    "sweetalert2": "^11.26.25"
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",

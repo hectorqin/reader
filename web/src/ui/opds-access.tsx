@@ -3,6 +3,7 @@ import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { OpdsCredential } from '../api/sources.ts';
 import { Modal } from './modal.tsx';
 import { Button } from './toolkit.tsx';
+import { FloatingNotice } from './floating-notice.tsx';
 
 export function OpdsAccess({ api, onClose, onSignedOut }: { api: ReaderApi; onClose(): void; onSignedOut(): void }) {
   const [items, setItems] = useState<OpdsCredential[]>([]), [name, setName] = useState('');
@@ -28,11 +29,10 @@ export function OpdsAccess({ api, onClose, onSignedOut }: { api: ReaderApi; onCl
   useEffect(() => { void run(reload); return () => { active.current = false; }; }, []);
   return <Modal title="连接外部阅读器" busy={busy} onClose={onClose}>
     <div className="sources-card source-modal-form"><div className="source-modal-content">
-      {busy && <p role="status">正在处理…</p>}
+      <FloatingNotice message={busy ? '正在处理…' : error} busy={busy} error={!!error} />
       <p>通过 OPDS 1.2 只读目录访问当前账号书架中的文件书籍。章节书和目录漫画暂不发布。</p>
       <label>目录地址<input readOnly value={url} /></label>
       <p>在外部阅读器中填入目录地址和专用账号/密码。请使用 HTTPS；凭据有效期一年，可随时撤销。</p>
-      {error && <p role="alert">{error}</p>}
       {created && <div role="status"><p>密码仅展示这一次，请先保存。关闭后无法重新查看。</p>
         <label>OPDS 用户名<input readOnly value={created.username} /></label>
         <label>OPDS 密码<input readOnly value={created.password} autoComplete="off" /></label>

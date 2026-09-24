@@ -10,6 +10,8 @@ import { OfflineDownload, type DownloadState } from '../core/offline-download.ts
 import { decodeAnchor, encodeAnchor, findText, type SearchHit, type TextAnchor } from './text-anchor.ts';
 import { ApiError } from '../api/errors.ts';
 import { newId } from '../core/id.ts';
+import { FloatingConfirm } from './floating-confirm.tsx';
+import { FloatingNotice } from './floating-notice.tsx';
 
 export interface SearchSection { id: string; title: string; text: string }
 export interface ReadingToolsProps {
@@ -32,6 +34,7 @@ export function ReadingTools(props: ReadingToolsProps) {
   const [searchMode, setSearchMode] = useState('服务端搜索'), [searchTotal, setSearchTotal] = useState(0);
   const [searchFailures, setSearchFailures] = useState<Array<{title: string; code: string}>>([]);
   const [message, setMessage] = useState('');
+  const [messageError,setMessageError] = useState(false);
   const [replacement, setReplacement] = useState(''), [prefix, setPrefix] = useState(props.overrides.headingPrefix);
   const [headingPreview, setHeadingPreview] = useState<string[] | null>(null), [saving, setSaving] = useState(false);
   async function edit(work: () => Promise<void>) { if (saving) return; setSaving(true); await action(work); if (alive.current) setSaving(false); }
@@ -63,7 +66,8 @@ export function ReadingTools(props: ReadingToolsProps) {
     setQuota((await props.cache.quota()) / 1024 / 1024);
   }
   async function action(work: () => Promise<unknown>) {
-    try { await work(); } catch (error) { if (alive.current) setMessage(error instanceof Error ? error.message : '操作失败'); }
+    setMessage('');setMessageError(false);
+    try { await work(); } catch (error) { if (alive.current) {setMessageError(true);setMessage(error instanceof Error ? error.message : '操作失败');} }
   }
   useEffect(() => {
     void action(async () => { await task.load(); if (!alive.current) return; setDownloadReady(true); if (task.state.status !== 'idle') { setFrom(task.state.from); setTo(task.state.to); } await storage(); });
@@ -71,7 +75,7 @@ export function ReadingTools(props: ReadingToolsProps) {
   }, []);
   async function search() {
     searchRun.current?.abort(); const run = searchRun.current = new AbortController();
-    setHits([]); setScanned(0); setSearching(true); setMessage('');
+    setHits([]); setScanned(0); setSearching(true); setMessage('');setMessageError(false);
     setSearchFailures([]); setSearchTotal(0); setSearchMode('服务端搜索');
     const found: SearchHit[] = []; let count = 0;
     try {
@@ -99,7 +103,7 @@ export function ReadingTools(props: ReadingToolsProps) {
         if (found.length >= 200) { setMessage('已显示前 200 个命中，请缩小关键词范围'); break; }
       }
     } catch (error) {
-      if (!run.signal.aborted && alive.current) setMessage(error instanceof Error ? error.message : '搜索失败，已有结果保留');
+      if (!run.signal.aborted && alive.current) {setMessageError(true);setMessage(error instanceof Error ? error.message : '搜索失败，已有结果保留');}
     } finally { if (searchRun.current === run && alive.current) setSearching(false); }
   }
   async function saveNote(bookmark = false) {
@@ -121,7 +125,9 @@ export function ReadingTools(props: ReadingToolsProps) {
         ['search', '搜索', '书内搜索'], ['notes', '笔记', '笔记'], ['offline', '缓存', '离线缓存'], ['speech', '朗读', '朗读检测'], ['edit', '整理', '内容整理'],
       ] as const).map(([id, label, accessible]) => <button className="reading-tool-tab" type="button" aria-label={accessible} aria-pressed={tab === id} aria-controls="reading-tool-panel" onClick={() => { setTab(id); setMessage(''); }}>{label}</button>)}</nav>
       <div className="reading-tool-panel" id="reading-tool-panel">
-      {message && <p className="reading-tool-feedback" role="status">{message}</p>}
+      <FloatingNotice message={message} error={messageError} />
+      {deleteId && <FloatingConfirm title="删除笔记" text="确定删除这条笔记或书签？" confirmText="确认删除" cancelText="取消" onCancel={()=>setDeleteId('')} onConfirm={()=>{const id=deleteId;setDeleteId('');void edit(async()=>{await props.offline.deleteNote(id);props.sync.schedule();setNotes(props.offline.notesFor(bookId));props.onNotes();});}} />}
+      {removeId && <FloatingConfirm title="清理缓存" text="只删除此设备的书籍缓存，保留原书、进度和笔记。" confirmText="确认清理" cancelText="保留缓存" onCancel={()=>setRemoveId('')} onConfirm={()=>{const id=removeId;setRemoveId('');void action(async()=>{await props.cache.removeBook(id);setDownload(null);await storage();});}} />}
       {tab === 'search' && <section aria-label="书内搜索">
         <h3>书内搜索</h3>
         <form className="reading-tool-search" onSubmit={event => { event.preventDefault(); if (query.trim()) void search(); }}><label>关键词<input placeholder="输入要查找的文字" value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} /></label><button className="button primary" disabled={searching || !query.trim()}>搜索全文</button></form>
@@ -144,7 +150,7 @@ export function ReadingTools(props: ReadingToolsProps) {
         {!editing && !composing && <><div className="reading-note-filters" role="group" aria-label="笔记筛选">{([['all', '全部'], ['bookmark', '书签'], ['annotation', '高亮与批注']] as const).map(([value, label]) => <button type="button" aria-pressed={noteFilter === value} onClick={() => { setNoteFilter(value); setDeleteId(''); }}>{label}</button>)}</div>
         <ul className="reading-note-list">{visibleNotes.map(note => <li key={note.id}>
           <button className="reading-note-open" disabled={saving} onClick={() => void action(async () => { await props.navigate(decodeAnchor(note.locator) ?? note.locator); props.onClose(); })}><span className="reading-note-kind">{note.type === 'bookmark' ? '书签' : note.type === 'highlight' ? '高亮' : '批注'}<span>跳转阅读 ›</span></span><strong>{note.text || '书签'}</strong>{note.comment && <span className="reading-note-comment">{note.comment}</span>}</button>
-          <div className="reading-note-actions">{deleteId === note.id ? <><span>删除这条{note.type === 'bookmark' ? '书签' : '笔记'}？</span><button type="button" disabled={saving} onClick={() => setDeleteId('')}>取消</button><button type="button" disabled={saving} onClick={() => void edit(async () => { await props.offline.deleteNote(note.id); props.sync.schedule(); setNotes(props.offline.notesFor(bookId)); setDeleteId(''); props.onNotes(); })}>确认删除</button></> : <><button type="button" disabled={saving} onClick={() => { setEditing(note); setComment(note.comment); setColor(note.color || '#ffd54f'); setDeleteId(''); }}>编辑</button><button type="button" disabled={saving} onClick={() => setDeleteId(note.id)}>删除笔记</button></>}</div>
+          <div className="reading-note-actions"><button type="button" disabled={saving} onClick={() => { setEditing(note); setComment(note.comment); setColor(note.color || '#ffd54f'); }}>编辑</button><button type="button" disabled={saving} onClick={() => setDeleteId(note.id)}>删除笔记</button></div>
         </li>)}</ul>
         {!visibleNotes.length && <div className="reading-tool-empty"><strong>{noteFilter === 'bookmark' ? '还没有书签' : noteFilter === 'annotation' ? '还没有高亮或批注' : '还没有阅读记录'}</strong><p>加书签，记住当前读到的位置。<br />在正文选中文字后，可添加高亮或批注。</p>{!props.selection && <button className="button" onClick={props.onClose}>返回正文</button>}</div>}</>}
       </section>}
@@ -157,7 +163,6 @@ export function ReadingTools(props: ReadingToolsProps) {
         <details className="reading-tool-advanced"><summary>存储管理与配额</summary><div><label>设备账号配额（MiB）<input type="number" min={1} max={10240} value={quota} onInput={e => setQuota(Number(e.currentTarget.value))} /></label>
         <button className="button" onClick={() => void action(async () => { await props.cache.setQuota(quota * 1024 * 1024); setMessage('配额已保存'); })}>保存配额</button>
         <ul>{books.map(book => <li key={book.id}>{props.offline.current.books[book.id]?.title ?? (book.id === bookId ? props.manifest.book.title : book.id)} · {(book.bytes / 1024 / 1024).toFixed(1)} MiB <button className="button" disabled={download?.status === 'running'} onClick={() => setRemoveId(book.id)}>清理缓存</button></li>)}</ul>
-        {removeId && <div role="group" aria-label="确认清理缓存"><p>只删除此设备的书籍缓存，保留原书、进度和笔记。</p><button className="button" onClick={() => void action(async () => { await props.cache.removeBook(removeId); setRemoveId(''); setDownload(null); await storage(); })}>确认清理</button><button className="button" onClick={() => setRemoveId('')}>保留缓存</button></div>}
         </div></details>
       </section>}
       {tab === 'edit' && <section aria-label="内容整理">

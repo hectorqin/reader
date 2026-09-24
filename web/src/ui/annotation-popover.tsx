@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from './vendor/preact.ts';
 import type { Note } from '../api/types.ts';
 import type { TextAnchor } from './text-anchor.ts';
 import { Modal } from './modal.tsx';
+import { FloatingConfirm } from './floating-confirm.tsx';
+import { FloatingNotice } from './floating-notice.tsx';
 
 export interface AnnotationTarget { anchor: TextAnchor; rect: DOMRect; note?: Note }
 export function AnnotationPopover({ target, save, remove, close }: {
@@ -23,36 +25,37 @@ export function AnnotationPopover({ target, save, remove, close }: {
   }
   useEffect(() => {
     const dismiss = (event: PointerEvent) => {
-      if (editing || busy || panel.current?.contains(event.target as Node)) return;
+      if (editing || busy || confirmDelete || panel.current?.contains(event.target as Node)) return;
       // Native selection handles target the reading surface. Let selectionchange
       // decide when the selection ends instead of clearing it on pointerdown.
       if (!target.note && event.composedPath().some(node => node instanceof Element && node.tagName === 'BOOK-CONTENT')) return;
       close();
     };
-    const key = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) { event.stopPropagation(); close(); } };
-    const moved = (event: Event) => { if (target.note && !editing && !busy && !(event.target instanceof Node && panel.current?.contains(event.target))) close(); };
+    const key = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy && !confirmDelete) { event.stopPropagation(); close(); } };
+    const moved = (event: Event) => { if (target.note && !editing && !busy && !confirmDelete && !(event.target instanceof Node && panel.current?.contains(event.target))) close(); };
     document.addEventListener('pointerdown', dismiss); document.addEventListener('keydown', key, true);
     window.addEventListener('resize',moved); document.addEventListener('scroll',moved,true);
     return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', key, true); window.removeEventListener('resize',moved); document.removeEventListener('scroll',moved,true); };
-  }, [editing, busy]);
+  }, [editing, busy, confirmDelete]);
   useEffect(() => { if (editing) input.current?.focus(); }, [editing]);
   if (editing) return <Modal title={target.note ? '编辑批注' : '添加批注'} busy={busy} onClose={close}>
     <form className="annotation-editor source-modal-content" onSubmit={event => { event.preventDefault(); void work(() => save(comment.trim() ? 'note' : 'highlight', comment, color)); }}>
       <blockquote>{target.anchor.quote}</blockquote>
       <label>批注<textarea ref={input} aria-label="批注" maxLength={4000} value={comment} onInput={event => setComment(event.currentTarget.value)} placeholder="写下此刻的想法" disabled={busy} /></label>
       <div className="reading-note-colors" role="group" aria-label="高亮颜色">{[['#ffd54f','黄色'],['#80cbc4','绿色'],['#ce93d8','紫色']].map(([value, label]) => <button type="button" aria-label={label} aria-pressed={color === value} style={{'--note-color':value}} disabled={busy} onClick={() => setColor(value)}>{color === value ? '✓' : ''}</button>)}</div>
-      {error && <p role="alert">{error}</p>}<div className="reading-tool-actions"><button type="button" className="button" disabled={busy} onClick={close}>取消</button><button className="button primary" disabled={busy}>保存批注</button></div>
+      <FloatingNotice message={error} error /><div className="reading-tool-actions"><button type="button" className="button" disabled={busy} onClick={close}>取消</button><button className="button primary" disabled={busy}>保存批注</button></div>
     </form>
   </Modal>;
   return <div ref={panel} className="annotation-popover" style={{left,top,width}} role={target.note ? 'dialog' : 'toolbar'} aria-label={target.note ? '批注详情' : '选中文字操作'} onPointerDown={event => event.preventDefault()}>
     {target.note && <><blockquote>{target.anchor.quote}</blockquote><p className="annotation-comment">{target.note.comment || '这段文字已高亮，尚未添加批注。'}</p></>}
-    {error && <p role="alert">{error}</p>}
+    <FloatingNotice message={error} error />
+    {confirmDelete && <FloatingConfirm title="删除批注" text="确定删除这段高亮及其批注？" confirmText="确认删除" cancelText="取消" onCancel={()=>setConfirmDelete(false)} onConfirm={()=>{setConfirmDelete(false);void work(remove);}} />}
     <div className="annotation-actions">
       {!target.note && <button disabled={busy} onClick={() => void work(async () => { if (!navigator.clipboard) throw new Error('当前环境不支持剪贴板，请使用系统复制'); await navigator.clipboard.writeText(target.anchor.quote); })}>复制</button>}
       {!target.note && <button disabled={busy} onClick={() => void work(() => save('highlight', '', color))}>高亮</button>}
       <button disabled={busy} onClick={() => setEditing(true)}>{target.note ? '编辑批注' : '批注'}</button>
       {!target.note && <button disabled={busy} onClick={() => void work(() => save('bookmark', '', ''))}>书签</button>}
-      {target.note && <button disabled={busy} onClick={() => confirmDelete ? void work(remove) : setConfirmDelete(true)}>{confirmDelete ? '确认删除' : '删除'}</button>}
+      {target.note && <button disabled={busy} onClick={() => setConfirmDelete(true)}>删除</button>}
       <button disabled={busy} aria-label="关闭选区工具" onClick={close}>关闭</button>
     </div>
   </div>;

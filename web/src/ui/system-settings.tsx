@@ -2,6 +2,8 @@ import { useEffect, useState } from './vendor/preact.ts';
 import type { ReaderApi } from '../api/client.ts';
 import type { ManagedUser, RegistrationSettings } from '../api/types.ts';
 import { Modal } from './modal.tsx';
+import { FloatingConfirm } from './floating-confirm.tsx';
+import { FloatingNotice } from './floating-notice.tsx';
 
 export function SystemSettings({api,onClose}:{api:ReaderApi;onClose():void}) {
   const [users,setUsers]=useState<ManagedUser[]>([]),[settings,setSettings]=useState<RegistrationSettings|null>(null);
@@ -16,8 +18,8 @@ export function SystemSettings({api,onClose}:{api:ReaderApi;onClose():void}) {
   const self=api.currentSession()?.user.id;
   return <Modal title="系统设置" busy={busy} onClose={onClose}><div className="user-management source-modal-content">
     <nav className="extension-tabs" aria-label="系统设置分类"><button aria-pressed={tab==='users'} onClick={()=>setTab('users')}>用户管理</button><button aria-pressed={tab==='registration'} onClick={()=>setTab('registration')}>注册与邀请</button></nav>
-    {error && <p role="alert" className="notice">{error}</p>}{message && <p role="status">{message}</p>}
-    {confirmation && <section className="notice" role="alert"><p>{confirmation.text}</p><button className="button primary" disabled={busy} onClick={()=>void work(confirmation.run)}>确认操作</button> <button className="button" disabled={busy} onClick={()=>setConfirmation(null)}>取消操作</button></section>}
+    <FloatingNotice message={error || message} error={!!error} kind="success" />
+    {confirmation && <FloatingConfirm text={confirmation.text} onCancel={()=>setConfirmation(null)} onConfirm={()=>{setConfirmation(null);void work(confirmation.run);}} />}
     {tab==='users' ? <>
       <div className="user-manager-actions"><input aria-label="筛选用户" placeholder="搜索用户名或显示名" value={query} onInput={e=>setQuery(e.currentTarget.value)} /><button className="button primary" disabled={busy} onClick={()=>{setForm(!form);setReset(null);setPassword('');}}>新增用户</button></div>
       {form && <form className="user-manager-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await api.adminCreateUser({username:username.trim(),password,displayName:displayName.trim(),role});setForm(false);setUsername('');setPassword('');setDisplayName('');setRole('member');},'用户已创建');}}>

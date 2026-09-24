@@ -40,6 +40,8 @@ function manifest(value: BookContent): Manifest {
 }
 
 beforeAll(() => {
+  window.matchMedia ??= () => ({matches:false,addEventListener(){},removeEventListener(){}} as unknown as MediaQueryList);
+  window.scrollTo = () => {};
   HTMLDialogElement.prototype.showModal ??= function() { this.setAttribute('open', ''); };
   HTMLDialogElement.prototype.close ??= function() { this.removeAttribute('open'); };
   vi.stubGlobal('Blob', NodeBlob);
@@ -419,8 +421,9 @@ it('opens tools, searches the whole book, navigates and returns, and persists a 
  await vi.waitFor(()=>expect(env.screen.element.querySelector('.reading-note-editor')).toBeNull());
  await act(() => click(env.screen,'删除笔记'));
  expect(env.offline.notesFor(book.id)).toHaveLength(1);
- await act(() => click(env.screen,'取消'));
+ await act(() => document.querySelector<HTMLButtonElement>('.swal2-cancel')!.click());
+ await vi.waitFor(()=>expect(document.querySelector('.confirmation-host')).toBeNull());
  expect(env.offline.notesFor(book.id)).toHaveLength(1);
- await act(() => click(env.screen,'删除笔记'));await click(env.screen,'确认删除');
+ await act(() => click(env.screen,'删除笔记'));await act(() => document.querySelector<HTMLButtonElement>('.swal2-confirm')!.click());
  await vi.waitFor(()=>expect(env.offline.notesFor(book.id)).toHaveLength(0));
 });
