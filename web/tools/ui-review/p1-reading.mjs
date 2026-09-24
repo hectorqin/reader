@@ -34,6 +34,14 @@ try {
  await page.goto(base);await page.locator('input[autocomplete=username]').fill('p1-reader');await page.locator('input[type=password]').fill('password123');await page.locator('button[type=submit]').click();await page.locator('.shelf-screen').waitFor();
  await page.goto(base+'/#/book/'+epub.id);await page.locator('book-content h1').waitFor();assert.ok(await button('设置').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight));await button('工具').click();
  for(const width of [320,390,1280]){await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'tools-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
+ await button('笔记').click();assert.equal(await page.locator('.reading-note-editor').count(),0);
+ for(const width of [320,390,1280]){await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'notes-empty-'+width+'.png')});assert.ok(await page.locator('.reading-tool-tabs').evaluate(el=>new Set([...el.children].map(b=>b.getBoundingClientRect().top)).size===1));assert.equal(await page.getByRole('dialog').evaluate(el=>el.scrollWidth>el.clientWidth),false);}
+ await button('添加当前位置书签').click();await button('已添加当前位置书签').waitFor();assert.equal(await button('已添加当前位置书签').isDisabled(),true);
+ await button('编辑').click();await page.getByLabel('批注',{exact:true}).fill('读到这里');await button('保存修改').click();await page.locator('.reading-note-comment').getByText('读到这里',{exact:true}).waitFor();
+ await page.setViewportSize({width:390,height:844});await page.screenshot({path:join(shots,'notes-bookmark-390.png')});
+ await button('高亮与批注').click();assert.equal(await page.locator('.reading-note-list li').count(),0);await button('全部').click();
+ await button('删除笔记').click();assert.equal(await page.locator('.reading-note-list li').count(),1);await button('取消').click();await button('删除笔记').click();await button('确认删除').click();await page.getByText('还没有阅读记录',{exact:true}).waitFor();
+ await button('书内搜索').click();
  await page.setViewportSize({width:390,height:844});await page.getByLabel('关键词',{exact:true}).fill('检索目标');await button('搜索全文').click();await page.locator('.reading-tool-results li').nth(1).waitFor();await page.locator('.reading-tool-results li button').nth(1).click();await page.getByRole('dialog').waitFor({state:'hidden'});
  assert.ok(await page.locator('book-content').evaluate(host=>host.shadowRoot.querySelectorAll('[data-reader-mark="search"]').length)>0);
  await button('工具').click();await button('返回原阅读位置').click();
@@ -42,7 +50,9 @@ try {
  await context.route('**/api/**',route=>route.abort('internetdisconnected'));await page.reload();await page.locator('book-content h1').waitFor();await context.unroute('**/api/**');
  // Select actual shadow DOM text, then create a persisted personal correction.
  await page.locator('book-content').evaluate(host=>{const node=host.shadowRoot.querySelector('p').firstChild;const range=document.createRange();range.setStart(node,3);range.setEnd(node,7);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);});
- await button('工具').click();await button('笔记').click();await page.getByLabel('批注',{exact:true}).fill('跨设备批注测试');await button('保存高亮或批注').click();await page.getByText('已保存，联网后同步').waitFor();
+ await button('工具').click();assert.equal(await button('笔记').getAttribute('aria-pressed'),'true');await page.getByLabel('批注',{exact:true}).fill('跨设备批注测试');await button('绿色').click();
+ await page.screenshot({path:join(shots,'notes-editor-390.png')});
+ await button('保存批注').click();await page.getByText('笔记已保存',{exact:true}).waitFor();assert.equal(await page.locator('.reading-note-editor').count(),0);
  await button('关闭弹窗').click();assert.ok(await page.locator('book-content').evaluate(host=>host.shadowRoot.querySelectorAll('[data-reader-mark="note"]').length)>0);
  await page.locator('book-content').evaluate(host=>{const node=host.shadowRoot.querySelector('p').firstChild;const range=document.createRange();range.setStart(node,3);range.setEnd(node,7);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);});
  await button('工具').click();await button('内容整理').click();await page.getByLabel('替换为',{exact:true}).fill('已经修正');await button('保存纠错 / 过滤').click();await page.getByText('纠错已保存，正文已更新').waitFor();await button('关闭弹窗').click();await page.reload();await page.locator('book-content p').filter({hasText:'已经修正'}).waitFor();

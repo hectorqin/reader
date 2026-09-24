@@ -3943,14 +3943,46 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .source-switch .catalog-feedback { margin-top: 1rem; }
 
 /* Reading tools share the reader modal, including narrow phone layouts. */
-.reading-tools { display: grid; gap: 1rem; padding: 1rem; overflow-wrap: anywhere; }
-.reading-tool-tabs { display: flex; flex-wrap: wrap; gap: .5rem; }
-.reading-tool-tabs [aria-pressed="true"] { font-weight: bold; outline: 2px solid currentColor; }
+.reading-tools { display: flex; flex-direction: column; overflow: hidden; overflow-wrap: anywhere; }
+.reading-tool-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); flex: none; padding: .35rem .75rem 0; border-bottom: 1px solid var(--reader-line); }
+.reading-tool-tab { min-height: 48px; padding: .5rem .2rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--reader-ink); cursor: pointer; }
+.reading-tool-tab[aria-pressed="true"] { font-weight: 600; color: var(--reader-accent); border-bottom-color: var(--reader-accent); }
+.reading-tool-panel { padding: 1rem; overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.reading-tool-panel h3, .reading-tool-panel h4 { margin: 0; font-size: 1rem; }
+.reading-tool-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.reading-tool-heading small { font-weight: normal; font-size: .8rem; margin-inline-start: .25rem; }
+.reading-tool-heading .button { font-size: .85rem; padding: .5rem .75rem; white-space: nowrap; }
+.reading-tool-actions { display: flex; justify-content: flex-end; gap: .5rem; flex-wrap: wrap; }
+.reading-note-editor { display: grid; gap: .85rem; padding: 1rem; border: 1px solid var(--reader-line); border-radius: .75rem; background: var(--reader-surface); }
+.reading-note-editor label small { font-size: .75rem; font-weight: normal; }
+.reading-note-colors { display: flex; align-items: center; gap: .5rem; }
+.reading-note-colors > span { font-size: .85rem; margin-inline-end: auto; }
+.reading-note-colors button { min-width: 44px; height: 44px; border: 2px solid transparent; border-radius: 50%; background: var(--note-color); color: #222; cursor: pointer; }
+.reading-note-colors button[aria-pressed="true"] { border-color: var(--reader-accent); box-shadow: inset 0 0 0 3px var(--reader-paper); }
+.reading-note-filters { display: flex; gap: .25rem; border-bottom: 1px solid var(--reader-line); }
+.reading-note-filters button { min-height: 44px; padding: .5rem .65rem; background: transparent; color: var(--reader-ink); border: 0; border-bottom: 2px solid transparent; font-size: .8rem; cursor: pointer; }
+.reading-note-filters button[aria-pressed="true"] { color: var(--reader-accent); border-bottom-color: var(--reader-accent); font-weight: 600; }
+.reading-note-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; }
+.reading-note-list li { border: 1px solid var(--reader-line); border-radius: .65rem; overflow: hidden; }
+.reading-note-open { width: 100%; padding: .8rem; display: grid; gap: .5rem; text-align: start; background: transparent; color: var(--reader-ink); border: 0; cursor: pointer; }
+.reading-note-open strong, .reading-note-comment { font-weight: normal; line-height: 1.6; white-space: pre-wrap; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.reading-note-kind { display: flex; align-items: center; justify-content: space-between; font-size: .75rem; color: var(--reader-accent); }
+.reading-note-comment { font-size: .85rem; border-inline-start: 2px solid var(--reader-line); padding-inline-start: .65rem; }
+.reading-note-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .25rem; padding: 0 .4rem; border-top: 1px solid var(--reader-line); }
+.reading-note-actions button { min-height: 44px; padding: .4rem .6rem; border: 0; background: transparent; color: var(--reader-accent); font-size: .8rem; cursor: pointer; }
+.reading-note-actions > span { margin-inline-end: auto; padding: .4rem; font-size: .8rem; }
+.reading-tool-empty { text-align: center; padding: 1.5rem .5rem; }
+.reading-tool-empty strong { font-weight: 500; }
+.reading-tool-empty .button { margin-top: .75rem; }
+.reading-tool-feedback { padding: .6rem .75rem; border-radius: .5rem; background: var(--reader-surface); color: var(--reader-accent); }
+.reading-tool-advanced { border-top: 1px solid var(--reader-line); padding-top: .5rem; }
+.reading-tool-advanced summary { padding: .6rem 0; cursor: pointer; font-size: .9rem; }
+.reading-tool-advanced > div { display: grid; gap: .75rem; padding-top: .5rem; }
 .reading-tools section { display: grid; gap: .75rem; }
 .reading-tools label { display: grid; gap: .3rem; }
 .reading-tools input, .reading-tools textarea, .reading-tools select { max-width: 100%; min-width: 0; }
 .reading-tools blockquote { margin: 0; max-height: 8rem; overflow: auto; }
-.reading-tool-results { max-height: 45vh; overflow: auto; margin: 0; padding-left: 1.5rem; }
+.reading-tool-results { margin: 0; padding-left: 1.5rem; }
 .reading-tool-results li { margin-block: .6rem; }
 .reading-tool-results span { display: block; white-space: pre-wrap; }
 .reading-tool-range { display: flex; gap: 1rem; }
@@ -3960,8 +3992,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 
 .reading-tools { min-height: 0; }
 .reading-tools button, .reading-tools input, .reading-tools textarea, .reading-tools select { font: inherit; }
-.reading-tool-tabs .button { flex: 1 1 auto; min-height: 2.5rem; font-size: .875rem; }
-.reading-tool-tabs .button[aria-pressed="true"] { color: var(--reader-accent); background: var(--reader-surface); outline: none; border-color: var(--reader-accent); }
+.reading-tools .reading-tool-tab { font-size: .875rem; }
 .reading-tools input, .reading-tools textarea, .reading-tools select { width: 100%; box-sizing: border-box; border: 1px solid var(--reader-line); border-radius: .5rem; padding: .6rem; background: var(--reader-paper); color: var(--reader-ink); }
 .reading-tools textarea { min-height: 5rem; resize: vertical; }
 .reading-tools form { display: grid; gap: .6rem; }

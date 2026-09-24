@@ -24,7 +24,7 @@ export interface ReadingToolsProps {
 }
 
 export function ReadingTools(props: ReadingToolsProps) {
-  const [tab, setTab] = useState<'search' | 'notes' | 'offline' | 'speech' | 'edit'>('search');
+  const [tab, setTab] = useState<'search' | 'notes' | 'offline' | 'speech' | 'edit'>(props.selection ? 'notes' : 'search');
   const [query, setQuery] = useState(''), [hits, setHits] = useState<SearchHit[]>([]);
   const [scanned, setScanned] = useState(0), [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
@@ -34,6 +34,10 @@ export function ReadingTools(props: ReadingToolsProps) {
   const [notes, setNotes] = useState<Note[]>(props.offline.notesFor(props.manifest.book.id));
   const [comment, setComment] = useState(''), [editing, setEditing] = useState<Note | null>(null);
   const [color, setColor] = useState('#ffd54f');
+  const [composing, setComposing] = useState(!!props.selection);
+  const [noteFilter, setNoteFilter] = useState<'all' | 'bookmark' | 'annotation'>('all');
+  const [deleteId, setDeleteId] = useState('');
+  const editorRef = useRef<HTMLDivElement>(null);
   const [from, setFrom] = useState(1), [to, setTo] = useState(['chapters', 'txt'].includes(props.manifest.book.format) ? props.manifest.content?.total ?? 1 : 1);
   const [downloadReady, setDownloadReady] = useState(false);
   const [download, setDownload] = useState<DownloadState | null>(null);
@@ -44,6 +48,9 @@ export function ReadingTools(props: ReadingToolsProps) {
   const task = useMemo(() => new OfflineDownload(props.api, props.cache, props.manifest, state => { if (alive.current) setDownload(state); }), []);
   const bookId = props.manifest.book.id;
   const rangedDownload = ['chapters', 'txt'].includes(props.manifest.book.format) && !props.overrides.headingPrefix;
+  const visibleNotes = notes.filter(note => noteFilter === 'all' || (noteFilter === 'bookmark' ? note.type === 'bookmark' : note.type !== 'bookmark'));
+  const bookmarked = notes.some(note => note.type === 'bookmark' && note.locator === props.locator);
+  useEffect(() => { if (editing || composing) editorRef.current?.querySelector('textarea')?.focus(); }, [editing, composing]);
   async function storage() {
     const entries = await props.cache.entries(), grouped = new Map<string, number>();
     for (const entry of entries) grouped.set(entry.bookId, (grouped.get(entry.bookId) ?? 0) + entry.bytes);
@@ -79,47 +86,56 @@ export function ReadingTools(props: ReadingToolsProps) {
     const note: Note = editing && !bookmark ? { ...editing, type: editing.type === 'bookmark' ? 'bookmark' : comment.trim() ? 'note' : 'highlight', comment, color, updatedAt: Date.now() } : {
       id: crypto.randomUUID(), bookId, type: bookmark ? 'bookmark' : comment.trim() ? 'note' : 'highlight',
       locator: bookmark ? props.locator : encodeAnchor(selected!), text: bookmark ? props.manifest.book.title : selected!.quote,
-      comment, color, updatedAt: Date.now(),
+      comment: bookmark ? '' : comment, color: bookmark ? '' : color, updatedAt: Date.now(),
     };
     await props.offline.upsertNotes([note]); props.sync.schedule();
-    setNotes(props.offline.notesFor(bookId)); setComment(''); setEditing(null); props.onNotes(); setMessage('已保存，联网后同步');
+    setNotes(props.offline.notesFor(bookId));
+    if (!bookmark) { setComment(''); setEditing(null); setComposing(false); }
+    setNoteFilter(bookmark ? 'bookmark' : 'all'); props.onNotes(); setMessage(bookmark ? '已添加当前位置书签' : '笔记已保存');
   }
   return <Modal title="阅读工具" busy={saving} onClose={props.onClose}>
-    <div className="reading-tools source-modal-content">
+    <div className="reading-tools">
       <nav className="reading-tool-tabs" aria-label="阅读工具分类">{([
-        ['search', '书内搜索'], ['notes', '笔记'], ['offline', '离线缓存'], ['speech', '朗读检测'], ['edit', '内容整理'],
-      ] as const).map(([id, label]) => <button className="button" type="button" aria-pressed={tab === id} onClick={() => { setTab(id); setMessage(''); }}>{label}</button>)}</nav>
-      {message && <p role="status">{message}</p>}
+        ['search', '搜索', '书内搜索'], ['notes', '笔记', '笔记'], ['offline', '缓存', '离线缓存'], ['speech', '朗读', '朗读检测'], ['edit', '整理', '内容整理'],
+      ] as const).map(([id, label, accessible]) => <button className="reading-tool-tab" type="button" aria-label={accessible} aria-pressed={tab === id} aria-controls="reading-tool-panel" onClick={() => { setTab(id); setMessage(''); }}>{label}</button>)}</nav>
+      <div className="reading-tool-panel" id="reading-tool-panel">
+      {message && <p className="reading-tool-feedback" role="status">{message}</p>}
       {tab === 'search' && <section aria-label="书内搜索">
-        <form onSubmit={event => { event.preventDefault(); if (query.trim()) void search(); }}><label>关键词<input value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} /></label><button className="button" disabled={searching || !query.trim()}>搜索全文</button></form>
+        <h3>书内搜索</h3>
+        <form className="reading-tool-search" onSubmit={event => { event.preventDefault(); if (query.trim()) void search(); }}><label>关键词<input placeholder="输入要查找的文字" value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} /></label><button className="button primary" disabled={searching || !query.trim()}>搜索全文</button></form>
         {searching && <button className="button" onClick={() => { searchRun.current?.abort(); setSearching(false); }}>停止搜索</button>}
         <p role="status">已扫描 {scanned} 章，找到 {hits.length} 处</p>
         <button className="button" disabled={!returnTo} onClick={() => void action(async () => { await props.navigate(returnTo); props.onClose(); })}>返回原阅读位置</button>
         <ol className="reading-tool-results">{hits.map((hit, index) => <li key={index}><button className="button" onClick={() => void action(async () => { await props.navigate(hit.anchor); props.onClose(); })}><strong>{hit.title}</strong><span>{hit.excerpt}</span></button></li>)}</ol>
       </section>}
       {tab === 'notes' && <section aria-label="笔记管理">
-        <blockquote>{editing?.text ?? props.selection?.quote ?? '在正文选择文字可高亮或批注；也可保存当前位置书签。'}</blockquote>
-        <label>批注<textarea value={comment} maxLength={4000} onInput={event => setComment(event.currentTarget.value)} /></label>
-        <label>高亮颜色<select value={color} onChange={event => setColor(event.currentTarget.value)}><option value="#ffd54f">黄色</option><option value="#80cbc4">绿色</option><option value="#ce93d8">紫色</option></select></label>
-        <button className="button" disabled={!editing && !props.selection} onClick={() => void action(() => saveNote())}>{editing ? '保存修改' : '保存高亮或批注'}</button>
-        <button className="button" disabled={!props.locator} onClick={() => void action(() => saveNote(true))}>添加当前位置书签</button>
-        {editing && <button className="button" onClick={() => { setEditing(null); setComment(''); }}>取消编辑</button>}
-        <ul className="reading-tool-results">{notes.map(note => <li key={note.id}><button className="button" onClick={() => void action(async () => { await props.navigate(decodeAnchor(note.locator) ?? note.locator); props.onClose(); })}>{note.text || '书签'}{note.comment && <span>{note.comment}</span>}</button>
-          <button className="button" onClick={() => { setEditing(note); setComment(note.comment); setColor(note.color || '#ffd54f'); }}>编辑</button><button className="button" onClick={() => void action(async () => { await props.offline.deleteNote(note.id); props.sync.schedule(); setNotes(props.offline.notesFor(bookId)); props.onNotes(); })}>删除笔记</button></li>)}</ul>
-        {!notes.length && <p>暂无笔记</p>}
+        <div className="reading-tool-heading"><h3>笔记与书签 <small>{notes.length}</small></h3><button className="button" aria-label={bookmarked ? '已添加当前位置书签' : '添加当前位置书签'} disabled={saving || !props.locator || bookmarked} onClick={() => void edit(() => saveNote(true))}>{bookmarked ? '已加书签' : '＋ 加书签'}</button></div>
+        {(editing || composing) && <div className="reading-note-editor" ref={editorRef}>
+          <h4>{editing ? '编辑' + (editing.type === 'bookmark' ? '书签' : '笔记') : '记录所选文字'}</h4>
+          <blockquote>{editing?.text ?? props.selection?.quote}</blockquote>
+          <label><span>批注 <small>可选</small></span><textarea aria-label="批注" disabled={saving} placeholder={editing?.type === 'bookmark' ? '为这个位置添加备注' : '写下想法，或留空仅保存高亮'} value={comment} maxLength={4000} onInput={event => setComment(event.currentTarget.value)} /></label>
+          {editing?.type !== 'bookmark' && <div className="reading-note-colors" role="group" aria-label="高亮颜色"><span>高亮颜色</span>{[['#ffd54f', '黄色'], ['#80cbc4', '绿色'], ['#ce93d8', '紫色']].map(([value, label]) => <button type="button" disabled={saving} aria-label={label} aria-pressed={color === value} style={{ '--note-color': value }} onClick={() => setColor(value)}>{color === value ? '✓' : ''}</button>)}</div>}
+          <div className="reading-tool-actions"><button className="button" disabled={saving} onClick={() => { setEditing(null); setComposing(false); setComment(''); }}>取消编辑</button><button className="button primary" disabled={saving} onClick={() => void edit(() => saveNote())}>{editing ? '保存修改' : comment.trim() ? '保存批注' : '保存高亮'}</button></div>
+        </div>}
+        {!editing && !composing && props.selection && <button className="button" onClick={() => setComposing(true)}>为所选文字添加笔记</button>}
+        {!editing && !composing && <><div className="reading-note-filters" role="group" aria-label="笔记筛选">{([['all', '全部'], ['bookmark', '书签'], ['annotation', '高亮与批注']] as const).map(([value, label]) => <button type="button" aria-pressed={noteFilter === value} onClick={() => { setNoteFilter(value); setDeleteId(''); }}>{label}</button>)}</div>
+        <ul className="reading-note-list">{visibleNotes.map(note => <li key={note.id}>
+          <button className="reading-note-open" disabled={saving} onClick={() => void action(async () => { await props.navigate(decodeAnchor(note.locator) ?? note.locator); props.onClose(); })}><span className="reading-note-kind">{note.type === 'bookmark' ? '书签' : note.type === 'highlight' ? '高亮' : '批注'}<span>跳转阅读 ›</span></span><strong>{note.text || '书签'}</strong>{note.comment && <span className="reading-note-comment">{note.comment}</span>}</button>
+          <div className="reading-note-actions">{deleteId === note.id ? <><span>删除这条{note.type === 'bookmark' ? '书签' : '笔记'}？</span><button type="button" disabled={saving} onClick={() => setDeleteId('')}>取消</button><button type="button" disabled={saving} onClick={() => void edit(async () => { await props.offline.deleteNote(note.id); props.sync.schedule(); setNotes(props.offline.notesFor(bookId)); setDeleteId(''); props.onNotes(); })}>确认删除</button></> : <><button type="button" disabled={saving} onClick={() => { setEditing(note); setComment(note.comment); setColor(note.color || '#ffd54f'); setDeleteId(''); }}>编辑</button><button type="button" disabled={saving} onClick={() => setDeleteId(note.id)}>删除笔记</button></>}</div>
+        </li>)}</ul>
+        {!visibleNotes.length && <div className="reading-tool-empty"><strong>{noteFilter === 'bookmark' ? '还没有书签' : noteFilter === 'annotation' ? '还没有高亮或批注' : '还没有阅读记录'}</strong><p>加书签，记住当前读到的位置。<br />在正文选中文字后，可添加高亮或批注。</p>{!props.selection && <button className="button" onClick={props.onClose}>返回正文</button>}</div>}</>}
       </section>}
       {tab === 'offline' && <section aria-label="离线缓存管理">
         <p>缓存保存在当前设备、当前账号。关闭此面板会暂停任务，已下载内容保留。</p>
         {rangedDownload && <div className="reading-tool-range"><label>起始章<input type="number" min={1} max={props.manifest.content?.total} value={from} onInput={e => setFrom(Number(e.currentTarget.value))} /></label><label>结束章<input type="number" min={from} max={props.manifest.content?.total} value={to} onInput={e => setTo(Number(e.currentTarget.value))} /></label></div>}
-        <button className="button" disabled={!downloadReady || download?.status === 'running'} onClick={() => void action(async () => { await task.start(rangedDownload ? from : 1, rangedDownload ? to : 1); await storage(); })}>下载 / 继续</button>
-        <button className="button" disabled={download?.status !== 'running'} onClick={() => void action(() => task.pause())}>暂停</button>
-        <button className="button" disabled={download?.status !== 'running'} onClick={() => void action(() => task.pause(true))}>取消任务</button>
+        <div className="reading-tool-actions">{download?.status === 'running' ? <><button className="button" onClick={() => void action(() => task.pause())}>暂停</button><button className="button" onClick={() => void action(() => task.pause(true))}>取消任务</button></> : <button className="button primary" disabled={!downloadReady} onClick={() => void action(async () => { await task.start(rangedDownload ? from : 1, rangedDownload ? to : 1); await storage(); })}>下载 / 继续</button>}</div>
         {download && <p role="status">{download.message} · {download.completed}/{download.total}</p>}
         <p>当前账号缓存占用 {(usage / 1024 / 1024).toFixed(1)} MiB</p>
-        <label>设备账号配额（MiB）<input type="number" min={1} max={10240} value={quota} onInput={e => setQuota(Number(e.currentTarget.value))} /></label>
+        <details className="reading-tool-advanced"><summary>存储管理与配额</summary><div><label>设备账号配额（MiB）<input type="number" min={1} max={10240} value={quota} onInput={e => setQuota(Number(e.currentTarget.value))} /></label>
         <button className="button" onClick={() => void action(async () => { await props.cache.setQuota(quota * 1024 * 1024); setMessage('配额已保存'); })}>保存配额</button>
         <ul>{books.map(book => <li key={book.id}>{props.offline.current.books[book.id]?.title ?? (book.id === bookId ? props.manifest.book.title : book.id)} · {(book.bytes / 1024 / 1024).toFixed(1)} MiB <button className="button" disabled={download?.status === 'running'} onClick={() => setRemoveId(book.id)}>清理缓存</button></li>)}</ul>
         {removeId && <div role="group" aria-label="确认清理缓存"><p>只删除此设备的书籍缓存，保留原书、进度和笔记。</p><button className="button" onClick={() => void action(async () => { await props.cache.removeBook(removeId); setRemoveId(''); setDownload(null); await storage(); })}>确认清理</button><button className="button" onClick={() => setRemoveId('')}>保留缓存</button></div>}
+        </div></details>
       </section>}
       {tab === 'edit' && <section aria-label="内容整理">
         <p>个人整理规则保存在服务器，联网时保存；原书保持不变。清空替换内容可过滤选中的文字。</p>
@@ -137,6 +153,7 @@ export function ReadingTools(props: ReadingToolsProps) {
         </>}
       </section>}
       {tab === 'speech' && <section aria-label="朗读检测"><p>使用当前朗读设置试听。HTTP 引擎会请求服务端合成试听音频。</p><button className="button" onClick={() => void action(async () => setMessage(await props.previewSpeech()))}>检测并试听</button><button className="button" onClick={props.stopPreview}>停止试听</button><p>若浏览器限制播放，请点击试听后允许音频；可在朗读设置切换系统或 HTTP 引擎。</p></section>}
+      </div>
     </div>
   </Modal>;
 }
