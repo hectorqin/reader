@@ -190,8 +190,8 @@ export class App {
         this.enterApp();
         this.sync.start();
       } catch (err) {
-        if (err instanceof ApiError && err.isConnectivity) {
-          // Offline with a stored session is a legitimate state, not a failure.
+        if (err instanceof ApiError && (err.isConnectivity || err.kind === 'server')) {
+          // A network outage or temporary server failure does not revoke a login.
           this.enterApp();
           this.sync.start();
         } else {
@@ -677,9 +677,11 @@ export class App {
     if (typeof document === 'undefined') return;
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') void this.flush();
+      else void this.api.renewSessionIfNeeded().catch(() => {});
     });
     if (typeof window !== 'undefined') {
       window.addEventListener('pagehide', () => void this.flush());
+      window.addEventListener('online', () => void this.api.renewSessionIfNeeded().catch(() => {}));
     }
   }
 

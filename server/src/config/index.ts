@@ -118,7 +118,7 @@ export function loadConfig(): AppConfig {
     host: process.env.HOST ?? '0.0.0.0',
     port: envInt('PORT', 5888),
     jwtSecret: loadOrCreateSecret(dataDir),
-    accessTokenTtl: envInt('ACCESS_TOKEN_TTL', 60 * 60 * 24),
+    accessTokenTtl: envInt('ACCESS_TOKEN_TTL', 60 * 60 * 24 * 7),
     refreshTokenTtl: envInt('REFRESH_TOKEN_TTL', 60 * 60 * 24 * 365),
     scanInterval: envInt('SCAN_INTERVAL', 60 * 30),
     watchInterval: envInt('WATCH_INTERVAL', 60),

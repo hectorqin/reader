@@ -85,31 +85,39 @@ export class LoginScreen {
     const state = this.state;
     return (
       <form
-        className="centered-form"
+        className="centered-form login-card"
         onSubmit={(event) => {
           event.preventDefault();
           void this.submit();
         }}
       >
-        <h1 style="margin:0 0 .25rem;font-size:1.3rem;">reader</h1>
-        <p className="muted" style="margin:0 0 1.25rem;font-size:.85rem;">
-          自部署书库阅读器
-        </p>
-        <FloatingNotice message={state.busy ? '正在登录…' : state.error || state.notice} busy={state.busy} error={!!state.error || state.noticeKind === 'error'} />
+        <header className="login-heading">
+          <span className="login-brand">reader <span>你的私人书房</span></span>
+          <h1>{state.registering ? '开启阅读之旅' : '欢迎回来'}</h1>
+          <p className="muted">{state.registering ? '创建账号，收藏你的下一本好书。' : '登录书房，接着上次的故事读下去。'}</p>
+        </header>
+        <FloatingNotice message={state.busy ? (state.registering ? '正在创建账号…' : '正在登录…') : state.error || state.notice} busy={state.busy} error={!!state.error || state.noticeKind === 'error'} />
+        <details className="login-connection">
+          <summary>连接设置<span>更换服务地址</span></summary>
         <div className="field">
-          <label>服务端地址</label>
+          <label htmlFor="login-server">服务端地址</label>
           <input
+            id="login-server"
             type="url"
             inputMode="url"
             autoComplete="url"
-            placeholder="http://192.168.1.10:8080"
+            placeholder="http://192.168.1.10:5888"
             value={state.serverUrl}
             onInput={(event) => this.onServerUrlChange((event.currentTarget as HTMLInputElement).value)}
           />
         </div>
+        </details>
         <div className="field">
-          <label>用户名</label>
+          <label htmlFor="login-username">用户名</label>
           <input
+            id="login-username"
+            placeholder="请输入用户名"
+            disabled={state.busy}
             type="text"
             autoComplete="username"
             autoCapitalize="off"
@@ -120,8 +128,11 @@ export class LoginScreen {
           />
         </div>
         <div className="field">
-          <label>密码</label>
+          <label htmlFor="login-password">密码</label>
           <input
+            id="login-password"
+            placeholder={state.registering ? '设置密码，至少 8 位' : '请输入密码'}
+            disabled={state.busy}
             type="password"
             autoComplete={state.registering ? 'new-password' : 'current-password'}
             value={state.password}
@@ -130,8 +141,11 @@ export class LoginScreen {
         </div>
         {state.registering ? (
           <div className="field">
-            <label>显示名（可选）</label>
+            <label htmlFor="login-name">显示名（可选）</label>
             <input
+              id="login-name"
+              placeholder="希望我们怎么称呼你"
+              disabled={state.busy}
               type="text"
               autoComplete="nickname"
               value={state.displayName}
@@ -139,14 +153,16 @@ export class LoginScreen {
             />
           </div>
         ) : null}
-        <button type="submit" className="button primary" disabled={state.busy}>
+        <button type="submit" className="button primary login-submit" disabled={state.busy}>
           {state.registering ? '注册并登录' : '登录'}
         </button>
-        <div className="field" style="margin-top:.75rem;">
-          <button type="button" className="button" onClick={() => this.toggleRegister()}>
-            注册新账号
+        <p className="login-session-hint">登录状态自动保持，无需每天重新登录</p>
+        {(state.registering || !state.instance || state.instance.registrationOpen || state.instance.userCount === 0) && <div className="login-switch">
+          <span>{state.registering ? '已有账号？' : '还没有账号？'}</span>
+          <button type="button" disabled={state.busy} onClick={() => this.toggleRegister()}>
+            {state.registering ? '返回登录' : '注册新账号'}
           </button>
-        </div>
+        </div>}
       </form>
     );
   }

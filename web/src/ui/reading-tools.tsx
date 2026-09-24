@@ -9,6 +9,7 @@ import { PublicationCache } from '../store/publications.ts';
 import { OfflineDownload, type DownloadState } from '../core/offline-download.ts';
 import { decodeAnchor, encodeAnchor, findText, type SearchHit, type TextAnchor } from './text-anchor.ts';
 import { ApiError } from '../api/errors.ts';
+import { newId } from '../core/id.ts';
 
 export interface SearchSection { id: string; title: string; text: string }
 export interface ReadingToolsProps {
@@ -105,7 +106,7 @@ export function ReadingTools(props: ReadingToolsProps) {
     const selected = props.selection;
     if (!bookmark && !editing && !selected) throw new Error('先在正文选择文字，再打开阅读工具');
     const note: Note = editing && !bookmark ? { ...editing, type: editing.type === 'bookmark' ? 'bookmark' : comment.trim() ? 'note' : 'highlight', comment, color, updatedAt: Date.now() } : {
-      id: crypto.randomUUID(), bookId, type: bookmark ? 'bookmark' : comment.trim() ? 'note' : 'highlight',
+      id: newId(), bookId, type: bookmark ? 'bookmark' : comment.trim() ? 'note' : 'highlight',
       locator: bookmark ? props.locator : encodeAnchor(selected!), text: bookmark ? props.manifest.book.title : selected!.quote,
       comment: bookmark ? '' : comment, color: bookmark ? '' : color, updatedAt: Date.now(),
     };
@@ -163,7 +164,7 @@ export function ReadingTools(props: ReadingToolsProps) {
         <p>个人整理规则保存在服务器，联网时保存；原书保持不变。清空替换内容可过滤选中的文字。</p>
         <blockquote>{props.selection?.quote ?? '请先在正文选择需要纠正的文字'}</blockquote>
         <label>替换为<textarea maxLength={4000} value={replacement} onInput={e => setReplacement(e.currentTarget.value)} /></label>
-        <button className="button" disabled={saving || !props.selection || props.selection.quote.length > 4000} onClick={() => void edit(async () => { await props.saveOverrides({ ...props.overrides, corrections: [...props.overrides.corrections, {id: crypto.randomUUID(),anchor:props.selection!,replacement}] }); setMessage('纠错已保存，正文已更新'); })}>保存纠错 / 过滤</button>
+        <button className="button" disabled={saving || !props.selection || props.selection.quote.length > 4000} onClick={() => void edit(async () => { await props.saveOverrides({ ...props.overrides, corrections: [...props.overrides.corrections, {id: newId(),anchor:props.selection!,replacement}] }); setMessage('纠错已保存，正文已更新'); })}>保存纠错 / 过滤</button>
         <ul>{props.overrides.corrections.map(c => <li key={c.id}>{c.anchor.quote.slice(0,60)} → {c.replacement.slice(0,60) || '（过滤）'} <button className="button" disabled={saving} onClick={() => void edit(() => props.saveOverrides({ ...props.overrides,corrections:props.overrides.corrections.filter(item => item.id !== c.id) }))}>移除此项</button></li>)}</ul>
         <button className="button" disabled={saving || props.overrides.version === 0} onClick={() => void edit(async () => { await props.undoOverrides(); setMessage('已撤销上一次整理修改'); })}>撤销上一次整理修改</button>
         {props.manifest.book.format === 'txt' && <>

@@ -167,6 +167,12 @@ export class ReaderApi {
     return this.session;
   }
 
+  /** Renew before expiry; transient failures leave the persisted login intact. */
+  async renewSessionIfNeeded(): Promise<void> {
+    if (!this.session || this.session.accessTokenExpiresAt > Date.now() + 5 * 60_000) return;
+    await this.refreshSession(this.sessionGeneration);
+  }
+
   onSessionChange(listener: (session: Session | null) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -719,6 +725,15 @@ export class ReaderApi {
       });
     };
 
+    if (!path.startsWith('/api/v1/auth/') && path !== '/api/v1/instance') {
+      try { await this.renewSessionIfNeeded(); }
+      catch (error) {
+        if (error instanceof ApiError && error.isAuthFailure) throw error;
+        assertCurrent();
+        if (!(error instanceof ApiError) || error.isAuthFailure || (this.session?.accessTokenExpiresAt ?? 0) <= Date.now()) throw error;
+      }
+      assertCurrent();
+    }
     const token = this.session?.accessToken ?? null;
     try {
       const response = await attempt(token);
@@ -780,7 +795,7 @@ export class ReaderApi {
         return session;
       } catch (err) {
         this.assertSession(generation);
-        if (err instanceof ApiError) {
+        if (err instanceof ApiError && err.isAuthFailure) {
           // A rejected refresh token is terminal: the user must sign in again.
           await this.clearSessionIfCurrent(generation);
         }

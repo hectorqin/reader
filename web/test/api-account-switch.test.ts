@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReaderApi } from '../src/api/client.ts';
+import { ApiError } from '../src/api/errors.ts';
 import type { HttpResponse } from '../src/core/platform.ts';
 import type { Session } from '../src/api/types.ts';
 import { FakeTransport, makePlatform } from './helpers/env.ts';
@@ -34,6 +35,30 @@ async function setup() {
 }
 
 describe('requests across an account change', () => {
+  it.each([503, 0])('preserves the session when renewal temporarily fails (%s)', async status => {
+    const env = await setup();
+    env.transport.respondWith(request => {
+      if (!request.url.endsWith('/refresh')) return expired;
+      if (!status) throw new ApiError('offline','network unavailable');
+      return {status,headers:{},json:{error:{code:'UNAVAILABLE',message:'temporary failure'}}};
+    });
+    await expect(env.api.listBooks()).rejects.toBeDefined();
+    expect(env.stored()?.user.id).toBe('a');
+  });
+  it('renews near expiry once for concurrent requests and persists the rotation', async () => {
+    const env = await setup(); env.api.currentSession()!.accessTokenExpiresAt = Date.now()+60_000;
+    env.transport.respondWith(request => request.url.endsWith('/refresh') ? ok({...session('a'),accessToken:'renewed',refreshToken:'rotated'}) : ok({items:[]}));
+    await Promise.all([env.api.listBooks(),env.api.listBooks()]);
+    expect(env.transport.requests.filter(request=>request.url.endsWith('/refresh'))).toHaveLength(1);
+    expect(env.transport.requests.filter(request=>request.url.endsWith('/books')).every(request=>request.headers.authorization==='Bearer renewed')).toBe(true);
+    expect(env.stored()?.refreshToken).toBe('rotated');
+  });
+  it('clears the session only when the refresh credential is rejected', async () => {
+    const env = await setup(); env.api.currentSession()!.accessTokenExpiresAt = Date.now()-1;
+    env.transport.respondWith(()=>({status:401,headers:{},json:{error:{code:'REFRESH_EXPIRED',message:'expired'}}}));
+    await expect(env.api.renewSessionIfNeeded()).rejects.toMatchObject({code:'REFRESH_EXPIRED'});
+    expect(env.stored()).toBeNull();
+  });
   it.each(['AUTH_REQUIRED', 'AUTH_EXPIRED', 'VERIFICATION_REQUIRED'])('keeps the Reader session for source error %s', async code => {
     const env = await setup();
     env.transport.respondWith(() => ({ status: 401, headers: {}, json: { error: { code, message: '站点需要验证' } } }));

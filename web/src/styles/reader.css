@@ -2732,6 +2732,26 @@ book-content {
   text-align: start;
 }
 
+.login-screen { background: radial-gradient(ellipse at 15% 5%, #a1835720, transparent 60%), var(--reader-paper); padding: 2rem 1rem; }
+.login-card { max-width: 27rem; width: 100%; padding: 2rem; border: 1px solid var(--reader-line); border-radius: 1.4rem; background: var(--reader-paper); box-shadow: 0 16px 60px #00000006; }
+.login-heading { margin-bottom: 1.75rem; }
+.login-brand { display: flex; align-items: center; gap: .65rem; font-size: 1.1rem; font-weight: 750; color: var(--reader-accent); }
+.login-brand span { font-size: .75rem; color: var(--reader-muted); font-weight: 400; border-left: 1px solid var(--reader-line); padding-left: .65rem; }
+.login-heading h1 { font-size: 1.65rem; line-height: 1.3; margin: 1.6rem 0 .6rem; }
+.login-heading p { font-size: .85rem; line-height: 1.7; margin: 0; }
+.login-card .field { display: flex; flex-direction: column; align-items: stretch; gap: .5rem; margin: 0 0 1rem; }
+.login-card .field label { font-size: .85rem; color: var(--reader-ink); }
+.login-card input { width: 100%; min-width: 0; min-height: 48px; padding: .75rem .9rem; font-size: 16px; border-radius: .7rem; }
+.login-connection { margin-bottom: 1.4rem; border-bottom: 1px solid var(--reader-line); padding-bottom: .9rem; }
+.login-connection summary { font-size: .8rem; color: var(--reader-muted); cursor: pointer; }
+.login-connection summary span { float: right; font-size: .75rem; }
+.login-connection[open] .field { margin: 1rem 0 0; }
+.login-submit { width: 100%; min-height: 50px; margin-top: .35rem; font-size: 1rem; border-radius: .75rem; }
+.login-session-hint { text-align: center; font-size: .72rem; color: var(--reader-muted); line-height: 1.6; margin: .85rem 0 1.4rem; }
+.login-switch { display: flex; align-items: center; justify-content: center; gap: .25rem; font-size: .85rem; color: var(--reader-muted); }
+.login-switch button { min-height: 44px; border: 0; padding: .5rem; background: transparent; color: var(--reader-accent); font: inherit; cursor: pointer; }
+@media (max-width: 480px) { .login-screen { padding: 1.5rem 1rem; } .login-card { padding: 1.5rem; } }
+
 .notice {
   background: color-mix(in srgb, var(--reader-accent) 12%, var(--reader-surface));
   border-radius: var(--reader-radius);

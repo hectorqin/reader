@@ -33,6 +33,7 @@ import { OFFLINE_FILE, PublicationCache, publicationScope } from '../store/publi
 import { ReadingTools, type SearchSection } from './reading-tools.tsx';
 import { decodeAnchor, encodeAnchor, searchableText, type TextAnchor } from './text-anchor.ts';
 import { AnnotationPopover, type AnnotationTarget } from './annotation-popover.tsx';
+import { newId } from '../core/id.ts';
 import { textToChapterHtml } from '../formats/segments.ts';
 import { parseLocator } from './locator.ts';
 
@@ -549,7 +550,7 @@ export class ReaderScreen {
   private async saveAnnotation(type: 'highlight' | 'note' | 'bookmark', comment: string, color: string): Promise<void> {
     if (!this.book || !this.annotation) return;
     const { anchor, note } = this.annotation;
-    await this.options.offline.upsertNotes([{ id: note?.id ?? crypto.randomUUID(), bookId: this.book.id,
+    await this.options.offline.upsertNotes([{ id: note?.id ?? newId(), bookId: this.book.id,
       type, locator: encodeAnchor(anchor), text: anchor.quote, comment, color, updatedAt: Date.now() }]);
     this.options.sync.schedule(); this.paintNotes();
   }

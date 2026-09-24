@@ -27,7 +27,7 @@ These are defaults when running the server directly. The Docker image additional
 | `SCAN_INTERVAL` | `1800` | Scheduled scan interval in seconds; `0` disables it |
 | `WATCH_INTERVAL` | `60` | Change-check interval in seconds; `0` disables it |
 | `ALLOW_REGISTRATION` | `false` | Allow public registration after the first account |
-| `ACCESS_TOKEN_TTL` | `86400` | Access-token lifetime in seconds |
+| `ACCESS_TOKEN_TTL` | `604800` | Access-token lifetime in seconds (7 days); renewed near expiry on requests or returning to the foreground |
 | `REFRESH_TOKEN_TTL` | `31536000` | Refresh-token lifetime in seconds |
 | `READER_TOKEN_SECRET` | Generated | Signing secret, at least 16 characters; otherwise stored in `DATA_DIR/token.secret` |
 | `LOG_LEVEL` | `info` | Logging level |

@@ -30,8 +30,17 @@ try {
  const books=db.all('SELECT id,format FROM books'), epub=books.find(b=>b.format==='epub'),txt=books.find(b=>b.format==='txt');
  browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH}:{})});
  const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true,isMobile:true}), page=await context.newPage();page.setDefaultTimeout(12000);
+ await context.addInitScript(()=>Object.defineProperty(crypto,'randomUUID',{value:undefined,configurable:true}));
  const errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push(r.url()));const button=name=>page.getByRole('button',{name,exact:true});
- await page.goto(base);await page.locator('input[autocomplete=username]').fill('p1-reader');await page.locator('input[type=password]').fill('password123');await page.locator('button[type=submit]').click();await page.locator('.shelf-screen').waitFor();
+ await context.route('**/api/v1/instance',async route=>{const response=await route.fetch();await route.fulfill({response,json:{...await response.json(),registrationOpen:true}});});
+ await page.goto(base);await page.getByRole('heading',{name:'欢迎回来'}).waitFor();
+ for(const width of [320,390,1280]) {await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'login-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
+ await page.setViewportSize({width:390,height:844});await button('注册新账号').click();await page.getByLabel('显示名（可选）').waitFor();await page.screenshot({path:join(shots,'register-390.png')});await button('返回登录').click();
+ await context.unroute('**/api/v1/instance');
+ await page.locator('input[autocomplete=username]').fill('p1-reader');await page.locator('input[type=password]').fill('password123');await page.locator('button[type=submit]').click();await page.locator('.shelf-screen').waitFor();
+ await context.route('**/api/v1/auth/me',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'TEMPORARY',message:'retry later'}})}));
+ await page.reload();await page.locator('.shelf-screen').waitFor();await context.unroute('**/api/v1/auth/me');
+ await page.reload();await page.locator('.shelf-screen').waitFor();
  await page.goto(base+'/#/book/'+epub.id);await page.locator('book-content h1').waitFor();assert.ok(await button('设置').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight));await button('工具').click();
  for(const width of [320,390,1280]){await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'tools-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
  await button('笔记').click();assert.equal(await page.locator('.reading-note-editor').count(),0);
