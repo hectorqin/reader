@@ -81,9 +81,11 @@ export class PluginPageScreen {
     </form>;
   }
   private content(content: ExtensionContent, scope = 'page') {
-    return <>
+    const editor = <>
       {content.links?.filter(link => { try { const url = new URL(link.url); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; } }).map(link => <a className="button" href={link.url} target="_blank" rel="noopener noreferrer">{link.title}</a>)}
       {content.forms.map(form => <section className="sources-card">{this.form(form)}</section>)}
+    </>;
+    const output = <>
       {content.sections?.map((section, sectionIndex) => <section className="extension-section"><h2>{section.title}</h2>
         {!section.items.length && section.emptyText && <p className="extension-empty">{section.emptyText}</p>}
         {section.items.map((item, index) => {
@@ -102,6 +104,9 @@ export class PluginPageScreen {
         <pre tabIndex={0} aria-label={output.title} data-format={output.format}>{output.text}</pre>
       </details>)}
     </>;
+    return content.layout === 'workbench'
+      ? <div className="extension-workbench"><div className="extension-workbench-editor">{editor}</div><div className="extension-workbench-output">{output}</div></div>
+      : <>{editor}{output}</>;
   }
   private revealActiveTab() {
     const list = this.element.querySelector<HTMLElement>('.extension-tabs');

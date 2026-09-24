@@ -12,6 +12,7 @@ export interface ExtensionForm {
   values?: Record<string, string | number | boolean>;
 }
 export interface ExtensionContent {
+  layout?: 'workbench';
   links?: Array<{ title: string; url: string }>;
   forms: ExtensionForm[];
   outputs?: Array<{ title: string; text: string; format: 'text' | 'log' | 'json' }>;
@@ -88,6 +89,7 @@ export function extensionPage(input: unknown): ExtensionPage {
     }
   };
   const content = (input: Record<string, unknown>) => {
+    if (input.layout !== undefined) check(input.layout === 'workbench');
     forms(input.forms);
     if (input.links !== undefined) {
       check(Array.isArray(input.links) && input.links.length <= 32);

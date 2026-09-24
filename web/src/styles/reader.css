@@ -3970,6 +3970,11 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reading-tools blockquote { border-inline-start: 3px solid var(--reader-accent); padding: .5rem .75rem; line-height: 1.6; }
 .source-capabilities { margin-block: 12px; overflow-wrap: anywhere; }
 .source-capabilities summary { cursor: pointer; }
+.extension-workbench { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+.extension-workbench > div { min-width: 0; }
+.extension-workbench textarea { min-height: 28rem; resize: vertical; font-family: ui-monospace, monospace; tab-size: 2; }
+.extension-workbench pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 65vh; overflow: auto; }
+@media (max-width: 800px) { .extension-workbench { grid-template-columns: minmax(0, 1fr); } .extension-workbench textarea { min-height: 20rem; } }
 .sources-row > .source-capabilities { flex-basis: 100%; }
 .plugin-install-disclosure > summary { cursor: pointer; padding-block: .75rem; font-weight: 600; }
 .source-capabilities dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }

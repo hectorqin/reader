@@ -51,3 +51,5 @@ CatalogEntry 可提供 `sourceName`、`latestChapter`，用于详情弹窗和换
 服务端测试覆盖实例隔离、页面与任务权限、暂停、删除、重启、协议校验和换源事务；Web 测试覆盖通用 Tab、表单草稿、错误反馈与搜索取消。浏览器验证入口见[UI/UX 评审](ui-review/sources-ux.md)。插件业务测试由插件维护者负责。
 
 登录字段使用 `password`：服务端拒绝返回非空的默认密码，客户端不保留密码草稿，提交失败后清空密码。页面及 Tab 可声明 `links: [{title,url}]`，仅支持不包含内嵌凭据的 HTTP(S) 地址，以新窗口和 `noopener noreferrer` 打开。
+
+页面和 Tab 可声明 `layout: "workbench"`，桌面将表单和输出分为两栏，窄屏纵向排列；省略时保留原有布局。日志可通过分页表单分批返回，每页仍遵循输出大小限制。

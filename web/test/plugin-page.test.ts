@@ -153,6 +153,27 @@ it('preserves unrelated tab drafts after actions and requires inline confirmatio
   tab('草稿').click(); expect(screen.element.querySelector('textarea')?.value).toBe('unsaved');
 });
 
+it('keeps workbench rule drafts across log pagination and failed actions', async () => {
+  const { api, transport } = fixture();
+  let fail = false;
+  transport.respondWith(request => fail ? { status: 400, headers: {}, json: { error: { code: 'INVALID_JSON', message: '规则无效' } } } : {
+    status: 200, headers: {}, json: { title: 'Debug', layout: 'workbench', forms: [
+      { id: 'debug', title: 'Editor', submit: '调试', fields: [{ key: 'rule', label: '规则', type: 'textarea', value: '{}' }] },
+      { id: 'logs', title: 'Logs', submit: '翻页', fields: [] },
+    ], outputs: [{ title: '日志', format: 'log', text: request.method === 'POST' ? '第二页' : '第一页' }] }
+  });
+  const screen = new PluginPageScreen({ api, sourceId: 'one', pageId: 'library', onBack() {}, onSignedOut() {} });
+  screens.push(screen); document.body.append(screen.element); await screen.show();
+  expect(screen.element.querySelector('.extension-workbench-editor textarea')).not.toBeNull();
+  const area = screen.element.querySelector('textarea')!; area.value = '{draft'; area.dispatchEvent(new Event('input', { bubbles: true }));
+  screen.element.querySelectorAll<HTMLButtonElement>('button[type=submit]')[1]!.click();
+  await vi.waitFor(() => expect(screen.element.querySelector('.extension-workbench-output pre')?.textContent).toBe('第二页'));
+  expect(screen.element.querySelector('textarea')?.value).toBe('{draft');
+  fail = true; screen.element.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
+  await vi.waitFor(() => expect(noticeText()).toBe('规则无效'));
+  expect(screen.element.querySelector('textarea')?.value).toBe('{draft');
+});
+
 it('clears secret inputs after a failed login and only renders safe external links', async () => {
   const { api, transport } = fixture();
   transport.respondWith(request => request.method === 'POST' ? { status: 502, headers: {}, json: { error: { code: 'AUTH_REQUIRED', message: '登录失败' } } } : {

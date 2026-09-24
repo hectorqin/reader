@@ -43,6 +43,7 @@ export interface ExtensionField {
 export interface ExtensionForm {
   layout?: 'inline'; confirm?: string; id: string; title: string; submit: string; fields: ExtensionField[]; values?: Record<string, string | number | boolean> }
 export interface ExtensionContent {
+  layout?: 'workbench';
   links?: Array<{ title: string; url: string }>;
   forms: ExtensionForm[];
   outputs?: Array<{ title: string; text: string; format: 'text' | 'log' | 'json' }>;

@@ -43,6 +43,8 @@ test('extension UX hints are validated without allowing executable or unbounded 
 });
 
 test('read-only extension outputs are text-only and bounded', () => {
+  assert.equal(extensionPage({ title: 'Debug', layout: 'workbench', forms: [] }).layout, 'workbench');
+  assert.throws(() => extensionPage({ title: 'Debug', layout: 'html', forms: [] }));
   const output = { title: 'Log', text: '<script>plain text</script>\n200 OK', format: 'log' };
   assert.equal(extensionPage({ title: 'Debug', forms: [], outputs: [output] }).outputs?.[0]?.text, output.text);
   for (const outputs of [[{ ...output, format: 'html' }], [{ ...output, text: {} }], [{ ...output, text: 'x'.repeat(65537) }], Array(9).fill(output)]) {
