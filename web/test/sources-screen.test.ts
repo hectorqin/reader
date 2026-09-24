@@ -138,6 +138,20 @@ function input(root: HTMLElement, label: string, value: string) {
 }
 
 describe('sources and subscriptions UI', () => {
+  it('renders request identity choices and saves their machine values', async () => {
+    const { screen, api } = await setup();
+    const descriptor = { ...opds, configSchema: { properties: { requestProfile: { type: 'string', title: '请求身份', default: 'desktop', enum: ['desktop', 'mobile', 'native'], enumNames: ['电脑浏览器', '手机浏览器', '原始模式'] } } } };
+    vi.spyOn(api, 'sourceTypes').mockResolvedValue([descriptor]);
+    const save = vi.spyOn(api, 'saveSource').mockResolvedValue(source);
+    await screen.show(); await click(screen.element, '书源管理'); await click(screen.element, '添加来源');
+    input(screen.element, '名称', '手机请求');
+    const field = screen.element.querySelector<HTMLSelectElement>('[aria-label="请求身份"]')!;
+    expect(field.value).toBe('desktop'); expect(field.options[1].text).toBe('手机浏览器');
+    field.value = 'mobile'; field.dispatchEvent(new Event('change', { bubbles: true }));
+    await click(screen.element, '保存来源');
+    expect(save).toHaveBeenCalledWith(null, expect.objectContaining({ config: { requestProfile: 'mobile' } }));
+  });
+
   it('renders declared numeric defaults and bounds and saves the configured value', async () => {
     const { screen, api } = await setup();
     const descriptor = { ...opds, configSchema: { properties: { parallel: { type: 'integer', title: '并发数量', default: 3, minimum: 1, maximum: 10 }, crossOrigin: { type: 'boolean', title: '允许跨域', default: false } } } };

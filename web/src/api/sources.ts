@@ -1,7 +1,7 @@
 export interface SourceType {
   extensions?: { pages?: Array<{ id: string; title: string }> };
   id: string; pluginId: string; label: string; version: string; builtin: boolean; capabilities: string[];
-  configSchema?: { properties?: Record<string, { type?: string; title?: string; default?: unknown; minimum?: number; maximum?: number }>; required?: string[] };
+  configSchema?: { properties?: Record<string, { type?: string; title?: string; default?: unknown; minimum?: number; maximum?: number; enum?: string[]; enumNames?: string[] }>; required?: string[] };
   credentialKeys?: Array<{ key: string; label: string }>;
 }
 export interface SourceInstance {

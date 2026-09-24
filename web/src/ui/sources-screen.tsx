@@ -450,7 +450,10 @@ export class SourcesScreen {
             }}>{this.types.map((t) => <option value={keyFor(t)}>{t.label}</option>)}</select></label>
             <label>名称<input autoFocus required disabled={this.busy} maxLength={128} value={this.editor.name} onInput={(event) => { this.editor!.name = event.currentTarget.value; }} /></label>
             {type?.configSchema?.properties ? Object.entries(type.configSchema.properties).map(([key, field]) => <label key={key}>{field.title ?? key}
-              {field.type === 'array' || field.type === 'object' ? <textarea disabled={this.busy} aria-label={field.title ?? key} value={JSON.stringify(this.editor!.config[key] ?? (field.type === 'array' ? [] : {}), null, 2)}
+              {field.type === 'string' && Array.isArray(field.enum) ? <select disabled={this.busy} aria-label={field.title ?? key} value={String(this.editor!.config[key] ?? field.default ?? field.enum[0] ?? '')}
+                onChange={event => { this.editor!.config[key] = event.currentTarget.value; }}>
+                {field.enum.map((value, index) => <option value={value}>{field.enumNames?.[index] ?? value}</option>)}
+              </select> : field.type === 'array' || field.type === 'object' ? <textarea disabled={this.busy} aria-label={field.title ?? key} value={JSON.stringify(this.editor!.config[key] ?? (field.type === 'array' ? [] : {}), null, 2)}
                 onChange={(event) => { try { this.editor!.config[key] = JSON.parse(event.currentTarget.value); event.currentTarget.setCustomValidity(''); } catch { event.currentTarget.setCustomValidity('请输入有效 JSON'); } }} />
                 : field.type === 'boolean' ? <input disabled={this.busy} type="checkbox" checked={this.editor!.config[key] === true}
                   onChange={(event) => { this.editor!.config[key] = event.currentTarget.checked; }} />
