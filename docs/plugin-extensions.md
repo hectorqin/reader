@@ -53,3 +53,5 @@ CatalogEntry 可提供 `sourceName`、`latestChapter`，用于详情弹窗和换
 登录字段使用 `password`：服务端拒绝返回非空的默认密码，客户端不保留密码草稿，提交失败后清空密码。页面及 Tab 可声明 `links: [{title,url}]`，仅支持不包含内嵌凭据的 HTTP(S) 地址，以新窗口和 `noopener noreferrer` 打开。
 
 页面和 Tab 可声明 `layout: "workbench"`，桌面将表单和输出分为两栏，窄屏纵向排列；省略时保留原有布局。日志可通过分页表单分批返回，每页仍遵循输出大小限制。
+
+Tab 可声明 `loadAction`，用户进入该 Tab 时执行加载动作；加载完成的页面应省略此字段，避免切换时覆盖草稿。select 字段可声明 `changeAction`，选择变化时携带当前表单值调用动作并更新页面；失败时恢复选择，保留草稿。动作名遵循原有标识符校验。

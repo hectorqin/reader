@@ -1,6 +1,7 @@
 import { badRequest } from '../lib/errors.ts';
 
 export interface ExtensionField {
+  changeAction?: string;
   placeholder?: string; min?: number; max?: number;
   key: string; label: string; type: 'text' | 'password' | 'textarea' | 'number' | 'boolean' | 'select';
   required?: boolean; value?: string | number | boolean;
@@ -12,6 +13,7 @@ export interface ExtensionForm {
   values?: Record<string, string | number | boolean>;
 }
 export interface ExtensionContent {
+  loadAction?: string;
   layout?: 'workbench';
   links?: Array<{ title: string; url: string }>;
   forms: ExtensionForm[];
@@ -64,6 +66,7 @@ export function extensionFields(input: unknown): ExtensionField[] {
     if (field.min !== undefined && field.max !== undefined) check(Number(field.min) <= Number(field.max));
     if (field.value !== undefined) extensionValues({ value: field.value });
     if (field.required !== undefined) check(typeof field.required === 'boolean');
+    if (field.changeAction !== undefined) check(field.type === 'select' && typeof field.changeAction === 'string' && identifier.test(field.changeAction));
     if (field.type === 'select') {
       check(Array.isArray(field.options) && field.options.length <= 10001);
       for (const option of field.options) { record(option); label(option.value); label(option.label); }
@@ -89,6 +92,7 @@ export function extensionPage(input: unknown): ExtensionPage {
     }
   };
   const content = (input: Record<string, unknown>) => {
+    if (input.loadAction !== undefined) check(typeof input.loadAction === 'string' && identifier.test(input.loadAction));
     if (input.layout !== undefined) check(input.layout === 'workbench');
     forms(input.forms);
     if (input.links !== undefined) {

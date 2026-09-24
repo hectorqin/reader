@@ -46,11 +46,13 @@ export class PluginPageScreen {
       this.inputs.clear(); this.expanded.clear(); this.confirmation = undefined;
       this.activeTab = page.activeTab ?? (page.tabs?.some(tab => tab.id === this.activeTab) ? this.activeTab : page.tabs?.[0]?.id ?? '');
       this.noticeTab = this.activeTab;
+      return true;
     } catch (error) {
       if (this.disposed) return;
       for (const [form, values] of this.inputs) for (const field of form.fields) if (field.type === 'password') values[field.key] = '';
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
       else this.error = error instanceof Error ? error.message : '操作失败';
+      return false;
     } finally {
       this.busy = false; this.draw(); this.revealActiveTab();
       if (previousTab !== this.activeTab || previousForms !== formIds()) { const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0; }
@@ -68,7 +70,12 @@ export class PluginPageScreen {
       {form.fields.map(field => <label key={field.key} data-field-type={field.type}>{field.label}
         {field.type === 'textarea' ? <textarea aria-label={field.label} placeholder={field.placeholder} required={field.required} disabled={this.busy} value={String(data[field.key] ?? '')} onInput={event => { data[field.key] = event.currentTarget.value; }} />
           : field.type === 'boolean' ? <input aria-label={field.label} type="checkbox" disabled={this.busy} checked={data[field.key] === true} onChange={event => { data[field.key] = event.currentTarget.checked; }} />
-          : field.type === 'select' ? <select aria-label={field.label} required={field.required} disabled={this.busy} value={String(data[field.key] ?? '')} onChange={event => { data[field.key] = event.currentTarget.value; }}>
+          : field.type === 'select' ? <select aria-label={field.label} required={field.required} disabled={this.busy} value={String(data[field.key] ?? '')} onChange={event => {
+            const previous = data[field.key]; data[field.key] = event.currentTarget.value;
+            if (field.changeAction) void this.run(field.changeAction, { ...data }, form).then(ok => {
+              if (!ok) { data[field.key] = previous!; this.draw(); }
+            });
+          }}>
             {field.options?.map(option => <option value={option.value}>{option.label}</option>)}
           </select> : <input aria-label={field.label} placeholder={field.placeholder} min={field.min} max={field.max} required={field.required} disabled={this.busy} autoComplete={field.type === 'password' ? 'off' : undefined} type={field.type === 'number' ? 'number' : field.type === 'password' ? 'password' : 'text'} value={String(data[field.key] ?? '')}
             onInput={event => { data[field.key] = field.type === 'number' ? Number(event.currentTarget.value) : event.currentTarget.value; }} />}
@@ -120,6 +127,8 @@ export class PluginPageScreen {
   private selectTab(id: string) {
     this.activeTab = id; this.error = ''; this.confirmation = undefined; this.draw(); this.revealActiveTab();
     const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0;
+    const tab = this.page?.tabs?.find(tab => tab.id === id);
+    if (tab?.loadAction) void this.run(tab.loadAction);
   }
   private view() {
     const tabs = this.page?.tabs, selected = tabs?.find(tab => tab.id === this.activeTab);
