@@ -231,11 +231,24 @@ export class ReaderView {
       }, 160);
     };
     this.host.ownerDocument.addEventListener('selectionchange', changed);
+    this.host.shadow.addEventListener('selectionchange', changed);
     this.host.shadow.addEventListener('pointerup', changed);
+    this.host.ownerDocument.addEventListener('touchend', changed, true);
+    this.host.ownerDocument.addEventListener('pointercancel', changed, true);
+    this.host.ownerDocument.addEventListener('scroll', changed, true);
+    window.visualViewport?.addEventListener('resize', changed);
+    window.visualViewport?.addEventListener('scroll', changed);
     this.host.shadow.addEventListener('keyup', changed);
-    const contextMenu = (event: Event) => { if (this.selectionAnchor()) { event.preventDefault(); changed(); } };
+    const contextMenu = (event: Event) => { if (this.selectionAnchor()) event.preventDefault(); changed(); };
     this.host.shadow.addEventListener('contextmenu',contextMenu);
-    this.detachSelection = () => { clearTimeout(timer); this.host.ownerDocument.removeEventListener('selectionchange', changed); this.host.shadow.removeEventListener('pointerup', changed); this.host.shadow.removeEventListener('keyup', changed); this.host.shadow.removeEventListener('contextmenu',contextMenu); };
+    this.detachSelection = () => {
+      clearTimeout(timer); this.host.ownerDocument.removeEventListener('selectionchange', changed);
+      this.host.shadow.removeEventListener('selectionchange', changed); this.host.shadow.removeEventListener('pointerup', changed);
+      this.host.ownerDocument.removeEventListener('touchend', changed, true); this.host.ownerDocument.removeEventListener('pointercancel', changed, true);
+      this.host.ownerDocument.removeEventListener('scroll', changed, true);
+      window.visualViewport?.removeEventListener('resize', changed); window.visualViewport?.removeEventListener('scroll', changed);
+      this.host.shadow.removeEventListener('keyup', changed); this.host.shadow.removeEventListener('contextmenu',contextMenu);
+    };
     this.applySettings();
   }
 
@@ -554,8 +567,9 @@ export class ReaderView {
 
   selectionAnchor(): TextAnchor | null {
     const shadow = this.host.shadow as ShadowRoot & { getSelection?: () => Selection | null };
-    return selectedAnchor(this.host.flow, this.doc.sections[this.sectionIndex]?.id ?? '',
-      shadow.getSelection?.() ?? this.host.ownerDocument.getSelection());
+    const sectionId = this.doc.sections[this.sectionIndex]?.id ?? '';
+    return selectedAnchor(this.host.flow, sectionId, shadow.getSelection?.() ?? null)
+      ?? selectedAnchor(this.host.flow, sectionId, this.host.ownerDocument.getSelection());
   }
 
   revealFragment(fragment: string): boolean {

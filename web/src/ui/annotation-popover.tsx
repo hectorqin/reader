@@ -22,9 +22,15 @@ export function AnnotationPopover({ target, save, remove, close }: {
     try { await action(); close(); } catch (e) { setError(e instanceof Error ? e.message : '操作失败'); setBusy(false); }
   }
   useEffect(() => {
-    const dismiss = (event: PointerEvent) => { if (!editing && !busy && !panel.current?.contains(event.target as Node)) close(); };
+    const dismiss = (event: PointerEvent) => {
+      if (editing || busy || panel.current?.contains(event.target as Node)) return;
+      // Native selection handles target the reading surface. Let selectionchange
+      // decide when the selection ends instead of clearing it on pointerdown.
+      if (!target.note && event.composedPath().some(node => node instanceof Element && node.tagName === 'BOOK-CONTENT')) return;
+      close();
+    };
     const key = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) { event.stopPropagation(); close(); } };
-    const moved = (event: Event) => { if (!editing && !busy && !(event.target instanceof Node && panel.current?.contains(event.target))) close(); };
+    const moved = (event: Event) => { if (target.note && !editing && !busy && !(event.target instanceof Node && panel.current?.contains(event.target))) close(); };
     document.addEventListener('pointerdown', dismiss); document.addEventListener('keydown', key, true);
     window.addEventListener('resize',moved); document.addEventListener('scroll',moved,true);
     return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', key, true); window.removeEventListener('resize',moved); document.removeEventListener('scroll',moved,true); };

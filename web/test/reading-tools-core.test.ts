@@ -36,6 +36,21 @@ describe('navigation and text anchors', () => {
     const anchor = selectedAnchor(root, 's', selection)!; expect(anchor.quote).toBe('选中文字');
     root.prepend(document.createTextNode('新内容')); expect(anchorRange(root, anchor)?.toString()).toBe('选中文字'); root.remove();
   });
+  it('reads mobile shadow selections with re-scoped ranges and backwards handles', () => {
+    const host = document.createElement('div'); document.body.append(host);
+    const shadow = host.attachShadow({mode:'open'}), root = document.createElement('p');
+    root.textContent = '前文选中文字后文'; shadow.append(root);
+    const text = root.firstChild!;
+    const outside = document.createRange(); outside.selectNode(host);
+    const selection = {rangeCount:1,isCollapsed:false,getRangeAt:()=>outside,
+      anchorNode:text,anchorOffset:6,focusNode:text,focusOffset:2} as unknown as Selection;
+    expect(selectedAnchor(root,'s',selection)?.quote).toBe('选中文字');
+    const composed = {...selection,anchorNode:document.body,focusNode:document.body,
+      getComposedRanges:()=>[{startContainer:text,startOffset:2,endContainer:text,endOffset:6,collapsed:false}]} as unknown as Selection;
+    expect(selectedAnchor(root,'s',composed)?.quote).toBe('选中文字');
+    expect(selectedAnchor(root,'s',{...selection,anchorNode:document.body} as Selection)).toBeNull();
+    host.remove();
+  });
 });
 describe('scoped quota and offline tasks', () => {
   it('serializes quota checks, isolates accounts, and rolls back failed metadata writes', async () => {

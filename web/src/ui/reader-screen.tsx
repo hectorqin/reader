@@ -976,6 +976,7 @@ export class ReaderScreen {
       onSelection: (anchor, rect) => {
         if (epoch !== this.viewEpoch || this.toolsOpen || this.annotation?.note || this.element.querySelector('dialog[open]')) return;
         if (anchor && rect && anchor.quote.trim()) { this.annotation = { anchor, rect }; this.patch({}); }
+        else if (this.annotation) { this.annotation = null; this.patch({}); }
       },
       onAnnotation: (id, rect) => {
         if (epoch !== this.viewEpoch || !this.book || this.toolsOpen) return;

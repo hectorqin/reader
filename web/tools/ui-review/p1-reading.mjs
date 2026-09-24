@@ -55,6 +55,16 @@ try {
  // Select actual shadow DOM text, then create a persisted personal correction.
  await page.locator('book-content').evaluate(host=>{const node=host.shadowRoot.querySelector('p').firstChild;const range=document.createRange();range.setStart(node,3);range.setEnd(node,7);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);});
  await page.getByRole('toolbar',{name:'选中文字操作'}).waitFor();await page.screenshot({path:join(shots,'selection-toolbar-390.png')});
+ // Mobile selection handles and automatic scrolling must preserve the selection.
+ await page.locator('book-content').evaluate(host=>{host.dispatchEvent(new Event('scroll'));});
+ await page.waitForTimeout(250);
+ assert.equal(await page.locator('book-content').evaluate(host=>host.shadowRoot.getSelection().toString()),'需要纠错');
+ await page.getByRole('toolbar',{name:'选中文字操作'}).waitFor();
+ await page.locator('book-content p').first().dispatchEvent('pointerdown',{pointerType:'touch',bubbles:true,composed:true});
+ assert.equal(await page.locator('book-content').evaluate(host=>host.shadowRoot.getSelection().toString()),'需要纠错');
+ await page.locator('book-content p').first().dispatchEvent('pointercancel',{pointerType:'touch',bubbles:true,composed:true});
+ await page.locator('book-content p').first().dispatchEvent('touchend',{bubbles:true,composed:true});
+ await page.getByRole('toolbar',{name:'选中文字操作'}).waitFor();
  await button('批注').click();await page.getByLabel('批注',{exact:true}).fill('跨设备批注测试');await button('绿色').click();
  await page.screenshot({path:join(shots,'annotation-editor-390.png')});await button('保存批注').click();await page.getByRole('dialog').waitFor({state:'hidden'});
  const mark=page.locator('book-content [data-reader-mark="note"]').first();await mark.waitFor();await mark.scrollIntoViewIfNeeded();
@@ -62,6 +72,11 @@ try {
  await mark.tap();await page.getByRole('dialog',{name:'批注详情'}).waitFor();assert.equal(await page.locator('book-content').evaluate(el=>el.scrollTop),beforeClick);await page.getByText('跨设备批注测试',{exact:true}).waitFor();await page.screenshot({path:join(shots,'annotation-detail-390.png')});
  await button('编辑批注').click();await page.getByLabel('批注',{exact:true}).fill('编辑后的批注');await button('保存批注').click();await page.getByRole('dialog').waitFor({state:'hidden'});
  await mark.click();await page.getByText('编辑后的批注',{exact:true}).waitFor();await button('删除').click();await button('确认删除').click();await mark.waitFor({state:'detached'});
+ // Embedded engines can omit ShadowRoot.getSelection; document composed ranges must still work.
+ await page.locator('book-content').evaluate(host=>Object.defineProperty(host.shadowRoot,'getSelection',{value:undefined,configurable:true}));
+ await page.locator('book-content').evaluate(host=>{const node=host.shadowRoot.querySelector('p').firstChild;const range=document.createRange();range.setStart(node,3);range.setEnd(node,7);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);});
+ await page.getByRole('toolbar',{name:'选中文字操作'}).waitFor();await button('关闭选区工具').click();
+ await page.locator('book-content').evaluate(host=>{delete host.shadowRoot.getSelection;});
  await page.locator('book-content').evaluate(host=>{const node=host.shadowRoot.querySelector('p').firstChild;const range=document.createRange();range.setStart(node,3);range.setEnd(node,7);const selection=window.getSelection();selection.removeAllRanges();selection.addRange(range);});
  await button('工具').click();await button('内容整理').click();await page.getByLabel('替换为',{exact:true}).fill('已经修正');await button('保存纠错 / 过滤').click();await page.getByText('纠错已保存，正文已更新').waitFor();await button('关闭弹窗').click();await page.reload();await page.locator('book-content p').filter({hasText:'已经修正'}).waitFor();
  await button('工具').click();await button('内容整理').click();await button('撤销上一次整理修改').click();await page.getByText('已撤销上一次整理修改').waitFor();await button('关闭弹窗').click();assert.ok(!(await page.locator('book-content p').first().innerText()).includes('已经修正'));

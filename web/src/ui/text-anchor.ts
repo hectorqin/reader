@@ -52,10 +52,31 @@ export function anchorRange(root: Node, anchor: TextAnchor): Range | null {
   return null;
 }
 
+export function selectedRange(root: Node, selection: Selection | null): Range | null {
+  if (!selection) return null;
+  const inside = (range: AbstractRange) => !range.collapsed && root.contains(range.startContainer) && root.contains(range.endContainer);
+  // Document ranges may be re-scoped to the shadow host even though the native
+  // mobile selection visibly highlights text inside it.
+  const shadow = root.getRootNode();
+  const composed = selection as Selection & { getComposedRanges?: (options: {shadowRoots: ShadowRoot[]}) => StaticRange[] };
+  if (shadow instanceof ShadowRoot && composed.getComposedRanges) {
+    try {
+      const selected = composed.getComposedRanges({shadowRoots:[shadow]}).find(inside);
+      if (selected) { const range = root.ownerDocument!.createRange(); range.setStart(selected.startContainer,selected.startOffset); range.setEnd(selected.endContainer,selected.endOffset); return range; }
+    } catch { /* Older engines use the range or anchor/focus fallback below. */ }
+  }
+  if (selection.rangeCount > 0) { const range = selection.getRangeAt(0); if (inside(range)) return range; }
+  const {anchorNode,anchorOffset,focusNode,focusOffset} = selection;
+  if (!anchorNode || !focusNode || !root.contains(anchorNode) || !root.contains(focusNode)) return null;
+  const range = root.ownerDocument!.createRange();
+  range.setStart(anchorNode,anchorOffset); range.setEnd(focusNode,focusOffset);
+  if (range.collapsed) { range.setStart(focusNode,focusOffset); range.setEnd(anchorNode,anchorOffset); }
+  return inside(range) ? range : null;
+}
+
 export function selectedAnchor(root: Node, sectionId: string, selection: Selection | null): TextAnchor | null {
-  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return null;
-  const range = selection.getRangeAt(0);
-  if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
+  const range = selectedRange(root,selection);
+  if (!range) return null;
   const prefix = range.cloneRange(); prefix.selectNodeContents(root); prefix.setEnd(range.startContainer, range.startOffset);
   const text = textNodes(root).map(n => n.data).join('');
   // cloneContents excludes styles via the same traversal used by search.
