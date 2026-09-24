@@ -3,7 +3,7 @@ import type { ReaderApi } from '../api/client.ts';
 import type { ManagedUser, RegistrationSettings } from '../api/types.ts';
 import { Modal } from './modal.tsx';
 
-export function UserManagement({api,onClose}:{api:ReaderApi;onClose():void}) {
+export function SystemSettings({api,onClose}:{api:ReaderApi;onClose():void}) {
   const [users,setUsers]=useState<ManagedUser[]>([]),[settings,setSettings]=useState<RegistrationSettings|null>(null);
   const [tab,setTab]=useState<'users'|'registration'>('users'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [form,setForm]=useState(false),[username,setUsername]=useState(''),[password,setPassword]=useState(''),[displayName,setDisplayName]=useState(''),[role,setRole]=useState<'admin'|'member'>('member');
@@ -14,8 +14,8 @@ export function UserManagement({api,onClose}:{api:ReaderApi;onClose():void}) {
   async function work(action:()=>Promise<unknown>,success='已保存') { if(busy)return;setBusy(true);setError('');setMessage('');try{await action();await load();setConfirmation(null);setMessage(success);}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{setBusy(false);} }
   useEffect(()=>{void work(async()=>{},'');},[]);
   const self=api.currentSession()?.user.id;
-  return <Modal title="用户管理" busy={busy} onClose={onClose}><div className="user-management source-modal-content">
-    <nav className="extension-tabs" aria-label="用户管理分类"><button aria-pressed={tab==='users'} onClick={()=>setTab('users')}>用户账号</button><button aria-pressed={tab==='registration'} onClick={()=>setTab('registration')}>注册与邀请</button></nav>
+  return <Modal title="系统设置" busy={busy} onClose={onClose}><div className="user-management source-modal-content">
+    <nav className="extension-tabs" aria-label="系统设置分类"><button aria-pressed={tab==='users'} onClick={()=>setTab('users')}>用户管理</button><button aria-pressed={tab==='registration'} onClick={()=>setTab('registration')}>注册与邀请</button></nav>
     {error && <p role="alert" className="notice">{error}</p>}{message && <p role="status">{message}</p>}
     {confirmation && <section className="notice" role="alert"><p>{confirmation.text}</p><button className="button primary" disabled={busy} onClick={()=>void work(confirmation.run)}>确认操作</button> <button className="button" disabled={busy} onClick={()=>setConfirmation(null)}>取消操作</button></section>}
     {tab==='users' ? <>

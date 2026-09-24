@@ -9,7 +9,7 @@ import { mountUI } from './mount.ts';
 import { DialogView, type Dialog, type DialogAnswer } from './dialog.tsx';
 import { DENSITY_LABELS, SHELF_SORTS, ShelfSettingsPanel } from './shelf-settings.tsx';
 import { OpdsAccess } from './opds-access.tsx';
-import { UserManagement } from './user-management.tsx';
+import { SystemSettings } from './system-settings.tsx';
 import { isLocalSort, shelfOrder, shelfServerSort, sortBooks, type ReadingTimes } from './shelf-order.ts';
 import { describeShelfAction } from './shelf-membership.ts';
 import { Icon, IconButton, IconTextButton } from './toolkit.tsx';
@@ -174,7 +174,7 @@ interface ShelfState {
   status: string;
   settingsOpen: boolean;
   opdsOpen: boolean;
-  usersOpen: boolean;
+  systemSettingsOpen: boolean;
   refreshing: boolean;
   /**
    * True until the first frame that has *anything* to show.
@@ -309,7 +309,7 @@ export class ShelfScreen {
       status: '',
       settingsOpen: false,
       opdsOpen: false,
-      usersOpen: false,
+      systemSettingsOpen: false,
       refreshing: false,
       bootstrapping: true,
       revision: 0,
@@ -846,6 +846,7 @@ export class ShelfScreen {
             </p>
           </div>
           <div className="shelf-head-actions">
+            {this.options.api.currentSession()?.user.role === 'admin' && <IconButton label="系统设置" icon="settings" onClick={()=>this.patch({settingsOpen:false,systemSettingsOpen:true})} />}
             {empty && !hasQuery && <IconButton label="刷新" icon="refresh" disabled={state.loading} onClick={() => void this.manualRefresh()} />}
             <IconButton
               label={`书架设置 · ${DENSITY_LABELS[density]}`}
@@ -995,9 +996,8 @@ export class ShelfScreen {
           onPatch={(patch) => this.applySettings(patch)}
           onClose={() => this.patch({ settingsOpen: false })}
           onOpenExternalReader={() => this.patch({ settingsOpen: false, opdsOpen: true })}
-          {...(this.options.api.currentSession()?.user.role === 'admin' ? {onOpenUsers:()=>this.patch({settingsOpen:false,usersOpen:true})} : {})}
         />
-        {state.usersOpen && <UserManagement api={this.options.api} onClose={()=>this.patch({usersOpen:false,settingsOpen:true})} />}
+        {state.systemSettingsOpen && <SystemSettings api={this.options.api} onClose={()=>this.patch({systemSettingsOpen:false})} />}
         {state.opdsOpen && <OpdsAccess api={this.options.api} onSignedOut={this.options.onSignedOut}
           onClose={() => this.patch({ opdsOpen: false, settingsOpen: true })} />}
         {state.dialog ? (

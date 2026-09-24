@@ -51,7 +51,6 @@ export interface ShelfSettingsOptions {
   onPatch(patch: Partial<AppSettings>): void;
   onClose(): void;
   onOpenExternalReader(): void;
-  onOpenUsers?: () => void;
 }
 
 export function ShelfSettingsPanel({
@@ -60,7 +59,6 @@ export function ShelfSettingsPanel({
   onPatch,
   onClose,
   onOpenExternalReader,
-  onOpenUsers,
 }: ShelfSettingsOptions & { open: boolean }): JSX.Element {
   const panel = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -114,7 +112,6 @@ export function ShelfSettingsPanel({
         <SectionTitle>外部阅读器</SectionTitle>
         <div className="notice">通过 OPDS，让其他阅读器只读访问你的书架。</div>
         <Button onClick={onOpenExternalReader}>连接外部阅读器</Button>
-        {onOpenUsers && <><SectionTitle>实例管理</SectionTitle><Button onClick={onOpenUsers}>用户管理</Button></>}
       </div>
     </div>
   );
