@@ -42,7 +42,7 @@ export class SourceHost {
     this.registry.registerBuiltin('reader.local', createLocalProvider(db, shelf));
     this.updates = new ChapterUpdates(db, this.chapters);
     this.registry.registerBuiltin('reader.opds', createOpdsProvider());
-    this.plugins = new PluginManager(db, config.dataDir, this.registry);
+    this.plugins = new PluginManager(db, config.dataDir, this.registry, event => this.log?.info(event, 'source plugin diagnostic'));
     this.ensureLocal();
   }
 

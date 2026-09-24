@@ -3,7 +3,7 @@ import { realpath, stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Db } from '../db/index.ts';
 import { AppError } from '../lib/errors.ts';
-import { ProcessPlugin } from './process-plugin.ts';
+import { ProcessPlugin, type ProcessPluginOptions } from './process-plugin.ts';
 import { SourceRegistry, SourceRegistryError } from './registry.ts';
 import type { PluginRuntimeStatus, SourceDescriptor, SourceProvider, SourceInstance } from './types.ts';
 
@@ -134,7 +134,7 @@ export class PluginManager {
   }
 
 
-  constructor(private readonly db: Db, private readonly dataDir: string, private readonly registry: SourceRegistry) {}
+  constructor(private readonly db: Db, private readonly dataDir: string, private readonly registry: SourceRegistry, private readonly onDiagnostic?: ProcessPluginOptions['onDiagnostic']) {}
 
   loadInstalled(): Promise<void> {
     return this.enqueue(async () => {
@@ -346,7 +346,7 @@ export class PluginManager {
   }
 
   private async loadPackage(folder: string): Promise<ProcessPlugin> {
-    try { return await ProcessPlugin.load(await this.packageDirectory(folder), { dataRoot: join(this.dataDir, 'plugin-data') }); }
+    try { return await ProcessPlugin.load(await this.packageDirectory(folder), { dataRoot: join(this.dataDir, 'plugin-data'), onDiagnostic: this.onDiagnostic }); }
     catch (error) { throw this.packageInputError(error); }
   }
 

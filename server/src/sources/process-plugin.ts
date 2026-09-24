@@ -24,6 +24,7 @@ export class PluginError extends AppError {
 }
 
 export interface ProcessPluginOptions {
+  readonly onDiagnostic?: (event: Record<string, unknown>) => void;
   readonly dataRoot?: string;
   readonly timeoutMs?: number;
   /** Applies to each JSON line and limits the first version's inline resource payloads. */
@@ -41,6 +42,7 @@ interface PendingRequest {
  * fault isolation, not a sandbox: installed code has this OS user's privileges.
  */
 export class ProcessPlugin {
+  private readonly onDiagnostic?: ProcessPluginOptions['onDiagnostic'];
   private process: ChildProcessWithoutNullStreams | undefined;
   private state: PluginRuntimeState = 'stopped';
   private sequence = 0;
@@ -57,6 +59,7 @@ export class ProcessPlugin {
     private readonly entry: string,
     options: ProcessPluginOptions,
   ) {
+    this.onDiagnostic = options.onDiagnostic;
     this.timeoutMs = options.timeoutMs ?? 30_000;
     this.maxMessageBytes = options.maxMessageBytes ?? 2 * 1024 * 1024;
     if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs < 1) {
@@ -174,7 +177,23 @@ export class ProcessPlugin {
     child.stdout.on('data', (chunk: Buffer) => {
       if (this.process === child) this.onData(chunk);
     });
-    child.stderr.resume();
+    // Only structured diagnostic records are forwarded; arbitrary stderr may contain secrets.
+    let diagnosticBuffer = '', dropping = false;
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      for (const part of chunk.split(/(?<=\n)/)) {
+        if (!dropping) diagnosticBuffer += part;
+        if (diagnosticBuffer.length > 32768) { diagnosticBuffer = ''; dropping = true; }
+        if (!part.endsWith('\n')) continue;
+        if (!dropping && diagnosticBuffer.startsWith('READER_DIAGNOSTIC ')) {
+          try {
+            const event: unknown = JSON.parse(diagnosticBuffer.slice(18));
+            if (event && typeof event === 'object' && !Array.isArray(event)) this.onDiagnostic?.({ pluginId: this.manifest.id, pluginVersion: this.manifest.version, diagnostic: event });
+          } catch { /* Invalid diagnostics must never break RPC. */ }
+        }
+        diagnosticBuffer = ''; dropping = false;
+      }
+    });
     child.stdin.on('error', () => {
       if (this.process === child) this.fail(new PluginError('PLUGIN_UNAVAILABLE', 'plugin input pipe failed'));
     });
@@ -188,6 +207,7 @@ export class ProcessPlugin {
   }
 
   private request(method: string, params: Record<string, unknown>, signal?: AbortSignal): Promise<unknown> {
+    const startedAt = Date.now();
     const abortError = () => signal?.reason?.name === 'TimeoutError'
       ? new PluginError('PLUGIN_TIMEOUT', 'plugin request exceeded its execution deadline')
       : new PluginError('PLUGIN_CANCELLED', 'plugin request cancelled');
@@ -214,6 +234,8 @@ export class ProcessPlugin {
         if (!pending) return;
         this.pending.delete(id);
         pending.cleanup();
+        if (error.code === 'PLUGIN_TIMEOUT') this.onDiagnostic?.({ pluginId: this.manifest.id, pluginVersion: this.manifest.version,
+          diagnostic: { event: 'rpc.timeout', method, rpcId: id, sourceId: instanceId, elapsedMs: Date.now() - startedAt, pendingRequests: this.pending.size } });
         // A stop command may still finish late: keep it running so it can release
         // the search session, but never let its deadline kill unrelated work.
         if (!cancellationRequest) child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id } }) + '\n');

@@ -163,6 +163,29 @@ for (const method of ['detail', 'acquire', 'extension.page', 'extension.action',
   });
 }
 
+test('structured plugin diagnostics survive split lines without forwarding raw stderr or oversized lines', async () => {
+  const f = await fixture(`
+    import { createInterface } from 'node:readline';
+    createInterface({input:process.stdin}).on('line', line => {
+      const request=JSON.parse(line);
+      process.stderr.write('raw private stderr\\n');
+      process.stderr.write('x'.repeat(40000)+'\\n');
+      process.stderr.write('READER_DIAG');
+      setTimeout(()=>{
+        process.stderr.write('NOSTIC '+JSON.stringify({event:'search.finished',category:'success'})+'\\n');
+        process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:request.id,result:{ref:'a',title:'A'}})+'\\n');
+      },10);
+    });
+  `);
+  const events: Record<string, unknown>[] = [];
+  const plugin = await ProcessPlugin.load(f.directory, { onDiagnostic: event => events.push(event) });
+  try {
+    await plugin.providers()[0]!.detail(context(), 'a');
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.deepEqual(events, [{ pluginId: manifest.id, pluginVersion: manifest.version, diagnostic: { event: 'search.finished', category: 'success' } }]);
+  } finally { await plugin.close(); await f.dispose(); }
+});
+
 for (const end of ['abort', 'external timeout', 'deadline'] as const) test(`${end} isolates an uncooperative request`, async () => {
   const source = await fixture(`
     import { createInterface } from 'node:readline';

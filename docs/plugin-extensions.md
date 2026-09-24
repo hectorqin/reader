@@ -1,5 +1,11 @@
 # 插件扩展页面、搜索与换源
 
+## 搜索诊断
+
+宿主记录 `search stream started`、`search stream ended`、`search stream provider failed`。结束日志包含 sourceId、sessionId、reason、耗时、最后事件距今时间、结果数量与书源进度。`complete`/`limit` 表示完成，`provider_error` 表示来源调用异常，`connection_closed`/`request_aborted` 表示连接关闭，`superseded` 表示同会话被新连接接替。连接关闭不能单独区分浏览器、网络或反向代理，需要结合代理日志。取消确认失败会保留结束上下文和 cleanupMs。
+
+插件 stderr 仅转发 `READER_DIAGNOSTIC ` 前缀的单行 JSON，附加 pluginId/pluginVersion 并记录为 `source plugin diagnostic`；任意文本及超长行丢弃。插件负责脱敏。RPC 超时额外记录 method、rpcId、sourceId、elapsedMs、pendingRequests，以区分搜索与清理调用。
+
 Reader 保留 local 与 OPDS 内置，通过通用协议接入独立 Node.js 插件。宿主负责能力校验、权限、进程与任务调度、缓存和通用界面；来源业务由插件实现。一个插件可添加成多个独立配置的来源实例。
 
 ## 页面与存储
