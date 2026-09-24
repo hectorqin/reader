@@ -49,27 +49,6 @@ async function setup(admin = true) {
 
 async function* pages(...values: Array<SourcePage | Promise<SourcePage>>): AsyncGenerator<SourcePage> { for (const value of values) yield await value; }
 
-it('creates external reader credentials, shows the password once and revokes only the chosen client', async () => {
-  const { screen, api } = await setup(false);
-  const item = { id: 'client-1', name: '平板', createdAt: 1, expiresAt: Date.now() + 100000 };
-  const list = vi.spyOn(api, 'opdsCredentials').mockResolvedValue({ credentials: [], catalogUrl: '/opds' });
-  const create = vi.spyOn(api, 'createOpdsCredential').mockResolvedValue({ ...item, username: item.id, password: 'once-secret', catalogUrl: '/opds' });
-  const revoke = vi.spyOn(api, 'revokeOpdsCredential').mockResolvedValue();
-  await click(screen.element, '连接外部阅读器');
-  await vi.waitFor(() => expect(screen.element.querySelector<HTMLInputElement>('dialog input[readonly]')?.value).toContain('/opds'));
-  list.mockResolvedValue({ credentials: [item], catalogUrl: '/opds' });
-  input(screen.element, '客户端名称', '平板'); await vi.waitFor(() => expect(button(screen.element, '创建 OPDS 凭据').disabled).toBe(false)); await click(screen.element, '创建 OPDS 凭据');
-  await vi.waitFor(() => expect(create).toHaveBeenCalledWith('平板'));
-  await vi.waitFor(() => expect([...screen.element.querySelectorAll<HTMLInputElement>('input')].some(field => field.value === 'once-secret')).toBe(true));
-  await vi.waitFor(() => expect(button(screen.element, '关闭弹窗').disabled).toBe(false));
-  await click(screen.element, '关闭弹窗'); await vi.waitFor(() => expect(screen.element.querySelector('dialog')).toBeNull());
-  await click(screen.element, '连接外部阅读器');
-  await vi.waitFor(() => expect(screen.element.textContent).toContain('撤销 平板'));
-  expect([...screen.element.querySelectorAll<HTMLInputElement>('input')].some(field => field.value === 'once-secret')).toBe(false);
-  list.mockResolvedValue({ credentials: [], catalogUrl: '/opds' });
-  await click(screen.element, '撤销 平板'); await vi.waitFor(() => expect(revoke).toHaveBeenCalledWith('client-1'));
-});
-
 it('shows declared capabilities and personal access state without exposing or resubmitting stored secrets', async () => {
   const { screen, api } = await setup(false); await chooseSource(screen.element);
   expect(screen.element.querySelector('.source-capabilities')?.textContent).toContain('OPDS 服务端');

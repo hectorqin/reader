@@ -59,6 +59,7 @@ function page(from: number, count: number, total: number): { items: Book[]; tota
 
 interface Harness {
   screen: ShelfScreen;
+  api: ReaderApi;
   calls: string[];
   transport: FakeTransport;
   offline: OfflineStore;
@@ -105,7 +106,7 @@ async function makeScreen(
     onSettingsChange: (patch) => calls.push(`settings:${JSON.stringify(patch)}`),
   });
   document.body.append(screen.element);
-  return { screen, calls, transport, offline };
+  return { screen, api, calls, transport, offline };
 }
 
 /** The `page` each `listBooks` request asked for, in order. */
@@ -623,4 +624,47 @@ describe('taking a book off the shelf', () => {
     await vi.waitFor(() => expect(screen.element.querySelectorAll('.book-card')).toHaveLength(1));
     expect(screen.element.querySelector('[aria-label="第1卷 的操作"]')).toBeNull();
   });
+});
+
+function button(root: HTMLElement, label: string) {
+  const found = [...root.querySelectorAll('button')].find((element) => element.textContent?.trim() === label || element.getAttribute('aria-label') === label);
+  expect(found, label).toBeDefined(); return found!;
+}
+async function click(root: HTMLElement, label: string) {
+  button(root, label).click();
+  await vi.waitFor(() => expect([...document.querySelectorAll('[role=status]')].map(el => el.textContent).join('')).not.toMatch(/正在处理|正在保存|正在搜索/));
+}
+function input(root: HTMLElement, label: string, value: string) {
+  const element = [...root.querySelectorAll('label')].find((item) => item.textContent?.startsWith(label))?.querySelector('input');
+  expect(element, label).toBeDefined(); element!.value = value; element!.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+it('creates external reader credentials, shows the password once and revokes only the chosen client', async () => {
+  HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  HTMLDialogElement.prototype.close = function () { this.open = false; };
+  const { screen, api } = await makeScreen(new FakeTransport());
+  const settings = screen.element.querySelector<HTMLElement>('.shelf-settings')!;
+  expect(settings.hidden).toBe(true);
+  screen.element.querySelector<HTMLButtonElement>('button[aria-label^="书架设置"]')!.click();
+  await vi.waitFor(() => expect(settings.hidden).toBe(false));
+  const item = { id: 'client-1', name: '平板', createdAt: 1, expiresAt: Date.now() + 100000 };
+  const list = vi.spyOn(api, 'opdsCredentials').mockResolvedValue({ credentials: [], catalogUrl: '/opds' });
+  const create = vi.spyOn(api, 'createOpdsCredential').mockResolvedValue({ ...item, username: item.id, password: 'once-secret', catalogUrl: '/opds' });
+  const revoke = vi.spyOn(api, 'revokeOpdsCredential').mockResolvedValue();
+  await click(screen.element, '连接外部阅读器');
+  await vi.waitFor(() => expect(screen.element.querySelector<HTMLInputElement>('dialog input[readonly]')?.value).toContain('/opds'));
+  expect(settings.hidden).toBe(true);
+  list.mockResolvedValue({ credentials: [item], catalogUrl: '/opds' });
+  input(screen.element, '客户端名称', '平板'); await vi.waitFor(() => expect(button(screen.element, '创建 OPDS 凭据').disabled).toBe(false)); await click(screen.element, '创建 OPDS 凭据');
+  await vi.waitFor(() => expect(create).toHaveBeenCalledWith('平板'));
+  await vi.waitFor(() => expect([...screen.element.querySelectorAll<HTMLInputElement>('input')].some(field => field.value === 'once-secret')).toBe(true));
+  await vi.waitFor(() => expect(button(screen.element, '关闭弹窗').disabled).toBe(false));
+  await click(screen.element, '关闭弹窗'); await vi.waitFor(() => expect(screen.element.querySelector('dialog')).toBeNull());
+  expect(settings.hidden).toBe(false);
+  await click(screen.element, '连接外部阅读器');
+  await vi.waitFor(() => expect(screen.element.textContent).toContain('撤销 平板'));
+  expect([...screen.element.querySelectorAll<HTMLInputElement>('input')].some(field => field.value === 'once-secret')).toBe(false);
+  list.mockResolvedValue({ credentials: [], catalogUrl: '/opds' });
+  await click(screen.element, '撤销 平板'); await vi.waitFor(() => expect(revoke).toHaveBeenCalledWith('client-1'));
+  screen.dispose();
 });

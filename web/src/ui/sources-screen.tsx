@@ -1,5 +1,4 @@
 import { SourceCapabilities } from './source-capabilities.tsx';
-import { OpdsAccess } from './opds-access.tsx';
 import type { CredentialStatus } from '../api/sources.ts';
 import { groupSourceResults } from './source-results.ts';
 import type { ExtensionField } from '../api/sources.ts';
@@ -41,7 +40,6 @@ export class SourcesScreen {
   private subscriptions: ChapterSubscription[] = [];
   private tab: SourceTab = 'search';
   private credentialsOpen = false;
-  private opdsOpen = false;
   private credentialStatus: CredentialStatus | null = null;
   private managing: string | null = null;
   private editor: Editor | null = null;
@@ -301,7 +299,6 @@ export class SourcesScreen {
         </section>
       </>}
       {this.tab === 'search' && <>
-        <section className="sources-card"><Button disabled={this.busy} onClick={() => { this.opdsOpen = true; this.draw(); }}>连接外部阅读器</Button></section>
         <section className="sources-card source-picker"><div><h2>搜书</h2><p className="muted">选择来源，发现想读的书。</p></div>
           <label>选择来源<select aria-label="选择来源" disabled={this.busy} value={this.selected?.id ?? ''} onChange={event => {
             const source = this.sources.find(source => source.id === event.currentTarget.value); if (source) this.select(source);
@@ -415,7 +412,6 @@ export class SourcesScreen {
         </article>)}
       </section>}
       </main>
-        {this.opdsOpen && <OpdsAccess api={this.options.api} onSignedOut={this.options.onSignedOut} onClose={() => { this.opdsOpen = false; this.draw(); }} />}
         {activeGroup && <Modal title="书源列表" busy={this.working} onClose={() => { this.resultGroup = null; this.draw(); }}>
           <div className="source-modal-content catalog-source-list">
             <header className="catalog-source-heading"><h3>{activeGroup.entry.title}</h3><p>{activeGroup.entry.authors?.join(' / ') || '作者未知'}</p><small role="status">{activeGroup.entries.length} 条书源{this.searchRun ? ' · 搜索中，列表持续更新' : ''}</small></header>

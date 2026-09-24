@@ -37,7 +37,9 @@ try {
  page=await browser.newPage({viewport:{width:390,height:844}});page.setDefaultTimeout(12000);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));const button=name=>page.getByRole('button',{name,exact:true});
  await page.goto(base);await page.locator('input[autocomplete=username]').fill('p2-reader');await page.locator('input[type=password]').fill('password123');await page.locator('button[type=submit]').click();await page.locator('.shelf-screen').waitFor();
- await page.goto(base+'/#/sources');await button('连接外部阅读器').click();
+ await page.getByRole('button',{name:/^书架设置/}).click();
+ for(const width of [320,390,1280]) {await page.setViewportSize({width,height:844});await button('连接外部阅读器').scrollIntoViewIfNeeded();await page.screenshot({path:join(shots,'shelf-settings-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
+ await button('连接外部阅读器').click();assert.equal(await page.getByRole('dialog',{name:'书架设置',exact:true}).count(),0);
  await page.getByLabel('客户端名称').fill('浏览器验收客户端');await button('创建 OPDS 凭据').click();await page.getByLabel('OPDS 密码',{exact:true}).waitFor();
  const opdsUser=await page.getByLabel('OPDS 用户名',{exact:true}).inputValue(),opdsPassword=await page.getByLabel('OPDS 密码',{exact:true}).inputValue();
  const authorization='Basic '+Buffer.from(opdsUser+':'+opdsPassword).toString('base64');
@@ -45,6 +47,7 @@ try {
  await button('关闭弹窗').click();await button('连接外部阅读器').click();await button('撤销 浏览器验收客户端').waitFor();assert.equal(await page.getByLabel('OPDS 密码',{exact:true}).count(),0);
  for(const width of [320,390,1280]) {await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'opds-access-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
  await button('撤销 浏览器验收客户端').click();await button('撤销 浏览器验收客户端').waitFor({state:'hidden'});assert.equal((await fetch(base+'/opds',{headers:{authorization}})).status,401);await button('关闭弹窗').click();
+ await page.goto(base+'/#/sources');assert.equal(await button('连接外部阅读器').count(),0);
  await page.getByLabel('选择来源').selectOption('quality');
  await page.locator('.source-capabilities summary').click();
  for(const width of [320,390,1280]) {await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'capabilities-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}

@@ -8,6 +8,7 @@ import type { AppSettings, ShelfSort } from '../store/settings.ts';
 import { mountUI } from './mount.ts';
 import { DialogView, type Dialog, type DialogAnswer } from './dialog.tsx';
 import { DENSITY_LABELS, SHELF_SORTS, ShelfSettingsPanel } from './shelf-settings.tsx';
+import { OpdsAccess } from './opds-access.tsx';
 import { isLocalSort, shelfOrder, shelfServerSort, sortBooks, type ReadingTimes } from './shelf-order.ts';
 import { describeShelfAction } from './shelf-membership.ts';
 import { Icon, IconButton, IconTextButton } from './toolkit.tsx';
@@ -171,6 +172,7 @@ interface ShelfState {
   loading: boolean;
   status: string;
   settingsOpen: boolean;
+  opdsOpen: boolean;
   refreshing: boolean;
   /**
    * True until the first frame that has *anything* to show.
@@ -304,6 +306,7 @@ export class ShelfScreen {
       loading: false,
       status: '',
       settingsOpen: false,
+      opdsOpen: false,
       refreshing: false,
       bootstrapping: true,
       revision: 0,
@@ -988,7 +991,10 @@ export class ShelfScreen {
           settings={this.settings}
           onPatch={(patch) => this.applySettings(patch)}
           onClose={() => this.patch({ settingsOpen: false })}
+          onOpenExternalReader={() => this.patch({ settingsOpen: false, opdsOpen: true })}
         />
+        {state.opdsOpen && <OpdsAccess api={this.options.api} onSignedOut={this.options.onSignedOut}
+          onClose={() => this.patch({ opdsOpen: false, settingsOpen: true })} />}
         {state.dialog ? (
           <DialogView dialog={state.dialog} onClose={(answer) => this.closeDialog(answer)} destructive="从书架拿掉" />
         ) : null}

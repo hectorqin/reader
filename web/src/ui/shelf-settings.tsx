@@ -22,7 +22,7 @@
  */
 
 import type { AppSettings } from '../store/settings.ts';
-import { IconButton, SectionTitle, Segmented, SwitchRow } from './toolkit.tsx';
+import { Button, IconButton, SectionTitle, Segmented, SwitchRow } from './toolkit.tsx';
 import { type JSX, useLayoutEffect, useRef } from './vendor/preact.ts';
 
 export const DENSITY_LABELS: Record<AppSettings['shelfDensity'], string> = {
@@ -50,6 +50,7 @@ export interface ShelfSettingsOptions {
   settings: AppSettings;
   onPatch(patch: Partial<AppSettings>): void;
   onClose(): void;
+  onOpenExternalReader(): void;
 }
 
 export function ShelfSettingsPanel({
@@ -57,6 +58,7 @@ export function ShelfSettingsPanel({
   settings,
   onPatch,
   onClose,
+  onOpenExternalReader,
 }: ShelfSettingsOptions & { open: boolean }): JSX.Element {
   const panel = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -107,6 +109,9 @@ export function ShelfSettingsPanel({
           value={settings.shelfSort}
           onChange={(value) => onPatch({ shelfSort: value })}
         />
+        <SectionTitle>外部阅读器</SectionTitle>
+        <div className="notice">通过 OPDS，让其他阅读器只读访问你的书架。</div>
+        <Button onClick={onOpenExternalReader}>连接外部阅读器</Button>
       </div>
     </div>
   );
