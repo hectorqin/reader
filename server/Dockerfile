@@ -56,7 +56,7 @@ ENV NODE_ENV=production \
 # `su-exec` is a ~10KB static helper that drops privileges from an entrypoint;
 # Alpine's busybox has no equivalent (`setpriv` lives in util-linux, which the
 # base image does not carry), and `su` there needs a password hash to be set up.
-RUN apk add --no-cache su-exec \
+RUN apk add --no-cache su-exec chromium \
  && addgroup -S reader && adduser -S reader -G reader \
  && mkdir -p /data /books /app/public && chown -R reader:reader /data /books /app/public
 
