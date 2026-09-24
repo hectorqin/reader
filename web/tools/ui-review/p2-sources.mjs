@@ -49,10 +49,14 @@ try {
  await button('撤销 浏览器验收客户端').click();await button('撤销 浏览器验收客户端').waitFor({state:'hidden'});assert.equal((await fetch(base+'/opds',{headers:{authorization}})).status,401);await button('关闭弹窗').click();
  await page.goto(base+'/#/sources');assert.equal(await button('连接外部阅读器').count(),0);
  await page.getByLabel('选择来源').selectOption('quality');
- await page.locator('.source-capabilities summary').click();
+ assert.equal(await page.locator('.source-capabilities').count(),0);
+ await page.getByRole('tab',{name:'插件管理',exact:true}).click();
+ assert.equal(await page.locator('.plugin-install-disclosure').getAttribute('open'),null);
+ await page.locator('.source-capabilities summary').first().click();
  for(const width of [320,390,1280]) {await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'capabilities-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
- await button('登录凭据').click();await page.getByText('最近一次访问成功',{exact:false}).waitFor();await page.locator('input[type=password]').fill('test-secret');await button('保存个人凭据').click();await page.getByRole('dialog').waitFor({state:'hidden'});
- await button('登录凭据').click();await page.getByText('尚未验证访问',{exact:false}).waitFor();assert.equal(await page.locator('input[type=password]').inputValue(),'');
+ await page.getByRole('tab',{name:'书源管理',exact:true}).click();
+ await button('书源登录').click();await page.getByText('最近一次访问成功',{exact:false}).waitFor();await page.locator('input[type=password]').fill('test-secret');await button('保存个人凭据').click();await page.getByRole('dialog').waitFor({state:'hidden'});
+ await button('书源登录').click();await page.getByText('尚未验证访问',{exact:false}).waitFor();assert.equal(await page.locator('input[type=password]').inputValue(),'');
  for(const width of [320,390,1280]) {await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'credentials-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
  await button('清空站点密码（保存后删除）').click();await button('保存个人凭据').click();await page.getByRole('dialog').waitFor({state:'hidden'});assert.equal(ctx.sources.credentialStatus('quality',user.id).fields[0].configured,false);
  await page.goto(base+'/#/book/'+acquired.publicationId);await page.locator('book-content p').first().waitFor();await button('切换书源').click();await button('查看此源目录：备选来源').click();

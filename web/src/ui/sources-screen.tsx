@@ -40,6 +40,7 @@ export class SourcesScreen {
   private subscriptions: ChapterSubscription[] = [];
   private tab: SourceTab = 'search';
   private credentialsOpen = false;
+  private credentialSource: SourceInstance | null = null;
   private credentialStatus: CredentialStatus | null = null;
   private managing: string | null = null;
   private editor: Editor | null = null;
@@ -98,13 +99,13 @@ export class SourcesScreen {
       if (preferred) await this.activateSource(preferred);
     }
   }
-  private async openCredentials(): Promise<void> {
+  private async openCredentials(source: SourceInstance): Promise<void> {
+    this.credentialSource = source;
     this.credentialsOpen = true; this.credentialValues = {}; this.credentialStatus = null;
     this.draw();
     await this.run(async () => {
-      const source = this.selected!;
       const status = await this.options.api.credentialStatus(source.id);
-      if (!this.disposed && this.selected?.id === source.id && this.credentialsOpen) this.credentialStatus = status;
+      if (!this.disposed && this.credentialSource?.id === source.id && this.credentialsOpen) this.credentialStatus = status;
     });
   }
   private async installPlugin(upload: boolean): Promise<void> {
@@ -199,7 +200,12 @@ export class SourcesScreen {
       if (!current()) return;
       this.searchState = 'error';
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
-      else { this.message = error instanceof Error ? error.message : '搜索失败，已保留找到的书籍。'; this.messageError = true; }
+      else {
+        this.message = error instanceof ApiError && ['PLUGIN_TIMEOUT', 'SOURCE_TIMEOUT'].includes(error.code)
+          ? '书源搜索超时，已保留找到的书籍。可点击“继续搜索”；若再次超时，请缩小书源范围，或在书源管理中检查登录状态。'
+          : error instanceof Error ? error.message : '搜索失败，已保留找到的书籍。';
+        this.messageError = true;
+      }
     } finally {
       if (current()) { this.searchRun = null; this.draw(); }
     }
@@ -241,7 +247,7 @@ export class SourcesScreen {
     const resume = this.canResume && (this.searchState === 'stopped' || this.searchState === 'error');
     const tabs: Array<{ id: SourceTab; title: string }> = [
       { id: 'search', title: '搜书' },
-      ...(this.options.admin ? [{ id: 'sources' as const, title: '书源管理' }] : []),
+      { id: 'sources', title: '书源管理' },
       { id: 'updates', title: '自动追更' },
       ...(this.options.admin ? [{ id: 'plugins' as const, title: '插件管理' }] : []),
     ];
@@ -262,7 +268,7 @@ export class SourcesScreen {
         }}>{tab.title}{tab.id === 'updates' && this.subscriptions.some(s => s.newChapters > 0) && <span className="sources-tab-dot" aria-label="有更新" />}</button>)}</nav>
       <FloatingNotice busy={this.working} error={this.messageError} message={this.installing ? '正在安装插件并启用，请稍候…' : this.working ? '正在处理…' : this.message} />
       <main key="body" className="sources-body" role="tabpanel" id={'sources-panel-' + this.tab} aria-labelledby={'sources-tab-' + this.tab} tabIndex={0}>
-      {this.tab === 'sources' && this.options.admin && <>
+      {this.tab === 'sources' && <>
         {!!this.savedSource?.descriptor?.extensions?.pages?.length && <section className="sources-card source-next-step"><strong>{this.savedSource!.name}</strong>
           <p>可为此书源单独管理订阅和规则。</p>{this.savedSource!.descriptor!.extensions!.pages!.map(page => <a className="button primary" href={'#/sources/' + encodeURIComponent(this.savedSource!.id) + '/' + encodeURIComponent(page.id)}>{page.title}</a>)}
         </section>}
@@ -274,6 +280,7 @@ export class SourcesScreen {
               <small>{source.descriptor?.label ?? '插件未启用或未安装'}</small>
               <span className={'source-state' + (source.enabled ? ' is-enabled' : '')}>{source.enabled ? '已启用' : '已暂停'}</span>
             </div><div className="source-entry-actions">
+              {(source.descriptor?.credentialKeys?.length ?? 0) > 0 && <Button disabled={this.busy || !source.enabled} onClick={() => void this.openCredentials(source)}>书源登录</Button>}
               {this.options.admin && <button type="button" className="source-manage-trigger" disabled={this.busy}
                 aria-expanded={this.managing === source.id} aria-controls={'source-manage-' + source.id}
                 onClick={() => { this.managing = this.managing === source.id ? null : source.id; this.draw(); }}
@@ -306,8 +313,6 @@ export class SourcesScreen {
           {!this.selected && <p className="muted">{this.sources.some(source => source.enabled && source.descriptor) ? '选择来源后，即可搜索书籍或浏览目录。' : '暂无可用来源，请先添加或启用来源。'}</p>}
         </section>
         {this.selected && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>
-          {this.selected.descriptor && <SourceCapabilities type={this.selected.descriptor} />}
-          {(this.selected.descriptor?.credentialKeys?.length ?? 0) > 0 && <Button disabled={this.busy} onClick={() => void this.openCredentials()}>登录凭据</Button>}
           {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.search(resume); }}>
             {this.filters.map(field => <label key={field.key}>{field.label}<select aria-label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy}
               onChange={event => { this.filterValues[field.key] = event.currentTarget.value; this.draw(); }}>
@@ -374,6 +379,7 @@ export class SourcesScreen {
           </div></article>)}
       </section>}
       {this.tab === 'plugins' && this.options.admin && <section className="sources-card"><h2>插件管理</h2>
+        <details className="plugin-install-disclosure"><summary>安装或更新插件</summary>
         <p className="notice">插件以服务端权限运行。安装前请确认来源可信；npm 安装需要服务端能够访问 npm 仓库。</p>
         <p className="muted">更新已有插件：上传新版安装包或输入 npm 包名与版本即可，书源配置和数据会保留，无需卸载。</p>
         <label className="sources-consent"><input type="checkbox" disabled={this.busy} checked={this.trusted} onChange={(event) => { this.trusted = event.currentTarget.checked; this.draw(); }} />我信任这个插件的代码</label>
@@ -402,6 +408,7 @@ export class SourcesScreen {
             <Button type="submit" disabled={this.busy || !this.trusted || !this.pluginFile}>上传并启用</Button>
           </form>
         </div>
+        </details>
         <h3>已安装插件</h3>
         {this.plugins.map((plugin) => <article className="sources-row" key={plugin.pluginId}><div><strong>{plugin.name ?? plugin.pluginId}</strong>
           <small>{plugin.version} · {plugin.builtin ? '内置' : plugin.enabled ? '已启用' : '已停用'}{plugin.error ? ` · ${plugin.error.message}` : ''}{plugin.runtime?.state === 'failed' ? ' · 运行失败，请重启插件' : ''}</small></div>
@@ -409,6 +416,7 @@ export class SourcesScreen {
           {!plugin.builtin && <div className="sources-actions"><Button disabled={this.busy} onClick={() => void this.run(async () => { await this.options.api.enablePlugin(plugin.pluginId, !plugin.enabled); await this.reload(); })}>{plugin.enabled ? '停用' : '启用'}</Button>
             {plugin.runtime?.state === 'failed' && <Button disabled={this.busy} onClick={() => void this.run(async () => { await this.options.api.enablePlugin(plugin.pluginId, true); await this.reload(); })}>重启插件</Button>}
             <Button disabled={this.busy} onClick={() => void this.run(async () => { await this.options.api.uninstallPlugin(plugin.pluginId); await this.reload(); this.message = '插件已卸载，书籍及已缓存内容保留。'; })}>卸载</Button></div>}
+          {this.types.filter(type => type.pluginId === plugin.pluginId).map(type => <SourceCapabilities key={keyFor(type)} type={type} />)}
         </article>)}
       </section>}
       </main>
@@ -459,8 +467,8 @@ export class SourcesScreen {
                 await this.options.api.removeSource(this.editor!.id!); this.editor = null; await this.reload();
               })}>删除空来源</Button>}</footer>
           </form></Modal>}
-          {this.credentialsOpen && this.selected && <Modal title="我的登录凭据" busy={this.busy} onClose={() => { this.credentialsOpen = false; this.credentialValues = {}; this.message = ''; this.draw(); }}><form className="sources-card source-modal-form" onSubmit={(event) => { event.preventDefault(); void this.run(async () => {
-            const source = this.selected!;
+          {this.credentialsOpen && this.credentialSource && <Modal title={this.credentialSource.name + ' · 书源登录'} busy={this.busy} onClose={() => { this.credentialsOpen = false; this.credentialValues = {}; this.message = ''; this.draw(); }}><form className="sources-card source-modal-form" onSubmit={(event) => { event.preventDefault(); void this.run(async () => {
+            const source = this.credentialSource!;
             for (const field of source.descriptor?.credentialKeys ?? []) {
               if (this.disposed) return;
               if (field.key in this.credentialValues) await this.options.api.sourceCredential(source.id, field.key, this.credentialValues[field.key]!);
@@ -474,7 +482,7 @@ export class SourcesScreen {
               {this.credentialStatus.state === 'verification-required' && <p>请在站点或插件提供的管理页面完成验证，再重试。Reader 不会绕过验证码。</p>}
               <p className="muted">这是当前账号最近一次请求的结果，不保证会话仍有效；站点未提供的过期时间无法判断。</p>
             </div> : <p>尚未取得访问状态，可重试打开凭据页。</p>}
-            {this.selected.descriptor?.credentialKeys?.map((field) => <label key={field.key}>{field.label} · {this.credentialStatus?.fields.find(item => item.key === field.key)?.configured ? '已配置' : this.credentialStatus ? '未配置' : '状态未知'}
+            {this.credentialSource.descriptor?.credentialKeys?.map((field) => <label key={field.key}>{field.label} · {this.credentialStatus?.fields.find(item => item.key === field.key)?.configured ? '已配置' : this.credentialStatus ? '未配置' : '状态未知'}
             <input aria-label={field.label} autoFocus disabled={this.busy} type="password" autoComplete="off" value={this.credentialValues[field.key] ?? ''} onInput={(event) => { this.credentialValues[field.key] = event.currentTarget.value; }} />
             <Button disabled={this.busy} onClick={() => { this.credentialValues[field.key] = ''; this.draw(); }}>清空{field.label}（保存后删除）</Button></label>)}
             </div><footer className="source-modal-actions"><Button className="primary" type="submit" disabled={this.busy}>保存个人凭据</Button></footer></form></Modal>}

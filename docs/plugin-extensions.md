@@ -8,7 +8,7 @@ Reader 保留 local 与 OPDS 内置，通过通用协议接入独立 Node.js 插
 
 GET 调用 `extension.page`；POST 调用 `extension.action`，参数为 `{sourceType,context:{instance,userId},pageId,action,values}`。宿主根据 sourceId 从数据库解析插件与实例，客户端不能伪造上下文；暂停的来源仍可管理，停用插件则不可访问页面。普通读者无页面读取及写入权限。
 
-返回 Page DTO：`title/description/notice/forms/sections/tabs/activeTab`。每个 Tab 包含 `id/title/description/forms/sections/outputs`，页面公共内容和当前 Tab 同时渲染。Form 包含 `id/title/submit/fields/values`，可选 `layout: "inline"` 和 `confirm` 声明紧凑布局及行内二次确认，fields 支持 text、textarea、number、boolean、select；values 携带不透明行 ID。Field 可选 `placeholder/min/max`，Page 可选 `noticeKind: "info" | "error"`；所有字段由宿主验证。section 支持 `emptyText`，item 支持 `collapsible`。`outputs` 用于调试日志、JSON 或普通文本，格式为 `{title,text,format:"text"|"log"|"json"}`，宿主以纯文本块渲染并限制数量与大小，不执行内容。一次动作返回新页面；可选 activeTab 请求切换到指定 Tab，否则保留当前选择。纯 Tab 切换保留输入草稿。提交后保留其它声明未变化的表单草稿；服务端改变表单声明或主动刷新时以新页面为准。
+返回 Page DTO：`title/description/notice/forms/sections/tabs/activeTab`。每个 Tab 包含 `id/title/description/forms/sections/outputs`，页面公共内容和当前 Tab 同时渲染。Form 包含 `id/title/submit/fields/values`，可选 `layout: "inline"` 和 `confirm` 声明紧凑布局及行内二次确认，fields 支持 text、password、textarea、number、boolean、select；values 携带不透明行 ID。Field 可选 `placeholder/min/max`，Page 可选 `noticeKind: "info" | "error"`；所有字段由宿主验证。section 支持 `emptyText`，item 支持 `collapsible`。`outputs` 用于调试日志、JSON 或普通文本，格式为 `{title,text,format:"text"|"log"|"json"}`，宿主以纯文本块渲染并限制数量与大小，不执行内容。一次动作返回新页面；可选 activeTab 请求切换到指定 Tab，否则保留当前选择。纯 Tab 切换保留输入草稿。提交后保留其它声明未变化的表单草稿；服务端改变表单声明或主动刷新时以新页面为准。
 
 操作中的状态、`notice` 和请求错误由宿主统一显示为紧凑浮动提示，不占用页面内容高度。完成提示可关闭并自动消失；错误保留 `alert` 语义，操作完成后的焦点回到内容面板，不滚动到提示。需要持续查看的日志和结果仍放在 `outputs`。
 
@@ -49,3 +49,5 @@ CatalogEntry 可提供 `sourceName`、`latestChapter`，用于详情弹窗和换
 ## 验证
 
 服务端测试覆盖实例隔离、页面与任务权限、暂停、删除、重启、协议校验和换源事务；Web 测试覆盖通用 Tab、表单草稿、错误反馈与搜索取消。浏览器验证入口见[UI/UX 评审](ui-review/sources-ux.md)。插件业务测试由插件维护者负责。
+
+登录字段使用 `password`：服务端拒绝返回非空的默认密码，客户端不保留密码草稿，提交失败后清空密码。页面及 Tab 可声明 `links: [{title,url}]`，仅支持不包含内嵌凭据的 HTTP(S) 地址，以新窗口和 `noopener noreferrer` 打开。

@@ -2,6 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { extensionDeclarations, extensionFields, extensionPage, extensionValues } from '../src/sources/extensions.ts';
 
+test('login extensions accept private inputs and HTTP links without echoing secrets or script URLs', () => {
+  const form = { id: 'login', title: 'Login', submit: 'Login', fields: [{ key: 'password', label: 'Password', type: 'password' }] };
+  assert.doesNotThrow(() => extensionPage({ title: 'Login', forms: [form], links: [{ title: 'Site', url: 'https://example.test/login' }] }));
+  for (const url of ['javascript:alert(1)', 'data:text/html,test', 'https://name:secret@example.test']) {
+    assert.throws(() => extensionPage({ title: 'Login', forms: [], links: [{ title: 'Site', url }] }));
+  }
+  assert.throws(() => extensionPage({ title: 'Login', forms: [{ ...form, values: { password: 'secret' } }] }));
+  assert.throws(() => extensionFields([{ key: 'password', label: 'Password', type: 'password', value: 'secret' }]));
+});
+
 test('extension protocol rejects malformed declarations, unbounded options and structured action values', () => {
   assert.throws(() => extensionDeclarations({ pages: [{ id: '../escape', title: 'x' }] }));
   assert.throws(() => extensionDeclarations({ tasks: [{ id: 'poll', intervalMinutes: 0 }] }));

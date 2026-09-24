@@ -27,13 +27,18 @@ export class PluginPageScreen {
   private async run(action?: string, values?: Record<string, unknown>, submitted?: ExtensionForm) {
     if (this.busy || this.disposed) return;
     const previousTab = this.activeTab;
+    const formIds = () => (this.page?.tabs?.find(tab => tab.id === this.activeTab) ?? this.page)?.forms.map(form => form.id).join(',');
+    const previousForms = formIds();
     this.busy = true; this.error = ''; this.draw();
     try {
       const page = await (this.options.sourceId !== undefined
         ? this.options.api.sourcePage(this.options.sourceId, this.options.pageId, action, values)
         : this.options.api.pluginPage(this.options.pluginId!, this.options.pageId, action, values));
       if (this.disposed) return; this.page = page;
-      const draftCandidates = new Map([...this.drafts, ...[...this.inputs].map(([form, data]) => [JSON.stringify(form), { ...data }] as const)]);
+      const draftCandidates = new Map([...this.drafts, ...[...this.inputs].map(([form, data]) => {
+        const safe = { ...data }; for (const field of form.fields) if (field.type === 'password') delete safe[field.key];
+        return [JSON.stringify(form), safe] as const;
+      })]);
       if (submitted) draftCandidates.delete(JSON.stringify(submitted));
       const forms = [page, ...(page.tabs ?? [])].flatMap(content => [...content.forms, ...(content.sections ?? []).flatMap(section => section.items.flatMap(item => item.forms ?? []))]);
       const keys = new Set(forms.map(form => JSON.stringify(form)));
@@ -43,11 +48,12 @@ export class PluginPageScreen {
       this.noticeTab = this.activeTab;
     } catch (error) {
       if (this.disposed) return;
+      for (const [form, values] of this.inputs) for (const field of form.fields) if (field.type === 'password') values[field.key] = '';
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
       else this.error = error instanceof Error ? error.message : '操作失败';
     } finally {
       this.busy = false; this.draw(); this.revealActiveTab();
-      if (previousTab !== this.activeTab) { const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0; }
+      if (previousTab !== this.activeTab || previousForms !== formIds()) { const body = this.element.querySelector('.sources-body'); if (body) body.scrollTop = 0; }
       if (action) (this.element.querySelector<HTMLElement>('[role=tabpanel]') ?? this.element.querySelector<HTMLElement>('.sources-body'))?.focus({ preventScroll: true });
     }
   }
@@ -64,7 +70,7 @@ export class PluginPageScreen {
           : field.type === 'boolean' ? <input aria-label={field.label} type="checkbox" disabled={this.busy} checked={data[field.key] === true} onChange={event => { data[field.key] = event.currentTarget.checked; }} />
           : field.type === 'select' ? <select aria-label={field.label} required={field.required} disabled={this.busy} value={String(data[field.key] ?? '')} onChange={event => { data[field.key] = event.currentTarget.value; }}>
             {field.options?.map(option => <option value={option.value}>{option.label}</option>)}
-          </select> : <input aria-label={field.label} placeholder={field.placeholder} min={field.min} max={field.max} required={field.required} disabled={this.busy} type={field.type === 'number' ? 'number' : 'text'} value={String(data[field.key] ?? '')}
+          </select> : <input aria-label={field.label} placeholder={field.placeholder} min={field.min} max={field.max} required={field.required} disabled={this.busy} autoComplete={field.type === 'password' ? 'off' : undefined} type={field.type === 'number' ? 'number' : field.type === 'password' ? 'password' : 'text'} value={String(data[field.key] ?? '')}
             onInput={event => { data[field.key] = field.type === 'number' ? Number(event.currentTarget.value) : event.currentTarget.value; }} />}
       </label>)}
       <Button type="submit" disabled={this.busy}>{form.submit}</Button>
@@ -76,6 +82,7 @@ export class PluginPageScreen {
   }
   private content(content: ExtensionContent, scope = 'page') {
     return <>
+      {content.links?.filter(link => { try { const url = new URL(link.url); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; } }).map(link => <a className="button" href={link.url} target="_blank" rel="noopener noreferrer">{link.title}</a>)}
       {content.forms.map(form => <section className="sources-card">{this.form(form)}</section>)}
       {content.sections?.map((section, sectionIndex) => <section className="extension-section"><h2>{section.title}</h2>
         {!section.items.length && section.emptyText && <p className="extension-empty">{section.emptyText}</p>}

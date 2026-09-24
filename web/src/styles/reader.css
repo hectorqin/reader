@@ -3970,6 +3970,8 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reading-tools blockquote { border-inline-start: 3px solid var(--reader-accent); padding: .5rem .75rem; line-height: 1.6; }
 .source-capabilities { margin-block: 12px; overflow-wrap: anywhere; }
 .source-capabilities summary { cursor: pointer; }
+.sources-row > .source-capabilities { flex-basis: 100%; }
+.plugin-install-disclosure > summary { cursor: pointer; padding-block: .75rem; font-weight: 600; }
 .source-capabilities dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 .source-capabilities dl > div { padding: 8px; border: 1px solid currentColor; border-radius: 6px; }
 .source-capabilities dd { margin: 4px 0 0; }

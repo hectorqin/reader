@@ -37,12 +37,13 @@ export interface ChapterSubscription {
 
 export interface ExtensionField {
   placeholder?: string; min?: number; max?: number;
-  key: string; label: string; type: 'text' | 'textarea' | 'number' | 'boolean' | 'select'; required?: boolean;
+  key: string; label: string; type: 'text' | 'password' | 'textarea' | 'number' | 'boolean' | 'select'; required?: boolean;
   value?: string | number | boolean; options?: Array<{ value: string; label: string }>;
 }
 export interface ExtensionForm {
   layout?: 'inline'; confirm?: string; id: string; title: string; submit: string; fields: ExtensionField[]; values?: Record<string, string | number | boolean> }
 export interface ExtensionContent {
+  links?: Array<{ title: string; url: string }>;
   forms: ExtensionForm[];
   outputs?: Array<{ title: string; text: string; format: 'text' | 'log' | 'json' }>;
   sections?: Array<{ title: string; emptyText?: string; items: Array<{ title: string; description?: string; collapsible?: boolean; forms?: ExtensionForm[] }> }>;

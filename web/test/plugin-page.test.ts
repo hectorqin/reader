@@ -152,3 +152,19 @@ it('preserves unrelated tab drafts after actions and requires inline confirmatio
   expect(screen.element.querySelector('.extension-toolbar [role=status]')).toBeNull();
   tab('草稿').click(); expect(screen.element.querySelector('textarea')?.value).toBe('unsaved');
 });
+
+it('clears secret inputs after a failed login and only renders safe external links', async () => {
+  const { api, transport } = fixture();
+  transport.respondWith(request => request.method === 'POST' ? { status: 502, headers: {}, json: { error: { code: 'AUTH_REQUIRED', message: '登录失败' } } } : {
+    status: 200, headers: {}, json: { title: '登录', forms: [{ id: 'login', title: '登录表单', submit: '登录书源', fields: [{ key: 'password', label: '密码', type: 'password' }] }],
+      links: [{ title: '站点', url: 'https://example.test/login' }, { title: '脚本', url: 'javascript:alert(1)' }] }
+  });
+  const screen = new PluginPageScreen({ api, sourceId: 'one', pageId: 'library', onBack() {}, onSignedOut() {} });
+  screens.push(screen); document.body.append(screen.element); await screen.show();
+  const secret = screen.element.querySelector<HTMLInputElement>('input[type=password]')!;
+  secret.value = 'private'; secret.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(screen.element.querySelectorAll('a')).toHaveLength(1); expect(screen.element.querySelector('a')?.rel).toBe('noopener noreferrer');
+  screen.element.querySelector<HTMLButtonElement>('button[type=submit]')!.click();
+  await vi.waitFor(() => expect(noticeText()).toBe('登录失败'));
+  expect(secret.value).toBe('');
+});

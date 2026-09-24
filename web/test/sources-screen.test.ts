@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { noticeText } from './helpers/notices.ts';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { ReaderApi } from '../src/api/client.ts';
+import { ApiError, ReaderApi } from '../src/api/client.ts';
 import type { SourcePage } from '../src/api/sources.ts';
 import { SourcesScreen } from '../src/ui/sources-screen.tsx';
 import { FakeTransport, makePlatform, bodyText } from './helpers/env.ts';
@@ -51,19 +51,20 @@ async function* pages(...values: Array<SourcePage | Promise<SourcePage>>): Async
 
 it('shows declared capabilities and personal access state without exposing or resubmitting stored secrets', async () => {
   const { screen, api } = await setup(false); await chooseSource(screen.element);
-  expect(screen.element.querySelector('.source-capabilities')?.textContent).toContain('OPDS 服务端');
+  expect(screen.element.querySelector('.source-capabilities')).toBeNull();
+  await click(screen.element, '书源管理');
   vi.spyOn(api, 'credentialStatus').mockResolvedValue({ state: 'verification-required', checkedAt: 1000, available: true,
     fields: [{ key: 'password', label: 'OPDS 密码', configured: true }] });
   const save = vi.spyOn(api, 'sourceCredential').mockResolvedValue();
-  await click(screen.element, '登录凭据');
+  await click(screen.element, '书源登录');
   expect(screen.element.querySelector('dialog')?.textContent).toContain('需要人工验证');
   expect(screen.element.querySelector('dialog')?.textContent).toContain('已配置');
   expect(screen.element.querySelector<HTMLInputElement>('input[type=password]')!.value).toBe('');
   await click(screen.element, '保存个人凭据'); expect(save).not.toHaveBeenCalled();
-  await click(screen.element, '登录凭据'); await click(screen.element, '清空OPDS 密码（保存后删除）');
+  await click(screen.element, '书源登录'); await click(screen.element, '清空OPDS 密码（保存后删除）');
   await click(screen.element, '保存个人凭据'); expect(save).toHaveBeenCalledWith('source-1', 'password', '');
   vi.spyOn(api, 'credentialStatus').mockRejectedValue(new Error('状态暂不可用'));
-  await click(screen.element, '登录凭据'); input(screen.element, 'OPDS 密码', 'replacement');
+  await click(screen.element, '书源登录'); input(screen.element, 'OPDS 密码', 'replacement');
   await click(screen.element, '保存个人凭据'); expect(save).toHaveBeenLastCalledWith('source-1', 'password', 'replacement');
 });
 
@@ -160,10 +161,11 @@ describe('sources and subscriptions UI', () => {
     expect(screen.element.textContent).not.toContain('插件管理'); expect(screen.element.textContent).not.toContain('添加来源');
     expect(transport.requests.some((request) => request.url.endsWith('/plugins'))).toBe(false);
     await chooseSource(screen.element); expect(screen.element.textContent).toContain('来源小说');
-    await click(screen.element, '登录凭据'); input(screen.element, 'OPDS 密码', 'private'); await click(screen.element, '保存个人凭据');
+    await click(screen.element, '书源管理');
+    await click(screen.element, '书源登录'); input(screen.element, 'OPDS 密码', 'private'); await click(screen.element, '保存个人凭据');
     expect(bodyText(transport.requests.find((request) => request.url.endsWith('/credentials/password')))).toBe('{"value":"private"}');
     expect(screen.element.querySelector('dialog')).toBeNull();
-    await click(screen.element, '登录凭据'); expect(screen.element.querySelector<HTMLInputElement>('input[type=password]')!.value).toBe('');
+    await click(screen.element, '书源登录'); expect(screen.element.querySelector<HTMLInputElement>('input[type=password]')!.value).toBe('');
   });
   it('creates OPDS configuration, acquires books and enables automatic updates', async () => {
     const { screen, transport, onOpen } = await setup();
@@ -462,4 +464,27 @@ it('loads the default source on entry but ignores a disabled or unavailable defa
   expect(browse).not.toHaveBeenCalled();
   list.mockResolvedValue([{ ...source, isDefault: true, descriptor: null }]);
   await screen.show(); expect(browse).not.toHaveBeenCalled();
+});
+
+it('preserves search results and explains how to resume after a plugin deadline', async () => {
+  const { screen, api } = await setup(); await chooseSource(screen.element);
+  vi.spyOn(api, 'searchSource').mockImplementation(async function* () {
+    yield { items: [{ ref: 'kept', title: '保留的书' }], batch: { completed: 34, total: 128 }, nextCursor: 'next' };
+    throw new ApiError('server', 'plugin request exceeded its execution deadline', 'PLUGIN_TIMEOUT', 504);
+  });
+  input(screen.element, '搜索书籍', '测试'); await click(screen.element, '搜索');
+  await vi.waitFor(() => expect(noticeText()).toContain('搜索超时'));
+  expect(noticeText()).toContain('继续搜索');
+  expect(screen.element.textContent).toContain('保留的书');
+});
+
+it('keeps compatibility in plugin management and collapses installation by default', async () => {
+  const { screen, api } = await setup();
+  vi.spyOn(api, 'plugins').mockResolvedValue([{ pluginId: 'reader.opds', builtin: true, enabled: true, name: 'OPDS' }]);
+  await screen.show(); await chooseSource(screen.element);
+  expect(screen.element.querySelector('.source-capabilities')).toBeNull();
+  expect([...screen.element.querySelectorAll('button')].some(button => button.textContent === '书源登录')).toBe(false);
+  await click(screen.element, '插件管理');
+  expect(screen.element.querySelector('.source-capabilities')?.textContent).toContain('OPDS 服务端');
+  expect(screen.element.querySelector<HTMLDetailsElement>('.plugin-install-disclosure')?.open).toBe(false);
 });

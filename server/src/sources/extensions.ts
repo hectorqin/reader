@@ -2,7 +2,7 @@ import { badRequest } from '../lib/errors.ts';
 
 export interface ExtensionField {
   placeholder?: string; min?: number; max?: number;
-  key: string; label: string; type: 'text' | 'textarea' | 'number' | 'boolean' | 'select';
+  key: string; label: string; type: 'text' | 'password' | 'textarea' | 'number' | 'boolean' | 'select';
   required?: boolean; value?: string | number | boolean;
   options?: Array<{ value: string; label: string }>;
 }
@@ -12,6 +12,7 @@ export interface ExtensionForm {
   values?: Record<string, string | number | boolean>;
 }
 export interface ExtensionContent {
+  links?: Array<{ title: string; url: string }>;
   forms: ExtensionForm[];
   outputs?: Array<{ title: string; text: string; format: 'text' | 'log' | 'json' }>;
   sections?: Array<{ title: string; emptyText?: string; items: Array<{ title: string; description?: string; collapsible?: boolean; forms?: ExtensionForm[] }> }>;
@@ -55,7 +56,8 @@ export function extensionFields(input: unknown): ExtensionField[] {
   const keys = new Set();
   for (const field of input) {
     record(field); check(typeof field.key === 'string' && identifier.test(field.key) && !keys.has(field.key)); keys.add(field.key);
-    label(field.label); check(['text', 'textarea', 'number', 'boolean', 'select'].includes(String(field.type)));
+    label(field.label); check(['text', 'password', 'textarea', 'number', 'boolean', 'select'].includes(String(field.type)));
+    if (field.type === 'password') check(field.value === undefined || field.value === '');
     if (field.placeholder !== undefined) label(field.placeholder);
     for (const bound of [field.min, field.max]) if (bound !== undefined) check(field.type === 'number' && typeof bound === 'number' && Number.isFinite(bound));
     if (field.min !== undefined && field.max !== undefined) check(Number(field.min) <= Number(field.max));
@@ -82,10 +84,19 @@ export function extensionPage(input: unknown): ExtensionPage {
       if (form.layout !== undefined) check(form.layout === 'inline');
       if (form.confirm !== undefined) label(form.confirm);
       extensionFields(form.fields); if (form.values !== undefined) extensionValues(form.values);
+      for (const field of form.fields as ExtensionField[]) if (field.type === 'password') check(!(form.values as Record<string, unknown> | undefined)?.[field.key]);
     }
   };
   const content = (input: Record<string, unknown>) => {
     forms(input.forms);
+    if (input.links !== undefined) {
+      check(Array.isArray(input.links) && input.links.length <= 32);
+      for (const link of input.links) {
+        record(link); label(link.title); label(link.url);
+        let url; try { url = new URL(String(link.url)); } catch { check(false); }
+        check(!!url && ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password);
+      }
+    }
     if (input.outputs !== undefined) {
       check(Array.isArray(input.outputs) && input.outputs.length <= 8);
       for (const output of input.outputs) {
