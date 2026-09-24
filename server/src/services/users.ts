@@ -4,6 +4,7 @@ import type { AppConfig } from '../config/index.ts';
 import { hashPassword, verifyPassword } from './passwords.ts';
 import { hashToken, newRefreshToken, signAccessToken } from './tokens.ts';
 import { conflict, forbidden, notFound, unauthorized } from '../lib/errors.ts';
+import { RegistrationService } from './registration.ts';
 
 export type Role = 'admin' | 'member';
 
@@ -16,6 +17,7 @@ export interface UserRow {
   disabled: number;
   created_at: number;
   updated_at: number;
+  auth_version?: number;
 }
 
 export interface PublicUser {
@@ -47,10 +49,10 @@ export class UserService {
     return row?.n ?? 0;
   }
 
-  list(): PublicUser[] {
+  list(): Array<PublicUser & {disabled:boolean}> {
     return this.db
       .all<UserRow>('SELECT * FROM users ORDER BY created_at ASC')
-      .map(toPublicUser);
+      .map(row=>({...toPublicUser(row),disabled:!!row.disabled}));
   }
 
   byId(id: string): UserRow | undefined {
@@ -64,7 +66,7 @@ export class UserService {
    */
   canRegisterPublicly(): boolean {
     if (this.count() === 0) return true;
-    return process.env.ALLOW_REGISTRATION === 'true';
+    return new RegistrationService(this.db).mode() !== 'closed';
   }
 
   async create(input: {
@@ -72,40 +74,45 @@ export class UserService {
     password: string;
     displayName?: string;
     role?: Role;
-  }): Promise<PublicUser> {
+  }, admission?: () => void): Promise<PublicUser> {
     const username = input.username.trim();
     if (username.length < 3) throw conflict('username must be at least 3 characters', 'USERNAME_TOO_SHORT');
     if (input.password.length < 8) throw conflict('password must be at least 8 characters', 'PASSWORD_TOO_SHORT');
     const existing = this.db.get<{ id: string }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', username);
     if (existing) throw conflict('username already taken', 'USERNAME_TAKEN');
 
-    const now = Date.now();
-    const row: UserRow = {
-      id: randomUUID(),
-      username,
-      display_name: input.displayName?.trim() ?? '',
-      password_hash: await hashPassword(input.password),
-      // The first user to register owns the instance.
-      role: input.role ?? (this.count() === 0 ? 'admin' : 'member'),
-      disabled: 0,
-      created_at: now,
-      updated_at: now,
-    };
-    this.db.run(
-      `INSERT INTO users (id, username, display_name, password_hash, role, disabled, created_at, updated_at)
-       VALUES (?,?,?,?,?,?,?,?)`,
-      row.id, row.username, row.display_name, row.password_hash, row.role, row.disabled, row.created_at, row.updated_at,
-    );
-    // A new account must see the whole shared library straight away. Without
-    // this, a book scanned before the account existed would stay invisible
-    // until its file happened to change.
-    this.db.run(
-      `INSERT OR IGNORE INTO user_books (user_id, book_id, added_at)
-       SELECT ?, b.id, ? FROM books b
-       WHERE EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)`,
-      row.id, now,
-    );
-    return toPublicUser(row);
+    const passwordHash = await hashPassword(input.password);
+    return this.db.transaction(() => {
+      admission?.();
+      if (this.db.get('SELECT id FROM users WHERE username = ? COLLATE NOCASE', username)) throw conflict('username already taken', 'USERNAME_TAKEN');
+      const now = Date.now();
+      const row: UserRow = {
+        id: randomUUID(),
+        username,
+        display_name: input.displayName?.trim() ?? '',
+        password_hash: passwordHash,
+        // The first user to register owns the instance.
+        role: input.role ?? (this.count() === 0 ? 'admin' : 'member'),
+        disabled: 0,
+        created_at: now,
+        updated_at: now,
+      };
+      this.db.run(
+        `INSERT INTO users (id, username, display_name, password_hash, role, disabled, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?)`,
+        row.id, row.username, row.display_name, row.password_hash, row.role, row.disabled, row.created_at, row.updated_at,
+      );
+      // A new account must see the whole shared library straight away. Without
+      // this, a book scanned before the account existed would stay invisible
+      // until its file happened to change.
+      this.db.run(
+        `INSERT OR IGNORE INTO user_books (user_id, book_id, added_at)
+         SELECT ?, b.id, ? FROM books b
+         WHERE EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)`,
+        row.id, now,
+      );
+      return toPublicUser(row);
+    });
   }
 
   /**
@@ -139,7 +146,7 @@ export class UserService {
     if (!row || !ok) throw unauthorized('invalid username or password', 'BAD_CREDENTIALS');
     if (row.disabled === 1) throw forbidden('account disabled', 'ACCOUNT_DISABLED');
 
-    const access = signAccessToken(this.config, { id: row.id, role: row.role });
+    const access = signAccessToken(this.config, { id: row.id, role: row.role, authVersion: row.auth_version ?? 0 });
     const refresh = newRefreshToken();
     const refreshExpiresAt = Date.now() + this.config.refreshTokenTtl * 1000;
     this.db.run(
@@ -177,7 +184,7 @@ export class UserService {
 
     this.db.run('UPDATE refresh_tokens SET revoked_at = ? WHERE id = ?', Date.now(), row.id);
 
-    const access = signAccessToken(this.config, { id: user.id, role: user.role });
+    const access = signAccessToken(this.config, { id: user.id, role: user.role, authVersion: user.auth_version ?? 0 });
     const next = newRefreshToken();
     const expiresAt = Date.now() + this.config.refreshTokenTtl * 1000;
     this.db.run(
@@ -214,7 +221,7 @@ export class UserService {
     }
     if (nextPassword.length < 8) throw conflict('password must be at least 8 characters', 'PASSWORD_TOO_SHORT');
     this.db.run(
-      'UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?',
+      'UPDATE users SET password_hash = ?, auth_version = auth_version + 1, updated_at = ? WHERE id = ?',
       await hashPassword(nextPassword), Date.now(), userId,
     );
     // A password change must invalidate every other device's session.
@@ -223,10 +230,20 @@ export class UserService {
 
   setDisabled(userId: string, disabled: boolean): void {
     this.db.run('UPDATE users SET disabled = ?, updated_at = ? WHERE id = ?', disabled ? 1 : 0, Date.now(), userId);
-    if (disabled) this.revokeAll(userId);
+    if (disabled) { this.revokeAll(userId); this.db.run('UPDATE users SET auth_version=auth_version+1 WHERE id=?',userId); }
   }
 
   setRole(userId: string, role: Role): void {
     this.db.run('UPDATE users SET role = ?, updated_at = ? WHERE id = ?', role, Date.now(), userId);
+  }
+
+  async resetPassword(userId: string, password: string): Promise<void> {
+    if (!this.byId(userId)) throw notFound('用户不存在');
+    if (password.length < 8 || password.length > 1024) throw conflict('密码须为 8–1024 位','PASSWORD_TOO_SHORT');
+    const hash = await hashPassword(password);
+    this.db.transaction(()=>{
+      this.db.run('UPDATE users SET password_hash=?,auth_version=auth_version+1,updated_at=? WHERE id=?',hash,Date.now(),userId);
+      this.revokeAll(userId);
+    });
   }
 }

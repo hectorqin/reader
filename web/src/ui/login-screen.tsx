@@ -17,6 +17,7 @@ interface LoginState {
   username: string;
   password: string;
   displayName: string;
+  inviteCode: string;
   registering: boolean;
   busy: boolean;
   error: string;
@@ -55,6 +56,7 @@ export class LoginScreen {
       username: '',
       password: '',
       displayName: '',
+      inviteCode: '',
       registering: false,
       busy: false,
       error: '',
@@ -153,16 +155,18 @@ export class LoginScreen {
             />
           </div>
         ) : null}
-        <button type="submit" className="button primary login-submit" disabled={state.busy}>
+        {state.registering && state.instance?.invitationRequired && <div className="field"><label htmlFor="login-invite">邀请码</label><input id="login-invite" autoComplete="off" value={state.inviteCode} placeholder="填写管理员提供的邀请码" disabled={state.busy} onInput={event=>this.patch({inviteCode:event.currentTarget.value})} /></div>}
+        {state.registering && state.instance && !state.instance.registrationOpen && <p className="notice">此书房暂未开放注册，请联系管理员创建账号或开放注册。</p>}
+        <button type="submit" className="button primary login-submit" disabled={state.busy || (state.registering && !!state.instance && !state.instance.registrationOpen)}>
           {state.registering ? '注册并登录' : '登录'}
         </button>
         <p className="login-session-hint">登录状态自动保持，无需每天重新登录</p>
-        {(state.registering || !state.instance || state.instance.registrationOpen || state.instance.userCount === 0) && <div className="login-switch">
+        <div className="login-switch">
           <span>{state.registering ? '已有账号？' : '还没有账号？'}</span>
           <button type="button" disabled={state.busy} onClick={() => this.toggleRegister()}>
             {state.registering ? '返回登录' : '注册新账号'}
           </button>
-        </div>}
+        </div>
       </form>
     );
   }
@@ -246,7 +250,7 @@ export class LoginScreen {
     this.patch({ error: '', busy: true });
     try {
       if (this.state.registering) {
-        await this.options.api.register(username, password, this.state.displayName.trim() || undefined);
+        await this.options.api.register(username, password, this.state.displayName.trim() || undefined, this.state.inviteCode.trim() || undefined);
       } else {
         await this.options.api.login(username, password);
       }
@@ -277,6 +281,7 @@ function noticeForInstance(instance: InstanceInfo): Partial<LoginState> {
     return { notice: '这是一个全新的实例，第一个注册的账号会成为管理员。', noticeKind: 'info', registering: true };
   }
   if (instance.registrationOpen) {
+    if (instance.invitationRequired) return { notice:'此书房需要邀请码注册，请向管理员获取。',noticeKind:'info' };
     return { notice: `已有 ${instance.userCount} 个账号，此实例开放注册。`, noticeKind: 'info' };
   }
   return { notice: '', noticeKind: 'info' };

@@ -27,7 +27,7 @@
 | `PUBLIC_URL` | 空 | 对外访问地址，反向代理后设置 |
 | `SCAN_INTERVAL` | `1800` | 定时扫描间隔，秒；`0` 关闭 |
 | `WATCH_INTERVAL` | `60` | 变化检查间隔，秒；`0` 关闭 |
-| `ALLOW_REGISTRATION` | `false` | 首个账号之后是否允许公开注册 |
+| `ALLOW_REGISTRATION` | `false` | 首个账号之后的默认注册策略；管理员在「书架设置 → 用户管理 → 注册与邀请」保存的策略优先，支持关闭、开放、邀请码注册 |
 | `ACCESS_TOKEN_TTL` | `604800` | 访问令牌有效期，秒；默认 7 天，客户端在临近过期请求或返回前台时自动续期 |
 | `REFRESH_TOKEN_TTL` | `31536000` | 刷新令牌有效期，秒 |
 | `READER_TOKEN_SECRET` | 自动生成 | 至少 16 字符的签名密钥；默认保存在 `DATA_DIR/token.secret` |

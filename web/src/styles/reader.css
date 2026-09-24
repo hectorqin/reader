@@ -2750,6 +2750,17 @@ book-content {
 .login-session-hint { text-align: center; font-size: .72rem; color: var(--reader-muted); line-height: 1.6; margin: .85rem 0 1.4rem; }
 .login-switch { display: flex; align-items: center; justify-content: center; gap: .25rem; font-size: .85rem; color: var(--reader-muted); }
 .login-switch button { min-height: 44px; border: 0; padding: .5rem; background: transparent; color: var(--reader-accent); font: inherit; cursor: pointer; }
+.user-management { display: grid; gap: 1rem; }
+.user-manager-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
+.user-manager-actions input { flex: 1; min-width: 120px; }
+.user-manager-form { display: grid; gap: .85rem; padding: 1rem; border: 1px solid var(--reader-line); border-radius: .75rem; }
+.user-manager-form label, .user-manager-mode { display: grid; gap: .4rem; }
+.user-management input, .user-management select { min-width: 0; width: 100%; min-height: 44px; font-size: 16px; padding: .65rem .75rem; border: 1px solid var(--reader-line); border-radius: .65rem; background: var(--reader-paper); color: var(--reader-ink); }
+.user-management .extension-tabs button[aria-pressed=true] { color: var(--reader-accent); border-bottom-color: var(--reader-accent); }
+.user-manager-list { list-style: none; padding: 0; margin: 0; display: grid; gap: .75rem; }
+.user-manager-list li { padding: 1rem; border: 1px solid var(--reader-line); border-radius: .75rem; overflow-wrap: anywhere; }
+.user-manager-list p { margin: .5rem 0; font-size: .85rem; }
+.user-management summary { cursor: pointer; min-height: 44px; padding-block: .65rem; }
 @media (max-width: 480px) { .login-screen { padding: 1.5rem 1rem; } .login-card { padding: 1.5rem; } }
 
 .notice {

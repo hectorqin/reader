@@ -72,7 +72,8 @@
 ```
 
 - 首个账号恒可注册，且自动成为 `admin`
-- 之后仅在 `ALLOW_REGISTRATION=true` 时开放
+- 之后按管理员设置的注册策略开放；未设置时兼容 `ALLOW_REGISTRATION`。
+- 邀请模式需要提交 `inviteCode`，无效、过期、停用或用尽的邀请码返回 `400 INVITE_INVALID`，未填写返回 `400 INVITE_REQUIRED`。普通注册只创建普通用户。
 - 关闭时返回 `400 REGISTRATION_DISABLED`
 
 返回 `201`：
@@ -1008,7 +1009,7 @@ Invoke-RestMethod -Method Post -Uri "$readerApi/books/$readerBookId/refresh" -He
 ### `GET /admin/users`
 
 → `{ "users": [ { "id": "...", "username": "...", "displayName": "...",
-                  "role": "member", "createdAt": 0 } ] }`
+                  "role": "member", "disabled": false, "createdAt": 0 } ] }`
 
 ### `POST /admin/users`
 
@@ -1023,7 +1024,23 @@ Invoke-RestMethod -Method Post -Uri "$readerApi/books/$readerBookId/refresh" -He
 
 `{ "disabled": true }` 或 `{ "role": "admin" }`。
 
-不能停用自己（`400 SELF_LOCKOUT`），否则会把自己锁在外面。
+不能停用自己或移除自己的管理员角色（`400 SELF_LOCKOUT`），并须保留至少一名启用的管理员。停用立即撤销旧会话，重新启用仍需重新登录。
+
+### `POST /admin/users/:id/password`
+
+`{ "password": "至少8位的新密码" }` → `{ "ok": true }`。重置其他用户的密码，同时撤销其访问令牌和续期令牌。本人请使用 `/auth/password`。
+
+### `GET /admin/registration`、`PATCH /admin/registration`
+
+GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "closed" | "open" | "invite" }`，对应关闭、开放、仅邀请码注册。数据库设置优先于环境变量，重启后保留。首个账号仍可直接注册为管理员。
+
+`GET /instance` 额外返回 `registrationMode` 和 `invitationRequired`，不暴露邀请码；`registrationOpen` 为开放或邀请模式时均为 true。
+
+### `POST /admin/invites`、`DELETE /admin/invites/:id`
+
+创建参数 `{ "label": "家人", "maxUses": 1, "days": 7 }`，备注最多 80 字、次数 1–1000、有效期 1–365 天。返回 `201 { "code": "新邀请码", "invite": {...} }`。明文仅创建时返回，数据库只保存摘要。
+
+列表条目含 `id/label/maxUses/usedCount/expiresAt/disabled/createdAt`。DELETE 停用邀请码，不删除已注册用户。邀请码消费与账号创建在同一事务内，失败不扣次数，并发不超额。上述管理接口均仅管理员可用。
 
 ### `GET /providers`
 

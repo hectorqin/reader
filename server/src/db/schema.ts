@@ -15,6 +15,7 @@
  * that an instance running an older build against a newer database still works.
  */
 export const MIGRATIONS_SQL = `
+ALTER TABLE users ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE source_instances ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
 CREATE UNIQUE INDEX IF NOT EXISTS source_single_default ON source_instances(is_default) WHERE is_default = 1;
 ALTER TABLE book_files ADD COLUMN parse_version INTEGER NOT NULL DEFAULT 0;
@@ -35,6 +36,21 @@ CREATE TABLE IF NOT EXISTS users (
   disabled      INTEGER NOT NULL DEFAULT 0,
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS registration_settings (
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  mode TEXT NOT NULL CHECK(mode IN ('closed','open','invite'))
+);
+CREATE TABLE IF NOT EXISTS registration_invites (
+  id TEXT PRIMARY KEY,
+  code_hash TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL,
+  max_uses INTEGER NOT NULL,
+  used_count INTEGER NOT NULL DEFAULT 0,
+  expires_at INTEGER NOT NULL,
+  disabled INTEGER NOT NULL DEFAULT 0,
+  created_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS refresh_tokens (

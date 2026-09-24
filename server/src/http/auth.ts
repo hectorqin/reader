@@ -19,6 +19,7 @@ export function authenticate(ctx: AppContext) {
     const row = ctx.users.byId(payload.sub);
     if (!row) throw unauthorized('account no longer exists', 'TOKEN_INVALID');
     if (row.disabled === 1) throw forbidden('account disabled', 'ACCOUNT_DISABLED');
+    if ((payload.ver ?? 0) !== (row.auth_version ?? 0)) throw unauthorized('session revoked', 'TOKEN_INVALID');
     request.currentUser = toPublicUser(row);
   };
 }

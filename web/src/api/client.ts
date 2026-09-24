@@ -212,11 +212,12 @@ export class ReaderApi {
     return this.get<InstanceInfo>('/api/v1/instance');
   }
 
-  async register(username: string, password: string, displayName?: string): Promise<Session> {
+  async register(username: string, password: string, displayName?: string, inviteCode?: string): Promise<Session> {
     const { session } = await this.call<{ user: User; session: Session }>('/api/v1/auth/register', 'POST', {
       username,
       password,
       ...(displayName ? { displayName } : {}),
+      ...(inviteCode ? { inviteCode } : {}),
     });
     await this.setSession(session);
     return session;
@@ -232,6 +233,15 @@ export class ReaderApi {
     const result = await this.get<{ user: User }>('/api/v1/auth/me');
     return result.user;
   }
+
+  async adminUsers(): Promise<{users:import('./types.ts').ManagedUser[]}> { return this.get('/api/v1/admin/users'); }
+  async adminCreateUser(input:{username:string;password:string;displayName:string;role:'admin'|'member'}): Promise<unknown> { return this.call('/api/v1/admin/users','POST',input); }
+  async adminUpdateUser(id:string,input:{disabled?:boolean;role?:'admin'|'member'}): Promise<unknown> { return this.call('/api/v1/admin/users/'+encodeURIComponent(id),'PATCH',input); }
+  async adminResetPassword(id:string,password:string): Promise<unknown> { return this.call('/api/v1/admin/users/'+encodeURIComponent(id)+'/password','POST',{password}); }
+  async registrationSettings(): Promise<import('./types.ts').RegistrationSettings> { return this.get('/api/v1/admin/registration'); }
+  async setRegistrationMode(mode:import('./types.ts').RegistrationSettings['mode']): Promise<unknown> { return this.call('/api/v1/admin/registration','PATCH',{mode}); }
+  async createInvite(input:{label:string;maxUses:number;days:number}): Promise<{code:string}> { return this.call('/api/v1/admin/invites','POST',input); }
+  async disableInvite(id:string): Promise<unknown> { return this.call('/api/v1/admin/invites/'+encodeURIComponent(id),'DELETE'); }
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     await this.call('/api/v1/auth/password', 'POST', { currentPassword, newPassword });

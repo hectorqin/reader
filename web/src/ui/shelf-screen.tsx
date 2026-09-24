@@ -9,6 +9,7 @@ import { mountUI } from './mount.ts';
 import { DialogView, type Dialog, type DialogAnswer } from './dialog.tsx';
 import { DENSITY_LABELS, SHELF_SORTS, ShelfSettingsPanel } from './shelf-settings.tsx';
 import { OpdsAccess } from './opds-access.tsx';
+import { UserManagement } from './user-management.tsx';
 import { isLocalSort, shelfOrder, shelfServerSort, sortBooks, type ReadingTimes } from './shelf-order.ts';
 import { describeShelfAction } from './shelf-membership.ts';
 import { Icon, IconButton, IconTextButton } from './toolkit.tsx';
@@ -173,6 +174,7 @@ interface ShelfState {
   status: string;
   settingsOpen: boolean;
   opdsOpen: boolean;
+  usersOpen: boolean;
   refreshing: boolean;
   /**
    * True until the first frame that has *anything* to show.
@@ -307,6 +309,7 @@ export class ShelfScreen {
       status: '',
       settingsOpen: false,
       opdsOpen: false,
+      usersOpen: false,
       refreshing: false,
       bootstrapping: true,
       revision: 0,
@@ -992,7 +995,9 @@ export class ShelfScreen {
           onPatch={(patch) => this.applySettings(patch)}
           onClose={() => this.patch({ settingsOpen: false })}
           onOpenExternalReader={() => this.patch({ settingsOpen: false, opdsOpen: true })}
+          {...(this.options.api.currentSession()?.user.role === 'admin' ? {onOpenUsers:()=>this.patch({settingsOpen:false,usersOpen:true})} : {})}
         />
+        {state.usersOpen && <UserManagement api={this.options.api} onClose={()=>this.patch({usersOpen:false,settingsOpen:true})} />}
         {state.opdsOpen && <OpdsAccess api={this.options.api} onSignedOut={this.options.onSignedOut}
           onClose={() => this.patch({ opdsOpen: false, settingsOpen: true })} />}
         {state.dialog ? (

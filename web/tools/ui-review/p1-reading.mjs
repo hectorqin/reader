@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { chromium } from 'playwright';
 import JSZip from 'jszip';
+import { reviewUserManagement } from './user-management.mjs';
 import { openDatabase } from '../../../server/src/db/index.ts';
 import { buildApp } from '../../../server/src/http/app.ts';
 import { Scanner } from '../../../server/src/indexer/scanner.ts';
@@ -41,6 +42,7 @@ try {
  await context.route('**/api/v1/auth/me',route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:{code:'TEMPORARY',message:'retry later'}})}));
  await page.reload();await page.locator('.shelf-screen').waitFor();await context.unroute('**/api/v1/auth/me');
  await page.reload();await page.locator('.shelf-screen').waitFor();
+ await reviewUserManagement(context,page,base,shots);
  await page.goto(base+'/#/book/'+epub.id);await page.locator('book-content h1').waitFor();assert.ok(await button('设置').evaluate(el=>el.getBoundingClientRect().bottom<=innerHeight));await button('工具').click();
  for(const width of [320,390,1280]){await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'tools-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
  await button('笔记').click();assert.equal(await page.locator('.reading-note-editor').count(),0);

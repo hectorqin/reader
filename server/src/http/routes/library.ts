@@ -776,7 +776,8 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
   app.post('/api/v1/admin/users', { preHandler: auth }, async (request, reply) => {
     requireAdmin(request);
     const body = (request.body ?? {}) as { username?: string; password?: string; displayName?: string; role?: 'admin' | 'member' };
-    if (!body.username || !body.password) throw badRequest('username and password are required');
+    if (typeof body.username!=='string' || typeof body.password!=='string' || !body.username || !body.password || body.username.length>100 || body.password.length>1024 || (body.displayName!==undefined && (typeof body.displayName!=='string' || body.displayName.length>100))) throw badRequest('请填写有效的用户名、密码和显示名');
+    if (body.role!==undefined && body.role!=='admin' && body.role!=='member') throw badRequest('无效的用户角色');
     const user = await ctx.users.createAsAdmin({
       username: body.username,
       password: body.password,
@@ -792,7 +793,12 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     requireAdmin(request);
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as { disabled?: boolean; role?: 'admin' | 'member' };
-    if (id === actor.id && body.disabled) throw badRequest('cannot disable your own account', 'SELF_LOCKOUT');
+    const target = ctx.users.byId(id);
+    if (!target) throw notFound('用户不存在');
+    if (body.disabled!==undefined && typeof body.disabled!=='boolean') throw badRequest('无效的账号状态');
+    if (body.role!==undefined && body.role!=='admin' && body.role!=='member') throw badRequest('无效的用户角色');
+    if (id === actor.id && (body.disabled || body.role==='member')) throw badRequest('不能停用自己或移除自己的管理员权限', 'SELF_LOCKOUT');
+    if (target.role==='admin' && !target.disabled && (body.disabled || body.role==='member') && ctx.db.get<{n:number}>("SELECT count(*) AS n FROM users WHERE role='admin' AND disabled=0")!.n<=1) throw badRequest('必须保留至少一名启用的管理员','LAST_ADMIN');
     if (body.disabled !== undefined) ctx.users.setDisabled(id, body.disabled);
     if (body.role !== undefined) ctx.users.setRole(id, body.role);
     return { users: ctx.users.list() };

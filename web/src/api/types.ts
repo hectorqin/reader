@@ -24,6 +24,8 @@ export interface User {
 }
 
 export interface InstanceInfo {
+  registrationMode?: 'closed' | 'open' | 'invite';
+  invitationRequired?: boolean;
   name: string;
   apiVersion: number;
   registrationOpen: boolean;
@@ -336,6 +338,10 @@ export type ShelfAction = 'add' | 'remove' | 'hide' | 'unhide';
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }
+
+export interface ManagedUser extends User { disabled: boolean }
+export interface RegistrationInvite { id:string; label:string; maxUses:number; usedCount:number; expiresAt:number; disabled:boolean; createdAt:number }
+export interface RegistrationSettings { mode:'closed'|'open'|'invite'; invites:RegistrationInvite[] }
 
 export interface BookSearchPage {
   hits: Array<{title: string; excerpt: string; anchor: {sectionId: string; start: number; end: number; quote: string; prefix: string; suffix: string}}>;

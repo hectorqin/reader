@@ -8,6 +8,7 @@ export interface TokenPayload {
   type: 'access';
   iat: number;
   exp: number;
+  ver?: number;
 }
 
 /**
@@ -18,11 +19,11 @@ export interface TokenPayload {
  */
 export function signAccessToken(
   config: AppConfig,
-  user: { id: string; role: 'admin' | 'member' },
+  user: { id: string; role: 'admin' | 'member'; authVersion?: number },
 ): { token: string; expiresAt: number } {
   const issuedAt = Math.floor(Date.now() / 1000);
   const expiresAt = issuedAt + config.accessTokenTtl;
-  const payload: TokenPayload = { sub: user.id, role: user.role, type: 'access', iat: issuedAt, exp: expiresAt };
+  const payload: TokenPayload = { sub: user.id, role: user.role, type: 'access', iat: issuedAt, exp: expiresAt, ver: user.authVersion ?? 0 };
   const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const body = base64url(JSON.stringify(payload));
   const signature = sign(config.jwtSecret, `${header}.${body}`);
