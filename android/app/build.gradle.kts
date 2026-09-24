@@ -24,7 +24,7 @@ android {
          * remembers it.
          *
          * `DEFAULT_SERVER_URL` can be set at build time for a preconfigured
-         * personal build: ./gradlew assembleDebug -PdefaultServerUrl=http://nas:8080
+         * personal build: ./gradlew assembleDebug -PdefaultServerUrl=http://nas:5888
          */
         buildConfigField(
             "String",

@@ -31,7 +31,7 @@ export default defineConfig({
     port: 5174,
     proxy: {
       '/api': {
-        target: process.env.READER_SERVER ?? 'http://127.0.0.1:8080',
+        target: process.env.READER_SERVER ?? 'http://127.0.0.1:5888',
         changeOrigin: true,
       },
     },

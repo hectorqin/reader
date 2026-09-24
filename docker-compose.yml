@@ -2,7 +2,7 @@
 #
 #   docker compose up -d
 #
-# Then open http://<your-host>:8080 and register the first account, which
+# Then open http://<your-host>:5888 and register the first account, which
 # automatically becomes the instance admin.
 services:
   reader:
@@ -23,7 +23,7 @@ services:
         max-size: "10m"
         max-file: "3"
     ports:
-      - "8080:8080"
+      - "5888:5888"
     environment:
       # Polling intervals in seconds. Set to 0 to disable (a manual scan is
       # still available from the admin API).
@@ -64,7 +64,7 @@ services:
       # SQLite database, cover cache, scan journal, upload staging and plugins.
       - ./data:/data
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5888/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 3

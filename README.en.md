@@ -30,7 +30,7 @@ A self-hosted library and reader for browsers and Android, with EPUB typography,
 
 ## Get started
 
-Prepare Docker, Docker Compose, and a directory of books. After starting the service, open `http://<your-host>:8080`. The first registered account becomes the administrator.
+Prepare Docker, Docker Compose, and a directory of books. After starting the service, open `http://<your-host>:5888`. The first registered account becomes the administrator.
 
 **[Open the getting started guide →](docs/getting-started.en.md)**
 

@@ -116,7 +116,7 @@ export function loadConfig(): AppConfig {
     booksDir,
     dataDir,
     host: process.env.HOST ?? '0.0.0.0',
-    port: envInt('PORT', 8080),
+    port: envInt('PORT', 5888),
     jwtSecret: loadOrCreateSecret(dataDir),
     accessTokenTtl: envInt('ACCESS_TOKEN_TTL', 60 * 60 * 24),
     refreshTokenTtl: envInt('REFRESH_TOKEN_TTL', 60 * 60 * 24 * 365),

@@ -30,7 +30,7 @@
 
 ## 开始使用
 
-准备 Docker、Docker Compose 和一个书籍目录，即可部署。服务启动后访问 `http://<你的主机>:8080`，首个注册账号成为管理员。
+准备 Docker、Docker Compose 和一个书籍目录，即可部署。服务启动后访问 `http://<你的主机>:5888`，首个注册账号成为管理员。
 
 **[打开入门指南 →](docs/getting-started.zh-CN.md)**
 

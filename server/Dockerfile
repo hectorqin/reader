@@ -1,7 +1,7 @@
 # --- web client build stage ---------------------------------------------------
 # The H5 client is built here and baked into the server image, because serving it
 # from the same container is what keeps the deployment to a single command: the
-# reader opens http://<nas-ip>:8080 and gets the app, with no second container and
+# reader opens http://<nas-ip>:5888 and gets the app, with no second container and
 # no CORS configuration to think about.
 #
 # `web` is optional. When the build context has no `web` directory the copy below
@@ -47,7 +47,7 @@ WORKDIR /app
 ENV NODE_ENV=production \
     BOOKS_DIR=/books \
     DATA_DIR=/data \
-    PORT=8080 \
+    PORT=5888 \
     WEB_DIR=/app/web
 
 # Run as an unprivileged user. The library mount is read-only, so this user only
@@ -73,13 +73,13 @@ COPY --chown=root:root server/docker-entrypoint.sh /usr/local/bin/docker-entrypo
 RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh \
  && chmod 0755 /usr/local/bin/docker-entrypoint.sh
 
-EXPOSE 8080
+EXPOSE 5888
 VOLUME ["/data"]
 
 # The healthcheck hits the unauthenticated endpoint so an orchestrator can tell
 # "server up but library unreadable" from "server down".
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||5888)+'/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["node", "dist/main.js"]

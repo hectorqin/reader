@@ -952,7 +952,7 @@ DELETE /api/v1/plugins/:id       保留来源实例、已获取书和数据
 ```powershell
 # 在仓库根目录执行；改为服务端实际使用的 DATA_DIR 和管理员令牌。
 $readerDataDir = 'D:\reader-data'
-$readerApi = 'http://localhost:8080/api/v1'
+$readerApi = 'http://localhost:5888/api/v1'
 $readerHeaders = @{ Authorization = 'Bearer <admin-token>' }
 New-Item -ItemType Directory -Force (Join-Path $readerDataDir 'plugins')
 Copy-Item -Recurse examples/plugins/demo-chapters (Join-Path $readerDataDir 'plugins/demo-chapters')
