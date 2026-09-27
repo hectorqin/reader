@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import {expect,it,vi} from 'vitest';
+import {beforeEach,afterEach,expect,it,vi} from 'vitest';
 import {MediaScreen} from '../src/media/screen.tsx';
 
 for(const libraryId of ['','music-lib'])it(`bounds repeated shrink recovery for ${libraryId||'all libraries'}`,async()=>{
@@ -20,3 +20,10 @@ it('does not discard results or pretend an empty library when the recovery reque
   await expect(Reflect.apply(Reflect.get(MediaScreen.prototype,'load'),context,[])).rejects.toThrow('offline');
   expect(context.items).toEqual([{id:'old'}]);expect(context.total).toBe(65);expect(context.offset).toBe(0);
 });
+
+// Older Android browsers do not expose AbortSignal.any.
+beforeEach(() => {
+  const NativeSignal = globalThis.AbortSignal;
+  vi.stubGlobal('AbortSignal', new Proxy(NativeSignal, { get(target, key) { return key === 'any' ? undefined : Reflect.get(target, key); } }));
+});
+afterEach(() => vi.unstubAllGlobals());

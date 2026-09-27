@@ -1,3 +1,4 @@
+import {combineAbortSignals} from '../core/abort.ts';
 import {MediaSelect} from './select.tsx';
 import {ApiError} from '../api/errors.ts';
 import {MissingEdition} from './missing-edition.tsx';
@@ -335,8 +336,8 @@ export class MediaScreen {
     }
     const request=++this.catalogRequest;
     this.catalogAbort?.abort();this.catalogAbort=new AbortController();
-    const signal=AbortSignal.any([this.abort.signal,this.catalogAbort.signal]);
     if(!this.libraries.length){this.items=[];this.total=0;this.offset=0;this.catalogLoading=false;this.catalogFailed=false;return;}
+    const {signal,dispose}=combineAbortSignals([this.abort.signal,this.catalogAbort.signal]);
     const {libraryId,kind,query,trackSort}=this,filters=kind==='track'?this.trackFilters:undefined;
     let offset=this.offset;const current=()=>!this.disposed&&request===this.catalogRequest;
     const read=()=>libraryId?this.api.items(libraryId,kind,query,offset,signal,trackSort,filters):this.api.browse(this.channel,kind,offset,signal,trackSort,filters);
@@ -349,7 +350,7 @@ export class MediaScreen {
       }
       this.items=result.items;this.total=result.total;
     }catch(error){if(current()){this.catalogFailed=true;throw error;}}
-    finally{if(current()){this.catalogLoading=false;this.draw();}}
+    finally{dispose();if(current()){this.catalogLoading=false;this.draw();}}
   }
   private async personalPage<T>(view:'favorites'|'history',offset:number,signal=this.abort.signal){
     const scope=favoriteScope(this.location?.params?.scope??this.favoriteScope),channel=view==='favorites'?(scope==='all'?'':scope):this.channel;
@@ -366,7 +367,7 @@ export class MediaScreen {
     if(this.location?.page===view&&Number(this.location.params?.offset??0)!==offset){this.syncLocation(view,{...this.location.params,offset:String(offset)},'',true);return;}
     const sequence=++this.personalSequence,current=()=>!this.disposed&&sequence===this.personalSequence;
     this.personalAbort?.abort();this.personalAbort=new AbortController();
-    const signal=AbortSignal.any([this.abort.signal,this.personalAbort.signal]);
+    const {signal,dispose}=combineAbortSignals([this.abort.signal,this.personalAbort.signal]);
     this.personalRequest={view,offset};
     if(this.personal!==view){this.favorites=[];this.activity=[];this.favoriteTotal=0;this.historyTotal=0;}
     this.personal=view;this.clearQueueIds=null;this.personalLoading=true;this.personalFailed=false;this.draw();
@@ -375,7 +376,7 @@ export class MediaScreen {
       else if(view==='history'){const result=await this.personalPage<Activity>(view,offset,signal);if(!current())return;this.activity=result.items;this.historyOffset=result.offset;this.historyTotal=result.total;}
       else{const allowed=new Set(this.libraries.map(l=>l.id)),result=await this.api.request<{items:Activity[]}>(view,'GET',undefined,signal);if(!current())return;this.activity=result.items.filter(i=>allowed.has(i.libraryId));}
     }catch(error){if(current()){this.personalFailed=true;throw error;}}
-    finally{if(current()){this.personalLoading=false;this.draw();}}
+    finally{dispose();if(current()){this.personalLoading=false;this.draw();}}
   }
   private leavePersonal(){if(this.routing){personalReturns.delete(this.api);this.backPage();return;}this.personalSequence++;this.personalAbort?.abort();this.personalLoading=false;this.personalFailed=false;this.personal=null;this.error='';this.errorCause=undefined;this.draw();}
   private retryScreen(){

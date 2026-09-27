@@ -1,3 +1,4 @@
+import { combineAbortSignals } from '../core/abort.ts';
 import type { ChapterQuality, CredentialStatus, OpdsCredential } from './sources.ts';
 import type { ReadingOverrides } from './types.ts';
 import { eventStream } from './event-stream.ts';
@@ -314,7 +315,7 @@ export class ReaderApi {
   }
   private async *catalogStream(path: string, query: unknown, options: RequestOptions): AsyncGenerator<SourcePage> {
     const generation = this.sessionGeneration, controller = new AbortController();
-    const signal = options.signal ? AbortSignal.any([options.signal, controller.signal]) : controller.signal;
+    const { signal, dispose } = combineAbortSignals(options.signal ? [options.signal, controller.signal] : [controller.signal]);
     this.streams.add(controller);
     try {
       const response = await this.request(path, 'POST', query, { ...options, signal, stream: true });
@@ -339,7 +340,7 @@ export class ReaderApi {
       // account-change contract on that path as well as between events.
       this.assertSession(generation);
       throw error;
-    } finally { controller.abort(); this.streams.delete(controller); }
+    } finally { controller.abort(); dispose(); this.streams.delete(controller); }
   }
   async sourceDetail(id: string, ref: string): Promise<SourceEntry> {
     return this.get(`/api/v1/sources/${encodeURIComponent(id)}/entries?ref=${encodeURIComponent(ref)}`);

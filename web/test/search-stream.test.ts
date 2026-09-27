@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { eventStream } from '../src/api/event-stream.ts';
 import { ReaderApi } from '../src/api/client.ts';
 import { FetchTransport } from '../src/core/fetch-transport.ts';
@@ -84,4 +84,10 @@ it('rejects oversized unfinished events and cancels the reader', async () => {
   let cancelled = false;
   const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(encoder.encode('data: ' + 'x'.repeat(2 * 1024 * 1024))); }, cancel() { cancelled = true; } });
   await expect(eventStream(stream).next()).rejects.toMatchObject({ code: 'INVALID_STREAM' }); expect(cancelled).toBe(true);
+});
+
+// Older Android browsers do not expose AbortSignal.any.
+beforeEach(() => {
+  const NativeSignal = globalThis.AbortSignal;
+  vi.stubGlobal('AbortSignal', new Proxy(NativeSignal, { get(target, key) { return key === 'any' ? undefined : Reflect.get(target, key); } }));
 });
