@@ -51,6 +51,7 @@ import java.util.Locale
 class SpeechBridge(
     private val context: Context,
     private val webView: WebView,
+    private val beforeSpeak: () -> Unit = {},
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var tts: TextToSpeech? = null
@@ -88,20 +89,20 @@ class SpeechBridge(
         override fun onDone(utteranceId: String?) {
             if (utteranceId == null || utteranceId != currentUtterance) return
             currentUtterance = ""
-            emit("done", null)
+            emit("done", null, utteranceId)
         }
 
         @Deprecated("Required by the platform interface; onError(id, code) is the one that carries a reason")
         override fun onError(utteranceId: String?) {
             if (utteranceId != null && utteranceId != currentUtterance) return
             currentUtterance = ""
-            emit("error", "朗读失败")
+            emit("error", "朗读失败", utteranceId.orEmpty())
         }
 
         override fun onError(utteranceId: String?, errorCode: Int) {
             if (utteranceId != null && utteranceId != currentUtterance) return
             currentUtterance = ""
-            emit("error", errorMessage(errorCode))
+            emit("error", errorMessage(errorCode), utteranceId.orEmpty())
         }
     }
 
@@ -174,6 +175,7 @@ class SpeechBridge(
         mainHandler.post {
             val engine = tts ?: return@post
             if (!ready) return@post
+            beforeSpeak()
             // A very long utterance makes several vendor stacks go silent, exactly
             // as it does in a WebView. The client splits far below this, but a
             // defensive cut costs nothing and turns a hang into a short sentence.
@@ -190,8 +192,9 @@ class SpeechBridge(
             // are not needed.
             val result = engine.speak(bounded, TextToSpeech.QUEUE_FLUSH, params, currentUtterance)
             if (result == TextToSpeech.ERROR) {
+                val failedUtterance = currentUtterance
                 currentUtterance = ""
-                emit("error", "朗读启动失败")
+                emit("error", "朗读启动失败", failedUtterance)
             }
         }
     }
@@ -207,6 +210,15 @@ class SpeechBridge(
         mainHandler.post {
             currentUtterance = ""
             tts?.stop()
+        }
+    }
+
+    /** Media took audio ownership; also suspend the Web sentence queue. */
+    fun interruptForMedia() {
+        mainHandler.post {
+            currentUtterance = ""
+            tts?.stop()
+            emit("interrupted", null, "")
         }
     }
 
@@ -274,7 +286,7 @@ class SpeechBridge(
         engine.setPitch(pitch)
         if (voiceId.isNotEmpty()) {
             val wanted = engine.voices?.firstOrNull { it.name == voiceId }
-            if (wanted != null && !wanted.isNotInstalled) {
+            if (wanted != null && wanted.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) != true) {
                 engine.voice = wanted
                 return
             }
@@ -310,7 +322,7 @@ class SpeechBridge(
         for (voice in voices) {
             // A voice that is not installed cannot be used, and offering it would
             // make the reader choose a voice that says nothing.
-            if (voice.isNotInstalled) continue
+            if (voice.features?.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) == true) continue
             val entry = JSONObject()
             entry.put("id", voice.name)
             entry.put("name", friendlyName(voice))
@@ -335,7 +347,7 @@ class SpeechBridge(
         return "$tag · $short"
     }
 
-    private fun emit(type: String, message: String?) {
+    private fun emit(type: String, message: String?, utteranceId: String = currentUtterance) {
         val callback = eventCallback ?: return
         val payload = JSONObject()
         payload.put("type", type)
@@ -343,7 +355,7 @@ class SpeechBridge(
         // Only for events about a specific utterance. `ready` is not about one, and
         // an empty id would be an id that matches nothing on the client.
         if (type == "start" || type == "done" || type == "error") {
-            payload.put("id", currentUtterance)
+            payload.put("id", utteranceId)
         }
         evaluate(callback, payload.toString())
     }

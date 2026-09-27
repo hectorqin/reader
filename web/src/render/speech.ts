@@ -328,6 +328,7 @@ class NativeTtsEngine implements SpeechEngine {
   private voices: TtsVoice[] = [];
   private generation = 0;
   private speaking = false;
+  private awaitingReady = false;
   private watchdog: ReturnType<typeof setTimeout> | null = null;
   /** Id of the utterance in flight, matched against the shell's events. */
   private utteranceId = '';
@@ -504,6 +505,24 @@ class NativeTtsEngine implements SpeechEngine {
     this.cursor = nextIndex;
     this.onChunk(chunk, nextIndex);
     this.emit();
+    this.speakCurrent(chunk);
+  }
+
+  private speakCurrent(chunk: SpokenChunk): void {
+    if (!this.bridge.available()) {
+      this.awaitingReady = true;
+      this.clearWatchdog();
+      const generation = this.generation;
+      this.watchdog = setTimeout(() => {
+        this.watchdog = null;
+        if (generation !== this.generation || !this.awaitingReady || this.state !== 'playing') return;
+        this.awaitingReady = false;
+        this.fail('系统语音引擎初始化超时，请稍后重试');
+      }, 15000);
+      this.bridge.init();
+      return;
+    }
+    this.awaitingReady = false;
 
     this.bridge.setRate(this.rate);
     this.bridge.setPitch(this.pitch);
@@ -512,7 +531,7 @@ class NativeTtsEngine implements SpeechEngine {
     this.speaking = true;
     // The id is minted here and echoed by the shell, which is how a `done` that
     // arrives after the reader pressed "next" is recognised as stale.
-    this.utteranceId = `u${generation}-${nextIndex}`;
+    this.utteranceId = `u${generation}-${this.cursor}`;
     try {
       this.bridge.speak(chunk.text, this.utteranceId);
     } catch (err) {
@@ -536,11 +555,29 @@ class NativeTtsEngine implements SpeechEngine {
 
   private onNativeEvent(event: { type: string; id?: string; message?: string }): void {
     if (!this.active) return;
+    if (event.type === 'ready') {
+      if (this.awaitingReady && this.state === 'playing') {
+        this.awaitingReady = false;
+        this.clearWatchdog();
+        const chunk = this.queue[this.cursor];
+        if (chunk) this.speakCurrent(chunk);
+      }
+      return;
+    }
     // A late event for something the reader has moved past is not an error and
     // must not touch the cursor: it would skip a sentence, which is exactly the
     // bug the id exists to prevent.
     if (event.id !== undefined && event.id !== '' && event.id !== this.utteranceId) return;
     switch (event.type) {
+      case 'interrupted':
+        this.generation += 1;
+        this.awaitingReady = false;
+        this.speaking = false;
+        this.utteranceId = '';
+        this.clearWatchdog();
+        this.state = 'paused';
+        this.emit();
+        break;
       case 'done':
         if (!this.speaking) return;
         this.speaking = false;
@@ -594,6 +631,9 @@ class NativeTtsEngine implements SpeechEngine {
   }
 
   private fail(message: string): void {
+    this.awaitingReady = false;
+    this.speaking = false;
+    this.clearWatchdog();
     this.error = message;
     this.state = 'idle';
     this.bridge.stop();

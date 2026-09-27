@@ -21,6 +21,7 @@
     "jszip": "^3.10.1",
     "lucide-preact": "^1.47.0",
     "notyf": "^3.10.0",
+    "plyr": "3.8.4",
     "sweetalert2": "^11.26.25"
   },
   "devDependencies": {

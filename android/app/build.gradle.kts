@@ -83,7 +83,10 @@ android {
              * source, and the APK built fine with no client inside it. That is a
              * worse failure than a red build: nothing points at it.
              */
-            assets.srcDirs("src/main/assets", "src/main/assets/web-assets")
+            // Replace the default root, rather than adding a nested root beside it.
+            // Otherwise the same bundle is also packaged under assets/web-assets/.
+            // WebHost still serves the flattened assets/index.html entry point.
+            assets.setSrcDirs(listOf("src/main/assets/web-assets"))
         }
     }
 
@@ -100,4 +103,9 @@ dependencies {
     // instead of file://, which is what makes fetch() to the reader server work
     // without disabling web security. See WebHost.kt.
     implementation("androidx.webkit:webkit:1.12.1")
+    implementation("androidx.media3:media3-exoplayer:1.5.1")
+    implementation("androidx.media3:media3-session:1.5.1")
+    implementation("androidx.media3:media3-ui:1.5.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

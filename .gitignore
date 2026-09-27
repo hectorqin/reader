@@ -5,6 +5,7 @@ node_modules/
 # build output
 server/dist/
 web/dist/
+android/.kotlin/
 
 # runtime data: sqlite db, covers, token secret
 data/
@@ -30,3 +31,8 @@ docs/ui-review/*.png
 docs/ui-review/mobile/*.png
 docs/ui-review/p1/*.png
 docs/ui-review/p2/*.png
+
+# Generated media validation artifacts
+/artifacts/
+/docs/media-*-result.json
+/docs/media-*-benchmark.jsonl

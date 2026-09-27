@@ -8,7 +8,7 @@ import { createStores } from '../store/idb.ts';
  * Also the base class for the Android platform, which reuses everything here
  * and overrides only the parts a native shell can do better.
  */
-export async function createWebPlatform(baseUrl: string): Promise<Platform> {
+export async function createWebPlatform(baseUrl: string | (() => string)): Promise<Platform> {
   const stores = await createStores();
   const listeners = new Set<(state: Connectivity) => void>();
   let last: Connectivity = typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'online';
@@ -28,7 +28,7 @@ export async function createWebPlatform(baseUrl: string): Promise<Platform> {
   return {
     name: 'web',
     deviceLabel: deviceLabelFromNavigator(),
-    transport: new FetchTransport(() => baseUrl),
+    transport: new FetchTransport(typeof baseUrl === 'function' ? baseUrl : () => baseUrl),
     kv: stores.kv,
     blobs: stores.blobs,
     async connectivity(): Promise<Connectivity> {

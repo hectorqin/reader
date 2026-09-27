@@ -31,6 +31,7 @@ class FakeWindow implements RouterWindow {
   readonly location: { readonly hash: string };
 
   readonly history: {
+    state?:unknown;
     pushState(state: unknown, title: string, url?: string): void;
     replaceState(state: unknown, title: string, url?: string): void;
   };
@@ -44,6 +45,7 @@ class FakeWindow implements RouterWindow {
     };
     this.history = {
       pushState(_state: unknown, _title: string, url?: string): void {
+        self.history.state=_state;
         if (url === undefined) return;
         // Mirrors the platform: `pushState` may be given a full URL, and the
         // fragment is what the app reads back.
@@ -52,6 +54,7 @@ class FakeWindow implements RouterWindow {
         self.pushed.push(self.hash);
       },
       replaceState(_state: unknown, _title: string, url?: string): void {
+        self.history.state=_state;
         if (url === undefined) return;
         const index = url.indexOf('#');
         self.hash = index === -1 ? '' : url.slice(index);
@@ -507,4 +510,31 @@ it('backs out of file management through its folder hierarchy and then browsing'
   expect(parentOf(parseRoute('#/library/files/a/b'))).toMatchObject({ name: 'library', view: 'files', path: 'a', page: 1 });
   expect(parentOf(parseRoute('#/library/files/a'))).toMatchObject({ name: 'library', view: 'files', path: '', page: 1 });
   expect(parentOf(parseRoute('#/library/files'))).toMatchObject({ name: 'library', view: 'browse', path: '', page: 1 });
+});
+
+it('restores media origins after refresh without adding them to URLs',()=>{
+  const win=new FakeWindow();win.hash='#/media/music/albums?offset=60';
+  const first=makeRouter(win);
+  first.router.navigate({name:'media',channel:'music',page:'album',itemId:'a',returnTo:win.hash});
+  expect(win.hash).toBe('#/media/music/album/a');first.router.dispose();
+  const second=makeRouter(win);expect(second.router.current()).toMatchObject({returnTo:'#/media/music/albums?offset=60'});
+  second.seen.last.back();expect(win.hash).toBe('#/media/music/albums?offset=60');second.router.dispose();
+});
+it('canonicalizes legacy return URLs into history metadata on first load',()=>{
+  const win=new FakeWindow();win.hash='#/media/music/album/a?return='+encodeURIComponent('#/media/music/albums?offset=60');
+  const {router,seen}=makeRouter(win);expect(win.hash).toBe('#/media/music/album/a');seen.last.back();expect(win.hash).toBe('#/media/music/albums?offset=60');router.dispose();
+});
+
+it('restores filtered global favorites after refreshing a cross-channel detail',()=>{
+  const win=new FakeWindow();win.hash='#/media/favorites?offset=60&scope=music';
+  const first=makeRouter(win);
+  first.router.navigate({name:'media',channel:'music',page:'album',itemId:'album',returnTo:win.hash});
+  expect(win.hash).toBe('#/media/music/album/album');first.router.dispose();
+  const second=makeRouter(win);expect(second.router.current()).toMatchObject({returnTo:'#/media/favorites?offset=60&scope=music'});
+  second.seen.last.back();expect(win.hash).toBe('#/media/favorites?offset=60&scope=music');second.router.dispose();
+});
+
+it('replaces a legacy channel favorites location with its global address',()=>{
+  const win=new FakeWindow();win.hash='#/media/music/favorites';
+  const {router}=makeRouter(win);expect(win.hash).toBe('#/media/favorites');router.dispose();
 });

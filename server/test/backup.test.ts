@@ -4,6 +4,8 @@ import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Db } from '../src/db/index.ts';
+import {DatabaseSync} from 'node:sqlite';
+import {migrateMediaDatabase,activateMediaDatabase} from '../src/media/migrate-database.ts';
 import { createBackup, restoreBackup, verifyBackup } from '../src/maintenance/backup.ts';
 
 async function fixture(t: import('node:test').TestContext) {
@@ -48,6 +50,26 @@ test('refuses existing destinations and overlapping paths without touching origi
   await createBackup(f.data, f.backup);
   await assert.rejects(restoreBackup(f.backup, f.data), /EEXIST/);
   assert.equal(await readFile(join(f.data, 'token.secret'), 'utf8'), 'test-secret');
+});
+
+test('offline backup restores the isolated media pair at a new path without replaying legacy rows',async t=>{
+  const f=await fixture(t),source=join(f.data,'reader.db'),mediaPath=join(f.data,'media.db');
+  const db=new Db(source);db.run('CREATE TABLE media_sample(id TEXT PRIMARY KEY,user_id TEXT REFERENCES users(id),position REAL)');
+  db.run("INSERT INTO media_sample VALUES('part','u',19.25)");db.close();
+  activateMediaDatabase(source,mediaPath);
+  const media=new DatabaseSync(mediaPath);media.exec('UPDATE media_sample SET position=42');media.close();
+  const manifest=await createBackup(f.data,f.backup);
+  assert.ok(manifest.entries.some(e=>e.path==='media.db'));
+  assert.ok(!manifest.entries.some(e=>e.path==='media.db-shm'));
+  await restoreBackup(f.backup,f.restored);
+  assert.equal(migrateMediaDatabase(join(f.restored,'reader.db'),join(f.restored,'media.db')).state,'existing');
+  const restored=new DatabaseSync(join(f.restored,'media.db'));
+  try{assert.equal(restored.prepare('SELECT position FROM media_sample').get()!.position,42);}finally{restored.close();}
+  await createBackup(f.restored,join(f.root,'second'));
+  const bad=new DatabaseSync(mediaPath);bad.exec("UPDATE media_storage_migration SET source_id='wrong'");bad.close();
+  await assert.rejects(createBackup(f.data,join(f.root,'mismatched')),/身份不匹配/);
+  await rm(mediaPath);
+  await assert.rejects(createBackup(f.data,join(f.root,'missing-media')),/影音数据库缺失/);
 });
 
 test('tampered, incomplete and missing files are rejected before creating restore destination', async t => {

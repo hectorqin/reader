@@ -1,4 +1,7 @@
 import './styles/reader.css';
+import './media/media.css';
+import './media/presentation.css';
+import './media/v2.css';
 import { App } from './app.ts';
 import { registerPwa } from './core/pwa.ts';
 

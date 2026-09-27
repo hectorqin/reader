@@ -11,7 +11,7 @@ import { forbidden, unauthorized } from '../lib/errors.ts';
  * re-read from the database on every request instead of trusting the claims
  * embedded in the token.
  */
-export function authenticate(ctx: AppContext) {
+export function authenticate(ctx: Pick<AppContext,'config'> & {users:Pick<AppContext['users'],'byId'>}) {
   return async function preHandler(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
     const token = bearerToken(request);
     if (!token) throw unauthorized('missing bearer token', 'NO_TOKEN');

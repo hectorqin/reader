@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut android:shortcutId="media_video" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_video">
+        <intent android:action="cool.cnb.reader.OPEN_VIDEO" android:targetPackage="cool.cnb.reader" android:targetClass="cool.cnb.reader.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="media_music" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_music">
+        <intent android:action="cool.cnb.reader.OPEN_MUSIC" android:targetPackage="cool.cnb.reader" android:targetClass="cool.cnb.reader.MainActivity" />
+    </shortcut>
+    <shortcut android:shortcutId="media_audiobook" android:enabled="true" android:icon="@mipmap/ic_launcher" android:shortcutShortLabel="@string/shortcut_audiobook">
+        <intent android:action="cool.cnb.reader.OPEN_AUDIOBOOK" android:targetPackage="cool.cnb.reader" android:targetClass="cool.cnb.reader.MainActivity" />
+    </shortcut>
+</shortcuts>

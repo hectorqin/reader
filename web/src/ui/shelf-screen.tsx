@@ -17,6 +17,7 @@ import { type ComponentChildren, type JSX, useEffect, useState } from './vendor/
 
 export interface ShelfScreenOptions {
   onOpenSources?(): void;
+  onOpenMedia?(): void;
   api: ReaderApi;
   offline: OfflineStore;
   platform: Platform;
@@ -846,6 +847,7 @@ export class ShelfScreen {
             </p>
           </div>
           <div className="shelf-head-actions">
+            {this.options.onOpenMedia && <IconButton label="影音" icon="volume" onClick={this.options.onOpenMedia} />}
             {this.options.api.currentSession()?.user.role === 'admin' && <IconButton label="系统设置" icon="settings" onClick={()=>this.patch({settingsOpen:false,systemSettingsOpen:true})} />}
             {empty && !hasQuery && <IconButton label="刷新" icon="refresh" disabled={state.loading} onClick={() => void this.manualRefresh()} />}
             <IconButton

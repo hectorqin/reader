@@ -59,6 +59,11 @@ export class Db {
     this.raw.prepare(sql).run(...params);
   }
 
+  /** Explicit opt-in for bounded batch executors; ordinary reading queries are unchanged. */
+  prepare(sql: string) {
+    return this.raw.prepare(sql);
+  }
+
   /** Runs `fn` inside a transaction, rolling back on any throw. */
   transaction<T>(fn: () => T): T {
     this.raw.exec('BEGIN');

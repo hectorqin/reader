@@ -14,8 +14,11 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.webkit.WebViewAssetLoader
 import cool.cnb.reader.BuildConfig
+import cool.cnb.reader.media.MediaLaunchRoute
 import cool.cnb.reader.bridge.ReaderBridge
 import cool.cnb.reader.bridge.SpeechBridge
+import cool.cnb.reader.media.MediaBridge
+import cool.cnb.reader.media.MediaAudioCoordinator
 
 /**
  * Configures the WebView and serves the bundled client to it.
@@ -68,15 +71,23 @@ class WebHost(
         get() = currentBridge?.speech()
 
     private var currentBridge: ReaderBridge? = null
+    private var mediaBridge: MediaBridge? = null
 
-    fun install(bridge: ReaderBridge) {
+    fun install(bridge: ReaderBridge, launchAction: String? = null) {
         configure()
         currentBridge = bridge
         webView.addJavascriptInterface(bridge, ReaderBridge.NAME)
         webView.addJavascriptInterface(bridge.speech(), ReaderBridge.SPEECH_NAME)
+        val media = MediaBridge(context, webView) { bridge.speech().interruptForMedia() }
+        if (media.install()) { mediaBridge = media; MediaAudioCoordinator.stopSpeech = { bridge.speech().interruptForMedia() } }
         webView.webViewClient = AssetClient()
         webView.webChromeClient = ChromeClient()
-        webView.loadUrl(START_URL)
+        webView.loadUrl(START_URL + (MediaLaunchRoute.fragmentForAction(launchAction) ?: ""))
+    }
+
+    fun openMediaShortcut(action: String?) {
+        val fragment = MediaLaunchRoute.fragmentForAction(action) ?: return
+        webView.loadUrl(START_URL + fragment)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -126,6 +137,8 @@ class WebHost(
     }
 
     fun destroy() {
+        mediaBridge?.close(); mediaBridge = null
+        MediaAudioCoordinator.stopSpeech = null
         webView.stopLoading()
         webView.clearHistory()
         webView.removeJavascriptInterface(ReaderBridge.NAME)

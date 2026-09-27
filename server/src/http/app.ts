@@ -10,9 +10,12 @@ import { registerTtsRoutes } from './routes/tts.ts';
 import { registerWebRoutes } from './routes/web.ts';
 import { registerSourceRoutes } from './routes/sources.ts';
 import { registerOpdsRoutes } from './routes/opds.ts';
+import { registerMediaRoutes } from './routes/media.ts';
+import {registerMediaProxy} from './routes/media-proxy.ts';
+import type {MediaService} from '../media/start-runtime.ts';
 import { isOriginAllowed, resolveCorsOrigin } from './cors.ts';
 
-export function buildApp(ctx: AppContext): FastifyInstance {
+export function buildApp(ctx: AppContext,mediaRuntime?:MediaService): FastifyInstance {
   const app = Fastify({
     logger: { level: ctx.config.logLevel },
     // Book bodies are streamed straight from disk, so a JSON limit this small is
@@ -67,6 +70,8 @@ export function buildApp(ctx: AppContext): FastifyInstance {
   registerReadingOverrideRoutes(app, ctx);
   registerSourceRoutes(app, ctx);
   registerOpdsRoutes(app, ctx);
+  if(mediaRuntime)registerMediaProxy(app,mediaRuntime);
+  else registerMediaRoutes(app, ctx);
   // Registered last: the SPA fallback must not shadow an API route.
   registerWebRoutes(app, ctx);
 

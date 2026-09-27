@@ -48,7 +48,8 @@ ENV NODE_ENV=production \
     BOOKS_DIR=/books \
     DATA_DIR=/data \
     PORT=5888 \
-    WEB_DIR=/app/web
+    WEB_DIR=/app/web \
+    MEDIA_FFPROBE_PATH=/usr/bin/ffprobe
 
 # Run as an unprivileged user. The library mount is read-only, so this user only
 # ever needs write access to /data.
@@ -56,7 +57,9 @@ ENV NODE_ENV=production \
 # `su-exec` is a ~10KB static helper that drops privileges from an entrypoint;
 # Alpine's busybox has no equivalent (`setpriv` lives in util-linux, which the
 # base image does not carry), and `su` there needs a password hash to be set up.
-RUN apk add --no-cache su-exec chromium \
+# Alpine supplies ffprobe in ffmpeg; media scanning only invokes ffprobe.
+RUN apk add --no-cache su-exec chromium ffmpeg \
+ && ffprobe -version >/dev/null \
  && addgroup -S reader && adduser -S reader -G reader \
  && mkdir -p /data /books /app/public && chown -R reader:reader /data /books /app/public
 

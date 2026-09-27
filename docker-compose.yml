@@ -30,6 +30,11 @@ services:
       SCAN_INTERVAL: "1800"
       WATCH_INTERVAL: "60"
       LOG_LEVEL: "info"
+      # Optional online media metadata providers. Configure on the host; do not
+      # commit credentials. Local NFO/tags work without either provider.
+      # MEDIA_TMDB_TOKEN: "${MEDIA_TMDB_TOKEN}"
+      # MEDIA_TMDB_API_KEY: "${MEDIA_TMDB_API_KEY}"
+      # MEDIA_MUSICBRAINZ_USER_AGENT: "Reader/1.0 (your-contact@example.com)"
       # Set this to the address you actually reach the server on, so download
       # links work behind a reverse proxy.
       # PUBLIC_URL: "https://reader.example.com"
@@ -60,6 +65,12 @@ services:
       # Use :ro for a browse-only deployment. Use :rw if an administrator
       # should upload, rename, move or delete files from the web file manager.
       - /path/to/your/books:/books:ro
+      # Optional media roots, independent of the reading library. After mounting,
+      # create media libraries in the UI using /media/video, /media/music, etc.
+      # The application only reads media files; keep these mounts read-only.
+      # - /path/to/your/videos:/media/video:ro
+      # - /path/to/your/music:/media/music:ro
+      # - /path/to/your/audiobooks:/media/audiobook:ro
       # --- server-owned writable data ---
       # SQLite database, cover cache, scan journal, upload staging and plugins.
       - ./data:/data

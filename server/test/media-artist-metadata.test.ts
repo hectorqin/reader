@@ -1,0 +1,55 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {Db} from '../src/db/index.ts';
+import {MediaLibraries} from '../src/media/libraries.ts';
+import {MediaScanner} from '../src/media/scanner.ts';
+import {MediaArtwork} from '../src/media/artwork.ts';
+import {LocalMediaStorage} from '../src/media/storage/local.ts';
+import {readArtistProfile} from '../src/media/artist-metadata.ts';
+
+test('named artist sidecars supply biography and portrait through scan, rescan, artwork authorization and manual overrides',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'media-artist-sidecar-')),folder=join(root,'歌手','专辑');await mkdir(folder,{recursive:true});
+  const db=new Db(':memory:'),libraries=new MediaLibraries(db),actor={id:'admin',role:'admin'} as const;
+  db.run("INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES('admin','admin','unused','admin',0,0)");
+  const scanner=new MediaScanner(db,libraries,async()=>({status:'ready',info:{duration:30,format:'mp3',streams:[],tags:{artist:'歌手',album:'专辑'},chapters:[]}}));
+  t.after(async()=>{await scanner.close();db.close();await rm(root,{recursive:true,force:true});});
+  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jv1sAAAAASUVORK5CYII=','base64');
+  await writeFile(join(folder,'song.mp3'),'fixture');
+  await writeFile(join(root,'歌手','artist.nfo'),'<artist><name>歌手</name><biography>艺人简介</biography></artist>');
+  await writeFile(join(root,'歌手','artist.png'),png);
+  const library=await libraries.create(actor,{name:'音乐',kind:'music',root,access:'all'});
+  const scan=async()=>{const job=scanner.start(actor,library.id);await scanner.wait(library.id);assert.equal(scanner.job(actor,job.id).state,'complete');};
+  await scan();const artist=scanner.catalog.list(actor,library.id,{kind:'artist'}).items[0]!;
+  assert.equal(artist.metadata.plot,'艺人简介');assert.equal(artist.metadata.coverRef,'歌手/artist.png');
+  assert.equal((artist.metadata.sources as Record<string,string>).plot,'nfo');
+  const artwork=new MediaArtwork(db,libraries);assert.deepEqual((await artwork.cover(actor,artist.id)).bytes,png);
+  db.run("UPDATE media_libraries SET access='restricted' WHERE id=?",library.id);
+  await assert.rejects(artwork.cover({id:'member',role:'member'},artist.id),{statusCode:404});
+  scanner.catalog.override(actor,artist.id,{plot:'人工简介'});
+  await writeFile(join(root,'歌手','artist.nfo'),'<artist><name>歌手</name><biography>更新简介</biography></artist>');
+  await scan();const updated=scanner.catalog.detail(actor,artist.id);
+  assert.equal(updated.metadata.plot,'更新简介');assert.equal(updated.overrides.plot,'人工简介');
+  await rm(join(root,'歌手','artist.nfo'));await scan();
+  const removed=scanner.catalog.detail(actor,artist.id);
+  assert.equal(removed.metadata.plot,undefined);assert.equal(removed.metadata.coverRef,undefined);assert.equal(removed.overrides.plot,'人工简介');
+  await assert.rejects(artwork.cover(actor,artist.id),{statusCode:404});
+});
+
+test('artist sidecars require matching names, reject entities and oversized XML, ignore remote artwork and do not walk above the parent',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'artist-sidecar-bounds-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  await mkdir(join(root,'artist','album'),{recursive:true});await writeFile(join(root,'artist','album','song.mp3'),'file');
+  const storage=await LocalMediaStorage.create(root),ref='artist/album/song.mp3',warnings:string[]=[];
+  await writeFile(join(root,'artist.nfo'),'<artist><name>A</name><biography>too distant</biography></artist>');
+  assert.equal(await readArtistProfile(storage,ref,'A',warnings),undefined);
+  const file=join(root,'artist','artist.nfo');
+  await writeFile(file,'<artist><name>B</name><biography>wrong person</biography></artist>');
+  assert.equal(await readArtistProfile(storage,ref,'A',warnings),undefined);
+  await writeFile(file,'<!DOCTYPE artist [<!ENTITY x SYSTEM "file:///private">]><artist><name>A</name><biography>&x;</biography></artist>');
+  assert.equal(await readArtistProfile(storage,ref,'A',warnings),undefined);assert.ok(warnings.includes('artist-nfo-unreadable'));
+  await writeFile(file,' '.repeat(1024*1024+1));assert.equal(await readArtistProfile(storage,ref,'A',warnings),undefined);
+  await writeFile(file,'<artist><name>A</name><biography>safe text</biography><thumb>https://example.com/photo.png</thumb></artist>');
+  assert.deepEqual(await readArtistProfile(storage,ref,'A',warnings),{title:'A',sourceRef:'artist/artist.nfo',plot:'safe text'});
+});

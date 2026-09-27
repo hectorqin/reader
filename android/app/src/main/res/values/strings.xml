@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">reader</string>
+    <string name="shortcut_video">影视</string>
+    <string name="shortcut_music">音乐</string>
+    <string name="shortcut_audiobook">有声书</string>
 </resources>

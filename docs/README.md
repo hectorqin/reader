@@ -44,3 +44,10 @@ These records describe checks at specific delivery points. Use tests and CI for 
 - [生态互通与客户端覆盖方案](ecosystem-roadmap.zh-CN.md)
 
 - [OPDS 服务端接入与 WebDAV 备份上传](opds-webdav.zh-CN.md)
+
+## 影音模块
+
+- [使用指南](media-user-guide.zh-CN.md)与 [OpenList 接入](media-openlist.md)
+- [架构与实现](media-implementation.md)、[导航规则](media-navigation.md)与[写入隔离](media-write-isolation.md)
+- [验证方式](media-validation.md)与[验收媒体包](media-acceptance-pack.md)
+- [冻结原型与最新验收参考](prototypes/media/README.md)

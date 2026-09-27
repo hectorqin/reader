@@ -66,7 +66,7 @@ class ReaderBridge(
      * the web layer decides when to pay that, by calling `init()` when the reader
      * first opens the朗读 settings rather than on every app start.
      */
-    private val speechBridge = SpeechBridge(context, webView)
+    private val speechBridge = SpeechBridge(context, webView) { cool.cnb.reader.media.MediaAudioCoordinator.pauseMedia?.invoke() }
 
     /**
      * Runs a UI-thread block and waits for its result.
@@ -127,7 +127,7 @@ class ReaderBridge(
     }
 
     /**
-     * Validated connectivity, not merely "an interface exists".
+     * Active network availability, including LAN-only connections.
      *
      * See ConnectivityMonitor for why this distinction is the whole reason the
      * bridge exists.

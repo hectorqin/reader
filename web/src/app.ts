@@ -1,4 +1,8 @@
 import { PluginPageScreen } from './ui/plugin-page-screen.tsx';
+import { renderChannelLinks } from './media/channel-navigation.tsx';
+import { MediaApi } from './media/api.ts';
+import { MediaScreen } from './media/screen.tsx';
+import { MediaPlayer } from './media/player.ts';
 import { ReaderApi, type SessionStore } from './api/client.ts';
 import { ApiError } from './api/errors.ts';
 import type { Book, Session } from './api/types.ts';
@@ -23,7 +27,7 @@ import { LoginScreen } from './ui/login-screen.tsx';
 import { LibraryBrowseScreen, LibraryFilesScreen } from './ui/library-screen.tsx';
 import { el } from './ui/dom.ts';
 import { notify } from './ui/notifications.ts';
-import { Router, parentOf, type LibraryView, type Route, type RouteLocation } from './ui/router.ts';
+import { Router, parentOf, routeHash, type LibraryView, type Route, type RouteLocation } from './ui/router.ts';
 
 /**
  * Application shell: routing, lifecycle and the wiring between the layers.
@@ -63,6 +67,10 @@ export class App {
   private readonly root: HTMLElement;
   private readonly sessions: SessionStore;
   private api!: ReaderApi;
+  private mediaApi!: MediaApi;
+  private mediaPlayer!: MediaPlayer;
+  private mediaScreen: MediaScreen | null = null;
+  private channelEntry: HTMLElement | null = null;
   private platform!: Platform;
   private offline!: OfflineStore;
   private settingsStore!: SettingsStore;
@@ -162,6 +170,10 @@ export class App {
   async start(): Promise<void> {
     this.platform = await this.createPlatform();
     this.api = new ReaderApi(this.platform, this.sessions);
+    this.mediaApi = new MediaApi(this.api);
+    this.mediaPlayer = new MediaPlayer(this.mediaApi);
+    this.api.onSessionChange(session=>{if(session)this.mediaPlayer.reconnectNative();else void this.mediaPlayer.stop();});
+    this.root.insertAdjacentElement('afterend', this.mediaPlayer.element);
     this.offline = new OfflineStore(this.platform.kv);
     this.settingsStore = new SettingsStore(this.platform.kv);
     this.settings = await this.settingsStore.load();
@@ -218,6 +230,7 @@ export class App {
    */
   private enterApp(): void {
     if (this.router) return;
+    this.mediaPlayer.reconnectNative();
     this.router = new Router({
       fallback: fallbackHash(),
       onChange: (route, location) => this.render(route, location),
@@ -262,11 +275,24 @@ export class App {
      * because the library is a place they are allowed to be and the folder is the
      * part of it the link was actually about.
      */
+    this.showChannelEntry(route);
     if (route.name === 'library' && route.view === 'files' && !this.isAdmin) {
       this.showLibrary({ ...route, view: 'browse' }, location);
       return;
     }
     switch (route.name) {
+      case 'media':
+        if(this.mediaScreen&&this.route?.name==='media'&&this.route.channel===route.channel){
+          this.route=route;void this.mediaScreen.showRoute(route);return;
+        }
+        this.clearScreens(); this.route = route;
+        this.mediaScreen = new MediaScreen(this.mediaApi, this.mediaPlayer, route.channel, this.isAdmin,
+          (channel, itemId = '') => this.router?.navigate({name:'media',channel,itemId,...(itemId&&this.route?.name==='media'?{returnTo:routeHash(this.route)}:{})}), route.itemId || undefined,
+          {route,page:route.page,fromSettings:route.fromSettings,
+            navigate:(page,fromSettings,replace=false)=>this.router?.navigate({name:'media',channel:route.channel,itemId:'',...(page?{page}:{}),...(fromSettings?{fromSettings:true}:{})},{replace}),
+            navigateRoute:(next,replace=false)=>this.router?.navigate(next,{replace}),
+            back:()=>this.router?.back()});
+        this.root.append(this.mediaScreen.element); void this.mediaScreen.show(); return;
       case 'source-page':
       case 'plugin-page':
         this.clearScreens(); this.route = route;
@@ -293,6 +319,7 @@ export class App {
   }
 
   private clearScreens(): void {
+    this.mediaScreen?.dispose(); this.mediaScreen = null;
     this.pluginPage?.dispose(); this.pluginPage = null;
     this.sources?.dispose();
     this.sources = null;
@@ -311,6 +338,23 @@ export class App {
 
   // ---- screens ----
 
+  private showChannelEntry(route: Route): void {
+    this.mediaPlayer.setVisible(route.name === 'media');
+    if (route.name !== 'media') {
+      this.channelEntry?.remove();
+      this.channelEntry = null;
+      return;
+    }
+    if (!this.channelEntry) {
+      this.channelEntry = document.createElement('nav');
+      this.channelEntry.className = 'media-channel-entry';
+      this.channelEntry.setAttribute('aria-label', '内容频道');
+      this.root.insertAdjacentElement('afterend', this.channelEntry);
+    }
+    this.channelEntry.hidden = false;
+    renderChannelLinks(this.channelEntry, route.channel);
+  }
+
   /**
    * The sign-in screen, and the first-run experience.
    *
@@ -321,6 +365,9 @@ export class App {
    * the pending route.
    */
   private showLogin(message?: string): void {
+    if (this.channelEntry) this.channelEntry.hidden = true;
+    this.mediaPlayer?.setVisible(false);
+    if (this.mediaPlayer) void this.mediaPlayer.stop();
     this.router?.dispose();
     this.router = null;
     this.route = null;
@@ -365,6 +412,7 @@ export class App {
     this.clearScreens();
     const shelf = new ShelfScreen({
       onOpenSources: () => this.router?.navigate({ name: 'sources' }),
+      onOpenMedia: () => this.router?.navigate({ name: 'media', channel: 'video', itemId: '' }),
       api: this.api,
       offline: this.offline,
       platform: this.platform,
@@ -658,13 +706,16 @@ export class App {
   }
 
   private async createPlatform(): Promise<Platform> {
+    // Resolve on every request: login and restored settings can change the
+    // server after the platform has been constructed.
+    const serverUrl = () => this.api?.baseUrl ?? this.options.defaultServerUrl ?? '';
     const bridge = detectAndroidBridge();
-    if (!bridge) return createWebPlatform(this.options.defaultServerUrl ?? '');
+    if (!bridge) return createWebPlatform(serverUrl);
     // The native page renderer is resolved here, once, alongside the bridge that
     // provides it, so no screen has to ask whether it is running on Android.
     this.pageHost = androidPageHost(bridge);
     this.speechBridge = androidSpeechBridge(bridge);
-    return createAndroidPlatform(this.options.defaultServerUrl ?? '', bridge);
+    return createAndroidPlatform(serverUrl, bridge);
   }
 
   /**
@@ -694,13 +745,15 @@ export class App {
    * an unhandled rejection.
    */
   async flush(): Promise<void> {
-    try {
-      await this.reader?.flushProgress();
-      await this.offline.flush();
-      await this.sync.flush();
-    } catch {
-      // The outbox is durable; the next cycle retries.
-    }
+    await Promise.allSettled([
+      Promise.resolve().then(() => this.mediaPlayer?.flush()),
+      (async () => {
+        // Reading keeps its existing persistence order and never waits for media I/O.
+        await this.reader?.flushProgress();
+        await this.offline.flush();
+        await this.sync.flush();
+      })(),
+    ]);
   }
 
   // ---- diagnostics for the shell ----

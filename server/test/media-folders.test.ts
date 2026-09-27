@@ -1,0 +1,50 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {Db} from '../src/db/index.ts';
+import {MediaLibraries} from '../src/media/libraries.ts';
+import {MediaScanner} from '../src/media/scanner.ts';
+import {MediaFolders} from '../src/media/folders.ts';
+
+test('folders isolate literal paths, page entries and preserve missing file associations',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'media-folders-')),db=new Db(':memory:'),libraries=new MediaLibraries(db),actor={id:'admin',role:'admin'} as const;
+  const scanner=new MediaScanner(db,libraries,async()=>({status:'ready',info:{format:'m4b',duration:20,streams:[],tags:{},chapters:[{start:0,end:10,title:'一'},{start:10,end:20,title:'二'}]}}));
+  t.after(async()=>{await scanner.close();db.close();await rm(root,{recursive:true,force:true});});
+  for(const dir of ['Book','Book2','100%_','empty','🎧有声'])await mkdir(join(root,dir));
+  for(const file of ['root.m4b','Book/a.m4b','Book/b.m4b','Book2/other.m4b','100%_/one.m4b'])await writeFile(join(root,file),file);
+  await writeFile(join(root,'secret.txt'),'unrelated');
+  const library=await libraries.create(actor,{name:'books',kind:'audiobook',root,access:'restricted'});
+  scanner.start(actor,library.id);await scanner.wait(library.id);
+  const folders=new MediaFolders(db,libraries,scanner.catalog);
+  const top=folders.list(actor,library.id);assert.equal(top.total,4);assert.equal(top.items[3]!.kind,'file');
+  assert.equal(top.items.some(row=>row.name==='empty'||row.name==='secret.txt'),false);
+  assert.equal(folders.list(actor,library.id,'Book').total,2);
+  assert.equal(folders.list(actor,library.id,'100%_').total,1);
+  assert.deepEqual(folders.list(actor,library.id,'',1,2).items,top.items.slice(1,3));
+  for(const path of ['..','Book/../Book2','/Book','Book/','Book\\a','C:/','Book//a'])assert.throws(()=>folders.list(actor,library.id,path),{code:'MEDIA_FOLDER_PATH'});
+  assert.throws(()=>folders.list(actor,library.id,'not-found'),{statusCode:404});
+  assert.throws(()=>folders.list({id:'member',role:'member'},library.id),{statusCode:404});
+  const entry=folders.list(actor,library.id,'Book').items[0]!,file=folders.file(actor,entry.assetId!);
+  assert.equal(file.items.length,1);assert.equal(file.items[0]!.editions[0]!.parts.length,2,'only this file chapters');
+  assert.equal(file.items[0]!.editions[0]!.parts.every(part=>part.assetId===entry.assetId),true);
+  assert.throws(()=>folders.file({id:'member',role:'member'},entry.assetId!),{statusCode:404});
+  await rm(join(root,entry.path));scanner.start(actor,library.id);await scanner.wait(library.id);
+  assert.equal(folders.file(actor,entry.assetId!).available,false);
+  assert.equal(folders.file(actor,entry.assetId!).items[0]!.editions[0]!.parts[0]!.available,false);
+  assert.equal(folders.list(actor,library.id).items.find(row=>row.name==='Book')!.availableFiles,1);
+  await writeFile(join(root,'🎧有声','a.m4b'),'unicode');scanner.start(actor,library.id);await scanner.wait(library.id);
+  assert.equal(folders.list(actor,library.id,'🎧有声').items[0]!.name,'a.m4b');
+  // Prefix ranges must not include sibling names at either boundary or fold case.
+  for(const dir of ['Book0','Book-','🎧有声0','🎧有声/子目录'])await mkdir(join(root,dir),{recursive:true});
+  for(const file of ['Book0/x.m4b','Book-/x.m4b','🎧有声0/x.m4b','🎧有声/子目录/x.m4b'])await writeFile(join(root,file),'boundary');
+  scanner.start(actor,library.id);await scanner.wait(library.id);
+  // Windows cannot create case-distinct siblings; exercise the published index directly.
+  db.run("INSERT INTO media_assets(id,library_id,ref,size,modified_at,probe_status) VALUES('case-sibling',?,'book/x.m4b',1,0,'ready')",library.id);
+  assert.equal(folders.list(actor,library.id,'Book').total,2);
+  assert.ok(folders.list(actor,library.id,'Book').items.every(item=>item.name==='a.m4b'||item.name==='b.m4b'));
+  assert.equal(folders.list(actor,library.id,'book').total,1);
+  assert.deepEqual(folders.list(actor,library.id,'🎧有声').items.map(item=>item.name),['子目录','a.m4b']);
+  assert.equal(folders.list(actor,library.id,'🎧有声/子目录').items[0]!.name,'x.m4b');
+});

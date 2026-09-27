@@ -1,6 +1,7 @@
 package cool.cnb.reader
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.View
@@ -103,6 +104,7 @@ class MainActivity : AppCompatActivity() {
                     pageView = page,
                     fitPreference = { fitPreference },
                 ),
+                launchAction = intent?.action,
             )
         }
         // The speech engine is a bound service and a speaker; it is released when
@@ -145,11 +147,6 @@ class MainActivity : AppCompatActivity() {
      * would make the first sentence after returning fail. On destroy the page is
      * gone, so there is nothing left for the engine to speak.
      */
-    override fun onDestroy() {
-        speechBridge?.shutdown()
-        super.onDestroy()
-    }
-
     /**
      * Keeps the WebView clear of the status bar, the navigation bar and the
      * on-screen keyboard.
@@ -159,6 +156,12 @@ class MainActivity : AppCompatActivity() {
      * permanently covered. `adjustResize` in the manifest is not sufficient on
      * its own from API 30 onwards.
      */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        host?.openMediaShortcut(intent.action)
+    }
+
     private fun applyInsets(root: FrameLayout) {
         ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime())
@@ -182,6 +185,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        speechBridge?.shutdown()
         host?.destroy()
         connectivity.close()
         pageView?.hide()

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createSpeechEngine, speechAvailability, SPEECH_ENGINE_LABELS } from '../src/render/speech.ts';
 import type { NativeSpeechBridge } from '../src/android-bridge.ts';
 import type { TtsSnapshot } from '../src/render/tts.ts';
@@ -64,6 +64,71 @@ function fakeNativeBridge(): {
     },
   };
 }
+
+describe('native initialization', () => {
+  function setup() {
+    const native = fakeNativeBridge();
+    let ready = false;
+    native.bridge.available = () => ready;
+    const engine = createSpeechEngine({ kind: 'native', baseUrl: '', accessToken: () => null, nativeBridge: native.bridge })!;
+    engine.loadQueue = async () => ({ chunks: [
+      { text: 'First.', node: null, start: 0, blockIndex: 0 },
+      { text: 'Second.', node: null, start: 6, blockIndex: 0 },
+    ], startIndex: 0 });
+    return { native, engine, ready() { ready = true; native.fire('ready'); } };
+  }
+  it('waits for ready and speaks the first sentence exactly once', async () => {
+    const x = setup(), highlighted = vi.fn(); x.engine.onChunk = highlighted;
+    try {
+      await x.engine.play(0); expect(x.native.spoken).toEqual([]);
+      x.ready(); x.ready(); expect(x.native.spoken).toEqual(['First.']);
+      expect(highlighted).toHaveBeenCalledTimes(1);
+      x.native.fire('done'); expect(x.native.spoken).toEqual(['First.', 'Second.']);
+    } finally { x.engine.dispose(); }
+  });
+  it.each(['pause', 'stop'] as const)('does not speak on late ready after %s', async action => {
+    const x = setup(); try {
+      await x.engine.play(0); x.engine[action](); x.ready(); expect(x.native.spoken).toEqual([]);
+      if (action === 'pause') { x.engine.resume(); expect(x.native.spoken).toEqual(['First.']); }
+    } finally { x.engine.dispose(); }
+  });
+  it('reports initialization timeout without skipping a sentence', async () => {
+    vi.useFakeTimers(); const x = setup(); try {
+      await x.engine.play(0); await vi.advanceTimersByTimeAsync(15001);
+      expect(x.native.spoken).toEqual([]); expect(x.engine.snapshot.state).toBe('idle');
+      expect(x.engine.snapshot.error).toContain('初始化超时'); x.ready(); expect(x.native.spoken).toEqual([]);
+    } finally { x.engine.dispose(); vi.useRealTimers(); }
+  });
+});
+
+describe('native media interruption', () => {
+  it.each([true, false])('suspends the queue, including pending initialization (ready=%s)', async ready => {
+    vi.useFakeTimers();
+    const native = fakeNativeBridge();
+    native.bridge.available = () => ready;
+    const engine = createSpeechEngine({ kind: 'native', baseUrl: '', accessToken: () => null, nativeBridge: native.bridge })!;
+    engine.loadQueue = async () => ({ chunks: [
+      { text: 'First.', node: null, start: 0, blockIndex: 0 },
+      { text: 'Second.', node: null, start: 6, blockIndex: 0 },
+    ], startIndex: 0 });
+    try {
+      await engine.play(0);
+      native.fire('interrupted');
+      native.fire('done');
+      native.bridge.available = () => true;
+      native.fire('ready');
+      await vi.advanceTimersByTimeAsync(60000);
+      expect(engine.snapshot.state).toBe('paused');
+      expect(native.spoken).toEqual(ready ? ['First.'] : []);
+      engine.resume();
+      expect(native.spoken).toEqual(ready ? ['First.', 'First.'] : ['First.']);
+      native.fireStale('done');
+      expect(engine.snapshot.state).toBe('playing');
+      native.fire('done');
+      expect(native.spoken.at(-1)).toBe('Second.');
+    } finally { engine.dispose(); vi.useRealTimers(); }
+  });
+});
 
 describe('speechAvailability', () => {
   it('prefers the native engine on an Android shell', () => {

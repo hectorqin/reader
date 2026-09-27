@@ -334,6 +334,11 @@ export class ReaderApi {
         yield data as SourcePage;
       }
       throw new ApiError('offline', '搜索连接中断，已保留收到的结果，可继续搜索。', 'STREAM_INTERRUPTED');
+    } catch (error) {
+      // An idle stream may abort before yielding another event. Preserve the
+      // account-change contract on that path as well as between events.
+      this.assertSession(generation);
+      throw error;
     } finally { controller.abort(); this.streams.delete(controller); }
   }
   async sourceDetail(id: string, ref: string): Promise<SourceEntry> {
@@ -694,6 +699,12 @@ export class ReaderApi {
   }
 
   // ---- transport plumbing ----
+
+  /** Media modules share account renewal without coupling to reading DTOs. */
+  mediaRequest<T>(path: string, method = 'GET', body?: unknown, options: RequestOptions = {}): Promise<T> {
+    if (!path.startsWith('/api/v1/media/')) throw new Error('invalid media API path');
+    return this.call<T>(path, method, body, options);
+  }
 
   private async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const response = await this.request(path, 'GET', undefined, options);

@@ -10,6 +10,7 @@ import { UploadService } from './services/uploads.ts';
 import { buildApp } from './http/app.ts';
 import { setLogger } from './lib/log.ts';
 import type { AppContext } from './http/context.ts';
+import {createMediaService} from './media/start-runtime.ts';
 
 interface Schedulers {
   scanTimer: NodeJS.Timeout | undefined;
@@ -33,7 +34,10 @@ async function main(): Promise<void> {
     sources: undefined,
   } as unknown as AppContext;
 
-  const app = buildApp(ctx);
+  const mediaRuntime=createMediaService(db,config,error=>{
+    app.log.error({err:error},'media service unavailable; reading remains available');
+  });
+  const app = buildApp(ctx,mediaRuntime);
   ctx.log = app.log;
   // Code that runs outside a request (the scanner, the format parsers) has no
   // request to borrow a logger from, so it gets the app's.
@@ -69,6 +73,7 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 
   await app.listen({ host: config.host, port: config.port });
+  mediaRuntime.start();
 
   if (ctx.users.count() === 0) {
     app.log.warn('no accounts exist yet; the first registration becomes the admin');

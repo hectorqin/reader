@@ -1,8 +1,9 @@
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { createReadStream, existsSync } from 'node:fs';
 import { chmod, copyFile, lstat, mkdir, readFile, readdir, readlink, realpath, symlink, unlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import {readMediaStorageIdentity,isMediaStorageActivated} from '../media/storage-identity.ts';
 
 const MANIFEST = 'reader-backup.json';
 const INCOMPLETE = '.reader-backup-incomplete';
@@ -25,7 +26,7 @@ async function inventory(root: string, rel = ''): Promise<Entry[]> {
   for (const name of (await readdir(join(root, rel))).sort()) {
     // SQLite rebuilds shared memory from the database/WAL. Reader locks in this
     // file can change even during a read-only integrity check.
-    if (!rel && (name === MANIFEST || name === INCOMPLETE || name === 'reader.db-shm')) continue;
+    if (!rel && (name === MANIFEST || name === INCOMPLETE || name === 'reader.db-shm' || name === 'media.db-shm')) continue;
     const path = rel ? `${rel}/${name}` : name;
     const absolute = join(root, path);
     const stat = await lstat(absolute);
@@ -58,6 +59,18 @@ function checkDatabase(root: string): void {
       if (!db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?").get(table)) {
         throw new Error(`不是当前 reader 数据库：缺少 ${table}`);
       }
+    }
+    const mediaPath=join(root,'media.db'),identity=readMediaStorageIdentity(db);
+    if(isMediaStorageActivated(db)&&!existsSync(mediaPath))throw new Error('已启用的影音数据库缺失，请恢复完整配对备份');
+    if(existsSync(mediaPath)){
+      const media=new DatabaseSync(mediaPath,{readOnly:true});
+      try{
+        const rows=media.prepare('PRAGMA integrity_check').all();
+        if(rows.length!==1||rows[0]?.integrity_check!=='ok')throw new Error('影音 SQLite 完整性校验失败');
+        if(media.prepare('PRAGMA foreign_key_check').get())throw new Error('影音 SQLite 外键完整性校验失败');
+        const marker=media.prepare('SELECT version,source_id FROM media_storage_migration WHERE id=1').get();
+        if(marker?.version!==2||!identity||marker.source_id!==identity)throw new Error('影音数据库与阅读数据库身份不匹配，请先完成迁移升级');
+      }finally{media.close();}
     }
   } finally { db.close(); }
 }

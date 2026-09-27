@@ -1,0 +1,90 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {Db} from '../src/db/index.ts';
+import {MediaLibraries} from '../src/media/libraries.ts';
+import {MediaScanner} from '../src/media/scanner.ts';
+import {MediaHierarchy} from '../src/media/hierarchy.ts';
+import {MediaScraping} from '../src/media/scraping.ts';
+import {MediaPlayback} from '../src/media/playback.ts';
+
+test('video hierarchy changes preserve progress and manual numbering across new-file rescans, clearing only affected TMDB data',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'media-hierarchy-')),db=new Db(':memory:');
+  db.run("INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES('admin','admin','x','admin',0,0)");
+  const actor={id:'admin',role:'admin'} as const,libraries=new MediaLibraries(db),scanner=new MediaScanner(db,libraries,async()=>({status:'unsupported'}));
+  t.after(async()=>{await scanner.close();db.close();await rm(root,{recursive:true,force:true});});
+  const writeEpisode=async(name:string,show:string,season:number,episode:number)=>{
+    await writeFile(join(root,name+'.mp4'),'fixture');
+    await writeFile(join(root,name+'.nfo'),`<episodedetails><title>${name}</title><showtitle>${show}</showtitle><season>${season}</season><episode>${episode}</episode></episodedetails>`);
+  };
+  await writeEpisode('A1','A',1,1);await writeEpisode('A2','A',1,2);await writeEpisode('B1','B',1,1);
+  const lib=await libraries.create(actor,{name:'video',kind:'video',root,access:'all'});
+  const scan=async()=>{const job=scanner.start(actor,lib.id);await scanner.wait(lib.id);assert.equal(scanner.job(actor,job.id).state,'complete');};await scan();
+  const catalog=scanner.catalog,hierarchy=new MediaHierarchy(db,catalog);new MediaScraping(db,catalog,[]);
+  const shows=catalog.list(actor,lib.id,{kind:'series'}).items;
+  const a=catalog.detail(actor,shows.find(x=>x.title==='A')!.id),b=catalog.detail(actor,shows.find(x=>x.title==='B')!.id);
+  const season=catalog.detail(actor,a.children[0]!.id),target=catalog.detail(actor,b.children[0]!.id),episode=catalog.detail(actor,season.children[0]!.id);
+  const playback=new MediaPlayback(db,libraries),part=episode.editions[0]!.parts[0]!.id,session=playback.create(actor,part);
+  playback.update(actor,session.id,{sequence:0,revision:session.revision,position:12});const progress=playback.progress(actor,part);
+  for(const item of [season,episode,target]){
+    db.run('INSERT INTO media_online_metadata VALUES(?,?,?,?,?,?,?)',item.id,'tmdb','1/season/1','https://example.test','{"title":"Online"}','admin',0);
+    db.run('INSERT INTO media_scrape_candidates(id,item_id,actor_id,provider,external_id,expires_at) VALUES(?,?,?,?,?,?)',item.id,item.id,'admin','tmdb','1/season/1',Date.now()+60000);
+  }
+  db.run("INSERT INTO media_metadata_overrides VALUES(?, 'title', ?,0)",episode.id,JSON.stringify('人工标题'));
+  const move={targetParentId:b.id,ordinal:2,expectedParentId:a.id,expectedOrdinal:1};
+  const foreign=await libraries.create(actor,{name:'foreign',kind:'video',root,access:'restricted'});
+  db.run("INSERT INTO media_items(id,library_id,kind,local_key,title,metadata_json) VALUES('foreign-show',?,'series','foreign','foreign','{}')",foreign.id);
+  assert.throws(()=>hierarchy.moveVideo(actor,season.id,{...move,targetParentId:'foreign-show'}),{code:'MEDIA_PARENT_TARGET'});
+  assert.throws(()=>hierarchy.moveVideo({...actor,role:'member'},season.id,move),{statusCode:403});
+  assert.throws(()=>hierarchy.moveVideo(actor,season.id,{...move,ordinal:1}),{code:'MEDIA_NUMBER_OCCUPIED'});
+  assert.ok(catalog.detail(actor,season.id).metadata.onlineMatch,'rejected edits retain matches');
+  hierarchy.moveVideo(actor,season.id,move);
+  assert.equal(catalog.detail(actor,season.id).metadata.onlineMatch,undefined);
+  assert.equal(catalog.detail(actor,episode.id).metadata.onlineMatch,undefined);
+  assert.ok(catalog.detail(actor,target.id).metadata.onlineMatch);
+  assert.equal(db.get<{n:number}>('SELECT count(*) n FROM media_scrape_candidates')!.n,1);
+  assert.equal(catalog.detail(actor,episode.id).title,'人工标题');
+  assert.throws(()=>hierarchy.moveVideo(actor,season.id,move),{code:'MEDIA_PARENT_CHANGED'});
+  // A newly discovered file invokes upsert for the old scanner season key.
+  await writeEpisode('A3','A',1,3);await scan();
+  const retained=catalog.detail(actor,season.id);assert.equal(retained.parentId,b.id);assert.equal(retained.ordinal,2);
+  assert.equal(retained.children.length,3);assert.deepEqual(playback.progress(actor,part),progress);
+  const episodeMove={targetParentId:target.id,ordinal:2,expectedParentId:season.id,expectedOrdinal:1};
+  assert.throws(()=>hierarchy.moveVideo(actor,episode.id,{...episodeMove,ordinal:0}),{statusCode:400});
+  assert.throws(()=>hierarchy.moveVideo(actor,episode.id,{...episodeMove,targetParentId:b.id}),{code:'MEDIA_PARENT_TARGET'});
+  hierarchy.moveVideo(actor,episode.id,episodeMove);await scan();
+  const after=catalog.detail(actor,episode.id);assert.equal(after.parentId,target.id);assert.equal(after.ordinal,2);
+  assert.deepEqual(after.editions,episode.editions);assert.deepEqual(playback.progress(actor,part),progress);
+  // A newly discovered B episode 2 must not absorb manually moved A episode 1,
+  // even though both now display the same season/episode number.
+  await writeEpisode('B2','B',1,2);await scan();
+  const numberedTwice=catalog.detail(actor,target.id).children.filter(child=>child.ordinal===2);
+  assert.equal(numberedTwice.length,2,'ambiguous scan numbering preserves separate identities');
+  const discovered=numberedTwice.find(child=>child.id!==episode.id)!;
+  assert.notEqual(catalog.detail(actor,discovered.id).editions[0]!.parts[0]!.id,part);
+  assert.deepEqual(catalog.detail(actor,episode.id).editions,episode.editions);
+  assert.deepEqual(playback.progress(actor,part),progress);
+  assert.throws(()=>hierarchy.moveVideo(actor,discovered.id,{targetParentId:target.id,ordinal:1,expectedParentId:target.id,expectedOrdinal:2}),{code:'MEDIA_NUMBER_OCCUPIED'});
+  hierarchy.moveVideo(actor,discovered.id,{targetParentId:target.id,ordinal:3,expectedParentId:target.id,expectedOrdinal:2});
+  await scan();assert.equal(catalog.detail(actor,discovered.id).ordinal,3);
+  const count=()=>db.get<{n:number}>('SELECT count(*) n FROM media_items')!.n;
+  const before=count(),create={seriesTitle:'新剧集',seasonOrdinal:0,ordinal:1,expectedParentId:target.id,expectedOrdinal:2};
+  assert.throws(()=>hierarchy.createParent(actor,episode.id,{...create,ordinal:0}),{statusCode:400});
+  assert.equal(count(),before,'invalid move rolls back the new series and season');
+  const created=hierarchy.createParent(actor,episode.id,create),createdSeason=catalog.detail(actor,created.parentId!);
+  assert.equal(count(),before+2);assert.equal(createdSeason.ordinal,0);
+  assert.equal(catalog.detail(actor,createdSeason.parentId!).title,'新剧集');
+  assert.throws(()=>hierarchy.createParent(actor,episode.id,create),{code:'MEDIA_PARENT_CHANGED'});
+  assert.equal(count(),before+2,'stale retry creates nothing');
+  const intoExisting={targetSeriesId:b.id,seasonOrdinal:1,ordinal:1,expectedParentId:created.parentId,expectedOrdinal:1};
+  assert.throws(()=>hierarchy.createParent(actor,episode.id,intoExisting),{code:'MEDIA_NUMBER_OCCUPIED'});
+  assert.equal(count(),before+2);
+  const newSeasonMove=hierarchy.createParent(actor,episode.id,{...intoExisting,seasonOrdinal:3});
+  assert.equal(catalog.detail(actor,newSeasonMove.parentId!).parentId,b.id);
+  const newSeriesMove=hierarchy.createParent(actor,season.id,{seriesTitle:'重新整理剧集',ordinal:2,expectedParentId:b.id,expectedOrdinal:2});
+  assert.equal(catalog.detail(actor,newSeriesMove.parentId!).title,'重新整理剧集');
+  await scan();assert.equal(catalog.detail(actor,episode.id).parentId,newSeasonMove.parentId);assert.equal(catalog.detail(actor,season.id).parentId,newSeriesMove.parentId);
+  assert.deepEqual(playback.progress(actor,part),progress);
+});

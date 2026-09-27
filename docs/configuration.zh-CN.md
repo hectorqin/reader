@@ -32,6 +32,9 @@
 | `REFRESH_TOKEN_TTL` | `31536000` | 刷新令牌有效期，秒 |
 | `READER_TOKEN_SECRET` | 自动生成 | 至少 16 字符的签名密钥；默认保存在 `DATA_DIR/token.secret` |
 | `LOG_LEVEL` | `info` | 日志级别 |
+| `MEDIA_FFPROBE_PATH` | `ffprobe` | 影音技术信息读取程序；缺失时仍可扫描入库，时长、标签及章节信息可能不完整 |
+| `MEDIA_TMDB_TOKEN` | 空 | TMDB API Read Access Token；空值禁用 TMDB 在线匹配，不影响本地扫描 |
+| `MEDIA_MUSICBRAINZ_USER_AGENT` | 空 | MusicBrainz 请求标识，填写应用名称、版本及有效联系地址，例如 `Reader/0.1 (mailto:admin@example.com)`；空值禁用 MusicBrainz 在线匹配 |
 | `CORS_ORIGINS` | 空 | 允许的浏览器来源，逗号分隔；空值反射请求来源 |
 | `WEB_DIR` | 当前工作目录下的 `web` | 已构建 Web 客户端目录 |
 | `TTS_URL` | 空 | HTTP 语音上游地址，空值关闭 HTTP 朗读 |

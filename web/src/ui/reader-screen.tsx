@@ -1858,6 +1858,7 @@ export class ReaderScreen {
   }
 
   private renderSpeechState(snapshot: TtsSnapshot): void {
+    this.voices = snapshot.voices.map(voice => ({ id: voice.id, name: voice.name, lang: voice.lang, default: voice.default }));
     if (snapshot.state === 'unsupported') {
       this.setStatus('error', snapshot.error || '当前浏览器不支持朗读');
       this.patch({ tts: { ...this.chrome.tts, active: false, state: snapshot.state } });

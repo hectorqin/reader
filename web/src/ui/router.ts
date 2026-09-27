@@ -66,10 +66,12 @@
  * switch — Back returns to the half you were on. That is the correct reading of two
  * screens with different audiences, and it is what the report asked for.
  */
+import {isPlayerPage,mediaParentPage,mediaPath,parseMediaPath,readMediaParams,safeMediaReturn,type MediaRoute} from '../media/page-route.ts';
 export type LibraryView = 'browse' | 'files';
 
 /** A parsed location. */
 export type Route =
+  | MediaRoute
   | { name: 'sources' }
   | { name: 'source-page'; sourceId: string; pageId: string }
   | { name: 'plugin-page'; pluginId: string; pageId: string }
@@ -157,6 +159,8 @@ export interface RouterOptions {
 export interface RouterWindow {
   readonly location: { readonly hash: string };
   readonly history: {
+    readonly state?: unknown;
+    back?(): void;
     pushState(state: unknown, title: string, url?: string): void;
     replaceState(state: unknown, title: string, url?: string): void;
   };
@@ -179,6 +183,18 @@ export function parseRoute(hash: string, context?: RouteContext): Route {
   const parts = pathOf(raw).split('/').filter((part) => part.length > 0);
   if (parts.length === 0) return shelfRoute(context);
   const [head, ...rest] = parts;
+  if (head === 'media') {
+    const channel = rest[0];
+    if(channel==='search'||channel==='favorites'){
+      const query=new URLSearchParams(raw.split('?')[1]??''),params=readMediaParams(query);
+      return {name:'media',channel:'video',itemId:'',page:channel,...(Object.keys(params).length?{params}:{}),...(channel==='favorites'&&query.get('from')==='settings'?{fromSettings:true}:{})};
+    }
+    if(channel==='video'||channel==='music'||channel==='audiobook'){
+      const parsed=parseMediaPath(rest.slice(1)),query=new URLSearchParams(raw.split('?')[1]??''),params={...readMediaParams(query),...parsed.params},returnTo=safeMediaReturn(query.get('return'));
+      return {name:'media',channel,...parsed,...(Object.keys(params).length?{params}:{}),...(query.get('from')==='settings'?{fromSettings:true}:{}),...(returnTo?{returnTo}:{})};
+    }
+    return { name: 'media', channel: 'video', itemId: '' };
+  }
   if (head === 'plugins' && rest.length === 2) {
     try { return { name: 'plugin-page', pluginId: decodeURIComponent(rest[0]!), pageId: decodeURIComponent(rest[1]!) }; } catch { return shelfRoute(context); }
   }
@@ -305,6 +321,7 @@ function shelfRoute(context?: RouteContext, page = 1): Route {
  */
 export function routeHash(route: Route): string {
   switch (route.name) {
+    case 'media': {const path=mediaPath(route),query=new URLSearchParams();for(const key of Object.keys(route.params??{}).sort()){const value=route.params![key];if(value&&!(key==='offset'&&value==='0')&&!(key==='sort'&&value==='default')&&!(key==='scope'&&value==='all')&&!(key==='part'&&isPlayerPage(route.page)&&route.itemId))query.set(key,value);}if(route.fromSettings)query.set('from','settings');return (route.page==='search'||route.page==='favorites'?'#/media/'+route.page:'#/media/'+route.channel+(path?'/'+path:''))+(query.size?'?'+query:'');}
     case 'source-page': return '#/sources/' + encodeURIComponent(route.sourceId) + '/' + encodeURIComponent(route.pageId);
     case 'plugin-page': return '#/plugins/' + encodeURIComponent(route.pluginId) + '/' + encodeURIComponent(route.pageId);
     case 'sources': return '#/sources';
@@ -337,6 +354,7 @@ export function routeHash(route: Route): string {
 /** Whether two routes point at the same place. Used to skip a redundant repaint. */
 export function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
+  if (a.name === 'media' && b.name === 'media') return routeHash(a)===routeHash(b);
   if (a.name === 'source-page' && b.name === 'source-page') return a.sourceId === b.sourceId && a.pageId === b.pageId;
   if (a.name === 'plugin-page' && b.name === 'plugin-page') return a.pluginId === b.pluginId && a.pageId === b.pageId;
   if (a.name === 'book' && b.name === 'book') return a.bookId === b.bookId;
@@ -359,6 +377,18 @@ export function sameRoute(a: Route, b: Route): boolean {
 
 /** Where a "back" from this route lands when the app has no trail of its own. */
 export function parentOf(route: Route): Route {
+  if(route.name==='media'){
+    const origin=safeMediaReturn(route.returnTo);if(origin&&origin!==routeHash(route))return parseRoute(origin);
+    if(route.page){
+      if(isPlayerPage(route.page)&&route.itemId)return route.page==='player'?{name:'media',channel:route.channel,itemId:route.itemId}:{name:'media',channel:route.channel,itemId:route.itemId,page:'player',...(route.params?.part?{params:{part:route.params.part}}:{})};
+      if(['metadata','match','chapters'].includes(route.page)&&route.itemId)return {name:'media',channel:route.channel,itemId:route.itemId};
+      const page=mediaParentPage(route.page,route.fromSettings),params={...route.params};
+      delete params.asset;delete params.work;
+      if(route.page==='narrator')delete params.narrator;
+      return {name:'media',channel:route.channel,itemId:'',...(page?{page}:{}),...(['narrator-work','narrator','file'].includes(route.page)&&Object.keys(params).length?{params}:{})};
+    }
+  }
+  if (route.name === 'media' && route.itemId) return { ...route, itemId: '' };
   if (route.name === 'plugin-page' || route.name === 'source-page') return { name: 'sources' };
   if (route.name === 'library' && route.view === 'files') {
     return { ...route, path: route.path.split('/').slice(0, -1).join('/'), page: 1, search: '', view: route.path ? 'files' : 'browse' };
@@ -434,7 +464,9 @@ export class Router {
       libraryPath: previous?.name === 'library' ? previous.path : '',
       libraryPage: previous?.name === 'library' ? previous.page : 1,
     };
-    return this.substitute(parseRoute(this.win.location.hash, context), previous);
+    const route=this.substitute(parseRoute(this.win.location.hash, context), previous);
+    if(route.name==='media'&&this.win.location.hash!==routeHash(route))this.win.history.replaceState(this.mediaState(route), '', routeHash(route));
+    return route;
   }
 
   /**
@@ -447,6 +479,11 @@ export class Router {
    * separable in the first place.
    */
   private substitute(route: Route, previous: Route | null): Route {
+    if(route.name==='media'){
+      const state=this.win.history.state as {readerMediaReturnTo?:string;readerMediaRoute?:string}|null;
+      const origin=safeMediaReturn(route.returnTo)??(state?.readerMediaRoute===routeHash(route)||!state?.readerMediaRoute&&route.page==='search'?safeMediaReturn(state?.readerMediaReturnTo):undefined);
+      if(origin&&routeHash(parseRoute(origin))!==routeHash(route))return {...route,returnTo:routeHash(parseRoute(origin))};
+    }
     if (route.name === 'shelf') {
       // A Back into `#/shelf` means the shelf the reader was last on, folder and
       // page included: the hash has nowhere to put either, and a shelf that resets
@@ -521,7 +558,7 @@ export class Router {
   private track(route: Route): void {
     const index = this.stack.findIndex((entry) => sameRoute(entry, route));
     if (index === -1) this.stack.push(route);
-    else this.stack.length = index + 1;
+    else {this.stack.length = index + 1;this.stack[index]=route;}
     this.last = route;
   }
 
@@ -532,12 +569,18 @@ export class Router {
   /**
    * Leaves the current screen.
    *
-   * Deliberately not `history.back()`: the entry behind this one may be the login
+   * Media routes with a verified predecessor can use browser Back. Otherwise,
+   * avoid `history.back()`: the entry behind this one may be the login
    * form, a `vite dev` page, or another site entirely, and none of those are what
    * a reader means by "back". The app's own trail is the truth of where they were,
    * and when it is empty the parent screen is.
    */
   private backFrom(route: Route): void {
+    if(route.name==='media'&&safeMediaReturn(route.returnTo)){
+      const parent=parentOf(route),state=this.win.history.state as {readerMediaFrom?:string}|null;
+      if(this.win.history.back&&state?.readerMediaFrom===routeHash(parent)){this.win.history.back();return;}
+      this.replace(parent);return;
+    }
     const index = this.stack.findIndex((entry) => sameRoute(entry, route));
     if (index > 0) {
       const previous = this.stack[index - 1]!;
@@ -577,10 +620,11 @@ export class Router {
     }
     // `pushState` does not fire `hashchange` — that event is only for a real
     // fragment change made by the browser — so the paint is driven from here.
-    this.win.history.pushState(null, '', hash);
+    this.win.history.pushState(route.name==='media'?this.mediaState(route,this.win.location.hash):null, '', hash);
     this.last = route;
     this.options.onChange(route, this.locationFor(route));
   }
+  back():void {if(this.last)this.backFrom(this.last);}
 
   /**
    * Shows a route by *overwriting* the current entry rather than adding one.
@@ -592,8 +636,8 @@ export class Router {
    * pasted URL does not stay behind a shelf the reader has never seen, ready to
    * pull them back into the app on the next Back press.
    *
-   * `history.replaceState` is therefore the *only* correct platform call the
-   * router needs beyond `pushState` — without it, Back loops.
+   * `history.replaceState` provides the fallback when there is no verified
+   * predecessor — pushing that fallback would make Back loop.
    */
   private replace(route: Route): void {
     const hash = routeHash(route);
@@ -614,8 +658,16 @@ export class Router {
     if (index !== -1 && index < this.stack.length - 1) this.stack.length = index + 1;
     else this.stack[this.stack.length - 1] = route;
     this.last = route;
-    if (this.win.location.hash !== hash) this.win.history.replaceState(null, '', hash);
+    if (this.win.location.hash !== hash||route.name==='media') this.win.history.replaceState(route.name==='media'?this.mediaState(route):null, '', hash);
     this.options.onChange(route, this.locationFor(route));
+  }
+
+  private mediaState(route:Extract<Route,{name:'media'}>,from?:string){
+    const state={...(this.win.history.state as Record<string,unknown>|null),readerMediaRoute:routeHash(route)} as Record<string,unknown>;
+    delete state.readerMediaReturnTo;
+    if(from)state.readerMediaFrom=from;
+    const origin=safeMediaReturn(route.returnTo);if(origin)state.readerMediaReturnTo=routeHash(parseRoute(origin));
+    return state;
   }
 
   dispose(): void {

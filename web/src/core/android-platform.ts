@@ -12,9 +12,9 @@ import type { NativePageHost, NativePageRequest } from '../ui/native-page.ts';
  * or does badly:
  *
  *  - **Connectivity.** `navigator.onLine` in an Android WebView reports "true"
- *    whenever a network interface exists, including a Wi-Fi network with no
- *    route to the server. The platform ConnectivityManager knows better, and
- *    getting this wrong is what makes the offline path feel broken.
+ *    whenever a network interface exists. The native monitor reports an active
+ *    network, including LAN-only connections; requests determine whether the
+ *    configured server is reachable without requiring public-internet access.
  *  - **A stable device label.** The UA-derived one changes when Chrome updates.
  *  - **Native feedback.** A toast for "已下载" is one line of Kotlin and avoids
  *    building a notification UI in the web layer.
@@ -28,7 +28,7 @@ import type { NativePageHost, NativePageRequest } from '../ui/native-page.ts';
  * it is written so that a refusal from the shell is indistinguishable from a
  * browser with no native path at all.
  */
-export async function createAndroidPlatform(baseUrl: string, bridge: AndroidBridge): Promise<Platform> {
+export async function createAndroidPlatform(baseUrl: string | (() => string), bridge: AndroidBridge): Promise<Platform> {
   const stores = await createStores();
   const listeners = new Set<(state: Connectivity) => void>();
   let last: Connectivity = normalise(bridge.connectivity());
@@ -43,7 +43,7 @@ export async function createAndroidPlatform(baseUrl: string, bridge: AndroidBrid
   return {
     name: 'android',
     deviceLabel: safeDeviceLabel(bridge),
-    transport: new FetchTransport(() => baseUrl),
+    transport: new FetchTransport(typeof baseUrl === 'function' ? baseUrl : () => baseUrl),
     kv: stores.kv,
     blobs: stores.blobs,
     async connectivity(): Promise<Connectivity> {
@@ -223,7 +223,43 @@ function toBase64(bytes: Uint8Array): string {
 export function promoteSpeechInterface(bridge: AndroidBridge): AndroidBridge {
   const raw = window.ReaderAndroidSpeech;
   if (!raw) return bridge;
-  return { ...bridge, speech: raw };
+  // Java bridge methods require the injected object as their receiver. A plain
+  // spread copies the functions but makes calls use the wrapper as `this`.
+  const speech = bindInjectedMethods(raw);
+  speech.onSpeechEvent = callback => registerNativeCallback(raw, 'onSpeechEvent', '__readerSpeechEvent', callback, true);
+  speech.onVoices = callback => registerNativeCallback(raw, 'onVoices', '__readerSpeechVoices', callback, true);
+  const promoted = { ...bridge, speech };
+  for (const key of Object.keys(bridge)) {
+    // Some shells also enumerate their native speech() accessor. The client
+    // contract requires the promoted object, not that Java accessor function.
+    if (key === 'speech') continue;
+    const method = Reflect.get(bridge, key);
+    if (typeof method === 'function') {
+      Reflect.set(promoted, key, method.bind(bridge));
+    }
+  }
+  promoted.watchConnectivity = callback => registerNativeCallback(bridge, 'watchConnectivity', '__readerConnectivity', callback, false);
+  return promoted;
+}
+
+function bindInjectedMethods<T extends object>(raw: T): T {
+  const result = { ...raw };
+  for (const key of Object.keys(raw)) {
+    const method = Reflect.get(raw, key);
+    if (typeof method === 'function') Reflect.set(result, key, method.bind(raw));
+  }
+  return result;
+}
+
+function registerNativeCallback<T>(raw: object, method: string, name: string, callback: (value: T) => void, json: boolean): void {
+  // Each native interface owns one listener. Reusing its name also replaces old
+  // listeners when a reading session creates a new speech engine.
+  Reflect.set(window, name, (value: string) => {
+    let parsed: T;
+    try { parsed = (json ? JSON.parse(value) : value) as T; } catch { return; }
+    callback(parsed);
+  });
+  Reflect.apply(Reflect.get(raw, method), raw, [name]);
 }
 
 function shellAtLeast(bridge: AndroidBridge, version: number): boolean {
