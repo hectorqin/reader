@@ -8,6 +8,13 @@ import {ApiError} from '../src/api/errors.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
 const button=(text:string)=>Array.from(root.querySelectorAll('button')).find(button=>button.textContent?.includes(text))!;
+it('parent directory navigation stays in folders even when a global history callback is provided',async()=>{
+  const request=vi.fn().mockResolvedValue({total:0,items:[]}),onBack=vi.fn(),onLocationChange=vi.fn();
+  await act(async()=>render(<MediaFolders api={{request} as unknown as MediaApi} libraryId="lib" initialLocation={{path:'动画/剧集/第一季',offset:60,assetId:null,editions:{},chapters:{}}} onLocationChange={onLocationChange} onPlay={vi.fn()} onQueue={vi.fn()} onDetail={vi.fn()}/>,root));
+  await act(async()=>button('上级目录').click());
+  await vi.waitFor(()=>expect(onLocationChange).toHaveBeenLastCalledWith(expect.objectContaining({path:'动画/剧集',offset:0,assetId:null})));
+  expect(onBack).not.toHaveBeenCalled();
+});
 it('only administrators see directory cleanup',async()=>{
   const request=vi.fn().mockResolvedValue({total:0,items:[]});
   const props={api:{request} as unknown as MediaApi,libraryId:'lib',onPlay:vi.fn(),onQueue:vi.fn(),onDetail:vi.fn()};

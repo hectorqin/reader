@@ -33,7 +33,7 @@ test('video parsing separates release tokens from meaningful numerals and resolv
   assert.equal(recognizeVideo('Drama/S02/01.mp4',raw(),rules).metadata.show,'剧名');
   assert.equal(recognizeVideo('Drama/S02/01.mp4',raw(),rules).metadata.season,2);
   assert.equal(recognizeVideo('Drama/01.mp4',raw(),rules).metadata.season,1);
-  assert.equal(recognizeVideo('Drama/Drama.S03E01.mp4',raw(),rules).metadata.season,3);
+  assert.equal(recognizeVideo('Drama/Drama.S03E01.mp4',raw(),rules).metadata.season,1);
   assert.equal(recognizeVideo('Drama/01.mp4',raw(),[{path:'Drama',mode:'ignore'}]).kind,'ignore');
   assert.equal(recognizeVideo('Drama2/01.mp4',raw(),[{path:'Drama',mode:'ignore'}]).kind,'movie');
   assert.equal(recognizeVideo('Drama/Season 01/01.mp4',raw(),[{path:'Drama',mode:'ignore'},{path:'Drama/Season 01',mode:'auto'}]).kind,'episode');

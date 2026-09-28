@@ -20,7 +20,7 @@ function FileWork({api,item,busy,selected,onSelect,positions,onPosition,onPlay,o
     {edition&&<EditionDetails key={edition.id} api={api} item={item} edition={edition} busy={busy} showTools={false} position={positions[edition.id]??{query:'',page:0}} onPositionChange={position=>onPosition(edition.id,position)} onPlay={onPlay} onQueue={onQueue} onRefresh={onRefresh} onChooseVersion={onDetail}/>}
   </section>;
 }
-export function MediaFolders({api,admin=false,video=false,libraryId,initialLocation,onLocationChange,onBack,onPlay,onQueue,onDetail}:{api:MediaApi;admin?:boolean;video?:boolean;libraryId:string;initialLocation?:FolderLocation|undefined;onLocationChange?:(location:FolderLocation)=>void;onBack?:()=>void;onPlay:(parts:Part[],index:number,title:string)=>Promise<void>;onQueue:(ids:string[])=>Promise<void>;onDetail:(id:string,location:FolderLocation)=>void}){
+export function MediaFolders({api,admin=false,video=false,libraryId,initialLocation,onLocationChange,onPlay,onQueue,onDetail}:{api:MediaApi;admin?:boolean;video?:boolean;libraryId:string;initialLocation?:FolderLocation|undefined;onLocationChange?:(location:FolderLocation)=>void;onPlay:(parts:Part[],index:number,title:string)=>Promise<void>;onQueue:(ids:string[])=>Promise<void>;onDetail:(id:string,location:FolderLocation)=>void}){
   const [path,setPath]=useState(initialLocation?.path??''),[offset,setOffset]=useState(initialLocation?.offset??0),[assetId,setAssetId]=useState<string|null>(initialLocation?.assetId??null),[retry,setRetry]=useState(0);
   const [editions,setEditions]=useState(initialLocation?.editions??{}),[chapters,setChapters]=useState(initialLocation?.chapters??{});
   const [listing,setListing]=useState<Listing|null>(null),[file,setFile]=useState<FileDetail|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
@@ -41,7 +41,7 @@ export function MediaFolders({api,admin=false,video=false,libraryId,initialLocat
   const segments=path?path.split('/'):[];
   return <section className="media-folders" aria-label="影音文件夹">
     <nav className="media-folder-path" aria-label="目录位置"><button disabled={busy} onClick={()=>open('')}>库内根目录</button>{segments.map((segment,index)=><button key={index} disabled={busy} onClick={()=>open(segments.slice(0,index+1).join('/'))}>/ {segment}</button>)}</nav>
-    {(path||assetId)&&<button className="media-folder-back" disabled={busy} aria-label={'← '+(assetId?'返回文件列表':'上级目录')} onClick={()=>onBack?onBack():assetId?setAssetId(null):open(segments.slice(0,-1).join('/'))}><ChevronLeft size={16} aria-hidden="true"/>{assetId?'返回文件列表':'上级目录'}</button>}
+    {(path||assetId)&&<button className="media-folder-back" disabled={busy} aria-label={'← '+(assetId?'返回文件列表':'上级目录')} onClick={()=>assetId?setAssetId(null):open(segments.slice(0,-1).join('/'))}><ChevronLeft size={16} aria-hidden="true"/>{assetId?'返回文件列表':'上级目录'}</button>}
     {error&&<MediaScreenError fullPage error={cause} message={error} busy={loading} retryLabel="重新加载" onRetry={()=>setRetry(value=>value+1)}/>}{actionError&&<div className="media-error" role="alert">{actionError}</div>}{notice&&<p role="status">{notice}</p>}
     {loading&&<MediaLoading layout={assetId?'tracks':'list'} square label={assetId?'正在读取文件与章节…':'正在读取目录…'}/>}
     {cleanupNotice&&<p role="status">{cleanupNotice}</p>}

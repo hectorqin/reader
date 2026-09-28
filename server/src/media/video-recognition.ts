@@ -14,7 +14,7 @@ function number(text:string):number|undefined{
   return text?result+current:undefined;
 }
 export function seasonDirectory(name:string):number|undefined{
-  const match=/^(?:season[ ._-]*|s)(\d{1,3})$/i.exec(name)||/第([零〇一二两三四五六七八九十百\d]+)季$/.exec(name);
+  const match=/(?:season[ ._-]*|s)(\d{1,3})$/i.exec(name)||/([零〇一二两三四五六七八九十百\d]+)季$/.exec(name);
   if(match)return number(match[1]!);
   if(/^(specials?|特别篇|特別篇)$/i.test(name))return 0;
   return undefined;
@@ -44,13 +44,13 @@ export function recognizeVideo(ref:string,raw:LocalMediaMetadata,rules:VideoRule
   const seriesRule=mode==='series'?rule:mode==='season'?inherited.slice(0,-1).reverse().find(value=>value.mode==='series'):undefined;
   if(seriesRule)seriesRoot=seriesRule.path;
   if(mode==='season'&&!seriesRule)seriesRoot=posix.dirname(rule!.path)==='.'?'':posix.dirname(rule!.path);
-  const patterns=[/(?:^|[ ._-])S(\d{1,3})[ ._-]*E(\d{1,4})(?=$|[ ._-])/i,/(?:^|[ ._-])(\d{1,3})x(\d{1,4})(?=$|[ ._-])/i,/第([零〇一二两三四五六七八九十百\d]+)季[ ._-]*第?([零〇一二两三四五六七八九十百\d]+)[集话話]/];
+  const patterns=[/(?:^|[ ._-])S(\d{1,3})[ ._-]*E(\d{1,4})(?=$|[ ._-])/i,/(?:^|[ ._-])(\d{1,3})x(\d{1,4})(?=$|[ ._-])/i,/第([零〇一二两三四五六七八九十百\d]+)季[ ._-]*第?([零〇一二两三四五六七八九十百\d]+)[集话話]/,/第([零〇一二两三四五六七八九十百\d]+)季[ ._-]*(\d{1,4})(?=$|[ ._-])/i,/(?:^|[ ._-])SE(\d{1,3})[ ._-]+(\d{1,4})(?=$|[ ._-])/i];
   const match=patterns.map(pattern=>pattern.exec(stem)).find(Boolean);
   let season=match?number(match[1]!):directorySeason,episode=match?number(match[2]!):undefined;
   const single=/(?:^|[ ._-])(?:EP?|第)[ ._-]*([零〇一二两三四五六七八九十百\d]+)(?:[集话話])?(?=$|[ ._-])/i.exec(stem);
   const bare=/^\s*(\d{1,4})(?=$|[ ._-])/.exec(stem);
   if(episode===undefined&&(directorySeason!==undefined||raw.sources.season==='nfo'||mode==='series'||mode==='season'))episode=number((single||bare)?.[1]??'');
-  if(mode==='series'||mode==='season'){season=mode==='season'?rule?.season:season??rule?.season;reasons.push('目录规则');}
+  if(mode==='series'||mode==='season'){season=mode==='season'?rule?.season:rule?.season??directorySeason;reasons.push('目录规则');}
   const multi=/(?:S\d{1,3}[ ._-]*)?E\d{1,4}(?:[ ._-]*E\d{1,4}|-\d{1,3})(?=$|[ ._-])/i.test(stem)||/第?[\d一二三四五六七八九十]+[-~至到][\d一二三四五六七八九十]+集/.test(stem);
   let cleanedStem=match&&!multi?stem.slice(0,match.index):stem;
   if(raw.sources.year==='filename'){delete metadata.year;delete metadata.sources.year;}
@@ -67,7 +67,7 @@ export function recognizeVideo(ref:string,raw:LocalMediaMetadata,rules:VideoRule
   if(raw.sources.episode==='nfo')episode=raw.episode;
   if(mode==='series'||mode==='season'){
     show=rule?.title||seriesRule?.title||parentTitle||show;
-    season=mode==='season'?rule?.season:season??rule?.season;
+    season=mode==='season'?rule?.season:rule?.season??directorySeason;
   }
   if(rule?.year!==undefined){metadata.year=rule.year;metadata.sources.year='rule';}
   const episodic=mode!=='movie'&&!!show&&season!==undefined&&episode!==undefined&&episode>0&&!multi;
