@@ -1,6 +1,6 @@
 import { posix } from 'node:path';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
-import type { MediaStorage } from './storage/types.ts';
+import type { MediaStorage, StorageEntry } from './storage/types.ts';
 import { isRemoteStorageFailure } from './storage/types.ts';
 import type { ProbeResult } from './probe.ts';
 import type { ArtistProfile } from './artist-metadata.ts';
@@ -45,10 +45,15 @@ export async function readLocalMetadata(storage: MediaStorage, ref: string, prob
   const dir = posix.dirname(ref);
   const sibling = (name: string) => dir === '.' ? name : `${dir}/${name}`;
   const stem = posix.basename(ref, posix.extname(ref));
-  // Refresh for each resource. Never cache absence across scans or skip the
-  // containment/size checks for a candidate that the directory actually has.
+  // Remote listings are scoped to one scan; local candidates still go through
+  // fresh containment checks. Resolve remote URLs only when opening a sidecar.
   let names:Set<string>|undefined;
-  try{names=await storage.siblingNames(ref);}catch(error){if(isRemoteStorageFailure(error))throw error;/* Preserve individual local read errors. */}
+  let entries:Map<string,StorageEntry>|undefined;
+  try{
+    if(storage.filePath)names=await storage.siblingNames(ref);
+    else{const listed=await storage.siblings(ref);entries=new Map(listed.map(entry=>[entry.ref,entry]));names=new Set(listed.map(entry=>entry.name));}
+  }catch(error){if(isRemoteStorageFailure(error))throw error;/* Preserve individual local read errors. */}
+  const stat=async(ref:string)=>entries?.get(ref)??await storage.stat(ref);
   const actualName=(name:string)=>!names||names.has(name)?name:[...names].find(value=>value.toLowerCase()===name.toLowerCase());
   const match = /^(.*?)(?:[ ._-]|^)S(\d{1,3})E(\d{1,4})(?=[ ._-]|$)/i.exec(stem);
   const year = /(?:^|[ ._(])(19\d{2}|20\d{2})(?:[ ._) ]|$)/.exec(stem);
@@ -72,7 +77,7 @@ export async function readLocalMetadata(storage: MediaStorage, ref: string, prob
     const actual=actualName(name);if(!actual)continue;
     const sidecar = sibling(actual);
     try {
-      const entry = await storage.stat(sidecar);
+      const entry = await stat(sidecar);
       if (entry.size > 1024 * 1024) { metadata.warnings.push('nfo-too-large'); continue; }
       const {stream} = await storage.open(sidecar);
       const chunks: Buffer[] = []; let size = 0;
@@ -108,7 +113,7 @@ export async function readLocalMetadata(storage: MediaStorage, ref: string, prob
   }
   for (const name of [`${stem}-poster.jpg`, `${stem}.jpg`, 'poster.jpg', 'cover.jpg', 'folder.jpg', 'cover.png', `${stem}-poster.png`, `${stem}.png`, 'poster.png', 'folder.png', 'cover.webp', 'poster.webp']) {
     const actual=actualName(name);if(!actual)continue;
-    try { const entry = await storage.stat(sibling(actual)); if (entry.size <= 20 * 1024 * 1024) { metadata.coverRef = entry.ref; break; } }
+    try { const entry = await stat(sibling(actual)); if (entry.size <= 20 * 1024 * 1024) { metadata.coverRef = entry.ref; break; } }
     catch (error) { if (isRemoteStorageFailure(error)) throw error; /* Missing or unsafe local cover does not block import. */ }
   }
   return metadata;

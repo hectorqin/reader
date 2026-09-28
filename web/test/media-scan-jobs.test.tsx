@@ -5,6 +5,17 @@ import { render } from '../src/ui/vendor/preact.ts';
 import { ScanJobs } from '../src/media/scan-jobs.tsx';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
+it('shows live phase timing and retains expanded diagnostics when polling updates a job',()=>{
+  const diagnostics={elapsedMs:5000,active:[{phase:'stat',ref:'film.mp4',elapsedMs:3000}],timings:{list:30,stat:1000,metadata:20},logs:[{at:1000,message:'开始扫描'}]};
+  const props={libraryName:'远端',busy:false,jobs:[{id:'scan',state:'running',inspected:5,error:null,diagnostics}],onCancel:vi.fn(),onRetry:vi.fn()};
+  act(()=>render(<ScanJobs {...props}/>,root));
+  expect(root.textContent).toContain('校验文件 · film.mp4 · 已等待 3.0 秒');
+  expect(root.textContent).toContain('平均 1.0 个文件/秒');
+  const details=root.querySelector('details')!;details.open=true;
+  act(()=>render(<ScanJobs {...props} jobs={[{...props.jobs[0]!,inspected:6}]}/>,root));
+  expect(root.querySelector('details')).toBe(details);expect(details.open).toBe(true);
+  expect(root.textContent).toContain('开始扫描');
+});
 it('shows inspected counts without inventing a total and prevents a retry while scanning',()=>{
   const props={libraryName:'家庭影院',busy:false,jobs:[{id:'now',state:'running',inspected:136,error:null},{id:'old',state:'failed',inspected:0,error:'directory-unavailable'}],onCancel:vi.fn(),onRetry:vi.fn()};
   act(()=>render(<ScanJobs {...props}/>,root));

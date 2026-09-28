@@ -9,6 +9,23 @@ const context = (request: ReturnType<typeof vi.fn>) => ({
 });
 const read = (state: ReturnType<typeof context>, id: string) => Reflect.apply(Reflect.get(MediaScreen.prototype, 'loadJobs'), state, [id]);
 
+it('background polling keeps the existing page ready without global busy or a loading redraw', async () => {
+  vi.useFakeTimers();
+  try {
+    let resolve!: (value: unknown) => void;
+    const request=vi.fn().mockImplementation(()=>new Promise(done=>{resolve=done;}));
+    const state=context(request);
+    Reflect.set(state,'loadJobs',(id:string,background:boolean)=>Reflect.apply(Reflect.get(MediaScreen.prototype,'loadJobs'),state,[id,background]));
+    const pending=Reflect.apply(Reflect.get(MediaScreen.prototype,'loadJobs'),state,['a',true]);
+    expect(state.jobState).toBe('ready');expect(state.draw).not.toHaveBeenCalled();
+    resolve({items:[{id:'active',state:'running'}]});await pending;
+    expect(state.draw).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(request).toHaveBeenCalledTimes(2);expect(state.jobState).toBe('ready');
+    resolve({items:[{id:'active',state:'running'}]});await Promise.resolve();
+  } finally {vi.clearAllTimers();vi.useRealTimers();}
+});
+
 it('clears another library’s jobs before reading and never presents a failed read as empty success', async () => {
   const state = context(vi.fn().mockRejectedValue(new Error('offline')));
   await expect(read(state, 'b')).rejects.toThrow('offline');

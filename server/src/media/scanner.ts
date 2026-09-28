@@ -12,6 +12,8 @@ import { readArtistProfile } from './artist-metadata.ts';
 import { MediaCatalog } from './catalog.ts';
 import { MediaStatementDatabase } from './statement-database.ts';
 import { MediaPublisher } from './publisher.ts';
+import { ScanTrace, type ScanDiagnostics, type ScanLogger } from './scan-diagnostics.ts';
+import type { StorageEntry } from './storage/types.ts';
 
 const VIDEO = new Set(['.mp4','.mkv','.avi','.mov','.webm','.m4v','.ts','.m2ts','.mpg','.mpeg']);
 const AUDIO = new Set(['.mp3','.flac','.m4a','.m4b','.aac','.ogg','.opus','.wav','.aiff','.wma']);
@@ -23,8 +25,9 @@ export interface MediaAsset {
 export interface MediaScanJob {
   id:string; libraryId:string; state:'queued'|'running'|'complete'|'failed'|'cancelled';
   inspected:number; error:string|null; startedAt:number; finishedAt:number|null;
+  diagnostics?:ScanDiagnostics;
 }
-interface JobRow { id:string;library_id:string;state:MediaScanJob['state'];inspected:number;error:string|null;started_at:number;finished_at:number|null }
+interface JobRow { id:string;library_id:string;state:MediaScanJob['state'];inspected:number;error:string|null;started_at:number;finished_at:number|null;diagnostics_json:string|null }
 
 /** Stage a complete snapshot before publishing it; failed scans never mark missing. */
 export class MediaScanner {
@@ -33,7 +36,8 @@ export class MediaScanner {
   private readonly active = new Map<string,{controller:AbortController;done:Promise<void>;cancelQueued:(()=>void)|undefined}>();
   private running=0;
   private pending:Array<()=>void>=[];
-  constructor(db:MediaDatabase & Pick<Db,'prepare'>,private readonly libraries:MediaLibraries,private readonly probe:MediaProbe=probeMedia) {
+  private readonly traces=new Map<string,ScanTrace>();
+  constructor(db:MediaDatabase & Pick<Db,'prepare'>,private readonly libraries:MediaLibraries,private readonly probe:MediaProbe=probeMedia,private readonly logger?:ScanLogger) {
     this.db=new MediaStatementDatabase(db);
     db.transaction(()=>{
       db.run(`CREATE TABLE IF NOT EXISTS media_assets (
@@ -48,6 +52,8 @@ export class MediaScanner {
         id TEXT PRIMARY KEY,library_id TEXT NOT NULL REFERENCES media_libraries(id) ON DELETE CASCADE,
         state TEXT NOT NULL,inspected INTEGER NOT NULL DEFAULT 0,error TEXT,started_at INTEGER NOT NULL,finished_at INTEGER)`);
       db.run('CREATE INDEX IF NOT EXISTS media_scan_jobs_library_time ON media_scan_jobs(library_id,started_at)');
+      if(!db.all<{name:string}>('PRAGMA table_info(media_scan_jobs)').some(column=>column.name==='diagnostics_json'))
+        db.run('ALTER TABLE media_scan_jobs ADD COLUMN diagnostics_json TEXT');
       db.run(`CREATE TABLE IF NOT EXISTS media_scan_stage (
         job_id TEXT NOT NULL REFERENCES media_scan_jobs(id) ON DELETE CASCADE,ref TEXT NOT NULL,payload TEXT NOT NULL,
         PRIMARY KEY(job_id,ref))`);
@@ -111,7 +117,8 @@ export class MediaScanner {
   }
 
   private jobDto(row:JobRow):MediaScanJob {
-    return {id:row.id,libraryId:row.library_id,state:row.state,inspected:row.inspected,error:row.error,startedAt:row.started_at,finishedAt:row.finished_at};
+    return {id:row.id,libraryId:row.library_id,state:row.state,inspected:row.inspected,error:row.error,startedAt:row.started_at,finishedAt:row.finished_at,
+      diagnostics:this.traces.get(row.id)?.snapshot()??(row.diagnostics_json?JSON.parse(row.diagnostics_json):undefined)};
   }
 
   jobs(actor:MediaActor,libraryId:string):MediaScanJob[] {
@@ -136,35 +143,71 @@ export class MediaScanner {
   }
 
   private async scan(actor:MediaActor,libraryId:string,jobId:string,signal:AbortSignal):Promise<void> {
+    const trace=new ScanTrace(jobId,libraryId,this.logger);this.traces.set(jobId,trace);trace.note('开始扫描');
+    const heartbeat=setInterval(()=>{
+      trace.note('扫描进度');
+      this.db.run('UPDATE media_scan_jobs SET diagnostics_json=? WHERE id=?',JSON.stringify(trace.snapshot()),jobId);
+    },10_000);
     try {
-      const library=this.libraries.get(actor,libraryId),storage=await this.libraries.storage(actor,libraryId);
+      const library=this.libraries.get(actor,libraryId),storage=await trace.measure('list',undefined,()=>this.libraries.storage(actor,libraryId));
       const supported=library.kind==='video'?VIDEO:AUDIO;
       let inspected=0;
-      for await(const entry of storage.list(signal)) {
-        if(!supported.has(extname(entry.ref).toLowerCase()))continue;
+      const inspect=async(entry:StorageEntry)=>{
+        signal.throwIfAborted();
         const old=this.db.get<AssetRow>('SELECT * FROM media_assets WHERE library_id=? AND ref=?',libraryId,entry.ref);
         const oldProbe=old?this.dto(old).probe:null;
         const unchanged=old&&old.size===entry.size&&old.modified_at===entry.modifiedAt&&old.file_identity===entry.fileIdentity;
         const reusable=unchanged&&old.probe_status==='ready'&&oldProbe?.info?.schemaVersion===MEDIA_PROBE_VERSION&&oldProbe.info.streams.every(stream=>typeof stream.attachedPicture==='boolean');
-        const probe:ProbeResult=reusable?this.dto(old).probe:storage.filePath?await this.probe(await storage.filePath(entry.ref),signal):{status:'unavailable',info:null};
+        const probe:ProbeResult=reusable?this.dto(old).probe:storage.filePath?await trace.measure('probe',entry.ref,async()=>this.probe(await storage.filePath!(entry.ref),signal)):{status:'unavailable',info:null};
         // A cache upgrade must not discard known chapters when the probe is temporarily unavailable.
         if(unchanged&&old.probe_status==='ready'&&oldProbe?.info&&(probe.status!=='ready'||!probe.info))throw Object.assign(new Error('probe-upgrade-failed'),{code:'PROBE_UPGRADE_FAILED'});
         if(!reusable&&probe.info)probe.info={...probe.info,schemaVersion:MEDIA_PROBE_VERSION};
         signal.throwIfAborted();
-        const fresh=await storage.stat(entry.ref);
-        if(fresh.size!==entry.size||fresh.modifiedAt!==entry.modifiedAt||fresh.fileIdentity!==entry.fileIdentity)throw new Error('file-changed-during-scan');
-        const metadata=await readLocalMetadata(storage,entry.ref,probe);
-        const artist=metadata.albumArtist||metadata.artist;
-        if(library.kind==='music'&&artist)metadata.artistProfile=await readArtistProfile(storage,entry.ref,artist,metadata.warnings);
+        // Remote scans publish directory snapshots. Resolving each file again
+        // can fetch an expensive signed URL; only actual reads need that lookup.
+        if(storage.filePath){
+          const fresh=await trace.measure('stat',entry.ref,()=>storage.stat(entry.ref));
+          if(fresh.size!==entry.size||fresh.modifiedAt!==entry.modifiedAt||fresh.fileIdentity!==entry.fileIdentity)throw new Error('file-changed-during-scan');
+        }
+        const metadata=await trace.measure('metadata',entry.ref,async()=>{
+          const metadata=await readLocalMetadata(storage,entry.ref,probe),artist=metadata.albumArtist||metadata.artist;
+          if(library.kind==='music'&&artist)metadata.artistProfile=await readArtistProfile(storage,entry.ref,artist,metadata.warnings);
+          return metadata;
+        });
+        signal.throwIfAborted();
         this.db.run('INSERT INTO media_scan_stage(job_id,ref,payload) VALUES(?,?,?)',jobId,entry.ref,JSON.stringify({...entry,probe,metadata}));
         this.db.run('UPDATE media_scan_jobs SET inspected=? WHERE id=?',++inspected,jobId);
-      }
+      };
+      // Remote sidecar reads are I/O bound. Keep local ffprobe sequential and drain
+      // every batch before failure/cleanup so no worker writes after staging is removed.
+      const concurrency=storage.filePath?1:4,iterator=storage.list(signal)[Symbol.asyncIterator]();
+      let batch:StorageEntry[]=[];
+      const flush=async()=>{
+        const results=await Promise.allSettled(batch.map(inspect));batch=[];
+        const failure=results.find(result=>result.status==='rejected');
+        if(failure?.status==='rejected')throw failure.reason;
+      };
+      try{
+        for(;;){
+          const next=await trace.measure('list',undefined,()=>iterator.next());
+          if(next.done)break;
+          if(!supported.has(extname(next.value.ref).toLowerCase()))continue;
+          batch.push(next.value);if(batch.length===concurrency)await flush();
+        }
+        if(batch.length)await flush();
+      }finally{await iterator.return?.();}
       signal.throwIfAborted();
-      this.publish(libraryId,jobId);
+      const end=trace.begin('publish');try{this.publish(libraryId,jobId);}finally{end();}
+      trace.note('扫描完成');
     }catch(error){
       const code=signal.aborted?'cancelled':(error as NodeJS.ErrnoException).code==='ENOENT'?'directory-unavailable':(error as NodeJS.ErrnoException).code==='PROBE_UPGRADE_FAILED'?'probe-upgrade-failed':(error as NodeJS.ErrnoException).code==='MEDIA_OPENLIST_AUTH'?'openlist-auth-failed':(error as NodeJS.ErrnoException).code?.startsWith('MEDIA_OPENLIST_')?'openlist-unavailable':'scan-failed';
       this.db.run('UPDATE media_scan_jobs SET state=?,error=?,finished_at=? WHERE id=?',signal.aborted?'cancelled':'failed',code,Date.now(),jobId);
-    }finally{this.db.run('DELETE FROM media_scan_stage WHERE job_id=?',jobId);}
+      trace.note(signal.aborted?'扫描已取消':`扫描失败：${code}`,!signal.aborted);
+    }finally{
+      clearInterval(heartbeat);
+      this.db.run('UPDATE media_scan_jobs SET diagnostics_json=? WHERE id=?',JSON.stringify(trace.snapshot()),jobId);
+      this.traces.delete(jobId);this.db.run('DELETE FROM media_scan_stage WHERE job_id=?',jobId);
+    }
   }
 
   private publish(libraryId:string,jobId:string):void {

@@ -9,7 +9,11 @@ export interface SearchItem extends Item {channel:MediaChannel;libraryName:strin
 export interface Edition {id:string;label:string;parts:Part[];revision?:string}
 export interface Detail extends Item {children:Item[];editions:Edition[]}
 export interface Narrator {name:string;works:number;editions:number}
-export interface ScanJob {id:string;libraryId?:string;state:string;inspected:number;error:string|null}
+export interface ScanDiagnostics {
+  elapsedMs:number;active:Array<{phase:string;ref?:string;elapsedMs:number}>;
+  timings:Record<string,number>;logs:Array<{at:number;message:string}>;
+}
+export interface ScanJob {id:string;libraryId?:string;state:string;inspected:number;error:string|null;diagnostics?:ScanDiagnostics}
 export interface Playback {id:string;itemId?:string;partId:string;streamUrl:string;contentType:string;expiresAt:number;position:number;start:number;end:number|null;revision:number}
 export interface Progress {position:number;revision:number;completed:boolean}
 export interface MediaAccount {username:string;displayName:string;role:'admin'|'member';server:string}

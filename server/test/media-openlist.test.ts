@@ -172,12 +172,13 @@ async function serverFixture(t: TestContext) {
     ['/音乐/COVER.JPG', Buffer.from([255,216,255,1,2,3])],
     ['/音乐/Artist.NFO', Buffer.from('<artist><name>演唱者</name><biography>远程歌手简介</biography></artist>')],
   ]);
-  const state = {token:'library-secret',password:'directory-secret',failed:false,failSidecar:false,origin:'',requests:[] as string[]};
+  const state = {token:'library-secret',password:'directory-secret',failed:false,failSidecar:false,origin:'',requests:[] as string[],apiCalls:[] as Array<{method:string;path:string}>};
   const server = createServer(async (req,res) => {
     state.requests.push(req.url!);
     if (req.url!.startsWith('/api/fs/')) {
       let body='';for await (const chunk of req) body += chunk;
       const input = JSON.parse(body);
+      state.apiCalls.push({method:req.url!,path:input.path});
       res.setHeader('content-type','application/json');
       if (req.headers.authorization !== (state.token || undefined) || input.password !== state.password) { res.end(JSON.stringify({code:403,message:'should never expose secrets'})); return; }
       if (state.failed) { res.end(JSON.stringify({code:500,message:'internal failure'})); return; }
@@ -203,6 +204,26 @@ async function serverFixture(t: TestContext) {
   return {state,files};
 }
 
+test('OpenList scans paginated media snapshots without get calls and refreshes each scan',async t=>{
+  const {state,files}=await serverFixture(t),db=new Db(':memory:');
+  files.clear();for(let i=0;i<220;i++)files.set(`/音乐/track-${i}.mp3`,Buffer.from('audio'));
+  const libraries=new MediaLibraries(db),admin={id:'admin',role:'admin'} as const;
+  const library=await libraries.create(admin,{name:'Remote',kind:'music',access:'all',storage:'openlist',root:'/音乐',openlist:{baseUrl:state.origin,token:state.token,password:state.password}});
+  const scanner=new MediaScanner(db,libraries);
+  t.after(async()=>{await scanner.close();db.close();});
+  const scan=async()=>{const job=scanner.start(admin,library.id);await scanner.wait(library.id);return scanner.job(admin,job.id);};
+  state.apiCalls.length=0;
+  assert.equal((await scan()).state,'complete');
+  assert.equal(scanner.assets(admin,library.id).total,220);
+  assert.deepEqual(state.apiCalls.map(call=>call.method),['/api/fs/list','/api/fs/list']);
+  const removed=scanner.assets(admin,library.id).items.find(asset=>asset.ref==='track-0.mp3')!;
+  files.delete('/音乐/track-0.mp3');state.failed=true;
+  assert.equal((await scan()).state,'failed');assert.equal(scanner.asset(admin,removed.id).available,true);
+  state.failed=false;state.apiCalls.length=0;
+  assert.equal((await scan()).state,'complete');assert.equal(scanner.asset(admin,removed.id).available,false);
+  assert.ok(state.apiCalls.every(call=>call.method==='/api/fs/list'));
+});
+
 test('OpenList library creation, scanning, sidecars, playback, access revocation and failed scans work end to end', async t => {
   const {state} = await serverFixture(t), db = new Db(':memory:');
   t.after(() => db.close());
@@ -222,8 +243,10 @@ test('OpenList library creation, scanning, sidecars, playback, access revocation
   assert.equal(libraries.list(admin).length,1);
   const scanner = new MediaScanner(db,libraries,async () => {throw new Error('Remote URL must never reach local ffprobe');});
   t.after(()=>scanner.close());
+  state.apiCalls.length=0;
   const job = scanner.start(admin,library.id); await scanner.wait(library.id);
   assert.equal(scanner.job(admin,job.id).state,'complete');
+  assert.deepEqual(state.apiCalls.filter(call=>call.method==='/api/fs/get').map(call=>call.path),['/音乐/TRACK.NFO','/音乐/Artist.NFO']);
   const assets = scanner.assets(admin,library.id).items;
   assert.equal(assets.length,1); assert.equal(assets[0]!.probe.status,'unavailable');
   const catalog = scanner.catalog.list(admin,library.id,{kind:'track'});

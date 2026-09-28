@@ -32,7 +32,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   const database=options.database||ctx.db;
   const accounts=new DatabaseMediaAccounts(ctx.db);
   const references=database!==ctx.db?new MediaAccountReferences(database,accounts):undefined;
-  const libraries=new MediaLibraries(database,true,accounts,references),scanner=new MediaScanner(database,libraries);
+  const libraries=new MediaLibraries(database,true,accounts,references),scanner=new MediaScanner(database,libraries,undefined,app.log);
   const playback=new MediaPlayback(database,libraries,accounts);
   const background=new MediaBackgroundGrants(database,libraries,accounts);
   const userState=new MediaUserState(database,libraries,scanner.catalog);

@@ -8,6 +8,46 @@ import { MediaLibraries } from '../src/media/libraries.ts';
 import { MediaScanner } from '../src/media/scanner.ts';
 import type { MediaProbe } from '../src/media/probe.ts';
 import {MEDIA_PROBE_VERSION} from '../src/media/probe.ts';
+import type { MediaStorage } from '../src/media/storage/types.ts';
+
+test('remote scan overlaps bounded metadata reads and exposes diagnostic history',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'scan-concurrency-')),db=new Db(':memory:');
+  const libraries=new MediaLibraries(db),actor={id:'admin',role:'admin'} as const;
+  const library=await libraries.create(actor,{name:'Remote',kind:'video',root,access:'all'});
+  const entries=Array.from({length:8},(_,i)=>({ref:`film-${i}.mp4`,name:`film-${i}.mp4`,size:1,modifiedAt:0,fileIdentity:null}));
+  let active=0,peak=0,fail=false;
+  const storage:MediaStorage={
+    async *list(){yield* entries;},
+    async stat(){throw Error('remote scan must use its directory snapshot');},
+    async siblings(ref){
+      active++;peak=Math.max(peak,active);
+      const live=scanner.job(actor,db.get<{id:string}>('SELECT id FROM media_scan_jobs ORDER BY rowid DESC LIMIT 1')!.id);
+      assert.ok(live.diagnostics?.active.some(operation=>operation.phase==='metadata'));
+      await new Promise(resolve=>setTimeout(resolve,10));active--;
+      if(fail&&ref===entries[0]!.ref)throw Object.assign(new Error('secret upstream URL must not be logged'),{code:'MEDIA_OPENLIST_UNAVAILABLE'});
+      return entries;
+    },
+    async siblingNames(){return new Set(entries.map(entry=>entry.name));},
+    async open(){throw Error('unexpected open');},
+  };
+  t.mock.method(libraries,'storage',async()=>storage);
+  const scanner=new MediaScanner(db,libraries);
+  t.after(async()=>{await scanner.close();db.close();await rm(root,{recursive:true,force:true});});
+  const job=scanner.start(actor,library.id);await scanner.wait(library.id);
+  assert.equal(scanner.job(actor,job.id).state,'complete');
+  assert.ok(peak>1&&peak<=4,`expected bounded parallel checks, observed ${peak}`);
+  const diagnostics=scanner.job(actor,job.id).diagnostics!;
+  assert.equal(diagnostics.timings.stat,0);assert.ok(diagnostics.timings.metadata>0);assert.ok(diagnostics.logs.some(log=>log.message==='扫描完成'));
+  assert.deepEqual(diagnostics.active,[]);
+  const before=scanner.assets(actor,library.id);
+  fail=true;const failed=scanner.start(actor,library.id);await scanner.wait(library.id);
+  assert.equal(scanner.job(actor,failed.id).state,'failed');assert.equal(active,0);
+  assert.equal(db.get<{n:number}>('SELECT count(*) n FROM media_scan_stage')!.n,0);
+  assert.deepEqual(scanner.assets(actor,library.id),before);
+  const failedDiagnostics=scanner.job(actor,failed.id).diagnostics!;
+  assert.ok(failedDiagnostics.logs.some(log=>log.message.includes('操作中断：metadata')));
+  assert.ok(!JSON.stringify(failedDiagnostics).includes('secret upstream'));
+});
 
 test('publication skips unchanged catalog writes but replays sidecars, legacy fingerprints and restored files atomically',async t=>{
   const root=await mkdtemp(join(tmpdir(),'media-publication-delta-')),db=new Db(':memory:'),libraries=new MediaLibraries(db);

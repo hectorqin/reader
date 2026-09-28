@@ -14,11 +14,14 @@ export async function readArtistProfile(storage:MediaStorage,ref:string,name:str
     let sourceRef=sibling('artist.nfo');
     try{
       // Remote directory listing distinguishes an absent optional sidecar from a failed read.
-      const names=storage.filePath?undefined:await storage.siblingNames(sourceRef);
+      const listed=storage.filePath?undefined:await storage.siblings(sourceRef);
+      const entries=listed?new Map(listed.map(entry=>[entry.ref,entry])):undefined;
+      const names=listed?new Set(listed.map(entry=>entry.name)):undefined;
+      const stat=async(ref:string)=>entries?.get(ref)??await storage.stat(ref);
       const actualName=(name:string)=>!names||names.has(name)?name:[...names].find(value=>value.toLowerCase()===name.toLowerCase());
       const sourceName=actualName('artist.nfo');if(!sourceName)continue;
       sourceRef=sibling(sourceName);
-      if((await storage.stat(sourceRef)).size>1024*1024)throw Error('artist-nfo-too-large');
+      if((await stat(sourceRef)).size>1024*1024)throw Error('artist-nfo-too-large');
       const {stream}=await storage.open(sourceRef),chunks:Buffer[]=[];let size=0;
       for await(const chunk of stream){size+=chunk.length;if(size>1024*1024){stream.destroy();throw Error('artist-nfo-too-large');}chunks.push(Buffer.from(chunk));}
       const xml=Buffer.concat(chunks).toString('utf8');
@@ -29,7 +32,7 @@ export async function readArtistProfile(storage:MediaStorage,ref:string,name:str
       if(typeof node.biography==='string'&&node.biography.trim())profile.plot=node.biography.trim().slice(0,32000);
       for(const file of ['artist.jpg','artist.png','artist.webp']){
         const actual=actualName(file);if(!actual)continue;
-        try{const entry=await storage.stat(sibling(actual));if(entry.size>0&&entry.size<=20*1024*1024){profile.coverRef=entry.ref;break;}}catch(error){if(isRemoteStorageFailure(error))throw error;/* Missing or unsafe local portraits do not block the biography. */}
+        try{const entry=await stat(sibling(actual));if(entry.size>0&&entry.size<=20*1024*1024){profile.coverRef=entry.ref;break;}}catch(error){if(isRemoteStorageFailure(error))throw error;/* Missing or unsafe local portraits do not block the biography. */}
       }
       return profile;
     }catch(error){if(isRemoteStorageFailure(error))throw error;if((error as NodeJS.ErrnoException).code!=='ENOENT')warnings.push('artist-nfo-unreadable');}
