@@ -398,4 +398,18 @@ for(const isolated of [false,true])test(`media HTTP enforces authentication, gra
     assert.equal(cleanup.sweep(),0);assert.ok(store.get("SELECT id FROM users WHERE id='grant-only'"));
     assert.ok(store.get("SELECT id FROM media_items WHERE id='hierarchy-show'"),'shared catalog survives user cleanup');
   }
+  const cleanupUrl=`${url}/${id}/missing-resources`;
+  assert.equal((await app.inject({url:cleanupUrl+'?path='})).statusCode,401);
+  assert.equal((await app.inject({url:cleanupUrl+'?path=',headers:member})).statusCode,403);
+  assert.equal((await app.inject({url:cleanupUrl,headers:admin})).statusCode,400);
+  assert.equal((await app.inject({url:cleanupUrl+'?path=..',headers:admin})).statusCode,400);
+  const absent=await app.inject({url:cleanupUrl+'?path=',headers:admin});assert.equal(absent.statusCode,200);assert.equal(absent.headers['cache-control'],'no-store');
+  const cleanupRequest={method:'POST' as const,url:cleanupUrl+'/cleanup',payload:{path:'',revision:absent.json().revision}};
+  assert.equal((await app.inject(cleanupRequest)).statusCode,401);
+  assert.equal((await app.inject({...cleanupRequest,headers:member})).statusCode,403);
+  assert.equal((await app.inject({...cleanupRequest,headers:admin,payload:{path:''}})).statusCode,400);
+  assert.equal((await app.inject({...cleanupRequest,headers:admin,payload:{path:'',revision:'0'.repeat(64)}})).statusCode,409);
+  const cleaned=await app.inject({...cleanupRequest,headers:admin});assert.equal(cleaned.statusCode,200,cleaned.body);
+  assert.deepEqual(mediaDb.all('PRAGMA foreign_key_check'),[]);
+
 });

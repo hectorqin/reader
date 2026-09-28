@@ -1,0 +1,107 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,mkdir,writeFile,rm,readFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {Db} from '../src/db/index.ts';
+import {MediaLibraries} from '../src/media/libraries.ts';
+import {MediaScanner} from '../src/media/scanner.ts';
+import {MediaCleanup} from '../src/media/cleanup.ts';
+import {MediaPlayback} from '../src/media/playback.ts';
+import {MediaUserState} from '../src/media/user-state.ts';
+import {MediaBackgroundGrants} from '../src/media/background-grants.ts';
+import {MediaScraping} from '../src/media/scraping.ts';
+import {MediaScrapeJobs} from '../src/media/scrape-jobs.ts';
+
+test('directory cleanup is scoped, transactional and removes only orphaned catalog/user records',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'media-cleanup-')),db=new Db(':memory:'),libraries=new MediaLibraries(db),actor={id:'admin',role:'admin'} as const;
+  const scanner=new MediaScanner(db,libraries,async()=>({status:'ready',info:{format:'mp4',duration:20,streams:[],tags:{},chapters:[]}}));
+  new MediaPlayback(db,libraries);new MediaUserState(db,libraries,scanner.catalog);new MediaBackgroundGrants(db,libraries);
+  new MediaScrapeJobs(db,scanner.catalog,new MediaScraping(db,scanner.catalog,[]));
+  const cleanup=new MediaCleanup(db,libraries,scanner.catalog);
+  t.after(async()=>{await scanner.close();db.close();await rm(root,{recursive:true,force:true});});
+  for(const id of ['admin','member'])db.run('INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES(?,?,?,?,0,0)',id,id,'unused',id==='admin'?'admin':'member');
+  const lost='🎬100%_/Show/Season 01/Show S01E01.mp4',kept='🎬100%_/Show/Season 02/Show S02E01.mp4',sibling='🎬100%_0/other.mp4';
+  for(const ref of [lost,kept,sibling]){await mkdir(join(root,ref,'..'),{recursive:true});await writeFile(join(root,ref),'fixture');}
+  const library=await libraries.create(actor,{name:'video',kind:'video',root,access:'all'});
+  assert.throws(()=>cleanup.preview(actor,library.id,''),{code:'MEDIA_CLEANUP_SCAN_REQUIRED'});
+  const scan=async()=>{scanner.start(actor,library.id);await scanner.wait(library.id);};await scan();
+  const part=db.get<{id:string;item_id:string;parent_id:string}>(`SELECT p.id,e.item_id,i.parent_id FROM media_parts p JOIN media_assets a ON a.id=p.asset_id JOIN media_editions e ON e.id=p.edition_id JOIN media_items i ON i.id=e.item_id WHERE a.ref=?`,lost)!;
+  const keptPart=db.get<{id:string}>(`SELECT p.id FROM media_parts p JOIN media_assets a ON a.id=p.asset_id WHERE a.ref=?`,kept)!.id;
+  for(const id of ['admin','member']){
+    db.run('INSERT INTO media_favorites VALUES(?,?,0)',id,part.item_id);
+    db.run('INSERT INTO media_queue VALUES(?,?,?,0,0)',id,id,part.id);
+    db.run('INSERT INTO media_progress VALUES(?,?,5,0,1,?,0)',id,part.id,'session');
+  }
+  db.run("INSERT INTO media_playback_sessions(id,user_id,part_id,token_hash,expires_at,auth_version,created_at) VALUES('session','admin',?,'hash',9999999999999,0,0)",part.id);
+  db.run("INSERT INTO media_background_sessions VALUES('session','grant',9999999999999)");
+  db.run("INSERT INTO media_background_grants(id,user_id,token_hash,auth_version,expires_at,parts_json) VALUES('grant','admin','grant-hash',0,9999999999999,?)",JSON.stringify([part.id,keptPart]));
+  await rm(join(root,lost));await rm(join(root,sibling));await scan();
+  assert.throws(()=>cleanup.preview({id:'member',role:'member'},library.id,''),{code:'ADMIN_REQUIRED'});
+  for(const path of ['../','/','🎬100%_/../','x\\y','x//y','C:/x'])assert.throws(()=>cleanup.preview(actor,library.id,path),{code:'MEDIA_FOLDER_PATH'});
+  const preview=cleanup.preview(actor,library.id,'🎬100%_/Show/Season 01');
+  assert.equal(preview.assets,1);assert.equal(preview.items,2);assert.equal(preview.favorites,2);assert.equal(preview.progress,2);assert.equal(preview.queue,2);
+  db.run("UPDATE media_assets SET available=1 WHERE ref=?",lost);
+  assert.throws(()=>cleanup.remove(actor,library.id,preview.path,preview.revision),{code:'MEDIA_CLEANUP_CHANGED'});
+  db.run("UPDATE media_assets SET available=0 WHERE ref=?",lost);
+  // Simulate a late database failure to verify dependent state is also rolled back.
+  db.run("CREATE TRIGGER reject_cleanup BEFORE DELETE ON media_assets BEGIN SELECT RAISE(ABORT,'fixture failure'); END");
+  assert.throws(()=>cleanup.remove(actor,library.id,preview.path,preview.revision),/fixture failure/);
+  assert.equal(db.get<{n:number}>('SELECT count(*) n FROM media_queue')!.n,2);
+  assert.ok(db.get('SELECT id FROM media_playback_sessions WHERE id=?','session'));
+  db.run('DROP TRIGGER reject_cleanup');
+  const result=cleanup.remove(actor,library.id,preview.path,preview.revision);
+  assert.equal(result.returnPath,'🎬100%_/Show');
+  assert.equal(db.get('SELECT id FROM media_items WHERE id=?',part.item_id),undefined);
+  assert.equal(db.get('SELECT id FROM media_items WHERE id=?',part.parent_id),undefined);
+  assert.equal(db.get<{n:number}>("SELECT count(*) n FROM media_items WHERE kind='series'")!.n,1);
+  assert.ok(db.get('SELECT id FROM media_assets WHERE ref=?',sibling),'prefix sibling must survive');
+  for(const table of ['media_progress','media_queue','media_playback_sessions','media_background_sessions','media_favorites'])assert.equal(db.get<{n:number}>(`SELECT count(*) n FROM ${table}`)!.n,0,table);
+  assert.equal(db.get<{parts_json:string}>("SELECT parts_json FROM media_background_grants WHERE id='grant'")!.parts_json,JSON.stringify([keptPart]));
+  assert.equal(await readFile(join(root,kept),'utf8'),'fixture');
+  assert.deepEqual(db.all('PRAGMA foreign_key_check'),[]);
+  assert.throws(()=>cleanup.remove(actor,library.id,preview.path,preview.revision),{code:'MEDIA_CLEANUP_CHANGED'});
+  const empty=cleanup.preview(actor,library.id,preview.path);assert.equal(empty.assets,0);
+  assert.equal(cleanup.remove(actor,library.id,preview.path,empty.revision).assets,0);
+  db.run("UPDATE media_scan_jobs SET state='failed' WHERE id=(SELECT id FROM media_scan_jobs ORDER BY rowid DESC LIMIT 1)");
+  assert.throws(()=>cleanup.preview(actor,library.id,''),{code:'MEDIA_CLEANUP_SCAN_REQUIRED'});
+  db.run("UPDATE media_scan_jobs SET state='running' WHERE id=(SELECT id FROM media_scan_jobs ORDER BY rowid DESC LIMIT 1)");
+  assert.throws(()=>cleanup.preview(actor,library.id,''),{code:'SCAN_RUNNING'});
+});
+
+test('cleanup retains a shared audiobook edition, other libraries and records outside the literal directory',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'media-cleanup-shared-')),db=new Db(':memory:'),libraries=new MediaLibraries(db),actor={id:'admin',role:'admin'} as const;
+  const scanner=new MediaScanner(db,libraries,async()=>({status:'unavailable',info:null}));
+  new MediaPlayback(db,libraries);new MediaUserState(db,libraries,scanner.catalog);new MediaBackgroundGrants(db,libraries);
+  new MediaScrapeJobs(db,scanner.catalog,new MediaScraping(db,scanner.catalog,[]));
+  const cleanup=new MediaCleanup(db,libraries,scanner.catalog);
+  t.after(async()=>{await scanner.close();db.close();await rm(root,{recursive:true,force:true});});
+  db.run("INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES('admin','admin','unused','admin',0,0)");
+  for(const ref of ['100%_/one.mp3','100%_/two.mp3','100xx/other.mp3']){await mkdir(join(root,ref,'..'),{recursive:true});await writeFile(join(root,ref),'fixture');}
+  const library=await libraries.create(actor,{name:'books',kind:'audiobook',root,access:'all'});
+  const other=await libraries.create(actor,{name:'other',kind:'audiobook',root,access:'all'});
+  const scan=async(id:string)=>{scanner.start(actor,id);await scanner.wait(id);};await scan(library.id);await scan(other.id);
+  const original=scanner.catalog.list(actor,library.id,{kind:'audiobook'}).items.find(item=>item.title==='100%_')!;
+  const detail=scanner.catalog.detail(actor,original.id);assert.equal(detail.editions[0]!.parts.length,2);
+  scanner.catalog.override(actor,original.id,{title:'人工书名'});
+  db.run('INSERT INTO media_favorites VALUES(?,?,0)',actor.id,original.id);
+  const otherCount=db.get<{n:number}>('SELECT count(*) n FROM media_assets WHERE library_id=?',other.id)!.n;
+  await rm(join(root,'100%_/one.mp3'));await rm(join(root,'100xx/other.mp3'));await scan(library.id);
+  const preview=cleanup.preview(actor,library.id,'100%_');assert.equal(preview.assets,1);assert.equal(preview.editions,0);assert.equal(preview.items,0);
+  db.run("INSERT INTO media_scrape_jobs VALUES('busy','admin','tmdb','running',0)");
+  db.run("INSERT INTO media_scrape_job_items VALUES('busy',?,0,'running',NULL)",original.id);
+  assert.throws(()=>cleanup.remove(actor,library.id,'100%_',preview.revision),{code:'SCRAPE_RUNNING'});
+  db.run("UPDATE media_scrape_jobs SET state='complete' WHERE id='busy'");
+  cleanup.remove(actor,library.id,'100%_',preview.revision);
+  assert.equal(scanner.catalog.detail(actor,original.id).editions[0]!.parts.length,1);
+  assert.equal(scanner.catalog.detail(actor,original.id).title,'人工书名');
+  assert.equal(db.get<{n:number}>('SELECT count(*) n FROM media_assets WHERE library_id=?',other.id)!.n,otherCount);
+  assert.ok(db.get('SELECT item_id FROM media_favorites WHERE item_id=?',original.id));
+  assert.ok(db.get("SELECT id FROM media_assets WHERE library_id=? AND ref='100xx/other.mp3'",library.id));
+  await writeFile(join(root,'100%_/one.mp3'),'restored');await scan(library.id);
+  assert.equal(scanner.catalog.detail(actor,original.id).editions[0]!.parts.length,2,'restored file can be imported again');
+  const entire=cleanup.preview(actor,library.id,'');assert.equal(entire.assets,1);
+  cleanup.remove(actor,library.id,'',entire.revision);
+  assert.equal(db.get<{n:number}>('SELECT count(*) n FROM media_assets WHERE library_id=?',library.id)!.n,2);
+  assert.deepEqual(db.all('PRAGMA foreign_key_check'),[]);
+});

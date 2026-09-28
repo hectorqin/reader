@@ -8,6 +8,15 @@ import {ApiError} from '../src/api/errors.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
 const button=(text:string)=>Array.from(root.querySelectorAll('button')).find(button=>button.textContent?.includes(text))!;
+it('only administrators see directory cleanup',async()=>{
+  const request=vi.fn().mockResolvedValue({total:0,items:[]});
+  const props={api:{request} as unknown as MediaApi,libraryId:'lib',onPlay:vi.fn(),onQueue:vi.fn(),onDetail:vi.fn()};
+  await act(async()=>render(<MediaFolders {...props}/>,root));
+  await vi.waitFor(()=>expect(root.textContent).toContain('暂无已扫描'));
+  expect(button('清理失效资源')).toBeUndefined();
+  await act(async()=>render(<MediaFolders {...props} admin/>,root));
+  expect(button('清理失效资源')).toBeDefined();
+});
 it('opens a folder and file, plays its chapters and returns to the same directory',async()=>{
   const parts=[{id:'p',assetId:'a',title:'第一章',start:0,end:10,available:true}];
   const request=vi.fn(async(path:string)=>path.startsWith('assets/')?{assetId:'a',path:'Book/one.m4b',available:true,items:[{id:'item',title:'作品',editions:[{id:'e',label:'版本',parts}]}]}:new URLSearchParams(path.split('?')[1]).get('path')==='Book'?{total:1,items:[{name:'one.m4b',path:'Book/one.m4b',kind:'file',assetId:'a',files:1,availableFiles:1,size:100}]}:{total:1,items:[{name:'Book',path:'Book',kind:'folder',files:1,availableFiles:1,size:100}]});

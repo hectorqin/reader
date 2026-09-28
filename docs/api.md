@@ -848,6 +848,8 @@ Reader 对外提供的只读 OPDS 服务与 WebDAV 备份上传见[接入指南]
 | PATCH /libraries/:id | 修改名称或 OpenList 凭据 |
 | PUT /libraries/:id/access | 设置访问范围与用户列表 |
 | POST /libraries/:id/scan | 提交扫描任务 |
+| GET /libraries/:id/missing-resources?path=库内相对目录 | 管理员预览当前目录及子目录的缺失资源清理范围；path 空字符串表示根目录 |
+| POST /libraries/:id/missing-resources/cleanup | 管理员提交 {path,revision}；revision 来自预览，范围变化返回 MEDIA_CLEANUP_CHANGED |
 | GET /libraries/:id/jobs、GET /jobs/:id | 查看任务状态 |
 | GET /browse、GET /libraries/:id/items | 按频道、分类或库浏览 |
 | GET /items/:id | 作品、版本与章节详情 |

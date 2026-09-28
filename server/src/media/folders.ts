@@ -4,12 +4,16 @@ import type { MediaActor } from './libraries.ts';
 import { MediaLibraries } from './libraries.ts';
 import { MediaCatalog } from './catalog.ts';
 
+export function validateMediaFolderPath(path:string){
+  if(path.length>4000||path.includes('\\')||path.includes(':')||path.includes('\0')||(path&&path.split('/').some(part=>!part||part==='.'||part==='..')))throw badRequest('无效的媒体库内目录','MEDIA_FOLDER_PATH');
+}
+
 /** Browse the published media snapshot, without exposing server paths or unrelated files. */
 export class MediaFolders {
   constructor(private readonly db:MediaDatabase,private readonly libraries:MediaLibraries,private readonly catalog:MediaCatalog){}
   list(actor:MediaActor,libraryId:string,path='',offset=0,limit=60){
     this.libraries.get(actor,libraryId);
-    if(path.length>4000||path.includes('\\')||path.includes(':')||path.includes('\0')||(path&&path.split('/').some(part=>!part||part==='.'||part==='..')))throw badRequest('无效的媒体库内目录','MEDIA_FOLDER_PATH');
+    validateMediaFolderPath(path);
     const prefix=path?path+'/':'';
     // Binary range ['path/', 'path0') covers exactly the descendants and uses (library_id,ref).
     // Keep the literal prefix check too; unlike LIKE, names containing % or _ are not patterns.
