@@ -9,6 +9,7 @@ export function PlaybackProblem({player,onVersions,onBack,backLabel='返回浏�
     <Icon size={28} strokeWidth={1.5} aria-hidden="true"/>
     <strong>{blocked?'播放会话已失效':code===4?'当前设备无法直接播放':code===3?'资源解码失败':'播放提示'}</strong>
     <p>{player.error}</p>
+    {!blocked&&player.canRetryViaProxy&&<button className="media-primary" onClick={()=>player.retryViaProxy()}>通过服务器重试</button>}
     {(onVersions||onBack)&&<div>{onVersions&&<button className="media-primary" onClick={onVersions}>{blocked?'重新选择播放':'选择播放版本'}</button>}{onBack&&<button onClick={onBack}>{backLabel}</button>}</div>}
   </section>;
 }

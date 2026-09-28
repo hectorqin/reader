@@ -23,12 +23,13 @@ describe('media playback lifecycle',()=>{
   });
   it('falls back once in auto mode without creating a second playback session',async()=>{
     const {player,playback}=setup();playback.mockResolvedValue({...session('film'),playbackMode:'auto'});
-    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(new DOMException('source failed','NotSupportedError')).mockResolvedValueOnce();
+    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(new DOMException('source failed','NotSupportedError')).mockRejectedValueOnce(new DOMException('CORS failed','NotSupportedError')).mockResolvedValueOnce();
     await player.play([{...part('film'),video:true}]);
     await vi.waitFor(()=>expect(player.video.src).toContain('proxy=1'));
-    expect(playback).toHaveBeenCalledTimes(1);expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);
+    expect(playback).toHaveBeenCalledTimes(1);expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(3);
+    expect(player.video.hasAttribute('crossorigin')).toBe(false);
     player.video.dispatchEvent(new Event('error'));
-    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);expect(player.error).not.toBe('');await player.stop();
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(3);expect(player.error).not.toBe('');await player.stop();
   });
   it('does not proxy on autoplay rejection, explicit direct mode or a paused restore',async()=>{
     for(const mode of ['autoplay','direct','restore'] as const){
@@ -38,6 +39,28 @@ describe('media playback lifecycle',()=>{
       if(mode==='restore')player.video.dispatchEvent(new Event('error'));
       await Promise.resolve();expect(player.video.src).not.toContain('proxy=1');await player.stop();
     }
+  });
+  it('re-enables automatic recovery after a paused restore is resumed by the user',async()=>{
+    const {player,playback}=setup();playback.mockResolvedValue({...session('film'),playbackMode:'auto'});
+    await player.play([{...part('film'),video:true}],0,false,{autoplay:false});
+    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValue(new DOMException('source blocked','NotSupportedError'));
+    player.toggle();
+    await vi.waitFor(()=>expect(player.video.src).toContain('proxy=1'));
+    await player.stop();
+  });
+  it('tries anonymous CORS after opaque direct playback fails before using proxy',async()=>{
+    const {player,playback}=setup();playback.mockResolvedValue({...session('film'),playbackMode:'auto'});
+    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(new DOMException('opaque source blocked','NotSupportedError')).mockResolvedValueOnce();
+    await player.play([{...part('film'),video:true}]);
+    await vi.waitFor(()=>expect(player.video.crossOrigin).toBe('anonymous'));
+    expect(player.video.src).not.toContain('proxy=1');expect(playback).toHaveBeenCalledTimes(1);await player.stop();
+  });
+  it('allows an explicit proxy retry in direct mode without another session',async()=>{
+    const {player,playback}=setup();playback.mockResolvedValue({...session('film'),playbackMode:'direct'});
+    await player.play([{...part('film'),video:true}],0,false,{autoplay:false});
+    expect(player.canRetryViaProxy).toBe(true);player.retryViaProxy();
+    expect(player.video.src).toContain('proxy=1');expect(player.canRetryViaProxy).toBe(false);
+    expect(playback).toHaveBeenCalledTimes(1);await player.stop();
   });
   it('closes the mini player, saves progress and releases its media and queue',async()=>{
     const {player,request}=setup();await player.play([part('a'),part('b')]);ready(player);

@@ -77,16 +77,32 @@ export class MediaPlayer extends EventTarget {
   support='';
   loadingStatus='';
   private proxyFallback=false;
+  private corsRetry=false;
   private allowAutomaticFallback=false;
   private sourceAttempt=0;
   private startupTimer:ReturnType<typeof setTimeout>|undefined;
   private startupAt=0;
   private clearStartupTimer(){if(this.startupTimer)clearTimeout(this.startupTimer);this.startupTimer=undefined;}
-  private retryWithProxy():boolean{
-    if(!this.session||!this.allowAutomaticFallback||this.session.playbackMode!=='auto'||this.proxyFallback||this.nativeActive||this.playbackBlocked)return false;
+  get canRetryViaProxy(){return this.active&&!this.nativeActive&&!this.playbackBlocked&&!this.proxyFallback;}
+  retryViaProxy(){this.allowAutomaticFallback=true;this.retryWithProxy(true);}
+  private recoverWebPlayback():boolean{
+    if(this.session&&this.allowAutomaticFallback&&this.session.playbackMode==='auto'&&!this.proxyFallback&&!this.corsRetry&&!this.nativeActive&&!this.playbackBlocked){
+      this.corsRetry=true;this.clearStartupTimer();
+      if(this.ready&&Number.isFinite(this.media.currentTime))this.session.position=this.media.currentTime;
+      this.ready=false;this.error='';this.loadingStatus='正在尝试兼容跨域的直连方式…';
+      this.media.crossOrigin='anonymous';this.media.src=this.api.streamUrl(this.session);
+      const generation=this.generation;this.beginWebPlayback(generation);this.changed();
+      this.startupTimer=setTimeout(()=>{if(generation===this.generation&&!this.ready)this.retryWithProxy();},20000);
+      return true;
+    }
+    return this.retryWithProxy();
+  }
+  private retryWithProxy(force=false):boolean{
+    if(!this.session||!this.allowAutomaticFallback||(!force&&this.session.playbackMode!=='auto')||this.proxyFallback||this.nativeActive||this.playbackBlocked)return false;
     this.proxyFallback=true;this.clearStartupTimer();
     if(this.ready&&Number.isFinite(this.media.currentTime))this.session.position=this.media.currentTime;
     this.ready=false;this.error='';this.loadingStatus='直连不可用，正在通过服务器连接…';
+    this.media.removeAttribute('crossorigin');
     this.media.src=this.api.streamUrl(this.session)+'&proxy=1';
     this.beginWebPlayback(this.generation);this.changed();return true;
   }
@@ -94,7 +110,7 @@ export class MediaPlayer extends EventTarget {
     const attempt=++this.sourceAttempt;
     void this.media.play().catch(error=>{
       if(generation!==this.generation||attempt!==this.sourceAttempt)return;
-      if(error?.name!=='NotAllowedError'&&error?.name!=='AbortError'&&this.retryWithProxy())return;
+      if(error?.name!=='NotAllowedError'&&error?.name!=='AbortError'&&this.recoverWebPlayback())return;
       this.clearStartupTimer();this.loadingStatus='';this.error=playbackFailure(error,this.media.error);this.changed();
     });
   }
@@ -228,7 +244,7 @@ export class MediaPlayer extends EventTarget {
       media.addEventListener('pause',()=>{if(media===this.media){if(!this.completed)++this.resumeIntent;void this.flush();this.changed();}});
       media.addEventListener('play',()=>this.changed());
       media.addEventListener('error',()=>{if(media===this.media){
-        if(this.retryWithProxy())return;
+        if(this.recoverWebPlayback())return;
         this.clearStartupTimer();this.loadingStatus='';
         this.error=playbackFailure(undefined,media.error);this.changed();
       }});
@@ -337,7 +353,7 @@ export class MediaPlayer extends EventTarget {
     this.lease?.stop();this.lease=null;
     if(!this.active)this.playbackRate=readPlaybackPreferences(this.api.preferenceScope()).defaultRate;
     this.session=session;this.sequence=0;this.finishedSession='';this.ready=false;this.completed=false;this.title=selected.title;this.error='';this.active=true;this.playbackBlocked=false;
-    this.proxyFallback=false;this.startupAt=performance.now();this.loadingStatus='正在解析播放地址并连接视频源…';
+    this.proxyFallback=false;this.corsRetry=false;this.startupAt=performance.now();this.loadingStatus='正在解析播放地址并连接视频源…';
     this.allowAutomaticFallback=options.autoplay!==false;
     if(!this.native||(selected.video&&!nativeVideo))this.lease=new PlaybackLease(this.api,session,(message,terminal)=>{
       if(this.session!==session)return;
@@ -346,6 +362,7 @@ export class MediaPlayer extends EventTarget {
       this.changed();
     });
     this.media=selected.video?this.video:this.audio;
+    this.media.removeAttribute('crossorigin');
     const rate=this.playbackRate;
     this.media.defaultPlaybackRate=rate;this.media.playbackRate=rate;
     if(this.nativeActive)this.native?.command('stop');
@@ -435,12 +452,22 @@ export class MediaPlayer extends EventTarget {
       await this.lease?.ensure();
       if(generation!==this.generation||intent!==this.resumeIntent||this.playbackBlocked)return;
       if(this.nativeActive){this.native!.command('resume');return;}
+      this.allowAutomaticFallback=true;
+      if(this.media.error&&this.recoverWebPlayback())return;
       if(this.media.error){
         if(this.ready&&Number.isFinite(this.media.currentTime))session.position=this.media.currentTime;
         this.ready=false;this.media.load();
       }
+      const attempt=++this.sourceAttempt;
       try { await this.media.play(); }
-      catch(error) { if(generation===this.generation){this.error=playbackFailure(error,this.media.error);this.changed();} return; }
+      catch(error) {
+        if(generation===this.generation&&attempt===this.sourceAttempt){
+          const name=(error as {name?:string})?.name;
+          if(name!=='NotAllowedError'&&name!=='AbortError'&&this.recoverWebPlayback())return;
+          this.error=playbackFailure(error,this.media.error);this.changed();
+        }
+        return;
+      }
       if(generation===this.generation){this.error='';this.changed();}
     }catch{if(generation===this.generation){if(!this.error)this.error='播放连接恢复失败，请稍后重试。';this.changed();}}
   }

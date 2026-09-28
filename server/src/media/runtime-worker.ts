@@ -24,7 +24,8 @@ await new Promise<void>((resolve,reject)=>{
   parentPort!.postMessage({type:'prepared'});
 });
 const core=new MediaReadDatabase(corePath),media=new MediaStoreDatabase(mediaPath);
-const app=Fastify({logger:false,bodyLimit:8*1024*1024,routerOptions:{maxParamLength:16_384}});
+// Keep structured diagnostics, without logging URLs containing playback tickets.
+const app=Fastify({logger:{level:config.logLevel},disableRequestLogging:true,bodyLimit:8*1024*1024,routerOptions:{maxParamLength:16_384}});
 const expected=Buffer.from(secret);
 app.addHook('onRequest',async(request,reply)=>{
   const header=request.headers['x-reader-media-internal'];

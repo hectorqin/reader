@@ -22,6 +22,7 @@ function sampleWav(){
     ['/音乐/track.lrc',Buffer.from('[00:00.00]云端练习曲\n[00:02.00]OpenList 本机模拟上游验收')],
   ]);
   const state={origin:'',token:'openlist-e2e-token',password:'openlist-e2e-directory-password',calls:[],rawAuth:false};
+  const orbFixture=!!process.env.MEDIA_OPENLIST_ORB_FIXTURE,corsAllowed=process.env.MEDIA_OPENLIST_ORB_FIXTURE!=='proxy';let corsMedia=false;
   const upstream=createServer(async(req,res)=>{
     try{
       const url=new URL(req.url,state.origin);
@@ -39,6 +40,10 @@ function sampleWav(){
       }
       if(url.pathname!=='/raw'){res.writeHead(404);res.end();return;}
       state.rawAuth ||= !!req.headers.authorization;
+      if(orbFixture&&req.headers['sec-fetch-mode']==='no-cors'&&url.searchParams.get('path')?.endsWith('.wav')){
+        res.writeHead(200,{'content-type':'application/json','x-content-type-options':'nosniff'});res.end('{"error":"opaque playback unavailable"}');return;
+      }
+      if(req.headers['sec-fetch-mode']==='cors'){corsMedia=true;if(corsAllowed)res.setHeader('access-control-allow-origin','*');}
       const data=files.get(url.searchParams.get('path'));if(!data){res.writeHead(404);res.end();return;}
       state.calls.push({path:'/raw',range:req.headers.range||null});
       const match=/^bytes=(\d+)-(\d*)$/.exec(req.headers.range||'');
@@ -55,7 +60,8 @@ function sampleWav(){
     const {baseUrl}=await new Promise((ok,no)=>{let output='';service.stdout.on('data',data=>{output+=data;for(const line of output.split('\n'))try{const value=JSON.parse(line);if(value.baseUrl)ok(value);}catch{}});service.once('exit',()=>no(Error(logs||'fixture exited')));});
     browser=await chromium.launch({headless:true,executablePath:process.env.PROTOTYPE_CHROMIUM});
     page=await browser.newPage({viewport:{width:1120,height:900}});page.setDefaultTimeout(20000);page.on('pageerror',error=>errors.push(error.message));
-    let authorization='',browserDirect=false;page.on('request',request=>{if(request.url().startsWith(state.origin+'/raw'))browserDirect=true;if(request.url().startsWith(baseUrl+'/api/v1/media/')&&request.headers().authorization)authorization=request.headers().authorization;});
+    let authorization='',browserDirect=false,orbBlocked=false;page.on('request',request=>{if(request.url().startsWith(state.origin+'/raw'))browserDirect=true;if(request.url().startsWith(baseUrl+'/api/v1/media/')&&request.headers().authorization)authorization=request.headers().authorization;});
+    page.on('requestfailed',request=>{if(request.failure()?.errorText.includes('ERR_BLOCKED_BY_ORB'))orbBlocked=true;});
     const api=async(path)=>{const response=await page.request.get(baseUrl+'/api/v1/media/'+path,{headers:{authorization}});assert.ok(response.ok(),'reader API '+path+' returned '+response.status());return response.json();};
     const choose=async(name,option)=>{await page.getByRole('combobox',{name,exact:true}).click();await page.getByRole('option',{name:option,exact:true}).click();};
     const go=async(hash)=>{await page.evaluate(value=>{location.hash=value;},hash);};
@@ -81,6 +87,11 @@ function sampleWav(){
     assert.equal(new URL(streamUrl).origin,baseUrl);assert.ok(!streamUrl.startsWith(state.origin));
     const range=await page.request.get(streamUrl,{headers:{range:'bytes=44-63'}});assert.equal(range.status(),206);assert.equal(range.headers()['content-range'],`bytes 44-63/${audio.length}`);assert.deepEqual(await range.body(),audio.subarray(44,64));
     assert.equal(browserDirect,true,'browser reads the upstream directly after authenticated redirect');
+    if(orbFixture){
+      assert.equal(orbBlocked,true,'fixture must reproduce Chromium ORB');assert.equal(corsMedia,true,'player attempts anonymous CORS');
+      assert.equal(streamUrl.includes('proxy=1'),!corsAllowed,'proxy is used only when CORS also fails');
+      checks.push(corsAllowed?'真实 Chromium ORB 拦截后自动使用匿名 CORS 直连恢复播放。':'真实 Chromium ORB 与 CORS 拦截后自动回退服务器代理并恢复播放。');
+    }
     checks.push('Chromium 经鉴权跳转后直连上游成功播放 WAV；指定范围读取精确返回 20 字节和正确的 Content-Range。');
     await page.getByRole('button',{name:'打开播放控制',exact:true}).click();await page.locator('.media-audio-heading strong').waitFor();await shot('03-remote-audio-playing');
     await go('#/media/music/settings/libraries/'+library.id+'/edit');await page.locator('input[name=token]').waitFor();assert.equal(await page.locator('input[name=token]').inputValue(),'');assert.equal(await page.locator('input[name=password]').inputValue(),'');assert.match(await page.locator('input[name=token]').getAttribute('placeholder'),/已配置/);
