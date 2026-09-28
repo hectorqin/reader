@@ -4,13 +4,13 @@
 
 This guide takes you through Docker deployment, account registration, and opening your first book. To run from source, use the [development guide](development.en.md).
 
-This guide describes the current Node implementation. CI publishes `main` (development) and short commit tags, not `latest`; availability depends on a successful build. Pin a published commit tag for repeatable deployments. Legacy Java images, `/storage` data and Legado JSON sources are not directly compatible with this version.
+This guide describes the current Node implementation. CI publishes `main` (development) and short commit tags, not `latest`; availability depends on a successful build. Pin a published commit tag for repeatable deployments. Legacy Java images and `/storage` data are not directly compatible with this version.
 
 ## 1. Prepare your environment
 
 - Install Docker Engine or Docker Desktop and the Docker Compose plugin.
 - Prepare a book directory and a separate data directory.
-- Make port `8080` available, or change the host port in Compose, for example to `8090:8080`.
+- Make port `5888` available, or change the host port in Compose, for example to `5890:5888`.
 
 The container serves both the API and Web UI. No separate frontend deployment is needed. Run the following commands from the repository root.
 
@@ -34,7 +34,7 @@ For example, use `/srv/books:/books:ro` on Linux, or `"D:/books:/books:ro"` with
 | Directory | Purpose |
 | --- | --- |
 | `/books` (`BOOKS_DIR`) | Your existing book files |
-| `/data` (`DATA_DIR`) | Database, accounts, reading records, covers, upload staging, downloaded files, and plugin data |
+| `/data` (`DATA_DIR`) | Database, accounts, reading records, covers, upload staging, downloaded files, and media state |
 
 `DATA_DIR` must be outside `BOOKS_DIR` and must not be the same directory. Startup checks this constraint. Metadata stays in the data directory; reader does not create cover files or `.calibre` metadata beside your books.
 
@@ -53,7 +53,7 @@ docker compose ps
 docker compose logs --tail=100 reader
 ```
 
-Open `http://localhost:8080`, or `http://<server-ip>:8080` from another device.
+Open `http://localhost:5888`, or `http://<server-ip>:5888` from another device.
 
 1. Register the first account. It automatically becomes the administrator.
 2. Wait for the initial scan, then open a book from the shelf or library.
@@ -78,7 +78,7 @@ On Linux/macOS with a POSIX shell, you can also run the container using absolute
 ```sh
 mkdir -p ./data
 docker run -d --name reader --restart unless-stopped \
-  -p 8080:8080 \
+  -p 5888:5888 \
   -v /path/to/your/books:/books:ro \
   -v "$(pwd)/data:/data" \
   cnb.cool/hectorqin/reader:main
@@ -98,17 +98,25 @@ The shelf contains readable books; the library lets you browse the disk director
 
 As an administrator, add an OPDS source under Sources (书源) and configure its server URL. If authentication is required, set credentials for your current account. Open the source to browse or search its catalog and acquire books for your shelf.
 
-### External source plugins
+## 5. Add media libraries
 
-The generic plugin host does not parse Legado JSON. Do not enter a legacy JSON file or subscription URL as an npm package. Compatibility requires a separate plugin that explicitly supports that format; otherwise use local books or OPDS.
+Mount local media separately by adding the directories you need to Compose volumes:
 
-In Sources → Plugin management, administrators can confirm that they trust the plugin, then enter an npm package name (optionally with a version or tag) or upload a `.tgz` archive produced by `npm pack` (up to 100 MiB). Successful installations are enabled automatically; no manual deployment is needed. Add a source instance using the plugin’s source type and configure it from that instance’s management entry. One plugin can provide several independent instances. Capabilities and runtime dependencies are defined by each plugin.
+```yaml
+  - /path/to/your/videos:/media/video:ro
+  - /path/to/your/music:/media/music:ro
+  - /path/to/your/audiobooks:/media/audiobook:ro
+```
 
-Plugins run with server process privileges. Only install trusted code. The server needs Node.js and npm, plus network access for npm packages and dependencies not bundled in uploaded archives. npm lifecycle scripts are disabled, so plugins must ship prebuilt runtime files. Installation files and temporary files stay in `DATA_DIR`, never in the books directory.
+Run `docker compose up -d`. Open media from the bookshelf, then Settings → Media libraries. Choose video, music, or audiobooks, set a container path such as `/media/video`, and choose access permissions. Creation starts a scan; inspect scan tasks in settings if it fails.
 
-See the [plugin protocol](source-plugins.md) and [extension pages](plugin-extensions.md).
+When running directly on Windows, use an absolute local path such as `D:\Media\Music`. With Docker Desktop, mount the directory and enter its container path instead.
 
-## 5. Upgrade and back up
+Alternatively, choose OpenList and provide its service URL, remote directory, and optional token/directory password. No local mount is needed. See [OpenList setup (中文)](media-openlist.md).
+
+Local scans read NFO and tags; online matching requires TMDB or MusicBrainz [configuration](configuration.en.md). Playback does not transcode. See the [media guide (中文)](media-user-guide.zh-CN.md).
+
+## 6. Upgrade and back up
 
 The [offline backup and restore tool (中文)](backup.zh-CN.md) checks file hashes and SQLite integrity and restores into a new directory. For older builds without this command, use a stopped-service copy as described below.
 
@@ -121,7 +129,7 @@ docker compose pull
 docker compose up -d
 ```
 
-Keep your data directory: it contains accounts, reading records, signing keys, and plugin state. Plugin packages are upgraded separately; disable the plugin in the UI before replacing its package.
+Keep your data directory: it contains accounts, reading and playback progress, media metadata, and signing keys. Back up the complete directory and restore reader.db and media.db together. Back up original books and media separately.
 
 When moving from the legacy Java version, keep a full backup and use a separate new data directory. Existing book files can be mounted, but accounts, shelves, progress, notes and source settings have no automatic migration tool. Do not copy legacy `/storage` over the new `/data`. Source-built deployments must rebuild using both Compose files instead of relying on `pull`.
 

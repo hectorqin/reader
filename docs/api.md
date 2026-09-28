@@ -44,7 +44,7 @@
 
 ### `GET /books/:id/search?q=关键词&cursor=上一页游标`
 
-仅允许搜索当前用户书架中的书籍，支持 TXT、EPUB 和远程章节。关键词去除首尾空白后搜索，原始长度限 1–200 个字符。响应不缓存。
+仅允许搜索当前用户书架中的书籍，支持 TXT 和 EPUB。关键词去除首尾空白后搜索，原始长度限 1–200 个字符。响应不缓存。
 
 ```json
 {
@@ -59,7 +59,7 @@
 
 服务端按需扫描正文，每页本地最多 8 章、远程最多 1 章，每页最多返回 200 条匹配；`limited` 表示达到匹配上限。客户端连续请求 `nextCursor`，最多展示 200 条。游标绑定书籍目录、版本、关键词和个人整理版本，条件变化需重新搜索。此接口不是预建全文索引。
 
-单章限制 8 MiB，远程章节有 12 秒超时；失败章节在 `failures` 中返回 `{title, code}`，保留其他章节结果。客户端停止请求会取消后续扫描。返回定位包含当前用户的个人纠错。
+单章限制 8 MiB；失败章节在 `failures` 中返回 `{title, code}`，保留其他章节结果。客户端停止请求会取消后续扫描。返回定位包含当前用户的个人纠错。
 
 使用自定义 TXT 标题规则时返回 `400 SEARCH_LOCAL_LAYOUT`，客户端使用本地目录和缓存搜索并明确提示。断网时同样仅搜索已缓存内容，缓存不完整时提示结果可能不完整，不下载整书到浏览器搜索。
 
@@ -138,7 +138,7 @@
   "total": 1, "page": 1, "pageSize": 50 }
 ```
 
-只看得到可用文件书、当前用户已获取的下载书和章节出版物。本地文件被删的书不会留在书架上；插件禁用不会隐藏已经获取的章节书。
+只返回当前账号可访问的书籍；本地文件被删的书不会留在书架上。
 
 `path` 是对 `book_files.rel_path` 的**前缀匹配**，带上分隔符：`path=科幻` 匹配
 `科幻/…`，不会匹配到旁边的 `科幻小说`。`%` 和 `_` 在文件名里合法、在 `LIKE` 里是通配符，
@@ -215,7 +215,6 @@
 `?group=N` 会把 `items` 收窄到第 N 组，`groups` 仍然完整——这样打开一本 40 卷的漫画
 只传一卷的条目。目录客户端用 `/toc`，不要自己拼 `groups` 的标题。
 
-`format=chapters` 是远程章节出版物，没有整书文件，`files` 为 `[]`。它的 manifest 始终返回完整目录快照，即使传入 `group` 也不分窗，`content.revision` 标识快照版本。`items[].href` 是稳定定位引用，`items[].resourceRef` 是带 revision 的正文引用；用前者保存进度，用后者请求 `/assets`。阅读器应从这同一份快照构建目录，避免并发刷新时把两份目录混合。
 
 ### `GET /books/:id/items?group=N`
 
@@ -286,22 +285,6 @@ pdf / 单图没有独立目录，回落到 items。
 
 响应带 `Cache-Control: private, max-age=31536000, immutable`：文件资源由内容身份寻址；章节资源引用同时包含目录 revision，所以同一个资源 URL 的内容保持不变。
 
-章节资源按 manifest 的 `mediaType` 返回 `text/plain; charset=utf-8` 或清洗后的 `text/html; charset=utf-8`，带 `nosniff` 和 `default-src 'none'; img-src data:; sandbox` CSP。纯文本必须转义排版；HTML 只保留白名单标签，图片经插件通道获取、校验 PNG/JPEG/GIF/WebP 签名并转为 data URL。脚本、样式、表单、外部链接、SVG 和任意网络图片被移除。正文读取后持久缓存，来源禁用或插件卸载不影响缓存命中；旧 revision 已缓存正文可读，未缓存正文返回 `409 CHAPTER_SNAPSHOT_EXPIRED`。
-
-### `POST /books/:id/refresh`
-
-为当前用户已获取的章节书拉取并原子提交新目录，响应是完整内容 manifest（不含外层 `book`）：
-
-```json
-{ "kind": "text", "revision": "<snapshot-sha256>", "total": 1,
-  "groups": [{ "id": "chapters", "seq": 0, "title": "章节", "count": 1, "offset": 0 }],
-  "items": [{ "id": "<chapter-id-hash>", "seq": 0, "title": "第一章", "kind": "chapter",
-    "href": "chapter:<chapter-id-hash>",
-    "resourceRef": "chapter-resource:<snapshot-sha256>:<chapter-id-hash>",
-    "mediaType": "text/plain; charset=utf-8", "format": "html" }] }
-```
-
-`format: "html"` 表示客户端将纯文本排版为 HTML，不表示资源含 HTML；富文本条目省略 `format`、声明 `mediaType: text/html`，目录 `kind` 为 `reflowable`。该接口无需请求体；文件书返回 `400 SOURCE_UNSUPPORTED`，其他用户章节书返回 404。刷新失败保留旧目录；同一目录保持 revision 不变；正文变化时插件须更新 `ManifestSnapshot.version`。进度和笔记不重写，插章后以稳定 href 定位。手动刷新会更新检查时间和新增章计数，但不会自动开启订阅或预下载正文。
 
 ### 文件资源的流式与子资源行为
 
@@ -825,184 +808,71 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 ---
 
-## 来源与插件
+## 本地与 OPDS 来源
 
-来源接口把本地书、OPDS 和外部章节插件统一成同一组发现与获取操作。来源实例由管理员创建；来源配置在实例级共享，登录凭据通过用户级凭据接口保存。插件运行在独立的受信任 Node 进程中，安装前必须确认它拥有服务端操作系统权限。
+以下接口需账号令牌。内置类型为 reader.local 和 reader.opds；管理员配置来源，用户浏览、搜索和获取书籍。
 
-### `GET /sources/types`
+| 接口 | 用途 |
+| --- | --- |
+| GET /sources/types | 查询内置来源类型及能力 |
+| GET /sources | 查询来源实例；普通用户不返回管理配置 |
+| POST /sources | 管理员创建来源 |
+| PATCH /sources/:id | 管理员修改名称、配置、启停或默认搜索来源 |
+| GET /sources/:id/browse | 浏览目录 |
+| POST /sources/:id/search | 搜索书籍 |
+| GET /sources/:id/entries?ref=条目引用 | 查询条目详情 |
+| POST /sources/:id/acquire | 获取条目并加入当前账号书架 |
 
-返回当前已注册的内置和外部来源类型：
+创建 OPDS 示例：
 
 ```json
-{
-  "types": [
-    { "id": "local", "pluginId": "reader.local", "builtin": true, "label": "本地书库", "version": "1.0.0", "capabilities": ["browse", "search", "detail"] },
-    { "id": "opds", "pluginId": "reader.opds", "builtin": true, "label": "OPDS", "version": "1.0.0", "capabilities": ["browse", "search", "detail", "acquire.file"] }
-  ]
-}
-```
-
-### `GET /sources`
-
-登录用户可以看到来源实例，响应为 `{ "sources": [...] }`；每项有 `id/pluginId/sourceType/name/enabled/isDefault/descriptor`，只有管理员返回 `config`。服务端启动时自动创建 `local` 实例。
-
-管理员可发送 `PATCH /api/v1/sources/:id`，请求体为 `{ "isDefault": true }`，将已启用且支持搜索的来源设为全站默认书源。服务端最多保留一个默认来源，并持久保存；`false` 取消默认，暂停或删除来源也会清除其默认状态。进入搜书页时自动选中可用的默认来源，用户仍可手动选择其它来源；插件不可用时跳过默认选择。
-
-### `POST /sources` — 管理员
-
-创建来源：
-
-```http
-POST /api/v1/sources
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-
 {"pluginId":"reader.opds","sourceType":"opds","name":"家庭 OPDS","config":{"url":"https://books.example.test/opds","username":"reader"}}
 ```
 
-返回 `201 { "source": {...} }`。可指定 `id`（2～80 位字母、数字、下划线或短横线），省略则自动生成。`sourceType` 和 `pluginId` 从 `/sources/types` 读取。`local` 仅接受空配置，使用宿主 `BOOKS_DIR`。
+pluginId 是接口兼容字段。创建返回 201 与 source 对象。本地来源使用 BOOKS_DIR；OPDS 文件下载到 DATA_DIR/acquired。来源浏览、搜索和详情的游标及条目引用以响应为准，不应从外部 URL 自行拼接。
 
-`config` 不能包含密码。OPDS 的 `url` 必须是 HTTP(S) 地址；Feed 和下载链接默认限制在该 origin。跨 origin 获取文件须配置 `allowedOrigins`；Basic 凭据不转发到附加 origin。管理员可 `PATCH /sources/:id` 更新 `name/config/enabled/isDefault`，配置仍由提供者校验，修改 config 会清除该来源所有用户的凭据，防止向新地址发送旧凭据；来源有在途调用时修改 config 返回 `409 SOURCE_BUSY`。`DELETE /sources/:id` 只允许删除没有已获取内容的非内置来源，否则返回 `409 SOURCE_IN_USE`。Web 的 `#/sources` 提供对应表单。
+搜索请求 body 包含 query 和 sessionId，响应以 text/event-stream 返回 results、done 或 error；获取请求 body 使用 entryRef。
 
-### 来源浏览、搜索和详情
+当前账号可使用 PUT /sources/:id/credentials/password，body 为 {"value":"密码"}，保存自己的 OPDS 密码；凭据不会通过普通来源列表回显。暂停来源不删除已获取的文件书。
 
-```text
-GET /api/v1/sources/:id/browse?ref=<optional>&cursor=<optional>&limit=<1..200>
-POST /api/v1/sources/:id/search
-GET /api/v1/sources/:id/entries?ref=<entry-ref>
+Reader 对外提供的只读 OPDS 服务与 WebDAV 备份上传见[接入指南](opds-webdav.zh-CN.md)。
+
+## 影音
+
+接口前缀为 /api/v1/media，沿用账号令牌。用户只能访问已授权媒体库；建库、权限、扫描、刮削和人工资料编辑需要管理员权限。准备中返回 MEDIA_STARTING，启动失败返回 MEDIA_UNAVAILABLE。阅读健康检查不能替代影音就绪检查。
+
+| 接口（省略 /api/v1/media） | 用途 |
+| --- | --- |
+| GET /libraries | 当前账号可访问的媒体库 |
+| POST /libraries | 创建本地或 OpenList 媒体库 |
+| GET /libraries/:id/configuration | 管理员查看连接配置摘要，不回传凭据原值 |
+| PATCH /libraries/:id | 修改名称或 OpenList 凭据 |
+| PUT /libraries/:id/access | 设置访问范围与用户列表 |
+| POST /libraries/:id/scan | 提交扫描任务 |
+| GET /libraries/:id/jobs、GET /jobs/:id | 查看任务状态 |
+| GET /browse、GET /libraries/:id/items | 按频道、分类或库浏览 |
+| GET /items/:id | 作品、版本与章节详情 |
+| GET /search、GET /favorites、GET /history、GET /queue | 搜索及当前账号收藏、历史与队列 |
+| PUT /items/:id/favorite | 设置收藏，body 为 {"favorite":true} 或 {"favorite":false} |
+| PATCH /items/:id/metadata | 管理员保存人工资料 |
+| GET /metadata/providers | 可用在线资料提供者 |
+| POST /items/:id/matches、PUT /items/:id/match | 搜索候选、确认资料匹配 |
+| POST /playback | 根据 partId 创建播放会话 |
+| POST /playback/:id/renew | 续期播放会话 |
+| GET /parts/:id/progress、PUT /playback/:id/progress | 读取与保存播放进度 |
+| GET /streams/:id | 授权资源流，支持有效的字节 Range |
+
+本地建库请求示例：
+
+```json
+{"name":"家庭电影","kind":"video","storage":"local","root":"/media/video","access":"restricted"}
 ```
 
-浏览仍返回普通 JSON 目录响应。搜索使用 Streamable HTTP：请求体为 `{ "query": "...", "sessionId": "...", "cursor": "...", "filters": {}, "resultLimit": 10000 }`，响应为 `text/event-stream`，持续发送 `results`、最终 `done` 或 `error` 事件。`results.data` 是 CatalogPage，客户端边收边合并；断开连接会取消在途搜索。`ref` 和 `cursor` 是来源拥有的不透明值，客户端只保存并原样回传。条目返回 `ref`、标题、作者、封面和 `options`；不要从 `ref` 推断 URL 或拼接下一页地址。引用和查询参数必须为非空字符串且不超过 16,384 字符；路径中的 `publicationRef` 需要 URL 编码，路由允许最大 16,384 字符的参数。
+kind 为 video、music 或 audiobook；OpenList 建库和凭据更新见[OpenList API](media-openlist.md#api)。媒体路径属于服务端或容器，不是浏览器所在设备的路径。
 
-搜索请求必须携带 Bearer 凭据。`sessionId` 必填，由 16–80 个字母、数字、`_` 或 `-` 组成；继续同一次搜索时保留该值并回传最后收到的 `nextCursor`，新关键词或筛选条件使用新的值。可选 `limit` 为每页 1–200 条，`resultLimit` 为 1–10000 条，默认上限 10000 条。旧 GET 搜索接口已移除。
+播放会话使用具体 partId，不以作品名称或文件路径代替。流地址、有效期及进度并发字段以服务端响应为准；客户端不持久保存临时下载链接。权限撤销和资源失效需重新处理，不能绕过鉴权重用旧链接。后台专用授权见[后台播放](media-background-auth.md)。
 
-```text
-event: results
-data: {"items":[{"ref":"book-1","title":"示例书籍"}],"nextCursor":"opaque-cursor","batch":{"completed":1,"total":2}}
-
-event: results
-data: {"items":[],"batch":{"completed":2,"total":2}}
-
-event: done
-data: {"reason":"complete"}
-
-```
-
-服务端在同一响应中自动消费后续分页。`done.reason` 为 `complete` 或 `limit`；错误事件形如 `{"code":"SEARCH_FAILED","message":"搜索中断，已保留收到的结果。","status":500}`。响应开始前的鉴权或参数错误使用普通 HTTP 错误响应，响应开始后的错误通过 `error` 事件返回。没有收到 `done` 或 `error` 就结束连接属于异常中断，客户端保留已收到的结果，不自动重放搜索。Web 停止搜索只中止结果流，不再额外发送 HTTP 取消请求；服务端在断开后取消在途 RPC 并调用插件会话停止接口。继续同一会话前，服务端等待旧连接清理完成，防止旧清理停止新搜索。`POST /api/v1/sources/:id/search/cancel`（body 为 `{"sessionId":"..."}`）仍供其它调用方显式停止会话。
-
-搜索期间可查看已返回书籍的详情或加入书架。停止或中断后，搜索框旁的主按钮为“继续搜索”，沿用会话与最后收到的游标并保留结果；下拉菜单中的“重新搜索”使用新会话并清空结果。修改关键词或筛选条件后使用新搜索，会话过期时也需重新搜索。能否从中断处继续由来源的游标/会话能力决定。
-
-### 凭据与来源启停
-
-```http
-PUT /api/v1/sources/:id/credentials/password
-Authorization: Bearer <user-token>
-Content-Type: application/json
-
-{"value":"用户自己的 OPDS 密码"}
-```
-
-返回 `{ "ok": true }`。`value` 必须为字符串，允许空密码，最大 16,384 字符。密码按 `(sourceId, userId, key)` 隔离并以 AES-256-GCM 加密保存，普通来源列表不会回显。管理员可用 `PATCH /api/v1/sources/:id` 携带 `{ "enabled": false }` 暂停来源；已获取到 `DATA_DIR/acquired` 的书不会被删除。
-
-### 获取内容、目录和章节资源
-
-```http
-POST /api/v1/sources/:id/acquire
-Authorization: Bearer <user-token>
-Content-Type: application/json
-
-{"entryRef":"<entry-ref>","optionId":"<option-id>"}
-```
-
-内置 `local` 直接返回已有书的 `publicationId`。OPDS 文件会同步下载，成功响应为 `{ "kind":"ready", "publicationId":"<book-id>" }`；单文件上限 256 MiB，下载完成后计算真实 SHA-256，写入 `DATA_DIR/acquired`，复用现有格式解析和阅读端点，并将书加入当前用户书架。取消、超限或解析失败不会留下临时文件。
-
-章节插件在 RPC 中返回 `{ "kind":"chapters", "publicationRef":"..." }`。宿主随后获取并持久化目录，建立当前用户专属的 `format=chapters` 出版物并加入书架；HTTP 同样返回 `{ "kind":"ready", "publicationId":"<book-id>" }`。反复获取沿用 book ID，已隐藏的书重新上架；不同用户获取同一条目会得到不同出版物和正文缓存。此后通过 `/books/:id/manifest|items|toc|assets` 阅读，使用 `/books/:id/refresh` 手动更新目录。章节书没有整书文件，调用 `/books/:id/content` 返回 `400 CHAPTER_BOOK`。
-
-来源级开发预览仍保留：
-
-```text
-GET /api/v1/sources/:id/publications/:publicationRef/manifest
-GET /api/v1/sources/:id/publications/:publicationRef/resource?ref=<resource-ref>
-```
-
-上述来源级资源接口只返回 JSON：文本用 `text`，二进制资源用 `base64`。入库阅读接受 UTF-8 `text/plain`、`text/html`、`application/xhtml+xml`；目录最多 10,000 项及 2 MiB，原始正文最多 2 MiB。HTML 插图仅接受 `src="reader-res:<插件资源引用>"`，由同一来源的 `readResource` 返回图片；每章最多 32 个不同图片，单图 2 MiB，清洗与内嵌后的章节总计不超过 8 MiB，整章加载限时 60 秒。所有插件响应仍受单条 RPC 2 MiB 上限约束（含 base64）。
-
-服务端和设备分别缓存已读正文（含已内嵌图片）。Web 按服务器、账号及 resourceRef 隔离；断网或 5xx 时目录可回退本账号缓存，授权失败或资源不存在时不回退。没有整书预下载和缓存总配额。后台目录检查由下面的订阅接口控制。
-
-### 自动追更订阅
-
-`GET /subscriptions` 返回 `{ "subscriptions": [...] }`，只列当前用户书架中的章节书：`bookId/title/enabled/intervalMinutes/nextCheckAt/lastCheckAt/lastSuccessAt/lastError/failures/newChapters`，时间为毫秒，未检查时间为 null。默认关闭、间隔 60 分钟。
-
-`PATCH /books/:id/subscription` 接受 `{ "enabled": true, "intervalMinutes": 60 }` 或 `{ "acknowledge": true }`。间隔为 15～10080 分钟的整数；`acknowledge` 只清除新增章提示。管理员不能操作他人的章节书。
-
-单实例服务每分钟扫描一次，每轮最多顺序处理 20 本；开始时写入 5 分钟执行租约，崩溃重启后到期重试。暂停来源、禁用账号或隐藏书籍时跳过。失败按订阅间隔和指数退避的较大值重试，保留旧目录及上次成功时间；不预下载正文，不发外部通知。状态中的错误是代码，不包含上游消息。浏览器关闭不影响调度；阅读中不会自动替换当前目录，用户刷新或重开时采用新版本。
-
-插件类型可声明 `credentialKeys: [{ "key": "access-token", "label": "访问令牌" }]`；同时声明 `permissions.credentials: true` 后，宿主仅将该类型声明的当前用户键值放进 RPC `context.credentials`。凭据不出现在来源列表或普通 config 中。`AUTH_REQUIRED` 表示来源凭据问题，客户端不应退出 reader 账号。
-
-### 插件管理（管理员）
-
-管理员可以直接安装 npm 包或上传 `.tgz`，成功后自动启用。npm 包名支持作用域与可选版本/标签，拒绝 URL、本地路径、别名及安装参数。服务端使用 npm 安装，禁用生命周期脚本；每次安装有独立依赖目录，失败清理本次目录，不修改已有插件。重复插件 ID 返回 409，内置插件不能覆盖。
-
-```http
-POST /api/v1/plugins
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-
-{"package":"reader-source-example@1.0.0","trusted":true}
-```
-
-上传接口：`POST /api/v1/plugins/upload`，使用 `multipart/form-data`，字段 `trusted=true` 和单个 `file`（`.tgz`，最大 100 MiB）。字段顺序不限。包应由 `npm pack` 生成，包含 `package.json`、`plugin.json` 和已构建的入口文件。上传包未包含的依赖仍会从 npm 仓库下载。来源类型、配置与扩展入口由插件清单声明。
-
-原目录加载接口仍可使用 `{"folder":"demo-chapters","trusted":true}`，或 `{"folder":"npm:reader-source-example","trusted":true}` 加载预部署在 `DATA_DIR/plugins` 或其 `node_modules` 下的包。新安装的 `folder` 是服务端生成的存储标识，客户端不应自行构造。
-
-启停和卸载：
-
-```text
-GET    /api/v1/plugins
-PATCH  /api/v1/plugins/:id       body: {"enabled":true|false}
-DELETE /api/v1/plugins/:id       保留来源实例、已获取书和数据
-```
-
-安装返回 `201 { "plugin": {...} }`，列表返回 `{ "plugins": [...] }`，启停返回 `{ "plugin": {...} }`，卸载返回 `{ "ok": true }`。插件状态包含 `pluginId/builtin/enabled/sourceTypes/runtime`，外部插件还带 `folder/name/version`，加载失败时有 `error`。卸载会移除注册和安装记录，保留包文件、来源实例、凭据和书籍数据。
-
-禁用或插件进程故障不会删除已下载文件、章节目录及已缓存正文。npm 安装和上传包遇到相同插件 ID、不同版本时，会先在独立目录安装、校验已有来源能力和配置，再切换并启用；配置、凭据、订阅、插件数据目录和书架记录均保留。成功响应的 `plugin` 附带 `updated:true` 和可用的 `previousVersion`，相同版本返回 `409 PLUGIN_ALREADY_INSTALLED`。新版缺少已有实例能力返回 `409 PLUGIN_UPDATE_INCOMPATIBLE`，旧插件仍有在途操作返回 `409 PLUGIN_BUSY`。校验或切换失败保留旧安装记录和提供者；不自动回滚插件自行修改的数据。预部署目录加载不自动覆盖，一键版本回滚尚未提供。
-
-内置 `reader.local` 和 `reader.opds` 不可卸载、禁用或替换。已安装插件失败后可用 `PATCH ... {"enabled":true}` 重新加载。同一服务实例同时只处理一次安装，冲突返回 `409 PLUGIN_INSTALL_BUSY`；npm 下载限时 5 分钟，失败返回 `502 PLUGIN_INSTALL_FAILED`，缺失 npm 返回 `503 NPM_UNAVAILABLE`。
-
-### 可运行示例：demo-chapters
-
-仓库中的 [`examples/plugins/demo-chapters`](../examples/plugins/demo-chapters) 是一个不联网的静态章节插件。按以下步骤验证完整调用链（服务端已启动且已有管理员令牌）：
-
-```powershell
-# 在仓库根目录执行；改为服务端实际使用的 DATA_DIR 和管理员令牌。
-$readerDataDir = 'D:\reader-data'
-$readerApi = 'http://localhost:5888/api/v1'
-$readerHeaders = @{ Authorization = 'Bearer <admin-token>' }
-New-Item -ItemType Directory -Force (Join-Path $readerDataDir 'plugins')
-Copy-Item -Recurse examples/plugins/demo-chapters (Join-Path $readerDataDir 'plugins/demo-chapters')
-
-Invoke-RestMethod -Method Post -Uri "$readerApi/plugins" -Headers $readerHeaders `
-  -ContentType 'application/json' -Body '{"folder":"demo-chapters","trusted":true}'
-$createdSource = Invoke-RestMethod -Method Post -Uri "$readerApi/sources" -Headers $readerHeaders `
-  -ContentType 'application/json' -Body '{"pluginId":"reader.source.demo","sourceType":"demo-chapters","name":"Demo chapters","config":{}}'
-$readerSourceId = $createdSource.source.id
-
-Invoke-RestMethod -Uri "$readerApi/sources/$readerSourceId/browse" -Headers $readerHeaders
-Invoke-RestMethod -Uri "$readerApi/sources/$readerSourceId/entries?ref=demo-book" -Headers $readerHeaders
-$acquiredBook = Invoke-RestMethod -Method Post -Uri "$readerApi/sources/$readerSourceId/acquire" -Headers $readerHeaders `
-  -ContentType 'application/json' -Body '{"entryRef":"demo-book"}'
-$readerBookId = $acquiredBook.publicationId
-$readerManifest = Invoke-RestMethod -Uri "$readerApi/books/$readerBookId/manifest" -Headers $readerHeaders
-$readerResourceRef = [Uri]::EscapeDataString($readerManifest.items[0].resourceRef)
-Invoke-RestMethod -Uri "$readerApi/books/$readerBookId/assets?ref=$readerResourceRef" -Headers $readerHeaders
-Invoke-RestMethod -Method Post -Uri "$readerApi/books/$readerBookId/refresh" -Headers $readerHeaders
-```
-
-资源正文应包含“这是通过独立 Node 进程提供的示例章节”，书籍同时出现在当前用户书架。普通成员也可使用自己的令牌获取、阅读及手动刷新；只有安装插件、创建和启停来源需要管理员。
-
-宿主来源调用预算为 60 秒，同一来源实例最多 2 个并发调用，宿主总计最多 8 个，超限立即返回 `429 RATE_LIMITED`。插件每次 RPC 预算 30 秒、单条 JSON 消息上限 2 MiB（包含 base64 开销）。超时或取消只结束对应请求，向插件发送 `$/cancelRequest` 并忽略迟到响应，不终止其它在途请求或阻止后续调用；`searchCancel` 控制请求超时只结束等待，允许插件继续清理会话。插件应协作中断对应任务，宿主不会自动重试操作。协议错误、超长响应、管道故障或进程退出仍会使整个插件失败，需管理员重新启用。外部进程暂不支持 `acquire.file`，大文件获取由内置 OPDS 提供。
-
----
+完整请求 schema 及响应以[当前路由](../server/src/http/routes/media.ts)为准，使用流程见[影音手册](media-user-guide.zh-CN.md)，数据隔离见[影音架构](media-implementation.md)。
 
 ## 管理员
 
@@ -1046,7 +916,7 @@ GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "c
 
 → `{ "providers": [ { "id": "none", "displayName": "...", "enabled": true } ] }`
 
-第一版只有 `none`。此处是元数据补全 provider，与 `/sources` 内容来源独立；安装书源插件不会改变该列表。
+本地书籍元数据提供者目前只有 `none`；影音的在线资料提供者使用 `/media/metadata/providers`。
 
 ---
 
@@ -1105,17 +975,7 @@ GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "c
 | `MANIFEST_TOO_LARGE` | 413 | 章节目录超过 10,000 项或 2 MiB |
 | `INVALID_MANIFEST` | 400 | 章节目录版本字段不合法 |
 | `INVALID_RESOURCE` | 400 | 获取内容为空、媒体类型不匹配或解析失败 |
-| `PLUGIN_TRUST_REQUIRED` | 400 | 安装受信任进程插件时未显式确认权限 |
-| `PLUGIN_UNAVAILABLE` | 404 / 503 | 来源插件未注册，或进程不可用 |
 | `RATE_LIMITED` | 429 | 上游限流或宿主来源并发达到上限 |
-| `PLUGIN_TIMEOUT` | 504 | 插件单次 RPC 超过 30 秒 |
-| `PLUGIN_PROTOCOL_ERROR` | 502 | 插件返回了不符合协议的 JSON |
-| `PLUGIN_INCOMPATIBLE` | 400 | 安装包的 API 版本或运行时不受支持 |
-| `PLUGIN_PACKAGE_NOT_FOUND` | 404 | 插件目录、清单或入口文件不存在 |
-| `PLUGIN_INVALID_MANIFEST` | 400 | 插件清单 JSON 或字段不合法 |
-| `PLUGIN_PATH_ESCAPE` | 400 | 插件目录不在 `DATA_DIR/plugins` 内 |
-| `PLUGIN_ALREADY_INSTALLED` | 409 | 插件 ID 或目录已安装 |
-| `BUILTIN_PLUGIN_IMMUTABLE` | 400 | 内置来源不能停用、卸载或替换 |
 | `SOURCE_TIMEOUT` | 504 | 宿主来源调用超过 60 秒 |
 | `SOURCE_CANCELLED` | 499 | 客户端断开或主动取消来源调用 |
 | `INTERNAL` | 500 | 服务端错误 |
@@ -1138,21 +998,6 @@ GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "c
    改个文件名时踢下线，顺手把他存的令牌也删了。按 `error.code` 判断，不要只看状态码。
 
 
-### 插件扩展与换源
-
-- 管理员 `GET /api/v1/sources/:id/pages/:pageId`：来源实例的声明页面，返回 `title/description/notice/forms/sections/tabs/activeTab`。
-- 管理员 `POST /api/v1/sources/:id/pages/:pageId`：`{action,values}`，操作当前实例并返回页面；入口来自 sourceType 的 `extensions.pages`。暂停来源仍可管理，插件停用后不可访问。
-- 管理员 `GET /api/v1/plugins/:id/pages/:pageId`：已声明配置页，返回通用 title/description/forms/sections。
-- 管理员 `POST /api/v1/plugins/:id/pages/:pageId`：`{action,values}`，返回更新后的页面。插件清单顶层 extensions.pages 提供全局入口。
-- `GET /api/v1/sources/:id/search-filters`：插件声明的选择字段；搜索接口接受 JSON 编码的 `filters` 查询参数，值为字符串映射。
-- `GET /api/v1/books/:id/source-options`：`{canSwitch}`，限本人有权限的书籍。
-- `POST /api/v1/books/:id/alternatives`：请求 `{sessionId,cursor?,resultLimit?}`，以 `text/event-stream` 返回 `results`（CatalogPage）、`done`、`error`，与搜索使用相同的 Streamable HTTP 协议。断开连接取消换源搜索。
-- `POST /api/v1/books/:id/refresh-chapter`：请求 `{ref}`（当前 manifest 的 `resourceRef`），强制重新读取当前修订的章节，返回正文二进制响应；失败保留原缓存，旧修订返回 `CHAPTER_SNAPSHOT_EXPIRED`。
-- `POST /api/v1/books/:id/switch-preview`：`{entryRef}` → `{chapters:[{id,title}]}`。
-- `POST /api/v1/books/:id/switch-source`：`{entryRef,chapterId,revision}` → `{content,href}`；所选正文验证成功后事务切换，保留 bookId。目录变更返回冲突，客户端刷新再选择。
-
-后台任务 RPC、持久化及限制见[插件扩展设计](plugin-extensions.md)。页面只接受声明式数据，不执行插件提供的浏览器脚本。
-
 ## Personal reading overrides and TTS diagnostics
 
 All endpoints require the account access token in the Authorization header. Reading overrides additionally check book access.
@@ -1161,13 +1006,3 @@ All endpoints require the account access token in the Authorization header. Read
 - PUT /api/v1/books/:id/reading-overrides accepts the same object. A correction contains id, anchor (sectionId, start, end, quote, prefix, suffix), and replacement. The submitted version must match the latest version; stale writes return 409. Up to 500 corrections are allowed, with each quote/replacement at most 4,000 characters. headingPrefix is a literal prefix of at most 60 characters.
 - POST /api/v1/books/:id/reading-overrides/undo accepts { version } and saves the preceding snapshot as a new version. History is scoped to account/book and stored in DATA_DIR/reader.db; it never rewrites library files.
 - POST /api/v1/tts/test accepts { voice?, speed? }, synthesizes a fixed sample and returns { bytes, contentType, elapsedMs, cached }. Failure codes include TTS_DISABLED, TTS_AUTH, TTS_TIMEOUT, TTS_CONTENT, TTS_EMPTY and TTS_UPSTREAM. It does not accept an upstream URL. Audio playback remains GET /api/v1/tts.
-
-### 章节质量和个人凭据状态（P2）
-
-- `POST /api/v1/books/:id/switch-quality`：已登录且拥有该书，body 为 `{ entryRef, chapterId }`。沿当前来源插件获取候选正文，返回 `{ chapterId, title, latestChapter, characters, images, bytes, elapsedMs }`；不写入书架、绑定或正文缓存。耗时包含目录、正文、内嵌图片处理，不含前置 acquire 和网络往返。
-- `switch-preview` 额外返回 `latestChapter`。质量检测按需执行；确认换源时重新获取并验证正文。空白或清洗后为空的正文返回 `EMPTY_CHAPTER`，不覆盖旧缓存/绑定。图片章可通过，字符统计不包含空白与 HTML 标签。
-- `GET /api/v1/sources/:id/credentials`：仅当前账号的 `{ state, checkedAt, available, fields: [{ key, label, configured }] }`，不包含凭据值。state 为 unknown / reachable / auth-required / verification-required。checkedAt 是毫秒时间戳或 null；仅代表最近观察。
-- `DELETE /api/v1/sources/:id/credentials/:key`：只删除当前账号该项。原 PUT 保存空字符串也会删除；保存/删除后访问状态回到 unknown。修改连接配置会清除该来源所有个人凭据并重置状态。
-- 插件抛出 `AUTH_REQUIRED`、`AUTH_EXPIRED` 或 `VERIFICATION_REQUIRED` 时记录访问状态；它们不使 Reader 账号退出。部分搜索错误中出现同类码也会记录；多个站点共用一个实例时只表示其中有站点需要处理。普通网络失败不推断为凭据失效。
-
-- [OPDS 服务端接入与 WebDAV 备份上传](opds-webdav.zh-CN.md)

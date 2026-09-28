@@ -7,8 +7,7 @@
 ## 目录与权限
 
 - `BOOKS_DIR` 是用户书籍目录。`:ro` 用于只读部署；`:rw` 配合文件系统写权限启用管理员文件管理。
-- `DATA_DIR` 保存 SQLite、账号、阅读记录、密钥、封面、扫描状态、上传暂存、远程下载与插件数据，必须始终可写。
-- Web 插件安装需要服务端可执行 npm（官方容器已包含）。可通过服务端 npm 配置设置 registry；下载、依赖和缓存都放在 `DATA_DIR/plugins` 的独立安装目录，成功后清理临时包和下载缓存。安装最长等待 5 分钟，禁用 npm 生命周期脚本；需要编译或额外运行环境的插件应由发布者提供构建产物与部署说明。
+- `DATA_DIR` 保存 SQLite、账号、阅读记录、密钥、封面、扫描状态、上传暂存、下载文件与影音资料，必须始终可写。
 - `DATA_DIR` 不能与 `BOOKS_DIR` 相同或位于其内部，启动时会拒绝该配置。
 - 镜像入口脚本尝试修正数据目录本身的属主，再以 `reader` 用户运行。它不会替你修改书籍目录的属主，也不会递归修复已有数据文件的权限。
 
@@ -23,7 +22,7 @@
 | `BOOKS_DIR` | `/books` | 书籍目录 |
 | `DATA_DIR` | 当前工作目录下的 `data` | 服务端状态和缓存目录 |
 | `HOST` | `0.0.0.0` | 监听地址 |
-| `PORT` | `8080` | 监听端口 |
+| `PORT` | `5888` | 监听端口 |
 | `PUBLIC_URL` | 空 | 对外访问地址，反向代理后设置 |
 | `SCAN_INTERVAL` | `1800` | 定时扫描间隔，秒；`0` 关闭 |
 | `WATCH_INTERVAL` | `60` | 变化检查间隔，秒；`0` 关闭 |
@@ -33,7 +32,9 @@
 | `READER_TOKEN_SECRET` | 自动生成 | 至少 16 字符的签名密钥；默认保存在 `DATA_DIR/token.secret` |
 | `LOG_LEVEL` | `info` | 日志级别 |
 | `MEDIA_FFPROBE_PATH` | `ffprobe` | 影音技术信息读取程序；缺失时仍可扫描入库，时长、标签及章节信息可能不完整 |
-| `MEDIA_TMDB_TOKEN` | 空 | TMDB API Read Access Token；空值禁用 TMDB 在线匹配，不影响本地扫描 |
+| `MEDIA_TMDB_TOKEN` | 空 | TMDB 读取令牌；与 API Key 同时配置时优先使用 |
+| `MEDIA_TMDB_API_KEY` | 空 | TMDB API Key；令牌与 Key 均为空时关闭在线影视匹配 |
+| `MEDIA_FFMPEG_PATH` | `ffmpeg` | 内嵌封面与字幕提取程序，不提供转码 |
 | `MEDIA_MUSICBRAINZ_USER_AGENT` | 空 | MusicBrainz 请求标识，填写应用名称、版本及有效联系地址，例如 `Reader/0.1 (mailto:admin@example.com)`；空值禁用 MusicBrainz 在线匹配 |
 | `CORS_ORIGINS` | 空 | 允许的浏览器来源，逗号分隔；空值反射请求来源 |
 | `WEB_DIR` | 当前工作目录下的 `web` | 已构建 Web 客户端目录 |
@@ -47,13 +48,13 @@
 
 ## HTTPS 与反向代理
 
-局域网可直接访问 `http://<服务器IP>:8080`。对公网提供服务时使用 HTTPS，保护登录凭据和访问令牌。
+局域网可直接访问 `http://<服务器IP>:5888`。对公网提供服务时使用 HTTPS，保护登录凭据和访问令牌。
 
 例如 Caddy 与 reader 运行在同一台主机上时：
 
 ```caddyfile
 reader.example.com {
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:5888
 }
 ```
 
@@ -96,6 +97,20 @@ reader 代理语音请求，不内置合成模型。上游接口需兼容项目�
 
 确认挂载目录中的文件对服务进程可读，格式受支持，并等待扫描完成或由管理员手动扫描。扫描器跳过 `.git`、`@eaDir`、`#recycle` 等目录，不跟随符号链接；可在书库文件页核对实际目录。
 
-### 远程书源搜索失败
+## 影音媒体库
 
-检查来源地址、当前账号凭据和搜索结果中的错误详情，确认来源与插件已启用。插件额外的运行依赖和配置要求，以插件作者提供的文档为准。
+本地电影、剧集、音乐和有声书目录单独挂载到容器（建议只读），在「影音设置 → 媒体库管理」中填写容器路径。直接运行服务端时填写本机绝对路径；媒体根目录不要使用 DATA_DIR。普通用户只可访问已授权的库，扫描、刮削与资料编辑由管理员操作。
+
+官方镜像包含 ffprobe 和 ffmpeg。本机启动时将二者加入 PATH，或设置 MEDIA_FFPROBE_PATH / MEDIA_FFMPEG_PATH 为可执行文件路径。ffprobe 用于时长、编码、标签和章节，ffmpeg 用于内嵌资源提取，均不提供转码。
+
+在线匹配可配置 MEDIA_TMDB_TOKEN 或 MEDIA_TMDB_API_KEY，音乐资料可配置 MEDIA_MUSICBRAINZ_USER_AGENT。仅在宿主环境或未提交的 .env 中保存凭据，并在 Compose 的 environment 中传入；只有 .env 值、未声明 environment 时不会自动传进容器。本地 NFO 和标签读取不依赖在线凭据。
+
+OpenList 连接信息在建库界面设置，无需本地挂载；服务端必须能访问 OpenList 和其下载源。远端内嵌资料暂不读取，某些驱动需要 OpenList Web 代理。配置与限制见 [OpenList 接入](media-openlist.md)。
+
+影音使用独立 media.db；阅读与账号使用 reader.db。备份整个 DATA_DIR，成对恢复，见[备份指南](backup.zh-CN.md)。
+
+### 影音不可用或无法播放
+
+阅读健康检查成功不代表影音已就绪。MEDIA_STARTING 表示正在准备，稍后重试；MEDIA_UNAVAILABLE 需检查服务日志与数据目录。扫描失败时查看任务错误，检查路径、权限或 OpenList 连接后重新扫描。
+
+能显示资料但无法播放时，检查浏览器对媒体容器及编码的支持、下载源连通性和 Range 响应。当前没有转码；OpenList 驱动特定请求头问题可按其配置启用 Web 代理。不要删除 media.db 作为修复方式。

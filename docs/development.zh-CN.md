@@ -53,7 +53,7 @@ npm run dev --prefix server
 npm run dev --prefix web
 ```
 
-访问 `http://localhost:5174`。Vite 默认把 `/api` 代理到 `http://127.0.0.1:8080`；通过 `READER_SERVER` 环境变量可调整代理目标。
+访问 `http://localhost:5174`。Vite 默认把 `/api` 代理到 `http://127.0.0.1:5888`；通过 `READER_SERVER` 环境变量可调整代理目标。
 
 ## 检查与测试
 
@@ -103,7 +103,7 @@ cd android
 ./gradlew :app:assembleDebug
 ```
 
-Windows 原生终端使用 `gradlew.bat`。产物为 `android/app/build/outputs/apk/debug/app-debug.apk`。可通过 `-PdefaultServerUrl=http://nas.local:8080` 预设地址；未预设时由用户填写服务地址并登录。编译 APK 不等于完成真机阅读验证。
+Windows 原生终端使用 `gradlew.bat`。产物为 `android/app/build/outputs/apk/debug/app-debug.apk`。可通过 `-PdefaultServerUrl=http://nas.local:5888` 预设地址；未预设时由用户填写服务地址并登录。编译 APK 不等于完成真机阅读验证。
 
 ## 代码导览
 
@@ -112,7 +112,9 @@ Windows 原生终端使用 `gradlew.bat`。产物为 `android/app/build/outputs/
 | `server/src/config`、`db` | 运行时配置、SQLite schema 和访问层 |
 | `server/src/indexer` | 文件格式、扫描、身份与元数据 |
 | `server/src/services`、`http` | 业务服务、API、鉴权和资源交付 |
-| `server/src/sources` | 内置来源和通用插件契约 |
+| `server/src/media` | 影音目录、扫描、资料与播放服务 |
+| `web/src/media` | 影音页面、路由、主题与播放器 |
+| `server/src/sources` | 本地书库与 OPDS 接入 |
 | `web/src/formats` | EPUB、TXT、漫画等格式处理 |
 | `web/src/ui`、`styles` | Preact 界面、阅读舞台和样式 |
 | `web/src/core`、`store` | 平台能力、同步、离线存储 |
@@ -127,4 +129,4 @@ Windows 原生终端使用 `gradlew.bat`。产物为 `android/app/build/outputs/
 3. 为行为变更补充适当的回归验证；纯文档修改检查链接、命令和示例即可。
 4. 提交变更时说明改动、验证方式和已知限制。
 
-API 详见 [API 文档](api.md)，插件开发见[来源架构](source-plugins.md)与[扩展协议](plugin-extensions.md)。
+API 详见 [API 文档](api.md)；影音边界见[模块架构](media-implementation.md)，验证入口见[影音验证](media-validation.md)。

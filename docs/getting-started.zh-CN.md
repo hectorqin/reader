@@ -4,13 +4,13 @@
 
 本文带你完成 Docker 部署、注册账号和读取第一本书。直接从源码运行请看[开发指南](development.zh-CN.md)。
 
-本指南对应当前 Node 版工作区。CI 发布 `main`（开发分支）和提交短哈希标签，没有发布 `latest` 的配置；标签可用性以对应构建成功为准。部署后核对版本，长期使用建议固定提交标签。旧 Java 版镜像、`/storage` 数据和 Legado JSON 书源不与新版直接兼容。
+本指南对应当前 Node 版工作区。CI 发布 `main`（开发分支）和提交短哈希标签，没有发布 `latest` 的配置；标签可用性以对应构建成功为准。部署后核对版本，长期使用建议固定提交标签。旧 Java 版镜像、`/storage` 数据不与新版直接兼容。
 
 ## 1. 准备环境
 
 - 安装 Docker Engine 或 Docker Desktop，以及 Docker Compose 插件。
 - 准备一个书籍目录和一个独立的数据目录。
-- 确保主机的 `8080` 端口可用；也可修改 Compose 左侧端口，例如 `8090:8080`。
+- 确保主机的 `5888` 端口可用；也可修改 Compose 左侧端口，例如 `5890:5888`。
 
 容器同时提供 API 和 Web 界面，无需单独部署前端。以下命令从仓库根目录执行。
 
@@ -34,7 +34,7 @@ volumes:
 | 目录 | 用途 |
 | --- | --- |
 | `/books`（`BOOKS_DIR`） | 现有书籍文件 |
-| `/data`（`DATA_DIR`） | 数据库、账号、阅读记录、封面缓存、上传暂存、下载文件和插件数据 |
+| `/data`（`DATA_DIR`） | 数据库、账号、阅读记录、封面缓存、上传暂存、下载文件与影音数据 |
 
 `DATA_DIR` 不能与 `BOOKS_DIR` 相同，也不能位于其中；启动时会检查这项约束。元数据保存在数据目录，不会在书旁生成封面或 `.calibre` 文件。
 
@@ -53,7 +53,7 @@ docker compose ps
 docker compose logs --tail=100 reader
 ```
 
-打开 `http://localhost:8080`；在另一台设备上使用 `http://<服务器IP>:8080`。
+打开 `http://localhost:5888`；在另一台设备上使用 `http://<服务器IP>:5888`。
 
 1. 注册第一个账号，该账号自动成为管理员。
 2. 等待初次扫描，在书架或书库中打开一本书。
@@ -78,7 +78,7 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```sh
 mkdir -p ./data
 docker run -d --name reader --restart unless-stopped \
-  -p 8080:8080 \
+  -p 5888:5888 \
   -v /path/to/your/books:/books:ro \
   -v "$(pwd)/data:/data" \
   cnb.cool/hectorqin/reader:main
@@ -98,17 +98,25 @@ Windows 推荐使用上面的 Compose 配置，避免不同 shell 的路径和�
 
 管理员在「书源」添加 OPDS 来源并设置服务地址。需要认证时填写当前账号的来源凭据。打开来源后可浏览或搜索目录，获取书籍并加入书架。
 
-### 外部书源插件
+## 5. 添加影音媒体库
 
-通用来源插件不是 Legado JSON 解析器。旧版书源 JSON 或订阅链接不能直接当 npm 包安装；只有明确声明支持该格式的独立插件才能提供兼容，是否支持以该插件说明为准。尚无适用插件时，请使用本地书库或 OPDS。
+本地影音需单独挂载。在 Compose 的 volumes 中按需增加：
 
-管理员打开「书源 → 插件管理」，确认信任插件代码后，输入 npm 包名（可带版本或标签），或上传 `npm pack` 生成的 `.tgz` 安装包（最大 100 MiB），安装成功后自动启用。无需手动部署包目录。随后在「书源管理」选择插件提供的来源类型创建实例，从该实例的管理入口配置。一个插件可创建多个独立实例；具体功能与运行依赖由插件声明。
+```yaml
+  - /path/to/your/videos:/media/video:ro
+  - /path/to/your/music:/media/music:ro
+  - /path/to/your/audiobooks:/media/audiobook:ro
+```
 
-插件拥有服务端进程权限，请只安装可信代码。服务端需要 Node.js 和 npm；npm 包及未打包的依赖需要联网下载。安装期间禁用 npm 生命周期脚本，插件应预先构建并打包运行所需文件。所有安装文件与临时文件保存在 `DATA_DIR`，不会写入书库目录。
+执行 `docker compose up -d` 后，从书架「影音」进入「设置 → 媒体库管理」，选择影视、音乐或有声书，填写容器内目录（例如 `/media/video`）及访问范围。创建后自动扫描；扫描任务和失败原因可在设置中查看。
 
-开发与配置协议见[来源插件](source-plugins.md)和[扩展页面](plugin-extensions.md)。
+Windows 直接运行服务时填本机绝对路径，例如 `D:\Media\Music`；Docker Desktop 则挂载该目录并填写容器内路径。
 
-## 5. 更新与备份
+也可选择 OpenList，填写服务地址、远端目录及可选令牌/目录密码，无需把远端目录挂载到 Reader 容器。详见 [OpenList 接入](media-openlist.md)。
+
+本地扫描可读取 NFO 和标签；在线匹配需按[部署配置](configuration.zh-CN.md)设置 TMDB 或 MusicBrainz。播放不转码，更多操作见[影音手册](media-user-guide.zh-CN.md)。
+
+## 6. 更新与备份
 
 推荐使用[离线备份与恢复工具](backup.zh-CN.md)，可验证文件清单和数据库完整性，并恢复到新目录。首次从没有维护命令的旧构建升级时，仍可按以下停机复制方式保留完整数据。
 
@@ -121,7 +129,7 @@ docker compose pull
 docker compose up -d
 ```
 
-不要删除数据目录：其中包含账号、阅读记录、签名密钥和插件状态。插件包需单独升级；替换包前先在界面停用插件。
+不要删除数据目录：其中包含账号、阅读与播放进度、影音资料及签名密钥。备份完整目录，成对恢复 reader.db 和 media.db；书籍和原始媒体目录需单独备份。
 
 从旧 Java 版迁移时，先保留其完整备份，使用独立的新数据目录部署新版。本地书文件可挂载到新书库；账号、书架、进度、笔记和旧书源配置目前没有自动迁移工具，不要直接用旧 `/storage` 覆盖新 `/data`。源码构建部署更新时使用两份 Compose 文件重新构建，不能仅执行 `pull`。
 

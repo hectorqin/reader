@@ -53,7 +53,7 @@ In the second terminal:
 npm run dev --prefix web
 ```
 
-Open `http://localhost:5174`. Vite proxies `/api` to `http://127.0.0.1:8080` by default. Set `READER_SERVER` to change the proxy target.
+Open `http://localhost:5174`. Vite proxies `/api` to `http://127.0.0.1:5888` by default. Set `READER_SERVER` to change the proxy target.
 
 ## Checks and tests
 
@@ -103,7 +103,7 @@ cd android
 ./gradlew :app:assembleDebug
 ```
 
-Use `gradlew.bat` from a native Windows terminal. The output is `android/app/build/outputs/apk/debug/app-debug.apk`. Add `-PdefaultServerUrl=http://nas.local:8080` to preset the server address; otherwise users enter it and sign in. Building an APK does not validate reading on a physical device.
+Use `gradlew.bat` from a native Windows terminal. The output is `android/app/build/outputs/apk/debug/app-debug.apk`. Add `-PdefaultServerUrl=http://nas.local:5888` to preset the server address; otherwise users enter it and sign in. Building an APK does not validate reading on a physical device.
 
 ## Code map
 
@@ -112,7 +112,9 @@ Use `gradlew.bat` from a native Windows terminal. The output is `android/app/bui
 | `server/src/config`, `db` | Runtime configuration, SQLite schema and access |
 | `server/src/indexer` | File formats, scanning, identity, and metadata |
 | `server/src/services`, `http` | Business services, API, authentication, and resources |
-| `server/src/sources` | Built-in sources and generic plugin contracts |
+| `server/src/media` | Media catalog, scans, metadata, and playback |
+| `web/src/media` | Media pages, routes, themes, and players |
+| `server/src/sources` | Local library and OPDS integration |
 | `web/src/formats` | EPUB, TXT, comics, and other format handling |
 | `web/src/ui`, `styles` | Preact UI, reading stage, and styles |
 | `web/src/core`, `store` | Platform capabilities, synchronization, and offline storage |
@@ -127,4 +129,4 @@ Preact manages UI state; the reading stage handles content layout and measuremen
 3. Add appropriate regression checks for behavior changes. Documentation-only changes need link, command, and example checks.
 4. Describe the changes, validation, and known limitations when submitting.
 
-For integrations, see the [API reference (中文)](api.md), [source architecture (中文)](source-plugins.md), and [extension protocol (中文)](plugin-extensions.md).
+See the [API reference (中文)](api.md), [media architecture (中文)](media-implementation.md), and [media validation (中文)](media-validation.md).
