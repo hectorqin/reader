@@ -11,13 +11,23 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: .75rem;
-  padding: .75rem 1rem;
+  gap: 1rem;
+  padding: .625rem .625rem .625rem 1rem;
   border: 1px solid var(--reader-line);
-  border-radius: .75rem;
+  border-radius: 1rem;
   background: var(--reader-surface);
   color: var(--reader-ink);
-  box-shadow: 0 4px 20px #0002;
+  box-shadow: 0 4px 16px #0000000d;
+  font-size: .875rem;
+  line-height: 1.5;
 }
-.pwa-update button { min-height: 44px; padding: .5rem 1rem; }
+.pwa-update .button {
+  min-height: 44px;
+  flex: none;
+  padding: .625rem 1rem;
+  border-radius: .75rem;
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+}
 .pwa-update button:focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 2px; }

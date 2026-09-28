@@ -32,6 +32,7 @@ export function watchPwaUpdates(
   message.setAttribute('role', 'status');
   message.textContent = '新版本已准备好';
   const button = document.createElement('button');
+  button.className = 'button primary';
   button.type = 'button';
   button.textContent = '立即更新';
   banner.append(message, button);

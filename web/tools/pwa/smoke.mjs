@@ -85,6 +85,15 @@ try {
     await page.setViewportSize({ width: 320, height: 640 });
     const updateButton = page.getByRole('button', { name: '立即更新', exact: true });
     await updateButton.waitFor();
+    if (process.env.PWA_SCREENSHOT_DIR) {
+      for (const theme of ['light', 'dark']) {
+        await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
+        await page.locator('.pwa-update').screenshot({
+          path: `${process.env.PWA_SCREENSHOT_DIR}/reader-pwa-${theme}.png`,
+          style: '.notyf { visibility: hidden !important; }',
+        });
+      }
+    }
     const bounds = await page.locator('.pwa-update').boundingBox();
     assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 320);
     await page.evaluate(() => {
