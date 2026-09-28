@@ -37,7 +37,14 @@ const assert=require('node:assert/strict');
     const tmdbSaved=page.waitForResponse(response=>response.url().endsWith('/admin/settings/tmdb')&&response.request().method()==='PATCH');await page.getByRole('button',{name:'保存配置',exact:true}).click();assert.equal((await tmdbSaved).status(),200);
     const provider=await (await fetch(origin+'/api/v1/media/metadata/providers',{headers})).json();assert.equal(provider.items.find(item=>item.id==='tmdb').configured,true,'isolated media worker sees configuration without restarting');
     assert.equal(await page.getByLabel('读取令牌',{exact:true}).inputValue(),'');
-    await page.screenshot({path:join(artifacts,'tmdb-mobile.png')});assert.deepEqual(errors,[]);
+    await page.screenshot({path:join(artifacts,'tmdb-mobile.png')});
+    await page.getByLabel('配置分类').selectOption('playback');
+    assert.equal(await page.getByLabel('OpenList 播放方式',{exact:true}).inputValue(),'auto');
+    await page.getByLabel('OpenList 播放方式',{exact:true}).selectOption('proxy');
+    const playbackSaved=page.waitForResponse(response=>response.url().endsWith('/admin/settings/playback')&&response.request().method()==='PATCH');
+    await page.getByRole('button',{name:'保存配置',exact:true}).click();assert.equal((await playbackSaved).status(),200);
+    await page.reload();await open();await page.getByLabel('配置分类').selectOption('playback');
+    assert.equal(await page.getByLabel('OpenList 播放方式',{exact:true}).inputValue(),'proxy');assert.deepEqual(errors,[]);
     console.log('PASS: mobile settings, draft TTS test and audio, save/reload, secret redaction, and live media worker configuration');
   }finally{
     await browser?.close();server.kill();await new Promise(resolve=>server.exitCode!==null?resolve():server.once('exit',resolve));upstream.closeAllConnections();await new Promise(resolve=>upstream.close(resolve));

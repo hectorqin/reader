@@ -859,7 +859,7 @@ Reader 对外提供的只读 OPDS 服务与 WebDAV 备份上传见[接入指南]
 | POST /playback | 根据 partId 创建播放会话 |
 | POST /playback/:id/renew | 续期播放会话 |
 | GET /parts/:id/progress、PUT /playback/:id/progress | 读取与保存播放进度 |
-| GET /streams/:id | 授权资源流，支持有效的字节 Range |
+| GET /streams/:id | 校验播放票据；OpenList 默认 307 跳转至临时下载地址，本地或代理模式返回字节流。`proxy=1` 请求代理回退，支持有效的字节 Range；响应不缓存 |
 
 本地建库请求示例：
 

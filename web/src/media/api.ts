@@ -14,7 +14,7 @@ export interface ScanDiagnostics {
   timings:Record<string,number>;logs:Array<{at:number;message:string}>;
 }
 export interface ScanJob {id:string;libraryId?:string;state:string;inspected:number;error:string|null;diagnostics?:ScanDiagnostics}
-export interface Playback {id:string;itemId?:string;partId:string;streamUrl:string;contentType:string;expiresAt:number;position:number;start:number;end:number|null;revision:number}
+export interface Playback {id:string;itemId?:string;partId:string;streamUrl:string;contentType:string;expiresAt:number;position:number;start:number;end:number|null;revision:number;playbackMode?:'auto'|'direct'|'proxy'}
 export interface Progress {position:number;revision:number;completed:boolean}
 export interface MediaAccount {username:string;displayName:string;role:'admin'|'member';server:string}
 

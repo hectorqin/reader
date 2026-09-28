@@ -5,6 +5,12 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {registerMediaProxy} from '../src/http/routes/media-proxy.ts';
 import {registerErrorHandler} from '../src/http/errors.ts';
 
+test('media bridge forwards direct playback redirects without consuming the source',async()=>{
+  const app=Fastify({logger:false});
+  registerMediaProxy(app,{close:async()=>{},request:async()=>new Response(null,{status:307,headers:{location:'https://cdn.example/movie?sign=temporary','cache-control':'private, no-store','referrer-policy':'no-referrer','server-timing':'resolve;dur=12'}})});
+  try{const response=await app.inject('/api/v1/media/streams/test');assert.equal(response.statusCode,307);assert.equal(response.headers.location,'https://cdn.example/movie?sign=temporary');assert.equal(response.headers['server-timing'],'resolve;dur=12');}finally{await app.close();}
+});
+
 test('media proxy bounds outstanding work and releases its capacity after replies',async()=>{
   const app=Fastify({logger:false});registerErrorHandler(app);
   const release:Array<()=>void>=[];

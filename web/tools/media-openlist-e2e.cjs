@@ -55,7 +55,7 @@ function sampleWav(){
     const {baseUrl}=await new Promise((ok,no)=>{let output='';service.stdout.on('data',data=>{output+=data;for(const line of output.split('\n'))try{const value=JSON.parse(line);if(value.baseUrl)ok(value);}catch{}});service.once('exit',()=>no(Error(logs||'fixture exited')));});
     browser=await chromium.launch({headless:true,executablePath:process.env.PROTOTYPE_CHROMIUM});
     page=await browser.newPage({viewport:{width:1120,height:900}});page.setDefaultTimeout(20000);page.on('pageerror',error=>errors.push(error.message));
-    let authorization='';page.on('request',request=>{if(request.url().startsWith(baseUrl+'/api/v1/media/')&&request.headers().authorization)authorization=request.headers().authorization;});
+    let authorization='',browserDirect=false;page.on('request',request=>{if(request.url().startsWith(state.origin+'/raw'))browserDirect=true;if(request.url().startsWith(baseUrl+'/api/v1/media/')&&request.headers().authorization)authorization=request.headers().authorization;});
     const api=async(path)=>{const response=await page.request.get(baseUrl+'/api/v1/media/'+path,{headers:{authorization}});assert.ok(response.ok(),'reader API '+path+' returned '+response.status());return response.json();};
     const choose=async(name,option)=>{await page.getByRole('combobox',{name,exact:true}).click();await page.getByRole('option',{name:option,exact:true}).click();};
     const go=async(hash)=>{await page.evaluate(value=>{location.hash=value;},hash);};
@@ -80,7 +80,8 @@ function sampleWav(){
     const source=await page.locator('.media-player audio').getAttribute('src');assert.ok(source);const streamUrl=new URL(source,baseUrl).href;
     assert.equal(new URL(streamUrl).origin,baseUrl);assert.ok(!streamUrl.startsWith(state.origin));
     const range=await page.request.get(streamUrl,{headers:{range:'bytes=44-63'}});assert.equal(range.status(),206);assert.equal(range.headers()['content-range'],`bytes 44-63/${audio.length}`);assert.deepEqual(await range.body(),audio.subarray(44,64));
-    checks.push('Chromium 通过 Reader 代理成功解码并播放生成的 WAV；指定范围读取精确返回 20 字节、206 状态和正确的 Content-Range。');
+    assert.equal(browserDirect,true,'browser reads the upstream directly after authenticated redirect');
+    checks.push('Chromium 经鉴权跳转后直连上游成功播放 WAV；指定范围读取精确返回 20 字节和正确的 Content-Range。');
     await page.getByRole('button',{name:'打开播放控制',exact:true}).click();await page.locator('.media-audio-heading strong').waitFor();await shot('03-remote-audio-playing');
     await go('#/media/music/settings/libraries/'+library.id+'/edit');await page.locator('input[name=token]').waitFor();assert.equal(await page.locator('input[name=token]').inputValue(),'');assert.equal(await page.locator('input[name=password]').inputValue(),'');assert.match(await page.locator('input[name=token]').getAttribute('placeholder'),/已配置/);
     await page.locator('input[name=name]').fill('OpenList 音乐验收（改名）');

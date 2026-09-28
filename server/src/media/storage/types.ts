@@ -19,6 +19,7 @@ export interface ByteRange {
 export interface MediaStorage {
   list(signal?: AbortSignal): AsyncIterable<StorageEntry>;
   stat(ref: string): Promise<StorageEntry>;
+  directUrl?(ref:string):Promise<string>;
   siblingNames(ref: string): Promise<Set<string> | undefined>;
   siblings(ref: string): Promise<StorageEntry[]>;
   /** Only local adapters expose a path to trusted local probing tools. */

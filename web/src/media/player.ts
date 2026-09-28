@@ -75,6 +75,29 @@ export class MediaPlayer extends EventTarget {
   title='';
   error='';
   support='';
+  loadingStatus='';
+  private proxyFallback=false;
+  private allowAutomaticFallback=false;
+  private sourceAttempt=0;
+  private startupTimer:ReturnType<typeof setTimeout>|undefined;
+  private startupAt=0;
+  private clearStartupTimer(){if(this.startupTimer)clearTimeout(this.startupTimer);this.startupTimer=undefined;}
+  private retryWithProxy():boolean{
+    if(!this.session||!this.allowAutomaticFallback||this.session.playbackMode!=='auto'||this.proxyFallback||this.nativeActive||this.playbackBlocked)return false;
+    this.proxyFallback=true;this.clearStartupTimer();
+    if(this.ready&&Number.isFinite(this.media.currentTime))this.session.position=this.media.currentTime;
+    this.ready=false;this.error='';this.loadingStatus='直连不可用，正在通过服务器连接…';
+    this.media.src=this.api.streamUrl(this.session)+'&proxy=1';
+    this.beginWebPlayback(this.generation);this.changed();return true;
+  }
+  private beginWebPlayback(generation:number){
+    const attempt=++this.sourceAttempt;
+    void this.media.play().catch(error=>{
+      if(generation!==this.generation||attempt!==this.sourceAttempt)return;
+      if(error?.name!=='NotAllowedError'&&error?.name!=='AbortError'&&this.retryWithProxy())return;
+      this.clearStartupTimer();this.loadingStatus='';this.error=playbackFailure(error,this.media.error);this.changed();
+    });
+  }
   active=false;
   private visible=true;
   setVisible(visible:boolean){this.visible=visible;this.element.hidden=!visible||!this.active;}
@@ -188,6 +211,9 @@ export class MediaPlayer extends EventTarget {
     this.audio.controls=false;this.video.controls=true;this.video.playsInline=true;
     for(const media of [this.audio,this.video]) {
       media.preload='metadata';
+      media.addEventListener('loadedmetadata',()=>{if(media===this.media){this.clearStartupTimer();this.loadingStatus='正在缓冲…';this.changed();}});
+      media.addEventListener('waiting',()=>{if(media===this.media){this.loadingStatus='正在缓冲…';this.changed();}});
+      media.addEventListener('playing',()=>{if(media===this.media){this.clearStartupTimer();this.loadingStatus='';this.changed();console.info('[media-playback]',{stage:'playing',elapsedMs:Math.round(performance.now()-this.startupAt),transport:this.proxyFallback?'proxy':this.session?.playbackMode});}});
       media.addEventListener('ratechange',()=>{if(media===this.media&&!this.nativeActive){this.playbackRate=media.playbackRate;this.changed();}});
       media.addEventListener('loadedmetadata',()=>{if(media===this.media&&this.session){media.currentTime=this.session.position;this.ready=true;this.updateMiniProgress();}});
       media.addEventListener('timeupdate',()=>{
@@ -202,6 +228,8 @@ export class MediaPlayer extends EventTarget {
       media.addEventListener('pause',()=>{if(media===this.media){if(!this.completed)++this.resumeIntent;void this.flush();this.changed();}});
       media.addEventListener('play',()=>this.changed());
       media.addEventListener('error',()=>{if(media===this.media){
+        if(this.retryWithProxy())return;
+        this.clearStartupTimer();this.loadingStatus='';
         this.error=playbackFailure(undefined,media.error);this.changed();
       }});
     }
@@ -309,6 +337,8 @@ export class MediaPlayer extends EventTarget {
     this.lease?.stop();this.lease=null;
     if(!this.active)this.playbackRate=readPlaybackPreferences(this.api.preferenceScope()).defaultRate;
     this.session=session;this.sequence=0;this.finishedSession='';this.ready=false;this.completed=false;this.title=selected.title;this.error='';this.active=true;this.playbackBlocked=false;
+    this.proxyFallback=false;this.startupAt=performance.now();this.loadingStatus='正在解析播放地址并连接视频源…';
+    this.allowAutomaticFallback=options.autoplay!==false;
     if(!this.native||(selected.video&&!nativeVideo))this.lease=new PlaybackLease(this.api,session,(message,terminal)=>{
       if(this.session!==session)return;
       this.error=message;
@@ -340,11 +370,13 @@ export class MediaPlayer extends EventTarget {
     }
     this.media.src=this.api.streamUrl(session);
     void this.audioTracks.load(this.media,selected.part.assetId);
-    if(options.autoplay===false)this.media.load();
-    else try{await this.media.play();}catch(error){if(generation===this.generation)this.error=playbackFailure(error,this.media.error);}
-    if(generation!==this.generation)return;
     this.changed();
     if(selected.video&&options.openControls!==false)this.dispatchEvent(new Event('open-controls'));
+    if(options.autoplay===false)this.media.load();
+    else{
+      this.beginWebPlayback(generation);
+      if(session.playbackMode==='auto')this.startupTimer=setTimeout(()=>{if(generation===this.generation&&!this.ready)this.retryWithProxy();},20000);
+    }
   }
   private async finished(){
     const session=this.session,generation=this.generation,intent=this.resumeIntent;
@@ -385,7 +417,7 @@ export class MediaPlayer extends EventTarget {
     });
     return this.saving;
   }
-  pause(){++this.resumeIntent;if(this.nativeActive)this.native?.command('pause');else this.media.pause();}
+  pause(){++this.resumeIntent;this.allowAutomaticFallback=false;this.clearStartupTimer();if(this.nativeActive)this.native?.command('pause');else this.media.pause();}
   private async saveProgress(id:string,payload:{sequence:number;revision:number;position:number;completed:boolean}):Promise<Progress>{
     const controller=new AbortController();
     let timer:ReturnType<typeof setTimeout>|undefined;

@@ -1,4 +1,4 @@
-import {useEffect,useState} from './vendor/preact.ts';
+import {useEffect,useLayoutEffect,useState} from './vendor/preact.ts';
 import {FloatingNotice} from './floating-notice.tsx';
 import {FloatingConfirm} from './floating-confirm.tsx';
 import '../styles/business-settings.css';
@@ -9,7 +9,7 @@ export interface SettingsTransport {
 }
 interface SettingsView {
   group:string;label:string;revision:number;values:Record<string,string|number|boolean>;secrets:Record<string,boolean>;
-  fields:Array<{key:string;label:string;type:'text'|'password'|'number'|'checkbox'|'url';min?:number;max?:number;help?:string}>;
+  fields:Array<{key:string;label:string;type:'text'|'password'|'number'|'checkbox'|'url'|'select';min?:number;max?:number;help?:string;options?:Array<{value:string;label:string}>}>;
 }
 export function BusinessSettings({api,group,onSaved}:{api:SettingsTransport;group?:string;onSaved?:()=>void}){
   const [groups,setGroups]=useState<SettingsView[]>([]),[selected,setSelected]=useState(group||'tts');
@@ -23,7 +23,7 @@ export function BusinessSettings({api,group,onSaved}:{api:SettingsTransport;grou
   },[api,retry]);
   useEffect(()=>{if(group)setSelected(group);},[group]);
   const current=groups.find(item=>item.group===selected);
-  useEffect(()=>{setValues(current?.values||{});setVoices([]);setVoice('');setAudio('');},[current]);
+  useLayoutEffect(()=>{setValues(current?.values||{});setVoices([]);setVoice('');setAudio('');},[current]);
   useEffect(()=>()=>{if(audio)URL.revokeObjectURL(audio);},[audio]);
   async function work(action:()=>Promise<void>){if(busy)return;setBusy(true);setError('');setMessage('');try{await action();}catch(error){setError(error instanceof Error?error.message:'操作失败');}finally{setBusy(false);}}
   return <section className="business-settings" aria-label={current?.label||'业务配置'}>
@@ -38,6 +38,7 @@ export function BusinessSettings({api,group,onSaved}:{api:SettingsTransport;grou
       });}}>
         {current.fields.map(field=><label key={field.key} className={field.type==='checkbox'?'business-setting-toggle':undefined}>{field.label}
           {field.type==='checkbox'?<input type="checkbox" checked={!!values[field.key]} disabled={busy} onChange={event=>setValues({...values,[field.key]:event.currentTarget.checked})}/>:
+          field.type==='select'?<select aria-label={field.label} value={String(values[field.key]??'')} disabled={busy} onChange={event=>setValues({...values,[field.key]:event.currentTarget.value})}>{field.options?.map(option=><option value={option.value}>{option.label}</option>)}</select>:
           <input aria-label={field.label} type={field.type} value={String(values[field.key]??'')} disabled={busy} min={field.min} max={field.max} step={field.type==='number'?1:undefined} maxLength={4096} autoComplete={field.type==='password'?'new-password':'off'} placeholder={field.type==='password'&&current.secrets[field.key]?'已保存，留空不修改':undefined} onInput={event=>setValues({...values,[field.key]:field.type==='number'?Number(event.currentTarget.value):event.currentTarget.value})}/>}
           {field.help&&<small className="muted">{field.help}</small>}
           {field.type==='password'&&<><small className="muted">{values[field.key]===''?'保存时将清除凭据':current.secrets[field.key]?'已有凭据，仅替换时填写':'尚未配置凭据'}</small><button className="button business-secret-clear" type="button" disabled={busy} onClick={()=>setValues({...values,[field.key]:''})}>清除{field.label}</button></>}

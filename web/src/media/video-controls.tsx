@@ -46,6 +46,7 @@ export function VideoControls({player,api,onBack}:{player:MediaPlayer;api:MediaA
     <div className="media-video-caption"><div><strong>{item?.title||player.title}</strong>{edition&&<small>{edition.label}</small>}</div></div>
     <div className="media-video-toolbar media-video-tools"><button onClick={()=>open('subtitles')}><Subtitles size={20} aria-hidden="true"/>字幕</button><button onClick={()=>open('tracks')}><AudioLines size={20} aria-hidden="true"/>音轨</button><button onClick={()=>open('versions')}><Layers size={20} aria-hidden="true"/>版本</button><button aria-label="更多播放选项" onClick={()=>open('more')}><Ellipsis size={20} aria-hidden="true"/>更多</button></div>
     {player.error&&<PlaybackProblem player={player} {...(item?.editions.length?{onVersions:()=>open('versions')}:{})} {...(onBack?{onBack}:{})}/>}
+    {!player.error&&player.loadingStatus&&<p role="status">{player.loadingStatus}</p>}
     {notice&&<p className="media-error" role="alert">{notice}</p>}
     {item&&(item.overrides.plot??item.overrides.description??item.metadata.plot??item.metadata.description)&&<details className="media-video-description"><summary>剧情简介</summary><p>{String(item.overrides.plot??item.overrides.description??item.metadata.plot??item.metadata.description)}</p></details>}
     {item?.kind==='episode'&&item.parentId&&<VideoEpisodeRail key={item.parentId} api={api} item={item} player={player}/>}

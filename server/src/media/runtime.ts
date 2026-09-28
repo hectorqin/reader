@@ -44,7 +44,8 @@ export class MediaRuntime {
     const origin=await this.ready,url=new URL(path,origin);
     if(url.origin!==origin||!url.pathname.startsWith('/api/v1/media/'))throw new Error('invalid internal media route');
     const headers=new Headers(options.headers);headers.set('x-reader-media-internal',this.secret);
-    return fetch(url,{...options,headers,redirect:'error'});
+    // Return playback redirects to the browser; never follow them with internal credentials.
+    return fetch(url,{...options,headers,redirect:'manual'});
   }
   async close():Promise<void>{
     if(this.closed)return;

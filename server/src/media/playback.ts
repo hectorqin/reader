@@ -28,7 +28,8 @@ export function parseMediaRange(header:string|undefined,size:number):ByteRange|u
 }
 
 export class MediaPlayback {
-  constructor(private readonly db:MediaDatabase,private readonly libraries:MediaLibraries,private readonly accounts:MediaAccounts=new DatabaseMediaAccounts(db)) {
+  private readonly directLinks=new Map<string,{url:string;expires:number}>();
+  constructor(private readonly db:MediaDatabase,private readonly libraries:MediaLibraries,private readonly accounts:MediaAccounts=new DatabaseMediaAccounts(db),private readonly playbackMode:()=> 'auto'|'direct'|'proxy'=()=> 'proxy') {
     db.transaction(()=>{
       db.run(`CREATE TABLE IF NOT EXISTS media_playback_sessions (
         id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -82,7 +83,7 @@ export class MediaPlayback {
       this.db.run(`INSERT INTO media_progress(user_id,part_id,position,completed,revision,session_id,updated_at) VALUES(?,?,?,?,?,?,?)
         ON CONFLICT(user_id,part_id) DO UPDATE SET position=excluded.position,completed=excluded.completed,revision=excluded.revision,session_id=excluded.session_id,updated_at=excluded.updated_at`,actor.id,partId,position,0,old.revision+1,id,now);
     return {id,partId,itemId:part.item_id,editionId:part.edition_id,assetId:part.asset_id,contentType:CONTENT_TYPES[extname(part.ref).toLowerCase()]||'application/octet-stream',
-      streamUrl:`/api/v1/media/streams/${id}?ticket=${token}`,expiresAt,position,start:part.start_seconds,end:part.end_seconds,revision:old.revision+1,mode:'direct' as const};
+      streamUrl:`/api/v1/media/streams/${id}?ticket=${token}`,expiresAt,position,start:part.start_seconds,end:part.end_seconds,revision:old.revision+1,mode:'direct' as const,playbackMode:this.playbackMode()};
   }
   update(actor:MediaActor,id:string,input:{sequence:number;revision:number;position:number;completed?:boolean}) {
     const session=this.db.get<SessionRow>('SELECT * FROM media_playback_sessions WHERE id=? AND user_id=?',id,actor.id);
@@ -141,5 +142,18 @@ export class MediaPlayback {
     const opened=await storage.open(part.ref,range);
     try { this.authorizeStream(id,ticket); } catch (error) { opened.stream.destroy(); throw error; }
     return {...opened,partial:range!==undefined,contentType:CONTENT_TYPES[extname(part.ref).toLowerCase()]||'application/octet-stream'};
+  }
+  async directUrl(id:string,ticket:string):Promise<string|undefined>{
+    const {actor,part}=this.authorizeStream(id,ticket);
+    const cached=this.directLinks.get(id);
+    if(cached&&cached.expires>Date.now())return cached.url;
+    this.directLinks.delete(id);
+    const storage=await this.libraries.storage(actor,part.library_id);
+    if(!storage.directUrl)return;
+    const url=await storage.directUrl(part.ref);
+    this.authorizeStream(id,ticket);
+    while(this.directLinks.size>=256)this.directLinks.delete(this.directLinks.keys().next().value!);
+    this.directLinks.set(id,{url,expires:Date.now()+30000});
+    return url;
   }
 }

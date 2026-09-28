@@ -3,6 +3,7 @@ import type { AppConfig } from '../config/index.ts';
 import { badRequest, conflict } from '../lib/errors.ts';
 
 export interface BusinessValues {
+  playback:{mode:'auto'|'direct'|'proxy'};
   tmdb:{enabled:boolean;token:string;apiKey:string;language:string};
   musicbrainz:{enabled:boolean;userAgent:string};
   tts:{enabled:boolean;url:string;token:string;voicesUrl:string;timeoutMs:number;cacheMaxBytes:number};
@@ -12,8 +13,9 @@ export interface BusinessValues {
   webdav:{url:string;username:string;password:string;maxBytes:number};
 }
 export type SettingsGroup=keyof BusinessValues;
-type Field={key:string;label:string;type:'text'|'password'|'number'|'checkbox'|'url';default:string|number|boolean;min?:number;max?:number;help?:string};
+type Field={key:string;label:string;type:'text'|'password'|'number'|'checkbox'|'url'|'select';default:string|number|boolean;min?:number;max?:number;help?:string;options?:Array<{value:string;label:string}>};
 export const SETTINGS_SCHEMA:Record<SettingsGroup,{label:string;fields:Field[]}>= {
+  playback:{label:'媒体播放',fields:[{key:'mode',label:'OpenList 播放方式',type:'select',default:'auto',options:[{value:'auto',label:'自动（直连优先，失败尝试代理）'},{value:'direct',label:'浏览器直连'},{value:'proxy',label:'服务器代理'}],help:'直连由浏览器访问临时下载地址，不经过 Reader 转发。仅服务器可访问的资源请选择代理；OpenList 自身的 Web 代理设置仍然有效。'}]},
   tmdb:{label:'TMDB',fields:[
     {key:'enabled',label:'启用 TMDB',type:'checkbox',default:false},
     {key:'token',label:'读取令牌',type:'password',default:''},
@@ -95,6 +97,7 @@ export class BusinessSettings extends BusinessSettingsReader {
       if(field.type==='checkbox'){if(typeof value!=='boolean')throw badRequest(`${field.label}格式无效`);}
       else if(field.type==='number'){if(typeof value!=='number'||!Number.isSafeInteger(value)||value<field.min!||value>field.max!)throw badRequest(`${field.label}须在 ${field.min}–${field.max} 之间`);}
       else if(typeof value!=='string'||value.length>4096||/[\u0000-\u001f\u007f]/.test(value))throw badRequest(`${field.label}格式无效`);
+      if(field.type==='select'&&!field.options?.some(option=>option.value===value))throw badRequest(`${field.label}选项无效`);
       values[key]=typeof value==='string'&&field.type!=='password'?value.trim():value;
       if(field.type==='url'&&values[key])validateUrl(String(values[key]));
     }

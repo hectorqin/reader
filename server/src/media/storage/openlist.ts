@@ -40,7 +40,7 @@ export function normalizeOpenList(input: OpenListConnection, root: string): { co
   return { root: normalized, connection: { baseUrl: url.href.replace(/\/+$/, ''), token: input.token || '', password: input.password || '' } };
 }
 
-/** Read-only OpenList v4 fs API. Secrets and signed URLs never leave this adapter. */
+/** Read-only OpenList v4 fs API. API credentials never leave this adapter. */
 export class OpenListMediaStorage implements MediaStorage {
   private readonly connection: OpenListConnection;
   private readonly root: string;
@@ -48,6 +48,7 @@ export class OpenListMediaStorage implements MediaStorage {
   private readonly directories = new Map<string, RemoteObject[]>();
   private readonly pendingDirectories = new Map<string, Promise<RemoteObject[]>>();
   private cachedEntries = 0;
+  private lastObject: {ref:string;object:RemoteObject;expires:number}|undefined;
   constructor(connection: OpenListConnection, root: string, private readonly request: typeof fetch = fetch, private readonly timeout = REQUEST_TIMEOUT) {
     const normalized = normalizeOpenList(connection, root);
     this.connection = normalized.connection;
@@ -156,9 +157,17 @@ export class OpenListMediaStorage implements MediaStorage {
     }
   }
   private async get(ref: string, signal?: AbortSignal): Promise<RemoteObject> {
+    signal?.throwIfAborted();
+    if(this.lastObject?.ref===ref&&this.lastObject.expires>Date.now())return this.lastObject.object;
     const obj = this.object(await this.api('get', { path: this.path(ref) }, signal));
     if (obj.name !== ref.split('/').at(-1)) throw remoteError('MEDIA_OPENLIST_CHANGED');
+    this.lastObject={ref,object:obj,expires:Date.now()+5000};
     return obj;
+  }
+  async directUrl(ref:string):Promise<string>{
+    const obj=await this.get(ref);this.entry(ref,obj);
+    if(typeof obj.raw_url!=='string'||!obj.raw_url)throw remoteError();
+    return httpUrl(obj.raw_url).href;
   }
   async stat(ref: string): Promise<StorageEntry> { return this.entry(ref, await this.get(ref)); }
   async siblings(ref: string): Promise<StorageEntry[]> {
@@ -170,6 +179,7 @@ export class OpenListMediaStorage implements MediaStorage {
   async open(ref: string, range?: ByteRange, signal?: AbortSignal) {
     signal?.throwIfAborted();
     const obj = await this.get(ref, signal), entry = this.entry(ref, obj);
+    this.lastObject=undefined;
     const start = range?.start ?? 0, end = range?.end ?? entry.size - 1;
     if (range && (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end >= entry.size))
       throw new StorageError('invalid-range', 'Byte range is outside the resource');

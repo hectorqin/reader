@@ -160,7 +160,7 @@ export class MediaScreen {
     if(this.routing?.navigateRoute){
       const itemId=this.player.currentItemId,part=this.player.currentPartId;if(!itemId||!part)return;
       let channel=this.player.isVideo?'video' as const:this.channel;
-      try{const item=await this.api.detail(itemId,this.abort.signal);channel=['movie','episode'].includes(item.kind)?'video':item.kind==='audiobook'?'audiobook':'music';}catch{/* Playback controls remain available when optional metadata cannot load. */}
+      if(!this.player.isVideo)try{const item=await this.api.detail(itemId,this.abort.signal);channel=item.kind==='audiobook'?'audiobook':'music';}catch{/* Playback controls remain available when optional metadata cannot load. */}
       if(this.disposed||this.player.currentPartId!==part)return;
       if(this.playbackView&&this.location?.itemId===itemId&&this.location.params?.part===part)return;
       this.routing.navigateRoute({name:'media',channel,itemId,page:'player',params:{part},...(this.location?{returnTo:routeHash(this.location)}:{})});return;

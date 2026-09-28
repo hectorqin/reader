@@ -30,7 +30,7 @@ export function registerMediaProxy(app:FastifyInstance,runtime:Pick<MediaRuntime
       const upstream=await runtime.request(request.raw.url!,{method:request.method,headers,body,signal:controller.signal});
       clearTimeout(timer);
       reply.status(upstream.status);
-      for(const name of ['content-type','content-length','content-range','accept-ranges','cache-control','content-security-policy','x-content-type-options','referrer-policy','retry-after']){
+      for(const name of ['location','server-timing','content-type','content-length','content-range','accept-ranges','cache-control','content-security-policy','x-content-type-options','referrer-policy','retry-after']){
         const value=upstream.headers.get(name);if(value!==null)reply.header(name,value);
       }
       if(request.method==='HEAD'||!upstream.body){await upstream.body?.cancel();return reply.send();}

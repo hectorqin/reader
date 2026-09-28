@@ -36,7 +36,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   const references=database!==ctx.db?new MediaAccountReferences(database,accounts):undefined;
   const settings=new BusinessSettingsReader(ctx.db);
   const libraries=new MediaLibraries(database,true,accounts,references),scanner=new MediaScanner(database,libraries,undefined,app.log,()=>settings.read('scanning'));
-  const playback=new MediaPlayback(database,libraries,accounts);
+  const playback=new MediaPlayback(database,libraries,accounts,()=>settings.read('playback').mode);
   const background=new MediaBackgroundGrants(database,libraries,accounts);
   const userState=new MediaUserState(database,libraries,scanner.catalog);
   const scraping=new MediaScraping(database,scanner.catalog,options.metadataProviders??configuredProviders(settings));
@@ -211,11 +211,25 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
     preHandler:auth,schema:{body:{type:'object',additionalProperties:false,required:['sequence','revision','position'],properties:{sequence:{type:'integer',minimum:0},revision:{type:'integer',minimum:0},position:{type:'number',minimum:0},completed:{type:'boolean'}}}},
   },async request=>playback.update(currentUser(request),request.params.id,request.body));
   // Scope URL credentials to one read-only session; suppress request URL logs for these routes.
-  app.get<{Params:{id:string};Querystring:{ticket:string}}>('/api/v1/media/streams/:id',{
-    logLevel:'silent',schema:{querystring:{type:'object',required:['ticket'],properties:{ticket:{type:'string',minLength:40,maxLength:100}}}},
+  app.get<{Params:{id:string};Querystring:{ticket:string;proxy?:string}}>('/api/v1/media/streams/:id',{
+    logLevel:'silent',schema:{querystring:{type:'object',required:['ticket'],properties:{ticket:{type:'string',minLength:40,maxLength:100},proxy:{type:'string',enum:['1']}}}},
   },async(request,reply)=>{
+    const started=performance.now(),mode=settings.read('playback').mode;
+    reply.header('cache-control','private, no-store').header('referrer-policy','no-referrer');
     try {
+      if(mode!=='proxy'&&request.query.proxy!=='1'){
+        const url=await playback.directUrl(request.params.id,request.query.ticket);
+        // HTTPS pages cannot load insecure media; auto mode keeps that traffic server-side.
+        if(url&&!(mode==='auto'&&settings.read('access').publicUrl.startsWith('https:')&&url.startsWith('http:'))){
+          const elapsedMs=Math.round(performance.now()-started);
+          app.log.info({sessionId:request.params.id,transport:'direct',elapsedMs},'media playback source ready');
+          return reply.header('server-timing',`resolve;dur=${elapsedMs}`).redirect(url,307);
+        }
+      }
       const result=await playback.stream(request.params.id,request.query.ticket,request.headers.range);
+      const elapsedMs=Math.round(performance.now()-started);
+      app.log.info({sessionId:request.params.id,transport:'proxy',elapsedMs,rangeStart:result.start},'media playback source ready');
+      reply.header('server-timing',`upstream;dur=${elapsedMs}`);
       reply.header('cache-control','private, no-store').header('referrer-policy','no-referrer').header('accept-ranges','bytes').type(result.contentType);
       reply.header('content-length',result.entry.size?result.end-result.start+1:0);
       if(result.partial)reply.status(206).header('content-range',`bytes ${result.start}-${result.end}/${result.entry.size}`);
@@ -223,6 +237,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
       return reply.send(result.stream);
     } catch(error) {
       const code=(error as {code?:string}).code;
+      app.log.warn({sessionId:request.params.id,code,elapsedMs:Math.round(performance.now()-started)},'media playback source failed');
       if(code==='MEDIA_RANGE'||code==='invalid-range'){
         const {part}=playback.authorizeStream(request.params.id,request.query.ticket);
         return reply.status(416).header('content-range',`bytes */${part.size}`).send({error:{code:'MEDIA_RANGE',message:'unsatisfiable range'}});

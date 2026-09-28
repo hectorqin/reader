@@ -12,6 +12,33 @@ function ready(player:MediaPlayer){player.audio.dispatchEvent(new Event('loadedm
 describe('media playback lifecycle',()=>{
   beforeEach(()=>{localStorage.clear();vi.spyOn(HTMLMediaElement.prototype,'play').mockImplementation(async function(this:HTMLMediaElement){Object.defineProperty(this,'paused',{configurable:true,value:false});});vi.spyOn(HTMLMediaElement.prototype,'pause').mockImplementation(function(this:HTMLMediaElement){Object.defineProperty(this,'paused',{configurable:true,value:true});});vi.spyOn(HTMLMediaElement.prototype,'load').mockImplementation(()=>{});});
   afterEach(()=>{vi.restoreAllMocks();vi.useRealTimers();});
+  it('opens video controls and releases the action while playback is still buffering',async()=>{
+    const {player}=setup();let started=false;
+    vi.mocked(HTMLMediaElement.prototype.play).mockImplementation(()=>{started=true;return new Promise(()=>{});});
+    const opened=vi.fn();player.addEventListener('open-controls',opened);
+    let returned=false;void player.play([{...part('film'),video:true}]).then(()=>{returned=true;});
+    await vi.waitFor(()=>expect(started).toBe(true));
+    expect(opened).toHaveBeenCalledTimes(1);expect(returned).toBe(true);
+    await player.stop();
+  });
+  it('falls back once in auto mode without creating a second playback session',async()=>{
+    const {player,playback}=setup();playback.mockResolvedValue({...session('film'),playbackMode:'auto'});
+    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(new DOMException('source failed','NotSupportedError')).mockResolvedValueOnce();
+    await player.play([{...part('film'),video:true}]);
+    await vi.waitFor(()=>expect(player.video.src).toContain('proxy=1'));
+    expect(playback).toHaveBeenCalledTimes(1);expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);
+    player.video.dispatchEvent(new Event('error'));
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(2);expect(player.error).not.toBe('');await player.stop();
+  });
+  it('does not proxy on autoplay rejection, explicit direct mode or a paused restore',async()=>{
+    for(const mode of ['autoplay','direct','restore'] as const){
+      const {player,playback}=setup();playback.mockResolvedValue({...session('film'),playbackMode:mode==='direct'?'direct':'auto'});
+      vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValue(new DOMException('failed',mode==='autoplay'?'NotAllowedError':'NotSupportedError'));
+      await player.play([{...part('film'),video:true}],0,false,{autoplay:mode!=='restore'});
+      if(mode==='restore')player.video.dispatchEvent(new Event('error'));
+      await Promise.resolve();expect(player.video.src).not.toContain('proxy=1');await player.stop();
+    }
+  });
   it('closes the mini player, saves progress and releases its media and queue',async()=>{
     const {player,request}=setup();await player.play([part('a'),part('b')]);ready(player);
     player.audio.currentTime=57;

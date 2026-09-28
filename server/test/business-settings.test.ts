@@ -32,6 +32,10 @@ test('settings migrate once, redact secrets, reject stale edits and are visible 
   assert.throws(()=>settings.save('tmdb',{enabled:true},view.revision),{code:'SETTINGS_CONFLICT'});
   assert.throws(()=>settings.save('scanning',{files:999},settings.view('scanning').revision),{statusCode:400});
   assert.equal(settings.read('scanning').interval,60);
+  assert.equal(settings.read('playback').mode,'auto');
+  assert.throws(()=>settings.save('playback',{mode:'invalid'},settings.view('playback').revision),{statusCode:400});
+  settings.save('playback',{mode:'proxy'},settings.view('playback').revision);
+  assert.equal(reader.read('playback').mode,'proxy');
   remote.close();db.close();
   const reopened=new Db(path);try{const next=new BusinessSettings(reopened,config(root));assert.equal(next.read('tmdb').token,'');assert.equal(next.read('tmdb').enabled,false);}finally{reopened.close();}
 });
