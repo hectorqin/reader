@@ -13,7 +13,13 @@ For a first installation, follow [getting started](getting-started.en.md). This 
 
 Read-only books do not prevent account or progress updates in the data directory. To enable uploads, check host ACLs and directory permissions as well as changing the mount to `:rw`.
 
-## Environment variables
+## Business settings in the UI
+
+Administrators configure HTTP speech, scanning, login lifetimes, public URL, browser origins and WebDAV under System settings → Service configuration. TMDB and MusicBrainz are also editable in Media settings → Metadata providers. Registration remains under Registration and invitations. Values persist in reader.db and apply without restarting.
+
+On first upgrade, legacy business environment variables are imported once. Existing database values, including cleared credentials, always win. See [business settings (中文)](business-settings.zh-CN.md).
+
+## Deployment environment variables
 
 These are defaults when running the server directly. The Docker image additionally sets `DATA_DIR=/data` and `WEB_DIR=/app/web`, with `BOOKS_DIR=/books`.
 
@@ -23,26 +29,11 @@ These are defaults when running the server directly. The Docker image additional
 | `DATA_DIR` | `data` under the current working directory | Server state and caches |
 | `HOST` | `0.0.0.0` | Listen address |
 | `PORT` | `5888` | Listen port |
-| `PUBLIC_URL` | Empty | Public-facing URL; set when using a reverse proxy |
-| `SCAN_INTERVAL` | `1800` | Scheduled scan interval in seconds; `0` disables it |
-| `WATCH_INTERVAL` | `60` | Change-check interval in seconds; `0` disables it |
-| `ALLOW_REGISTRATION` | `false` | Default registration policy; saved admin settings take precedence (closed, open, or invite-only) |
-| `ACCESS_TOKEN_TTL` | `604800` | Access-token lifetime in seconds (7 days); renewed near expiry on requests or returning to the foreground |
-| `REFRESH_TOKEN_TTL` | `31536000` | Refresh-token lifetime in seconds |
 | `READER_TOKEN_SECRET` | Generated | Signing secret, at least 16 characters; otherwise stored in `DATA_DIR/token.secret` |
 | `LOG_LEVEL` | `info` | Logging level |
 | `MEDIA_FFPROBE_PATH` | `ffprobe` | Local media probe executable |
 | `MEDIA_FFMPEG_PATH` | `ffmpeg` | Embedded artwork and subtitle extraction |
-| `MEDIA_TMDB_TOKEN` | Empty | TMDB read token; preferred when both credentials are configured |
-| `MEDIA_TMDB_API_KEY` | Empty | TMDB API key; no online matching unless token or key is set |
-| `MEDIA_MUSICBRAINZ_USER_AGENT` | Empty | MusicBrainz application/version/contact identifier; empty disables matching |
-| `CORS_ORIGINS` | Empty | Comma-separated browser origins; empty reflects the requesting origin |
 | `WEB_DIR` | `web` under the current working directory | Built Web client directory |
-| `TTS_URL` | Empty | HTTP speech upstream; empty disables HTTP speech |
-| `TTS_TOKEN` | Empty | Upstream Bearer token |
-| `TTS_VOICES_URL` | `<TTS_URL>/voices` | Upstream voice list |
-| `TTS_TIMEOUT_MS` | `20000` | Speech request timeout in milliseconds |
-| `TTS_CACHE_BYTES` | `268435456` | Byte limit for `DATA_DIR/tts-cache`; `0` disables caching |
 
 Run `docker compose up -d` after changing environment variables. Keep the signing secret stable to preserve sessions. Accounts, progress, and notes cannot be recovered by rescanning book files.
 
@@ -58,21 +49,15 @@ reader.example.com {
 }
 ```
 
-Set `PUBLIC_URL=https://reader.example.com`. If Caddy also runs in a container, use reader's service address on the container network instead.
+Set the public URL to `https://reader.example.com` in Login and service access. If Caddy also runs in a container, use reader's service address on the container network instead.
 
-For separately hosted frontends, set `CORS_ORIGINS` to the Web client's actual origin. Source search uses Streamable HTTP: proxies must forward `text/event-stream` incrementally rather than buffer the entire response. A VPN or tunnel can provide access when you have no public IP.
+For separately hosted frontends, set allowed browser origins in Login and service access to the Web client's actual origin. Source search uses Streamable HTTP: proxies must forward `text/event-stream` incrementally rather than buffer the entire response. A VPN or tunnel can provide access when you have no public IP.
 
 ## HTTP text-to-speech
 
-Use Android system speech or browser `speechSynthesis` when available. To enable an HTTP speech service, configure a compatible upstream in Compose:
+Use Android system speech or browser `speechSynthesis` when available. To enable an HTTP speech service, configure a compatible upstream in the administrator UI:
 
-```yaml
-environment:
-  TTS_URL: "http://your-tts-host:5002/tts"
-  # TTS_TOKEN: "your-token"
-  # TTS_VOICES_URL: "http://your-tts-host:5002/voices"
-  TTS_CACHE_BYTES: "268435456"
-```
+Configure the synthesis URL, token, voices URL, timeout and cache limit in System settings → Service configuration → HTTP speech. Test the connection and preview audio before saving.
 
 reader proxies speech requests and does not include a synthesis model. The upstream must implement the expected request protocol; a service's name alone does not establish compatibility. See the [TTS API (中文)](api.md). The address must be reachable from the reader container; `localhost` inside a container refers to that container.
 
@@ -103,7 +88,7 @@ Mount local movie, series, music, and audiobook directories separately (read-onl
 
 The official image includes ffprobe and ffmpeg. For native runs, put them on PATH or set MEDIA_FFPROBE_PATH / MEDIA_FFMPEG_PATH to executable paths. They probe metadata and extract embedded resources; they do not enable transcoding.
 
-Set MEDIA_TMDB_TOKEN or MEDIA_TMDB_API_KEY for online video matching, and MEDIA_MUSICBRAINZ_USER_AGENT for music metadata. Keep credentials in the host environment or an untracked .env, and pass them through Compose environment entries. A .env entry alone does not inject the value into the container. Local tags and NFO work without online credentials.
+Configure TMDB credentials and MusicBrainz contact information in Media settings → Metadata providers. Changes apply without restarting. Local tags and NFO work without online credentials.
 
 Configure OpenList in the library creation form; no local mount is needed. Reader must reach OpenList and its download upstreams. Remote embedded metadata is not read, and some drivers require OpenList Web proxy. See [OpenList setup (中文)](media-openlist.md).
 

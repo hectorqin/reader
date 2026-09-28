@@ -32,6 +32,7 @@ import { UserService } from '../src/services/users.ts';
 import { ShelfService } from '../src/services/shelf.ts';
 import { SyncService } from '../src/services/sync.ts';
 import { TtsService } from '../src/services/tts.ts';
+import {BusinessSettings} from '../src/services/business-settings.ts';
 import { BrowseService } from '../src/services/browse.ts';
 import { buildApp } from '../src/http/app.ts';
 import type { AppContext } from '../src/http/context.ts';
@@ -91,6 +92,9 @@ function startUpstream(): Promise<void> {
 async function buildInstance(): Promise<void> {
   const config = loadConfig();
   const db = openDatabase(config);
+  // Each case supplies its desired fixture explicitly; production imports env only once.
+  const settings=new BusinessSettings(db,config);
+  settings.save('tts',{enabled:!!process.env.TTS_URL,url:process.env.TTS_URL||'',voicesUrl:process.env.TTS_VOICES_URL||'',cacheMaxBytes:0},settings.view('tts').revision);
   ctx = {
     config,
     db,
@@ -294,7 +298,7 @@ test('diagnostic endpoint synthesizes audio and requires header authentication',
 for (const [behaviour,code] of [['empty','TTS_EMPTY'],['auth','TTS_AUTH'],['slow','TTS_TIMEOUT']] as const) {
  test('diagnosis classifies ' + behaviour, async () => {
   upstreamBehaviour = behaviour;
-  if (behaviour === 'slow') { process.env.TTS_TIMEOUT_MS = '30'; ctx.tts = new TtsService(ctx.config); }
+  if (behaviour === 'slow') { ctx.tts = new TtsService(ctx.config,{...ctx.settings!.read('tts'),timeoutMs:30}); }
   try { const result = await app.inject({method:'POST',url:'/api/v1/tts/test',headers:{authorization:'Bearer '+token},payload:{}}); assert.equal(result.statusCode,400,result.body); assert.equal(result.json().error.code,code); }
   finally { delete process.env.TTS_TIMEOUT_MS; }
  });

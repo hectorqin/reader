@@ -43,6 +43,7 @@ export interface SessionStore {
  * engines may I offer here", not "does this endpoint exist".
  */
 export interface TtsCapabilities {
+  timeoutMs?:number;
   http: boolean;
   formats: string[];
   maxLength: number;
@@ -705,6 +706,14 @@ export class ReaderApi {
   mediaRequest<T>(path: string, method = 'GET', body?: unknown, options: RequestOptions = {}): Promise<T> {
     if (!path.startsWith('/api/v1/media/')) throw new Error('invalid media API path');
     return this.call<T>(path, method, body, options);
+  }
+
+  businessSettingsRequest<T>(path='',method='GET',body?:unknown,signal?:AbortSignal):Promise<T>{
+    return this.call<T>('/api/v1/admin/settings'+(path?'/'+path:''),method,body,signal?{signal}:{});
+  }
+  async businessTtsPreview(values:Record<string,unknown>,voice:string):Promise<Blob>{
+    const result=await this.request('/api/v1/admin/settings/tts/preview','POST',{values,voice},{binary:true});
+    return new Blob([new Uint8Array(result.bytes??[]).buffer],{type:result.headers['content-type']||'audio/mpeg'});
   }
 
   private async get<T>(path: string, options: RequestOptions = {}): Promise<T> {

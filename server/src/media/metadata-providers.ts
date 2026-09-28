@@ -35,25 +35,24 @@ const unavailable = () => new AppError(502, 'MEDIA_PROVIDER_UNAVAILABLE', '刮�
 
 /** Only provider-owned fixed origins are accepted; never follow redirects with credentials. */
 export class MetadataHttp {
-  private musicBrainzNext = 0;
-  constructor(private readonly fetcher: typeof fetch = fetch) {}
+  constructor(private readonly fetcher: typeof fetch = fetch,private readonly options={timeoutMs:12000,retries:2},private readonly limiter={next:0}) {}
 
   async json(url: URL, headers: Record<string, string>, signal?:AbortSignal): Promise<JsonObject> {
     if (!['https://api.themoviedb.org', 'https://musicbrainz.org'].includes(url.origin)) throw badRequest('invalid provider origin');
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt <= this.options.retries; attempt++) {
       signal?.throwIfAborted();
       if (url.hostname === 'musicbrainz.org') {
         // Reserve before awaiting so concurrent callers obey MusicBrainz's one-request/second limit.
-        const now = Date.now(), scheduled = Math.max(now, this.musicBrainzNext);
+        const now = Date.now(), scheduled = Math.max(now, this.limiter.next);
         if (scheduled - now > 10_000) throw new AppError(429, 'MEDIA_PROVIDER_BUSY', '刮削请求较多，请稍后重试');
-        this.musicBrainzNext = scheduled + 1100;
+        this.limiter.next = scheduled + 1100;
         if (scheduled > now) await delay(scheduled - now,undefined,{signal});
       }
       try {
-        const response = await this.fetcher(url, { headers, redirect: 'error', signal: signal?AbortSignal.any([signal,AbortSignal.timeout(12_000)]):AbortSignal.timeout(12_000) });
+        const response = await this.fetcher(url, { headers, redirect: 'error', signal: signal?AbortSignal.any([signal,AbortSignal.timeout(this.options.timeoutMs)]):AbortSignal.timeout(this.options.timeoutMs) });
         if (response.status === 429 || response.status >= 500) {
           await response.body?.cancel();
-          if (attempt === 2) throw unavailable();
+          if (attempt === this.options.retries) throw unavailable();
           const retry = Number(response.headers.get('retry-after'));
           if (Number.isFinite(retry) && retry > 5) throw unavailable();
           await delay(Math.max((attempt + 1) * 500, Number.isFinite(retry) ? retry * 1000 : 0),undefined,{signal});
@@ -83,7 +82,7 @@ export class MetadataHttp {
       } catch (error) {
         signal?.throwIfAborted();
         if (error instanceof AppError) throw error;
-        if (attempt === 2) throw unavailable();
+        if (attempt === this.options.retries) throw unavailable();
         await delay((attempt + 1) * 500,undefined,{signal});
       }
     }
@@ -96,15 +95,15 @@ export class TmdbProvider implements MetadataProvider {
   readonly label = 'TMDB';
   readonly kinds: MediaItemKind[] = ['movie', 'series', 'season', 'episode'];
   get configured() { return !!(this.token || this.apiKey); }
-  constructor(private readonly http: MetadataHttp, private readonly token = process.env.MEDIA_TMDB_TOKEN || '', private readonly apiKey = process.env.MEDIA_TMDB_API_KEY || '') {}
+  constructor(private readonly http: MetadataHttp, private readonly token = '', private readonly apiKey = '',private readonly language='zh-CN') {}
   private endpoint(kind: MediaItemKind): string {
-    if (!this.configured) throw badRequest('请先配置 MEDIA_TMDB_TOKEN 或 MEDIA_TMDB_API_KEY', 'MEDIA_PROVIDER_NOT_CONFIGURED');
+    if (!this.configured) throw badRequest('请先在影音设置中配置 TMDB', 'MEDIA_PROVIDER_NOT_CONFIGURED');
     if (!this.kinds.includes(kind)) throw badRequest('TMDB 不支持此条目类型');
     return kind === 'movie' ? 'movie' : 'tv';
   }
   private request(path: string, query?: string, signal?:AbortSignal) {
     const url = new URL('https://api.themoviedb.org/3/' + path);
-    url.searchParams.set('language', 'zh-CN');
+    url.searchParams.set('language', this.language);
     if (query) url.searchParams.set('query', query);
     const headers: Record<string, string> = { Accept: 'application/json' };
     if (this.token) headers.Authorization = 'Bearer ' + this.token;
@@ -150,9 +149,9 @@ export class MusicBrainzProvider implements MetadataProvider {
   readonly label = 'MusicBrainz';
   readonly kinds: MediaItemKind[] = ['artist', 'album', 'track', 'audiobook'];
   get configured() { return !!this.userAgent; }
-  constructor(private readonly http: MetadataHttp, private readonly userAgent = process.env.MEDIA_MUSICBRAINZ_USER_AGENT || '') {}
+  constructor(private readonly http: MetadataHttp, private readonly userAgent = '') {}
   private entity(kind: MediaItemKind): string {
-    if (!this.configured) throw badRequest('请先配置包含联系地址的 MEDIA_MUSICBRAINZ_USER_AGENT', 'MEDIA_PROVIDER_NOT_CONFIGURED');
+    if (!this.configured) throw badRequest('请先在影音设置中配置 MusicBrainz 联系信息', 'MEDIA_PROVIDER_NOT_CONFIGURED');
     if (!this.kinds.includes(kind)) throw badRequest('MusicBrainz 不支持此条目类型');
     return kind === 'artist' ? 'artist' : kind === 'track' ? 'recording' : 'release-group';
   }

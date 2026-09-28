@@ -72,7 +72,7 @@
 ```
 
 - 首个账号恒可注册，且自动成为 `admin`
-- 之后按管理员设置的注册策略开放；未设置时兼容 `ALLOW_REGISTRATION`。
+- 之后按管理员设置的注册策略开放；首次初始化时从旧 `ALLOW_REGISTRATION` 导入，随后以数据库配置为准。
 - 邀请模式需要提交 `inviteCode`，无效、过期、停用或用尽的邀请码返回 `400 INVITE_INVALID`，未填写返回 `400 INVITE_REQUIRED`。普通注册只创建普通用户。
 - 关闭时返回 `400 REGISTRATION_DISABLED`
 
@@ -634,7 +634,7 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 ## 朗读（HTTP TTS）
 
-这两条路由只在服务端配置了 `TTS_URL` 时才有意义，并且分工明确：
+这两条路由只在服务端配置了 HTTP 朗读合成接口 时才有意义，并且分工明确：
 一条回答「这里能用什么」，一条真正合成音频。
 
 ### `GET /tts/voices`
@@ -643,10 +643,10 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 → `{ "http": false, "formats": ["audio/mpeg", ...], "maxLength": 800, "voices": [] }`
 
-- 未配置 `TTS_URL` 时返回 `http: false` 而**不是 404**：客户端问的是「这里能用什么引擎」，
-  不是「这个接口存在吗」。一个 `TTS_URL` 没配的实例是完全正常的实例。
+- 未配置 HTTP 朗读合成接口 时返回 `http: false` 而**不是 404**：客户端问的是「这里能用什么引擎」，
+  不是「这个接口存在吗」。一个 HTTP 朗读合成接口 没配的实例是完全正常的实例。
 - `maxLength` 无论开关都返回：客户端会按它切句，这个决定发生在选引擎之前。
-- 配置了之后 `voices` 来自 `TTS_VOICES_URL`（或约定路径 `<TTS_URL>/voices`）。
+- 配置了之后 `voices` 来自 音色列表接口（或约定路径 `<合成接口>/voices`）。
 
 ### `GET /tts?text=<文本>&voice=<可选>&speed=<可选>&format=<可选>`
 
@@ -658,23 +658,22 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 - `speed` 夹在 0.25–4；`text` 上限 800 字，超了返回 `TEXT_TOO_LONG`，
   **不会转发给上游**。
 - 上游返回非 `audio/*` 时返回 `TTS_UPSTREAM` 而不是把 HTML 当音频流出去：
-  一个配错的 `TTS_URL`（指到一个网页）会以 200 返回 HTML，塞进 `<audio>` 里
+  一个配错的 HTTP 朗读合成接口（指到一个网页）会以 200 返回 HTML，塞进 `<audio>` 里
   既没有声音也没有事件——这是最难排查的一种「成功」。
 - 这是唯一接受**查询串令牌**的接口之一（另一个是 `/books/:id/assets`、`/cover`、`/content`）：
   `<audio src>` 无法携带 `Authorization` 头。因此它被精确地限制为 `GET /tts`，
   能力查询 `/tts/voices` 不支持查询串令牌。
-- 响应带 `cache-control: private, max-age=604800, immutable`：
-  同一句话的音频永远相同，第二次播放不应该再到服务端。
+- 响应带 `cache-control: private, no-store`，避免服务配置更新后继续使用旧音频；服务端按上游配置缓存合成结果。
 
-相关环境变量：
+在「系统设置 → 服务配置 → HTTP 朗读」修改以下配置：
 
-| 变量 | 说明 |
+| 配置项 | 说明 |
 | --- | --- |
-| `TTS_URL` | 上游合成服务的地址，例如 `http://127.0.0.1:5002/tts`。不设则关闭 HTTP 朗读 |
-| `TTS_TOKEN` | 以 `Authorization: Bearer` 转发给上游 |
-| `TTS_VOICES_URL` | 语音列表地址；默认 `<TTS_URL>/voices` |
-| `TTS_TIMEOUT_MS` | 单次合成超时，默认 20000 |
-| `TTS_CACHE_BYTES` | 音频磁盘缓存上限（`DATA_DIR/tts-cache`），默认 256MiB；0 关闭缓存 |
+| HTTP 朗读合成接口 | 上游合成服务的地址，例如 `http://127.0.0.1:5002/tts`。不设则关闭 HTTP 朗读 |
+| 认证令牌 | 以 `Authorization: Bearer` 转发给上游 |
+| 音色列表接口 | 语音列表地址；默认 `<合成接口>/voices` |
+| 请求超时（毫秒） | 单次合成超时，默认 20000 |
+| 音频缓存上限（字节） | 音频磁盘缓存上限（`DATA_DIR/tts-cache`），默认 256MiB；0 关闭缓存 |
 
 ## 静态客户端
 
@@ -888,7 +887,7 @@ kind 为 video、music 或 audiobook；OpenList 建库和凭据更新见[OpenLis
   "displayName": "家人", "role": "member" }
 ```
 
-不受 `ALLOW_REGISTRATION` 限制——管理员本就该能加家庭成员。
+不受注册策略限制——管理员本就该能加家庭成员。
 
 ### `PATCH /admin/users/:id`
 
@@ -956,7 +955,7 @@ GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "c
 | `FILE_MISSING` | 404 | 文件已从磁盘消失 |
 | `USERNAME_TAKEN` | 409 | 用户名已占用 |
 | `PASSWORD_TOO_SHORT` | 409 | 口令少于 8 位 |
-| `TTS_DISABLED` | 400 | 该实例没有配置 `TTS_URL`，无法使用 HTTP 朗读 |
+| `TTS_DISABLED` | 400 | 该实例没有配置 HTTP 朗读合成接口，无法使用 HTTP 朗读 |
 | `TTS_UPSTREAM` | 400 | 上游合成服务不可达、超时、报错，或返回的不是音频 |
 | `TEXT_TOO_LONG` | 400 | 单条语句超过 800 字，请客户端先切句 |
 | `INVALID_SOURCE_CONFIG` | 400 | 来源配置不符合内置来源要求 |
@@ -999,6 +998,17 @@ GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "c
 
 
 ## Personal reading overrides and TTS diagnostics
+
+### Administrator business settings
+
+All `/api/v1/admin/settings` routes require an administrator bearer token. Responses are not cacheable. Configuration is persisted in `reader.db` and applied without restarting.
+
+- `GET /api/v1/admin/settings` returns `{groups:[{group,label,fields,values,secrets,revision}]}`. Secret values are omitted; `secrets` contains presence flags only.
+- `PATCH /api/v1/admin/settings/:group` accepts `{values,revision}`. Omitted fields retain their values; an explicit empty secret clears it. Stale revisions return `409 SETTINGS_CONFLICT`. Unknown fields and invalid values return 400.
+- Groups: `tmdb`, `musicbrainz`, `tts`, `scanning`, `scraping`, `access`, `webdav`. Registration continues using its existing API.
+- `POST /api/v1/admin/settings/:group/test` accepts `{values}` for TMDB, MusicBrainz, TTS or WebDAV. It tests the draft without saving it. TTS additionally returns voices.
+- `POST /api/v1/admin/settings/tts/preview` accepts `{values,voice?}` and returns sample audio. `POST /api/v1/admin/settings/tts/clear-cache` clears cached audio.
+- `POST /api/v1/admin/settings/webdav/upload` accepts `{directory,name}` and uploads a verified offline backup using saved WebDAV settings. It never creates an online snapshot or overwrites a remote backup.
 
 All endpoints require the account access token in the Authorization header. Reading overrides additionally check book access.
 

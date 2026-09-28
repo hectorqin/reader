@@ -15,6 +15,7 @@ The project README introduces reader. Use the guides below for installation, eve
 | 远端媒体目录 / Remote media directories | [OpenList 接入](media-openlist.md) | Chinese only |
 | 安装到桌面、离线启动和版本更新 / PWA installation, offline startup and updates | [PWA 指南](pwa.zh-CN.md) | Chinese only |
 | 环境变量、目录权限、HTTPS、排错 / Settings, permissions, HTTPS, troubleshooting | [部署配置](configuration.zh-CN.md) | [Configuration](configuration.en.md) |
+| 页面业务配置、服务连接与迁移 / Business settings, service connections and migration | [业务配置](business-settings.zh-CN.md) | Chinese only |
 | 数据备份、校验与恢复 / Data backup, verification and restore | [备份恢复](backup.zh-CN.md) | Chinese only |
 | 本地开发、验证、镜像与 Android 构建 / Development, checks, Docker and Android builds | [开发指南](development.zh-CN.md) | [Development](development.en.md) |
 

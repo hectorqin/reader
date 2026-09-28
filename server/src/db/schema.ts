@@ -38,6 +38,9 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at    INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS business_settings (
+  name TEXT PRIMARY KEY,value TEXT NOT NULL,revision INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS registration_settings (
   id INTEGER PRIMARY KEY CHECK(id = 1),
   mode TEXT NOT NULL CHECK(mode IN ('closed','open','invite'))

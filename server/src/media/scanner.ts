@@ -37,7 +37,7 @@ export class MediaScanner {
   private running=0;
   private pending:Array<()=>void>=[];
   private readonly traces=new Map<string,ScanTrace>();
-  constructor(db:MediaDatabase & Pick<Db,'prepare'>,private readonly libraries:MediaLibraries,private readonly probe:MediaProbe=probeMedia,private readonly logger?:ScanLogger) {
+  constructor(db:MediaDatabase & Pick<Db,'prepare'>,private readonly libraries:MediaLibraries,private readonly probe:MediaProbe=probeMedia,private readonly logger?:ScanLogger,private readonly settings=()=>({libraries:2,files:4})) {
     this.db=new MediaStatementDatabase(db);
     db.transaction(()=>{
       db.run(`CREATE TABLE IF NOT EXISTS media_assets (
@@ -67,13 +67,13 @@ export class MediaScanner {
     if(actor.role!=='admin')throw forbidden('admin role required','ADMIN_REQUIRED');
     this.libraries.get(actor,libraryId);
     if(this.active.has(libraryId))throw conflict('media scan already running','SCAN_RUNNING');
-    const id=randomUUID(),controller=new AbortController();
+    const id=randomUUID(),controller=new AbortController(),options=this.settings();
     this.db.run("INSERT INTO media_scan_jobs(id,library_id,state,started_at) VALUES(?,?,'queued',?)",id,libraryId,Date.now());
     let finish!:()=>void;const done=new Promise<void>(resolve=>{finish=resolve;});
     const execute=()=>{
       entry.cancelQueued=undefined;this.running++;
       this.db.run("UPDATE media_scan_jobs SET state='running' WHERE id=?",id);
-      void this.scan(actor,libraryId,id,controller.signal).finally(()=>{this.active.delete(libraryId);this.running--;finish();this.drain();});
+      void this.scan(actor,libraryId,id,controller.signal,options.files).finally(()=>{this.active.delete(libraryId);this.running--;finish();this.drain();});
     };
     const entry:{controller:AbortController;done:Promise<void>;cancelQueued:(()=>void)|undefined}={controller,done,cancelQueued:()=>{
       this.pending=this.pending.filter(task=>task!==execute);this.active.delete(libraryId);
@@ -83,7 +83,7 @@ export class MediaScanner {
     return this.job(actor,id);
   }
 
-  private drain(){while(this.running<2&&this.pending.length)this.pending.shift()!();}
+  private drain(){while(this.running<this.settings().libraries&&this.pending.length)this.pending.shift()!();}
   startAll(actor:MediaActor){
     if(actor.role!=='admin')throw forbidden('admin role required','ADMIN_REQUIRED');
     const items:MediaScanJob[]=[],skipped:string[]=[];
@@ -142,7 +142,7 @@ export class MediaScanner {
       probe:{status:row.probe_status,info:row.technical_json?JSON.parse(row.technical_json):null}};
   }
 
-  private async scan(actor:MediaActor,libraryId:string,jobId:string,signal:AbortSignal):Promise<void> {
+  private async scan(actor:MediaActor,libraryId:string,jobId:string,signal:AbortSignal,files=4):Promise<void> {
     const trace=new ScanTrace(jobId,libraryId,this.logger);this.traces.set(jobId,trace);trace.note('开始扫描');
     const heartbeat=setInterval(()=>{
       trace.note('扫描进度');
@@ -180,7 +180,7 @@ export class MediaScanner {
       };
       // Remote sidecar reads are I/O bound. Keep local ffprobe sequential and drain
       // every batch before failure/cleanup so no worker writes after staging is removed.
-      const concurrency=storage.filePath?1:4,iterator=storage.list(signal)[Symbol.asyncIterator]();
+      const concurrency=storage.filePath?1:files,iterator=storage.list(signal)[Symbol.asyncIterator]();
       let batch:StorageEntry[]=[];
       const flush=async()=>{
         const results=await Promise.allSettled(batch.map(inspect));batch=[];

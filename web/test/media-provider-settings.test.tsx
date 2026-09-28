@@ -8,12 +8,13 @@ const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
 it('retries source status and shows only capabilities reported by the server',async()=>{
  const request=vi.fn().mockRejectedValueOnce(new Error('网络中断')).mockResolvedValue({items:[{id:'tmdb',label:'TMDB',kinds:['movie','series'],configured:false},{id:'musicbrainz',label:'MusicBrainz',kinds:['album','track'],configured:true}]});
- await act(async()=>render(<MediaProviderSettings api={{request} as unknown as MediaApi}/>,root));
+ const businessSettingsRequest=vi.fn().mockResolvedValue({groups:[{group:'tmdb',label:'TMDB',revision:1,values:{enabled:false},secrets:{token:false},fields:[{key:'token',label:'读取令牌',type:'password'}]}]});
+ await act(async()=>render(<MediaProviderSettings api={{request,businessSettingsRequest} as unknown as MediaApi}/>,root));
  await vi.waitFor(()=>expect(root.querySelector('[role=alert]')?.textContent).toContain('网络中断'));
  await act(async()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent==='重试读取来源')!.click());
  await vi.waitFor(()=>expect(root.querySelectorAll('.media-provider-row')).toHaveLength(3));
  const rows=root.querySelectorAll('.media-provider-row');expect(rows).toHaveLength(3);expect(rows[0]!.textContent).toContain('未配置');expect(rows[1]!.textContent).toContain('已配置');
- await act(async()=>(rows[0] as HTMLButtonElement).click());expect(root.textContent).toContain('MEDIA_TMDB_API_KEY');expect(root.querySelector('input[type=password]')).toBeNull();
+ await act(async()=>(rows[0] as HTMLButtonElement).click());await vi.waitFor(()=>expect(root.querySelector('input[type=password]')).not.toBeNull());expect(root.textContent).not.toContain('MEDIA_TMDB_API_KEY');expect(root.textContent).toContain('保存配置');
  expect(request.mock.calls.every(call=>call[0]==='metadata/providers'&&call[1]==='GET')).toBe(true);
  expect(Array.from(root.querySelectorAll('button')).some(button=>button.textContent?.includes('TVBox'))).toBe(false);
 });

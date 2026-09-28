@@ -79,13 +79,14 @@ export class MediaScrapeJobs {
   async wait(id:string){await this.active.get(id)?.done;}
   async close(){const jobs=[...this.active.values()];jobs.forEach(job=>job.controller.abort());await Promise.all(jobs.map(job=>job.done));}
   private async run(actor:MediaActor,id:string,provider:string,items:string[],signal:AbortSignal){
+    const scraping=this.scraping.snapshot();
     try{
       for(const item of items){
         signal.throwIfAborted();
         const user=this.accounts.get(actor.id);
         if(!user||user.disabled||user.role!=='admin')throw new Error('actor-unavailable');
         this.db.run("UPDATE media_scrape_job_items SET state='running' WHERE job_id=? AND item_id=?",id,item);
-        try{const result=await this.scraping.autoMatch(actor,item,provider,signal,()=>{const current=this.accounts.get(actor.id);if(!current||current.disabled||current.role!=='admin')throw new Error('actor-unavailable');});signal.throwIfAborted();this.db.run('UPDATE media_scrape_job_items SET state=? WHERE job_id=? AND item_id=?',result.status,id,item);}
+        try{const result=await scraping.autoMatch(actor,item,provider,signal,()=>{const current=this.accounts.get(actor.id);if(!current||current.disabled||current.role!=='admin')throw new Error('actor-unavailable');});signal.throwIfAborted();this.db.run('UPDATE media_scrape_job_items SET state=? WHERE job_id=? AND item_id=?',result.status,id,item);}
         catch(error){if(signal.aborted)throw error;this.db.run("UPDATE media_scrape_job_items SET state='failed',error=? WHERE job_id=? AND item_id=?",'匹配失败，请重新审阅或重试',id,item);}
       }
       this.db.run("UPDATE media_scrape_jobs SET state='complete' WHERE id=?",id);

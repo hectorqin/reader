@@ -3,9 +3,10 @@ import {ChevronRight,FileText,Search} from 'lucide-preact';
 import type {MediaApi} from './api.ts';
 import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';
+import {BusinessSettings} from '../ui/business-settings.tsx';
 
 interface Provider {id:string;label:string;kinds:string[];configured:boolean}
-const kinds:Record<string,string>={movie:'电影',series:'剧集',season:'季',episode:'单集',album:'专辑',track:'曲目',audiobook:'有声书'};
+const kinds:Record<string,string>={movie:'电影',series:'剧集',season:'季',episode:'单集',artist:'艺人',album:'专辑',track:'曲目',audiobook:'有声书'};
 export function MediaProviderSettings({api}:{api:MediaApi}){
   const [providers,setProviders]=useState<Provider[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[retry,setRetry]=useState(0),[selected,setSelected]=useState('');
   const [cause,setCause]=useState<unknown>();
@@ -17,7 +18,7 @@ export function MediaProviderSettings({api}:{api:MediaApi}){
     {!loading&&!error&&providers.map(value=><button key={value.id} className="media-provider-row" aria-expanded={selected===value.id} onClick={()=>setSelected(selected===value.id?'':value.id)}><Search size={20} aria-hidden="true"/><span><strong>{value.label}</strong><small>{value.kinds.map(kind=>kinds[kind]||kind).join('、')}</small></span><small className="media-status-badge" data-configured={value.configured}>{value.configured?'已配置':'未配置'}</small><ChevronRight size={16} aria-hidden="true"/></button>)}
     {!loading&&!error&&!providers.length&&<p>服务器尚未提供在线元数据来源。</p>}
     {provider&&!loading&&!error&&<section className="media-provider-note" aria-label={provider.label+'配置说明'}><h3>{provider.label}</h3><p>{provider.configured?'服务器已配置此来源，可以从作品详情搜索候选，或从扫描与刮削页面发起匹配。':'此来源尚未配置，配置完成后才能搜索和匹配元数据。'}</p>
-      {provider.id==='tmdb'?<p>在服务器启动环境设置 <code>MEDIA_TMDB_TOKEN</code> 或 <code>MEDIA_TMDB_API_KEY</code>，重启服务后生效。凭据由服务器保存，此处不显示凭据内容。</p>:provider.id==='musicbrainz'?<p>在服务器启动环境设置包含应用名称和联系地址的 <code>MEDIA_MUSICBRAINZ_USER_AGENT</code>，重启服务后生效。使用专辑、艺人与曲目标签搜索，低置信度结果需要人工确认。</p>:<p>配置方式由服务器提供此来源的适配器决定。</p>}
+      {['tmdb','musicbrainz'].includes(provider.id)?<BusinessSettings api={api} group={provider.id} onSaved={()=>setRetry(value=>value+1)}/>:<p>配置方式由服务器提供此来源的适配器决定。</p>}
       <button onClick={()=>{setSelected('');setRetry(value=>value+1);}}>刷新配置状态</button></section>}
     <button className="media-provider-row" aria-expanded={selected==='local'} onClick={()=>setSelected(selected==='local'?'':'local')}><FileText size={20} aria-hidden="true"/><span><strong>本地资料</strong><small>NFO、内嵌标签、同目录图片</small></span><small className="media-status-badge">内置</small><ChevronRight size={16} aria-hidden="true"/></button>
     {selected==='local'&&<p className="media-provider-note">扫描时读取本地资料，人工覆盖优先于资料源。在线匹配不会修改原始媒体文件。</p>}

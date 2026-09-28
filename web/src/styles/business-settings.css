@@ -1,0 +1,19 @@
+.business-settings { min-width: 0; }
+.business-settings .business-setting-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+}
+.business-settings .business-setting-toggle input[type=checkbox] {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  margin: 0;
+  flex: 0 0 22px;
+  accent-color: var(--reader-accent);
+}
+.business-settings .business-secret-clear { justify-self: start; font-size: 12px; }
+.business-settings audio { width: 100%; }
+.business-settings .muted { line-height: 1.6; }

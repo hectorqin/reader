@@ -52,6 +52,7 @@ export interface HttpTtsCapabilities {
 }
 
 export interface HttpTtsOptions {
+  requestTimeoutMs?:()=>number;
   /** Absolute URL of the server, e.g. `http://192.168.1.10:8080`. */
   baseUrl: string;
   /** Bearer token; sent as a query parameter, see the note above. */
@@ -339,7 +340,7 @@ export class HttpTtsEngine {
       this.timeout = null;
       if (generation !== this.generation) return;
       if (this.state === 'playing') this.speakNext();
-    }, REQUEST_TIMEOUT_MS);
+    }, Math.max(1000,Math.min(125000,this.options.requestTimeoutMs?.()??REQUEST_TIMEOUT_MS)));
   }
 
   /**

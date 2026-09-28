@@ -154,8 +154,8 @@ export class ReaderScreen {
   private lastSpeechQueue: SpokenChunk[] = [];
   /** What the server said it can synthesise. */
   private httpTtsAvailable = false;
+  private httpTtsTimeoutMs=20000;
   /** Probed once per screen; a server's capabilities do not change mid-book. */
-  private httpProbed = false;
   /** Voices the current engine reports, for the panel's select. */
   private voices: Array<{ id: string; name: string; lang: string; default: boolean }> = [];
 
@@ -1309,12 +1309,8 @@ export class ReaderScreen {
     // Re-read the voice list on every open: a Bluetooth headset paired while the
     // book was open adds a voice, and Chrome only reports it asynchronously.
     this.refreshVoices();
-    // The server's capability answer is cached after the first probe, so this is
-    // a no-op on every subsequent open.
-    if (!this.httpProbed) {
-      this.httpProbed = true;
-      void this.probeHttpTts();
-    }
+    // Administrators can change HTTP speech without restarting this reader.
+    void this.probeHttpTts();
   }
 
   private refreshVoices(): void {
@@ -1335,6 +1331,7 @@ export class ReaderScreen {
     try {
       const capabilities = await this.options.api.ttsCapabilities();
       this.httpTtsAvailable = capabilities?.http === true;
+      this.httpTtsTimeoutMs=(capabilities?.timeoutMs??20000)+5000;
     } catch {
       this.httpTtsAvailable = false;
     }
@@ -1711,6 +1708,7 @@ export class ReaderScreen {
     if (!kind) return null;
 
     const engine = createSpeechEngine({
+      httpTimeoutMs:()=>this.httpTtsTimeoutMs,
       kind,
       baseUrl: this.options.api.baseUrl,
       accessToken: () => this.options.api.currentSession()?.accessToken ?? null,

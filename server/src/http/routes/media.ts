@@ -25,6 +25,8 @@ import { MediaBackgroundGrants } from '../../media/background-grants.ts';
 import { DatabaseMediaAccounts, MediaAccountReferences } from '../../media/accounts.ts';
 import type { MediaDatabase } from '../../media/read-database.ts';
 import type { Db } from '../../db/index.ts';
+import {BusinessSettingsReader} from '../../services/business-settings.ts';
+import {configuredProviders} from '../../media/configured-providers.ts';
 
 export type MediaRouteContext=Pick<AppContext,'config'> & {db:MediaDatabase & Pick<Db,'prepare'>;users:Pick<AppContext['users'],'byId'>};
 
@@ -32,11 +34,12 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   const database=options.database||ctx.db;
   const accounts=new DatabaseMediaAccounts(ctx.db);
   const references=database!==ctx.db?new MediaAccountReferences(database,accounts):undefined;
-  const libraries=new MediaLibraries(database,true,accounts,references),scanner=new MediaScanner(database,libraries,undefined,app.log);
+  const settings=new BusinessSettingsReader(ctx.db);
+  const libraries=new MediaLibraries(database,true,accounts,references),scanner=new MediaScanner(database,libraries,undefined,app.log,()=>settings.read('scanning'));
   const playback=new MediaPlayback(database,libraries,accounts);
   const background=new MediaBackgroundGrants(database,libraries,accounts);
   const userState=new MediaUserState(database,libraries,scanner.catalog);
-  const scraping=new MediaScraping(database,scanner.catalog,options.metadataProviders);
+  const scraping=new MediaScraping(database,scanner.catalog,options.metadataProviders??configuredProviders(settings));
   const hierarchy=new MediaHierarchy(database,scanner.catalog);
   const scrapeJobs=new MediaScrapeJobs(database,scanner.catalog,scraping,accounts);
   const artwork=new MediaArtwork(database,libraries);

@@ -115,6 +115,7 @@ export const SPEECH_ENGINE_LABELS: Record<Exclude<SpeechEngineKind, 'auto'>, str
 };
 
 export interface SpeechFactoryOptions {
+  httpTimeoutMs?:()=>number;
   kind: Exclude<SpeechEngineKind, 'auto'>;
   baseUrl: string;
   accessToken: () => string | null;
@@ -154,6 +155,7 @@ export function createSpeechEngine(options: SpeechFactoryOptions): SpeechEngine 
       });
     case 'http': {
       const engine = new HttpTtsEngine({
+        ...(options.httpTimeoutMs?{requestTimeoutMs:options.httpTimeoutMs}:{}),
         baseUrl: options.baseUrl,
         accessToken: options.accessToken,
         ...(options.onError ? { onError: options.onError } : {}),

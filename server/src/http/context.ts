@@ -9,9 +9,12 @@ import type { TtsService } from '../services/tts.ts';
 import type { BrowseService } from '../services/browse.ts';
 import type { UploadService } from '../services/uploads.ts';
 import type { SourceHost } from '../services/source-host.ts';
+import type { BusinessSettings } from '../services/business-settings.ts';
 
 export interface AppContext {
   config: AppConfig;
+  settings?:BusinessSettings;
+  settingsChanged?:(group:string)=>void;
   db: Db;
   scanner: Scanner;
   users: UserService;

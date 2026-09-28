@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import {settingsDefaults,type BusinessValues} from './business-settings.ts';
 
 /**
  * Server-side speech synthesis, for a client that has no engine of its own.
@@ -45,6 +46,7 @@ const MAX_TEXT_LENGTH = 800;
 
 /** What the client is told this instance supports. */
 export interface TtsCapabilities {
+  timeoutMs:number;
   /** True when `TTS_URL` is configured, i.e. this instance can synthesise. */
   http: boolean;
   /** Content types the proxy may answer with, for the client's own checks. */
@@ -86,19 +88,19 @@ export class TtsService {
   private cacheBytes = 0;
   private cacheFiles: string[] = [];
 
-  constructor(config: AppConfig) {
-    const url = (process.env.TTS_URL ?? '').trim().replace(/\/+$/, '');
-    this.config = url
+  constructor(config: AppConfig,input:BusinessValues['tts']=settingsDefaults('tts')) {
+    const url = input.url.trim().replace(/\/+$/, '');
+    this.config = input.enabled&&url
       ? {
           url,
-          token: (process.env.TTS_TOKEN ?? '').trim(),
-          voicesUrl: (process.env.TTS_VOICES_URL ?? '').trim(),
-          timeoutMs: Number.parseInt(process.env.TTS_TIMEOUT_MS ?? '20000', 10) || 20_000,
+          token: input.token,
+          voicesUrl: input.voicesUrl,
+          timeoutMs: input.timeoutMs,
           cacheDir: join(config.dataDir, 'tts-cache'),
-          cacheMaxBytes: Number.parseInt(process.env.TTS_CACHE_BYTES ?? String(256 * 1024 * 1024), 10) || 0,
+          cacheMaxBytes: input.cacheMaxBytes,
         }
       : null;
-    if (this.config) this.loadCacheIndex();
+    if (this.config) {this.loadCacheIndex();if(this.config.cacheMaxBytes>0)this.evict();}
   }
 
   /** Whether this instance can synthesise at all. */
@@ -108,6 +110,7 @@ export class TtsService {
 
   capabilities(): TtsCapabilities {
     return {
+      timeoutMs:this.config?.timeoutMs??20000,
       http: this.enabled,
       formats: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4'],
       maxLength: MAX_TEXT_LENGTH,
@@ -130,7 +133,7 @@ export class TtsService {
   }): Promise<{ bytes: Uint8Array; contentType: string; cached: boolean }> {
     const config = this.config;
     if (!config) {
-      throw badRequest('this instance has no HTTP TTS engine configured (set TTS_URL)', 'TTS_DISABLED');
+      throw badRequest('请管理员在系统设置中配置 HTTP 朗读', 'TTS_DISABLED');
     }
     const text = (input.text ?? '').trim();
     if (!text) throw badRequest('text is required');
@@ -142,7 +145,7 @@ export class TtsService {
     const speed = input.speed === undefined ? 1 : clamp(input.speed, 0.25, 4);
     const voice = (input.voice ?? '').slice(0, 120);
 
-    const key = hashKey({ text, voice, speed, format: input.format ?? '', url: config.url });
+    const key = hashKey({ text, voice, speed, format: input.format ?? '', url: config.url,credential:hashKey({token:config.token}) });
     const cached = this.readCache(key);
     if (cached) return { ...cached, cached: true };
 
@@ -247,7 +250,7 @@ export class TtsService {
 
   private readCache(key: string): { bytes: Uint8Array; contentType: string } | null {
     const config = this.config;
-    if (!config) return null;
+    if (!config||config.cacheMaxBytes<=0) return null;
     const meta = join(config.cacheDir, `${key}.meta`);
     const data = join(config.cacheDir, `${key}.bin`);
     try {
@@ -303,6 +306,12 @@ export class TtsService {
       }
     }
   }
+
+  clearCache():void {
+    if(!this.config)return;
+    for(const name of readdirSync(this.config.cacheDir))if(/^[a-f0-9]{32}\.(bin|meta)$/.test(name))unlinkSync(join(this.config.cacheDir,name));
+    this.loadCacheIndex();
+  }
 }
 
 function normaliseVoice(row: unknown): TtsVoice | null {
@@ -329,5 +338,5 @@ function clamp(value: number, min: number, max: number): number {
 
 /** Wired in `main.ts`; kept out of `AppContext` so tests can build one freely. */
 export function createTtsService(ctx: AppContext): TtsService {
-  return new TtsService(ctx.config);
+  return new TtsService(ctx.config,ctx.settings?.read('tts'));
 }

@@ -53,13 +53,18 @@ async function main(): Promise<void> {
   ctx.users = new UserService(db, config);
   ctx.shelf = new ShelfService(db);
   ctx.sync = new SyncService(db, ctx.shelf);
-  ctx.tts = new TtsService(config);
+  ctx.tts = new TtsService(config,ctx.settings!.read('tts'));
   ctx.browse = new BrowseService(db, config, ctx.shelf);
   ctx.uploads = new UploadService(db, config, ctx.browse, ctx.scanner);
 
   app.log.info({ booksDir: config.booksDir, dataDir: config.dataDir }, 'starting reader server');
 
-  const scheduler = startSchedulers(ctx, app.log);
+  let scheduler = startSchedulers(ctx, app.log);
+  ctx.settingsChanged=group=>{
+    if(group!=='scanning')return;
+    if(scheduler.scanTimer)clearInterval(scheduler.scanTimer);
+    scheduler=startSchedulers(ctx,app.log,false);
+  };
 
   const shutdown = async (signal: string): Promise<void> => {
     app.log.info({ signal }, 'shutting down');
@@ -80,7 +85,7 @@ async function main(): Promise<void> {
   }
 }
 
-function startSchedulers(ctx: AppContext, log: AppContext['log']): Schedulers {
+function startSchedulers(ctx: AppContext, log: AppContext['log'],initial=true): Schedulers {
   const runScan = async (): Promise<void> => {
     try {
       await ctx.scanner.scan();
@@ -90,19 +95,17 @@ function startSchedulers(ctx: AppContext, log: AppContext['log']): Schedulers {
   };
 
   // A scan at boot makes the library available immediately after a restart.
-  void runScan();
+  if(initial)void runScan();
 
   // The watch poller is the same code path as the interval scan; the mtime+size
   // fast path makes it cheap enough to run every minute (see Scanner.indexFile).
-  const scanTimer = ctx.config.scanInterval > 0
-    ? setInterval(() => void runScan(), ctx.config.scanInterval * 1000)
+  const interval=ctx.settings!.read('scanning').interval;
+  const scanTimer = interval > 0
+    ? setInterval(() => void runScan(), interval * 1000)
     : undefined;
   scanTimer?.unref();
 
-  const watchTimer = ctx.config.watchInterval > 0
-    ? setInterval(() => void runScan(), ctx.config.watchInterval * 1000)
-    : undefined;
-  watchTimer?.unref();
+  const watchTimer = undefined;
 
   return { scanTimer, watchTimer };
 }

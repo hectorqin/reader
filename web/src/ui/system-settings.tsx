@@ -4,10 +4,11 @@ import type { ManagedUser, RegistrationSettings } from '../api/types.ts';
 import { Modal } from './modal.tsx';
 import { FloatingConfirm } from './floating-confirm.tsx';
 import { FloatingNotice } from './floating-notice.tsx';
+import {BusinessSettings} from './business-settings.tsx';
 
 export function SystemSettings({api,onClose}:{api:ReaderApi;onClose():void}) {
   const [users,setUsers]=useState<ManagedUser[]>([]),[settings,setSettings]=useState<RegistrationSettings|null>(null);
-  const [tab,setTab]=useState<'users'|'registration'>('users'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+  const [tab,setTab]=useState<'users'|'registration'|'business'>('users'),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
   const [form,setForm]=useState(false),[username,setUsername]=useState(''),[password,setPassword]=useState(''),[displayName,setDisplayName]=useState(''),[role,setRole]=useState<'admin'|'member'>('member');
   const [reset,setReset]=useState<ManagedUser|null>(null),[confirmation,setConfirmation]=useState<{text:string;run:()=>Promise<unknown>}|null>(null);
   const [label,setLabel]=useState(''),[maxUses,setMaxUses]=useState(1),[days,setDays]=useState(7),[code,setCode]=useState('');
@@ -17,7 +18,7 @@ export function SystemSettings({api,onClose}:{api:ReaderApi;onClose():void}) {
   useEffect(()=>{void work(async()=>{},'');},[]);
   const self=api.currentSession()?.user.id;
   return <Modal title="系统设置" busy={busy} onClose={onClose}><div className="user-management source-modal-content">
-    <nav className="extension-tabs" aria-label="系统设置分类"><button aria-pressed={tab==='users'} onClick={()=>setTab('users')}>用户管理</button><button aria-pressed={tab==='registration'} onClick={()=>setTab('registration')}>注册与邀请</button></nav>
+    <nav className="extension-tabs" aria-label="系统设置分类"><button aria-pressed={tab==='users'} onClick={()=>setTab('users')}>用户管理</button><button aria-pressed={tab==='registration'} onClick={()=>setTab('registration')}>注册与邀请</button><button aria-pressed={tab==='business'} onClick={()=>setTab('business')}>服务配置</button></nav>
     <FloatingNotice message={error || message} error={!!error} kind="success" />
     {confirmation && <FloatingConfirm text={confirmation.text} onCancel={()=>setConfirmation(null)} onConfirm={()=>{setConfirmation(null);void work(confirmation.run);}} />}
     {tab==='users' ? <>
@@ -35,7 +36,7 @@ export function SystemSettings({api,onClose}:{api:ReaderApi;onClose():void}) {
         <p>{user.role==='admin'?'管理员':'普通用户'} · {user.disabled?'已停用':'正常'}</p>
         {user.id!==self && <div className="user-manager-actions"><button className="button" disabled={busy} onClick={()=>setConfirmation({text:`确定${user.disabled?'启用':'停用'} ${user.username}？${user.disabled?'':'旧会话将立即失效。'}`,run:()=>api.adminUpdateUser(user.id,{disabled:!user.disabled})})}>{user.disabled?'启用':'停用'}</button><button className="button" disabled={busy} onClick={()=>setConfirmation({text:`将 ${user.username} ${user.role==='admin'?'改为普通用户':'设为管理员（可管理全部用户及实例设置）'}？`,run:()=>api.adminUpdateUser(user.id,{role:user.role==='admin'?'member':'admin'})})}>{user.role==='admin'?'移除管理员':'设为管理员'}</button><button className="button" disabled={busy} onClick={()=>{setReset(user);setForm(false);setPassword('');}}>重置密码</button></div>}
       </li>)}</ul>
-    </> : settings && <>
+    </> : tab==='business'?<BusinessSettings api={api}/>:settings && <>
       <label className="user-manager-mode">注册方式<select aria-label="注册方式" value={settings.mode} disabled={busy} onChange={e=>{const mode=e.currentTarget.value as RegistrationSettings['mode'];setConfirmation({text:`将注册方式修改为${mode==='closed'?'关闭注册':mode==='open'?'开放注册（任何访问者都可创建账号）':'仅邀请码注册'}？`,run:()=>api.setRegistrationMode(mode)});}}><option value="closed">关闭注册</option><option value="open">开放注册</option><option value="invite">仅邀请码注册</option></select></label>
       <p className="muted">关闭注册时仍可由管理员创建账号。设置立即生效并在重启后保留。</p>
       <details><summary>创建邀请码</summary><form className="user-manager-form" onSubmit={e=>{e.preventDefault();void work(async()=>{setCode((await api.createInvite({label,maxUses,days})).code);},'邀请码已创建');}}><label>备注<input maxLength={80} value={label} onInput={e=>setLabel(e.currentTarget.value)} /></label><label>可用次数<input type="number" required min={1} max={1000} value={maxUses} onInput={e=>setMaxUses(Number(e.currentTarget.value))} /></label><label>有效天数<input type="number" required min={1} max={365} value={days} onInput={e=>setDays(Number(e.currentTarget.value))} /></label><button className="button primary" disabled={busy}>生成邀请码</button></form></details>

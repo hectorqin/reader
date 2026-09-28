@@ -25,41 +25,12 @@ services:
     ports:
       - "5888:5888"
     environment:
-      # Polling intervals in seconds. Set to 0 to disable (a manual scan is
-      # still available from the admin API).
-      SCAN_INTERVAL: "1800"
-      WATCH_INTERVAL: "60"
+      # Business settings are managed in the administrator UI and persisted in /data.
       LOG_LEVEL: "info"
-      # Optional online media metadata providers. Configure on the host; do not
-      # commit credentials. Local NFO/tags work without either provider.
-      # MEDIA_TMDB_TOKEN: "${MEDIA_TMDB_TOKEN}"
-      # MEDIA_TMDB_API_KEY: "${MEDIA_TMDB_API_KEY}"
-      # MEDIA_MUSICBRAINZ_USER_AGENT: "Reader/1.0 (your-contact@example.com)"
-      # Set this to the address you actually reach the server on, so download
-      # links work behind a reverse proxy.
-      # PUBLIC_URL: "https://reader.example.com"
-      # Uncomment to allow family members to self-register instead of the admin
-      # creating their accounts:
-      # ALLOW_REGISTRATION: "true"
-      # Origins allowed to call the API from a browser, comma separated.
-      # Empty (the default) reflects whatever origin asks. Fine for a LAN: the
-      # client does not know the address it will be reached on, and there are no
-      # cookies in the design. Set it if the instance is on the public internet:
-      # CORS_ORIGINS: "https://reader.example.com"
       # Directory holding the built H5 client, served at `/`. Already set in the
       # image; only override if you build the client separately.
       # WEB_DIR: "/app/web"
 
-      # --- HTTP speech, for clients that have no engine of their own ---
-      # The server only *proxies*; it does not bundle a synthesizer, because
-      # that would multiply the image size and a NAS's CPU budget. Point this at
-      # any service that accepts the classic `?text=...&speed=...` shape
-      # (edge-tts, a local Piper wrapper, a commercial API with a shim).
-      #
-      #   TTS_URL: "http://host.docker.internal:5002/tts"
-      #   TTS_TOKEN: ""                    # bearer token, if the upstream wants one
-      #   TTS_VOICES_URL: ""               # defaults to <TTS_URL>/voices
-      #   TTS_CACHE_BYTES: "268435456"     # audio cache cap in /data; 0 disables
     volumes:
       # --- your books ---
       # Use :ro for a browse-only deployment. Use :rw if an administrator

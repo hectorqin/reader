@@ -101,6 +101,16 @@ function makeEngine(options: {
   return { engine, audios, spoken, errors };
 }
 
+it('uses the current configured waiting limit for each sentence',async()=>{
+  let timeout=65000;
+  const schedule=vi.fn(()=>0 as unknown as ReturnType<typeof setTimeout>);
+  const engine=new HttpTtsEngine({baseUrl:'http://nas.local',accessToken:()=>null,requestTimeoutMs:()=>timeout,
+    createAudio:()=>new FakeAudio() as unknown as HTMLAudioElement,setTimeout:schedule,clearTimeout:()=>{}});
+  engine.setQueueLoader(async()=>({chunks:[{text:'试听。'}],startIndex:0}));
+  await engine.play(0);expect(schedule).toHaveBeenLastCalledWith(expect.any(Function),65000);
+  engine.stop();timeout=35000;await engine.play(0);expect(schedule).toHaveBeenLastCalledWith(expect.any(Function),35000);engine.stop();
+});
+
 describe('HttpTtsEngine', () => {
   it('asks the server one sentence at a time, with the token in the query', async () => {
     const { engine, audios } = makeEngine({ chunks: [['第一句。', '第二句。']], token: 'tok-123' });

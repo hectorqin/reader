@@ -6,10 +6,12 @@ export type RegistrationMode = 'closed' | 'open' | 'invite';
 const digest = (code: string) => createHash('sha256').update(code.trim()).digest('hex');
 
 export class RegistrationService {
-  constructor(private readonly db: Db) {}
+  constructor(private readonly db: Db) {
+    db.run('INSERT OR IGNORE INTO registration_settings(id,mode) VALUES(1,?)',process.env.ALLOW_REGISTRATION==='true'?'open':'closed');
+  }
   mode(): RegistrationMode {
     return this.db.get<{mode:RegistrationMode}>('SELECT mode FROM registration_settings WHERE id = 1')?.mode
-      ?? (process.env.ALLOW_REGISTRATION === 'true' ? 'open' : 'closed');
+      ?? 'closed';
   }
   setMode(mode: unknown): void {
     if (mode !== 'closed' && mode !== 'open' && mode !== 'invite') throw badRequest('无效的注册模式');

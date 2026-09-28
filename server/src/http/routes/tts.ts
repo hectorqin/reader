@@ -64,9 +64,9 @@ export function registerTtsRoutes(app: FastifyInstance, ctx: AppContext): void {
 
     reply.header('content-type', audio.contentType);
     reply.header('content-length', String(audio.bytes.byteLength));
-    // Immutable per (text, voice, speed): the same sentence will always be the
-    // same audio, so a second play of it should not reach the server at all.
-    reply.header('cache-control', 'private, max-age=604800, immutable');
+    // The administrator can replace the upstream while the audio URL stays the
+    // same. Reuse the server cache, which includes the upstream configuration.
+    reply.header('cache-control', 'private, no-store');
     reply.header('x-tts-cache', audio.cached ? 'hit' : 'miss');
     return reply.send(Buffer.from(audio.bytes));
   });

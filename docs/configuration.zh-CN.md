@@ -13,7 +13,13 @@
 
 书库只读不影响账号和阅读进度写入数据目录。需要上传时，除修改 `:rw` 外，还要检查宿主机 ACL 或目录权限。
 
-## 环境变量
+## 页面业务配置
+
+管理员在「系统设置 → 服务配置」中管理 HTTP 朗读、扫描、登录有效期、对外地址、浏览器来源及 WebDAV 备份目标。TMDB 与 MusicBrainz 也可在「影音设置 → 元数据刮削」编辑，注册策略沿用「注册与邀请」。配置写入 reader.db，保存后无需重启。详见[业务配置](business-settings.zh-CN.md)。
+
+升级首次启动会导入旧业务环境变量；数据库存在配置后不再读取这些环境变量，清空字段也不会恢复旧值。
+
+## 部署环境变量
 
 以下是直接运行服务端时的默认值。Docker 镜像另设 `DATA_DIR=/data`、`WEB_DIR=/app/web`，`BOOKS_DIR=/books`。
 
@@ -23,26 +29,11 @@
 | `DATA_DIR` | 当前工作目录下的 `data` | 服务端状态和缓存目录 |
 | `HOST` | `0.0.0.0` | 监听地址 |
 | `PORT` | `5888` | 监听端口 |
-| `PUBLIC_URL` | 空 | 对外访问地址，反向代理后设置 |
-| `SCAN_INTERVAL` | `1800` | 定时扫描间隔，秒；`0` 关闭 |
-| `WATCH_INTERVAL` | `60` | 变化检查间隔，秒；`0` 关闭 |
-| `ALLOW_REGISTRATION` | `false` | 首个账号之后的默认注册策略；管理员在「系统设置 → 注册与邀请」保存的策略优先，支持关闭、开放、邀请码注册 |
-| `ACCESS_TOKEN_TTL` | `604800` | 访问令牌有效期，秒；默认 7 天，客户端在临近过期请求或返回前台时自动续期 |
-| `REFRESH_TOKEN_TTL` | `31536000` | 刷新令牌有效期，秒 |
 | `READER_TOKEN_SECRET` | 自动生成 | 至少 16 字符的签名密钥；默认保存在 `DATA_DIR/token.secret` |
 | `LOG_LEVEL` | `info` | 日志级别 |
 | `MEDIA_FFPROBE_PATH` | `ffprobe` | 影音技术信息读取程序；缺失时仍可扫描入库，时长、标签及章节信息可能不完整 |
-| `MEDIA_TMDB_TOKEN` | 空 | TMDB 读取令牌；与 API Key 同时配置时优先使用 |
-| `MEDIA_TMDB_API_KEY` | 空 | TMDB API Key；令牌与 Key 均为空时关闭在线影视匹配 |
 | `MEDIA_FFMPEG_PATH` | `ffmpeg` | 内嵌封面与字幕提取程序，不提供转码 |
-| `MEDIA_MUSICBRAINZ_USER_AGENT` | 空 | MusicBrainz 请求标识，填写应用名称、版本及有效联系地址，例如 `Reader/0.1 (mailto:admin@example.com)`；空值禁用 MusicBrainz 在线匹配 |
-| `CORS_ORIGINS` | 空 | 允许的浏览器来源，逗号分隔；空值反射请求来源 |
 | `WEB_DIR` | 当前工作目录下的 `web` | 已构建 Web 客户端目录 |
-| `TTS_URL` | 空 | HTTP 语音上游地址，空值关闭 HTTP 朗读 |
-| `TTS_TOKEN` | 空 | 上游 Bearer 令牌 |
-| `TTS_VOICES_URL` | `<TTS_URL>/voices` | 上游语音列表 |
-| `TTS_TIMEOUT_MS` | `20000` | 单次语音请求超时，毫秒 |
-| `TTS_CACHE_BYTES` | `268435456` | `DATA_DIR/tts-cache` 缓存上限，字节；`0` 关闭 |
 
 修改 Compose 环境变量后执行 `docker compose up -d`。签名密钥需要稳定保存，否则已有会话会失效。数据目录中的账号、进度和笔记不能靠重新扫描书籍恢复。
 
@@ -58,21 +49,13 @@ reader.example.com {
 }
 ```
 
-设置 `PUBLIC_URL=https://reader.example.com`。如果 Caddy 也在容器中，代理地址应改为容器网络中 reader 的服务地址。
+在「登录与服务访问」中设置对外地址为 `https://reader.example.com`。如果 Caddy 也在容器中，代理地址应改为容器网络中 reader 的服务地址。
 
-前后端分开部署时，将 `CORS_ORIGINS` 设置为 Web 客户端的实际来源。书源搜索采用 Streamable HTTP，代理需要持续转发 `text/event-stream`；不要把搜索响应缓冲到完成后才返回。没有公网 IP 时也可用 VPN 或隧道连接服务。
+前后端分开部署时，在「登录与服务访问」中设置允许的浏览器来源为 Web 客户端的实际来源。书源搜索采用 Streamable HTTP，代理需要持续转发 `text/event-stream`；不要把搜索响应缓冲到完成后才返回。没有公网 IP 时也可用 VPN 或隧道连接服务。
 
 ## HTTP 朗读
 
-优先使用 Android 系统语音或浏览器 `speechSynthesis`。需要 HTTP 语音时，在 Compose 中配置兼容上游：
-
-```yaml
-environment:
-  TTS_URL: "http://your-tts-host:5002/tts"
-  # TTS_TOKEN: "your-token"
-  # TTS_VOICES_URL: "http://your-tts-host:5002/voices"
-  TTS_CACHE_BYTES: "268435456"
-```
+优先使用 Android 系统语音或浏览器 `speechSynthesis`。需要 HTTP 语音时，进入「系统设置 → 服务配置 → HTTP 朗读」，填写合成接口、认证令牌和可选音色列表地址，启用后检测连接、试听并保存。请求超时和音频缓存上限也在此设置。
 
 reader 代理语音请求，不内置合成模型。上游接口需兼容项目的请求协议；不能仅凭服务名称判断是否兼容，详见 [TTS API](api.md)。地址必须从 reader 容器内可达，容器内的 `localhost` 指容器自身。
 
@@ -103,7 +86,7 @@ reader 代理语音请求，不内置合成模型。上游接口需兼容项目�
 
 官方镜像包含 ffprobe 和 ffmpeg。本机启动时将二者加入 PATH，或设置 MEDIA_FFPROBE_PATH / MEDIA_FFMPEG_PATH 为可执行文件路径。ffprobe 用于时长、编码、标签和章节，ffmpeg 用于内嵌资源提取，均不提供转码。
 
-在线匹配可配置 MEDIA_TMDB_TOKEN 或 MEDIA_TMDB_API_KEY，音乐资料可配置 MEDIA_MUSICBRAINZ_USER_AGENT。仅在宿主环境或未提交的 .env 中保存凭据，并在 Compose 的 environment 中传入；只有 .env 值、未声明 environment 时不会自动传进容器。本地 NFO 和标签读取不依赖在线凭据。
+在线匹配在「影音设置 → 元数据刮削」配置 TMDB 令牌或 API Key，以及 MusicBrainz 应用标识与联系地址。可测试连接、调整资料语言并保存，无需重启。本地 NFO 和标签读取不依赖在线凭据。
 
 OpenList 连接信息在建库界面设置，无需本地挂载；服务端必须能访问 OpenList 和其下载源。远端内嵌资料暂不读取，某些驱动需要 OpenList Web 代理。配置与限制见 [OpenList 接入](media-openlist.md)。
 

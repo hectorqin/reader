@@ -24,22 +24,19 @@
 
 ## 上传一致性备份到 WebDAV
 
-这是管理员 CLI，上传已完成的备份目录；不直接同步运行中的 DATA_DIR，也不是 Legado 进度互通。先按 [备份指南](backup.zh-CN.md) 停止全部相关服务进程、创建并验证备份。上传阶段可重新启动 Reader，备份目录保持不变。
+管理员可从「系统设置 → 服务配置 → WebDAV 备份」或 CLI 上传已完成的备份目录；不直接同步运行中的 DATA_DIR，也不是 Legado 进度互通。先按 [备份指南](backup.zh-CN.md) 停止全部相关服务进程、创建并验证备份。上传阶段可重新启动 Reader，备份目录保持不变。
 
 在编译后的服务端目录运行：
 
 ```sh
-# 从安全的环境/秘密管理器注入，不要把密码写进仓库或 URL
-export WEBDAV_URL='https://dav.example.com/reader-backups/'
-export WEBDAV_USERNAME='backup-user'
-# WEBDAV_PASSWORD 由运行环境注入
+# 先在系统设置中保存 WebDAV 目标、账号和密码；DATA_DIR 指向运行实例的数据目录
 node dist/maintenance/webdav-cli.js /backups/reader-20260924 reader-20260924.zip
 ```
 
-目标 WebDAV collection 必须已存在，账号需有 HEAD、PUT、GET、MOVE、DELETE 权限。仅接受 HTTPS（loopback 测试允许 HTTP），不跟随重定向转发凭据。原始文件及最终 ZIP 默认限 2 GiB，可通过 `WEBDAV_MAX_BYTES` 设置；ZIP32 上限小于 4 GiB，最多 60000 条目录记录。打包使用本地临时磁盘，服务端需有足够空间。
+目标 WebDAV collection 必须已存在，账号需有 HEAD、PUT、GET、MOVE、DELETE 权限。仅接受 HTTPS（loopback 测试允许 HTTP），不跟随重定向转发凭据。原始文件及最终 ZIP 默认限 2 GiB，可在 WebDAV 配置页设置上传上限；ZIP32 上限小于 4 GiB，最多 60000 条目录记录。打包使用本地临时磁盘，服务端需有足够空间。
 
 流程为：验证目录 → 流式 ZIP 打包 → 再次验证目录 → 检查同名目标 → 上传随机临时文件 → 下载并核对大小/SHA-256 → `MOVE` 且 `Overwrite: F` 发布。暂时性 PUT 错误最多尝试三次；身份验证失败、校验失败或最终 MOVE 错误不会强行覆盖。最终发布结果不确定时须核对远端，不自动重试 MOVE。
 
-取消/失败会尝试删除此次随机临时文件；网络持续故障时可能残留 `.reader-upload-*.zip`，管理员核对后清理。首版不自动删除历史备份、不设定计划任务。密码仅存在调用进程环境，不写入配置和日志。
+取消/失败会尝试删除此次随机临时文件；网络持续故障时可能残留 `.reader-upload-*.zip`，管理员核对后清理。首版不自动删除历史备份、不设定计划任务。密码保存在实例数据库中，不回显至页面或写入日志；备份包含这些凭据，应限制访问权限。
 
 恢复时，下载并在新的空目录解压 ZIP（Linux 上保留权限和内部符号链接），运行 `maintenance/cli.js verify`，通过后按备份指南恢复到新的 DATA_DIR。请使用可信工具解压；备份包含账号数据和 token.secret，应使用私有 WebDAV 存储及受控下载权限。

@@ -610,7 +610,7 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
   if (state.speechUnavailable) {
     return (
       <div className="notice">
-        当前环境没有可用的朗读引擎：浏览器不支持语音合成，且服务端未配置 TTS_URL。在服务端设置 TTS_URL 后即可使用 HTTP 朗读。
+        当前环境没有可用的朗读引擎。请管理员在「系统设置 → 服务配置 → HTTP 朗读」配置语音服务，或启用设备的系统语音。
       </div>
     );
   }

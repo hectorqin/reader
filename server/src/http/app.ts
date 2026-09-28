@@ -14,8 +14,13 @@ import { registerMediaRoutes } from './routes/media.ts';
 import {registerMediaProxy} from './routes/media-proxy.ts';
 import type {MediaService} from '../media/start-runtime.ts';
 import { isOriginAllowed, resolveCorsOrigin } from './cors.ts';
+import {BusinessSettings} from '../services/business-settings.ts';
+import {TtsService} from '../services/tts.ts';
+import {registerBusinessSettingsRoutes} from './routes/business-settings.ts';
 
 export function buildApp(ctx: AppContext,mediaRuntime?:MediaService): FastifyInstance {
+  ctx.settings??=new BusinessSettings(ctx.db,ctx.config);
+  ctx.tts=new TtsService(ctx.config,ctx.settings.read('tts'));
   const app = Fastify({
     logger: { level: ctx.config.logLevel },
     // Book bodies are streamed straight from disk, so a JSON limit this small is
@@ -64,6 +69,7 @@ export function buildApp(ctx: AppContext,mediaRuntime?:MediaService): FastifyIns
   app.options('/*', async (_request, reply) => reply.status(204).send());
 
   registerAuthRoutes(app, ctx);
+  registerBusinessSettingsRoutes(app,ctx);
   registerLibraryRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
   registerTtsRoutes(app, ctx);

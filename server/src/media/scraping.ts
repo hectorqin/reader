@@ -12,10 +12,12 @@ interface CandidateRow { id: string; item_id: string; actor_id: string; provider
 
 /** Search stores reviewable candidates. Only a confirmed, item-bound candidate may publish metadata. */
 export class MediaScraping {
-  private readonly providers: MetadataProvider[];
-  constructor(private readonly db:MediaDatabase, private readonly catalog: MediaCatalog, providers?: MetadataProvider[]) {
+  private readonly source:MetadataProvider[]|(()=>MetadataProvider[]);
+  private get providers(){return typeof this.source==='function'?this.source():this.source;}
+  snapshot(){return new MediaScraping(this.db,this.catalog,this.providers);}
+  constructor(private readonly db:MediaDatabase, private readonly catalog: MediaCatalog, providers?: MetadataProvider[]|(()=>MetadataProvider[])) {
     const http = new MetadataHttp();
-    this.providers = providers ?? [new TmdbProvider(http), new MusicBrainzProvider(http)];
+    this.source = providers ?? [new TmdbProvider(http), new MusicBrainzProvider(http)];
     db.run(`CREATE TABLE IF NOT EXISTS media_scrape_candidates (
       id TEXT PRIMARY KEY,item_id TEXT NOT NULL REFERENCES media_items(id) ON DELETE CASCADE,
       actor_id TEXT NOT NULL,provider TEXT NOT NULL,external_id TEXT NOT NULL,expires_at INTEGER NOT NULL)`);
