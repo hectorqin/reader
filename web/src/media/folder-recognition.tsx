@@ -36,6 +36,9 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
     if(!signal.aborted){setRevision(result.revision);setNotice('目录规则已保存。已有作品尚未更改。');}
   }
   const description=(row:Proposal)=>row.after.kind==='ignore'?'跳过扫描':row.after.kind==='episode'?`${row.after.metadata.show} · 第 ${row.after.metadata.season} 季第 ${row.after.metadata.episode} 集`:`电影 · ${row.after.metadata.title}`;
+  const selectable=(row:Proposal)=>['ready','review'].includes(row.status);
+  const visible=preview?.items.slice(page*30,page*30+30)??[];
+  const selectRows=(rows:Proposal[])=>setSelected(current=>[...new Set([...current,...rows.filter(selectable).map(row=>row.assetId)])]);
   return <>
     <div className="media-toolbar"><span>影视识别</span><button disabled={disabled} onClick={show}><Settings2 size={16} aria-hidden="true"/>识别规则与预览</button></div>
     {open&&<Modal title="目录识别规则" busy={busy} onClose={()=>setOpen(false)}><div className="media-form media-recognition-form">
@@ -54,10 +57,15 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
       {mode==='ignore'&&<p>后续扫描跳过该目录的新文件。已有作品和文件保留，不会因此被标记缺失。</p>}
       <div className="media-toolbar"><button disabled={busy||!revision} onClick={()=>void work(async signal=>{await save(signal);if(!signal.aborted){invalidate();setNotice('目录规则已保存。已有作品尚未更改。');}})}>保存规则</button><button className="media-primary" disabled={busy||!revision} onClick={()=>void work(async signal=>{await save(signal);if(signal.aborted)return;const result=await api.request<Preview>(base+'/recognition-preview','POST',{path},signal);if(!signal.aborted){setPreview(result);setSelected(result.items.filter(row=>row.status==='ready').map(row=>row.assetId));setPage(0);}})}>{busy?'正在处理…':'保存并预览重新识别'}</button></div>
       {preview&&<section className="media-recognition-preview" aria-label="重新识别预览"><h3>识别结果 · {preview.items.length} 个文件</h3><p>待确认结果默认不选；已人工整理、在线确认或共享多版本的作品保留。确认后保留资源、版本和播放片段 ID，已有播放进度与队列继续有效。</p>
+        <div className="media-recognition-bulk"><p role="status">已选 {selected.length} / {preview.items.filter(selectable).length} 项（跨页保留）</p><div className="media-toolbar">
+          <button disabled={busy||!visible.some(selectable)} onClick={()=>selectRows(visible)}>全选本页</button>
+          <button disabled={busy||!preview.items.some(selectable)} onClick={()=>selectRows(preview.items)}>全选可应用项</button>
+          <button disabled={busy||!selected.length} onClick={()=>setSelected([])}>清空选择</button>
+          <button className="media-primary" disabled={busy||!selected.length} onClick={()=>setConfirm(true)}>应用所选 {selected.length} 项</button>
+        </div><p>全选包含待确认结果，请先核对；受保护与忽略项不会选中。</p></div>
         {!preview.items.length&&<p>没有已扫描且可用的资源，请先扫描媒体库。</p>}
         {preview.items.slice(page*30,page*30+30).map(row=><label key={row.assetId} className="media-recognition-row"><input type="checkbox" aria-label={'应用 '+row.ref} disabled={busy||!['ready','review'].includes(row.status)} checked={selected.includes(row.assetId)} onChange={e=>setSelected(e.currentTarget.checked?[...selected,row.assetId]:selected.filter(id=>id!==row.assetId))}/><span><strong>{row.ref}</strong><small>当前：{row.before?.title??'未关联'}</small><b>{description(row)}</b><small>{({ready:'可应用',review:'待确认',protected:'保留现有',ignored:'已忽略'} as const)[row.status]} · {row.reason}</small></span></label>)}
         {preview.items.length>30&&<nav className="media-toolbar" aria-label="识别预览分页"><button disabled={busy||!page} onClick={()=>setPage(page-1)}>上一页</button><span>{page+1} / {Math.ceil(preview.items.length/30)}</span><button disabled={busy||(page+1)*30>=preview.items.length} onClick={()=>setPage(page+1)}>下一页</button></nav>}
-        <button className="media-primary" disabled={busy||!selected.length} onClick={()=>setConfirm(true)}>应用所选 {selected.length} 项</button>
       </section>}
     </div></Modal>}
     {confirm&&<FloatingConfirm title="确认重新识别" text={`将按预览调整 ${selected.length} 个文件的标题和作品归属。同一剧、季、集的版本可能合并到一个作品，收藏随之保留。不修改原文件，保留播放进度与队列。`} confirmText="应用识别结果" onCancel={()=>setConfirm(false)} onConfirm={()=>{setConfirm(false);void work(async signal=>{await api.request(base+'/recognition-apply','POST',{path,previewId:preview!.id,assetIds:selected},signal);if(!signal.aborted){setOpen(false);onApplied();}});}}/>}

@@ -14,7 +14,7 @@ function number(text:string):number|undefined{
   return text?result+current:undefined;
 }
 export function seasonDirectory(name:string):number|undefined{
-  const match=/^(?:season[ ._-]*|s)(\d{1,3})$/i.exec(name)||/^第([零〇一二两三四五六七八九十百\d]+)季$/.exec(name);
+  const match=/^(?:season[ ._-]*|s)(\d{1,3})$/i.exec(name)||/第([零〇一二两三四五六七八九十百\d]+)季$/.exec(name);
   if(match)return number(match[1]!);
   if(/^(specials?|特别篇|特別篇)$/i.test(name))return 0;
   return undefined;

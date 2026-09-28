@@ -28,3 +28,15 @@ it('retains saved-rule notice if preview fails and reports no successful applica
   act(()=>render(<FolderRecognition api={{request} as unknown as MediaApi} libraryId="lib" path="Show" disabled={false} onBusy={vi.fn()} onApplied={onApplied}/>,root));
   await click('识别规则与预览');await vi.waitFor(()=>expect(root.querySelector<HTMLButtonElement>('.media-primary')?.disabled).toBe(false));await click('保存并预览');await vi.waitFor(()=>expect(root.textContent).toContain('500'));expect(root.textContent).toContain('目录规则已保存');expect(onApplied).not.toHaveBeenCalled();
 });
+it('batch selection spans pages, excludes protected resources, and can be cleared',async()=>{
+  const items=Array.from({length:65},(_,i)=>({...preview.items[i%4]!,assetId:String(i),ref:`Show/${i}.mp4`}));
+  const request=vi.fn().mockResolvedValueOnce(rule).mockResolvedValueOnce({revision:'next'}).mockResolvedValueOnce({id:'many',items});
+  act(()=>render(<FolderRecognition api={{request} as unknown as MediaApi} libraryId="lib" path="Show" disabled={false} onBusy={vi.fn()} onApplied={vi.fn()}/>,root));
+  await click('识别规则与预览');await vi.waitFor(()=>expect(root.querySelector<HTMLButtonElement>('.media-primary')?.disabled).toBe(false));await click('保存并预览');
+  await vi.waitFor(()=>expect(root.querySelectorAll('.media-recognition-row')).toHaveLength(30));
+  await click('清空选择');await click('全选本页');expect(root.textContent).toContain('已选 16 / 33 项');
+  await click('下一页');expect(root.textContent).toContain('已选 16 / 33 项');
+  await click('全选可应用项');expect(root.textContent).toContain('已选 33 / 33 项');
+  expect(root.querySelectorAll('.media-recognition-row input:disabled:checked')).toHaveLength(0);
+  await click('清空选择');expect(root.textContent).toContain('已选 0 / 33 项');
+});

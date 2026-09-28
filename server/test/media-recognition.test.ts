@@ -19,6 +19,8 @@ test('video parsing separates release tokens from meaningful numerals and resolv
   assert.equal(cleanVideoTitle('001. Film').title,'001 Film');
   assert.equal(cleanVideoTitle('001. Film',true).title,'Film');
   assert.equal(seasonDirectory('第二十一季'),21);assert.equal(seasonDirectory('Specials'),0);
+  const peppa=recognizeVideo('动画/小猪佩奇/小猪佩奇第1季/小猪佩奇第一季.Peppa.Pig.Season.1.E01.4K.WEB-DL.H265.AAC-OurTV.mp4',raw(),[{path:'动画/小猪佩奇',mode:'series',title:'小猪佩奇'}]);
+  assert.equal(peppa.kind,'episode');assert.equal(peppa.metadata.season,1);assert.equal(peppa.metadata.episode,1);
   for(const [ref,season,episode] of [
     ['Drama/Drama_S01E01_1080p.mp4',1,1],['Drama/Drama.1x02.mkv',1,2],
     ['Drama/Season 02/EP03.mp4',2,3],['Drama/第三季/004.mp4',3,4],
