@@ -8,9 +8,13 @@ const shell = new URL('index.html', scope).href;
 
 self.addEventListener('install', (event) => {
   // Reload bypasses HTTP caches for the fixed-name Android-compatible bundle.
-  // Do not skipWaiting: an open reader must keep its current bundle until closed.
+  // Wait for the reader's explicit update action before replacing open pages.
   event.waitUntil(caches.open(cacheName).then((cache) =>
     cache.addAll(urls.map((url) => new Request(url, { cache: 'reload' })))));
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') event.waitUntil(self.skipWaiting());
 });
 
 self.addEventListener('activate', (event) => {

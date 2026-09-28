@@ -78,11 +78,27 @@ try {
       await registration.update();
     });
     await page.waitForFunction(async () => !!(await navigator.serviceWorker.getRegistration()).waiting);
-    // Existing readers retain their version until every controlled page closes.
+    // The reader can activate without closing any tabs, after saving progress.
     assert.equal(await page.evaluate(async () => (await caches.keys()).length), 2);
-    await page.close();
-    page = await context.newPage();
-    await page.goto(`${origin}${base}`);
+    const other = await context.newPage();
+    await other.goto(`${origin}${base}`);
+    await page.setViewportSize({ width: 320, height: 640 });
+    const updateButton = page.getByRole('button', { name: '立即更新', exact: true });
+    await updateButton.waitFor();
+    const bounds = await page.locator('.pwa-update').boundingBox();
+    assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 320);
+    await page.evaluate(() => {
+      window.readerApp.saveBeforeUpdate = async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        sessionStorage.setItem('pwa-saved', 'yes');
+      };
+    });
+    await Promise.all([
+      page.waitForEvent('load'),
+      page.getByRole('button', { name: '立即更新', exact: true }).click(),
+    ]);
+    assert.equal(await page.evaluate(() => sessionStorage.getItem('pwa-saved')), 'yes');
+    assert.equal(other.isClosed(), false);
     await page.waitForFunction(async () => {
       const keys = await caches.keys();
       return keys.length === 1 && keys[0].endsWith(':updated');
@@ -91,7 +107,7 @@ try {
     await page.reload();
     await page.waitForFunction(() => document.querySelector('#app')?.children.length > 0);
     await context.close();
-    console.log(`PASS ${base}: manifest, icons, installability, offline restart, API isolation, waiting update and cache cleanup`);
+    console.log(`PASS ${base}: manifest, icons, installability, offline restart, API isolation, immediate update with multiple tabs and cache cleanup`);
   }
 } finally {
   await browser?.close();

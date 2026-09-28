@@ -744,6 +744,13 @@ export class App {
    * here leaves the outbox intact for the next attempt rather than surfacing as
    * an unhandled rejection.
    */
+  /** Persist locally before replacing the page; failures must block the update. */
+  async saveBeforeUpdate(): Promise<void> {
+    await this.mediaPlayer?.flush();
+    await this.reader?.flushProgress();
+    await this.offline?.flush();
+  }
+
   async flush(): Promise<void> {
     await Promise.allSettled([
       Promise.resolve().then(() => this.mediaPlayer?.flush()),

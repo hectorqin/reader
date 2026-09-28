@@ -1,0 +1,23 @@
+.pwa-update {
+  position: fixed;
+  z-index: 1000;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - 2rem);
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  padding: .75rem 1rem;
+  border: 1px solid var(--reader-line);
+  border-radius: .75rem;
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  box-shadow: 0 4px 20px #0002;
+}
+.pwa-update button { min-height: 44px; padding: .5rem 1rem; }
+.pwa-update button:focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 2px; }
