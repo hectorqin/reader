@@ -6,6 +6,8 @@ import type { ProbeResult } from './probe.ts';
 import type { ArtistProfile } from './artist-metadata.ts';
 
 export interface LocalMediaMetadata {
+  seriesRoot?:string;
+  recognition?:{kind:'movie'|'episode';confidence:'high'|'review';reasons:string[]};
   artistProfile?:ArtistProfile;
   title: string;
   year?: number;
@@ -22,7 +24,7 @@ export interface LocalMediaMetadata {
   track?: number;
   disc?: number;
   externalIds: Record<string, string>;
-  sources: Record<string, 'filename' | 'tag' | 'nfo'>;
+  sources: Record<string, 'filename' | 'tag' | 'nfo' | 'rule'>;
   coverRef?: string;
   embeddedCoverAssetId?: string;
   warnings: string[];
@@ -91,7 +93,7 @@ export async function readLocalMetadata(storage: MediaStorage, ref: string, prob
       const parsed = new XMLParser({ignoreAttributes:false,processEntities:false,parseTagValue:false}).parse(xml);
       const node = parsed.movie || parsed.episodedetails || parsed.tvshow || parsed.album || parsed.audiobook;
       if (!node || typeof node !== 'object') continue;
-      const showOnly = !!parsed.tvshow && !!match;
+      const showOnly = !!parsed.tvshow;
       for (const [field, value] of Object.entries({title:showOnly?undefined:node.title,plot:node.plot,show:showOnly?node.title:node.showtitle,artist:node.artist,albumArtist:node.albumartist,album:node.album,author:node.author,narrator:node.narrator,edition:node.edition})) {
         const valueText = text(value);
         if (valueText) { (metadata as unknown as Record<string,unknown>)[field] = valueText; metadata.sources[field] = 'nfo'; }

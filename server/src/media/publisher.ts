@@ -5,10 +5,10 @@ import type { ProbeResult } from './probe.ts';
 import type { StorageEntry } from './storage/types.ts';
 import type { LocalMediaMetadata } from './local-metadata.ts';
 
-interface Staged extends StorageEntry { probe:ProbeResult;metadata:LocalMediaMetadata }
+interface Staged extends StorageEntry { probe:ProbeResult;metadata:LocalMediaMetadata;ignored?:boolean }
 interface AssetRow {id:string;library_id:string;ref:string;size:number;modified_at:number;file_identity:string|null;available:number;probe_status:ProbeResult['status'];technical_json:string|null;publication_fingerprint:string|null}
 // Bump when ingest semantics require replaying otherwise identical staged inputs.
-const PUBLICATION_VERSION=1;
+const PUBLICATION_VERSION=2;
 
 /** Publishes one staged job atomically, without initializing schemas or resetting jobs. */
 export class MediaPublisher {
@@ -36,6 +36,10 @@ export class MediaPublisher {
       this.db.run(`UPDATE media_assets SET available=0 WHERE library_id=? AND available=1 AND NOT EXISTS
         (SELECT 1 FROM media_scan_stage s WHERE s.job_id=? AND s.ref=media_assets.ref)`,libraryId,jobId);
       for(const entry of staged){
+        if(entry.ignored){
+          this.db.run('UPDATE media_assets SET available=1 WHERE library_id=? AND ref=? AND available=0',libraryId,entry.ref);
+          continue;
+        }
         let old=byRef.get(entry.ref);
         const fingerprint=createHash('sha256').update(JSON.stringify([PUBLICATION_VERSION,library.kind,entry])).digest('hex');
         const technical=entry.probe.info?JSON.stringify(entry.probe.info):null;

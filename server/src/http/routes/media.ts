@@ -21,6 +21,9 @@ import { MediaSubtitles } from '../../media/subtitles.ts';
 import { MediaLyrics } from '../../media/lyrics.ts';
 import { MediaFolders } from '../../media/folders.ts';
 import { MediaCleanup } from '../../media/cleanup.ts';
+import {MediaDirectoryRules} from '../../media/directory-rules.ts';
+import {MediaRecognitionReview} from '../../media/recognition-review.ts';
+import type {VideoRule} from '../../media/video-recognition.ts';
 import { MediaScrapeJobs,SCRAPE_RESULT_STATES } from '../../media/scrape-jobs.ts';
 import { MediaBackgroundGrants } from '../../media/background-grants.ts';
 import { DatabaseMediaAccounts, MediaAccountReferences } from '../../media/accounts.ts';
@@ -48,6 +51,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   const lyrics=new MediaLyrics(database,libraries);
   const folders=new MediaFolders(database,libraries,scanner.catalog);
   const cleanup=new MediaCleanup(database,libraries,scanner.catalog);
+  const directoryRules=new MediaDirectoryRules(database),recognition=new MediaRecognitionReview(database,libraries,scanner.catalog,directoryRules);
   const authenticateAccount=authenticate(ctx);
   const auth=async(request:import('fastify').FastifyRequest,reply:import('fastify').FastifyReply)=>{
     await authenticateAccount(request,reply);
@@ -69,6 +73,15 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   app.get<{Params:{id:string};Querystring:{path?:string;offset?:number;limit?:number}}>('/api/v1/media/libraries/:id/folders',{preHandler:auth,schema:{querystring:{type:'object',properties:{path:{type:'string',maxLength:4000},offset:{type:'integer',minimum:0,default:0},limit:{type:'integer',minimum:1,maximum:200,default:60}}}}},async (request,reply)=>queryCatalog(request,reply,{method:'folders',args:[currentUser(request),request.params.id,request.query.path,request.query.offset,request.query.limit]}));
   app.get<{Params:{id:string};Querystring:{path:string}}>('/api/v1/media/libraries/:id/missing-resources',{preHandler:[auth,async request=>requireAdmin(request)],schema:{querystring:{type:'object',additionalProperties:false,required:['path'],properties:{path:{type:'string',maxLength:4000}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(cleanup.preview(currentUser(request),request.params.id,request.query.path)));
   app.post<{Params:{id:string};Body:{path:string;revision:string}}>('/api/v1/media/libraries/:id/missing-resources/cleanup',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,required:['path','revision'],properties:{path:{type:'string',maxLength:4000},revision:{type:'string',pattern:'^[a-f0-9]{64}$'}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(cleanup.remove(currentUser(request),request.params.id,request.body.path,request.body.revision)));
+  app.get<{Params:{id:string};Querystring:{path:string}}>('/api/v1/media/libraries/:id/recognition-rule',{preHandler:[auth,async request=>requireAdmin(request)],schema:{querystring:{type:'object',additionalProperties:false,required:['path'],properties:{path:{type:'string',maxLength:4000}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(directoryRules.get(currentUser(request),libraries,request.params.id,request.query.path)));
+  app.put<{Params:{id:string};Body:{path:string;revision:string;rule:VideoRule|null}}>('/api/v1/media/libraries/:id/recognition-rule',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,required:['path','revision','rule'],properties:{path:{type:'string',maxLength:4000},revision:{type:'string',pattern:'^[a-f0-9]{64}$'},rule:{anyOf:[{type:'object'},{type:'null'}]}}}}},async request=>directoryRules.save(currentUser(request),libraries,request.params.id,request.body.path,request.body.rule,request.body.revision));
+  app.post<{Params:{id:string};Body:{path:string}}>('/api/v1/media/libraries/:id/recognition-preview',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,required:['path'],properties:{path:{type:'string',maxLength:4000}}}}},async(request,reply)=>{
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),120_000),abort=()=>{if(!reply.raw.writableEnded)controller.abort();};
+    reply.raw.on('close',abort);
+    try{return reply.header('cache-control','no-store').send(await recognition.preview(currentUser(request),request.params.id,request.body.path,controller.signal));}
+    finally{clearTimeout(timer);reply.raw.off('close',abort);}
+  });
+  app.post<{Params:{id:string};Body:{path:string;previewId:string;assetIds:string[]}}>('/api/v1/media/libraries/:id/recognition-apply',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,required:['path','previewId','assetIds'],properties:{path:{type:'string',maxLength:4000},previewId:{type:'string',minLength:1,maxLength:100},assetIds:{type:'array',minItems:1,maxItems:500,uniqueItems:true,items:{type:'string',minLength:1,maxLength:100}}}}}},async request=>recognition.apply(currentUser(request),request.params.id,request.body.path,request.body.previewId,request.body.assetIds));
   app.get<{Params:{id:string}}>('/api/v1/media/assets/:id/catalog',{preHandler:auth},async (request,reply)=>queryCatalog(request,reply,{method:'file',args:[currentUser(request),request.params.id]}));
   app.get<{Params:{id:string}}>('/api/v1/media/parts/:id/lyrics',{preHandler:auth},async(request,reply)=>reply.header('cache-control','private, no-store').send(await lyrics.read(currentUser(request),request.params.id)));
   const backgroundToken=(request:import('fastify').FastifyRequest)=>typeof request.headers['x-media-background']==='string'?request.headers['x-media-background']:'';

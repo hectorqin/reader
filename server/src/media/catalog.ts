@@ -34,7 +34,7 @@ function titleOrder(sort:MediaSort|undefined,fallback:string){
   if(sort!=='title-asc'&&sort!=='title-desc')throw badRequest('无效排序');
   return `COALESCE((SELECT json_extract(o.value_json,'$') FROM media_metadata_overrides o WHERE o.item_id=i.id AND o.field='title'),(SELECT json_extract(m.fields_json,'$.title') FROM media_online_metadata m WHERE m.item_id=i.id),i.title) COLLATE NOCASE ${sort==='title-desc'?'DESC':'ASC'},i.id`;
 }
-interface ItemRow { id:string;library_id:string;kind:MediaItemKind;parent_id:string|null;title:string;metadata_json:string;local_key:string;ordinal:number }
+interface ItemRow { id:string;library_id:string;kind:MediaItemKind;parent_id:string|null;title:string;metadata_json:string;local_key:string;ordinal:number;manual_structure:number }
 interface PartRow { id:string;edition_id:string;asset_id:string;title:string;ordinal:number;start_seconds:number;end_seconds:number|null;available:number }
 export interface MediaItem {
   id:string;libraryId:string;kind:MediaItemKind;parentId:string|null;title:string;ordinal:number;
@@ -108,13 +108,14 @@ export class MediaCatalog {
       else this.db.run('DELETE FROM media_asset_narrators WHERE asset_id=?',assetId);
     }
     if(probe.info?.streams.some(stream=>stream.attachedPicture&&['mjpeg','png','webp'].includes(stream.codec)))metadata={...metadata,embeddedCoverAssetId:assetId};
-    const dir=posix.dirname(ref),title=metadata.title;
+    const dir=posix.dirname(ref);
+    let title=metadata.title;
     const previous=this.db.get<{id:string;item_id:string;manual_item:number}>(`SELECT e.id,e.item_id,e.manual_item FROM media_editions e
       JOIN media_parts p ON p.edition_id=e.id WHERE p.asset_id=? ORDER BY p.active DESC LIMIT 1`,assetId);
     let itemId=previous?.item_id;
     if(!itemId){
       if(kind==='video'&&metadata.show&&metadata.season!==undefined&&metadata.episode!==undefined){
-        const showDir=/^(season[ ._-]*\d+|s\d+|第.+季)$/i.test(posix.basename(dir))?posix.dirname(dir):dir;
+        const showDir=metadata.seriesRoot??(/^(season[ ._-]*\d+|s\d+|第.+季)$/i.test(posix.basename(dir))?posix.dirname(dir):dir);
         const seriesId=this.upsert(libraryId,'series',`${showDir}\0${metadata.show}`,metadata.show,null,metadata);
         const seasonId=this.upsert(libraryId,'season',`${seriesId}:${metadata.season}`,`第 ${metadata.season} 季`,seriesId,metadata,metadata.season);
         itemId=this.upsert(libraryId,'episode',`${seasonId}:${metadata.episode}`,title,seasonId,metadata,metadata.episode);
@@ -134,6 +135,13 @@ export class MediaCatalog {
       }
     }else if(!previous?.manual_item){
       const item=this.db.get<ItemRow>('SELECT * FROM media_items WHERE id=?',itemId)!;
+      if(kind==='video'){
+        const old=JSON.parse(item.metadata_json) as LocalMediaMetadata;
+        const proposedKind=metadata.show&&metadata.season!==undefined&&metadata.episode!==undefined?'episode':'movie';
+        if(item.manual_structure||item.kind!==proposedKind||['show','season','episode','seriesRoot'].some(key=>old[key as keyof LocalMediaMetadata]!==metadata[key as keyof LocalMediaMetadata])){
+          metadata={...old,recognition:metadata.recognition};title=item.title;
+        }
+      }
       const retainedTitle=item.kind==='audiobook'?(metadata.album||item.title):title;
       this.db.run('UPDATE media_items SET title=?,metadata_json=? WHERE id=?',retainedTitle,JSON.stringify(metadata),itemId);
     }
@@ -151,6 +159,40 @@ export class MediaCatalog {
         ordinal=excluded.ordinal,start_seconds=excluded.start_seconds,end_seconds=excluded.end_seconds,active=1`,
       old?.id||randomUUID(),editionId,assetId,key,part.title||`第 ${index+1} 章`,(metadata.disc||1)*1000000+(metadata.track||0)*1000+index,part.start,part.end);
     }
+  }
+
+  /** Apply reviewed video metadata while preserving asset, edition and part identities. */
+  reidentifyVideoAsset(assetId:string,metadata:LocalMediaMetadata){
+    const asset=this.db.get<{library_id:string;ref:string}>('SELECT library_id,ref FROM media_assets WHERE id=?',assetId);
+    if(!asset)throw notFound('资源已变化');
+    const edition=this.db.get<{id:string;item_id:string}>('SELECT e.id,e.item_id FROM media_editions e JOIN media_parts p ON p.edition_id=e.id WHERE p.asset_id=? LIMIT 1',assetId);
+    if(!edition)throw notFound('资源尚未关联作品');
+    const old=this.db.get<ItemRow>('SELECT * FROM media_items WHERE id=?',edition.item_id)!;
+    let parentId:string|null=null,kind:MediaItemKind='movie',key=assetId,ordinal=0;
+    if(metadata.show&&metadata.season!==undefined&&metadata.episode!==undefined){
+      kind='episode';
+      const seriesId=this.upsert(asset.library_id,'series',`${metadata.seriesRoot??posix.dirname(asset.ref)}\0${metadata.show}`,metadata.show,null,metadata);
+      parentId=this.upsert(asset.library_id,'season',`${seriesId}:${metadata.season}`,`第 ${metadata.season} 季`,seriesId,metadata,metadata.season);
+      key=`${parentId}:${metadata.episode}`;ordinal=metadata.episode;
+    }
+    const target=this.db.get<{id:string}>('SELECT id FROM media_items WHERE library_id=? AND kind=? AND local_key=?',asset.library_id,kind,key);
+    if(target&&target.id!==old.id){
+      this.db.run('UPDATE media_editions SET item_id=? WHERE id=?',target.id,edition.id);
+      this.db.run('INSERT OR IGNORE INTO media_favorites(user_id,item_id,created_at) SELECT user_id,?,created_at FROM media_favorites WHERE item_id=?',target.id,old.id);
+      this.db.run('DELETE FROM media_items WHERE id=?',old.id);
+    }else{
+      this.db.run('UPDATE media_items SET kind=?,parent_id=?,local_key=?,title=?,ordinal=?,metadata_json=? WHERE id=?',kind,parentId,key,metadata.title,ordinal,JSON.stringify(metadata),old.id);
+    }
+    this.db.run('UPDATE media_parts SET title=? WHERE asset_id=? AND local_key=?',metadata.title,assetId,'file');
+    this.db.run('UPDATE media_assets SET publication_fingerprint=NULL WHERE id=?',assetId);
+    // Empty inferred parents can retire; retain explicitly curated/favorited containers.
+    let previous=old.parent_id;
+    while(previous&&previous!==parentId){
+      const parent=this.db.get<{parent_id:string|null;manual_structure:number}>('SELECT parent_id,manual_structure FROM media_items WHERE id=?',previous);
+      if(!parent||parent.manual_structure||this.db.get('SELECT 1 FROM media_items WHERE parent_id=?',previous)||this.db.get('SELECT 1 FROM media_editions WHERE item_id=?',previous)||this.db.get('SELECT 1 FROM media_favorites WHERE item_id=?',previous)||this.db.get('SELECT 1 FROM media_metadata_overrides WHERE item_id=?',previous)||this.db.get('SELECT 1 FROM media_online_metadata WHERE item_id=?',previous))break;
+      this.db.run('DELETE FROM media_items WHERE id=?',previous);previous=parent.parent_id;
+    }
+    return target?.id??old.id;
   }
 
   /** Resolve artwork after the entire scan is published, independent of file order. */

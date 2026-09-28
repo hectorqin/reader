@@ -6,7 +6,7 @@ const labels:Record<string,string>={title:'标题',plot:'简介',year:'年份',a
 const kindLabels:Record<string,string>={movie:'电影',series:'剧集',season:'季',episode:'单集',artist:'歌手',album:'专辑',track:'曲目',audiobook:'有声书'};
 const fieldsFor=(kind:string)=>['title','year',...(['artist','album','track'].includes(kind)?['artist','albumArtist','album']:kind==='audiobook'?['author','narrator']:[]),'plot'];
 const valueOf=(item:Detail,field:string)=>String(item.overrides[field]??(field==='title'?item.title:item.metadata[field])??'');
-const sourceLabels:Record<string,string>={filename:'文件名识别',tag:'文件内嵌标签',nfo:'本地 NFO 文件',tmdb:'TMDB 在线资料',musicbrainz:'MusicBrainz 在线资料'};
+const sourceLabels:Record<string,string>={rule:'目录识别规则',filename:'文件名识别',tag:'文件内嵌标签',nfo:'本地 NFO 文件',tmdb:'TMDB 在线资料',musicbrainz:'MusicBrainz 在线资料'};
 const baseSource=(item:Detail,field:string)=>{
   if(item.metadata[field]===undefined||item.metadata[field]===null||item.metadata[field]==='')return '暂无信息';
   const source=(item.metadata.sources as Record<string,unknown>|undefined)?.[field];

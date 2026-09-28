@@ -412,4 +412,20 @@ for(const isolated of [false,true])test(`media HTTP enforces authentication, gra
   const cleaned=await app.inject({...cleanupRequest,headers:admin});assert.equal(cleaned.statusCode,200,cleaned.body);
   assert.deepEqual(mediaDb.all('PRAGMA foreign_key_check'),[]);
 
+  const ruleUrl=`${url}/${id}/recognition-rule`;
+  assert.equal((await app.inject({url:ruleUrl+'?path='})).statusCode,401);
+  assert.equal((await app.inject({url:ruleUrl+'?path=',headers:member})).statusCode,403);
+  const ruleResponse=await app.inject({url:ruleUrl+'?path=',headers:admin});assert.equal(ruleResponse.statusCode,200);
+  const ruleWrite={method:'PUT' as const,url:ruleUrl,headers:admin,payload:{path:'Review',revision:ruleResponse.json().revision,rule:{path:'Review',mode:'season',season:2,title:'测试剧集'}}};
+  const savedRule=await app.inject(ruleWrite);assert.equal(savedRule.statusCode,200,savedRule.body);
+  const loadedRule=await app.inject({url:ruleUrl+'?path=Review',headers:admin});assert.deepEqual(loadedRule.json().rule,ruleWrite.payload.rule);
+  assert.equal((await app.inject(ruleWrite)).statusCode,409);
+  assert.equal((await app.inject({...ruleWrite,payload:{...ruleWrite.payload,revision:savedRule.json().revision,rule:{path:'Review',mode:'season',season:-1,title:'invalid'}}})).statusCode,400);
+  const previewRequest={method:'POST' as const,url:`${url}/${id}/recognition-preview`,payload:{path:'Review'}};
+  assert.equal((await app.inject({...previewRequest,headers:member})).statusCode,403);
+  const recognitionPreview=await app.inject({...previewRequest,headers:admin});assert.equal(recognitionPreview.statusCode,200,recognitionPreview.body);assert.deepEqual(recognitionPreview.json().items,[]);
+  const applyRequest={method:'POST' as const,url:`${url}/${id}/recognition-apply`,payload:{path:'Review',previewId:recognitionPreview.json().id,assetIds:['missing']}};
+  assert.equal((await app.inject({...applyRequest,headers:member})).statusCode,403);
+  assert.equal((await app.inject({...applyRequest,headers:admin})).statusCode,400);
+
 });

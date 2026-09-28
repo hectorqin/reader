@@ -14,6 +14,9 @@ import { MediaStatementDatabase } from './statement-database.ts';
 import { MediaPublisher } from './publisher.ts';
 import { ScanTrace, type ScanDiagnostics, type ScanLogger } from './scan-diagnostics.ts';
 import type { StorageEntry } from './storage/types.ts';
+import {MediaDirectoryRules} from './directory-rules.ts';
+import {recognizeVideo,withinDirectory} from './video-recognition.ts';
+import {videoMetadataReader} from './video-metadata.ts';
 
 const VIDEO = new Set(['.mp4','.mkv','.avi','.mov','.webm','.m4v','.ts','.m2ts','.mpg','.mpeg']);
 const AUDIO = new Set(['.mp3','.flac','.m4a','.m4b','.aac','.ogg','.opus','.wav','.aiff','.wma']);
@@ -61,6 +64,7 @@ export class MediaScanner {
       db.run('DELETE FROM media_scan_stage');
     });
     this.catalog=new MediaCatalog(this.db,libraries);
+    new MediaDirectoryRules(this.db);
   }
 
   start(actor:MediaActor,libraryId:string):MediaScanJob {
@@ -151,9 +155,16 @@ export class MediaScanner {
     try {
       const library=this.libraries.get(actor,libraryId),storage=await trace.measure('list',undefined,()=>this.libraries.storage(actor,libraryId));
       const supported=library.kind==='video'?VIDEO:AUDIO;
+      const rules=library.kind==='video'?new MediaDirectoryRules(this.db).list(libraryId):[];
+      const readVideo=videoMetadataReader(storage);
       let inspected=0;
       const inspect=async(entry:StorageEntry)=>{
         signal.throwIfAborted();
+        if(library.kind==='video'&&rules.filter(rule=>withinDirectory(entry.ref,rule.path)).sort((a,b)=>b.path.length-a.path.length)[0]?.mode==='ignore'){
+          // Presence remains part of the snapshot, so ignored files aren't falsely marked missing.
+          this.db.run('INSERT INTO media_scan_stage(job_id,ref,payload) VALUES(?,?,?)',jobId,entry.ref,JSON.stringify({...entry,ignored:true}));
+          this.db.run('UPDATE media_scan_jobs SET inspected=? WHERE id=?',++inspected,jobId);return;
+        }
         const old=this.db.get<AssetRow>('SELECT * FROM media_assets WHERE library_id=? AND ref=?',libraryId,entry.ref);
         const oldProbe=old?this.dto(old).probe:null;
         const unchanged=old&&old.size===entry.size&&old.modified_at===entry.modifiedAt&&old.file_identity===entry.fileIdentity;
@@ -170,7 +181,8 @@ export class MediaScanner {
           if(fresh.size!==entry.size||fresh.modifiedAt!==entry.modifiedAt||fresh.fileIdentity!==entry.fileIdentity)throw new Error('file-changed-during-scan');
         }
         const metadata=await trace.measure('metadata',entry.ref,async()=>{
-          const metadata=await readLocalMetadata(storage,entry.ref,probe),artist=metadata.albumArtist||metadata.artist;
+          const raw=library.kind==='video'?await readVideo(entry.ref,probe):await readLocalMetadata(storage,entry.ref,probe);
+          const metadata=library.kind==='video'?recognizeVideo(entry.ref,raw,rules).metadata:raw,artist=metadata.albumArtist||metadata.artist;
           if(library.kind==='music'&&artist)metadata.artistProfile=await readArtistProfile(storage,entry.ref,artist,metadata.warnings);
           return metadata;
         });
