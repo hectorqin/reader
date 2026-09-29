@@ -22,6 +22,9 @@ export class MediaApi {
   constructor(private readonly reader:ReaderApi) {}
   businessSettingsRequest<T>(path='',method='GET',body?:unknown,signal?:AbortSignal){return this.reader.businessSettingsRequest<T>(path,method,body,signal);}
   businessTtsPreview(values:Record<string,unknown>,voice:string){return this.reader.businessTtsPreview(values,voice);}
+  aiScan(libraryId:string){return this.reader.aiScan(libraryId);}
+  businessAiModels(values?:{baseUrl?:string;apiKey?:string}){return this.reader.businessAiModels(values);}
+  aiFolderScan(libraryId:string,path:string){return this.request<{total:number;items:unknown[];batches:number}>(`libraries/${encodeURIComponent(libraryId)}/folders/ai-scan`,'POST',{path});}
   preferenceScope(){return JSON.stringify([this.reader.baseUrl,this.reader.currentSession()?.user.id??'anonymous']);}
   accountInfo():MediaAccount|null {const user=this.reader.currentSession()?.user;return user?{username:user.username,displayName:user.displayName,role:user.role,server:this.reader.baseUrl}:null;}
   request<T>(path:string,method='GET',body?:unknown,signal?:AbortSignal):Promise<T> {

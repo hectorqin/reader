@@ -17,6 +17,7 @@ import { isOriginAllowed, resolveCorsOrigin } from './cors.ts';
 import {BusinessSettings} from '../services/business-settings.ts';
 import {TtsService} from '../services/tts.ts';
 import {registerBusinessSettingsRoutes} from './routes/business-settings.ts';
+import {registerAiRoutes} from './routes/ai.ts';
 
 export function buildApp(ctx: AppContext,mediaRuntime?:MediaService): FastifyInstance {
   ctx.settings??=new BusinessSettings(ctx.db,ctx.config);
@@ -70,6 +71,7 @@ export function buildApp(ctx: AppContext,mediaRuntime?:MediaService): FastifyIns
 
   registerAuthRoutes(app, ctx);
   registerBusinessSettingsRoutes(app,ctx);
+  registerAiRoutes(app,ctx);
   registerLibraryRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
   registerTtsRoutes(app, ctx);

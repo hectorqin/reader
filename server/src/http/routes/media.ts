@@ -31,6 +31,7 @@ import type { MediaDatabase } from '../../media/read-database.ts';
 import type { Db } from '../../db/index.ts';
 import {BusinessSettingsReader} from '../../services/business-settings.ts';
 import {configuredProviders} from '../../media/configured-providers.ts';
+import {AiService} from '../../services/ai.ts';
 
 export type MediaRouteContext=Pick<AppContext,'config'> & {db:MediaDatabase & Pick<Db,'prepare'>;users:Pick<AppContext['users'],'byId'>};
 
@@ -39,6 +40,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   const accounts=new DatabaseMediaAccounts(ctx.db);
   const references=database!==ctx.db?new MediaAccountReferences(database,accounts):undefined;
   const settings=new BusinessSettingsReader(ctx.db);
+  const ai=new AiService(database,()=>settings.read('ai'));
   const libraries=new MediaLibraries(database,true,accounts,references),scanner=new MediaScanner(database,libraries,undefined,app.log,()=>settings.read('scanning'));
   const playback=new MediaPlayback(database,libraries,accounts,()=>settings.read('playback').mode);
   const background=new MediaBackgroundGrants(database,libraries,accounts);
@@ -71,6 +73,14 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
     return result.result;
   };
   app.get<{Params:{id:string};Querystring:{path?:string;offset?:number;limit?:number}}>('/api/v1/media/libraries/:id/folders',{preHandler:auth,schema:{querystring:{type:'object',properties:{path:{type:'string',maxLength:4000},offset:{type:'integer',minimum:0,default:0},limit:{type:'integer',minimum:1,maximum:200,default:60}}}}},async (request,reply)=>queryCatalog(request,reply,{method:'folders',args:[currentUser(request),request.params.id,request.query.path,request.query.offset,request.query.limit]}));
+  app.post<{Params:{id:string};Body:{path?:string}}>('/api/v1/media/libraries/:id/folders/ai-scan',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,properties:{path:{type:'string',maxLength:4000}}}}},async request=>{
+    libraries.get(currentUser(request),request.params.id);
+    const path=(request.body?.path??'').replace(/^\/+|\/+$/g,'');
+    if(path.split('/').includes('..')||path.includes('\\'))throw badRequest('目录路径无效');
+    const prefix=path?path+'/':'';
+    const rows=database.all<{ref:string}>('SELECT ref FROM media_assets WHERE library_id=? AND available=1 ORDER BY ref',request.params.id);
+    return ai.scanBatches(request.params.id,rows.map(row=>row.ref).filter(ref=>ref.startsWith(prefix)));
+  });
   app.get<{Params:{id:string};Querystring:{path:string}}>('/api/v1/media/libraries/:id/missing-resources',{preHandler:[auth,async request=>requireAdmin(request)],schema:{querystring:{type:'object',additionalProperties:false,required:['path'],properties:{path:{type:'string',maxLength:4000}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(cleanup.preview(currentUser(request),request.params.id,request.query.path)));
   app.post<{Params:{id:string};Body:{path:string;revision:string}}>('/api/v1/media/libraries/:id/missing-resources/cleanup',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,required:['path','revision'],properties:{path:{type:'string',maxLength:4000},revision:{type:'string',pattern:'^[a-f0-9]{64}$'}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(cleanup.remove(currentUser(request),request.params.id,request.body.path,request.body.revision)));
   app.get<{Params:{id:string};Querystring:{path:string}}>('/api/v1/media/libraries/:id/recognition-rule',{preHandler:[auth,async request=>requireAdmin(request)],schema:{querystring:{type:'object',additionalProperties:false,required:['path'],properties:{path:{type:'string',maxLength:4000}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(directoryRules.get(currentUser(request),libraries,request.params.id,request.query.path)));

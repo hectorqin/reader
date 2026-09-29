@@ -90,6 +90,8 @@ export interface ChromeState {
   description?: string;
   sourceName?: string;
   chapterUrl?: string;
+  aiSummary?: string;
+  aiSummaryBusy?: boolean;
   refreshingChapter?: boolean;
   alternativeChapters?: Array<{ id: string; title: string }> | undefined;
   alternativeChapter?: string;
@@ -152,6 +154,7 @@ export interface ChromeHandlers {
   onTocEntry(ref: string): void;
   onChapter(delta: 1 | -1): void;
   onBookInfo?(): void;
+  onAiSummary?(): void;
   onRefresh?(): void;
   onRefreshChapter?(): void;
   onAlternatives?(cursor?: string): void;
@@ -209,10 +212,13 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         <div className="reader-top-actions">
           {state.canSwitch && <IconButton label="切换书源" icon="sort" disabled={state.switching || state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onAlternatives?.()} />}
           {state.canRefresh && <IconButton label="刷新当前章节" icon="refresh" disabled={state.switching || state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onRefreshChapter?.()} />}
+          <IconButton label="AI 总结" icon="file-text" disabled={state.aiSummaryBusy || state.navigating} onClick={() => handlers.onAiSummary?.()} />
         </div>
         {(state.sourceName || state.chapterUrl) && <div className="reader-source-info"><span>{state.sourceName || '当前书源'}</span>{state.chapterUrl && <a href={state.chapterUrl} target="_blank" rel="noopener noreferrer" title={state.chapterUrl}>{state.chapterUrl}</a>}</div>}
       </div>
       {state.bookInfoOpen && <Modal title="书籍信息" busy={false} onClose={() => handlers.onBookInfo?.()}><article className="book-detail source-modal-content"><h3>{state.title}</h3><p className="book-detail-author">{state.author || '作者未知'}</p><dl><dt>书源</dt><dd>{state.sourceName || (state.canRefresh ? '远程书源' : '本地书籍')}</dd><dt>当前章节</dt><dd>{state.chapterLabel || '暂无信息'}</dd></dl><h4>内容简介</h4><p className="book-detail-description">{state.description || '暂无简介'}</p></article></Modal>}
+      {state.aiSummaryBusy && <div className="floating-notice" role="status">正在生成章节总结…</div>}
+      {state.aiSummary && <Modal title="AI 章节总结" busy={false} onClose={() => handlers.onAiSummary?.()}><article className="book-detail source-modal-content"><p className="book-detail-description">{state.aiSummary}</p></article></Modal>}
       <StageHost stage={stage} />
       <ReaderIndicators state={state} />
       <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作">
