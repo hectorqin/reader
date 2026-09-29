@@ -40,3 +40,10 @@ it('batch selection spans pages, excludes protected resources, and can be cleare
   expect(root.querySelectorAll('.media-recognition-row input:disabled:checked')).toHaveLength(0);
   await click('清空选择');expect(root.textContent).toContain('已选 0 / 33 项');
 });
+it('does not decorate named season groups with 第 and 季',async()=>{
+  const named={...preview.items[0]!,after:{...preview.items[0]!.after,metadata:{...preview.items[0]!.after.metadata,season:'4K版'}}};
+  const request=vi.fn().mockResolvedValueOnce({...rule,rule:{...rule.rule,season:'4K版'}}).mockResolvedValueOnce({revision:'next'}).mockResolvedValueOnce({id:'named',items:[named]});
+  act(()=>render(<FolderRecognition api={{request} as unknown as MediaApi} libraryId="lib" path="Show" disabled={false} onBusy={vi.fn()} onApplied={vi.fn()}/>,root));
+  await click('识别规则与预览');await vi.waitFor(()=>expect(root.querySelector<HTMLButtonElement>('.media-primary')?.disabled).toBe(false));await click('保存并预览');
+  await vi.waitFor(()=>expect(root.textContent).toContain('4K版第 0 集'));expect(root.textContent).not.toContain('第 4K版 季');
+});

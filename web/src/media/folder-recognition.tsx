@@ -7,7 +7,7 @@ import {MediaSelect} from './select.tsx';
 import type {MediaApi} from './api.ts';
 type Mode='auto'|'movie'|'series'|'season'|'ignore';
 interface Rule {path:string;mode:Mode;title?:string;season?:number|string;year?:number;stripLeadingNumber?:boolean}
-interface Proposal {assetId:string;ref:string;before:{id:string;title:string;kind:string}|null;status:'ready'|'review'|'protected'|'ignored';reason:string;after:{kind:string;confidence:string;metadata:{title:string;show?:string;season?:number;episode?:number}}}
+interface Proposal {assetId:string;ref:string;before:{id:string;title:string;kind:string}|null;status:'ready'|'review'|'protected'|'ignored';reason:string;after:{kind:string;confidence:string;metadata:{title:string;show?:string;season?:number|string;episode?:number}}}
 interface Preview {id:string;items:Proposal[]}
 const labels:Record<Mode,string>={auto:'自动识别',movie:'电影目录',series:'剧集目录',season:'指定季目录',ignore:'忽略目录'};
 
@@ -35,7 +35,8 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
     const result=await api.request<{revision:string}>(base+'/recognition-rule','PUT',{path,rule,revision},signal);
     if(!signal.aborted){setRevision(result.revision);setNotice('目录规则已保存。已有作品尚未更改。');}
   }
-  const description=(row:Proposal)=>row.after.kind==='ignore'?'跳过扫描':row.after.kind==='episode'?`${row.after.metadata.show} · 第 ${row.after.metadata.season} 季第 ${row.after.metadata.episode} 集`:`电影 · ${row.after.metadata.title}`;
+  const seasonLabel=(season:number|string|undefined)=>typeof season==='number'&&Number.isFinite(season)?`第 ${season} 季`:String(season??'正片');
+  const description=(row:Proposal)=>row.after.kind==='ignore'?'跳过扫描':row.after.kind==='episode'?`${row.after.metadata.show} · ${seasonLabel(row.after.metadata.season)}第 ${row.after.metadata.episode} 集`:`电影 · ${row.after.metadata.title}`;
   const selectable=(row:Proposal)=>['ready','review'].includes(row.status);
   const visible=preview?.items.slice(page*30,page*30+30)??[];
   const selectRows=(rows:Proposal[])=>setSelected(current=>[...new Set([...current,...rows.filter(selectable).map(row=>row.assetId)])]);
