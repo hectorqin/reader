@@ -13,7 +13,7 @@ export interface LocalMediaMetadata {
   year?: number;
   plot?: string;
   show?: string;
-  season?: number;
+  season?: number|string;
   episode?: number;
   artist?: string;
   albumArtist?: string;

@@ -54,10 +54,10 @@ export class MediaRecognitionReview {
       for(const proposal of proposals){
         if(proposal.after.kind!=='episode'||!['ready','review'].includes(proposal.status))continue;
         const metadata=proposal.after.metadata,seriesKey=`${metadata.seriesRoot??''}\0${metadata.show}`;
-        const key=JSON.stringify([seriesKey,metadata.season,metadata.episode]);
+        const key=JSON.stringify([seriesKey,String(metadata.season),metadata.episode]);
         const group=targets.get(key)??[];group.push(proposal);targets.set(key,group);
         const series=this.db.get<{id:string}>("SELECT id FROM media_items WHERE library_id=? AND kind='series' AND local_key=?",libraryId,seriesKey);
-        const season=series&&this.db.get<{id:string}>("SELECT id FROM media_items WHERE kind='season' AND local_key=?",`${series.id}:${metadata.season}`);
+        const season=series&&this.db.get<{id:string}>("SELECT id FROM media_items WHERE kind='season' AND local_key=?",`${series.id}:${String(metadata.season)}`);
         const episode=season&&this.db.get<{id:string}>("SELECT id FROM media_items WHERE kind='episode' AND local_key=?",`${season.id}:${metadata.episode}`);
         if([series,season,episode].some(item=>item&&this.curated(item.id))){proposal.status='protected';proposal.reason='目标剧集已有人工整理或在线确认，保留现有作品';}
         else if(episode&&episode.id!==proposal.before?.id){proposal.status='review';proposal.reason='目标集已存在，应用后合并版本，请核对';}

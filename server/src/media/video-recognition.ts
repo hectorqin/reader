@@ -2,7 +2,7 @@ import {posix} from 'node:path';
 import type {LocalMediaMetadata} from './local-metadata.ts';
 
 export type VideoRuleMode='auto'|'movie'|'series'|'season'|'ignore';
-export interface VideoRule {path:string;mode:VideoRuleMode;title?:string;season?:number;year?:number;stripLeadingNumber?:boolean}
+export interface VideoRule {path:string;mode:VideoRuleMode;title?:string;season?:number|string;year?:number;stripLeadingNumber?:boolean}
 export interface VideoRecognition {kind:'movie'|'episode'|'ignore';confidence:'high'|'review';reasons:string[];metadata:LocalMediaMetadata}
 export const withinDirectory=(ref:string,path:string)=>!path||ref.startsWith(path+'/');
 
@@ -49,12 +49,12 @@ export function recognizeVideo(ref:string,raw:LocalMediaMetadata,rules:VideoRule
   if(mode==='season'&&!seriesRule)seriesRoot=posix.dirname(rule!.path)==='.'?'':posix.dirname(rule!.path);
   const patterns=[/(?:^|[ ._-])S(\d{1,3})[ ._-]*E(\d{1,4})(?=$|[ ._-])/i,/(?:^|[ ._-])(\d{1,3})x(\d{1,4})(?=$|[ ._-])/i,/第([零〇一二两三四五六七八九十百\d]+)季[ ._-]*第?([零〇一二两三四五六七八九十百\d]+)[集话話]/,/第([零〇一二两三四五六七八九十百\d]+)季[ ._-]*(\d{1,4})(?=$|[ ._-])/i,/(?:^|[ ._-])SE(\d{1,3})[ ._-]+(\d{1,4})(?=$|[ ._-])/i];
   const match=patterns.map(pattern=>pattern.exec(stem)).find(Boolean);
-  let season=match?number(match[1]!):directorySeason,episode=match?number(match[2]!):undefined;
+  let season:number|string|undefined=match?number(match[1]!):directorySeason,episode=match?number(match[2]!):undefined;
   const single=/(?:^|[ ._-])(?:EP?|第)[ ._-]*([零〇一二两三四五六七八九十百\d]+)(?:[集话話])?(?=$|[ ._-])/i.exec(stem);
   const bare=/^\s*(\d{1,4})(?=$|[ ._-])/.exec(stem);
   const trailing=/(?:^|[ ._-])(?:-|集)?\s*(\d{1,4})\s*$/i.exec(stem);
   if(episode===undefined&&(directorySeason!==undefined||raw.sources.season==='nfo'||mode==='series'||mode==='season'))episode=number((single||bare||trailing)?.[1]??'');
-  if(mode==='series'||mode==='season'){season=mode==='season'?rule?.season:rule?.season??directorySeason??1;reasons.push('目录规则');}
+  if(mode==='series'||mode==='season'){season=mode==='season'?rule?.season:rule?.season??directorySeason??'正片';reasons.push('目录规则');}
   const multi=/(?:S\d{1,3}[ ._-]*)?E\d{1,4}(?:[ ._-]*E\d{1,4}|-\d{1,3})(?=$|[ ._-])/i.test(stem)||/第?[\d一二三四五六七八九十]+[-~至到][\d一二三四五六七八九十]+集/.test(stem);
   let cleanedStem=match&&!multi?stem.slice(0,match.index):stem;
   if(raw.sources.year==='filename'){delete metadata.year;delete metadata.sources.year;}
@@ -71,7 +71,7 @@ export function recognizeVideo(ref:string,raw:LocalMediaMetadata,rules:VideoRule
   if(raw.sources.episode==='nfo')episode=raw.episode;
   if(mode==='series'||mode==='season'){
     show=rule?.title||seriesRule?.title||parentTitle||show;
-    season=mode==='season'?rule?.season:rule?.season??directorySeason??1;
+    season=mode==='season'?rule?.season:rule?.season??directorySeason??'正片';
   }
   if(rule?.year!==undefined){metadata.year=rule.year;metadata.sources.year='rule';}
   const episodic=mode!=='movie'&&!!show&&season!==undefined&&episode!==undefined&&episode>0&&!multi;

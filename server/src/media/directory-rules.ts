@@ -40,7 +40,7 @@ export class MediaDirectoryRules {
     if(rule===null)return;
     if(typeof rule!=='object'||rule.path!==path||!['auto','movie','series','season','ignore'].includes(rule.mode)||Object.keys(rule).some(key=>!['path','mode','title','season','year','stripLeadingNumber'].includes(key)))throw badRequest('无效目录识别规则');
     if(rule.title!==undefined&&(typeof rule.title!=='string'||!rule.title.trim()||rule.title.length>200))throw badRequest('剧名需为 1–200 字符');
-    if(rule.season!==undefined&&(!Number.isInteger(rule.season)||rule.season<0||rule.season>999))throw badRequest('季号需为 0–999');
+    if(rule.season!==undefined&&((typeof rule.season==='number'&&(!Number.isInteger(rule.season)||rule.season<0||rule.season>999))||(typeof rule.season==='string'&&(!rule.season.trim()||rule.season.length>80))))throw badRequest('默认季/版本需为有效文本');
     if(rule.mode==='season'&&rule.season===undefined)throw badRequest('季目录必须指定季号');
     if(rule.year!==undefined&&(!Number.isInteger(rule.year)||rule.year<1800||rule.year>2199))throw badRequest('年份需为 1800–2199');
     if(rule.stripLeadingNumber!==undefined&&typeof rule.stripLeadingNumber!=='boolean')throw badRequest('无效编号设置');

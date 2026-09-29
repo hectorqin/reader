@@ -117,7 +117,8 @@ export class MediaCatalog {
       if(kind==='video'&&metadata.show&&metadata.season!==undefined&&metadata.episode!==undefined){
         const showDir=metadata.seriesRoot??(/^(season[ ._-]*\d+|s\d+|第.+季)$/i.test(posix.basename(dir))?posix.dirname(dir):dir);
         const seriesId=this.upsert(libraryId,'series',`${showDir}\0${metadata.show}`,metadata.show,null,metadata);
-        const seasonId=this.upsert(libraryId,'season',`${seriesId}:${metadata.season}`,`第 ${metadata.season} 季`,seriesId,metadata,metadata.season);
+        const seasonKey=String(metadata.season),seasonTitle=typeof metadata.season==='number'?`第 ${metadata.season} 季`:metadata.season;
+        const seasonId=this.upsert(libraryId,'season',`${seriesId}:${seasonKey}`,seasonTitle,seriesId,metadata,typeof metadata.season==='number'?metadata.season:0);
         itemId=this.upsert(libraryId,'episode',`${seasonId}:${metadata.episode}`,title,seasonId,metadata,metadata.episode);
       }else if(kind==='video'){
         // Unidentified movies remain independent; equal titles alone do not merge.
@@ -172,7 +173,8 @@ export class MediaCatalog {
     if(metadata.show&&metadata.season!==undefined&&metadata.episode!==undefined){
       kind='episode';
       const seriesId=this.upsert(asset.library_id,'series',`${metadata.seriesRoot??posix.dirname(asset.ref)}\0${metadata.show}`,metadata.show,null,metadata);
-      parentId=this.upsert(asset.library_id,'season',`${seriesId}:${metadata.season}`,`第 ${metadata.season} 季`,seriesId,metadata,metadata.season);
+      const seasonKey=String(metadata.season),seasonTitle=typeof metadata.season==='number'?`第 ${metadata.season} 季`:metadata.season;
+      parentId=this.upsert(asset.library_id,'season',`${seriesId}:${seasonKey}`,seasonTitle,seriesId,metadata,typeof metadata.season==='number'?metadata.season:0);
       key=`${parentId}:${metadata.episode}`;ordinal=metadata.episode;
     }
     const target=this.db.get<{id:string}>('SELECT id FROM media_items WHERE library_id=? AND kind=? AND local_key=?',asset.library_id,kind,key);

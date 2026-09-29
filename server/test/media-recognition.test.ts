@@ -21,7 +21,9 @@ test('video parsing separates release tokens from meaningful numerals and resolv
   assert.equal(cleanVideoTitle('猫和老鼠 - 001',true).title,'猫和老鼠');
   assert.equal(cleanVideoTitle('22复仇者联盟4：终局之战',true).title,'复仇者联盟4：终局之战');
   const flatSeries=recognizeVideo('猫和老鼠/猫和老鼠157集4K蓝光TV版/猫和老鼠 - 001.mp4',raw(),[{path:'猫和老鼠/猫和老鼠157集4K蓝光TV版',mode:'series',title:'猫和老鼠'}]);
-  assert.equal(flatSeries.kind,'episode');assert.equal(flatSeries.metadata.show,'猫和老鼠');assert.equal(flatSeries.metadata.season,1);assert.equal(flatSeries.metadata.episode,1);
+  assert.equal(flatSeries.kind,'episode');assert.equal(flatSeries.metadata.show,'猫和老鼠');assert.equal(flatSeries.metadata.season,'正片');assert.equal(flatSeries.metadata.episode,1);
+  const special=recognizeVideo('Show/特别版/EP01.mp4',raw(),[{path:'Show/特别版',mode:'season',title:'剧名',season:'特别版'}]);
+  assert.equal(special.kind,'episode');assert.equal(special.metadata.season,'特别版');
   assert.equal(seasonDirectory('第二十一季'),21);assert.equal(seasonDirectory('Specials'),0);
   const peppa=recognizeVideo('动画/小猪佩奇/小猪佩奇第1季/小猪佩奇第一季.Peppa.Pig.Season.1.E01.4K.WEB-DL.H265.AAC-OurTV.mp4',raw(),[{path:'动画/小猪佩奇',mode:'series',title:'小猪佩奇'}]);
   assert.equal(peppa.kind,'episode');assert.equal(peppa.metadata.season,1);assert.equal(peppa.metadata.episode,1);

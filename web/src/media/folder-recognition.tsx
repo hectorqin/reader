@@ -6,7 +6,7 @@ import {FloatingConfirm} from '../ui/floating-confirm.tsx';
 import {MediaSelect} from './select.tsx';
 import type {MediaApi} from './api.ts';
 type Mode='auto'|'movie'|'series'|'season'|'ignore';
-interface Rule {path:string;mode:Mode;title?:string;season?:number;year?:number;stripLeadingNumber?:boolean}
+interface Rule {path:string;mode:Mode;title?:string;season?:number|string;year?:number;stripLeadingNumber?:boolean}
 interface Proposal {assetId:string;ref:string;before:{id:string;title:string;kind:string}|null;status:'ready'|'review'|'protected'|'ignored';reason:string;after:{kind:string;confidence:string;metadata:{title:string;show?:string;season?:number;episode?:number}}}
 interface Preview {id:string;items:Proposal[]}
 const labels:Record<Mode,string>={auto:'自动识别',movie:'电影目录',series:'剧集目录',season:'指定季目录',ignore:'忽略目录'};
@@ -31,7 +31,7 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
   function invalidate(){setPreview(null);setSelected([]);setNotice('');}
   async function save(signal:AbortSignal){
     const episodic=mode==='series'||mode==='season';
-    const rule:Rule|null=mode==='inherit'?null:{path,mode,...(episodic&&title.trim()?{title:title.trim()}:{}),...(episodic&&season!==''?{season:Number(season)}:{}),...(mode!=='ignore'&&year!==''?{year:Number(year)}:{}),stripLeadingNumber:strip};
+    const rule:Rule|null=mode==='inherit'?null:{path,mode,...(episodic&&title.trim()?{title:title.trim()}:{}),...(episodic&&season.trim()?{season:/^\d+$/.test(season.trim())?Number(season):season.trim()}:{}),...(mode!=='ignore'&&year!==''?{year:Number(year)}:{}),stripLeadingNumber:strip};
     const result=await api.request<{revision:string}>(base+'/recognition-rule','PUT',{path,rule,revision},signal);
     if(!signal.aborted){setRevision(result.revision);setNotice('目录规则已保存。已有作品尚未更改。');}
   }
@@ -48,7 +48,7 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
       <label>解析类型<MediaSelect aria-label="解析类型" disabled={busy||!revision} value={mode} onChange={e=>{setMode(e.currentTarget.value as Mode|'inherit');invalidate();}}><option value="inherit">继承上级（无上级则自动）</option>{Object.entries(labels).map(([value,label])=><option value={value}>{label}</option>)}</MediaSelect></label>
       {(mode==='series'||mode==='season')&&<>
         <label>剧名<input aria-label="剧名" disabled={busy} maxLength={200} value={title} placeholder="留空使用上级剧名或目录名" onInput={e=>{setTitle(e.currentTarget.value);invalidate();}}/></label>
-        <label>{mode==='season'?'季号（必填，0 为特别篇）':'默认季号（可选）'}<input aria-label="季号" disabled={busy} type="number" min={0} max={999} value={season} onInput={e=>{setSeason(e.currentTarget.value);invalidate();}}/></label>
+        <label>{mode==='season'?'季/版本名称（必填）':'默认季/版本名称（可选）'}<input aria-label="季/版本名称" disabled={busy} value={season} placeholder="如：第1季、特别版、4K版、OVA" onInput={e=>{setSeason(e.currentTarget.value);invalidate();}}/></label>
       </>}
       {mode!=='ignore'&&mode!=='inherit'&&<>
         <label>年份（可选）<input aria-label="年份" disabled={busy} type="number" min={1800} max={2199} value={year} onInput={e=>{setYear(e.currentTarget.value);invalidate();}}/></label>
