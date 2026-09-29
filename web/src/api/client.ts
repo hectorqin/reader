@@ -715,6 +715,9 @@ export class ReaderApi {
     const result=await this.request('/api/v1/admin/settings/tts/preview','POST',{values,voice},{binary:true});
     return new Blob([new Uint8Array(result.bytes??[]).buffer],{type:result.headers['content-type']||'audio/mpeg'});
   }
+  async businessAiModels():Promise<string[]> { return (await this.call<{models:string[]}>('/api/v1/admin/ai/models','GET')).models; }
+  async aiSummary(bookId:string,chapterId:string,content:string):Promise<{summary:string;cached:boolean}>{ return this.call('/api/v1/ai/summary','POST',{bookId,chapterId,content}); }
+  async aiScan(libraryId:string,paths?:string[]):Promise<{total:number;items:unknown[];batches:number}>{ return this.call('/api/v1/admin/ai/scan','POST',{libraryId,paths}); }
 
   private async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const response = await this.request(path, 'GET', undefined, options);

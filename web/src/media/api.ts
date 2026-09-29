@@ -22,6 +22,7 @@ export class MediaApi {
   constructor(private readonly reader:ReaderApi) {}
   businessSettingsRequest<T>(path='',method='GET',body?:unknown,signal?:AbortSignal){return this.reader.businessSettingsRequest<T>(path,method,body,signal);}
   businessTtsPreview(values:Record<string,unknown>,voice:string){return this.reader.businessTtsPreview(values,voice);}
+  aiScan(libraryId:string,paths?:string[]){return this.reader.aiScan(libraryId,paths);}
   preferenceScope(){return JSON.stringify([this.reader.baseUrl,this.reader.currentSession()?.user.id??'anonymous']);}
   accountInfo():MediaAccount|null {const user=this.reader.currentSession()?.user;return user?{username:user.username,displayName:user.displayName,role:user.role,server:this.reader.baseUrl}:null;}
   request<T>(path:string,method='GET',body?:unknown,signal?:AbortSignal):Promise<T> {

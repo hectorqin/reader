@@ -261,6 +261,7 @@ export class ReaderScreen {
             onTocEntry: (ref) => void this.goToChapterRef(ref),
             onChapter: (delta) => void this.goToChapter(delta),
             onBookInfo: () => this.patch({ bookInfoOpen: !this.chrome.bookInfoOpen }),
+            onAiSummary: () => void this.generateAiSummary(),
             onRefresh: () => void this.refreshPublication(),
             onRefreshChapter: () => void this.refreshChapter(),
             onAlternatives: cursor => void this.loadAlternatives(cursor),
@@ -284,6 +285,21 @@ export class ReaderScreen {
     );
 
     this.bindSyncStatus();
+  }
+
+  private async generateAiSummary(): Promise<void> {
+    if (this.chrome.aiSummary) { this.patch({ aiSummary: '' }); return; }
+    if (!this.book || !this.chrome.currentSectionId || this.chrome.aiSummaryBusy) return;
+    const content = this.stage.textContent?.trim() || '';
+    if (!content) { this.flashStatus('当前章节没有可总结的正文', 2400); return; }
+    this.patch({ aiSummaryBusy: true, aiSummary: '' });
+    try {
+      const result = await this.options.api.aiSummary(this.book.id, this.chrome.currentSectionId, content);
+      this.patch({ aiSummary: result.summary, aiSummaryBusy: false });
+    } catch (error) {
+      this.patch({ aiSummaryBusy: false });
+      this.flashStatus(error instanceof Error ? error.message : 'AI 总结失败', 3200);
+    }
   }
 
   /** Opens a book: fetch bytes, parse, restore position, start reporting. */

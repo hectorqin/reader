@@ -3,6 +3,7 @@ import type { AppConfig } from '../config/index.ts';
 import { badRequest, conflict } from '../lib/errors.ts';
 
 export interface BusinessValues {
+  ai:{enabled:boolean;scanEnabled:boolean;summaryEnabled:boolean;baseUrl:string;apiKey:string;model:string;scanPrompt:string;summaryPrompt:string;batchSize:number;maxInputChars:number};
   playback:{mode:'auto'|'direct'|'proxy'};
   tmdb:{enabled:boolean;token:string;apiKey:string;language:string};
   musicbrainz:{enabled:boolean;userAgent:string};
@@ -15,6 +16,18 @@ export interface BusinessValues {
 export type SettingsGroup=keyof BusinessValues;
 type Field={key:string;label:string;type:'text'|'password'|'number'|'checkbox'|'url'|'select';default:string|number|boolean;min?:number;max?:number;help?:string;options?:Array<{value:string;label:string}>};
 export const SETTINGS_SCHEMA:Record<SettingsGroup,{label:string;fields:Field[]}>= {
+  ai:{label:'AI 功能',fields:[
+    {key:'enabled',label:'启用 AI',type:'checkbox',default:false},
+    {key:'scanEnabled',label:'启用 AI 扫描',type:'checkbox',default:false},
+    {key:'summaryEnabled',label:'启用 AI 总结',type:'checkbox',default:false},
+    {key:'baseUrl',label:'Base URL',type:'url',default:'',help:'OpenAI 兼容接口地址，例如 https://api.openai.com/v1'},
+    {key:'apiKey',label:'API Key',type:'password',default:''},
+    {key:'model',label:'模型',type:'text',default:'',help:'保存后可通过“获取模型”刷新候选列表'},
+    {key:'scanPrompt',label:'AI 扫描 Prompt',type:'text',default:'请根据以下媒体路径识别类型。必须返回 JSON 数组，每项包含 path、category（movie/series/music/audiobook/other）、title、year、season、artist、album。不要添加解释。'},
+    {key:'summaryPrompt',label:'AI 总结 Prompt',type:'text',default:'请用中文总结以下章节内容，提炼主要情节、人物和关键信息，输出简洁连贯的段落。'},
+    {key:'batchSize',label:'扫描批次大小',type:'number',default:500,min:20,max:1000},
+    {key:'maxInputChars',label:'总结最大输入字符数',type:'number',default:60000,min:1000,max:500000},
+  ]},
   playback:{label:'媒体播放',fields:[{key:'mode',label:'OpenList 播放方式',type:'select',default:'auto',options:[{value:'auto',label:'自动（直连优先，失败尝试代理）'},{value:'direct',label:'浏览器直连'},{value:'proxy',label:'服务器代理'}],help:'直连由浏览器访问临时下载地址，不经过 Reader 转发。仅服务器可访问的资源请选择代理；OpenList 自身的 Web 代理设置仍然有效。'}]},
   tmdb:{label:'TMDB',fields:[
     {key:'enabled',label:'启用 TMDB',type:'checkbox',default:false},
@@ -98,6 +111,7 @@ export class BusinessSettings extends BusinessSettingsReader {
       else if(field.type==='number'){if(typeof value!=='number'||!Number.isSafeInteger(value)||value<field.min!||value>field.max!)throw badRequest(`${field.label}须在 ${field.min}–${field.max} 之间`);}
       else if(typeof value!=='string'||value.length>4096||/[\u0000-\u001f\u007f]/.test(value))throw badRequest(`${field.label}格式无效`);
       if(field.type==='select'&&!field.options?.some(option=>option.value===value))throw badRequest(`${field.label}选项无效`);
+      if(group==='ai'&&key==='apiKey'&&field.type==='password'&&value==='') continue;
       values[key]=typeof value==='string'&&field.type!=='password'?value.trim():value;
       if(field.type==='url'&&values[key])validateUrl(String(values[key]));
     }
@@ -107,6 +121,7 @@ export class BusinessSettings extends BusinessSettingsReader {
     }
     if(group==='musicbrainz'&&values.enabled&&!/\S+\/\S+.*(?:@|https?:\/\/)/.test(String(values.userAgent)))throw badRequest('请填写应用名称/版本及有效联系地址');
     if(group==='tts'&&values.enabled&&!values.url)throw badRequest('启用 HTTP 朗读前请填写接口地址');
+    if(group==='ai'&&values.enabled&&(!values.baseUrl||!values.apiKey||!values.model))throw badRequest('启用 AI 前请填写 Base URL、API Key 和模型');
     if(group==='access'){
       for(const origin of String(values.corsOrigins).split(',').map(value=>value.trim()).filter(Boolean))if(origin!=='null'&&validateUrl(origin).origin!==origin)throw badRequest('浏览器来源须为协议与域名（可含端口），不能包含路径');
       if(Number(values.refreshTokenTtl)<Number(values.accessTokenTtl))throw badRequest('登录续期有效期不能小于访问令牌有效期');
@@ -139,6 +154,7 @@ function legacySettings<K extends SettingsGroup>(group:K,config:AppConfig):Busin
   const integer=(name:string,fallback:number)=>{const value=Number(env[name]);return env[name]&&Number.isSafeInteger(value)&&value>=0?value:fallback;};
   const intervals=[config.scanInterval,config.watchInterval].filter(value=>value>0);
   const legacy:Partial<BusinessValues>={
+    ai:{enabled:false,scanEnabled:false,summaryEnabled:false,baseUrl:text('AI_BASE_URL'),apiKey:text('AI_API_KEY'),model:text('AI_MODEL'),scanPrompt:'请根据以下媒体路径识别类型。必须返回 JSON 数组，每项包含 path、category（movie/series/music/audiobook/other）、title、year、season、artist、album。不要添加解释。',summaryPrompt:'请用中文总结以下章节内容，提炼主要情节、人物和关键信息，输出简洁连贯的段落。',batchSize:500,maxInputChars:60000},
     tmdb:{enabled:!!(text('MEDIA_TMDB_TOKEN')||text('MEDIA_TMDB_API_KEY')),token:text('MEDIA_TMDB_TOKEN'),apiKey:text('MEDIA_TMDB_API_KEY'),language:'zh-CN'},
     musicbrainz:{enabled:!!text('MEDIA_MUSICBRAINZ_USER_AGENT'),userAgent:text('MEDIA_MUSICBRAINZ_USER_AGENT')},
     tts:{enabled:!!text('TTS_URL'),url:text('TTS_URL'),token:text('TTS_TOKEN'),voicesUrl:text('TTS_VOICES_URL'),timeoutMs:integer('TTS_TIMEOUT_MS',20000),cacheMaxBytes:integer('TTS_CACHE_BYTES',268435456)},
