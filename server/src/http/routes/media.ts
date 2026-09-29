@@ -41,6 +41,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   const references=database!==ctx.db?new MediaAccountReferences(database,accounts):undefined;
   const settings=new BusinessSettingsReader(ctx.db);
   const ai=new AiService(database,()=>settings.read('ai'),app.log);
+  ai.recoverJobs();
   const libraries=new MediaLibraries(database,true,accounts,references),scanner=new MediaScanner(database,libraries,undefined,app.log,()=>settings.read('scanning'));
   const playback=new MediaPlayback(database,libraries,accounts,()=>settings.read('playback').mode);
   const background=new MediaBackgroundGrants(database,libraries,accounts);
@@ -73,7 +74,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
     return result.result;
   };
   app.get<{Params:{id:string};Querystring:{path?:string;offset?:number;limit?:number}}>('/api/v1/media/libraries/:id/folders',{preHandler:auth,schema:{querystring:{type:'object',properties:{path:{type:'string',maxLength:4000},offset:{type:'integer',minimum:0,default:0},limit:{type:'integer',minimum:1,maximum:200,default:60}}}}},async (request,reply)=>queryCatalog(request,reply,{method:'folders',args:[currentUser(request),request.params.id,request.query.path,request.query.offset,request.query.limit]}));
-  app.post<{Params:{id:string};Body:{path?:string}}>('/api/v1/media/libraries/:id/folders/ai-scan',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,properties:{path:{type:'string',maxLength:4000}}}}},async request=>{
+  app.post<{Params:{id:string};Body:{path?:string}}>('/api/v1/media/libraries/:id/folders/ai-scan',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,properties:{path:{type:'string',maxLength:4000}}}}},async (request,reply)=>{
     libraries.get(currentUser(request),request.params.id);
     const path=(request.body?.path??'').replace(/^\/+|\/+$/g,'');
     if(path.split('/').includes('..')||path.includes('\\'))throw badRequest('目录路径无效');
@@ -81,8 +82,19 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
     const rows=database.all<{ref:string}>('SELECT ref FROM media_assets WHERE library_id=? AND available=1 ORDER BY ref',request.params.id);
     const paths=rows.map(row=>row.ref).filter(ref=>ref.startsWith(prefix));
     app.log.info({libraryId:request.params.id,path,pCount:paths.length,actor:currentUser(request).id},'ai folder scan requested');
-    try{return await ai.scanBatches(request.params.id,paths);}catch(error){app.log.error({err:error,libraryId:request.params.id,path,pCount:paths.length},'ai folder scan failed');throw error;}
+    return reply.status(202).send(ai.startJob(request.params.id,path,paths));
   });
+  app.post<{Body:{libraryId?:string;path?:string}}>('/api/v1/media/ai-scan-jobs',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,properties:{libraryId:{type:'string'},path:{type:'string',maxLength:4000}}}}},async (request,reply)=>{
+    const actor=currentUser(request),path=(request.body?.path??'').replace(/^\/+|\/+$/g,'');
+    if(path.split('/').includes('..')||path.includes('\\'))throw badRequest('目录路径无效');
+    const ids=request.body?.libraryId?[request.body.libraryId]:libraries.list(actor).map(library=>library.id),jobs=[];
+    for(const libraryId of ids){libraries.get(actor,libraryId);const prefix=path?path+'/':'';const paths=database.all<{ref:string}>('SELECT ref FROM media_assets WHERE library_id=? AND available=1 ORDER BY ref',libraryId).map(row=>row.ref).filter(ref=>ref.startsWith(prefix));jobs.push(ai.startJob(libraryId,path,paths));}
+    return reply.status(202).send({items:jobs});
+  });
+  app.get<{Querystring:{libraryId?:string}}>('/api/v1/media/ai-scan-jobs',{preHandler:[auth,async request=>requireAdmin(request)]},async request=>({items:ai.jobs(request.query.libraryId)}));
+  app.get<{Params:{id:string}}>('/api/v1/media/ai-scan-jobs/:id',{preHandler:[auth,async request=>requireAdmin(request)]},async request=>ai.job(request.params.id));
+  app.get<{Params:{id:string}}>('/api/v1/media/ai-scan-jobs/:id/batches',{preHandler:[auth,async request=>requireAdmin(request)]},async request=>({items:ai.batches(request.params.id)}));
+  app.delete<{Params:{id:string}}>('/api/v1/media/ai-scan-jobs/:id',{preHandler:[auth,async request=>requireAdmin(request)]},async(request,reply)=>{ai.deleteJob(request.params.id);return reply.status(204).send();});
   app.get<{Params:{id:string};Querystring:{path:string}}>('/api/v1/media/libraries/:id/missing-resources',{preHandler:[auth,async request=>requireAdmin(request)],schema:{querystring:{type:'object',additionalProperties:false,required:['path'],properties:{path:{type:'string',maxLength:4000}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(cleanup.preview(currentUser(request),request.params.id,request.query.path)));
   app.post<{Params:{id:string};Body:{path:string;revision:string}}>('/api/v1/media/libraries/:id/missing-resources/cleanup',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,required:['path','revision'],properties:{path:{type:'string',maxLength:4000},revision:{type:'string',pattern:'^[a-f0-9]{64}$'}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(cleanup.remove(currentUser(request),request.params.id,request.body.path,request.body.revision)));
   app.get<{Params:{id:string};Querystring:{path:string}}>('/api/v1/media/libraries/:id/recognition-rule',{preHandler:[auth,async request=>requireAdmin(request)],schema:{querystring:{type:'object',additionalProperties:false,required:['path'],properties:{path:{type:'string',maxLength:4000}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(directoryRules.get(currentUser(request),libraries,request.params.id,request.query.path)));
@@ -131,7 +143,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
     preHandler:scrapeAdmin,schema:{body:{type:'object',additionalProperties:false,required:['candidateId'],properties:{candidateId:{type:'string',minLength:1,maxLength:100}}}},
   },async request=>scraping.confirm(currentUser(request),request.params.id,request.body.candidateId));
   app.delete<{Params:{id:string}}>('/api/v1/media/items/:id/match',{preHandler:scrapeAdmin},async request=>scraping.clear(currentUser(request),request.params.id));
-  app.addHook('onClose',async()=>{await catalogReader?.close();await scrapeJobs.close();await scanner.close();});
+  app.addHook('onClose',async()=>{await ai.close();await catalogReader?.close();await scrapeJobs.close();await scanner.close();});
   const pagination={type:'object',properties:{offset:{type:'integer',minimum:0,default:0},limit:{type:'integer',minimum:1,maximum:200,default:100}}};
   app.get('/api/v1/media/libraries',{preHandler:auth},async request=>({items:libraries.list(currentUser(request))}));
   app.get('/api/v1/media/library-summaries',{preHandler:scrapeAdmin},async(request,reply)=>{reply.header('cache-control','private, no-store');return queryCatalog(request,reply,{method:'librarySummaries',args:[currentUser(request)]});});

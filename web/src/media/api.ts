@@ -14,6 +14,8 @@ export interface ScanDiagnostics {
   timings:Record<string,number>;logs:Array<{at:number;message:string}>;
 }
 export interface ScanJob {id:string;libraryId?:string;state:string;inspected:number;error:string|null;diagnostics?:ScanDiagnostics}
+export interface AiScanJob {id:string;libraryId:string;path:string;state:'queued'|'running'|'complete'|'failed';totalPaths:number;processedPaths:number;batchCount:number;resultCount:number;error:string|null;startedAt:number;finishedAt:number|null}
+export interface AiScanBatch {id:string;jobId:string;batch:number;pathCount:number;paths:string[];raw:string|null;items:unknown[];state:'running'|'complete'|'failed';error:string|null;startedAt:number;finishedAt:number|null}
 export interface Playback {id:string;itemId?:string;partId:string;streamUrl:string;contentType:string;expiresAt:number;position:number;start:number;end:number|null;revision:number;playbackMode?:'auto'|'direct'|'proxy'}
 export interface Progress {position:number;revision:number;completed:boolean}
 export interface MediaAccount {username:string;displayName:string;role:'admin'|'member';server:string}
@@ -24,7 +26,11 @@ export class MediaApi {
   businessTtsPreview(values:Record<string,unknown>,voice:string){return this.reader.businessTtsPreview(values,voice);}
   aiScan(libraryId:string){return this.reader.aiScan(libraryId);}
   businessAiModels(values?:{baseUrl?:string;apiKey?:string}){return this.reader.businessAiModels(values);}
-  aiFolderScan(libraryId:string,path:string){return this.request<{total:number;items:unknown[];batches:number}>(`libraries/${encodeURIComponent(libraryId)}/folders/ai-scan`,'POST',{path});}
+  aiFolderScan(libraryId:string,path:string){return this.request<AiScanJob>(`libraries/${encodeURIComponent(libraryId)}/folders/ai-scan`,'POST',{path});}
+  startAiScan(libraryId?:string,path=''){return this.request<{items:AiScanJob[]}|AiScanJob>('ai-scan-jobs','POST',{...(libraryId?{libraryId}:{}),path});}
+  aiScanJobs(libraryId?:string){const query=libraryId?`?libraryId=${encodeURIComponent(libraryId)}`:'';return this.request<{items:AiScanJob[]}>(`ai-scan-jobs${query}`);}
+  aiScanBatches(id:string){return this.request<{items:AiScanBatch[]}>(`ai-scan-jobs/${encodeURIComponent(id)}/batches`);}
+  deleteAiScanJob(id:string){return this.request<void>(`ai-scan-jobs/${encodeURIComponent(id)}`,'DELETE');}
   preferenceScope(){return JSON.stringify([this.reader.baseUrl,this.reader.currentSession()?.user.id??'anonymous']);}
   accountInfo():MediaAccount|null {const user=this.reader.currentSession()?.user;return user?{username:user.username,displayName:user.displayName,role:user.role,server:this.reader.baseUrl}:null;}
   request<T>(path:string,method='GET',body?:unknown,signal?:AbortSignal):Promise<T> {

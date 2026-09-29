@@ -26,6 +26,7 @@ import { MediaLibraryCreate } from './library-create.tsx';
 import { MusicParentEditor } from './parent-editor.tsx';
 import { VideoHierarchyEditor } from './video-hierarchy-editor.tsx';
 import { ScanJobs } from './scan-jobs.tsx';
+import { AiScanJobs } from './ai-scan-jobs.tsx';
 import { SavedQueue } from './saved-queue.tsx';
 import { MediaChildList } from './child-list.tsx';
 import { readMediaPreferences, type MediaPreferences } from './preferences.ts';
@@ -46,7 +47,7 @@ import { MediaSearch, searchReturnFor, clearSearchReturn, restoreSearchReturn, r
 import { render, Fragment } from '../ui/vendor/preact.ts';
 import { MediaCover } from './cover.tsx';
 import { MediaApi } from './api.ts';
-import type { Detail, Item, Library, MediaChannel, ScanJob } from './api.ts';
+import type { AiScanJob, Detail, Item, Library, MediaChannel, ScanJob } from './api.ts';
 import type { MediaPlayer } from './player.ts';
 
 const labels={video:'影视',music:'音乐',audiobook:'有声书'};
@@ -120,6 +121,7 @@ export class MediaScreen {
   private managing=false;
   private managerTab:'libraries'|'tasks'='libraries';
   private jobs:ScanJob[]=[];
+  private aiJobs:AiScanJob[]=[];
   private jobLibraryId='';
   private scanNotice='';
   private scanActionError='';
@@ -424,6 +426,8 @@ export class MediaScreen {
     try{await this.loadJobs('');}catch(error){if(!failure)throw error;}
     if(failure)this.scanActionError='批量扫描请求未确认，请核对当前任务状态后再操作。'+(failure instanceof Error?failure.message:'');
   });}
+  private async startAiScan(libraryId?:string,path=''){await this.run(async()=>{await this.api.startAiScan(libraryId,path);this.scanNotice='AI 扫描任务已创建，可在下方查看每批返回结果。';await this.loadAiJobs();});}
+  private async loadAiJobs(){try{this.aiJobs=(await this.api.aiScanJobs(this.jobLibraryId||undefined)).items;this.draw();}catch{/* 普通扫描任务仍可用。 */}}
   private async loadJobs(id:string,background=false){
     if(this.poll){clearTimeout(this.poll);this.poll=null;}
     if(this.jobLibraryId!==id)this.jobs=[];
@@ -437,7 +441,7 @@ export class MediaScreen {
       throw error;
     }
     if(this.disposed||request!==this.jobRequest)return;
-    this.jobs=result.items;this.jobState='ready';this.draw();
+    this.jobs=result.items;this.jobState='ready';void this.loadAiJobs();this.draw();
     if(this.jobs.some(j=>j.state==='running'||j.state==='queued'))this.poll=setTimeout(()=>{void this.loadJobs(id,true).catch(()=>{});},1500);
     else if(!this.itemId)await this.load();
   }
@@ -506,7 +510,7 @@ export class MediaScreen {
         <p className="media-manager-note">扫描只读取原始目录。封面、索引和刮削缓存保存在应用数据目录。</p>
         <h2>接入方式</h2><div className="media-connection-row"><Folder size={20} aria-hidden="true"/><span>服务器目录<small>包括服务器已挂载的 NAS</small></span><small>可用</small></div>
     </>:<>
-      <div className="media-manager-toolbar"><span>扫描与刮削分开执行</span><button disabled={this.busy||!this.allLibraries.length||this.jobState!=='ready'} onClick={()=>void this.scanAll()}>扫描所有媒体库</button><button disabled={this.busy||!this.jobLibraryId} onClick={()=>void this.run(async()=>{const result=await this.api.aiScan(this.jobLibraryId);this.scanNotice=`AI 扫描完成：处理 ${result.total} 条路径，生成 ${result.items.length} 条分类结果。`;})}>AI 扫描</button></div>{this.scanNotice&&<p className="media-manager-note" role="status">{this.scanNotice}</p>}
+      <div className="media-manager-toolbar"><span>扫描与刮削分开执行</span><button disabled={this.busy||!this.allLibraries.length||this.jobState!=='ready'} onClick={()=>void this.scanAll()}>扫描所有媒体库</button><button disabled={this.busy||!this.jobLibraryId} onClick={()=>void this.startAiScan(this.jobLibraryId)}>AI 扫描当前库</button><button disabled={this.busy||!this.allLibraries.length} onClick={()=>void this.startAiScan()}>AI 扫描所有媒体库</button></div>{this.scanNotice&&<p className="media-manager-note" role="status">{this.scanNotice}</p>}
       {this.scanActionError&&<div className="media-error" role="alert"><p>{this.scanActionError}</p><button disabled={this.busy} onClick={()=>void this.run(async()=>{await this.loadJobs(this.jobLibraryId);this.scanActionError='';})}>重新核对任务</button></div>}
       <div className="media-task-library"><label>扫描媒体库<MediaSelect aria-label="扫描媒体库" value={this.jobLibraryId} disabled={this.busy||!this.allLibraries.length} onChange={event=>this.openManagerTasks(event.currentTarget.value)}><option value="">全部媒体库 · 最新任务</option>{this.allLibraries.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</MediaSelect></label><button disabled={this.busy||!this.jobLibraryId} onClick={()=>void this.scan(this.jobLibraryId)}><RefreshCw size={16} aria-hidden="true"/>扫描</button><button disabled={this.busy} onClick={()=>void this.run(()=>this.loadJobs(this.jobLibraryId))} aria-label="刷新扫描任务" title="刷新扫描任务"><RefreshCw size={16} aria-hidden="true"/></button></div>
       <h2 className="media-task-section-title">扫描任务{this.jobLibraryId?' · '+this.allLibraries.find(l=>l.id===this.jobLibraryId)?.name:''}</h2>
@@ -514,6 +518,7 @@ export class MediaScreen {
       {this.jobState==='error'&&<div className="media-error" role="alert"><p>{this.jobError}</p>{this.jobs.length>0&&<p>以下为上次读取的任务，状态可能已变化。</p>}<button disabled={this.busy} onClick={()=>void this.run(()=>this.loadJobs(this.jobLibraryId))}>重试读取扫描任务</button></div>}
       {this.jobState==='ready'&&this.jobs.length===0&&<p>{this.jobLibraryId?'该媒体库暂无扫描任务。':'暂无扫描任务。'}</p>}
       <ScanJobs key={this.jobLibraryId} jobs={this.jobs} libraries={this.allLibraries} libraryName={this.allLibraries.find(l=>l.id===this.jobLibraryId)?.name||'媒体库'} busy={this.busy||this.jobState!=='ready'} onRetry={id=>void this.scan(id||this.jobLibraryId)} onCancel={id=>void this.run(async()=>{await this.api.request('jobs/'+id+'/cancel','POST');await this.loadJobs(this.jobLibraryId);})}/>
+      <AiScanJobs api={this.api} jobs={this.aiJobs} libraries={this.allLibraries} busy={this.busy} onRefresh={()=>void this.loadAiJobs()} onDelete={id=>void this.run(async()=>{await this.api.deleteAiScanJob(id);await this.loadAiJobs();})}/>
       <p className="media-manager-note">目录不可访问时保留原有资料。扫描与在线匹配分开执行，匹配失败不影响本地播放。</p>
       <div className="media-manager-scraping"><ScrapeJobs api={this.api} libraries={this.allLibraries} navigate={this.navigate}/></div>
     </>}
