@@ -158,6 +158,8 @@ export class MediaScanner {
       const rules=library.kind==='video'?new MediaDirectoryRules(this.db).list(libraryId):[];
       const readVideo=videoMetadataReader(storage);
       let inspected=0;
+      const fallbackEpisodes=new Map<string,number>();
+      const fallbackFor=(ref:string)=>fallbackEpisodes.get(ref);
       const inspect=async(entry:StorageEntry)=>{
         signal.throwIfAborted();
         if(library.kind==='video'&&rules.filter(rule=>withinDirectory(entry.ref,rule.path)).sort((a,b)=>b.path.length-a.path.length)[0]?.mode==='ignore'){
@@ -182,7 +184,7 @@ export class MediaScanner {
         }
         const metadata=await trace.measure('metadata',entry.ref,async()=>{
           const raw=library.kind==='video'?await readVideo(entry.ref,probe):await readLocalMetadata(storage,entry.ref,probe);
-          const metadata=library.kind==='video'?recognizeVideo(entry.ref,raw,rules).metadata:raw,artist=metadata.albumArtist||metadata.artist;
+          const metadata=library.kind==='video'?recognizeVideo(entry.ref,raw,rules,fallbackFor(entry.ref)).metadata:raw,artist=metadata.albumArtist||metadata.artist;
           if(library.kind==='music'&&artist)metadata.artistProfile=await readArtistProfile(storage,entry.ref,artist,metadata.warnings);
           return metadata;
         });
@@ -192,22 +194,22 @@ export class MediaScanner {
       };
       // Remote sidecar reads are I/O bound. Keep local ffprobe sequential and drain
       // every batch before failure/cleanup so no worker writes after staging is removed.
-      const concurrency=storage.filePath?1:files,iterator=storage.list(signal)[Symbol.asyncIterator]();
+      const concurrency=storage.filePath?1:files;
+      const entries:StorageEntry[]=[];const iterator=storage.list(signal)[Symbol.asyncIterator]();
+      try{for(;;){const next=await trace.measure('list',undefined,()=>iterator.next());if(next.done)break;if(supported.has(extname(next.value.ref).toLowerCase()))entries.push(next.value);}}finally{await iterator.return?.();}
+      if(library.kind==='video'){
+        const groups=new Map<string,StorageEntry[]>();
+        for(const entry of entries){const rule=rules.filter(value=>withinDirectory(entry.ref,value.path)).sort((a,b)=>b.path.length-a.path.length)[0];if(!rule||!['series','season'].includes(rule.mode))continue;const key=rule.path+'\0'+String(rule.season??'正片');const group=groups.get(key)??[];group.push(entry);groups.set(key,group);}
+        for(const group of groups.values())for(const [index,entry] of group.sort((a,b)=>a.ref.localeCompare(b.ref,'zh',{numeric:true})).entries())fallbackEpisodes.set(entry.ref,index+1);
+      }
       let batch:StorageEntry[]=[];
       const flush=async()=>{
         const results=await Promise.allSettled(batch.map(inspect));batch=[];
         const failure=results.find(result=>result.status==='rejected');
         if(failure?.status==='rejected')throw failure.reason;
       };
-      try{
-        for(;;){
-          const next=await trace.measure('list',undefined,()=>iterator.next());
-          if(next.done)break;
-          if(!supported.has(extname(next.value.ref).toLowerCase()))continue;
-          batch.push(next.value);if(batch.length===concurrency)await flush();
-        }
-        if(batch.length)await flush();
-      }finally{await iterator.return?.();}
+      for(const entry of entries){batch.push(entry);if(batch.length===concurrency)await flush();}
+      if(batch.length)await flush();
       signal.throwIfAborted();
       const end=trace.begin('publish');try{this.publish(libraryId,jobId);}finally{end();}
       trace.note('扫描完成');

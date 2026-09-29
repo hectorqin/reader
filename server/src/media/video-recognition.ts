@@ -36,7 +36,7 @@ export function cleanVideoTitle(input:string,stripLeadingNumber=false){
   return {title:value.replace(/\s+/g,' ').replace(/^[\s.-]+|[\s.-]+$/g,'').trim(),removed};
 }
 
-export function recognizeVideo(ref:string,raw:LocalMediaMetadata,rules:VideoRule[]):VideoRecognition{
+export function recognizeVideo(ref:string,raw:LocalMediaMetadata,rules:VideoRule[],fallbackEpisode?:number):VideoRecognition{
   const metadata:LocalMediaMetadata={...raw,sources:{...raw.sources},externalIds:{...raw.externalIds},warnings:[...raw.warnings]};
   const inherited=rules.filter(rule=>withinDirectory(ref,rule.path)).sort((a,b)=>a.path.length-b.path.length),rule=inherited.at(-1);
   const reasons:string[]=[],mode=rule?.mode??'auto';
@@ -50,13 +50,15 @@ export function recognizeVideo(ref:string,raw:LocalMediaMetadata,rules:VideoRule
   const patterns=[/(?:^|[ ._-])S(\d{1,3})[ ._-]*E(\d{1,4})(?=$|[ ._-])/i,/(?:^|[ ._-])(\d{1,3})x(\d{1,4})(?=$|[ ._-])/i,/第([零〇一二两三四五六七八九十百\d]+)季[ ._-]*第?([零〇一二两三四五六七八九十百\d]+)[集话話]/,/第([零〇一二两三四五六七八九十百\d]+)季[ ._-]*(\d{1,4})(?=$|[ ._-])/i,/(?:^|[ ._-])SE(\d{1,3})[ ._-]+(\d{1,4})(?=$|[ ._-])/i];
   const match=patterns.map(pattern=>pattern.exec(stem)).find(Boolean);
   let season:number|string|undefined=match?number(match[1]!):directorySeason,episode=match?number(match[2]!):undefined;
+  const discTitle=/^(.*?)(?:CD|DISC|DISK|盘)[ ._-]*(\d{1,3})\s*[=:：-]\s*(.+)$/i.exec(stem);
   const single=/(?:^|[ ._-])(?:EP?|第)[ ._-]*([零〇一二两三四五六七八九十百\d]+)(?:[集话話])?(?=$|[ ._-])/i.exec(stem);
   const bare=/^\s*(\d{1,4})(?=$|[ ._-])/.exec(stem);
   const trailing=/(?:^|[ ._-])(?:-|集)?\s*(\d{1,4})\s*$/i.exec(stem);
-  if(episode===undefined&&(directorySeason!==undefined||raw.sources.season==='nfo'||mode==='series'||mode==='season'))episode=number((single||bare||trailing)?.[1]??'');
+  if(episode===undefined&&(directorySeason!==undefined||raw.sources.season==='nfo'||mode==='series'||mode==='season'))episode=number((single||bare||trailing)?.[1]??'') ?? (fallbackEpisode&&fallbackEpisode>0?fallbackEpisode:undefined);
   if(mode==='series'||mode==='season'){season=mode==='season'?rule?.season:rule?.season??directorySeason??'正片';reasons.push('目录规则');}
   const multi=/(?:S\d{1,3}[ ._-]*)?E\d{1,4}(?:[ ._-]*E\d{1,4}|-\d{1,3})(?=$|[ ._-])/i.test(stem)||/第?[\d一二三四五六七八九十]+[-~至到][\d一二三四五六七八九十]+集/.test(stem);
   let cleanedStem=match&&!multi?stem.slice(0,match.index):stem;
+  if(discTitle)cleanedStem=discTitle[3]!;
   if(raw.sources.year==='filename'){delete metadata.year;delete metadata.sources.year;}
   const yearMatch=/(?:[ ._(\[])(19\d{2}|20\d{2})(?=$|[ ._)\]])/.exec(cleanedStem);
   if(yearMatch){metadata.year??=Number(yearMatch[1]);cleanedStem=cleanedStem.replace(yearMatch[1]!,' ');}
@@ -78,8 +80,8 @@ export function recognizeVideo(ref:string,raw:LocalMediaMetadata,rules:VideoRule
   let confidence:'high'|'review'='high';
   if(episodic){
     metadata.show=show;metadata.season=season;metadata.episode=episode;metadata.seriesRoot=seriesRoot;
-    if(raw.sources.title==='filename')metadata.title=`第 ${episode} 集`;
-    reasons.push(raw.sources.episode==='nfo'?'NFO 季集信息':match?'文件名季集编号':'季目录与集号');
+    if(raw.sources.title==='filename')metadata.title=discTitle?.[3]?.trim()||`第 ${episode} 集`;
+    reasons.push(raw.sources.episode==='nfo'?'NFO 季集信息':match?'文件名季集编号':discTitle?'目录规则与文件顺序':'季目录与集号');
     metadata.sources.show=mode==='series'||mode==='season'?'rule':raw.sources.show==='nfo'?'nfo':'filename';
   }else{
     delete metadata.show;delete metadata.season;delete metadata.episode;delete metadata.seriesRoot;

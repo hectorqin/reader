@@ -35,6 +35,10 @@ test('video parsing separates release tokens from meaningful numerals and resolv
   for(const ref of ['Drama.S01E01E02.mp4','Drama.S01E01-E02.mp4','Drama.S01E01-02.mp4','Drama/第1-2集.mp4'])assert.equal(recognizeVideo(ref,raw(),[]).confidence,'review',ref);
   assert.equal(recognizeVideo('Film (2020).1080p.mkv',raw(),[]).metadata.title,'Film');
   assert.equal(recognizeVideo('1917.mp4',raw(),[]).metadata.title,'1917');
+  const discs=recognizeVideo('动画/猫和老鼠/猫和老鼠珍藏版/猫和老鼠CD1=三只小猫.avi',raw('猫和老鼠CD1=三只小猫'),[{path:'动画/猫和老鼠/猫和老鼠珍藏版',mode:'series',title:'猫和老鼠'}],7);
+  assert.equal(discs.kind,'episode');assert.equal(discs.metadata.episode,7);assert.equal(discs.metadata.title,'三只小猫');
+  const ordered=recognizeVideo('动画/猫和老鼠/猫和老鼠珍藏版/第三段.avi',raw('第三段'),[{path:'动画/猫和老鼠/猫和老鼠珍藏版',mode:'series',title:'猫和老鼠'}],3);
+  assert.equal(ordered.kind,'episode');assert.equal(ordered.metadata.episode,3);
   const rules:VideoRule[]=[{path:'Drama',mode:'series',title:'剧名',season:1},{path:'Drama/S02',mode:'season',season:2}];
   assert.equal(recognizeVideo('Drama/S02/01.mp4',raw(),rules).metadata.show,'剧名');
   assert.equal(recognizeVideo('Drama/S02/01.mp4',raw(),rules).metadata.season,2);

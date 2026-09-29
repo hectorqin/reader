@@ -4,7 +4,7 @@ import type {MediaActor} from './libraries.ts';
 import {MediaLibraries} from './libraries.ts';
 import {MediaCatalog} from './catalog.ts';
 import {MediaDirectoryRules} from './directory-rules.ts';
-import {recognizeVideo,type VideoRecognition} from './video-recognition.ts';
+import {recognizeVideo,withinDirectory,type VideoRecognition} from './video-recognition.ts';
 import {videoMetadataReader} from './video-metadata.ts';
 import type {ProbeResult} from './probe.ts';
 import {badRequest,conflict,notFound} from '../lib/errors.ts';
@@ -41,10 +41,14 @@ export class MediaRecognitionReview {
       const assets=this.db.all<Asset>(`SELECT id,ref,technical_json,probe_status FROM media_assets WHERE library_id=? AND available=1${path?' AND ref>=? AND ref<?':''} ORDER BY ref LIMIT 501`,libraryId,...(path?[path+'/',path+'0']:[]));
       if(assets.length>500)throw badRequest('目录超过 500 个资源，请进入子目录分批预览','MEDIA_RECOGNITION_LIMIT');
       const storage=await this.libraries.storage(actor,libraryId),read=videoMetadataReader(storage),proposals:Proposal[]=[];
+      const fallbackEpisodes=new Map<string,number>();
       for(const asset of assets){
         signal?.throwIfAborted();
         const metadata=await read(asset.ref,{status:asset.probe_status,info:asset.technical_json?JSON.parse(asset.technical_json):null});
-        const after=recognizeVideo(asset.ref,metadata,rules);
+        const rule=rules.filter(value=>withinDirectory(asset.ref,value.path)).sort((a,b)=>b.path.length-a.path.length)[0];
+        const key=rule&&['series','season'].includes(rule.mode)?rule.path+'\0'+String(rule.season??'正片'):'';
+        const fallback=key?(fallbackEpisodes.set(key,(fallbackEpisodes.get(key)??0)+1),fallbackEpisodes.get(key)):undefined;
+        const after=recognizeVideo(asset.ref,metadata,rules,fallback);
         const current=this.db.get<{id:string;title:string;kind:string;manual_structure:number;manual_item:number;edition_id:string}>(`SELECT i.id,i.title,i.kind,i.manual_structure,e.manual_item,e.id edition_id FROM media_items i JOIN media_editions e ON e.item_id=i.id JOIN media_parts p ON p.edition_id=e.id WHERE p.asset_id=? LIMIT 1`,asset.id);
         const protectedItem=!!current&&(this.curated(current.id)||!!current.manual_item||!!this.db.get('SELECT 1 FROM media_editions WHERE item_id=? AND id<>?',current.id,current.edition_id)||!!this.db.get('SELECT 1 FROM media_parts WHERE edition_id=? AND asset_id<>?',current.edition_id,asset.id));
         const status=after.kind==='ignore'?'ignored':!current||protectedItem?'protected':after.confidence==='high'?'ready':'review';
