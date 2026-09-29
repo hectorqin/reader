@@ -43,7 +43,7 @@ export function ScrapeJobs({api,libraries,navigate}:{api:MediaApi;libraries:Libr
   const createForm=useRef<HTMLDetailsElement>(null),history=useRef<HTMLElement>(null);
   const [libraryId,setLibraryId]=useState(libraries[0]?.id||'');
   const [providers,setProviders]=useState<Provider[]>([]),[provider,setProvider]=useState('');
-  const [kind,setKind]=useState(''),[offset,setOffset]=useState(0),[total,setTotal]=useState(0);
+  const [kind,setKind]=useState(''),[offset,setOffset]=useState(0),[total,setTotal]=useState(0),[query,setQuery]=useState('');
   const [items,setItems]=useState<Item[]>([]),[selected,setSelected]=useState<string[]>([]);
   const [jobs,setJobs]=useState<Job[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(false);
   const [refresh,setRefresh]=useState(0),[providerRetry,setProviderRetry]=useState(0);
@@ -73,6 +73,7 @@ export function ScrapeJobs({api,libraries,navigate}:{api:MediaApi;libraries:Libr
   },[api,refresh,jobsRetry]);
   async function action(path:string,body:unknown){setBusy(true);setError('');try{await api.request(path,'POST',body);setSelected([]);setRefresh(value=>value+1);if(path==='scrape-jobs'){if(createForm.current)createForm.current.open=false;history.current?.focus();}}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{setBusy(false);}}
   const running=jobs.some(job=>job.state==='running');
+  const visibleItems=query.trim()?items.filter(item=>item.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())):items;
   const taskHistory=<section ref={history} tabIndex={-1} className="media-task-history" aria-label="最近刮削任务">
     <h2 className="media-task-section-title">最近任务</h2>
     {jobsState==='loading'&&<p role="status">正在读取任务状态…</p>}
@@ -95,9 +96,9 @@ export function ScrapeJobs({api,libraries,navigate}:{api:MediaApi;libraries:Libr
     <label>刮削来源<MediaSelect aria-label="刮削来源" value={provider} disabled={busy} onChange={e=>{setSelected([]);setItems([]);setLoading(true);setProvider(e.currentTarget.value);}}>{!provider&&<option value="">无可用来源</option>}{compatibleProviders.map(p=><option key={p.id} value={p.id} disabled={!p.configured}>{p.label}{p.configured?'':'（未配置）'}</option>)}</MediaSelect></label>
     <label>内容类型<MediaSelect aria-label="内容类型" value={kind} disabled={busy||!allowed.length} onChange={e=>{setKind(e.currentTarget.value);setSelected([]);setOffset(0);}}>{!allowed.length&&<option value="">暂无可匹配类型</option>}{allowed.map(value=><option key={value} value={value}>{names[value]}</option>)}</MediaSelect></label></div>
     {!provider&&<p role="status">当前媒体库没有已配置的匹配来源。请管理员配置支持此类内容的来源后重试。<button disabled={busy} onClick={()=>{setError('');setProviderRetry(value=>value+1);}}>重新检查来源</button></p>}
-    <div className="media-toolbar"><button disabled={busy||loading||!items.some(item=>!selected.includes(item.id))||selected.length>=500} onClick={()=>setSelected(current=>[...new Set([...current,...items.map(item=>item.id)])].slice(0,500))}>选择本页</button><button disabled={busy||loading||!items.some(item=>selected.includes(item.id))} onClick={()=>setSelected(current=>current.filter(id=>!items.some(item=>item.id===id)))}>取消本页</button><button disabled={busy||!selected.length} onClick={()=>setSelected([])}>清除选择</button></div>
-    {loading?<p role="status">正在加载作品…</p>:items.map(item=><label className="media-user-option" key={item.id}><input type="checkbox" disabled={busy||(!selected.includes(item.id)&&selected.length>=500)} checked={selected.includes(item.id)} onChange={e=>setSelected(current=>e.currentTarget.checked?[...current,item.id]:current.filter(id=>id!==item.id))}/><span>{item.title}</span></label>)}
-    <div className="media-toolbar"><button disabled={loading||offset===0} onClick={()=>setOffset(value=>Math.max(0,value-60))}>上一页</button><span>{total} 项 · 已选 {selected.length}</span><button disabled={loading||offset+60>=total} onClick={()=>setOffset(value=>value+60)}>下一页</button></div>
+    <div className="media-scrape-selection-toolbar"><label className="media-scrape-search">筛选作品<input value={query} placeholder="输入标题过滤本页" onInput={e=>setQuery(e.currentTarget.value)}/></label><div><button disabled={busy||loading||!visibleItems.some(item=>!selected.includes(item.id))||selected.length>=500} onClick={()=>setSelected(current=>[...new Set([...current,...visibleItems.map(item=>item.id)])].slice(0,500))}>选择可见项</button><button disabled={busy||loading||!visibleItems.some(item=>selected.includes(item.id))} onClick={()=>setSelected(current=>current.filter(id=>!visibleItems.some(item=>item.id===id)))}>取消可见项</button><button disabled={busy||!selected.length} onClick={()=>setSelected([])}>清除选择</button></div></div>
+    {loading?<p role="status">正在加载作品…</p>:<div className="media-scrape-item-list">{visibleItems.map(item=><label className="media-user-option" key={item.id}><input type="checkbox" disabled={busy||(!selected.includes(item.id)&&selected.length>=500)} checked={selected.includes(item.id)} onChange={e=>setSelected(current=>e.currentTarget.checked?[...current,item.id]:current.filter(id=>id!==item.id))}/><span>{item.title}</span></label>)}{!visibleItems.length&&<p role="status">本页没有匹配的作品。</p>}</div>}
+    <div className="media-scrape-selection-footer"><button disabled={loading||offset===0} onClick={()=>setOffset(value=>Math.max(0,value-60))}>上一页</button><span>{total} 项 · 已选 {selected.length}</span><button disabled={loading||offset+60>=total} onClick={()=>setOffset(value=>value+60)}>下一页</button></div>
     <button disabled={busy||loading||jobsState!=='ready'||running||!selected.length||!allowed.includes(kind)} onClick={()=>void action('scrape-jobs',{provider,itemIds:selected})}>开始批量匹配</button>
     </details>
   </section>;
