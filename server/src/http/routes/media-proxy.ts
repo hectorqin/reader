@@ -18,7 +18,7 @@ export function registerMediaProxy(app:FastifyInstance,runtime:Pick<MediaRuntime
     const release=()=>{if(released)return;released=true;inFlight--;active.delete(controller);clearTimeout(timer);};
     const disconnected=()=>{controller.abort();release();};
     // Bound waiting for response headers, not the duration of media playback.
-    const timer=setTimeout(()=>controller.abort(),30000);
+    const timer=setTimeout(()=>controller.abort(),request.raw.url?.includes('/ai-scan')?180000:30000);
     reply.raw.once('close',disconnected);reply.raw.once('finish',release);
     try{
       const headers=new Headers();
