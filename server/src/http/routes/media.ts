@@ -149,6 +149,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   app.get('/api/v1/media/library-summaries',{preHandler:scrapeAdmin},async(request,reply)=>{reply.header('cache-control','private, no-store');return queryCatalog(request,reply,{method:'librarySummaries',args:[currentUser(request)]});});
   app.get('/api/v1/media/scan-jobs',{preHandler:scrapeAdmin},async request=>({items:scanner.latestJobs(currentUser(request))}));
   app.post('/api/v1/media/scan-jobs',{preHandler:scrapeAdmin},async(request,reply)=>reply.status(202).send(scanner.startAll(currentUser(request))));
+  app.delete<{Params:{id:string}}>('/api/v1/media/scan-jobs/:id',{preHandler:scrapeAdmin},async(request,reply)=>{scanner.deleteJob(currentUser(request),request.params.id);return reply.status(204).send();});
   app.get<{Querystring:{query:string;channel?:MediaLibraryKind;kind?:MediaItemKind;offset:number;limit:number}}>('/api/v1/media/search',{
     preHandler:auth,schema:{querystring:{...pagination,required:['query'],additionalProperties:false,properties:{...pagination.properties,query:{type:'string',minLength:1,maxLength:200,pattern:'\\S'},kind:{type:'string',enum:['movie','series','season','episode','artist','album','track','audiobook']},channel:{type:'string',enum:['video','music','audiobook']}}}},
   },async (request,reply)=>queryCatalog(request,reply,{method:'search',args:[currentUser(request),request.query.query,request.query]}));

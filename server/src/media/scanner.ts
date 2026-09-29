@@ -107,6 +107,14 @@ export class MediaScanner {
     if(job.state==='running'||job.state==='queued'){const entry=this.active.get(job.libraryId);entry?.controller.abort();entry?.cancelQueued?.();}
     return this.job(actor,id);
   }
+  deleteJob(actor:MediaActor,id:string):void {
+    const job=this.job(actor,id);
+    if(job.state==='running'||job.state==='queued')throw conflict('运行中的扫描任务不能删除','SCAN_RUNNING');
+    this.db.transaction(()=>{
+      this.db.run('DELETE FROM media_scan_stage WHERE job_id=?',id);
+      this.db.run('DELETE FROM media_scan_jobs WHERE id=?',id);
+    });
+  }
   async close():Promise<void> {
     const jobs=[...this.active.values()];jobs.forEach(job=>{job.controller.abort();job.cancelQueued?.();});
     await Promise.all(jobs.map(job=>job.done));
