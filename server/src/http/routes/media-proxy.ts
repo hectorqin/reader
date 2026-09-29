@@ -39,6 +39,7 @@ export function registerMediaProxy(app:FastifyInstance,runtime:Pick<MediaRuntime
       return reply.send(stream);
     }catch(error){
       release();
+      request.log.error({err:error,path:request.raw.url,method:request.method},'media proxy request failed');
       if(error instanceof AppError)throw error;
       throw new AppError(503,'MEDIA_REQUEST_UNCERTAIN','影音请求未完成；写入结果请查询后确认');
     }

@@ -40,7 +40,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   const accounts=new DatabaseMediaAccounts(ctx.db);
   const references=database!==ctx.db?new MediaAccountReferences(database,accounts):undefined;
   const settings=new BusinessSettingsReader(ctx.db);
-  const ai=new AiService(database,()=>settings.read('ai'));
+  const ai=new AiService(database,()=>settings.read('ai'),app.log);
   const libraries=new MediaLibraries(database,true,accounts,references),scanner=new MediaScanner(database,libraries,undefined,app.log,()=>settings.read('scanning'));
   const playback=new MediaPlayback(database,libraries,accounts,()=>settings.read('playback').mode);
   const background=new MediaBackgroundGrants(database,libraries,accounts);
@@ -79,7 +79,9 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
     if(path.split('/').includes('..')||path.includes('\\'))throw badRequest('目录路径无效');
     const prefix=path?path+'/':'';
     const rows=database.all<{ref:string}>('SELECT ref FROM media_assets WHERE library_id=? AND available=1 ORDER BY ref',request.params.id);
-    return ai.scanBatches(request.params.id,rows.map(row=>row.ref).filter(ref=>ref.startsWith(prefix)));
+    const paths=rows.map(row=>row.ref).filter(ref=>ref.startsWith(prefix));
+    app.log.info({libraryId:request.params.id,path,pCount:paths.length,actor:currentUser(request).id},'ai folder scan requested');
+    try{return await ai.scanBatches(request.params.id,paths);}catch(error){app.log.error({err:error,libraryId:request.params.id,path,pCount:paths.length},'ai folder scan failed');throw error;}
   });
   app.get<{Params:{id:string};Querystring:{path:string}}>('/api/v1/media/libraries/:id/missing-resources',{preHandler:[auth,async request=>requireAdmin(request)],schema:{querystring:{type:'object',additionalProperties:false,required:['path'],properties:{path:{type:'string',maxLength:4000}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(cleanup.preview(currentUser(request),request.params.id,request.query.path)));
   app.post<{Params:{id:string};Body:{path:string;revision:string}}>('/api/v1/media/libraries/:id/missing-resources/cleanup',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,required:['path','revision'],properties:{path:{type:'string',maxLength:4000},revision:{type:'string',pattern:'^[a-f0-9]{64}$'}}}}},async(request,reply)=>reply.header('cache-control','no-store').send(cleanup.remove(currentUser(request),request.params.id,request.body.path,request.body.revision)));
