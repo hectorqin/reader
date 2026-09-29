@@ -18,6 +18,8 @@ test('video parsing separates release tokens from meaningful numerals and resolv
   assert.equal(cleanVideoTitle('[字幕组] Film.1080p.WEB-DL.H.265.10bit.AAC').title,'Film');
   assert.equal(cleanVideoTitle('001. Film').title,'001 Film');
   assert.equal(cleanVideoTitle('001. Film',true).title,'Film');
+  assert.equal(cleanVideoTitle('猫和老鼠 - 001',true).title,'猫和老鼠');
+  assert.equal(cleanVideoTitle('22复仇者联盟4：终局之战',true).title,'复仇者联盟4：终局之战');
   assert.equal(seasonDirectory('第二十一季'),21);assert.equal(seasonDirectory('Specials'),0);
   const peppa=recognizeVideo('动画/小猪佩奇/小猪佩奇第1季/小猪佩奇第一季.Peppa.Pig.Season.1.E01.4K.WEB-DL.H265.AAC-OurTV.mp4',raw(),[{path:'动画/小猪佩奇',mode:'series',title:'小猪佩奇'}]);
   assert.equal(peppa.kind,'episode');assert.equal(peppa.metadata.season,1);assert.equal(peppa.metadata.episode,1);
@@ -85,6 +87,15 @@ test('directory reidentification is explicit, preserves playback state and rejec
   assert.throws(()=>rules.get(actor,libraries,library.id,'../'),{code:'MEDIA_FOLDER_PATH'});
   preview=await review.preview(actor,library.id,'Show');db.run('UPDATE media_recognition_previews SET expires_at=0');
   assert.throws(()=>review.apply(actor,library.id,'Show',preview.id,[before.asset_id]),{code:'MEDIA_RECOGNITION_EXPIRED'});
+});
+
+test('parent directory rules are inherited by descendants and explicit series rules override filename title and season',async t=>{
+  const {db,actor,library,rules,libraries}=await fixture(t,['Show/第7季/001.mp4']);
+  const saved=rules.save(actor,libraries,library.id,'Show',{path:'Show',mode:'series',title:'固定剧名',season:2,stripLeadingNumber:true},rules.version(library.id));
+  const detail=rules.get(actor,libraries,library.id,'Show/第7季');
+  assert.equal(detail.inherited?.title,'固定剧名');assert.equal(detail.inherited?.season,2);assert.equal(saved.revision,rules.version(library.id));
+  const result=recognizeVideo('Show/第7季/001.mp4',raw(),rules.list(library.id));
+  assert.equal(result.kind,'episode');assert.equal(result.metadata.show,'固定剧名');assert.equal(result.metadata.season,2);assert.equal(result.metadata.episode,1);
 });
 
 test('inherited NFO and season directories group seasons; ignore preserves existing assets and curation is protected',async t=>{

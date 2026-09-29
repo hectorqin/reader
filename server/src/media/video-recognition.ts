@@ -29,7 +29,10 @@ export function cleanVideoTitle(input:string,stripLeadingNumber=false){
   value=value.replace(/(?:^|[ ._\-[\]【】()])(?:\d{3,4}[pi]|4k|8k|uhd|web[ ._-]?(?:dl|rip)|blu[ ._-]?ray|b[dr]rip|hdtv|dvdrip|remux|[hx][ ._-]?26[45]|hevc|avc|av1|hdr10\+?|hdr|dolby[ ._-]?vision|dts(?:[ ._-]?hd)?|aac|ac3|eac3|truehd|ddp?(?:[ .]?\d[ .]\d)?|10bit|8bit)(?=$|[ ._\-[\]【】()])/gi,token=>{removed.push(token.trim());return ' ';});
   // Dotted separators are common release naming, but decimal titles are preserved.
   value=value.replace(/(?<!\d)\.|\.(?!\d)|_/g,' ').replace(/\[\s*\]|【\s*】|\(\s*\)/g,' ');
-  if(stripLeadingNumber)value=value.replace(/^\s*(?:\[\d{1,4}\]|【\d{1,4}】|\d{1,4}[ ._-]+)\s*/,token=>{removed.push(token.trim());return '';});
+  if(stripLeadingNumber){
+    value=value.replace(/^\s*(?:\[\d{1,4}\]|【\d{1,4}】|\d{1,4}[ ._-]+|\d{1,4}(?=[\u3400-\u9fff]))\s*/,token=>{removed.push(token.trim());return '';});
+    value=value.replace(/\s+-\s+\d{1,4}\s*$/,'');
+  }
   return {title:value.replace(/\s+/g,' ').replace(/^[\s.-]+|[\s.-]+$/g,'').trim(),removed};
 }
 

@@ -15,7 +15,7 @@ export class MediaDirectoryRules {
   get(actor:MediaActor,libraries:MediaLibraries,libraryId:string,path:string){
     this.authorize(actor,libraries,libraryId,path);
     const rules=this.list(libraryId),exact=rules.find(rule=>rule.path===path)??null;
-    return {rule:exact,inherited:rules.filter(rule=>rule.path!==path&&withinDirectory(path+'/',rule.path)).sort((a,b)=>b.path.length-a.path.length)[0]??null,revision:this.version(libraryId)};
+    return {rule:exact,inherited:rules.filter(rule=>rule.path!==path&&withinDirectory(path,rule.path)).sort((a,b)=>b.path.length-a.path.length)[0]??null,revision:this.version(libraryId)};
   }
   authorize(actor:MediaActor,libraries:MediaLibraries,libraryId:string,path:string){
     if(actor.role!=='admin')throw forbidden('admin role required','ADMIN_REQUIRED');
