@@ -120,7 +120,7 @@ export class MediaScreen {
   private favorite=false;
   private managing=false;
   private managerTab:'libraries'|'tasks'='libraries';
-  private taskTab:'media'|'ai'='media';
+  private taskTab:'media'|'ai'|'scrape'='media';
   private jobs:ScanJob[]=[];
   private aiJobs:AiScanJob[]=[];
   private jobLibraryId='';
@@ -511,7 +511,7 @@ export class MediaScreen {
         <p className="media-manager-note">扫描只读取原始目录。封面、索引和刮削缓存保存在应用数据目录。</p>
         <h2>接入方式</h2><div className="media-connection-row"><Folder size={20} aria-hidden="true"/><span>服务器目录<small>包括服务器已挂载的 NAS</small></span><small>可用</small></div>
     </>:<>
-      <nav className="media-task-tabs" aria-label="扫描任务类型"><button aria-current={this.taskTab==='media'?'page':undefined} onClick={()=>{this.taskTab='media';this.draw();}}>媒体库扫描</button><button aria-current={this.taskTab==='ai'?'page':undefined} onClick={()=>{this.taskTab='ai';this.draw();}}>AI 扫描</button></nav>
+      <nav className="media-task-tabs" aria-label="任务类型"><button aria-current={this.taskTab==='media'?'page':undefined} onClick={()=>{this.taskTab='media';this.draw();}}>媒体库扫描</button><button aria-current={this.taskTab==='ai'?'page':undefined} onClick={()=>{this.taskTab='ai';this.draw();}}>AI 扫描</button><button aria-current={this.taskTab==='scrape'?'page':undefined} onClick={()=>{this.taskTab='scrape';this.draw();}}>刮削</button></nav>
       {this.taskTab==='media'?<>
         <div className="media-manager-toolbar"><span>扫描所有媒体库并建立索引</span><button disabled={this.busy||!this.allLibraries.length||this.jobState!=='ready'} onClick={()=>void this.scanAll()}>扫描所有媒体库</button></div>{this.scanNotice&&<p className="media-manager-note" role="status">{this.scanNotice}</p>}
         {this.scanActionError&&<div className="media-error" role="alert"><p>{this.scanActionError}</p><button disabled={this.busy} onClick={()=>void this.run(async()=>{await this.loadJobs(this.jobLibraryId);this.scanActionError='';})}>重新核对任务</button></div>}
@@ -519,13 +519,15 @@ export class MediaScreen {
         <h2 className="media-task-section-title">媒体库扫描历史{this.jobLibraryId?' · '+this.allLibraries.find(l=>l.id===this.jobLibraryId)?.name:''}</h2>
         {this.jobState==='loading'&&!this.busy&&<FloatingNotice message="正在读取扫描任务…" busy/>}{this.jobState==='error'&&<div className="media-error" role="alert"><p>{this.jobError}</p><button disabled={this.busy} onClick={()=>void this.run(()=>this.loadJobs(this.jobLibraryId))}>重试读取扫描任务</button></div>}{this.jobState==='ready'&&this.jobs.length===0&&<p>暂无媒体库扫描历史。</p>}
         <ScanJobs key={this.jobLibraryId} jobs={this.jobs} libraries={this.allLibraries} libraryName={this.allLibraries.find(l=>l.id===this.jobLibraryId)?.name||'媒体库'} busy={this.busy||this.jobState!=='ready'} onRetry={id=>void this.scan(id||this.jobLibraryId)} onCancel={id=>void this.run(async()=>{await this.api.request('jobs/'+id+'/cancel','POST');await this.loadJobs(this.jobLibraryId);})} onDelete={id=>void this.run(async()=>{await this.api.request('scan-jobs/'+id,'DELETE');await this.loadJobs(this.jobLibraryId);})}/>
-      </>:<>
+      </>:this.taskTab==='ai'?<>
         <div className="media-manager-toolbar"><span>AI 识别媒体类型</span><button disabled={this.busy||!this.jobLibraryId} onClick={()=>void this.startAiScan(this.jobLibraryId)}>AI 扫描当前库</button><button disabled={this.busy||!this.allLibraries.length} onClick={()=>void this.startAiScan()}>AI 扫描所有媒体库</button><button disabled={this.busy} onClick={()=>void this.loadAiJobs()} aria-label="刷新 AI 扫描任务"><RefreshCw size={16} aria-hidden="true"/></button></div>{this.scanNotice&&<p className="media-manager-note" role="status">{this.scanNotice}</p>}
         <div className="media-task-library"><label>媒体库<MediaSelect aria-label="AI 扫描媒体库" value={this.jobLibraryId} disabled={this.busy||!this.allLibraries.length} onChange={event=>{this.jobLibraryId=event.currentTarget.value;void this.loadAiJobs();}}><option value="">全部媒体库</option>{this.allLibraries.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</MediaSelect></label></div>
         <h2 className="media-task-section-title">AI 扫描历史</h2><AiScanJobs api={this.api} jobs={this.aiJobs} libraries={this.allLibraries} busy={this.busy} onRefresh={()=>void this.loadAiJobs()} onDelete={id=>void this.run(async()=>{await this.api.deleteAiScanJob(id);await this.loadAiJobs();})}/>
+      </>:<>
+        <div className="media-manager-toolbar"><span>在线匹配媒体信息</span></div>
+        <div className="media-manager-scraping"><ScrapeJobs api={this.api} libraries={this.allLibraries} navigate={this.navigate}/></div>
       </>}
-      <p className="media-manager-note">目录不可访问时保留原有资料。扫描与在线匹配分开执行，匹配失败不影响本地播放。</p>
-      <div className="media-manager-scraping"><ScrapeJobs api={this.api} libraries={this.allLibraries} navigate={this.navigate}/></div>
+      {this.taskTab!=='scrape'&&<p className="media-manager-note">目录不可访问时保留原有资料。扫描与在线匹配分开执行，匹配失败不影响本地播放。</p>}
     </>}
   </section>;}
   private async permissions(lib:Library){if(this.routing?.navigateRoute){this.openRoute('library-permissions',{library:lib.id});return;}this.permissionLibrary=lib;this.draw();}
