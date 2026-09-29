@@ -6,14 +6,14 @@ import {FloatingConfirm} from '../ui/floating-confirm.tsx';
 import {MediaSelect} from './select.tsx';
 import type {MediaApi} from './api.ts';
 type Mode='auto'|'movie'|'series'|'season'|'ignore';
-interface Rule {path:string;mode:Mode;title?:string;season?:number|string;year?:number;stripLeadingNumber?:boolean}
+interface Rule {path:string;mode:Mode;title?:string;season?:number|string;year?:number;stripLeadingNumber?:boolean;filePattern?:string}
 interface Proposal {assetId:string;ref:string;before:{id:string;title:string;kind:string}|null;status:'ready'|'review'|'protected'|'ignored';reason:string;after:{kind:string;confidence:string;metadata:{title:string;show?:string;season?:number|string;episode?:number}}}
 interface Preview {id:string;items:Proposal[]}
 const labels:Record<Mode,string>={auto:'自动识别',movie:'电影目录',series:'剧集目录',season:'指定季目录',ignore:'忽略目录'};
 
 export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}:{api:MediaApi;libraryId:string;path:string;disabled:boolean;onBusy:(busy:boolean)=>void;onApplied:()=>void}){
   const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
-  const [mode,setMode]=useState<Mode|'inherit'>('inherit'),[title,setTitle]=useState(''),[season,setSeason]=useState(''),[year,setYear]=useState(''),[strip,setStrip]=useState(false);
+  const [mode,setMode]=useState<Mode|'inherit'>('inherit'),[title,setTitle]=useState(''),[season,setSeason]=useState(''),[year,setYear]=useState(''),[strip,setStrip]=useState(false),[filePattern,setFilePattern]=useState('');
   const [revision,setRevision]=useState(''),[inherited,setInherited]=useState<Rule|null>(null),[preview,setPreview]=useState<Preview|null>(null),[selected,setSelected]=useState<string[]>([]),[confirm,setConfirm]=useState(false),[page,setPage]=useState(0);
   const pending=useRef<AbortController|null>(null);
   useEffect(()=>()=>pending.current?.abort(),[]);
@@ -26,12 +26,12 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
   function show(){setOpen(true);setRevision('');setPreview(null);setSelected([]);void work(async signal=>{
     const result=await api.request<{rule:Rule|null;inherited:Rule|null;revision:string}>(base+'/recognition-rule?'+new URLSearchParams({path}),'GET',undefined,signal);
     if(signal.aborted)return;
-    setRevision(result.revision);setInherited(result.inherited);setMode(result.rule?.mode??'inherit');setTitle(result.rule?.title??'');setSeason(result.rule?.season===undefined?'':String(result.rule.season));setYear(result.rule?.year===undefined?'':String(result.rule.year));setStrip(result.rule?.stripLeadingNumber??false);setPreview(null);setSelected([]);
+    setRevision(result.revision);setInherited(result.inherited);setMode(result.rule?.mode??'inherit');setTitle(result.rule?.title??'');setSeason(result.rule?.season===undefined?'':String(result.rule.season));setYear(result.rule?.year===undefined?'':String(result.rule.year));setStrip(result.rule?.stripLeadingNumber??false);setFilePattern(result.rule?.filePattern??'');setPreview(null);setSelected([]);
   });}
   function invalidate(){setPreview(null);setSelected([]);setNotice('');}
   async function save(signal:AbortSignal){
     const episodic=mode==='series'||mode==='season';
-    const rule:Rule|null=mode==='inherit'?null:{path,mode,...(episodic&&title.trim()?{title:title.trim()}:{}),...(episodic&&season.trim()?{season:/^\d+$/.test(season.trim())?Number(season):season.trim()}:{}),...(mode!=='ignore'&&year!==''?{year:Number(year)}:{}),stripLeadingNumber:strip};
+    const rule:Rule|null=mode==='inherit'?null:{path,mode,...(episodic&&title.trim()?{title:title.trim()}:{}),...(episodic&&season.trim()?{season:/^\d+$/.test(season.trim())?Number(season):season.trim()}:{}),...(mode!=='ignore'&&year!==''?{year:Number(year)}:{}),...(filePattern.trim()?{filePattern:filePattern.trim()}:{}),stripLeadingNumber:strip};
     const result=await api.request<{revision:string}>(base+'/recognition-rule','PUT',{path,rule,revision},signal);
     if(!signal.aborted){setRevision(result.revision);setNotice('目录规则已保存。已有作品尚未更改。');}
   }
@@ -43,7 +43,7 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
   return <>
     <div className="media-toolbar"><span>影视识别</span><button disabled={disabled} onClick={show}><Settings2 size={16} aria-hidden="true"/>识别规则与预览</button></div>
     {open&&<Modal title="目录识别规则" busy={busy} onClose={()=>setOpen(false)}><div className="media-form media-recognition-form">
-      <p className="media-folder-note">{path||'库内根目录'} · 包含子目录，子目录自己的规则优先。规则保存后用于后续扫描；已有作品通过下方预览确认重新识别。</p>
+      <p className="media-folder-note">{path||'库内根目录'} · 包含子目录，子目录自己的规则优先。目录内文件统一应用下方文件正则。规则保存后用于后续扫描；已有作品通过下方预览确认重新识别。</p>
       {inherited&&<p>继承自「{inherited.path||'库内根目录'}」：{labels[inherited.mode]}{inherited.title?' · '+inherited.title:''}</p>}
       {error&&<p className="media-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
       <label>解析类型<MediaSelect aria-label="解析类型" disabled={busy||!revision} value={mode} onChange={e=>{setMode(e.currentTarget.value as Mode|'inherit');invalidate();}}><option value="inherit">继承上级（无上级则自动）</option>{Object.entries(labels).map(([value,label])=><option value={value}>{label}</option>)}</MediaSelect></label>
@@ -51,6 +51,7 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
         <label>剧名<input aria-label="剧名" disabled={busy} maxLength={200} value={title} placeholder="留空使用上级剧名或目录名" onInput={e=>{setTitle(e.currentTarget.value);invalidate();}}/></label>
         <label>{mode==='season'?'季/版本名称（必填）':'默认季/版本名称（可选）'}<input aria-label="季/版本名称" disabled={busy} value={season} placeholder="如：第1季、特别版、4K版、OVA" onInput={e=>{setSeason(e.currentTarget.value);invalidate();}}/></label>
       </>}
+      {mode!=='ignore'&&mode!=='inherit'&&<label>目录内文件名解析正则（可选）<input aria-label="目录内文件名解析正则" disabled={busy} maxLength={1000} value={filePattern} placeholder="如：(?<name>[^\\s]+)(?<year>[0-9]{4})(?<order>[0-9]+)" onInput={e=>{setFilePattern(e.currentTarget.value);invalidate();}}/><small>对当前目录及子目录内的所有文件统一应用。支持具名组：name、year、season、episode、order、artist、album、author、narrator、edition 等。</small></label>}
       {mode!=='ignore'&&mode!=='inherit'&&<>
         <label>年份（可选）<input aria-label="年份" disabled={busy} type="number" min={1800} max={2199} value={year} onInput={e=>{setYear(e.currentTarget.value);invalidate();}}/></label>
         <label className="media-recognition-check"><input type="checkbox" disabled={busy} checked={strip} onChange={e=>{setStrip(e.currentTarget.checked);invalidate();}}/>移除文件名开头的排列编号（如 001.；电影年份与续集数字需核对）</label>

@@ -24,9 +24,7 @@ export class MediaApi {
   constructor(private readonly reader:ReaderApi) {}
   businessSettingsRequest<T>(path='',method='GET',body?:unknown,signal?:AbortSignal){return this.reader.businessSettingsRequest<T>(path,method,body,signal);}
   businessTtsPreview(values:Record<string,unknown>,voice:string){return this.reader.businessTtsPreview(values,voice);}
-  aiScan(libraryId:string){return this.reader.aiScan(libraryId);}
   businessAiModels(values?:{baseUrl?:string;apiKey?:string}){return this.reader.businessAiModels(values);}
-  aiFolderScan(libraryId:string,path:string){return this.request<AiScanJob>(`libraries/${encodeURIComponent(libraryId)}/folders/ai-scan`,'POST',{path});}
   startAiScan(libraryId?:string,path=''){return this.request<{items:AiScanJob[]}|AiScanJob>('ai-scan-jobs','POST',{...(libraryId?{libraryId}:{}),path});}
   aiScanJobs(libraryId?:string){const query=libraryId?`?libraryId=${encodeURIComponent(libraryId)}`:'';return this.request<{items:AiScanJob[]}>(`ai-scan-jobs${query}`);}
   aiScanBatches(id:string){return this.request<{items:AiScanBatch[]}>(`ai-scan-jobs/${encodeURIComponent(id)}/batches`);}

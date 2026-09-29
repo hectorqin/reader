@@ -39,6 +39,14 @@ test('video parsing separates release tokens from meaningful numerals and resolv
   assert.equal(discs.kind,'episode');assert.equal(discs.metadata.episode,7);assert.equal(discs.metadata.title,'三只小猫');
   const ordered=recognizeVideo('动画/猫和老鼠/猫和老鼠珍藏版/第三段.avi',raw('第三段'),[{path:'动画/猫和老鼠/猫和老鼠珍藏版',mode:'series',title:'猫和老鼠'}],3);
   assert.equal(ordered.kind,'episode');assert.equal(ordered.metadata.episode,3);
+  const forced=recognizeVideo('Show/任意文件.S01E01E02.mkv',raw(),[{path:'Show',mode:'series',title:'固定剧名',season:'特别版'}],4);
+  assert.equal(forced.kind,'episode');assert.equal(forced.metadata.show,'固定剧名');assert.equal(forced.metadata.season,'特别版');assert.equal(forced.metadata.episode,1);
+  const patterned=recognizeVideo('Movie/银河护卫队202401.mkv',raw(),[{path:'Movie',mode:'movie',filePattern:'(?<name>[^\\s]+?)(?<year>[0-9]{4})(?<order>[0-9]+)'}]);
+  assert.equal(patterned.metadata.title,'银河护卫队');assert.equal(patterned.metadata.year,2024);assert.equal(patterned.metadata.track,1);assert.equal(patterned.metadata.sources.title,'rule');
+  const custom=recognizeVideo('Movie/标题202401.mkv',raw(),[{path:'Movie',mode:'movie',filePattern:'(?<name>[^\\s]+?)(?<year>[0-9]{4})(?<release>[0-9]+)'}]);
+  assert.equal(custom.metadata.attributes?.release,'01');
+  const episodePattern=recognizeVideo('Show/第一话-特别篇.mkv',raw(),[{path:'Show',mode:'series',title:'剧名',season:'特别版',filePattern:'(?<name>[^-]+)-(?<order>[^.]+)'}],2);
+  assert.equal(episodePattern.kind,'episode');assert.equal(episodePattern.metadata.title,'第一话');assert.equal(episodePattern.metadata.episode,1);
   const rules:VideoRule[]=[{path:'Drama',mode:'series',title:'剧名',season:1},{path:'Drama/S02',mode:'season',season:2}];
   assert.equal(recognizeVideo('Drama/S02/01.mp4',raw(),rules).metadata.show,'剧名');
   assert.equal(recognizeVideo('Drama/S02/01.mp4',raw(),rules).metadata.season,2);

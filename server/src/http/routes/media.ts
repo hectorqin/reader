@@ -74,16 +74,6 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
     return result.result;
   };
   app.get<{Params:{id:string};Querystring:{path?:string;offset?:number;limit?:number}}>('/api/v1/media/libraries/:id/folders',{preHandler:auth,schema:{querystring:{type:'object',properties:{path:{type:'string',maxLength:4000},offset:{type:'integer',minimum:0,default:0},limit:{type:'integer',minimum:1,maximum:200,default:60}}}}},async (request,reply)=>queryCatalog(request,reply,{method:'folders',args:[currentUser(request),request.params.id,request.query.path,request.query.offset,request.query.limit]}));
-  app.post<{Params:{id:string};Body:{path?:string}}>('/api/v1/media/libraries/:id/folders/ai-scan',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,properties:{path:{type:'string',maxLength:4000}}}}},async (request,reply)=>{
-    libraries.get(currentUser(request),request.params.id);
-    const path=(request.body?.path??'').replace(/^\/+|\/+$/g,'');
-    if(path.split('/').includes('..')||path.includes('\\'))throw badRequest('目录路径无效');
-    const prefix=path?path+'/':'';
-    const rows=database.all<{ref:string}>('SELECT ref FROM media_assets WHERE library_id=? AND available=1 ORDER BY ref',request.params.id);
-    const paths=rows.map(row=>row.ref).filter(ref=>ref.startsWith(prefix));
-    app.log.info({libraryId:request.params.id,path,pCount:paths.length,actor:currentUser(request).id},'ai folder scan requested');
-    return reply.status(202).send(ai.startJob(request.params.id,path,paths));
-  });
   app.post<{Body:{libraryId?:string;path?:string}}>('/api/v1/media/ai-scan-jobs',{preHandler:[auth,async request=>requireAdmin(request)],schema:{body:{type:'object',additionalProperties:false,properties:{libraryId:{type:'string'},path:{type:'string',maxLength:4000}}}}},async (request,reply)=>{
     const actor=currentUser(request),path=(request.body?.path??'').replace(/^\/+|\/+$/g,'');
     if(path.split('/').includes('..')||path.includes('\\'))throw badRequest('目录路径无效');

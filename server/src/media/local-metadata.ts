@@ -28,6 +28,8 @@ export interface LocalMediaMetadata {
   coverRef?: string;
   embeddedCoverAssetId?: string;
   warnings: string[];
+  /** Values captured by a user supplied filename pattern that have no built-in field. */
+  attributes?: Record<string,string>;
 }
 
 const text = (value: unknown): string | undefined => {

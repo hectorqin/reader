@@ -38,11 +38,15 @@ export class MediaDirectoryRules {
   }
   private validate(path:string,rule:VideoRule|null){
     if(rule===null)return;
-    if(typeof rule!=='object'||rule.path!==path||!['auto','movie','series','season','ignore'].includes(rule.mode)||Object.keys(rule).some(key=>!['path','mode','title','season','year','stripLeadingNumber'].includes(key)))throw badRequest('无效目录识别规则');
+    if(typeof rule!=='object'||rule.path!==path||!['auto','movie','series','season','ignore'].includes(rule.mode)||Object.keys(rule).some(key=>!['path','mode','title','season','year','stripLeadingNumber','filePattern'].includes(key)))throw badRequest('无效目录识别规则');
     if(rule.title!==undefined&&(typeof rule.title!=='string'||!rule.title.trim()||rule.title.length>200))throw badRequest('剧名需为 1–200 字符');
     if(rule.season!==undefined&&((typeof rule.season==='number'&&(!Number.isInteger(rule.season)||rule.season<0||rule.season>999))||(typeof rule.season==='string'&&(!rule.season.trim()||rule.season.length>80))))throw badRequest('默认季/版本需为有效文本');
     if(rule.mode==='season'&&rule.season===undefined)throw badRequest('季目录必须指定季号');
     if(rule.year!==undefined&&(!Number.isInteger(rule.year)||rule.year<1800||rule.year>2199))throw badRequest('年份需为 1800–2199');
     if(rule.stripLeadingNumber!==undefined&&typeof rule.stripLeadingNumber!=='boolean')throw badRequest('无效编号设置');
+    if(rule.filePattern!==undefined){
+      if(typeof rule.filePattern!=='string'||!rule.filePattern.trim()||rule.filePattern.length>1000)throw badRequest('文件名正则需为 1–1000 字符');
+      try{new RegExp(rule.filePattern,'i');}catch{throw badRequest('文件名正则无效');}
+    }
   }
 }

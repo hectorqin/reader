@@ -717,7 +717,6 @@ export class ReaderApi {
   }
   async businessAiModels(values?:{baseUrl?:string;apiKey?:string}):Promise<string[]> { return (await this.call<{models:string[]}>('/api/v1/admin/ai/models','POST',values??{})).models; }
   async aiSummary(bookId:string,chapterId:string,content:string):Promise<{summary:string;cached:boolean}>{ return this.call('/api/v1/ai/summary','POST',{bookId,chapterId,content}); }
-  async aiScan(libraryId:string):Promise<{id:string;libraryId:string;path:string;state:string}>{ return this.call('/api/v1/media/libraries/'+encodeURIComponent(libraryId)+'/folders/ai-scan','POST',{path:''}); }
 
   private async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
     const response = await this.request(path, 'GET', undefined, options);
