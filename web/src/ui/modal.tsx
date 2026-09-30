@@ -3,8 +3,8 @@ import { IconButton } from './toolkit.tsx';
 import { placeNotifications } from './notifications.ts';
 
 /** Native modal supplies focus containment and makes the background inert. */
-export function Modal({ title, busy, onClose, children }: {
-  title: string; busy: boolean; onClose(): void; children: ComponentChildren;
+export function Modal({ title, busy, onClose, children, className }: {
+  title: string; busy: boolean; onClose(): void; children: ComponentChildren; className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useLayoutEffect(() => {
@@ -18,7 +18,7 @@ export function Modal({ title, busy, onClose, children }: {
       queueMicrotask(() => { if (previous?.isConnected) previous.focus({ preventScroll: true }); });
     };
   }, []);
-  return <dialog ref={ref} className="source-modal" aria-label={title} aria-busy={busy}
+  return <dialog ref={ref} className={['source-modal', className].filter(Boolean).join(' ')} aria-label={title} aria-busy={busy}
     onKeyDown={event => {
       if (event.key !== 'Tab') return;
       const dialog = event.currentTarget;

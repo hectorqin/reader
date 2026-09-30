@@ -499,7 +499,11 @@ export class MediaCatalog {
     const seasons=this.db.all<ItemRow>("SELECT * FROM media_items WHERE parent_id=? AND kind='season' ORDER BY ordinal,title",id);
     return {episodes:seasons.flatMap(season=>{
       const title=this.dto(season).title;
-      return this.seasonPlayback(actor,season.id).episodes.map(episode=>({...episode,title:title+' · '+episode.title}));
+      return this.seasonPlayback(actor,season.id).episodes.map((episode,index)=>{
+        const normalized=episode.title.trim();
+        const display=/^(第\s*\d+\s*集|E(?:P)?\s*\d+)$/i.test(normalized)?`第 ${index+1} 集`:`第 ${index+1} 集 · ${normalized}`;
+        return {...episode,title:title+' · '+display};
+      });
     })};
   }
   override(actor:MediaActor,id:string,patch:Record<string,unknown>):void {

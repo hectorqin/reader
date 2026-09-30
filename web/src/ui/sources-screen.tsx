@@ -50,6 +50,10 @@ export class SourcesScreen {
   private query = '';
   private filters: ExtensionField[] = [];
   private filterValues: Record<string, string> = {};
+  private filterQueries: Record<string, string> = {};
+  private sourcePickerQuery = '';
+  private catalogSourceQuery = '';
+  private resultGroupQuery = '';
   private credentialValues: Record<string, string> = {};
   private folder = '';
   private pluginFile: File | null = null;
@@ -149,7 +153,7 @@ export class SourcesScreen {
     this.stopSearch(); this.searchState = 'idle'; this.searchRequest = null; this.searchSession = null; this.searchMenu = false;
     this.resultGroup = null; this.detailEntry = null; this.detailEpoch++;
     this.selected = source; this.page = null; this.path = []; this.query = ''; this.credentialValues = {}; this.acquired = null;
-    this.filters = []; this.filterValues = {};
+    this.filters = []; this.filterValues = {}; this.filterQueries = {}; this.sourcePickerQuery = ''; this.catalogSourceQuery = ''; this.resultGroupQuery = '';
     if (source.descriptor?.capabilities.includes('search.filters')) this.filters = await this.options.api.sourceFilters(source.id);
     if (source.descriptor?.capabilities.includes('browse')) await this.catalog({});
     this.draw();
@@ -307,16 +311,17 @@ export class SourcesScreen {
       </>}
       {this.tab === 'search' && <>
         <section className="sources-card source-picker"><div><h2>搜书</h2><p className="muted">选择来源，发现想读的书。</p></div>
+          <label className="source-picker-search">筛选书源<input type="text" placeholder="搜索书源名称" value={this.sourcePickerQuery} onInput={event=>{this.sourcePickerQuery=event.currentTarget.value;this.draw();}} /></label>
           <label>选择来源<select aria-label="选择来源" disabled={this.busy} value={this.selected?.id ?? ''} onChange={event => {
             const source = this.sources.find(source => source.id === event.currentTarget.value); if (source) this.select(source);
-          }}><option value="" disabled>请选择一个来源</option>{this.sources.filter(source => source.enabled && source.descriptor).map(source => <option key={source.id} value={source.id}>{source.name}{source.isDefault ? '（默认）' : ''}</option>)}</select></label>
+          }}><option value="" disabled>请选择一个来源</option>{this.sources.filter(source => source.enabled && source.descriptor && source.name.toLocaleLowerCase().includes(this.sourcePickerQuery.trim().toLocaleLowerCase())).map(source => <option key={source.id} value={source.id}>{source.name}{source.isDefault ? '（默认）' : ''}</option>)}</select></label>
           {!this.selected && <p className="muted">{this.sources.some(source => source.enabled && source.descriptor) ? '选择来源后，即可搜索书籍或浏览目录。' : '暂无可用来源，请先添加或启用来源。'}</p>}
         </section>
         {this.selected && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>
           {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.search(resume); }}>
-            {this.filters.map(field => <label key={field.key}>{field.label}<select aria-label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy}
+            {this.filters.map(field => <label key={field.key}>{field.label}<input type="search" placeholder={'搜索'+field.label} value={this.filterQueries[field.key] ?? ''} disabled={this.busy} onInput={event=>{this.filterQueries[field.key]=event.currentTarget.value;this.draw();}}/><select aria-label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy}
               onChange={event => { this.filterValues[field.key] = event.currentTarget.value; this.draw(); }}>
-              {field.options?.map(option => <option value={option.value}>{option.label}</option>)}
+              {field.options?.filter(option=>option.label.toLocaleLowerCase().includes((this.filterQueries[field.key]??'').trim().toLocaleLowerCase())).map(option => <option value={option.value}>{option.label}</option>)}
             </select></label>)}
             <label className="source-keyword">搜索书籍<input type="search" placeholder="输入书名或作者" disabled={this.busy} required value={this.query} onInput={(event) => { this.query = event.currentTarget.value; this.draw(); }} /></label>
             {this.searchRun ? <Button key="stop" type="button" className="search-stop" onClick={event => { event.preventDefault(); this.stopSearch(); }}><Icon name="stop" />停止搜索</Button>
@@ -344,10 +349,11 @@ export class SourcesScreen {
             {this.page?.batch && <progress aria-label="书源搜索进度" max={Math.max(1, this.page.batch.total)} value={this.page.batch.completed} />}
             {this.searchState === 'searching' && <small>可查看详情、加入书架，或随时停止。</small>}
           </div>}
+          {this.page && grouped && <label className="catalog-group-filter">筛选分组<input type="search" placeholder="搜索书名或作者" value={this.resultGroupQuery} onInput={event=>{this.resultGroupQuery=event.currentTarget.value;this.draw();}} /></label>}
           {this.page && <CatalogFeedback page={this.page} count={results.length} merged={this.searchState !== 'idle'} searching={this.searchState === 'searching'} />}
           {this.page?.navigation?.map((entry) => <Button disabled={this.busy} onClick={() => void this.run(() => this.catalog({ ref: entry.ref }))}>{entry.title}</Button>)}
           {this.page?.items.length === 0 && !this.searchRun && <div className="catalog-empty"><Icon name={this.page.errors?.length ? 'warning' : 'search'} /><strong>{this.searchState === 'stopped' ? '搜索已停止，暂未找到书籍' : this.page.errors?.length ? '暂未返回书籍，部分来源搜索失败' : '没有找到匹配书籍'}</strong><p>{this.page.errors?.length ? '请查看失败原因，或调整搜索范围后重试。' : '试试其他关键词，或调整搜索范围。'}</p></div>}
-          {results.map(({ key, entry, entries }) => <article className="sources-row catalog-book" key={key}>
+          {results.filter(({entry})=>{const q=this.resultGroupQuery.trim().toLocaleLowerCase();return !q||entry.title.toLocaleLowerCase().includes(q)||(entry.authors??[]).some(author=>author.toLocaleLowerCase().includes(q));}).map(({ key, entry, entries }) => <article className="sources-row catalog-book" key={key}>
             <div><strong>{entry.title}</strong><small>{entry.authors?.join(' / ') || '作者未知'}</small>{!grouped && <p className="source-description">{entry.description}</p>}</div>
             {grouped ? <Button className="catalog-source-count" onClick={() => { this.resultGroup = key; this.draw(); }}><span>{entries.length} 条书源</span><Icon name="chevron-right" /></Button> :
             <div className="sources-actions"><Button onClick={() => void this.showDetail(entry)}>详情</Button>
@@ -422,8 +428,8 @@ export class SourcesScreen {
       </main>
         {activeGroup && <Modal title="书源列表" busy={this.working} onClose={() => { this.resultGroup = null; this.draw(); }}>
           <div className="source-modal-content catalog-source-list">
-            <header className="catalog-source-heading"><h3>{activeGroup.entry.title}</h3><p>{activeGroup.entry.authors?.join(' / ') || '作者未知'}</p><small role="status">{activeGroup.entries.length} 条书源{this.searchRun ? ' · 搜索中，列表持续更新' : ''}</small></header>
-            {activeGroup.entries.map(entry => <article className="catalog-source-item" key={entry.ref}>
+            <header className="catalog-source-heading"><h3>{activeGroup.entry.title}</h3><p>{activeGroup.entry.authors?.join(' / ') || '作者未知'}</p><small role="status">{activeGroup.entries.length} 条书源{this.searchRun ? ' · 搜索中，列表持续更新' : ''}</small><input type="search" placeholder="搜索书源" value={this.catalogSourceQuery} onInput={event=>{this.catalogSourceQuery=event.currentTarget.value;this.draw();}} /></header>
+            {activeGroup.entries.filter(entry=>(entry.sourceName || this.selected?.name || '未命名书源').toLocaleLowerCase().includes(this.catalogSourceQuery.trim().toLocaleLowerCase())).map(entry => <article className="catalog-source-item" key={entry.ref}>
               <div><strong>{entry.sourceName || this.selected?.name || '未命名书源'}</strong><p className="source-description">最新章节：{entry.latestChapter || '暂无信息'}</p></div>
               <div className="sources-actions"><Button onClick={() => void this.showDetail(entry)}>详情</Button>
                 {(entry.options?.length ? entry.options : [{ id: '', label: '加入书架' }]).map(option => <Button className="primary" disabled={this.working || option.available === false} onClick={() => void this.run(() => this.acquire(entry, option.id), true)}>{option.label}</Button>)}

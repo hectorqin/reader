@@ -5,6 +5,7 @@ import type { ByteRange, MediaStorage, StorageEntry } from './types.ts';
 
 export interface OpenListConnection { baseUrl: string; token?: string; password?: string }
 interface RemoteObject { name: string; size: number; is_dir: boolean; modified: string; raw_url?: string }
+interface VideoPreviewData { video_preview_play_info?: { live_transcoding_task_list?: Array<{ status?: string; url?: string; template_id?: string }> } }
 const PAGE_SIZE = 200;
 const MAX_JSON = 4 * 1024 * 1024;
 const REQUEST_TIMEOUT = 15_000;
@@ -68,7 +69,7 @@ export class OpenListMediaStorage implements MediaStorage {
     if (obj.is_dir) throw new StorageError('not-file', 'Media resource is not a regular file');
     return { ref, name: obj.name, size: obj.size, modifiedAt: Date.parse(obj.modified), fileIdentity: null };
   }
-  private async api<T>(method: 'list' | 'get', body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
+  private async api<T>(method: 'list' | 'get' | 'other', body: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
     signal?.throwIfAborted();
     const controller = new AbortController(), abort = () => controller.abort();
     const timer = setTimeout(abort, this.timeout);
@@ -166,6 +167,16 @@ export class OpenListMediaStorage implements MediaStorage {
   }
   async directUrl(ref:string):Promise<string>{
     const obj=await this.get(ref);this.entry(ref,obj);
+    if(/\.(?:mp4|m4v|mov|mkv|avi|ts|m2ts|mpg|mpeg)$/i.test(obj.name)){
+      try{
+        const preview=await this.api<VideoPreviewData>('other',{path:this.path(ref),method:'video_preview'});
+        const tasks=preview.video_preview_play_info?.live_transcoding_task_list??[];
+        const preferred=['HD','SD','LD'];
+        const task=preferred.map(id=>tasks.find(value=>value.template_id===id&&value.status==='finished'&&typeof value.url==='string'&&value.url)).find(Boolean)
+          ?? tasks.find(value=>value.status==='finished'&&typeof value.url==='string'&&value.url);
+        if(task?.url)return httpUrl(task.url).href;
+      }catch(error){if(error instanceof AppError&&error.code==='MEDIA_OPENLIST_AUTH')throw error;/* fall back to raw_url */}
+    }
     if(typeof obj.raw_url!=='string'||!obj.raw_url)throw remoteError();
     return httpUrl(obj.raw_url).href;
   }

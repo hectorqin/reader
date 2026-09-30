@@ -28,6 +28,6 @@ export function MediaFavorites({api,items,total,offset,scope,busy,onScope,onPage
     </button>)}</div>
     {!items.length&&<div className="media-personal-empty"><Heart size={32} strokeWidth={1.4} aria-hidden="true"/><p>{scope==='all'?'还没有收藏，打开作品详情即可收藏。':'暂无这类收藏。'}</p>{scope!=='all'&&<button onClick={()=>onScope('all')}>查看全部收藏</button>}</div>}
     {total>60&&<nav className="media-toolbar" aria-label="收藏分页"><button disabled={busy||offset===0} onClick={()=>onPage(Math.max(0,offset-60))}>上一页</button><span>第 {Math.floor(offset/60)+1} 页</span><button disabled={busy||offset+60>=total} onClick={()=>onPage(offset+60)}>下一页</button></nav>}
-    {filterOpen&&<Modal title="收藏类型" busy={false} onClose={()=>setFilterOpen(false)}><div className="media-favorite-filter" role="group" aria-label="收藏类型">{scopes.map(([value,label])=><button key={value} type="button" aria-pressed={scope===value} onClick={()=>{setFilterOpen(false);if(scope!==value)onScope(value);}}><span>{label}</span>{scope===value&&<Check size={18} aria-hidden="true"/>}</button>)}</div></Modal>}
+    {filterOpen&&<Modal className="media-modal" title="收藏类型" busy={false} onClose={()=>setFilterOpen(false)}><div className="media-favorite-filter" role="group" aria-label="收藏类型">{scopes.map(([value,label])=><button key={value} type="button" aria-pressed={scope===value} onClick={()=>{setFilterOpen(false);if(scope!==value)onScope(value);}}><span>{label}</span>{scope===value&&<Check size={18} aria-hidden="true"/>}</button>)}</div></Modal>}
   </section>;
 }

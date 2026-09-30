@@ -42,7 +42,7 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
   const selectRows=(rows:Proposal[])=>setSelected(current=>[...new Set([...current,...rows.filter(selectable).map(row=>row.assetId)])]);
   return <>
     <div className="media-toolbar"><span>影视识别</span><button disabled={disabled} onClick={show}><Settings2 size={16} aria-hidden="true"/>识别规则与预览</button></div>
-    {open&&<Modal title="目录识别规则" busy={busy} onClose={()=>setOpen(false)}><div className="media-form media-recognition-form">
+    {open&&<Modal className="media-modal" title="目录识别规则" busy={busy} onClose={()=>setOpen(false)}><div className="media-form media-recognition-form">
       <p className="media-folder-note">{path||'库内根目录'} · 包含子目录，子目录自己的规则优先。目录内文件统一应用下方文件正则。规则保存后用于后续扫描；已有作品通过下方预览确认重新识别。</p>
       {inherited&&<p>继承自「{inherited.path||'库内根目录'}」：{labels[inherited.mode]}{inherited.title?' · '+inherited.title:''}</p>}
       {error&&<p className="media-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
@@ -70,6 +70,6 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
         {preview.items.length>30&&<nav className="media-toolbar" aria-label="识别预览分页"><button disabled={busy||!page} onClick={()=>setPage(page-1)}>上一页</button><span>{page+1} / {Math.ceil(preview.items.length/30)}</span><button disabled={busy||(page+1)*30>=preview.items.length} onClick={()=>setPage(page+1)}>下一页</button></nav>}
       </section>}
     </div></Modal>}
-    {confirm&&<FloatingConfirm title="确认重新识别" text={`将按预览调整 ${selected.length} 个文件的标题和作品归属。同一剧、季、集的版本可能合并到一个作品，收藏随之保留。不修改原文件，保留播放进度与队列。`} confirmText="应用识别结果" onCancel={()=>setConfirm(false)} onConfirm={()=>{setConfirm(false);void work(async signal=>{await api.request(base+'/recognition-apply','POST',{path,previewId:preview!.id,assetIds:selected},signal);if(!signal.aborted){setOpen(false);onApplied();}});}}/>}
+    {confirm&&<FloatingConfirm theme="media" title="确认重新识别" text={`将按预览调整 ${selected.length} 个文件的标题和作品归属。同一剧、季、集的版本可能合并到一个作品，收藏随之保留。不修改原文件，保留播放进度与队列。`} confirmText="应用识别结果" onCancel={()=>setConfirm(false)} onConfirm={()=>{setConfirm(false);void work(async signal=>{await api.request(base+'/recognition-apply','POST',{path,previewId:preview!.id,assetIds:selected},signal);if(!signal.aborted){setOpen(false);onApplied();}});}}/>}
   </>;
 }

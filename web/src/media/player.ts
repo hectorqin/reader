@@ -182,7 +182,7 @@ export class MediaPlayer extends EventTarget {
     this.audioControls.append(this.chapterSeek,this.volumeLabel);
     this.subtitles=new SubtitleControls(api,this.video);
     this.audioTracks=new AudioTrackControls(api);
-    this.nativeControls.hidden=true;
+    this.nativeControls.className='media-native-controls';this.nativeControls.hidden=true;
     const nativeTrackLabel=document.createElement('label');nativeTrackLabel.textContent='音轨 ';nativeTrackLabel.hidden=true;
     const nativeTrackSelect=document.createElement('select');nativeTrackSelect.setAttribute('aria-label','原生音轨');nativeTrackLabel.append(nativeTrackSelect);this.nativeControls.append(nativeTrackLabel);
     nativeTrackSelect.addEventListener('change',()=>{

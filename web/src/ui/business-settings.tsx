@@ -2,6 +2,7 @@ import {useEffect,useLayoutEffect,useState} from './vendor/preact.ts';
 import {FloatingNotice} from './floating-notice.tsx';
 import {FloatingConfirm} from './floating-confirm.tsx';
 import '../styles/business-settings.css';
+import type {JSX} from './vendor/preact.ts';
 
 export interface SettingsTransport {
   businessSettingsRequest<T>(path?:string,method?:string,body?:unknown,signal?:AbortSignal):Promise<T>;
@@ -12,7 +13,8 @@ interface SettingsView {
   group:string;label:string;revision:number;values:Record<string,string|number|boolean>;secrets:Record<string,boolean>;
   fields:Array<{key:string;label:string;type:'text'|'textarea'|'password'|'number'|'checkbox'|'url'|'select';min?:number;max?:number;help?:string;options?:Array<{value:string;label:string}>}>;
 }
-export function BusinessSettings({api,group,onSaved}:{api:SettingsTransport;group?:string;onSaved?:()=>void}){
+export function BusinessSettings({api,group,onSaved,selectControl}:{api:SettingsTransport;group?:string;onSaved?:()=>void;selectControl?:any}){
+  const Select=selectControl??'select';
   const [groups,setGroups]=useState<SettingsView[]>([]),[selected,setSelected]=useState(group||'tts');
   const [values,setValues]=useState<Record<string,string|number|boolean>>({}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[retry,setRetry]=useState(0);
   const [voices,setVoices]=useState<Array<{id:string;name:string}>>([]),[voice,setVoice]=useState(''),[audio,setAudio]=useState('');
@@ -30,7 +32,7 @@ export function BusinessSettings({api,group,onSaved}:{api:SettingsTransport;grou
   async function work(action:()=>Promise<void>){if(busy)return;setBusy(true);setError('');setMessage('');try{await action();}catch(error){setError(error instanceof Error?error.message:'操作失败');}finally{setBusy(false);}}
   return <section className="business-settings" aria-label={current?.label||'业务配置'}>
     <FloatingNotice message={busy?'正在处理…':error||message} busy={busy} error={!!error} kind="success"/>
-    {!group&&<label className="user-manager-mode">配置分类<select aria-label="配置分类" value={selected} disabled={busy} onChange={event=>setSelected(event.currentTarget.value)}>{groups.map(item=><option key={item.group} value={item.group}>{item.label}</option>)}</select></label>}
+    {!group&&<label className="user-manager-mode">配置分类<Select aria-label="配置分类" value={selected} disabled={busy} onChange={(event:JSX.TargetedEvent<HTMLSelectElement>)=>setSelected(event.currentTarget.value)}>{groups.map(item=><option key={item.group} value={item.group}>{item.label}</option>)}</Select></label>}
     {!current&&!busy&&<button onClick={()=>setRetry(value=>value+1)}>重新读取配置</button>}
     {current&&<>
       <p className="muted">保存后生效，无需重启。进行中的任务保留原配置，新任务使用更新后的配置。</p>
@@ -40,8 +42,8 @@ export function BusinessSettings({api,group,onSaved}:{api:SettingsTransport;grou
       });}}>
         {current.fields.map(field=><label key={field.key} className={field.type==='checkbox'?'business-setting-toggle':undefined}>{field.label}
           {field.type==='checkbox'?<input type="checkbox" checked={!!values[field.key]} disabled={busy} onChange={event=>setValues({...values,[field.key]:event.currentTarget.checked})}/>:
-          selected==='ai'&&field.key==='model'?<select aria-label={field.label} value={String(values.model||'')} disabled={busy} onChange={event=>setValues({...values,model:event.currentTarget.value})}><option value="">请获取并选择模型</option>{Array.from(new Set([String(values.model||''),...models])).filter(Boolean).map(model=><option key={model} value={model}>{model}</option>)}</select>:
-          field.type==='select'?<select aria-label={field.label} value={String(values[field.key]??'')} disabled={busy} onChange={event=>setValues({...values,[field.key]:event.currentTarget.value})}>{field.options?.map(option=><option value={option.value}>{option.label}</option>)}</select>:
+          selected==='ai'&&field.key==='model'?<Select aria-label={field.label} value={String(values.model||'')} disabled={busy} onChange={(event:JSX.TargetedEvent<HTMLSelectElement>)=>setValues({...values,model:event.currentTarget.value})}><option value="">请获取并选择模型</option>{Array.from(new Set([String(values.model||''),...models])).filter(Boolean).map(model=><option key={model} value={model}>{model}</option>)}</Select>:
+          field.type==='select'?<Select aria-label={field.label} value={String(values[field.key]??'')} disabled={busy} onChange={(event:JSX.TargetedEvent<HTMLSelectElement>)=>setValues({...values,[field.key]:event.currentTarget.value})}>{field.options?.map(option=><option value={option.value}>{option.label}</option>)}</Select>:
           field.type==='textarea'?<textarea aria-label={field.label} value={String(values[field.key]??'')} disabled={busy} maxLength={4096} rows={5} onInput={event=>setValues({...values,[field.key]:event.currentTarget.value})}/>:<input aria-label={field.label} list={selected==='ai'&&field.key==='model'?'ai-models':undefined} type={field.type} value={String(values[field.key]??'')} disabled={busy} min={field.min} max={field.max} step={field.type==='number'?1:undefined} maxLength={4096} autoComplete={field.type==='password'?'new-password':'off'} placeholder={field.type==='password'&&current.secrets[field.key]?'已保存，留空不修改':undefined} onInput={event=>setValues({...values,[field.key]:field.type==='number'?Number(event.currentTarget.value):event.currentTarget.value})}/>}
           {field.help&&<small className="muted">{field.help}</small>}
           {field.type==='password'&&<><small className="muted">{values[field.key]===''?'保存时将清除凭据':current.secrets[field.key]?'已有凭据，仅替换时填写':'尚未配置凭据'}</small><button className="button business-secret-clear" type="button" disabled={busy} onClick={()=>setValues({...values,[field.key]:''})}>清除{field.label}</button></>}

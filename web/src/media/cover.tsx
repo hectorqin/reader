@@ -3,6 +3,12 @@ import type { Item, MediaApi } from './api.ts';
 import { ApiError } from '../api/errors.ts';
 import {personColor} from './person-portrait.tsx';
 
+import { createStores } from '../store/idb.ts';
+const coverStores=createStores().catch(()=>null);
+const memoryCoverCache=new Map<string,Uint8Array>();
+async function readCachedCover(key:string){const memory=memoryCoverCache.get(key);if(memory)return memory;const stores=await coverStores;const bytes=stores?await stores.blobs.get(key):null;if(bytes)memoryCoverCache.set(key,bytes);return bytes;}
+async function writeCachedCover(key:string,bytes:Uint8Array){memoryCoverCache.set(key,bytes);const stores=await coverStores;try{await stores?.blobs.put(key,bytes);}catch{/* optional cache */}}
+
 const failureLabel=(error:unknown)=>{
   if(error instanceof ApiError){
     const labels:Record<string,string>={MEDIA_COVER_TIMEOUT:'封面读取超时',MEDIA_COVER_NOT_FOUND:'来源暂无封面',MEDIA_COVER_BUSY:'封面服务繁忙',MEDIA_COVER_UPSTREAM:'封面来源暂不可用'};
@@ -23,12 +29,15 @@ export function MediaCover({ api, item, square, retryable=false, loadWithoutMeta
     if (!loadWithoutMetadata&&!item.metadata.coverRef&&!item.metadata.tmdbPosterPath&&!item.metadata.embeddedCoverAssetId&&!item.metadata.musicBrainzCoverGroupId) return;
     const controller = new AbortController();
     let blobUrl = '', requested = false;
+    const cacheKey='media-cover:'+item.id+':'+[item.metadata.coverRef,item.metadata.tmdbPosterPath,item.metadata.embeddedCoverAssetId,item.metadata.musicBrainzCoverGroupId].join('|');
     let observer: IntersectionObserver | null = null;
     async function load() {
       if (requested) return;
       requested = true; observer?.disconnect();
       try {
-        const bytes = await api.cover(item.id, controller.signal);
+        const persistent=Object.prototype.hasOwnProperty.call(api,'reader');
+        const cached=persistent?await readCachedCover(cacheKey):null;let bytes:Uint8Array;
+        if(cached){bytes=cached;}else{bytes=await api.cover(item.id,controller.signal);if(persistent)void writeCachedCover(cacheKey,bytes);}
         if (controller.signal.aborted) return;
         const type = bytes[0] === 137 ? 'image/png' : bytes[0] === 255 ? 'image/jpeg' : 'image/webp';
         blobUrl = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type }));

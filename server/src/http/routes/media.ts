@@ -262,7 +262,11 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
       const elapsedMs=Math.round(performance.now()-started);
       app.log.info({sessionId:request.params.id,transport:'proxy',elapsedMs,rangeStart:result.start},'media playback source ready');
       reply.header('server-timing',`upstream;dur=${elapsedMs}`);
-      reply.header('cache-control','private, no-store').header('referrer-policy','no-referrer').header('accept-ranges','bytes').type(result.contentType);
+      reply.header('cache-control','private, no-store').header('referrer-policy','no-referrer').header('accept-ranges','bytes')
+        .header('access-control-allow-origin','*')
+        .header('access-control-allow-headers','Range, Content-Type, Authorization')
+        .header('access-control-expose-headers','Accept-Ranges, Content-Length, Content-Range, Content-Type')
+        .type(result.contentType);
       reply.header('content-length',result.entry.size?result.end-result.start+1:0);
       if(result.partial)reply.status(206).header('content-range',`bytes ${result.start}-${result.end}/${result.entry.size}`);
       reply.raw.once('close',()=>result.stream.destroy());
