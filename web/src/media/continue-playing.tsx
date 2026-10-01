@@ -1,6 +1,6 @@
 import {Play} from 'lucide-preact';
 import { useEffect, useRef, useState } from '../ui/vendor/preact.ts';
-import type { MediaApi, Part } from './api.ts';
+import type { MediaApi, Part, Detail } from './api.ts';
 import {MediaCover} from './cover.tsx';
 import {historyPosition} from './history-labels.ts';
 
@@ -9,13 +9,24 @@ interface Recent {libraryId:string;itemId:string;partId:string;title:string;part
 /** A single compact continuation, scoped to the selected library. */
 export function ContinuePlaying({api,libraryId,libraryIds=[],onPlay}:{api:MediaApi;libraryId:string;libraryIds?:string[];onPlay:(parts:Part[],index:number,title:string)=>Promise<void>}) {
   const [recent,setRecent]=useState<Recent|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+  const [work,setWork]=useState<Detail|null>(null),[cover,setCover]=useState<Detail|null>(null);
   const lifetime=useRef<AbortController|null>(null);
   const scope=JSON.stringify(libraryId?[libraryId]:libraryIds);
   useEffect(()=>{
-    const abort=new AbortController();lifetime.current=abort;setRecent(null);setError('');
+    const abort=new AbortController();lifetime.current=abort;setRecent(null);setWork(null);setCover(null);setError('');
     const allowed=new Set<string>(JSON.parse(scope));
-    if(allowed.size)void api.request<{items:Recent[]}>('history','GET',undefined,abort.signal).then(result=>{
-      if(!abort.signal.aborted)setRecent(result.items.find(row=>allowed.has(row.libraryId)&&!row.completed&&row.available&&row.position>row.start)??null);
+    if(allowed.size)void api.request<{items:Recent[]}>('history','GET',undefined,abort.signal).then(async result=>{
+      const row=result.items.find(row=>allowed.has(row.libraryId)&&!row.completed&&row.available&&row.position>row.start)??null;
+      if(abort.signal.aborted)return;setRecent(row);
+      if(!row)return;
+      let detail=await api.detail(row.itemId,abort.signal);
+      const hasCover=(item:Detail)=>!!(item.metadata.coverRef||item.metadata.tmdbPosterPath||item.metadata.embeddedCoverAssetId||item.metadata.musicBrainzCoverGroupId);
+      let artwork:Detail|null=hasCover(detail)?detail:null;
+      for(let depth=0;detail.parentId&&depth<3&&['episode','season','track'].includes(detail.kind);depth++){
+        detail=await api.detail(detail.parentId,abort.signal);
+        if(!artwork&&hasCover(detail))artwork=detail;
+      }
+      if(!abort.signal.aborted){setWork(detail);setCover(artwork);}
     }).catch(()=>{/* Optional history must not prevent browsing. */});
     return ()=>abort.abort();
   },[api,scope]);
@@ -35,7 +46,7 @@ export function ContinuePlaying({api,libraryId,libraryIds=[],onPlay}:{api:MediaA
   if(!recent)return null;
   const elapsed=Math.max(0,recent.position-recent.start),duration=recent.end===null?null:Math.max(0,recent.end-recent.start);
   return <section className="media-continue" aria-label="最近续播">
-    <MediaCover api={api} item={{id:recent.itemId,libraryId:recent.libraryId,kind:'recent',title:recent.title,parentId:null,metadata:recent.metadataJson?JSON.parse(recent.metadataJson):{},overrides:{}}} square={false} loadWithoutMetadata/><div><strong title={recent.title}>{recent.title}</strong><small title={recent.partTitle}>{recent.partTitle&&recent.partTitle!==recent.title?recent.partTitle+' · ':''}{historyPosition(recent.position,recent.start)}{duration!==null&&duration>0?' / '+historyPosition(duration,0):''}</small>
+    <MediaCover api={api} item={cover??work??{id:recent.itemId,libraryId:recent.libraryId,kind:'recent',title:recent.title,parentId:null,metadata:{},overrides:{}}} square={false} loadWithoutMetadata/><div><small>最近播放</small><strong title={work?.title??recent.title}>{work?.title??recent.title}</strong><small>{work&&work.id!==recent.itemId?recent.title+' · ':''}已播放 {historyPosition(recent.position,recent.start)}{duration!==null&&duration>0?' / '+historyPosition(duration,0):''}</small>
       {duration!==null&&duration>0&&<progress aria-label="已播进度" max={duration} value={Math.min(elapsed,duration)}/>}</div>
     <button className="media-primary" aria-label={busy?'正在打开…':'续播'} title="继续播放" disabled={busy} onClick={()=>void resume()}><Play size={18} fill="currentColor" aria-hidden="true"/></button>
     {error&&<p role="alert">{error}</p>}

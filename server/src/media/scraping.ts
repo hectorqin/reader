@@ -96,7 +96,7 @@ export class MediaScraping {
       return { items, expiresAt, truncated:candidates.length>=20 };
     });
   }
-  async autoMatch(actor:MediaActor,itemId:string,providerId:string,signal?:AbortSignal,beforePublish?:()=>void,mode:'strong'|'first'='strong') {
+  async autoMatch(actor:MediaActor,itemId:string,providerId:string,signal?:AbortSignal,beforePublish?:()=>void,mode:'strong'|'first'|'manual'='strong') {
     signal?.throwIfAborted();this.admin(actor);
     const item=this.catalog.detail(actor,itemId);
     if(item.metadata.onlineMatch)return {status:'unchanged',item};
@@ -105,7 +105,7 @@ export class MediaScraping {
     if(!result.items.length&&!result.truncated)return {status:'unmatched',...result};
     // Numbering can differ between local editions and the provider. A parent
     // match locates candidates, but does not authorize publishing every child.
-    if(providerId==='tmdb'&&(item.kind==='season'||item.kind==='episode'))return {status:'review',...result};
+    if(mode==='manual'||(mode!=='first'&&providerId==='tmdb'&&(item.kind==='season'||item.kind==='episode')))return {status:'review',...result};
     const strong=result.items.filter(candidate=>candidate.evidence.level==='strong');
     const selected=mode==='first'?result.items[0]:strong.length===1&&!result.truncated?strong[0]:undefined;
     if(!selected)return {status:'review',...result};

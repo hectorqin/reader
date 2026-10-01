@@ -98,3 +98,21 @@ test('batch stores individual results, rejects overlap, and cancels before publi
     const restarted=new MediaScrapeJobs(db,catalog,scraping);assert.equal(restarted.get(actor,'old').state,'interrupted');
   }finally{await jobs.close();db.close();}
 });
+
+for(const mode of ['first','manual'] as const)test(`batch ${mode} policy preserves selection on retry`,async()=>{
+ const db=new Db(':memory:'),actor={id:'admin',role:'admin'} as const;
+ db.run("INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES('admin','admin','x','admin',0,0)");
+ const catalog=new MediaCatalog(db,new MediaLibraries(db));
+ db.run("INSERT INTO media_libraries(id,name,kind,root,access,created_at,updated_at) VALUES('lib','movies','video','/media','all',0,0)");
+ db.run("INSERT INTO media_items(id,library_id,kind,local_key,title,metadata_json) VALUES('one','lib','movie','one','Local title','{}')");
+ let fail=true;
+ const scraping=new MediaScraping(db,catalog,[{id:'tmdb',label:'test',configured:true,kinds:['movie'],async search(){if(fail)throw Error('offline');return [{externalId:'first',title:'Other title'},{externalId:'second',title:'Local title'}];},async detail(_kind,id){return {externalId:id,fields:{title:'Other title'},sourceUrl:'https://example.com/'+id};}}]);
+ const jobs=new MediaScrapeJobs(db,catalog,scraping);
+ try{
+  const initial=jobs.start(actor,'tmdb',['one'],mode);await jobs.wait(initial.id);
+  fail=false;const retry=jobs.retry(actor,initial.id);await jobs.wait(retry.id);
+  assert.equal(jobs.get(actor,retry.id).items[0]!.state,mode==='first'?'matched':'review');
+  if(mode==='first')assert.equal((catalog.detail(actor,'one').metadata.onlineMatch as {externalId:string}).externalId,'first');
+  else {assert.equal(catalog.detail(actor,'one').metadata.onlineMatch,undefined);assert.equal(scraping.candidates(actor,'one').items.length,2);}
+ }finally{await jobs.close();db.close();}
+});
