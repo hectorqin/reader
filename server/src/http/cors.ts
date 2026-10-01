@@ -22,6 +22,7 @@ export function resolveCorsOrigin(config: AppConfig, request: FastifyRequest): s
   // Non-browser clients (curl, the Android native layer) send no Origin; the
   // header is then irrelevant and echoing nothing is correct.
   if (!origin) return '*';
+  if (origin === 'https://appassets.androidplatform.net') return origin;
   if (config.corsOrigins.length === 0) return origin;
 
   if (config.corsOrigins.includes(origin)) return origin;
