@@ -6,7 +6,10 @@
   "lang": "zh-CN",
   "start_url": "./",
   "scope": "./",
+  "display_override": ["window-controls-overlay", "standalone"],
   "display": "standalone",
+  "orientation": "any",
+  "launch_handler": { "client_mode": "navigate-existing" },
   "background_color": "#fbfaf7",
   "theme_color": "#fbfaf7",
   "icons": [

@@ -42,4 +42,4 @@ window.__readerFlush = () => {
 
 void app.start().catch((err: unknown) => {
   root.textContent = `客户端启动失败：${err instanceof Error ? err.message : String(err)}`;
-});
+}).finally(() => document.getElementById('app-startup')?.remove());

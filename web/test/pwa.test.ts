@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { registerPwa, watchPwaUpdates } from '../src/core/pwa.ts';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 let registration: ServiceWorkerRegistration;
 let serviceWorker: ServiceWorkerContainer;
@@ -124,6 +126,16 @@ it('keeps ordinary HTTP and unsupported browsers usable', () => {
   vi.stubGlobal('isSecureContext', true);
   vi.stubGlobal('navigator', {});
   expect(registerPwa).not.toThrow();
+});
+
+it('ships standalone launch metadata and a first-paint startup shell', () => {
+  const manifest = JSON.parse(readFileSync(resolve(process.cwd(), 'public/manifest.webmanifest'), 'utf8'));
+  expect(manifest.display).toBe('standalone');
+  expect(manifest.display_override).toContain('standalone');
+  expect(manifest.launch_handler.client_mode).toBe('navigate-existing');
+  const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
+  expect(html).toContain('id="app-startup"');
+  expect(html).toContain('apple-touch-startup-image');
 });
 
 it('reports failed registration without an unhandled rejection', async () => {
