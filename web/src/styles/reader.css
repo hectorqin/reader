@@ -3502,7 +3502,19 @@ book-content {
  * button beside it is what the user operates.
  */
 .manager-upload-input {
-  display: none;
+  /* Android WebView may reject click() on an input with display:none. Keep the
+     native picker in the layout as an invisible, non-obstructing control. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 /* ---- reduced motion ---- */
