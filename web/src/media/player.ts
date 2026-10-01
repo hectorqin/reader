@@ -362,7 +362,9 @@ export class MediaPlayer extends EventTarget {
       this.changed();
     });
     this.media=selected.video?this.video:this.audio;
-    this.media.removeAttribute('crossorigin');
+    // Anonymous CORS mode makes the browser attach Origin to the media
+    // request and to redirected HLS segment requests such as media-0.ts.
+    this.media.crossOrigin='anonymous';
     const rate=this.playbackRate;
     this.media.defaultPlaybackRate=rate;this.media.playbackRate=rate;
     if(this.nativeActive)this.native?.command('stop');
@@ -385,6 +387,7 @@ export class MediaPlayer extends EventTarget {
           queue:parts.map(entry=>({partId:entry.part.id,title:entry.title.slice(0,200)}))}});
       this.changed();return;
     }
+    this.media.crossOrigin='anonymous';
     this.media.src=this.api.streamUrl(session);
     void this.audioTracks.load(this.media,selected.part.assetId);
     this.changed();

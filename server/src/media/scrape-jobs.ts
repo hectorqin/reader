@@ -13,7 +13,8 @@ const resultSelect=`SELECT j.item_id itemId,j.state,j.error,COALESCE((SELECT jso
 export class MediaScrapeJobs {
   private active=new Map<string,{controller:AbortController;done:Promise<void>}>();
   constructor(private db:MediaDatabase,private catalog:MediaCatalog,private scraping:MediaScraping,private accounts:MediaAccounts=new DatabaseMediaAccounts(db)){
-    db.run(`CREATE TABLE IF NOT EXISTS media_scrape_jobs(id TEXT PRIMARY KEY,actor_id TEXT NOT NULL,provider TEXT NOT NULL,state TEXT NOT NULL,created_at INTEGER NOT NULL)`);
+    db.run(`CREATE TABLE IF NOT EXISTS media_scrape_jobs(id TEXT PRIMARY KEY,actor_id TEXT NOT NULL,provider TEXT NOT NULL,state TEXT NOT NULL,created_at INTEGER NOT NULL,match_mode TEXT NOT NULL DEFAULT 'strong')`);
+    if(!db.all<{name:string}>('PRAGMA table_info(media_scrape_jobs)').some(column=>column.name==='match_mode'))db.run("ALTER TABLE media_scrape_jobs ADD COLUMN match_mode TEXT NOT NULL DEFAULT 'strong'");
     db.run(`CREATE TABLE IF NOT EXISTS media_scrape_job_items(job_id TEXT NOT NULL REFERENCES media_scrape_jobs(id) ON DELETE CASCADE,item_id TEXT NOT NULL,ordinal INTEGER NOT NULL,state TEXT NOT NULL,error TEXT,PRIMARY KEY(job_id,item_id))`);
     db.transaction(()=>{
       db.run("UPDATE media_scrape_job_items SET state='interrupted',error='server-restarted' WHERE job_id IN (SELECT id FROM media_scrape_jobs WHERE state='running') AND state IN ('pending','running')");
@@ -32,7 +33,7 @@ export class MediaScrapeJobs {
     }
     return this.start(actor,'tmdb',ids);
   }
-  start(actor:MediaActor,provider:string,itemIds:string[]){
+  start(actor:MediaActor,provider:string,itemIds:string[],matchMode:'strong'|'first'='strong'){
     this.admin(actor);
     if(!Array.isArray(itemIds)||!itemIds.length||itemIds.length>500||new Set(itemIds).size!==itemIds.length)throw badRequest('选择 1–500 个不重复作品');
     const source=this.scraping.status(actor).items.find(p=>p.id===provider&&p.configured);
@@ -40,7 +41,8 @@ export class MediaScrapeJobs {
     for(const id of itemIds)if(!source.kinds.includes(this.catalog.detail(actor,id).kind))throw badRequest('包含来源不支持的作品类型');
     if(this.active.size)throw conflict('已有批量刮削任务正在运行','SCRAPE_RUNNING');
     const id=randomUUID(),controller=new AbortController();
-    this.db.transaction(()=>{this.db.run("INSERT INTO media_scrape_jobs VALUES(?,?,?,'running',?)",id,actor.id,provider,Date.now());itemIds.forEach((item,index)=>this.db.run("INSERT INTO media_scrape_job_items VALUES(?,?,?,'pending',NULL)",id,item,index));});
+    if(matchMode!=='strong'&&matchMode!=='first')throw badRequest('无效的匹配策略');
+    this.db.transaction(()=>{this.db.run("INSERT INTO media_scrape_jobs VALUES(?,?,?,'running',?,?)",id,actor.id,provider,Date.now(),matchMode);itemIds.forEach((item,index)=>this.db.run("INSERT INTO media_scrape_job_items VALUES(?,?,?,'pending',NULL)",id,item,index));});
     const done=Promise.resolve().then(()=>this.run(actor,id,provider,itemIds,controller.signal)).finally(()=>this.active.delete(id));
     this.active.set(id,{controller,done});return this.get(actor,id);
   }
@@ -86,7 +88,7 @@ export class MediaScrapeJobs {
         const user=this.accounts.get(actor.id);
         if(!user||user.disabled||user.role!=='admin')throw new Error('actor-unavailable');
         this.db.run("UPDATE media_scrape_job_items SET state='running' WHERE job_id=? AND item_id=?",id,item);
-        try{const result=await scraping.autoMatch(actor,item,provider,signal,()=>{const current=this.accounts.get(actor.id);if(!current||current.disabled||current.role!=='admin')throw new Error('actor-unavailable');});signal.throwIfAborted();this.db.run('UPDATE media_scrape_job_items SET state=? WHERE job_id=? AND item_id=?',result.status,id,item);}
+        try{const mode=this.db.get<{match_mode:string}>('SELECT match_mode FROM media_scrape_jobs WHERE id=?',id)?.match_mode==='first'?'first':'strong';const result=await scraping.autoMatch(actor,item,provider,signal,()=>{const current=this.accounts.get(actor.id);if(!current||current.disabled||current.role!=='admin')throw new Error('actor-unavailable');},mode);signal.throwIfAborted();this.db.run('UPDATE media_scrape_job_items SET state=? WHERE job_id=? AND item_id=?',result.status,id,item);}
         catch(error){if(signal.aborted)throw error;this.db.run("UPDATE media_scrape_job_items SET state='failed',error=? WHERE job_id=? AND item_id=?",'匹配失败，请重新审阅或重试',id,item);}
       }
       this.db.run("UPDATE media_scrape_jobs SET state='complete' WHERE id=?",id);

@@ -96,7 +96,7 @@ export class MediaScraping {
       return { items, expiresAt, truncated:candidates.length>=20 };
     });
   }
-  async autoMatch(actor:MediaActor,itemId:string,providerId:string,signal?:AbortSignal,beforePublish?:()=>void) {
+  async autoMatch(actor:MediaActor,itemId:string,providerId:string,signal?:AbortSignal,beforePublish?:()=>void,mode:'strong'|'first'='strong') {
     signal?.throwIfAborted();this.admin(actor);
     const item=this.catalog.detail(actor,itemId);
     if(item.metadata.onlineMatch)return {status:'unchanged',item};
@@ -107,8 +107,9 @@ export class MediaScraping {
     // match locates candidates, but does not authorize publishing every child.
     if(providerId==='tmdb'&&(item.kind==='season'||item.kind==='episode'))return {status:'review',...result};
     const strong=result.items.filter(candidate=>candidate.evidence.level==='strong');
-    if(result.truncated||strong.length!==1)return {status:'review',...result};
-    try{return {status:'matched',item:await this.confirm(actor,itemId,strong[0]!.candidateId,true,signal,beforePublish)};}
+    const selected=mode==='first'?result.items[0]:strong.length===1&&!result.truncated?strong[0]:undefined;
+    if(!selected)return {status:'review',...result};
+    try{return {status:'matched',item:await this.confirm(actor,itemId,selected.candidateId,mode!=='first',signal,beforePublish)};}
     catch(error){if((error as {code?:string}).code==='MEDIA_MATCH_REVIEW')return {status:'review',...result};throw error;}
   }
   async confirm(actor: MediaActor, itemId: string, candidateId: string, automatic=false, signal?:AbortSignal, beforePublish?:()=>void) {

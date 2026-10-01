@@ -722,10 +722,10 @@ body:has(>#app>.media-screen) { background: #faf9f5; }
 @media(min-width:900px){.media-detail-columns {display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:30px;align-items:start}.media-person-detail .media-detail-columns {display:block}.media-person-detail .media-detail-sidebar {max-width:640px}.media-detail-sidebar .media-edition-tools {margin-top:0}.media-detail-main>.media-series-seasons {margin-top:18px}}
 
 /* A permanent video stage and its controls scroll as one surface. */
-.media-player.media-player-expanded:not(:is(.media-player-audio,.media-player-native-video)) {position:fixed;z-index:3;inset:62px 0 0;width:100%;max-width:1120px;max-height:none;padding:0;border:0;border-radius:0;background:#111810;color:#f2f2e9;overflow:auto;overscroll-behavior:contain;box-shadow:none;box-sizing:border-box}
+.media-player.media-player-expanded:not(:is(.media-player-audio,.media-player-native-video)) {position:fixed;z-index:3;inset:62px 0 0;width:100%;max-width:none;max-height:none;padding:0;border:0;border-radius:0;background:var(--media-background);color:var(--text);overflow:auto;overscroll-behavior:contain;box-shadow:none;box-sizing:border-box}
 .media-player-expanded:not(:is(.media-player-audio,.media-player-native-video))>:not(.media-video-workspace) {display:none}
-.media-video-workspace,.media-video-sheet {--text:#f2f2e9;--muted:#aebba5;--border:#34402d;--surface:#263022;--media-accent:#b6c99a;--media-selection:#34452a;--media-error-background:#f49a8c18;--media-error-ink:#f4a89d;color-scheme:dark}
-.media-video-workspace {min-height:100%;background:#111810;color:var(--text)}
+.media-video-workspace,.media-video-sheet {color-scheme:inherit}
+.media-video-workspace {min-height:100%;background:var(--media-background);color:var(--text)}
 .media-video-stage {aspect-ratio:16/9;background:#060906;display:flex;align-items:center;justify-content:center}
 .media-video-stage video {display:block;width:100%;height:100%;max-height:none;object-fit:contain}
 .media-video-workspace .media-video-controls {display:block;max-width:none;max-height:none;padding:15px 20px 30px;margin:0;border:0;border-radius:0;background:transparent;overflow:visible}
@@ -755,7 +755,7 @@ body:has(>#app>.media-screen) { background: #faf9f5; }
 .media-video-workspace .media-playback-problem .media-primary {background:var(--media-accent);color:#182010}
 .media-video-controls .media-screen-error {margin:18px 0;font-size:12px}
 .media-video-controls .media-screen-error-actions {display:flex;gap:8px}
-.media-video-sheet {position:fixed;inset:auto 0 0;margin:0 auto;padding:20px 22px 25px;border:1px solid var(--border);border-bottom:0;border-radius:15px 15px 0 0;width:540px;max-width:100%;max-height:80dvh;box-sizing:border-box;overflow:auto;background:#1e271b;color:#f2f2e9;font:14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -10px 50px #0004}
+.media-video-sheet {position:fixed;inset:auto 0 0;margin:0 auto;padding:20px 22px 25px;border:1px solid var(--border);border-bottom:0;border-radius:15px 15px 0 0;width:540px;max-width:100%;max-height:80dvh;box-sizing:border-box;overflow:auto;background:var(--media-paper);color:var(--text);font:14px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;box-shadow:0 -10px 50px #0004}
 .media-video-sheet::backdrop {background:#10160c88}
 .media-video-sheet header {display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .media-video-sheet h2 {font-size:17px;margin:0;font-weight:600}
@@ -794,7 +794,7 @@ body:has(>#app>.media-screen) { background: #faf9f5; }
 .media-video-tools>div {flex:1;justify-content:space-between}
 .media-video-sheet .media-video-end {display:flex;align-items:center;gap:10px;padding-left:0}
 @media(max-width:700px){body:has(.media-screen.media-video-page) .media-channel-entry {display:none}.media-screen.media-video-page {padding-top:0}.media-screen.media-video-page>.media-heading {margin:0 -4px}}
-.media-screen.media-video-page>.media-heading {background:#111810;color:#f2f2e9;border-color:#34402d}
+.media-screen.media-video-page>.media-heading {background:var(--media-background);color:var(--text);border-color:var(--border)}
 
 /* Settings and library forms share the prototype's single page heading. */
 .media-utility-host[hidden] {display:none}

@@ -4,7 +4,7 @@ import type { MediaApi, Part } from './api.ts';
 import {MediaCover} from './cover.tsx';
 import {historyPosition} from './history-labels.ts';
 
-interface Recent {libraryId:string;itemId:string;partId:string;title:string;partTitle:string;start:number;end:number|null;position:number;completed:number;available:number}
+interface Recent {libraryId:string;itemId:string;partId:string;title:string;partTitle:string;start:number;end:number|null;position:number;completed:number;available:number;metadataJson?:string}
 
 /** A single compact continuation, scoped to the selected library. */
 export function ContinuePlaying({api,libraryId,libraryIds=[],onPlay}:{api:MediaApi;libraryId:string;libraryIds?:string[];onPlay:(parts:Part[],index:number,title:string)=>Promise<void>}) {
@@ -35,7 +35,7 @@ export function ContinuePlaying({api,libraryId,libraryIds=[],onPlay}:{api:MediaA
   if(!recent)return null;
   const elapsed=Math.max(0,recent.position-recent.start),duration=recent.end===null?null:Math.max(0,recent.end-recent.start);
   return <section className="media-continue" aria-label="最近续播">
-    <MediaCover api={api} item={{id:recent.itemId,libraryId:recent.libraryId,kind:'recent',title:recent.title,parentId:null,metadata:{},overrides:{}}} square={false} loadWithoutMetadata/><div><strong title={recent.title}>{recent.title}</strong><small title={recent.partTitle}>{recent.partTitle&&recent.partTitle!==recent.title?recent.partTitle+' · ':''}{historyPosition(recent.position,recent.start)}{duration!==null&&duration>0?' / '+historyPosition(duration,0):''}</small>
+    <MediaCover api={api} item={{id:recent.itemId,libraryId:recent.libraryId,kind:'recent',title:recent.title,parentId:null,metadata:recent.metadataJson?JSON.parse(recent.metadataJson):{},overrides:{}}} square={false} loadWithoutMetadata/><div><strong title={recent.title}>{recent.title}</strong><small title={recent.partTitle}>{recent.partTitle&&recent.partTitle!==recent.title?recent.partTitle+' · ':''}{historyPosition(recent.position,recent.start)}{duration!==null&&duration>0?' / '+historyPosition(duration,0):''}</small>
       {duration!==null&&duration>0&&<progress aria-label="已播进度" max={duration} value={Math.min(elapsed,duration)}/>}</div>
     <button className="media-primary" aria-label={busy?'正在打开…':'续播'} title="继续播放" disabled={busy} onClick={()=>void resume()}><Play size={18} fill="currentColor" aria-hidden="true"/></button>
     {error&&<p role="alert">{error}</p>}

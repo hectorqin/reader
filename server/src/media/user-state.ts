@@ -50,10 +50,10 @@ export class MediaUserState {
     ) SELECT i.id itemId,i.library_id libraryId,i.kind,
       COALESCE(json_extract(o.value_json,'$'),json_extract(m.fields_json,'$.title'),i.title) title,
       e.id editionId,e.label editionLabel,p.id partId,p.title partTitle,a.id assetId,p.start_seconds start,p.end_seconds end,
-      g.position,g.completed,g.updated_at updatedAt,(a.available=1 AND p.active=1) available FROM page g JOIN media_parts p ON p.id=g.part_id
+      g.position,g.completed,g.updated_at updatedAt,(a.available=1 AND p.active=1) available,json_patch(i.metadata_json,COALESCE(m.fields_json,'{}')) metadataJson FROM page g JOIN media_parts p ON p.id=g.part_id
       JOIN media_editions e ON e.id=p.edition_id JOIN media_items i ON i.id=e.item_id JOIN media_assets a ON a.id=p.asset_id
       LEFT JOIN media_metadata_overrides o ON o.item_id=i.id AND o.field='title' LEFT JOIN media_online_metadata m ON m.item_id=i.id
-      ORDER BY g.updated_at DESC,p.id`,actor.id,...visible,options.limit??100,options.offset??0),total};
+    ORDER BY g.updated_at DESC,p.id`,actor.id,...visible,options.limit??100,options.offset??0),total};
   }
   queue(actor:MediaActor) {
     const visible=this.visible(actor);
