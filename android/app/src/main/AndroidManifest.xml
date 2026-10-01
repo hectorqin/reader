@@ -53,6 +53,7 @@
         </service>
 
         <activity android:name=".media.MediaVideoActivity" android:exported="false"
+            android:theme="@style/Theme.Reader.Video"
             android:launchMode="singleTask"
             android:supportsPictureInPicture="true"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize" />

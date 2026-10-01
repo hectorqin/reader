@@ -14,13 +14,22 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.FrameLayout
+import android.widget.HorizontalScrollView
 import android.widget.TextView
+import android.content.res.ColorStateList
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.view.ViewGroup.LayoutParams
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.ui.DefaultTimeBar
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionCommand
@@ -31,13 +40,19 @@ import com.google.common.util.concurrent.ListenableFuture
 /** A surface for the service-owned player. No URLs or credentials enter the activity intent. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class MediaVideoActivity : AppCompatActivity() {
-    private lateinit var root: LinearLayout
+    private lateinit var root: FrameLayout
     private lateinit var view: PlayerView
     private lateinit var status: TextView
     private lateinit var previous: Button
     private lateinit var next: Button
     private lateinit var bar: LinearLayout
     private lateinit var pip: Button
+    private lateinit var chrome: LinearLayout
+    private lateinit var problem: LinearLayout
+    private lateinit var problemText: TextView
+    private lateinit var title: TextView
+    private var playbackError = false
+    private var controlsVisible = true
     private var controller: MediaController? = null
     private var pending: ListenableFuture<MediaController>? = null
     private val subtitleRequests = SubtitleRequestGate()
@@ -50,7 +65,10 @@ class MediaVideoActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(Color.BLACK) }
+        root = FrameLayout(this).apply {
+            setBackgroundColor(Color.rgb(8, 12, 9))
+            clipToPadding = false
+        }
         ViewCompat.setOnApplyWindowInsetsListener(root) { target, insets ->
             val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
             val inPip = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInPictureInPictureMode
@@ -58,33 +76,117 @@ class MediaVideoActivity : AppCompatActivity() {
             else target.setPadding(safe.left, safe.top, safe.right, safe.bottom)
             insets
         }
-        bar = LinearLayout(this)
-        bar.addView(Button(this).apply { text = "返回"; setOnClickListener { finish() } })
-        previous = Button(this).apply { text = "上一集"; setOnClickListener { move(MediaPlaybackService.PREVIOUS) } }
-        next = Button(this).apply { text = "下一集"; setOnClickListener { move(MediaPlaybackService.NEXT) } }
+        view = PlayerView(this).apply {
+            setShowSubtitleButton(true)
+            setShowPreviousButton(false)
+            setShowNextButton(false)
+            setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+            setControllerShowTimeoutMs(3500)
+            setShutterBackgroundColor(Color.rgb(6, 8, 6))
+        }
+        root.addView(view, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        chrome = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(8), 0, dp(16))
+            background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0xF2111913.toInt(), 0x00111913))
+        }
+        val heading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12), 0, dp(12), 0) }
+        heading.addView(actionButton("‹", "返回") { finish() }, LinearLayout.LayoutParams(dp(48), dp(48)))
+        title = TextView(this).apply {
+            text = "视频播放"; textSize = 16f; setTextColor(Color.WHITE)
+            maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(dp(12), 0, dp(12), 0)
+        }
+        heading.addView(title, LinearLayout.LayoutParams(0, dp(48), 1f))
+        chrome.addView(heading)
+        bar = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(10), 0, dp(10), 0)
+        }
+        previous = actionButton("上一集", "上一集") { move(MediaPlaybackService.PREVIOUS) }
+        next = actionButton("下一集", "下一集") { move(MediaPlaybackService.NEXT) }
         bar.addView(previous); bar.addView(next)
-        bar.addView(Button(this).apply { text = "字幕"; setOnClickListener { listSubtitles(this) } })
-        pip = Button(this).apply {
-            text = "小窗"; contentDescription = "画中画"
+        bar.addView(actionButton("字幕", "字幕") { listSubtitles(it as Button) })
+        pip = actionButton("小窗", "画中画") { openPip() }.apply {
             visibility = if (supportsPip()) View.VISIBLE else View.GONE
-            setOnClickListener { openPip() }
         }
         bar.addView(pip)
         for (index in 0 until bar.childCount) (bar.getChildAt(index) as Button).apply {
             minWidth = 0; minimumWidth = 0
-            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            layoutParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, dp(48)).apply {
+                marginStart = dp(3); marginEnd = dp(3)
+            }
         }
-        root.addView(bar)
-        status = TextView(this).apply { setTextColor(Color.WHITE); text = "正在连接播放器…" }
-        root.addView(status)
-        view = PlayerView(this).apply { setShowSubtitleButton(true) }
-        root.addView(view, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        chrome.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(bar) })
+        status = TextView(this).apply {
+            setTextColor(Color.rgb(205, 218, 204))
+            textSize = 14f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            gravity = Gravity.CENTER_VERTICAL
+            text = "正在连接播放器…"
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(dp(18), 0, dp(18), 0)
+        }
+        chrome.addView(status, LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT))
+        root.addView(chrome, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.TOP))
+        problemText = TextView(this).apply { textSize = 14f; setTextColor(0xFFD0DACE.toInt()); gravity = Gravity.CENTER; setPadding(0, dp(12), 0, dp(20)) }
+        problem = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER; setPadding(dp(24), dp(20), dp(24), dp(20))
+            background = GradientDrawable().apply { cornerRadius = dp(18).toFloat(); setColor(0xF21E291F.toInt()) }
+            addView(TextView(this@MediaVideoActivity).apply { text = "暂时无法播放"; textSize = 20f; setTextColor(Color.WHITE) })
+            addView(problemText)
+            addView(actionButton("返回选择其他版本", "返回选择其他播放版本") { finish() }, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, dp(48)))
+            visibility = View.GONE
+        }
+        root.addView(problem, FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER).apply { leftMargin = dp(24); rightMargin = dp(24) })
+        view.findViewById<DefaultTimeBar>(androidx.media3.ui.R.id.exo_progress)?.apply {
+            setPlayedColor(0xFFB6C99A.toInt()); setScrubberColor(0xFFB6C99A.toInt())
+            setBufferedColor(0xFF61705A.toInt()); setUnplayedColor(0xFF303D2C.toInt())
+        }
+        view.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
+            controlsVisible = visibility == View.VISIBLE
+            updateChrome()
+        })
+        view.setFullscreenButtonClickListener { fullscreen ->
+            requestedOrientation = if (fullscreen) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
         setContentView(root)
         WindowCompat.getInsetsController(window, root).apply {
             isAppearanceLightStatusBars = false
             isAppearanceLightNavigationBars = false
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         ViewCompat.requestApplyInsets(root)
+    }
+
+    private fun updateChrome() {
+        val inPip = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInPictureInPictureMode
+        chrome.visibility = if (!inPip && (controlsVisible || playbackError)) View.VISIBLE else View.GONE
+        problem.visibility = if (!inPip && playbackError) View.VISIBLE else View.GONE
+        WindowCompat.getInsetsController(window, root).apply {
+            if (inPip || (!controlsVisible && !playbackError)) hide(WindowInsetsCompat.Type.systemBars())
+            else show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+
+    private fun dp(value: Int): Int = (value * resources.displayMetrics.density + 0.5f).toInt()
+
+    private fun actionButton(label: String, description: String, click: (View) -> Unit): Button = Button(this).apply {
+        text = label
+        contentDescription = description
+        textSize = if (label.length == 1) 27f else 12f
+        setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(0xFF6D786B.toInt(), 0xFFE6EDE2.toInt())))
+        setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL))
+        gravity = Gravity.CENTER
+        minHeight = 0
+        setPadding(dp(12), 0, dp(12), 0)
+        background = GradientDrawable().apply {
+            cornerRadius = dp(9).toFloat()
+            setColor(Color.rgb(35, 48, 38))
+        }
+        backgroundTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_enabled), intArrayOf(-android.R.attr.state_enabled)), intArrayOf(Color.rgb(49, 69, 51), Color.rgb(31, 36, 32)))
+        setOnClickListener(click)
     }
 
     override fun onStart() {
@@ -96,7 +198,7 @@ class MediaVideoActivity : AppCompatActivity() {
             runCatching {
                 controller = future.get().also { it.addListener(listener); view.player = it }
                 update()
-            }.onFailure { status.text = "无法连接播放器，请返回后重试。" }
+            }.onFailure { showProblem("无法连接播放器，请返回后重试。") }
         }, ContextCompat.getMainExecutor(this))
     }
 
@@ -109,14 +211,30 @@ class MediaVideoActivity : AppCompatActivity() {
             subtitleSession = currentSession
         }
         if (player.currentMediaItem?.mediaMetadata?.extras?.getBoolean("video") != true) { finish(); return }
-        status.text = player.playerError?.let { "无法解码或读取资源，请返回选择其他版本。" }
-            ?: player.sessionExtras.getString("mediaError") ?: player.mediaMetadata.title ?: "视频播放"
+        title.text = player.mediaMetadata.title ?: "视频播放"
+        val error = player.playerError?.let { "无法解码或读取资源，请返回选择其他版本。" }
+            ?: player.sessionExtras.getString("mediaError")?.takeIf { it.isNotBlank() }
+        showProblem(error)
+        status.text = if (player.playbackState == Player.STATE_BUFFERING) "正在缓冲…" else ""
         previous.isEnabled = player.sessionExtras.getBoolean("canPrevious")
         next.isEnabled = player.sessionExtras.getBoolean("canNext")
         pip.isEnabled = player.playbackState == Player.STATE_READY || player.playbackState == Player.STATE_BUFFERING
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && supportsPip()) runCatching { setPictureInPictureParams(pipParams()) }
         if (player.isPlaying) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
+    private fun showProblem(message: String?) {
+        playbackError = message != null
+        problemText.text = message.orEmpty()
+        view.useController = !playbackError && !(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInPictureInPictureMode)
+        updateChrome()
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        view.setFullscreenButtonState(newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE)
+        ViewCompat.requestApplyInsets(root)
     }
 
     private fun supportsPip(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
@@ -146,10 +264,10 @@ class MediaVideoActivity : AppCompatActivity() {
 
     override fun onPictureInPictureModeChanged(inPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(inPictureInPictureMode, newConfig)
-        bar.visibility = if (inPictureInPictureMode) View.GONE else View.VISIBLE
-        status.visibility = if (inPictureInPictureMode) View.GONE else View.VISIBLE
-        view.useController = !inPictureInPictureMode
+        view.useController = !inPictureInPictureMode && !playbackError
         if (inPictureInPictureMode) view.hideController()
+        else if (!playbackError) view.showController()
+        updateChrome()
         ViewCompat.requestApplyInsets(root)
     }
 

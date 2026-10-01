@@ -11,4 +11,12 @@
         <item name="android:navigationBarColor">@color/paper</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
+    <style name="Theme.Reader.Video" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">#080C09</item>
+        <item name="android:statusBarColor">#080C09</item>
+        <item name="android:navigationBarColor">#080C09</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="colorAccent">#B6C99A</item>
+    </style>
 </resources>
