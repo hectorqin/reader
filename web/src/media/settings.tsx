@@ -1,3 +1,4 @@
+import {FloatingConfirm} from '../ui/floating-confirm.tsx';
 import {MediaSelect} from './select.tsx';
 import {PlaybackSettings} from './playback-settings.tsx';
 import {MediaThemeSettings} from './theme-settings.tsx';
@@ -27,7 +28,7 @@ export function MediaSettings({scope,preferences,player,admin,api,account,onSave
   const link=(Icon:typeof Clock3,label:string,description:string,onClick:()=>void)=><button className="media-setting-row" onClick={onClick}><Icon size={19} strokeWidth={1.6} aria-hidden="true"/><span>{label}</span><small>{description}</small><ChevronRight size={16} aria-hidden="true"/></button>;
   return <section className="media-settings" aria-label="影音设置">
     <div className="media-settings-heading"><button className="media-back-button" data-media-back aria-label={panel==='home'?'← 返回影音':'返回影音设置'} title={panel==='home'?'返回影音':'返回影音设置'} onClick={back}><ChevronLeft size={20} aria-hidden="true"/></button><h1>{title}</h1></div>
-    {leaving&&<div className="media-manager-note" role="alert"><p>浏览偏好尚未保存。</p><button onClick={()=>setLeaving(false)}>继续编辑</button><button onClick={()=>{setLeaving(false);setDraft({...preferences});setPanel('home');}}>放弃修改</button></div>}
+    {leaving&&<FloatingConfirm theme="media" title="放弃浏览偏好修改？" text="浏览偏好尚未保存，离开后将丢弃本次修改。" confirmText="放弃修改" cancelText="继续编辑" onCancel={()=>setLeaving(false)} onConfirm={()=>{setLeaving(false);setDraft({...preferences});setPanel('home');}}/>}
     {panel==='home'?<>
       {account&&<div className="media-settings-intro"><div className="media-account-avatar" aria-hidden="true">{Array.from(account.displayName||account.username)[0]}</div><div><strong>{account.displayName||account.username}</strong><small>{account.role==='admin'?'管理员':'普通用户'} · 当前服务器</small></div></div>}
       <section className="media-settings-group"><h2>我的内容</h2>

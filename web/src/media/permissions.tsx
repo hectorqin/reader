@@ -1,3 +1,4 @@
+import {FloatingConfirm} from '../ui/floating-confirm.tsx';
 import {MediaSelect} from './select.tsx';
 import { useEffect, useState, useRef } from '../ui/vendor/preact.ts';
 import {ChevronLeft,Search} from 'lucide-preact';
@@ -41,7 +42,7 @@ export function MediaPermissions({api,library,onSaved,onCancel}:{api:MediaApi;li
     finally {if(pending.current===controller)pending.current=null;if(!controller.signal.aborted)setSaving(false);}
   };
   return <section className="media-permissions-page"><header className="media-settings-heading"><button className="media-back-button" data-media-back aria-label="返回媒体库" disabled={saving} onClick={close}><ChevronLeft size={20} aria-hidden="true"/></button><h1>访问权限</h1></header>
-    {leaving&&<div className="media-manager-note" role="alert"><p>访问权限尚未保存。</p><button onClick={()=>setLeaving(false)}>继续编辑</button><button onClick={onCancel}>放弃修改</button></div>}
+    {leaving&&<FloatingConfirm theme="media" title="放弃访问权限修改？" text="访问权限尚未保存，离开后将丢弃本次选择。" confirmText="放弃修改" cancelText="继续编辑" onCancel={()=>setLeaving(false)} onConfirm={()=>{setLeaving(false);onCancel();}}/>}
     <form className="media-form media-permissions-form" aria-label="媒体库访问权限" onSubmit={event=>{event.preventDefault();if(ready&&!saving)void save();}}>
     <div className="media-permissions-intro"><h2>{library.name}</h2><p>允许访问的用户共享作品资料，收藏与进度各自独立。</p></div>
     {error&&(ready?<div role="alert" className="media-error">{error}</div>:<MediaScreenError fullPage error={cause} message={error} busy={false} onRetry={()=>setAttempt(value=>value+1)}/>)}

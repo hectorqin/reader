@@ -512,3 +512,10 @@ body[data-media-theme] {--surface-muted:var(--media-theme-surface)}
 .media-player .dplayer-host .dplayer-bar-wrap .dplayer-played,.media-player .dplayer-host .dplayer-volume-bar-inner {background:var(--media-accent)!important}
 .media-player .dplayer-host .dplayer-setting-box,.media-player .dplayer-host .dplayer-setting-item {background:var(--media-paper);color:var(--text)}
 .media-player .dplayer-host .dplayer-setting-item:hover {background:var(--media-selection)}
+
+.media-screen .media-folder-operation{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;margin:10px 0;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.media-folder-operation>span{display:grid;gap:5px;font-size:14px}.media-folder-operation small{color:var(--muted);font-size:12px}
+.media-screen .media-folder-operation>button{display:inline-flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;min-height:40px;padding:8px 14px;border:1px solid var(--border);border-radius:8px;background:var(--media-selection);color:var(--text)}
+.media-screen .media-folder-operation>button:hover{border-color:var(--media-accent)}
+.media-scrape-manager>.media-task-create{margin-top:0}.media-scrape-manager>.media-task-history{margin-top:28px}
+@media(max-width:520px){.media-screen .media-folder-operation{align-items:stretch;flex-direction:column}.media-folder-operation>button{align-self:flex-start}}

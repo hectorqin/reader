@@ -78,6 +78,13 @@ export class MediaScrapeJobs {
   }
   list(actor:MediaActor){this.admin(actor);return {items:this.db.all<{id:string}>('SELECT id FROM media_scrape_jobs ORDER BY created_at DESC,id DESC LIMIT 50').map(row=>this.get(actor,row.id))};}
   cancel(actor:MediaActor,id:string){this.get(actor,id);this.active.get(id)?.controller.abort();return this.get(actor,id);}
+  deleteJob(actor:MediaActor,id:string){
+    this.admin(actor);
+    const job=this.db.get<{state:string}>('SELECT state FROM media_scrape_jobs WHERE id=?',id);
+    if(!job)throw notFound('刮削任务不存在');
+    if(job.state==='running'||this.active.has(id))throw conflict('任务仍在运行，请先取消并等待结束','SCRAPE_RUNNING');
+    this.db.run('DELETE FROM media_scrape_jobs WHERE id=?',id);
+  }
   async wait(id:string){await this.active.get(id)?.done;}
   async close(){const jobs=[...this.active.values()];jobs.forEach(job=>job.controller.abort());await Promise.all(jobs.map(job=>job.done));}
   private matchMode(id:string):'strong'|'first'|'manual' {

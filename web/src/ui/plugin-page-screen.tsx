@@ -1,3 +1,4 @@
+import {FloatingConfirm} from './floating-confirm.tsx';
 import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { ExtensionContent, ExtensionForm, ExtensionPage } from '../api/sources.ts';
 import { mountUI } from './mount.ts';
@@ -81,10 +82,7 @@ export class PluginPageScreen {
             onInput={event => { data[field.key] = field.type === 'number' ? Number(event.currentTarget.value) : event.currentTarget.value; }} />}
       </label>)}
       <Button type="submit" disabled={this.busy}>{form.submit}</Button>
-      {this.confirmation === form && <div className="extension-confirm" role="group" aria-label="确认操作"><p>{form.confirm}</p>
-        <Button disabled={this.busy} onClick={() => void this.run(form.id, data, form)}>确认{form.submit}</Button>
-        <Button disabled={this.busy} onClick={() => { this.confirmation = undefined; this.draw(); }}>取消</Button>
-      </div>}
+      {this.confirmation === form && <FloatingConfirm title="确认操作" text={form.confirm||''} confirmText={'确认'+form.submit} cancelText="取消" onCancel={()=>{this.confirmation=undefined;this.draw();}} onConfirm={()=>{this.confirmation=undefined;void this.run(form.id,data,form);}}/>}
     </form>;
   }
   private content(content: ExtensionContent, scope = 'page') {

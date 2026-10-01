@@ -1,3 +1,4 @@
+import {FloatingConfirm} from './floating-confirm.tsx';
 /**
  * The questions a screen asks, and the one shape each answer has.
  *
@@ -77,27 +78,16 @@ export function DialogView({
    */
   destructive: string;
 }): JSX.Element {
+  if(dialog.kind==='confirm')return <FloatingConfirm title={dialog.title} text={dialog.body} confirmText={destructive} cancelText="取消" onConfirm={()=>onClose(true)} onCancel={()=>onClose(false)}/>;
   return (
     <div
       className="dialog-overlay"
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose(dialog.kind === 'confirm' ? false : null);
+        if (event.target === event.currentTarget) onClose(null);
       }}
     >
       {dialog.kind === 'prompt' ? (
         <PromptDialog title={dialog.title} value={dialog.value} onClose={(value) => onClose(value)} />
-      ) : null}
-      {dialog.kind === 'confirm' ? (
-        <div className="dialog">
-          <h3>{dialog.title}</h3>
-          <p className="muted">{dialog.body}</p>
-          <div className="dialog-actions">
-            <Button onClick={() => onClose(false)}>取消</Button>
-            <Button className="danger" onClick={() => onClose(true)}>
-              {destructive}
-            </Button>
-          </div>
-        </div>
       ) : null}
       {dialog.kind === 'pick' ? (
         <div className="dialog sheet">

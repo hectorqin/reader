@@ -1,3 +1,4 @@
+import {FloatingConfirm} from '../ui/floating-confirm.tsx';
 import {MediaSelect} from './select.tsx';
 import { ChevronDown, ChevronRight } from 'lucide-preact';
 import { useEffect, useRef, useState } from '../ui/vendor/preact.ts';
@@ -49,6 +50,7 @@ export function ScrapeJobs({api,libraries,navigate}:{api:MediaApi;libraries:Libr
   const [jobs,setJobs]=useState<Job[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[loading,setLoading]=useState(false);
   const [refresh,setRefresh]=useState(0),[providerRetry,setProviderRetry]=useState(0);
   const [jobsState,setJobsState]=useState<'loading'|'ready'|'error'>('loading'),[jobsRetry,setJobsRetry]=useState(0);
+  const [deleteId,setDeleteId]=useState('');
   const [openJobs,setOpenJobs]=useState<string[]>([]);
   const [selectingAll,setSelectingAll]=useState(false);
   const library=libraries.find(lib=>lib.id===libraryId);
@@ -73,7 +75,7 @@ export function ScrapeJobs({api,libraries,navigate}:{api:MediaApi;libraries:Libr
     const load=async()=>{try{const result=await api.request<{items:Job[]}>('scrape-jobs?summary=true','GET',undefined,controller.signal);if(controller.signal.aborted)return;setJobs(result.items);setJobsState('ready');if(result.items.some(job=>job.state==='running'))timer=setTimeout(()=>void load(),2000);}catch{if(!controller.signal.aborted)setJobsState('error');}};
     void load();return ()=>{controller.abort();if(timer)clearTimeout(timer);};
   },[api,refresh,jobsRetry]);
-  async function action(path:string,body:unknown){setBusy(true);setError('');try{await api.request(path,'POST',body);setSelected([]);setRefresh(value=>value+1);if(path==='scrape-jobs'){if(createForm.current)createForm.current.open=false;history.current?.focus();}}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{setBusy(false);}}
+  async function action(path:string,body:unknown,method='POST'){setBusy(true);setError('');try{await api.request(path,method,body);setSelected([]);setRefresh(value=>value+1);if(path==='scrape-jobs'){if(createForm.current)createForm.current.open=false;history.current?.focus();}}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{setBusy(false);}}
   async function selectAllResults(){
     if(selectingAll||loading||!libraryId||!kind)return;setSelectingAll(true);setError('');
     try{const ids:string[]=[];let cursor=0;while(ids.length<500&&cursor<total){const page=await api.items(libraryId,kind,'',cursor);for(const item of page.items){if(!ids.includes(item.id))ids.push(item.id);if(ids.length>=500)break;}if(!page.items.length)break;cursor+=page.items.length;}setSelected(ids);if(total>500)setError('服务端单批最多处理 500 项，已选择前 500 项。');}
@@ -91,13 +93,13 @@ export function ScrapeJobs({api,libraries,navigate}:{api:MediaApi;libraries:Libr
       <p>{Object.entries(names).flatMap(([state,label])=>{const count=countState(job,state);return count?[`${label} ${count}`]:[];}).join(' · ')}</p>
       {job.state==='complete'&&<p>任务处理已结束，请核对下方结果；待审阅、无匹配和失败项尚未保存新的匹配。</p>}
       {job.state==='running'?<button disabled={busy||jobsState!=='ready'} onClick={()=>void action('scrape-jobs/'+job.id+'/cancel',{})}>取消任务</button>:<button disabled={busy||jobsState!=='ready'||running||!['failed','interrupted','cancelled'].some(state=>countState(job,state)>0)} onClick={()=>void (job.counts?action('scrape-jobs/'+encodeURIComponent(job.id)+'/retry',{}):action('scrape-jobs',{provider:job.provider,itemIds:job.items.filter(i=>['failed','interrupted','cancelled'].includes(i.state)).map(i=>i.itemId)}))}>重试未完成项</button>}
+      {job.state!=='running'&&<button disabled={busy||jobsState!=='ready'} onClick={()=>setDeleteId(job.id)}>删除任务</button>}
       {openJobs.includes(job.id)&&<JobResults job={job} api={api} navigate={navigate}/>}
     </details>;})}
   </section>;
   return <section className="media-scrape-manager" aria-label="批量刮削管理">
     {error&&<p role="alert">{error}<button onClick={()=>{setError('');setRefresh(value=>value+1);if(!providers.length)setProviderRetry(value=>value+1);}}>刷新</button></p>}
-    {taskHistory}
-    <details ref={createForm} className="media-task-create"><summary>新建批量匹配</summary>
+    <details ref={createForm} className="media-task-create" open><summary>新建批量匹配</summary>
     <p>将所选作品标题发送给来源，唯一较强匹配经详情复核后保存；已有匹配保留，歧义结果转人工审阅。季集按已确认父剧和编号获取候选，需逐项核对后确认。每批最多 500 项。</p>
     <div className="media-form"><label>媒体库<MediaSelect aria-label="媒体库" value={libraryId} disabled={busy} onChange={e=>{setSelected([]);setItems([]);setLoading(true);setLibraryId(e.currentTarget.value);}}>{libraries.map(lib=><option value={lib.id} key={lib.id}>{lib.name}</option>)}</MediaSelect></label>
     <label>刮削来源<MediaSelect aria-label="刮削来源" value={provider} disabled={busy} onChange={e=>{setSelected([]);setItems([]);setLoading(true);setProvider(e.currentTarget.value);}}>{!provider&&<option value="">无可用来源</option>}{compatibleProviders.map(p=><option key={p.id} value={p.id} disabled={!p.configured}>{p.label}{p.configured?'':'（未配置）'}</option>)}</MediaSelect></label>
@@ -109,5 +111,7 @@ export function ScrapeJobs({api,libraries,navigate}:{api:MediaApi;libraries:Libr
     <div className="media-scrape-selection-footer"><button disabled={loading||offset===0} onClick={()=>setOffset(value=>Math.max(0,value-60))}>上一页</button><span>{total} 项 · 已选 {selected.length}</span><button disabled={loading||offset+60>=total} onClick={()=>setOffset(value=>value+60)}>下一页</button></div>
     <button disabled={busy||loading||jobsState!=='ready'||running||!selected.length||!allowed.includes(kind)} onClick={()=>void action('scrape-jobs',{provider,itemIds:selected,...(matchMode!=='strong'?{matchMode}: {})})}>开始批量匹配</button>
     </details>
+    {taskHistory}
+    {deleteId&&<FloatingConfirm theme="media" title="删除刮削任务" text="仅删除这条任务及结果记录，已保存的媒体资料和匹配候选保留。" confirmText="删除记录" cancelText="取消" onCancel={()=>setDeleteId('')} onConfirm={()=>{const id=deleteId;setDeleteId('');void action('scrape-jobs/'+encodeURIComponent(id),undefined,'DELETE');}}/>}
   </section>;
 }

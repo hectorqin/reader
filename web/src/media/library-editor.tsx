@@ -1,3 +1,4 @@
+import {FloatingConfirm} from '../ui/floating-confirm.tsx';
 import { useEffect, useRef, useState } from '../ui/vendor/preact.ts';
 import type { Library, LibraryConfiguration, MediaApi } from './api.ts';
 import {ChevronLeft} from 'lucide-preact';
@@ -44,7 +45,7 @@ export function MediaLibraryEditor({ api, library, onSaved, onCancel }: {
   };
 
   return <section className="media-library-workspace"><header className="media-settings-heading"><button className="media-back-button" data-media-back aria-label="返回媒体库" disabled={saving} onClick={close}><ChevronLeft size={20} aria-hidden="true"/></button><h1>编辑媒体库</h1></header>
-    {leaving&&<div className="media-manager-note" role="alert"><p>媒体库修改尚未保存。</p><button onClick={()=>setLeaving(false)}>继续编辑</button><button onClick={onCancel}>放弃修改</button></div>}
+    {leaving&&<FloatingConfirm theme="media" title="放弃媒体库修改？" text="媒体库修改尚未保存，离开后将丢弃本次修改。" confirmText="放弃修改" cancelText="继续编辑" onCancel={()=>setLeaving(false)} onConfirm={()=>{setLeaving(false);onCancel();}}/>}
     <form className="media-form media-library-editor" aria-label="媒体库配置" onSubmit={event => { event.preventDefault(); void save(); }}>
     {error && <div role="alert" className="media-error">{error}{!configuration && <button type="button" onClick={() => setAttempt(value => value + 1)}>重试读取配置</button>}</div>}
     {!configuration && !error && <p role="status">正在读取媒体库配置…</p>}
