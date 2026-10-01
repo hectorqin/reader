@@ -181,7 +181,7 @@ export class App {
 
     const storedUrl = await this.settingsStore.serverUrl();
     const session = await this.api.restore();
-    const baseUrl = storedUrl || this.options.defaultServerUrl || inferDefaultUrl();
+    const baseUrl = validServerUrl(storedUrl) || validServerUrl(this.options.defaultServerUrl) || inferDefaultUrl();
     if (baseUrl) {
       this.api.setBaseUrl(baseUrl);
       // A session restored from storage is only usable if the URL it was minted
@@ -854,18 +854,28 @@ async function createStoresLazy(): Promise<KeyValueStoreLike> {
 }
 
 /** Best-effort default so a fresh install does not start with an empty field. */
-function inferDefaultUrl(): string {
+export function inferDefaultUrl(): string {
   if (typeof location === 'undefined') return '';
   if (location.protocol === 'file:') return '';
   if (location.hostname === 'appassets.androidplatform.net') {
     try {
-      return window.ReaderAndroid?.configuredServerUrl?.().trim() || '';
+      return validServerUrl(window.ReaderAndroid?.configuredServerUrl?.());
     } catch {
       return '';
     }
   }
   // Same-origin when the H5 bundle is served by the reader server itself.
   return `${location.origin}`;
+}
+
+/** Discard the local asset address accidentally saved by older APKs. */
+export function validServerUrl(value?: string): string {
+  if (!value?.trim()) return '';
+  try {
+    const url = new URL(value.trim());
+    if (!['http:', 'https:'].includes(url.protocol) || url.hostname === 'appassets.androidplatform.net') return '';
+    return value.trim();
+  } catch { return ''; }
 }
 
 export { el };
