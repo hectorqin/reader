@@ -10,6 +10,8 @@
 export interface AndroidBridge {
   /** Version of the native shell, so the client can require a minimum. */
   shellVersion(): number;
+  /** Optional Reader server origin configured by the native APK. */
+  configuredServerUrl?: () => string;
   /** Device label recorded on progress rows, e.g. `Pixel 7`. */
   deviceLabel(): string;
   /** 'online' | 'offline' from the platform connectivity manager. */

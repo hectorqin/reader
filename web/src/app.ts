@@ -857,6 +857,13 @@ async function createStoresLazy(): Promise<KeyValueStoreLike> {
 function inferDefaultUrl(): string {
   if (typeof location === 'undefined') return '';
   if (location.protocol === 'file:') return '';
+  if (location.hostname === 'appassets.androidplatform.net') {
+    try {
+      return window.ReaderAndroid?.configuredServerUrl?.().trim() || '';
+    } catch {
+      return '';
+    }
+  }
   // Same-origin when the H5 bundle is served by the reader server itself.
   return `${location.origin}`;
 }

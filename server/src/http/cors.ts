@@ -37,6 +37,10 @@ export function resolveCorsOrigin(config: AppConfig, request: FastifyRequest): s
 export function isOriginAllowed(config: AppConfig, request: FastifyRequest): boolean {
   const origin = request.headers.origin;
   if (!origin) return true;
+  // The Android shell serves the shared client from WebViewAssetLoader. This
+  // stable, synthetic origin is not configurable by an end user and must be
+  // accepted even when a public deployment narrows browser origins.
+  if (origin === 'https://appassets.androidplatform.net') return true;
   if (config.corsOrigins.length === 0) return true;
   return config.corsOrigins.includes(origin) || (origin === 'null' && config.corsOrigins.includes('null'));
 }

@@ -103,6 +103,7 @@ class MainActivity : AppCompatActivity() {
                     connectivity,
                     pageView = page,
                     fitPreference = { fitPreference },
+                    configuredServerUrl = BuildConfig.DEFAULT_SERVER_URL,
                 ),
                 launchAction = intent?.action,
             )

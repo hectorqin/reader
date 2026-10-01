@@ -54,6 +54,8 @@ class ReaderBridge(
     private val pageView: NativePageView? = null,
     /** Current image fit preference, mirrored from the client (`contain`/`width`). */
     private val fitPreference: () -> String = { "contain" },
+    /** Optional server origin baked into this APK at build time. */
+    private val configuredServerUrl: String = "",
 ) {
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -102,6 +104,10 @@ class ReaderBridge(
      */
     @JavascriptInterface
     fun shellVersion(): Int = SHELL_VERSION
+
+    /** Returns the configured Reader server origin, never the WebView asset origin. */
+    @JavascriptInterface
+    fun configuredServerUrl(): String = configuredServerUrl.trim()
 
     /**
      * A device label that is stable and meaningful to a human.
