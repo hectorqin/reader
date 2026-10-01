@@ -335,7 +335,10 @@ export class MediaPlayer extends EventTarget {
       while(epoch===this.generation){const saving=this.saving;await saving;if(saving===this.saving)break;}
       if(epoch!==this.generation)return;
       if(session&&this.pendingProgress.has(session)){this.error='当前进度尚未保存，请稍后重试切换。';return;}
-      await this.play(this.queue,target);
+      // Keep the current playback view mounted while only the session URL and
+      // selected queue entry change. Re-opening controls here makes route based
+      // screens look like they refreshed when switching episodes.
+      await this.play(this.queue,target,false,{openControls:false});
     }catch(error){
       if(this.session===session){this.queueIndex=index;this.error=error instanceof Error?error.message:'切换失败，请重试。';}
     }finally{this.switching=false;this.changed();}

@@ -419,6 +419,11 @@ body[data-media-theme] .media-video-stage .plyr {
  .media-screen .media-tabs {gap:30px;margin:5px 0 16px;border-bottom:1px solid var(--border);width:100%;overflow-y:hidden}
  .media-screen .media-browse-tools {margin-bottom:16px}
  .media-screen.media-secondary-page>.media-heading {left:max(148px,calc((100vw - 1120px)/2 + 148px));right:max(32px,calc((100vw - 1120px)/2 + 32px));gap:4px}
+ .media-screen.media-playback-page>.media-heading,
+ .media-screen.media-chapters-page>.media-heading,
+ .media-screen.media-metadata-workspace>.media-metadata-host>.media-heading,
+ .media-screen:has(>.media-detail-page)>.media-heading,
+ .media-screen.media-secondary-page>.media-heading {left:max(32px,calc((100vw - 1120px)/2));right:max(32px,calc((100vw - 1120px)/2));}
  .media-screen .media-detail-page {padding-top:28px}
  .media-screen .media-episode-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
  .media-screen :is(.media-library-empty,.media-screen-error.is-page,.media-state-page) {min-height:calc((100dvh - 96px)*.8)}
