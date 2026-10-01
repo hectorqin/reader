@@ -979,3 +979,5 @@ body[data-media-theme]:has(>#app>.media-screen) {background:var(--media-theme-ba
 .media-video-workspace select,.media-video-sheet select,.media-subtitle-controls select {appearance:none;-webkit-appearance:none;border:1px solid var(--border);background:var(--surface);color:var(--text);padding-right:30px;color-scheme:inherit}
 .media-video-workspace select,.media-video-sheet select,.media-subtitle-controls select {background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 14px) 50%,calc(100% - 9px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
 .media-native-controls select {appearance:none;-webkit-appearance:none;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:7px 30px 7px 10px;background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);background-position:calc(100% - 14px) 50%,calc(100% - 9px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+.media-video-stage .dplayer-host{width:100%;height:100%}
+

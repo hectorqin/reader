@@ -10,6 +10,7 @@ import { FloatingNotice } from './floating-notice.tsx';
 import { CatalogFeedback } from './catalog-feedback.tsx';
 import { mountUI } from './mount.ts';
 import { Button, IconButton, Icon } from './toolkit.tsx';
+import { SearchableSelect } from './searchable-select.tsx';
 
 interface Options { api: ReaderApi; admin: boolean; onBack(): void; onOpen(book: Book): void; onSignedOut(): void }
 type SourceTab = 'search' | 'sources' | 'updates' | 'plugins';
@@ -50,8 +51,6 @@ export class SourcesScreen {
   private query = '';
   private filters: ExtensionField[] = [];
   private filterValues: Record<string, string> = {};
-  private filterQueries: Record<string, string> = {};
-  private sourcePickerQuery = '';
   private catalogSourceQuery = '';
   private resultGroupQuery = '';
   private credentialValues: Record<string, string> = {};
@@ -153,7 +152,7 @@ export class SourcesScreen {
     this.stopSearch(); this.searchState = 'idle'; this.searchRequest = null; this.searchSession = null; this.searchMenu = false;
     this.resultGroup = null; this.detailEntry = null; this.detailEpoch++;
     this.selected = source; this.page = null; this.path = []; this.query = ''; this.credentialValues = {}; this.acquired = null;
-    this.filters = []; this.filterValues = {}; this.filterQueries = {}; this.sourcePickerQuery = ''; this.catalogSourceQuery = ''; this.resultGroupQuery = '';
+    this.filters = []; this.filterValues = {}; this.catalogSourceQuery = ''; this.resultGroupQuery = '';
     if (source.descriptor?.capabilities.includes('search.filters')) this.filters = await this.options.api.sourceFilters(source.id);
     if (source.descriptor?.capabilities.includes('browse')) await this.catalog({});
     this.draw();
@@ -311,18 +310,12 @@ export class SourcesScreen {
       </>}
       {this.tab === 'search' && <>
         <section className="sources-card source-picker"><div><h2>搜书</h2><p className="muted">选择来源，发现想读的书。</p></div>
-          <label className="source-picker-search">筛选书源<input type="text" placeholder="搜索书源名称" value={this.sourcePickerQuery} onInput={event=>{this.sourcePickerQuery=event.currentTarget.value;this.draw();}} /></label>
-          <label>选择来源<select aria-label="选择来源" disabled={this.busy} value={this.selected?.id ?? ''} onChange={event => {
-            const source = this.sources.find(source => source.id === event.currentTarget.value); if (source) this.select(source);
-          }}><option value="" disabled>请选择一个来源</option>{this.sources.filter(source => source.enabled && source.descriptor && source.name.toLocaleLowerCase().includes(this.sourcePickerQuery.trim().toLocaleLowerCase())).map(source => <option key={source.id} value={source.id}>{source.name}{source.isDefault ? '（默认）' : ''}</option>)}</select></label>
+          <SearchableSelect label="选择来源" value={this.selected?.id ?? ''} disabled={this.busy} options={this.sources.filter(source => source.enabled && source.descriptor).map(source => ({value:source.id,label:source.name+(source.isDefault?'（默认）':'')}))} onChange={value=>{const source=this.sources.find(source=>source.id===value);if(source)this.select(source)}} />
           {!this.selected && <p className="muted">{this.sources.some(source => source.enabled && source.descriptor) ? '选择来源后，即可搜索书籍或浏览目录。' : '暂无可用来源，请先添加或启用来源。'}</p>}
         </section>
         {this.selected && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>
           {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.search(resume); }}>
-            {this.filters.map(field => <label key={field.key}>{field.label}<input type="search" placeholder={'搜索'+field.label} value={this.filterQueries[field.key] ?? ''} disabled={this.busy} onInput={event=>{this.filterQueries[field.key]=event.currentTarget.value;this.draw();}}/><select aria-label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy}
-              onChange={event => { this.filterValues[field.key] = event.currentTarget.value; this.draw(); }}>
-              {field.options?.filter(option=>option.label.toLocaleLowerCase().includes((this.filterQueries[field.key]??'').trim().toLocaleLowerCase())).map(option => <option value={option.value}>{option.label}</option>)}
-            </select></label>)}
+            {this.filters.map(field => <SearchableSelect key={field.key} label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy} options={(field.options??[]).map(option=>({value:option.value,label:option.label}))} onChange={value=>{this.filterValues[field.key]=value;this.draw()}} />)}
             <label className="source-keyword">搜索书籍<input type="search" placeholder="输入书名或作者" disabled={this.busy} required value={this.query} onInput={(event) => { this.query = event.currentTarget.value; this.draw(); }} /></label>
             {this.searchRun ? <Button key="stop" type="button" className="search-stop" onClick={event => { event.preventDefault(); this.stopSearch(); }}><Icon name="stop" />停止搜索</Button>
               : <div key="search" className="search-split" onBlur={event => {

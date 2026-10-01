@@ -18,7 +18,7 @@ export class MediaPlayer extends EventTarget {
   readonly videoControlsHost=document.createElement('div');
   private readonly videoWorkspace=document.createElement('div');
   private customVideoControls=false;
-  private webVideo:import('plyr').default|null=null;
+  private webVideo:{destroy?:()=>void}|null=null;
   private webVideoLoading:Promise<void>|null=null;
   private ensureWebVideo(){
     return this.webVideoLoading??=import('./web-video.ts').then(({enhanceVideo})=>{this.webVideo=enhanceVideo(this.video,()=>this.toggle());}).catch(()=>{this.webVideoLoading=null;this.video.controls=true;});
