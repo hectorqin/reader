@@ -3773,6 +3773,15 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .source-toggle { color: var(--reader-muted); }
 .sources-hub .sources-tabs [role=tab] { font-size: .9rem; }
 .source-picker label { max-width: 32rem; }
+.sources-search .searchable-select { flex: 1 1 12rem; min-width: 12rem; }
+.sources-search .searchable-select-label, .source-picker .searchable-select-label { display:block; margin: 0 0 .4rem; color: var(--reader-muted); font-size:.8rem; font-weight:600; letter-spacing:.01em; }
+.sources-search .searchable-select-trigger { text-align:left; }
+.sources-search .searchable-select > .searchable-select-trigger { min-height: 46px; border-radius: .7rem; background: var(--reader-surface); }
+.sources-search .searchable-select-menu { width: min(22rem, calc(100vw - 3rem)); border-radius: .8rem; }
+.sources-screen .searchable-select-menu { background: var(--reader-paper, #fff); opacity: 1; }
+.sources-search .searchable-select-search { margin: 0; }
+.sources-search .searchable-select-options { max-height: 15rem; }
+.sources-search .searchable-select-options button { min-height: 42px; }
 @media (min-width: 768px) {
   .source-picker { display:flex; align-items:center; flex-wrap:wrap; gap:1rem 2rem; }
   .source-picker > div { flex:1; }

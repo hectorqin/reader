@@ -36,10 +36,11 @@ export interface ChapterSubscription {
 }
 
 export interface ExtensionField {
+  dependsOn?: string;
   changeAction?: string;
   placeholder?: string; min?: number; max?: number;
   key: string; label: string; type: 'text' | 'password' | 'textarea' | 'number' | 'boolean' | 'select'; required?: boolean;
-  value?: string | number | boolean; options?: Array<{ value: string; label: string }>;
+  value?: string | number | boolean; options?: Array<{ value: string; label: string; parentValues?: string[] }>;
 }
 export interface ExtensionForm {
   layout?: 'inline'; confirm?: string; id: string; title: string; submit: string; fields: ExtensionField[]; values?: Record<string, string | number | boolean> }

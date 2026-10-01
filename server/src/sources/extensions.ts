@@ -1,11 +1,12 @@
 import { badRequest } from '../lib/errors.ts';
 
 export interface ExtensionField {
+  dependsOn?: string;
   changeAction?: string;
   placeholder?: string; min?: number; max?: number;
   key: string; label: string; type: 'text' | 'password' | 'textarea' | 'number' | 'boolean' | 'select';
   required?: boolean; value?: string | number | boolean;
-  options?: Array<{ value: string; label: string }>;
+  options?: Array<{ value: string; label: string; parentValues?: string[] }>;
 }
 export interface ExtensionForm {
   layout?: 'inline'; confirm?: string;
@@ -69,7 +70,7 @@ export function extensionFields(input: unknown): ExtensionField[] {
     if (field.changeAction !== undefined) check(field.type === 'select' && typeof field.changeAction === 'string' && identifier.test(field.changeAction));
     if (field.type === 'select') {
       check(Array.isArray(field.options) && field.options.length <= 10001);
-      for (const option of field.options) { record(option); label(option.value); label(option.label); }
+      for (const option of field.options) { record(option); label(option.value); label(option.label); if (option.parentValues !== undefined) { check(Array.isArray(option.parentValues)); option.parentValues.forEach(label); } }
     }
   }
   return input as ExtensionField[];

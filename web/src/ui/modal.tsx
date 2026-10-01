@@ -10,10 +10,10 @@ export function Modal({ title, busy, onClose, children, className }: {
   useLayoutEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const dialog = ref.current!;
-    dialog.showModal();
+    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open', '');
     placeNotifications();
     return () => {
-      dialog.close();
+      if (typeof dialog.close === 'function') dialog.close(); else dialog.removeAttribute('open');
       placeNotifications();
       queueMicrotask(() => { if (previous?.isConnected) previous.focus({ preventScroll: true }); });
     };

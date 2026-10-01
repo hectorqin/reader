@@ -94,6 +94,9 @@ body:has(>#app>.media-screen) { background: #faf9f5; }
 .media-read-loading-detail .media-skeleton-entry {display:flex;gap:26px;align-items:center;margin-top:24px}
 .media-read-loading-detail .media-skeleton-cover {width:170px;flex-shrink:0}
 .media-read-loading-detail .media-skeleton-copy {flex:1;gap:20px}
+.media-read-loading {min-width:0;color:var(--text)}
+.media-read-loading>p {margin:0 0 18px;color:var(--muted);line-height:1.6}
+.media-skeleton-cover,.media-skeleton-copy>i {background:color-mix(in srgb,var(--text) 7%,var(--media-paper));}
 .media-screen .media-screen-error.is-page {display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;background:transparent;color:var(--muted);max-width:460px;margin:60px auto;padding:12px 18px}
 .media-screen-error.is-page>strong {font-size:20px;font-weight:550;color:var(--text)}
 .media-screen-error.is-page>p {margin:0;font-size:13px;line-height:1.8;max-width:100%}
@@ -101,6 +104,7 @@ body:has(>#app>.media-screen) { background: #faf9f5; }
 @keyframes media-skeleton-breathe {to{opacity:.45}}
 @media(prefers-reduced-motion:reduce){.media-skeleton-cover,.media-skeleton-copy>i{animation:none}}
 @media(max-width:700px){.media-read-loading-detail .media-skeleton-cover{width:105px}.media-read-loading-detail .media-skeleton-entry{gap:15px}.media-screen-error.is-page>strong{font-size:18px}}
+@media(max-width:430px){.media-read-loading-detail .media-skeleton-entry{align-items:flex-start}.media-read-loading-detail .media-skeleton-copy{min-width:0}.media-read-loading-detail .media-skeleton-copy>i{max-width:100%}}
 .media-cover {box-shadow:0 3px 9px #00000015;border-radius:4px 8px 8px 4px}
 .media-cover.square {border-radius:6px}
 .media-hero {gap:26px;margin-top:24px}
@@ -949,6 +953,24 @@ body[data-media-theme]:has(>#app>.media-screen) {background:var(--media-theme-ba
 .media-theme-card>small {display:block;margin:0 4px;color:var(--muted);font-size:11px}
 .media-theme-settings>p[role] {margin:16px 0 0}
 @media(max-width:700px){.media-theme-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.media-theme-settings {margin-top:16px}}
+@media(max-width:700px){
+  .media-task-tabs{display:flex;width:100%;box-sizing:border-box;overflow-x:auto;margin-bottom:20px}
+  .media-task-tabs button{flex:1 0 auto;padding-inline:12px}
+  .media-manager-toolbar{align-items:flex-start;flex-wrap:wrap}
+  .media-manager-toolbar>span{flex:1 1 12rem}
+  .media-task-library{align-items:stretch}
+  .media-task-library>label{flex-basis:100%}
+  .media-task-library>button{flex:1;justify-content:center}
+  .media-scan-job{grid-template-columns:minmax(0,1fr) auto;gap:8px 10px}
+  .media-scan-job .media-task-copy{grid-column:1}
+  .media-scan-job .media-task-state{grid-column:2;grid-row:1}
+  .media-scan-job .media-task-icon,.media-scan-job .media-task-icon-placeholder{grid-column:2;grid-row:2}
+  .media-scan-job .media-ai-job-actions{grid-column:1;grid-row:2;margin-top:0}
+  .media-scrape-manager .media-task-create{padding-inline:10px}
+  .media-scrape-selection-toolbar{display:grid!important;gap:10px}
+  .media-scrape-selection-toolbar>div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .media-scrape-selection-toolbar>div button{min-width:0;padding-inline:6px;font-size:12px}
+}
 
 /* Keep lyric scrolling usable without a permanent scrollbar beside the text. */
 .media-lyrics-lines {scrollbar-width:none;-ms-overflow-style:none}

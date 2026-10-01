@@ -17,6 +17,12 @@ type SourceTab = 'search' | 'sources' | 'updates' | 'plugins';
 interface Editor { id: string | null; typeKey: string; name: string; config: Record<string, unknown>; raw: string }
 const keyFor = (type: { pluginId: string; id: string }) => `${type.pluginId}/${type.id}`;
 const date = (value: number | null) => value ? new Date(value).toLocaleString() : '尚未检查';
+const sourceErrorMessage = (error: unknown) => {
+  const message = error instanceof Error ? error.message : '';
+  if (/chapter directory is empty/i.test(message)) return '书源没有返回章节目录，暂时无法加入书架。请检查书源规则或更换书源。';
+  if (/chapter.*content/i.test(message)) return '书源没有提供可读取的章节内容，请更换书源。';
+  return message || '操作失败，请重试';
+};
 // getRandomValues also works when a self-hosted Reader is opened over LAN HTTP.
 const searchId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
 
@@ -67,6 +73,12 @@ export class SourcesScreen {
   private detailLoading = false;
   private detailEpoch = 0;
 
+  private filterOptions(field: ExtensionField): Array<{ value: string; label: string }> {
+    const parentKey = field.changeAction ?? (field as ExtensionField & { dependsOn?: string }).dependsOn;
+    const parent = parentKey ? this.filterValues[parentKey] : undefined;
+    return (field.options ?? []).filter(option => !parent || !(option as { parentValues?: string[] }).parentValues || (option as { parentValues?: string[] }).parentValues!.includes(parent));
+  }
+
   constructor(private readonly options: Options) {
     this.element.className = 'sources-screen sources-hub';
     this.ui = mountUI(this.element, () => this.view(), null);
@@ -81,7 +93,7 @@ export class SourcesScreen {
     catch (error) {
       if (this.disposed) return;
       if (error instanceof ApiError && error.isAuthFailure) this.options.onSignedOut();
-      else { this.message = error instanceof Error ? error.message : '操作失败，请重试'; this.messageError = true; }
+      else { this.message = sourceErrorMessage(error); this.messageError = true; }
     } finally {
       this.working = false; this.draw();
     }
@@ -315,7 +327,7 @@ export class SourcesScreen {
         </section>
         {this.selected && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>
           {this.selected.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={(event) => { event.preventDefault(); void this.search(resume); }}>
-            {this.filters.map(field => <SearchableSelect key={field.key} label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy} options={(field.options??[]).map(option=>({value:option.value,label:option.label}))} onChange={value=>{this.filterValues[field.key]=value;this.draw()}} />)}
+            {this.filters.map(field => <SearchableSelect key={field.key} label={field.label} value={this.filterValues[field.key] ?? ''} disabled={this.busy} options={this.filterOptions(field)} onChange={value=>{this.filterValues[field.key]=value; for (const dependent of this.filters.filter(candidate => (candidate.changeAction ?? (candidate as ExtensionField & { dependsOn?: string }).dependsOn) === field.key)) { if (!this.filterOptions(dependent).some(option => option.value === this.filterValues[dependent.key])) this.filterValues[dependent.key] = ''; } this.draw()}} />)}
             <label className="source-keyword">搜索书籍<input type="search" placeholder="输入书名或作者" disabled={this.busy} required value={this.query} onInput={(event) => { this.query = event.currentTarget.value; this.draw(); }} /></label>
             {this.searchRun ? <Button key="stop" type="button" className="search-stop" onClick={event => { event.preventDefault(); this.stopSearch(); }}><Icon name="stop" />停止搜索</Button>
               : <div key="search" className="search-split" onBlur={event => {

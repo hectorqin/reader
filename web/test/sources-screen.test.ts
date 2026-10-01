@@ -11,6 +11,34 @@ const opds = { id: 'opds', pluginId: 'reader.opds', builtin: true, label: 'OPDS'
   credentialKeys: [{ key: 'password', label: 'OPDS 密码' }], configSchema: { required: ['url'], properties: { url: { type: 'string', title: 'OPDS 地址' } } } };
 const source = { id: 'source-1', name: '远程书库', pluginId: 'reader.opds', sourceType: 'opds', enabled: true, descriptor: opds, config: { url: 'https://books.test' } };
 const screens: SourcesScreen[] = [];
+
+it('links source options to the group and clears an incompatible source before searching', async () => {
+  const { screen, api } = await setup();
+  vi.spyOn(api, 'sources').mockResolvedValue([{ ...source, isDefault: true, descriptor: { ...opds, capabilities: ['search', 'search.filters'] } }]);
+  vi.spyOn(api, 'sourceFilters').mockResolvedValue([
+    { key: 'group', label: '分组', type: 'select', options: [{ value: '', label: '全部分组' }, { value: 'cloud', label: '网盘' }, { value: 'novel', label: '小说' }, { value: 'empty', label: '空分组' }] },
+    { key: 'source', label: '书源', type: 'select', dependsOn: 'group', options: [
+      { value: '', label: '全部书源' }, { value: 'cloud-one', label: '网盘书源', parentValues: ['cloud'] },
+      { value: 'shared', label: '多分组书源', parentValues: ['cloud', 'novel'] }, { value: 'novel-one', label: '小说书源', parentValues: ['novel'] },
+    ] },
+  ]);
+  await screen.show();
+  const select = (label: string) => screen.element.querySelector<HTMLSelectElement>(`select[aria-label="${label}"]`)!;
+  const change = async (label: string, value: string) => {
+    select(label).value = value; select(label).dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+  };
+  await change('书源', 'cloud-one'); await change('分组', 'novel');
+  expect([...select('书源').options].map(option => option.value)).toEqual(['', 'shared', 'novel-one']);
+  expect(select('书源').value).toBe('');
+  const search = vi.spyOn(api, 'searchSource').mockImplementation(() => pages({ items: [] }));
+  input(screen.element, '搜索书籍', '测试'); await click(screen.element, '搜索');
+  expect(search.mock.calls[0]?.[1].filters).toEqual({ group: 'novel', source: '' });
+  await change('书源', 'shared'); await change('分组', 'cloud');
+  expect(select('书源').value).toBe('shared');
+  await change('分组', 'empty'); expect([...select('书源').options].map(option => option.value)).toEqual(['']);
+  await change('分组', ''); expect(select('书源').options).toHaveLength(4);
+});
 // jsdom has no top-layer dialog implementation; native focus containment is covered in Chromium.
 beforeAll(() => {
   HTMLDialogElement.prototype.showModal = function () { this.open = true; this.querySelector<HTMLElement>('[autofocus]')?.focus(); };
