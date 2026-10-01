@@ -553,6 +553,13 @@ body:has(>#app>.media-screen) { background: #faf9f5; }
 .media-person-detail>.media-detail-actions {position:absolute;top:0;right:0;margin:0}
 .media-screen .media-person-detail .media-detail-favorite {width:44px;padding:10px;background:transparent}
 @media(min-width:701px){
+  /* The desktop brand belongs to the channel landing page. Hide it on
+     secondary/detail pages where the page header already identifies the view. */
+  body:has(.media-screen.media-secondary-page) .media-channel-entry .media-brand,
+  body:has(.media-screen.media-playback-page) .media-channel-entry .media-brand,
+  body:has(.media-screen.media-chapters-page) .media-channel-entry .media-brand,
+  body:has(.media-screen.media-metadata-workspace) .media-channel-entry .media-brand,
+  body:has(.media-screen>.media-detail-page) .media-channel-entry .media-brand {display:none}
   body:has(.media-screen.media-playback-page) .media-channel-entry a,
   body:has(.media-screen.media-chapters-page) .media-channel-entry a,
   body:has(.media-screen.media-metadata-workspace) .media-channel-entry a,

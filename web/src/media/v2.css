@@ -182,6 +182,40 @@
 .media-episode-rail .media-video-episodes button>span:nth-child(2) {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .media-episode-rail .media-video-episodes small {margin:3px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .media-episode-rail .media-video-episodes>div {display:contents}
+
+/* Video playback is a themed surface around a deliberately dark video
+   viewport. Keep the header, metadata and episode list on the active media
+   palette even when the reader's global dark-mode selector is also present. */
+body[data-media-theme] .media-screen.media-video-page,
+body[data-media-theme] .media-player.media-player-expanded {
+  background:var(--media-theme-background)!important;
+  color:var(--media-theme-text)!important;
+}
+body[data-media-theme] .media-screen.media-video-page>.media-heading {
+  background:var(--media-theme-background)!important;
+  color:var(--media-theme-text)!important;
+  border-color:var(--media-theme-border)!important;
+}
+body[data-media-theme] .media-video-workspace,
+body[data-media-theme] .media-video-controls,
+body[data-media-theme] .media-episode-rail {
+  color:var(--media-theme-text);
+}
+body[data-media-theme] .media-episode-rail {
+  background:var(--media-theme-paper);
+  border-color:var(--media-theme-border);
+  box-shadow:0 8px 24px color-mix(in srgb,var(--media-theme-text) 12%,transparent);
+}
+body[data-media-theme] .media-episode-rail header {background:var(--media-theme-paper)}
+body[data-media-theme] .media-episode-rail .media-video-episodes button[aria-current=true] {
+  background:var(--media-theme-selection);
+  color:var(--media-theme-accent);
+}
+body[data-media-theme] .media-video-stage .plyr {
+  --plyr-color-main:var(--media-theme-accent);
+  --plyr-menu-background:var(--media-theme-paper);
+  --plyr-menu-color:var(--media-theme-text);
+}
 .searchable-select {position:relative;display:inline-flex;flex-direction:column;min-width:190px;max-width:100%}
 .searchable-select-label {display:block;margin:0 0 5px;color:var(--muted);font-size:12px;font-weight:600}
 .searchable-select-native {position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
