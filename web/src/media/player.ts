@@ -90,7 +90,7 @@ export class MediaPlayer extends EventTarget {
       this.corsRetry=true;this.clearStartupTimer();
       if(this.ready&&Number.isFinite(this.media.currentTime))this.session.position=this.media.currentTime;
       this.ready=false;this.error='';this.loadingStatus='正在尝试兼容跨域的直连方式…';
-      this.media.crossOrigin='anonymous';this.media.src=this.api.streamUrl(this.session);
+      this.media.crossOrigin='anonymous';(this.media as HTMLMediaElement&{referrerPolicy?:string}).referrerPolicy='no-referrer';this.media.src=this.api.streamUrl(this.session);
       const generation=this.generation;this.beginWebPlayback(generation);this.changed();
       this.startupTimer=setTimeout(()=>{if(generation===this.generation&&!this.ready)this.retryWithProxy();},20000);
       return true;
@@ -364,7 +364,7 @@ export class MediaPlayer extends EventTarget {
     this.media=selected.video?this.video:this.audio;
     // Anonymous CORS mode makes the browser attach Origin to the media
     // request and to redirected HLS segment requests such as media-0.ts.
-    this.media.crossOrigin='anonymous';
+    this.media.crossOrigin='anonymous';(this.media as HTMLMediaElement&{referrerPolicy?:string}).referrerPolicy='no-referrer';
     const rate=this.playbackRate;
     this.media.defaultPlaybackRate=rate;this.media.playbackRate=rate;
     if(this.nativeActive)this.native?.command('stop');

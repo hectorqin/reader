@@ -178,7 +178,7 @@
 .media-episode-rail header {position:sticky;top:0;z-index:1;padding-bottom:12px;background:var(--media-paper)}
 .media-episode-rail .media-video-episodes button {display:grid;grid-template-columns:32px minmax(0,1fr) 18px;gap:10px;align-items:center;padding:10px 8px;border:0;border-radius:8px;color:var(--text);background:transparent}
 .media-episode-rail .media-video-episodes button:hover:not(:disabled) {background:var(--media-selection)}
-.media-episode-rail .media-video-episodes button[aria-current=true] {background:#34452a;color:var(--media-accent);font-weight:600}
+.media-episode-rail .media-video-episodes button[aria-current=true] {background:var(--media-selection);color:var(--media-accent);font-weight:600}
 .media-episode-rail .media-video-episodes button>span:first-child {font-variant-numeric:tabular-nums;color:var(--muted);text-align:center}
 .media-episode-rail .media-video-episodes button[aria-current=true]>span:first-child {color:var(--media-accent)}
 .media-episode-rail .media-video-episodes button>span:nth-child(2) {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
