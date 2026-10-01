@@ -165,7 +165,9 @@
 .media-video-tools>button {display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:62px;font-size:11px}
 .media-video-description summary {min-height:44px;cursor:pointer;display:flex;align-items:center}
 .media-episode-rail {padding:16px;background:var(--media-paper);color:var(--text);border:1px solid var(--border);border-radius:10px;margin-top:20px}
-.media-episode-rail header {display:flex;align-items:center;justify-content:space-between;gap:8px}
+.media-episode-rail header {display:flex;align-items:center;justify-content:space-between;gap:12px}
+.media-episode-rail header h2 {flex:none;white-space:nowrap}
+.media-episode-rail header .media-select-control {flex:1;min-width:0;max-width:200px}
 .media-episode-rail header select {max-width:180px;font-size:12px}
 .media-episode-rail nav {display:flex;align-items:center;justify-content:space-between;font-size:11px}
 .media-episode-rail .media-video-episodes small {display:block;margin:4px 0 0;font-size:11px}
@@ -240,6 +242,10 @@ body[data-media-theme] .media-video-stage .plyr {
  body:has(.media-screen .media-mobile-title) .media-channel-entry a:last-child {margin-right:0}
  .media-channel-entry a[aria-current=page] {background:transparent;border-bottom-color:var(--media-accent);color:var(--text);font-weight:650}
  .media-screen:is(.media-secondary-page,.media-utility-workspace,.media-playback-page) .media-heading,.media-utility-workspace .media-settings-heading {height:68px;min-height:68px}
+ .media-screen:is(.media-secondary-page,.media-playback-page,.media-chapters-page,.media-manager-workspace)>.media-heading,
+ .media-screen.media-metadata-workspace>.media-metadata-host>.media-heading,
+ .media-screen:has(>.media-detail-page)>.media-heading,
+ .media-utility-workspace .media-settings-heading {left:max(24px,calc((100vw - 1060px)/2))}
  .media-screen .media-mobile-title {height:68px;left:max(145px,calc((100vw - 1056px)/2 + 110px))}
  .media-heading:has(.media-mobile-title) .media-heading-actions {top:12px}
  .media-audio-sheet,.media-video-sheet {inset:0;margin:auto;border:1px solid var(--border);border-radius:14px;height:fit-content}
