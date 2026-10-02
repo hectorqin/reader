@@ -562,6 +562,18 @@ body[data-media-theme] {--surface-muted:var(--media-theme-surface)}
 .media-screen .media-continue:hover,.media-screen .media-continue:focus-visible{border-color:var(--media-accent);box-shadow:0 3px 12px rgba(31,42,34,.08);outline:none}
 .media-screen .media-continue-play{display:grid!important;place-items:center;width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;border:1px solid color-mix(in srgb,var(--media-accent) 35%,var(--border))!important;border-radius:50%!important;background:transparent!important;color:var(--media-accent)!important}
 .media-screen .media-continue-play:hover{background:var(--media-selection)!important}
+.media-screen .media-folders{position:relative}
+.media-screen .media-folders>.media-folder-actions{position:absolute;top:-52px;right:0;margin:0;z-index:4}
+.media-screen .media-folders>.media-folder-actions>summary{min-height:40px;padding:8px 12px}
+.media-screen .media-folders>.media-folder-actions>nav{right:0;top:calc(100% + 4px)}
+.media-modal:has(.media-match-confirm){width:min(560px,calc(100vw - 32px));max-width:560px;padding:0;border-radius:16px;overflow:hidden}
+.media-modal:has(.media-match-confirm) .media-match-confirm{margin:0;padding:20px;border:0;border-radius:0;background:var(--media-paper)}
+.media-modal:has(.media-match-confirm) .media-match-confirm p{font-size:14px;line-height:1.75;margin:0 0 18px}
+.media-modal:has(.media-match-confirm) .media-match-confirm .dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.media-modal:has(.media-match-confirm) .media-match-confirm .dialog-actions button{min-height:44px}
+.search-split{position:relative;isolation:isolate}
+.sources-search .search-menu{right:0;left:auto;min-width:260px;box-sizing:border-box}
+@media(max-width:640px){.media-screen .media-folders>.media-folder-actions{top:-49px}.media-screen .media-modal .media-match-confirm .dialog-actions{justify-content:stretch}.media-screen .media-modal .media-match-confirm .dialog-actions button{flex:1 1 140px}.sources-search .search-menu{right:0;min-width:min(290px,calc(100vw - 32px))}}
 
 /* Keep the embedded player's own controls independent from the reader theme. */
 .media-video-stage,.media-video-stage *{color-scheme:dark}
