@@ -83,6 +83,16 @@ export class MediaPlayer extends EventTarget {
   private startupTimer:ReturnType<typeof setTimeout>|undefined;
   private startupAt=0;
   private clearStartupTimer(){if(this.startupTimer)clearTimeout(this.startupTimer);this.startupTimer=undefined;}
+  private watchStartup(generation:number){
+    this.clearStartupTimer();
+    this.startupTimer=setTimeout(()=>{
+      if(generation!==this.generation||!this.active)return;
+      if(this.retryWithProxy())return;
+      ++this.sourceAttempt;this.media.pause();this.loadingStatus='';
+      this.error='连接或缓冲超时，请检查网络后重试。';this.changed();
+    },20000);
+  }
+  retryPlayback(){if(!this.active||this.playbackBlocked||this.loadingStatus)return;void this.resume();}
   get canRetryViaProxy(){return this.active&&!this.nativeActive&&!this.playbackBlocked&&!this.proxyFallback;}
   retryViaProxy(){this.allowAutomaticFallback=true;this.retryWithProxy(true);}
   private recoverWebPlayback():boolean{
@@ -92,7 +102,7 @@ export class MediaPlayer extends EventTarget {
       this.ready=false;this.error='';this.loadingStatus='正在尝试兼容跨域的直连方式…';
       this.media.crossOrigin='anonymous';(this.media as HTMLMediaElement&{referrerPolicy?:string}).referrerPolicy='no-referrer';this.media.src=this.api.streamUrl(this.session);
       const generation=this.generation;this.beginWebPlayback(generation);this.changed();
-      this.startupTimer=setTimeout(()=>{if(generation===this.generation&&!this.ready)this.retryWithProxy();},20000);
+
       return true;
     }
     return this.retryWithProxy();
@@ -107,6 +117,7 @@ export class MediaPlayer extends EventTarget {
     this.beginWebPlayback(this.generation);this.changed();return true;
   }
   private beginWebPlayback(generation:number){
+    this.watchStartup(generation);
     const attempt=++this.sourceAttempt;
     void this.media.play().catch(error=>{
       if(generation!==this.generation||attempt!==this.sourceAttempt)return;
@@ -219,7 +230,7 @@ export class MediaPlayer extends EventTarget {
       }
       if(typeof state.sleepAt==='number'&&Number.isFinite(state.sleepAt)&&state.sleepAt>=0)this.sleepAt=state.sleepAt;
       if(typeof state.speed==='number'&&Number.isFinite(state.speed)&&state.speed>=0.5&&state.speed<=3)this.playbackRate=state.speed;
-      this.ready=true;
+      this.ready=true;this.loadingStatus='';
       this.error=state.error||'';
       // Native service owns end-of-part transitions even when this page is suspended.
       this.changed();
@@ -227,9 +238,9 @@ export class MediaPlayer extends EventTarget {
     this.audio.controls=false;this.video.controls=true;this.video.playsInline=true;
     for(const media of [this.audio,this.video]) {
       media.preload='metadata';
-      media.addEventListener('loadedmetadata',()=>{if(media===this.media){this.clearStartupTimer();this.loadingStatus='正在缓冲…';this.changed();}});
+      media.addEventListener('loadedmetadata',()=>{if(media===this.media){this.loadingStatus='正在缓冲…';this.changed();}});
       media.addEventListener('waiting',()=>{if(media===this.media){this.loadingStatus='正在缓冲…';this.changed();}});
-      media.addEventListener('playing',()=>{if(media===this.media){this.clearStartupTimer();this.loadingStatus='';this.changed();console.info('[media-playback]',{stage:'playing',elapsedMs:Math.round(performance.now()-this.startupAt),transport:this.proxyFallback?'proxy':this.session?.playbackMode});}});
+      media.addEventListener('playing',()=>{if(media===this.media){this.clearStartupTimer();this.loadingStatus='';this.error='';this.changed();console.info('[media-playback]',{stage:'playing',elapsedMs:Math.round(performance.now()-this.startupAt),transport:this.proxyFallback?'proxy':this.session?.playbackMode});}});
       media.addEventListener('ratechange',()=>{if(media===this.media&&!this.nativeActive){this.playbackRate=media.playbackRate;this.changed();}});
       media.addEventListener('loadedmetadata',()=>{if(media===this.media&&this.session){media.currentTime=this.session.position;this.ready=true;this.updateMiniProgress();}});
       media.addEventListener('timeupdate',()=>{
@@ -356,7 +367,7 @@ export class MediaPlayer extends EventTarget {
     this.lease?.stop();this.lease=null;
     if(!this.active)this.playbackRate=readPlaybackPreferences(this.api.preferenceScope()).defaultRate;
     this.session=session;this.sequence=0;this.finishedSession='';this.ready=false;this.completed=false;this.title=selected.title;this.error='';this.active=true;this.playbackBlocked=false;
-    this.proxyFallback=false;this.corsRetry=false;this.startupAt=performance.now();this.loadingStatus='正在解析播放地址并连接视频源…';
+    this.proxyFallback=false;this.corsRetry=false;this.startupAt=performance.now();this.loadingStatus=options.autoplay===false?'':'正在连接媒体源…';
     this.allowAutomaticFallback=options.autoplay!==false;
     if(!this.native||(selected.video&&!nativeVideo))this.lease=new PlaybackLease(this.api,session,(message,terminal)=>{
       if(this.session!==session)return;
@@ -398,7 +409,6 @@ export class MediaPlayer extends EventTarget {
     if(options.autoplay===false)this.media.load();
     else{
       this.beginWebPlayback(generation);
-      if(session.playbackMode==='auto')this.startupTimer=setTimeout(()=>{if(generation===this.generation&&!this.ready)this.retryWithProxy();},20000);
     }
   }
   private async finished(){
@@ -440,7 +450,7 @@ export class MediaPlayer extends EventTarget {
     });
     return this.saving;
   }
-  pause(){++this.resumeIntent;this.allowAutomaticFallback=false;this.clearStartupTimer();if(this.nativeActive)this.native?.command('pause');else this.media.pause();}
+  pause(){++this.resumeIntent;this.allowAutomaticFallback=false;this.clearStartupTimer();this.loadingStatus='';if(this.nativeActive)this.native?.command('pause');else this.media.pause();}
   private async saveProgress(id:string,payload:{sequence:number;revision:number;position:number;completed:boolean}):Promise<Progress>{
     const controller=new AbortController();
     let timer:ReturnType<typeof setTimeout>|undefined;
@@ -464,13 +474,14 @@ export class MediaPlayer extends EventTarget {
         if(this.ready&&Number.isFinite(this.media.currentTime))session.position=this.media.currentTime;
         this.ready=false;this.media.load();
       }
+      this.error='';this.loadingStatus='正在连接媒体源…';this.watchStartup(generation);this.changed();
       const attempt=++this.sourceAttempt;
       try { await this.media.play(); }
       catch(error) {
         if(generation===this.generation&&attempt===this.sourceAttempt){
           const name=(error as {name?:string})?.name;
           if(name!=='NotAllowedError'&&name!=='AbortError'&&this.recoverWebPlayback())return;
-          this.error=playbackFailure(error,this.media.error);this.changed();
+          this.clearStartupTimer();this.loadingStatus='';this.error=playbackFailure(error,this.media.error);this.changed();
         }
         return;
       }
@@ -501,5 +512,5 @@ export class MediaPlayer extends EventTarget {
     }
     this.changed();
   }
-  async stop(){this.restoreNative=false;++this.generation;this.pause();const pending=this.flush();this.native?.command('stop');this.nativeActive=false;this.nativeControls.hidden=true;this.subtitles.clear();this.audioTracks.clear();this.lease?.stop();this.lease=null;this.session=null;this.ready=false;this.audio.removeAttribute('src');this.video.removeAttribute('src');this.audio.load();this.video.load();this.active=false;this.element.hidden=true;this.sleep(0);this.queue=[];this.changed();await pending;}
+  async stop(){this.restoreNative=false;++this.generation;this.clearStartupTimer();this.loadingStatus='';this.error='';this.pause();const pending=this.flush();this.native?.command('stop');this.nativeActive=false;this.nativeControls.hidden=true;this.subtitles.clear();this.audioTracks.clear();this.lease?.stop();this.lease=null;this.session=null;this.ready=false;this.audio.removeAttribute('src');this.video.removeAttribute('src');this.audio.load();this.video.load();this.active=false;this.element.hidden=true;this.sleep(0);this.queue=[];this.changed();await pending;}
 }
