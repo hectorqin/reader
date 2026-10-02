@@ -17,6 +17,7 @@
     "ui:sources": "npm run build && node --import ../server/node_modules/tsx/dist/loader.mjs tools/ui-review/host-source-flow.mjs"
   },
   "dependencies": {
+    "@tanstack/query-core": "^5.104.0",
     "dplayer": "^1.27.1",
     "fast-xml-parser": "^4.5.1",
     "jszip": "^3.10.1",

@@ -111,6 +111,9 @@ body:has(>#app>.media-screen) { background: #faf9f5; }
 .media-hero .media-cover {width:170px;min-width:170px}
 .media-screen .media-primary {background:var(--media-accent);color:var(--media-on-accent)}
 .media-screen button.media-primary:hover:not(:disabled) {background:var(--media-accent);color:var(--media-on-accent);filter:brightness(.94)}
+.media-task-retry {display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:40px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--media-selection);color:var(--media-accent);font-size:12px;font-weight:600}
+.media-task-retry:disabled {opacity:.5}
+@media(max-width:430px){.media-task-retry span{display:inline}.media-task-retry{min-width:64px}.media-scan-job .media-task-icon{min-width:40px}}
 .media-screen .media-continue {background:var(--surface);border:0;border-radius:9px;padding:11px 14px;margin-top:18px}
 
 /* Desktop keeps channel links; mobile switches channels beside the catalog title. */

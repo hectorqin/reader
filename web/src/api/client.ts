@@ -28,6 +28,7 @@ import type {
 } from './types.ts';
 import type { Platform } from '../core/platform.ts';
 import type { SourceType, SourceInstance, SourcePlugin, SourceEntry, SourcePage, SourceAcquisition, ChapterSubscription } from './sources.ts';
+import { affectedNavigationQuery, createReaderQueryClient, isNavigationQuery, readerQueryKey } from './query.ts';
 
 export interface SessionStore {
   load(): Promise<Session | null>;
@@ -133,6 +134,8 @@ export class ReaderApi {
   private refreshPromise: Promise<Session> | null = null;
   private sessionGeneration = 0;
   private readonly streams = new Set<AbortController>();
+  private readonly queryClient = createReaderQueryClient();
+  private queryScope = 0;
   private sessionWrites: Promise<void> = Promise.resolve();
   private readonly listeners = new Set<(session: Session | null) => void>();
 
@@ -153,6 +156,7 @@ export class ReaderApi {
       for (const stream of this.streams) stream.abort();
       this.sessionGeneration += 1;
       this.refreshPromise = null;
+      this.queryScope += 1;
     }
     this.currentBaseUrl = next;
   }
@@ -188,6 +192,7 @@ export class ReaderApi {
     }
     const generation = this.sessionGeneration;
     this.session = session;
+    if (!rotation) this.queryScope += 1;
     const write = this.sessionWrites.catch(() => undefined).then(() =>
       session ? this.sessions.save(session) : this.sessions.clear());
     this.sessionWrites = write;
@@ -621,6 +626,11 @@ export class ReaderApi {
       ...(onProgress ? { onUploadProgress: onProgress } : {}),
       ...(options.signal ? { signal: options.signal } : {}),
     });
+    void this.queryClient.invalidateQueries({
+      queryKey: ['reader'],
+      predicate: query => affectedNavigationQuery('/api/v1/library/upload', String(query.queryKey[4])),
+      refetchType: 'none',
+    });
     return response.json as UploadResult;
   }
 
@@ -705,11 +715,21 @@ export class ReaderApi {
   /** Media modules share account renewal without coupling to reading DTOs. */
   mediaRequest<T>(path: string, method = 'GET', body?: unknown, options: RequestOptions = {}): Promise<T> {
     if (!path.startsWith('/api/v1/media/')) throw new Error('invalid media API path');
+    if (method === 'GET' && body === undefined) return this.get<T>(path, options);
     return this.call<T>(path, method, body, options);
   }
 
+  /** Force the next screen load to read the server while retaining cache data. */
+  refreshQueries(): void {
+    void this.queryClient.invalidateQueries({ queryKey: ['reader'], refetchType: 'none' });
+  }
+
   businessSettingsRequest<T>(path='',method='GET',body?:unknown,signal?:AbortSignal):Promise<T>{
-    return this.call<T>('/api/v1/admin/settings'+(path?'/'+path:''),method,body,signal?{signal}:{});
+    const requestPath = '/api/v1/admin/settings'+(path?'/'+path:'');
+    const options = signal ? { signal } : {};
+    return method === 'GET' && body === undefined
+      ? this.get<T>(requestPath, options)
+      : this.call<T>(requestPath, method, body, options);
   }
   async businessTtsPreview(values:Record<string,unknown>,voice:string):Promise<Blob>{
     const result=await this.request('/api/v1/admin/settings/tts/preview','POST',{values,voice},{binary:true});
@@ -719,8 +739,21 @@ export class ReaderApi {
   async aiSummary(bookId:string,chapterId:string,content:string):Promise<{summary:string;cached:boolean}>{ return this.call('/api/v1/ai/summary','POST',{bookId,chapterId,content}); }
 
   private async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const response = await this.request(path, 'GET', undefined, options);
-    return response.json as T;
+    if (!isNavigationQuery(path)) return (await this.request(path, 'GET', undefined, options)).json as T;
+    const generation = this.sessionGeneration;
+    const key = readerQueryKey(this.currentBaseUrl, this.session?.user.id, this.queryScope, path);
+    const result = await this.queryClient.fetchQuery<T>({
+      queryKey: key,
+      // Keep the caller's AbortSignal semantics intact. These class-based
+      // screens already abort requests when disposed; letting fetchQuery own the
+      // signal would turn normal auth/session transitions into CancelledError.
+      queryFn: () => this.request(path, 'GET', undefined, options)
+        .then(response => response.json as T),
+    });
+    // A response that completed after login/logout must never escape through a
+    // cache promise, even when QueryClient returned a previously resolved value.
+    this.assertSession(generation);
+    return result;
   }
 
   private async call<T>(
@@ -730,6 +763,13 @@ export class ReaderApi {
     options: RequestOptions = {},
   ): Promise<T> {
     const response = await this.request(path, method, body, options);
+    if (method !== 'GET') {
+      void this.queryClient.invalidateQueries({
+        queryKey: ['reader'],
+        predicate: query => affectedNavigationQuery(path, String(query.queryKey[4])),
+        refetchType: 'none',
+      });
+    }
     return response.json as T;
   }
 

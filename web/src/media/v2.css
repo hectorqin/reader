@@ -105,7 +105,7 @@
 .media-screen .media-settings-panel,.media-screen .media-form {max-width:760px;margin-inline:auto}
 .media-screen .media-setting-field,.media-screen .media-settings-check {min-height:56px;padding:12px 0;border-bottom:1px solid var(--border)}
 .media-screen .media-settings-check input {accent-color:var(--media-accent);width:20px;height:20px}
-.media-screen .media-library-list {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.media-screen .media-library-list {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:12px 0;}
 .media-screen .media-library-row {display:grid;grid-template-columns:24px minmax(0,1fr) 44px;gap:10px;padding:16px;margin:0;border:1px solid var(--border);border-radius:11px;background:var(--media-paper);align-items:start}
 .media-library-row>svg {margin-top:8px;color:var(--media-accent)}
 .media-library-row strong {font-size:14px}

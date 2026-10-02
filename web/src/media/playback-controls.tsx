@@ -89,6 +89,7 @@ export function PlaybackControls({player,api,panel,onPanelChange,onBack,onFavori
     <section className="media-playback-status" data-panel={view} data-channel={channel??'unknown'} aria-label="播放控制">
     {(player.isVideo||!itemId)&&<header className="media-now-playing"><div><small>正在播放</small><strong>{player.title}</strong></div><button className="media-symbol-button" aria-label="结束" title="结束播放" onClick={()=>void player.stop()}><Square size={18} aria-hidden="true"/></button></header>}
     {player.error&&<PlaybackProblem player={player} {...(item?.editions.length?{onVersions:()=>open('versions')}:{})} {...(onBack?{onBack}:{})} backLabel={view==='main'?'返回浏览':'返回播放'}/>}
+    {!player.error&&player.loadingStatus&&<p role="status" className="media-loading-status">{player.loadingStatus}</p>}
     {player.canOpenNativeVideo&&<button onClick={()=>void player.openNativeVideo()}>打开 Android 视频播放器</button>}
     {view==='chapters'?<PlayingChapters key={itemId} player={player} api={api} item={item} error={failed} cause={cause} onRetry={()=>setRetry(value=>value+1)}/>:view==='queue'?<CurrentPlaylist player={player}/>:!player.isVideo&&itemId&&<PlayingArtwork api={api} item={item} failed={!!failed} onRetry={()=>setRetry(value=>value+1)} player={player} lyrics={lyrics} onMore={()=>open('more')}/>}
     {view!=='queue'&&view!=='chapters'&&<div className="media-audio-bottom">

@@ -12,6 +12,19 @@ function ready(player:MediaPlayer){player.audio.dispatchEvent(new Event('loadedm
 describe('media playback lifecycle',()=>{
   beforeEach(()=>{localStorage.clear();vi.spyOn(HTMLMediaElement.prototype,'play').mockImplementation(async function(this:HTMLMediaElement){Object.defineProperty(this,'paused',{configurable:true,value:false});});vi.spyOn(HTMLMediaElement.prototype,'pause').mockImplementation(function(this:HTMLMediaElement){Object.defineProperty(this,'paused',{configurable:true,value:true});});vi.spyOn(HTMLMediaElement.prototype,'load').mockImplementation(()=>{});});
   afterEach(()=>{vi.restoreAllMocks();vi.useRealTimers();});
+  it('times out after metadata and retries without duplicating the session or queue',async()=>{
+    vi.useFakeTimers();
+    const {player,playback}=setup();
+    vi.mocked(HTMLMediaElement.prototype.play).mockImplementation(()=>new Promise(()=>{}));
+    await player.play([part('slow')]);ready(player);
+    await vi.advanceTimersByTimeAsync(20001);
+    expect(player.error).toContain('超时');expect(player.loadingStatus).toBe('');
+    player.retryPlayback();await vi.advanceTimersByTimeAsync(0);
+    expect(player.loadingStatus).toContain('连接');expect(playback).toHaveBeenCalledTimes(1);
+    player.audio.dispatchEvent(new Event('playing'));
+    await vi.advanceTimersByTimeAsync(20001);
+    expect(player.error).toBe('');expect(player.loadingStatus).toBe('');await player.stop();
+  });
   it('opens video controls and releases the action while playback is still buffering',async()=>{
     const {player}=setup();let started=false;
     vi.mocked(HTMLMediaElement.prototype.play).mockImplementation(()=>{started=true;return new Promise(()=>{});});

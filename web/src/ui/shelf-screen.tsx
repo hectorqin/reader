@@ -655,6 +655,7 @@ export class ShelfScreen {
   private async manualRefresh(): Promise<void> {
     this.patch({ refreshing: true });
     try {
+      this.options.api.refreshQueries();
       await this.refresh();
     } finally {
       setTimeout(() => this.patch({ refreshing: false }), 900);
