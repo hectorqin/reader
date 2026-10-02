@@ -1,7 +1,7 @@
 import {FolderRecognition} from './folder-recognition.tsx';
 import {FolderCleanup} from './folder-cleanup.tsx';
 import {MediaSelect} from './select.tsx';
-import {useEffect,useRef,useState} from '../ui/vendor/preact.ts';
+import {useEffect,useLayoutEffect,useRef,useState,render} from '../ui/vendor/preact.ts';
 import {Folder,FolderOpen,File,ChevronRight,ChevronLeft,ArrowUpRight,Ellipsis} from 'lucide-preact';
 import type {Detail,MediaApi,Part} from './api.ts';
 import {EditionDetails,type ChapterPosition} from './edition-details.tsx';
@@ -27,6 +27,13 @@ export function MediaFolders({api,admin=false,video=false,libraryId,initialLocat
   const [loading,setLoading]=useState(true),[cause,setCause]=useState<unknown>(),[actionError,setActionError]=useState('');
   const [cleanupNotice,setCleanupNotice]=useState('');
   const generation=useRef(0);
+  const folderRoot=useRef<HTMLElement>(null),menuSlot=useRef<HTMLSpanElement|null>(null);
+  useLayoutEffect(()=>{
+    const host=folderRoot.current?.closest('.media-screen')?.querySelector('.media-heading-actions');
+    if(!host)return;
+    const slot=document.createElement('span');slot.className='media-folder-menu-slot';host.append(slot);menuSlot.current=slot;
+    return()=>{render(null,slot);slot.remove();menuSlot.current=null;};
+  },[]);
   useEffect(()=>{
     const abort=new AbortController();++generation.current;setLoading(true);setListing(null);setFile(null);setError('');setCause(undefined);setActionError('');setNotice('');setBusy(false);
     void (async()=>{try{
@@ -38,10 +45,10 @@ export function MediaFolders({api,admin=false,video=false,libraryId,initialLocat
   useEffect(()=>{onLocationChange?.({path,offset,assetId,editions,chapters});},[path,offset,assetId]);
   function open(next:string){setCleanupNotice('');setPath(next);setOffset(0);setAssetId(null);}
   async function action(run:()=>Promise<void>,queue=false){if(busy)return;const current=generation.current;setBusy(true);setActionError('');setNotice('');try{await run();if(current===generation.current)setNotice(queue?'已加入队列':'');}catch(error){if(current===generation.current)setActionError((error instanceof ApiError&&error.kind==='offline'?'无法连接服务器':error instanceof Error?error.message:'操作失败')+(queue?'。加入结果尚未确认，请先到待播队列核对，再决定是否重新添加。':'。可以重新选择章节播放。'));}finally{if(current===generation.current)setBusy(false);}}
+  useLayoutEffect(()=>{const slot=menuSlot.current;if(!slot)return;const menu=admin&&listing&&<details className="media-actions media-folder-actions"><summary aria-label="文件管理操作" title="文件管理操作"><Ellipsis size={20} aria-hidden="true"/></summary><nav aria-label="文件管理操作">{admin&&video&&<FolderRecognition key={libraryId+'-rules-menu-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onApplied={()=>{setCleanupNotice('已应用识别结果，原文件与播放进度保留。');setRetry(value=>value+1);}}/>}{admin&&<FolderCleanup key={libraryId+'-cleanup-menu-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onCleaned={result=>{setCleanupNotice('已清理 '+result.assets+' 个失效资源记录'+(result.returnPath!==path?'，已返回上级有效目录。':'。'));setPath(result.returnPath);setOffset(0);setRetry(value=>value+1);}}/>}</nav></details>;render(menu,slot);},[api,admin,video,libraryId,path,busy,loading,listing]);
   const segments=path?path.split('/'):[];
-  return <section className="media-folders" aria-label="影音文件夹">
+  return <section ref={folderRoot} className="media-folders" aria-label="影音文件夹">
     <nav className="media-folder-path" aria-label="目录位置"><button disabled={busy} onClick={()=>open('')}>库内根目录</button>{segments.map((segment,index)=><button key={index} disabled={busy} onClick={()=>open(segments.slice(0,index+1).join('/'))}>/ {segment}</button>)}</nav>
-    {listing&&<details className="media-actions media-folder-actions"><summary aria-label="文件管理操作" title="文件管理操作"><Ellipsis size={20} aria-hidden="true"/></summary><nav aria-label="文件管理操作">{admin&&video&&<FolderRecognition key={libraryId+'-rules-menu-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onApplied={()=>{setCleanupNotice('已应用识别结果，原文件与播放进度保留。');setRetry(value=>value+1);}}/>}{admin&&<FolderCleanup key={libraryId+'-cleanup-menu-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onCleaned={result=>{setCleanupNotice('已清理 '+result.assets+' 个失效资源记录'+(result.returnPath!==path?'，已返回上级有效目录。':'。'));setPath(result.returnPath);setOffset(0);setRetry(value=>value+1);}}/>}</nav></details>}
     {(path||assetId)&&<button className="media-folder-back" disabled={busy} aria-label={'← '+(assetId?'返回文件列表':'上级目录')} onClick={()=>assetId?setAssetId(null):open(segments.slice(0,-1).join('/'))}><ChevronLeft size={16} aria-hidden="true"/>{assetId?'返回文件列表':'上级目录'}</button>}
     {error&&<MediaScreenError fullPage error={cause} message={error} busy={loading} retryLabel="重新加载" onRetry={()=>setRetry(value=>value+1)}/>}{actionError&&<div className="media-error" role="alert">{actionError}</div>}{notice&&<p role="status">{notice}</p>}
     {loading&&<MediaLoading layout={assetId?'tracks':'list'} square label={assetId?'正在读取文件与章节…':'正在读取目录…'}/>}
