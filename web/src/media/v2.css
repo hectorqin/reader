@@ -582,3 +582,8 @@ body[data-media-theme] {--surface-muted:var(--media-theme-surface)}
 .media-video-stage,.media-video-stage *{color-scheme:dark}
 .media-video-stage .plyr{--plyr-color-main:#b9d98a;--plyr-video-background:#080b0e;--plyr-font-family:inherit;--plyr-control-icon-size:18px;--plyr-control-spacing:10px;--plyr-menu-background:#263022;--plyr-menu-color:#f2f2e9}
 .media-video-stage .plyr__controls button,.media-video-stage .plyr__control{background:transparent;color:#f2f2e9}
+
+/* Folder actions use the same compact icon button as other page menus. */
+.media-screen .media-folder-actions>summary { width:44px; min-width:44px; height:44px; box-sizing:border-box; padding:10px; border:1px solid var(--border); border-radius:50%; background:var(--surface); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; list-style:none; }
+.media-screen .media-folder-actions>summary::-webkit-details-marker { display:none; }
+.media-screen .media-folder-actions[open]>summary { border-color:var(--media-accent); background:var(--media-selection); }

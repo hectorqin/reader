@@ -433,7 +433,7 @@ export class SourcesScreen {
       </main>
         {activeGroup && <Modal title="书源列表" busy={this.working} onClose={() => { this.resultGroup = null; this.draw(); }}>
           <div className="source-modal-content catalog-source-list">
-            <header className="catalog-source-heading"><h3>{activeGroup.entry.title}</h3><p>{activeGroup.entry.authors?.join(' / ') || '作者未知'}</p><small role="status">{activeGroup.entries.length} 条书源{this.searchRun ? ' · 搜索中，列表持续更新' : ''}</small><input type="search" placeholder="搜索书源" value={this.catalogSourceQuery} onInput={event=>{this.catalogSourceQuery=event.currentTarget.value;this.draw();}} /></header>
+            <header className="catalog-source-heading"><h3>{activeGroup.entry.title}</h3><p>{activeGroup.entry.authors?.join(' / ') || '作者未知'}</p><div className="catalog-source-meta"><small role="status">{activeGroup.entries.length} 条书源{this.searchRun ? ' · 搜索中，列表持续更新' : ''}</small><label className="catalog-source-search"><span className="sr-only">搜索书源</span><input type="search" placeholder="搜索书源" value={this.catalogSourceQuery} onInput={event=>{this.catalogSourceQuery=event.currentTarget.value;this.draw();}} /></label></div></header>
             {activeGroup.entries.filter(entry=>(entry.sourceName || this.selected?.name || '未命名书源').toLocaleLowerCase().includes(this.catalogSourceQuery.trim().toLocaleLowerCase())).map(entry => <article className="catalog-source-item" key={entry.ref}>
               <div><strong>{entry.sourceName || this.selected?.name || '未命名书源'}</strong><p className="source-description">最新章节：{entry.latestChapter || '暂无信息'}</p></div>
               <div className="sources-actions"><Button onClick={() => void this.showDetail(entry)}>详情</Button>

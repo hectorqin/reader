@@ -589,6 +589,7 @@ export class LibraryFilesScreen {
 
     this.uploadInput.type = 'file';
     this.uploadInput.multiple = true;
+    this.uploadInput.accept = '*/*';
     this.uploadInput.className = 'manager-upload-input';
     this.uploadInput.setAttribute('aria-hidden', 'true');
     this.uploadInput.tabIndex = -1;

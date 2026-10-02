@@ -4072,3 +4072,14 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .source-capabilities dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 .source-capabilities dl > div { padding: 8px; border: 1px solid currentColor; border-radius: 6px; }
 .source-capabilities dd { margin: 4px 0 0; }
+
+/* Align split search actions and source filtering controls. */
+.search-menu button { display:grid; grid-template-columns:2rem minmax(0,1fr); align-items:center; column-gap:.65rem; }
+.search-menu button > .icon { width:2rem; height:2rem; display:grid; place-items:center; }
+.search-menu button > span { min-width:0; line-height:1.35; }
+.search-menu small { line-height:1.4; }
+.catalog-source-meta { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-top:.75rem; }
+.catalog-source-search { display:block; flex:1 1 16rem; max-width:22rem; }
+.catalog-source-search input { width:100%; min-height:42px; box-sizing:border-box; padding:.6rem .8rem; border:1px solid var(--reader-line); border-radius:.7rem; background:var(--reader-paper); color:var(--reader-ink); }
+.catalog-source-search input:focus { border-color:var(--reader-accent); outline:2px solid color-mix(in srgb,var(--reader-accent) 25%,transparent); outline-offset:1px; }
+@media (max-width:600px) { .catalog-source-meta { align-items:stretch; flex-direction:column; gap:.55rem; } .catalog-source-search { max-width:none; } }

@@ -2,7 +2,7 @@ import {FolderRecognition} from './folder-recognition.tsx';
 import {FolderCleanup} from './folder-cleanup.tsx';
 import {MediaSelect} from './select.tsx';
 import {useEffect,useRef,useState} from '../ui/vendor/preact.ts';
-import {Folder,FolderOpen,File,ChevronRight,ChevronLeft,ArrowUpRight} from 'lucide-preact';
+import {Folder,FolderOpen,File,ChevronRight,ChevronLeft,ArrowUpRight,Ellipsis} from 'lucide-preact';
 import type {Detail,MediaApi,Part} from './api.ts';
 import {EditionDetails,type ChapterPosition} from './edition-details.tsx';
 import {ResourceInfo} from './resource-info.tsx';
@@ -41,7 +41,7 @@ export function MediaFolders({api,admin=false,video=false,libraryId,initialLocat
   const segments=path?path.split('/'):[];
   return <section className="media-folders" aria-label="影音文件夹">
     <nav className="media-folder-path" aria-label="目录位置"><button disabled={busy} onClick={()=>open('')}>库内根目录</button>{segments.map((segment,index)=><button key={index} disabled={busy} onClick={()=>open(segments.slice(0,index+1).join('/'))}>/ {segment}</button>)}</nav>
-    {listing&&<details className="media-actions media-folder-actions"><summary aria-label="文件管理操作">更多操作</summary><nav aria-label="文件管理操作">{admin&&video&&<FolderRecognition key={libraryId+'-rules-menu-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onApplied={()=>{setCleanupNotice('已应用识别结果，原文件与播放进度保留。');setRetry(value=>value+1);}}/>}{admin&&<FolderCleanup key={libraryId+'-cleanup-menu-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onCleaned={result=>{setCleanupNotice('已清理 '+result.assets+' 个失效资源记录'+(result.returnPath!==path?'，已返回上级有效目录。':'。'));setPath(result.returnPath);setOffset(0);setRetry(value=>value+1);}}/>}</nav></details>}
+    {listing&&<details className="media-actions media-folder-actions"><summary aria-label="文件管理操作" title="文件管理操作"><Ellipsis size={20} aria-hidden="true"/></summary><nav aria-label="文件管理操作">{admin&&video&&<FolderRecognition key={libraryId+'-rules-menu-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onApplied={()=>{setCleanupNotice('已应用识别结果，原文件与播放进度保留。');setRetry(value=>value+1);}}/>}{admin&&<FolderCleanup key={libraryId+'-cleanup-menu-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onCleaned={result=>{setCleanupNotice('已清理 '+result.assets+' 个失效资源记录'+(result.returnPath!==path?'，已返回上级有效目录。':'。'));setPath(result.returnPath);setOffset(0);setRetry(value=>value+1);}}/>}</nav></details>}
     {(path||assetId)&&<button className="media-folder-back" disabled={busy} aria-label={'← '+(assetId?'返回文件列表':'上级目录')} onClick={()=>assetId?setAssetId(null):open(segments.slice(0,-1).join('/'))}><ChevronLeft size={16} aria-hidden="true"/>{assetId?'返回文件列表':'上级目录'}</button>}
     {error&&<MediaScreenError fullPage error={cause} message={error} busy={loading} retryLabel="重新加载" onRetry={()=>setRetry(value=>value+1)}/>}{actionError&&<div className="media-error" role="alert">{actionError}</div>}{notice&&<p role="status">{notice}</p>}
     {loading&&<MediaLoading layout={assetId?'tracks':'list'} square label={assetId?'正在读取文件与章节…':'正在读取目录…'}/>}
