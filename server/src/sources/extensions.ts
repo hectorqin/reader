@@ -4,14 +4,14 @@ export interface ExtensionField {
   dependsOn?: string;
   changeAction?: string;
   placeholder?: string; min?: number; max?: number;
-  key: string; label: string; type: 'text' | 'password' | 'textarea' | 'number' | 'boolean' | 'select';
+  key: string; label: string; type: 'text' | 'password' | 'textarea' | 'number' | 'boolean' | 'select' | 'file';
   required?: boolean; value?: string | number | boolean;
   options?: Array<{ value: string; label: string; parentValues?: string[] }>;
 }
 export interface ExtensionForm {
   layout?: 'inline'; confirm?: string;
   id: string; title: string; submit: string; fields: ExtensionField[];
-  values?: Record<string, string | number | boolean>;
+  values?: Record<string, unknown>;
 }
 export interface ExtensionContent {
   loadAction?: string;
@@ -33,10 +33,11 @@ const identifier = /^[a-z][a-z0-9._-]{0,63}$/;
 function check(ok: unknown): asserts ok { if (!ok) throw badRequest('Invalid plugin extension payload', 'INVALID_EXTENSION'); }
 function record(value: unknown): asserts value is Record<string, unknown> { check(value && typeof value === 'object' && !Array.isArray(value)); }
 function label(value: unknown): asserts value is string { check(typeof value === 'string' && value.length <= 8192); }
-export function extensionValues(input: unknown): Record<string, string | number | boolean> {
+export function extensionValues(input: unknown): Record<string, unknown> {
   record(input); check(Object.keys(input).length <= 32);
   for (const [key, value] of Object.entries(input)) {
-    check(identifier.test(key)); check(typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value) || typeof value === 'string' && value.length <= 512_000);
+    check(identifier.test(key)); const data = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>).data : undefined;
+    check(typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value) || typeof value === 'string' && value.length <= 512_000 || Array.isArray(value) && value.length <= 10000 && value.every(item => typeof item === 'string' && item.length <= 4096) || typeof data === 'string' && data.length <= 8 * 1024 * 1024);
   }
   return input as Record<string, string | number | boolean>;
 }
@@ -60,7 +61,7 @@ export function extensionFields(input: unknown): ExtensionField[] {
   const keys = new Set();
   for (const field of input) {
     record(field); check(typeof field.key === 'string' && identifier.test(field.key) && !keys.has(field.key)); keys.add(field.key);
-    label(field.label); check(['text', 'password', 'textarea', 'number', 'boolean', 'select'].includes(String(field.type)));
+    label(field.label); check(['text', 'password', 'textarea', 'number', 'boolean', 'select', 'file'].includes(String(field.type)));
     if (field.type === 'password') check(field.value === undefined || field.value === '');
     if (field.placeholder !== undefined) label(field.placeholder);
     for (const bound of [field.min, field.max]) if (bound !== undefined) check(field.type === 'number' && typeof bound === 'number' && Number.isFinite(bound));
@@ -116,7 +117,7 @@ export function extensionPage(input: unknown): ExtensionPage {
       check(Array.isArray(input.sections) && input.sections.length <= 16);
       for (const section of input.sections) {
         record(section); label(section.title); if (section.emptyText !== undefined) label(section.emptyText); check(Array.isArray(section.items) && section.items.length <= 200);
-        for (const item of section.items) { record(item); label(item.title); if (item.description !== undefined) label(item.description); if (item.forms !== undefined) forms(item.forms); if (item.collapsible !== undefined) check(typeof item.collapsible === 'boolean'); }
+        for (const item of section.items) { record(item); label(item.title); if (item.description !== undefined) label(item.description); if (item.forms !== undefined) forms(item.forms); if (item.collapsible !== undefined) check(typeof item.collapsible === 'boolean'); if (item.selectable !== undefined) check(typeof item.selectable === 'boolean'); if (item.key !== undefined) label(item.key); }
       }
     }
   };

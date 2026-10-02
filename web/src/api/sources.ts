@@ -39,18 +39,18 @@ export interface ExtensionField {
   dependsOn?: string;
   changeAction?: string;
   placeholder?: string; min?: number; max?: number;
-  key: string; label: string; type: 'text' | 'password' | 'textarea' | 'number' | 'boolean' | 'select'; required?: boolean;
+  key: string; label: string; type: 'text' | 'password' | 'textarea' | 'number' | 'boolean' | 'select' | 'file'; required?: boolean;
   value?: string | number | boolean; options?: Array<{ value: string; label: string; parentValues?: string[] }>;
 }
 export interface ExtensionForm {
-  layout?: 'inline'; confirm?: string; id: string; title: string; submit: string; fields: ExtensionField[]; values?: Record<string, string | number | boolean> }
+  layout?: 'inline'; confirm?: string; id: string; title: string; submit: string; fields: ExtensionField[]; values?: Record<string, unknown> }
 export interface ExtensionContent {
   loadAction?: string;
   layout?: 'workbench';
   links?: Array<{ title: string; url: string }>;
   forms: ExtensionForm[];
   outputs?: Array<{ title: string; text: string; format: 'text' | 'log' | 'json' }>;
-  sections?: Array<{ title: string; emptyText?: string; items: Array<{ title: string; description?: string; collapsible?: boolean; forms?: ExtensionForm[] }> }>;
+  sections?: Array<{ title: string; emptyText?: string; items: Array<{ title: string; description?: string; collapsible?: boolean; selectable?: boolean; key?: string; forms?: ExtensionForm[] }> }>;
 }
 export interface ExtensionPage extends ExtensionContent {
   title: string; description?: string; notice?: string; noticeKind?: 'info' | 'error'; activeTab?: string;

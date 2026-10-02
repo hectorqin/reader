@@ -17,8 +17,9 @@ export class PluginPageScreen {
   private noticeTab = '';
   private expanded = new Set<string>();
   private confirmation: ExtensionForm | undefined;
-  private drafts = new Map<string, Record<string, string | number | boolean>>();
-  private inputs = new Map<ExtensionForm, Record<string, string | number | boolean>>();
+  private drafts = new Map<string, Record<string, unknown>>();
+  private inputs = new Map<ExtensionForm, Record<string, unknown>>();
+  private selected = new Set<string>();
   constructor(private readonly options: { api: ReaderApi; pageId: string; onBack(): void; onSignedOut(): void } & ({ sourceId: string; pluginId?: never } | { pluginId: string; sourceId?: never })) {
     this.element.className = 'sources-screen extension-screen'; this.ui = mountUI(this.element, () => this.view(), null);
   }
@@ -65,11 +66,12 @@ export class PluginPageScreen {
     if (!values) { values = { ...form.values }; for (const field of form.fields) values[field.key] = field.value ?? (field.type === 'boolean' ? false : ''); Object.assign(values, this.drafts.get(JSON.stringify(form))); this.inputs.set(form, values); }
     const data = values;
     return <form className={form.layout === 'inline' ? 'extension-form-inline' : undefined} onSubmit={event => {
-      event.preventDefault(); if (form.confirm) { this.confirmation = form; this.draw(); } else void this.run(form.id, data, form);
+      event.preventDefault(); const payload = { ...data, ...(form.id === 'batch' ? { ids: [...this.selected] } : {}) }; if (form.confirm) { this.confirmation = form; this.draw(); } else void this.run(form.id, payload, form);
     }}>
       {form.title && <h3>{form.title}</h3>}
       {form.fields.map(field => <label key={field.key} data-field-type={field.type}>{field.label}
         {field.type === 'textarea' ? <textarea aria-label={field.label} placeholder={field.placeholder} required={field.required} disabled={this.busy} value={String(data[field.key] ?? '')} onInput={event => { data[field.key] = event.currentTarget.value; }} />
+          : field.type === 'file' ? <input aria-label={field.label} type="file" required={field.required} disabled={this.busy} onChange={async event => { const file = event.currentTarget.files?.[0]; if (!file) return; const bytes = new Uint8Array(await file.arrayBuffer()); let binary = ''; for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); data[field.key] = { name: file.name, type: file.type, data: btoa(binary) }; }} />
           : field.type === 'boolean' ? <input aria-label={field.label} type="checkbox" disabled={this.busy} checked={data[field.key] === true} onChange={event => { data[field.key] = event.currentTarget.checked; }} />
           : field.type === 'select' ? <select aria-label={field.label} required={field.required} disabled={this.busy} value={String(data[field.key] ?? '')} onChange={event => {
             const previous = data[field.key]; data[field.key] = event.currentTarget.value;
@@ -82,7 +84,7 @@ export class PluginPageScreen {
             onInput={event => { data[field.key] = field.type === 'number' ? Number(event.currentTarget.value) : event.currentTarget.value; }} />}
       </label>)}
       <Button type="submit" disabled={this.busy}>{form.submit}</Button>
-      {this.confirmation === form && <FloatingConfirm title="确认操作" text={form.confirm||''} confirmText={'确认'+form.submit} cancelText="取消" onCancel={()=>{this.confirmation=undefined;this.draw();}} onConfirm={()=>{this.confirmation=undefined;void this.run(form.id,data,form);}}/>}
+      {this.confirmation === form && <FloatingConfirm title="确认操作" text={form.confirm||''} confirmText={'确认'+form.submit} cancelText="取消" onCancel={()=>{this.confirmation=undefined;this.draw();}} onConfirm={()=>{this.confirmation=undefined;void this.run(form.id, { ...data, ...(form.id === 'batch' ? { ids: [...this.selected] } : {}) }, form);}}/>}
     </form>;
   }
   private content(content: ExtensionContent, scope = 'page') {
@@ -96,7 +98,7 @@ export class PluginPageScreen {
         {section.items.map((item, index) => {
           const key = scope + ':' + sectionIndex + ':' + index, open = this.expanded.has(key);
           return <article className="sources-card extension-item" key={key}>
-            <div className="extension-item-heading"><div><h3>{item.title}</h3><p className="source-description">{item.description}</p></div>
+            <div className="extension-item-heading"><div>{item.selectable && item.key && <input type="checkbox" aria-label={'选择 ' + item.title} checked={this.selected.has(item.key)} onChange={event => { if (event.currentTarget.checked) this.selected.add(item.key!); else this.selected.delete(item.key!); this.draw(); }} />}<h3>{item.title}</h3><p className="source-description">{item.description}</p></div>
               {item.collapsible && <button className="button" type="button" aria-expanded={open} aria-controls={'extension-item-' + key} onClick={() => {
                 if (open) this.expanded.delete(key); else this.expanded.add(key); this.draw();
               }}>{open ? '收起' : '管理'}</button>}</div>
