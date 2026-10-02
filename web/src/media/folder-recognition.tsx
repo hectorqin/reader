@@ -11,7 +11,7 @@ interface Proposal {assetId:string;ref:string;before:{id:string;title:string;kin
 interface Preview {id:string;items:Proposal[]}
 const labels:Record<Mode,string>={auto:'自动识别',movie:'电影目录',series:'剧集目录',season:'指定季目录',ignore:'忽略目录'};
 
-export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}:{api:MediaApi;libraryId:string;path:string;disabled:boolean;onBusy:(busy:boolean)=>void;onApplied:()=>void}){
+export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied,menuOnly=false}:{api:MediaApi;libraryId:string;path:string;disabled:boolean;onBusy:(busy:boolean)=>void;onApplied:()=>void;menuOnly?:boolean}){
   const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [mode,setMode]=useState<Mode|'inherit'>('inherit'),[title,setTitle]=useState(''),[season,setSeason]=useState(''),[year,setYear]=useState(''),[strip,setStrip]=useState(false),[filePattern,setFilePattern]=useState('');
   const [revision,setRevision]=useState(''),[inherited,setInherited]=useState<Rule|null>(null),[preview,setPreview]=useState<Preview|null>(null),[selected,setSelected]=useState<string[]>([]),[confirm,setConfirm]=useState(false),[page,setPage]=useState(0);
@@ -41,7 +41,7 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied}
   const visible=preview?.items.slice(page*30,page*30+30)??[];
   const selectRows=(rows:Proposal[])=>setSelected(current=>[...new Set([...current,...rows.filter(selectable).map(row=>row.assetId)])]);
   return <>
-    <div className="media-folder-operation"><span><strong>影视识别</strong><small>设置当前目录及子目录的识别规则</small></span><button disabled={disabled} onClick={show}><Settings2 size={16} aria-hidden="true"/>识别规则与预览</button></div>
+    <>{menuOnly?<button disabled={disabled} onClick={show}><Settings2 size={16} aria-hidden="true"/>识别规则与预览</button>:<div className="media-folder-operation"><span><strong>影视识别</strong><small>设置当前目录及子目录的识别规则</small></span><button disabled={disabled} onClick={show}><Settings2 size={16} aria-hidden="true"/>识别规则与预览</button></div>}</>
     {open&&<Modal className="media-modal" title="目录识别规则" busy={busy} onClose={()=>setOpen(false)}><div className="media-form media-recognition-form">
       <p className="media-folder-note">{path||'库内根目录'} · 包含子目录，子目录自己的规则优先。目录内文件统一应用下方文件正则。规则保存后用于后续扫描；已有作品通过下方预览确认重新识别。</p>
       {inherited&&<p>继承自「{inherited.path||'库内根目录'}」：{labels[inherited.mode]}{inherited.title?' · '+inherited.title:''}</p>}
