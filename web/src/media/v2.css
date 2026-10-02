@@ -557,3 +557,13 @@ body[data-media-theme] {--surface-muted:var(--media-theme-surface)}
 .media-screen .media-manager .media-library-footer{margin-top:8px;padding-top:10px;line-height:1.4}
 .media-screen .media-manager .media-library-footer button{min-height:36px;padding-inline:8px;border-radius:7px}
 @media(max-width:700px){.media-screen .media-manager .media-library-list{gap:10px}.media-screen .media-manager .media-library-row{grid-template-columns:28px minmax(0,1fr) 36px;padding:13px 14px;border-radius:13px}.media-screen .media-manager .media-library-footer{margin-top:7px;padding-top:9px}.media-screen .media-manager .media-library-footer button{min-height:34px}}
+
+.media-screen .media-continue{cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease}
+.media-screen .media-continue:hover,.media-screen .media-continue:focus-visible{border-color:var(--media-accent);box-shadow:0 3px 12px rgba(31,42,34,.08);outline:none}
+.media-screen .media-continue-play{display:grid!important;place-items:center;width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;border:1px solid color-mix(in srgb,var(--media-accent) 35%,var(--border))!important;border-radius:50%!important;background:transparent!important;color:var(--media-accent)!important}
+.media-screen .media-continue-play:hover{background:var(--media-selection)!important}
+
+/* Keep the embedded player's own controls independent from the reader theme. */
+.media-video-stage,.media-video-stage *{color-scheme:dark}
+.media-video-stage .plyr{--plyr-color-main:#b9d98a;--plyr-video-background:#080b0e;--plyr-font-family:inherit;--plyr-control-icon-size:18px;--plyr-control-spacing:10px;--plyr-menu-background:#263022;--plyr-menu-color:#f2f2e9}
+.media-video-stage .plyr__controls button,.media-video-stage .plyr__control{background:transparent;color:#f2f2e9}

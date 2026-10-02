@@ -34,9 +34,9 @@ function ToolSheet({tool,onClose,children}:{tool:Tool;onClose:()=>void;children:
 
 /** Rendered in the permanent player's controls host, alongside the live video. */
 export function VideoControls({player,api,onBack}:{player:MediaPlayer;api:MediaApi;onBack?:()=>void}){
-  const [tool,setTool]=useState<Tool|null>(null),[detail,setDetail]=useState<Detail|null>(null),[failed,setFailed]=useState(false),[cause,setCause]=useState<unknown>(),[retry,setRetry]=useState(0),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
+  const [tool,setTool]=useState<Tool|null>(null),[detail,setDetail]=useState<Detail|null>(null),[plot,setPlot]=useState(''),[failed,setFailed]=useState(false),[cause,setCause]=useState<unknown>(),[retry,setRetry]=useState(0),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
   const itemId=player.currentItemId;
-  useEffect(()=>{const abort=new AbortController();setDetail(null);setFailed(false);setCause(undefined);if(itemId)void api.detail(itemId,abort.signal).then(value=>{if(!abort.signal.aborted)setDetail(value);}).catch(error=>{if(!abort.signal.aborted){setFailed(true);setCause(error);}});return ()=>abort.abort();},[api,itemId,retry]);
+  useEffect(()=>{const abort=new AbortController();setDetail(null);setPlot('');setFailed(false);setCause(undefined);if(itemId)void api.detail(itemId,abort.signal).then(async value=>{let current=value;let text=String(current.overrides.plot??current.overrides.description??current.metadata.plot??current.metadata.description??'').trim();for(let depth=0;!text&&current.parentId&&depth<3;depth++){current=await api.detail(current.parentId,abort.signal);text=String(current.overrides.plot??current.overrides.description??current.metadata.plot??current.metadata.description??'').trim();}if(!abort.signal.aborted){setDetail(value);setPlot(text);}}).catch(error=>{if(!abort.signal.aborted){setFailed(true);setCause(error);}});return ()=>abort.abort();},[api,itemId,retry]);
   const item=detail?.id===itemId?detail:null,edition=item?.editions.find(entry=>entry.parts.some(part=>part.id===player.currentPartId));
   const entries=player.currentPlaylist;
   const [query,setQuery]=useState(''),[page,setPage]=useState(0);
@@ -49,7 +49,7 @@ export function VideoControls({player,api,onBack}:{player:MediaPlayer;api:MediaA
     {player.error&&<PlaybackProblem player={player} {...(item?.editions.length?{onVersions:()=>open('versions')}:{})} {...(onBack?{onBack}:{})}/>}
     {!player.error&&player.loadingStatus&&<FloatingNotice message={player.loadingStatus} busy />}
     {notice&&<p className="media-error" role="alert">{notice}</p>}
-    {item&&(item.overrides.plot??item.overrides.description??item.metadata.plot??item.metadata.description)&&<details className="media-video-description"><summary>剧情简介</summary><p>{String(item.overrides.plot??item.overrides.description??item.metadata.plot??item.metadata.description)}</p></details>}
+    {plot&&<details className="media-video-description" open><summary>剧情简介</summary><p>{plot}</p></details>}
     {item?.kind==='episode'&&item.parentId&&<VideoEpisodeRail key={item.parentId} api={api} item={item} player={player}/>}
     {!item&&itemId&&!failed&&<MediaLoading layout="tracks" count={2} label="正在读取作品资料…"/>}
     {failed&&<MediaScreenError error={cause} message="作品资料读取失败，播放控制仍可使用。" busy={false} onRetry={()=>setRetry(value=>value+1)} retryLabel="重试作品资料"/>}
