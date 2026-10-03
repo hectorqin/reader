@@ -438,7 +438,11 @@ function readDevToolsEndpoint(proc) {
  * here keeps `findChrome` a plain list of paths.
  */
 function globPlaywrightChrome() {
-  const roots = ['/ms-playwright', join(process.env.HOME ?? '/root', '.cache', 'ms-playwright')];
+  const roots = [
+    '/ms-playwright',
+    join(process.env.HOME ?? '/root', '.cache', 'ms-playwright'),
+    join(process.env.LOCALAPPDATA ?? '', 'ms-playwright'),
+  ];
   const found = [];
   for (const root of roots) {
     let entries;
@@ -449,7 +453,12 @@ function globPlaywrightChrome() {
     }
     for (const entry of entries) {
       if (!entry.startsWith('chromium')) continue;
-      for (const relative of ['chrome-linux/chrome', 'chrome-linux/headless_shell']) {
+      for (const relative of [
+        'chrome-linux/chrome',
+        'chrome-linux/headless_shell',
+        'chrome-win64/chrome.exe',
+        'chrome-win/chrome.exe',
+      ]) {
         const candidate = join(root, entry, relative);
         if (existsSync(candidate)) found.push(candidate);
       }

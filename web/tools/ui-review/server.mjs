@@ -972,7 +972,11 @@ export function createReviewServer({ port = 5199 } = {}) {
   return {
     server,
     seen,
-    listen: () => new Promise((resolve) => server.listen(port, '127.0.0.1', () => resolve(`http://127.0.0.1:${port}`))),
+    listen: () => new Promise((resolve) => server.listen(port, '127.0.0.1', () => {
+      const address = server.address();
+      const actualPort = address && typeof address === 'object' ? address.port : port;
+      resolve(`http://127.0.0.1:${actualPort}`);
+    })),
     close: () => new Promise((resolve) => server.close(resolve)),
   };
 }
