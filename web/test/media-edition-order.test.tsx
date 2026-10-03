@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act } from 'react';
 
-import { EditionOrder } from '../src/media/edition-order.tsx';
-import type { Edition, MediaApi } from '../src/media/api.ts';
+import { EditionOrder } from '../src/features/media/components/edition-order.tsx';
+import type { Edition, MediaApi } from '../src/features/media/api/media-api.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
 it('moves a chapter across a page boundary, retries failures and explicitly resets scanned order',async()=>{

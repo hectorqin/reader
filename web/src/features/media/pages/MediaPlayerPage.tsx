@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { usePlaybackStore } from '../stores/playback.store.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
-import { PlaybackControls, type PlaybackPanel } from '../../../media/playback-controls.tsx';
-import { VideoControls } from '../../../media/video-controls.tsx';
+import { PlaybackControls, type PlaybackPanel } from '../components/playback-controls.tsx';
+import { VideoControls } from '../components/video-controls.tsx';
 import { restorePlaybackEntries } from '../services/restore-playback.ts';
 import { useEffect, useState } from 'react';
 

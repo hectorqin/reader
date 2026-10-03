@@ -1,7 +1,7 @@
 import type { SelectHTMLAttributes, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import {Check,ChevronDown} from 'lucide-react';
-import './select.css';
+import '../styles/select.css';
 
 type Choice={value:string;label:string;disabled:boolean;group:string};
 type Props=Omit<SelectHTMLAttributes<HTMLSelectElement>,'ref'|'multiple'|'size'> & {

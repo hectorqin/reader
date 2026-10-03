@@ -10,7 +10,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
   const ready=kind=>page.waitForFunction(kind=>{const media=document.querySelector('.media-player '+kind);return media?.readyState>=1;},kind);
   const saved=()=>page.waitForResponse(response=>response.request().method()==='PUT'&&response.url().includes('/progress')&&response.ok());
   const album=sampleItems.find(item=>item.kind==='album'&&item.title==='静谧时刻'),movie=sampleItems.find(item=>item.kind==='movie'&&item.title==='海岸线');assert.ok(album&&movie);
-  await page.goto(baseUrl+'/#/media/music/album/'+album.id);await page.locator('#login-username').fill('reviewer');await page.locator('#login-password').fill('review-test-pass');await page.locator('form button[type=submit]').click();await page.getByRole('button',{name:'播放全部',exact:true}).click();
+  await page.goto(baseUrl+'/#/media/music/album/'+album.id);await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();await page.getByRole('button',{name:'播放全部',exact:true}).click();
   await page.waitForFunction(()=>{const audio=document.querySelector('.media-player audio');return audio?.readyState>=2&&!audio.paused;});await page.getByRole('button',{name:'打开播放控制',exact:true}).click();await page.locator('.media-audio-heading strong').waitFor();
   assert.match(new URL(page.url()).hash,/^#\/media\/music\/player\/[^/]+\/[^/?]+$/);assert.ok(!page.url().includes('return='));
   const source=await page.locator('.media-player audio').getAttribute('src');

@@ -17,7 +17,7 @@
  * meant the control that was *not* pressed never learned that its value had
  * changed somewhere else. Here every control is rendered from `settings`, so a
  * patch from anywhere redraws all of them, and pressing a button no longer
- * replaces it under the finger because Preact diffs the text of the node that is
+ * replaces it under the finger because React diffs the text of the node that is
  * already there.
  */
 

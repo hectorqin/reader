@@ -3,9 +3,9 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {act} from 'react';
 
-import {PlaybackControls} from '../src/media/playback-controls.tsx';
-import type {MediaApi} from '../src/media/api.ts';
-import type {MediaPlayer} from '../src/media/player.ts';
+import {PlaybackControls} from '../src/features/media/components/playback-controls.tsx';
+import type {MediaApi} from '../src/features/media/api/media-api.ts';
+import type {MediaPlayer} from '../src/features/media/services/player.ts';
 const host=document.createElement('div');document.body.append(host);
 afterEach(()=>act(()=>render(null,host)));
 it('keeps playback usable when artwork metadata fails and retries without restarting audio',async()=>{

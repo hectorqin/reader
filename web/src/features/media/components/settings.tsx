@@ -1,14 +1,14 @@
 import {FloatingConfirm} from '../../../ui/floating-confirm.tsx';
 import {MediaSelect} from './select.tsx';
-import {PlaybackSettings} from '../../../media/playback-settings.tsx';
-import {MediaThemeSettings} from '../../../media/theme-settings.tsx';
-import {readMediaTheme,mediaThemes,type MediaThemeId} from '../../../media/theme.ts';
+import {PlaybackSettings} from './playback-settings.tsx';
+import {MediaThemeSettings} from './theme-settings.tsx';
+import {readMediaTheme,mediaThemes,type MediaThemeId} from '../services/theme.ts';
 export type SettingsPanel = 'home'|'theme'|'browse'|'playback'|'plugins'|'account';
 import { useState } from 'react';
 import {ChevronLeft,ChevronRight,Clock3,Heart,Headphones,FolderOpen,SlidersHorizontal,RefreshCw,UserRound,Blocks,Palette} from 'lucide-react';
-import type {MediaPlayer} from '../../../media/player.ts';
+import type {MediaPlayer} from '../services/player.ts';
 import type {MediaApi,MediaAccount} from '../api/media-api.ts';
-import {MediaProviderSettings} from '../../../media/provider-settings.tsx';
+import {MediaProviderSettings} from './provider-settings.tsx';
 import {defaultMediaPreferences,saveMediaPreferences,type MediaPreferences} from '../services/preferences.ts';
 
 export function MediaSettings({scope,preferences,player,admin,api,account,onSaved,onBack,onPersonal,onManage,onTasks,onPlayback,panel:routePanel,onPanelChange,theme,onThemeChange}:{scope:string;preferences:MediaPreferences;player:MediaPlayer;admin:boolean;api?:MediaApi;account?:MediaAccount|null;onSaved:(value:MediaPreferences)=>void;onBack:()=>void;onPersonal:(view:'favorites'|'history'|'queue')=>void;onManage:()=>void;onTasks?:()=>void;onPlayback?:()=>void;panel?:SettingsPanel;onPanelChange?:(panel:SettingsPanel)=>void;channelLabel?:string;theme?:MediaThemeId;onThemeChange?:(theme:MediaThemeId)=>void}){

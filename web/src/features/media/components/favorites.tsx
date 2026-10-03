@@ -4,7 +4,7 @@ import {Modal} from '../../../ui/modal.tsx';
 import {MediaCover} from './cover.tsx';
 import {itemLabel} from './item-label.ts';
 import type {Item,MediaApi,MediaChannel} from '../api/media-api.ts';
-import './favorites.css';
+import '../styles/favorites.css';
 
 export type FavoriteScope=MediaChannel|'all';
 const scopes:Array<[FavoriteScope,string]>=[['all','全部'],['video','影视'],['music','音乐'],['audiobook','有声书']];

@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act } from 'react';
 
-import { EditionDetails } from '../src/media/edition-details.tsx';
-import type { Detail, Edition, MediaApi } from '../src/media/api.ts';
+import { EditionDetails } from '../src/features/media/components/edition-details.tsx';
+import type { Detail, Edition, MediaApi } from '../src/features/media/api/media-api.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
 it('previews three chapters around the current chapter but plays the full available edition and exposes the complete list',async()=>{

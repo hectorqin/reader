@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { playbackFailure, playbackSupport } from '../src/media/playback-support.ts';
+import { playbackFailure, playbackSupport } from '../src/features/media/services/playback-support.ts';
 
 describe('direct playback support feedback',()=>{
   it.each([['LC','mp4a.40.2'],['HE-AAC','mp4a.40.5'],['HE-AACv2','mp4a.40.29']])('uses the scanned AAC %s profile for MP4 capability checks', (profile,codec)=>{

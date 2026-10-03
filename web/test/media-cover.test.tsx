@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 
-import { MediaCover } from '../src/media/cover.tsx';
-import type { Item, MediaApi } from '../src/media/api.ts';
+import { MediaCover } from '../src/features/media/components/cover.tsx';
+import type { Item, MediaApi } from '../src/features/media/api/media-api.ts';
 import { ApiError } from '../src/api/errors.ts';
 
 const host=document.createElement('div');document.body.append(host);

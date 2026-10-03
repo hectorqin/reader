@@ -1,5 +1,5 @@
 import {expect,it} from 'vitest';
-import {seasonQueue,type SeasonEpisode} from '../src/media/season-playback.tsx';
+import {seasonQueue,type SeasonEpisode} from '../src/features/media/components/season-playback.tsx';
 const episode=(id:string,versions=1,available=true):SeasonEpisode=>({id,title:id,editions:Array.from({length:versions},(_,index)=>({id:id+index,label:'版本'+index,parts:[{id:id+'part'+index,assetId:id,title:id,start:0,end:30,available}]}))});
 it('keeps episode and file order from the selected starting episode',()=>{
   const result=seasonQueue([episode('01'),episode('02'),episode('03')],1,{});

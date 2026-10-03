@@ -113,14 +113,14 @@ Windows 原生终端使用 `gradlew.bat`。产物为 `android/app/build/outputs/
 | `server/src/indexer` | 文件格式、扫描、身份与元数据 |
 | `server/src/services`、`http` | 业务服务、API、鉴权和资源交付 |
 | `server/src/media` | 影音目录、扫描、资料与播放服务 |
-| `web/src/media` | 影音页面、路由、主题与播放器 |
+| `web/src/features/media` | 影音页面、组件、服务、主题与播放器 |
 | `server/src/sources` | 本地书库与 OPDS 接入 |
 | `web/src/formats` | EPUB、TXT、漫画等格式处理 |
-| `web/src/ui`、`styles` | Preact 界面、阅读舞台和样式 |
+| `web/src/ui`、`styles` | 共享交互、命令式阅读舞台和阅读样式 |
 | `web/src/core`、`store` | 平台能力、同步、离线存储 |
 | `android/app/src/main/java/cool/cnb/reader` | Android Activity、WebView、原生图片和语音桥接 |
 
-界面状态使用 Preact，阅读内容布局与测量由阅读舞台管理；书籍样式通过 Shadow DOM 隔离，图标使用 Lucide SVG。Web 产物由服务端和 Android 共同使用。详细取舍见[架构文档](architecture.md)和[界面规范](ui.md)。
+应用界面使用 React 19 和 React Router，服务端数据使用 React Query，共享客户端状态使用 Zustand；阅读内容布局与测量由命令式阅读舞台管理。基础交互组件使用 Mantine，图标使用 Lucide React，书籍样式通过 Shadow DOM 隔离。Web 产物由服务端和 Android 共同使用。详细取舍见[架构文档](architecture.md)和[界面规范](ui.md)。
 
 ## 贡献流程
 

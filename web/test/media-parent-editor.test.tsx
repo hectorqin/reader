@@ -3,9 +3,9 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {act} from 'react';
 
-import {MusicParentEditor} from '../src/media/parent-editor.tsx';
+import {MusicParentEditor} from '../src/features/media/components/parent-editor.tsx';
 import {ApiError} from '../src/api/errors.ts';
-import type {Detail,MediaApi} from '../src/media/api.ts';
+import type {Detail,MediaApi} from '../src/features/media/api/media-api.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
 const button=(name:string)=>[...root.querySelectorAll('button')].find(value=>value.textContent===name)!;

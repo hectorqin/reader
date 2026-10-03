@@ -330,7 +330,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
  * Puts the stage in the tree without owning it.
  *
  * `dangerouslySetInnerHTML` is the wrong tool here — it would replace the node
- * Preact renders rather than keep this one. A ref callback that appends the
+ * React renders rather than keep this one. A ref callback that appends the
  * element the screen kept across renders is the honest version: the tree decides
  * *where* the stage sits (between the status line and the footer, which is where
  * its stacking context comes from) and the screen owns its contents.

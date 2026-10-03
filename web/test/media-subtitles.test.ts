@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SubtitleControls } from '../src/media/subtitles.ts';
-import type { MediaApi } from '../src/media/api.ts';
+import { SubtitleControls } from '../src/features/media/components/subtitles.ts';
+import type { MediaApi } from '../src/features/media/api/media-api.ts';
 
 afterEach(()=>{vi.unstubAllGlobals();});
 describe('external subtitle lifecycle',()=>{

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PlaybackLease } from '../src/media/playback-lease.ts';
-import type { MediaApi, Playback } from '../src/media/api.ts';
+import { PlaybackLease } from '../src/features/media/services/playback-lease.ts';
+import type { MediaApi, Playback } from '../src/features/media/api/media-api.ts';
 import { ApiError } from '../src/api/errors.ts';
 
 const leases: PlaybackLease[] = [];

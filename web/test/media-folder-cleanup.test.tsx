@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {act} from 'react';
 
-import {FolderCleanup} from '../src/media/folder-cleanup.tsx';
-import type {MediaApi} from '../src/media/api.ts';
+import {FolderCleanup} from '../src/features/media/components/folder-cleanup.tsx';
+import type {MediaApi} from '../src/features/media/api/media-api.ts';
 vi.mock('../src/ui/floating-confirm.tsx',()=>({FloatingConfirm:({text,onConfirm,onCancel}:any)=><div role="dialog"><p>{text}</p><button onClick={onConfirm}>确认清理</button><button onClick={onCancel}>取消</button></div>}));
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>{act(()=>render(null,root));vi.clearAllMocks();});

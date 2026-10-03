@@ -1,4 +1,4 @@
-import type { MediaPlayer } from '../../../media/player.ts';
+import type { MediaPlayer } from './player.ts';
 import { usePlaybackStore } from '../stores/playback.store.ts';
 import type { MediaApi } from '../api/media-api.ts';
 

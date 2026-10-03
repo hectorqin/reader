@@ -1,10 +1,10 @@
-import {savePlaybackPreferences} from '../src/media/playback-preferences.ts';
+import {savePlaybackPreferences} from '../src/features/media/services/playback-preferences.ts';
 // @vitest-environment jsdom
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { MediaPlayer } from '../src/media/player.ts';
-import type { MediaApi, Playback } from '../src/media/api.ts';
+import { MediaPlayer } from '../src/features/media/services/player.ts';
+import type { MediaApi, Playback } from '../src/features/media/api/media-api.ts';
 
-vi.mock('../src/media/web-video.ts',()=>({enhanceVideo:vi.fn(()=>({}))}));
+vi.mock('../src/features/media/components/web-video.ts',()=>({enhanceVideo:vi.fn(()=>({}))}));
 const part=(id:string)=>({part:{id,assetId:id,title:id,start:0,end:100,available:true},title:id,video:false});
 const session=(id:string):Playback=>({id,partId:id,streamUrl:'/stream/'+id,contentType:'audio/mpeg',expiresAt:Date.now()+6*60*60*1000,start:0,end:100,position:42,revision:1});
 function setup(){const request=vi.fn().mockImplementation(async(_path,_method,body)=>({revision:body.revision+1,position:body.position,completed:body.completed}));const playback=vi.fn().mockImplementation(async(id:string)=>session(id));const api={preferenceScope:()=>'player-test',playback,request:(path:string,...args:unknown[])=>path.startsWith('assets/')?Promise.resolve({}):request(path,...args),streamUrl:(s:Playback)=>s.streamUrl} as unknown as MediaApi;return {player:new MediaPlayer(api),request,playback};}

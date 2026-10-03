@@ -3,9 +3,9 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {act} from 'react';
 
-import {MediaDetailHeading} from '../src/media/detail-heading.tsx';
-import {EditionDetails} from '../src/media/edition-details.tsx';
-import type {Edition,Item,MediaApi} from '../src/media/api.ts';
+import {MediaDetailHeading} from '../src/features/media/components/detail-heading.tsx';
+import {EditionDetails} from '../src/features/media/components/edition-details.tsx';
+import type {Edition,Item,MediaApi} from '../src/features/media/api/media-api.ts';
 
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));

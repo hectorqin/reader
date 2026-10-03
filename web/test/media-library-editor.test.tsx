@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act } from 'react';
 
-import { MediaLibraryEditor } from '../src/media/library-editor.tsx';
-import type { Library, MediaApi } from '../src/media/api.ts';
+import { MediaLibraryEditor } from '../src/features/media/components/library-editor.tsx';
+import type { Library, MediaApi } from '../src/features/media/api/media-api.ts';
 
 const root = document.createElement('div'); document.body.append(root);
 const library: Library = { id: 'lib', name: '音乐', kind: 'music', access: 'restricted' };

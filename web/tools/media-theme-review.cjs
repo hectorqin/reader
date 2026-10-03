@@ -9,7 +9,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
   const shot=async name=>{await page.screenshot({path:join(out,name+'.png')});shots.push(name);};
   const go=async hash=>page.evaluate(hash=>location.hash=hash,hash);
   const palette=selector=>page.locator(selector).evaluate(node=>({bg:getComputedStyle(node).getPropertyValue('--media-background').trim(),ink:getComputedStyle(node).getPropertyValue('--text').trim(),scheme:getComputedStyle(node).colorScheme}));
-  await page.goto(baseUrl+'/#/media/music/settings');await page.locator('#login-username').fill('reviewer');await page.locator('#login-password').fill('review-test-pass');await page.locator('form button[type=submit]').click();
+  await page.goto(baseUrl+'/#/media/music/settings');await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();
   await page.getByRole('button',{name:/主题外观/}).click();await page.getByRole('heading',{name:'主题外观',exact:true}).waitFor();assert.match(page.url(),/music\/settings\/theme/);
   await shot('themes-mobile');await page.getByRole('button',{name:'返回影音设置',exact:true}).click();await page.getByRole('heading',{name:'影音设置',exact:true}).waitFor();await page.getByRole('button',{name:/主题外观/}).click();
   const readingTheme=await page.evaluate(()=>document.documentElement.getAttribute('data-theme'));

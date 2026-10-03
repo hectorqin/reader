@@ -3,7 +3,7 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act } from 'react';
 
-import { SavedQueue, type SavedQueueEntry } from '../src/media/saved-queue.tsx';
+import { SavedQueue, type SavedQueueEntry } from '../src/features/media/components/saved-queue.tsx';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
 const button=(name:string)=>root.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`)!;

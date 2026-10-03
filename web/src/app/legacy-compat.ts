@@ -1,7 +1,7 @@
 import { createAndroidPlatform, detectAndroidBridge, androidPageHost, androidSpeechBridge } from '../core/android-platform.ts';
 import { createWebPlatform } from '../core/web-platform.ts';
 import type { Platform } from '../core/platform.ts';
-import { renderChannelLinks } from '../media/channel-navigation.tsx';
+import { renderChannelLinks } from '../features/media/components/channel-navigation.tsx';
 import type { AppSettings } from '../store/settings.ts';
 
 /**

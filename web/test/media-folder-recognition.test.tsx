@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {act} from 'react';
 
-import {FolderRecognition} from '../src/media/folder-recognition.tsx';
-import type {MediaApi} from '../src/media/api.ts';
+import {FolderRecognition} from '../src/features/media/components/folder-recognition.tsx';
+import type {MediaApi} from '../src/features/media/api/media-api.ts';
 vi.mock('../src/ui/modal.tsx',()=>({Modal:({children,title}:any)=><div role="dialog" aria-label={title}>{children}</div>}));
 vi.mock('../src/ui/floating-confirm.tsx',()=>({FloatingConfirm:({onConfirm,onCancel}:any)=><div><button onClick={onConfirm}>确认应用</button><button onClick={onCancel}>取消应用</button></div>}));
 const root=document.createElement('div');document.body.append(root);

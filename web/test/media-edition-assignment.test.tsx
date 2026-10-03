@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act } from 'react';
 
-import { EditionAssignment } from '../src/media/edition-assignment.tsx';
-import type { Detail, Edition, MediaApi } from '../src/media/api.ts';
+import { EditionAssignment } from '../src/features/media/components/edition-assignment.tsx';
+import type { Detail, Edition, MediaApi } from '../src/features/media/api/media-api.ts';
 import {ApiError} from '../src/api/errors.ts';
 
 const root=document.createElement('div');document.body.append(root);

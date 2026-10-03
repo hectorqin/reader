@@ -23,7 +23,7 @@ const assert=require('node:assert/strict');
     assert.equal(login.status,200);const session=await login.json();
     const get=async path=>{const response=await fetch(baseUrl+'/api/v1/media/'+path,{headers:{authorization:'Bearer '+session.accessToken}});assert.equal(response.status,200);return response.json();};
     await page.goto(baseUrl+'/#/media/music/live-track');
-    await page.locator('#login-username').fill('reviewer');await page.locator('#login-password').fill('review-test-pass');await page.locator('form button[type=submit]').click();
+    await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();
     await page.getByText('在线匹配元数据',{exact:true}).click();
     await page.getByLabel('刮削搜索词',{exact:true}).fill('Yesterday');
     await page.getByLabel('刮削艺人限定',{exact:true}).fill('The Beatles');

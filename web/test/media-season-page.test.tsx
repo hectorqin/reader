@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {expect,it,vi} from 'vitest';
 import {act} from 'react';
 
-import {SeasonPlayback,SeriesSeasons} from '../src/media/season-playback.tsx';
-import type {MediaApi} from '../src/media/api.ts';
+import {SeasonPlayback,SeriesSeasons} from '../src/features/media/components/season-playback.tsx';
+import type {MediaApi} from '../src/features/media/api/media-api.ts';
 
 it('plays from a grid tile and waits for a version choice before starting ambiguous episodes',async()=>{
   const root=document.createElement('div');document.body.append(root);

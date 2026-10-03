@@ -4,7 +4,7 @@ import {expect,it,vi} from 'vitest';
 
 import {act} from 'react';
 import {ApiError} from '../src/api/errors.ts';
-import {MediaScreenError} from '../src/media/screen-error.tsx';
+import {MediaScreenError} from '../src/features/media/components/screen-error.tsx';
 
 it.each([
   [new ApiError('server','准备中','MEDIA_STARTING',503),'影音服务正在准备'],

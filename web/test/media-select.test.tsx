@@ -3,7 +3,7 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {act} from 'react';
 import { useState } from 'react';
-import {MediaSelect} from '../src/media/select.tsx';
+import {MediaSelect} from '../src/features/media/components/select.tsx';
 
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>{act(()=>render(null,root));vi.restoreAllMocks();});

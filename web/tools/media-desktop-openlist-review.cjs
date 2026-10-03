@@ -51,7 +51,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),fs=
    else if(path.startsWith('assets/'))data={size:24000000,available:true,probe:{status:'ready',info:{duration:222,format:'FLAC',streams:[{index:0,type:'audio',codec:'flac',channels:2}]}}};
    await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
-  await page.goto(baseUrl+'/#/media/music/albums');await page.locator('#login-username').fill('reviewer');await page.locator('#login-password').fill('review-test-pass');await page.locator('form button[type=submit]').click();await page.locator('.media-tile img').first().waitFor();
+  await page.goto(baseUrl+'/#/media/music/albums');await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();await page.locator('.media-tile img').first().waitFor();
 
   const captures=[];
   async function screenshot(key,title,reference){

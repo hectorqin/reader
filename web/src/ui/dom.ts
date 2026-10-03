@@ -8,9 +8,8 @@
  * afford to debug through.
  *
  * The chrome — shelves, panels, dialogs, the reader's topbar and settings — is
- * Preact now (see `toolkit.tsx` and `mount.ts`). `el` survives for the code that
- * builds DOM *to be measured* rather than DOM to be described, plus the few
- * places a legacy screen still constructs a node by hand.
+ * rendered by React. `el` survives for the code that builds DOM *to be measured*
+ * rather than DOM to be described, plus the few imperative reader boundaries.
  */
 export type Child = Node | string | null | undefined | false;
 

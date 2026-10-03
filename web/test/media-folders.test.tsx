@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {act} from 'react';
 
-import {MediaFolders,type FolderLocation} from '../src/media/folders.tsx';
-import type {MediaApi} from '../src/media/api.ts';
+import {MediaFolders,type FolderLocation} from '../src/features/media/components/folders.tsx';
+import type {MediaApi} from '../src/features/media/api/media-api.ts';
 import {ApiError} from '../src/api/errors.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
@@ -76,7 +76,7 @@ it('ignores a late failed folder response after navigating back to the root',asy
 it('restores the file version and chapter page when returning from a full work detail',async()=>{
   const location:FolderLocation={path:'Book',offset:60,assetId:'file',editions:{item:'second'},chapters:{second:{query:'',page:1}}};
   const parts=Array.from({length:61},(_,i)=>({id:'p'+i,assetId:'file',title:'章节 '+(i+1),start:0,end:10,available:true}));
-  const request=vi.fn().mockResolvedValue({assetId:'file',path:'Book/book.m4b',available:true,items:[{id:'item',title:'作品',kind:'audiobook',editions:[{id:'first',label:'原版',parts:parts.slice(0,1)},{id:'second',label:'修订版',parts}]}]});
+  const request=vi.fn(async(path:string)=>path.startsWith('assets/')?{assetId:'file',path:'Book/book.m4b',available:true,items:[{id:'item',title:'作品',kind:'audiobook',editions:[{id:'first',label:'原版',parts:parts.slice(0,1)},{id:'second',label:'修订版',parts}]}]}:{path:'Book',total:61,items:[{name:'book.m4b',path:'Book/book.m4b',kind:'file',assetId:'file',files:1,availableFiles:1,size:100}]});
   const onDetail=vi.fn();
   await act(async()=>render(<MediaFolders api={{request} as unknown as MediaApi} libraryId="lib" initialLocation={location} onPlay={vi.fn()} onQueue={vi.fn()} onDetail={onDetail}/>,root));
   await vi.waitFor(()=>expect(root.querySelectorAll('.media-edition .media-row')).toHaveLength(11));

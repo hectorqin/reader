@@ -10,7 +10,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
   let existing=false;
   await page.route('**/api/v1/media/libraries',async route=>{if(route.request().method()!=='GET')return route.continue();await route.fulfill({contentType:'application/json',body:JSON.stringify({items:existing?[{id:'review-lib',name:'空测试库',kind:'video',access:'all'}]:[]})});});
   await page.route('**/api/v1/media/libraries/review-lib/items?*',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({items:[],total:0})}));
-  await page.goto(baseUrl+'/#/media/video');await page.locator('#login-username').fill('reviewer');await page.locator('#login-password').fill('review-test-pass');await page.locator('form button[type=submit]').click();
+  await page.goto(baseUrl+'/#/media/video');await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();
   for(const channel of ['video','music','audiobook']){
    await page.evaluate(channel=>location.hash='#/media/'+channel,channel);await page.locator('.media-library-empty').waitFor();
    assert.equal(await page.getByLabel('媒体库',{exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'文件夹',exact:true}).count(),0);

@@ -12,13 +12,13 @@
 
 ## 1. 图标
 
-图标统一使用 `lucide-preact` 的 SVG，`src/ui/icon.tsx` 集中维护名称映射，线宽 1.8，尺寸 1em。
+图标统一使用 `lucide-react` 的 SVG，`web/src/ui/icon.tsx` 集中维护名称映射，线宽 1.8，尺寸 1em。
 界面使用 Icon / IconButton / IconTextButton，不直接嵌入字体码位或 emoji。
 装饰图标标记 aria-hidden；没有文字的按钮必须有中文 aria-label。原字体文件与生成工具仅供历史兼容，不再加载到阅读界面。
 
 ## 2. 设计令牌
 
-全部定义在 `src/styles/reader.css` 的 `:root` 里。**界面层不应出现字面量**。
+全部定义在 `web/src/styles/reader.css` 的 `:root` 里。**界面层不应出现字面量**。
 
 ### 2.1 间距：四档
 
@@ -699,17 +699,17 @@ TXT 是唯一一种**没有作者排版**的书，所以它也是唯一一处「
 | `web/tools/icons/` | 生成器 |
 | `web/test/icons.test.ts` | 字体度量、字形包围盒、码位表、**没有借来的名字**、词汇表与 `.icon` 规则的契约 |
 | `web/src/ui/toolkit.tsx` | `IconButton` / `Button` / `Segmented` / `SwitchRow` / `Scrim` |
-| `web/src/ui/shelf-screen.tsx` | 书架；排序（§3.4.2）、分页器（§3.5）与书库入口（§3.4） |
-| `web/src/ui/library-screen.tsx` | 书库的两个屏幕：`LibraryBrowseScreen`（商城式浏览页，§3.4.1.1）与 `LibraryFilesScreen`（文件管理页，§3.4.4）；面包屑、分页器、上传后重读（§3.5） |
+| `web/src/features/shelf/pages/ShelfPage.tsx` | 书架；排序、分页器与书库入口 |
+| `web/src/features/library/pages/LibraryPage.tsx` | 书库浏览、书籍列表和文件管理路由；搜索、面包屑、分页器、上传后重读 |
 | `web/src/ui/shelf-membership.ts` | 两个方向的措辞与批量报告那句话的唯一来源（§3.5.2） |
 | `web/src/ui/shelf-order.ts` | 排序的**唯一**定义：方向、客户端/服务端的键怎么翻译、阅读时间怎么排 |
 | `web/src/ui/dialog.tsx` | 提问（文本框/确认/选择/改资料），两个书库页面共用 |
 | `web/src/ui/pager.tsx` | 翻页器，书架与书库共用（§3.5） |
-| `web/test/shelf-screen.test.ts` | 书架排序（默认项、`recent` 是客户端排）、分页的算术、超界怎么夹 |
+| `web/test/shelf-order.test.ts` | 书架排序（默认项、`recent` 是客户端排）、排序方向和稳定性 |
 | `web/test/shelf-order.test.ts` | 排序的方向、客户端/服务端的键、阅读时间排序与并列时的稳定 |
-| `web/test/library-screen.test.ts` | 浏览页：封面网格、文件夹作用域的搜索、「加入书架」发的是哪个书 id |
-| `web/test/library-access.test.ts` | 文件管理页的管理员判定（§3.4.4）：路由词汇，以及非管理员拿到的是浏览页 |
-| `web/test/manager.test.ts` | 书库文件页的分页、上传后的重读、「破坏性操作必须先选中再确认」，以及**这一页没有上架/下架**（§3.5.1） |
+| `web/test/react-router-routes.test.tsx` | React Router 的页面、影音嵌套路由和权限边界 |
+| `web/test/media-library-list.test.tsx` | 媒体库列表、分页和空状态 |
+| `web/test/media-library-editor.test.tsx` | 媒体库编辑、权限和保存后的重读 |
 | `web/src/ui/gestures.ts` | 手势与事件层级（§3.6） |
 | `web/src/ui/reader-chrome.tsx` | 阅读页的顶栏/页脚/面板/朗读条/沉浸式按钮列 |
 | `web/src/ui/shadow.ts` | 书内容 shadow root；含纯文本排版表（§3.9） |

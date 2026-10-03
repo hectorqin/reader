@@ -12,7 +12,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
    else if(path.endsWith('/favorite'))data={favorite:false};else return route.continue();
    await route.fulfill({contentType:'application/json',body:JSON.stringify(data)});
   });
-  await page.goto(baseUrl+'/#/media/music');await page.locator('#login-username').fill('reviewer');await page.locator('#login-password').fill('review-test-pass');await page.locator('form button[type=submit]').click();await page.getByRole('button',{name:'专辑',exact:true}).waitFor();
+  await page.goto(baseUrl+'/#/media/music');await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();await page.getByRole('button',{name:'专辑',exact:true}).waitFor();
   const albumsUrl=page.url();await page.getByRole('button',{name:'歌手',exact:true}).click();await page.getByText('自然录音',{exact:true}).first().waitFor();const artistsUrl=page.url();
   await page.getByRole('button',{name:'专辑',exact:true}).click();await page.locator('.media-tile').first().click();await page.getByRole('heading',{name:'专辑详情',exact:true}).waitFor();
   const globalMenu=await page.getByLabel('更多影音操作',{exact:true}).count();

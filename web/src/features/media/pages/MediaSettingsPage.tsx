@@ -29,7 +29,7 @@ export function MediaSettingsPage() {
     ? `/media/${channel}/settings`
     : `/media/${channel}/settings/${next}`;
 
-  return <MediaPageFrame title={titles[panel]}>
+  return <MediaPageFrame className="media-utility-workspace" title={titles[panel]}>
     <MediaSettings
       scope={runtime.mediaApi.preferenceScope()}
       preferences={preferences}

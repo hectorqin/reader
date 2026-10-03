@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {act} from 'react';
 
-import {VideoHierarchyEditor} from '../src/media/video-hierarchy-editor.tsx';
-import type {Detail,MediaApi} from '../src/media/api.ts';
+import {VideoHierarchyEditor} from '../src/features/media/components/video-hierarchy-editor.tsx';
+import type {Detail,MediaApi} from '../src/features/media/api/media-api.ts';
 import {ApiError} from '../src/api/errors.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));

@@ -8,7 +8,7 @@ import { OfflineStore } from '../store/offline.ts';
 import { SettingsStore, type AppSettings } from '../store/settings.ts';
 import { publicationScope } from '../store/publications.ts';
 import { MediaApi } from '../features/media/api/media-api.ts';
-import { MediaPlayer } from '../media/player.ts';
+import { MediaPlayer } from '../features/media/services/player.ts';
 import { createAppQueryClient } from '../shared/query/query-client.ts';
 import { useAuthStore } from '../shared/stores/auth.store.ts';
 import { useSettingsStore } from '../shared/stores/settings.store.ts';

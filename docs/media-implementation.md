@@ -1,6 +1,6 @@
 # 影音模块架构
 
-影音覆盖电影、剧集、音乐和有声书，使用独立路由、主题和服务线程。默认入口仍为阅读，阅读界面和书架设置沿用原有实现。
+影音覆盖电影、剧集、音乐和有声书，使用独立 React 路由、主题和服务线程。首页进入影视频道，阅读通过书架入口访问；阅读正文引擎由 React 页面托管生命周期。
 
 ## 数据与服务边界
 
@@ -22,11 +22,11 @@
 
 OpenList 使用 fs/list 与 fs/get，只读扫描，按需解析临时下载地址，由 Reader 授权接口代理 Range。令牌不交给前端或下载源；远程内嵌资料暂不探测。具体配置与驱动限制见[OpenList](media-openlist.md)。
 
-Web 音频使用浏览器媒体能力，视频采用 Plyr；Android 使用 Media3。播放会话、流票据、进度并发和即时撤权由服务端控制。后台授权与进程恢复见[后台播放](media-background-auth.md)。不提供转码、TVBox/JAR、云盘登录或影音离线下载。
+Web 音频使用浏览器媒体能力，视频采用 DPlayer；Android 使用 Media3。播放会话、流票据、进度并发和即时撤权由服务端控制。后台授权与进程恢复见[后台播放](media-background-auth.md)。不提供转码、TVBox/JAR、云盘登录或影音离线下载。
 
 ## 代码与维护入口
 
 - 服务端：[media 模块](../server/src/media/)、[HTTP 路由](../server/src/http/routes/media.ts)。
-- 前端：[media 模块](../web/src/media/)、[页面路由](../web/src/media/page-route.ts)。
+- 前端：[media feature 模块](../web/src/features/media/)、[React 页面路由](../web/src/app/router/routes.tsx)。
 - [使用说明](media-user-guide.zh-CN.md)、[导航约定](media-navigation.md)、[验证方式](media-validation.md)、[性能测量](media-catalog-performance.md)。
 - [冻结的 v2 原型](prototypes/media/v2-review/index.html)是布局参考；实际功能与地址以源码及当前说明为准。

@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { afterEach, expect, it, vi } from 'vitest';
 import { act } from 'react';
 
-import { MediaSearch, searchReturnFor } from '../src/media/search.tsx';
-import type { MediaApi, SearchItem } from '../src/media/api.ts';
+import { MediaSearch, searchReturnFor } from '../src/features/media/components/search.tsx';
+import type { MediaApi, SearchItem } from '../src/features/media/api/media-api.ts';
 
 const root=document.createElement('div');root.className='media-screen';document.body.append(root);
 afterEach(()=>{act(()=>render(null,root));root.scrollTop=0;});

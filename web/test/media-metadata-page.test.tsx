@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {act} from 'react';
 
-import {MediaMetadataPage} from '../src/media/metadata-page.tsx';
-import type {Detail,MediaApi} from '../src/media/api.ts';
+import {MediaMetadataPage} from '../src/features/media/components/metadata-page.tsx';
+import type {Detail,MediaApi} from '../src/features/media/api/media-api.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
 const item:Detail={id:'film',libraryId:'lib',kind:'movie',title:'人工标题',parentId:null,metadata:{title:'来源标题',year:2024,sources:{title:'nfo',year:'nfo'}},overrides:{title:'人工标题'},editions:[],children:[]};

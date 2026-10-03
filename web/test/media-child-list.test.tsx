@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it} from 'vitest';
 import {act} from 'react';
 
-import {MediaChildList} from '../src/media/child-list.tsx';
-import type {Item} from '../src/media/api.ts';
+import {MediaChildList} from '../src/features/media/components/child-list.tsx';
+import type {Item} from '../src/features/media/api/media-api.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
 const items:Item[]=Array.from({length:125},(_,index)=>({id:String(index),libraryId:'lib',kind:'album',title:'专辑'+String(index+1).padStart(3,'0'),parentId:'artist',metadata:{},overrides:{}}));

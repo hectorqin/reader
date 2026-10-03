@@ -30,7 +30,7 @@ const assert=require('node:assert/strict');
       else await route.continue();
     });
     await page.goto(baseUrl+'/#/media/video');
-    await page.locator('#login-username').fill('reviewer');await page.locator('#login-password').fill('review-test-pass');await page.locator('form button[type=submit]').click();
+    await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();
     await page.getByRole('alert').filter({hasText:'作品首次读取失败'}).waitFor();
     assert.equal(await page.locator('.media-empty').count(),0,'browse failure must not claim empty media');
     await page.getByRole('alert').getByRole('button',{name:'重试',exact:true}).click();

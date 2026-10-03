@@ -3,11 +3,11 @@ import { render } from '../src/shared/ui/render-root.ts';
 import {afterEach,expect,it,vi} from 'vitest';
 import {act} from 'react';
 
-import {VideoEpisodeRail} from '../src/media/video-episode-rail.tsx';
-import {ArtistTracks} from '../src/media/artist-tracks.tsx';
-import type {Detail,MediaApi} from '../src/media/api.ts';
-import type {MediaPlayer} from '../src/media/player.ts';
-import {readPlaybackPreferences,savePlaybackPreferences} from '../src/media/playback-preferences.ts';
+import {VideoEpisodeRail} from '../src/features/media/components/video-episode-rail.tsx';
+import {ArtistTracks} from '../src/features/media/components/artist-tracks.tsx';
+import type {Detail,MediaApi} from '../src/features/media/api/media-api.ts';
+import type {MediaPlayer} from '../src/features/media/services/player.ts';
+import {readPlaybackPreferences,savePlaybackPreferences} from '../src/features/media/services/playback-preferences.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>{act(()=>render(null,root));localStorage.clear();});
 const item={id:'ep1',kind:'episode',title:'第一集',parentId:'season1',libraryId:'lib',metadata:{},overrides:{},editions:[],children:[]} as Detail;

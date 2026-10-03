@@ -3,8 +3,8 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 
-import { MetadataMatcher } from '../src/media/metadata-matcher.tsx';
-import type { Detail, MediaApi } from '../src/media/api.ts';
+import { MetadataMatcher } from '../src/features/media/components/metadata-matcher.tsx';
+import type { Detail, MediaApi } from '../src/features/media/api/media-api.ts';
 
 const root = document.createElement('div');
 document.body.append(root);

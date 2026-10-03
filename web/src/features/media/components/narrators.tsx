@@ -2,7 +2,7 @@ import {MediaSelect} from './select.tsx';
 import { useEffect, useState, type ReactNode } from 'react';
 import type { Detail, MediaApi, Narrator, Part } from '../api/media-api.ts';
 import { MediaCover } from './cover.tsx';
-import { EditionDetails } from '../components/edition-details.tsx';
+import { EditionDetails } from './edition-details.tsx';
 import {PersonPortrait} from './person-portrait.tsx';
 import {ChevronLeft,Play,ArrowUpRight} from 'lucide-react';
 

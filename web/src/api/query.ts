@@ -1,9 +1,9 @@
 import { QueryClient } from '@tanstack/query-core';
 
 /**
- * Shared client-side server cache. The UI is intentionally framework agnostic
- * (Preact screens are class based), so the QueryClient is used as a small data
- * cache rather than through a React adapter.
+ * Shared client-side server cache for transport-level invalidation. React pages
+ * consume the same client through QueryClientProvider and React Query hooks;
+ * this module only owns the API client's framework-neutral cache operations.
  */
 export const createReaderQueryClient = () => new QueryClient({
   defaultOptions: {

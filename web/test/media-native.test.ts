@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { MediaPlayer } from '../src/media/player.ts';
-import type { MediaApi, Playback } from '../src/media/api.ts';
+import { MediaPlayer } from '../src/features/media/services/player.ts';
+import type { MediaApi, Playback } from '../src/features/media/api/media-api.ts';
 
 afterEach(()=>{delete window.ReaderMedia;vi.restoreAllMocks();});
 it('uses discovered clipped duration when scan duration is absent, and bounds seeks without retaining the previous item duration',async()=>{

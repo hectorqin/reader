@@ -6,9 +6,9 @@ import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { aiJobsQuery, jobsQuery, librariesQuery } from '../queries/media.queries.ts';
 import { MediaPageFrame, QueryFeedback } from '../components/MediaPageFrame.tsx';
-import { ScanJobs } from '../../../media/scan-jobs.tsx';
-import { AiScanJobs } from '../../../media/ai-scan-jobs.tsx';
-import { ScrapeJobs } from '../../../media/scrape-jobs.tsx';
+import { ScanJobs } from '../components/scan-jobs.tsx';
+import { AiScanJobs } from '../components/ai-scan-jobs.tsx';
+import { ScrapeJobs } from '../components/scrape-jobs.tsx';
 import type { MediaChannel } from '../api/media-api.ts';
 
 export function MediaTasksPage() {

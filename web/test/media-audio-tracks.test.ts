@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe,expect,it,vi } from 'vitest';
-import { AudioTrackControls } from '../src/media/audio-tracks.ts';
-import type { MediaApi } from '../src/media/api.ts';
+import { AudioTrackControls } from '../src/features/media/components/audio-tracks.ts';
+import type { MediaApi } from '../src/features/media/api/media-api.ts';
 
 function setup(count=2){
   const request=vi.fn().mockResolvedValue({probe:{info:{streams:Array.from({length:count},()=>({type:'audio'}))}}});

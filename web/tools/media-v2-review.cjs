@@ -21,7 +21,7 @@ async function saveShot(capture){for(let attempt=0;;attempt++){try{return await 
   page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
   await ref.goto(pathToFileURL(join(repo,'docs/prototypes/media/v2-review/index.html')).href);await ref.waitForFunction(()=>!!window.prototypeReview);
   const go=async hash=>{await page.evaluate(hash=>location.hash=hash,hash);await page.waitForTimeout(180);};
-  await page.goto(baseUrl+'/#/media/music/settings');await page.locator('#login-username').fill('reviewer');await page.locator('#login-password').fill('review-test-pass');await page.locator('form button[type=submit]').click();await page.locator('.media-settings-intro').waitFor();
+  await page.goto(baseUrl+'/#/media/music/settings');await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();await page.locator('.media-settings-intro').waitFor();
   async function shot(id,width=390,theme='forest',label=''){
    const height=width>700?900:844;await page.setViewportSize({width,height});
    await ref.evaluate(({id,width,theme,height})=>{window.prototypeReview.setWidth(width);window.prototypeReview.setTheme(theme==='midnight'?'dark':theme);window.prototypeReview.go(id,true);document.querySelector('#frame').style.height=height+'px';},{id,width,theme,height});

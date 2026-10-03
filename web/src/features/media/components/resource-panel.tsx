@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {Ellipsis,FileText,Layers} from 'lucide-react';
 import {Modal} from '../../../ui/modal.tsx';
 import {ResourceInfo} from './resource-info.tsx';
-import {EditionTools,type EditionDetailsProps} from '../components/edition-details.tsx';
+import {EditionTools,type EditionDetailsProps} from './edition-details.tsx';
 import type {MediaApi} from '../api/media-api.ts';
 
 export function ResourcePanel({api,assets,summary,editionOptions,versionPicker,sourceInfo,openPanel,onPanelChange}:{api:MediaApi;assets:Array<{id:string;title:string}>;summary:string;versionPicker?:ReactNode;sourceInfo?:ReactNode;openPanel?:'files'|'source'|null;onPanelChange?:(panel:'files'|'source'|null)=>void;editionOptions?:EditionDetailsProps|undefined}){

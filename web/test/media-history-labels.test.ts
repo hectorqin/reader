@@ -1,5 +1,5 @@
 import {expect,it} from 'vitest';
-import {historyDay,historyPosition} from '../src/media/history-labels.ts';
+import {historyDay,historyPosition} from '../src/features/media/components/history-labels.ts';
 
 it('groups by local calendar date across year and month boundaries',()=>{
   const now=new Date(2026,0,1,0,5);

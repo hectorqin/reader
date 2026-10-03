@@ -1,6 +1,6 @@
 import {expect,it,vi} from 'vitest';
-import {restorePlaybackEntries} from '../src/media/restore-playback.ts';
-import type {MediaApi,Detail} from '../src/media/api.ts';
+import {restorePlaybackEntries} from '../src/features/media/services/restore-playback.ts';
+import type {MediaApi,Detail} from '../src/features/media/api/media-api.ts';
 const part=(id:string,available=true)=>({id,assetId:id,title:id,available,start:0,end:100});
 const item:Detail={id:'book',libraryId:'library',kind:'audiobook',title:'故事',parentId:null,metadata:{},overrides:{},children:[],editions:[{id:'original',label:'原版',parts:[part('original')]},{id:'selected',label:'新版',parts:[part('first'),part('missing',false),part('current')]}]};
 it('restores the exact version and part from current library data',async()=>{

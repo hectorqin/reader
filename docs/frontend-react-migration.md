@@ -11,7 +11,7 @@
 | 能力 | 方案 | 责任 |
 | --- | --- | --- |
 | UI 运行时 | React 19 + React DOM | 所有页面和组件的唯一 UI 运行时 |
-| 路由 | React Router 7 `createHashRouter` | Hash URL、嵌套路由、Layout、Outlet、loader、错误边界和权限守卫 |
+| 路由 | React Router 7 `createHashRouter` | Hash URL、嵌套路由、Layout、Outlet、错误边界和权限守卫 |
 | 服务端状态 | `@tanstack/react-query` | 查询缓存、去重、mutation、失效和预取 |
 | 客户端共享状态 | Zustand | 认证、设置、同步、播放等跨页面状态 |
 | 基础组件 | Mantine | 对话框、表单、菜单、选择器、通知、加载和管理界面 |
@@ -42,7 +42,7 @@ web/src/
       mutations/
       stores/
       services/
-      routes.tsx
+      styles/
     reader/
       pages/
       components/
@@ -59,7 +59,9 @@ web/src/
 
 页面组件只处理页面展示和交互。API 调用通过领域 query/mutation hooks；跨页面状态通过领域 store；页面临时状态留在组件内部。路由页面不得通过布尔字段判断其它页面。
 
-影音领域的 React 组件、API 类型和跨页面服务统一放在 `features/media` 下；`src/media` 中保留的文件只作为旧测试、Android diagnostics 和历史模块的兼容 re-export，不参与生产路由调度。阅读器的命令式引擎和 Android 宿主仍保留在 `ui`/`core` 边界，由 `features/reader/pages/ReaderPage` 明确托管生命周期。
+影音领域的 React 组件、API 类型、跨页面服务和样式统一放在 `features/media` 下；旧的 `src/media` 目录已删除，测试与 Android 诊断也直接引用新目录，没有旧媒体路径转导层。领域内同目录组件使用 `./` 导入，跨职责目录使用 `../api`、`../services`、`../styles` 等明确路径；样式唯一存放在 `styles`，避免组件目录与样式目录维护重复副本。路由入口集中在 `app/router/routes.tsx`。
+
+阅读器的命令式引擎和 Android 宿主仍保留在 `ui`/`core` 边界，由 `features/reader/pages/ReaderPage` 明确托管生命周期。`app.ts` 的诊断兼容接口只提供平台、flush 等宿主能力，不参与生产页面调度。
 
 ## 生命周期边界
 
@@ -78,7 +80,7 @@ web/src/
 3. 影音 Layout、路由树、Query/Mutation 层和目录页面。
 4. 详情、元数据、章节、媒体库管理、设置和任务页面。
 5. PlaybackService、播放器页和 MiniPlayer。
-6. 删除 `MediaScreen`、旧媒体路由分支和媒体侧 `mountUI` 使用。
+6. 删除 `MediaScreen`、旧媒体路由分支、旧 `media` 目录和媒体侧 `mountUI` 使用。
 7. 迁移其它非阅读页面。
 8. React 化阅读器外围页面，保留 ReaderEngine。
 9. 删除 Preact、`lucide-preact`、旧 `mountUI` 和旧 Screen 调度链。
@@ -86,7 +88,7 @@ web/src/
 ## 验收标准
 
 - 所有页面由 React Router 管理，`App` 不再手写页面 switch。
-- `MediaScreen` 删除，媒体页面按 route/page/query/mutation 拆分。
+- `MediaScreen` 删除，旧 `src/media` 目录删除，媒体页面按 route/page/query/mutation 拆分。
 - React Query 统一管理服务端状态，Zustand 管理客户端共享状态。
 - 播放器跨路由持续播放，阅读引擎拥有明确的 React 托管生命周期。
 - Mantine 负责基础交互组件；品牌样式只做必要覆盖，不强行改写组件内部实现。
@@ -105,7 +107,7 @@ web/src/
 - `MediaPlayer` 已由 `PlaybackService` 管理并在 Provider 中启动，跨路由播放状态通过 Zustand 暴露，播放器 DOM 不随页面路由销毁。
 - 已用浏览器验证开发服务器能够启动并显示 React 登录页面；`npm run typecheck` 与 `npm run build` 通过。
 
-当前迁移已完成生产入口切换。影音管理、播放器控制、登录、书架、书库、书源、设置和阅读路由均由 React Router 管理；旧 `MediaScreen`、旧媒体路由、旧 `mountUI`、Preact 适配层和旧 Screen 页面已从生产代码删除。阅读内容引擎仍作为 `ReaderPage` 的命令式服务边界存在，并由 React effect 负责创建、刷新和销毁。
+当前迁移已完成生产入口切换和影音目录收敛。影音管理、播放器控制、登录、书架、书库、书源、设置和阅读路由均由 React Router 管理；旧 `MediaScreen`、旧媒体路由、旧 `mountUI`、Preact 适配层、旧 Screen 页面和 `src/media` 目录已删除。阅读内容引擎仍作为 `ReaderPage` 的命令式服务边界存在，并由 React effect 负责创建、刷新和销毁。
 
 最终验证结果：
 

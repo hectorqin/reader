@@ -67,7 +67,7 @@ function sampleWav(){
     const go=async(hash)=>{await page.evaluate(value=>{location.hash=value;},hash);};
     const shot=async(name)=>{await page.screenshot({path:join(out,name+'.png')});screenshots.push(name);};
     await page.goto(baseUrl+'/#/media/music/settings/libraries/new');
-    await page.locator('#login-username').fill('reviewer');await page.locator('#login-password').fill('review-test-pass');await page.locator('form button[type=submit]').click();
+    await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();
     await page.getByRole('heading',{name:'新建媒体库',exact:true}).waitFor();await page.locator('input[name=name]').fill('OpenList 音乐验收');await choose('内容类型','音乐');await choose('接入方式','OpenList');
     await page.locator('input[name=baseUrl]').fill(state.origin+'/mounted/');await page.locator('input[name=token]').fill(state.token);await page.locator('input[name=password]').fill(state.password);await page.locator('input[name=root]').fill('/音乐/');await choose('访问范围','所有用户');await shot('01-create-openlist');
     const creation=page.waitForResponse(response=>response.request().method()==='POST'&&response.url()===baseUrl+'/api/v1/media/libraries');
