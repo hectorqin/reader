@@ -18,6 +18,13 @@ export function MediaPlayerPage() {
   const video = usePlaybackStore(state => state.video);
   const requested = panel === 'lyrics' || panel === 'queue' || panel === 'chapters' ? panel as PlaybackPanel : 'main';
   const [restoreError, setRestoreError] = useState('');
+  // The player element lives outside the routed React tree so playback survives
+  // navigation. A player route is the explicit full-screen/expanded view; mirror
+  // that lifecycle here and collapse the persistent mini-player when leaving it.
+  useEffect(() => {
+    runtime.player.setControlsExpanded(true);
+    return () => runtime.player.setControlsExpanded(false);
+  }, [runtime]);
   useEffect(() => {
     const itemId = params.get('item') ?? '', partId = params.get('part') ?? '';
     if (!itemId || !partId || (runtime.player.currentItemId === itemId && runtime.player.currentPartId === partId)) return;

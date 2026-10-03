@@ -112,7 +112,7 @@ async function installReaderApiStubs(page) {
   });
 }
 
-async function capture(page, name, checks, errors = []) {
+async function capture(page, name, checks, errors) {
   for (const width of widths) {
     const height = heightFor(width);
     await page.setViewportSize({ width, height });
@@ -150,6 +150,35 @@ async function waitHeading(page, name) {
 
 async function waitMediaHeading(page, name) {
   await page.locator('.media-screen h1').filter({ hasText: name }).first().waitFor({ state: 'attached' });
+}
+
+async function assertLoadedAndAdvancingVideo(page) {
+  const video = page.locator('video').first();
+  await video.waitFor({ state: 'attached' });
+  await page.waitForFunction(() => {
+    const element = document.querySelector('video');
+    return !!element && element.readyState >= 2 && !element.error && Number.isFinite(element.duration) && element.duration > 0;
+  }, undefined, { timeout: 15_000 });
+  const before = await video.evaluate(element => ({
+    readyState: element.readyState,
+    error: element.error ? { code: element.error.code, message: element.error.message } : null,
+    duration: element.duration,
+    currentTime: element.currentTime,
+    ended: element.ended,
+  }));
+  assert.ok(before.readyState >= 2, `video metadata not loaded: ${JSON.stringify(before)}`);
+  assert.equal(before.error, null, `video media error: ${JSON.stringify(before.error)}`);
+  assert.ok(before.duration > 0, `video duration is not positive: ${JSON.stringify(before)}`);
+  assert.equal(before.ended, false, `video ended before advancing: ${JSON.stringify(before)}`);
+  await page.waitForFunction(previous => {
+    const element = document.querySelector('video');
+    return !!element && !element.error && !element.ended && element.currentTime > previous + 0.05;
+  }, before.currentTime, { timeout: 5_000 });
+  const after = await video.evaluate(element => ({ currentTime: element.currentTime, ended: element.ended, error: element.error?.code ?? null }));
+  assert.equal(after.error, null, `video errored while advancing: ${JSON.stringify(after)}`);
+  assert.equal(after.ended, false, `video ended during advancement: ${JSON.stringify(after)}`);
+  assert.ok(after.currentTime > before.currentTime + 0.05, `video time did not advance: ${JSON.stringify({ before, after })}`);
+  return { before, after };
 }
 
 async function runReaderReview(browser, origin, checks, errors) {
@@ -225,9 +254,12 @@ async function runMediaReview(browser, fixture, checks, errors) {
     { id: 'reviewer', username: 'reviewer', displayName: '评测', role: 'admin' },
     { id: fixture.reviewMemberId, username: 'review-member', displayName: '林间', role: 'member' },
   ] }) }));
-  await login(page, origin, '/#/media/video');
+  // Start the authenticated session on the real review library route. This
+  // avoids an initial browse request without a library query before the first
+  // screenshot route is loaded.
+  await login(page, origin, '/#/media/video?library=review-lib');
   const pages = [
-    ['media-video', '/#/media/video', '影视', '.media-grid'],
+    ['media-video', '/#/media/video?library=review-lib', '影视', '.media-grid'],
     ['media-music', '/#/media/music', '音乐', '.media-screen'],
     ['media-audiobook', '/#/media/audiobook', '有声书', '.media-screen'],
     ['media-detail', '/#/media/video/items/review-film', '人工保留标题', '.media-detail-page'],
@@ -265,6 +297,7 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await page.getByRole('button', { name: '筛选收藏' }).click();
   await page.getByRole('button', { name: '影视' }).last().click();
   await page.waitForURL(/scope=video/);
+  await page.locator('.media-favorite-tools').filter({ hasText: '影视' }).waitFor({ state: 'visible' });
   assert.match(await page.locator('.media-favorite-tools').innerText(), /影视/);
   await page.getByRole('button', { name: '下一页' }).click();
   await page.waitForURL(/offset=60/);
@@ -292,7 +325,64 @@ async function runMediaReview(browser, fixture, checks, errors) {
   assert.equal((await playback).status(), 201);
   await page.waitForURL(/#\/media\/video\/player/);
   await page.locator('.media-player-page').waitFor({ state: 'attached' });
+  const videoPlayback = await assertLoadedAndAdvancingVideo(page);
+  assert.ok(videoPlayback.after.currentTime > videoPlayback.before.currentTime, 'video playback session did not advance');
   await capture(page, 'media-player', checks, errors);
+
+  // The player is a runtime-owned session. Navigate away and return through the
+  // mini-player control; a fresh POST /playback would indicate the session was
+  // lost during the route transition.
+  const playbackPostsBeforeRoute = [];
+  const countPlaybackPosts = response => {
+    if (response.request().method() === 'POST' && response.url().endsWith('/api/v1/media/playback')) playbackPostsBeforeRoute.push(response.url());
+  };
+  page.on('response', countPlaybackPosts);
+  await page.locator('.media-channel-entry a[href="#/media/video"]').click();
+  await page.locator('.media-mini').waitFor({ state: 'attached' });
+  await page.locator('.react-mini-player a').click();
+  await page.waitForURL(/#\/media\/video\/player\?item=review-film&part=review-film-part/);
+  await page.locator('.media-player-page').waitFor({ state: 'attached' });
+  assert.equal(playbackPostsBeforeRoute.length, 0, 'route return created a new playback session');
+  page.off('response', countPlaybackPosts);
+
+  // Responsive route contract: the default tab is active at both target widths,
+  // and the Movies tab is a real navigation action.
+  for (const width of widths) {
+    await page.setViewportSize({ width, height: heightFor(width) });
+    await page.goto(`${origin}/#/media/video`);
+    await waitMediaHeading(page, '影视');
+    assert.equal(await page.locator('.media-tabs [aria-current="page"]').innerText(), '首页', `default tab is not active at ${width}px`);
+    await page.locator('.media-tabs a').filter({ hasText: '电影' }).click();
+    await page.waitForURL(/#\/media\/video\/movies/);
+    await page.locator('.media-tabs [aria-current="page"]').filter({ hasText: '电影' }).waitFor({ state: 'visible' });
+    assert.equal(await page.locator('.media-tabs [aria-current="page"]').innerText(), '电影', `Movies tab did not activate at ${width}px`);
+  }
+
+  // At desktop width use the real heading controls: search and 更多 -> 设置.
+  await page.setViewportSize({ width: 1120, height: heightFor(1120) });
+  await page.goto(`${origin}/#/media/video`);
+  await waitMediaHeading(page, '影视');
+  await page.getByRole('link', { name: '搜索', exact: true }).click();
+  await page.waitForURL(/#\/media\/search$/);
+  await waitMediaHeading(page, '搜索');
+  await page.goBack();
+  await waitMediaHeading(page, '影视');
+  await page.locator('summary[aria-label="更多操作"]').click();
+  await page.locator('details[open] a').filter({ hasText: '设置' }).click();
+  await page.waitForURL(/#\/media\/video\/settings$/);
+  await waitMediaHeading(page, '影音设置');
+
+  // Empty states distinguish a configured-but-empty music channel from a channel
+  // with no accessible audiobook library.
+  await page.setViewportSize({ width: 390, height: heightFor(390) });
+  await page.goto(`${origin}/#/media/music`);
+  await waitMediaHeading(page, '音乐');
+  await page.locator('.media-library-empty').waitFor({ state: 'attached' });
+  assert.match(await page.locator('.media-library-empty').innerText(), /还没有|暂无内容/);
+  await page.goto(`${origin}/#/media/audiobook`);
+  await waitMediaHeading(page, '有声书');
+  await page.locator('.media-library-empty').waitFor({ state: 'attached' });
+  assert.match(await page.locator('.media-library-empty').innerText(), /让喜欢的作品住进来/);
 
   // Permissions: PUT then reopen and read the persisted GET response.
   await page.goto(`${origin}/#/media/video/settings/libraries/review-lib/permissions`);

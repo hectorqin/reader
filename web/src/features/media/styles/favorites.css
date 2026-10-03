@@ -7,6 +7,7 @@
 .media-screen .media-favorites .media-favorite-row:hover {background:var(--surface)}
 .media-favorites .media-favorite-row>.media-cover {width:42px;min-width:42px;flex:none}
 .media-screen .media-favorites .media-favorite-row>.media-portrait {width:44px;min-width:44px;height:44px;border-radius:50%}
+.media-favorites .media-favorite-row>.media-cover:not(.has-image) .media-cover-title {writing-mode:vertical-rl;white-space:normal;letter-spacing:.08em;line-height:1.4}
 .media-favorites .media-favorite-copy {flex:1;min-width:0;padding:9px 0}
 .media-favorites .media-favorite-copy strong {display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:13px;line-height:1.5;font-weight:550;margin:0}
 .media-favorites .media-favorite-copy small {display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;line-height:1.5;color:var(--muted);margin-top:3px}

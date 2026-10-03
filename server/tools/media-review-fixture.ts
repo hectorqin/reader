@@ -1,6 +1,6 @@
 /** Disposable HTTP fixture: real routes/database; only the remote metadata provider is synthetic. */
 import Fastify from 'fastify';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { Db } from '../src/db/index.ts';
@@ -17,7 +17,8 @@ import {MediaScanner} from '../src/media/scanner.ts';
 
 const root=await mkdtemp(join(tmpdir(),'media-review-'));
 await mkdir(join(root,'books'));
-await writeFile(join(root,'review-film.mp4'), Buffer.from([0, 0, 0, 0]));
+const playableFixture=await readFile(resolve('server/tools/fixtures/media-review.mp4'));
+await writeFile(join(root,'review-film.mp4'), playableFixture);
 process.env.BOOKS_DIR=join(root,'books');process.env.DATA_DIR=join(root,'data');
 process.env.WEB_DIR=resolve('web/dist');process.env.READER_TOKEN_SECRET='review-fixture-only';
 const config=loadConfig(),db=new Db(':memory:'),app=Fastify({logger:false});
@@ -37,9 +38,9 @@ db.run("INSERT INTO media_libraries(id,name,kind,root,access,created_at,updated_
 db.run("INSERT INTO media_items(id,library_id,kind,local_key,title,metadata_json) VALUES('review-film','review-lib','movie','film','本地电影','{}')");
 // A playable disposable part keeps the browser review on the real playback path
 // (detail -> POST /playback -> player) instead of requiring a production asset.
-db.run("INSERT INTO media_assets(id,library_id,ref,size,modified_at,available,probe_status) VALUES('review-film-asset','review-lib','review-film.mp4',4,0,1,'ready')");
+db.run("INSERT INTO media_assets(id,library_id,ref,size,modified_at,available,probe_status) VALUES('review-film-asset','review-lib','review-film.mp4',?,0,1,'ready')",playableFixture.length);
 db.run("INSERT INTO media_editions(id,item_id,local_key,label) VALUES('review-film-edition','review-film','review-film','测试版本')");
-db.run("INSERT INTO media_parts(id,edition_id,asset_id,local_key,title,ordinal,start_seconds,end_seconds) VALUES('review-film-part','review-film-edition','review-film-asset','file','正片',0,0,1)");
+db.run("INSERT INTO media_parts(id,edition_id,asset_id,local_key,title,ordinal,start_seconds,end_seconds) VALUES('review-film-part','review-film-edition','review-film-asset','file','正片',0,0,2)");
 db.run("INSERT INTO media_metadata_overrides(item_id,field,value_json,updated_at) VALUES('review-film','title',?,0)",JSON.stringify('人工保留标题'));
 db.run("INSERT INTO media_items(id,library_id,kind,local_key,title,metadata_json) VALUES('long-film','review-lib','movie','long-film',?,'{}')",'LongUnbrokenMovieTitle'.repeat(8));
 db.run("INSERT INTO media_editions(id,item_id,local_key,label) VALUES('long-edition','long-film','long',?)",'LongUnbrokenEditionName'.repeat(8));
