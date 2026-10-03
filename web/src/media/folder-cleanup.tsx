@@ -1,5 +1,5 @@
-import {useEffect,useRef,useState} from '../ui/vendor/preact.ts';
-import {Trash2} from 'lucide-preact';
+import { useEffect, useRef, useState } from 'react';
+import {Trash2} from 'lucide-react';
 import {FloatingConfirm} from '../ui/floating-confirm.tsx';
 import type {MediaApi} from './api.ts';
 

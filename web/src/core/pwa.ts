@@ -22,7 +22,7 @@ export function registerPwa(): void {
 /** Keep activation opt-in, including when another tab activates the new worker. */
 export function watchPwaUpdates(
   registration: ServiceWorkerRegistration,
-  save: () => Promise<void> = async () => { await window.readerApp?.saveBeforeUpdate(); },
+    save: () => Promise<void> = async () => { await window.__readerFlush?.(); },
   reload: () => void = () => location.reload(),
 ): () => void {
   const banner = document.createElement('aside');

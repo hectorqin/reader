@@ -1,8 +1,8 @@
 import {MediaSelect} from './select.tsx';
 import {SleepTimerOptions} from './sleep-timer.tsx';
-import { ChevronLeft, Layers, Play, Pause, SkipBack, SkipForward, RotateCcw, RotateCw, Square, Timer, Gauge, Ellipsis, BookOpen, ListMusic, Search, ArrowUp, ArrowDown, X, Volume2, Pencil } from 'lucide-preact';
+import { ChevronLeft, Layers, Play, Pause, SkipBack, SkipForward, RotateCcw, RotateCw, Square, Timer, Gauge, Ellipsis, BookOpen, ListMusic, Search, ArrowUp, ArrowDown, X, Volume2, Pencil } from 'lucide-react';
 import type { MediaPlayer } from './player.ts';
-import {useEffect,useState,useRef,useLayoutEffect} from '../ui/vendor/preact.ts';
+import { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import type {Detail,MediaApi,Part} from './api.ts';
 import {MediaCover} from './cover.tsx';
 import {AudiobookChapters} from './audiobook-chapters.tsx';
@@ -110,7 +110,7 @@ export function PlaybackControls({player,api,panel,onPanelChange,onBack,onFavori
     </div>
     </div>}
     {tool&&<AudioToolSheet key={tool} title={tool==='sleep'?'睡眠定时':tool==='more'?'更多播放选项':'播放版本'} onClose={()=>{if(!busy)setTool(null);}}>
-      {tool==='sleep'?<SleepTimerOptions player={player} onSelected={()=>setTool(null)}/>:tool==='versions'?<div className="media-audio-versions">{item?.editions?.map(value=><button disabled={busy||value.id===edition?.id&&!player.error||!value.parts.length||value.parts.some(part=>!part.available)} aria-current={value.id===edition?.id?'true':undefined} onClick={()=>void changeVersion(value.id)}><strong>{value.label}</strong><small>{value.parts.some(part=>!part.available)?'资源缺失':value.id===edition?.id?'当前版本':value.parts.length+' 个章节'}</small></button>)}</div>:<>
+      {tool==='sleep'?<SleepTimerOptions player={player} onSelected={()=>setTool(null)}/>:tool==='versions'?<div className="media-audio-versions">{item?.editions?.map(value=><button key={value.id} disabled={busy||value.id===edition?.id&&!player.error||!value.parts.length||value.parts.some(part=>!part.available)} aria-current={value.id===edition?.id?'true':undefined} onClick={()=>void changeVersion(value.id)}><strong>{value.label}</strong><small>{value.parts.some(part=>!part.available)?'资源缺失':value.id===edition?.id?'当前版本':value.parts.length+' 个章节'}</small></button>)}</div>:<>
         <VolumeControl player={player}/>{channel!=='audiobook'&&<div className="media-audio-speed">{speed}</div>}
         <div className="media-audio-shortcuts"><button aria-label="上一首 / 章" disabled={!player.canPrevious} onClick={()=>void player.move(-1)}><SkipBack size={18} aria-hidden="true"/>上一{channel==='music'?'首':'章'}</button><button aria-label="下一首 / 章" disabled={!player.canNext} onClick={()=>void player.move(1)}><SkipForward size={18} aria-hidden="true"/>下一{channel==='music'?'首':'章'}</button></div>
         <div className="media-audio-shortcuts"><button aria-label="快退 15 秒" disabled={player.playbackUnavailable} onClick={()=>player.skip(-15)}><RotateCcw size={18} aria-hidden="true"/>15 秒</button><button aria-label="快进 30 秒" disabled={player.playbackUnavailable} onClick={()=>player.skip(30)}><RotateCw size={18} aria-hidden="true"/>30 秒</button></div>

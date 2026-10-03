@@ -1,3 +1,4 @@
+import type { MouseEvent as ReactMouseEvent } from 'react';
 /**
  * The primitives every screen was re-writing by hand.
  *
@@ -14,12 +15,12 @@
  */
 
 import { Icon, type IconName } from './icon.tsx';
-import { type ComponentChildren, type JSX } from './vendor/preact.ts';
+import { type ReactNode, type JSX } from 'react';
 
 export { Icon, type IconName } from './icon.tsx';
 
 /** The panel headings and controls the stylesheet already styles. */
-export function SectionTitle({ children }: { children: ComponentChildren }): JSX.Element {
+export function SectionTitle({ children }: { children: ReactNode }): JSX.Element {
   return <div className="section-title">{children}</div>;
 }
 
@@ -36,11 +37,11 @@ export interface IconButtonProps {
    * optical weights, in one toolbar.
    */
   icon: IconName;
-  onClick?: (event: MouseEvent) => void;
+  onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   /** Kept in the DOM so the header's layout does not depend on the mount. */
   hidden?: boolean;
-  class?: string;
+  className?: string;
 }
 
 /**
@@ -53,7 +54,7 @@ export interface IconButtonProps {
  * The glyph is passed as a *name*, so it is always `.icon` — which is what makes the
  * control's own alignment guaranteed rather than inherited from a caller's layout.
  */
-export function IconButton({ label, icon, onClick, disabled, hidden, class: className }: IconButtonProps): JSX.Element {
+export function IconButton({ label, icon, onClick, disabled, hidden, className }: IconButtonProps): JSX.Element {
   return (
     <button
       type="button"
@@ -71,7 +72,7 @@ export function IconButton({ label, icon, onClick, disabled, hidden, class: clas
 export interface IconTextButtonProps {
   label: string;
   icon: IconName;
-  onClick?: (event: MouseEvent) => void;
+  onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   className?: string;
 }
@@ -100,8 +101,8 @@ export function IconTextButton({ label, icon, onClick, disabled, className }: Ic
 }
 
 export interface PrimaryButtonProps {
-  children: ComponentChildren;
-  onClick?: (event: MouseEvent) => void;
+  children: ReactNode;
+  onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   type?: 'button' | 'submit';
   className?: string;
@@ -187,7 +188,7 @@ export function SwitchRow({ label, hint, checked, onChange }: SwitchRowProps): J
 
 export interface ScrimProps {
   onDismiss?(): void;
-  children: ComponentChildren;
+  children: ReactNode;
   className?: string;
 }
 

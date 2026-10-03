@@ -4,9 +4,9 @@ import {
   Library, Play, Pause, SkipBack, SkipForward, Square, Headphones, Moon, Sun,
   Eye, Info, TriangleAlert, Clock, Ellipsis, Pencil, ArrowDownUp, LogOut,
   CirclePlus, IndentIncrease, Type, MoveVertical, Settings, SlidersVertical,
-} from 'lucide-preact';
+} from 'lucide-react';
 import type { IconName } from './icon-names.ts';
-import type { JSX } from './vendor/preact.ts';
+import type { JSX } from 'react';
 export type { IconName };
 const ICONS = {
   menu: Menu, 'chevron-left': ChevronLeft, 'chevron-right': ChevronRight,
@@ -24,11 +24,11 @@ const ICONS = {
   'forward-step': SkipForward, bars: Menu, gear: Settings, xmark: X,
   'magnifying-glass': Search, books: Library,
 } satisfies Record<IconName, typeof Menu>;
-export interface IconProps { name: IconName; label?: string | null; class?: string; }
+export interface IconProps { name: IconName; label?: string | null; className?: string; }
 /** Shared geometry and stroke weight, independent of font rendering. */
-export function Icon({ name, label, class: className }: IconProps): JSX.Element {
+export function Icon({ name, label, className }: IconProps): JSX.Element {
   const Glyph = ICONS[name];
-  return <Glyph class={className ? 'icon ' + className : 'icon'} size="1em"
+  return <Glyph className={className ? 'icon ' + className : 'icon'} size="1em"
     strokeWidth={1.8} aria-hidden={label ? undefined : true}
     role={label ? 'img' : undefined} aria-label={label ?? undefined} />;
 }

@@ -1,7 +1,8 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { act } from 'preact/test-utils';
-import { render } from '../src/ui/vendor/preact.ts';
+import { act } from 'react';
+
 import { EditionDetails } from '../src/media/edition-details.tsx';
 import type { Detail, Edition, MediaApi } from '../src/media/api.ts';
 const root=document.createElement('div');document.body.append(root);

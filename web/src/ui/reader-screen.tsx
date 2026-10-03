@@ -27,7 +27,8 @@ import {
   type SpeechEngineKind,
 } from '../render/speech.ts';
 import type { NativeSpeechBridge } from '../android-bridge.ts';
-import { mountUI } from './mount.ts';
+import { createRoot, type Root } from 'react-dom/client';
+import { flushSync } from 'react-dom';
 import { ReaderChrome, type ChromeState, type ChromeTocEntry } from './reader-chrome.tsx';
 import { OFFLINE_FILE, PublicationCache, publicationScope } from '../store/publications.ts';
 import { ReadingTools, type SearchSection } from './reading-tools.tsx';
@@ -97,7 +98,7 @@ interface LoadedBook {
 export class ReaderScreen {
   readonly element: HTMLDivElement;
   private readonly stage: HTMLDivElement;
-  private readonly ui: ReturnType<typeof mountUI>;
+  private readonly ui: Root;
   /**
    * Everything the chrome draws. Written by this class, read by the tree.
    *
@@ -231,10 +232,15 @@ export class ReaderScreen {
     // rules that have to be kept in agreement.
     this.element.dataset['chrome'] = 'visible';
     this.element.style.cssText = 'flex:1 1 auto;min-height:0;display:flex;flex-direction:column;position:relative;';
-    this.ui = mountUI(
-      this.element,
-      () => (
-        <ReaderChrome
+    this.ui = createRoot(this.element);
+    this.renderChrome();
+
+    this.bindSyncStatus();
+  }
+
+  private renderChrome(): void {
+    flushSync(() => this.ui.render(
+<ReaderChrome
           tools={<>{this.annotation && <AnnotationPopover key={this.annotation.note?.id ?? encodeAnchor(this.annotation.anchor)} target={this.annotation}
             save={(type, comment, color) => this.saveAnnotation(type, comment, color)} remove={() => this.removeAnnotation()}
             close={() => { this.annotation = null; this.view?.clearSelection(); this.patch({}); }} />}{this.toolsOpen && this.manifest ? <ReadingTools
@@ -280,11 +286,7 @@ export class ReaderScreen {
             onStopSpeech: () => this.stopSpeech(),
           }}
         />
-      ),
-      this.chrome,
-    );
-
-    this.bindSyncStatus();
+    ));
   }
 
   private async generateAiSummary(): Promise<void> {
@@ -2043,7 +2045,7 @@ export class ReaderScreen {
         voices: this.voices,
       }),
     };
-    this.ui.update(this.chrome);
+    this.renderChrome();
   }
 
   /** Which engine will actually speak, for the panel's conditional rows. */

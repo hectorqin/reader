@@ -1,6 +1,6 @@
 import { DEFAULT_APP_SETTINGS, READOUT_FIELDS, type ReadoutMode } from '../store/settings.ts';
 import type { ChromeState } from './reader-chrome.tsx';
-import { useEffect, useState } from './vendor/preact.ts';
+import { useEffect, useState } from 'react';
 
 /** Only this small subtree updates with the clock; the reading surface is untouched. */
 export function ReaderIndicators({ state }: { state: ChromeState }) {

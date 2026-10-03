@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
 import { pwa } from './tools/pwa/build.ts';
 
 // The build output is consumed twice:
@@ -10,7 +11,7 @@ import { pwa } from './tools/pwa/build.ts';
 // from file:// cannot fetch sibling chunks over the network, and every extra
 // request through the file protocol is a chance to meet a platform quirk.
 export default defineConfig({
-  plugins: [pwa()],
+  plugins: [react(), pwa()],
   base: './',
   build: {
     outDir: 'dist',
@@ -39,6 +40,7 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    setupFiles: ['./test/setup.ts'],
     // The `node:test` files are run by `tsx --test` (see package.json), because
     // they were written for the Node test runner and importing a vitest test
     // file from one process, or vice versa, silently produces "no test suite

@@ -1,4 +1,4 @@
-import {Check,TimerOff} from 'lucide-preact';
+import {Check,TimerOff} from 'lucide-react';
 import type {MediaPlayer} from './player.ts';
 
 export function SleepTimerOptions({player,onSelected}:{player:MediaPlayer;onSelected?:()=>void}){

@@ -1,6 +1,7 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createElement, render } from '../src/ui/vendor/preact.ts';
+import { createElement } from 'react';
 import { FloatingNotice } from '../src/ui/floating-notice.tsx';
 import { dismissAllNotices, dismissNotice, notify, placeNotifications } from '../src/ui/notifications.ts';
 import { noticeText, visibleNotices } from './helpers/notices.ts';

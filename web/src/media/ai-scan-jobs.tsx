@@ -1,5 +1,5 @@
-import {ChevronDown,ChevronRight,Trash2} from 'lucide-preact';
-import {useEffect,useState} from '../ui/vendor/preact.ts';
+import {ChevronDown,ChevronRight,Trash2} from 'lucide-react';
+import { useEffect, useState } from 'react';
 import type {AiScanBatch,AiScanJob,Library,MediaApi} from './api.ts';
 
 const labels:Record<string,string>={queued:'排队中',running:'进行中',complete:'已完成',failed:'失败'};

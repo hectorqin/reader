@@ -1,5 +1,5 @@
-import {Play} from 'lucide-preact';
-import { useEffect, useRef, useState } from '../ui/vendor/preact.ts';
+import {Play} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { MediaApi, Part, Detail } from './api.ts';
 import {MediaCover} from './cover.tsx';
 import {historyPosition} from './history-labels.ts';

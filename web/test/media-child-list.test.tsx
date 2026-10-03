@@ -1,13 +1,14 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import {afterEach,expect,it} from 'vitest';
-import {act} from 'preact/test-utils';
-import {render} from '../src/ui/vendor/preact.ts';
+import {act} from 'react';
+
 import {MediaChildList} from '../src/media/child-list.tsx';
 import type {Item} from '../src/media/api.ts';
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>act(()=>render(null,root)));
 const items:Item[]=Array.from({length:125},(_,index)=>({id:String(index),libraryId:'lib',kind:'album',title:'专辑'+String(index+1).padStart(3,'0'),parentId:'artist',metadata:{},overrides:{}}));
-const draw=(values:Item[])=>render(<MediaChildList items={values} label="专辑" renderItems={rows=><div>{rows.map(row=><button data-item={row.id}>{row.title}</button>)}</div>}/>,root);
+const draw=(values:Item[])=>render(<MediaChildList items={values} label="专辑" renderItems={rows=><div>{rows.map(row=><button key={row.id} data-item={row.id}>{row.title}</button>)}</div>}/>,root);
 const click=async(name:string)=>act(async()=>{Array.from(root.querySelectorAll('button')).find(button=>button.textContent===name)!.click();});
 it('keeps all child items reachable and resets pagination when searching',async()=>{
   await act(async()=>draw(items));

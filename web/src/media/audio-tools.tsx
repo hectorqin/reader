@@ -1,8 +1,8 @@
-import { Heart, X } from 'lucide-preact';
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentChildren } from '../ui/vendor/preact.ts';
+import { Heart, X } from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type { MediaApi } from './api.ts';
 
-export function AudioToolSheet({title,onClose,children}:{title:string;onClose:()=>void;children:ComponentChildren}){
+export function AudioToolSheet({title,onClose,children}:{title:string;onClose:()=>void;children:ReactNode}){
   const ref=useRef<HTMLDialogElement>(null);
   useLayoutEffect(()=>{const dialog=ref.current;if(!dialog)return;const previous=document.activeElement as HTMLElement|null;dialog.showModal();return ()=>{dialog.close();queueMicrotask(()=>{if(previous?.isConnected)previous.focus({preventScroll:true});});};},[]);
   return <dialog ref={ref} className="media-audio-sheet" aria-label={title} onCancel={event=>{event.preventDefault();onClose();}} onKeyDown={event=>{if(event.key==='Escape')event.stopPropagation();}} onClick={event=>{if(event.target===event.currentTarget){const rect=event.currentTarget.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)onClose();}}}>

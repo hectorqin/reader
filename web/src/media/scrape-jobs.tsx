@@ -1,7 +1,7 @@
 import {FloatingConfirm} from '../ui/floating-confirm.tsx';
 import {MediaSelect} from './select.tsx';
-import { ChevronDown, ChevronRight } from 'lucide-preact';
-import { useEffect, useRef, useState } from '../ui/vendor/preact.ts';
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import type { Item, Library, MediaApi, MediaChannel } from './api.ts';
 interface Job {id:string;provider:string;state:string;created_at?:number;total?:number;counts?:Record<string,number>;items:Array<{itemId:string;state:string;error:string|null;title?:string;channel?:MediaChannel}>}
 const countState=(job:Job,state:string)=>job.counts?.[state]??job.items.filter(row=>row.state===state).length;
@@ -102,8 +102,8 @@ export function ScrapeJobs({api,libraries,navigate}:{api:MediaApi;libraries:Libr
     <details ref={createForm} className="media-task-create" open><summary>新建批量匹配</summary>
     <p>将所选作品标题发送给来源，唯一较强匹配经详情复核后保存；已有匹配保留，歧义结果转人工审阅。季集按已确认父剧和编号获取候选，需逐项核对后确认。每批最多 500 项。</p>
     <div className="media-form"><label>媒体库<MediaSelect aria-label="媒体库" value={libraryId} disabled={busy} onChange={e=>{setSelected([]);setItems([]);setLoading(true);setLibraryId(e.currentTarget.value);}}>{libraries.map(lib=><option value={lib.id} key={lib.id}>{lib.name}</option>)}</MediaSelect></label>
-    <label>刮削来源<MediaSelect aria-label="刮削来源" value={provider} disabled={busy} onChange={e=>{setSelected([]);setItems([]);setLoading(true);setProvider(e.currentTarget.value);}}>{!provider&&<option value="">无可用来源</option>}{compatibleProviders.map(p=><option key={p.id} value={p.id} disabled={!p.configured}>{p.label}{p.configured?'':'（未配置）'}</option>)}</MediaSelect></label>
-    <label>内容类型<MediaSelect aria-label="内容类型" value={kind} disabled={busy||!allowed.length} onChange={e=>{setKind(e.currentTarget.value);setSelected([]);setOffset(0);}}>{!allowed.length&&<option value="">暂无可匹配类型</option>}{allowed.map(value=><option key={value} value={value}>{names[value]}</option>)}</MediaSelect></label>
+    <label>刮削来源<MediaSelect aria-label="刮削来源" value={provider} disabled={busy} onChange={e=>{setSelected([]);setItems([]);setLoading(true);setProvider(e.currentTarget.value);}}>{!provider&&<option key="empty" value="">无可用来源</option>}{compatibleProviders.map(p=><option key={p.id} value={p.id} disabled={!p.configured}>{p.label}{p.configured?'':'（未配置）'}</option>)}</MediaSelect></label>
+    <label>内容类型<MediaSelect aria-label="内容类型" value={kind} disabled={busy||!allowed.length} onChange={e=>{setKind(e.currentTarget.value);setSelected([]);setOffset(0);}}>{!allowed.length&&<option key="empty" value="">暂无可匹配类型</option>}{allowed.map(value=><option key={value} value={value}>{names[value]}</option>)}</MediaSelect></label>
     <label>匹配方式<MediaSelect aria-label="匹配方式" value={matchMode} disabled={busy} onChange={e=>setMatchMode(e.currentTarget.value as 'strong'|'first'|'manual')}><option value="strong">自动匹配唯一强候选</option><option value="first">默认采用第一条候选</option><option value="manual">手动确认每项匹配</option></MediaSelect></label></div>
     {!provider&&<p role="status">当前媒体库没有已配置的匹配来源。请管理员配置支持此类内容的来源后重试。<button disabled={busy} onClick={()=>{setError('');setProviderRetry(value=>value+1);}}>重新检查来源</button></p>}
     <div className="media-scrape-selection-toolbar"><label className="media-scrape-search">筛选作品<input value={query} placeholder="输入标题过滤本页" onInput={e=>setQuery(e.currentTarget.value)}/></label><div><button disabled={busy||loading||!visibleItems.some(item=>!selected.includes(item.id))||selected.length>=500} onClick={()=>setSelected(current=>[...new Set([...current,...visibleItems.map(item=>item.id)])].slice(0,500))}>选择本页</button><button disabled={busy||loading||selectingAll} onClick={()=>void selectAllResults()}>{selectingAll?'正在选择…':'选择全部结果'}</button><button disabled={busy||loading||!visibleItems.some(item=>selected.includes(item.id))} onClick={()=>setSelected(current=>current.filter(id=>!visibleItems.some(item=>item.id===id)))}>取消本页</button><button disabled={busy||!selected.length} onClick={()=>setSelected([])}>清除选择</button></div></div>

@@ -1,7 +1,8 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import {afterEach,expect,it,vi} from 'vitest';
-import {act} from 'preact/test-utils';
-import {render} from '../src/ui/vendor/preact.ts';
+import {act} from 'react';
+
 import {FolderCleanup} from '../src/media/folder-cleanup.tsx';
 import type {MediaApi} from '../src/media/api.ts';
 vi.mock('../src/ui/floating-confirm.tsx',()=>({FloatingConfirm:({text,onConfirm,onCancel}:any)=><div role="dialog"><p>{text}</p><button onClick={onConfirm}>确认清理</button><button onClick={onCancel}>取消</button></div>}));

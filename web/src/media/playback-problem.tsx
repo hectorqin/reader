@@ -1,4 +1,4 @@
-import {LockKeyhole,TriangleAlert} from 'lucide-preact';
+import {LockKeyhole,TriangleAlert} from 'lucide-react';
 import type {MediaPlayer} from './player.ts';
 
 /** Recovery opens an existing selector; it never creates a session automatically. */

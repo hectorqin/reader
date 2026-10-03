@@ -1,7 +1,7 @@
 import {VideoEpisodeRail} from './video-episode-rail.tsx';
 import {SleepTimerOptions} from './sleep-timer.tsx';
-import {Ellipsis,X,Square,Check,Subtitles,AudioLines,Layers} from 'lucide-preact';
-import {useEffect,useLayoutEffect,useRef,useState,type ComponentChildren} from '../ui/vendor/preact.ts';
+import {Ellipsis,X,Square,Check,Subtitles,AudioLines,Layers} from 'lucide-react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type {MediaPlayer} from './player.ts';
 import type {Detail,MediaApi} from './api.ts';
 import {MediaLoading} from './loading.tsx';
@@ -24,7 +24,7 @@ function Volume({player}:{player:MediaPlayer}){
   return <div ref={host}/>;
 }
 
-function ToolSheet({tool,onClose,children}:{tool:Tool;onClose:()=>void;children:ComponentChildren}){
+function ToolSheet({tool,onClose,children}:{tool:Tool;onClose:()=>void;children:ReactNode}){
   const ref=useRef<HTMLDialogElement>(null);
   useLayoutEffect(()=>{const dialog=ref.current;if(!dialog)return;dialog.showModal();return ()=>dialog.close();},[]);
   return <dialog ref={ref} className="media-video-sheet" aria-label={titles[tool]} onCancel={event=>{event.preventDefault();onClose();}} onKeyDown={event=>{if(event.key==='Escape')event.stopPropagation();}} onClick={event=>{if(event.target===event.currentTarget){const rect=event.currentTarget.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)onClose();}}}>

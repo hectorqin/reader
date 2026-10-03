@@ -1,4 +1,4 @@
-import { FolderOpen } from 'lucide-preact';
+import { FolderOpen } from 'lucide-react';
 import type { MediaChannel } from './api.ts';
 
 export function EmptyMediaLibrary({channel,hasLibraries,admin,category,onCreate,onManage}: {

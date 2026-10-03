@@ -1,5 +1,5 @@
-import { ArrowDown, ArrowUp, Check, Ellipsis, ListMusic, ListOrdered, Search, Trash2, X } from 'lucide-preact';
-import { useState } from '../ui/vendor/preact.ts';
+import { ArrowDown, ArrowUp, Check, Ellipsis, ListMusic, ListOrdered, Search, Trash2, X } from 'lucide-react';
+import { useState } from 'react';
 
 export interface SavedQueueEntry {id:string;itemId:string;title:string;partTitle:string;editionLabel?:string;start:number;end:number|null;available:number}
 const duration=(entry:SavedQueueEntry)=>{if(entry.end===null||entry.end<entry.start)return '';const seconds=Math.floor(entry.end-entry.start);return seconds>=3600?`${Math.floor(seconds/3600)}:${String(Math.floor(seconds/60)%60).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`:`${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;};
@@ -20,7 +20,7 @@ export function SavedQueue({entries,busy,onPlay,onDetail,onMove,onRemove,onClear
         <span className="media-saved-queue-number" aria-hidden="true">{String(index+1).padStart(2,'0')}</span>
         <button className="media-saved-queue-title" aria-label={'播放 '+entry.title} title={entry.title} disabled={busy||!entry.available} onClick={()=>onPlay(index)}><strong>{entry.title}</strong><small>{[entry.partTitle!==entry.title?entry.partTitle:'',entry.editionLabel,!entry.available?'资源不可用':''].filter(Boolean).join(' · ')||'本地资源'}</small></button>
         {!editing&&<span className="media-saved-queue-duration">{duration(entry)}</span>}
-        {editing?<span className="media-queue-actions">{(['up','down'] as const).map(direction=><button aria-label={(direction==='up'?'上移 ':'下移 ')+entry.title} title={direction==='up'?'上移':'下移'} disabled={busy||(direction==='up'?index===0:index===entries.length-1)} onClick={()=>onMove(index,direction)}>{direction==='up'?<ArrowUp size={17} aria-hidden="true"/>:<ArrowDown size={17} aria-hidden="true"/>}</button>)}<button aria-label={'移除 '+entry.title} title="移除" disabled={busy} onClick={()=>onRemove(entry.id)}><X size={17} aria-hidden="true"/></button></span>:<button className="media-saved-queue-detail" aria-label={'查看 '+entry.title+' 详情'} title="作品详情" onClick={()=>onDetail(entry.itemId)}><Ellipsis size={18} aria-hidden="true"/></button>}
+        {editing?<span className="media-queue-actions">{(['up','down'] as const).map(direction=><button key={direction} aria-label={(direction==='up'?'上移 ':'下移 ')+entry.title} title={direction==='up'?'上移':'下移'} disabled={busy||(direction==='up'?index===0:index===entries.length-1)} onClick={()=>onMove(index,direction)}>{direction==='up'?<ArrowUp size={17} aria-hidden="true"/>:<ArrowDown size={17} aria-hidden="true"/>}</button>)}<button aria-label={'移除 '+entry.title} title="移除" disabled={busy} onClick={()=>onRemove(entry.id)}><X size={17} aria-hidden="true"/></button></span>:<button className="media-saved-queue-detail" aria-label={'查看 '+entry.title+' 详情'} title="作品详情" onClick={()=>onDetail(entry.itemId)}><Ellipsis size={18} aria-hidden="true"/></button>}
       </li>)}
     </ol>
     {!rows.length&&<div className="media-personal-empty"><ListMusic size={30} aria-hidden="true"/><p>队列中没有符合条件的条目。</p><button onClick={()=>{setQuery('');setPage(0);}}>清除查找</button></div>}

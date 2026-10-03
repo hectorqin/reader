@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from '../ui/vendor/preact.ts';
+import { useEffect, useRef, useState } from 'react';
 import type { MediaApi } from './api.ts';
 import type { MediaPlayer } from './player.ts';
-import {LocateFixed,Music2} from 'lucide-preact';
+import {LocateFixed,Music2} from 'lucide-react';
 interface LyricsData {synced:boolean;lines:Array<{time:number|null;text:string}>;source:string}
 export function Lyrics({api,player}:{api:MediaApi;player:MediaPlayer}){
   const partId=player.currentPartId;

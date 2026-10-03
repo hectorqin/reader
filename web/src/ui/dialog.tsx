@@ -28,7 +28,7 @@ import {FloatingConfirm} from './floating-confirm.tsx';
  */
 
 import { Button } from './toolkit.tsx';
-import { type JSX, useEffect, useRef } from './vendor/preact.ts';
+import { type JSX, useEffect, useRef } from 'react';
 
 /** One question with one answer. Held by the screen, rendered by the tree. */
 export type Dialog =

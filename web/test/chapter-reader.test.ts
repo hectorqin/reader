@@ -2,7 +2,7 @@
 import { noticeText } from './helpers/notices.ts';
 import { Blob as NodeBlob } from 'node:buffer';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { act } from 'preact/test-utils';
+import { act } from 'react';
 import { ReaderApi } from '../src/api/client.ts';
 import { ApiError } from '../src/api/errors.ts';
 import type { Book, BookContent, Manifest, Session } from '../src/api/types.ts';

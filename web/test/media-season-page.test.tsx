@@ -1,7 +1,8 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import {expect,it,vi} from 'vitest';
-import {act} from 'preact/test-utils';
-import {render} from '../src/ui/vendor/preact.ts';
+import {act} from 'react';
+
 import {SeasonPlayback,SeriesSeasons} from '../src/media/season-playback.tsx';
 import type {MediaApi} from '../src/media/api.ts';
 
@@ -49,7 +50,7 @@ it('retries playback with the chosen start and edition without fetching the list
     await vi.waitFor(()=>expect(root.querySelectorAll('.media-season-row')).toHaveLength(2));
     await act(async()=>{
       const start=root.querySelector<HTMLInputElement>('[aria-label="从 第二集 开始"]')!;
-      start.checked=true;start.dispatchEvent(new Event('change',{bubbles:true}));
+      start.click();
       const version=root.querySelector('select')!;version.value='alternate';version.dispatchEvent(new Event('change',{bubbles:true}));
     });
     await act(async()=>{Array.from(root.querySelectorAll('button')).find(button=>button.textContent==='顺序播放 1 集')!.click();});
@@ -92,7 +93,7 @@ it.each(['season','series'] as const)('searches and pages a long %s without chan
     const button=(label:string)=>Array.from(root.querySelectorAll('button')).find(button=>button.textContent===label)!;
     act(()=>button('下一页').click());
     const start=root.querySelector<HTMLInputElement>('[aria-label="从 Episode 061 开始"]')!;
-    act(()=>{start.checked=true;start.dispatchEvent(new Event('change',{bubbles:true}));});
+    act(()=>{start.click();});
     const search=root.querySelector<HTMLInputElement>('input[type=search]')!;
     act(()=>{search.value='120';search.dispatchEvent(new Event('input',{bubbles:true}));});
     expect(root.querySelectorAll('.media-season-row')).toHaveLength(1);

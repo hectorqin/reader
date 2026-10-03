@@ -1,0 +1,14 @@
+.app-global-nav, .media-app-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: .75rem 1rem;
+  border-bottom: 1px solid var(--mantine-color-default-border);
+  background: var(--mantine-color-body);
+}
+.app-global-nav a, .media-app-nav a { color: var(--mantine-color-text); text-decoration: none; }
+.app-global-nav a:hover, .media-app-nav a:hover { color: var(--mantine-primary-color-filled); }
+.media-page { max-width: 1440px; margin-inline: auto; padding-bottom: 7rem; }
+.react-mini-player { position: fixed; bottom: .75rem; left: 1rem; right: 1rem; z-index: 250; }
+.reader-route-host { height: 100dvh; overflow: hidden; }

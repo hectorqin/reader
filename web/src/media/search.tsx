@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from '../ui/vendor/preact.ts';
-import { Search, ChevronRight } from 'lucide-preact';
+import { useEffect, useRef, useState } from 'react';
+import { Search, ChevronRight } from 'lucide-react';
 import { MediaCover } from './cover.tsx';
 import { MediaLoading } from './loading.tsx';
 import { MediaScreenError } from './screen-error.tsx';

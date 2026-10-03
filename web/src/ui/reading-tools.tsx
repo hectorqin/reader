@@ -1,5 +1,5 @@
 import type { ReadingOverrides } from './reading-overrides.ts';
-import { useEffect, useMemo, useRef, useState } from './vendor/preact.ts';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Modal } from './modal.tsx';
 import type { ReaderApi } from '../api/client.ts';
 import type { Manifest, Note } from '../api/types.ts';
@@ -123,7 +123,7 @@ export function ReadingTools(props: ReadingToolsProps) {
     <div className="reading-tools">
       <nav className="reading-tool-tabs" aria-label="阅读工具分类">{([
         ['search', '搜索', '书内搜索'], ['notes', '笔记', '笔记'], ['offline', '缓存', '离线缓存'], ['speech', '朗读', '朗读检测'], ['edit', '整理', '内容整理'],
-      ] as const).map(([id, label, accessible]) => <button className="reading-tool-tab" type="button" aria-label={accessible} aria-pressed={tab === id} aria-controls="reading-tool-panel" onClick={() => { setTab(id); setMessage(''); }}>{label}</button>)}</nav>
+        ] as const).map(([id, label, accessible]) => <button key={id} className="reading-tool-tab" type="button" aria-label={accessible} aria-pressed={tab === id} aria-controls="reading-tool-panel" onClick={() => { setTab(id); setMessage(''); }}>{label}</button>)}</nav>
       <div className="reading-tool-panel" id="reading-tool-panel">
       <FloatingNotice message={message} error={messageError} />
       {deleteId && <FloatingConfirm title="删除笔记" text="确定删除这条笔记或书签？" confirmText="确认删除" cancelText="取消" onCancel={()=>setDeleteId('')} onConfirm={()=>{const id=deleteId;setDeleteId('');void edit(async()=>{await props.offline.deleteNote(id);props.sync.schedule();setNotes(props.offline.notesFor(bookId));props.onNotes();});}} />}
@@ -143,11 +143,11 @@ export function ReadingTools(props: ReadingToolsProps) {
           <h4>{editing ? '编辑' + (editing.type === 'bookmark' ? '书签' : '笔记') : '记录所选文字'}</h4>
           <blockquote>{editing?.text ?? props.selection?.quote}</blockquote>
           <label><span>批注 <small>可选</small></span><textarea aria-label="批注" disabled={saving} placeholder={editing?.type === 'bookmark' ? '为这个位置添加备注' : '写下想法，或留空仅保存高亮'} value={comment} maxLength={4000} onInput={event => setComment(event.currentTarget.value)} /></label>
-          {editing?.type !== 'bookmark' && <div className="reading-note-colors" role="group" aria-label="高亮颜色"><span>高亮颜色</span>{[['#ffd54f', '黄色'], ['#80cbc4', '绿色'], ['#ce93d8', '紫色']].map(([value, label]) => <button type="button" disabled={saving} aria-label={label} aria-pressed={color === value} style={{ '--note-color': value }} onClick={() => setColor(value)}>{color === value ? '✓' : ''}</button>)}</div>}
+          {editing?.type !== 'bookmark' && <div className="reading-note-colors" role="group" aria-label="高亮颜色"><span>高亮颜色</span>{[['#ffd54f', '黄色'], ['#80cbc4', '绿色'], ['#ce93d8', '紫色']].map(([value, label]) => <button key={value} type="button" disabled={saving} aria-label={label} aria-pressed={color === value} style={{ '--note-color': value }} onClick={() => setColor(value)}>{color === value ? '✓' : ''}</button>)}</div>}
           <div className="reading-tool-actions"><button className="button" disabled={saving} onClick={() => { setEditing(null); setComposing(false); setComment(''); }}>取消编辑</button><button className="button primary" disabled={saving} onClick={() => void edit(() => saveNote())}>{editing ? '保存修改' : comment.trim() ? '保存批注' : '保存高亮'}</button></div>
         </div>}
         {!editing && !composing && props.selection && <button className="button" onClick={() => setComposing(true)}>为所选文字添加笔记</button>}
-        {!editing && !composing && <><div className="reading-note-filters" role="group" aria-label="笔记筛选">{([['all', '全部'], ['bookmark', '书签'], ['annotation', '高亮与批注']] as const).map(([value, label]) => <button type="button" aria-pressed={noteFilter === value} onClick={() => { setNoteFilter(value); setDeleteId(''); }}>{label}</button>)}</div>
+        {!editing && !composing && <><div className="reading-note-filters" role="group" aria-label="笔记筛选">{([['all', '全部'], ['bookmark', '书签'], ['annotation', '高亮与批注']] as const).map(([value, label]) => <button key={value} type="button" aria-pressed={noteFilter === value} onClick={() => { setNoteFilter(value); setDeleteId(''); }}>{label}</button>)}</div>
         <ul className="reading-note-list">{visibleNotes.map(note => <li key={note.id}>
           <button className="reading-note-open" disabled={saving} onClick={() => void action(async () => { await props.navigate(decodeAnchor(note.locator) ?? note.locator); props.onClose(); })}><span className="reading-note-kind">{note.type === 'bookmark' ? '书签' : note.type === 'highlight' ? '高亮' : '批注'}<span>跳转阅读 ›</span></span><strong>{note.text || '书签'}</strong>{note.comment && <span className="reading-note-comment">{note.comment}</span>}</button>
           <div className="reading-note-actions"><button type="button" disabled={saving} onClick={() => { setEditing(note); setComment(note.comment); setColor(note.color || '#ffd54f'); }}>编辑</button><button type="button" disabled={saving} onClick={() => setDeleteId(note.id)}>删除笔记</button></div>

@@ -1,5 +1,6 @@
-import { BookOpen, Clapperboard, Music2, Headphones, ChevronsUpDown, Check } from 'lucide-preact';
-import { render, useEffect, useRef } from '../ui/vendor/preact.ts';
+import { render } from '../shared/ui/render-root.ts';
+import { BookOpen, Clapperboard, Music2, Headphones, ChevronsUpDown, Check } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 const channels = [
     { id: '', label: '阅读', icon: BookOpen },

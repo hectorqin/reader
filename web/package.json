@@ -17,24 +17,34 @@
     "ui:sources": "npm run build && node --import ../server/node_modules/tsx/dist/loader.mjs tools/ui-review/host-source-flow.mjs"
   },
   "dependencies": {
+    "@mantine/core": "^8.3.5",
+    "@mantine/hooks": "^8.3.5",
+    "@mantine/notifications": "^8.3.5",
     "@tanstack/query-core": "^5.104.0",
+    "@tanstack/react-query": "^5.90.5",
     "dplayer": "^1.27.1",
     "fast-xml-parser": "^4.5.1",
     "jszip": "^3.10.1",
-    "lucide-preact": "^1.47.0",
+    "lucide-react": "^0.468.0",
     "notyf": "^3.10.0",
-    "sweetalert2": "^11.26.25"
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.9.4",
+    "sweetalert2": "^11.26.25",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@types/jsdom": "^30.0.0",
     "@types/node": "^22.20.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
     "clipper-lib": "^6.4.2",
     "jsdom": "^30.0.1",
     "playwright": "^1.63.0",
-    "preact": "^10.29.8",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.0.7",
-    "vitest": "^2.1.8"
+    "vitest": "^3.2.4"
   }
 }

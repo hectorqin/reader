@@ -1,0 +1,12 @@
+import { useEffect, useState } from 'react';
+import type {Item,MediaApi} from '../api/media-api.ts';
+import {Ellipsis} from 'lucide-react';
+import {MediaScreenError} from './screen-error.tsx';
+import {MediaLoading} from './loading.tsx';
+export function ArtistTracks({api,artist,onPlay,onDetail}:{api:MediaApi;artist:Item;onPlay:(id:string)=>Promise<void>;onDetail:(id:string)=>void}){
+  const [items,setItems]=useState<Item[]>([]),[total,setTotal]=useState(0),[offset,setOffset]=useState(0),[loading,setLoading]=useState(true),[error,setError]=useState<unknown>(),[retry,setRetry]=useState(0),[busy,setBusy]=useState(false);
+  useEffect(()=>{const abort=new AbortController();setLoading(true);setError(undefined);void api.items(artist.libraryId,'track','',offset,abort.signal,'default',{artist:artist.title}).then(result=>{if(!abort.signal.aborted){setItems(result.items);setTotal(result.total);}}).catch(cause=>{if(!abort.signal.aborted)setError(cause);}).finally(()=>{if(!abort.signal.aborted)setLoading(false);});return()=>abort.abort();},[api,artist.id,artist.title,artist.libraryId,offset,retry]);
+  async function play(id:string){setBusy(true);try{await onPlay(id);}catch(cause){setError(cause);}finally{setBusy(false);}}
+  if(!loading&&!error&&!total)return null;
+  return <section className="media-artist-tracks" aria-label="歌手曲目"><h2>曲目{total>0&&<small> · {total} 首</small>}</h2>{loading?<MediaLoading layout="tracks" count={3}/>:error?<MediaScreenError error={error} message={error instanceof Error?error.message:'曲目暂时无法读取'} busy={busy} onRetry={()=>setRetry(retry+1)}/>:<><div className="media-track-list">{items.map((item,index)=><div className="media-track-entry" key={item.id}><span className="media-track-number">{String(offset+index+1).padStart(2,'0')}</span><button className="media-track-copy" disabled={busy} aria-label={'播放 '+item.title} onClick={()=>void play(item.id)}><strong>{item.title}</strong><small>{String(item.overrides.artist??item.metadata.artist??artist.title)}</small></button><button className="media-track-detail" aria-label={'查看 '+item.title+' 详情'} onClick={()=>onDetail(item.id)}><Ellipsis size={18} aria-hidden="true"/></button></div>)}</div>{total>60&&<nav className="media-toolbar" aria-label="歌手曲目分页"><button disabled={!offset} onClick={()=>setOffset(Math.max(0,offset-60))}>上一页</button><span>{Math.floor(offset/60)+1} / {Math.ceil(total/60)}</span><button disabled={offset+60>=total} onClick={()=>setOffset(offset+60)}>下一页</button></nav>}</>}</section>;
+}

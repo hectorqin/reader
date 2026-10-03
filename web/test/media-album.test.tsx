@@ -1,7 +1,8 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import {afterEach,expect,it,vi} from 'vitest';
-import {act} from 'preact/test-utils';
-import {render} from '../src/ui/vendor/preact.ts';
+import {act} from 'react';
+
 import {AlbumPlayback,albumQueue,type AlbumTrack} from '../src/media/album-playback.tsx';
 import type {MediaApi} from '../src/media/api.ts';
 const track=(id:string,versions=1,available=true):AlbumTrack=>({id,title:id,disc:1,track:1,editions:Array.from({length:versions},(_,i)=>({id:id+i,label:'版本'+i,parts:[{id:id+'p'+i,assetId:id,title:id,start:0,end:10,available}]}))});

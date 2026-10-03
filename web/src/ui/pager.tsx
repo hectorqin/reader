@@ -40,7 +40,7 @@
  */
 
 import { Icon } from './toolkit.tsx';
-import type { JSX } from './vendor/preact.ts';
+import type { JSX } from 'react';
 
 export interface PagerProps {
   page: number;

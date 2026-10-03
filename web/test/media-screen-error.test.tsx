@@ -1,7 +1,8 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import {expect,it,vi} from 'vitest';
-import {render} from 'preact';
-import {act} from 'preact/test-utils';
+
+import {act} from 'react';
 import {ApiError} from '../src/api/errors.ts';
 import {MediaScreenError} from '../src/media/screen-error.tsx';
 

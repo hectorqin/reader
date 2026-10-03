@@ -1,4 +1,4 @@
-import { useEffect, useState } from './vendor/preact.ts';
+import { useEffect, useState } from 'react';
 import type { ReaderApi } from '../api/client.ts';
 import type { ManagedUser, RegistrationSettings } from '../api/types.ts';
 import { Modal } from './modal.tsx';

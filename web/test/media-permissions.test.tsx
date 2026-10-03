@@ -1,7 +1,8 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { act } from 'preact/test-utils';
-import { render } from '../src/ui/vendor/preact.ts';
+import { act } from 'react';
+
 import { MediaPermissions } from '../src/media/permissions.tsx';
 import type { MediaApi } from '../src/media/api.ts';
 import {ApiError} from '../src/api/errors.ts';

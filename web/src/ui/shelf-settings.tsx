@@ -23,7 +23,7 @@
 
 import type { AppSettings } from '../store/settings.ts';
 import { Button, IconButton, SectionTitle, Segmented, SwitchRow } from './toolkit.tsx';
-import { type JSX, useLayoutEffect, useRef } from './vendor/preact.ts';
+import { type JSX, useLayoutEffect, useRef } from 'react';
 
 export const DENSITY_LABELS: Record<AppSettings['shelfDensity'], string> = {
   compact: '紧凑',

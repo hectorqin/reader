@@ -1,3 +1,4 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -7,7 +8,7 @@ import { GLYPHS } from '../tools/icons/paths.mjs';
 import { pathToSubpaths } from '../tools/icons/path.mjs';
 import { Icon } from '../src/ui/icon.tsx';
 import { IconButton } from '../src/ui/toolkit.tsx';
-import { render } from '../src/ui/vendor/preact.ts';
+
 
 /**
  * The icon set's contract with the font.
@@ -387,8 +388,6 @@ describe('the stylesheet', () => {
     // builds its own markup is where that gets forgotten.
     const sources = [
       'toolkit.tsx',
-      'shelf-screen.tsx',
-      'library-screen.tsx',
       'reader-chrome.tsx',
       'shelf-settings.tsx',
       'dialog.tsx',

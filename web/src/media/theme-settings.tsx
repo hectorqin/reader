@@ -1,5 +1,5 @@
-import {useState} from '../ui/vendor/preact.ts';
-import {Check,Monitor} from 'lucide-preact';
+import { useState } from 'react';
+import {Check,Monitor} from 'lucide-react';
 import {mediaThemes,saveMediaTheme,type MediaThemeId} from './theme.ts';
 
 export function MediaThemeSettings({scope,selected,onChange}:{scope:string;selected:MediaThemeId;onChange:(theme:MediaThemeId)=>void}){

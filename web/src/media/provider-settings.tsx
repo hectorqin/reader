@@ -1,5 +1,5 @@
-import {useEffect,useState} from '../ui/vendor/preact.ts';
-import {ChevronRight,FileText,Search} from 'lucide-preact';
+import { useEffect, useState } from 'react';
+import {ChevronRight,FileText,Search} from 'lucide-react';
 import type {MediaApi} from './api.ts';
 import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';

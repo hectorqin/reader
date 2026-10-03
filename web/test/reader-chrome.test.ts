@@ -1,3 +1,4 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 /**
  * The reader's chrome, as a function of its state.
@@ -12,7 +13,7 @@
  *    the voice at all (没法停止).
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createElement as h, render } from '../src/ui/vendor/preact.ts';
+import { createElement as h } from 'react';
 import { ReaderChrome, type ChromeState, type ChromeHandlers } from '../src/ui/reader-chrome.tsx';
 
 function chromeState(overrides: Partial<ChromeState> = {}): ChromeState {

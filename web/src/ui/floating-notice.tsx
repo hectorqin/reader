@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from './vendor/preact.ts';
+import { useLayoutEffect, useRef } from 'react';
 import { dismissNotice, notify, type NoticeKind } from './notifications.ts';
 
 /** Renderless bridge for state-driven screens; all messages use the global host. */

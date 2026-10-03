@@ -1,7 +1,8 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { act } from 'preact/test-utils';
-import { render } from '../src/ui/vendor/preact.ts';
+import { act } from 'react';
+
 import { MediaSearch, searchReturnFor } from '../src/media/search.tsx';
 import type { MediaApi, SearchItem } from '../src/media/api.ts';
 

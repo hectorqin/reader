@@ -16,10 +16,9 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "noEmit": true,
-    // The UI layer is Preact components; the render layer is still imperative DOM
-    // work and stays TS. Both compile out of this one config.
+    // React owns the application UI; the reader and media engines retain
+    // imperative DOM internals behind explicit React lifecycle boundaries.
     "jsx": "react-jsx",
-    "jsxImportSource": "preact"
   },
   "include": ["src", "test", "vite.config.ts"]
 }

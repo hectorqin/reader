@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from './vendor/preact.ts';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { OpdsCredential } from '../api/sources.ts';
 import { Modal } from './modal.tsx';

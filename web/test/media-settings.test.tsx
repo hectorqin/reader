@@ -1,7 +1,8 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import {afterEach,expect,it,vi} from 'vitest';
-import {act} from 'preact/test-utils';
-import {render} from '../src/ui/vendor/preact.ts';
+import {act} from 'react';
+
 import {MediaSettings} from '../src/media/settings.tsx';
 import {defaultMediaPreferences,readMediaPreferences,saveMediaPreferences} from '../src/media/preferences.ts';
 import type {MediaPlayer} from '../src/media/player.ts';

@@ -1,6 +1,6 @@
-import {useEffect,useMemo,useRef,useState} from './vendor/preact.ts';
-import type {JSX} from './vendor/preact.ts';
-import {ChevronDown,Check,Search} from 'lucide-preact';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { JSX } from 'react';
+import {ChevronDown,Check,Search} from 'lucide-react';
 
 export interface SearchableSelectOption { value:string; label:string }
 export function SearchableSelect({label,value,options,disabled,onChange}:{label:string;value:string;options:SearchableSelectOption[];disabled?:boolean;onChange:(value:string)=>void}):JSX.Element {
@@ -10,7 +10,7 @@ export function SearchableSelect({label,value,options,disabled,onChange}:{label:
   const selected=options.find(option=>option.value===value), filtered=useMemo(()=>{const text=query.trim().toLocaleLowerCase();return text?options.filter(option=>option.label.toLocaleLowerCase().includes(text)):options},[options,query]);
   return <div className="searchable-select" ref={ref}>
     <span className="searchable-select-label">{label}</span>
-    <select aria-label={label} className="searchable-select-native" value={value} disabled={disabled} onChange={event=>onChange(event.currentTarget.value)}>{!options.some(option=>option.value==='')&&<option value="" disabled>请选择一个来源</option>}{options.map(option=><option value={option.value}>{option.label}</option>)}</select>
+    <select aria-label={label} className="searchable-select-native" value={value} disabled={disabled} onChange={event=>onChange(event.currentTarget.value)}>{!options.some(option=>option.value==='')&&<option key="empty" value="" disabled>请选择一个来源</option>}{options.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
     <button type="button" className="searchable-select-trigger" aria-label={label} aria-haspopup="listbox" aria-expanded={open} disabled={disabled} onClick={()=>{setOpen(!open);setQuery('')}}>
       <span>{selected?.label??label}</span><ChevronDown size={16} aria-hidden="true"/>
     </button>

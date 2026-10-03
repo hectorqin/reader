@@ -1,10 +1,10 @@
-import { type ComponentChildren, useLayoutEffect, useRef } from './vendor/preact.ts';
+import { type ReactNode, useLayoutEffect, useRef } from 'react';
 import { IconButton } from './toolkit.tsx';
 import { placeNotifications } from './notifications.ts';
 
 /** Native modal supplies focus containment and makes the background inert. */
 export function Modal({ title, busy, onClose, children, className }: {
-  title: string; busy: boolean; onClose(): void; children: ComponentChildren; className?: string;
+  title: string; busy: boolean; onClose(): void; children: ReactNode; className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useLayoutEffect(() => {

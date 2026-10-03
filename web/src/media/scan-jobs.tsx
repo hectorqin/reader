@@ -1,5 +1,5 @@
-import { RefreshCw, Trash2, X } from 'lucide-preact';
-import { useState } from '../ui/vendor/preact.ts';
+import { RefreshCw, Trash2, X } from 'lucide-react';
+import { useState } from 'react';
 import type { Library, ScanJob } from './api.ts';
 import { scanFeedback } from './scan-feedback.ts';
 

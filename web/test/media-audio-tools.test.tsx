@@ -1,7 +1,8 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
-import { act } from 'preact/test-utils';
-import { render } from '../src/ui/vendor/preact.ts';
+import { act } from 'react';
+
 import { PlaybackControls } from '../src/media/playback-controls.tsx';
 import { PlaybackFavorite } from '../src/media/audio-tools.tsx';
 import type { MediaApi, Detail } from '../src/media/api.ts';

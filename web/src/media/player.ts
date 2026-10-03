@@ -1,7 +1,8 @@
+import { render } from '../shared/ui/render-root.ts';
 import {MiniNowPlaying} from './mini-now-playing.tsx';
 import {readPlaybackPreferences} from './playback-preferences.ts';
-import {createElement,render} from '../ui/vendor/preact.ts';
-import {Play,Pause,X} from 'lucide-preact';
+import { createElement } from 'react';
+import {Play,Pause,X} from 'lucide-react';
 import { MediaApi } from './api.ts';
 import type { Part, Playback, Progress } from './api.ts';
 import { PlaybackLease } from './playback-lease.ts';

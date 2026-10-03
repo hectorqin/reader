@@ -1,5 +1,5 @@
-import {useEffect,useRef,useState} from '../ui/vendor/preact.ts';
-import {Settings2} from 'lucide-preact';
+import { useEffect, useRef, useState } from 'react';
+import {Settings2} from 'lucide-react';
 import './folder-recognition.css';
 import {Modal} from '../ui/modal.tsx';
 import {FloatingConfirm} from '../ui/floating-confirm.tsx';
@@ -46,7 +46,7 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied,
       <p className="media-folder-note">{path||'库内根目录'} · 包含子目录，子目录自己的规则优先。目录内文件统一应用下方文件正则。规则保存后用于后续扫描；已有作品通过下方预览确认重新识别。</p>
       {inherited&&<p>继承自「{inherited.path||'库内根目录'}」：{labels[inherited.mode]}{inherited.title?' · '+inherited.title:''}</p>}
       {error&&<p className="media-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
-      <label>解析类型<MediaSelect aria-label="解析类型" disabled={busy||!revision} value={mode} onChange={e=>{setMode(e.currentTarget.value as Mode|'inherit');invalidate();}}><option value="inherit">继承上级（无上级则自动）</option>{Object.entries(labels).map(([value,label])=><option value={value}>{label}</option>)}</MediaSelect></label>
+      <label>解析类型<MediaSelect aria-label="解析类型" disabled={busy||!revision} value={mode} onChange={e=>{setMode(e.currentTarget.value as Mode|'inherit');invalidate();}}><option value="inherit">继承上级（无上级则自动）</option>{Object.entries(labels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</MediaSelect></label>
       {(mode==='series'||mode==='season')&&<>
         <label>剧名<input aria-label="剧名" disabled={busy} maxLength={200} value={title} placeholder="留空使用上级剧名或目录名" onInput={e=>{setTitle(e.currentTarget.value);invalidate();}}/></label>
         <label>{mode==='season'?'季/版本名称（必填）':'默认季/版本名称（可选）'}<input aria-label="季/版本名称" disabled={busy} value={season} placeholder="如：第1季、特别版、4K版、OVA" onInput={e=>{setSeason(e.currentTarget.value);invalidate();}}/></label>

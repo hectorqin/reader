@@ -1,7 +1,8 @@
+import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { act } from 'preact/test-utils';
-import { createElement as h, render } from '../src/ui/vendor/preact.ts';
+import { act } from 'react';
+import { createElement as h } from 'react';
 import { ReaderIndicators } from '../src/ui/reader-indicators.tsx';
 import type { ChromeState } from '../src/ui/reader-chrome.tsx';
 import { SettingsStore } from '../src/store/settings.ts';
