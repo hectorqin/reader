@@ -56,14 +56,18 @@ export function LibraryBrowsePage() {
 
 /** Administrator-only file manager. All mutations are explicit and scoped to selected paths. */
 export function LibraryFilesPage() {
+  const role = useAuthStore(state => state.verifiedUser?.role);
+  if (role !== 'admin') return <Stack p="md"><Alert color="red" title="无权访问">文件管理需要管理员权限。</Alert><Button component={Link} to="/library">返回书库</Button></Stack>;
+  return <LibraryFilesAdminPage />;
+}
+
+function LibraryFilesAdminPage() {
   const runtime = useRuntime();
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const path = params.get('path') ?? '';
   const page = Math.max(1, Number(params.get('page')) || 1);
   const [selected, setSelected] = useState<string[]>([]);
-  const role = useAuthStore(state => state.verifiedUser?.role);
-  if (role !== 'admin') return <Stack p="md"><Alert color="red" title="无权访问">文件管理需要管理员权限。</Alert><Button component={Link} to="/library">返回书库</Button></Stack>;
   const query = useQuery({ queryKey: ['library-files', runtime.api.baseUrl, path, page], queryFn: ({ signal }) => runtime.api.browse(path, page, { signal }) });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['library-files'] });
   const go = (next: string, p = 1) => setParams({ ...(next ? { path: next } : {}), ...(p > 1 ? { page: String(p) } : {}) });

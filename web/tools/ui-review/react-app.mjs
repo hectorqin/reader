@@ -20,7 +20,7 @@ const output = process.env.UI_REVIEW_DIR
   ? resolve(process.env.UI_REVIEW_DIR)
   : join(repo, 'artifacts', 'ui-review', 'react-app');
 const widths = [390, 1120];
-const height = 844;
+const heightFor = width => width === 1120 ? 900 : 844;
 
 const waitForServerLine = (child, label) => new Promise((resolvePromise, reject) => {
   let buffer = '';
@@ -53,7 +53,7 @@ async function startMediaFixture() {
   const loader = join(repo, 'server', 'node_modules', 'tsx', 'dist', 'loader.mjs');
   const child = spawn(process.execPath, ['--import', pathToFileURL(loader).href, join(repo, 'server', 'tools', 'media-review-fixture.ts')], {
     cwd: repo,
-    env: { ...process.env, MEDIA_REVIEW_TIMEOUT_MS: '600000' },
+    env: { ...process.env, MEDIA_REVIEW_TIMEOUT_MS: '600000', MEDIA_REVIEW_MEMBER: '1' },
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -71,17 +71,23 @@ async function login(page, origin, target = '/#/shelf') {
   const username = page.locator('input[autocomplete="username"]');
   await Promise.race([
     username.waitFor({ state: 'visible' }).catch(() => undefined),
-    page.locator('.shelf-screen, .media-app-nav').first().waitFor({ state: 'attached' }).catch(() => undefined),
+    page.locator('.shelf-screen, .media-channel-entry, .media-screen').first().waitFor({ state: 'attached' }).catch(() => undefined),
   ]);
   if (await username.isVisible().catch(() => false)) {
     await username.fill('reviewer');
     await page.locator('input[type="password"]').fill('review-test-pass');
     await page.locator('form button[type="submit"]').click();
   }
-  await page.locator('.shelf-screen, .media-app-nav').first().waitFor({ state: 'attached' });
+  await page.locator('.shelf-screen, .media-channel-entry, .media-screen').first().waitFor({ state: 'attached' });
 }
 
 async function installReaderApiStubs(page) {
+  await page.route('**/api/v1/library/facets**', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ authors: [], series: [], formats: [] }) });
+  });
+  await page.route('**/api/v1/books/*/reading-overrides**', async route => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+  });
   await page.route('**/api/v1/admin/settings**', async route => {
     const url = new URL(route.request().url());
     if (route.request().method() !== 'GET') {
@@ -106,8 +112,9 @@ async function installReaderApiStubs(page) {
   });
 }
 
-async function capture(page, name, checks, errors) {
+async function capture(page, name, checks, errors = []) {
   for (const width of widths) {
+    const height = heightFor(width);
     await page.setViewportSize({ width, height });
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(120);
@@ -130,11 +137,23 @@ async function capture(page, name, checks, errors) {
 }
 
 async function waitHeading(page, name) {
-  await page.getByRole('heading', { name, exact: true }).first().waitFor();
+  try {
+    await page.locator('h1').filter({ hasText: name }).first().waitFor({ state: 'visible' });
+  } catch (error) {
+    try {
+      await page.getByText(name, { exact: true }).first().waitFor({ state: 'visible' });
+    } catch {
+      throw new Error(`${name} heading missing at ${page.url()} body=${(await page.locator('body').innerText()).slice(0, 2000)}\n${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+}
+
+async function waitMediaHeading(page, name) {
+  await page.locator('.media-screen h1').filter({ hasText: name }).first().waitFor({ state: 'attached' });
 }
 
 async function runReaderReview(browser, origin, checks, errors) {
-  const context = await browser.newContext({ viewport: { width: 390, height }, isMobile: true, hasTouch: true });
+  const context = await browser.newContext({ viewport: { width: 390, height: heightFor(390) }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   page.setDefaultTimeout(15_000);
   page.on('pageerror', error => errors.push({ page: 'reader', message: error.message }));
@@ -148,6 +167,18 @@ async function runReaderReview(browser, origin, checks, errors) {
   await page.goto(`${origin}/#/library`);
   await waitHeading(page, '书库');
   await capture(page, 'library', checks, errors);
+  await page.goto(`${origin}/#/library/files`);
+  await waitHeading(page, '文件管理');
+  // File-manager selection is local UI state; exercise it before taking the
+  // screenshot so the route review covers the actual administrator affordance.
+  const fileRows = page.locator('table tbody input[type="checkbox"]');
+  if (await fileRows.count()) {
+    await fileRows.first().check();
+    await page.getByText(/已选 1 项/).waitFor({ state: 'visible' });
+    await page.getByRole('button', { name: '清除' }).click();
+    assert.equal(await page.getByText(/已选 1 项/).count(), 0);
+  }
+  await capture(page, 'library-files', checks, errors);
   await page.goto(`${origin}/#/settings`);
   await waitHeading(page, '设置');
   await capture(page, 'settings', checks, errors);
@@ -164,26 +195,43 @@ async function runReaderReview(browser, origin, checks, errors) {
   await context.close();
 }
 
-async function runMediaReview(browser, origin, checks, errors) {
-  const context = await browser.newContext({ viewport: { width: 390, height }, isMobile: true, hasTouch: true });
+async function loginAs(page, origin, username) {
+  await page.goto(`${origin}/#/media/video`, { waitUntil: 'domcontentloaded' });
+  const user = page.locator('input[autocomplete="username"]');
+  if (await user.isVisible().catch(() => false)) {
+    await user.fill(username);
+    await page.locator('input[type="password"]').fill('review-test-pass');
+    await page.locator('form button[type="submit"]').click();
+  }
+  await page.locator('.media-screen, .media-channel-entry').first().waitFor({ state: 'attached' });
+}
+
+async function runMediaReview(browser, fixture, checks, errors) {
+  const origin = fixture.baseUrl;
+  const context = await browser.newContext({ viewport: { width: 390, height: heightFor(390) }, isMobile: true, hasTouch: true });
   const page = await context.newPage();
   page.setDefaultTimeout(15_000);
   page.on('pageerror', error => errors.push({ page: 'media', message: error.message }));
+  const apiFailures = [];
   page.on('response', response => {
     if (response.status() >= 400 && response.url().includes('/api/')) {
+      apiFailures.push({ status: response.status(), method: response.request().method(), url: response.url() });
       console.warn(`media API ${response.status()} ${response.request().method()} ${response.url()}`);
     }
   });
   page.on('requestfailed', request => console.warn(`media request failed ${request.url()} ${request.failure()?.errorText ?? ''}`));
   await page.route('**/api/v1/sync**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ serverTime: Date.now(), progress: [], notes: [] }) }));
-  await page.route('**/api/v1/admin/users**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ users: [{ id: 'reviewer', username: 'reviewer', displayName: '评测', role: 'admin' }] }) }));
+  await page.route('**/api/v1/admin/users**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ users: [
+    { id: 'reviewer', username: 'reviewer', displayName: '评测', role: 'admin' },
+    { id: fixture.reviewMemberId, username: 'review-member', displayName: '林间', role: 'member' },
+  ] }) }));
   await login(page, origin, '/#/media/video');
   const pages = [
     ['media-video', '/#/media/video', '影视', '.media-grid'],
     ['media-music', '/#/media/music', '音乐', '.media-screen'],
     ['media-audiobook', '/#/media/audiobook', '有声书', '.media-screen'],
     ['media-detail', '/#/media/video/items/review-film', '人工保留标题', '.media-detail-page'],
-    ['media-favorites', '/#/media/favorites', '我的收藏', '.media-grid'],
+    ['media-favorites', '/#/media/favorites', '我的收藏', '.media-favorite-list'],
     ['media-history', '/#/media/video/history', '播放历史', '.media-screen'],
     ['media-queue', '/#/media/queue', '待播队列', '.media-screen'],
     ['media-folders', '/#/media/video/folders/review-lib', '文件夹浏览', '.media-folders'],
@@ -192,7 +240,7 @@ async function runMediaReview(browser, origin, checks, errors) {
   ];
   for (const [name, path, heading, target] of pages) {
     await page.goto(`${origin}${path}`);
-    await waitHeading(page, heading);
+    await waitMediaHeading(page, heading);
     try {
       await page.locator(target).first().waitFor({ state: 'attached' });
     } catch (error) {
@@ -200,6 +248,105 @@ async function runMediaReview(browser, origin, checks, errors) {
     }
     await capture(page, name, checks, errors);
   }
+
+  // Submit a real search form and assert the query result, rather than only
+  // checking that the search route can be deep-linked.
+  await page.goto(`${origin}/#/media/search`);
+  await waitMediaHeading(page, '搜索');
+  await page.locator('input[name="q"]').fill('收藏电影001');
+  await page.locator('.media-search button[type="submit"]').click();
+  await page.waitForURL(/#\/media\/search\?q=/);
+  await page.getByText('收藏电影001', { exact: true }).first().waitFor({ state: 'visible' });
+  await capture(page, 'media-search', checks, errors);
+
+  // 65 fixture favorites exercise filter + the 60/5 pagination boundary + detail.
+  await page.goto(`${origin}/#/media/favorites`);
+  await waitMediaHeading(page, '我的收藏');
+  await page.getByRole('button', { name: '筛选收藏' }).click();
+  await page.getByRole('button', { name: '影视' }).last().click();
+  await page.waitForURL(/scope=video/);
+  assert.match(await page.locator('.media-favorite-tools').innerText(), /影视/);
+  await page.getByRole('button', { name: '下一页' }).click();
+  await page.waitForURL(/offset=60/);
+  await page.getByText('收藏电影061', { exact: true }).waitFor({ state: 'visible' });
+  await page.locator('.media-favorite-row').first().click();
+  await page.locator('.media-detail-page').waitFor({ state: 'attached' });
+  await capture(page, 'media-favorites-detail', checks, errors);
+
+  // Detail favorite is a real PUT and is then reverted to keep the disposable
+  // fixture deterministic for any subsequent assertions.
+  await page.goto(`${origin}/#/media/video/items/review-film`);
+  await waitMediaHeading(page, '人工保留标题');
+  let write = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().includes('/favorite'));
+  await page.getByRole('button', { name: '收藏', exact: true }).click();
+  assert.equal((await write).status(), 200);
+  await page.getByRole('button', { name: '取消收藏', exact: true }).waitFor({ state: 'visible' });
+  write = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().includes('/favorite'));
+  await page.getByRole('button', { name: '取消收藏', exact: true }).click();
+  assert.equal((await write).status(), 200);
+
+  // Detail -> POST /playback -> routed player (the fixture has an available
+  // disposable part, so this is the actual playback path).
+  const playback = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/playback'));
+  await page.getByRole('button', { name: '播放', exact: true }).click();
+  assert.equal((await playback).status(), 201);
+  await page.waitForURL(/#\/media\/video\/player/);
+  await page.locator('.media-player-page').waitFor({ state: 'attached' });
+  await capture(page, 'media-player', checks, errors);
+
+  // Permissions: PUT then reopen and read the persisted GET response.
+  await page.goto(`${origin}/#/media/video/settings/libraries/review-lib/permissions`);
+  await waitMediaHeading(page, '访问权限');
+  await page.locator('select[aria-label="访问范围"]').selectOption('restricted');
+  await page.locator('.media-user-option').filter({ hasText: '林间' }).locator('input[type="checkbox"]').check();
+  const accessPut = page.waitForResponse(r => r.request().method() === 'PUT' && r.url().endsWith('/access'));
+  await page.getByRole('button', { name: '保存权限', exact: true }).click();
+  const accessResponse = await accessPut;
+  assert.equal(accessResponse.status(), 204, `permission save failed: ${await accessResponse.text()}`);
+  await page.waitForURL(/#\/media\/video\/settings\/libraries$/);
+  await page.goto(`${origin}/#/media/video/settings/libraries/review-lib/permissions`);
+  await page.locator('select[aria-label="访问范围"]').waitFor({ state: 'attached' });
+  assert.equal(await page.locator('select[aria-label="访问范围"]').inputValue(), 'restricted');
+  assert.equal(await page.locator('.media-user-option').filter({ hasText: '林间' }).locator('input[type="checkbox"]').isChecked(), true);
+  await capture(page, 'media-permissions-saved', checks, errors);
+
+  // Existing library PATCH.
+  await page.goto(`${origin}/#/media/video/settings/libraries/review-lib/edit`);
+  await waitMediaHeading(page, '编辑媒体库');
+  await page.locator('input[name="name"]').fill('候选审阅测试库（已编辑）');
+  const libraryPatch = page.waitForResponse(r => r.request().method() === 'PATCH' && r.url().endsWith('/review-lib'));
+  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  const libraryPatchResponse = await libraryPatch;
+  assert.equal(libraryPatchResponse.status(), 200);
+  assert.equal((await libraryPatchResponse.json()).name, '候选审阅测试库（已编辑）');
+  await page.waitForURL(/#\/media\/video\/settings\/libraries$/);
+
+  // New library POST + scan against the fixture's own temporary root.
+  await page.goto(`${origin}/#/media/video/settings/libraries/new`);
+  await waitMediaHeading(page, '新建媒体库');
+  await page.locator('input[name="name"]').fill('UI审阅新建库');
+  await page.locator('input[name="root"]').fill(fixture.reviewRoot);
+  await page.locator('select[name="access"]').selectOption('all');
+  const createPost = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/libraries'));
+  await page.getByRole('button', { name: '创建并扫描', exact: true }).click();
+  assert.equal((await createPost).status(), 201);
+  await page.getByRole('status').filter({ hasText: '已创建' }).waitFor({ state: 'visible' });
+
+  // Member session: browse allowed content; administrator settings denied.
+  const memberContext = await browser.newContext({ viewport: { width: 390, height: heightFor(390) }, isMobile: true, hasTouch: true });
+  const memberPage = await memberContext.newPage();
+  memberPage.setDefaultTimeout(15_000);
+  await memberPage.route('**/api/v1/sync**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ serverTime: Date.now(), progress: [], notes: [] }) }));
+  await loginAs(memberPage, origin, 'review-member');
+  await memberPage.goto(`${origin}/#/media/video`);
+  try {
+    await memberPage.getByText('review-film', { exact: true }).waitFor({ state: 'visible' });
+  } catch (error) {
+    throw new Error(`member cannot browse granted library: ${(await memberPage.locator('body').innerText()).slice(0, 1800)}\n${error instanceof Error ? error.message : String(error)}`);
+  }
+  await memberPage.goto(`${origin}/#/media/video/settings/libraries`);
+  await memberPage.getByText('需要管理员权限。', { exact: true }).waitFor({ state: 'visible' });
+  await memberContext.close();
   // Back/forward must remain inside the hash router and keep the target page.
   await page.goto(`${origin}/#/media/video`);
   await page.goto(`${origin}/#/media/music`);
@@ -207,6 +354,7 @@ async function runMediaReview(browser, origin, checks, errors) {
   assert.equal(new URL(page.url()).hash, '#/media/video');
   await page.goForward();
   assert.equal(new URL(page.url()).hash, '#/media/music');
+  assert.deepEqual(apiFailures, [], `media API failures: ${JSON.stringify(apiFailures)}`);
   await context.close();
 }
 
@@ -223,7 +371,7 @@ try {
   mediaServer = await startMediaFixture();
   browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
   await runReaderReview(browser, readerOrigin, checks, errors);
-  await runMediaReview(browser, mediaServer.baseUrl, checks, errors);
+  await runMediaReview(browser, mediaServer, checks, errors);
   assert.deepEqual(errors, [], `browser page errors: ${JSON.stringify(errors)}`);
   const report = { passed: true, screenshots: checks.length, checks, pageErrors: errors };
   await writeFile(join(output, 'verification.json'), JSON.stringify(report, null, 2));

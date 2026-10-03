@@ -708,6 +708,12 @@ export function createReviewServer({ port = 5199 } = {}) {
      * against a missing endpoint is a screenshot of an error line — which is a real
      * defect in a review harness (it certifies a screen nobody has seen).
      */
+    if (path === '/api/v1/library/facets') {
+      return json(res, { authors: [AUTHOR], series: [], tags: [], formats: ['txt', 'epub'] });
+    }
+    if (/^\/api\/v1\/books\/[^/]+\/reading-overrides$/.test(path)) {
+      return json(res, { version: 0, corrections: [], headingPrefix: '' });
+    }
     if (path === '/api/v1/library/browse') {
       const dir = url.searchParams.get('path') ?? '';
       const page = Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1;

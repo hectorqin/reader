@@ -16,6 +16,7 @@ function AuthenticatedShell() {
   const location = useLocation();
   const navigate = useNavigate();
   const reading = location.pathname.startsWith('/book/');
+  const media = location.pathname.startsWith('/media');
   useEffect(() => {
     const openControls = () => {
       const state = runtime.playback.snapshot();
@@ -26,7 +27,7 @@ function AuthenticatedShell() {
   }, [runtime, navigate]);
   useEffect(() => runtime.player.setVisible(location.pathname.startsWith('/media/')), [runtime, location.pathname]);
   return <>
-    {!reading && <header className="app-global-nav" aria-label="主导航">
+    {!reading && !media && <header className="app-global-nav" aria-label="主导航">
       <Link to="/shelf">书架</Link><Link to="/library">书库</Link><Link to="/sources">书源</Link><Link to="/media/video">影音</Link><Link to="/settings">设置</Link>
       <span style={{ marginInlineStart: 'auto' }}>{user?.displayName || user?.username || ''}</span>
       <button type="button" onClick={() => void runtime.api.signOut()}>退出登录</button>
@@ -42,10 +43,19 @@ export function AuthBoundary({ children }: { children?: ReactNode }) {
 }
 
 export function MediaLayout() {
+  const location = useLocation();
+  const current = location.pathname.startsWith('/media/music')
+    ? 'music'
+    : location.pathname.startsWith('/media/audiobook')
+      ? 'audiobook'
+      : 'video';
   return <>
-    <nav className="media-app-nav" aria-label="影音导航">
-      <Link to="/media/video">影视</Link><Link to="/media/music">音乐</Link><Link to="/media/audiobook">有声书</Link>
-      <Link to="/media/search">搜索</Link><Link to="/media/favorites">收藏</Link><Link to="/media/video/history">历史</Link>
+    <nav className="media-channel-entry" aria-label="主导航">
+      <span className="media-brand" aria-hidden="true">reader.</span>
+      <Link to="/shelf">阅读</Link>
+      <Link to="/media/video" aria-current={current === 'video' ? 'page' : undefined}>影视</Link>
+      <Link to="/media/music" aria-current={current === 'music' ? 'page' : undefined}>音乐</Link>
+      <Link to="/media/audiobook" aria-current={current === 'audiobook' ? 'page' : undefined}>有声书</Link>
     </nav>
     <Outlet />
   </>;

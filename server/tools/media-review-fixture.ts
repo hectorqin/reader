@@ -1,6 +1,6 @@
 /** Disposable HTTP fixture: real routes/database; only the remote metadata provider is synthetic. */
 import Fastify from 'fastify';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { Db } from '../src/db/index.ts';
@@ -17,12 +17,14 @@ import {MediaScanner} from '../src/media/scanner.ts';
 
 const root=await mkdtemp(join(tmpdir(),'media-review-'));
 await mkdir(join(root,'books'));
+await writeFile(join(root,'review-film.mp4'), Buffer.from([0, 0, 0, 0]));
 process.env.BOOKS_DIR=join(root,'books');process.env.DATA_DIR=join(root,'data');
 process.env.WEB_DIR=resolve('web/dist');process.env.READER_TOKEN_SECRET='review-fixture-only';
 const config=loadConfig(),db=new Db(':memory:'),app=Fastify({logger:false});
 const users=new UserService(db,config);
 await users.create({username:'reviewer',password:'review-test-pass'});
-if(process.env.MEDIA_REVIEW_MEMBER==='1')await users.create({username:'review-member',password:'review-test-pass',displayName:'林间',role:'member'});
+let reviewMemberId='';
+if(process.env.MEDIA_REVIEW_MEMBER==='1')reviewMemberId=(await users.create({username:'review-member',password:'review-test-pass',displayName:'林间',role:'member'})).id;
 const ctx={config,db,users} as AppContext;
 registerErrorHandler(app);registerAuthRoutes(app,ctx);
 registerMediaRoutes(app,ctx,{metadataProviders:process.env.MEDIA_REVIEW_LIVE_TMDB==='1'?[new TmdbProvider(new MetadataHttp())]:process.env.MEDIA_REVIEW_LIVE_MUSICBRAINZ==='1'?[new MusicBrainzProvider(new MetadataHttp())]:[{
@@ -33,6 +35,11 @@ registerMediaRoutes(app,ctx,{metadataProviders:process.env.MEDIA_REVIEW_LIVE_TMD
 registerWebRoutes(app,ctx);
 db.run("INSERT INTO media_libraries(id,name,kind,root,access,created_at,updated_at) VALUES('review-lib','候选审阅测试库','video',?,'all',0,0)",root);
 db.run("INSERT INTO media_items(id,library_id,kind,local_key,title,metadata_json) VALUES('review-film','review-lib','movie','film','本地电影','{}')");
+// A playable disposable part keeps the browser review on the real playback path
+// (detail -> POST /playback -> player) instead of requiring a production asset.
+db.run("INSERT INTO media_assets(id,library_id,ref,size,modified_at,available,probe_status) VALUES('review-film-asset','review-lib','review-film.mp4',4,0,1,'ready')");
+db.run("INSERT INTO media_editions(id,item_id,local_key,label) VALUES('review-film-edition','review-film','review-film','测试版本')");
+db.run("INSERT INTO media_parts(id,edition_id,asset_id,local_key,title,ordinal,start_seconds,end_seconds) VALUES('review-film-part','review-film-edition','review-film-asset','file','正片',0,0,1)");
 db.run("INSERT INTO media_metadata_overrides(item_id,field,value_json,updated_at) VALUES('review-film','title',?,0)",JSON.stringify('人工保留标题'));
 db.run("INSERT INTO media_items(id,library_id,kind,local_key,title,metadata_json) VALUES('long-film','review-lib','movie','long-film',?,'{}')",'LongUnbrokenMovieTitle'.repeat(8));
 db.run("INSERT INTO media_editions(id,item_id,local_key,label) VALUES('long-edition','long-film','long',?)",'LongUnbrokenEditionName'.repeat(8));
@@ -67,7 +74,7 @@ if(process.env.MEDIA_REVIEW_SAMPLE_PACK){
   }finally{await scanner.close();}
 }
 const baseUrl=await app.listen({host:'127.0.0.1',port:0});
-process.stdout.write(JSON.stringify({baseUrl,sampleItems})+'\n');
+process.stdout.write(JSON.stringify({baseUrl,reviewRoot:root,reviewMemberId,users:users.list(),sampleItems})+'\n');
 let closing=false;
 async function close(){if(closing)return;closing=true;await app.close();db.close();await rm(root,{recursive:true,force:true});process.exit(0);}
 process.stdin.resume();process.stdin.once('data',()=>void close());process.stdin.once('end',()=>void close());
