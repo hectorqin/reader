@@ -75,7 +75,7 @@ export function ResourcePanel({
     >
       <div className="media-resource-dialog">
         {panel === 'files'
-          ? files.map(asset => <ResourceInfo key={asset.id} api={api} assetId={asset.id} title={asset.title} expanded />)
+          ? files.length > 0 ? files.map(asset => <ResourceInfo key={asset.id} api={api} assetId={asset.id} title={asset.title} expanded />) : <p className="media-resource-empty">暂无资源。</p>
           : panel === 'source'
             ? sourceInfo
             : <>{versionPicker}{manage && editionOptions && <EditionTools {...editionOptions} managementOnly />}</>}
