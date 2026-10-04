@@ -42,6 +42,10 @@ db.run("INSERT INTO media_assets(id,library_id,ref,size,modified_at,available,pr
 db.run("INSERT INTO media_editions(id,item_id,local_key,label) VALUES('review-film-edition','review-film','review-film','测试版本')");
 db.run("INSERT INTO media_parts(id,edition_id,asset_id,local_key,title,ordinal,start_seconds,end_seconds) VALUES('review-film-part','review-film-edition','review-film-asset','file','正片',0,0,2)");
 db.run("INSERT INTO media_metadata_overrides(item_id,field,value_json,updated_at) VALUES('review-film','title',?,0)",JSON.stringify('人工保留标题'));
+// Keep one playable video in the recent-history feed so the browse page can
+// exercise the production "continue playing" card.  The larger favorite set
+// below intentionally uses unavailable assets for history/pagination coverage.
+db.run("INSERT INTO media_progress(user_id,part_id,position,completed,revision,session_id,updated_at) VALUES((SELECT id FROM users WHERE username='reviewer'),'review-film-part',1,0,1,'fixture',1735787044000)");
 db.run("INSERT INTO media_items(id,library_id,kind,local_key,title,metadata_json) VALUES('long-film','review-lib','movie','long-film',?,'{}')",'LongUnbrokenMovieTitle'.repeat(8));
 db.run("INSERT INTO media_editions(id,item_id,local_key,label) VALUES('long-edition','long-film','long',?)",'LongUnbrokenEditionName'.repeat(8));
 db.run(`WITH RECURSIVE seq(n) AS(SELECT 1 UNION ALL SELECT n+1 FROM seq WHERE n<65)

@@ -281,6 +281,15 @@ async function runMediaReview(browser, fixture, checks, errors) {
     await capture(page, name, checks, errors);
   }
 
+  // The browse fixture includes one playable, partially watched video.  Keep
+  // this assertion close to the route sweep so the recent continuation card
+  // cannot silently disappear when fixture data or rendering changes.
+  await page.goto(`${origin}/#/media/video?library=review-lib`);
+  await waitMediaHeading(page, '影视');
+  await page.locator('.media-continue').waitFor({ state: 'visible' });
+  assert.match(await page.locator('.media-continue').innerText(), /最近播放/);
+  assert.match(await page.locator('.media-continue').innerText(), /人工保留标题/);
+
   await page.goto(`${origin}/#/media/video/history`);
   await waitMediaHeading(page, '播放历史');
   await page.locator('.media-history-date').first().waitFor({ state: 'visible' });

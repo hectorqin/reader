@@ -20,6 +20,11 @@ it('shows known library, overridden credits and the selected edition duration wi
   expect(root.textContent).toContain('1 章');expect(root.textContent).not.toContain('小时');expect(root.textContent).not.toContain('0 秒');
 });
 
+it('does not render a zero duration for an empty edition',()=>{
+  act(()=>render(<MediaDetailHeading item={{...item,kind:'movie',title:'无资源电影'}} edition={{...edition,label:'空版本',parts:[]}}/>,root));
+  expect(root.textContent).not.toContain('0 秒');
+});
+
 it('offers explicit alternate-version and refresh actions for a wholly missing edition',()=>{
   const refresh=vi.fn(),choose=vi.fn(),play=vi.fn();
   act(()=>render(<EditionDetails api={{} as MediaApi} edition={{...edition,parts:edition.parts.map(part=>({...part,available:false}))}} busy={false} onPlay={play} onQueue={vi.fn()} onRefresh={refresh} onChooseVersion={choose} showTools={false}/>,root));

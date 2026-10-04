@@ -18,7 +18,7 @@ export function MediaDetailHeading({ item,edition,trackCount,seasonCount }: { it
   const year = text(field('year'));
   const narrator=item.kind==='audiobook'?text(field('narrator')):'';
   const credits=[credit&&item.kind!=='album'?(item.kind==='audiobook'?credit+' 著':credit):'',narrator?narrator+' 演播':'',year,text(field('genre')),trackCount!==undefined?trackCount+' 首':'',seasonCount!==undefined?seasonCount+' 季':''].filter(Boolean);
-  const knownDuration=edition?.parts.length&&edition.parts.every(part=>part.end!==null&&Number.isFinite(part.end)&&part.end>=part.start)?edition.parts.reduce((sum,part)=>sum+part.end!-part.start,0):null;
+  const knownDuration=edition && edition.parts.length > 0 && edition.parts.every(part=>part.end!==null&&Number.isFinite(part.end)&&part.end>=part.start)?edition.parts.reduce((sum,part)=>sum+part.end!-part.start,0):null;
   const minutes=knownDuration===null?0:Math.floor(knownDuration/60);
   const duration=knownDuration===null?'':minutes>=60?Math.floor(minutes/60)+' 小时'+(minutes%60?' '+minutes%60+' 分':''):minutes?minutes+' 分':Math.floor(knownDuration)+' 秒';
   return <div className="media-detail-heading">

@@ -119,7 +119,7 @@ function DetailContent({ detail, channel, favorite, favoriteBusy, onToggleFavori
       <SeriesSeasons api={runtime.mediaApi} seasons={detail.children} currentPartId={runtime.player.currentPartId} onPlay={onPlayEntries} onDetail={id => navigate(`/media/video/items/${encodeURIComponent(id)}`)} />
     </>}
     {detail.kind === 'season' && <SeasonPlayback api={runtime.mediaApi} id={detail.id} currentPartId={runtime.player.currentPartId} onPlay={onPlayEntries} onDetail={id => navigate(`/media/video/items/${encodeURIComponent(id)}`)} />}
-    {edition && (playable.length > 0 || !edition.parts.length) && !['album', 'series'].includes(detail.kind) && !(detail.kind === 'movie' && edition.parts.length === 1 && playable.length > 0) && <EditionDetails item={detail} edition={edition} api={runtime.mediaApi} busy={false} showTools={false} onPlay={onPlay} onQueue={onQueue} onRefresh={onRefresh} onChooseVersion={detail.editions.length > 1 ? () => onResourcePanelChange('versions') : undefined} />}
+    {edition && playable.length > 0 && !['album', 'series'].includes(detail.kind) && !(detail.kind === 'movie' && edition.parts.length === 1) && <EditionDetails item={detail} edition={edition} api={runtime.mediaApi} busy={false} showTools={false} onPlay={onPlay} onQueue={onQueue} onRefresh={onRefresh} onChooseVersion={detail.editions.length > 1 ? () => onResourcePanelChange('versions') : undefined} />}
     {detail.kind === 'artist' && <ArtistInfo item={detail} />}
     {detail.kind === 'artist' && <ArtistTracks
       api={runtime.mediaApi}
