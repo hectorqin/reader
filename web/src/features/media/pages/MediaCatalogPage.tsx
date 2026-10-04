@@ -47,19 +47,6 @@ export function MediaCatalogPage() {
         const isDefault = item.path === defaultCategory.path;
         return <NavLink key={item.path} className="media-tab-link" to={isDefault ? `/media/${channel}` : `/media/${channel}/${item.path}`} end={isDefault}>{item.label}</NavLink>;
       })}</nav>
-      <div className="media-toolbar media-browse-tools">
-        <div className="media-library-filter">
-          <Select aria-label="来源库" data={libraryOptions} value={selectedLibrary} onChange={value => patch({ library: value ?? '', offset: '' })} />
-          {query.data && <span className="media-catalog-count">{query.data.total}{channel === 'music' && current.kind === 'album' ? ' 张专辑' : ' 项'}</span>}
-        </div>
-        <div className="media-browse-actions">
-          <Button component={Link} to={`/media/${channel}/folders${selectedLibrary ? `/${encodeURIComponent(selectedLibrary)}` : ''}`} className="media-icon-button" aria-label="打开文件夹" title="打开文件夹"><FolderOpen size={19} aria-hidden="true" /></Button>
-          <label className="media-sort-control" aria-label="排序">
-            <SlidersHorizontal size={19} aria-hidden="true" />
-            <Select aria-label="排序" data={[{ value: 'default', label: '默认顺序' }, { value: 'title-asc', label: '名称升序' }, { value: 'title-desc', label: '名称降序' }]} value={params.get('sort') ?? 'default'} onChange={value => patch({ sort: value ?? 'default', offset: '' })} />
-          </label>
-        </div>
-      </div>
     </>}
     <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
     {emptyCatalog && <EmptyMediaLibrary channel={channel} hasLibraries={hasLibraries} admin={admin} category={current.label} onCreate={() => navigate(`/media/${channel}/settings/libraries/new`)} onManage={() => navigate(`/media/${channel}/settings/libraries`)} />}
@@ -69,6 +56,19 @@ export function MediaCatalogPage() {
       libraryIds={channelLibraries.map(item => item.id)}
       onPlay={async (parts, index, title) => { await runtime.player.play(parts.map(part => ({ part, title: `${title} · ${part.title}`, video: channel === 'video' })), index); }}
     />}
+    {!emptyWithoutLibraries && <div className="media-toolbar media-browse-tools">
+      <div className="media-library-filter">
+        <Select aria-label="来源库" data={libraryOptions} value={selectedLibrary} onChange={value => patch({ library: value ?? '', offset: '' })} />
+        {query.data && <span className="media-catalog-count">{query.data.total}{channel === 'music' && current.kind === 'album' ? ' 张专辑' : ' 项'}</span>}
+      </div>
+      <div className="media-browse-actions">
+        <Button component={Link} to={`/media/${channel}/folders${selectedLibrary ? `/${encodeURIComponent(selectedLibrary)}` : ''}`} className="media-icon-button" aria-label="打开文件夹" title="打开文件夹"><FolderOpen size={19} aria-hidden="true" /></Button>
+        <label className="media-sort-control" aria-label="排序">
+          <SlidersHorizontal size={19} aria-hidden="true" />
+          <Select aria-label="排序" data={[{ value: 'default', label: '默认顺序' }, { value: 'title-asc', label: '名称升序' }, { value: 'title-desc', label: '名称降序' }]} value={params.get('sort') ?? 'default'} onChange={value => patch({ sort: value ?? 'default', offset: '' })} />
+        </label>
+      </div>
+    </div>}
     {!emptyCatalog && query.data && <><MediaItemGrid items={query.data.items} channel={channel} /><div className="media-toolbar media-pagination"><Pagination total={Math.max(1, Math.ceil(query.data.total / 60))} value={Math.floor(offset / 60) + 1} onChange={page => patch({ offset: String((page - 1) * 60) })} /></div></>}
   </MediaPageFrame>;
 }
