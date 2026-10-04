@@ -52,9 +52,13 @@ export const routes = [{
     { path: 'book/:bookId', element: <ReaderPage /> },
     { path: 'media', element: <MediaLayout />, children: [
       { index: true, element: <Navigate to="video" replace /> },
+      { path: 'music', element: <Navigate to="/media/music/albums" replace /> },
+      { path: 'audiobook', element: <Navigate to="/media/audiobook/books" replace /> },
       { path: 'search', element: <MediaSearchPage /> },
       { path: 'favorites', element: <MediaFavoritesPage /> },
       { path: 'queue', element: <MediaQueuePage /> },
+      { path: ':channel/favorites', element: <MediaFavoritesPage /> },
+      { path: ':channel/queue', element: <MediaQueuePage /> },
       { path: ':channel/settings', element: <MediaSettingsPage /> },
       { path: ':channel/settings/libraries', element: <MediaLibrariesPage /> },
       { path: ':channel/settings/libraries/new', element: <MediaLibraryCreatePage /> },

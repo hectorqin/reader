@@ -42,6 +42,7 @@
 .media-detail-columns {display:block;max-width:820px}
 .media-detail-sidebar {max-width:none}
 .media-detail-page .media-detail-description {margin:20px 0}
+.media-detail-page > .media-detail-actions {margin-top:4px}
 .media-detail-description p {font-size:13px;line-height:1.9;margin:8px 0}
 .media-detail-page .media-resource-panel {margin:22px 0 0;padding:0 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
 .media-resource-panel>header {min-height:50px;margin:0}
@@ -538,6 +539,20 @@ body[data-media-theme] .media-video-stage .plyr {
   max-width: 850px;
   margin: 0 auto;
 }
+.media-screen .media-context-label {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.media-screen .media-page-heading .media-heading-context {
+  margin-left: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: nowrap;
+}
 .media-screen .media-favorites .media-favorite-row {
   min-height: 72px;
 }
@@ -620,6 +635,7 @@ body[data-media-theme] .media-video-stage .plyr {
 .media-screen .media-browse-actions {margin-left:auto;gap:4px}
 .media-screen .media-browse-actions>button,.media-screen .media-browse-filters>summary {width:44px;min-width:44px;height:44px;padding:12px;box-sizing:border-box;border-radius:50%}
 .media-screen .media-detail-favorite {background:transparent;border-radius:50%}
+
 .media-ai-jobs{margin-top:28px;border-top:1px solid var(--border);padding-top:18px}.media-ai-job-actions{display:flex;align-items:center;justify-content:flex-start;gap:12px;margin-top:10px}.media-ai-batches{margin-top:10px;padding-left:10px}.media-ai-batch{border-top:1px solid var(--border);padding:8px 0}.media-ai-batch-toggle{display:flex;align-items:center;gap:5px;background:transparent;border:0;padding:4px;color:inherit}.media-ai-batch-detail{padding:8px 20px;font-size:13px}.media-ai-batch-detail pre{max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;background:color-mix(in srgb,var(--text) 5%,var(--media-paper));padding:10px}
 .media-task-tabs{display:inline-flex;align-items:center;gap:3px;margin:8px 0 28px;padding:4px;border:1px solid var(--border);border-radius:12px;background:var(--surface-muted,#f3f4ef);box-shadow:inset 0 1px 2px rgba(31,42,34,.06)}.media-task-tabs button{min-height:36px;border:0;border-radius:9px;background:transparent;padding:0 18px;color:var(--muted);font-size:14px;font-weight:500;white-space:nowrap;transition:background .15s ease,color .15s ease,box-shadow .15s ease}.media-task-tabs button:hover{color:var(--text);background:rgba(255,255,255,.65)}.media-task-tabs button[aria-current=page]{background:var(--surface,#fff);color:var(--text);font-weight:650;box-shadow:0 1px 3px rgba(31,42,34,.14)}.media-task-actions{display:flex;gap:6px}.media-task-actions .media-task-icon{position:static}
 .media-manager-toolbar>span,.media-task-library>label{min-width:0}
@@ -717,6 +733,11 @@ body[data-media-theme] .media-video-stage .plyr {
  .media-screen .media-detail-page {padding-top:28px}
  .media-screen .media-episode-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
  .media-screen :is(.media-library-empty,.media-screen-error.is-page,.media-state-page) {min-height:calc((100dvh - 96px)*.8)}
+ /* The audiobook landing page intentionally has no category/tool rows when
+    no audiobook library exists. Keep its empty state at the same visual
+    baseline as the legacy Preact page instead of pulling it up with the
+    shorter content flow. */
+ .media-screen.media-catalog-page:not(:has(.media-tabs)) .media-library-empty {min-height:calc((100dvh - 96px)*.94)}
  .media-screen.media-playback-page:not(.media-video-page) .media-playback-status[data-panel=main] {display:grid;grid-template-columns:minmax(280px,1fr) minmax(300px,1fr);grid-template-rows:none;column-gap:64px;max-width:940px;min-height:calc(100dvh - 96px);padding:45px 20px;align-items:center;align-content:stretch}
  .media-screen .media-playback-status[data-panel=main] .media-playing-artwork>.media-cover {grid-column:1;grid-row:1/5;width:100%;max-width:360px;margin:auto}
  .media-screen .media-playback-status[data-panel=main][data-channel=audiobook] .media-playing-artwork>.media-cover {width:230px;margin:auto}

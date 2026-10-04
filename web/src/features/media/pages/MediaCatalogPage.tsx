@@ -1,5 +1,5 @@
 import { Button, Pagination, Select } from '@mantine/core';
-import { FolderOpen, MoreHorizontal, Search, Settings2, SlidersHorizontal } from 'lucide-react';
+import { FolderOpen, History, LibraryBig, ListVideo, MoreHorizontal, Search, Settings2, SlidersHorizontal, Star } from 'lucide-react';
 import { Link, NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -23,23 +23,25 @@ export function MediaCatalogPage() {
   const channelLibraries = libraries.data?.items.filter(item => item.kind === channel) ?? [];
   const selectedLibrary = params.get('library') ?? '';
   const emptyCatalog = !query.isPending && !query.error && query.data?.total === 0;
-  // Audiobooks without a configured library use a focused empty state and hide browse chrome.
-  // Other channels keep their tabs and source toolbar so an empty category still explains
-  // that the existing library can be rescanned or another category selected.
-  const emptyAudiobook = channel === 'audiobook' && emptyCatalog && channelLibraries.length === 0;
+  // An empty channel without a configured library uses the focused legacy empty state;
+  // there is no source selector or category toolbar to act on in that state.
   const hasLibraries = channelLibraries.length > 0;
+  const emptyWithoutLibraries = emptyCatalog && !hasLibraries;
   const libraryOptions = [{ value: '', label: '全部媒体库' }, ...(channelLibraries.map(item => ({ value: item.id, label: item.name })) )];
   return <MediaPageFrame className="media-catalog-page" title={channelLabels[channel]} actions={<>
     <Button component={Link} to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Button>
     <details className="media-actions media-catalog-actions">
       <summary aria-label="更多操作" title="更多操作"><MoreHorizontal size={20} aria-hidden="true" /></summary>
       <nav aria-label="更多操作">
-        <Link to={`/media/${channel}/folders${selectedLibrary ? `/${encodeURIComponent(selectedLibrary)}` : ''}`}><FolderOpen size={16} aria-hidden="true" />文件夹</Link>
-        <Link to={`/media/${channel}/settings`}><Settings2 size={16} aria-hidden="true" />设置</Link>
+        <Link to={`/media/${channel}/settings`}><Settings2 size={16} aria-hidden="true" />影音设置</Link>
+        <Link to="/media/favorites"><Star size={16} aria-hidden="true" />收藏</Link>
+        <Link to={`/media/${channel}/history`}><History size={16} aria-hidden="true" />历史</Link>
+        <Link to={`/media/${channel}/queue`}><ListVideo size={16} aria-hidden="true" />队列</Link>
+        <Link to={`/media/${channel}/settings/libraries`}><LibraryBig size={16} aria-hidden="true" />媒体库管理</Link>
       </nav>
     </details>
   </>}>
-    {!emptyAudiobook && <>
+    {!emptyWithoutLibraries && <>
       <nav className="media-tabs" aria-label={`${channelLabels[channel]}分类`}>{categories.map(item => {
         const defaultCategory = categories[0]!;
         const isDefault = item.path === defaultCategory.path;

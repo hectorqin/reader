@@ -4,7 +4,7 @@ import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import type { Detail, Item, MediaChannel, Part, ScanJob, AiScanJob } from '../api/media-api.ts';
 
 export interface Activity {
-  id: string; itemId: string; partId: string; assetId: string; libraryId: string;
+  id: string; itemId: string; partId: string; assetId: string; libraryId: string; kind: string;
   title: string; partTitle: string; editionLabel?: string; start: number; end: number | null;
   available: number; position?: number; updatedAt?: number; completed?: boolean;
 }

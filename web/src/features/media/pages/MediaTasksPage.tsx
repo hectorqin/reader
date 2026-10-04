@@ -67,7 +67,7 @@ export function MediaTasksPage() {
   const channelLibraryIds = new Set((libraries.data?.items ?? []).map(library => library.id));
   const filteredJobs = (jobs.data?.items ?? []).filter(job =>
     libraryId ? (!job.libraryId || job.libraryId === libraryId) : (!job.libraryId || channelLibraryIds.has(job.libraryId)));
-  return <MediaPageFrame title="扫描与刮削">
+  return <MediaPageFrame title="扫描与刮削" backTo={`/media/${channel}/settings`} backLabel="返回影音设置">
     <Stack>
       <SegmentedControl value={tab} onChange={setTab} data={[{ value: 'scan', label: '媒体库扫描' }, { value: 'ai', label: 'AI 扫描' }, { value: 'scrape', label: '刮削' }]} />
       {requestedLibraryId && !libraryId && !libraries.isPending && !libraries.error && <Alert color="yellow">所选媒体库不存在，或不属于当前频道；已切换为全部媒体库。</Alert>}

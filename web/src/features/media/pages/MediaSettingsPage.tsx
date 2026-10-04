@@ -29,7 +29,7 @@ export function MediaSettingsPage() {
     ? `/media/${channel}/settings`
     : `/media/${channel}/settings/${next}`;
 
-  return <MediaPageFrame className="media-utility-workspace" title={titles[panel]}>
+  return <MediaPageFrame className="media-utility-workspace" title={titles[panel]} {...(panel !== 'home' ? { backTo: `/media/${channel}/settings`, backLabel: '返回影音设置' } : {})}>
     <MediaSettings
       scope={runtime.mediaApi.preferenceScope()}
       preferences={preferences}
@@ -41,7 +41,7 @@ export function MediaSettingsPage() {
       onSaved={setPreferences}
       onBack={() => navigate(`/media/${channel}`)}
       onPanelChange={next => navigate(settingsPath(next))}
-      onPersonal={view => navigate(view === 'favorites' ? '/media/favorites' : view === 'queue' ? '/media/queue' : `/media/${channel}/history`)}
+      onPersonal={view => navigate(view === 'favorites' ? `/media/${channel}/favorites` : view === 'queue' ? `/media/${channel}/queue` : `/media/${channel}/history`, { state: { returnTo: `/media/${channel}/settings` } })}
       onManage={() => navigate(`/media/${channel}/settings/libraries`)}
       onTasks={() => navigate(`/media/${channel}/settings/tasks`)}
       onPlayback={() => navigate(`/media/${channel}/player`)}

@@ -90,7 +90,7 @@ export function MediaSearch({api,channel,navigate,initialLocation,onLocationChan
   },[api,query,scope,offset,attempt]);
   return <section ref={host} aria-label="影音搜索结果">
     <form className="media-search" role="search" onSubmit={event=>{event.preventDefault();scrollToRestore.current=null;setQuery(input.trim());setOffset(0);change({q:input.trim(),offset:0});setAttempt(value=>value+1);}}>
-      <input aria-label="搜索影音" placeholder="搜索作品、专辑、歌手或曲目" value={input} maxLength={200} onInput={event=>setInput(event.currentTarget.value)}/>
+      <input name="q" aria-label="搜索影音" placeholder="搜索作品、专辑、歌手或曲目" value={input} maxLength={200} onInput={event=>setInput(event.currentTarget.value)}/>
       <button className="media-primary" type="submit" disabled={!input.trim()}>搜索</button>
     </form>
     <nav className="media-search-scopes" aria-label="搜索范围">{(['all','video','music','audiobook'] as const).map(value=><button key={value} type="button" aria-pressed={scope===value} data-scope={value} onClick={()=>{scrollToRestore.current=null;setScope(value);setOffset(0);change({scope:value,offset:0});}}>{value==='all'?'全部':labels[value]}</button>)}</nav>

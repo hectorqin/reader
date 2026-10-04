@@ -1,4 +1,5 @@
-import { Alert, Button, Loader } from '@mantine/core';
+import { Alert, Loader } from '@mantine/core';
+import { MoreHorizontal, RefreshCw, Plus } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -41,7 +42,13 @@ export function MediaLibrariesPage() {
       setActionError(error instanceof Error ? error.message : '扫描请求失败，请稍后重试。');
     } finally { setBusyId(null); }
   };
-  return <MediaPageFrame title="媒体库管理" actions={<Button component={Link} to={`/media/${channel}/settings/libraries/new`}>新建媒体库</Button>}>
+  return <MediaPageFrame title="媒体库管理" backTo={`/media/${channel}/settings`} backLabel="返回影音设置" actions={<details className="media-actions media-library-management-actions">
+    <summary aria-label="媒体库管理操作" title="媒体库管理操作"><MoreHorizontal size={20} aria-hidden="true" /></summary>
+    <nav aria-label="媒体库管理操作">
+      <Link to={`/media/${channel}/settings/libraries/new`}><Plus size={16} aria-hidden="true" />新建媒体库</Link>
+      <button type="button" onClick={() => void query.refetch()}><RefreshCw size={16} aria-hidden="true" />刷新</button>
+    </nav>
+  </details>}>
     {actionError && <Alert color="red" title="操作失败">{actionError}</Alert>}
     <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
     {query.isPending && <Loader />}
@@ -68,7 +75,7 @@ export function MediaLibraryCreatePage() {
   const role = useAuthStore(state => state.verifiedUser?.role);
   if (role !== 'admin') return <MediaPageFrame title="新建媒体库"><Alert color="red">需要管理员权限。</Alert></MediaPageFrame>;
   const mediaChannel = channel;
-  return <MediaPageFrame title="新建媒体库"><MediaLibraryCreate
+  return <MediaPageFrame title="新建媒体库" backTo={`/media/${channel}/settings/libraries`} backLabel="返回媒体库管理"><MediaLibraryCreate
     api={runtime.mediaApi}
     channel={mediaChannel}
     disabled={false}

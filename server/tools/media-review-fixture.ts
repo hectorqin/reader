@@ -51,12 +51,26 @@ db.run("UPDATE media_items SET ordinal=-1 WHERE id='review-film'");
 db.run("INSERT INTO media_assets(id,library_id,ref,size,modified_at,available,probe_status) SELECT id,library_id,id,1,0,0,'ready' FROM media_items WHERE id LIKE 'favorite-%'");
 db.run("INSERT INTO media_editions(id,item_id,local_key,label) SELECT id,id,id,'历史版本' FROM media_items WHERE id LIKE 'favorite-%'");
 db.run("INSERT INTO media_parts(id,edition_id,asset_id,local_key,title,ordinal) SELECT id,id,id,id,'历史章节',0 FROM media_items WHERE id LIKE 'favorite-%'");
-db.run("INSERT INTO media_progress(user_id,part_id,position,revision,session_id,updated_at) SELECT u.id,i.id,5,1,'fixture',0 FROM users u CROSS JOIN media_items i WHERE u.username='reviewer' AND i.id LIKE 'favorite-%'");
+// Keep history deterministic while exercising date grouping and position labels.
+// 2025-01-02 03:04:05 UTC renders as 2025年1月2日 in the review browser.
+db.run("INSERT INTO media_progress(user_id,part_id,position,revision,session_id,updated_at) SELECT u.id,i.id,5,1,'fixture',1735787045000 FROM users u CROSS JOIN media_items i WHERE u.username='reviewer' AND i.id LIKE 'favorite-%'");
 db.run("INSERT INTO media_libraries(id,name,kind,root,access,created_at,updated_at) VALUES('track-lib','曲目长列表测试库','music',?,'all',0,0)",root);
 db.run("INSERT INTO media_libraries(id,name,kind,root,access,created_at,updated_at) VALUES('track-empty-lib','空音乐测试库','music',?,'all',0,0)",root);
 db.run(`WITH RECURSIVE seq(n) AS(SELECT 1 UNION ALL SELECT n+1 FROM seq WHERE n<65)
   INSERT INTO media_items(id,library_id,kind,local_key,title,ordinal,metadata_json) SELECT printf('track-%03d',n),'track-lib','track',printf('track-%03d',n),printf('曲目%03d',n),n,'{"artist":"测试艺人"}' FROM seq`);
 db.run("UPDATE media_items SET title=?,metadata_json=? WHERE id='track-003'",'UnbrokenTrackTitle'.repeat(10),JSON.stringify({artist:'UnbrokenArtistName'.repeat(10),album:'独立专辑'}));
+// Give a few music tracks real catalog parts so the queue review covers a
+// mixed video + music queue through the production API.
+db.run("INSERT INTO media_assets(id,library_id,ref,size,modified_at,available,probe_status) SELECT id||'-asset','track-lib',id||'.mp3',1,0,1,'ready' FROM media_items WHERE id IN ('track-001','track-002','track-003')");
+db.run("INSERT INTO media_editions(id,item_id,local_key,label) SELECT id||'-edition',id,id,'测试音频版本' FROM media_items WHERE id IN ('track-001','track-002','track-003')");
+db.run("INSERT INTO media_parts(id,edition_id,asset_id,local_key,title,ordinal,start_seconds,end_seconds) SELECT id||'-part',id||'-edition',id||'-asset','file','第1首',0,0,180 FROM media_items WHERE id IN ('track-001','track-002','track-003')");
+db.run(`INSERT INTO media_progress(user_id,part_id,position,completed,revision,session_id,updated_at) VALUES
+  ((SELECT id FROM users WHERE username='reviewer'),'track-001-part',42,0,1,'fixture',1735873445000),
+  ((SELECT id FROM users WHERE username='reviewer'),'track-002-part',180,1,1,'fixture',1735959845000)`);
+db.run(`INSERT INTO media_queue(id,user_id,part_id,ordinal,created_at) VALUES
+  ('queue-video',(SELECT id FROM users WHERE username='reviewer'),'review-film-part',0,1735787045000),
+  ('queue-music-001',(SELECT id FROM users WHERE username='reviewer'),'track-001-part',1,1735787045000),
+  ('queue-music-002',(SELECT id FROM users WHERE username='reviewer'),'track-002-part',2,1735787045000)`);
 if(process.env.MEDIA_REVIEW_LIVE_MUSICBRAINZ==='1'){
   db.run("INSERT INTO media_items(id,library_id,kind,local_key,title,metadata_json) VALUES('live-album','track-lib','album','live-album','Abbey Road',?)",JSON.stringify({artist:'The Beatles'}));
   db.run("INSERT INTO media_items(id,library_id,kind,local_key,title,metadata_json) VALUES('live-track','track-lib','track','live-track','Yesterday',?)",JSON.stringify({artist:'The Beatles'}));

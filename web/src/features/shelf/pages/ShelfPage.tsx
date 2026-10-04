@@ -1,12 +1,15 @@
-import { Alert, Badge, Button, Card, Center, Checkbox, Group, Loader, Pagination, SegmentedControl, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core';
+import { ActionIcon, Alert, Badge, Button, Card, Center, Checkbox, Group, Loader, Pagination, SegmentedControl, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Book, ContinueReadingItem } from '../../../api/types.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
+import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
 import { useShelf } from '../queries/shelf.queries.ts';
-import { SHELF_SORTS } from '../../../ui/shelf-settings.tsx';
+import { SHELF_SORTS, ShelfSettingsPanel } from '../../../ui/shelf-settings.tsx';
+import { OpdsAccess } from '../../../ui/opds-access.tsx';
+import { SystemSettings } from '../../../ui/system-settings.tsx';
 
 const coverCache = new WeakMap<object, Map<string, string>>();
 function useCover(api: ReturnType<typeof useRuntime>['api'], coverUrl: string | null | undefined): string | null {
@@ -40,22 +43,69 @@ export function ShelfPage() {
   const runtime = useRuntime();
   const queryClient = useQueryClient();
   const settings = useSettingsStore(state => state.settings);
+  const user = useAuthStore(state => state.verifiedUser);
   const [params, setParams] = useSearchParams();
   const page = Math.max(1, Number(params.get('page')) || 1);
   const [sort, setSort] = useState<typeof settings.shelfSort>((params.get('sort') as typeof settings.shelfSort) || settings.shelfSort);
   const [search, setSearch] = useState(params.get('q') || '');
   const [queryText, setQueryText] = useState(params.get('q') || '');
   const [selected, setSelected] = useState<string[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [opdsOpen, setOpdsOpen] = useState(false);
+  const [systemSettingsOpen, setSystemSettingsOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const query = useShelf(page, sort, queryText);
   const continueQuery = useQuery({ queryKey: ['continue-reading', runtime.api.baseUrl, runtime.api.currentSession()?.user.id], queryFn: () => runtime.api.continueReading(8), staleTime: 30_000 });
   const pages = query.data ? Math.max(1, Math.ceil(query.data.total / query.data.pageSize)) : 1;
   useEffect(() => { void runtime.updateSettings({ shelfSort: sort }); }, [runtime, sort]);
   const onSort = (value: string) => { const next = value as typeof sort; setSort(next); setParams({ ...(queryText ? { q: queryText } : {}), sort: next, page: '1' }); };
   const onSearch = (event: FormEvent) => { event.preventDefault(); setQueryText(search.trim()); setParams({ ...(search.trim() ? { q: search.trim() } : {}), sort, page: '1' }); };
+  const clearSearch = () => { setSearch(''); setQueryText(''); setParams({ sort, page: '1' }); };
+  const refresh = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    runtime.api.refreshQueries();
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['shelf'] }),
+        queryClient.invalidateQueries({ queryKey: ['continue-reading'] }),
+      ]);
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const remove = async (book: Book) => { await runtime.api.browseBatchShelf({ bookIds: [book.id] }, 'remove'); await queryClient.invalidateQueries({ queryKey: ['shelf'] }); await queryClient.invalidateQueries({ queryKey: ['continue-reading'] }); };
   const removeSelected = async () => { if (!selected.length) return; await runtime.api.browseBatchShelf({ bookIds: selected }, 'remove'); setSelected([]); await queryClient.invalidateQueries({ queryKey: ['shelf'] }); await queryClient.invalidateQueries({ queryKey: ['continue-reading'] }); };
   const cards = useMemo(() => query.data?.items ?? [], [query.data]);
-  return <Stack className="shelf-screen" p="md" maw={1440} mx="auto"><Group className="shelf-head" justify="space-between" align="center"><Title className="shelf-title" order={1}>书架</Title><Group className="shelf-head-actions"><Button component={Link} to="/library" variant="light">浏览书库</Button><Button component={Link} to="/media/video" variant="subtle">影音</Button></Group></Group>{selected.length > 0 && <Group><Badge>已选 {selected.length} 本</Badge><Button size="compact-sm" color="red" onClick={() => void removeSelected()}>批量移出书架</Button><Button size="compact-sm" variant="subtle" onClick={() => setSelected([])}>清除选择</Button></Group>}<Group className="shelf-search" align="end" wrap="wrap"><form onSubmit={onSearch} style={{ flex: '1 1 20rem' }}><TextInput label="搜索书名、作者" value={search} onChange={event => setSearch(event.currentTarget.value)} placeholder="输入关键词后回车" /></form><SegmentedControl aria-label="书架排序" value={sort} onChange={onSort} data={SHELF_SORTS} /></Group>{continueQuery.data && continueQuery.data.length > 0 && <Stack gap="xs"><Group justify="space-between"><Title order={3}>继续阅读</Title><Badge variant="light">{continueQuery.data.length} 本</Badge></Group><SimpleGrid className="book-grid continue-grid" cols={{ base: 2, xs: 3, sm: 4, md: 8 }}>{continueQuery.data.map(item => <BookCard key={item.id} book={item} showAuthor={settings.shelfShowAuthor} showProgress={settings.shelfShowProgress} />)}</SimpleGrid></Stack>}{query.isPending && <Center py="xl"><Loader /></Center>}{query.error && <Alert color="red" title="书架加载失败">{query.error.message}</Alert>}{query.data && cards.length === 0 && <Alert>书架为空。可以从书库浏览并加入书架。</Alert>}{cards.length > 0 && <SimpleGrid className="book-grid" cols={{ base: 2, xs: 3, sm: 4, md: 6, lg: 8 }}>{cards.map(book => <Stack key={book.id} gap={4}><Group justify="space-between"><Checkbox aria-label={`选择${book.title}`} checked={selected.includes(book.id)} onChange={() => setSelected(s => s.includes(book.id) ? s.filter(x => x !== book.id) : [...s, book.id])} /><Button size="compact-xs" variant="subtle" color="red" onClick={() => void remove(book)}>移出书架</Button></Group><BookCard book={book} showAuthor={settings.shelfShowAuthor} showProgress={settings.shelfShowProgress} /></Stack>)}</SimpleGrid>}{query.data && pages > 1 && <Pagination total={pages} value={page} onChange={value => setParams({ ...(queryText ? { q: queryText } : {}), sort, page: String(value) })} />}</Stack>;
+  return <Stack className="shelf-screen" p="md" maw={1440} mx="auto">
+    <Group className="shelf-head" justify="space-between" align="center">
+      <Title className="shelf-title" order={1}>{queryText ? '搜索结果' : '书架'}</Title>
+      <Group className="shelf-head-actions" gap="xs">
+        <Button component={Link} to="/library" variant="light">书库</Button>
+        <Button component={Link} to="/sources" variant="light">书源</Button>
+        <Button component={Link} to="/media/video" variant="subtle">影音</Button>
+        <Button variant="subtle" loading={refreshing} onClick={() => void refresh()}>刷新</Button>
+        <Button variant="subtle" onClick={() => setSettingsOpen(true)}>设置</Button>
+        {user?.role === 'admin' && <Button variant="subtle" onClick={() => setSystemSettingsOpen(true)}>系统设置</Button>}
+      </Group>
+    </Group>
+    {selected.length > 0 && <Group><Badge>已选 {selected.length} 本</Badge><Button size="compact-sm" color="red" onClick={() => void removeSelected()}>批量移出书架</Button><Button size="compact-sm" variant="subtle" onClick={() => setSelected([])}>清除选择</Button></Group>}
+    <Group className="shelf-search" align="end" wrap="wrap">
+      <form onSubmit={onSearch} style={{ flex: '1 1 20rem' }}>
+        <TextInput label="搜索书名、作者" type="search" value={search} onChange={event => setSearch(event.currentTarget.value)} placeholder="输入关键词后回车" rightSection={search ? <ActionIcon aria-label="清除搜索" variant="subtle" onClick={clearSearch}><span aria-hidden="true">×</span></ActionIcon> : null} rightSectionPointerEvents={search ? 'all' : 'none'} />
+      </form>
+      <SegmentedControl aria-label="书架排序" value={sort} onChange={onSort} data={SHELF_SORTS} />
+    </Group>
+    {continueQuery.data && continueQuery.data.length > 0 && <Stack gap="xs"><Group justify="space-between"><Title order={3}>继续阅读</Title><Badge variant="light">{continueQuery.data.length} 本</Badge></Group><SimpleGrid className="book-grid continue-grid" cols={{ base: 2, xs: 3, sm: 4, md: 8 }}>{continueQuery.data.map(item => <BookCard key={item.id} book={item} showAuthor={settings.shelfShowAuthor} showProgress={settings.shelfShowProgress} />)}</SimpleGrid></Stack>}
+    {query.isPending && <Center py="xl"><Loader /></Center>}
+    {query.error && <Alert color="red" title="书架加载失败">{query.error.message}</Alert>}
+    {query.data && cards.length === 0 && <Alert>{queryText ? '没有匹配的书。' : '书架为空。可以从书库浏览并加入书架。'}</Alert>}
+    {cards.length > 0 && <SimpleGrid className="book-grid" cols={{ base: 2, xs: 3, sm: 4, md: 6, lg: 8 }}>{cards.map(book => <Stack key={book.id} gap={4}><Group justify="space-between"><Checkbox aria-label={`选择${book.title}`} checked={selected.includes(book.id)} onChange={() => setSelected(s => s.includes(book.id) ? s.filter(x => x !== book.id) : [...s, book.id])} /><Button size="compact-xs" variant="subtle" color="red" onClick={() => void remove(book)}>移出书架</Button></Group><BookCard book={book} showAuthor={settings.shelfShowAuthor} showProgress={settings.shelfShowProgress} /></Stack>)}</SimpleGrid>}
+    {query.data && pages > 1 && <Pagination total={pages} value={page} onChange={value => setParams({ ...(queryText ? { q: queryText } : {}), sort, page: String(value) })} />}
+    <ShelfSettingsPanel open={settingsOpen} settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSettingsOpen(false)} onOpenExternalReader={() => { setSettingsOpen(false); setOpdsOpen(true); }} />
+    {opdsOpen && <OpdsAccess api={runtime.api} onSignedOut={() => { void runtime.api.signOut(); }} onClose={() => { setOpdsOpen(false); setSettingsOpen(true); }} />}
+    {systemSettingsOpen && <SystemSettings api={runtime.api} onClose={() => setSystemSettingsOpen(false)} />}
+  </Stack>;
 }
 
 

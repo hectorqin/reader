@@ -112,8 +112,9 @@ web/src/
 最终验证结果：
 
 - `npm run typecheck` 通过。
-- `npm run build` 通过；Vite 完成 2634 个模块构建，产物仍为 Android WebView 可加载的相对资源单 Bundle。仅保留大 chunk 的性能提示，未阻断构建。
-- `npm test` 通过：95 个 Vitest 测试文件、803 个测试全部通过；Node 测试 29 项全部通过。
+- `npm run build` 通过；Vite 完成约 2633 个模块构建，产物仍为 Android WebView 可加载的相对资源单 Bundle。仅保留大 chunk 的性能提示，未阻断构建。
+- `npm test` 通过：97 个 Vitest 测试文件、811 个测试全部通过；Node 测试 29 项全部通过。
+- `npm run ui:review:only` 通过：40 张 React 页面截图，详情、视频播放、历史和队列页面均完成视觉回归。
 - `git diff --check` 通过；输出的换行符提示属于工作区 CRLF 转换提示，不是 whitespace error。
 
 至此生产入口已经完成 React 化。后续新增页面应继续按 `app / features / shared` 边界实现，由 React Router 接入路由，不再向旧 Screen 调度链添加逻辑。

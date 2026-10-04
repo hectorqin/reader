@@ -260,8 +260,8 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await login(page, origin, '/#/media/video?library=review-lib');
   const pages = [
     ['media-video', '/#/media/video?library=review-lib', '影视', '.media-grid'],
-    ['media-music', '/#/media/music', '音乐', '.media-screen'],
-    ['media-audiobook', '/#/media/audiobook', '有声书', '.media-screen'],
+    ['media-music', '/#/media/music/albums', '音乐', '.media-screen'],
+    ['media-audiobook', '/#/media/audiobook/books', '有声书', '.media-screen'],
     ['media-detail', '/#/media/video/items/review-film', '人工保留标题', '.media-detail-page'],
     ['media-favorites', '/#/media/favorites', '我的收藏', '.media-favorite-list'],
     ['media-history', '/#/media/video/history', '播放历史', '.media-screen'],
@@ -280,6 +280,58 @@ async function runMediaReview(browser, fixture, checks, errors) {
     }
     await capture(page, name, checks, errors);
   }
+
+  await page.goto(`${origin}/#/media/video/history`);
+  await waitMediaHeading(page, '播放历史');
+  await page.locator('.media-history-date').first().waitFor({ state: 'visible' });
+  assert.match(await page.locator('.media-history-date').first().innerText(), /2025年1月2日/);
+  assert.match(await page.locator('.media-history-row').first().innerText(), /00:05/);
+  await page.goto(`${origin}/#/media/music/history`);
+  await waitMediaHeading(page, '播放历史');
+  await page.locator('.media-history-date').first().waitFor({ state: 'visible' });
+  assert.match(await page.locator('.media-history-date').first().innerText(), /2025年1月4日/);
+  assert.match(await page.locator('.media-history-row').first().innerText(), /已完成/);
+
+  // The fixture starts with a mixed video + music queue. Exercise the real
+  // queue mutation endpoints and assert the visible order after each refresh.
+  await page.goto(`${origin}/#/media/queue`);
+  await waitMediaHeading(page, '待播队列');
+  const queueRows = page.locator('.media-saved-queue-row');
+  await queueRows.first().waitFor({ state: 'visible' });
+  assert.equal(await queueRows.count(), 3, 'fixture queue should contain three mixed-channel entries');
+  assert.match(await page.locator('.media-saved-queue-toolbar').innerText(), /3 项/);
+  const queueTitles = async () => page.locator('.media-saved-queue-title strong').allTextContents();
+  const waitQueueTitles = expected => page.waitForFunction(expectedTitles => {
+    const actual = [...document.querySelectorAll('.media-saved-queue-title strong')].map(element => element.textContent ?? '');
+    return JSON.stringify(actual) === JSON.stringify(expectedTitles);
+  }, expected, { timeout: 15_000 });
+  assert.deepEqual(await queueTitles(), ['人工保留标题', '曲目001', '曲目002']);
+
+  await page.getByRole('button', { name: '编辑队列' }).click();
+  const moveDown = page.waitForResponse(r => r.request().method() === 'POST' && r.url().includes('/queue/') && r.url().endsWith('/move'));
+  await page.getByRole('button', { name: '下移 曲目001' }).click();
+  assert.equal((await moveDown).status(), 200, 'queue move down failed');
+  await waitQueueTitles(['人工保留标题', '曲目002', '曲目001']);
+  const moveUp = page.waitForResponse(r => r.request().method() === 'POST' && r.url().includes('/queue/') && r.url().endsWith('/move'));
+  await page.getByRole('button', { name: '上移 曲目001' }).click();
+  assert.equal((await moveUp).status(), 200, 'queue move up failed');
+  await waitQueueTitles(['人工保留标题', '曲目001', '曲目002']);
+
+  const remove = page.waitForResponse(r => r.request().method() === 'DELETE' && r.url().includes('/queue/'));
+  await page.getByRole('button', { name: '移除 曲目002' }).click();
+  assert.equal((await remove).status(), 200, 'queue remove failed');
+  await page.getByRole('button', { name: '完成编辑队列' }).click();
+  assert.equal(await queueRows.count(), 2, 'queue remove did not update the list');
+
+  await page.getByRole('button', { name: '清空当前频道队列' }).click();
+  await page.getByRole('button', { name: '确认清空' }).waitFor({ state: 'visible' });
+  assert.match(await page.locator('[role="dialog"], .media-floating-confirm').last().innerText().catch(() => ''), /清空队列|确认清空/);
+  const clear = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/queue/clear'));
+  await page.getByRole('button', { name: '确认清空' }).click();
+  assert.equal((await clear).status(), 200, 'queue clear failed');
+  await page.locator('.media-queue-page .media-personal-empty').getByText('暂无记录。', { exact: true }).waitFor({ state: 'visible' });
+  assert.equal(await page.locator('.media-saved-queue-toolbar').count(), 0, 'empty queue should hide saved-queue tools');
+  await capture(page, 'media-queue-empty', checks, errors);
 
   // Submit a real search form and assert the query result, rather than only
   // checking that the search route can be deep-linked.
@@ -321,10 +373,10 @@ async function runMediaReview(browser, fixture, checks, errors) {
   // Detail -> POST /playback -> routed player (the fixture has an available
   // disposable part, so this is the actual playback path).
   const playback = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/playback'));
-  await page.getByRole('button', { name: '播放', exact: true }).click();
+  await page.getByRole('button', { name: '播放电影', exact: true }).click();
   assert.equal((await playback).status(), 201);
   await page.waitForURL(/#\/media\/video\/player/);
-  await page.locator('.media-player-page').waitFor({ state: 'attached' });
+  await page.locator('.media-playback-page').waitFor({ state: 'attached' });
   const videoPlayback = await assertLoadedAndAdvancingVideo(page);
   assert.ok(videoPlayback.after.currentTime > videoPlayback.before.currentTime, 'video playback session did not advance');
   await capture(page, 'media-player', checks, errors);
@@ -337,11 +389,13 @@ async function runMediaReview(browser, fixture, checks, errors) {
     if (response.request().method() === 'POST' && response.url().endsWith('/api/v1/media/playback')) playbackPostsBeforeRoute.push(response.url());
   };
   page.on('response', countPlaybackPosts);
-  await page.locator('.media-channel-entry a[href="#/media/video"]').click();
+  // Playback routes hide the channel nav. Return through the player heading,
+  // then reopen the persistent mini-player from the browse page.
+  await page.getByRole('button', { name: '← 返回浏览' }).click();
   await page.locator('.media-mini').waitFor({ state: 'attached' });
   await page.locator('.react-mini-player a').click();
   await page.waitForURL(/#\/media\/video\/player\?item=review-film&part=review-film-part/);
-  await page.locator('.media-player-page').waitFor({ state: 'attached' });
+  await page.locator('.media-playback-page').waitFor({ state: 'attached' });
   assert.equal(playbackPostsBeforeRoute.length, 0, 'route return created a new playback session');
   page.off('response', countPlaybackPosts);
 
@@ -375,11 +429,11 @@ async function runMediaReview(browser, fixture, checks, errors) {
   // Empty states distinguish a configured-but-empty music channel from a channel
   // with no accessible audiobook library.
   await page.setViewportSize({ width: 390, height: heightFor(390) });
-  await page.goto(`${origin}/#/media/music`);
+  await page.goto(`${origin}/#/media/music/albums`);
   await waitMediaHeading(page, '音乐');
   await page.locator('.media-library-empty').waitFor({ state: 'attached' });
   assert.match(await page.locator('.media-library-empty').innerText(), /还没有|暂无内容/);
-  await page.goto(`${origin}/#/media/audiobook`);
+  await page.goto(`${origin}/#/media/audiobook/books`);
   await waitMediaHeading(page, '有声书');
   await page.locator('.media-library-empty').waitFor({ state: 'attached' });
   assert.match(await page.locator('.media-library-empty').innerText(), /让喜欢的作品住进来/);
@@ -439,11 +493,11 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await memberContext.close();
   // Back/forward must remain inside the hash router and keep the target page.
   await page.goto(`${origin}/#/media/video`);
-  await page.goto(`${origin}/#/media/music`);
+  await page.goto(`${origin}/#/media/music/albums`);
   await page.goBack();
   assert.equal(new URL(page.url()).hash, '#/media/video');
   await page.goForward();
-  assert.equal(new URL(page.url()).hash, '#/media/music');
+  assert.equal(new URL(page.url()).hash, '#/media/music/albums');
   assert.deepEqual(apiFailures, [], `media API failures: ${JSON.stringify(apiFailures)}`);
   await context.close();
 }

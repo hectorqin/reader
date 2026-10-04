@@ -1,6 +1,7 @@
 import { Button, Center, Stack, Title } from '@mantine/core';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ChevronLeft } from 'lucide-react';
 import { usePlaybackStore } from '../stores/playback.store.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { PlaybackControls, type PlaybackPanel } from '../components/playback-controls.tsx';
@@ -17,6 +18,11 @@ export function MediaPlayerPage() {
   const active = usePlaybackStore(state => state.active);
   const video = usePlaybackStore(state => state.video);
   const requested = panel === 'lyrics' || panel === 'queue' || panel === 'chapters' ? panel as PlaybackPanel : 'main';
+  // Keep the routed player shell aligned with the legacy Preact screen. The
+  // live media element is mounted outside this tree, but the screen classes
+  // drive the fixed heading, channel navigation visibility, and page sizing.
+  const videoPage = video || channel === 'video';
+  const rootClassName = ['media-screen', 'media-secondary-page', 'media-playback-page', 'media-player-page', videoPage ? 'media-video-page' : undefined].filter(Boolean).join(' ');
   const [restoreError, setRestoreError] = useState('');
   // The player element lives outside the routed React tree so playback survives
   // navigation. A player route is the explicit full-screen/expanded view; mirror
@@ -35,8 +41,15 @@ export function MediaPlayerPage() {
       .catch(reason => { if (!controller.signal.aborted) setRestoreError(reason instanceof Error ? reason.message : '无法恢复播放'); });
     return () => controller.abort();
   }, [runtime, params]);
-  if (restoreError) return <Center mih="60vh"><Stack align="center"><Title order={2}>无法恢复播放</Title><div role="alert">{restoreError}</div><Button onClick={() => navigate(`/media/${channel}`)}>返回频道</Button></Stack></Center>;
-  if (!active) return <Center mih="60vh"><Stack align="center"><Title order={2}>当前没有播放内容</Title><Button onClick={() => navigate(`/media/${channel}`)}>选择作品</Button></Stack></Center>;
-  if (video) return <div className="media-player-page">{createPortal(<VideoControls player={runtime.player} api={runtime.mediaApi} onBack={() => navigate(-1)} />, runtime.player.videoControlsHost)}</div>;
-  return <div className="media-player-page"><PlaybackControls player={runtime.player} api={runtime.mediaApi} panel={requested} onPanelChange={value => navigate(value === 'main' ? `/media/${channel}/player` : `/media/${channel}/player/${value}`, { replace: true })} onBack={() => navigate(-1)} /></div>;
+  const back = () => navigate(-1);
+  return <div className={rootClassName}>
+    {videoPage && <header className="media-heading">
+      <button type="button" className="media-back-button" aria-label="← 返回浏览" title="返回浏览" onClick={back}><ChevronLeft size={20} aria-hidden="true" /></button>
+      <strong>视频播放</strong>
+    </header>}
+    {restoreError ? <Center mih="60vh"><Stack align="center"><Title order={2}>无法恢复播放</Title><div role="alert">{restoreError}</div><Button onClick={() => navigate(`/media/${channel}`)}>返回频道</Button></Stack></Center>
+      : !active ? <Center mih="60vh"><Stack align="center"><Title order={2}>当前没有播放内容</Title><Button onClick={() => navigate(`/media/${channel}`)}>选择作品</Button></Stack></Center>
+      : video ? createPortal(<VideoControls player={runtime.player} api={runtime.mediaApi} onBack={back} />, runtime.player.videoControlsHost)
+      : <PlaybackControls player={runtime.player} api={runtime.mediaApi} panel={requested} onPanelChange={value => navigate(value === 'main' ? `/media/${channel}/player` : `/media/${channel}/player/${value}`, { replace: true })} onBack={back} />}
+  </div>;
 }

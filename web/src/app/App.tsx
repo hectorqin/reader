@@ -5,6 +5,7 @@ import { useAuthStore } from '../shared/stores/auth.store.ts';
 import { useRuntime } from './providers/runtime-context.tsx';
 import { LoginPage } from '../features/auth/pages/LoginPage.tsx';
 import { MiniPlayer } from '../features/media/components/MiniPlayer.tsx';
+import { MediaChannelEntry } from '../features/media/components/channel-navigation.tsx';
 
 export function AppShell() {
   return <AuthBoundary><AuthenticatedShell /></AuthBoundary>;
@@ -49,16 +50,7 @@ export function MediaLayout() {
     : location.pathname.startsWith('/media/audiobook')
       ? 'audiobook'
       : 'video';
-  return <>
-    <nav className="media-channel-entry" aria-label="主导航">
-      <span className="media-brand" aria-hidden="true">reader.</span>
-      <Link to="/shelf">阅读</Link>
-      <Link to="/media/video" aria-current={current === 'video' ? 'page' : undefined}>影视</Link>
-      <Link to="/media/music" aria-current={current === 'music' ? 'page' : undefined}>音乐</Link>
-      <Link to="/media/audiobook" aria-current={current === 'audiobook' ? 'page' : undefined}>有声书</Link>
-    </nav>
-    <Outlet />
-  </>;
+  return <><MediaChannelEntry current={current} /><Outlet /></>;
 }
 
 export function HomeRedirect() { return <Navigate to="/media/video" replace />; }
