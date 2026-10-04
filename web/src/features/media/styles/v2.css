@@ -518,7 +518,7 @@ body[data-media-theme] .media-video-stage .plyr {
   }
   .media-screen.media-catalog-page .media-tabs {
     margin-top: 0;
-    margin-bottom: 6px;
+    margin-bottom: 0;
     min-height: 44px;
     height: 44px;
     gap: 25px;
