@@ -38,7 +38,7 @@ export function MediaLibrariesPage() {
     try {
       await runtime.mediaApi.request(`libraries/${encodeURIComponent(id)}/scan`, 'POST');
       await queryClient.invalidateQueries({ queryKey: ['media'] });
-      navigate(`/media/${channel}/settings/tasks?library=${encodeURIComponent(id)}`);
+      navigate(`/media/${channel}/settings/tasks?library=${encodeURIComponent(id)}`, { state: { returnTo: `/media/${channel}/settings/libraries` } });
     } catch (error) {
       setActionError(error instanceof Error ? error.message : '扫描请求失败，请稍后重试。');
     } finally { setBusyId(null); }
@@ -47,7 +47,7 @@ export function MediaLibrariesPage() {
     <summary aria-label="媒体库管理操作" title="媒体库管理操作"><MoreHorizontal size={20} aria-hidden="true" /></summary>
     <nav aria-label="媒体库管理操作">
       <Link to={`/media/${channel}/settings/libraries/new`}><Plus size={16} aria-hidden="true" />新建媒体库</Link>
-      <Link to={`/media/${channel}/settings/tasks`}><RefreshCw size={16} aria-hidden="true" />扫描与刮削</Link>
+      <Link to={`/media/${channel}/settings/tasks`} state={{ returnTo: `/media/${channel}/settings/libraries` }}><RefreshCw size={16} aria-hidden="true" />扫描与刮削</Link>
     </nav>
   </details>}>
     {actionError && <Alert color="red" title="操作失败">{actionError}</Alert>}
@@ -84,7 +84,7 @@ export function MediaLibraryCreatePage() {
       queryClient.setQueryData(librariesQuery(runtime).queryKey, (value: { items: Library[] } | undefined) => ({ items: [...(value?.items ?? []).filter(item => item.id !== library.id), library] }));
     }}
     onCancel={() => navigate(`/media/${channel}/settings/libraries`)}
-    onJobs={async id => { navigate(`/media/${channel}/settings/tasks?library=${encodeURIComponent(id)}`); }}
+    onJobs={async id => { navigate(`/media/${channel}/settings/tasks?library=${encodeURIComponent(id)}`, { state: { returnTo: `/media/${channel}/settings/libraries` } }); }}
   /></MediaPageFrame>;
 }
 

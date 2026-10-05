@@ -43,7 +43,7 @@ export function MediaSettingsPage() {
       onPanelChange={next => navigate(settingsPath(next))}
       onPersonal={view => navigate(view === 'favorites' ? '/media/favorites' : view === 'queue' ? `/media/${channel}/queue` : `/media/${channel}/history`, { state: { returnTo: `/media/${channel}/settings` } })}
       onManage={() => navigate(`/media/${channel}/settings/libraries`)}
-      onTasks={() => navigate(`/media/${channel}/settings/tasks`)}
+      onTasks={() => navigate(`/media/${channel}/settings/tasks`, { state: { returnTo: `/media/${channel}/settings` } })}
       onPlayback={() => navigate(`/media/${channel}/player`)}
     />
   </MediaPageFrame>;
