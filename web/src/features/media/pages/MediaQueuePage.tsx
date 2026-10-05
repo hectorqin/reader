@@ -48,7 +48,8 @@ export function MediaQueuePage() {
       }
       if (type === 'clear') {
         if (channel) {
-          await runtime.mediaApi.request('queue/clear', 'POST', { channel, entryIds: entries.map(entry => entry.id) });
+          const channelEntries = entries.filter(entry => queueChannel(entry.kind) === channel);
+          await runtime.mediaApi.request('queue/clear', 'POST', { channel, entryIds: channelEntries.map(entry => entry.id) });
         } else {
           const grouped = new Map<string, string[]>();
           for (const entry of entries) { const kind = queueChannel(entry.kind), ids = grouped.get(kind) ?? []; ids.push(entry.id); grouped.set(kind, ids); }

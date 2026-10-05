@@ -1,6 +1,7 @@
-import { Button, Pagination, Select } from '@mantine/core';
+import { Button } from '@mantine/core';
 import { FolderOpen, History, LibraryBig, ListVideo, MoreHorizontal, Search, Settings2, SlidersHorizontal, Star } from 'lucide-react';
 import { Link, NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { catalogQuery, useMediaLibraries } from '../queries/media.queries.ts';
@@ -11,6 +12,11 @@ import { ContinuePlaying } from '../components/continue-playing.tsx';
 import { usePlaybackStore } from '../stores/playback.store.ts';
 import { EmptyMediaLibrary } from '../components/empty-library.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
+import { MediaSelect } from '../components/select.tsx';
+
+const countLabels: Record<string, string> = {
+  video: '项', movie: '部电影', series: '部剧集', album: '张专辑', artist: '位歌手', track: '首曲目', audiobook: '部有声书', narrator: '位演播者',
+};
 
 export function MediaCatalogPage() {
   const runtime = useRuntime(), navigate = useNavigate(), channel = useMediaChannel(), { category } = useParams(), [params, setParams] = useSearchParams();
@@ -21,13 +27,21 @@ export function MediaCatalogPage() {
   const offset = Number(params.get('offset')) || 0;
   const patch = (values: Record<string, string>) => { const next = new URLSearchParams(params); for (const [key, value] of Object.entries(values)) value ? next.set(key, value) : next.delete(key); setParams(next); };
   const channelLibraries = libraries.data?.items.filter(item => item.kind === channel) ?? [];
-  const selectedLibrary = params.get('library') ?? '';
+  const selectedFromUrl = params.get('library');
+  const selectedLibrary = selectedFromUrl ?? (channelLibraries.length === 1 ? channelLibraries[0]!.id : '');
   const emptyCatalog = !query.isPending && !query.error && query.data?.total === 0;
   // An empty channel without a configured library uses the focused legacy empty state;
   // there is no source selector or category toolbar to act on in that state.
   const hasLibraries = channelLibraries.length > 0;
   const emptyWithoutLibraries = emptyCatalog && !hasLibraries;
   const libraryOptions = [{ value: '', label: '全部媒体库' }, ...(channelLibraries.map(item => ({ value: item.id, label: item.name })) )];
+  useEffect(() => {
+    if (selectedFromUrl === null && channelLibraries.length === 1) {
+      const next = new URLSearchParams(params);
+      next.set('library', channelLibraries[0]!.id);
+      setParams(next, { replace: true });
+    }
+  }, [channelLibraries, params, selectedFromUrl, setParams]);
   return <MediaPageFrame className="media-catalog-page" title={channelLabels[channel]} actions={<>
     <Button component={Link} to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Button>
     <details className="media-actions media-catalog-actions">
@@ -58,17 +72,27 @@ export function MediaCatalogPage() {
     />}
     {!emptyWithoutLibraries && <div className="media-toolbar media-browse-tools">
       <div className="media-library-filter">
-        <Select aria-label="来源库" data={libraryOptions} value={selectedLibrary} onChange={value => patch({ library: value ?? '', offset: '' })} />
-        {query.data && <span className="media-catalog-count">{query.data.total}{channel === 'music' && current.kind === 'album' ? ' 张专辑' : ' 项'}</span>}
+        <MediaSelect variant="plain" aria-label="来源库" value={selectedLibrary} onChange={event => patch({ library: event.currentTarget.value, offset: '' })}>
+          {libraryOptions.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}
+        </MediaSelect>
+        {query.data && <span className="media-catalog-count">{query.data.total} {countLabels[current.kind] ?? '项'}</span>}
       </div>
       <div className="media-browse-actions">
         <Button component={Link} to={`/media/${channel}/folders${selectedLibrary ? `/${encodeURIComponent(selectedLibrary)}` : ''}`} className="media-icon-button" aria-label="打开文件夹" title="打开文件夹"><FolderOpen size={19} aria-hidden="true" /></Button>
-        <label className="media-sort-control" aria-label="排序">
-          <SlidersHorizontal size={19} aria-hidden="true" />
-          <Select aria-label="排序" data={[{ value: 'default', label: '默认顺序' }, { value: 'title-asc', label: '名称升序' }, { value: 'title-desc', label: '名称降序' }]} value={params.get('sort') ?? 'default'} onChange={value => patch({ sort: value ?? 'default', offset: '' })} />
-        </label>
+        <details className="media-browse-filters">
+          <summary aria-label="筛选与排序" title="筛选与排序"><SlidersHorizontal size={19} aria-hidden="true" />{params.get('sort') && params.get('sort') !== 'default' && <i aria-label="已应用筛选" />}</summary>
+          <div className="media-browse-filter-panel">
+            <label>排序<MediaSelect aria-label="排序" value={params.get('sort') ?? 'default'} onChange={event => patch({ sort: event.currentTarget.value, offset: '' })}>
+              <option value="default">默认顺序</option><option value="title-asc">名称升序</option><option value="title-desc">名称降序</option>
+            </MediaSelect></label>
+          </div>
+        </details>
       </div>
     </div>}
-    {!emptyCatalog && query.data && <><MediaItemGrid items={query.data.items} channel={channel} /><div className="media-toolbar media-pagination"><Pagination total={Math.max(1, Math.ceil(query.data.total / 60))} value={Math.floor(offset / 60) + 1} onChange={page => patch({ offset: String((page - 1) * 60) })} /></div></>}
+    {!emptyCatalog && query.data && <><MediaItemGrid items={query.data.items} channel={channel} />{query.data.total > 60 && <nav className="media-toolbar media-pagination" aria-label="分页">
+      <Button disabled={offset === 0 || query.isFetching} onClick={() => patch({ offset: offset >= 60 ? String(offset - 60) : '' })}>上一页</Button>
+      <span>{Math.floor(offset / 60) + 1} / {Math.ceil(query.data.total / 60)}</span>
+      <Button disabled={offset + 60 >= query.data.total || query.isFetching} onClick={() => patch({ offset: String(offset + 60) })}>下一页</Button>
+    </nav>}</>}
   </MediaPageFrame>;
 }

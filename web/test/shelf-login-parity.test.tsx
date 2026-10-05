@@ -58,10 +58,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('keeps the shelf entry points available and restores clear, refresh, settings and OPDS actions', async () => {
+it('keeps the shelf entry points available and restores clear, settings and OPDS actions', async () => {
   const value = mount(<ShelfPage />, runtime(), '/shelf?q=三体');
   expect(root.textContent).toContain('书源');
-  expect(root.textContent).toContain('刷新');
+  expect(root.textContent).not.toContain('刷新');
   expect(root.textContent).toContain('设置');
   expect(root.querySelector('[aria-label="清除搜索"]')).not.toBeNull();
   const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;

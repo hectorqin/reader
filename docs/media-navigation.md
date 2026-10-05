@@ -31,6 +31,6 @@ channel 表示 video、music 或 audiobook；itemId、part、libraryId 均为真
 | 文件夹、文件 | #/media/:channel/folders/:libraryId?path=…&offset=…；文件继续使用该路由并追加 asset=… |
 | 演播者、演播作品 | #/media/audiobook/narrators/:narrator，以及 /media/audiobook/narrators/:narrator/works/:workId |
 
-旧路由不承担兼容承诺。返回按实际浏览器历史和保存的来源状态处理；不为每个页面生成 return 查询参数。播放器的 item、part 查询参数保存作品及播放部分，可刷新后重新校验授权并恢复页面。
+路由表之外保留少量旧深链接兼容：`/media`、`/media/music` 和 `/media/audiobook` 会进入对应频道默认页；未知媒体路径回到 `/media/video`。书源与系统旧入口的兼容规则见[React 架构说明](frontend-react-migration.md)。返回按实际浏览器历史和保存的来源状态处理；不为每个页面生成 return 查询参数。播放器的 item、part 查询参数保存作品及播放部分，可刷新后重新校验授权并恢复页面。
 
 协议实现以[React 页面路由](../web/src/app/router/routes.tsx)及[影音 feature](../web/src/features/media/)为准。冻结 v2 原型内的示例路由只用于设计演示。

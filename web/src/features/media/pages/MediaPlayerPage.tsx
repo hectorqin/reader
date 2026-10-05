@@ -1,4 +1,4 @@
-import { Button, Center, Stack, Title } from '@mantine/core';
+import { Button, Center, Stack } from '@mantine/core';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
@@ -41,14 +41,22 @@ export function MediaPlayerPage() {
       .catch(reason => { if (!controller.signal.aborted) setRestoreError(reason instanceof Error ? reason.message : '无法恢复播放'); });
     return () => controller.abort();
   }, [runtime, params]);
-  const back = () => navigate(-1);
+  // Legacy playback keeps the expanded player open when leaving queue/lyrics/
+  // chapter sub-panels; only the main player view exits back to the catalogue.
+  const back = () => {
+    if (requested !== 'main') {
+      navigate(`/media/${channel}/player`, { replace: true });
+      return;
+    }
+    navigate(-1);
+  };
   return <div className={rootClassName}>
     {videoPage && <header className="media-heading">
       <button type="button" className="media-back-button" aria-label="← 返回浏览" title="返回浏览" onClick={back}><ChevronLeft size={20} aria-hidden="true" /></button>
       <strong>视频播放</strong>
     </header>}
-    {restoreError ? <Center mih="60vh"><Stack align="center"><Title order={2}>无法恢复播放</Title><div role="alert">{restoreError}</div><Button onClick={() => navigate(`/media/${channel}`)}>返回频道</Button></Stack></Center>
-      : !active ? <Center mih="60vh"><Stack align="center"><Title order={2}>当前没有播放内容</Title><Button onClick={() => navigate(`/media/${channel}`)}>选择作品</Button></Stack></Center>
+    {restoreError ? <Center mih="60vh"><Stack align="center"><strong>无法恢复播放</strong><div role="alert">{restoreError}</div><Button variant="subtle" onClick={() => navigate(`/media/${channel}`)}>返回频道</Button></Stack></Center>
+      : !active ? <div className="media-player-empty"><p>当前没有播放内容。</p><Button variant="subtle" onClick={() => navigate(`/media/${channel}`)}>选择作品</Button></div>
       : video ? createPortal(<VideoControls player={runtime.player} api={runtime.mediaApi} onBack={back} />, runtime.player.videoControlsHost)
       : <PlaybackControls player={runtime.player} api={runtime.mediaApi} panel={requested} onPanelChange={value => navigate(value === 'main' ? `/media/${channel}/player` : `/media/${channel}/player/${value}`, { replace: true })} onBack={back} />}
   </div>;

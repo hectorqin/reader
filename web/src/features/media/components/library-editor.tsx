@@ -2,6 +2,7 @@ import {FloatingConfirm} from '../../../ui/floating-confirm.tsx';
 import { useEffect, useRef, useState } from 'react';
 import type { Library, LibraryConfiguration, MediaApi } from '../api/media-api.ts';
 import {ChevronLeft} from 'lucide-react';
+import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 
 type Configuration = LibraryConfiguration;
 const kinds = { video: '影视', music: '音乐', audiobook: '有声书' };
@@ -51,7 +52,7 @@ export function MediaLibraryEditor({ api, library, onSaved, onCancel }: {
     {leaving&&<FloatingConfirm theme="media" title="放弃媒体库修改？" text="媒体库修改尚未保存，离开后将丢弃本次修改。" confirmText="放弃修改" cancelText="继续编辑" onCancel={()=>setLeaving(false)} onConfirm={()=>{setLeaving(false);onCancel();}}/>}
     <form className="media-form media-library-editor" aria-label="媒体库配置" onSubmit={event => { event.preventDefault(); void save(); }}>
     {error && <div role="alert" className="media-error">{error}{!configuration && <button type="button" onClick={() => setAttempt(value => value + 1)}>重试读取配置</button>}</div>}
-    {!configuration && !error && <p role="status">正在读取媒体库配置…</p>}
+    {!configuration && !error && <FloatingNotice message="正在读取媒体库配置…" busy />}
     <label>媒体库名称<input name="name" required maxLength={200} value={name} disabled={!configuration || saving} onInput={event => setName(event.currentTarget.value)}/></label>
     {configuration && <>
       <div className="media-library-fields"><div><span>内容类型</span><p className="media-readonly-field">{kinds[configuration.kind]}</p></div><div><span>接入方式</span><p className="media-readonly-field">{configuration.storage==='openlist'?'OpenList':'服务器目录'}</p></div></div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MediaApi } from '../api/media-api.ts';
 import type { MediaPlayer } from '../services/player.ts';
 import {LocateFixed,Music2} from 'lucide-react';
+import {FloatingNotice} from '../../../ui/floating-notice.tsx';
 interface LyricsData {synced:boolean;lines:Array<{time:number|null;text:string}>;source:string}
 export function Lyrics({api,player}:{api:MediaApi;player:MediaPlayer}){
   const partId=player.currentPartId;
@@ -32,7 +33,7 @@ export function Lyrics({api,player}:{api:MediaApi;player:MediaPlayer}){
     return ()=>{resize.disconnect();document.fonts?.removeEventListener('loadingdone',align);};
   },[activeTime,follow]);
   return <section className="media-lyrics" aria-label="歌词">
-    {error?<div className="media-lyrics-empty" role="alert"><Music2 size={30} aria-hidden="true"/><h3>歌词暂时无法读取</h3><p>{error}</p><button onClick={()=>setRetry(retry+1)}>重试歌词</button></div>:!data?<div className="media-lyrics-empty media-lyrics-loading" role="status"><span>正在读取歌词…</span><i aria-hidden="true"/><i aria-hidden="true"/><i aria-hidden="true"/></div>:!data.lines.length?<div className="media-lyrics-empty"><Music2 size={30} aria-hidden="true"/><h3>暂无歌词</h3><p>可在音频旁放置同名 .lrc 文件。</p></div>:<>
+    {error?<div className="media-lyrics-empty" role="alert"><Music2 size={30} aria-hidden="true"/><h3>歌词暂时无法读取</h3><p>{error}</p><button onClick={()=>setRetry(retry+1)}>重试歌词</button></div>:!data?<><FloatingNotice message="正在读取歌词…" busy /><div className="media-lyrics-empty media-lyrics-loading" role="status" aria-label="正在读取歌词"><i aria-hidden="true"/><i aria-hidden="true"/><i aria-hidden="true"/></div></>:!data.lines.length?<div className="media-lyrics-empty"><Music2 size={30} aria-hidden="true"/><h3>暂无歌词</h3><p>可在音频旁放置同名 .lrc 文件。</p></div>:<>
       <div className="media-toolbar media-lyrics-toolbar"><small title={data.source==='sidecar'?'本地歌词文件':'内嵌歌词标签'}>{data.synced?'点击歌词跳转':'纯文本歌词'}</small>{data.synced&&<button aria-label={follow?'暂停跟随':'跟随播放'} title={follow?'暂停跟随':'跟随播放'} aria-pressed={follow} onClick={()=>setFollow(!follow)}><LocateFixed size={18} aria-hidden="true"/></button>}</div>
       <div ref={viewport} className="media-lyrics-lines" tabIndex={0} aria-label="歌词文本" onWheel={()=>setFollow(false)} onTouchStart={()=>setFollow(false)} onKeyDown={event=>{
         if(event.altKey||event.ctrlKey||event.metaKey||!['ArrowUp','ArrowDown','PageUp','PageDown','Home','End'].includes(event.key))return;

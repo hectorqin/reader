@@ -2,6 +2,8 @@ import { chromium } from 'playwright';
 import { createReviewServer } from './server.mjs';
 import { mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import { join, resolve } from 'node:path';
+const shots = process.env.UI_REVIEW_DIR ? resolve(process.env.UI_REVIEW_DIR) : join(resolve(import.meta.dirname, '../../..'), 'artifacts/ui-review/extension');
 let savedName = '示例配置';
 function extensionPage(body) {
  if (body) { assert.equal(body.action, 'save'); savedName = body.values.name; }
@@ -53,13 +55,13 @@ try {
  await page.getByRole('status').filter({hasText:'配置已保存'}).waitFor();
  assert.equal(savedName,'修改后的配置');
  assert.equal(await page.locator('body').evaluate(el=>el.scrollWidth>innerWidth),false);
- await mkdir('docs/ui-review',{recursive:true});await page.screenshot({path:'docs/ui-review/plugin-config-mobile.png'});
+ await mkdir(shots,{recursive:true});await page.screenshot({path:join(shots,'plugin-config-mobile.png')});
  for (const width of [1024, 1366, 1920]) {
   await page.setViewportSize({width,height:900});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   assert.ok(await page.locator('.sources-body').evaluate(el=>el.getBoundingClientRect().width >= Math.min(innerWidth - 48, 1280)), 'desktop source page uses the shared content measure');
   assert.ok(await page.getByRole('tab').first().evaluate(el=>el.getBoundingClientRect().width<240), 'desktop tabs stay compact');
-  await page.screenshot({path:`docs/ui-review/plugin-config-desktop-${width}.png`,animations:'disabled'});
+  await page.screenshot({path:join(shots,`plugin-config-desktop-${width}.png`),animations:'disabled'});
   const bounds = selector => page.locator(selector).first().evaluate(el => {const r=el.getBoundingClientRect(); return {left:r.left,width:r.width};});
   const config = await bounds('.sources-body');
   const card = await bounds('.sources-body .sources-card');
@@ -70,12 +72,12 @@ try {
   await page.goto(base+'/#/sources'); await page.locator('.sources-hub').waitFor();
   assert.deepEqual(await bounds('.sources-body'),config,'source hub and library share the same width and position');
   assert.deepEqual(await bounds('.sources-header'),libraryHeader,'source and library headings align');
-  await page.screenshot({path:`docs/ui-review/sources-hub-desktop-${width}.png`,animations:'disabled'});
+  await page.screenshot({path:join(shots,`sources-hub-desktop-${width}.png`),animations:'disabled'});
   await page.goto(base+'/#/sources/catalog/library'); await page.getByRole('heading',{name:'我的远程书源',exact:true}).waitFor();
  }
  await page.setViewportSize({width:390,height:844});await page.goto(base+'/#/sources');await page.getByRole('combobox',{name:'选择来源',exact:true}).selectOption('catalog');await page.locator('.sources-search select').first().selectOption('fiction');await page.locator('input[type=search]').fill('多书源');await page.getByRole('button',{name:'搜索',exact:true}).click();await page.getByText('【示例书源 A】',{exact:true}).waitFor();
- assert.equal(await page.locator('body').evaluate(el=>el.scrollWidth>innerWidth),false);await page.screenshot({path:'docs/ui-review/plugin-search-mobile.png'});
- await page.goto(base+'/#/book/extension-book');await page.getByRole('button',{name:'目录',exact:true}).click();await page.getByRole('button',{name:'切换书源',exact:true}).click();await page.getByRole('button',{name:'查看此源目录',exact:true}).click();await page.locator('section[aria-label="切换书源"] select').selectOption('new-two');await page.screenshot({path:'docs/ui-review/plugin-switch-mobile.png'});
+ assert.equal(await page.locator('body').evaluate(el=>el.scrollWidth>innerWidth),false);await page.screenshot({path:join(shots,'plugin-search-mobile.png')});
+ await page.goto(base+'/#/book/extension-book');await page.getByRole('button',{name:'目录',exact:true}).click();await page.getByRole('button',{name:'切换书源',exact:true}).click();await page.getByRole('button',{name:'查看此源目录',exact:true}).click();await page.locator('section[aria-label="切换书源"] select').selectOption('new-two');await page.screenshot({path:join(shots,'plugin-switch-mobile.png')});
  await page.getByRole('button',{name:'确认换源并阅读',exact:true}).click();await page.getByText('测试：新源暂时不可用',{exact:true}).waitFor();assert.match(await page.locator('book-content .book-flow').textContent(),/旧书源/);
  fail=false;await page.getByRole('button',{name:'确认换源并阅读',exact:true}).click();await page.getByText('已切换书源，从所选章节开头继续阅读',{exact:true}).waitFor();assert.match(await page.locator('book-content .book-flow').textContent(),/新书源/);assert.deepEqual(errors,[]);
  console.log('PASS production Chromium: mobile/desktop config, generic settings, safe log output, generic filters, failed switch preserves view, successful switch lands on selected chapter');

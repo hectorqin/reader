@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Group, Stack, Text, Title } from '@mantine/core';
+import { Alert, Button } from '@mantine/core';
 import { Ellipsis, Heart, Play } from 'lucide-react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,7 +13,7 @@ import { EditionDetails } from '../components/edition-details.tsx';
 import { MediaSelect } from '../components/select.tsx';
 import { MissingEdition } from '../components/missing-edition.tsx';
 import { AlbumPlayback } from '../components/album-playback.tsx';
-import { SeriesPlayback, SeriesSeasons, SeasonPlayback } from '../components/season-playback.tsx';
+import { SeriesSeasons, SeasonPlayback, seasonQueue, type SeasonEpisode } from '../components/season-playback.tsx';
 import { MediaChildList } from '../components/child-list.tsx';
 import { ResourcePanel } from '../components/resource-panel.tsx';
 import { MetadataSources } from '../components/metadata-sources.tsx';
@@ -54,17 +54,17 @@ export function MediaDetailPage() {
     setResourcePanel(panel);
   };
   const detailActions = detail ? <details className="media-actions media-item-actions" ref={detailMenu}>
-    <summary aria-label={detail.kind === 'artist' ? '歌手操作' : '作品操作'} title="作品操作"><Ellipsis size={20} aria-hidden="true" /></summary>
+    <summary aria-label={detail.kind === 'artist' ? '歌手操作' : '作品操作'} title={detail.kind === 'artist' ? '歌手操作' : '作品操作'}><Ellipsis size={20} aria-hidden="true" /></summary>
     <nav aria-label={detail.kind === 'artist' ? '歌手操作' : '作品操作'}>
+      <button type="button" disabled={toggleFavorite.isPending} onClick={() => { detailMenu.current?.removeAttribute('open'); toggleFavorite.mutate(!favorite.data?.favorite); }}>{favorite.data?.favorite ? (detail.kind === 'artist' ? '取消收藏歌手' : '取消收藏作品') : (detail.kind === 'artist' ? '收藏歌手' : '收藏作品')}</button>
       {detail.kind !== 'artist' && <>
-        <button type="button" disabled={toggleFavorite.isPending} onClick={() => { detailMenu.current?.removeAttribute('open'); toggleFavorite.mutate(!favorite.data?.favorite); }}>{favorite.data?.favorite ? '取消收藏作品' : '收藏作品'}</button>
         {detail.editions.some(edition => edition.parts.length > 0) && <button type="button" onClick={() => openResourcePanel('files')}>资源信息</button>}
         {(detail.editions.length > 1 || (admin && detail.editions.length > 0)) && <button type="button" onClick={() => openResourcePanel('versions')}>{admin ? '版本管理' : '播放版本'}</button>}
         <button type="button" onClick={() => openResourcePanel('source')}>资料来源</button>
       </>}
       {admin && <>
-        <button type="button" onClick={() => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/metadata`)}>编辑资料</button>
-        <button type="button" onClick={() => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/match`)}>匹配元数据</button>
+        <button type="button" onClick={() => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/metadata`)}>{detail.kind === 'artist' ? '编辑歌手资料' : '编辑资料'}</button>
+        <button type="button" onClick={() => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/match`)}>{detail.kind === 'artist' ? '匹配歌手资料' : '匹配元数据'}</button>
         {detail.kind === 'audiobook' && <button type="button" onClick={() => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/chapters`)}>章节列表</button>}
         {['track', 'album', 'season', 'episode'].includes(detail.kind) && <button type="button" onClick={() => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/structure`)}>结构整理</button>}
       </>}
@@ -107,21 +107,29 @@ function DetailContent({ detail, channel, favorite, favoriteBusy, onToggleFavori
   const resourceSummary = edition
     ? `${new Set(edition.parts.map(part => part.assetId)).size} 个文件 · ${edition.label}`
     : detail.children.length + (detail.kind === 'album' ? ' 首曲目' : detail.kind === 'series' ? ' 季 · 资源见单集详情' : ' 项内容');
-  return <Stack className="media-detail-page">
-    <Group className="media-hero" align="start"><MediaCover api={runtime.mediaApi} item={detail} square={['album', 'artist', 'track'].includes(detail.kind)} /><Stack className="media-detail-hero-copy" flex={1}><MediaDetailHeading item={detail} edition={edition} {...(detail.kind === 'album' ? { trackCount: detail.children.length } : {})} {...(detail.kind === 'series' ? { seasonCount: detail.children.length } : {})} /></Stack></Group>
-    <Group className="media-detail-actions"><Button className="media-primary" leftSection={<Play size={16} />} disabled={!playable.length} onClick={() => onPlay(playable)}>{detail.kind === 'movie' ? '播放电影' : detail.kind === 'series' ? '播放剧集' : detail.kind === 'audiobook' ? '播放有声书' : detail.kind === 'album' ? '播放专辑' : '播放'}</Button>{detail.kind !== 'album' && <Button className="media-detail-favorite" variant={favorite ? 'filled' : 'light'} {...(favorite ? { color: 'pink' as const } : {})} loading={favoriteBusy} aria-label={favorite ? '取消收藏' : '收藏'} title={favorite ? '取消收藏' : '收藏'} onClick={onToggleFavorite}><Heart size={18} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" /></Button>}</Group>
-    {plot && <Card className="media-detail-description" withBorder><Title order={3}>{['movie', 'series', 'season', 'episode'].includes(detail.kind) ? '剧情简介' : detail.kind === 'audiobook' ? '内容简介' : '简介'}</Title><Text>{plot}</Text></Card>}
-    {edition && edition.parts.length > 0 && !playable.length && <MissingEdition title={detail.title} label={edition.label} busy={false} onRefresh={onRefresh} onChooseVersion={detail.editions.length > 1 ? () => onResourcePanelChange('versions') : undefined} />}
-    {detail.kind !== 'artist' && <ResourcePanel api={runtime.mediaApi} assets={assets} summary={resourceSummary} versionPicker={detail.editions.length > 1 && <label className="media-edition-picker">版本<MediaSelect aria-label="播放版本" value={edition?.id ?? ''} onChange={event => { const next = new URLSearchParams(params); next.set('edition', event.currentTarget.value); setParams(next, { replace: true }); }}>{detail.editions.map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</MediaSelect></label>} editionOptions={editionOptions} sourceInfo={<MetadataSources item={detail} />} openPanel={resourcePanel} onPanelChange={onResourcePanelChange} showTrigger={false} />}
-    {detail.kind === 'album' && <AlbumPlayback api={runtime.mediaApi} id={detail.id} credit={credit} onPlay={onPlayEntries} onQueue={onQueue} onDetail={id => navigate(`/media/music/items/${encodeURIComponent(id)}`)} onTracksRead={tracks => setAlbumAssets([...new Map(tracks.flatMap(track => track.editions.flatMap(value => value.parts.map(part => ({ id: part.assetId, title: part.title })))).map(asset => [asset.id, asset])).values()])} />}
-    {detail.kind === 'series' && <>
-      <SeriesPlayback id={detail.id} api={runtime.mediaApi} currentPartId={runtime.player.currentPartId} onPlay={onPlayEntries} onDetail={id => navigate(`/media/video/items/${encodeURIComponent(id)}`)} />
-      <SeriesSeasons api={runtime.mediaApi} seasons={detail.children} currentPartId={runtime.player.currentPartId} onPlay={onPlayEntries} onDetail={id => navigate(`/media/video/items/${encodeURIComponent(id)}`)} />
-    </>}
-    {detail.kind === 'season' && <SeasonPlayback api={runtime.mediaApi} id={detail.id} currentPartId={runtime.player.currentPartId} onPlay={onPlayEntries} onDetail={id => navigate(`/media/video/items/${encodeURIComponent(id)}`)} />}
-    {edition && playable.length > 0 && !['album', 'series'].includes(detail.kind) && !(detail.kind === 'movie' && edition.parts.length === 1) && <EditionDetails item={detail} edition={edition} api={runtime.mediaApi} busy={false} showTools={false} onPlay={onPlay} onQueue={onQueue} onRefresh={onRefresh} onChooseVersion={detail.editions.length > 1 ? () => onResourcePanelChange('versions') : undefined} />}
-    {detail.kind === 'artist' && <ArtistInfo item={detail} />}
-    {detail.kind === 'artist' && <ArtistTracks
+  const albumSidebar = detail.kind === 'album' && plot ? <aside className="media-detail-sidebar"><section className="media-detail-description"><h2>关于这张专辑</h2><p>{plot}</p></section></aside> : undefined;
+  const detailClass = 'media-detail-page' + (detail.kind === 'artist' ? ' media-person-detail' : '');
+  const artistPlot = detail.kind === 'artist' ? plot : '';
+  const playSeries = async () => {
+    const result = await runtime.mediaApi.request<{ episodes: SeasonEpisode[] }>(`items/${encodeURIComponent(detail.id)}/series-playback`);
+    const queue = seasonQueue(result.episodes, 0, {});
+    if (queue.entries.length) await onPlayEntries(queue.entries);
+    else if (result.episodes[0]) navigate(`/media/video/items/${encodeURIComponent(result.episodes[0].id)}`);
+  };
+  const resourceControl = detail.kind !== 'artist' && <ResourcePanel api={runtime.mediaApi} assets={assets} summary={resourceSummary} versionPicker={detail.editions.length > 1 && <label className="media-edition-picker">版本<MediaSelect aria-label="播放版本" value={edition?.id ?? ''} onChange={event => { const next = new URLSearchParams(params); next.set('edition', event.currentTarget.value); setParams(next, { replace: true }); }}>{detail.editions.map(value => <option key={value.id} value={value.id}>{value.label}</option>)}</MediaSelect></label>} editionOptions={editionOptions} sourceInfo={<MetadataSources item={detail} />} openPanel={resourcePanel} onPanelChange={onResourcePanelChange} showTrigger={false} />;
+  if (edition?.parts.length && !playable.length) return <>{resourceControl}<MissingEdition title={detail.title} label={edition.label} busy={false} onRefresh={onRefresh} onChooseVersion={detail.editions.length > 1 ? () => onResourcePanelChange('versions') : undefined} /></>;
+  return <>{resourceControl}<article className={detailClass}>
+    <div className="media-hero"><MediaCover api={runtime.mediaApi} item={detail} square={['album', 'artist', 'track'].includes(detail.kind)} /><div className={detail.kind === 'artist' ? 'media-person-copy' : 'media-detail-hero-copy'}><MediaDetailHeading item={detail} edition={edition} {...(detail.kind === 'album' ? { trackCount: detail.children.length } : {})} {...(detail.kind === 'series' ? { seasonCount: detail.children.length } : {})} />{detail.kind === 'artist' && <span className="media-person-count">{detail.children.filter(item => item.kind === 'album').length} 张专辑</span>}</div></div>
+    <div className="media-detail-actions">{detail.kind === 'series' && <Button className="media-primary" leftSection={<Play size={16} />} disabled={!detail.children.length} onClick={() => void playSeries()}>播放剧集</Button>}{edition && <Button className="media-primary" leftSection={<Play size={16} />} disabled={!playable.length} onClick={() => onPlay(playable)}>{detail.kind === 'movie' ? '播放电影' : detail.kind === 'track' ? '播放音频' : detail.kind === 'audiobook' ? '开始收听' : '播放此版本'}</Button>}{detail.kind !== 'album' && <Button className="media-detail-favorite" variant="subtle" loading={favoriteBusy} aria-label={favorite ? '取消收藏' : '收藏'} title={favorite ? '取消收藏' : '收藏'} onClick={onToggleFavorite}><Heart size={18} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" /></Button>}</div>
+    {artistPlot && <p className="media-person-bio">{artistPlot}</p>}
+    <div className={'media-detail-columns' + (detail.kind === 'album' ? ' media-album-detail' : '')}><div className="media-detail-main">
+      {!['artist', 'album'].includes(detail.kind) && plot && <section className="media-detail-description"><h2>{['movie', 'series', 'season', 'episode'].includes(detail.kind) ? '剧情简介' : '内容简介'}</h2><p>{plot}</p></section>}
+      {detail.kind === 'album' && <AlbumPlayback api={runtime.mediaApi} id={detail.id} credit={credit} sidebar={albumSidebar} onPlay={onPlayEntries} onQueue={onQueue} onDetail={id => navigate(`/media/music/items/${encodeURIComponent(id)}`)} onTracksRead={tracks => setAlbumAssets([...new Map(tracks.flatMap(track => track.editions.flatMap(value => value.parts.map(part => ({ id: part.assetId, title: part.title })))).map(asset => [asset.id, asset])).values()])} />}
+      {detail.kind === 'series' && <SeriesSeasons api={runtime.mediaApi} seasons={detail.children} currentPartId={runtime.player.currentPartId} onPlay={onPlayEntries} onDetail={id => navigate(`/media/video/items/${encodeURIComponent(id)}`)} />}
+      {detail.kind === 'season' && <SeasonPlayback api={runtime.mediaApi} id={detail.id} currentPartId={runtime.player.currentPartId} onPlay={onPlayEntries} onDetail={id => navigate(`/media/video/items/${encodeURIComponent(id)}`)} />}
+      {edition && playable.length > 0 && !['album', 'series'].includes(detail.kind) && !(detail.kind === 'movie' && edition.parts.length === 1) && <EditionDetails item={detail} edition={edition} api={runtime.mediaApi} busy={false} showTools={false} onPlay={onPlay} onQueue={onQueue} onRefresh={onRefresh} {...(detail.editions.length > 1 ? { onChooseVersion: () => onResourcePanelChange('versions') } : {})} {...(detail.kind === 'audiobook' ? { onShowAll: () => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/chapters`) } : {})} />}
+      {detail.kind === 'artist' && <ArtistInfo item={detail} />}
+      {detail.kind === 'artist' && <ArtistTracks
       api={runtime.mediaApi}
       artist={detail}
       onPlay={async id => {
@@ -131,6 +139,7 @@ function DetailContent({ detail, channel, favorite, favoriteBusy, onToggleFavori
       }}
       onDetail={id => navigate(`/media/music/items/${encodeURIComponent(id)}`)}
     />}
-    {!['album', 'series', 'season', 'audiobook'].includes(detail.kind) && detail.children.length > 0 && <Card withBorder><Title order={3}>相关内容</Title><MediaChildList items={detail.children} label="内容" renderItems={items => <Stack>{items.map(item => <Button key={item.id} component={Link} variant="subtle" justify="start" to={`/media/${channel}/items/${encodeURIComponent(item.id)}`}>{item.title}</Button>)}</Stack>} /></Card>}
-  </Stack>;
+    {!['album', 'series', 'season'].includes(detail.kind) && detail.children.length > 0 && <section className="media-detail-children"><h2>{detail.kind === 'artist' ? '全部专辑' : '全部内容'}</h2><MediaChildList items={detail.children} label={detail.kind === 'artist' ? '专辑' : '内容'} renderItems={items => <div className="media-grid">{items.map(item => <Link key={item.id} className="media-tile" to={`/media/${channel}/items/${encodeURIComponent(item.id)}`}><MediaCover api={runtime.mediaApi} item={item} square={item.kind === 'artist' || item.kind === 'album'} /><strong title={item.title}>{item.title}</strong></Link>)}</div>} /></section>}
+    </div>{detail.kind !== 'album' && <aside className="media-detail-sidebar media-resource-hidden" />}
+  </div></article></>;
 }

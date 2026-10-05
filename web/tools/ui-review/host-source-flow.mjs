@@ -1,4 +1,4 @@
-// Run from server: node --import tsx ../web/tools/ui-review/sources-e2e.mjs
+// Run from server: node --import tsx ../web/tools/ui-review/host-source-flow.mjs
 // Real HTTP server, SQLite, stdio plugin and production Web; uses a self-contained example source.
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
@@ -21,7 +21,7 @@ import { pluginArchive } from '../../../server/test/helpers/plugin-package.ts';
 
 const repo = resolve(import.meta.dirname, '../../..');
 const root = await mkdtemp(join(tmpdir(), 'reader-ui-e2e-'));
-const shots = process.env.UI_REVIEW_DIR || join(repo, 'docs/ui-review');
+const shots = process.env.UI_REVIEW_DIR ? resolve(process.env.UI_REVIEW_DIR) : join(repo, 'artifacts/ui-review/sources');
 const config = { booksDir: join(root, 'books'), dataDir: join(root, 'data'), host: '127.0.0.1', port: 0,
   jwtSecret: 'isolated-end-to-end-fixture-secret', accessTokenTtl: 86400, refreshTokenTtl: 86400,
   scanInterval: 0, watchInterval: 0, logLevel: 'silent', publicUrl: '', corsOrigins: [], webDir: join(repo, 'web/dist') };

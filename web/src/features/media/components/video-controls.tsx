@@ -7,7 +7,6 @@ import type {Detail,MediaApi} from '../api/media-api.ts';
 import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';
 import {PlaybackProblem} from './playback-problem.tsx';
-import {FloatingNotice} from '../../../ui/floating-notice.tsx';
 
 type Tool='episodes'|'subtitles'|'tracks'|'volume'|'more'|'versions';
 const titles:Record<Tool,string>={episodes:'选集',subtitles:'字幕',tracks:'音轨',volume:'音量',more:'更多播放选项',versions:'播放版本'};
@@ -47,7 +46,6 @@ export function VideoControls({player,api,onBack}:{player:MediaPlayer;api:MediaA
     <div className="media-video-caption"><div><strong>{item?.title||player.title}</strong>{edition&&<small>{edition.label}</small>}</div></div>
     <div className="media-video-toolbar media-video-tools">{entries.length>1&&<button onClick={()=>open('episodes')}><Layers size={20} aria-hidden="true"/>选集</button>}<button onClick={()=>open('subtitles')}><Subtitles size={20} aria-hidden="true"/>字幕</button><button onClick={()=>open('tracks')}><AudioLines size={20} aria-hidden="true"/>音轨</button><button onClick={()=>open('versions')}><Layers size={20} aria-hidden="true"/>版本</button><button aria-label="更多播放选项" onClick={()=>open('more')}><Ellipsis size={20} aria-hidden="true"/>更多</button></div>
     {player.error&&<PlaybackProblem player={player} {...(item?.editions.length?{onVersions:()=>open('versions')}:{})} {...(onBack?{onBack}:{})}/>}
-    {!player.error&&player.loadingStatus&&<FloatingNotice message={player.loadingStatus} busy />}
     {notice&&<p className="media-error" role="alert">{notice}</p>}
     {plot&&<details className="media-video-description" open><summary>剧情简介</summary><p>{plot}</p></details>}
     {item?.kind==='episode'&&item.parentId&&<VideoEpisodeRail key={item.parentId} api={api} item={item} player={player}/>}

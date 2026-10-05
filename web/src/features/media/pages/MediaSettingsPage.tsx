@@ -7,7 +7,7 @@ import type { SettingsPanel } from '../components/settings.tsx';
 import { readMediaPreferences } from '../services/preferences.ts';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 
-const panels: readonly SettingsPanel[] = ['home', 'theme', 'browse', 'playback', 'plugins', 'account'];
+const panels: readonly SettingsPanel[] = ['home', 'theme', 'browse', 'playback', 'account'];
 const titles: Record<SettingsPanel, string> = {
   home: '影音设置', theme: '主题外观', browse: '浏览偏好', playback: '播放设置',
   plugins: '来源与刮削', account: '账号与连接',
@@ -41,7 +41,7 @@ export function MediaSettingsPage() {
       onSaved={setPreferences}
       onBack={() => navigate(`/media/${channel}`)}
       onPanelChange={next => navigate(settingsPath(next))}
-      onPersonal={view => navigate(view === 'favorites' ? `/media/${channel}/favorites` : view === 'queue' ? `/media/${channel}/queue` : `/media/${channel}/history`, { state: { returnTo: `/media/${channel}/settings` } })}
+      onPersonal={view => navigate(view === 'favorites' ? '/media/favorites' : view === 'queue' ? `/media/${channel}/queue` : `/media/${channel}/history`, { state: { returnTo: `/media/${channel}/settings` } })}
       onManage={() => navigate(`/media/${channel}/settings/libraries`)}
       onTasks={() => navigate(`/media/${channel}/settings/tasks`)}
       onPlayback={() => navigate(`/media/${channel}/player`)}

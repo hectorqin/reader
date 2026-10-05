@@ -71,7 +71,7 @@ npm run build --prefix web
 
 Web tests use both Vitest and Node's test runner. UI reviews use real Chromium; prepare it as described above. Historical test counts are not a substitute for current results.
 
-For UI changes, run `npm run ui:review --prefix web`; source workflows have `npm run ui:sources --prefix web`. See [UI review (中文)](ui-review/README.md) for tooling and requirements. Reviews generate screenshots and reports; screenshots are ignored by Git by default.
+For UI changes, run `npm run ui:review --prefix web`; source workflows have `npm run ui:sources --prefix web`. The review scripts live under `web/tools/ui-review/` and write screenshots and reports to the Git-ignored `artifacts/ui-review/` directory. Do not commit one-off screenshots under `docs/`.
 
 ## Build and run
 

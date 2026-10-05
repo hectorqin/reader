@@ -14,3 +14,16 @@ test('Android origin is allowed and echoed with a restricted H5 allowlist', () =
     assert.equal(isOriginAllowed(config, { headers: { origin: other } } as FastifyRequest), false);
   }
 });
+
+test('the public host is allowed when persisted CORS settings belong to another deployment', () => {
+  const config = { corsOrigins: ['https://reader.example.com'] } as AppConfig;
+  const request = {
+    protocol: 'http',
+    headers: {
+      origin: 'https://reader-uat.example.com',
+      host: 'reader-uat.example.com',
+      'x-forwarded-proto': 'https',
+    },
+  } as unknown as FastifyRequest;
+  assert.equal(isOriginAllowed(config, request), true);
+});

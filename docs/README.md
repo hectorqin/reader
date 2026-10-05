@@ -26,18 +26,14 @@ The project README introduces reader. Use the guides below for installation, eve
 | 文档 / Document | 内容 / Contents |
 | --- | --- |
 | [架构与数据边界 / Architecture](architecture.md) | 数据目录、身份、同步和客户端架构 / Data boundaries, identity, sync, client architecture |
+| [前端 React 架构](frontend-react-migration.md) | Web 入口、Provider、路由、feature 边界和长生命周期资源 |
 | [API](api.md) | 鉴权、书籍、资源、进度、文件管理、OPDS 与影音 / Auth, books, resources, progress, file management, OPDS and media |
 | [界面规范 / UI guidelines](ui.md) | 布局、交互、可访问性 / Layout, interaction, accessibility |
 
 ## 验证记录 · Review records
 
-这些是特定功能交付时的验证记录，当前结果以对应提交的测试和 CI 输出为准。
-These records describe checks at specific delivery points. Use tests and CI for the current commit's results.
-
-- [UI 评审工具 / UI review tooling](ui-review/README.md)
-- [书库与阅读界面 / Library and reader UI](ui-review/collections-ux.md)
-
-- [P1 阅读工具实施与验证](p1-progress-2026-09-23.md)
+特定功能的验证产物写入被 Git 忽略的 `artifacts/` 目录；当前结果以对应提交的测试和 CI 输出为准。
+Feature review artifacts are written to the ignored `artifacts/` directory. Use tests and CI for the current commit's results.
 
 - [互通与客户端覆盖](ecosystem-roadmap.zh-CN.md)
 

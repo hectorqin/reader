@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { createReviewServer } from './server.mjs';
 
@@ -7,8 +8,9 @@ const server = createReviewServer({ port: 0 });
 await server.listen();
 const base = 'http://127.0.0.1:' + server.server.address().port;
 const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
+const shots = process.env.UI_REVIEW_DIR ? resolve(process.env.UI_REVIEW_DIR) : join(resolve(import.meta.dirname, '../../..'), 'artifacts/ui-review/collections');
 try {
-  await mkdir('docs/ui-review', { recursive: true });
+  await mkdir(shots, { recursive: true });
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   let empty = true, writable = true, files = 0;
@@ -34,7 +36,7 @@ try {
   async function shot(name) {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, name + ' page overflow');
     if (await page.locator('.collection-links').count()) assert.equal(await page.locator('.collection-links').evaluate(el => el.scrollWidth > el.clientWidth), false, name + ' navigation overflow');
-    await page.screenshot({ path: 'docs/ui-review/collections-' + name + '.png', animations: 'disabled' });
+    await page.screenshot({ path: join(shots, 'collections-' + name + '.png'), animations: 'disabled' });
   }
   await page.goto(base);
   await page.locator('input[autocomplete=username]').fill('review'); await page.locator('input[type=password]').fill('password12');

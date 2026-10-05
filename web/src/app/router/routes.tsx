@@ -12,7 +12,6 @@ import { RouteErrorBoundary } from './error-boundary.tsx';
 import { ShelfPage } from '../../features/shelf/pages/ShelfPage.tsx';
 import { LibraryPage, LibraryBrowsePage, LibraryFilesPage } from '../../features/library/pages/LibraryPage.tsx';
 import { SourcesPage } from '../../features/sources/pages/SourcesPage.tsx';
-import { SettingsPage } from '../../features/settings/pages/SettingsPage.tsx';
 import { ReaderPage } from '../../features/reader/pages/ReaderPage.tsx';
 import { MediaLibrariesPage, MediaLibraryCreatePage } from '../../features/media/pages/MediaLibrariesPage.tsx';
 import { MediaLibraryEditPage, MediaLibraryPermissionsPage } from '../../features/media/pages/MediaLibraryEditorPages.tsx';
@@ -40,15 +39,24 @@ export const routes = [{
     { path: 'library/books', element: <LibraryPage /> },
     { path: 'library/files', element: <LibraryFilesPage /> },
     { path: 'sources', element: <SourcesPage /> },
-    { path: 'sources/search', element: <SourceCatalogPage /> },
+    // The legacy hash route /sources/search opens the complete sources hub;
+    // catalog browsing remains available through the source-specific route.
+    { path: 'sources/search', element: <SourcesPage /> },
     { path: 'sources/manage/new', element: <SourceEditorPage /> },
     { path: 'sources/manage/:sourceId', element: <SourceEditorPage /> },
     { path: 'sources/:sourceId/browse', element: <SourceCatalogPage /> },
     { path: 'sources/:sourceId/credentials', element: <SourceCredentialsPage /> },
     { path: 'sources/plugins', element: <PluginManagementPage /> },
     { path: 'sources/:sourceId/pages/:pageId', element: <SourceExtensionPage /> },
+    // Legacy source extension links use /sources/:sourceId/:pageId. Keep the
+    // old deep-link shape working while the React shell emits the namespaced
+    // /pages form for new links.
+    { path: 'sources/:sourceId/:pageId', element: <SourceExtensionPage /> },
     { path: 'sources/plugins/:pluginId/pages/:pageId', element: <SourceExtensionPage /> },
-    { path: 'settings', element: <SettingsPage /> },
+    // The legacy shell treats /settings as the shelf's admin settings overlay.
+    // Keep the route compatible with old deep links; user preferences live in
+    // the shelf settings sheet and media settings has its own nested route.
+    { path: 'settings', element: <Navigate to="/shelf" replace /> },
     { path: 'book/:bookId', element: <ReaderPage /> },
     { path: 'media', element: <MediaLayout />, children: [
       { index: true, element: <Navigate to="video" replace /> },

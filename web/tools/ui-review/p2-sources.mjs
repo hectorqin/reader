@@ -13,7 +13,7 @@ import { TtsService } from '../../../server/src/services/tts.ts';
 import { BrowseService } from '../../../server/src/services/browse.ts';
 
 const repo=resolve(import.meta.dirname,'../../..'), root=await mkdtemp(join(tmpdir(),'reader-p2-'));
-const shots=join(repo,'docs/ui-review/p2');
+const shots=process.env.UI_REVIEW_DIR ? resolve(process.env.UI_REVIEW_DIR) : join(repo,'artifacts/ui-review/p2');
 const config={booksDir:join(root,'books'),dataDir:join(root,'data'),host:'127.0.0.1',port:0,jwtSecret:'isolated-p2-test-secret',accessTokenTtl:86400,refreshTokenTtl:86400,scanInterval:0,watchInterval:0,logLevel:'silent',publicUrl:'',corsOrigins:[],webDir:join(repo,'web/dist')};
 let app,db,browser,page;
 try {

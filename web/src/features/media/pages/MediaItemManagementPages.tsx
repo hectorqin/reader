@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Loader, Stack, Text, Title } from '@mantine/core';
+import { Alert, Button, Card, Stack, Text, Title } from '@mantine/core';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -7,14 +7,13 @@ import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { detailQuery } from '../queries/media.queries.ts';
 import { useMediaDetailUpdate } from '../mutations/media.mutations.ts';
 import { MediaPageFrame, QueryFeedback } from '../components/MediaPageFrame.tsx';
-import { MetadataEditor } from '../components/metadata-editor.tsx';
-import { MetadataMatcher } from '../components/metadata-matcher.tsx';
 import { AudiobookChapters } from '../components/audiobook-chapters.tsx';
 import { EditionDetails, type ChapterPosition } from '../components/edition-details.tsx';
 import { EditionTools } from '../components/edition-details.tsx';
 import { ArtistInfo } from '../components/artist-info.tsx';
 import { VideoHierarchyEditor } from '../components/video-hierarchy-editor.tsx';
 import { MusicParentEditor } from '../components/parent-editor.tsx';
+import { MediaMetadataPage } from '../components/metadata-page.tsx';
 import type { Detail, MediaChannel, Part } from '../api/media-api.ts';
 
 const channels = ['video', 'music', 'audiobook'] as const;
@@ -32,17 +31,17 @@ function useItemPage() {
   return { runtime, navigate, channel, itemId, editionId, query, updateDetail };
 }
 
-function ItemPageFrame({ title, channel, itemId, children, admin = false }: {
-  title: string; channel: MediaChannel; itemId: string; children: React.ReactNode; admin?: boolean;
+function ItemPageFrame({ title, channel, itemId, children, admin = false, className }: {
+  title: string; channel: MediaChannel; itemId: string; children: React.ReactNode; admin?: boolean; className?: string;
 }) {
-  return <MediaPageFrame title={title} actions={<Button component={Link} to={`/media/${channel}/items/${encodeURIComponent(itemId)}`} variant="subtle">返回作品详情</Button>}>
-    {admin && <Text size="sm" c="dimmed">管理员操作会保留文件、版本和播放进度；保存后可返回作品详情继续核对。</Text>}
+  return <MediaPageFrame {...(className ? { className } : {})} title={title} hideHeader={className === 'media-metadata-workspace'} actions={className === 'media-metadata-workspace' ? undefined : <Button component={Link} to={`/media/${channel}/items/${encodeURIComponent(itemId)}`} variant="subtle">返回作品详情</Button>}>
+    {admin && className !== 'media-metadata-workspace' && <Text size="sm" c="dimmed">管理员操作会保留文件、版本和播放进度；保存后可返回作品详情继续核对。</Text>}
     {children}
   </MediaPageFrame>;
 }
 
 function ItemQuery({ query, children }: { query: ReturnType<typeof useQuery<Detail>>; children: (detail: Detail) => React.ReactNode }) {
-  return <><QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />{query.isPending && <Loader />}{query.data && children(query.data)}{!query.isPending && !query.error && !query.data && <Alert color="red">找不到这个作品。</Alert>}</>;
+  return <><QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />{query.data && children(query.data)}{!query.isPending && !query.error && !query.data && <Alert color="red">找不到这个作品。</Alert>}</>;
 }
 
 function AdminOnly({ children }: { children: React.ReactNode }) {
@@ -56,21 +55,21 @@ function playParts(runtime: ReturnType<typeof useRuntime>, channel: MediaChannel
 
 export function MediaMetadataEditPage() {
   const { runtime, navigate, channel, itemId, query, updateDetail } = useItemPage();
-  return <ItemPageFrame title="编辑资料" channel={channel} itemId={itemId} admin><AdminOnly><ItemQuery query={query}>{detail => {
+  return <ItemPageFrame title="编辑资料" channel={channel} itemId={itemId} admin className="media-metadata-workspace"><AdminOnly><ItemQuery query={query}>{detail => {
     const edition = detail.editions[0];
-    return <Stack>
-      <MetadataEditor api={runtime.mediaApi} item={detail} onUpdated={updateDetail} />
+    return <div className="media-metadata-host">
+      <MediaMetadataPage api={runtime.mediaApi} item={detail} initialView="edit" onViewChange={view => navigate(`/media/${channel}/items/${encodeURIComponent(itemId)}/${view === 'edit' ? 'metadata' : 'match'}`)} onUpdated={updateDetail} onBack={() => navigate(`/media/${channel}/items/${encodeURIComponent(itemId)}`)} />
       {edition && <Card withBorder><Title order={3}>版本与资源管理</Title><EditionTools api={runtime.mediaApi} item={detail} edition={edition} busy={false} onPlay={(parts, index) => { void playParts(runtime, channel, detail.title, parts, index); }} onQueue={ids => { void runtime.mediaApi.request('queue', 'POST', { partIds: ids }); }} onUpdated={updateDetail} onAssigned={target => navigate(`/media/${channel}/items/${encodeURIComponent(target.id)}`)} onRename={() => { void query.refetch(); }} /></Card>}
       <ArtistInfo item={detail} />
       <VideoHierarchyEditor api={runtime.mediaApi} item={detail} onUpdated={updateDetail} />
       <MusicParentEditor api={runtime.mediaApi} item={detail} onUpdated={updateDetail} />
-    </Stack>;
+    </div>;
   }}</ItemQuery></AdminOnly></ItemPageFrame>;
 }
 
 export function MediaMatchPage() {
-  const { runtime, channel, itemId, query, updateDetail } = useItemPage();
-  return <ItemPageFrame title="匹配作品" channel={channel} itemId={itemId} admin><AdminOnly><ItemQuery query={query}>{detail => <MetadataMatcher api={runtime.mediaApi} item={detail} layout="page" onUpdated={updateDetail} />}</ItemQuery></AdminOnly></ItemPageFrame>;
+  const { runtime, navigate, channel, itemId, query, updateDetail } = useItemPage();
+  return <ItemPageFrame title="匹配作品" channel={channel} itemId={itemId} admin className="media-metadata-workspace"><AdminOnly><ItemQuery query={query}>{detail => <div className="media-metadata-host"><MediaMetadataPage api={runtime.mediaApi} item={detail} initialView="match" onViewChange={view => navigate(`/media/${channel}/items/${encodeURIComponent(itemId)}/${view === 'edit' ? 'metadata' : 'match'}`)} onUpdated={updateDetail} onBack={() => navigate(`/media/${channel}/items/${encodeURIComponent(itemId)}`)} /></div>}</ItemQuery></AdminOnly></ItemPageFrame>;
 }
 
 export function MediaChaptersPage() {

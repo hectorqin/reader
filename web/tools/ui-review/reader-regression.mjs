@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { CDP } from './cdp.mjs';
 import { createReviewServer, BOOK_ID, ILLUSTRATED_ID } from './server.mjs';
 
 const server = createReviewServer({ port: 5201 });
 const origin = await server.listen();
+const shots = process.env.UI_REVIEW_DIR ? resolve(process.env.UI_REVIEW_DIR) : join(resolve(import.meta.dirname, '../../..'), 'artifacts/ui-review/reader-mobile');
 const cdp = await CDP.launch({ viewport: { width: 390, height: 844 }, scale: 2 });
 const read = () => cdp.run(`
   const host = document.querySelector('book-content');
@@ -40,8 +42,8 @@ try {
   assert.equal(after.y, before.y, 'middle tap must preserve scroll offset');
   assert.equal(after.top, before.top, 'chrome must not move the reading surface');
   assert.equal(after.height, before.height, 'chrome must not resize the reading surface');
-  await mkdir('../docs/ui-review/mobile', { recursive: true });
-  await cdp.screenshot('../docs/ui-review/mobile/reader.png');
+  await mkdir(shots, { recursive: true });
+  await cdp.screenshot(join(shots, 'reader.png'));
   for (const label of ['目录', '界面', '设置', '朗读']) {
     await cdp.clickText('.reader-actions button', label);
     await cdp.waitFor('document.querySelector(".panel") !== null');
@@ -51,7 +53,7 @@ try {
     assert.equal(opened.height, after.height, `${label} must preserve surface height`);
     const panel = await cdp.run(`const r=document.querySelector('.panel').getBoundingClientRect();return {top:r.top,bottom:r.bottom};`);
     assert.ok(panel.top > 250 && panel.bottom <= 845, `sheet must leave a preview and fit the screen: ${JSON.stringify(panel)}`);
-    await cdp.screenshot(`../docs/ui-review/mobile/panel-${label}.png`);
+    await cdp.screenshot(join(shots, `panel-${label}.png`));
     await cdp.click('.panel button[aria-label="关闭"]');
     await cdp.waitFor('document.querySelector(".panel") === null');
     assert.equal((await read()).y, after.y, `${label} close must preserve position`);
@@ -66,10 +68,10 @@ try {
   }
   const modes = await cdp.evaluate('Array.from(document.querySelectorAll(".reading-indicator span"),el=>el.dataset.mode)');
   assert.deepEqual(modes, ['book','chapter','time','progress']);
-  await cdp.screenshot('../docs/ui-review/mobile/readout-settings.png');
+  await cdp.screenshot(join(shots, 'readout-settings.png'));
   await cdp.click('.panel button[aria-label="关闭"]');
   await cdp.tapMiddle();
-  await cdp.screenshot('../docs/ui-review/mobile/readout-custom.png');
+  await cdp.screenshot(join(shots, 'readout-custom.png'));
   await cdp.navigate(`${origin}/#/shelf`);
   await cdp.waitFor('document.querySelector(".shelf-screen") !== null');
   await cdp.navigate(`${origin}/#/book/${BOOK_ID}`);
@@ -88,7 +90,7 @@ try {
   assert.equal((await read()).page, after.page, 'theme must preserve page');
   await cdp.tapMiddle();
   await cdp.sleep(250);
-  await cdp.screenshot('../docs/ui-review/mobile/immersive-green.png');
+  await cdp.screenshot(join(shots, 'immersive-green.png'));
   for (let i=0; i<6; i++) {
     const prior = await read();
     await cdp.tapMiddle();
@@ -117,7 +119,7 @@ try {
   await cdp.tapThird(0.15);
   await cdp.sleep(300);
   assert.equal((await read()).page,'2','reverse tap returns to same page');
-  await cdp.screenshot('../docs/ui-review/mobile/paged.png');
+  await cdp.screenshot(join(shots, 'paged.png'));
   await cdp.clickText('.footer button', '下一章');
   await cdp.sleep(350);
   assert.equal((await read()).page,'1','next chapter starts at page one');
@@ -129,7 +131,7 @@ try {
   await cdp.sleep(250);
   const epubHidden=await read();
   for(const key of ['x','y','page','pages','top','height']) assert.equal(epubHidden[key],epub[key],`EPUB toggle: ${key}`);
-  await cdp.screenshot('../docs/ui-review/mobile/epub.png');
+  await cdp.screenshot(join(shots, 'epub.png'));
   await cdp.navigate(`${origin}/#/book/review-comic`);
   await cdp.waitFor('document.querySelector("book-content")?.shadowRoot?.querySelector("img")?.naturalWidth > 0');
   await cdp.sleep(200);
@@ -146,7 +148,7 @@ try {
     assert.equal(await cdp.evaluate('document.querySelector(".reader-heading span").textContent'), chapter);
     assert.equal((await read()).height, comic.height, 'fixed layout geometry stays stable');
   }
-  await cdp.screenshot('../docs/ui-review/mobile/comic.png');
+  await cdp.screenshot(join(shots, 'comic.png'));
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 2, mobile: true });
   await cdp.sleep(250);
   for(const label of ['界面','设置']) {
@@ -154,7 +156,7 @@ try {
     await cdp.run(`await Promise.all(document.querySelector('.panel').getAnimations().map(a=>a.finished));`);
     const overflow=await cdp.run(`const p=document.querySelector('.panel');return p.scrollWidth-p.clientWidth;`);
     assert.ok(overflow <= 1, `${label} fits a narrow phone`);
-    await cdp.screenshot(`../docs/ui-review/mobile/narrow-${label}.png`);
+    await cdp.screenshot(join(shots, `narrow-${label}.png`));
     await cdp.click('.panel button[aria-label="关闭"]');
   }
   await cdp.navigate(`${origin}/#/book/review-pdf`);
@@ -163,7 +165,7 @@ try {
   assert.equal(pdf, '%PDF-1.4', 'browser viewer receives the actual PDF bytes');
   // The browser's PDF extension starts asynchronously after the frame commits.
   await cdp.sleep(1500);
-  await cdp.screenshot('../docs/ui-review/mobile/pdf.png');
+  await cdp.screenshot(join(shots, 'pdf.png'));
   console.log('PASS: page and geometry survive chrome toggle');
 } finally {
   await cdp.close();

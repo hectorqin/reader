@@ -29,4 +29,4 @@ Web 音频使用浏览器媒体能力，视频采用 DPlayer；Android 使用 Me
 - 服务端：[media 模块](../server/src/media/)、[HTTP 路由](../server/src/http/routes/media.ts)。
 - 前端：[media feature 模块](../web/src/features/media/)、[React 页面路由](../web/src/app/router/routes.tsx)。
 - [使用说明](media-user-guide.zh-CN.md)、[导航约定](media-navigation.md)、[验证方式](media-validation.md)、[性能测量](media-catalog-performance.md)。
-- [冻结的 v2 原型](prototypes/media/v2-review/index.html)是布局参考；实际功能与地址以源码及当前说明为准。
+- [冻结的 v2 原型](prototypes/media/v2-review/index.html)是布局参考；实际功能、地址和主题生命周期以源码及当前说明为准。浏览器评审截图和报告统一写入被忽略的 `artifacts/media`，不再提交到 `docs/`。

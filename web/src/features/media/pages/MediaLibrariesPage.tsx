@@ -1,5 +1,5 @@
-import { Alert, Loader } from '@mantine/core';
-import { MoreHorizontal, RefreshCw, Plus } from 'lucide-react';
+import { Alert } from '@mantine/core';
+import { MoreHorizontal, Plus, RefreshCw } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -28,9 +28,10 @@ export function MediaLibrariesPage() {
   const [actionError, setActionError] = useState('');
   const query = useQuery(librariesQuery(runtime));
   if (role !== 'admin') return <MediaPageFrame title="媒体库管理"><Alert color="red">需要管理员权限。</Alert></MediaPageFrame>;
-  // Management is scoped to the channel in the URL. Do not expose libraries
-  // from another media channel in this page.
-  const libraries = (query.data?.items ?? []).filter(item => item.kind === channel);
+  // The legacy manager is a shared workspace: opening it from any channel
+  // shows every media library, while the channel only controls the return path
+  // and the default type when creating a new library.
+  const libraries = query.data?.items ?? [];
   const scan = async (id: string) => {
     if (busyId) return;
     setBusyId(id); setActionError('');
@@ -42,16 +43,15 @@ export function MediaLibrariesPage() {
       setActionError(error instanceof Error ? error.message : '扫描请求失败，请稍后重试。');
     } finally { setBusyId(null); }
   };
-  return <MediaPageFrame title="媒体库管理" backTo={`/media/${channel}/settings`} backLabel="返回影音设置" actions={<details className="media-actions media-library-management-actions">
+  return <MediaPageFrame className="media-manager-workspace" title="媒体库管理" backTo={`/media/${channel}/settings`} backLabel="返回影音设置" actions={<details className="media-actions media-library-management-actions">
     <summary aria-label="媒体库管理操作" title="媒体库管理操作"><MoreHorizontal size={20} aria-hidden="true" /></summary>
     <nav aria-label="媒体库管理操作">
       <Link to={`/media/${channel}/settings/libraries/new`}><Plus size={16} aria-hidden="true" />新建媒体库</Link>
-      <button type="button" onClick={() => void query.refetch()}><RefreshCw size={16} aria-hidden="true" />刷新</button>
+      <Link to={`/media/${channel}/settings/tasks`}><RefreshCw size={16} aria-hidden="true" />扫描与刮削</Link>
     </nav>
   </details>}>
     {actionError && <Alert color="red" title="操作失败">{actionError}</Alert>}
     <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
-    {query.isPending && <Loader />}
     {!query.isPending && !query.error && <MediaLibraryList
       api={runtime.mediaApi}
       libraries={libraries}
@@ -75,10 +75,11 @@ export function MediaLibraryCreatePage() {
   const role = useAuthStore(state => state.verifiedUser?.role);
   if (role !== 'admin') return <MediaPageFrame title="新建媒体库"><Alert color="red">需要管理员权限。</Alert></MediaPageFrame>;
   const mediaChannel = channel;
-  return <MediaPageFrame title="新建媒体库" backTo={`/media/${channel}/settings/libraries`} backLabel="返回媒体库管理"><MediaLibraryCreate
+  return <MediaPageFrame className="media-manager-workspace" title="新建媒体库" backTo={`/media/${channel}/settings/libraries`} backLabel="返回媒体库管理"><MediaLibraryCreate
     api={runtime.mediaApi}
     channel={mediaChannel}
     disabled={false}
+    hideHeader
     onCreated={library => {
       queryClient.setQueryData(librariesQuery(runtime).queryKey, (value: { items: Library[] } | undefined) => ({ items: [...(value?.items ?? []).filter(item => item.id !== library.id), library] }));
     }}

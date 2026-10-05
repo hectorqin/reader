@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 import { chromium } from 'playwright';
 import { BOOK_ID, createReviewServer } from './server.mjs';
 
@@ -7,8 +8,9 @@ const server = createReviewServer({ port: 0 });
 await server.listen();
 const base = 'http://127.0.0.1:' + server.server.address().port;
 const browser = await chromium.launch({ headless: true, ...(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {}) });
+const shots = process.env.UI_REVIEW_DIR ? resolve(process.env.UI_REVIEW_DIR) : join(resolve(import.meta.dirname, '../../..'), 'artifacts/ui-review/desktop-reader');
 try {
-  await mkdir('docs/ui-review', { recursive: true });
+  await mkdir(shots, { recursive: true });
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -27,7 +29,7 @@ try {
   });
   async function shot(name) {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, name + ' horizontal overflow');
-    await page.screenshot({ path: 'docs/ui-review/desktop-reader-' + name + '.png', animations: 'disabled' });
+    await page.screenshot({ path: join(shots, 'desktop-reader-' + name + '.png'), animations: 'disabled' });
   }
 
   for (const [width, height] of [[1024, 768], [1366, 768], [1920, 1080]]) {

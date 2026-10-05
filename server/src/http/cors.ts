@@ -27,6 +27,10 @@ export function resolveCorsOrigin(config: AppConfig, request: FastifyRequest): s
 
   if (config.corsOrigins.includes(origin)) return origin;
 
+  const proto = (String(request.headers['x-forwarded-proto'] ?? request.protocol ?? 'http').split(',')[0] ?? '').trim();
+  const host = (String(request.headers['x-forwarded-host'] ?? request.headers.host ?? '').split(',')[0] ?? '').trim();
+  if (host && origin === `${proto}://${host}`) return origin;
+
   // `file://` requests arrive with the literal origin "null". The Android shell
   // needs this whenever the H5 bundle is loaded from assets, and it cannot be
   // expressed as a normal origin entry.
@@ -43,5 +47,12 @@ export function isOriginAllowed(config: AppConfig, request: FastifyRequest): boo
   // accepted even when a public deployment narrows browser origins.
   if (origin === 'https://appassets.androidplatform.net') return true;
   if (config.corsOrigins.length === 0) return true;
+  // A deployment may serve the H5 bundle from the same host as the API while
+  // sharing its persisted settings with another hostname. Treat that request
+  // as same-origin even when the stored allowlist belongs to the other host.
+  // Reverse proxies provide the public scheme/host through these headers.
+  const proto = (String(request.headers['x-forwarded-proto'] ?? request.protocol ?? 'http').split(',')[0] ?? '').trim();
+  const host = (String(request.headers['x-forwarded-host'] ?? request.headers.host ?? '').split(',')[0] ?? '').trim();
+  if (host && origin === `${proto}://${host}`) return true;
   return config.corsOrigins.includes(origin) || (origin === 'null' && config.corsOrigins.includes('null'));
 }

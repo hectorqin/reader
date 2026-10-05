@@ -42,7 +42,7 @@
 .media-detail-columns {display:block;max-width:820px}
 .media-detail-sidebar {max-width:none}
 .media-detail-page .media-detail-description {margin:20px 0}
-.media-detail-page > .media-detail-actions {margin-top:4px}
+.media-detail-page > .media-detail-actions {margin-top:20px}
 .media-detail-description p {font-size:13px;line-height:1.9;margin:8px 0}
 .media-detail-page .media-resource-panel {margin:22px 0 0;padding:0 14px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
 .media-resource-panel>header {min-height:50px;margin:0}
@@ -168,8 +168,8 @@
 .media-video-caption {border:0;padding:0;font-size:18px}
 .media-video-caption strong {font-weight:650}
 .media-video-caption small {font-size:12px}
-.media-video-toolbar.media-video-tools {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin:16px 0;border-block:1px solid var(--border)}
-.media-video-tools>button {display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:62px;font-size:11px}
+.media-video-toolbar.media-video-tools {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(84px,100%),1fr));margin:16px 0;border-block:1px solid var(--border)}
+.media-video-tools>button {display:flex;min-width:0;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:62px;font-size:11px}
 .media-video-description summary {min-height:44px;cursor:pointer;display:flex;align-items:center}
 .media-episode-rail {padding:16px;background:var(--media-paper);color:var(--text);border:1px solid var(--border);border-radius:10px;margin-top:20px}
 .media-episode-rail header {display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -293,7 +293,7 @@ body[data-media-theme] .media-video-stage .plyr {
  .media-screen .media-playback-status[data-panel=lyrics] {max-width:560px}
  .media-playback-status[data-panel=main][data-channel=audiobook] .media-playing-artwork>.media-cover {width:230px;aspect-ratio:2/3}
  .media-video-toolbar.media-video-tools {max-width:440px}
- .media-video-tools {grid-template-columns:repeat(auto-fit,minmax(72px,1fr))}
+ .media-video-tools {grid-template-columns:repeat(auto-fit,minmax(min(84px,100%),1fr))}
  .media-video-tools>button {flex-direction:row;gap:8px;min-height:48px}
 }
 
@@ -308,6 +308,13 @@ body[data-media-theme] .media-video-stage .plyr {
   clip: auto;
   white-space: normal;
   border: 0;
+}
+/* Catalog pages without category tabs still reserve the legacy title row. */
+@media(min-width:701px){
+  .media-screen.media-catalog-page > .media-heading:not(:has(~ .media-tabs)) {
+    height: 56px;
+    min-height: 56px;
+  }
 }
 .media-screen.media-catalog-page > .media-heading .media-mobile-title { display: none; }
 .media-screen.media-catalog-page > .media-heading .media-heading-actions {
@@ -790,6 +797,7 @@ body[data-media-theme] {--surface-muted:var(--media-theme-surface)}
 }
 :is(.media-screen,.media-player,.media-modal) :is(button,a,input,select,summary):focus-visible {outline:2px solid var(--media-accent);outline-offset:3px}
 .media-screen .media-grid:not(.media-season-picker) .media-tile strong {white-space:normal;min-height:3em}
+.media-screen .media-grid .media-tile {text-decoration:none;color:inherit;display:block}
 .media-screen .media-browse-tools {height:auto;flex-wrap:wrap}
 .media-loading-status {color:var(--muted);font-size:13px;min-height:24px}
 .media-scan-job .media-task-retry {grid-column:1/-1;justify-self:start;min-height:44px}
@@ -846,8 +854,82 @@ body[data-media-theme] {--surface-muted:var(--media-theme-surface)}
 .media-screen:has(>.media-read-loading-detail)>.media-heading .media-page-heading h2{margin:0;font-size:16px;line-height:1.4}
 .media-screen .media-folders{position:relative}
 .media-screen .media-heading-actions .media-folder-actions{position:relative;margin:0;z-index:4}
+.media-screen .media-folders>.media-folder-actions{position:absolute;top:-68px;right:0;margin:0;z-index:4}
+.media-screen .media-folders>.media-folder-actions>nav{right:0;top:calc(100% + 4px)}
 .media-screen .media-folders>.media-folder-actions>summary{min-height:40px;padding:8px 12px}
 .media-screen .media-folders>.media-folder-actions>nav{right:0;top:calc(100% + 4px)}
+
+/* Secondary/detail headers share one fixed chrome row on desktop. */
+@media(min-width:701px){
+  /* Detail queries render the shell before the detail article exists. Hide the
+     channel masthead during that state so loading and loaded headers occupy the
+     same row. */
+  body:has(.media-screen.media-detail-shell) .media-channel-entry .media-brand,
+  body:has(.media-screen.media-detail-shell) .media-channel-entry a { display:none; }
+  .media-screen.media-detail-shell>.media-heading {
+    position:fixed;
+    z-index:90;
+    top:0;
+    /* left:max(140px,calc((100vw - 1060px)/2 + 110px)); */
+    /* right:max(24px,calc((100vw - 1060px)/2)); */
+    height:62px;
+    min-height:62px;
+    margin:0;
+    padding:0 8px;
+    box-sizing:border-box;
+    border:0;
+    border-bottom:1px solid var(--border);
+    background:var(--media-background);
+    box-shadow:none;
+  }
+  .media-screen.media-detail-shell>.media-heading .media-page-heading { min-width:0; display:flex; align-items:center; gap:4px; }
+  .media-screen.media-detail-shell>.media-heading .media-page-heading h1 { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+}
+@media(max-width:700px){
+  .media-screen.media-detail-shell>.media-heading {
+    min-height:56px;
+    height:56px;
+    margin:0 -16px;
+    padding:0 8px 0 4px;
+    box-sizing:border-box;
+    border-bottom:1px solid var(--border);
+  }
+  .media-screen.media-detail-shell>.media-heading .media-page-heading {min-width:0;gap:4px}
+}
+
+/* Explicit menu styling keeps links and buttons on the themed palette. */
+.media-screen .media-actions nav {
+  min-width:196px;
+  padding:7px;
+  gap:2px;
+  background:var(--media-paper,var(--surface));
+  color:var(--text);
+  border-color:var(--border);
+  box-shadow:0 10px 28px #0003;
+}
+.media-screen .media-actions nav :is(a,button) {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  width:100%;
+  min-height:40px;
+  box-sizing:border-box;
+  padding:9px 10px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:var(--text);
+  font:inherit;
+  line-height:1.4;
+  text-align:left;
+  text-decoration:none;
+  white-space:nowrap;
+}
+.media-screen .media-actions nav :is(a,button):hover:not(:disabled),
+.media-screen .media-actions nav :is(a,button):focus-visible { background:var(--media-selection); color:var(--media-accent); }
+.media-screen .media-actions nav :is(a,button) svg {flex:none;stroke:currentColor}
+.media-screen .media-library-management-actions>summary {color:var(--text)}
+.media-screen .media-library-management-actions[open]>summary {background:var(--media-selection);color:var(--media-accent)}
 .media-modal:has(.media-match-confirm){width:min(560px,calc(100vw - 32px));max-width:560px;padding:0;border-radius:16px;overflow:hidden}
 .media-modal:has(.media-match-confirm) .media-match-confirm{margin:0;padding:20px;border:0;border-radius:0;background:var(--media-paper)}
 .media-modal:has(.media-match-confirm) .media-match-confirm p{font-size:14px;line-height:1.75;margin:0 0 18px}
@@ -866,3 +948,50 @@ body[data-media-theme] {--surface-muted:var(--media-theme-surface)}
 .media-screen .media-folder-actions>summary { width:44px; min-width:44px; height:44px; box-sizing:border-box; padding:10px; border:1px solid var(--border); border-radius:50%; background:var(--surface); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; list-style:none; }
 .media-screen .media-folder-actions>summary::-webkit-details-marker { display:none; }
 .media-screen .media-folder-actions[open]>summary { border-color:var(--media-accent); background:var(--media-selection); }
+
+/* Final legacy chrome: folder menus use an unframed icon, secondary routes hide
+   the global channel rail, and every secondary title keeps one subtle divider. */
+.media-screen .media-folder-actions>summary,
+.media-screen .media-folder-actions[open]>summary {
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+
+/* Secondary routes own the page chrome. The channel rail belongs to catalogue
+   landing pages and must not remain visible behind a secondary title row. */
+body:has(.media-screen.media-secondary-page) .media-channel-entry,
+body:has(.media-screen.media-manager-workspace) .media-channel-entry,
+body:has(.media-screen.media-utility-workspace) .media-channel-entry,
+body:has(.media-screen.media-playback-page) .media-channel-entry,
+body:has(.media-screen.media-chapters-page) .media-channel-entry,
+body:has(.media-screen.media-metadata-workspace) .media-channel-entry,
+body:has(.media-screen.media-detail-shell) .media-channel-entry,
+body:has(.media-screen>.media-detail-page) .media-channel-entry,
+body:has(.media-narrators:not([data-view=directory])) .media-channel-entry {
+  display:none!important;
+}
+
+.media-screen:is(.media-secondary-page,.media-manager-workspace,.media-playback-page,.media-chapters-page,.media-detail-shell)>.media-heading,
+.media-screen:has(>.media-detail-page)>.media-heading,
+.media-screen.media-metadata-workspace>.media-metadata-host>.media-heading,
+.media-utility-workspace .media-settings-heading,
+.media-narrators:not([data-view=directory])>.media-narrator-heading {
+  border-bottom:1px solid var(--border)!important;
+  box-shadow:none!important;
+}
+
+@media(min-width:701px){
+  .media-screen:is(.media-secondary-page,.media-manager-workspace,.media-playback-page,.media-chapters-page,.media-detail-shell)>.media-heading,
+  .media-screen:has(>.media-detail-page)>.media-heading,
+  .media-screen.media-metadata-workspace>.media-metadata-host>.media-heading,
+  .media-utility-workspace .media-settings-heading,
+  .media-narrators:not([data-view=directory])>.media-narrator-heading {
+    height:68px;
+    min-height:68px;
+  }
+}
+
+/* Folder rows are left-aligned text actions; only the chevron stays at the far edge. */
+.media-screen .media-folder-row>button { justify-content:flex-start; text-align:left; }

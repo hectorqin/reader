@@ -3,6 +3,10 @@ import { createReviewServer } from './server.mjs';
 import { mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import assert from 'node:assert/strict';
+import { join, resolve } from 'node:path';
+
+const repo = resolve(import.meta.dirname, '../../..');
+const shots = process.env.UI_REVIEW_DIR ? resolve(process.env.UI_REVIEW_DIR) : join(repo, 'artifacts/ui-review/source-search');
 
 const server = createReviewServer({ port: 5301 });
 const base = await server.listen();
@@ -44,7 +48,7 @@ try {
   await page.getByRole('combobox', { name: '选择来源' }).selectOption('demo');
   await page.getByRole('combobox', { name: '分组', exact: true }).selectOption('fiction');
   await page.locator('input[type=search]').fill('斗破苍穹');
-  await mkdir('docs/ui-review', { recursive: true });
+  await mkdir(shots, { recursive: true });
   for (const width of [390, 1024, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     mode = 'failed'; await page.getByRole('button', { name: '搜索', exact: true }).click();
@@ -52,7 +56,7 @@ try {
     assert.equal(await page.locator('.catalog-errors').evaluate(el => el.open), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.equal(await page.locator('.sources-body').evaluate(el => el.scrollWidth > el.clientWidth), false);
-    await page.screenshot({ path: `docs/ui-review/source-search-failed-${width}.png` });
+    await page.screenshot({ path: join(shots, `source-search-failed-${width}.png`) });
     mode = 'partial'; await page.getByRole('button', { name: '搜索', exact: true }).click();
     await page.locator('.search-progress').filter({ hasText: '搜索完成' }).waitFor();
     assert.equal(await page.locator('.catalog-book').count(), 1, 'repeated entries merge by ref');
@@ -62,7 +66,7 @@ try {
     await page.locator('.catalog-errors summary').focus(); await page.keyboard.press('Enter');
     assert.equal(await page.locator('.catalog-errors').evaluate(el => el.open), true);
     assert.equal(await page.locator('.sources-body').evaluate(el => el.scrollWidth > el.clientWidth), false);
-    await page.screenshot({ path: `docs/ui-review/source-search-partial-${width}.png` });
+    await page.screenshot({ path: join(shots, `source-search-partial-${width}.png`) });
   }
   mode = 'empty'; await page.getByRole('button', { name: '搜索', exact: true }).click();
   await page.getByText('没有找到匹配书籍', { exact: true }).waitFor();

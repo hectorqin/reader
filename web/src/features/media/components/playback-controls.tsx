@@ -10,6 +10,7 @@ import type {ChapterPosition} from './edition-details.tsx';
 import {SavePlaylist} from './save-playlist.tsx';
 import {Lyrics} from './lyrics.tsx';
 import {AudioToolSheet,PlaybackFavorite} from './audio-tools.tsx';
+import {FloatingNotice} from '../../../ui/floating-notice.tsx';
 import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';
 import {PlaybackProblem} from './playback-problem.tsx';
@@ -21,7 +22,7 @@ function PlayingArtwork({api,item,failed,onRetry,player,lyrics,onMore}:{api:Medi
   const credit=book?[field('narrator')&&String(field('narrator'))+' 演播',field('author')&&String(field('author'))+' 著'].filter(Boolean).join(' · '):[field('artist'),field('album')].filter(Boolean).join(' · ');
   const title=book?chapter?.title||item.title:item?.kind==='track'?item.title:player.title;
   return <>{lyrics?<><div className="media-lyrics-heading"><h2 className="media-playing-title">{title}</h2>{credit&&<p>{credit}</p>}</div><Lyrics key={player.currentPartId} api={api} player={player}/></>:<div className="media-playing-artwork">
-    {item?<MediaCover api={api} item={item} square={!book} retryable/>:<div className="media-artwork-placeholder" role="status">{failed?'作品资料暂不可用':'正在读取作品资料…'}</div>}
+    {!item&&!failed&&<FloatingNotice message="正在读取作品资料…" busy />}{item?<MediaCover api={api} item={item} square={!book} retryable/>:<div className="media-artwork-placeholder" role="status" aria-label={failed?'作品资料暂不可用':'正在读取作品资料'}>{failed?'作品资料暂不可用':null}</div>}
     {book&&chapter&&<p className="media-playing-chapter">第 {edition!.parts.indexOf(chapter)+1} / {edition!.parts.length} 章 · {item.title}</p>}
     <div className="media-playing-copy"><div><h2 className="media-playing-title">{title}</h2>{credit&&<p>{credit}</p>}{failed&&<p role="alert">作品资料读取失败。<button onClick={onRetry}>重新读取作品资料</button></p>}</div><button className="media-icon-button" aria-label="当前内容操作" onClick={onMore}><Ellipsis size={20} aria-hidden="true"/></button></div>
   </div>}</>;
@@ -89,7 +90,7 @@ export function PlaybackControls({player,api,panel,onPanelChange,onBack,onFavori
     <section className="media-playback-status" data-panel={view} data-channel={channel??'unknown'} aria-label="播放控制">
     {(player.isVideo||!itemId)&&<header className="media-now-playing"><div><small>正在播放</small><strong>{player.title}</strong></div><button className="media-symbol-button" aria-label="结束" title="结束播放" onClick={()=>void player.stop()}><Square size={18} aria-hidden="true"/></button></header>}
     {player.error&&<PlaybackProblem player={player} {...(item?.editions.length?{onVersions:()=>open('versions')}:{})} {...(onBack?{onBack}:{})} backLabel={view==='main'?'返回浏览':'返回播放'}/>}
-    {!player.error&&player.loadingStatus&&<p role="status" className="media-loading-status">{player.loadingStatus}</p>}
+    {!player.error&&player.loadingStatus&&<FloatingNotice message={player.loadingStatus} busy />}
     {player.canOpenNativeVideo&&<button onClick={()=>void player.openNativeVideo()}>打开 Android 视频播放器</button>}
     {view==='chapters'?<PlayingChapters key={itemId} player={player} api={api} item={item} error={failed} cause={cause} onRetry={()=>setRetry(value=>value+1)}/>:view==='queue'?<CurrentPlaylist player={player}/>:!player.isVideo&&itemId&&<PlayingArtwork api={api} item={item} failed={!!failed} onRetry={()=>setRetry(value=>value+1)} player={player} lyrics={lyrics} onMore={()=>open('more')}/>}
     {view!=='queue'&&view!=='chapters'&&<div className="media-audio-bottom">

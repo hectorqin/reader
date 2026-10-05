@@ -1,4 +1,6 @@
-import { Alert, Loader, Select } from '@mantine/core';
+import { Button } from '@mantine/core';
+import { History, LibraryBig, ListVideo, MoreHorizontal, Search, Settings2, Star } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -7,6 +9,8 @@ import { librariesQuery } from '../queries/media.queries.ts';
 import { MediaPageFrame, QueryFeedback } from '../components/MediaPageFrame.tsx';
 import { Narrators, type NarratorLocation } from '../components/narrators.tsx';
 import type { MediaChannel, Part } from '../api/media-api.ts';
+import { MediaSelect } from '../components/select.tsx';
+import { EmptyMediaLibrary } from '../components/empty-library.tsx';
 
 /**
  * Dedicated narrator workspace. Narrators are backed by the specialised
@@ -60,10 +64,22 @@ export function MediaNarratorsPage() {
     await runtime.player.play(parts.map(part => ({ part, title: `${title} · ${part.title}`, video: false })), index);
   };
 
-  return <MediaPageFrame title="演播者">
+  const actions = <>
+    <Button component={Link} to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Button>
+    <details className="media-actions media-catalog-actions">
+      <summary aria-label="更多操作" title="更多操作"><MoreHorizontal size={20} aria-hidden="true" /></summary>
+      <nav aria-label="更多操作">
+        <Link to="/media/audiobook/settings"><Settings2 size={16} aria-hidden="true" />影音设置</Link>
+        <Link to="/media/favorites"><Star size={16} aria-hidden="true" />收藏</Link>
+        <Link to="/media/audiobook/history"><History size={16} aria-hidden="true" />历史</Link>
+        <Link to="/media/audiobook/queue"><ListVideo size={16} aria-hidden="true" />队列</Link>
+        <Link to="/media/audiobook/settings/libraries"><LibraryBig size={16} aria-hidden="true" />媒体库管理</Link>
+      </nav>
+    </details>
+  </>;
+  return <MediaPageFrame className="media-catalog-page" title="有声书" actions={actions}>
     <QueryFeedback pending={libraries.isPending} error={libraries.error} retry={() => { void libraries.refetch(); }} />
-    {libraries.isPending && <Loader />}
-    {!libraries.isPending && !libraries.error && !libraryId && <Alert>当前没有可浏览的有声书媒体库。</Alert>}
+    {!libraries.isPending && !libraries.error && !libraryId && <EmptyMediaLibrary channel="audiobook" hasLibraries={false} admin={role === 'admin'} category="演播者" onCreate={() => navigate('/media/audiobook/settings/libraries/new')} onManage={() => navigate('/media/audiobook/settings/libraries')} />}
     {!libraries.isPending && !libraries.error && libraryId && <Narrators
       key={`${routeName ?? ''}:${routeWork}`}
       api={runtime.mediaApi}
@@ -71,16 +87,16 @@ export function MediaNarratorsPage() {
       showLibraryName={!requested}
       initialLocation={initialLocation}
       onLocationChange={updateLocation}
-      libraryControl={<Select aria-label="媒体库" value={libraryId} data={available.map(item => ({ value: item.id, label: item.name }))} onChange={value => {
+      libraryControl={<MediaSelect variant="plain" aria-label="媒体库" value={libraryId} onChange={event => {
+        const value = event.currentTarget.value;
         const next = new URLSearchParams(params);
         if (value) next.set('library', value); else next.delete('library');
         for (const key of ['narrator', 'work', 'edition', 'offset']) next.delete(key);
         navigate(`/media/audiobook/narrators${next.toString() ? `?${next.toString()}` : ''}`, { replace: true });
-      }} />}
+      }}>{available.map(item => <option value={item.id} key={item.id}>{item.name}</option>)}</MediaSelect>}
       onPlay={play}
       onQueue={async ids => { await runtime.mediaApi.request('queue', 'POST', { partIds: ids }); }}
       onDetail={id => navigate(`/media/audiobook/items/${encodeURIComponent(id)}`)}
     />}
-    {role === 'admin' && !libraries.isPending && !libraries.error && available.length === 0 && <Alert color="yellow">管理员可以先在影音设置中创建有声书媒体库。</Alert>}
   </MediaPageFrame>;
 }

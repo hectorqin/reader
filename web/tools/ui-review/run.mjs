@@ -25,13 +25,15 @@
  */
 
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CDP } from './cdp.mjs';
 import { createReviewServer, ILLUSTRATED_ID } from './server.mjs';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
-const outDir = join(here, '..', '..', '..', 'docs', 'ui-review');
+const outDir = process.env.UI_REVIEW_DIR
+  ? resolve(process.env.UI_REVIEW_DIR)
+  : join(here, '..', '..', '..', 'artifacts', 'ui-review', 'reader');
 
 /** Phone size, which is the size this product is actually used at. */
 const VIEWPORT = { width: 390, height: 844 };

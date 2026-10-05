@@ -1,121 +1,85 @@
-# 前端 React 架构重构方案
+# 前端 React 架构说明
 
-## 目标
+本文保留原“前端 React 迁移”文件名以避免已有链接断开，内容描述当前实现约定。生产 Web 入口已经使用 React 19；后续页面和组件应遵循本文及[架构与数据边界](architecture.md)中的边界，不再向旧的 Screen 调度链添加代码。
 
-将 `web` 从 Preact + 自研 Screen/Router 的混合实现迁移为完整的 React 19 应用。路由、页面生命周期、服务端状态、客户端共享状态和基础交互组件分别由成熟方案负责，业务页面按领域拆分。
+## 当前技术栈
 
-第一阶段优先迁移影音模块；第二阶段迁移登录、书架、书库、书源、设置等非阅读页面；最后只保留阅读内容引擎的命令式 DOM 实现，并由 React 页面托管其生命周期。
-
-## 已确定的技术选择
-
-| 能力 | 方案 | 责任 |
+| 能力 | 当前实现 | 责任 |
 | --- | --- | --- |
-| UI 运行时 | React 19 + React DOM | 所有页面和组件的唯一 UI 运行时 |
-| 路由 | React Router 7 `createHashRouter` | Hash URL、嵌套路由、Layout、Outlet、错误边界和权限守卫 |
+| UI 运行时 | React 19 + React DOM | 页面、组件和生命周期 |
+| 路由 | React Router 7 `createHashRouter` | Hash URL、嵌套路由、Outlet、参数、错误边界和导航 |
 | 服务端状态 | `@tanstack/react-query` | 查询缓存、去重、mutation、失效和预取 |
-| 客户端共享状态 | Zustand | 认证、设置、同步、播放等跨页面状态 |
-| 基础组件 | Mantine | 对话框、表单、菜单、选择器、通知、加载和管理界面 |
+| 客户端共享状态 | Zustand | 认证、设置、同步和播放状态 |
+| 基础组件 | Mantine | 主题、表单、菜单、通知、加载和管理界面 |
 | 图标 | `lucide-react` | React 图标组件 |
-| 构建 | Vite + TypeScript | 保持 `base: './'` 和 Android 单 Bundle 约束 |
+| 构建 | Vite + TypeScript | H5 与 Android WebView 共用的相对资源单 Bundle |
 
-Hash 路由继续使用，因为同一份构建产物由 H5 服务和 Android WebView 消费，Android 资源地址不支持任意路径 fallback。旧路由兼容不是目标；新路由以 React Router 的标准嵌套路由为准。
+继续使用 Hash 路由是因为同一份产物同时由 H5 服务和 Android WebView 加载；两个宿主都不能为任意路径提供客户端回退。新的链接应使用 `#/...` 形式。
 
-## 目录约定
+## 启动与运行时
+
+`web/src/main.tsx` 创建 `AppRuntime`，然后调用 `createRoot()` 渲染 `AppProviders` 和 `RouterProvider`。`web/src/app/runtime.ts` 只负责组装共享资源，不选择页面：
+
+- 根据环境选择 Web 或 Android 平台，创建 `ReaderApi`、`MediaApi`、`MediaPlayer`、`PlaybackService`、`SyncEngine`、`OfflineStore`、`SettingsStore` 和 Query Client；
+- 恢复本地会话、服务地址、离线作用域和同步状态；
+- 暴露 flush、登录状态、阅读器注册和设置更新等宿主能力。
+
+`AppProviders` 提供 `RuntimeContext`、`QueryClientProvider`、`MantineProvider` 和全局通知。Provider 生命周期负责启动/停止播放服务、连接会话与同步监听、写入根主题属性，并在页面隐藏或离开时刷新进度、离线数据和播放器状态，重新联网时续期会话。
+
+## 目录边界
+
+当前 Web 代码按以下实际目录组织：
 
 ```text
 web/src/
-  app/
-    App.tsx
-    providers/
-    router/
-    layouts/
+  app/                         # AppShell、Provider、运行时和 React Router
   features/
-    auth/
-    shelf/
-    library/
-    sources/
-    media/
-      pages/
-      components/
-      api/
-      queries/
-      mutations/
-      stores/
-      services/
-      styles/
-    reader/
-      pages/
-      components/
-      services/
-  shared/
-    api/
-    query/
-    stores/
-    ui/
-    hooks/
-    platform/
-    types/
+    auth/pages/                # 登录
+    library/pages/             # 书库浏览和文件管理
+    media/                     # 影音 API、页面、组件、查询、变更、服务、状态和样式
+    reader/pages/              # 阅读路由页面
+    settings/pages/            # 用户与服务设置
+    shelf/pages/,queries/      # 书架
+    sources/hooks/,pages/      # 书源及扩展页面
+  shared/query/,stores/,ui/   # 跨领域查询、状态和 UI 边界
+  api/, core/, formats/, net/  # API、平台、格式和网络基础能力
+  render/                      # 分页、PDF、文本、朗读等渲染服务
+  store/                       # 离线、出版物、设备设置存储
+  ui/                          # 阅读器命令式舞台及可复用交互组件
+  styles/                      # 应用和阅读器全局样式
 ```
 
-页面组件只处理页面展示和交互。API 调用通过领域 query/mutation hooks；跨页面状态通过领域 store；页面临时状态留在组件内部。路由页面不得通过布尔字段判断其它页面。
+页面组件只组合页面展示、查询和交互。API 请求通过领域 API、query 或 mutation 访问；跨页面状态放在 Zustand store；播放器、主题和阅读器等长生命周期行为放在 service。旧的 `web/src/media`、旧 Screen 页面、旧手写生产路由和 `mountUI` 已从生产入口移除。`web/src/app.ts` 与 `app/legacy-compat.ts` 仅保留 Android 诊断和旧测试所需的兼容形状，不负责生产页面调度。
 
-影音领域的 React 组件、API 类型、跨页面服务和样式统一放在 `features/media` 下；旧的 `src/media` 目录已删除，测试与 Android 诊断也直接引用新目录，没有旧媒体路径转导层。领域内同目录组件使用 `./` 导入，跨职责目录使用 `../api`、`../services`、`../styles` 等明确路径；样式唯一存放在 `styles`，避免组件目录与样式目录维护重复副本。路由入口集中在 `app/router/routes.tsx`。
+## 路由与兼容
 
-阅读器的命令式引擎和 Android 宿主仍保留在 `ui`/`core` 边界，由 `features/reader/pages/ReaderPage` 明确托管生命周期。`app.ts` 的诊断兼容接口只提供平台、flush 等宿主能力，不参与生产页面调度。
+路由定义集中在 `web/src/app/router/routes.tsx`，根级 `AppShell` 先经过 `AuthBoundary`，认证后渲染页面 Outlet。影音由 `MediaLayout` 提供频道上下文、主题生命周期和公共频道入口，具体页面继续按路由拆分。
 
-## 生命周期边界
+保留的兼容入口是有意的：
 
-播放器是应用级服务。`PlaybackService` 管理 audio/video/native bridge、播放队列和进度保存，`playback.store` 暴露可观察状态。离开播放页面只卸载控制界面，不销毁播放会话。
+- `/settings` 重定向到 `/shelf`，兼容旧书架设置深链接；
+- `/sources/search` 仍打开书源中心；
+- `/sources/:sourceId/:pageId` 与新的 `/sources/:sourceId/pages/:pageId` 都可打开扩展页；
+- `/media`、`/media/music` 和 `/media/audiobook` 重定向到对应频道默认页，未知路径回到 `/media/video`。
 
-阅读器内容仍由 `ReaderEngine`、分页器、Shadow DOM、朗读和 Android fixed-page host 负责。`ReaderPage` 使用 React effect 创建、更新和销毁引擎；React 不介入书籍内容的布局量测。
+兼容路由只保证旧链接仍能进入正确的 React 页面；新代码应直接使用当前路由树中的命名空间和嵌套路径。
 
-## 影音路由边界
+## 阅读器托管边界
 
-`MediaLayout` 只提供公共导航、频道上下文和 `<Outlet />`。每个可刷新、可返回的页面有独立组件，包括频道首页、分类、搜索、收藏、历史、队列、详情、元数据、匹配、章节、播放器、歌词、设置、媒体库管理、权限、任务、文件夹和文件。
+`features/reader/pages/ReaderPage.tsx` 是 React 与阅读器命令式实现之间的边界。页面取得书籍后，在 effect 中创建 `ReaderScreen`，把 `screen.element` 放入 route host，并通过 `runtime.registerReader()` 注册进度刷新回调。清理 effect 时先注销回调，再调用 `screen.dispose()` 并清空 host。
 
-## 迁移顺序
+`ReaderScreen` 内部仍负责章节加载、Shadow DOM、分页量测、手势、朗读和阅读工具；React 只托管它的创建、更新和销毁，不介入书籍正文的布局量测。ReaderScreen 的 chrome 使用 React 组件，正文舞台保持命令式 DOM，以确保 `getBoundingClientRect()` 和章节分页的节点生命周期稳定。
 
-1. React 运行时、Vite 插件、React Router、React Query、Zustand、Mantine 和应用 Provider。
-2. React 根应用、Hash Router、错误边界和权限边界。
-3. 影音 Layout、路由树、Query/Mutation 层和目录页面。
-4. 详情、元数据、章节、媒体库管理、设置和任务页面。
-5. PlaybackService、播放器页和 MiniPlayer。
-6. 删除 `MediaScreen`、旧媒体路由分支、旧 `media` 目录和媒体侧 `mountUI` 使用。
-7. 迁移其它非阅读页面。
-8. React 化阅读器外围页面，保留 ReaderEngine。
-9. 删除 Preact、`lucide-preact`、旧 `mountUI` 和旧 Screen 调度链。
+## 播放器和媒体主题生命周期
 
-## 验收标准
+播放器是应用级资源。`AppProviders` 把 `runtime.player.element` 挂到 `document.body`，调用 `runtime.playback.start()` 建立 `PlaybackService` 对 `MediaPlayer` 的监听；路由切换只卸载控制界面，不销毁播放会话。`AuthenticatedShell` 根据当前 URL 控制播放器可见性，并处理播放器发出的 `open-controls` 事件，将用户带到带有 `item` 和 `part` 查询参数的播放器路由。Provider 卸载时停止监听并移除播放器节点。
 
-- 所有页面由 React Router 管理，`App` 不再手写页面 switch。
-- `MediaScreen` 删除，旧 `src/media` 目录删除，媒体页面按 route/page/query/mutation 拆分。
-- React Query 统一管理服务端状态，Zustand 管理客户端共享状态。
-- 播放器跨路由持续播放，阅读引擎拥有明确的 React 托管生命周期。
-- Mantine 负责基础交互组件；品牌样式只做必要覆盖，不强行改写组件内部实现。
-- 保持 Android WebView 单 Bundle、相对资源和 PWA 能力。
-- 现有媒体、认证、同步、播放器、阅读器关键回归测试通过。
-- 新增页面不需要修改一个巨型 Screen 文件。
+影音主题由 `MediaLayout` 创建 `MediaThemeController`，作用域来自 `runtime.mediaApi.preferenceScope()`。控制器只向 `body` 写入带 `--media-theme-` 前缀的变量，响应系统主题、同页主题事件和存储变化；离开影音路由时清理变量和监听器，因此不会污染书架或阅读器主题。
 
-## 当前实施状态
+## 后续改动约定
 
-已完成第一轮可运行切换：
-
-- `main.tsx` 使用 `createRoot`、`AppProviders` 和 `RouterProvider`，应用启动不再经过旧 `App.start()`。
-- 路由已改为 `createHashRouter`，影音的频道、分类、搜索、收藏、历史、队列、详情和设置入口拥有独立 React 路由。
-- 媒体列表和详情页面通过 React Query 查询层访问 `MediaApi`，基础交互使用 Mantine。
-- 书架、书库、书源和设置已建立独立 React 页面与路由，旧 Screen 不再参与新的入口调度。
-- `MediaPlayer` 已由 `PlaybackService` 管理并在 Provider 中启动，跨路由播放状态通过 Zustand 暴露，播放器 DOM 不随页面路由销毁。
-- 已用浏览器验证开发服务器能够启动并显示 React 登录页面；`npm run typecheck` 与 `npm run build` 通过。
-
-当前迁移已完成生产入口切换和影音目录收敛。影音管理、播放器控制、登录、书架、书库、书源、设置和阅读路由均由 React Router 管理；旧 `MediaScreen`、旧媒体路由、旧 `mountUI`、Preact 适配层、旧 Screen 页面和 `src/media` 目录已删除。阅读内容引擎仍作为 `ReaderPage` 的命令式服务边界存在，并由 React effect 负责创建、刷新和销毁。
-
-最终验证结果：
-
-- `npm run typecheck` 通过。
-- `npm run build` 通过；Vite 完成约 2633 个模块构建，产物仍为 Android WebView 可加载的相对资源单 Bundle。仅保留大 chunk 的性能提示，未阻断构建。
-- `npm test` 通过：97 个 Vitest 测试文件、811 个测试全部通过；Node 测试 29 项全部通过。
-- `npm run ui:review:only` 通过：40 张 React 页面截图，详情、视频播放、历史和队列页面均完成视觉回归。
-- `git diff --check` 通过；输出的换行符提示属于工作区 CRLF 转换提示，不是 whitespace error。
-
-至此生产入口已经完成 React 化。后续新增页面应继续按 `app / features / shared` 边界实现，由 React Router 接入路由，不再向旧 Screen 调度链添加逻辑。
-
+- 新页面放入对应的 `features/<domain>/pages`，通过 `routes.tsx` 接入；
+- 领域组件、查询、变更、服务和样式留在各自 feature 内，跨领域依赖经过 `shared` 或 `app` 边界；
+- 需要长生命周期的资源必须由 Provider 或明确的 service 管理，并在清理阶段释放；
+- 阅读器正文继续通过 `ReaderScreen` 托管，不把命令式舞台改写为普通 React 子树；
+- 新链接使用 Hash 路由和当前嵌套路由，不新增旧 Screen 或手写 pathname 分支。

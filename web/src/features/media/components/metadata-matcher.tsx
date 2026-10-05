@@ -6,6 +6,7 @@ import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';
 import {ApiError} from '../../../api/errors.ts';
 import {Modal} from '../../../ui/modal.tsx';
+import {FloatingNotice} from '../../../ui/floating-notice.tsx';
 
 interface Provider { id: string; label: string; kinds: string[]; configured: boolean }
 interface Candidate { candidateId: string; provider: string; externalId: string; title: string; year?: number; artist?: string; description?: string; evidence?:{level:'strong'|'review'|'conflict';reasons:string[]} }
@@ -114,7 +115,7 @@ export function MetadataMatcher({ api, item, onUpdated,layout='inline',onBusyCha
     {!loading&&!loadError&&!provider&&<div className="media-match-unavailable" role="status"><Search size={26} strokeWidth={1.4} aria-hidden="true"/><strong>{providers.length?'尚未配置可用来源':'当前作品暂无支持的在线来源。'}</strong><p>{providers.length?'请由服务器管理员设置访问凭证或联系信息，再重新读取。':'可以返回手动编辑，本地资料和播放不受影响。'}</p>{providers.length>0&&<button type="button" disabled={busy} onClick={()=>setLoadRetry(value=>value+1)}>重新检查来源</button>}</div>}
     {loading&&<MediaLoading layout="list" label="正在读取来源与候选…" count={2}/>}
     {error && <p className="media-error" role="alert">{error}</p>}
-    {busy && <p role="status">正在处理元数据…</p>}
+    {busy && <FloatingNotice message="正在处理元数据…" busy />}
     {searched && candidates.length === 0 && <p>未找到候选，请修改关键词后重试。</p>}
     {layout==='page'&&<h2>候选作品</h2>}
     {candidates.map(candidate => <div className="media-row media-match-candidate" key={candidate.candidateId}>

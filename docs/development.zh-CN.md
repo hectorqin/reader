@@ -71,7 +71,7 @@ npm run build --prefix web
 
 Web 测试同时包含 Vitest 和 Node 测试。UI 评审使用真实 Chromium；浏览器缺失时按上面的步骤准备环境。不要把历史测试数量当作当前验证结果。
 
-UI 改动可运行 `npm run ui:review --prefix web`，书源流程可运行 `npm run ui:sources --prefix web`。评审工具及环境说明见 [UI 评审](ui-review/README.md)，会生成截图和报告；截图目录默认不纳入 Git。
+UI 改动可运行 `npm run ui:review --prefix web`，书源流程可运行 `npm run ui:sources --prefix web`。评审脚本位于 `web/tools/ui-review/`，会把截图和报告写入被 Git 忽略的 `artifacts/ui-review/`；不要把一次运行的截图提交到 `docs/`。
 
 ## 构建与运行
 

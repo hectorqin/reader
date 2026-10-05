@@ -56,8 +56,8 @@
       script: cd web && npm run ui:review:only
     - name: archive-screenshots
       script: |
-        echo "UI 评审截图：docs/ui-review/"
-        ls -la docs/ui-review/
+        echo "UI 评审产物：artifacts/ui-review/react-app/"
+        ls -la artifacts/ui-review/react-app/
 
 main:
   push:

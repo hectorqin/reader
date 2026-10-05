@@ -318,22 +318,23 @@ Readium 用 Readium CSS 主动接管排版、覆盖出版方样式，这与本�
 
 ### UI 框架：完整 React 应用
 
-前端现在由 React 19 负责组件树和页面生命周期，入口是
-`web/src/main.tsx` 的 `createRoot()`。所有登录后页面都挂在
-`AppProviders` 下，由成熟的 Provider 统一承载运行时、服务端状态和设计系统：
+前端由 React 19 负责应用页面和页面生命周期，入口是
+`web/src/main.tsx` 的 `createRoot()`。启动阶段先由
+`web/src/app/runtime.ts` 组装平台、API、同步、离线、播放器和设置资源，再由
+`AppProviders` 把它们注入 React 树：
 
-- `react-router-dom` 的 `createHashRouter` 负责路由、嵌套路由、参数和错误边界；
+- `react-router-dom` 的 `createHashRouter` 负责 Hash 路由、嵌套路由、参数、Outlet 和错误边界；
 - `@tanstack/react-query` 的 `QueryClientProvider` 负责服务端状态、缓存、加载、重试和失效；
 - Zustand stores 负责认证、设置、同步和播放器等跨页面客户端状态；
 - Mantine 提供基础组件、主题和通知，Lucide React 提供统一图标；
-- `RuntimeContext` 只暴露 API、同步、播放和设置等应用运行时依赖。
+- `RuntimeContext` 暴露 API、同步、播放、设置和平台能力，页面不自行组装这些依赖。
 
-业务按 `features/<domain>` 拆分，每个领域拥有自己的 `pages`、`components`、
-`queries`、`mutations`、`services` 和 `styles`。页面只组合查询、变更和组件，
-不再通过单文件的 URL 判断来调度所有屏幕。影音的实现位于
-`web/src/features/media`，阅读器仍保留一个命令式排版边界，因为它需要直接测量
-`getBoundingClientRect()`、维护 shadow root 和处理章节分页；这个边界由
-`ReaderPage` 的 effect 创建和销毁，不会把整个应用退回到手写 Screen 调度。
+业务按 `features/<domain>` 拆分，每个领域按实际需要拥有 `pages`、`components`、
+`queries`、`mutations`、`services` 和 `styles`。影音实现位于
+`web/src/features/media`；登录、书架、书库、书源、设置和阅读页面也通过各自
+feature 接入同一棵路由树。旧的 `web/src/media`、旧 Screen 页面、旧手写生产路由
+和 `mountUI` 已从生产入口移除。`web/src/app.ts` 与
+`app/legacy-compat.ts` 只保留 Android 诊断和旧测试需要的兼容形状，不负责页面调度。
 
 React 组件只声明布局和状态，副作用放在 effect、query 或 service 中。这样登录、
 书架、书库、书源、设置和影音页面共享同一套生命周期语义，加载、错误、空状态和
@@ -344,7 +345,7 @@ React 组件只声明布局和状态，副作用放在 effect、query 或 servic
 界面的第二个结构性问题不是「怎么画」，而是「在哪」。最初的 shell 用
 `showShelf()` / `openBook()` / `showManager()` 加一个 `pendingBook` 字段来换屏，
 URL 从头到尾不变。手机上这一点几乎看不见——直到读者按返回键：Android 的返回手势
-交给 Activity，Activity 看到 WebView 没有历史，于是**直接从书架上退出应用**。
+交给 Activity，Activity 看到 WebView 没有历史，于是直接从书架上退出应用。
 浏览器上则更糟，地址栏是自托管书库唯一的分发方式，而它既不能分享也不能收藏：
 一本书链接不出去，刷新永远回到书架。
 
@@ -363,31 +364,49 @@ URL 从头到尾不变。手机上这一点几乎看不见——直到读者按�
 不再由每个 Screen 自己维护一份 history。嵌套页面通过显式返回按钮回到父路由，浏览器
 的 Back/Forward 和刷新都能重建同一页面状态。
 
-当前核心路由是：
+当前路由树的稳定入口包括：
 
 | 路由 | 页面 |
 | --- | --- |
 | `#/shelf` | 书架 |
-| `#/library`、`#/library/files` | 书库浏览、文件管理 |
-| `#/sources`、`#/settings` | 书源、设置 |
+| `#/library`、`#/library/books`、`#/library/files` | 书库浏览、书籍列表、文件管理 |
+| `#/sources` 及 `#/sources/...` | 书源中心、浏览、凭据、扩展和插件管理 |
+| `#/settings` | 兼容旧深链接，重定向到书架 |
 | `#/book/:bookId` | 阅读器 |
-| `#/media/:channel` | 影音频道首页 |
-| `#/media/:channel/items/:itemId` | 影音详情 |
+| `#/media/:channel` | 影音频道目录 |
+| `#/media/:channel/items/:itemId` | 影音详情及管理子页 |
 | `#/media/:channel/player?item=&part=` | 播放器 |
-| `#/media/:channel/settings/...` | 影音设置及管理子页 |
+| `#/media/:channel/settings/...` | 影音设置及媒体库管理 |
 
-书架、书库、书源、设置和影音是独立页面；影音内部再按频道、收藏、历史、队列、
-搜索、详情和管理功能拆成嵌套路由。分页、筛选和播放器参数放在路由参数或 query 中，
-页面不会通过单文件里的 pathname 分支来决定渲染哪一组业务页面。
+`/sources/search`、旧的 `/sources/:sourceId/:pageId` 扩展页形状和
+`/media`、`/media/music`、`/media/audiobook` 默认入口仍由路由表兼容；
+新页面应使用当前命名空间和嵌套路由。未知路径回到 `/media/video`。影音内部按频道、
+收藏、历史、队列、搜索、详情和管理功能拆成嵌套路由，分页、筛选和播放器参数放在
+路由参数或 query 中。
 
 Hash 路由适配 WebView 和静态服务器：宿主只需要返回同一个 `index.html`，客户端从
 `#` 后解析页面，不依赖服务端为每个深层路径配置回退规则。登录是认证边界而不是业务
 页面；未认证时由 `AuthBoundary` 显示登录表单，认证完成后 React Router 渲染目标地址。
 
-阅读器是唯一的特殊生命周期边界：`ReaderPage` 创建 `ReaderScreen`，将其舞台
-通过 `StageHost` 插入 React 树，并在 effect 清理时调用 `dispose()`。页面离开后，
-reader 的异步请求和分页更新不会再写入已卸载的 DOM；其它页面完全遵循 React 的
-挂载、更新和卸载语义。
+### 阅读器与长生命周期资源
+
+阅读器是唯一的特殊生命周期边界：`ReaderPage` 在 effect 中取得书籍后创建
+`ReaderScreen`，把它的 `screen.element` 放入 route host，并通过
+`runtime.registerReader()` 注册进度刷新回调。页面离开时先注销回调，再调用
+`screen.dispose()` 并清空 host。ReaderScreen 内部的章节加载、分页量测、手势、
+朗读和 Shadow DOM 仍是命令式 DOM；其 chrome 使用 React，`StageHost` 只负责把
+ReaderScreen 持有的舞台节点放到 chrome 树中的正确位置。React 不介入书籍正文的布局量测。
+
+播放器是应用级资源。AppProviders 把 `runtime.player.element` 挂到
+`document.body`，启动 `PlaybackService` 对 `MediaPlayer` 的监听。路由切换只卸载
+控制页面，不销毁播放会话；播放器发出 `open-controls` 时由 `AuthenticatedShell`
+导航到带 `item` 和 `part` 查询参数的播放器路由。Provider 卸载时停止监听并移除
+播放器节点，应用隐藏或离开时统一调用 runtime flush，重新联网时续期会话。
+
+影音主题只在 `MediaLayout` 挂载期间生效。它创建 `MediaThemeController`，作用域来自
+`runtime.mediaApi.preferenceScope()`，并只向 `body` 写入带 `--media-theme-` 前缀的
+变量；系统主题、同页主题事件和存储变化会更新该作用域。离开影音路由时清理变量和监听器，
+因此不会污染书架、设置或阅读器主题。
 
 ### 只有一份渲染层
 

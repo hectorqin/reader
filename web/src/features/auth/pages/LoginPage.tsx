@@ -1,6 +1,6 @@
-import { Alert, Badge, Button, Center, Divider, Group, Loader, PasswordInput, Stack, Text, TextInput, Title } from '@mantine/core';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import type { InstanceInfo } from '../../../api/types.ts';
 import { ApiError } from '../../../api/errors.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -14,6 +14,7 @@ export function LoginPage() {
   const [serverUrl, setServerUrl] = useState(runtime.api.baseUrl);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [registering, setRegistering] = useState(false);
@@ -68,5 +69,20 @@ export function LoginPage() {
     } finally { setBusy(false); }
   };
   const canRegister = !!instance?.registrationOpen;
-  return <Center className="login-screen" mih="100vh" p="md"><form onSubmit={submit} style={{ width: 'min(100%, 28rem)' }}><Stack gap="md"><Stack gap={2}><Title order={1}>reader</Title><Text c="dimmed">你的私人书房</Text></Stack><details className="login-connection"><summary>连接设置<span>更换服务地址</span></summary><TextInput label="服务端地址" type="url" value={serverUrl} onChange={event => setServerUrl(event.currentTarget.value)} placeholder="http://127.0.0.1:5888" required rightSection={probing ? <Loader size="xs" /> : instance ? <Badge color="green">在线</Badge> : undefined} /><Group justify="space-between" align="center"><Text size="sm" c="dimmed">{instance?.name || '尚未连接服务端'}</Text>{instance && <Text size="xs" c="dimmed">API v{instance.apiVersion}</Text>}</Group></details><Divider /><TextInput label="用户名" autoComplete="username" value={username} onChange={event => setUsername(event.currentTarget.value)} required />{registering && <TextInput label="显示名（可选）" value={displayName} onChange={event => setDisplayName(event.currentTarget.value)} />}{registering && instance?.invitationRequired && <TextInput label="邀请码" value={inviteCode} onChange={event => setInviteCode(event.currentTarget.value)} required />}{registering && <Text size="xs" c="dimmed">注册后会自动登录并保存此服务端地址。</Text>}<PasswordInput label="密码" autoComplete={registering ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.currentTarget.value)} required />{notice && <Alert color={instance ? 'blue' : 'yellow'}>{notice}</Alert>}{error && <Alert color="red">{error}</Alert>}<Button className="login-submit" type="submit" loading={busy} disabled={!validServerUrl(serverUrl)}>{registering ? '注册并登录' : '登录'}</Button><Text className="login-session-hint">登录状态自动保持，无需每天重新登录</Text>{(canRegister || registering) && <Button type="button" variant="subtle" disabled={busy} onClick={() => setRegistering(value => !value)}>{registering ? '返回登录' : '注册新账号'}</Button>}</Stack></form></Center>;
+  return <div className="login-screen"><form className="centered-form login-card" onSubmit={submit}>
+    <header className="login-heading"><div className="login-brand">reader</div><p>你的私人书房</p></header>
+    <details className="login-connection">
+      <summary>连接设置<span>更换服务地址</span></summary>
+      <div className="field"><label htmlFor="login-server">服务端地址 <em>*</em></label><div className="login-server-input"><input id="login-server" type="url" value={serverUrl} onChange={event => setServerUrl(event.currentTarget.value)} placeholder="http://127.0.0.1:5888" required />{probing ? <span className="login-server-status is-probing">…</span> : instance ? <span className="login-server-status">在</span> : null}</div><div className="login-server-meta"><span>{instance?.name || '尚未连接服务端'}</span>{instance && <span>API v{instance.apiVersion}</span>}</div></div>
+    </details>
+    <div className="field"><label htmlFor="login-username">用户名 <em>*</em></label><input id="login-username" autoComplete="username" value={username} onChange={event => setUsername(event.currentTarget.value)} required /></div>
+    {registering && <div className="field"><label htmlFor="login-display-name">显示名（可选）</label><input id="login-display-name" value={displayName} onChange={event => setDisplayName(event.currentTarget.value)} /></div>}
+    {registering && instance?.invitationRequired && <div className="field"><label htmlFor="login-invite">邀请码 <em>*</em></label><input id="login-invite" value={inviteCode} onChange={event => setInviteCode(event.currentTarget.value)} required /></div>}
+    <div className="field"><label htmlFor="login-password">密码 <em>*</em></label><div className="login-password-input"><input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete={registering ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.currentTarget.value)} required /><button type="button" className="login-password-toggle" aria-label={showPassword ? '隐藏密码' : '显示密码'} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button></div></div>
+    {registering && <p className="login-register-hint">注册后会自动登录并保存此服务端地址。</p>}
+    {notice && <div className={'login-notice' + (instance ? '' : ' is-warning')} role="status">{notice}</div>}{error && <div className="login-notice is-error" role="alert">{error}</div>}
+    <button className="button primary login-submit" type="submit" disabled={!validServerUrl(serverUrl) || busy}>{busy ? '登录中…' : registering ? '注册并登录' : '登录'}</button>
+    <p className="login-session-hint">登录状态自动保持，无需每天重新登录</p>
+    {(canRegister || registering) && <div className="login-switch"><span>{registering ? '已有账号？' : '还没有账号？'}</span><button type="button" disabled={busy} onClick={() => setRegistering(value => !value)}>{registering ? '返回登录' : '注册新账号'}</button></div>}
+  </form></div>;
 }

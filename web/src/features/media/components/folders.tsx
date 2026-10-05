@@ -2,7 +2,8 @@ import {FolderRecognition} from './folder-recognition.tsx';
 import {FolderCleanup} from './folder-cleanup.tsx';
 import {MediaSelect} from './select.tsx';
 import { useEffect, useRef, useState } from 'react';
-import {Folder,FolderOpen,File,ChevronRight,ChevronLeft,ArrowUpRight} from 'lucide-react';
+import { createPortal } from 'react-dom';
+import {Folder,FolderOpen,File,ChevronRight,ChevronLeft,ArrowUpRight,Ellipsis} from 'lucide-react';
 import type {Detail,MediaApi,Part} from '../api/media-api.ts';
 import {EditionDetails,type ChapterPosition} from './edition-details.tsx';
 import {ResourceInfo} from './resource-info.tsx';
@@ -20,7 +21,7 @@ function FileWork({api,item,busy,selected,onSelect,positions,onPosition,onPlay,o
     {edition&&<EditionDetails key={edition.id} api={api} item={item} edition={edition} busy={busy} showTools={false} position={positions[edition.id]??{query:'',page:0}} onPositionChange={position=>onPosition(edition.id,position)} onPlay={onPlay} onQueue={onQueue} onRefresh={onRefresh} onChooseVersion={onDetail}/>}
   </section>;
 }
-export function MediaFolders({api,admin=false,video=false,libraryId,initialLocation,onLocationChange,onPlay,onQueue,onDetail}:{api:MediaApi;admin?:boolean;video?:boolean;libraryId:string;initialLocation?:FolderLocation|undefined;onLocationChange?:(location:FolderLocation)=>void;onPlay:(parts:Part[],index:number,title:string)=>Promise<void>;onQueue:(ids:string[])=>Promise<void>;onDetail:(id:string,location:FolderLocation)=>void}){
+export function MediaFolders({api,admin=false,video=false,libraryId,initialLocation,onLocationChange,onPlay,onQueue,onDetail,actionsHost}:{api:MediaApi;admin?:boolean;video?:boolean;libraryId:string;initialLocation?:FolderLocation|undefined;onLocationChange?:(location:FolderLocation)=>void;onPlay:(parts:Part[],index:number,title:string)=>Promise<void>;onQueue:(ids:string[])=>Promise<void>;onDetail:(id:string,location:FolderLocation)=>void;actionsHost?:HTMLElement|null}){
   const [path,setPath]=useState(initialLocation?.path??''),[offset,setOffset]=useState(initialLocation?.offset??0),[assetId,setAssetId]=useState<string|null>(initialLocation?.assetId??null),[retry,setRetry]=useState(0);
   const [editions,setEditions]=useState(initialLocation?.editions??{}),[chapters,setChapters]=useState(initialLocation?.chapters??{});
   const [listing,setListing]=useState<Listing|null>(null),[file,setFile]=useState<FileDetail|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
@@ -39,13 +40,16 @@ export function MediaFolders({api,admin=false,video=false,libraryId,initialLocat
   useEffect(()=>{onLocationChange?.({path,offset,assetId,editions,chapters});},[path,offset,assetId]);
   function open(next:string){setCleanupNotice('');setPath(next);setOffset(0);setAssetId(null);}
   async function action(run:()=>Promise<void>,queue=false){if(busy)return;const current=generation.current;setBusy(true);setActionError('');setNotice('');try{await run();if(current===generation.current)setNotice(queue?'已加入队列':'');}catch(error){if(current===generation.current)setActionError((error instanceof ApiError&&error.kind==='offline'?'无法连接服务器':error instanceof Error?error.message:'操作失败')+(queue?'。加入结果尚未确认，请先到待播队列核对，再决定是否重新添加。':'。可以重新选择章节播放。'));}finally{if(current===generation.current)setBusy(false);}}
-  const managementActions = admin && listing ? <div className="media-folder-actions" aria-label="文件管理操作">
+  const managementActions = admin && listing ? <details className="media-actions media-folder-actions" aria-label="文件管理操作">
+    <summary aria-label="文件管理操作" title="文件管理操作"><Ellipsis size={20} aria-hidden="true" /></summary>
+    <nav aria-label="文件管理操作">
     {video && <FolderRecognition key={libraryId+'-rules-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onApplied={()=>{setCleanupNotice('已应用识别结果，原文件与播放进度保留。');setRetry(value=>value+1);}}/>}
-    <FolderCleanup key={libraryId+'-cleanup-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} onBusy={setBusy} onCleaned={result=>{setCleanupNotice('已清理 '+result.assets+' 个失效资源记录'+(result.returnPath!==path?'，已返回上级有效目录。':'。'));setPath(result.returnPath);setOffset(0);setRetry(value=>value+1);}}/>
-  </div> : null;
+    <FolderCleanup key={libraryId+'-cleanup-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onCleaned={result=>{setCleanupNotice('已清理 '+result.assets+' 个失效资源记录'+(result.returnPath!==path?'，已返回上级有效目录。':'。'));setPath(result.returnPath);setOffset(0);setRetry(value=>value+1);}}/>
+    </nav>
+  </details> : null;
   const segments=path?path.split('/'):[];
   return <section ref={folderRoot} className="media-folders" aria-label="影音文件夹">
-    {managementActions}
+    {actionsHost && managementActions ? createPortal(managementActions,actionsHost) : managementActions}
     <nav className="media-folder-path" aria-label="目录位置"><button disabled={busy} onClick={()=>open('')}>库内根目录</button>{segments.map((segment,index)=><button key={index} disabled={busy} onClick={()=>open(segments.slice(0,index+1).join('/'))}>/ {segment}</button>)}</nav>
     {(path||assetId)&&<button className="media-folder-back" disabled={busy} aria-label={'← '+(assetId?'返回文件列表':'上级目录')} onClick={()=>assetId?setAssetId(null):open(segments.slice(0,-1).join('/'))}><ChevronLeft size={16} aria-hidden="true"/>{assetId?'返回文件列表':'上级目录'}</button>}
     {error&&<MediaScreenError fullPage error={cause} message={error} busy={loading} retryLabel="重新加载" onRetry={()=>setRetry(value=>value+1)}/>}{actionError&&<div className="media-error" role="alert">{actionError}</div>}{notice&&<p role="status">{notice}</p>}
