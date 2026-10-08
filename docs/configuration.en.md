@@ -15,7 +15,7 @@ Read-only books do not prevent account or progress updates in the data directory
 
 ## Business settings in the UI
 
-Administrators configure HTTP speech, scanning, login lifetimes, public URL, browser origins and WebDAV under System settings → Service configuration. TMDB and MusicBrainz are also editable in Media settings → Metadata providers. Registration remains under Registration and invitations. Values persist in reader.db and apply without restarting.
+Administrators configure HTTP speech, scanning, login lifetimes, public URL, browser origins, TMDB, MusicBrainz and WebDAV under System settings → Service configuration. Registration remains under Registration and invitations. Values persist in reader.db and apply without restarting.
 
 On first upgrade, legacy business environment variables are imported once. Existing database values, including cleared credentials, always win. See [business settings (中文)](business-settings.zh-CN.md).
 
@@ -88,7 +88,7 @@ Mount local movie, series, music, and audiobook directories separately (read-onl
 
 The official image includes ffprobe and ffmpeg. For native runs, put them on PATH or set MEDIA_FFPROBE_PATH / MEDIA_FFMPEG_PATH to executable paths. They probe metadata and extract embedded resources; they do not enable transcoding.
 
-Configure TMDB credentials and MusicBrainz contact information in Media settings → Metadata providers. Changes apply without restarting. Local tags and NFO work without online credentials.
+Configure TMDB credentials and MusicBrainz contact information under System settings → Service configuration. Changes apply without restarting. Local tags and NFO work without online credentials.
 
 Configure OpenList in the library creation form; no local mount is needed. Reader must reach OpenList and its download upstreams. Remote embedded metadata is not read, and some drivers require OpenList Web proxy. See [OpenList setup (中文)](media-openlist.md).
 

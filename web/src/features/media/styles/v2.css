@@ -1,5 +1,5 @@
 /* Approved v2 visual contract. Media-only selectors keep reading isolated.
-   Plyr owns all controls inside .plyr; this sheet only lays out its stage. */
+   DPlayer owns the video controls; this sheet only lays out its stage. */
 .media-screen {padding:68px 32px 96px;font-size:14px;scrollbar-width:thin}
 .media-channel-entry {height:68px;padding-inline:max(32px,calc((100vw - 1056px)/2))}
 .media-screen button {min-height:44px;border-radius:9px}
@@ -246,11 +246,7 @@ body[data-media-theme] .media-episode-rail .media-video-episodes button[aria-cur
   background:var(--media-theme-selection);
   color:var(--media-theme-accent);
 }
-body[data-media-theme] .media-video-stage .plyr {
-  --plyr-color-main:var(--media-theme-accent);
-  --plyr-menu-background:var(--media-theme-paper);
-  --plyr-menu-color:var(--media-theme-text);
-}
+body[data-media-theme] .media-video-stage .dplayer-host { color-scheme:dark; }
 .searchable-select {position:relative;display:inline-flex;flex-direction:column;min-width:190px;max-width:100%}
 .searchable-select-label {display:block;margin:0 0 5px;color:var(--muted);font-size:12px;font-weight:600}
 .searchable-select-native {position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
@@ -941,8 +937,8 @@ body[data-media-theme] {--surface-muted:var(--media-theme-surface)}
 
 /* Keep the embedded player's own controls independent from the reader theme. */
 .media-video-stage,.media-video-stage *{color-scheme:dark}
-.media-video-stage .plyr{--plyr-color-main:#b9d98a;--plyr-video-background:#080b0e;--plyr-font-family:inherit;--plyr-control-icon-size:18px;--plyr-control-spacing:10px;--plyr-menu-background:#263022;--plyr-menu-color:#f2f2e9}
-.media-video-stage .plyr__controls button,.media-video-stage .plyr__control{background:transparent;color:#f2f2e9}
+.media-video-stage .dplayer-host{background:#080b0e}
+.media-video-stage .dplayer-controller button{background:transparent;color:#f2f2e9}
 
 /* Folder actions use the same compact icon button as other page menus. */
 .media-screen .media-folder-actions>summary { width:44px; min-width:44px; height:44px; box-sizing:border-box; padding:10px; border:1px solid var(--border); border-radius:50%; background:var(--surface); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; list-style:none; }

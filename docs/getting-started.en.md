@@ -96,7 +96,7 @@ The shelf contains readable books; the library lets you browse the disk director
 
 ### OPDS
 
-As an administrator, add an OPDS source under Sources (书源) and configure its server URL. If authentication is required, set credentials for your current account. Open the source to browse or search its catalog and acquire books for your shelf.
+As an administrator, open Sources (书源) from the shelf, add an OPDS source, and configure its server URL. If authentication is required, set credentials for your current account. Open the source to browse or search its catalog and acquire books for your shelf.
 
 ## 5. Add media libraries
 
@@ -108,7 +108,7 @@ Mount local media separately by adding the directories you need to Compose volum
   - /path/to/your/audiobooks:/media/audiobook:ro
 ```
 
-Run `docker compose up -d`. Open media from the bookshelf, then Settings → Media libraries. Choose video, music, or audiobooks, set a container path such as `/media/video`, and choose access permissions. Creation starts a scan; inspect scan tasks in settings if it fails.
+Run `docker compose up -d`, open the video page (`#/media/video`), and use More actions → Media settings → Media libraries. Choose video, music, or audiobooks, set a container path such as `/media/video`, and choose access permissions. Creation starts a scan; inspect Scan and scrape if it fails.
 
 When running directly on Windows, use an absolute local path such as `D:\Media\Music`. With Docker Desktop, mount the directory and enter its container path instead.
 

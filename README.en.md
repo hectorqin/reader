@@ -14,7 +14,7 @@ A self-hosted reading and media library for browsers and Android, with EPUB typo
 - **Built for reading**: preserve EPUB publisher styles, detect TXT encodings and chapters, and enjoy comics, paged or scrolling reading, themes, fonts, and text-to-speech.
 - **Media browsing**: browse movies and series, artists and albums, or audiobooks and narrators. Filter by library, search, save favorites, and manage playback history and queues.
 - **Metadata and organization**: read local tags, NFO, artwork, lyrics, and subtitles. Configure TMDB and MusicBrainz for online matching, review candidates, or edit metadata and editions manually.
-- **Continue across devices**: accounts have independent shelves, notes, reading and playback progress. Web video uses Plyr; audio includes lyrics, speed controls, and a sleep timer. Android supports native background playback.
+- **Continue across devices**: accounts have independent shelves, notes, reading and playback progress. Web video uses DPlayer; audio includes lyrics, speed controls, and a sleep timer. Android supports native background playback.
 - **Simple hosting**: one Docker container serves the backend and Web UI. Media scanning only reads source files, with separate databases and service threads for reading and media.
 
 ## Supported content
@@ -34,9 +34,9 @@ A self-hosted reading and media library for browsers and Android, with EPUB typo
 
 Prepare Docker, Docker Compose, a book directory, and a separate data directory. Open `http://<your-host>:5888` after starting the service. The first registered account becomes the administrator. Follow the [getting started guide](docs/getting-started.en.md).
 
-Reader opens on the bookshelf by default. Use the media entry to browse your media; on mobile, tap the channel title to switch between video, music, audiobooks, and reading. Media settings include multiple themes; reading controls and bookshelf settings remain separate.
+Reader opens on the video page (`#/media/video`) by default. Use the channel navigation to switch between video, music, audiobooks, and reading; the media entry on the shelf also opens the video page. Media settings include multiple themes; reading controls and bookshelf settings remain separate.
 
-In media settings, administrators can add a server directory or OpenList library. Mount local media into Docker first and enter its container path. Library creation starts a scan. See the [media guide (中文)](docs/media-user-guide.zh-CN.md) and [OpenList setup (中文)](docs/media-openlist.md).
+From the video page, open More actions → Media settings → Media libraries to add a server directory or OpenList library. Mount local media into Docker first and enter its container path. Library creation starts a scan. See the [media guide (中文)](docs/media-user-guide.zh-CN.md) and [OpenList setup (中文)](docs/media-openlist.md).
 
 ## Documentation
 

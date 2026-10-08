@@ -23,14 +23,14 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
   await page.getByRole('button',{name:'深海',exact:true}).click();await page.reload();await page.getByRole('button',{name:'深海',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'深海',exact:true}).getAttribute('aria-pressed'),'true');
   await shot('themes-dark-mobile');await page.setViewportSize({width:1120,height:900});await shot('themes-desktop');await page.setViewportSize({width:427,height:900});
   const album=sampleItems.find(item=>item.kind==='album'&&item.title==='静谧时刻'),movie=sampleItems.find(item=>item.kind==='movie'&&item.title==='海岸线');assert.ok(album&&movie,'Use the real acceptance sample pack');
-  await go('#/media/music/album/'+album.id);await page.getByRole('button',{name:'播放全部',exact:true}).click();await page.waitForFunction(()=>{const audio=document.querySelector('.media-player audio');return audio?.readyState>=2&&!audio.paused;});
+  await go('#/media/music/items/'+album.id);await page.getByRole('button',{name:'播放全部',exact:true}).click();await page.waitForFunction(()=>{const audio=document.querySelector('.media-player audio');return audio?.readyState>=2&&!audio.paused;});
   const source=await page.locator('.media-player audio').evaluate(audio=>audio.currentSrc);assert.deepEqual(await palette('.media-screen'),await palette('.media-player'));await page.getByRole('button',{name:'播放全部',exact:true}).hover();assert.equal(await page.getByRole('button',{name:'播放全部',exact:true}).evaluate(button=>getComputedStyle(button).backgroundColor),'rgb(142, 201, 238)');await page.mouse.move(0,0);await shot('player-dark');
   await go('#/media/video/settings/theme');await page.getByRole('button',{name:'深海',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'深海',exact:true}).getAttribute('aria-pressed'),'true');
   await page.getByRole('button',{name:'暖砂',exact:true}).click();assert.deepEqual(await palette('.media-screen'),await palette('.media-player'));assert.equal(await page.locator('.media-player audio').evaluate(audio=>audio.currentSrc),source);assert.equal(await page.locator('.media-player audio').evaluate(audio=>audio.paused),false);
   await page.getByRole('button',{name:'关闭播放器',exact:true}).click();
   for(const [id,name] of [['sand','暖砂'],['midnight','深海']]){
    await go('#/media/video/settings/theme');await page.getByRole('button',{name,exact:true}).click();
-   await go('#/media/video/movie/'+movie.id);await page.locator('summary[aria-label="资源信息操作"]').click();await page.getByRole('button',{name:'版本管理',exact:true}).click();
+   await go('#/media/video/items/'+movie.id);await page.locator('summary[aria-label="作品操作"]').click();await page.getByRole('button',{name:'版本管理',exact:true}).click();
    const dialog=page.getByRole('dialog',{name:'版本管理'});await dialog.waitFor();
    for(const width of [390,535,1120]){
     await page.setViewportSize({width,height:834});const header=await dialog.locator('.source-modal-header').boundingBox();assert.ok(header.height<=60,'resource header must be compact');heights.push({theme:id,width,height:header.height});

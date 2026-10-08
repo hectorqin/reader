@@ -997,16 +997,13 @@ body[data-media-theme]:has(>#app>.media-screen) {background:var(--media-theme-ba
 .media-sleep-presets small {font-size:11px;color:var(--muted)}
 .media-screen .media-sleep-off,.media-video-sheet .media-sleep-off {display:flex;align-items:center;gap:10px;width:100%;margin-top:14px;padding:12px 4px;text-align:left;min-height:44px;color:var(--text)}
 .media-sleep-off span {flex:1}
-.media-video-stage .plyr {width:100%;--plyr-color-main:var(--media-accent);--plyr-video-background:#080b0e;--plyr-font-family:inherit;--plyr-control-icon-size:18px;--plyr-control-spacing:10px;--plyr-menu-background:#263022;--plyr-menu-color:#f2f2e9}
-.media-video-stage .plyr video {width:100%;max-height:min(66dvh,650px)}
-.media-video-stage .plyr:is(:fullscreen,.plyr--fullscreen-fallback) video {max-height:none;height:100%}
-.media-video-stage .plyr__control {border:0}
-.media-video-stage .plyr__controls button {min-width:36px;min-height:36px}
-.media-video-stage .plyr__control--overlaid {background:var(--media-accent);color:#182010;border-radius:50%;padding:18px}
+.media-video-stage .dplayer-host {width:100%;background:#080b0e}
+.media-video-stage .dplayer-host video {width:100%;max-height:min(66dvh,650px);object-fit:contain}
+.media-video-stage .dplayer-host:fullscreen video,.media-video-stage .dplayer-host:-webkit-full-screen video {max-height:none;height:100%}
+.media-video-stage .dplayer-controller button {border:0;min-width:36px;min-height:36px}
 @media(max-width:600px){
-  .media-video-stage .plyr {--plyr-control-icon-size:16px;--plyr-control-spacing:7px}
-  .media-video-stage .plyr .plyr__volume input[type=range],.media-video-stage .plyr .plyr__time--duration,.media-video-stage .plyr [data-plyr=pip] {display:none}
-  .media-video-stage .plyr .plyr__volume {flex:0 0 auto;min-width:0;width:auto}
+  .media-video-stage .dplayer-host .dplayer-time .dplayer-dtime {display:none}
+  .media-video-stage .dplayer-host .dplayer-volume {flex:0 0 auto;min-width:0;width:auto}
 }
 
 /* Media dialogs and player selects inherit the active media palette. */

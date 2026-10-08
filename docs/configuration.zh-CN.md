@@ -15,7 +15,7 @@
 
 ## 页面业务配置
 
-管理员在「系统设置 → 服务配置」中管理 HTTP 朗读、扫描、登录有效期、对外地址、浏览器来源及 WebDAV 备份目标。TMDB 与 MusicBrainz 也可在「影音设置 → 元数据刮削」编辑，注册策略沿用「注册与邀请」。配置写入 reader.db，保存后无需重启。详见[业务配置](business-settings.zh-CN.md)。
+管理员在「系统设置 → 服务配置」中管理 HTTP 朗读、扫描、登录有效期、对外地址、浏览器来源、TMDB、MusicBrainz 及 WebDAV 备份目标，注册策略沿用「注册与邀请」。配置写入 reader.db，保存后无需重启。详见[业务配置](business-settings.zh-CN.md)。
 
 升级首次启动会导入旧业务环境变量；数据库存在配置后不再读取这些环境变量，清空字段也不会恢复旧值。
 
@@ -86,7 +86,7 @@ reader 代理语音请求，不内置合成模型。上游接口需兼容项目�
 
 官方镜像包含 ffprobe 和 ffmpeg。本机启动时将二者加入 PATH，或设置 MEDIA_FFPROBE_PATH / MEDIA_FFMPEG_PATH 为可执行文件路径。ffprobe 用于时长、编码、标签和章节，ffmpeg 用于内嵌资源提取，均不提供转码。
 
-在线匹配在「影音设置 → 元数据刮削」配置 TMDB 令牌或 API Key，以及 MusicBrainz 应用标识与联系地址。可测试连接、调整资料语言并保存，无需重启。本地 NFO 和标签读取不依赖在线凭据。
+在线匹配在书架右上角「系统设置 → 服务配置」的 TMDB 和 MusicBrainz 分类中配置令牌、API Key、应用标识与联系地址。可测试连接、调整资料语言并保存，无需重启。本地 NFO 和标签读取不依赖在线凭据。
 
 OpenList 连接信息在建库界面设置，无需本地挂载；服务端必须能访问 OpenList 和其下载源。远端内嵌资料暂不读取，某些驱动需要 OpenList Web 代理。配置与限制见 [OpenList 接入](media-openlist.md)。
 
