@@ -38,3 +38,9 @@ it('opens recovery choices without restarting an expired session automatically',
   expect(root.textContent).toContain('播放会话已失效');expect(p.play).not.toHaveBeenCalled();
   act(()=>root.querySelector('button')!.click());expect(versions).toHaveBeenCalledOnce();expect(p.play).not.toHaveBeenCalled();
 });
+it('uses different icons for the episode list and the version switcher',async()=>{
+  const p=player();Object.defineProperty(p,'currentPlaylist',{value:[{index:0,title:'第 1 集',current:true},{index:1,title:'第 2 集',current:false}]});
+  await act(async()=>render(<VideoControls api={{detail:vi.fn().mockResolvedValue(film())} as unknown as MediaApi} player={p}/>,root));
+  const icon=(label:string)=>[...root.querySelectorAll('.media-video-toolbar button')].find(button=>button.textContent===label)?.querySelector('svg')?.getAttribute('class')??'';
+  expect(icon('选集')).toContain('lucide-list-video');expect(icon('版本')).toContain('lucide-layers');
+});

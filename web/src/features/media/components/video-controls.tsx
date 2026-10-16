@@ -1,6 +1,6 @@
 import {VideoEpisodeRail} from './video-episode-rail.tsx';
 import {SleepTimerOptions} from './sleep-timer.tsx';
-import {Ellipsis,X,Square,Check,Subtitles,AudioLines,Layers} from 'lucide-react';
+import {Ellipsis,X,Square,Check,Subtitles,AudioLines,Layers,ListVideo} from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import type {MediaPlayer} from '../services/player.ts';
 import type {Detail,MediaApi} from '../api/media-api.ts';
@@ -44,7 +44,7 @@ export function VideoControls({player,api,onBack}:{player:MediaPlayer;api:MediaA
   async function run(action:()=>Promise<void>,close=false){if(busy)return;setBusy(true);setNotice('');try{await action();if(close&&!player.error)setTool(null);}catch(error){setNotice(error instanceof Error?error.message:'操作失败，请重试。');}finally{setBusy(false);}}
   return <section className="media-playback-status media-video-controls" aria-label="播放控制">
     <div className="media-video-caption"><div><strong>{item?.title||player.title}</strong>{edition&&<small>{edition.label}</small>}</div></div>
-    <div className="media-video-toolbar media-video-tools">{entries.length>1&&<button onClick={()=>open('episodes')}><Layers size={20} aria-hidden="true"/>选集</button>}<button onClick={()=>open('subtitles')}><Subtitles size={20} aria-hidden="true"/>字幕</button><button onClick={()=>open('tracks')}><AudioLines size={20} aria-hidden="true"/>音轨</button><button onClick={()=>open('versions')}><Layers size={20} aria-hidden="true"/>版本</button><button aria-label="更多播放选项" onClick={()=>open('more')}><Ellipsis size={20} aria-hidden="true"/>更多</button></div>
+    <div className="media-video-toolbar media-video-tools">{entries.length>1&&<button onClick={()=>open('episodes')}><ListVideo size={20} aria-hidden="true"/>选集</button>}<button onClick={()=>open('subtitles')}><Subtitles size={20} aria-hidden="true"/>字幕</button><button onClick={()=>open('tracks')}><AudioLines size={20} aria-hidden="true"/>音轨</button><button onClick={()=>open('versions')}><Layers size={20} aria-hidden="true"/>版本</button><button aria-label="更多播放选项" onClick={()=>open('more')}><Ellipsis size={20} aria-hidden="true"/>更多</button></div>
     {player.error&&<PlaybackProblem player={player} {...(item?.editions.length?{onVersions:()=>open('versions')}:{})} {...(onBack?{onBack}:{})}/>}
     {notice&&<p className="media-error" role="alert">{notice}</p>}
     {plot&&<details className="media-video-description" open><summary>剧情简介</summary><p>{plot}</p></details>}

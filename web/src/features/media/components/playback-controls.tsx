@@ -1,6 +1,6 @@
 import {MediaSelect} from './select.tsx';
 import {SleepTimerOptions} from './sleep-timer.tsx';
-import { ChevronLeft, Layers, Play, Pause, SkipBack, SkipForward, RotateCcw, RotateCw, Square, Timer, Gauge, Ellipsis, BookOpen, ListMusic, Search, ArrowUp, ArrowDown, X, Volume2, Pencil } from 'lucide-react';
+import { ChevronLeft, Layers, Play, Pause, SkipBack, SkipForward, RotateCcw, RotateCw, Square, Timer, Gauge, Ellipsis, BookOpen, MicVocal, ListMusic, Search, ArrowUp, ArrowDown, X, Volume2, Pencil } from 'lucide-react';
 import type { MediaPlayer } from '../services/player.ts';
 import { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import type {Detail,MediaApi,Part} from '../api/media-api.ts';
@@ -15,7 +15,7 @@ import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';
 import {PlaybackProblem} from './playback-problem.tsx';
 
-function PlayingArtwork({api,item,failed,onRetry,player,lyrics,onMore}:{api:MediaApi;item:Detail|null;failed:boolean;onRetry:()=>void;player:MediaPlayer;lyrics:boolean;onMore:()=>void}){
+function PlayingArtwork({api,item,failed,onRetry,player,lyrics}:{api:MediaApi;item:Detail|null;failed:boolean;onRetry:()=>void;player:MediaPlayer;lyrics:boolean}){
   const field=(key:string)=>item?.overrides[key]??item?.metadata[key];
   const edition=item?.editions?.find(entry=>entry.parts.some(part=>part.id===player.currentPartId)),chapter=edition?.parts.find(part=>part.id===player.currentPartId);
   const book=item?.kind==='audiobook';
@@ -24,7 +24,7 @@ function PlayingArtwork({api,item,failed,onRetry,player,lyrics,onMore}:{api:Medi
   return <>{lyrics?<><div className="media-lyrics-heading"><h2 className="media-playing-title">{title}</h2>{credit&&<p>{credit}</p>}</div><Lyrics key={player.currentPartId} api={api} player={player}/></>:<div className="media-playing-artwork">
     {!item&&!failed&&<FloatingNotice message="正在读取作品资料…" busy />}{item?<MediaCover api={api} item={item} square={!book} retryable/>:<div className="media-artwork-placeholder" role="status" aria-label={failed?'作品资料暂不可用':'正在读取作品资料'}>{failed?'作品资料暂不可用':null}</div>}
     {book&&chapter&&<p className="media-playing-chapter">第 {edition!.parts.indexOf(chapter)+1} / {edition!.parts.length} 章 · {item.title}</p>}
-    <div className="media-playing-copy"><div><h2 className="media-playing-title">{title}</h2>{credit&&<p>{credit}</p>}{failed&&<p role="alert">作品资料读取失败。<button onClick={onRetry}>重新读取作品资料</button></p>}</div><button className="media-icon-button" aria-label="当前内容操作" onClick={onMore}><Ellipsis size={20} aria-hidden="true"/></button></div>
+    <div className="media-playing-copy"><div><h2 className="media-playing-title">{title}</h2>{credit&&<p>{credit}</p>}{failed&&<p role="alert">作品资料读取失败。<button onClick={onRetry}>重新读取作品资料</button></p>}</div></div>
   </div>}</>;
 }
 
@@ -92,7 +92,7 @@ export function PlaybackControls({player,api,panel,onPanelChange,onBack,onFavori
     {player.error&&<PlaybackProblem player={player} {...(item?.editions.length?{onVersions:()=>open('versions')}:{})} {...(onBack?{onBack}:{})} backLabel={view==='main'?'返回浏览':'返回播放'}/>}
     {!player.error&&player.loadingStatus&&<FloatingNotice message={player.loadingStatus} busy />}
     {player.canOpenNativeVideo&&<button onClick={()=>void player.openNativeVideo()}>打开 Android 视频播放器</button>}
-    {view==='chapters'?<PlayingChapters key={itemId} player={player} api={api} item={item} error={failed} cause={cause} onRetry={()=>setRetry(value=>value+1)}/>:view==='queue'?<CurrentPlaylist player={player}/>:!player.isVideo&&itemId&&<PlayingArtwork api={api} item={item} failed={!!failed} onRetry={()=>setRetry(value=>value+1)} player={player} lyrics={lyrics} onMore={()=>open('more')}/>}
+    {view==='chapters'?<PlayingChapters key={itemId} player={player} api={api} item={item} error={failed} cause={cause} onRetry={()=>setRetry(value=>value+1)}/>:view==='queue'?<CurrentPlaylist player={player}/>:!player.isVideo&&itemId&&<PlayingArtwork api={api} item={item} failed={!!failed} onRetry={()=>setRetry(value=>value+1)} player={player} lyrics={lyrics}/>}
     {view!=='queue'&&view!=='chapters'&&<div className="media-audio-bottom">
     {!player.isVideo&&<AudioTimeline player={player}/>}
     <div className="media-transport">
@@ -106,7 +106,7 @@ export function PlaybackControls({player,api,panel,onPanelChange,onBack,onFavori
       {channel==='music'?<PlaybackFavorite key={itemId} api={api} itemId={itemId} {...(onFavoriteChange?{onChanged:onFavoriteChange}:{})}/>:speed}
       <button className="media-lyrics-toggle" aria-label="睡眠定时" aria-haspopup="dialog" onClick={()=>open('sleep')}><Timer size={18} aria-hidden="true"/><span>{player.sleepAt?player.sleepRemainingMinutes+' 分钟':'定时'}</span></button>
       <button className="media-lyrics-toggle" aria-label={channel==='audiobook'?'全部章节':'播放队列'} onClick={()=>setView(channel==='audiobook'?'chapters':'queue')}>{channel==='audiobook'?<BookOpen size={18} aria-hidden="true"/>:<ListMusic size={18} aria-hidden="true"/>}<span>{channel==='audiobook'?'章节':'队列'}</span></button>
-      {channel==='audiobook'?<button className="media-lyrics-toggle" aria-label="播放版本" onClick={()=>open('versions')}><Layers size={18} aria-hidden="true"/><span>版本</span></button>:channel==='music'?<button className="media-lyrics-toggle" aria-label={lyrics?'封面':'歌词'} aria-pressed={lyrics} onClick={()=>setView(lyrics?'main':'lyrics')}><BookOpen size={18} aria-hidden="true"/><span>{lyrics?'封面':'歌词'}</span></button>:null}
+      {channel==='audiobook'?<button className="media-lyrics-toggle" aria-label="播放版本" onClick={()=>open('versions')}><Layers size={18} aria-hidden="true"/><span>版本</span></button>:channel==='music'?<button className="media-lyrics-toggle" aria-label={lyrics?'封面':'歌词'} aria-pressed={lyrics} onClick={()=>setView(lyrics?'main':'lyrics')}><MicVocal size={18} aria-hidden="true"/><span>{lyrics?'封面':'歌词'}</span></button>:null}
       {!onBack&&<button className="media-lyrics-toggle" aria-label="更多播放选项" onClick={()=>open('more')}><Ellipsis size={20} aria-hidden="true"/></button>}
     </div>
     </div>}
