@@ -1,0 +1,83 @@
+/* 我的: reuses the media theme tokens (--media-theme-*) so it follows the chosen theme. */
+.mine-page { max-width: 640px; }
+.mine-page .media-back-button { color: inherit; text-decoration: none; }
+
+.mine-profile {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 16px 0 8px;
+  padding: 16px;
+  border-radius: 20px;
+  background: var(--media-accent);
+  color: var(--media-on-accent);
+}
+
+.mine-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--media-on-accent);
+  color: var(--media-accent);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.mine-profile-text { min-width: 0; }
+.mine-profile-text strong { display: block; font-size: 18px; }
+.mine-profile-text small { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 12px; opacity: 0.85; overflow-wrap: anywhere; }
+.mine-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+
+.mine-group { margin: 20px 0 0; }
+.mine-group > h2 { margin: 0 0 6px 4px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: var(--muted); }
+
+.mine-card {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--media-paper, var(--surface));
+}
+
+.mine-page .mine-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.mine-page .mine-row:first-child { border-top: 0; }
+.mine-page .mine-row:hover { background: var(--surface); }
+.mine-page .mine-row:focus-visible { outline: 2px solid var(--media-accent); outline-offset: -2px; }
+
+.mine-row-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--media-selection);
+  color: var(--media-accent);
+}
+
+.mine-row-label { flex: 1; font-size: 15px; font-weight: 500; }
+.mine-row-value { font-size: 13px; color: var(--muted); }
+.mine-row-chevron { flex: none; color: var(--muted); }
+
+.mine-page .mine-row.is-danger { color: var(--media-error-ink); }
+.mine-page .mine-row.is-danger .mine-row-icon { background: var(--media-error-background); color: var(--media-error-ink); }
+

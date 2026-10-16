@@ -13,6 +13,7 @@ import { ShelfPage } from '../../features/shelf/pages/ShelfPage.tsx';
 import { LibraryPage, LibraryBrowsePage, LibraryFilesPage } from '../../features/library/pages/LibraryPage.tsx';
 import { SourcesPage } from '../../features/sources/pages/SourcesPage.tsx';
 import { ReaderPage } from '../../features/reader/pages/ReaderPage.tsx';
+import { MinePage } from '../../features/account/pages/MinePage.tsx';
 import { MediaLibrariesPage, MediaLibraryCreatePage } from '../../features/media/pages/MediaLibrariesPage.tsx';
 import { MediaLibraryEditPage, MediaLibraryPermissionsPage } from '../../features/media/pages/MediaLibraryEditorPages.tsx';
 import { MediaTasksPage } from '../../features/media/pages/MediaTasksPage.tsx';
@@ -58,6 +59,8 @@ export const routes = [{
     // the shelf settings sheet and media settings has its own nested route.
     { path: 'settings', element: <Navigate to="/shelf" replace /> },
     { path: 'book/:bookId', element: <ReaderPage /> },
+    // 我的 shares MediaLayout so it follows the chosen theme and keeps the channel rail.
+    { path: 'me', element: <MediaLayout />, children: [{ index: true, element: <MinePage /> }] },
     { path: 'media', element: <MediaLayout />, children: [
       { index: true, element: <Navigate to="video" replace /> },
       { path: 'music', element: <Navigate to="/media/music/albums" replace /> },

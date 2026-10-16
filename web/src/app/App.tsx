@@ -40,7 +40,9 @@ export function AuthBoundary({ children }: { children?: ReactNode }) {
 export function MediaLayout() {
   const runtime = useRuntime();
   const location = useLocation();
-  const current = location.pathname.startsWith('/media/music')
+  const current = location.pathname === '/me' || location.pathname.startsWith('/me/')
+    ? 'me'
+    : location.pathname.startsWith('/media/music')
     ? 'music'
     : location.pathname.startsWith('/media/audiobook')
       ? 'audiobook'
