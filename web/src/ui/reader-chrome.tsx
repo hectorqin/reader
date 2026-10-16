@@ -414,13 +414,9 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
   return (
     <>
       {(state.settingsTab ?? 'behavior') === 'appearance' ? <>
-      <SectionTitle>阅读信息</SectionTitle>
-      {READOUT_FIELDS.map(({ key, label }) => (
-        <SelectRow key={key} label={label} options={READOUT_OPTIONS}
-          value={state[key] ?? DEFAULT_APP_SETTINGS[key]}
-          onChange={(value) => handlers.onSetting({ [key]: value as ReadoutMode })} />
-      ))}
-      <SectionTitle>正文与主题</SectionTitle>
+      {/* Most-used first. Size, spacing, theme and brightness are what a reader opens
+          this sheet to change, so they fill its first screen; the rows that are set once
+          and left alone are folded underneath instead of pushing these below the fold. */}
       {state.layout !== 'fixed' ? <>
       <SliderRow
         label="字号"
@@ -440,7 +436,35 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         value={state.lineHeight}
         onChange={(value) => handlers.onSetting({ lineHeight: value })}
       />
+      </> : null}
+      <ThemeSwatchRow
+        label="主题"
+        options={[
+          { value: 'light', label: '白' },
+          { value: 'sepia', label: '米黄' },
+          { value: 'green', label: '浅绿' },
+          { value: 'dark', label: '夜间' },
+        ]}
+        value={state.theme}
+        onChange={(value) => handlers.onSetting({ theme: value as AppSettings['theme'] })}
+      />
       <SliderRow
+        label="亮度"
+        value={state.brightness}
+        min={0.35}
+        max={1}
+        step={0.05}
+        format={(value) => `${Math.round(value * 100)}%`}
+        onChange={(value) => handlers.onSetting({ brightness: value })}
+      />
+
+      {/* Plain text is the one format with no typography of its own, so its indent, gap
+          and encoding rows live with the other typography rows. They are absent for every
+          other format, where the answer to all three is "whatever the book said". */}
+      {state.layout !== 'fixed' || state.showTxtRows ? (
+        <FoldSection title="更多排版" hint="页边距 · 对齐 · 字体">
+          {state.layout !== 'fixed' ? <>
+          <SliderRow
         label="页边距"
         value={state.pageMargin}
         min={0}
@@ -474,35 +498,8 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         value={state.fontFamily}
         onChange={(value) => handlers.onSetting({ fontFamily: value })}
       />
-      </> : null}
-      <SegmentedRow
-        label="主题"
-        options={[
-          { value: 'light', label: '白' },
-          { value: 'sepia', label: '米黄' },
-          { value: 'green', label: '浅绿' },
-          { value: 'dark', label: '夜间' },
-        ]}
-        value={state.theme}
-        onChange={(value) => handlers.onSetting({ theme: value as AppSettings['theme'] })}
-      />
-      <SliderRow
-        label="亮度"
-        value={state.brightness}
-        min={0.35}
-        max={1}
-        step={0.05}
-        format={(value) => `${Math.round(value * 100)}%`}
-        onChange={(value) => handlers.onSetting({ brightness: value })}
-      />
-
-      {/* Plain text is the one format with no typography of its own, so these are
-          the rows that give it some. They sit with 排版 rather than at the end,
-          because they are the *same kind of setting* — how the text looks — and a
-          reader looking for the indent should not have to scroll past the
-          read-aloud controls to find it. They are absent for every other format,
-          where the answer to all three is "whatever the book said". */}
-      {state.showTxtRows ? (
+          </> : null}
+          {state.showTxtRows ? (
         <>
           <SectionTitle>正文</SectionTitle>
           <SliderRow
@@ -536,8 +533,16 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
             onChange={(value) => handlers.onSetting({ txtEncoding: value })}
           />
         </>
+          ) : null}
+        </FoldSection>
       ) : null}
-
+      <FoldSection title="页眉页脚" hint="顶部与底部显示的信息">
+      {READOUT_FIELDS.map(({ key, label }) => (
+        <SelectRow key={key} label={label} options={READOUT_OPTIONS}
+          value={state[key] ?? DEFAULT_APP_SETTINGS[key]}
+          onChange={(value) => handlers.onSetting({ [key]: value as ReadoutMode })} />
+      ))}
+      </FoldSection>
       </> : <>
       {state.layout !== 'fixed' ?
       <SegmentedRow
@@ -620,8 +625,13 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
       </div>
     );
   }
+  const RATE_PRESETS = [0.8, 1, 1.2, 1.5, 2];
   return (
     <>
+      {/* The thing a reader opens this sheet to do comes first; the tuning follows. */}
+      <button type="button" className="button primary speech-start" onClick={handlers.onSpeakFromHere}>
+        从当前位置朗读
+      </button>
       {/* The engine picker only appears when there is a choice to make. One
           engine is not a setting. */}
       {state.showEngineRow ? (
@@ -641,25 +651,11 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
         format={(value) => `${value.toFixed(1)}×`}
         onChange={(value) => handlers.onSpeechSetting({ ttsRate: value })}
       />
-      {state.showPitchRow ? (
-        <SliderRow
-          label="音调"
-          value={state.ttsPitch}
-          min={0.5}
-          max={2}
-          step={0.1}
-          format={(value) => value.toFixed(1)}
-          onChange={(value) => handlers.onSpeechSetting({ ttsPitch: value })}
-        />
-      ) : null}
-      <SliderRow
-        label="音量"
-        value={state.ttsVolume}
-        min={0}
-        max={1}
-        step={0.05}
-        format={(value) => `${Math.round(value * 100)}%`}
-        onChange={(value) => handlers.onSpeechSetting({ ttsVolume: value })}
+      <SegmentedRow
+        label="常用"
+        options={RATE_PRESETS.map((value) => ({ value: String(value), label: `${value.toFixed(1)}×` }))}
+        value={String(RATE_PRESETS.find((value) => Math.abs(value - state.ttsRate) < 0.05) ?? '')}
+        onChange={(value) => handlers.onSpeechSetting({ ttsRate: Number(value) })}
       />
       {state.showVoiceRow ? (
         <SelectRow label="语音" options={state.voices} value={state.ttsVoice} onChange={handlers.onVoice} />
@@ -673,9 +669,28 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
         value={state.ttsAutoAdvance ? 'auto' : 'stop'}
         onChange={(value) => handlers.onSpeechSetting({ ttsAutoAdvance: value === 'auto' })}
       />
-      <button type="button" className="button" onClick={handlers.onSpeakFromHere}>
-        从当前位置朗读
-      </button>
+      <FoldSection title="更多" hint={state.showPitchRow ? '音调 · 音量' : '音量'}>
+        {state.showPitchRow ? (
+          <SliderRow
+            label="音调"
+            value={state.ttsPitch}
+            min={0.5}
+            max={2}
+            step={0.1}
+            format={(value) => value.toFixed(1)}
+            onChange={(value) => handlers.onSpeechSetting({ ttsPitch: value })}
+          />
+        ) : null}
+        <SliderRow
+          label="音量"
+          value={state.ttsVolume}
+          min={0}
+          max={1}
+          step={0.05}
+          format={(value) => `${Math.round(value * 100)}%`}
+          onChange={(value) => handlers.onSpeechSetting({ ttsVolume: value })}
+        />
+      </FoldSection>
     </>
   );
 }
@@ -786,6 +801,53 @@ function SegmentedRow({
         ))}
       </div>
     </div>
+  );
+}
+
+/** A theme picker drawn in the theme's own paper and ink, so the choice is seen, not decoded from a name. */
+function ThemeSwatchRow({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: Array<{ value: string; label: string }>;
+  value: string;
+  onChange(value: string): void;
+}): JSX.Element {
+  return (
+    <div className="field is-stacked">
+      <label>{label}</label>
+      <div className="theme-swatches" role="group" aria-label={label}>
+        {options.map((option) => (
+          <button
+            type="button"
+            key={option.value}
+            className="theme-swatch"
+            aria-pressed={option.value === value}
+            onClick={() => onChange(option.value)}
+          >
+            {/* data-theme scopes the reading tokens to the chip, so it shows this theme's real colours. */}
+            <span className="theme-swatch-chip" data-theme={option.value} aria-hidden="true">Aa</span>
+            <span className="theme-swatch-label">{option.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Rows that are set once and left alone. A native <details>: keyboard and screen-reader behaviour for free. */
+function FoldSection({ title, hint, children }: { title: string; hint?: string; children: ReactNode }): JSX.Element {
+  return (
+    <details className="panel-fold">
+      <summary>
+        <span className="panel-fold-title">{title}</span>
+        {hint ? <span className="panel-fold-hint">{hint}</span> : null}
+      </summary>
+      <div className="panel-fold-body">{children}</div>
+    </details>
   );
 }
 

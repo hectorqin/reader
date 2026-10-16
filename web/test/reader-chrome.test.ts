@@ -164,6 +164,52 @@ describe('ReaderChrome', () => {
     expect(tree.querySelector('.panel')?.textContent).not.toContain('字号');
   });
 
+  it('puts the most-used appearance rows first and folds the rarely changed ones', () => {
+    const tree = paint({ settingsOpen: true, settingsTab: 'appearance' });
+    const body = tree.querySelector('.panel-body')!;
+    const order = [...body.children].map((element) =>
+      element.matches('details.panel-fold')
+        ? `fold:${element.querySelector('.panel-fold-title')?.textContent}`
+        : (element.querySelector('label')?.textContent ?? '').split(' ')[0],
+    );
+    // Size, spacing, theme and brightness fill the first screen; the readouts that
+    // used to come first are behind a fold, closed by default.
+    expect(order).toEqual(['字号', '行距', '主题', '亮度', 'fold:更多排版', 'fold:页眉页脚']);
+    for (const fold of body.querySelectorAll<HTMLDetailsElement>('details.panel-fold')) expect(fold.open).toBe(false);
+    expect(body.querySelector('details.panel-fold input[aria-label="页边距"]')).not.toBeNull();
+    expect(body.querySelector('details.panel-fold select[aria-label="顶部左侧"]')).not.toBeNull();
+  });
+
+  it('draws the theme choice as swatches and marks the selected one', () => {
+    const tree = paint({ settingsOpen: true, settingsTab: 'appearance', theme: 'sepia' });
+    const swatches = [...tree.querySelectorAll<HTMLButtonElement>('.theme-swatch')];
+    expect(swatches.map((button) => button.querySelector('.theme-swatch-label')?.textContent)).toEqual(['白', '米黄', '浅绿', '夜间']);
+    expect(swatches.filter((button) => button.getAttribute('aria-pressed') === 'true').map((button) => button.textContent)).toEqual(['Aa米黄']);
+    // The chip is scoped to its own theme so it is drawn in that theme's colours.
+    expect(swatches.map((button) => button.querySelector('.theme-swatch-chip')?.getAttribute('data-theme'))).toEqual(['light', 'sepia', 'green', 'dark']);
+  });
+
+  it('keeps typography folded away for fixed layouts and offers only the readouts', () => {
+    const tree = paint({ settingsOpen: true, settingsTab: 'appearance', layout: 'fixed' });
+    const folds = [...tree.querySelectorAll('details.panel-fold .panel-fold-title')].map((element) => element.textContent);
+    expect(folds).toEqual(['页眉页脚']);
+    expect(tree.querySelector('.panel')?.textContent).not.toContain('字号');
+    expect(tree.querySelector('.panel')?.textContent).toContain('浅绿');
+  });
+
+  it('puts the start action first in the read-aloud sheet and folds pitch and volume', () => {
+    const tree = paint({ settingsOpen: true, settingsTab: 'speech', ttsRate: 1.2, showPitchRow: true });
+    const body = tree.querySelector('.panel-body')!;
+    // The action the sheet exists for is not buried under five sliders.
+    expect(body.firstElementChild?.textContent).toBe('从当前位置朗读');
+    expect(body.firstElementChild?.classList.contains('primary')).toBe(true);
+    const presets = [...body.querySelectorAll('[aria-label="常用"] button')];
+    expect(presets.map((button) => button.textContent)).toEqual(['0.8×', '1.0×', '1.2×', '1.5×', '2.0×']);
+    expect(presets.filter((button) => button.getAttribute('aria-pressed') === 'true').map((button) => button.textContent)).toEqual(['1.2×']);
+    expect(body.querySelector('details.panel-fold input[aria-label="音量"]')).not.toBeNull();
+    expect(body.querySelector('details.panel-fold input[aria-label="音调"]')).not.toBeNull();
+  });
+
   it('draws every read-aloud control, including stop, in their own row', () => {
     const tree = paint({
       settingsOpen: true, settingsTab: 'speech',

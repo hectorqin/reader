@@ -28,7 +28,8 @@
  * Host shell: the viewer, not the book. Safe to style freely.
  * ------------------------------------------------------------------ */
 
-:root {
+:root,
+[data-theme='light'] {
   --reader-ink: #1a1a1a;
   --reader-paper: #fbfaf7;
   --reader-surface: #ffffff;
@@ -767,6 +768,8 @@ book-content {
 .chip:focus-visible,
 .switch:focus-visible,
 .segmented button:focus-visible,
+.theme-swatch:focus-visible .theme-swatch-chip,
+.panel-fold > summary:focus-visible,
 .toc-list li button:focus-visible,
 .manager-row:focus-visible,
 .manager-crumb:focus-visible,
@@ -2723,6 +2726,114 @@ book-content {
 
 .field[hidden] {
   display: none;
+}
+
+/* ---- settings sheet: theme swatches and folded rows ---- */
+
+/* Each chip is drawn in its own theme's paper and ink: the reader sees the choice
+ * instead of decoding a name. Selection is a thicker accent ring *and* a bolder
+ * label, so it never depends on colour alone. */
+.theme-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+}
+
+.theme-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--reader-ink);
+  font: inherit;
+  font-size: var(--text-label);
+  cursor: pointer;
+}
+
+.theme-swatch-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border: 1px solid var(--reader-line);
+  border-radius: 50%;
+  background: var(--reader-paper);
+  color: var(--reader-ink);
+  font-size: var(--text-title);
+  font-weight: 600;
+  transition: border-color var(--motion-duration) var(--motion-ease);
+}
+
+.theme-swatch[aria-pressed='true'] .theme-swatch-chip {
+  border: 2px solid var(--reader-accent);
+}
+
+.theme-swatch[aria-pressed='true'] .theme-swatch-label {
+  font-weight: 600;
+}
+
+/* Rows that are set once and left alone sit behind a native <details>. */
+.panel-fold {
+  margin-top: var(--space-2);
+  border-top: 1px solid color-mix(in srgb, var(--reader-line) 60%, transparent);
+}
+
+.panel-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.panel-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.panel-fold > summary::after {
+  content: '';
+  flex-shrink: 0;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-inline-start: auto;
+  border-right: 2px solid var(--reader-muted);
+  border-bottom: 2px solid var(--reader-muted);
+  transform: rotate(45deg);
+  transition: transform var(--motion-duration) var(--motion-ease);
+}
+
+.panel-fold[open] > summary::after {
+  transform: rotate(225deg);
+}
+
+.panel-fold-title {
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+
+.panel-fold-hint {
+  font-size: var(--text-meta);
+  color: var(--reader-muted);
+}
+
+.panel-fold-body {
+  padding-bottom: var(--space-2);
+}
+
+/* The one action the read-aloud sheet exists for: full width, first, and tall enough to hit. */
+.speech-start {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 48px;
+  margin-bottom: var(--space-3);
 }
 
 /* ---- status ---- */
