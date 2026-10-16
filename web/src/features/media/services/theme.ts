@@ -1,10 +1,10 @@
 export const mediaThemes = [
-  {id:'forest',name:'原野',description:'柔和米白 · 橄榄绿',dark:false,colors:['#f8f9f5','#ffffff','#edf0e8','#202b24','#66715f','#dfe5d9','#466638','#ffffff','#e6eddf']},
-  {id:'sand',name:'暖砂',description:'暖纸底色 · 赤陶棕',dark:false,colors:['#fbf7ee','#fffdf8','#f0e8dc','#382b21','#796751','#e3d6c4','#865333','#ffffff','#efe0cf']},
-  {id:'ocean',name:'雾蓝',description:'清透灰白 · 湖水蓝',dark:false,colors:['#f3f7fa','#ffffff','#e6eff4','#20343d','#5c7380','#d4e1e8','#2b637c','#ffffff','#dbeaf2']},
-  {id:'rose',name:'蔷薇',description:'轻盈粉白 · 梅子红',dark:false,colors:['#faf5f7','#ffffff','#f1e5eb','#3b2c34','#7d6470','#e4d5dc','#894d6a','#ffffff','#efdeea']},
-  {id:'midnight',name:'深海',description:'静谧深绿 · 苔绿',dark:true,colors:['#141b19','#1d2722','#25312a','#eef2e9','#a3b49f','#354439','#b6ce9d','#23311d','#30402b']},
-  {id:'graphite',name:'石墨',description:'纯粹深灰 · 银白',dark:true,colors:['#191c20','#23272c','#2e333a','#f1f3f5','#b0b7c1','#40464f','#c2cedc','#1f2832','#343f4c']},
+  {id:'sand',name:'暖纸',description:'暖中性底色 · 深林绿',dark:false,colors:['#f6f4ef','#ffffff','#ece9e1','#1b1a17','#66625a','#e4e0d6','#1f5a4a','#ffffff','#dcebe4']},
+  {id:'ocean',name:'雾蓝',description:'清透灰白 · 湖水蓝',dark:false,colors:['#f1f5f9','#ffffff','#e4ebf2','#16212b','#566573','#dde5ec','#2a5f86','#ffffff','#d9e7f2']},
+  {id:'rose',name:'蔷薇',description:'轻盈粉白 · 梅子红',dark:false,colors:['#faf3f4','#ffffff','#f1e6e9','#2a1b20','#7a5f67','#ebdade','#8a3a57','#ffffff','#f3dce4']},
+  {id:'forest',name:'原野',description:'柔和浅绿 · 草木绿',dark:false,colors:['#f3f6ef','#ffffff','#e6ede0','#1d2a1f','#5a6859','#dce5d6','#3f6b34','#ffffff','#e1edd9']},
+  {id:'midnight',name:'深夜',description:'暖黑底色 · 薄荷绿',dark:true,colors:['#14130f','#1e1c18','#2a2823','#f1eee6','#a29d90','#34312b','#6fc4a8','#0e1f18','#1f3a31']},
+  {id:'graphite',name:'石墨',description:'冷灰深色 · 天蓝',dark:true,colors:['#0f1216','#181c22','#222831','#e8ecf1','#98a2b0','#2c333d','#86aef5','#0b1a33','#1d2b45']},
 ] as const;
 export type MediaThemeId = 'system' | typeof mediaThemes[number]['id'];
 const tokens=['background','paper','surface','text','muted','border','accent','on-accent','selection'] as const;
@@ -19,7 +19,7 @@ export function saveMediaTheme(scope:string,value:MediaThemeId){
   // active media shell explicitly so a theme choice is applied immediately.
   if(typeof window!=='undefined') window.dispatchEvent(new CustomEvent(themeChangeEvent,{detail:{scope,value:next}}));
 }
-export function mediaThemePalette(id:MediaThemeId,dark=false){return mediaThemes.find(theme=>theme.id===(id==='system'?(dark?'graphite':'forest'):id))!;}
+export function mediaThemePalette(id:MediaThemeId,dark=false){return mediaThemes.find(theme=>theme.id===(id==='system'?(dark?'midnight':'sand'):id))!;}
 
 /** Only prefixed media variables are placed on the body; reading tokens remain untouched. */
 export class MediaThemeController {

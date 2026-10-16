@@ -84,7 +84,7 @@ async function saveShot(capture){for(let attempt=0;;attempt++){try{return await 
    for(const [id,item] of [['video-player',movie],['episode-player',episode]]){await go('#/media/video/items/'+item.id);await page.locator('.media-detail-actions .media-primary').click();await page.locator('.dplayer-video').waitFor();await page.waitForFunction(()=>document.querySelector('.media-player video')?.readyState>=2);for(const width of [390,1120])await shot(id,width);}
   }
   if(!wanted||wanted.includes('players')){
-   await go('#/media/music/settings/theme');await page.getByRole('button',{name:'深海',exact:true}).click();await go('#/media/music/albums?library='+album.libraryId);await page.locator('.media-tile').first().waitFor();await shot('music',390,'midnight');
+   await go('#/media/music/settings/theme');await page.getByRole('button',{name:'深夜',exact:true}).click();await go('#/media/music/albums?library='+album.libraryId);await page.locator('.media-tile').first().waitFor();await shot('music',390,'midnight');
    await go('#/media/music/settings/theme');await page.getByRole('button',{name:'原野',exact:true}).click();
   }
   assert.deepEqual(errors,[]);await fs.writeFile(join(out,'checks.json'),JSON.stringify({complete:true,fixture:'Real local acceptance media and disposable server; reference content differs where the library lacks prototype metadata. Video internals use DPlayer.',checks,errors},null,2));

@@ -18,10 +18,10 @@ it('keeps theme choices separate by server/account and handles old or invalid st
 it('applies a saved choice and does not apply changes when persistence fails',async()=>{
   const onChange=vi.fn();
   await act(async()=>render(<MediaThemeSettings scope="a" selected="forest" onChange={onChange}/>,root));
-  await act(async()=>root.querySelector<HTMLButtonElement>('[aria-label="深海"]')!.click());
+  await act(async()=>root.querySelector<HTMLButtonElement>('[aria-label="深夜"]')!.click());
   expect(readMediaTheme('a')).toBe('midnight');expect(onChange).toHaveBeenCalledWith('midnight');
   vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('full');});
-  await act(async()=>root.querySelector<HTMLButtonElement>('[aria-label="暖砂"]')!.click());
+  await act(async()=>root.querySelector<HTMLButtonElement>('[aria-label="暖纸"]')!.click());
   expect(onChange).toHaveBeenCalledTimes(1);expect(root.querySelector('[role=alert]')?.textContent).toContain('无法保存主题');
 });
 it('responds to system appearance, honors a fixed choice, and removes listeners and media variables on exit',()=>{
