@@ -22,6 +22,12 @@ export function saveMediaTheme(scope:string,value:MediaThemeId){
 export function mediaThemePalette(id:MediaThemeId,dark=false){return mediaThemes.find(theme=>theme.id===(id==='system'?(dark?'midnight':'sand'):id))!;}
 
 /** Only prefixed media variables are placed on the body; reading tokens remain untouched. */
+// [ink, soft background] per channel. Ink is used as text on its own soft background, so
+// every pair is held to 4.5:1 by test/media-theme-contrast.test.ts.
+const lightChannels={read:['#935825','#f3e6d8'],video:['#4b4fd6','#e4e5fa'],music:['#b23656','#f6e0e6'],audio:['#0c7272','#d9eeee']} as const;
+const darkChannels={read:['#e0a36a','#33291f'],video:['#9a9dff','#25264a'],music:['#f28ba6','#3c2229'],audio:['#5fd0cb','#17363a']} as const;
+export const channelColors={light:lightChannels,dark:darkChannels};
+
 export class MediaThemeController {
   current:MediaThemeId;
   private readonly system=typeof window.matchMedia==='function'?window.matchMedia('(prefers-color-scheme: dark)'):undefined;
@@ -45,11 +51,17 @@ export class MediaThemeController {
     document.body.style.setProperty('--media-theme-scheme',theme.dark?'dark':'light');
     document.body.style.setProperty('--media-theme-error-ink',theme.dark?'#f4a89d':'#943c32');
     document.body.style.setProperty('--media-theme-error-background',theme.dark?'#f49a8c18':'#a4504515');
+    // Channel colours: each content type keeps one hue everywhere (icons, progress, labels).
+    const channel=theme.dark?darkChannels:lightChannels;
+    for(const [name,[ink,soft]] of Object.entries(channel)){document.body.style.setProperty('--media-theme-ch-'+name,ink);document.body.style.setProperty('--media-theme-ch-'+name+'-soft',soft);}
+    document.body.style.setProperty('--media-theme-on-ch',theme.dark?'#0b1a33':'#ffffff');
   }
   dispose(){
     this.system?.removeEventListener('change',this.onSystem);window.removeEventListener('storage',this.onStorage);window.removeEventListener(themeChangeEvent,this.onThemeChange);
     delete document.body.dataset.mediaTheme;
     tokens.forEach(token=>document.body.style.removeProperty('--media-theme-'+token));
     for(const token of ['scheme','error-ink','error-background'])document.body.style.removeProperty('--media-theme-'+token);
+    for(const name of Object.keys(lightChannels)){document.body.style.removeProperty('--media-theme-ch-'+name);document.body.style.removeProperty('--media-theme-ch-'+name+'-soft');}
+    document.body.style.removeProperty('--media-theme-on-ch');
   }
 }

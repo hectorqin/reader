@@ -1,9 +1,9 @@
 import { useEffect, type ReactNode } from 'react';
-import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../shared/stores/auth.store.ts';
 import { useRuntime } from './providers/runtime-context.tsx';
 import { LoginPage } from '../features/auth/pages/LoginPage.tsx';
-import { MediaChannelEntry } from '../features/media/components/channel-navigation.tsx';
+import { AppNav, navMode } from './AppNav.tsx';
 import { MediaThemeController } from '../features/media/services/theme.ts';
 import { FloatingNotice } from '../ui/floating-notice.tsx';
 
@@ -24,11 +24,23 @@ function AuthenticatedShell() {
     return () => runtime.player.removeEventListener('open-controls', openControls);
   }, [runtime, navigate]);
   useEffect(() => runtime.player.setVisible(location.pathname.startsWith('/media/')), [runtime, location.pathname]);
-  // Reading-adjacent pages own their header and discovery actions. The migrated
-  // shell used to inject a second, generic navigation bar above every page, which
-  // changed the vertical rhythm and made shelf/library diverge from the legacy UI.
-  // Media keeps its own channel navigation through MediaLayout.
-  return <Outlet />;
+  const mode = navMode(location.pathname);
+  // Every page except the book itself wears the chosen theme: the reader keeps its own
+  // reading themes, everything around it shares one palette.
+  const themed = !location.pathname.startsWith('/book/');
+  useEffect(() => {
+    if (!themed) return undefined;
+    const theme = new MediaThemeController(runtime.mediaApi.preferenceScope(), () => undefined);
+    return () => theme.dispose();
+  }, [runtime, themed]);
+  useEffect(() => {
+    if (mode === 'hidden') delete document.body.dataset.appNav; else document.body.dataset.appNav = mode;
+    return () => { delete document.body.dataset.appNav; };
+  }, [mode]);
+  return <div className="app-shell">
+    <div className="app-shell-body"><Outlet /></div>
+    {mode !== 'hidden' && <AppNav mode={mode} />}
+  </div>;
 }
 
 export function AuthBoundary({ children }: { children?: ReactNode }) {
@@ -37,30 +49,8 @@ export function AuthBoundary({ children }: { children?: ReactNode }) {
   return <>{children}</>;
 }
 
-export function MediaLayout() {
-  const runtime = useRuntime();
-  const location = useLocation();
-  const current = location.pathname === '/me' || location.pathname.startsWith('/me/')
-    ? 'me'
-    : location.pathname.startsWith('/media/music')
-    ? 'music'
-    : location.pathname.startsWith('/media/audiobook')
-      ? 'audiobook'
-      : 'video';
-  // The legacy media shell applies its own palette while any media route is
-  // mounted. Keep this scoped to MediaLayout so reading pages continue to use
-  // the reader palette, and let React CSS consume the injected theme tokens.
-  useEffect(() => {
-    const theme = new MediaThemeController(runtime.mediaApi.preferenceScope(), () => undefined);
-    return () => theme.dispose();
-  }, [runtime]);
-  // Keep the channel rail after the page content in the DOM, matching the legacy
-  // shell. Its presentation stylesheet may pin it to the viewport, while the
-  // route-owned page remains the first and primary content surface.
-  return <><Outlet /><MediaChannelEntry current={current} /></>;
-}
-
-export function HomeRedirect() { return <Navigate to="/media/video" replace />; }
+/** Media routes: the page itself. Theme and navigation belong to AuthenticatedShell. */
+export function MediaLayout() { return <Outlet />; }
 
 export function LoadingPage() { return <FloatingNotice message="正在加载…" busy />; }
 

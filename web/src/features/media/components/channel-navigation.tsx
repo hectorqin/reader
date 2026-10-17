@@ -17,7 +17,7 @@ export function ChannelSwitcher({current,label}:{current:string;label?:string}) 
   useEffect(()=>{const close=(event:PointerEvent)=>{if(root.current&&!root.current.contains(event.target as Node))root.current.open=false;};document.addEventListener('pointerdown',close);return()=>document.removeEventListener('pointerdown',close);},[]);
   return <details className="media-channel-switcher" ref={root} onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();root.current!.open=false;root.current!.querySelector('summary')?.focus();}}}>
     <summary aria-label="切换频道" title="切换频道">{label&&<strong>{label}</strong>}<ChevronsUpDown size={18} aria-hidden="true"/></summary>
-    <nav aria-label="切换内容频道">{channels.map(({id,label,icon:Icon})=><a key={id} href={'#'+channelPath(id)} aria-current={id===current?'page':undefined} onClick={()=>{if(root.current)root.current.open=false;}}><Icon size={18} aria-hidden="true"/><span>{label}</span>{id===current&&<Check size={16} aria-hidden="true"/>}</a>)}</nav>
+    <nav aria-label="切换内容频道">{channels.filter(({id})=>id&&id!=='me').map(({id,label,icon:Icon})=><a key={id} href={'#'+channelPath(id)} aria-current={id===current?'page':undefined} onClick={()=>{if(root.current)root.current.open=false;}}><Icon size={18} aria-hidden="true"/><span>{label}</span>{id===current&&<Check size={16} aria-hidden="true"/>}</a>)}</nav>
   </details>;
 }
 export function MediaChannelEntry({ current }: { current: string }) {

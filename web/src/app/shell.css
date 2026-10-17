@@ -1,0 +1,101 @@
+/* V3 shell: one navigation for reading and media.
+ * A tab bar below 900px, a sidebar from 900px up. Colours come from the theme
+ * tokens that AuthenticatedShell applies to <body>, so every theme restyles it. */
+:root { --app-nav-width: 232px; --app-nav-bar: 64px; }
+
+.app-shell { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+/* Pages were direct children of #app (a flex column that clips); keep exactly that
+ * contract for them one level down. */
+.app-shell-body { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+
+.app-nav {
+  --nav-ink: var(--media-theme-text, var(--reader-ink));
+  --nav-muted: var(--media-theme-muted, var(--reader-muted));
+  --nav-line: var(--media-theme-border, var(--reader-line));
+  --nav-surface: var(--media-theme-paper, var(--reader-surface));
+  --nav-accent: var(--media-theme-accent, var(--reader-accent));
+  --nav-soft: var(--media-theme-selection, var(--reader-paper));
+  flex: none;
+  box-sizing: border-box;
+  background: var(--nav-surface);
+  color: var(--nav-ink);
+  border-color: var(--nav-line);
+}
+.app-nav ul { list-style: none; margin: 0; padding: 0; }
+.app-nav a { color: inherit; text-decoration: none; }
+.app-nav a:focus-visible { outline: 2px solid var(--nav-accent); outline-offset: 2px; }
+.app-nav-icon { display: grid; place-items: center; }
+
+/* ---- phone: tab bar ---- */
+@media (max-width: 899px) {
+  .app-nav { order: 2; display: flex; height: calc(var(--app-nav-bar) + env(safe-area-inset-bottom)); padding: 6px 12px env(safe-area-inset-bottom); border-top: 1px solid var(--nav-line); }
+  .app-nav[data-mode='push'] { display: none; }
+  .app-nav-brand, .app-nav-sub, .app-nav-user { display: none; }
+  .app-nav-list { display: flex; flex: 1; }
+  .app-nav-list > li { flex: 1; min-width: 0; }
+  .app-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: 52px; font-size: 11px; font-weight: 500; color: var(--nav-muted); }
+  .app-nav-item[aria-current='page'] { color: var(--nav-accent); font-weight: 600; }
+  .app-nav-item .app-nav-icon { width: 52px; height: 30px; border-radius: 15px; }
+  .app-nav-item[aria-current='page'] .app-nav-icon { background: var(--nav-soft); }
+}
+
+/* ---- desktop: sidebar ---- */
+@media (min-width: 900px) {
+  .app-shell { flex-direction: row; }
+  /* After the page in the DOM (so the phone bar follows the content), before it on screen. */
+  .app-nav { order: -1; display: flex; flex-direction: column; width: var(--app-nav-width); padding: 24px 14px; border-right: 1px solid var(--nav-line); overflow-y: auto; }
+  .app-nav-brand { padding: 0 14px 22px; font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; font-size: 26px; font-weight: 700; color: var(--nav-accent); }
+  .app-nav-item { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-radius: 12px; font-size: 15px; color: var(--nav-ink); }
+  .app-nav-item:hover { background: var(--media-theme-surface, var(--reader-paper)); }
+  .app-nav-item[aria-current='page'] { background: var(--nav-soft); color: var(--nav-accent); font-weight: 600; }
+  .app-nav-sub { margin-top: 2px; }
+  .app-nav-subitem { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 14px 0 46px; border-radius: 10px; font-size: 14px; color: var(--nav-muted); }
+  .app-nav-subitem i { width: 8px; height: 8px; border-radius: 50%; background: var(--media-theme-ch-video, var(--nav-accent)); }
+  .app-nav-subitem[data-channel='music'] i { background: var(--media-theme-ch-music, var(--nav-accent)); }
+  .app-nav-subitem[data-channel='audiobook'] i { background: var(--media-theme-ch-audio, var(--nav-accent)); }
+  .app-nav-subitem[aria-current='page'] { background: var(--media-theme-surface, var(--reader-paper)); color: var(--nav-ink); font-weight: 600; }
+  .app-nav-user { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 10px 12px; border-radius: 14px; background: var(--media-theme-background, var(--reader-paper)); }
+  .app-nav-avatar { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--nav-accent); color: var(--media-theme-on-accent, #fff); font-weight: 600; }
+  .app-nav-user-text { min-width: 0; }
+  .app-nav-user-text strong, .app-nav-user-text small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-nav-user-text strong { font-size: 14px; }
+  .app-nav-user-text small { font-size: 11px; color: var(--nav-muted); }
+}
+
+/* ---- the persistent mini player sits clear of the bar / sidebar ---- */
+@media (max-width: 899px) {
+  body[data-app-nav='top'] .media-player:is(.media-player-audio, .media-player-native-video) { bottom: calc(var(--app-nav-bar) + env(safe-area-inset-bottom) + 10px); }
+}
+@media (min-width: 900px) {
+  body[data-app-nav] .media-player:is(.media-player-audio, .media-player-native-video) { left: calc(var(--app-nav-width) + 24px); }
+}
+
+/* ---- reading pages wear the same theme as media ---- */
+body[data-media-theme] :is(.shelf-screen, .library-screen, .sources-screen, .home-page) {
+  --reader-ink: var(--media-theme-text);
+  --reader-paper: var(--media-theme-background);
+  --reader-surface: var(--media-theme-paper);
+  --reader-muted: var(--media-theme-muted);
+  --reader-line: var(--media-theme-border);
+  --reader-accent: var(--media-theme-accent);
+  background: var(--media-theme-background);
+  color: var(--media-theme-text);
+}
+
+/* The old fixed channel rail is gone; its top gutter goes with it. */
+@media (min-width: 701px) {
+  /* Only pages whose header scrolls with them; pages with a fixed header keep their 68px. */
+  body[data-app-nav] .media-screen:is(.media-catalog-page, .mine-page, .home-page) { padding-top: 24px; }
+  /* Search and the ⋯ menu used to hang from the rail with a negative offset. */
+  body[data-app-nav] .media-heading:has(.media-mobile-title) .media-heading-actions { position: fixed; z-index: 81; top: 12px; right: 32px; }
+}
+
+/* Fixed page headers were placed to clear the old rail's brand; they now clear the sidebar. */
+@media (min-width: 900px) {
+  body[data-app-nav] .media-screen .media-mobile-title,
+  body[data-app-nav] .media-screen.media-secondary-page > .media-heading,
+  body[data-app-nav] .media-narrators:not([data-view=directory]) > .media-narrator-heading,
+  body[data-app-nav] .media-utility-workspace .media-settings-heading,
+  body[data-app-nav] .media-manager-workspace > .media-heading { left: calc(var(--app-nav-width) + 24px); right: 32px; }
+  body[data-app-nav] .media-screen.media-detail-shell > .media-heading { left: var(--app-nav-width); right: 0; }
+}

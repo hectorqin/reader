@@ -1,5 +1,5 @@
 import { Navigate, type RouteObject } from 'react-router-dom';
-import { AppShell, HomeRedirect, MediaLayout } from '../App.tsx';
+import { AppShell, MediaLayout } from '../App.tsx';
 import { MediaCatalogPage } from '../../features/media/pages/MediaCatalogPage.tsx';
 import { MediaSearchPage } from '../../features/media/pages/MediaSearchPage.tsx';
 import { MediaFavoritesPage } from '../../features/media/pages/MediaFavoritesPage.tsx';
@@ -14,6 +14,7 @@ import { LibraryPage, LibraryBrowsePage, LibraryFilesPage } from '../../features
 import { SourcesPage } from '../../features/sources/pages/SourcesPage.tsx';
 import { ReaderPage } from '../../features/reader/pages/ReaderPage.tsx';
 import { MinePage } from '../../features/account/pages/MinePage.tsx';
+import { HomePage } from '../../features/home/pages/HomePage.tsx';
 import { MediaLibrariesPage, MediaLibraryCreatePage } from '../../features/media/pages/MediaLibrariesPage.tsx';
 import { MediaLibraryEditPage, MediaLibraryPermissionsPage } from '../../features/media/pages/MediaLibraryEditorPages.tsx';
 import { MediaTasksPage } from '../../features/media/pages/MediaTasksPage.tsx';
@@ -34,7 +35,7 @@ import { PluginManagementPage } from '../../features/sources/pages/PluginManagem
 
 export const routes = [{
   path: '/', element: <AppShell />, errorElement: <RouteErrorBoundary />, children: [
-    { index: true, element: <HomeRedirect /> },
+    { index: true, element: <HomePage /> },
     { path: 'shelf', element: <ShelfPage /> },
     { path: 'library', element: <LibraryBrowsePage /> },
     { path: 'library/books', element: <LibraryPage /> },

@@ -2,7 +2,7 @@ import { Alert } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { BookOpen, Headphones, LibraryBig, MoreHorizontal, Search, Settings, SlidersVertical, UserRound } from 'lucide-react';
+import { BookOpen, Headphones, LibraryBig, MoreHorizontal, Search, Settings, SlidersVertical } from 'lucide-react';
 import type { Book, ContinueReadingItem } from '../../../api/types.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
@@ -15,7 +15,7 @@ import { DialogView, type Dialog } from '../../../ui/dialog.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 
 const coverCache = new WeakMap<object, Map<string, string>>();
-function useCover(api: ReturnType<typeof useRuntime>['api'], coverUrl: string | null | undefined): string | null {
+export function useCover(api: ReturnType<typeof useRuntime>['api'], coverUrl: string | null | undefined): string | null {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     if (!coverUrl) { setSrc(null); return; }
@@ -33,7 +33,7 @@ function useCover(api: ReturnType<typeof useRuntime>['api'], coverUrl: string | 
   return src;
 }
 
-function BookCard({ book, showAuthor, showProgress, onRemove }: { book: Book | ContinueReadingItem; showAuthor: boolean; showProgress: boolean; onRemove?: () => void }) {
+export function BookCard({ book, showAuthor, showProgress, onRemove }: { book: Book | ContinueReadingItem; showAuthor: boolean; showProgress: boolean; onRemove?: () => void }) {
   const runtime = useRuntime();
   const src = useCover(runtime.api, book.coverUrl);
   const progress = 'percentage' in book ? book.percentage : runtime.offline?.progressFor(book.id)?.percentage;
@@ -80,7 +80,6 @@ export function ShelfPage() {
       <div className="shelf-head-text"><h1 className="shelf-title">{queryText ? '搜索结果' : '我的书架'}</h1><p className="shelf-subtitle muted">{subtitle}</p></div>
       <div className="shelf-head-actions">
         <Link className="icon-button" aria-label="影音" title="影音" to="/media/video"><Headphones className="icon" size="1em" strokeWidth={1.8} /></Link>
-        <Link className="icon-button" aria-label="我的" title="我的" to="/me"><UserRound className="icon" size="1em" strokeWidth={1.8} /></Link>
         {user?.role === 'admin' && <button className="icon-button" aria-label="系统设置" title="系统设置" onClick={() => setSystemSettingsOpen(true)}><Settings className="icon" size="1em" strokeWidth={1.8} /><span className="media-visually-hidden">系统设置</span></button>}
         <button className="icon-button" aria-label={`书架设置 · ${densityLabel}`} title={`书架设置 · ${densityLabel}`} onClick={() => setSettingsOpen(true)}><SlidersVertical className="icon" size="1em" strokeWidth={1.8} /><span className="media-visually-hidden">设置</span></button>
       </div>

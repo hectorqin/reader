@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mediaThemes } from '../src/features/media/services/theme.ts';
+import { channelColors, mediaThemes } from '../src/features/media/services/theme.ts';
 
 // colors order: background, paper, surface, text, muted, border, accent, on-accent, selection
 const lin = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
@@ -27,6 +27,20 @@ describe('media theme contrast', () => {
         .map(([fg, bg, min, label]) => ({ label, value: ratio(theme.colors[fg]!, theme.colors[bg]!), min }))
         .filter(item => item.value < item.min)
         .map(item => `${item.label}: ${item.value.toFixed(2)} < ${item.min}`);
+      expect(failures).toEqual([]);
+    });
+  }
+
+  // Channel hues label a card of their own soft colour, with the theme's text on top.
+  for (const theme of mediaThemes) {
+    it(`${theme.name} keeps channel labels and card text legible`, () => {
+      const channels = theme.dark ? channelColors.dark : channelColors.light;
+      const failures = Object.entries(channels).flatMap(([name, [ink, soft]]) => [
+        { label: `${name} label on soft`, value: ratio(ink, soft), min: 4.5 },
+        { label: `${name} icon on background`, value: ratio(ink, theme.colors[0]), min: 3 },
+        { label: `text on ${name} soft`, value: ratio(theme.colors[3], soft), min: 4.5 },
+        { label: `muted on ${name} soft`, value: ratio(theme.colors[4], soft), min: 4.5 },
+      ]).filter(item => item.value < item.min).map(item => `${item.label}: ${item.value.toFixed(2)} < ${item.min}`);
       expect(failures).toEqual([]);
     });
   }

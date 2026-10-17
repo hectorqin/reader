@@ -3,7 +3,6 @@ import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { render } from '../src/shared/ui/render-root.ts';
-import { MediaLayout } from '../src/app/App.tsx';
 import { MinePage } from '../src/features/account/pages/MinePage.tsx';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
 import { useAuthStore } from '../src/shared/stores/auth.store.ts';
@@ -20,7 +19,7 @@ const user = (role: 'admin' | 'member') => ({ id: 'u', username: 'lin', displayN
 const paint = () => act(() => render(
   <RuntimeContext.Provider value={runtime}>
     <MemoryRouter initialEntries={['/me']}>
-      <Routes><Route path="/me" element={<MediaLayout />}><Route index element={<MinePage />} /></Route></Routes>
+      <Routes><Route path="/me" element={<MinePage />} /></Routes>
     </MemoryRouter>
   </RuntimeContext.Provider>,
   root,
@@ -58,13 +57,10 @@ describe('我的', () => {
     expect(root.querySelector('.mine-profile')?.textContent).toContain('管理员');
   });
 
-  it('signs out through the API and keeps the channel rail with 我的 marked current', () => {
+  it('signs out through the API', () => {
     useAuthStore.setState({ verifiedUser: user('member') });
     paint();
     act(() => { root.querySelector<HTMLButtonElement>('.mine-row.is-danger')!.click(); });
     expect(signOut).toHaveBeenCalledTimes(1);
-    const current = root.querySelector('nav.media-channel-entry a[aria-current="page"]');
-    expect(current?.textContent).toContain('我的');
-    expect(current?.getAttribute('href')).toBe('/me');
   });
 });
