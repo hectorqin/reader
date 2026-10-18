@@ -1,3 +1,4 @@
+import { mediaThemePalette, readMediaTheme, saveMediaTheme } from '../features/media/services/theme.ts';
 import { applyCorrections, emptyOverrides, type ReadingOverrides } from './reading-overrides.ts';
 import { loadTxt } from '../formats/txt.ts';
 import { ApiError } from '../api/errors.ts';
@@ -39,6 +40,8 @@ import { textToChapterHtml } from '../formats/segments.ts';
 import { parseLocator } from './locator.ts';
 
 export interface ReaderScreenOptions {
+  /** Where the shared app theme is stored (see the media theme service). */
+  themeScope?: string;
   api: ReaderApi;
   offline: OfflineStore;
   sync: SyncEngine;
@@ -238,6 +241,8 @@ export class ReaderScreen {
     this.bindSyncStatus();
   }
 
+  private themeScope(): string { return this.options.themeScope ?? 'default'; }
+
   private renderChrome(): void {
     flushSync(() => this.ui.render(
 <ReaderChrome
@@ -260,6 +265,11 @@ export class ReaderScreen {
             toggleToc: () => this.toggleToc(),
             toggleSettings: (tab) => this.toggleSettings(tab),
             onSetting: (patch) => void this.updateSetting(patch),
+            appTheme: () => {
+              const id = readMediaTheme(this.themeScope());
+              return { id, dark: mediaThemePalette(id, window.matchMedia?.('(prefers-color-scheme: dark)').matches === true).dark };
+            },
+            onAppTheme: (id) => { try { saveMediaTheme(this.themeScope(), id); } catch { /* the device refused storage; the choice simply does not stick */ } this.patch({}); },
             onSpeechSetting: (patch) => this.updateSpeechSetting(patch),
             onVoice: (voice) => this.updateSpeechSetting({ ttsVoice: voice }),
             onSpeakFromHere: () => void this.speakFromReaderPosition(),

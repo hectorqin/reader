@@ -2760,7 +2760,7 @@ book-content {
   justify-content: center;
   width: 3rem;
   height: 3rem;
-  border: 1px solid var(--reader-line);
+  border: 1px solid var(--chip-line, var(--reader-line));
   border-radius: 50%;
   background: var(--reader-paper);
   color: var(--reader-ink);
@@ -2770,7 +2770,8 @@ book-content {
 }
 
 .theme-swatch[aria-pressed='true'] .theme-swatch-chip {
-  border: 2px solid var(--reader-accent);
+  border-width: 2px;
+  border-color: var(--reader-accent);
 }
 
 .theme-swatch[aria-pressed='true'] .theme-swatch-label {

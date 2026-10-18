@@ -69,10 +69,10 @@ describe('shell navigation', () => {
     expect(document.body.dataset.appNav).toBeUndefined();
   });
 
-  it('leaves the book to its own reading theme', () => {
+  it('gives the book the same theme as every other page', () => {
     paint('/book/abc');
     expect(root.querySelector('nav.app-nav')).toBeNull();
-    expect(document.body.dataset.mediaTheme).toBeUndefined();
+    expect(document.body.dataset.mediaTheme).toBe('system');
   });
 
   it('marks the reading destinations under 书架 and the account page under 我的', () => {

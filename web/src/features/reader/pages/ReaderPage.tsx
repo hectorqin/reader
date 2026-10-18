@@ -25,6 +25,7 @@ export function ReaderPage() {
       offline: runtime.offline,
       sync: runtime.sync,
       platform: runtime.platform,
+      themeScope: runtime.mediaApi.preferenceScope(),
       settings: runtime.settings.current,
       ...(runtime.pageHost ? { pageHost: runtime.pageHost } : {}),
       ...(runtime.speechBridge ? { speechBridge: runtime.speechBridge } : {}),

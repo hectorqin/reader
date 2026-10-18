@@ -25,14 +25,11 @@ function AuthenticatedShell() {
   }, [runtime, navigate]);
   useEffect(() => runtime.player.setVisible(location.pathname.startsWith('/media/')), [runtime, location.pathname]);
   const mode = navMode(location.pathname);
-  // Every page except the book itself wears the chosen theme: the reader keeps its own
-  // reading themes, everything around it shares one palette.
-  const themed = !location.pathname.startsWith('/book/');
+  // One theme for every page, the book included.
   useEffect(() => {
-    if (!themed) return undefined;
     const theme = new MediaThemeController(runtime.mediaApi.preferenceScope(), () => undefined);
     return () => theme.dispose();
-  }, [runtime, themed]);
+  }, [runtime]);
   useEffect(() => {
     if (mode === 'hidden') delete document.body.dataset.appNav; else document.body.dataset.appNav = mode;
     return () => { delete document.body.dataset.appNav; };

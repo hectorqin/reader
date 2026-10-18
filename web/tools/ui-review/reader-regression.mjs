@@ -44,7 +44,7 @@ try {
   assert.equal(after.height, before.height, 'chrome must not resize the reading surface');
   await mkdir(shots, { recursive: true });
   await cdp.screenshot(join(shots, 'reader.png'));
-  for (const label of ['目录', '界面', '设置', '朗读']) {
+  for (const label of ['目录', '外观', '设置', '朗读']) {
     await cdp.clickText('.reader-actions button', label);
     await cdp.waitFor('document.querySelector(".panel") !== null');
     await cdp.run(`await Promise.all(document.querySelector('.panel').getAnimations().map(a=>a.finished));`);
@@ -58,7 +58,7 @@ try {
     await cdp.waitFor('document.querySelector(".panel") === null');
     assert.equal((await read()).y, after.y, `${label} close must preserve position`);
   }
-  await cdp.clickText('.reader-actions button', '界面');
+  await cdp.clickText('.reader-actions button', '外观');
   const beforeReadouts = await read();
   for (const [label, mode] of [['顶部左侧','book'],['顶部右侧','chapter'],['底部左侧','time'],['底部右侧','progress']]) {
     await cdp.run(`const el=document.querySelector('select[aria-label="${label}"]');el.value='${mode}';el.dispatchEvent(new Event('change',{bubbles:true}));`);
@@ -78,13 +78,13 @@ try {
   await cdp.waitFor('Number(document.querySelector(".progress-scrubber")?.max) > 1');
   assert.deepEqual(await cdp.evaluate('Array.from(document.querySelectorAll(".reading-indicator span"),el=>el.dataset.mode)'), modes, 'readout settings survive reopening');
   if (await cdp.evaluate('document.querySelector(".reader-screen")?.dataset.chrome === "hidden"')) await cdp.tapMiddle();
-  await cdp.clickText('.reader-actions button', '界面');
+  await cdp.clickText('.reader-actions button', '外观');
   await cdp.waitFor('document.querySelector(\'select[aria-label="顶部左侧"]\') !== null');
   for (const [label, mode] of [['顶部左侧','chapter'],['顶部右侧','none'],['底部左侧','progress'],['底部右侧','time']]) {
     await cdp.run(`const el=document.querySelector('select[aria-label="${label}"]');el.value='${mode}';el.dispatchEvent(new Event('change',{bubbles:true}));`);
     await cdp.sleep(100);
   }
-  await cdp.clickText('.panel button', '浅绿');
+  await cdp.clickText('.panel button', '原野');
   await cdp.click('.panel button[aria-label="关闭"]');
   await cdp.sleep(300);
   assert.equal((await read()).page, after.page, 'theme must preserve page');
@@ -151,7 +151,7 @@ try {
   await cdp.screenshot(join(shots, 'comic.png'));
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 2, mobile: true });
   await cdp.sleep(250);
-  for(const label of ['界面','设置']) {
+  for(const label of ['外观','设置']) {
     await cdp.clickText('.reader-actions button', label);
     await cdp.run(`await Promise.all(document.querySelector('.panel').getAnimations().map(a=>a.finished));`);
     const overflow=await cdp.run(`const p=document.querySelector('.panel');return p.scrollWidth-p.clientWidth;`);

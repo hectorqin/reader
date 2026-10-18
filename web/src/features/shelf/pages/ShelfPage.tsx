@@ -2,7 +2,7 @@ import { Alert } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { BookOpen, Headphones, LibraryBig, MoreHorizontal, Search, Settings, SlidersVertical } from 'lucide-react';
+import { BookOpen, LibraryBig, MoreHorizontal, Search, Settings, SlidersVertical } from 'lucide-react';
 import type { Book, ContinueReadingItem } from '../../../api/types.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
@@ -77,9 +77,8 @@ export function ShelfPage() {
   const densityLabel = settings.shelfDensity === 'compact' ? '紧凑' : settings.shelfDensity === 'comfortable' ? '宽松' : '适中';
   return <div id="shelf-scroll" className="shelf shelf-screen">
     <header className="shelf-head">
-      <div className="shelf-head-text"><h1 className="shelf-title">{queryText ? '搜索结果' : '我的书架'}</h1><p className="shelf-subtitle muted">{subtitle}</p></div>
+      <div className="shelf-head-text"><h1 className="shelf-title">{queryText ? '搜索结果' : '书架'}</h1><p className="shelf-subtitle muted">{subtitle}</p></div>
       <div className="shelf-head-actions">
-        <Link className="icon-button" aria-label="影音" title="影音" to="/media/video"><Headphones className="icon" size="1em" strokeWidth={1.8} /></Link>
         {user?.role === 'admin' && <button className="icon-button" aria-label="系统设置" title="系统设置" onClick={() => setSystemSettingsOpen(true)}><Settings className="icon" size="1em" strokeWidth={1.8} /><span className="media-visually-hidden">系统设置</span></button>}
         <button className="icon-button" aria-label={`书架设置 · ${densityLabel}`} title={`书架设置 · ${densityLabel}`} onClick={() => setSettingsOpen(true)}><SlidersVertical className="icon" size="1em" strokeWidth={1.8} /><span className="media-visually-hidden">设置</span></button>
       </div>

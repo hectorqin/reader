@@ -43,7 +43,7 @@ try {
       const bar=el.getBoundingClientRect(), book=document.querySelector('book-content').getBoundingClientRect();
       return Math.abs(bar.left-book.left)<1 && Math.abs(bar.right-book.right)<1;
     }), true, 'book header aligns with the paper');
-    for (const label of ['目录', '界面', '设置', '朗读']) {
+    for (const label of ['目录', '外观', '设置', '朗读']) {
       const before = await surface();
       const trigger = page.locator('.reader-actions').getByRole('button', { name: label, exact: true });
       await trigger.click();
@@ -82,14 +82,14 @@ try {
   await page.locator('.reader-actions').getByRole('button',{name:'目录',exact:true}).click();
   await page.locator('.panel button[aria-label="关闭"]').press('Escape');
   assert.deepEqual(await surface(),paged,'side panels preserve the selected page in paged mode');
-  await page.getByRole('button',{name:'夜间',exact:true}).click();
+  await page.getByRole('button',{name:'深夜',exact:true}).click();
   await shot('dark');
-  await page.locator('.reader-actions').getByRole('button',{name:'界面',exact:true}).click();
+  await page.locator('.reader-actions').getByRole('button',{name:'外观',exact:true}).click();
   await shot('dark-settings');
   await page.locator('.panel button[aria-label="关闭"]').click();
   await page.getByRole('button',{name:'日间',exact:true}).click();
   await page.setViewportSize({ width: 1024, height: 420 });
-  await page.locator('.reader-actions').getByRole('button', { name: '界面', exact: true }).click();
+  await page.locator('.reader-actions').getByRole('button', { name: '外观', exact: true }).click();
   const body = page.locator('.panel-body');
   await body.hover(); await page.mouse.wheel(0, 300);
   await page.waitForFunction(() => document.querySelector('.panel-body')?.scrollTop > 0);

@@ -89,6 +89,8 @@ function handlers(): ChromeHandlers {
     toggleToc: noop,
     toggleSettings: noop,
     onSetting: noop,
+    appTheme: () => ({ id: 'sand', dark: false }),
+    onAppTheme: noop,
     onSpeechSetting: noop,
     onVoice: noop,
     onSpeakFromHere: noop,
@@ -155,7 +157,7 @@ describe('ReaderChrome', () => {
 
   it('separates appearance and behavior settings and omits text controls for comics', () => {
     let tree = paint({ settingsOpen: true, settingsTab: 'appearance' });
-    expect(tree.querySelector('.panel')?.textContent).toContain('浅绿');
+    expect(tree.querySelector('.panel')?.textContent).toContain('原野');
     expect(tree.querySelector('.panel')?.textContent).not.toContain('点击区域');
     tree = paint({ settingsOpen: true, settingsTab: 'behavior' });
     expect(tree.querySelector('.panel')?.textContent).toContain('点击区域');
@@ -180,13 +182,15 @@ describe('ReaderChrome', () => {
     expect(body.querySelector('details.panel-fold select[aria-label="顶部左侧"]')).not.toBeNull();
   });
 
-  it('draws the theme choice as swatches and marks the selected one', () => {
-    const tree = paint({ settingsOpen: true, settingsTab: 'appearance', theme: 'sepia' });
+  it('offers the app themes as swatches, plus follow-system, and marks the current one', () => {
+    const tree = paint({ settingsOpen: true, settingsTab: 'appearance' });
     const swatches = [...tree.querySelectorAll<HTMLButtonElement>('.theme-swatch')];
-    expect(swatches.map((button) => button.querySelector('.theme-swatch-label')?.textContent)).toEqual(['白', '米黄', '浅绿', '夜间']);
-    expect(swatches.filter((button) => button.getAttribute('aria-pressed') === 'true').map((button) => button.textContent)).toEqual(['Aa米黄']);
-    // The chip is scoped to its own theme so it is drawn in that theme's colours.
-    expect(swatches.map((button) => button.querySelector('.theme-swatch-chip')?.getAttribute('data-theme'))).toEqual(['light', 'sepia', 'green', 'dark']);
+    // Reading and media share one set of themes; there is no separate reading palette.
+    expect(swatches.map((button) => button.querySelector('.theme-swatch-label')?.textContent)).toEqual(['暖纸', '雾蓝', '蔷薇', '原野', '深夜', '石墨', '跟随系统']);
+    expect(swatches.filter((button) => button.getAttribute('aria-pressed') === 'true').map((button) => button.querySelector('.theme-swatch-label')?.textContent)).toEqual(['暖纸']);
+    // Each chip is drawn in that theme's own background and ink.
+    const chip = swatches[4]!.querySelector<HTMLElement>('.theme-swatch-chip')!;
+    expect(chip.style.background).toContain('rgb(20, 19, 15)');
   });
 
   it('keeps typography folded away for fixed layouts and offers only the readouts', () => {
@@ -194,7 +198,7 @@ describe('ReaderChrome', () => {
     const folds = [...tree.querySelectorAll('details.panel-fold .panel-fold-title')].map((element) => element.textContent);
     expect(folds).toEqual(['页眉页脚']);
     expect(tree.querySelector('.panel')?.textContent).not.toContain('字号');
-    expect(tree.querySelector('.panel')?.textContent).toContain('浅绿');
+    expect(tree.querySelector('.panel')?.textContent).toContain('原野');
   });
 
   it('puts the start action first in the read-aloud sheet and folds pitch and volume', () => {

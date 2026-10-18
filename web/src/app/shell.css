@@ -71,7 +71,7 @@
 }
 
 /* ---- reading pages wear the same theme as media ---- */
-body[data-media-theme] :is(.shelf-screen, .library-screen, .sources-screen, .home-page) {
+body[data-media-theme] :is(.shelf-screen, .library-screen, .sources-screen, .home-page, .reader-screen) {
   --reader-ink: var(--media-theme-text);
   --reader-paper: var(--media-theme-background);
   --reader-surface: var(--media-theme-paper);
@@ -99,3 +99,19 @@ body[data-media-theme] :is(.shelf-screen, .library-screen, .sources-screen, .hom
   body[data-app-nav] .media-manager-workspace > .media-heading { left: calc(var(--app-nav-width) + 24px); right: 32px; }
   body[data-app-nav] .media-screen.media-detail-shell > .media-heading { left: var(--app-nav-width); right: 0; }
 }
+
+/* The follow-system swatch shows both halves of what it will resolve to. */
+.theme-swatch-chip.is-system { background: linear-gradient(135deg, #f6f4ef 50%, #14130f 50%); color: transparent; }
+
+/* ---- reader chrome, V3: a rounded bottom sheet and a quiet top bar ---- */
+.reader-screen .footer {
+  border-top: 0;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -8px 30px rgb(27 26 23 / 0.1);
+}
+.reader-screen .topbar { border-bottom: 1px solid var(--reader-line); box-shadow: none; }
+.reader-screen .reader-actions button[aria-current='true'],
+.reader-screen .reader-actions button:active { color: var(--reader-accent); }
+
+/* Page titles in the serif face, the way the prototype sets them. */
+.shelf-title { font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; }
