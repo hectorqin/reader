@@ -5,9 +5,11 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import type { AppRuntime } from '../runtime.ts';
 import { RuntimeContext } from './runtime-context.tsx';
 import { useSettingsStore } from '../../shared/stores/settings.store.ts';
+import { useAppThemeDark } from './useAppThemeDark.ts';
 
 export function AppProviders({ runtime, children }: { runtime: AppRuntime; children: ReactNode }) {
   const theme = useSettingsStore(state => state.settings.theme);
+  const dark = useAppThemeDark(runtime.mediaApi.preferenceScope());
   useEffect(() => {
     const host = runtime.player.element;
     document.body.append(host);
@@ -36,7 +38,7 @@ export function AppProviders({ runtime, children }: { runtime: AppRuntime; child
   }, [runtime]);
   return <RuntimeContext value={runtime}>
     <QueryClientProvider client={runtime.queryClient}>
-      <MantineProvider forceColorScheme={theme === 'dark' ? 'dark' : 'light'}>
+      <MantineProvider forceColorScheme={dark ? 'dark' : 'light'}>
         <Notifications />{children}
       </MantineProvider>
     </QueryClientProvider>

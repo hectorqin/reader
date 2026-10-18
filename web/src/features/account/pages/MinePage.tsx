@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Film, LibraryBig, LogOut, Palette, PlayCircle, Rss, UserRound, type LucideIcon } from 'lucide-react';
+import { ChevronRight, Film, LibraryBig, LogOut, Palette, PlayCircle, Rss, UserRound, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { mediaThemes, readMediaTheme } from '../../media/services/theme.ts';
+import '../../home/styles/home.css';
 import '../styles/mine.css';
 
 function Row({ icon: Icon, label, value, to, onClick, danger = false }: { icon: LucideIcon; label: string; value?: string; to?: string; onClick?: () => void; danger?: boolean }) {
@@ -40,12 +41,7 @@ export function MinePage() {
   const themeName = choice === 'system' ? '跟随系统' : (mediaThemes.find(theme => theme.id === choice)?.name ?? '跟随系统');
   const name = user?.displayName || user?.username || '';
   return <div className="media-screen media-page mine-page">
-    <header className="media-heading">
-      <div className="media-page-heading">
-        <Link className="media-back-button" to="/shelf" aria-label="← 返回" title="返回书架"><ChevronLeft size={20} aria-hidden="true" /></Link>
-        <h1>我的</h1>
-      </div>
-    </header>
+    <header className="home-header"><h1>我的</h1></header>
     {user && <section className="mine-profile" aria-label="当前账号">
       <div className="mine-avatar" aria-hidden="true">{Array.from(name)[0]}</div>
       <div className="mine-profile-text">

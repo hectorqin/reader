@@ -12,7 +12,7 @@ export function MediaThemeSettings({scope,selected,onChange}:{scope:string;selec
       <span className="media-theme-preview" aria-hidden="true" style={{background:theme.colors[0],color:theme.colors[6]}}><span className="media-theme-preview-heading"><i style={{background:theme.colors[3]}}/><i style={{background:theme.colors[6]}}/></span><span className="media-theme-preview-covers">{[6,8,2].map(index=><i key={index} style={{background:theme.colors[index]}}/>)}</span><span className="media-theme-preview-line" style={{background:theme.colors[5]}}/></span>
       <span className="media-theme-card-label"><strong>{theme.name}</strong>{selected===theme.id&&<Check size={17} aria-hidden="true"/>}</span><small>{theme.description}</small>
     </button>)}</div>
-    <p className="media-theme-note">选择后立即生效，仅应用于影音。在此设备按服务器和账号保存。</p>
+    <p className="media-theme-note">选择后立即生效，阅读与影音共用同一套主题。在此设备按服务器和账号保存。</p>
     {saved&&<p role="status">主题已保存</p>}{error&&<p className="media-error" role="alert">{error}</p>}
   </section>;
 }

@@ -10,6 +10,7 @@ export type MediaThemeId = 'system' | typeof mediaThemes[number]['id'];
 const tokens=['background','paper','surface','text','muted','border','accent','on-accent','selection'] as const;
 const storageKey=(scope:string)=>'reader.media.theme.v1:'+scope;
 const themeChangeEvent='reader-media-theme-change';
+export const mediaThemeChangeEvent=themeChangeEvent;
 export function validMediaTheme(value:unknown):MediaThemeId{return value==='system'||mediaThemes.some(theme=>theme.id===value)?value as MediaThemeId:'system';}
 export function readMediaTheme(scope:string):MediaThemeId{try{return validMediaTheme(localStorage.getItem(storageKey(scope)));}catch{return 'system';}}
 export function saveMediaTheme(scope:string,value:MediaThemeId){

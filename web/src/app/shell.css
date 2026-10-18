@@ -115,3 +115,55 @@ body[data-media-theme] :is(.shelf-screen, .library-screen, .sources-screen, .hom
 
 /* Page titles in the serif face, the way the prototype sets them. */
 .shelf-title { font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; }
+
+/* Mantine components (forms, dialogs) wear the same theme instead of Mantine's default blue. */
+body[data-media-theme] {
+  --mantine-color-body: var(--media-theme-background);
+  --mantine-color-text: var(--media-theme-text);
+  --mantine-color-dimmed: var(--media-theme-muted);
+  --mantine-color-placeholder: var(--media-theme-muted);
+  --mantine-color-default: var(--media-theme-paper);
+  --mantine-color-default-hover: var(--media-theme-surface);
+  --mantine-color-default-color: var(--media-theme-text);
+  --mantine-color-default-border: var(--media-theme-border);
+  --mantine-color-anchor: var(--media-theme-accent);
+  --mantine-primary-color-filled: var(--media-theme-accent);
+  --mantine-primary-color-filled-hover: color-mix(in srgb, var(--media-theme-accent) 88%, #000);
+  --mantine-primary-color-light: var(--media-theme-selection);
+  --mantine-primary-color-light-hover: color-mix(in srgb, var(--media-theme-selection) 85%, var(--media-theme-accent));
+  --mantine-primary-color-light-color: var(--media-theme-accent);
+  --mantine-primary-color-contrast: var(--media-theme-on-accent);
+  /* Components that name their colour "blue" (Mantine's default) follow the accent too. */
+  --mantine-color-blue-filled: var(--media-theme-accent);
+  --mantine-color-blue-filled-hover: color-mix(in srgb, var(--media-theme-accent) 88%, #000);
+  --mantine-color-blue-light: var(--media-theme-selection);
+  --mantine-color-blue-light-hover: color-mix(in srgb, var(--media-theme-selection) 85%, var(--media-theme-accent));
+  --mantine-color-blue-light-color: var(--media-theme-accent);
+  --mantine-color-blue-outline: var(--media-theme-accent);
+  --mantine-color-blue-text: var(--media-theme-accent);
+}
+
+/* ---- video player, wide screens: the episode rail sits beside the picture ----
+ * Only when there is a rail (episodes). A film keeps the single centred column. The
+ * wrappers around the controls become transparent so caption, toolbar and rail are
+ * placed directly on the workspace grid. */
+@media (min-width: 1100px) {
+  .media-player-expanded .media-video-workspace:has(.media-episode-rail) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-auto-rows: min-content;
+    column-gap: 24px;
+    align-content: start;
+    box-sizing: border-box;
+    width: min(1280px, 100%);
+    max-width: none;
+    margin: 0 auto;
+    padding: 20px 32px 32px;
+  }
+  .media-video-workspace:has(.media-episode-rail) > div:not(.media-video-stage),
+  .media-video-workspace:has(.media-episode-rail) .media-video-controls { display: contents; }
+  .media-video-workspace:has(.media-episode-rail) .media-video-stage { grid-column: 1; grid-row: 1; overflow: hidden; border-radius: 20px; }
+  .media-video-workspace:has(.media-episode-rail) .media-video-controls > :not(.media-episode-rail) { grid-column: 1; width: auto; max-width: none; justify-self: stretch; }
+  .media-video-workspace:has(.media-episode-rail) .media-video-caption { margin-top: 16px; }
+  .media-video-workspace:has(.media-episode-rail) .media-episode-rail { position: static; inset: auto; width: auto; margin: 0; grid-column: 2; grid-row: 1 / span 8; align-self: start; max-height: calc(100dvh - 120px); overflow-y: auto; }
+}
