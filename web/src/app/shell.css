@@ -1,5 +1,5 @@
 /* V3 shell: one navigation for reading and media.
- * A tab bar below 900px, a sidebar from 900px up. Colours come from the theme
+ * A tab bar up to 700px, a sidebar from 701px up. Colours come from the theme
  * tokens that AuthenticatedShell applies to <body>, so every theme restyles it. */
 :root { --app-nav-width: 232px; --app-nav-bar: 64px; }
 
@@ -27,7 +27,7 @@
 .app-nav-icon { display: grid; place-items: center; }
 
 /* ---- phone: tab bar ---- */
-@media (max-width: 899px) {
+@media (max-width: 700px) {
   .app-nav { order: 2; display: flex; height: calc(var(--app-nav-bar) + env(safe-area-inset-bottom)); padding: 6px 12px env(safe-area-inset-bottom); border-top: 1px solid var(--nav-line); }
   .app-nav[data-mode='push'] { display: none; }
   .app-nav-brand, .app-nav-sub, .app-nav-user { display: none; }
@@ -40,7 +40,7 @@
 }
 
 /* ---- desktop: sidebar ---- */
-@media (min-width: 900px) {
+@media (min-width: 701px) {
   .app-shell { flex-direction: row; }
   /* After the page in the DOM (so the phone bar follows the content), before it on screen. */
   .app-nav { order: -1; display: flex; flex-direction: column; width: var(--app-nav-width); padding: 24px 14px; border-right: 1px solid var(--nav-line); overflow-y: auto; }
@@ -63,10 +63,10 @@
 }
 
 /* ---- the persistent mini player sits clear of the bar / sidebar ---- */
-@media (max-width: 899px) {
+@media (max-width: 700px) {
   body[data-app-nav='top'] .media-player:is(.media-player-audio, .media-player-native-video) { bottom: calc(var(--app-nav-bar) + env(safe-area-inset-bottom) + 10px); }
 }
-@media (min-width: 900px) {
+@media (min-width: 701px) {
   body[data-app-nav] .media-player:is(.media-player-audio, .media-player-native-video) { left: calc(var(--app-nav-width) + 24px); }
 }
 
@@ -91,7 +91,7 @@ body[data-media-theme] :is(.shelf-screen, .library-screen, .sources-screen, .hom
 }
 
 /* Fixed page headers were placed to clear the old rail's brand; they now clear the sidebar. */
-@media (min-width: 900px) {
+@media (min-width: 701px) {
   body[data-app-nav] .media-screen .media-mobile-title,
   body[data-app-nav] .media-screen.media-secondary-page > .media-heading,
   body[data-app-nav] .media-narrators:not([data-view=directory]) > .media-narrator-heading,
@@ -166,4 +166,15 @@ body[data-media-theme] {
   .media-video-workspace:has(.media-episode-rail) .media-video-controls > :not(.media-episode-rail) { grid-column: 1; width: auto; max-width: none; justify-self: stretch; }
   .media-video-workspace:has(.media-episode-rail) .media-video-caption { margin-top: 16px; }
   .media-video-workspace:has(.media-episode-rail) .media-episode-rail { position: static; inset: auto; width: auto; margin: 0; grid-column: 2; grid-row: 1 / span 8; align-self: start; max-height: calc(100dvh - 120px); overflow-y: auto; }
+}
+
+/* ---- phone: the channel switch is three segments in the page header ---- */
+.media-channel-segments { display: flex; flex: 1; gap: 2px; padding: 4px; border-radius: 14px; background: var(--media-surface, var(--surface)); }
+.media-channel-segments a { flex: 1; display: grid; place-items: center; min-height: 36px; border-radius: 10px; color: var(--muted); font-size: 14px; text-decoration: none; }
+.media-channel-segments a[aria-current='page'] { background: var(--media-paper, #fff); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgb(27 26 23 / 0.18); }
+.media-channel-segments a:focus-visible { outline: 2px solid var(--media-accent); outline-offset: 2px; }
+@media (min-width: 701px) { .media-mobile-title { display: none !important; } }
+@media (max-width: 700px) {
+  .media-screen .media-mobile-title { width: 100%; max-width: 300px; }
+  .media-channel-segments a { white-space: nowrap; }
 }

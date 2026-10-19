@@ -1,9 +1,9 @@
-import { Alert, Button, Title, UnstyledButton } from '@mantine/core';
+import { Alert, Button, Title, UnstyledButton, VisuallyHidden } from '@mantine/core';
 import { ChevronLeft } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useMediaChannel } from '../hooks/use-media-channel.ts';
-import { ChannelSwitcher } from './channel-navigation.tsx';
+import { ChannelSegments } from './channel-navigation.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 
 export function MediaPageFrame({ title, subtitle, children, actions, className, backTo, backLabel, hideHeader = false }: { title: string; subtitle?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string; backTo?: string; backLabel?: string; hideHeader?: boolean }) {
@@ -17,7 +17,11 @@ export function MediaPageFrame({ title, subtitle, children, actions, className, 
   return <div className={rootClassName}>
     {!hideHeader && <header className="media-heading">
       {catalog
-        ? <span className="media-mobile-title"><ChannelSwitcher current={channel} label={title} /></span>
+        ? <>
+          {/* The visible title is the segmented switch; the page still needs its one h1. */}
+          <VisuallyHidden component="h1">{title}</VisuallyHidden>
+          <span className="media-mobile-title"><ChannelSegments current={channel} /></span>
+        </>
         : <div className="media-page-heading">
           <UnstyledButton className="media-back-button" component={Link} to={target} aria-label="← 返回" title={label}><ChevronLeft size={20} aria-hidden="true" /></UnstyledButton>
           <Title order={1}>{title}</Title>

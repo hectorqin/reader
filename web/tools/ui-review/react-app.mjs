@@ -71,14 +71,14 @@ async function login(page, origin, target = '/#/shelf') {
   const username = page.locator('input[autocomplete="username"]');
   await Promise.race([
     username.waitFor({ state: 'visible' }).catch(() => undefined),
-    page.locator('.shelf-screen, .media-channel-entry, .media-screen').first().waitFor({ state: 'attached' }).catch(() => undefined),
+    page.locator('.shelf-screen, .home-page, .app-nav, .media-screen').first().waitFor({ state: 'attached' }).catch(() => undefined),
   ]);
   if (await username.isVisible().catch(() => false)) {
     await username.fill('reviewer');
     await page.locator('input[type="password"]').fill('review-test-pass');
     await page.locator('form button[type="submit"]').click();
   }
-  await page.locator('.shelf-screen, .media-channel-entry, .media-screen').first().waitFor({ state: 'attached' });
+  await page.locator('.shelf-screen, .home-page, .app-nav, .media-screen').first().waitFor({ state: 'attached' });
 }
 
 async function installReaderApiStubs(page) {
@@ -232,7 +232,7 @@ async function loginAs(page, origin, username) {
     await page.locator('input[type="password"]').fill('review-test-pass');
     await page.locator('form button[type="submit"]').click();
   }
-  await page.locator('.media-screen, .media-channel-entry').first().waitFor({ state: 'attached' });
+  await page.locator('.media-screen, .app-nav').first().waitFor({ state: 'attached' });
 }
 
 async function runMediaReview(browser, fixture, checks, errors) {
@@ -355,8 +355,8 @@ async function runMediaReview(browser, fixture, checks, errors) {
   // 65 fixture favorites exercise filter + the 60/5 pagination boundary + detail.
   await page.goto(`${origin}/#/media/favorites`);
   await waitMediaHeading(page, '我的收藏');
-  await page.getByRole('button', { name: '筛选收藏' }).click();
-  await page.getByRole('button', { name: '影视' }).last().click();
+  await page.locator('summary[aria-label="筛选收藏"]').click();
+  await page.getByRole('option', { name: '影视' }).click();
   await page.waitForURL(/scope=video/);
   await page.locator('.media-favorite-tools').filter({ hasText: '影视' }).waitFor({ state: 'visible' });
   assert.match(await page.locator('.media-favorite-tools').innerText(), /影视/);
