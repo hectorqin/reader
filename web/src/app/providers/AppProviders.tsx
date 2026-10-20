@@ -4,11 +4,9 @@ import { Notifications } from '@mantine/notifications';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { AppRuntime } from '../runtime.ts';
 import { RuntimeContext } from './runtime-context.tsx';
-import { useSettingsStore } from '../../shared/stores/settings.store.ts';
-import { useAppThemeDark } from './useAppThemeDark.ts';
+import { useAppThemeDark } from '../../shared/theme/use-theme.ts';
 
 export function AppProviders({ runtime, children }: { runtime: AppRuntime; children: ReactNode }) {
-  const theme = useSettingsStore(state => state.settings.theme);
   const dark = useAppThemeDark(runtime.mediaApi.preferenceScope());
   useEffect(() => {
     const host = runtime.player.element;
@@ -17,9 +15,6 @@ export function AppProviders({ runtime, children }: { runtime: AppRuntime; child
     return () => { runtime.playback.stop(); host.remove(); };
   }, [runtime]);
   useEffect(() => runtime.connect(), [runtime]);
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
   useEffect(() => {
     const visibility = () => {
       if (document.visibilityState === 'hidden') void runtime.flush();

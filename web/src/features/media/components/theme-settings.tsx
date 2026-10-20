@@ -1,23 +1,79 @@
 import { useState } from 'react';
-import {Check,Monitor} from 'lucide-react';
-import {darkThemes,lightThemes,mediaThemes,readSystemThemePair,saveMediaTheme,saveSystemThemePair,type MediaThemeId,type SystemThemePair} from '../services/theme.ts';
+import { Check, SunMoon } from 'lucide-react';
+import {
+  appThemes, resolveAppTheme, saveThemePreference, themes,
+  type AppThemeId, type ThemeId, type ThemeMode, type ThemePreference,
+} from '../../../shared/theme/theme.ts';
+import { useThemeState } from '../../../shared/theme/use-theme.ts';
 
-export function MediaThemeSettings({scope,selected,onChange}:{scope:string;selected:MediaThemeId;onChange:(theme:MediaThemeId)=>void}){
-  const [error,setError]=useState(''),[saved,setSaved]=useState(false),[pair,setPair]=useState<SystemThemePair>(()=>readSystemThemePair(scope));
-  function choosePair(patch:Partial<SystemThemePair>){setError('');setSaved(false);try{setPair(saveSystemThemePair(scope,patch));setSaved(true);}catch(error){setError(error instanceof Error?error.message:'主题保存失败');}}
-  function choose(theme:MediaThemeId){setError('');setSaved(false);try{saveMediaTheme(scope,theme);onChange(theme);setSaved(true);}catch(error){setError(error instanceof Error?error.message:'主题保存失败');}}
-  return <section className="media-theme-settings">
-    <button className="media-theme-system" aria-pressed={selected==='system'} onClick={()=>choose('system')}><Monitor size={21} aria-hidden="true"/><span><strong>跟随系统</strong><small>按系统深浅色自动切换</small></span>{selected==='system'&&<Check size={19} aria-hidden="true"/>}</button>
-    <div className="media-theme-pair" role="group" aria-label="跟随系统时使用的主题">
-      <div className="media-theme-pair-row"><span id="media-theme-pair-light">浅色时使用</span><div role="group" aria-labelledby="media-theme-pair-light">{lightThemes.map(theme=><button key={theme.id} aria-label={'浅色时使用 '+theme.name} aria-pressed={pair.light===theme.id} onClick={()=>choosePair({light:theme.id})}>{theme.name}</button>)}</div></div>
-      <div className="media-theme-pair-row"><span id="media-theme-pair-dark">深色时使用</span><div role="group" aria-labelledby="media-theme-pair-dark">{darkThemes.map(theme=><button key={theme.id} aria-label={'深色时使用 '+theme.name} aria-pressed={pair.dark===theme.id} onClick={()=>choosePair({dark:theme.id})}>{theme.name}</button>)}</div></div>
+/** Both halves of a theme, light on the left and dark on the right, in its own colours. */
+function ThemePreview({ id }: { id: ThemeId }) {
+  return <span className="theme-preview" aria-hidden="true">{(['light', 'dark'] as const).map(mode => {
+    const t = themes[id][mode];
+    return <span key={mode} style={{ background: t.bg }}>
+      <i className="theme-preview-title" style={{ background: t.ink }} />
+      <span className="theme-preview-chips"><i style={{ background: t.brand }} /><i style={{ background: t.brandSoft }} /></span>
+    </span>;
+  })}</span>;
+}
+
+function ThemeCard({ id, label, note, pressed, onClick }: { id: ThemeId; label: string; note: string; pressed: boolean; onClick(): void }) {
+  return <button type="button" className="theme-card" aria-label={label} aria-pressed={pressed} onClick={onClick}>
+    <ThemePreview id={id} />
+    <span className="theme-card-label"><strong>{label}</strong>{pressed && <Check size={18} aria-hidden="true" />}</span>
+    <small>{note}</small>
+  </button>;
+}
+
+function Chips<T extends string>({ label, options, value, onChange, labelPrefix = '' }: { label: string; options: readonly { value: T; label: string }[]; value: T; onChange(value: T): void; labelPrefix?: string }) {
+  return <div className="theme-chips" role="group" aria-label={label}>{options.map(option =>
+    <button type="button" key={option.value} aria-label={labelPrefix ? labelPrefix + ' ' + option.label : undefined} aria-pressed={value === option.value} onClick={() => onChange(option.value)}>{option.label}</button>)}</div>;
+}
+
+const themeOptions = appThemes.map(theme => ({ value: theme.id as AppThemeId, label: theme.name }));
+const modeOptions: readonly { value: ThemeMode; label: string }[] = [{ value: 'light', label: '浅色' }, { value: 'dark', label: '深色' }];
+
+/**
+ * 外观与主题 (V3.1): the app theme (暖陶, 雾蓝, 青绿), its light/dark mode or the
+ * follow-system pair, and the reading theme (跟随应用 or the reading-only 黑白灰).
+ */
+export function MediaThemeSettings({ scope }: { scope: string }) {
+  const { preference, systemDark } = useThemeState(scope);
+  const [error, setError] = useState(''), [saved, setSaved] = useState(false);
+  const following = preference.mode === 'system';
+  const resolved = resolveAppTheme(preference, systemDark);
+  function save(patch: Partial<ThemePreference>) {
+    setError(''); setSaved(false);
+    try { saveThemePreference(scope, patch); setSaved(true); } catch (cause) { setError(cause instanceof Error ? cause.message : '主题保存失败'); }
+  }
+  // Leaving follow-system keeps what is on screen now, so the switch never makes the page jump.
+  const toggleFollow = () => save(following ? { mode: resolved.mode, theme: resolved.theme } : { mode: 'system' });
+  const chooseTheme = (id: AppThemeId) => save(following ? { theme: id, system: { light: id, dark: id } } : { theme: id });
+  const themePressed = (id: AppThemeId) => following ? preference.system.light === id && preference.system.dark === id : preference.theme === id;
+  return <section className="theme-settings">
+    <div className="theme-settings-card">
+      <button type="button" className="theme-follow" aria-label="跟随系统" aria-pressed={following} onClick={toggleFollow}>
+        <span className="theme-follow-icon" aria-hidden="true"><SunMoon size={20} /></span>
+        <span className="theme-follow-text"><strong>跟随系统</strong><small>按系统深浅色自动切换</small></span>
+        <span className="theme-switch" aria-hidden="true" />
+      </button>
+      {following ? <>
+        <div className="theme-settings-row"><span>浅色时使用</span><Chips label="浅色时使用的主题" labelPrefix="浅色时使用" options={themeOptions} value={preference.system.light} onChange={light => save({ system: { ...preference.system, light } })} /></div>
+        <div className="theme-settings-row"><span>深色时使用</span><Chips label="深色时使用的主题" labelPrefix="深色时使用" options={themeOptions} value={preference.system.dark} onChange={dark => save({ system: { ...preference.system, dark } })} /></div>
+      </> : <div className="theme-settings-row"><span>明暗</span><Chips label="明暗" options={modeOptions} value={resolved.mode} onChange={mode => save({ mode })} /></div>}
     </div>
-    <h2>内置主题</h2>
-    <div className="media-theme-grid" role="group" aria-label="内置主题">{mediaThemes.map(theme=><button key={theme.id} className="media-theme-card" aria-label={theme.name} aria-pressed={selected===theme.id} onClick={()=>choose(theme.id)}>
-      <span className="media-theme-preview" aria-hidden="true" style={{background:theme.colors[0],color:theme.colors[6]}}><span className="media-theme-preview-heading"><i style={{background:theme.colors[3]}}/><i style={{background:theme.colors[6]}}/></span><span className="media-theme-preview-covers">{[6,8,2].map(index=><i key={index} style={{background:theme.colors[index]}}/>)}</span><span className="media-theme-preview-line" style={{background:theme.colors[5]}}/></span>
-      <span className="media-theme-card-label"><strong>{theme.name}</strong>{selected===theme.id&&<Check size={17} aria-hidden="true"/>}</span><small>{theme.description}</small>
-    </button>)}</div>
-    <p className="media-theme-note">选择后立即生效，阅读与影音共用同一套主题。在此设备按服务器和账号保存。</p>
-    {saved&&<p role="status">主题已保存</p>}{error&&<p className="media-error" role="alert">{error}</p>}
+
+    <h2>应用主题</h2>
+    <div className="theme-grid" role="group" aria-label="应用主题">
+      {appThemes.map(theme => <ThemeCard key={theme.id} id={theme.id} label={theme.name} note="浅色 · 深色" pressed={themePressed(theme.id)} onClick={() => chooseTheme(theme.id)} />)}
+    </div>
+
+    <h2>阅读主题</h2>
+    <div className="theme-grid" role="group" aria-label="阅读主题">
+      <ThemeCard id={resolved.theme} label="跟随应用" note={'与应用一致 · ' + themes[resolved.theme].name} pressed={preference.reading === 'app'} onClick={() => save({ reading: 'app' })} />
+      <ThemeCard id="gray" label={themes.gray.name} note="阅读专用 · 浅色 · 深色" pressed={preference.reading === 'gray'} onClick={() => save({ reading: 'gray' })} />
+    </div>
+    <p className="theme-settings-note">黑白灰只用于阅读器，可以与应用主题分开设置；浅色和夜间跟随应用的明暗。主题偏好按服务器和账号保存在此设备。</p>
+    {saved && <p role="status">主题已保存</p>}{error && <p className="media-error" role="alert">{error}</p>}
   </section>;
 }

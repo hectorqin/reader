@@ -6,7 +6,7 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { MinePage } from '../src/features/account/pages/MinePage.tsx';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
 import { useAuthStore } from '../src/shared/stores/auth.store.ts';
-import { saveMediaTheme } from '../src/features/media/services/theme.ts';
+import { saveThemePreference } from '../src/shared/theme/theme.ts';
 
 const root = document.createElement('div');
 document.body.append(root);
@@ -48,12 +48,12 @@ describe('我的', () => {
   });
 
   it('offers media library management only to administrators and shows the chosen theme', () => {
-    saveMediaTheme('mine-test', 'midnight');
+    saveThemePreference('mine-test', { theme: 'blue', mode: 'dark' });
     useAuthStore.setState({ verifiedUser: user('admin') });
     paint();
     const labels = [...root.querySelectorAll('.mine-row-label')].map(el => el.textContent);
     expect(labels).toContain('媒体库');
-    expect(root.textContent).toContain('深夜');
+    expect(root.textContent).toContain('雾蓝 · 深色');
     expect(root.querySelector('.mine-profile')?.textContent).toContain('管理员');
   });
 

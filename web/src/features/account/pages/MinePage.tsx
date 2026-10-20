@@ -3,7 +3,8 @@ import { ChevronRight, Film, LibraryBig, LogOut, Palette, PlayCircle, Rss, UserR
 import type { ReactNode } from 'react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
-import { mediaThemes, readMediaTheme } from '../../media/services/theme.ts';
+import { themeSummary } from '../../../shared/theme/theme.ts';
+import { useThemeState } from '../../../shared/theme/use-theme.ts';
 import '../../home/styles/home.css';
 import '../styles/mine.css';
 
@@ -37,8 +38,7 @@ export function MinePage() {
   const runtime = useRuntime();
   const user = useAuthStore(state => state.verifiedUser ?? state.session?.user ?? null);
   const admin = user?.role === 'admin';
-  const choice = readMediaTheme(runtime.mediaApi.preferenceScope());
-  const themeName = choice === 'system' ? '跟随系统' : (mediaThemes.find(theme => theme.id === choice)?.name ?? '跟随系统');
+  const themeName = themeSummary(useThemeState(runtime.mediaApi.preferenceScope()).preference);
   const name = user?.displayName || user?.username || '';
   return <div className="media-screen media-page mine-page">
     <header className="home-header"><h1>我的</h1></header>

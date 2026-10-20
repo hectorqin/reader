@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { mediaThemes, type MediaThemeId } from '../features/media/services/theme.ts';
+import { themes, type AppThemeId, type ModePreference, type ResolvedTheme, type ThemeMode, type ThemePreference } from '../shared/theme/theme.ts';
 import type { ChapterQuality } from '../api/sources.ts';
 import { Modal } from './modal.tsx';
 import type { SourcePage } from '../api/sources.ts';
@@ -176,9 +176,12 @@ export interface ChromeHandlers {
    */
   onScrubPage(page: number): void;
   onTurnPage(direction: 'next' | 'previous'): void;
-  /** The app theme the whole product wears; the book follows it like every other page. */
-  appTheme(): { id: MediaThemeId; dark: boolean };
-  onAppTheme(id: MediaThemeId): void;
+  /**
+   * The stored theme preference, what the app wears, and what the book wears (the
+   * app's theme, or the reading-only 黑白灰 in the app's light/dark mode).
+   */
+  theme(): ReaderThemeState;
+  onTheme(patch: Partial<ThemePreference>): void;
   onSpeechToggle(): void;
   onSpeechPrevious(): void;
   onSpeechNext(): void;
@@ -208,7 +211,8 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
   const currentPage = Math.min(totalPages, Math.max(1, state.pageInChapter));
   const pageLabel = '本章第 ' + currentPage + '/' + totalPages + ' 页';
   const tab = state.settingsTab ?? 'behavior';
-  const appTheme = handlers.appTheme();
+  const theme = handlers.theme();
+  const dark = theme.reading.mode === 'dark';
   return (
     <>
       {tools}
@@ -228,9 +232,10 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
       <StageHost stage={stage} />
       <ReaderIndicators state={state} />
       <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作">
-        <RailButton icon={appTheme.dark ? 'sun' : 'moon'}
-          label={appTheme.dark ? '日间' : '夜间'}
-          onClick={() => handlers.onAppTheme(appTheme.dark ? 'sand' : 'midnight')} />
+        {/* Day/night picks the mode explicitly (leaving 跟随系统), keeping the theme on screen. */}
+        <RailButton icon={dark ? 'sun' : 'moon'}
+          label={dark ? '日间' : '夜间'}
+          onClick={() => handlers.onTheme({ mode: dark ? 'light' : 'dark', theme: theme.app.theme })} />
       </div>
       <div className="footer" hidden={!state.chromeVisible}>
         <div className="progress-row">
@@ -443,10 +448,19 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         onChange={(value) => handlers.onSetting({ lineHeight: value })}
       />
       </> : null}
-      <ThemeSwatchRow
+      <ReadingThemeRow
         label="主题"
-        current={handlers.appTheme().id}
-        onChange={(id) => handlers.onAppTheme(id)}
+        state={handlers.theme()}
+        onChange={(reading) => handlers.onTheme({ reading })}
+      />
+      <SegmentedRow
+        label="明暗"
+        options={MODE_OPTIONS}
+        value={handlers.theme().preference.mode}
+        onChange={(value) => {
+          const mode = value as ModePreference;
+          handlers.onTheme(mode === 'system' ? { mode } : { mode, theme: handlers.theme().app.theme });
+        }}
       />
       <SliderRow
         label="亮度"
@@ -556,8 +570,8 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
       />
       : null}
       <SectionTitle>翻页</SectionTitle>
-      <Button onClick={() => { handlers.onSetting({ pageAnimation: 'none', mode: 'paged' }); handlers.onAppTheme('sand'); }}>应用电纸书预设</Button>
-      <p className="muted">浅色、分页、无翻页动画；仅保存到当前设备，可继续单独调整。屏幕刷新由设备控制。</p>
+      <Button onClick={() => { handlers.onSetting({ pageAnimation: 'none', mode: 'paged' }); handlers.onTheme({ reading: 'gray', mode: 'light', theme: handlers.theme().app.theme }); }}>应用电纸书预设</Button>
+      <p className="muted">黑白灰浅色、分页、无翻页动画；仅保存到当前设备，可继续单独调整。屏幕刷新由设备控制。</p>
       <SegmentedRow
         label="点击区域"
         options={[
@@ -804,27 +818,42 @@ function SegmentedRow({
   );
 }
 
+export interface ReaderThemeState {
+  preference: ThemePreference;
+  app: { theme: AppThemeId; mode: ThemeMode };
+  reading: ResolvedTheme;
+}
+
+const MODE_OPTIONS = [
+  { value: 'system', label: '跟随系统' },
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' },
+];
+
 /**
- * The app theme, drawn as swatches in each theme's own paper and ink so the choice is
- * seen, not decoded from a name. Reading and media share these themes: there is no
- * separate "reading theme".
+ * The reading theme, drawn as swatches in each theme's own paper and ink for the
+ * current light/dark mode, so the choice is seen, not decoded from a name: 跟随应用 wears the app
+ * theme, 黑白灰 is the reading-only theme. The app theme itself is chosen in 外观与主题.
  */
-function ThemeSwatchRow({ label, current, onChange }: { label: string; current: MediaThemeId; onChange(id: MediaThemeId): void }): JSX.Element {
+function ReadingThemeRow({ label, state, onChange }: { label: string; state: ReaderThemeState; onChange(reading: ThemePreference['reading']): void }): JSX.Element {
+  const options = [
+    { value: 'app' as const, label: '跟随应用', id: state.app.theme },
+    { value: 'gray' as const, label: themes.gray.name, id: 'gray' as const },
+  ];
   return (
     <div className="field is-stacked">
       <label>{label}</label>
       <div className="theme-swatches" role="group" aria-label={label}>
-        {mediaThemes.map((theme) => (
-          <button type="button" key={theme.id} className="theme-swatch" aria-pressed={current === theme.id} onClick={() => onChange(theme.id)}>
-            <span className="theme-swatch-chip" aria-hidden="true"
-              style={{ background: theme.colors[0], color: theme.colors[3], '--chip-line': theme.colors[5] } as CSSProperties}>Aa</span>
-            <span className="theme-swatch-label">{theme.name}</span>
-          </button>
-        ))}
-        <button type="button" className="theme-swatch" aria-pressed={current === 'system'} onClick={() => onChange('system')}>
-          <span className="theme-swatch-chip is-system" aria-hidden="true">Aa</span>
-          <span className="theme-swatch-label">跟随系统</span>
-        </button>
+        {options.map((option) => {
+          const current = themes[option.id][state.reading.mode];
+          return (
+            <button type="button" key={option.value} className="theme-swatch" aria-pressed={state.preference.reading === option.value} onClick={() => onChange(option.value)}>
+              <span className="theme-swatch-chip" aria-hidden="true"
+                style={{ background: current.bg, color: current.ink, '--chip-line': current.line } as CSSProperties}>Aa</span>
+              <span className="theme-swatch-label">{option.label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

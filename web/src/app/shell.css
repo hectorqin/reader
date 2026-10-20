@@ -1,6 +1,6 @@
 /* V3 shell: one navigation for reading and media.
- * A tab bar up to 700px, a sidebar from 701px up. Colours come from the theme
- * tokens that AuthenticatedShell applies to <body>, so every theme restyles it. */
+ * A tab bar up to 700px, a sidebar from 701px up. Colours are the theme's --color-*
+ * tokens (styles/theme-tokens.css), so every theme restyles it. */
 :root { --app-nav-width: 232px; --app-nav-bar: 64px; }
 
 .app-shell { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
@@ -9,12 +9,12 @@
 .app-shell-body { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
 
 .app-nav {
-  --nav-ink: var(--media-theme-text, var(--reader-ink));
-  --nav-muted: var(--media-theme-muted, var(--reader-muted));
-  --nav-line: var(--media-theme-border, var(--reader-line));
-  --nav-surface: var(--media-theme-paper, var(--reader-surface));
-  --nav-accent: var(--media-theme-accent, var(--reader-accent));
-  --nav-soft: var(--media-theme-selection, var(--reader-paper));
+  --nav-ink: var(--color-ink);
+  --nav-muted: var(--color-muted);
+  --nav-line: var(--color-line);
+  --nav-surface: var(--color-surface);
+  --nav-accent: var(--color-brand-text);
+  --nav-soft: var(--color-brand-soft);
   flex: none;
   box-sizing: border-box;
   background: var(--nav-surface);
@@ -46,16 +46,16 @@
   .app-nav { order: -1; display: flex; flex-direction: column; width: var(--app-nav-width); padding: 24px 14px; border-right: 1px solid var(--nav-line); overflow-y: auto; }
   .app-nav-brand { padding: 0 14px 22px; font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; font-size: 26px; font-weight: 700; color: var(--nav-accent); }
   .app-nav-item { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-radius: 12px; font-size: 15px; color: var(--nav-ink); }
-  .app-nav-item:hover { background: var(--media-theme-surface, var(--reader-paper)); }
+  .app-nav-item:hover { background: var(--color-surface-2); }
   .app-nav-item[aria-current='page'] { background: var(--nav-soft); color: var(--nav-accent); font-weight: 600; }
   .app-nav-sub { margin-top: 2px; }
   .app-nav-subitem { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 14px 0 46px; border-radius: 10px; font-size: 14px; color: var(--nav-muted); }
-  .app-nav-subitem i { width: 8px; height: 8px; border-radius: 50%; background: var(--media-theme-ch-video, var(--nav-accent)); }
-  .app-nav-subitem[data-channel='music'] i { background: var(--media-theme-ch-music, var(--nav-accent)); }
-  .app-nav-subitem[data-channel='audiobook'] i { background: var(--media-theme-ch-audio, var(--nav-accent)); }
-  .app-nav-subitem[aria-current='page'] { background: var(--media-theme-surface, var(--reader-paper)); color: var(--nav-ink); font-weight: 600; }
-  .app-nav-user { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 10px 12px; border-radius: 14px; background: var(--media-theme-background, var(--reader-paper)); }
-  .app-nav-avatar { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--nav-accent); color: var(--media-theme-on-accent, #fff); font-weight: 600; }
+  .app-nav-subitem i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-ch-video); }
+  .app-nav-subitem[data-channel='music'] i { background: var(--color-ch-music); }
+  .app-nav-subitem[data-channel='audiobook'] i { background: var(--color-ch-audio); }
+  .app-nav-subitem[aria-current='page'] { background: var(--color-surface-2); color: var(--nav-ink); font-weight: 600; }
+  .app-nav-user { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 10px 12px; border-radius: 14px; background: var(--color-bg); }
+  .app-nav-avatar { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--color-brand); color: var(--color-on-brand); font-weight: 600; }
   .app-nav-user-text { min-width: 0; }
   .app-nav-user-text strong, .app-nav-user-text small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .app-nav-user-text strong { font-size: 14px; }
@@ -70,16 +70,11 @@
   body[data-app-nav] .media-player:is(.media-player-audio, .media-player-native-video) { left: calc(var(--app-nav-width) + 24px); }
 }
 
-/* ---- reading pages wear the same theme as media ---- */
-body[data-media-theme] :is(.shelf-screen, .library-screen, .sources-screen, .home-page, .reader-screen) {
-  --reader-ink: var(--media-theme-text);
-  --reader-paper: var(--media-theme-background);
-  --reader-surface: var(--media-theme-paper);
-  --reader-muted: var(--media-theme-muted);
-  --reader-line: var(--media-theme-border);
-  --reader-accent: var(--media-theme-accent);
-  background: var(--media-theme-background);
-  color: var(--media-theme-text);
+/* ---- reading pages wear the theme too; their --reader-* names alias the tokens
+ * (theme-tokens.css). The reader may wear 黑白灰 on its own container. ---- */
+:is(.shelf-screen, .library-screen, .sources-screen, .home-page, .reader-screen) {
+  background: var(--color-bg);
+  color: var(--color-ink);
 }
 
 /* The old fixed channel rail is gone; its top gutter goes with it. */
@@ -100,14 +95,11 @@ body[data-media-theme] :is(.shelf-screen, .library-screen, .sources-screen, .hom
   body[data-app-nav] .media-screen.media-detail-shell > .media-heading { left: var(--app-nav-width); right: 0; }
 }
 
-/* The follow-system swatch shows both halves of what it will resolve to. */
-.theme-swatch-chip.is-system { background: linear-gradient(135deg, #f6f4ef 50%, #14130f 50%); color: transparent; }
-
 /* ---- reader chrome, V3: a rounded bottom sheet and a quiet top bar ---- */
 .reader-screen .footer {
   border-top: 0;
   border-radius: 24px 24px 0 0;
-  box-shadow: 0 -8px 30px rgb(27 26 23 / 0.1);
+  box-shadow: 0 -8px 30px color-mix(in srgb, var(--color-ink) 10%, transparent);
 }
 .reader-screen .topbar { border-bottom: 1px solid var(--reader-line); box-shadow: none; }
 .reader-screen .reader-actions button[aria-current='true'],
@@ -117,30 +109,31 @@ body[data-media-theme] :is(.shelf-screen, .library-screen, .sources-screen, .hom
 .shelf-title { font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; }
 
 /* Mantine components (forms, dialogs) wear the same theme instead of Mantine's default blue. */
-body[data-media-theme] {
-  --mantine-color-body: var(--media-theme-background);
-  --mantine-color-text: var(--media-theme-text);
-  --mantine-color-dimmed: var(--media-theme-muted);
-  --mantine-color-placeholder: var(--media-theme-muted);
-  --mantine-color-default: var(--media-theme-paper);
-  --mantine-color-default-hover: var(--media-theme-surface);
-  --mantine-color-default-color: var(--media-theme-text);
-  --mantine-color-default-border: var(--media-theme-border);
-  --mantine-color-anchor: var(--media-theme-accent);
-  --mantine-primary-color-filled: var(--media-theme-accent);
-  --mantine-primary-color-filled-hover: color-mix(in srgb, var(--media-theme-accent) 88%, #000);
-  --mantine-primary-color-light: var(--media-theme-selection);
-  --mantine-primary-color-light-hover: color-mix(in srgb, var(--media-theme-selection) 85%, var(--media-theme-accent));
-  --mantine-primary-color-light-color: var(--media-theme-accent);
-  --mantine-primary-color-contrast: var(--media-theme-on-accent);
-  /* Components that name their colour "blue" (Mantine's default) follow the accent too. */
-  --mantine-color-blue-filled: var(--media-theme-accent);
-  --mantine-color-blue-filled-hover: color-mix(in srgb, var(--media-theme-accent) 88%, #000);
-  --mantine-color-blue-light: var(--media-theme-selection);
-  --mantine-color-blue-light-hover: color-mix(in srgb, var(--media-theme-selection) 85%, var(--media-theme-accent));
-  --mantine-color-blue-light-color: var(--media-theme-accent);
-  --mantine-color-blue-outline: var(--media-theme-accent);
-  --mantine-color-blue-text: var(--media-theme-accent);
+body {
+  background: var(--color-bg);
+  --mantine-color-body: var(--color-bg);
+  --mantine-color-text: var(--color-ink);
+  --mantine-color-dimmed: var(--color-muted);
+  --mantine-color-placeholder: var(--color-muted);
+  --mantine-color-default: var(--color-surface);
+  --mantine-color-default-hover: var(--color-surface-2);
+  --mantine-color-default-color: var(--color-ink);
+  --mantine-color-default-border: var(--color-line);
+  --mantine-color-anchor: var(--color-brand-text);
+  --mantine-primary-color-filled: var(--color-brand);
+  --mantine-primary-color-filled-hover: color-mix(in srgb, var(--color-brand) 88%, var(--color-ink));
+  --mantine-primary-color-light: var(--color-brand-soft);
+  --mantine-primary-color-light-hover: color-mix(in srgb, var(--color-brand-soft) 85%, var(--color-brand));
+  --mantine-primary-color-light-color: var(--color-brand-text);
+  --mantine-primary-color-contrast: var(--color-on-brand);
+  /* Components that name their colour "blue" (Mantine's default) follow the brand too. */
+  --mantine-color-blue-filled: var(--color-brand);
+  --mantine-color-blue-filled-hover: color-mix(in srgb, var(--color-brand) 88%, var(--color-ink));
+  --mantine-color-blue-light: var(--color-brand-soft);
+  --mantine-color-blue-light-hover: color-mix(in srgb, var(--color-brand-soft) 85%, var(--color-brand));
+  --mantine-color-blue-light-color: var(--color-brand-text);
+  --mantine-color-blue-outline: var(--color-brand-text);
+  --mantine-color-blue-text: var(--color-brand-text);
 }
 
 /* ---- video player, wide screens: the episode rail sits beside the picture ----
@@ -171,7 +164,7 @@ body[data-media-theme] {
 /* ---- phone: the channel switch is three segments in the page header ---- */
 .media-channel-segments { display: flex; flex: 1; gap: 2px; padding: 4px; border-radius: 14px; background: var(--media-surface, var(--surface)); }
 .media-channel-segments a { flex: 1; display: grid; place-items: center; min-height: 36px; border-radius: 10px; color: var(--muted); font-size: 14px; text-decoration: none; }
-.media-channel-segments a[aria-current='page'] { background: var(--media-paper, #fff); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgb(27 26 23 / 0.18); }
+.media-channel-segments a[aria-current='page'] { background: var(--media-paper, #fff); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px color-mix(in srgb, var(--color-ink) 18%, transparent); }
 .media-channel-segments a:focus-visible { outline: 2px solid var(--media-accent); outline-offset: 2px; }
 @media (min-width: 701px) { .media-mobile-title { display: none !important; } }
 @media (max-width: 700px) {

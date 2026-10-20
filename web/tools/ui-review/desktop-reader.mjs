@@ -82,7 +82,7 @@ try {
   await page.locator('.reader-actions').getByRole('button',{name:'目录',exact:true}).click();
   await page.locator('.panel button[aria-label="关闭"]').press('Escape');
   assert.deepEqual(await surface(),paged,'side panels preserve the selected page in paged mode');
-  await page.getByRole('button',{name:'深夜',exact:true}).click();
+  await page.getByRole('button',{name:'夜间',exact:true}).click();
   await shot('dark');
   await page.locator('.reader-actions').getByRole('button',{name:'外观',exact:true}).click();
   await shot('dark-settings');

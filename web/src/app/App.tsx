@@ -4,7 +4,7 @@ import { useAuthStore } from '../shared/stores/auth.store.ts';
 import { useRuntime } from './providers/runtime-context.tsx';
 import { LoginPage } from '../features/auth/pages/LoginPage.tsx';
 import { AppNav, navMode } from './AppNav.tsx';
-import { MediaThemeController } from '../features/media/services/theme.ts';
+import { ThemeController } from '../shared/theme/theme.ts';
 import { FloatingNotice } from '../ui/floating-notice.tsx';
 
 export function AppShell() {
@@ -25,9 +25,9 @@ function AuthenticatedShell() {
   }, [runtime, navigate]);
   useEffect(() => runtime.player.setVisible(location.pathname.startsWith('/media/')), [runtime, location.pathname]);
   const mode = navMode(location.pathname);
-  // One theme for every page, the book included.
+  // One app theme for every page; the reader may wear its own reading theme on top.
   useEffect(() => {
-    const theme = new MediaThemeController(runtime.mediaApi.preferenceScope(), () => undefined);
+    const theme = new ThemeController(runtime.mediaApi.preferenceScope());
     return () => theme.dispose();
   }, [runtime]);
   useEffect(() => {

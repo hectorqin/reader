@@ -46,8 +46,8 @@ const SCENES = [
   { name: '04-panel-toc', label: '目录 · 半屏', what: '下半屏，上半屏正文仍可见', openBook: true, openPanel: '目录' },
   { name: '05-panel-settings', label: '阅读设置 · 半屏', what: '一行式行：标签在左、控件在右', openBook: true, openPanel: '设置' },
   { name: '06-reader-paged', label: '阅读页 · 翻页模式', what: '分栏后的一页，页数应与可翻次数一致', openBook: true, choose: ['设置', '翻页'], closePanel: true },
-  { name: '07-reader-sepia', label: '阅读页 · 原野', what: '主题切换后的同一页', openBook: true, theme: '原野' },
-  { name: '08-reader-dark', label: '阅读页 · 深夜', what: '暗色下的正文与工具栏', openBook: true, theme: '深夜' },
+  { name: '07-reader-light', label: '阅读页 · 浅色', what: '主题切换后的同一页', openBook: true, theme: '浅色' },
+  { name: '08-reader-dark', label: '阅读页 · 深色', what: '暗色下的正文与工具栏', openBook: true, theme: '深色' },
   {
     name: '09-panel-txt',
     label: 'TXT · 正文排版',

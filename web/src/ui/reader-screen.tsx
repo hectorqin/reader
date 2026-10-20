@@ -1,4 +1,4 @@
-import { mediaThemePalette, readMediaTheme, readSystemThemePair, saveMediaTheme } from '../features/media/services/theme.ts';
+import { readThemePreference, resolveAppTheme, resolveReadingTheme, saveThemePreference, subscribeTheme, systemPrefersDark } from '../shared/theme/theme.ts';
 import { applyCorrections, emptyOverrides, type ReadingOverrides } from './reading-overrides.ts';
 import { loadTxt } from '../formats/txt.ts';
 import { ApiError } from '../api/errors.ts';
@@ -193,6 +193,7 @@ export class ReaderScreen {
   private progressWrite: Promise<void> = Promise.resolve();
   private readonly noticeId = Symbol('reader-status');
   private disposed = false;
+  private themeOff?: () => void;
   private pendingPosition: Position | null = null;
   private readonly settings: AppSettings;
   private readonly listeners: Array<() => void> = [];
@@ -234,6 +235,10 @@ export class ReaderScreen {
     // is what makes "cannot be half-hidden" true by construction rather than by two
     // rules that have to be kept in agreement.
     this.element.dataset['chrome'] = 'visible';
+    // The reading theme: either the app's (no attributes, inherit <html>) or 黑白灰 on
+    // this container only, in the app's light/dark mode.
+    this.applyReadingTheme();
+    this.themeOff = subscribeTheme(this.themeScope(), () => { this.applyReadingTheme(); if (!this.disposed) this.patch({}); });
     this.element.style.cssText = 'flex:1 1 auto;min-height:0;display:flex;flex-direction:column;position:relative;';
     this.ui = createRoot(this.element);
     this.renderChrome();
@@ -242,6 +247,12 @@ export class ReaderScreen {
   }
 
   private themeScope(): string { return this.options.themeScope ?? 'default'; }
+
+  private applyReadingTheme(): void {
+    const reading = resolveReadingTheme(readThemePreference(this.themeScope()), systemPrefersDark());
+    if (reading.theme === 'gray') { this.element.dataset['theme'] = 'gray'; this.element.dataset['mode'] = reading.mode; }
+    else { delete this.element.dataset['theme']; delete this.element.dataset['mode']; }
+  }
 
   private renderChrome(): void {
     flushSync(() => this.ui.render(
@@ -265,11 +276,12 @@ export class ReaderScreen {
             toggleToc: () => this.toggleToc(),
             toggleSettings: (tab) => this.toggleSettings(tab),
             onSetting: (patch) => void this.updateSetting(patch),
-            appTheme: () => {
-              const id = readMediaTheme(this.themeScope());
-              return { id, dark: mediaThemePalette(id, window.matchMedia?.('(prefers-color-scheme: dark)').matches === true, readSystemThemePair(this.themeScope())).dark };
+            theme: () => {
+              const preference = readThemePreference(this.themeScope());
+              const systemDark = systemPrefersDark();
+              return { preference, app: resolveAppTheme(preference, systemDark), reading: resolveReadingTheme(preference, systemDark) };
             },
-            onAppTheme: (id) => { try { saveMediaTheme(this.themeScope(), id); } catch { /* the device refused storage; the choice simply does not stick */ } this.patch({}); },
+            onTheme: (patch) => { try { saveThemePreference(this.themeScope(), patch); } catch { /* the device refused storage; the choice simply does not stick */ } this.patch({}); },
             onSpeechSetting: (patch) => this.updateSpeechSetting(patch),
             onVoice: (voice) => this.updateSpeechSetting({ ttsVoice: voice }),
             onSpeakFromHere: () => void this.speakFromReaderPosition(),
@@ -492,6 +504,7 @@ export class ReaderScreen {
   }
 
   dispose(): void {
+    this.themeOff?.();
     this.closeAlternatives(); this.chapterRefresh?.abort();
     this.stopPreview();
     this.disposed = true;

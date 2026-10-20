@@ -36,7 +36,8 @@ afterEach(() => {
   act(() => render(null, root));
   useAuthStore.setState({ session: null, verifiedUser: null });
   delete document.body.dataset.appNav;
-  delete document.body.dataset.mediaTheme;
+  delete document.documentElement.dataset.theme;
+  delete document.documentElement.dataset.mode;
 });
 
 describe('shell navigation', () => {
@@ -46,7 +47,7 @@ describe('shell navigation', () => {
     expect(['/book/abc', '/media/video/player', '/media/music/player/lyrics'].map(navMode)).toEqual(Array(3).fill('hidden'));
   });
 
-  it('puts the navigation after the page, marks 影音 and the channel current, and themes the body', () => {
+  it('puts the navigation after the page, marks 影音 and the channel current, and themes the page', () => {
     paint('/media/music/albums');
     const page = root.querySelector('[data-testid="page"]')!;
     const nav = root.querySelector<HTMLElement>('nav.app-nav')!;
@@ -57,7 +58,7 @@ describe('shell navigation', () => {
     expect(nav.querySelector('.app-nav-item[aria-current="page"]')?.textContent).toBe('影音');
     expect(nav.querySelector('.app-nav-subitem[aria-current="page"]')?.textContent).toBe('音乐');
     expect(document.body.dataset.appNav).toBe('top');
-    expect(document.body.dataset.mediaTheme).toBe('system');
+    expect(document.documentElement.dataset.theme).toBe('warm');
   });
 
   it('keeps the sidebar on pushed pages, and removes the bar for the book and the player', () => {
@@ -72,7 +73,7 @@ describe('shell navigation', () => {
   it('gives the book the same theme as every other page', () => {
     paint('/book/abc');
     expect(root.querySelector('nav.app-nav')).toBeNull();
-    expect(document.body.dataset.mediaTheme).toBe('system');
+    expect(document.documentElement.dataset.theme).toBe('warm');
   });
 
   it('marks the reading destinations under 书架 and the account page under 我的', () => {

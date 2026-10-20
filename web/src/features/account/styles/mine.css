@@ -1,4 +1,4 @@
-/* 我的: reuses the media theme tokens (--media-theme-*) so it follows the chosen theme. */
+/* 我的: reuses the media aliases of the theme tokens, so it follows the chosen theme. */
 .mine-page { max-width: 640px; }
 .mine-page .media-back-button { color: inherit; text-decoration: none; }
 
@@ -9,7 +9,7 @@
   margin: 16px 0 8px;
   padding: 16px;
   border-radius: 20px;
-  background: var(--media-accent);
+  background:var(--media-fill);
   color: var(--media-on-accent);
 }
 
@@ -21,7 +21,7 @@
   height: 56px;
   border-radius: 50%;
   background: var(--media-on-accent);
-  color: var(--media-accent);
+  color: var(--media-fill);
   font-size: 24px;
   font-weight: 700;
 }

@@ -84,7 +84,7 @@ try {
     await cdp.run(`const el=document.querySelector('select[aria-label="${label}"]');el.value='${mode}';el.dispatchEvent(new Event('change',{bubbles:true}));`);
     await cdp.sleep(100);
   }
-  await cdp.clickText('.panel button', '原野');
+  await cdp.clickText('.panel button', '黑白灰');
   await cdp.click('.panel button[aria-label="关闭"]');
   await cdp.sleep(300);
   assert.equal((await read()).page, after.page, 'theme must preserve page');

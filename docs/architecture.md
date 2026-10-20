@@ -403,10 +403,12 @@ ReaderScreen 持有的舞台节点放到 chrome 树中的正确位置。React �
 导航到带 `item` 和 `part` 查询参数的播放器路由。Provider 卸载时停止监听并移除
 播放器节点，应用隐藏或离开时统一调用 runtime flush，重新联网时续期会话。
 
-影音主题只在 `MediaLayout` 挂载期间生效。它创建 `MediaThemeController`，作用域来自
-`runtime.mediaApi.preferenceScope()`，并只向 `body` 写入带 `--media-theme-` 前缀的
-变量；系统主题、同页主题事件和存储变化会更新该作用域。离开影音路由时清理变量和监听器，
-因此不会污染书架、设置或阅读器主题。
+应用主题由 `AuthenticatedShell` 创建的 `ThemeController`（`web/src/shared/theme/theme.ts`）
+统一应用，作用域来自 `runtime.mediaApi.preferenceScope()`。控制器只在 `<html>` 上写
+`data-theme`（warm、blue、green）和 `data-mode`（light、dark），颜色由
+`web/src/styles/theme-tokens.css` 的 `--color-*` 语义令牌给出；系统深浅色、同页保存和
+其他标签页的存储变化都会重新应用。阅读器选择黑白灰时只在自己的容器上写
+`data-theme="gray"`，视频和音乐播放页在自己的根节点上使用当前主题的深色取值。
 
 ### 只有一份渲染层
 

@@ -1,0 +1,295 @@
+/*
+ * Reader V3.1 semantic tokens (docs/prototypes/Reader V3 主题语义令牌.md).
+ *
+ * Components read only these variables. The app theme is two attributes on <html>
+ * (data-theme: warm | blue | green, data-mode: light | dark), written by
+ * ThemeController; the reader sets data-theme="gray" on its own container for the
+ * reading-only 黑白灰. Each block is selected by the pair on the *same* element, so a
+ * container can wear a different theme from the page around it.
+ *
+ * The values are mirrored in web/src/shared/theme/theme.ts (previews, contrast test);
+ * test/theme-tokens.test.ts fails if the two disagree.
+ */
+
+/* 暖陶 · 浅色 */
+:root,
+[data-theme="warm"][data-mode="light"] {
+  --color-bg: #FDF9F6;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F8EFE8;
+  --color-ink: #3A2A22;
+  --color-muted: #82685B;
+  --color-line: #F0E3DA;
+  --color-brand: #F2B79F;
+  --color-brand-soft: #FBE9E0;
+  --color-on-brand: #2B1810;
+  --color-brand-text: #A8482A;
+  --color-ch-read: #F2B79F;
+  --color-ch-read-soft: #FBE9E0;
+  --color-ch-read-text: #A8482A;
+  --color-ch-video: #F6CA97;
+  --color-ch-video-soft: #FCF0DD;
+  --color-ch-video-text: #8A5200;
+  --color-ch-music: #EFA9A3;
+  --color-ch-music-soft: #FAE4E1;
+  --color-ch-music-text: #A8343E;
+  --color-ch-audio: #E6BE9E;
+  --color-ch-audio-soft: #F7EBDD;
+  --color-ch-audio-text: #7A5232;
+  --color-on-ch: #2B1810;
+  --color-scrim: rgba(58,42,34,.40);
+}
+
+/* 暖陶 · 深色 */
+[data-theme="warm"][data-mode="dark"] {
+  --color-bg: #1F1713;
+  --color-surface: #2A201A;
+  --color-surface-2: #352A23;
+  --color-ink: #F7EDE6;
+  --color-muted: #BBA79B;
+  --color-line: #43342B;
+  --color-brand: #E88F73;
+  --color-brand-soft: #3F2A21;
+  --color-on-brand: #1A100C;
+  --color-brand-text: #F0987C;
+  --color-ch-read: #E88F73;
+  --color-ch-read-soft: #3F2A21;
+  --color-ch-read-text: #E88F73;
+  --color-ch-video: #E9AA6E;
+  --color-ch-video-soft: #3A2E1E;
+  --color-ch-video-text: #E9AA6E;
+  --color-ch-music: #E58A8A;
+  --color-ch-music-soft: #3D2526;
+  --color-ch-music-text: #E58A8A;
+  --color-ch-audio: #D9A07F;
+  --color-ch-audio-soft: #36291F;
+  --color-ch-audio-text: #D9A07F;
+  --color-on-ch: #1A100C;
+  --color-scrim: rgba(0,0,0,.60);
+}
+
+/* Before a theme is applied (the login page): 暖陶, in the device's mode. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-mode]) {
+    --color-bg: #1F1713;
+    --color-surface: #2A201A;
+    --color-surface-2: #352A23;
+    --color-ink: #F7EDE6;
+    --color-muted: #BBA79B;
+    --color-line: #43342B;
+    --color-brand: #E88F73;
+    --color-brand-soft: #3F2A21;
+    --color-on-brand: #1A100C;
+    --color-brand-text: #F0987C;
+    --color-ch-read: #E88F73;
+    --color-ch-read-soft: #3F2A21;
+    --color-ch-read-text: #E88F73;
+    --color-ch-video: #E9AA6E;
+    --color-ch-video-soft: #3A2E1E;
+    --color-ch-video-text: #E9AA6E;
+    --color-ch-music: #E58A8A;
+    --color-ch-music-soft: #3D2526;
+    --color-ch-music-text: #E58A8A;
+    --color-ch-audio: #D9A07F;
+    --color-ch-audio-soft: #36291F;
+    --color-ch-audio-text: #D9A07F;
+    --color-on-ch: #1A100C;
+    --color-scrim: rgba(0,0,0,.60);
+  }
+}
+
+/* 雾蓝 · 浅色 */
+[data-theme="blue"][data-mode="light"] {
+  --color-bg: #F8FAFE;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #EDF2FA;
+  --color-ink: #1F3250;
+  --color-muted: #5A6C8C;
+  --color-line: #E4EBF6;
+  --color-brand: #9DC0F2;
+  --color-brand-soft: #E6EFFC;
+  --color-on-brand: #0F1D36;
+  --color-brand-text: #2F63B0;
+  --color-ch-read: #9DC0F2;
+  --color-ch-read-soft: #E6EFFC;
+  --color-ch-read-text: #2F63B0;
+  --color-ch-video: #9FD2EE;
+  --color-ch-video-soft: #E3F2FA;
+  --color-ch-video-text: #1F6F93;
+  --color-ch-music: #B2B8F2;
+  --color-ch-music-soft: #ECEEFC;
+  --color-ch-music-text: #4A52B0;
+  --color-ch-audio: #90CBD8;
+  --color-ch-audio-soft: #E0F2F5;
+  --color-ch-audio-text: #1F6F7C;
+  --color-on-ch: #0F1D36;
+  --color-scrim: rgba(31,50,80,.40);
+}
+
+/* 雾蓝 · 深色 */
+[data-theme="blue"][data-mode="dark"] {
+  --color-bg: #0F1722;
+  --color-surface: #172131;
+  --color-surface-2: #202C40;
+  --color-ink: #E8EEF7;
+  --color-muted: #9FB0C8;
+  --color-line: #2A3850;
+  --color-brand: #7FB1F0;
+  --color-brand-soft: #1C3050;
+  --color-on-brand: #0A1220;
+  --color-brand-text: #8DB8F0;
+  --color-ch-read: #7FB1F0;
+  --color-ch-read-soft: #1C3050;
+  --color-ch-read-text: #7FB1F0;
+  --color-ch-video: #7CC3E8;
+  --color-ch-video-soft: #1A3347;
+  --color-ch-video-text: #7CC3E8;
+  --color-ch-music: #9AA3F0;
+  --color-ch-music-soft: #25274D;
+  --color-ch-music-text: #9AA3F0;
+  --color-ch-audio: #70C1CF;
+  --color-ch-audio-soft: #17353A;
+  --color-ch-audio-text: #70C1CF;
+  --color-on-ch: #0A1220;
+  --color-scrim: rgba(0,0,0,.60);
+}
+
+/* 青绿 · 浅色 */
+[data-theme="green"][data-mode="light"] {
+  --color-bg: #F7FBF8;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #EAF4EE;
+  --color-ink: #1B3329;
+  --color-muted: #52705F;
+  --color-line: #E0EEE5;
+  --color-brand: #8AD6B1;
+  --color-brand-soft: #E1F4EA;
+  --color-on-brand: #0F2A1E;
+  --color-brand-text: #1F6B4F;
+  --color-ch-read: #8AD6B1;
+  --color-ch-read-soft: #E1F4EA;
+  --color-ch-read-text: #1F6B4F;
+  --color-ch-video: #A9DB9B;
+  --color-ch-video-soft: #EBF6E2;
+  --color-ch-video-text: #3F6E1F;
+  --color-ch-music: #8CD2CF;
+  --color-ch-music-soft: #E1F3F2;
+  --color-ch-music-text: #1F6B68;
+  --color-ch-audio: #B6D98E;
+  --color-ch-audio-soft: #F0F5E0;
+  --color-ch-audio-text: #5B6B1F;
+  --color-on-ch: #0F2A1E;
+  --color-scrim: rgba(27,51,41,.40);
+}
+
+/* 青绿 · 深色 */
+[data-theme="green"][data-mode="dark"] {
+  --color-bg: #0E1914;
+  --color-surface: #15251E;
+  --color-surface-2: #1E3229;
+  --color-ink: #E6F2EC;
+  --color-muted: #98B3A7;
+  --color-line: #28403A;
+  --color-brand: #6ED6A8;
+  --color-brand-soft: #1A3B2E;
+  --color-on-brand: #07130E;
+  --color-brand-text: #7FDDB4;
+  --color-ch-read: #6ED6A8;
+  --color-ch-read-soft: #1A3B2E;
+  --color-ch-read-text: #6ED6A8;
+  --color-ch-video: #8ED67A;
+  --color-ch-video-soft: #243A1E;
+  --color-ch-video-text: #8ED67A;
+  --color-ch-music: #6CCBC6;
+  --color-ch-music-soft: #173A38;
+  --color-ch-music-text: #6CCBC6;
+  --color-ch-audio: #A6CF72;
+  --color-ch-audio-soft: #2C3818;
+  --color-ch-audio-text: #A6CF72;
+  --color-on-ch: #07130E;
+  --color-scrim: rgba(0,0,0,.60);
+}
+
+/* 黑白灰 · 浅色 */
+[data-theme="gray"][data-mode="light"] {
+  --color-bg: #F5F5F5;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #EBEBEB;
+  --color-ink: #1A1A1A;
+  --color-muted: #666666;
+  --color-line: #E0E0E0;
+  --color-brand: #3D3D3D;
+  --color-brand-soft: #EDEDED;
+  --color-on-brand: #FFFFFF;
+  --color-brand-text: #3D3D3D;
+  --color-ch-read: #3D3D3D;
+  --color-ch-read-soft: #EDEDED;
+  --color-ch-read-text: #3D3D3D;
+  --color-ch-video: #4A4A4A;
+  --color-ch-video-soft: #EDEDED;
+  --color-ch-video-text: #4A4A4A;
+  --color-ch-music: #575757;
+  --color-ch-music-soft: #EDEDED;
+  --color-ch-music-text: #575757;
+  --color-ch-audio: #666666;
+  --color-ch-audio-soft: #EDEDED;
+  --color-ch-audio-text: #666666;
+  --color-on-ch: #FFFFFF;
+  --color-scrim: rgba(26,26,26,.40);
+}
+
+/* 黑白灰 · 深色 */
+[data-theme="gray"][data-mode="dark"] {
+  --color-bg: #121212;
+  --color-surface: #1B1B1B;
+  --color-surface-2: #262626;
+  --color-ink: #E6E6E6;
+  --color-muted: #9E9E9E;
+  --color-line: #2E2E2E;
+  --color-brand: #E6E6E6;
+  --color-brand-soft: #2A2A2A;
+  --color-on-brand: #121212;
+  --color-brand-text: #E6E6E6;
+  --color-ch-read: #CFCFCF;
+  --color-ch-read-soft: #2A2A2A;
+  --color-ch-read-text: #CFCFCF;
+  --color-ch-video: #BDBDBD;
+  --color-ch-video-soft: #2A2A2A;
+  --color-ch-video-text: #BDBDBD;
+  --color-ch-music: #ABABAB;
+  --color-ch-music-soft: #2A2A2A;
+  --color-ch-music-text: #ABABAB;
+  --color-ch-audio: #999999;
+  --color-ch-audio-soft: #2A2A2A;
+  --color-ch-audio-text: #999999;
+  --color-on-ch: #121212;
+  --color-scrim: rgba(0,0,0,.60);
+}
+
+
+/* Status colours: not part of a theme, only of light or dark. */
+:root, [data-mode="light"] { --color-danger: #943C32; --color-danger-soft: #A4504515; }
+[data-mode="dark"] { --color-danger: #F4A89D; --color-danger-soft: #F49A8C18; }
+@media (prefers-color-scheme: dark) { :root:not([data-mode]) { --color-danger: #F4A89D; --color-danger-soft: #F49A8C18; } }
+
+/*
+ * Older token names, re-declared wherever a theme is (so a container with its own
+ * theme re-resolves them): the reading screens use --reader-*. Brand is split per
+ * the spec: --reader-accent is the brand *text* colour (links, selected icons, focus),
+ * --reader-fill / --reader-on-fill are a brand-filled control and what sits on it.
+ */
+:root,
+[data-theme][data-mode] {
+  --reader-ink: var(--color-ink);
+  --reader-paper: var(--color-bg);
+  --reader-surface: var(--color-surface);
+  --reader-muted: var(--color-muted);
+  --reader-line: var(--color-line);
+  --reader-accent: var(--color-brand-text);
+  --reader-fill: var(--color-brand);
+  --reader-on-fill: var(--color-on-brand);
+  --reader-scrim: var(--color-scrim);
+}
+:root, [data-theme][data-mode="light"] { color-scheme: light; }
+[data-theme][data-mode="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) { :root:not([data-mode]) { color-scheme: dark; } }
