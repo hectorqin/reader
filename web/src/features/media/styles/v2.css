@@ -991,3 +991,27 @@ body:has(.media-narrators:not([data-view=directory])) .media-channel-entry {
 
 /* Folder rows are left-aligned text actions; only the chevron stays at the far edge. */
 .media-screen .media-folder-row>button { justify-content:flex-start; text-align:left; }
+
+/* V3 theme page: which theme "跟随系统" uses on a light and on a dark device */
+.media-theme-pair {display:grid;gap:10px;margin:12px 0 0}
+.media-theme-pair-row {display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px}
+.media-theme-pair-row>span {flex:none;font-size:13px;color:var(--muted)}
+.media-theme-pair-row>div {display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.media-screen .media-theme-pair-row button {min-height:36px;padding:0 14px;border:1px solid var(--border);border-radius:999px;background:var(--media-paper);color:var(--media-text,inherit);font-size:13px}
+.media-screen .media-theme-pair-row button[aria-pressed=true] {border-color:var(--media-accent);box-shadow:0 0 0 1px var(--media-accent);color:var(--media-accent);font-weight:600}
+
+/* V3 播放队列 and 倍速与定时: how the queue advances, and stopping after the current entry */
+.media-screen .media-transport:has(.media-play-mode-cycle) {gap:12px}
+.media-screen .media-play-mode-cycle[data-mode=sequential] {color:var(--muted)}
+.media-screen .media-play-mode-cycle:not([data-mode=sequential]) {color:var(--media-accent)}
+.media-play-mode {display:flex;align-items:center;gap:12px;margin:0 0 10px}
+.media-play-mode>span {flex:none;font-size:13px;color:var(--muted)}
+.media-play-mode>div {display:flex;flex:1;gap:2px;padding:4px;border-radius:14px;background:var(--media-selection)}
+.media-screen .media-play-mode button {flex:1;min-height:40px;padding:0 6px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-size:14px;white-space:nowrap}
+.media-screen .media-play-mode button[aria-pressed=true] {background:var(--media-paper);color:var(--text);font-weight:600;box-shadow:0 1px 3px #0003}
+.media-sleep-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+.media-screen .media-sleep-actions button {display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:48px;margin:0;padding:0 8px;border:1px solid var(--border);border-radius:9px;background:var(--surface);color:var(--text);font-size:14px}
+.media-screen .media-sleep-actions button[aria-pressed=true] {background:var(--media-selection);border-color:var(--media-accent);color:var(--media-accent);font-weight:600}
+.media-screen .media-sleep-actions button:disabled {opacity:.5}
+.media-screen .media-sleep-actions .media-sleep-off span {flex:none}
+.media-sleep-note {margin:10px 0 0;font-size:12px;color:var(--muted)}

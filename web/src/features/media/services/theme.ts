@@ -20,7 +20,31 @@ export function saveMediaTheme(scope:string,value:MediaThemeId){
   // active media shell explicitly so a theme choice is applied immediately.
   if(typeof window!=='undefined') window.dispatchEvent(new CustomEvent(themeChangeEvent,{detail:{scope,value:next}}));
 }
-export function mediaThemePalette(id:MediaThemeId,dark=false){return mediaThemes.find(theme=>theme.id===(id==='system'?(dark?'midnight':'sand'):id))!;}
+/** "跟随系统" means one light theme for a light device and one dark theme for a dark device. */
+export type SystemThemePair={light:LightThemeId;dark:DarkThemeId};
+export type LightThemeId=Extract<typeof mediaThemes[number],{dark:false}>['id'];
+export type DarkThemeId=Extract<typeof mediaThemes[number],{dark:true}>['id'];
+export const lightThemes=mediaThemes.filter(theme=>!theme.dark);
+export const darkThemes=mediaThemes.filter(theme=>theme.dark);
+export const defaultSystemThemePair:SystemThemePair={light:'sand',dark:'midnight'};
+const systemPairKey=(scope:string)=>'reader.media.theme.system.v1:'+scope;
+export function validSystemThemePair(value:unknown):SystemThemePair{
+  const pair=(value&&typeof value==='object'?value:{}) as {light?:unknown;dark?:unknown};
+  const light=lightThemes.find(theme=>theme.id===pair.light)?.id??defaultSystemThemePair.light;
+  const dark=darkThemes.find(theme=>theme.id===pair.dark)?.id??defaultSystemThemePair.dark;
+  return {light,dark} as SystemThemePair;
+}
+export function readSystemThemePair(scope:string):SystemThemePair{
+  try{const raw=localStorage.getItem(systemPairKey(scope));return validSystemThemePair(raw?JSON.parse(raw):undefined);}catch{return {...defaultSystemThemePair};}
+}
+export function saveSystemThemePair(scope:string,value:Partial<SystemThemePair>){
+  const next=validSystemThemePair({...readSystemThemePair(scope),...value});
+  try{localStorage.setItem(systemPairKey(scope),JSON.stringify(next));}catch{throw new Error('设备无法保存主题，请检查浏览器存储空间或隐私设置。');}
+  // Same notification as a theme choice, so every listener re-reads and re-applies.
+  if(typeof window!=='undefined') window.dispatchEvent(new CustomEvent(themeChangeEvent,{detail:{scope,value:readMediaTheme(scope)}}));
+  return next;
+}
+export function mediaThemePalette(id:MediaThemeId,dark=false,pair:SystemThemePair=defaultSystemThemePair){return mediaThemes.find(theme=>theme.id===(id==='system'?(dark?pair.dark:pair.light):id))!;}
 
 /** Only prefixed media variables are placed on the body; reading tokens remain untouched. */
 // [ink, soft background] per channel. Ink is used as text on its own soft background, so
@@ -40,13 +64,13 @@ export class MediaThemeController {
   }
   set(value:MediaThemeId){this.current=validMediaTheme(value);this.apply();this.onChanged();}
   private onSystem=()=>{if(this.current==='system'){this.apply();this.onChanged();}};
-  private onStorage=(event:StorageEvent)=>{if(event.key===null||event.key===storageKey(this.scope))this.set(readMediaTheme(this.scope));};
+  private onStorage=(event:StorageEvent)=>{if(event.key===null||event.key===storageKey(this.scope)||event.key===systemPairKey(this.scope))this.set(readMediaTheme(this.scope));};
   private onThemeChange=(event:Event)=>{
     const detail=(event as CustomEvent<{scope?:unknown;value?:unknown}>).detail;
     if(detail?.scope===this.scope)this.set(validMediaTheme(detail.value));
   };
   private apply(){
-    const theme=mediaThemePalette(this.current,this.system?.matches);
+    const theme=mediaThemePalette(this.current,this.system?.matches,readSystemThemePair(this.scope));
     document.body.dataset.mediaTheme=this.current;
     tokens.forEach((token,index)=>document.body.style.setProperty('--media-theme-'+token,theme.colors[index]!));
     document.body.style.setProperty('--media-theme-scheme',theme.dark?'dark':'light');

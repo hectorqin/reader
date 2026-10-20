@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { mediaThemeChangeEvent, mediaThemePalette, readMediaTheme } from '../../features/media/services/theme.ts';
+import { mediaThemeChangeEvent, mediaThemePalette, readMediaTheme, readSystemThemePair } from '../../features/media/services/theme.ts';
 
 /** Whether the app theme currently resolves to a dark palette (follow-system included). */
 export function useAppThemeDark(scope: string): boolean {
@@ -14,6 +14,6 @@ export function useAppThemeDark(scope: string): boolean {
       query?.removeEventListener('change', notify);
     };
   };
-  const snapshot = () => mediaThemePalette(readMediaTheme(scope), window.matchMedia?.('(prefers-color-scheme: dark)').matches === true).dark;
+  const snapshot = () => mediaThemePalette(readMediaTheme(scope), window.matchMedia?.('(prefers-color-scheme: dark)').matches === true, readSystemThemePair(scope)).dark;
   return useSyncExternalStore(subscribe, snapshot, () => false);
 }
