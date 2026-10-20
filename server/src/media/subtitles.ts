@@ -74,7 +74,8 @@ export function subtitleToVtt(bytes: Uint8Array, format: string): string {
 
 /** Subtitle IDs are derived from an authorized asset's matching sidecars, not arbitrary paths. */
 export class MediaSubtitles {
-  constructor(private readonly db:MediaDatabase, private readonly libraries: MediaLibraries, private readonly extract=extractEmbeddedSubtitle) {}
+  /** `embedded`: whether streams inside the video are offered (业务配置 · 读取内嵌字幕与歌词). */
+  constructor(private readonly db:MediaDatabase, private readonly libraries: MediaLibraries, private readonly extract=extractEmbeddedSubtitle, private readonly embeddedEnabled:()=>boolean=()=>true) {}
   private asset(actor: MediaActor, id: string): Asset {
     const asset = this.db.get<Asset>('SELECT id,library_id,ref,available,technical_json FROM media_assets WHERE id=?', id);
     if (!asset) throw notFound('media asset not found');
@@ -83,6 +84,7 @@ export class MediaSubtitles {
     return asset;
   }
   private embedded(asset:Asset) {
+    if(!this.embeddedEnabled())return [];
     const info:MediaTechnicalInfo|null=asset.technical_json?JSON.parse(asset.technical_json):null;
     if(!['.mp4','.m4v','.mov','.mkv','.webm'].includes(posix.extname(asset.ref).toLowerCase()))return [];
     return (info?.streams??[]).filter(stream=>stream.type==='subtitle'&&Number.isSafeInteger(stream.index)&&stream.index>=0&&

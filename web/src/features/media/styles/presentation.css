@@ -1068,3 +1068,32 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 /* 适应屏幕: fill the screen, cropping the edges, instead of letterboxing. */
 .media-player[data-fit='cover'] .media-video-stage video,.media-player[data-fit='cover'] .media-video-stage .dplayer-host video {object-fit:cover}
 @media (prefers-reduced-motion: reduce) {.media-video-landscape {transition:none}}
+
+/* ---- 媒体库管理 (prototype 20): scan state on each card, 扫描与元数据 beside the list ---- */
+.media-libraries-layout {display:grid;gap:20px;align-items:start}
+@media (min-width:1100px) {.media-libraries-layout {grid-template-columns:minmax(0,1fr) 320px}}
+.media-library-footer {flex-wrap:wrap;row-gap:8px}
+.media-library-scan {display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;margin-left:auto;font-size:12px;color:var(--muted)}
+.media-library-scan[data-state='running'] {flex:1 1 100%;color:var(--text)}
+.media-library-scan[data-state='running']>span {flex:none}
+.media-library-progress {flex:1;min-width:120px;height:6px;appearance:none;border:0;border-radius:3px;background:var(--surface);overflow:hidden}
+.media-library-progress::-webkit-progress-bar {background:var(--surface);border-radius:3px}
+.media-library-progress::-webkit-progress-value {background:var(--media-fill);border-radius:3px}
+.media-library-progress::-moz-progress-bar {background:var(--media-fill);border-radius:3px}
+.media-library-progress:indeterminate {background:linear-gradient(90deg,var(--surface),var(--media-fill),var(--surface));background-size:200% 100%;animation:media-scan-progress 2s linear infinite}
+.media-library-scan[data-state='failed'] {flex:1 1 100%}
+.media-library-scan-error {flex:1 1 14rem;color:var(--media-error-ink)}
+.media-library-scan-actions {display:flex;gap:8px;margin-left:auto}
+.media-screen .media-library-details {border:0;background:transparent;color:var(--media-accent);padding-inline:4px}
+.media-scan-settings {padding:16px;border:1px solid var(--border);border-radius:18px;background:var(--media-paper)}
+.media-screen .media-scan-settings h2 {margin:0 0 8px;font-size:15px}
+.media-scan-settings-list {display:grid}
+.media-screen .media-scan-settings-list button {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:52px;padding:8px 0;border:0;border-top:1px solid var(--border);border-radius:0;background:transparent;text-align:left;color:var(--text)}
+.media-screen .media-scan-settings-list button:first-child {border-top:0}
+.media-scan-settings-list strong {display:block;font-size:14px;font-weight:500}
+.media-scan-settings-list small {display:block;margin-top:2px;font-size:11px;line-height:1.5;color:var(--muted)}
+.media-scan-switch {position:relative;flex:none;width:44px;height:26px;border-radius:13px;background:var(--surface);box-shadow:inset 0 0 0 1px var(--border)}
+.media-scan-switch::after {content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--media-paper);box-shadow:0 1px 2px color-mix(in srgb,var(--color-ink) 25%,transparent);transition:left var(--motion-duration) var(--motion-ease)}
+[aria-checked=true]>.media-scan-switch {background:var(--media-fill);box-shadow:none}
+[aria-checked=true]>.media-scan-switch::after {left:21px}
+.media-scan-settings-note {margin:10px 0 0;font-size:12px;line-height:1.6;color:var(--muted)}

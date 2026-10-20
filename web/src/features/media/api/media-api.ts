@@ -13,7 +13,7 @@ export interface ScanDiagnostics {
   elapsedMs:number;active:Array<{phase:string;ref?:string;elapsedMs:number}>;
   timings:Record<string,number>;logs:Array<{at:number;message:string}>;
 }
-export interface ScanJob {id:string;libraryId?:string;state:string;inspected:number;error:string|null;diagnostics?:ScanDiagnostics}
+export interface ScanJob {id:string;libraryId?:string;state:string;inspected:number;/** Files in the listing; null until it is known (older servers: absent). */total?:number|null;error:string|null;startedAt?:number;finishedAt?:number|null;diagnostics?:ScanDiagnostics}
 export interface AiScanJob {id:string;libraryId:string;path:string;state:'queued'|'running'|'complete'|'failed';totalPaths:number;processedPaths:number;batchCount:number;resultCount:number;error:string|null;startedAt:number;finishedAt:number|null}
 export interface AiScanBatch {id:string;jobId:string;batch:number;pathCount:number;paths:string[];raw:string|null;items:unknown[];state:'running'|'complete'|'failed';error:string|null;startedAt:number;finishedAt:number|null}
 export interface Playback {id:string;itemId?:string;partId:string;streamUrl:string;contentType:string;expiresAt:number;position:number;start:number;end:number|null;revision:number;playbackMode?:'auto'|'direct'|'proxy'}

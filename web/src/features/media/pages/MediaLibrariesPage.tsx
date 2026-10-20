@@ -5,11 +5,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
-import { librariesQuery } from '../queries/media.queries.ts';
+import { jobsQuery, librariesQuery } from '../queries/media.queries.ts';
 import { MediaPageFrame, QueryFeedback } from '../components/MediaPageFrame.tsx';
 import { MediaLibraryList } from '../components/library-list.tsx';
 import { MediaLibraryCreate } from '../components/library-create.tsx';
-import type { Library, MediaChannel } from '../api/media-api.ts';
+import { MediaScanSettings } from '../components/scan-settings.tsx';
+import type { Library, MediaChannel, ScanJob } from '../api/media-api.ts';
 
 const channels: MediaChannel[] = ['video', 'music', 'audiobook'];
 function safeChannel(value: string | undefined): MediaChannel {
@@ -27,22 +28,27 @@ export function MediaLibrariesPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
   const query = useQuery(librariesQuery(runtime));
+  // The latest scan of every library, polled so a running scan's progress moves on its card.
+  const jobs = useQuery({ ...jobsQuery(runtime), enabled: role === 'admin' });
   if (role !== 'admin') return <MediaPageFrame title="媒体库管理"><Alert color="red">需要管理员权限。</Alert></MediaPageFrame>;
   // The legacy manager is a shared workspace: opening it from any channel
   // shows every media library, while the channel only controls the return path
   // and the default type when creating a new library.
   const libraries = query.data?.items ?? [];
-  const scan = async (id: string) => {
+  const tasks = (id: string) => navigate(`/media/${channel}/settings/tasks?library=${encodeURIComponent(id)}`, { state: { returnTo: `/media/${channel}/settings/libraries` } });
+  // Progress is shown on the library's own card, so starting or cancelling stays on this page.
+  const act = async (id: string, action: () => Promise<unknown>, fallback: string) => {
     if (busyId) return;
     setBusyId(id); setActionError('');
     try {
-      await runtime.mediaApi.request(`libraries/${encodeURIComponent(id)}/scan`, 'POST');
+      await action();
       await queryClient.invalidateQueries({ queryKey: ['media'] });
-      navigate(`/media/${channel}/settings/tasks?library=${encodeURIComponent(id)}`, { state: { returnTo: `/media/${channel}/settings/libraries` } });
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : '扫描请求失败，请稍后重试。');
+      setActionError(error instanceof Error ? error.message : fallback);
     } finally { setBusyId(null); }
   };
+  const scan = (id: string) => act(id, () => runtime.mediaApi.request(`libraries/${encodeURIComponent(id)}/scan`, 'POST'), '扫描请求失败，请稍后重试。');
+  const cancel = (job: ScanJob) => act(job.libraryId ?? job.id, () => runtime.mediaApi.request(`jobs/${encodeURIComponent(job.id)}/cancel`, 'POST'), '取消扫描失败，请稍后重试。');
   return <MediaPageFrame className="media-manager-workspace" title="媒体库管理" backTo={`/media/${channel}/settings`} backLabel="返回影音设置" actions={<details className="media-actions media-library-management-actions">
     <summary aria-label="媒体库管理操作" title="媒体库管理操作"><MoreHorizontal size={20} aria-hidden="true" /></summary>
     <nav aria-label="媒体库管理操作">
@@ -52,6 +58,7 @@ export function MediaLibrariesPage() {
   </details>}>
     {actionError && <Alert color="red" title="操作失败">{actionError}</Alert>}
     <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
+    <div className="media-libraries-layout"><div>
     {!query.isPending && !query.error && <MediaLibraryList
       api={runtime.mediaApi}
       libraries={libraries}
@@ -61,8 +68,12 @@ export function MediaLibrariesPage() {
       onEdit={(library: Library) => navigate(`/media/${channel}/settings/libraries/${encodeURIComponent(library.id)}/edit`)}
       onPermissions={(library: Library) => navigate(`/media/${channel}/settings/libraries/${encodeURIComponent(library.id)}/permissions`)}
       onScan={id => { void scan(id); }}
+      jobs={jobs.data?.items ?? []}
+      onCancel={job => { void cancel(job); }}
+      onDetails={library => tasks(library.id)}
     />}
     {!query.isPending && !query.error && libraries.length === 0 && <Alert>还没有媒体库。请先创建一个媒体库并扫描目录。</Alert>}
+    </div><MediaScanSettings api={runtime.mediaApi} /></div>
   </MediaPageFrame>;
 }
 
