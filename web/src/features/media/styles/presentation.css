@@ -1017,3 +1017,54 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .theme-papers>button>span {display:grid;place-items:center;width:48px;height:48px;box-sizing:border-box;border:1px solid var(--border);border-radius:50%;font-family:'Songti SC','Noto Serif SC','Source Han Serif SC',serif;font-size:18px;font-weight:700}
 .theme-papers>button[aria-pressed=true]>span {border:3px solid var(--media-accent)}
 .theme-paper-follow {margin-top:12px}
+
+/* ---- 字幕与音轨 sheet (prototype 12) ---- */
+.media-video-tabs {display:flex;gap:2px;padding:4px;margin:0 0 14px;border-radius:14px;background:var(--surface)}
+.media-video-sheet .media-video-tabs button {flex:1;min-height:36px;border-radius:10px;color:var(--muted);font-size:14px}
+.media-video-sheet .media-video-tabs button[aria-selected=true] {background:var(--media-paper);color:var(--text);font-weight:600;box-shadow:0 1px 3px color-mix(in srgb,var(--color-ink) 18%,transparent)}
+.media-subtitle-panel {display:grid;gap:12px}
+.media-subtitle-list {display:grid;border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.media-video-sheet .media-subtitle-list button {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:52px;padding:8px 14px;border-radius:0;border-top:1px solid var(--border);text-align:left;color:var(--text)}
+.media-video-sheet .media-subtitle-list button:first-child {border-top:0}
+.media-subtitle-list strong {display:block;font-size:14px;font-weight:500}
+.media-subtitle-list small {display:block;margin-top:2px;font-size:12px;color:var(--muted)}
+.media-subtitle-list button[aria-checked=true] strong {font-weight:600}
+.media-subtitle-list svg {flex:none;color:var(--media-accent)}
+.media-video-sheet .media-subtitle-add {display:flex;align-items:center;justify-content:center;gap:8px;border:1px dashed var(--border);border-radius:12px;color:var(--media-accent)}
+.media-subtitle-row {display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:14px}
+.media-subtitle-steps,.media-subtitle-sizes,.media-video-speeds {display:flex;gap:2px;padding:3px;border-radius:12px;background:var(--surface)}
+.media-video-sheet :is(.media-subtitle-steps,.media-subtitle-sizes,.media-video-speeds) button {min-height:34px;min-width:52px;padding:0 10px;border-radius:9px;font-size:13px;font-variant-numeric:tabular-nums;color:var(--muted)}
+.media-video-sheet :is(.media-subtitle-sizes,.media-video-speeds) button[aria-pressed=true] {background:var(--media-paper);color:var(--text);font-weight:600;box-shadow:0 1px 3px color-mix(in srgb,var(--color-ink) 18%,transparent)}
+.media-video-speeds {flex-wrap:wrap}
+.media-subtitle-status,.media-subtitle-hint,.media-video-more-label {margin:0;font-size:12px;color:var(--muted)}
+/* 字号: relative to the picture's width (the stage is an inline-size container). */
+.media-video-stage {container-type:inline-size}
+.media-player[data-subtitle-size='small'] .media-video-stage video::cue {font-size:2.2cqw}
+.media-player[data-subtitle-size='large'] .media-video-stage video::cue {font-size:3.9cqw}
+
+/* ---- landscape full screen (prototype 13): the picture fills the screen, tools float over it ---- */
+.media-player.media-player-expanded:fullscreen {background:#060906}
+.media-player:fullscreen .media-video-workspace {display:block!important;position:relative;max-width:none!important;width:100%;height:100%;margin:0;padding:0!important}
+.media-player:fullscreen .media-video-stage {height:100dvh!important;width:100%;aspect-ratio:auto;border-radius:0!important}
+.media-player:fullscreen .media-video-stage .dplayer-host video {max-height:none;height:100dvh}
+.media-player:fullscreen .media-video-controls {display:block!important;position:static}
+.media-player:fullscreen .media-video-controls>:not(.media-video-landscape):not(dialog) {display:none!important}
+.media-video-landscape {position:absolute;inset:0 0 auto;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 28px max(16px,env(safe-area-inset-left));background:linear-gradient(rgb(0 0 0 / .62),transparent);color:#fff;pointer-events:none;transition:opacity var(--motion-duration) var(--motion-ease)}
+.media-video-landscape>* {pointer-events:auto}
+.media-video-landscape-title {display:flex;align-items:center;gap:8px;min-width:0}
+.media-video-landscape-title strong {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
+.media-video-landscape-tools {display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px}
+.media-video-landscape button {display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 12px;border:0;border-radius:20px;background:rgb(255 255 255 / .12);color:inherit;font:inherit;font-size:13px;cursor:pointer}
+.media-video-landscape button[aria-pressed=true] {background:rgb(255 255 255 / .28)}
+.media-video-landscape button:focus-visible {outline:2px solid #fff;outline-offset:2px}
+/* Hide with DPlayer's own controller after a few idle seconds. */
+.media-player:fullscreen:has(.dplayer-hide-controller) .media-video-landscape:not([data-locked]) {opacity:0}
+.media-player:fullscreen:has(.dplayer-hide-controller) .media-video-landscape:not([data-locked]):hover {opacity:1}
+/* 锁定: taps no longer reach the player; only the unlock button remains. */
+.media-video-landscape[data-locked] {inset:0 auto 0 0;background:none;padding:0 0 0 max(16px,env(safe-area-inset-left))}
+.media-video-landscape .media-video-unlock {width:48px;height:48px;padding:0;justify-content:center;border-radius:50%;background:rgb(0 0 0 / .45)}
+.media-player[data-locked] .dplayer-host {pointer-events:none}
+.media-player[data-locked] :is(.dplayer-controller,.dplayer-controller-mask,.dplayer-notice-list) {display:none!important}
+/* 适应屏幕: fill the screen, cropping the edges, instead of letterboxing. */
+.media-player[data-fit='cover'] .media-video-stage video,.media-player[data-fit='cover'] .media-video-stage .dplayer-host video {object-fit:cover}
+@media (prefers-reduced-motion: reduce) {.media-video-landscape {transition:none}}

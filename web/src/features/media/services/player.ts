@@ -173,6 +173,16 @@ export class MediaPlayer extends EventTarget {
       this.chapterSeek.setAttribute('aria-label','当前章节播放位置');
     };
   }
+  /** The subtitle state the 字幕与音轨 sheet draws (web video only; native has its own menu). */
+  get subtitleControls():SubtitleControls{return this.subtitles;}
+  /** 字号 in the subtitle sheet: drives `::cue` through a data attribute on the player. Per device. */
+  subtitleSize:SubtitleSize=readSubtitleSize();
+  setSubtitleSize(size:SubtitleSize){
+    if(!subtitleSizes.includes(size))return;
+    this.subtitleSize=size;this.element.dataset.subtitleSize=size;
+    try{localStorage.setItem(subtitleSizeKey,size);}catch{/* the choice still applies for this session */}
+    this.changed();
+  }
   mountVideoTracks(host:HTMLElement,kind:'subtitles'|'tracks'):()=>void {
     const control=kind==='subtitles'?this.subtitles.element:this.audioTracks.element;
     host.append(control);return ()=>{this.element.append(control);};
@@ -213,6 +223,7 @@ export class MediaPlayer extends EventTarget {
     this.volumeLabel.className='media-volume';this.volumeLabel.textContent='音量';this.volumeLabel.append(volume);
     this.audioControls.append(this.chapterSeek,this.volumeLabel);
     this.subtitles=new SubtitleControls(api,this.video);
+    this.element.dataset.subtitleSize=this.subtitleSize;
     this.audioTracks=new AudioTrackControls(api);
     this.nativeControls.className='media-native-controls';this.nativeControls.hidden=true;
     const nativeTrackLabel=document.createElement('label');nativeTrackLabel.textContent='音轨 ';nativeTrackLabel.hidden=true;
@@ -548,4 +559,11 @@ export class MediaPlayer extends EventTarget {
     this.changed();
   }
   async stop(){this.restoreNative=false;++this.generation;this.clearStartupTimer();this.loadingStatus='';this.error='';this.pause();const pending=this.flush();this.native?.command('stop');this.nativeActive=false;this.nativeControls.hidden=true;this.subtitles.clear();this.audioTracks.clear();this.lease?.stop();this.lease=null;this.session=null;this.ready=false;this.audio.removeAttribute('src');this.video.removeAttribute('src');this.audio.load();this.video.load();this.active=false;this.element.hidden=true;this.sleep(0);this.queue=[];this.shuffleTrail=[];this.changed();await pending;}
+}
+
+export const subtitleSizes=['small','normal','large'] as const;
+export type SubtitleSize=typeof subtitleSizes[number];
+const subtitleSizeKey='reader.media.subtitle-size.v1';
+function readSubtitleSize():SubtitleSize{
+  try{const stored=localStorage.getItem(subtitleSizeKey);return subtitleSizes.includes(stored as SubtitleSize)?stored as SubtitleSize:'normal';}catch{return 'normal';}
 }
