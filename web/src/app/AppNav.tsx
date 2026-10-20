@@ -1,7 +1,10 @@
-import { Link, useLocation } from 'react-router-dom';
-import { BookOpen, Clapperboard, House, UserRound, type LucideIcon } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { BookOpen, Clapperboard, House, Search, UserRound, type LucideIcon } from 'lucide-react';
 import { channelPath, mediaChannels } from '../features/media/components/channel-navigation.tsx';
 import { useAuthStore } from '../shared/stores/auth.store.ts';
+import { useSyncStore } from '../shared/stores/sync.store.ts';
+import type { SyncStatus } from '../core/sync.ts';
 import { useRuntime } from './providers/runtime-context.tsx';
 
 /**
@@ -39,8 +42,18 @@ export function AppNav({ mode }: { mode: Exclude<NavMode, 'hidden'> }) {
   const user = useAuthStore(state => state.verifiedUser ?? state.session?.user ?? null);
   const channel = /^\/media\/(video|music|audiobook)/.exec(pathname)?.[1];
   const name = user?.displayName || user?.username || '';
+  const sync = useSyncStore(state => state.status.state);
+  const navigate = useNavigate();
+  const [query, setQuery] = useState('');
+  const search = (event: FormEvent) => { event.preventDefault(); const q = query.trim(); if (q) navigate(`/search?q=${encodeURIComponent(q)}`); };
+  const connection = connectionLabel(sync);
   return <nav className="app-nav" aria-label="主导航" data-mode={mode}>
     <Link className="app-nav-brand" to="/" aria-label="reader. 首页">reader.</Link>
+    {/* Desktop only: one search across books and media (the page is /search). */}
+    <form className="app-nav-search" role="search" onSubmit={search}>
+      <Search size={16} aria-hidden="true" />
+      <input type="search" aria-label="搜索书籍和影音" placeholder="搜索书名、片名、歌曲、有声书" value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} />
+    </form>
     <ul className="app-nav-list">
       {destinations.map(({ to, label, icon: Icon, current }) => {
         const active = current(pathname);
@@ -61,9 +74,17 @@ export function AppNav({ mode }: { mode: Exclude<NavMode, 'hidden'> }) {
     </ul>
     {user && <Link className="app-nav-user" to="/me" aria-label="我的账号">
       <span className="app-nav-avatar" aria-hidden="true">{Array.from(name)[0]}</span>
-      <span className="app-nav-user-text"><strong>{name}</strong><small>{host(runtime.api.baseUrl)}</small></span>
+      <span className="app-nav-user-text"><strong>{name}</strong><small title={host(runtime.api.baseUrl)}><i className="app-nav-status" data-state={connection.state} aria-hidden="true" />{connection.label}</small></span>
     </Link>}
   </nav>;
 }
 
 function host(baseUrl: string): string { try { return new URL(baseUrl).host; } catch { return baseUrl; } }
+
+/** The sync engine's view of the server, in the sidebar's words. */
+export function connectionLabel(state: SyncStatus['state']): { state: 'online' | 'offline' | 'error'; label: string } {
+  if (state === 'offline') return { state: 'offline', label: '离线' };
+  if (state === 'error') return { state: 'error', label: '同步出错' };
+  if (state === 'syncing') return { state: 'online', label: '正在同步' };
+  return { state: 'online', label: '已连接' };
+}

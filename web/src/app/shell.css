@@ -30,7 +30,7 @@
 @media (max-width: 700px) {
   .app-nav { order: 2; display: flex; height: calc(var(--app-nav-bar) + env(safe-area-inset-bottom)); padding: 6px 12px env(safe-area-inset-bottom); border-top: 1px solid var(--nav-line); }
   .app-nav[data-mode='push'] { display: none; }
-  .app-nav-brand, .app-nav-sub, .app-nav-user { display: none; }
+  .app-nav-brand, .app-nav-sub, .app-nav-user, .app-nav-search { display: none; }
   .app-nav-list { display: flex; flex: 1; }
   .app-nav-list > li { flex: 1; min-width: 0; }
   .app-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: 52px; font-size: 11px; font-weight: 500; color: var(--nav-muted); }
@@ -59,7 +59,14 @@
   .app-nav-user-text { min-width: 0; }
   .app-nav-user-text strong, .app-nav-user-text small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .app-nav-user-text strong { font-size: 14px; }
-  .app-nav-user-text small { font-size: 11px; color: var(--nav-muted); }
+  .app-nav-user-text small { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--nav-muted); }
+  .app-nav-status { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--color-ch-audio); }
+  .app-nav-status[data-state='offline'] { background: var(--nav-muted); }
+  .app-nav-status[data-state='error'] { background: var(--color-danger); }
+  .app-nav-search { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 0 12px; border-radius: 12px; background: var(--color-surface-2); color: var(--nav-muted); }
+  .app-nav-search input { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--nav-ink); font: inherit; font-size: 13px; outline: none; }
+  .app-nav-search input::-webkit-search-cancel-button { display: none; }
+  .app-nav-search:focus-within { box-shadow: 0 0 0 2px var(--nav-accent); }
 }
 
 /* ---- the persistent mini player sits clear of the bar / sidebar ---- */

@@ -31,6 +31,7 @@ describe('React Router route tree', () => {
     ['/media/audiobook/items/item-1/chapters', 'MediaChaptersPage'],
     ['/media/music/items/item-1/editions/edition-1', 'MediaEditionPage'],
     ['/media/video/items/item-1/structure', 'MediaStructurePage'],
+    ['/search?q=三体', 'SearchPage'],
     ['/sources/search', 'SourcesPage'],
     ['/sources/source-1/browse', 'SourceCatalogPage'],
     ['/sources/manage/new', 'SourceEditorPage'],

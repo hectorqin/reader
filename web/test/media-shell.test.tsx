@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { render } from '../src/shared/ui/render-root.ts';
 import { AppShell } from '../src/app/App.tsx';
-import { navMode } from '../src/app/AppNav.tsx';
+import { connectionLabel, navMode } from '../src/app/AppNav.tsx';
+import { useSyncStore } from '../src/shared/stores/sync.store.ts';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
 import { useAuthStore } from '../src/shared/stores/auth.store.ts';
 
@@ -74,6 +75,16 @@ describe('shell navigation', () => {
     paint('/book/abc');
     expect(root.querySelector('nav.app-nav')).toBeNull();
     expect(document.documentElement.dataset.theme).toBe('warm');
+  });
+
+  it('says whether the server is reachable under the account, and searches books and media together', () => {
+    expect(['idle', 'syncing', 'offline', 'error', 'signed-out'].map(state => connectionLabel(state as never).label)).toEqual(['已连接', '正在同步', '离线', '同步出错', '已连接']);
+    act(() => useSyncStore.getState().update({ state: 'offline', lastSyncAt: null, pending: false, message: '' }));
+    paint('/media/video');
+    expect(root.querySelector('.app-nav-user small')?.textContent).toBe('离线');
+    act(() => useSyncStore.getState().update({ state: 'idle', lastSyncAt: null, pending: false, message: '' }));
+    expect(root.querySelector('.app-nav-user small')?.textContent).toBe('已连接');
+    expect(root.querySelector<HTMLInputElement>('.app-nav-search input')?.placeholder).toBe('搜索书名、片名、歌曲、有声书');
   });
 
   it('marks the reading destinations under 书架 and the account page under 我的', () => {
