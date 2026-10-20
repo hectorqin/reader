@@ -177,6 +177,42 @@ export function resolveReadingTheme(preference: ThemePreference, systemDark: boo
 
 export const themeTokens = ({ theme, mode }: ResolvedTheme): ThemeTokens => themes[theme][mode];
 
+/**
+ * Reading papers: the page's own colours, a per-device reader setting (like the font
+ * size). They tint only the reading surface — paper, ink, the readouts — while the
+ * reader's chrome keeps the reading theme. `theme` means "no paper, use the theme".
+ * The stylesheet mirrors these in theme-tokens.css (`.reader-screen[data-paper]`).
+ */
+export const readerPapers = {
+  white: { id: 'white', name: '白纸', dark: false, bg: '#FFFFFF', ink: '#1A1A1A', muted: '#666666', line: '#E0E0E0' },
+  warm: { id: 'warm', name: '暖黄', dark: false, bg: '#F4ECD8', ink: '#3B3226', muted: '#6B5D47', line: '#E2D5B8' },
+  green: { id: 'green', name: '浅绿', dark: false, bg: '#DDE9D6', ink: '#26331F', muted: '#4C5E43', line: '#C5D6BB' },
+  gray: { id: 'gray', name: '灰调', dark: false, bg: '#E6E6E3', ink: '#2A2A2A', muted: '#575754', line: '#D1D1CD' },
+  night: { id: 'night', name: '夜间', dark: true, bg: '#1D1C1A', ink: '#D8D4CA', muted: '#9D988D', line: '#34322E' },
+} as const;
+export type PaperId = keyof typeof readerPapers;
+export type ReaderPaper = 'theme' | PaperId;
+export const paperIds = Object.keys(readerPapers) as PaperId[];
+export const validReaderPaper = (value: unknown): ReaderPaper => value === 'theme' || paperIds.includes(value as PaperId) ? value as ReaderPaper : 'theme';
+
+/** What the reading screen wears: a theme and mode for its chrome, and the paper (if any) for its page. */
+export interface ReaderSurface extends ResolvedTheme { paper: PaperId | null }
+
+/**
+ * - No paper: the reading theme, in the app's mode.
+ * - 夜间: a dark page, so the reader's chrome goes dark with it.
+ * - A light paper: shown in light mode. When the app is dark and the paper follows
+ *   the system's dark mode (the default), the page gives way to the theme's dark
+ *   values; otherwise the reader stays light around the paper.
+ */
+export function resolveReaderSurface(preference: ThemePreference, systemDark: boolean, paper: ReaderPaper, followDark: boolean): ReaderSurface {
+  const reading = resolveReadingTheme(preference, systemDark);
+  if (paper === 'theme') return { ...reading, paper: null };
+  if (readerPapers[paper].dark) return { theme: reading.theme, mode: 'dark', paper };
+  if (reading.mode === 'dark' && followDark) return { ...reading, paper: null };
+  return { theme: reading.theme, mode: 'light', paper };
+}
+
 /** One subscription for every place that shows the theme: same-tab saves, other tabs, the OS. */
 export function subscribeTheme(scope: string, notify: () => void): () => void {
   const query = typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : undefined;

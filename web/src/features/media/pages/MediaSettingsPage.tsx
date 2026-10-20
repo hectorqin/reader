@@ -45,6 +45,7 @@ export function MediaSettingsPage() {
       onManage={() => navigate(`/media/${channel}/settings/libraries`)}
       onTasks={() => navigate(`/media/${channel}/settings/tasks`, { state: { returnTo: `/media/${channel}/settings` } })}
       onPlayback={() => navigate(`/media/${channel}/player`)}
+      onReaderSettings={patch => { void runtime.updateSettings(patch); }}
     />
   </MediaPageFrame>;
 }

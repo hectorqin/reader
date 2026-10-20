@@ -71,10 +71,15 @@
 }
 
 /* ---- reading pages wear the theme too; their --reader-* names alias the tokens
- * (theme-tokens.css). The reader may wear 黑白灰 on its own container. ---- */
-:is(.shelf-screen, .library-screen, .sources-screen, .home-page, .reader-screen) {
+ * (theme-tokens.css). The reader may wear 黑白灰 on its own container, and a
+ * reading paper on its page (--reader-paper / --reader-ink). ---- */
+:is(.shelf-screen, .library-screen, .sources-screen, .home-page) {
   background: var(--color-bg);
   color: var(--color-ink);
+}
+.reader-screen {
+  background: var(--reader-paper);
+  color: var(--reader-ink);
 }
 
 /* The old fixed channel rail is gone; its top gutter goes with it. */

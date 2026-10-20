@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { themes, type AppThemeId, type ModePreference, type ResolvedTheme, type ThemeMode, type ThemePreference } from '../shared/theme/theme.ts';
+import { paperIds, readerPapers, themes, type AppThemeId, type ModePreference, type ReaderPaper, type ReaderSurface, type ResolvedTheme, type ThemeMode, type ThemePreference } from '../shared/theme/theme.ts';
 import type { ChapterQuality } from '../api/sources.ts';
 import { Modal } from './modal.tsx';
 import type { SourcePage } from '../api/sources.ts';
@@ -27,7 +27,7 @@ import { DEFAULT_APP_SETTINGS, READOUT_FIELDS, READOUT_OPTIONS, type ReadoutMode
 import { ReaderIndicators } from './reader-indicators.tsx';
 import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ReactNode, type JSX, useLayoutEffect, useRef, useState } from 'react';
-import { Button, IconButton, SectionTitle } from './toolkit.tsx';
+import { Button, IconButton, SectionTitle, SwitchRow } from './toolkit.tsx';
 import { Icon, type IconName } from './icon.tsx';
 
 /**
@@ -124,6 +124,8 @@ export interface ChromeState {
   txtIndent: number;
   txtParagraphGap: number;
   comicDirection: AppSettings['comicDirection'];
+  paper: ReaderPaper;
+  paperFollowsDark: boolean;
   ttsRate: number;
   ttsPitch: number;
   ttsVolume: number;
@@ -212,7 +214,20 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
   const pageLabel = '本章第 ' + currentPage + '/' + totalPages + ' 页';
   const tab = state.settingsTab ?? 'behavior';
   const theme = handlers.theme();
-  const dark = theme.reading.mode === 'dark';
+  const dark = theme.surface.mode === 'dark';
+  const paper = state.paper ?? 'theme';
+  const lightPaper = paper !== 'theme' && !readerPapers[paper].dark;
+  // Day/night is about what the page looks like now, paper included.
+  const toggleNight = () => {
+    if (dark) {
+      if (paper !== 'theme' && readerPapers[paper].dark) handlers.onSetting({ paper: 'theme' });
+      if (theme.app.mode === 'dark') handlers.onTheme({ mode: 'light', theme: theme.app.theme });
+    } else if (lightPaper && !(state.paperFollowsDark ?? true)) {
+      handlers.onSetting({ paper: 'night' });
+    } else {
+      handlers.onTheme({ mode: 'dark', theme: theme.app.theme });
+    }
+  };
   return (
     <>
       {tools}
@@ -235,7 +250,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         {/* Day/night picks the mode explicitly (leaving 跟随系统), keeping the theme on screen. */}
         <RailButton icon={dark ? 'sun' : 'moon'}
           label={dark ? '日间' : '夜间'}
-          onClick={() => handlers.onTheme({ mode: dark ? 'light' : 'dark', theme: theme.app.theme })} />
+          onClick={toggleNight} />
       </div>
       <div className="footer" hidden={!state.chromeVisible}>
         <div className="progress-row">
@@ -428,6 +443,11 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
       {/* Most-used first. Size, spacing, theme and brightness are what a reader opens
           this sheet to change, so they fill its first screen; the rows that are set once
           and left alone are folded underneath instead of pushing these below the fold. */}
+      <PaperRow state={state} surface={handlers.theme().surface} onChange={(paper) => handlers.onSetting({ paper })} />
+      {state.paper !== 'theme' && state.paper !== 'night' && state.paper !== undefined ? (
+        <SwitchRow label="跟随系统深色模式" hint="应用为深色时，纸色换成主题的深色"
+          checked={state.paperFollowsDark ?? true} onChange={(value) => handlers.onSetting({ paperFollowsDark: value })} />
+      ) : null}
       {state.layout !== 'fixed' ? <>
       <SliderRow
         label="字号"
@@ -822,6 +842,35 @@ export interface ReaderThemeState {
   preference: ThemePreference;
   app: { theme: AppThemeId; mode: ThemeMode };
   reading: ResolvedTheme;
+  /** The reading theme and paper together: what the reading screen actually wears. */
+  surface: ReaderSurface;
+}
+
+/**
+ * The reading paper (阅读纸色), drawn in each paper's own colours: 跟随主题 is the
+ * reading theme's page, then 白纸, 暖黄, 浅绿, 灰调, 夜间. A reader setting, per device.
+ */
+function PaperRow({ state, surface, onChange }: { state: ChromeState; surface: ReaderSurface; onChange(paper: ReaderPaper): void }): JSX.Element {
+  const current = state.paper ?? 'theme';
+  const themed = themes[surface.theme][surface.paper ? (readerPapers[surface.paper].dark ? 'dark' : 'light') : surface.mode];
+  const options: Array<{ value: ReaderPaper; label: string; bg: string; ink: string; line: string }> = [
+    { value: 'theme', label: '跟随主题', bg: themed.bg, ink: themed.ink, line: themed.line },
+    ...paperIds.map((id) => ({ value: id, label: readerPapers[id].name, bg: readerPapers[id].bg, ink: readerPapers[id].ink, line: readerPapers[id].line })),
+  ];
+  return (
+    <div className="field is-stacked">
+      <label>纸色</label>
+      <div className="theme-swatches paper-swatches" role="group" aria-label="纸色">
+        {options.map((option) => (
+          <button type="button" key={option.value} className="theme-swatch" aria-pressed={current === option.value} onClick={() => onChange(option.value)}>
+            <span className="theme-swatch-chip" aria-hidden="true"
+              style={{ background: option.bg, color: option.ink, '--chip-line': option.line } as CSSProperties}>Aa</span>
+            <span className="theme-swatch-label">{option.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 const MODE_OPTIONS = [

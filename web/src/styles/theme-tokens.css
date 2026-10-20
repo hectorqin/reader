@@ -293,3 +293,15 @@
 :root, [data-theme][data-mode="light"] { color-scheme: light; }
 [data-theme][data-mode="dark"] { color-scheme: dark; }
 @media (prefers-color-scheme: dark) { :root:not([data-mode]) { color-scheme: dark; } }
+
+/*
+ * Reading papers (阅读纸色): a reader setting that tints only the page — paper, ink,
+ * readouts — and leaves the reader's chrome on its theme. Mirrors readerPapers in
+ * shared/theme/theme.ts. Same specificity as the alias block above, and later, so a
+ * paper wins on the reader container even when it carries its own data-theme.
+ */
+.reader-screen[data-paper="white"] { --reader-paper: #FFFFFF; --reader-ink: #1A1A1A; --reader-muted: #666666; --reader-line: #E0E0E0; }
+.reader-screen[data-paper="warm"] { --reader-paper: #F4ECD8; --reader-ink: #3B3226; --reader-muted: #6B5D47; --reader-line: #E2D5B8; }
+.reader-screen[data-paper="green"] { --reader-paper: #DDE9D6; --reader-ink: #26331F; --reader-muted: #4C5E43; --reader-line: #C5D6BB; }
+.reader-screen[data-paper="gray"] { --reader-paper: #E6E6E3; --reader-ink: #2A2A2A; --reader-muted: #575754; --reader-line: #D1D1CD; }
+.reader-screen[data-paper="night"] { --reader-paper: #1D1C1A; --reader-ink: #D8D4CA; --reader-muted: #9D988D; --reader-line: #34322E; }

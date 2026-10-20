@@ -1,4 +1,4 @@
-import { readThemePreference, resolveAppTheme, resolveReadingTheme, saveThemePreference, subscribeTheme, systemPrefersDark } from '../shared/theme/theme.ts';
+import { readThemePreference, resolveAppTheme, resolveReaderSurface, resolveReadingTheme, saveThemePreference, subscribeTheme, systemPrefersDark } from '../shared/theme/theme.ts';
 import { applyCorrections, emptyOverrides, type ReadingOverrides } from './reading-overrides.ts';
 import { loadTxt } from '../formats/txt.ts';
 import { ApiError } from '../api/errors.ts';
@@ -235,8 +235,8 @@ export class ReaderScreen {
     // is what makes "cannot be half-hidden" true by construction rather than by two
     // rules that have to be kept in agreement.
     this.element.dataset['chrome'] = 'visible';
-    // The reading theme: either the app's (no attributes, inherit <html>) or 黑白灰 on
-    // this container only, in the app's light/dark mode.
+    // The reading theme (the app's, or 黑白灰) and the reading paper, on this
+    // container only; see resolveReaderSurface.
     this.applyReadingTheme();
     this.themeOff = subscribeTheme(this.themeScope(), () => { this.applyReadingTheme(); if (!this.disposed) this.patch({}); });
     this.element.style.cssText = 'flex:1 1 auto;min-height:0;display:flex;flex-direction:column;position:relative;';
@@ -248,10 +248,15 @@ export class ReaderScreen {
 
   private themeScope(): string { return this.options.themeScope ?? 'default'; }
 
+  private readerSurface() {
+    return resolveReaderSurface(readThemePreference(this.themeScope()), systemPrefersDark(), this.settings.paper ?? 'theme', this.settings.paperFollowsDark ?? true);
+  }
+
   private applyReadingTheme(): void {
-    const reading = resolveReadingTheme(readThemePreference(this.themeScope()), systemPrefersDark());
-    if (reading.theme === 'gray') { this.element.dataset['theme'] = 'gray'; this.element.dataset['mode'] = reading.mode; }
-    else { delete this.element.dataset['theme']; delete this.element.dataset['mode']; }
+    const surface = this.readerSurface();
+    this.element.dataset['theme'] = surface.theme;
+    this.element.dataset['mode'] = surface.mode;
+    if (surface.paper) this.element.dataset['paper'] = surface.paper; else delete this.element.dataset['paper'];
   }
 
   private renderChrome(): void {
@@ -279,7 +284,7 @@ export class ReaderScreen {
             theme: () => {
               const preference = readThemePreference(this.themeScope());
               const systemDark = systemPrefersDark();
-              return { preference, app: resolveAppTheme(preference, systemDark), reading: resolveReadingTheme(preference, systemDark) };
+              return { preference, app: resolveAppTheme(preference, systemDark), reading: resolveReadingTheme(preference, systemDark), surface: this.readerSurface() };
             },
             onTheme: (patch) => { try { saveThemePreference(this.themeScope(), patch); } catch { /* the device refused storage; the choice simply does not stick */ } this.patch({}); },
             onSpeechSetting: (patch) => this.updateSpeechSetting(patch),
@@ -1680,6 +1685,7 @@ export class ReaderScreen {
   private async updateSetting(patch: Partial<AppSettings>): Promise<void> {
     this.options.onSettingsChange(patch);
     Object.assign(this.settings, patch);
+    if ('paper' in patch || 'paperFollowsDark' in patch) this.applyReadingTheme();
     // Reading information changes only the chrome, never the book's pagination.
     if (Object.keys(patch).some(key => !READOUT_FIELDS.some(field => field.key === key))) {
       this.view?.applySettings(this.viewSettings());
@@ -2103,6 +2109,8 @@ function emptyChromeSettings(): Partial<ChromeState> {
       txtParagraphGap: 0.55,
       txtEncoding: '',
       comicDirection: 'ltr',
+      paper: 'theme',
+      paperFollowsDark: true,
       ttsRate: 1,
       ttsPitch: 1,
       ttsVolume: 1,
@@ -2175,6 +2183,8 @@ function settingsView(
     txtIndent: settings.txtIndent,
     txtParagraphGap: settings.txtParagraphGap,
     comicDirection: settings.comicDirection,
+    paper: settings.paper,
+    paperFollowsDark: settings.paperFollowsDark,
     ttsRate: settings.ttsRate,
     ttsPitch: settings.ttsPitch,
     ttsVolume: settings.ttsVolume,

@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { Check, SunMoon } from 'lucide-react';
 import {
-  appThemes, resolveAppTheme, saveThemePreference, themes,
-  type AppThemeId, type ThemeId, type ThemeMode, type ThemePreference,
+  appThemes, paperIds, readerPapers, resolveAppTheme, resolveReadingTheme, saveThemePreference, themes,
+  type AppThemeId, type ReaderPaper, type ThemeId, type ThemeMode, type ThemePreference,
 } from '../../../shared/theme/theme.ts';
 import { useThemeState } from '../../../shared/theme/use-theme.ts';
+import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
+import type { AppSettings } from '../../../store/settings.ts';
 
 /** Both halves of a theme, light on the left and dark on the right, in its own colours. */
 function ThemePreview({ id }: { id: ThemeId }) {
@@ -37,8 +39,35 @@ const modeOptions: readonly { value: ThemeMode; label: string }[] = [{ value: 'l
  * 外观与主题 (V3.1): the app theme (暖陶, 雾蓝, 青绿), its light/dark mode or the
  * follow-system pair, and the reading theme (跟随应用 or the reading-only 黑白灰).
  */
-export function MediaThemeSettings({ scope }: { scope: string }) {
+/**
+ * The reading paper: the page's own colours, a per-device reader setting (the same
+ * one as the reader's 外观 sheet), shown here so the whole look is set in one place.
+ */
+function ReadingPapers({ themeId, settings, onChange }: { themeId: ThemeId; settings: Pick<AppSettings, 'paper' | 'paperFollowsDark'>; onChange(patch: Partial<AppSettings>): void }) {
+  const themed = themes[themeId].light;
+  const options: Array<{ value: ReaderPaper; label: string; bg: string; ink: string }> = [
+    { value: 'theme', label: '跟随主题', bg: themed.bg, ink: themed.ink },
+    ...paperIds.map(id => ({ value: id, label: readerPapers[id].name, bg: readerPapers[id].bg, ink: readerPapers[id].ink })),
+  ];
+  const lightPaper = settings.paper !== 'theme' && !readerPapers[settings.paper].dark;
+  return <>
+    <div className="theme-papers" role="group" aria-label="阅读纸色">{options.map(option =>
+      <button type="button" key={option.value} aria-label={option.label} aria-pressed={settings.paper === option.value} onClick={() => onChange({ paper: option.value })}>
+        <span aria-hidden="true" style={{ background: option.bg, color: option.ink }}>Aa</span>{option.label}
+      </button>)}</div>
+    {lightPaper && <div className="theme-settings-card theme-paper-follow">
+      <button type="button" className="theme-follow" aria-label="跟随系统深色模式" aria-pressed={settings.paperFollowsDark} onClick={() => onChange({ paperFollowsDark: !settings.paperFollowsDark })}>
+        <span className="theme-follow-text"><strong>跟随系统深色模式</strong><small>应用为深色时，纸色换成主题的深色</small></span>
+        <span className="theme-switch" aria-hidden="true" />
+      </button>
+    </div>}
+  </>;
+}
+
+export function MediaThemeSettings({ scope, onReaderSettings }: { scope: string; onReaderSettings?: (patch: Partial<AppSettings>) => void }) {
   const { preference, systemDark } = useThemeState(scope);
+  const paper = useSettingsStore(state => state.settings.paper);
+  const paperFollowsDark = useSettingsStore(state => state.settings.paperFollowsDark);
   const [error, setError] = useState(''), [saved, setSaved] = useState(false);
   const following = preference.mode === 'system';
   const resolved = resolveAppTheme(preference, systemDark);
@@ -74,6 +103,12 @@ export function MediaThemeSettings({ scope }: { scope: string }) {
       <ThemeCard id="gray" label={themes.gray.name} note="阅读专用 · 浅色 · 深色" pressed={preference.reading === 'gray'} onClick={() => save({ reading: 'gray' })} />
     </div>
     <p className="theme-settings-note">黑白灰只用于阅读器，可以与应用主题分开设置；浅色和夜间跟随应用的明暗。主题偏好按服务器和账号保存在此设备。</p>
+
+    {onReaderSettings && <>
+      <h2>阅读纸色</h2>
+      <ReadingPapers themeId={resolveReadingTheme(preference, systemDark).theme} settings={{ paper, paperFollowsDark }} onChange={patch => { onReaderSettings(patch); setSaved(true); setError(''); }} />
+      <p className="theme-settings-note">纸色只改阅读页的底色和文字，工具栏仍用阅读主题；也可在阅读页的“外观”里切换。纸色按设备保存。</p>
+    </>}
     {saved && <p role="status">主题已保存</p>}{error && <p className="media-error" role="alert">{error}</p>}
   </section>;
 }

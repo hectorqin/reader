@@ -4,6 +4,7 @@ import {PlaybackSettings} from './playback-settings.tsx';
 import {MediaThemeSettings} from './theme-settings.tsx';
 import {themeSummary} from '../../../shared/theme/theme.ts';
 import {useThemeState} from '../../../shared/theme/use-theme.ts';
+import type {AppSettings} from '../../../store/settings.ts';
 export type SettingsPanel = 'home'|'theme'|'browse'|'playback'|'plugins'|'account';
 import { useState } from 'react';
 import {ChevronLeft,ChevronRight,Clock3,Heart,Headphones,FolderOpen,SlidersHorizontal,RefreshCw,UserRound,Palette} from 'lucide-react';
@@ -12,7 +13,7 @@ import type {MediaApi,MediaAccount} from '../api/media-api.ts';
 import {MediaProviderSettings} from './provider-settings.tsx';
 import {defaultMediaPreferences,saveMediaPreferences,type MediaPreferences} from '../services/preferences.ts';
 
-export function MediaSettings({scope,preferences,player,admin,api: _api,account,onSaved,onBack,onPersonal,onManage,onTasks,onPlayback,panel:routePanel,onPanelChange}:{scope:string;preferences:MediaPreferences;player:MediaPlayer;admin:boolean;api?:MediaApi;account?:MediaAccount|null;onSaved:(value:MediaPreferences)=>void;onBack:()=>void;onPersonal:(view:'favorites'|'history'|'queue')=>void;onManage:()=>void;onTasks?:()=>void;onPlayback?:()=>void;panel?:SettingsPanel;onPanelChange?:(panel:SettingsPanel)=>void;channelLabel?:string}){
+export function MediaSettings({scope,preferences,player,admin,api: _api,account,onSaved,onBack,onPersonal,onManage,onTasks,onPlayback,panel:routePanel,onPanelChange,onReaderSettings}:{scope:string;preferences:MediaPreferences;player:MediaPlayer;admin:boolean;api?:MediaApi;account?:MediaAccount|null;onSaved:(value:MediaPreferences)=>void;onBack:()=>void;onPersonal:(view:'favorites'|'history'|'queue')=>void;onManage:()=>void;onTasks?:()=>void;onPlayback?:()=>void;panel?:SettingsPanel;onPanelChange?:(panel:SettingsPanel)=>void;channelLabel?:string;onReaderSettings?:(patch:Partial<AppSettings>)=>void}){
   const {preference:themePreference}=useThemeState(scope);
   const [localPanel,setLocalPanel]=useState<SettingsPanel>('home');
   const panel=routePanel??localPanel;
@@ -41,7 +42,7 @@ export function MediaSettings({scope,preferences,player,admin,api: _api,account,
       </section>
       {admin&&<section className="media-settings-group"><h2>管理员</h2>{link(FolderOpen,'媒体库管理','全部影音媒体库',onManage)}{onTasks&&link(RefreshCw,'扫描与刮削','任务与匹配结果',onTasks)}</section>}
       {account&&<section className="media-settings-group"><h2>账号</h2>{link(UserRound,'账号与连接','',()=>setPanel('account'))}</section>}
-    </>:panel==='theme'?<MediaThemeSettings scope={scope}/>:panel==='browse'?<form className="media-form media-settings-panel" onSubmit={event=>{event.preventDefault();save();}}>
+    </>:panel==='theme'?<MediaThemeSettings scope={scope} {...(onReaderSettings?{onReaderSettings}:{})}/>:panel==='browse'?<form className="media-form media-settings-panel" onSubmit={event=>{event.preventDefault();save();}}>
       <p>仅影响影音页面，在当前设备为此服务器和账号保存。</p>
       <label className="media-setting-field">封面密度<MediaSelect aria-label="封面密度" value={draft.density} onChange={event=>change({density:event.currentTarget.value as MediaPreferences['density']})}><option value="compact">紧凑（手机三列）</option><option value="comfortable">宽松（手机两列）</option></MediaSelect></label>
       <label className="media-setting-field">默认排序<MediaSelect aria-label="默认排序" value={draft.sort??'default'} onChange={event=>change({sort:event.currentTarget.value as NonNullable<MediaPreferences['sort']>})}><option value="default">默认顺序</option><option value="title-asc">名称升序</option><option value="title-desc">名称降序</option></MediaSelect></label>

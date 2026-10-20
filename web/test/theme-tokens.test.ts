@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { channels, themes, type ThemeTokens } from '../src/shared/theme/theme.ts';
+import { channels, paperIds, readerPapers, themes, type ThemeTokens } from '../src/shared/theme/theme.ts';
 
 /**
  * The V3.1 palettes: the stylesheet and the TypeScript mirror carry the same values,
@@ -53,6 +53,18 @@ describe('theme tokens', () => {
         ]),
       ];
       const failures = pairs.map(([name, fg, bg]) => ({ name, value: ratio(fg, bg) }))
+        .filter(item => item.value < 4.5).map(item => `${item.name}: ${item.value.toFixed(2)} < 4.5`);
+      expect(failures).toEqual([]);
+    });
+  }
+
+  for (const id of paperIds) {
+    const paper = readerPapers[id];
+    it(`纸色 ${paper.name}: the stylesheet matches, and ink and muted text are legible`, () => {
+      const match = stylesheet.match(new RegExp(`\\.reader-screen\\[data-paper="${id}"\\] \\{([^}]*)\\}`));
+      const declared = Object.fromEntries([...(match?.[1] ?? '').matchAll(/--reader-([\w-]+):\s*([^;]+);/g)].map(m => [m[1]!, m[2]!.trim()]));
+      expect(declared).toEqual({ paper: paper.bg, ink: paper.ink, muted: paper.muted, line: paper.line });
+      const failures = [['ink', paper.ink], ['muted', paper.muted]].map(([name, fg]) => ({ name, value: ratio(fg!, paper.bg) }))
         .filter(item => item.value < 4.5).map(item => `${item.name}: ${item.value.toFixed(2)} < 4.5`);
       expect(failures).toEqual([]);
     });

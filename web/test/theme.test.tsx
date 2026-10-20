@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act } from 'react';
 import {
   ThemeController, defaultThemePreference, migrateLegacyTheme, readThemePreference, resolveAppTheme,
-  resolveReadingTheme, saveThemePreference, themeSummary,
+  resolveReaderSurface, resolveReadingTheme, saveThemePreference, themeSummary,
 } from '../src/shared/theme/theme.ts';
 import { useAppThemeDark } from '../src/shared/theme/use-theme.ts';
 import { MediaThemeSettings } from '../src/features/media/components/theme-settings.tsx';
@@ -74,6 +74,20 @@ describe('theme preference', () => {
     expect(resolveReadingTheme(preference, true)).toEqual({ theme: 'gray', mode: 'dark' });
     expect(resolveReadingTheme({ ...preference, reading: 'app' }, true)).toEqual({ theme: 'blue', mode: 'dark' });
     expect(resolveAppTheme({ ...preference, mode: 'light', theme: 'warm' }, true)).toEqual({ theme: 'warm', mode: 'light' });
+  });
+});
+
+describe('reading paper', () => {
+  const light = { ...defaultThemePreference, mode: 'light' as const };
+  const dark = { ...defaultThemePreference, mode: 'dark' as const };
+  it('tints only light mode by default, gives way to the theme when the app is dark, and 夜间 is dark', () => {
+    expect(resolveReaderSurface(light, false, 'theme', true)).toEqual({ theme: 'warm', mode: 'light', paper: null });
+    expect(resolveReaderSurface(light, false, 'warm', true)).toEqual({ theme: 'warm', mode: 'light', paper: 'warm' });
+    expect(resolveReaderSurface(dark, false, 'warm', true)).toEqual({ theme: 'warm', mode: 'dark', paper: null });
+    // Not following the system's dark mode: the paper stays, and the reader stays light around it.
+    expect(resolveReaderSurface(dark, false, 'warm', false)).toEqual({ theme: 'warm', mode: 'light', paper: 'warm' });
+    expect(resolveReaderSurface(light, false, 'night', true)).toEqual({ theme: 'warm', mode: 'dark', paper: 'night' });
+    expect(resolveReaderSurface({ ...light, reading: 'gray' }, false, 'green', true)).toEqual({ theme: 'gray', mode: 'light', paper: 'green' });
   });
 });
 

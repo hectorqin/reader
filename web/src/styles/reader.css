@@ -1792,19 +1792,22 @@ book-content {
 
 /* ---- shelf settings sheet ---- */
 
-.shelf-settings .switch-field {
+.shelf-settings .switch-field,
+.reader-screen .panel .switch-field {
   flex-direction: row;
   align-items: center;
   gap: 0.75rem;
 }
 
-.shelf-settings .switch-text {
+.shelf-settings .switch-text,
+.reader-screen .panel .switch-text {
   flex: 1 1 auto;
   min-width: 0;
   font-size: 0.9rem;
 }
 
-.shelf-settings .switch-text .muted {
+.shelf-settings .switch-text .muted,
+.reader-screen .panel .switch-text .muted {
   font-size: 0.72rem;
   margin-top: 0.15rem;
 }
@@ -1817,7 +1820,8 @@ book-content {
  * this on" — a separate class would be a second one, and the two would eventually
  * disagree.
  */
-.shelf-settings .switch {
+.shelf-settings .switch,
+.reader-screen .panel .switch {
   flex: 0 0 auto;
   position: relative;
   width: 2.7rem;
@@ -1829,7 +1833,8 @@ book-content {
   transition: background var(--motion-duration) var(--motion-ease);
 }
 
-.shelf-settings .switch::after {
+.shelf-settings .switch::after,
+.reader-screen .panel .switch::after {
   content: '';
   position: absolute;
   top: 0.2rem;
@@ -1842,11 +1847,13 @@ book-content {
   transition: inset-inline-start var(--motion-duration) var(--motion-ease);
 }
 
-.shelf-settings .switch[aria-pressed='true'] {
+.shelf-settings .switch[aria-pressed='true'],
+.reader-screen .panel .switch[aria-pressed='true'] {
   background: var(--reader-fill);
 }
 
-.shelf-settings .switch[aria-pressed='true']::after {
+.shelf-settings .switch[aria-pressed='true']::after,
+.reader-screen .panel .switch[aria-pressed='true']::after {
   inset-inline-start: 1.3rem;
 }
 
@@ -1862,7 +1869,9 @@ book-content {
   }
 
   .shelf-settings .switch,
-  .shelf-settings .switch::after {
+  .shelf-settings .switch::after,
+  .reader-screen .panel .switch,
+  .reader-screen .panel .switch::after {
     transition: none;
   }
 
