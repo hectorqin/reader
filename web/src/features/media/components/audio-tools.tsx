@@ -1,13 +1,11 @@
-import { Heart, X } from 'lucide-react';
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Heart } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { MediaApi } from '../api/media-api.ts';
+import { Sheet } from '../../../ui/sheet.tsx';
 
+/** The audio player's menus: the app's one sheet, with the audio content styles. */
 export function AudioToolSheet({title,onClose,children}:{title:string;onClose:()=>void;children:ReactNode}){
-  const ref=useRef<HTMLDialogElement>(null);
-  useLayoutEffect(()=>{const dialog=ref.current;if(!dialog)return;const previous=document.activeElement as HTMLElement|null;dialog.showModal();return ()=>{dialog.close();queueMicrotask(()=>{if(previous?.isConnected)previous.focus({preventScroll:true});});};},[]);
-  return <dialog ref={ref} className="media-audio-sheet" aria-label={title} onCancel={event=>{event.preventDefault();onClose();}} onKeyDown={event=>{if(event.key==='Escape')event.stopPropagation();}} onClick={event=>{if(event.target===event.currentTarget){const rect=event.currentTarget.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)onClose();}}}>
-    <header><h2>{title}</h2><button aria-label="关闭播放菜单" onClick={onClose}><X size={20} aria-hidden="true"/></button></header>{children}
-  </dialog>;
+  return <Sheet className="media-audio-sheet" title={title} onClose={onClose}>{children}</Sheet>;
 }
 
 export function PlaybackFavorite({api,itemId,onChanged}:{api:MediaApi;itemId:string;onChanged?:(id:string,favorite:boolean)=>void}){

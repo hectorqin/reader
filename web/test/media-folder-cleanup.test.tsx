@@ -5,7 +5,7 @@ import {act} from 'react';
 
 import {FolderCleanup} from '../src/features/media/components/folder-cleanup.tsx';
 import type {MediaApi} from '../src/features/media/api/media-api.ts';
-vi.mock('../src/ui/floating-confirm.tsx',()=>({FloatingConfirm:({text,onConfirm,onCancel}:any)=><div role="dialog"><p>{text}</p><button onClick={onConfirm}>确认清理</button><button onClick={onCancel}>取消</button></div>}));
+vi.mock('../src/ui/sheet.tsx',()=>({ConfirmSheet:({text,onConfirm,onCancel}:any)=><div role="dialog"><p>{text}</p><button onClick={onConfirm}>确认清理</button><button onClick={onCancel}>取消</button></div>}));
 const root=document.createElement('div');document.body.append(root);
 afterEach(()=>{act(()=>render(null,root));vi.clearAllMocks();});
 const click=async(text:string)=>act(async()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent?.includes(text))!.click());

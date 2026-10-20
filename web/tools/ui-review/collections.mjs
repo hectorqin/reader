@@ -67,20 +67,20 @@ try {
     await page.setViewportSize({ width, height: 844 });
     await page.locator('.shelf-head button[aria-label^=书架设置]').click();
     const close = page.locator('.shelf-settings button[aria-label="关闭"]');
-    await page.locator('.shelf-settings .panel-body').evaluate(el => { el.scrollTop = 0; });
+    await page.locator('.shelf-settings .sheet-body').evaluate(el => { el.scrollTop = 0; });
     await shot('shelf-settings-' + width);
-    assert.equal(await close.evaluate(el => { const r = el.getBoundingClientRect(), p = el.closest('.panel-header').getBoundingClientRect(); return p.right - r.right <= 20 && r.top >= p.top && r.bottom <= p.bottom; }), true);
+    assert.equal(await close.evaluate(el => { const r = el.getBoundingClientRect(), p = el.closest('.sheet-header').getBoundingClientRect(); return p.right - r.right <= 20 && r.top >= p.top && r.bottom <= p.bottom; }), true);
     if (width >= 1280) {
       const desktopPanel = await page.locator('.shelf-settings').evaluate(el => {
         const r = el.getBoundingClientRect();
         return { rightGap: innerWidth - r.right, width: r.width, top: r.top, bottom: innerHeight - r.bottom };
       });
-      assert.ok(desktopPanel.width >= 400 && desktopPanel.width <= 450, 'desktop settings should be a compact side panel');
+      assert.ok(desktopPanel.width >= 440 && desktopPanel.width <= 500, 'desktop settings should be a compact side panel');
       assert.ok(desktopPanel.rightGap <= 20 && desktopPanel.top >= 10 && desktopPanel.bottom >= 10, 'desktop settings should sit inside the viewport');
       assert.equal(await page.locator('.shelf-discovery').evaluate(el => getComputedStyle(el).display), 'flex');
     }
     await page.setViewportSize({ width, height: width >= 1024 ? 420 : 568 });
-    const body = page.locator('.shelf-settings .panel-body');
+    const body = page.locator('.shelf-settings .sheet-body');
     await body.evaluate(el => { el.scrollTop = 45; });
     await shot('shelf-settings-sticky-' + width);
     const sticky = await body.evaluate(el => {
@@ -114,7 +114,7 @@ try {
     await shot('shelf-desktop-' + width);
     const trigger = page.locator('.shelf-head button[aria-label^=书架设置]');
     await trigger.click();
-    await page.locator('.shelf-settings .panel-body').evaluate(el => { el.scrollTop = 0; });
+    await page.locator('.shelf-settings .sheet-body').evaluate(el => { el.scrollTop = 0; });
     await shot('settings-desktop-' + width);
     if (width === 1366) {
       await page.evaluate(() => document.documentElement.dataset.theme = 'dark');

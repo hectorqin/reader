@@ -1,5 +1,4 @@
 import '@mantine/core/styles.css';
-import '@mantine/notifications/styles.css';
 import './styles/theme-tokens.css';
 import './styles/reader.css';
 import './app/app.css';

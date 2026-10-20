@@ -67,13 +67,13 @@ it('asks before dropping an unsaved preference draft',async()=>{
   act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent?.startsWith('浏览偏好'))!.click());
   act(()=>{const select=root.querySelector('select')!;select.value='comfortable';select.dispatchEvent(new Event('change',{bubbles:true}));});
   act(()=>root.querySelector<HTMLButtonElement>('[aria-label="返回影音设置"]')!.click());
-  expect(root.querySelector('[role=alert]')?.textContent).toContain('尚未保存');
+  expect(root.querySelector('[role=alertdialog]')?.textContent).toContain('尚未保存');
   act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent==='继续编辑')!.click());
   expect(root.querySelector('select')!.value).toBe('comfortable');
   act(()=>root.querySelector<HTMLButtonElement>('[aria-label="返回影音设置"]')!.click());
   act(()=>{const select=root.querySelector('select')!;select.value='compact';select.dispatchEvent(new Event('change',{bubbles:true}));});
   act(()=>root.querySelector<HTMLButtonElement>('[aria-label="返回影音设置"]')!.click());
-  expect(root.querySelector('h1')?.textContent).toBe('影音设置');expect(root.querySelector('[role=alert]')).toBeNull();
+  expect(root.querySelector('h1')?.textContent).toBe('影音设置');expect(root.querySelector('[role=alertdialog]')).toBeNull();
 });
 it('retains an unsaved draft through route back/forward and discards it only explicitly',async()=>{
   const onPanelChange=vi.fn();let panel:'home'|'browse'='browse';
@@ -85,13 +85,8 @@ it('retains an unsaved draft through route back/forward and discards it only exp
   expect(onPanelChange).toHaveBeenLastCalledWith('browse');act(()=>{panel='browse';draw();});
   expect(root.querySelector('select')!.value).toBe('comfortable');
   act(()=>root.querySelector<HTMLButtonElement>('[aria-label="返回影音设置"]')!.click());
-  expect(root.querySelector('[role=alert]')?.textContent).toContain('尚未保存');
+  expect(root.querySelector('[role=alertdialog]')?.textContent).toContain('尚未保存');
   act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent==='放弃修改')!.click());
   expect(onPanelChange).toHaveBeenLastCalledWith('home');act(()=>{panel='home';draw();});
   act(()=>{panel='browse';draw();});expect(root.querySelector('select')!.value).toBe('compact');
-});
-it('does not show playback settings when a member follows the provider deep link',async()=>{
-  await act(async()=>render(<MediaSettings scope="member" panel="plugins" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={vi.fn()} onBack={vi.fn()} onManage={vi.fn()}/>,root));
-  expect(root.querySelector('[role=alert]')?.textContent).toContain('需要管理员权限');
-  expect(root.textContent).not.toContain('还没有正在播放');
 });

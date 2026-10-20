@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Note } from '../api/types.ts';
 import type { TextAnchor } from './text-anchor.ts';
-import { Modal } from './modal.tsx';
-import { FloatingConfirm } from './floating-confirm.tsx';
+import { ConfirmSheet, Sheet } from './sheet.tsx';
 import { FloatingNotice } from './floating-notice.tsx';
 
 export interface AnnotationTarget { anchor: TextAnchor; rect: DOMRect; note?: Note }
@@ -38,18 +37,17 @@ export function AnnotationPopover({ target, save, remove, close }: {
     return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', key, true); window.removeEventListener('resize',moved); document.removeEventListener('scroll',moved,true); };
   }, [editing, busy, confirmDelete]);
   useEffect(() => { if (editing) input.current?.focus(); }, [editing]);
-  if (editing) return <Modal title={target.note ? '编辑批注' : '添加批注'} busy={busy} onClose={close}>
-    <form className="annotation-editor source-modal-content" onSubmit={event => { event.preventDefault(); void work(() => save(comment.trim() ? 'note' : 'highlight', comment, color)); }}>
+  if (editing) return <Sheet title={target.note ? '编辑批注' : '添加批注'} busy={busy} onClose={close}>
+    <form className="annotation-editor" onSubmit={event => { event.preventDefault(); void work(() => save(comment.trim() ? 'note' : 'highlight', comment, color)); }}>
       <blockquote>{target.anchor.quote}</blockquote>
       <label>批注<textarea ref={input} aria-label="批注" maxLength={4000} value={comment} onInput={event => setComment(event.currentTarget.value)} placeholder="写下此刻的想法" disabled={busy} /></label>
       <div className="reading-note-colors" role="group" aria-label="高亮颜色">{[['#ffd54f','黄色'],['#80cbc4','绿色'],['#ce93d8','紫色']].map(([value, label]) => <button key={value} type="button" aria-label={label} aria-pressed={color === value} style={{'--note-color':value}} disabled={busy} onClick={() => setColor(value)}>{color === value ? '✓' : ''}</button>)}</div>
       <FloatingNotice message={error} error /><div className="reading-tool-actions"><button type="button" className="button" disabled={busy} onClick={close}>取消</button><button className="button primary" disabled={busy}>保存批注</button></div>
     </form>
-  </Modal>;
-  return <div ref={panel} className="annotation-popover" style={{left,top,width}} role={target.note ? 'dialog' : 'toolbar'} aria-label={target.note ? '批注详情' : '选中文字操作'} onPointerDown={event => event.preventDefault()}>
+  </Sheet>;
+  return <><div ref={panel} className="annotation-popover" style={{left,top,width}} role={target.note ? 'dialog' : 'toolbar'} aria-label={target.note ? '批注详情' : '选中文字操作'} onPointerDown={event => event.preventDefault()}>
     {target.note && <><blockquote>{target.anchor.quote}</blockquote><p className="annotation-comment">{target.note.comment || '这段文字已高亮，尚未添加批注。'}</p></>}
     <FloatingNotice message={error} error />
-    {confirmDelete && <FloatingConfirm title="删除批注" text="确定删除这段高亮及其批注？" confirmText="确认删除" cancelText="取消" onCancel={()=>setConfirmDelete(false)} onConfirm={()=>{setConfirmDelete(false);void work(remove);}} />}
     <div className="annotation-actions">
       {!target.note && <button disabled={busy} onClick={() => void work(async () => { if (!navigator.clipboard) throw new Error('当前环境不支持剪贴板，请使用系统复制'); await navigator.clipboard.writeText(target.anchor.quote); })}>复制</button>}
       {!target.note && <button disabled={busy} onClick={() => void work(() => save('highlight', '', color))}>高亮</button>}
@@ -58,5 +56,8 @@ export function AnnotationPopover({ target, save, remove, close }: {
       {target.note && <button disabled={busy} onClick={() => setConfirmDelete(true)}>删除</button>}
       <button disabled={busy} aria-label="关闭选区工具" onClick={close}>关闭</button>
     </div>
-  </div>;
+  </div>
+  {/* Outside the popover, so its pointer handling does not swallow the sheet's taps. */}
+  {confirmDelete && <ConfirmSheet danger title="删除批注" text="确定删除这段高亮及其批注？" confirmText="确认删除" onCancel={()=>setConfirmDelete(false)} onConfirm={()=>{setConfirmDelete(false);void work(remove);}} />}
+  </>;
 }

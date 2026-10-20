@@ -8,7 +8,7 @@ import { queueQuery, type Activity } from '../queries/media.queries.ts';
 import { channelLabels } from '../hooks/use-media-channel.ts';
 import { MediaPageFrame, QueryFeedback } from '../components/MediaPageFrame.tsx';
 import { SavedQueue } from '../components/saved-queue.tsx';
-import { FloatingConfirm } from '../../../ui/floating-confirm.tsx';
+import { ConfirmSheet } from '../../../ui/sheet.tsx';
 
 function queueChannel(kind: string): 'video' | 'music' | 'audiobook' {
   return kind === 'audiobook' ? 'audiobook' : ['album', 'artist', 'track'].includes(kind) ? 'music' : 'video';
@@ -72,6 +72,6 @@ export function MediaQueuePage() {
       onClear={() => setConfirming(true)}
     />}
     {!query.isPending && !query.error && entries.length === 0 && <div className="media-personal-empty"><ListMusic size={30} strokeWidth={1.4} aria-hidden="true" /><p>暂无记录。</p></div>}
-    {confirming && <FloatingConfirm theme="media" title="清空队列" text={`移除${channel ? `当前${channel === 'video' ? '影视' : channel === 'music' ? '音乐' : '有声书'}` : '全部'}队列中的 ${entries.length} 条记录？不会删除文件或停止当前播放。`} confirmText="确认清空" cancelText="保留队列" onConfirm={() => { setConfirming(false); action.mutate({ type: 'clear' }); }} onCancel={() => setConfirming(false)} />}
+    {confirming && <ConfirmSheet danger title="清空队列" text={`移除${channel ? `当前${channel === 'video' ? '影视' : channel === 'music' ? '音乐' : '有声书'}` : '全部'}队列中的 ${entries.length} 条记录？不会删除文件或停止当前播放。`} confirmText="确认清空" cancelText="保留队列" onConfirm={() => { setConfirming(false); action.mutate({ type: 'clear' }); }} onCancel={() => setConfirming(false)} />}
   </section></MediaPageFrame>;
 }

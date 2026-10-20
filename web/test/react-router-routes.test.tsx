@@ -17,7 +17,6 @@ describe('React Router route tree', () => {
     ['/media/queue', 'MediaQueuePage'],
     ['/media/music/queue', 'MediaQueuePage'],
     ['/media/video/settings', 'MediaSettingsPage'],
-    ['/media/video/settings/plugins', 'MediaSettingsPage'],
     ['/media/video/settings/libraries', 'MediaLibrariesPage'],
     ['/media/video/settings/tasks', 'MediaTasksPage'],
     ['/media/video/folders/library-1', 'MediaFoldersPage'],

@@ -52,10 +52,10 @@ describe('我的', () => {
   it('opens the shelf display sheet in place', () => {
     useAuthStore.setState({ verifiedUser: user('member') });
     paint();
-    const sheet = () => root.querySelector<HTMLElement>('[role=dialog][aria-label="书架设置"]')!;
-    expect(sheet().hidden).toBe(true);
+    const sheet = () => root.querySelector<HTMLElement>('dialog[aria-label="书架设置"]');
+    expect(sheet()).toBeNull();
     act(() => { [...root.querySelectorAll<HTMLButtonElement>('button.mine-row')].find(b => b.textContent?.startsWith('书架显示'))!.click(); });
-    expect(sheet().hidden).toBe(false);
+    expect(sheet()?.hasAttribute('open')).toBe(true);
   });
 
   it('gathers administration under 管理 for administrators and shows the chosen theme', () => {
@@ -65,8 +65,7 @@ describe('我的', () => {
     const labels = [...root.querySelectorAll('.mine-row-label')].map(el => el.textContent);
     expect(labels).toContain('媒体库');
     const admin = [...root.querySelectorAll('[aria-label="管理"] .mine-row-label')].map(el => el.textContent);
-    expect(admin).toEqual(['系统设置', '扫描与刮削', '来源与刮削']);
-    expect(root.querySelector('[aria-label="管理"] a[href="/me/plugins"]')).not.toBeNull();
+    expect(admin).toEqual(['系统设置', '扫描与刮削']);
     expect(root.textContent).toContain('雾蓝 · 深色');
     expect(root.querySelector('.mine-profile')?.textContent).toContain('管理员');
   });

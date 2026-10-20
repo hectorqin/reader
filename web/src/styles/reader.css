@@ -731,7 +731,7 @@ book-content {
   text-decoration: none;
 }
 
-.panel-header .icon-text-button {
+.sheet-header .icon-text-button {
   padding: 0.45rem 0.6rem;
   font-size: 0.82rem;
 }
@@ -764,7 +764,7 @@ book-content {
 .tts-bar button:focus-visible,
 .pager-page:focus-visible,
 .pager-step:focus-visible,
-.dialog button:focus-visible {
+.sheet button:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
@@ -1801,22 +1801,19 @@ book-content {
 
 /* ---- shelf settings sheet ---- */
 
-.shelf-settings .switch-field,
-.reader-screen .panel .switch-field {
+.sheet .switch-field {
   flex-direction: row;
   align-items: center;
   gap: 0.75rem;
 }
 
-.shelf-settings .switch-text,
-.reader-screen .panel .switch-text {
+.sheet .switch-text {
   flex: 1 1 auto;
   min-width: 0;
   font-size: 0.9rem;
 }
 
-.shelf-settings .switch-text .muted,
-.reader-screen .panel .switch-text .muted {
+.sheet .switch-text .muted {
   font-size: 0.72rem;
   margin-top: 0.15rem;
 }
@@ -1829,8 +1826,7 @@ book-content {
  * this on" — a separate class would be a second one, and the two would eventually
  * disagree.
  */
-.shelf-settings .switch,
-.reader-screen .panel .switch {
+.sheet .switch {
   flex: 0 0 auto;
   position: relative;
   width: 2.7rem;
@@ -1842,8 +1838,7 @@ book-content {
   transition: background var(--motion-duration) var(--motion-ease);
 }
 
-.shelf-settings .switch::after,
-.reader-screen .panel .switch::after {
+.sheet .switch::after {
   content: '';
   position: absolute;
   top: 0.2rem;
@@ -1856,13 +1851,11 @@ book-content {
   transition: inset-inline-start var(--motion-duration) var(--motion-ease);
 }
 
-.shelf-settings .switch[aria-pressed='true'],
-.reader-screen .panel .switch[aria-pressed='true'] {
+.sheet .switch[aria-pressed='true'] {
   background: var(--reader-fill);
 }
 
-.shelf-settings .switch[aria-pressed='true']::after,
-.reader-screen .panel .switch[aria-pressed='true']::after {
+.sheet .switch[aria-pressed='true']::after {
   inset-inline-start: 1.3rem;
 }
 
@@ -1877,10 +1870,8 @@ book-content {
     animation: none;
   }
 
-  .shelf-settings .switch,
-  .shelf-settings .switch::after,
-  .reader-screen .panel .switch,
-  .reader-screen .panel .switch::after {
+  .sheet .switch,
+  .sheet .switch::after {
     transition: none;
   }
 
@@ -1893,122 +1884,12 @@ book-content {
   }
 }
 
-/* ---- panels: a bottom sheet, half the screen ----
+/* ---- reader sheets ----
  *
- * These used to be `inset: 0` — full-screen opaque pages that replaced the book.
- * That is a defensible pattern for a *destination* and the wrong one for a
- * *control*: choosing a chapter or nudging the font size is an adjustment to the
- * page underneath, and a full-screen panel makes the reader leave the page to make
- * it — then come back to a re-laid-out chapter with no memory of what it looked
- * like before. The panel is therefore a sheet over the *lower half* of the reading
- * area, and the top half stays readable, which is what makes the change visible
- * while it is being made.
- *
- * Three things follow from that and are not decoration:
- *
- *  - **A scrim**, because a sheet without one reads as part of the page. It is
- *    also the tap target that closes the sheet, which is the second way out, along
- *    with the ✕ in the header.
- *  - **A handle**, because a sheet that rises from the bottom is understood to be
- *    draggable, and a drag target with nothing to grab is a sheet the reader
- *    cannot close the way they expect. (The drag itself is not implemented; the
- *    handle is the *affordance*, and the scrim and the ✕ are the two real ways out.
- *    Promising a drag that does not exist would be worse than not drawing it, so
- *    the handle is a visual cue and the sheet's own scroll is what moves.)
- *  - **A height that leaves the top of the page alone.** `min(70%, ...)` rather
- *    than a fixed viewport fraction: the contents list of a 1200-chapter book wants
- *    all the room it can get, and the settings list of eleven rows does not want
- *    more than it needs.
+ * The contents, appearance, read-aloud and source-switch panels are the app's one
+ * Sheet (ui/sheet.tsx, styles/sheet.css). On a phone it stops at 62% of the screen
+ * so the page being adjusted stays visible above it.
  */
-
-.scrim {
-  position: absolute;
-  inset: 0;
-  z-index: var(--reader-layer-panel);
-  background: color-mix(in srgb, #000 42%, transparent);
-  animation: scrim-in var(--motion-duration) var(--motion-ease);
-}
-
-@keyframes scrim-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.panel {
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
-  z-index: var(--reader-layer-panel);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  /* Half the reading area, and never more than three quarters of it: the reader
-     has to be able to see the page they are adjusting, and a sheet that covers
-     everything is the full-screen panel this replaced. */
-  height: min(62%, 34rem);
-  max-height: 78%;
-  background: var(--reader-surface);
-  border-top: 1px solid var(--reader-line);
-  border-radius: 16px 16px 0 0;
-  box-shadow: 0 -14px 36px color-mix(in srgb, #000 26%, transparent);
-  animation: sheet-in var(--motion-duration) var(--motion-ease);
-}
-
-@keyframes sheet-in {
-  from { transform: translateY(100%); }
-  to { transform: translateY(0); }
-}
-
-.panel[hidden] {
-  display: none;
-}
-
-/* The grab handle. Decorative, so it is `aria-hidden` in the markup. */
-.panel-grip {
-  flex: 0 0 auto;
-  width: 2.25rem;
-  height: 0.25rem;
-  margin: 0.5rem auto 0.125rem;
-  border-radius: 999px;
-  background: var(--reader-line);
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.5rem 0.5rem 0.9rem;
-  border-bottom: 1px solid var(--reader-line);
-}
-
-.panel-header h2 {
-  margin: 0;
-  font-size: var(--text-title);
-  font-weight: 600;
-}
-
-/* The count beside the title. Right-aligned against the ✕ rather than next to the
-   title, so the header reads as "title … count … close" and the closing control
-   stays exactly where the reader's thumb expects it. */
-.panel-subtitle {
-  flex: 1 1 auto;
-  text-align: end;
-  font-size: var(--text-meta);
-  color: var(--reader-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.panel-body {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  /* `overscroll-behavior: contain` stops a flick at the end of the list from
-     scrolling the *chapter* behind the sheet, which is the classic bottom-sheet
-     annoyance: the list stops moving, the text underneath starts, and the reader
-     has lost their place. */
-  overscroll-behavior: contain;
-  padding: var(--space-3) 0.9rem calc(var(--space-3) + var(--safe-bottom));
-}
 
 .toc-list {
   list-style: none;
@@ -3525,120 +3406,6 @@ book-content {
   color: #c0392b;
 }
 
-/* ---- dialogs ---- */
-
-.dialog-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-  z-index: 30;
-}
-
-.dialog {
-  background: var(--reader-surface);
-  color: var(--reader-ink);
-  border: 1px solid var(--reader-line);
-  border-radius: var(--reader-radius);
-  padding: 1rem;
-  width: min(24rem, 100%);
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.dialog h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.dialog p {
-  margin: 0;
-  font-size: 0.82rem;
-  line-height: 1.5;
-}
-
-.dialog input {
-  appearance: none;
-  border: 1px solid var(--reader-line);
-  background: var(--reader-paper);
-  color: var(--reader-ink);
-  border-radius: var(--reader-radius);
-  padding: 0.6rem 0.7rem;
-  /* 16px, so iOS does not zoom the page on focus and leave the dialog off-screen. */
-  font-size: 16px;
-  font-family: inherit;
-  width: 100%;
-}
-
-.dialog-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-}
-
-.dialog-actions .button {
-  flex: 0 1 auto;
-  min-width: 5rem;
-}
-
-.dialog-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-/* ---- batch metadata ---- */
-
-/*
- * The batch dialog has seven optional fields, which do not fit on a phone.
- *
- * The fields scroll and the buttons do not. Scrolling the whole dialog instead
- * puts 保存 below the fold, so the reader fills the form, sees no way to commit
- * it, and has to work out that the sheet itself moves — and the on-screen
- * keyboard takes another third of the height while they are typing in it.
- *
- * `max-height` on the *fields* rather than on the dialog also keeps the title
- * visible, so it stays obvious what is being edited after a scroll.
- */
-.dialog:has(.dialog-field) {
-  max-height: min(86vh, 40rem);
-  overflow: hidden;
-}
-
-.dialog:has(.dialog-field) .dialog-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  overflow-y: auto;
-  min-height: 0;
-  /* Room for the last field's label, so it is not flush against the buttons. */
-  padding-bottom: 0.2rem;
-}
-
-.dialog-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.78rem;
-  color: var(--reader-muted);
-}
-
-.dialog-field input {
-  appearance: none;
-  border: 1px solid var(--reader-line);
-  background: var(--reader-paper);
-  color: var(--reader-ink);
-  border-radius: var(--reader-radius);
-  padding: 0.5rem 0.6rem;
-  /* 16px, so iOS does not zoom the page on focus and push the dialog off-screen. */
-  font-size: 16px;
-  font-family: inherit;
-  width: 100%;
-}
-
 /*
  * The file input is the trigger for the ⬆ button and is never shown.
  *
@@ -3836,13 +3603,10 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 }
 .reader-screen .rail-button { width: 48px; height: 48px; border-radius: 50%; background: var(--reader-surface); box-shadow: 0 3px 12px #00000020; }
 .reader-screen .rail-button .icon { font-size: 1.5rem; }
-.reader-screen .panel { border-radius: 20px 20px 0 0; max-height: 62%; background: var(--reader-surface); box-shadow: 0 -6px 30px #00000018; }
-.reader-screen .panel-header { padding: 0.5rem 1.25rem 0.75rem; }
-.reader-screen .panel-body { padding-inline: 1.25rem; }
-.reader-screen .panel .field { padding-block: 0.8rem; }
-.reader-screen .panel .tts-bar { position: static; border-radius: 12px; width: auto; transform: none; margin-bottom: 1rem; }
-.reader-screen .panel-header > .icon-button { margin-inline-start: auto; }
-.reader-screen .panel .field { grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr); gap: 0.75rem; padding-block: 0.5rem; }
+@media (max-width: 700px) { .reader-screen .sheet { max-height: min(62dvh, 36rem); } }
+.reader-screen .sheet .field { padding-block: 0.8rem; }
+.reader-screen .sheet .tts-bar { position: static; border-radius: 12px; width: auto; transform: none; margin-bottom: 1rem; }
+.reader-screen .sheet .field { grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr); gap: 0.75rem; padding-block: 0.5rem; }
 .reader-screen .field input[type='range'] { min-height: 32px; }
 .reader-screen .field input[type='range']::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: var(--reader-line); }
 .reader-screen .field input[type='range']::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; margin-top: -7px; border-radius: 50%; background: var(--reader-fill); }
@@ -3945,16 +3709,6 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   .source-picker > label { flex:1; margin:0; font-size:.85rem; color:var(--reader-muted); }
   .source-picker > p { flex-basis:100%; margin:0; }
 }
-.source-modal { color: var(--reader-ink); background: var(--reader-paper); border: 1px solid var(--reader-line); border-radius: 1rem; padding: 0; width: min(36rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: hidden; }
-.source-modal[open] { display: flex; flex-direction: column; }
-.source-modal::backdrop { background: #0007; }
-.source-modal-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .75rem 1rem; border-bottom: 1px solid var(--reader-line); flex: none; }
-.source-modal-header h2 { margin: 0; font-size: 1.15rem; }
-.source-modal-form.sources-card { display: flex; flex-direction: column; margin: 0; border: 0; padding: 0; width: 100%; min-height: 0; overflow: hidden; }
-.source-modal-content { overflow-y: auto; overscroll-behavior: contain; padding: 0 1rem 1rem; }
-.source-modal-actions { display: flex; flex-wrap: wrap; gap: .5rem; padding: .75rem 1rem; border-top: 1px solid var(--reader-line); flex: none; }
-.source-modal-actions button { min-height: 44px; }
-
 /* Collection pages share a quiet heading, labelled destinations and useful empty states. */
 .shelf-head { align-items: center; padding-top: calc(1.25rem + var(--safe-top)); padding-bottom: .85rem; }
 .shelf-head-actions { margin-top: 0; }
@@ -4039,21 +3793,11 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .file-manager-header .collection-links { align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: .55rem; }
 .file-manager-header .collection-link.button { flex: 0 0 auto; min-width: 8.5rem; min-height: 44px; justify-content: flex-start; }
 .file-manager-header .collection-link.button > span { flex: 1 1 auto; }
-.library-files-screen .mantine-Menu-dropdown { min-width: 10rem; padding: .35rem; border: 1px solid var(--reader-line); border-radius: .75rem; background: var(--reader-paper); color: var(--reader-ink); box-shadow: 0 .75rem 2rem #0003; }
-.library-files-screen .mantine-Menu-item { min-height: 2.5rem; border-radius: .5rem; color: var(--reader-ink); font: inherit; }
-.library-files-screen .mantine-Menu-item:hover, .library-files-screen .mantine-Menu-item:focus-visible { background: color-mix(in srgb, var(--reader-accent) 12%, transparent); color: var(--reader-ink); }
-.library-files-screen .mantine-Menu-item[data-disabled] { opacity: .45; }
-.library-files-screen .mantine-Menu-item[data-color='red'] { color: #b23a31; }
 .library-file-menu { min-width: 10rem; padding: .35rem; border: 1px solid var(--reader-line); border-radius: .75rem; background: var(--reader-paper); color: var(--reader-ink); box-shadow: 0 .75rem 2rem #0003; }
 .library-file-menu .mantine-Menu-item { min-height: 2.5rem; border-radius: .5rem; color: var(--reader-ink); font: inherit; }
 .library-file-menu .mantine-Menu-item:hover, .library-file-menu .mantine-Menu-item:focus-visible { background: color-mix(in srgb, var(--reader-accent) 12%, transparent); color: var(--reader-ink); }
 .library-file-menu .mantine-Menu-item[data-disabled] { opacity: .45; }
 .library-file-menu .mantine-Menu-item[data-color='red'] { color: #b23a31; }
-.shelf-settings.panel { position: fixed; }
-.shelf-settings .panel-header { padding: .75rem 1rem; flex: none; }
-.shelf-settings .panel-header h2 { flex: 1; }
-.shelf-settings .panel-header > .icon-button { flex: none; margin-inline-start: auto; width: 44px; height: 44px; }
-.shelf-settings .panel-body { padding-top: 0; }
 .shelf-settings .section-title:first-child { margin-top: 0; }
 .shelf-discovery { display: contents; }
 .plugin-install { margin-block: 1rem 1.5rem; border: 1px solid var(--reader-line); border-radius: .85rem; overflow: hidden; }
@@ -4083,7 +3827,6 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   .library-files-screen .manager-check { grid-row: 1; }
   .library-files-screen .manager-meta { grid-column: 3; grid-row: 1; justify-content: flex-end; padding-left: 0; }
   .library-files-screen .manager-more { grid-column: 4; grid-row: 1; }
-  .shelf-settings.panel { inset: 1rem 1rem auto auto; width: 26rem; height: min(42rem, calc(100dvh - 2rem)); max-height: calc(100dvh - 2rem); border: 1px solid var(--reader-line); border-radius: 1rem; box-shadow: 0 12px 48px #0003; overflow: hidden; animation-name: shelf-settings-in; }
   .shelf-settings .switch-field { grid-template-columns: minmax(0, 1fr) auto; }
   .sources-header { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); max-width: var(--collection-measure); margin-inline: auto; padding: 2rem .9rem .75rem; border-bottom: 0; }
   .sources-header h1 { font-size: 1.5rem; font-weight: 650; }
@@ -4107,14 +3850,8 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   .reader-screen .reader-actions .icon { font-size: 1.1rem; }
   .reader-screen .reader-rail { right: max(1rem, calc((100% - var(--desktop-page-width)) / 2 - 4.5rem)); bottom: 2.25rem; }
   .reader-screen .reading-indicator { width: var(--desktop-page-width); max-width: 100%; margin-inline: auto; padding-inline: 1.5rem; font-size: .75rem; }
-  .reader-screen .scrim { background: color-mix(in srgb, var(--reader-ink) 12%, transparent); }
-  .reader-screen .panel { inset: 1rem 1rem 1rem auto; width: 26rem; height: calc(100% - 2rem); max-height: none; border: 1px solid var(--reader-line); border-radius: 1rem; overflow: hidden; animation-name: shelf-settings-in; }
-  .reader-screen .panel[data-placement='start'] { inset-inline: 1rem auto; width: 23rem; animation-name: reader-contents-in; }
-  .reader-screen .panel-grip { display: none; }
-  .reader-screen .panel-header { flex: none; padding: .75rem 1.25rem; }
-  .reader-screen .panel-header .icon-button { width: 40px; height: 40px; border-radius: .6rem; }
-  .reader-screen .panel .section-title { font-size: .78rem; font-weight: 650; letter-spacing: .05em; color: var(--reader-accent); padding-top: .9rem; padding-bottom: .65rem; }
-  .reader-screen .panel-body { padding-top: 0; }
+  .reader-screen .sheet::backdrop { background: color-mix(in srgb, var(--reader-ink) 12%, transparent); }
+  .reader-screen .sheet .section-title { font-size: .78rem; font-weight: 650; letter-spacing: .05em; color: var(--reader-accent); padding-top: .9rem; padding-bottom: .65rem; }
   .reader-screen .section-title:first-child { margin-top: 0; }
 }
 @media (max-width: 600px) {
@@ -4126,14 +3863,6 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   .source-interval { width:100%; justify-content:space-between; }
   .source-interval select { flex:1; }
   .library-files-screen .manager-actions { overflow-x:auto; }
-}
-@keyframes reader-contents-in {
-  from { opacity: 0; transform: translateX(-1rem); }
-  to { opacity: 1; transform: translateX(0); }
-}
-@keyframes shelf-settings-in {
-  from { opacity: 0; transform: translateX(1rem); }
-  to { opacity: 1; transform: translateX(0); }
 }
 @media (max-width: 600px) {
   .source-entry-actions { flex-direction: column; gap: 0; }
@@ -4150,7 +3879,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reader-source-info span { flex: 0 1 auto; max-width: 35%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .reader-source-info a { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: inherit; text-decoration: none; }
 .reader-source-info a:hover { text-decoration: underline; }
-.book-detail { padding-top: 1rem; }
+.book-detail { display: grid; gap: .5rem; }
 .book-detail h3 { margin: 0; font-size: 1.35rem; overflow-wrap: anywhere; }
 .book-detail-author { color: var(--reader-muted); }
 .book-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .6rem 1rem; padding-block: .8rem; border-block: 1px solid var(--reader-line); }
@@ -4160,7 +3889,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 
 .reader-book-heading { padding: 0; border: 0; background: transparent; color: inherit; text-align: start; cursor: pointer; min-height: 44px; }
 
-.alternative-preview { padding-block: 1rem; display: grid; gap: .75rem; }
+.alternative-preview { display: grid; gap: .75rem; }
 .alternative-preview h4 { margin: 0; }
 .alternative-preview label { display: grid; gap: .5rem; }
 .alternative-preview select { width: 100%; min-width: 0; min-height: 44px; }
@@ -4242,7 +3971,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .annotation-actions button:hover { background: var(--reader-surface); }
 .annotation-popover blockquote, .annotation-editor blockquote { margin: .3rem 0 .75rem; padding: .5rem .75rem; border-inline-start: 3px solid var(--reader-accent); max-height: 6rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .annotation-comment { margin: .5rem; max-height: 8rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
-.annotation-editor { display: grid; gap: 1rem; padding-top: 1rem; }
+.annotation-editor { display: grid; gap: 1rem; }
 .annotation-editor label { display: grid; gap: .5rem; }
 .annotation-editor textarea { box-sizing: border-box; width: 100%; min-height: 6rem; padding: .75rem; font: inherit; border: 1px solid var(--reader-line); border-radius: .5rem; background: var(--reader-paper); color: var(--reader-ink); resize: vertical; }
 .reading-tool-advanced { border-top: 1px solid var(--reader-line); padding-top: .5rem; }

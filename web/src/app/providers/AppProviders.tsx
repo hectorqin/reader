@@ -1,6 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
 import { MantineProvider } from '@mantine/core';
-import { Notifications } from '@mantine/notifications';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { AppRuntime } from '../runtime.ts';
 import { RuntimeContext } from './runtime-context.tsx';
@@ -34,7 +33,7 @@ export function AppProviders({ runtime, children }: { runtime: AppRuntime; child
   return <RuntimeContext value={runtime}>
     <QueryClientProvider client={runtime.queryClient}>
       <MantineProvider forceColorScheme={dark ? 'dark' : 'light'}>
-        <Notifications />{children}
+        {children}
       </MantineProvider>
     </QueryClientProvider>
   </RuntimeContext>;

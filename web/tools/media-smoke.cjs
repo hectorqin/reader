@@ -62,7 +62,7 @@ const assert=require('node:assert/strict');
     await readingPage.close();
     const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
     async function stopPlayback(){
-      const close=page.getByRole('button',{name:'关闭播放菜单',exact:true});if(await close.isVisible())await close.click();
+      const close=page.locator('dialog[open] .sheet-close').last();if(await close.isVisible())await close.click();
       const videoStop=page.getByRole('button',{name:'结束',exact:true});
       if(await videoStop.isVisible()){await videoStop.click();return;}
       const audioStop=page.getByRole('button',{name:'结束播放',exact:true});
@@ -410,13 +410,13 @@ const assert=require('node:assert/strict');
     await page.getByLabel('更多播放选项',{exact:true}).click();
     await page.getByRole('button',{name:'快进 30 秒',exact:true}).click();
     await page.getByRole('button',{name:'快退 15 秒',exact:true}).click();
-    await page.getByRole('button',{name:'关闭播放菜单',exact:true}).click();
+    await page.locator('dialog[open] .sheet-close').last().click();
     await page.waitForFunction(()=>{const a=document.querySelector('.media-player audio');return a.paused&&Math.abs(a.currentTime-15)<.2;});
     await page.getByRole('button',{name:'继续',exact:true}).click();
     await page.getByRole('button',{name:'更多播放选项',exact:true}).click();
     await page.getByRole('combobox',{name:'倍速',exact:true}).selectOption('1.75');
     assert.equal(await page.locator('.media-player audio').evaluate(audio=>audio.playbackRate),1.75);
-    await page.getByRole('button',{name:'关闭播放菜单',exact:true}).click();
+    await page.locator('dialog[open] .sheet-close').last().click();
     await page.getByRole('combobox',{name:'定时',exact:true}).selectOption('15');
     assert.equal(await page.getByRole('combobox',{name:'定时',exact:true}).locator('option:checked').textContent(),'15 分钟');
     for(let i=0;i<50&&renewalCount===0;i++)await delay(100);
@@ -516,7 +516,7 @@ const assert=require('node:assert/strict');
     assert.equal(await page.getByRole('combobox',{name:'定时',exact:true}).locator('option:checked').textContent(),'15 分钟');
     await page.getByRole('combobox',{name:'定时',exact:true}).selectOption('0');
     assert.equal(await page.getByRole('combobox',{name:'定时',exact:true}).locator('option:checked').textContent(),'定时');
-    await page.getByRole('button',{name:'关闭播放菜单',exact:true}).click();
+    await page.locator('dialog[open] .sheet-close').last().click();
     await page.getByRole('button',{name:'字幕',exact:true}).click();
     // Exercise native TextTrack events; this validates controls, not container demux support.
     await page.locator('.media-player video').evaluate(video=>{
@@ -905,7 +905,7 @@ const assert=require('node:assert/strict');
     const savedLiveQueue=await(await fetch(origin+'/api/v1/media/queue',{headers})).json();
     assert.deepEqual(savedLiveQueue.items.filter(entry=>entry.kind==='audiobook').map(entry=>entry.partId),[chapters[1].id]);
     assert.equal(await page.locator('.media-player audio').evaluate(audio=>audio.currentSrc),sourceBeforeEdit);
-    await page.getByRole('button',{name:'关闭播放菜单',exact:true}).click();
+    await page.locator('dialog[open] .sheet-close').last().click();
 
     await stopPlayback();
     await page.getByRole('button',{name:'播放',exact:true}).nth(1).click();

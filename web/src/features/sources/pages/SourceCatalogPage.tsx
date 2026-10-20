@@ -1,4 +1,5 @@
-import { Alert, Button, Group, Modal, Select, Stack, Text } from '@mantine/core';
+import { Alert, Button, Group, Select, Text } from '@mantine/core';
+import { SourceBookDetailSheet } from '../components/SourceBookDetailSheet.tsx';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -69,18 +70,7 @@ export function SourceCatalogPage() {
     {busy && !page && <FloatingNotice message="正在搜索…" busy />}
     <section className="sources-card"><div className="source-results">{page?.items.map(item => { const option = item.options?.[0]; return <article className="sources-row catalog-book" key={item.ref}><div><strong>{item.title}</strong>{item.latestChapter && <small>{item.latestChapter}</small>}{item.authors?.length ? <small>{item.authors.join('、')}</small> : null}{item.description && <p className="source-description">{item.description}</p>}</div><div className="sources-actions"><Button className="button" onClick={() => setDetail(item)}>详情</Button><Button className="button primary" disabled={option?.available === false} loading={acquire.isPending} onClick={() => acquireEntry(item, option?.id)}>{option?.label ?? '加入书架'}</Button></div></article>; })}</div></section>
     {page && !busy && page.items.length === 0 && <Alert>没有找到匹配书籍。</Alert>}
-    <Modal opened={!!detail} onClose={() => setDetail(null)} title={detail?.title ?? '书籍详情'}>
-      <Stack>
-        {detailQuery.isPending && <FloatingNotice message="正在读取书籍详情…" busy />}
-        {detailQuery.error && <Alert color="red">{detailQuery.error.message}</Alert>}
-        {detail && <>
-          <Text>{detail.description || '暂无简介'}</Text>
-          <Text size="sm" c="dimmed">{detail.authors?.join('、') || '作者未知'}</Text>
-          {detail.options?.map(option => <Button key={option.id} disabled={option.available === false} loading={acquire.isPending} onClick={() => acquireEntry(detail, option.id)}>{option.label}</Button>)}
-          {(!detail.options || detail.options.length === 0) && <Button loading={acquire.isPending} onClick={() => acquireEntry(detail)}>加入书架</Button>}
-        </>}
-      </Stack>
-    </Modal>
+    {detail && <SourceBookDetailSheet detail={detail} pending={detailQuery.isPending} error={detailQuery.error} acquiring={acquire.isPending} onAcquire={acquireEntry} onClose={() => setDetail(null)} />}
     </main>
   </div>;
 }

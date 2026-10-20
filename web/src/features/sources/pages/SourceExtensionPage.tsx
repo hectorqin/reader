@@ -5,7 +5,7 @@ import type { ExtensionContent, ExtensionField, ExtensionForm, ExtensionPage } f
 import { ApiError } from '../../../api/errors.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
-import { FloatingConfirm } from '../../../ui/floating-confirm.tsx';
+import { ConfirmSheet } from '../../../ui/sheet.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 import { Button, IconButton } from '../../../ui/toolkit.tsx';
 
@@ -154,7 +154,7 @@ export function SourceExtensionPage() {
     <main className="sources-body" aria-busy={busy} tabIndex={-1}>{page.description && <p className="extension-description">{page.description}</p>}
       <ContentView content={page} scope="page" values={values} busy={busy} selected={selected} expanded={expanded} onChange={updateValue.bind(null)} onSubmit={submit} onSelectAction={selectAction} onToggle={toggleExpanded} onToggleSelected={toggleSelected} />
       {selectedTab && <div role="tabpanel" id={`extension-panel-${selectedTab.id}`} aria-labelledby={`extension-tab-${selectedTab.id}`} tabIndex={-1}>{selectedTab.description && <p className="extension-description">{selectedTab.description}</p>}<ContentView content={selectedTab} scope={`tab:${selectedTab.id}`} values={values} busy={busy} selected={selected} expanded={expanded} onChange={updateValue.bind(null)} onSubmit={submit} onSelectAction={selectAction} onToggle={toggleExpanded} onToggleSelected={toggleSelected} /></div>}
-    </main>{confirmation && <FloatingConfirm title="确认操作" text={confirmation.form.confirm ?? ''} confirmText={`确认${confirmation.form.submit}`} cancelText="取消" onCancel={() => setConfirmation(null)} onConfirm={() => void execute(confirmation.form.id, confirmation.values, confirmation.key, confirmation.form)} />}
+    </main>{confirmation && <ConfirmSheet title="确认操作" text={confirmation.form.confirm ?? ''} confirmText={`确认${confirmation.form.submit}`} cancelText="取消" onCancel={() => setConfirmation(null)} onConfirm={() => void execute(confirmation.form.id, confirmation.values, confirmation.key, confirmation.form)} />}
   </div>;
 }
 

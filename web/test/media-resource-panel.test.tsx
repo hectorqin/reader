@@ -32,7 +32,7 @@ it('allows the page action menu to open resource details without rendering a bod
   await act(async () => render(<ResourcePanel api={api} assets={[{ id: 'asset-1', title: '影片' }]} summary="1 个文件 · 原版" sourceInfo={<p>资料来源：TMDB</p>} openPanel="source" onPanelChange={onPanelChange} showTrigger={false} />, root));
   expect(root.querySelector('.media-resource-panel')).toBeNull();
   expect(document.querySelector('dialog[open]')?.getAttribute('aria-label')).toBe('来源');
-  const close = document.querySelector<HTMLButtonElement>('dialog button[aria-label="关闭弹窗"]');
+  const close = document.querySelector<HTMLButtonElement>('dialog button[aria-label="关闭"]');
   await act(async () => close?.click());
   expect(document.querySelector('dialog[open]')).toBeNull();
   expect(onPanelChange).toHaveBeenCalledWith(null);

@@ -1,4 +1,3 @@
-import {FloatingConfirm} from './floating-confirm.tsx';
 /**
  * The questions a screen asks, and the one shape each answer has.
  *
@@ -25,10 +24,13 @@ import {FloatingConfirm} from './floating-confirm.tsx';
  * prompt attached to a different file) and every path that forgot to remove it was a
  * path nobody tested. Held in state, "there is one dialog and it is the current
  * question" is not a rule anybody has to keep.
+ *
+ * Every kind is drawn as a `Sheet` (ui/sheet.tsx), like every other overlay.
  */
 
 import { Button } from './toolkit.tsx';
-import { type JSX, useEffect, useRef } from 'react';
+import { ConfirmSheet, Sheet } from './sheet.tsx';
+import { type JSX, useLayoutEffect, useRef } from 'react';
 
 /** One question with one answer. Held by the screen, rendered by the tree. */
 export type Dialog =
@@ -78,34 +80,22 @@ export function DialogView({
    */
   destructive: string;
 }): JSX.Element {
-  if(dialog.kind==='confirm')return <FloatingConfirm title={dialog.title} text={dialog.body} confirmText={destructive} cancelText="取消" onConfirm={()=>onClose(true)} onCancel={()=>onClose(false)}/>;
+  if (dialog.kind === 'confirm') {
+    return <ConfirmSheet title={dialog.title} text={dialog.body} confirmText={destructive} danger
+      onConfirm={() => onClose(true)} onCancel={() => onClose(false)} />;
+  }
+  if (dialog.kind === 'prompt') return <PromptDialog title={dialog.title} value={dialog.value} onClose={onClose} />;
+  if (dialog.kind === 'form') return <MetadataDialog dialog={dialog} onClose={onClose} />;
   return (
-    <div
-      className="dialog-overlay"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose(null);
-      }}
-    >
-      {dialog.kind === 'prompt' ? (
-        <PromptDialog title={dialog.title} value={dialog.value} onClose={(value) => onClose(value)} />
-      ) : null}
-      {dialog.kind === 'pick' ? (
-        <div className="dialog sheet">
-          <h3>{dialog.title}</h3>
-          <div className="dialog-list">
-            {dialog.options.map((option) => (
-              <Button key={option.value} onClick={() => onClose(option.value)}>
-                {option.label}
-              </Button>
-            ))}
-          </div>
-          <div className="dialog-actions">
-            <Button onClick={() => onClose(null)}>取消</Button>
-          </div>
-        </div>
-      ) : null}
-      {dialog.kind === 'form' ? <MetadataDialog dialog={dialog} onClose={(fields) => onClose(fields)} /> : null}
-    </div>
+    <Sheet title={dialog.title} size="compact" onClose={() => onClose(null)}>
+      <div className="sheet-list">
+        {dialog.options.map((option) => (
+          <Button key={option.value} onClick={() => onClose(option.value)}>
+            {option.label}
+          </Button>
+        ))}
+      </div>
+    </Sheet>
   );
 }
 
@@ -119,27 +109,27 @@ function PromptDialog({
   onClose(value: string | null): void;
 }): JSX.Element {
   const input = useRef<HTMLInputElement | null>(null);
-  useEffect(() => {
-    input.current?.focus();
-    input.current?.select();
-  }, []);
+  // Runs after the sheet has opened and focused the field, so the selection sticks.
+  useLayoutEffect(() => { input.current?.select(); }, []);
+  const submit = () => onClose(input.current?.value ?? '');
   return (
-    <form
-      className="dialog"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onClose(input.current?.value ?? '');
-      }}
-    >
-      <h3>{title}</h3>
-      <input ref={input} type="text" defaultValue={value} />
-      <div className="dialog-actions">
+    <Sheet title={title} size="compact" onClose={() => onClose(null)} initialFocus=".sheet-prompt-input"
+      footer={<>
         <Button onClick={() => onClose(null)}>取消</Button>
-        <Button type="submit" className="primary">
-          确定
-        </Button>
-      </div>
-    </form>
+        <Button className="primary" onClick={submit}>确定</Button>
+      </>}>
+      <form className="sheet-form" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+        <label className="sheet-field">
+          <input
+            ref={input}
+            aria-label={title}
+            className="sheet-prompt-input"
+            type="text"
+            defaultValue={value}
+          />
+        </label>
+      </form>
+    </Sheet>
   );
 }
 
@@ -151,50 +141,40 @@ function MetadataDialog({
   onClose(fields: Record<string, string> | null): void;
 }): JSX.Element {
   const inputs = useRef(new Map<string, HTMLInputElement>());
+  const submit = () => {
+    const patch: Record<string, string> = {};
+    for (const [key, input] of inputs.current) {
+      const value = input.value.trim();
+      if (value !== '') patch[key] = value;
+    }
+    onClose(patch);
+  };
+  // The fields scroll inside the sheet body and 保存 sits in the pinned footer, so a
+  // form with seven fields never puts its only way to commit below the fold.
   return (
-    <form
-      className="dialog"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const patch: Record<string, string> = {};
-        for (const [key, input] of inputs.current) {
-          const value = input.value.trim();
-          if (value !== '') patch[key] = value;
-        }
-        onClose(patch);
-      }}
-    >
-      <h3>{dialog.title}</h3>
-      <p className="muted">留空的字段保持不变。目录会写成它里面每一本书的资料。</p>
-      {/* The fields are their own scroller so the actions below them stay
-          reachable: a sheet that scrolls whole puts 保存 past the fold, and a form
-          with no visible way to commit it reads as a dead end. */}
-      <div className="dialog-fields">
+    <Sheet title={dialog.title} onClose={() => onClose(null)} initialFocus="input[name=author]"
+      footer={<>
+        <Button onClick={() => onClose(null)}>取消</Button>
+        <Button className="primary" onClick={submit}>保存</Button>
+      </>}>
+      <form className="sheet-form" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+        <p className="sheet-text">留空的字段保持不变。目录会写成它里面每一本书的资料</p>
         {dialog.fields.map((field) => (
-          <label className="dialog-field" key={field.key}>
+          <label className="sheet-field" key={field.key}>
             <span>{field.label}</span>
             <input
               type="text"
+              name={field.key}
               placeholder="留空则不改"
               ref={(node) => {
-                if (node) {
-                  inputs.current.set(field.key, node);
-                  if (field.key === 'author') node.focus();
-                } else {
-                  inputs.current.delete(field.key);
-                }
+                if (node) inputs.current.set(field.key, node);
+                else inputs.current.delete(field.key);
               }}
             />
           </label>
         ))}
-      </div>
-      <div className="dialog-actions">
-        <Button onClick={() => onClose(null)}>取消</Button>
-        <Button type="submit" className="primary">
-          保存
-        </Button>
-      </div>
-    </form>
+      </form>
+    </Sheet>
   );
 }
 

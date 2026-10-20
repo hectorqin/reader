@@ -1,14 +1,13 @@
-import {FloatingConfirm} from '../../../ui/floating-confirm.tsx';
+import { ConfirmSheet } from '../../../ui/sheet.tsx';
 import {MediaSelect} from './select.tsx';
 import {PlaybackSettings} from './playback-settings.tsx';
 import {MediaThemeSettings} from './theme-settings.tsx';
 import type {AppSettings} from '../../../store/settings.ts';
-export type SettingsPanel = 'home'|'theme'|'browse'|'playback'|'plugins'|'account';
+export type SettingsPanel = 'home'|'theme'|'browse'|'playback'|'account';
 import { useState } from 'react';
-import {ChevronLeft,ChevronRight,Clock3,Headphones,FolderOpen,SlidersHorizontal,RefreshCw,UserRound,Puzzle} from 'lucide-react';
+import {ChevronLeft,ChevronRight,Clock3,Headphones,FolderOpen,SlidersHorizontal,RefreshCw,UserRound} from 'lucide-react';
 import type {MediaPlayer} from '../services/player.ts';
 import type {MediaApi,MediaAccount} from '../api/media-api.ts';
-import {MediaProviderSettings} from './provider-settings.tsx';
 import {defaultMediaPreferences,saveMediaPreferences,type MediaPreferences} from '../services/preferences.ts';
 
 /**
@@ -27,17 +26,17 @@ export function MediaSettings({scope,preferences,player,admin,api: _api,account,
   function save(){setError('');setSaved(false);try{const value=saveMediaPreferences(scope,draft);onSaved(value);setSaved(true);}catch(error){setError(error instanceof Error?error.message:'保存失败');}}
   function change(patch:Partial<MediaPreferences>){setDraft({...draft,...patch});setSaved(false);}
   function openBrowse(){if(!dirty)setDraft({...preferences});setError('');setSaved(false);setPanel('browse');}
-  const title=panel==='theme'?'外观与主题':panel==='browse'?'浏览偏好':panel==='playback'?'播放设置':panel==='plugins'?'来源与刮削':panel==='account'?'账号与连接':'影音设置';
+  const title=panel==='theme'?'外观与主题':panel==='browse'?'浏览偏好':panel==='playback'?'播放设置':panel==='account'?'账号与连接':'影音设置';
   const link=(Icon:typeof Clock3,label:string,description:string,onClick:()=>void)=><button className="media-setting-row" onClick={onClick}><Icon size={19} strokeWidth={1.6} aria-hidden="true"/><span>{label}</span><small>{description}</small><ChevronRight size={16} aria-hidden="true"/></button>;
   return <section className="media-settings" aria-label="影音设置">
     <div className="media-settings-heading"><button className="media-back-button" data-media-back aria-label={panel==='home'?'← 返回影音':backLabel} title={panel==='home'?'返回影音':backLabel} onClick={back}><ChevronLeft size={20} aria-hidden="true"/></button><h1>{title}</h1></div>
-    {leaving&&<FloatingConfirm theme="media" title="放弃浏览偏好修改？" text="浏览偏好尚未保存，离开后将丢弃本次修改。" confirmText="放弃修改" cancelText="继续编辑" onCancel={()=>setLeaving(false)} onConfirm={()=>{setLeaving(false);setDraft({...preferences});setPanel('home');}}/>}
+    {leaving&&<ConfirmSheet danger title="放弃浏览偏好修改？" text="浏览偏好尚未保存，离开后将丢弃本次修改。" confirmText="放弃修改" cancelText="继续编辑" onCancel={()=>setLeaving(false)} onConfirm={()=>{setLeaving(false);setDraft({...preferences});setPanel('home');}}/>}
     {panel==='home'?<>
       <section className="media-settings-group"><h2>偏好</h2>
         {link(SlidersHorizontal,'浏览偏好',preferences.density==='compact'?'紧凑':'宽松',openBrowse)}
         {link(Headphones,'播放设置','倍速与连续播放',()=>setPanel('playback'))}
       </section>
-      {admin&&<section className="media-settings-group"><h2>管理员</h2>{link(FolderOpen,'媒体库管理','全部影音媒体库',onManage)}{onTasks&&link(RefreshCw,'扫描与刮削','任务与匹配结果',onTasks)}{_api&&link(Puzzle,'来源与刮削','TMDB、MusicBrainz 等资料来源',()=>setPanel('plugins'))}</section>}
+      {admin&&<section className="media-settings-group"><h2>管理员</h2>{link(FolderOpen,'媒体库管理','全部影音媒体库',onManage)}{onTasks&&link(RefreshCw,'扫描与刮削','任务与匹配结果',onTasks)}</section>}
       {onGeneral&&<section className="media-settings-group"><h2>通用</h2>{link(UserRound,'外观、账号与系统设置','在「我的」中管理',onGeneral)}</section>}
     </>:panel==='theme'?<MediaThemeSettings scope={scope} {...(onReaderSettings?{onReaderSettings}:{})}/>:panel==='browse'?<form className="media-form media-settings-panel" onSubmit={event=>{event.preventDefault();save();}}>
       <p>仅影响影音页面，在当前设备为此服务器和账号保存。</p>
@@ -47,6 +46,6 @@ export function MediaSettings({scope,preferences,player,admin,api: _api,account,
       <label className="media-settings-check"><span>列表工具栏显示来源库</span><input type="checkbox" checked={draft.showLibraryName} onChange={event=>change({showLibraryName:event.currentTarget.checked})}/></label>
       <div className="media-settings-footer"><button type="button" onClick={()=>{setDraft({...defaultMediaPreferences});setSaved(false);}}>恢复默认值</button><button className="media-primary" type="submit">保存偏好</button></div>
       {saved&&<p role="status">影音偏好已保存</p>}{error&&<p role="alert">{error}</p>}
-    </form>:panel==='plugins'?admin&&_api?<MediaProviderSettings api={_api}/>:<section className="media-settings-panel" role="alert"><h2>需要管理员权限</h2><p>请返回影音设置查看可用功能。</p></section>:panel==='account'&&account?<section className="media-account-panel"><div className="media-account-avatar" aria-hidden="true">{Array.from(account.displayName||account.username)[0]}</div><h2>{account.displayName||account.username}</h2><p>@{account.username} · {account.role==='admin'?'管理员':'普通用户'}</p><p className="media-manager-note">共享作品资料，收藏、队列和播放进度按账号隔离。</p><dl><dt>当前服务器</dt><dd>{account.server||window.location.origin}</dd></dl></section>:<PlaybackSettings scope={scope} player={player} {...(onPlayback?{onPlayback}:{})}/>}
+    </form>:panel==='account'&&account?<section className="media-account-panel"><div className="media-account-avatar" aria-hidden="true">{Array.from(account.displayName||account.username)[0]}</div><h2>{account.displayName||account.username}</h2><p>@{account.username} · {account.role==='admin'?'管理员':'普通用户'}</p><p className="media-manager-note">共享作品资料，收藏、队列和播放进度按账号隔离。</p><dl><dt>当前服务器</dt><dd>{account.server||window.location.origin}</dd></dl></section>:<PlaybackSettings scope={scope} player={player} {...(onPlayback?{onPlayback}:{})}/>}
   </section>;
 }

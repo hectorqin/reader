@@ -1,0 +1,261 @@
+/*
+ * The one overlay form (web/src/ui/sheet.tsx, docs/ui.md §3.7).
+ *
+ * Phones: a bottom sheet as tall as its content. Wider windows: a drawer on the
+ * right edge — full height, or as tall as its content for `compact`. Callers add a
+ * class for their *content*; nothing outside this file sets a sheet's position,
+ * size, radius, backdrop or header.
+ */
+
+.sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(100dvh - var(--safe-top) - 1.5rem);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--reader-line);
+  border-bottom: 0;
+  border-radius: 16px 16px 0 0;
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  font: inherit;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  box-shadow: 0 -14px 36px color-mix(in srgb, #000 22%, transparent);
+  overflow: hidden;
+}
+
+.sheet[open] {
+  display: flex;
+  flex-direction: column;
+  animation: sheet-rise var(--motion-duration) var(--motion-ease);
+}
+
+/* The fallback colour is for WebViews whose ::backdrop does not inherit custom properties. */
+.sheet::backdrop {
+  background: var(--color-scrim, rgb(0 0 0 / 0.4));
+}
+
+.sheet-grip {
+  flex: none;
+  width: 2.25rem;
+  height: 0.25rem;
+  margin: 0.5rem auto 0;
+  border-radius: 999px;
+  background: var(--reader-line);
+}
+
+.sheet-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 3.25rem;
+  box-sizing: border-box;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  border-bottom: 1px solid var(--reader-line);
+}
+
+.sheet-header h2 {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--text-title);
+  font-weight: 600;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sheet-subtitle {
+  flex: none;
+  font-size: var(--text-meta);
+  color: var(--reader-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-header > .icon-button {
+  flex: none;
+}
+
+.sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--space-3) var(--space-3) calc(var(--space-3) + var(--safe-bottom));
+}
+
+.sheet:has(> .sheet-footer) > .sheet-body {
+  padding-bottom: var(--space-3);
+}
+
+.sheet-footer {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) calc(var(--space-2) + var(--safe-bottom));
+  border-top: 1px solid var(--reader-line);
+}
+
+.sheet-footer .button {
+  min-width: 5rem;
+  min-height: 44px;
+}
+
+/* Running text inside a sheet: a confirmation's question, a form's explanation. */
+.sheet-text {
+  margin: 0;
+  color: var(--reader-muted);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A stacked form: label above field, the field full width. */
+.sheet-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sheet-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--text-label);
+  color: var(--reader-muted);
+}
+
+.sheet-field input,
+.sheet-field select,
+.sheet-field textarea {
+  appearance: none;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--reader-line);
+  border-radius: var(--reader-radius);
+  padding: var(--space-2);
+  background: var(--reader-paper);
+  color: var(--reader-ink);
+  /* 16px, so iOS does not zoom the page on focus and push the sheet off-screen. */
+  font-size: 16px;
+  font-family: inherit;
+}
+
+/* A switch row: label and hint take the width, the switch sits on the trailing edge. */
+.sheet .switch-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+/* A list of choices: one full-width row per option. */
+.sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sheet-list .button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: start;
+}
+
+.button.primary.danger {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: var(--color-bg);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .button.primary.danger:hover {
+    background: color-mix(in srgb, var(--color-danger) 88%, var(--color-ink));
+  }
+}
+
+@keyframes sheet-rise {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+
+@keyframes sheet-pop {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes sheet-slide {
+  from { opacity: 0; transform: translateX(1rem); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 700px) {
+  .sheet-footer .button {
+    flex: 1 1 0;
+  }
+}
+
+@media (min-width: 701px) {
+  .sheet {
+    inset: 1rem 1rem 1rem auto;
+    width: min(30rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    border-bottom: 1px solid var(--reader-line);
+    border-radius: 1rem;
+    box-shadow: 0 12px 48px color-mix(in srgb, #000 20%, transparent);
+  }
+
+  .sheet[open] {
+    animation-name: sheet-slide;
+  }
+
+  .sheet[data-size='compact'] {
+    bottom: auto;
+  }
+
+  /* Opened by a tap or a focused control: beside the opener, positioned by sheet.tsx. */
+  .sheet[data-size='compact'][data-anchored] {
+    right: auto;
+    bottom: auto;
+    width: min(24rem, calc(100vw - 2rem));
+    box-shadow: 0 12px 40px color-mix(in srgb, #000 18%, transparent);
+  }
+
+  .sheet[data-size='compact'][data-anchored][open] {
+    animation-name: sheet-pop;
+  }
+
+  .sheet[data-size='compact'][data-anchored]::backdrop {
+    background: color-mix(in srgb, var(--color-scrim, rgb(0 0 0 / 0.4)) 45%, transparent);
+  }
+
+  .sheet[data-size='wide'] {
+    width: min(42rem, calc(100vw - 2rem));
+  }
+
+  .sheet-grip {
+    display: none;
+  }
+
+  .sheet-header {
+    padding-block: var(--space-2);
+  }
+
+  .sheet-body {
+    padding-bottom: var(--space-3);
+  }
+
+  .sheet-footer {
+    padding-bottom: var(--space-2);
+  }
+}

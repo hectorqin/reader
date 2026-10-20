@@ -57,7 +57,7 @@ async function saveShot(capture){for(let attempt=0;;attempt++){try{return await 
    ['favorites','favorites','.media-favorite-list'],['history','video/history','.media-history-row'],['folders',`music/folders?library=${album.libraryId}`,'.media-folder-row'],
    ['settings','music/settings','.media-settings-intro'],['themes','music/settings/theme','.media-theme-card'],['browse-settings','music/settings/browse','.media-settings-panel'],['playback-settings','music/settings/playback','.media-settings-panel'],
    ['libraries','music/settings/libraries','.media-library-row'],['library-edit','video/settings/libraries/new','.media-library-create'],['permissions',`video/settings/libraries/${movie.libraryId}/permissions`,'.media-permissions-form'],
-   ['tasks','video/settings/tasks','.media-manager'],['metadata',`video/items/${movie.id}/metadata`,'.media-metadata-host'],['match',`video/items/${movie.id}/match`,'.media-metadata-host'],['plugins','video/settings/plugins','.media-settings'],['account','music/settings/account','.media-account-panel'],
+   ['tasks','video/settings/tasks','.media-manager'],['metadata',`video/items/${movie.id}/metadata`,'.media-metadata-host'],['match',`video/items/${movie.id}/match`,'.media-metadata-host'],['account','music/settings/account','.media-account-panel'],
   ];
   for(const [channel,item] of [['music',album],['audiobook',book]]){await go('#/media/'+channel+'/items/'+item.id);await page.locator('.media-detail-favorite').waitFor();await page.locator('.media-detail-favorite').click();await page.waitForFunction(()=>document.querySelector('.media-detail-favorite')?.getAttribute('aria-pressed')==='true');}
   const wanted=process.env.MEDIA_V2_ONLY?.split(',');

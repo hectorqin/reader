@@ -185,30 +185,3 @@ export function SwitchRow({ label, hint, checked, onChange }: SwitchRowProps): J
     </div>
   );
 }
-
-export interface ScrimProps {
-  onDismiss?(): void;
-  children: ReactNode;
-  className?: string;
-}
-
-/**
- * The element panels and dialogs sit on.
- *
- * Clicking outside a panel to dismiss it is the one interaction a reader expects
- * from a sheet, and re-implementing it per screen is how a screen ends up
- * dismissing the panel when the reader tapped *inside* it (a click that lands on
- * the panel's own padding still bubbles). The check is on the target, once.
- */
-export function Scrim({ onDismiss, children, className }: ScrimProps): JSX.Element {
-  return (
-    <div
-      className={className ?? 'panel-host'}
-      onClick={(event) => {
-        if (onDismiss && event.target === event.currentTarget) onDismiss();
-      }}
-    >
-      {children}
-    </div>
-  );
-}

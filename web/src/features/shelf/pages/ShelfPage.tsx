@@ -2,12 +2,13 @@ import { Alert } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { BookOpen, LibraryBig, MoreHorizontal, Search, SlidersVertical } from 'lucide-react';
+import { BookOpen, LibraryBig, MoreHorizontal, Search } from 'lucide-react';
 import type { Book, ContinueReadingItem, ReadingState } from '../../../api/types.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
 import { useShelf, useShelfGroups, type ShelfFilters } from '../queries/shelf.queries.ts';
-import { SHELF_SORTS, ShelfSettingsPanel } from '../../../ui/shelf-settings.tsx';
+import { SHELF_SORTS, ShelfSettingsSheet } from '../../../ui/shelf-settings.tsx';
+import { IconButton } from '../../../ui/toolkit.tsx';
 import { OpdsAccess } from '../../../ui/opds-access.tsx';
 import { DialogView, type Dialog } from '../../../ui/dialog.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
@@ -116,7 +117,7 @@ export function ShelfPage() {
     <header className="shelf-head">
       <div className="shelf-head-text"><h1 className="shelf-title">{queryText ? '搜索结果' : '书架'}</h1><p className="shelf-subtitle muted">{subtitle}</p></div>
       <div className="shelf-head-actions">
-        <button className="icon-button" aria-label={`书架设置 · ${densityLabel}`} title={`书架设置 · ${densityLabel}`} onClick={() => setSettingsOpen(true)}><SlidersVertical className="icon" size="1em" strokeWidth={1.8} /><span className="media-visually-hidden">设置</span></button>
+        <IconButton icon="tune" label={`书架设置 · ${densityLabel}`} onClick={() => setSettingsOpen(true)} />
       </div>
     </header>
     <div className="shelf-discovery">
@@ -149,7 +150,7 @@ export function ShelfPage() {
       {cards.length > 0 && <div className="book-grid" data-density={settings.shelfDensity} data-show-author={String(settings.shelfShowAuthor)} data-show-progress={String(settings.shelfShowProgress)}>{cards.map(book => <BookCard key={book.id} book={book} showAuthor={settings.shelfShowAuthor} showProgress={settings.shelfShowProgress} onRemove={() => setMenuTarget(book)} />)}</div>}
       {query.data && pages > 1 && <nav className="shelf-pager" aria-label="翻页"><button type="button" disabled={page <= 1} onClick={() => go({ page: page - 1 })}>上一页</button><span>{page} / {pages}</span><button type="button" disabled={page >= pages} onClick={() => go({ page: page + 1 })}>下一页</button></nav>}
     </section>
-    <ShelfSettingsPanel open={settingsOpen} settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSettingsOpen(false)} onOpenExternalReader={() => { setSettingsOpen(false); setOpdsOpen(true); }} />
+    {settingsOpen && <ShelfSettingsSheet settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSettingsOpen(false)} onOpenExternalReader={() => { setSettingsOpen(false); setOpdsOpen(true); }} />}
     {opdsOpen && <OpdsAccess api={runtime.api} onSignedOut={() => { void runtime.api.signOut(); }} onClose={() => { setOpdsOpen(false); setSettingsOpen(true); }} />}
     {menuTarget && <DialogView dialog={{ kind: 'pick', title: `《${menuTarget.title || '未命名'}》`, options: menuOptions(menuTarget), resolve: (_value: string | null) => undefined } satisfies Dialog} destructive="从书架拿掉" onClose={answer => { const target = menuTarget; setMenuTarget(null); if (typeof answer === 'string' && answer) void act(target, answer as BookAction); }} />}
     {groupsOpen && <DialogView dialog={{ kind: 'pick', title: groups.isPending ? '分组 · 正在读取…' : groups.error ? '分组 · 读取失败' : '分组', options: groupOptions, resolve: (_value: string | null) => undefined } satisfies Dialog} destructive="" onClose={answer => {

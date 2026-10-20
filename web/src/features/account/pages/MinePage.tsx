@@ -1,13 +1,13 @@
 import { Link } from 'react-router-dom';
 import { useState, type ReactNode } from 'react';
-import { ChevronRight, Film, LayoutGrid, LibraryBig, LogOut, Palette, PlayCircle, Puzzle, RefreshCw, Rss, Settings, SlidersHorizontal, UserRound, type LucideIcon } from 'lucide-react';
+import { ChevronRight, Film, LayoutGrid, LibraryBig, LogOut, Palette, PlayCircle, RefreshCw, Rss, Settings, SlidersHorizontal, UserRound, type LucideIcon } from 'lucide-react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
 import { themeSummary } from '../../../shared/theme/theme.ts';
 import { useThemeState } from '../../../shared/theme/use-theme.ts';
 import { readMediaPreferences } from '../../media/services/preferences.ts';
-import { DENSITY_LABELS, ShelfSettingsPanel } from '../../../ui/shelf-settings.tsx';
+import { DENSITY_LABELS, ShelfSettingsSheet } from '../../../ui/shelf-settings.tsx';
 import { OpdsAccess } from '../../../ui/opds-access.tsx';
 import { SystemSettings } from '../../../ui/system-settings.tsx';
 import '../../home/styles/home.css';
@@ -75,7 +75,6 @@ export function MinePage() {
           {admin && <Group title="管理" order={3}>
             <Row icon={Settings} label="系统设置" value="用户、注册、服务配置" onClick={() => setSheet('system')} />
             <Row icon={RefreshCw} label="扫描与刮削" to="/media/video/settings/tasks" state={{ returnTo: '/me' }} />
-            <Row icon={Puzzle} label="来源与刮削" to="/me/plugins" />
           </Group>}
         </div>
         <div className="mine-column">
@@ -93,7 +92,7 @@ export function MinePage() {
       </div>
     </div>
     {/* Outside the media screen, so its sheet styles are the shelf's own, not media's. */}
-    <ShelfSettingsPanel open={sheet === 'shelf'} settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSheet(null)} onOpenExternalReader={() => setSheet('opds')} />
+    {sheet === 'shelf' && <ShelfSettingsSheet settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSheet(null)} onOpenExternalReader={() => setSheet('opds')} />}
     {sheet === 'opds' && <OpdsAccess api={runtime.api} onSignedOut={() => { void runtime.api.signOut(); }} onClose={() => setSheet('shelf')} />}
     {sheet === 'system' && <SystemSettings api={runtime.api} onClose={() => setSheet(null)} />}
   </>;

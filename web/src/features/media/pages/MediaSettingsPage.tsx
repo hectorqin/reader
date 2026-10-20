@@ -7,10 +7,10 @@ import type { SettingsPanel } from '../components/settings.tsx';
 import { readMediaPreferences } from '../services/preferences.ts';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 
-const panels: readonly SettingsPanel[] = ['home', 'theme', 'browse', 'playback', 'plugins', 'account'];
+const panels: readonly SettingsPanel[] = ['home', 'theme', 'browse', 'playback', 'account'];
 const titles: Record<SettingsPanel, string> = {
   home: '影音设置', theme: '外观与主题', browse: '浏览偏好', playback: '播放设置',
-  plugins: '来源与刮削', account: '账号与连接',
+  account: '账号与连接',
 };
 
 function safePanel(value: string | undefined): SettingsPanel {

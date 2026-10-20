@@ -1,4 +1,4 @@
-import {FloatingConfirm} from '../../../ui/floating-confirm.tsx';
+import { ConfirmSheet } from '../../../ui/sheet.tsx';
 import {FloatingNotice} from '../../../ui/floating-notice.tsx';
 import {MediaSelect} from './select.tsx';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -113,6 +113,6 @@ export function ScrapeJobs({api,libraries,navigate}:{api:MediaApi;libraries:Libr
     <button disabled={busy||loading||jobsState!=='ready'||running||!selected.length||!allowed.includes(kind)} onClick={()=>void action('scrape-jobs',{provider,itemIds:selected,...(matchMode!=='strong'?{matchMode}: {})})}>开始批量匹配</button>
     </details>
     {taskHistory}
-    {deleteId&&<FloatingConfirm theme="media" title="删除刮削任务" text="仅删除这条任务及结果记录，已保存的媒体资料和匹配候选保留。" confirmText="删除记录" cancelText="取消" onCancel={()=>setDeleteId('')} onConfirm={()=>{const id=deleteId;setDeleteId('');void action('scrape-jobs/'+encodeURIComponent(id),undefined,'DELETE');}}/>}
+    {deleteId&&<ConfirmSheet danger title="删除刮削任务" text="仅删除这条任务及结果记录，已保存的媒体资料和匹配候选保留。" confirmText="删除记录" cancelText="取消" onCancel={()=>setDeleteId('')} onConfirm={()=>{const id=deleteId;setDeleteId('');void action('scrape-jobs/'+encodeURIComponent(id),undefined,'DELETE');}}/>}
   </section>;
 }

@@ -47,7 +47,7 @@ try {
       const before = await surface();
       const trigger = page.locator('.reader-actions').getByRole('button', { name: label, exact: true });
       await trigger.click();
-      const panel = page.locator('.reader-screen .panel');
+      const panel = page.locator('.reader-screen .sheet');
       await panel.waitFor();
       await shot(label + '-' + width);
       const bounds = await panel.evaluate(el => {
@@ -55,9 +55,9 @@ try {
         return { left: r.left, rightGap: innerWidth - r.right, width: r.width, top: r.top, bottomGap: innerHeight - r.bottom,
           overflow: el.scrollWidth > el.clientWidth };
       });
-      assert.ok(bounds.width <= 420 && bounds.width >= 360, 'bounded panel width');
+      assert.ok(bounds.width <= 500 && bounds.width >= 440, 'bounded panel width');
       assert.ok(bounds.top >= 10 && bounds.bottomGap >= 10 && !bounds.overflow, 'panel fits viewport');
-      assert.ok((label === '目录' ? bounds.left : bounds.rightGap) <= 20, 'contents on left, settings on right');
+      assert.ok(bounds.rightGap <= 20, 'every reader sheet is the right-edge drawer');
       assert.deepEqual(await surface(), before, 'opening ' + label + ' preserves the reading position and geometry');
       await panel.getByRole('button', { name: '关闭', exact: true }).press('Escape');
       await panel.waitFor({ state: 'detached' });
@@ -73,28 +73,28 @@ try {
     await page.locator('.reader-screen[data-chrome=visible]').waitFor();
   }
   await page.locator('.reader-actions').getByRole('button', {name:'设置',exact:true}).click();
-  await page.locator('.panel').getByRole('button',{name:'翻页',exact:true}).click();
-  await page.locator('.panel button[aria-label="关闭"]').click();
+  await page.locator('.sheet').getByRole('button',{name:'翻页',exact:true}).click();
+  await page.locator('.sheet button[aria-label="关闭"]').click();
   await page.locator('.progress-scrubber').fill('2');
   await page.waitForFunction(() => document.querySelector('.progress-page')?.textContent?.includes('第 2/'));
   await shot('paged');
   const paged = await surface();
   await page.locator('.reader-actions').getByRole('button',{name:'目录',exact:true}).click();
-  await page.locator('.panel button[aria-label="关闭"]').press('Escape');
+  await page.locator('.sheet button[aria-label="关闭"]').press('Escape');
   assert.deepEqual(await surface(),paged,'side panels preserve the selected page in paged mode');
   await page.getByRole('button',{name:'夜间',exact:true}).click();
   await shot('dark');
   await page.locator('.reader-actions').getByRole('button',{name:'外观',exact:true}).click();
   await shot('dark-settings');
-  await page.locator('.panel button[aria-label="关闭"]').click();
+  await page.locator('.sheet button[aria-label="关闭"]').click();
   await page.getByRole('button',{name:'日间',exact:true}).click();
   await page.setViewportSize({ width: 1024, height: 420 });
   await page.locator('.reader-actions').getByRole('button', { name: '外观', exact: true }).click();
-  const body = page.locator('.panel-body');
+  const body = page.locator('.sheet-body');
   await body.hover(); await page.mouse.wheel(0, 300);
-  await page.waitForFunction(() => document.querySelector('.panel-body')?.scrollTop > 0);
+  await page.waitForFunction(() => document.querySelector('.sheet-body')?.scrollTop > 0);
   await shot('short-window-scroll');
-  await page.locator('.panel button[aria-label="关闭"]').click();
+  await page.locator('.sheet button[aria-label="关闭"]').click();
   assert.deepEqual(errors, []);
   console.log('PASS desktop reader: 1024/1366/1920px, four panels, Escape/focus, immersive mode, stable page geometry and short-window scrolling');
 } finally {

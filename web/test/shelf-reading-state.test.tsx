@@ -58,8 +58,8 @@ it('shows a card\'s state and marks it from the ⋯ menu', async () => {
   paint('/shelf');
   expect(root.querySelector('.book-state')?.textContent).toBe('在读');
   await act(() => root.querySelector<HTMLButtonElement>('.book-more')!.click());
-  const options = [...root.querySelectorAll('.dialog button')].map(button => button.textContent);
-  expect(options).toEqual(['标记为想读', '标记为已读', '清除标记', '从书架拿掉', '取消']);
+  const options = [...root.querySelectorAll('.sheet-list button')].map(button => button.textContent);
+  expect(options).toEqual(['标记为想读', '标记为已读', '清除标记', '从书架拿掉']);
   await click('标记为已读');
   expect(setReadingStatus).toHaveBeenCalledWith('b1', 'finished');
   await act(() => root.querySelector<HTMLButtonElement>('.book-more')!.click());

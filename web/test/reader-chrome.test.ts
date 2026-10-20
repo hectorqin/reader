@@ -167,18 +167,18 @@ describe('ReaderChrome', () => {
 
   it('separates appearance and behavior settings and omits text controls for comics', () => {
     let tree = paint({ settingsOpen: true, settingsTab: 'appearance' });
-    expect(tree.querySelector('.panel')?.textContent).toContain('黑白灰');
-    expect(tree.querySelector('.panel')?.textContent).not.toContain('点击区域');
+    expect(tree.querySelector('.sheet')?.textContent).toContain('黑白灰');
+    expect(tree.querySelector('.sheet')?.textContent).not.toContain('点击区域');
     tree = paint({ settingsOpen: true, settingsTab: 'behavior' });
-    expect(tree.querySelector('.panel')?.textContent).toContain('点击区域');
-    expect(tree.querySelector('.panel')?.textContent).not.toContain('字号');
+    expect(tree.querySelector('.sheet')?.textContent).toContain('点击区域');
+    expect(tree.querySelector('.sheet')?.textContent).not.toContain('字号');
     tree = paint({ settingsOpen: true, settingsTab: 'appearance', layout: 'fixed' });
-    expect(tree.querySelector('.panel')?.textContent).not.toContain('字号');
+    expect(tree.querySelector('.sheet')?.textContent).not.toContain('字号');
   });
 
   it('puts the most-used appearance rows first and folds the rarely changed ones', () => {
     const tree = paint({ settingsOpen: true, settingsTab: 'appearance' });
-    const body = tree.querySelector('.panel-body')!;
+    const body = tree.querySelector('.sheet-body')!;
     const order = [...body.children].map((element) =>
       element.matches('details.panel-fold')
         ? `fold:${element.querySelector('.panel-fold-title')?.textContent}`
@@ -247,13 +247,13 @@ describe('ReaderChrome', () => {
     const tree = paint({ settingsOpen: true, settingsTab: 'appearance', layout: 'fixed' });
     const folds = [...tree.querySelectorAll('details.panel-fold .panel-fold-title')].map((element) => element.textContent);
     expect(folds).toEqual(['页眉页脚']);
-    expect(tree.querySelector('.panel')?.textContent).not.toContain('字号');
-    expect(tree.querySelector('.panel')?.textContent).toContain('黑白灰');
+    expect(tree.querySelector('.sheet')?.textContent).not.toContain('字号');
+    expect(tree.querySelector('.sheet')?.textContent).toContain('黑白灰');
   });
 
   it('puts the start action first in the read-aloud sheet and folds pitch and volume', () => {
     const tree = paint({ settingsOpen: true, settingsTab: 'speech', ttsRate: 1.2, showPitchRow: true });
-    const body = tree.querySelector('.panel-body')!;
+    const body = tree.querySelector('.sheet-body')!;
     // The action the sheet exists for is not buried under five sliders.
     expect(body.firstElementChild?.textContent).toBe('从当前位置朗读');
     expect(body.firstElementChild?.classList.contains('primary')).toBe(true);

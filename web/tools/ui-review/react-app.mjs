@@ -208,8 +208,9 @@ async function runReaderReview(browser, origin, checks, errors) {
     assert.equal(await page.getByText(/已选 1 项/).count(), 0);
   }
   await capture(page, 'library-files', checks, errors);
-  await page.goto(`${origin}/#/settings`);
-  await waitHeading(page, '设置');
+  // /settings redirects to the shelf; 我的 is the settings hub now.
+  await page.goto(`${origin}/#/me`);
+  await waitHeading(page, '我的');
   await capture(page, 'settings', checks, errors);
   await page.goto(`${origin}/#/sources`);
   await waitHeading(page, '书源');
@@ -334,7 +335,7 @@ async function runMediaReview(browser, fixture, checks, errors) {
 
   await page.getByRole('button', { name: '清空当前频道队列' }).click();
   await page.getByRole('button', { name: '确认清空' }).waitFor({ state: 'visible' });
-  assert.match(await page.locator('[role="dialog"], .media-floating-confirm').last().innerText().catch(() => ''), /清空队列|确认清空/);
+  assert.match(await page.locator('dialog[open]').last().innerText().catch(() => ''), /清空队列|确认清空/);
   const clear = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/queue/clear'));
   await page.getByRole('button', { name: '确认清空' }).click();
   assert.equal((await clear).status(), 200, 'queue clear failed');

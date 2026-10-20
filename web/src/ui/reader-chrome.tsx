@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import { paperIds, readerPapers, themes, type AppThemeId, type ModePreference, type ReaderPaper, type ReaderSurface, type ResolvedTheme, type ThemeMode, type ThemePreference } from '../shared/theme/theme.ts';
 import type { ChapterQuality } from '../api/sources.ts';
-import { Modal } from './modal.tsx';
+import { Sheet } from './sheet.tsx';
 import type { SourcePage } from '../api/sources.ts';
 import { CatalogFeedback } from './catalog-feedback.tsx';
 import { FloatingNotice } from './floating-notice.tsx';
@@ -26,7 +26,7 @@ import type { AppSettings } from '../store/settings.ts';
 import { DEFAULT_APP_SETTINGS, READOUT_FIELDS, READOUT_OPTIONS, type ReadoutMode } from '../store/settings.ts';
 import { ReaderIndicators } from './reader-indicators.tsx';
 import type { SpeechEngineKind } from '../render/speech.ts';
-import { type ReactNode, type JSX, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, type JSX, useState } from 'react';
 import { Button, IconButton, SectionTitle, SwitchRow } from './toolkit.tsx';
 import { Icon, type IconName } from './icon.tsx';
 
@@ -241,9 +241,9 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         </div>
         {(state.sourceName || state.chapterUrl) && <div className="reader-source-info"><span>{state.sourceName || '当前书源'}</span>{state.chapterUrl && <a href={state.chapterUrl} target="_blank" rel="noopener noreferrer" title={state.chapterUrl}>{state.chapterUrl}</a>}</div>}
       </div>
-      {state.bookInfoOpen && <Modal title="书籍信息" busy={false} onClose={() => handlers.onBookInfo?.()}><article className="book-detail source-modal-content"><h3>{state.title}</h3><p className="book-detail-author">{state.author || '作者未知'}</p><dl><dt>书源</dt><dd>{state.sourceName || (state.canRefresh ? '远程书源' : '本地书籍')}</dd><dt>当前章节</dt><dd>{state.chapterLabel || '暂无信息'}</dd></dl><h4>内容简介</h4><p className="book-detail-description">{state.description || '暂无简介'}</p></article></Modal>}
+      {state.bookInfoOpen && <Sheet title="书籍信息" onClose={() => handlers.onBookInfo?.()}><article className="book-detail"><h3>{state.title}</h3><p className="book-detail-author">{state.author || '作者未知'}</p><dl><dt>书源</dt><dd>{state.sourceName || (state.canRefresh ? '远程书源' : '本地书籍')}</dd><dt>当前章节</dt><dd>{state.chapterLabel || '暂无信息'}</dd></dl><h4>内容简介</h4><p className="book-detail-description">{state.description || '暂无简介'}</p></article></Sheet>}
       {state.aiSummaryBusy && <div className="floating-notice" role="status">正在生成章节总结…</div>}
-      {state.aiSummary && <Modal title="AI 章节总结" busy={false} onClose={() => handlers.onAiSummary?.()}><article className="book-detail source-modal-content"><p className="book-detail-description">{state.aiSummary}</p></article></Modal>}
+      {state.aiSummary && <Sheet title="AI 章节总结" onClose={() => handlers.onAiSummary?.()}><article className="book-detail"><p className="book-detail-description">{state.aiSummary}</p></article></Sheet>}
       <StageHost stage={stage} />
       <ReaderIndicators state={state} />
       <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作">
@@ -275,7 +275,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         </div>
       </div>
       {state.tocOpen ? (
-        <Panel title="目录" placement="start" subtitle={`${state.toc.length} 章`} onClose={handlers.toggleToc} actions={state.canRefresh ? <IconButton icon="refresh" label="刷新目录" disabled={state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onRefresh?.()} /> : null}>
+        <Sheet title="目录" subtitle={`${state.toc.length} 章`} onClose={handlers.toggleToc} actions={state.canRefresh ? <IconButton icon="refresh" label="刷新目录" disabled={state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onRefresh?.()} /> : null}>
           {state.toc.length === 0 ? (
             <div className="empty-state">这本书没有目录</div>
           ) : (
@@ -311,11 +311,11 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
               })}
             </ul>
           )}
-        </Panel>
+        </Sheet>
       ) : null}
 
       <FloatingNotice message={state.switching ? "正在获取书源内容…" : ""} busy />
-      {state.alternatives && <Panel title="切换书源" onClose={() => handlers.onCancelSwitch?.()}><section className="source-switch" aria-label="切换书源">
+      {state.alternatives && <Sheet title="切换书源" onClose={() => handlers.onCancelSwitch?.()}><section className="source-switch" aria-label="切换书源">
             <div className="source-switch-status" role="status"><span>{state.alternativesSearching ? '正在寻找可用书源' : '书源搜索完成'}</span><strong>{state.alternatives.items.length} 个可选</strong>
               {state.alternativesSearching && state.alternatives.batch && <progress aria-label="换源搜索进度" max={Math.max(1, state.alternatives.batch.total)} value={state.alternatives.batch.completed} />}
             </div>
@@ -330,23 +330,23 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
                 : state.alternativeChecks[entry.ref]!.error}</span>}
             </button>)}</div>
             {!!state.alternatives.errors?.length && <CatalogFeedback page={state.alternatives} merged compact searching={!!state.alternativesSearching} />}
-            {state.alternativeChapters && <Modal title="选择阅读章节" busy={!!state.switching} onClose={() => handlers.onCancelAlternative?.()}><div className="alternative-preview source-modal-content"><h4>{state.alternativeTitle}</h4><label>切换后阅读的章节<select value={state.alternativeChapter ?? ''} disabled={state.switching === true} onChange={event => handlers.onAlternativeChapter?.(event.currentTarget.value)}>
+            {state.alternativeChapters && <Sheet title="选择阅读章节" size="compact" busy={!!state.switching} onClose={() => handlers.onCancelAlternative?.()}><div className="alternative-preview"><h4>{state.alternativeTitle}</h4><label>切换后阅读的章节<select value={state.alternativeChapter ?? ''} disabled={state.switching === true} onChange={event => handlers.onAlternativeChapter?.(event.currentTarget.value)}>
               <option key="empty" value="">请选择章节</option>{state.alternativeChapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}
             </select></label>
               {state.alternativeLatest && <p>最新章节：{state.alternativeLatest}</p>}
               <Button disabled={state.switching || state.alternativeQualityBusy || !state.alternativeChapter} onClick={() => handlers.onCheckAlternative?.()}>{state.alternativeQualityBusy ? '正在检测正文…' : '检测所选章节 / 重试'}</Button>
               {state.alternativeQuality && <div role="status" className="chapter-quality"><strong>正文检测通过</strong><p>{state.alternativeQuality.characters} 字符 · {state.alternativeQuality.images} 张图片 · {(state.alternativeQuality.bytes / 1024).toFixed(1)} KiB · {state.alternativeQuality.elapsedMs} ms</p><p>检测仅说明本次内容可读，不保证章节完整或与原书一致。</p></div>}
               {state.alternativeQualityError && <p role="alert">{state.alternativeQualityError}</p>}
-              <Button type="button" disabled={state.switching || state.alternativeQualityBusy || !state.alternativeChapter} onClick={() => handlers.onSwitchSource?.()}>确认换源并阅读</Button></div></Modal>}
-          </section></Panel>}
+              <Button type="button" disabled={state.switching || state.alternativeQualityBusy || !state.alternativeChapter} onClick={() => handlers.onSwitchSource?.()}>确认换源并阅读</Button></div></Sheet>}
+          </section></Sheet>}
 
       {state.settingsOpen ? (
-        <Panel title={tab === 'appearance' ? '外观' : tab === 'speech' ? '朗读' : '阅读设置'} onClose={() => handlers.toggleSettings(tab)}>
+        <Sheet title={tab === 'appearance' ? '外观' : tab === 'speech' ? '朗读' : '阅读设置'} onClose={() => handlers.toggleSettings(tab)}>
           {tab === 'speech' ? <>
             {state.tts.active ? <SpeechBar state={state.tts} handlers={handlers} /> : null}
             <SpeechSettings state={state} handlers={handlers} />
           </> : <SettingsBody state={state} handlers={handlers} />}
-        </Panel>
+        </Sheet>
       ) : null}
     </>
   );
@@ -372,67 +372,6 @@ function StageHost({ stage }: { stage: HTMLElement }): JSX.Element {
         if (node && stage.parentElement !== node) node.append(stage);
       }}
     />
-  );
-}
-
-/**
- * A bottom sheet on phones and a side panel on desktop.
- *
- * Bottom sheet rather than a full-screen page, and the comment on `.panel` in the
- * stylesheet is where the reasoning lives. What belongs here is the *interaction*:
- *
- *  - The scrim is the second way out. A sheet that covers half the screen has a
- *    large, obvious, already-under-the-thumb dismissal target beside it, and using
- *    it is the gesture every reader already has; the ✕ is there for the reader who
- *    reaches for a button instead.
- *  - The scrim and the sheet are `role="dialog"`-adjacent but not a dialog: nothing
- *    behind them is inert, the text stays selectable and readable, and the point of
- *    the half height is that the reader can still see what they are adjusting. A
- *    modal that traps focus would be a lie about a sheet the reader can read
- *    through.
- *  - The grip is `aria-hidden`: it is an affordance for a drag that is not
- *    implemented, and announcing a control that does nothing is worse than not
- *    drawing one. The two real exits are labelled.
- */
-function Panel({
-  title,
-  placement = 'end',
-  subtitle,
-  actions,
-  onClose,
-  children,
-}: {
-  title: string;
-  placement?: 'start' | 'end';
-  subtitle?: string;
-  actions?: ReactNode;
-  onClose(): void;
-  children: ReactNode;
-}): JSX.Element {
-  const panel = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const trigger = document.activeElement;
-    panel.current?.querySelector<HTMLButtonElement>('.panel-header button')?.focus({ preventScroll: true });
-    return () => { if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true }); };
-  }, []);
-  return (
-    <>
-      {/* `onClick` on the scrim rather than a document listener: the scrim *is* the
-          dismiss control, so it should be a node the reader can hit, with the same
-          processing as any other tap on the page. */}
-      <div className="scrim" onClick={onClose} role="presentation" />
-      <div className="panel" data-placement={placement} ref={panel} role="group" aria-label={title}
-        onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }}>
-        <div className="panel-grip" aria-hidden="true" />
-        <div className="panel-header">
-          <h2>{title}</h2>
-          {subtitle ? <span className="panel-subtitle">{subtitle}</span> : null}
-          {actions}
-          <IconButton label="关闭" icon="close" onClick={onClose} />
-        </div>
-        <div className="panel-body">{children}</div>
-      </div>
-    </>
   );
 }
 

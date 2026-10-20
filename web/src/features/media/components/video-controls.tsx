@@ -1,6 +1,7 @@
 import {VideoEpisodeRail} from './video-episode-rail.tsx';
 import {SleepTimerOptions} from './sleep-timer.tsx';
-import {Ellipsis,X,Square,Check,Subtitles,AudioLines,Layers,ListVideo,Maximize,Minimize,Lock,LockOpen,Gauge,Expand,Shrink,Upload} from 'lucide-react';
+import {Sheet} from '../../../ui/sheet.tsx';
+import {Ellipsis,Square,Check,Subtitles,AudioLines,Layers,ListVideo,Maximize,Minimize,Lock,LockOpen,Gauge,Expand,Shrink,Upload} from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {subtitleSizes,type MediaPlayer,type SubtitleSize} from '../services/player.ts';
 import type {Detail,MediaApi} from '../api/media-api.ts';
@@ -63,11 +64,7 @@ function Volume({player}:{player:MediaPlayer}){
 }
 
 function ToolSheet({tool,onClose,children,tabs}:{tool:Tool;onClose:()=>void;children:ReactNode;tabs?:ReactNode}){
-  const ref=useRef<HTMLDialogElement>(null);
-  useLayoutEffect(()=>{const dialog=ref.current;if(!dialog)return;dialog.showModal();return ()=>dialog.close();},[]);
-  return <dialog ref={ref} className="media-video-sheet" aria-label={titles[tool]} onCancel={event=>{event.preventDefault();onClose();}} onKeyDown={event=>{if(event.key==='Escape')event.stopPropagation();}} onClick={event=>{if(event.target===event.currentTarget){const rect=event.currentTarget.getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)onClose();}}}>
-    <header><h2>{titles[tool]}</h2><button className="media-video-icon" aria-label="关闭播放菜单" onClick={onClose}><X size={20} aria-hidden="true"/></button></header>{tabs}{children}
-  </dialog>;
+  return <Sheet className="media-video-sheet" title={titles[tool]} onClose={onClose}>{tabs}{children}</Sheet>;
 }
 
 /** Rendered in the permanent player's controls host, alongside the live video. */

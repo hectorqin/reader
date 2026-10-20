@@ -2,7 +2,7 @@
    DPlayer owns the video controls; this sheet only lays out its stage. */
 .media-screen {padding:68px 32px 96px;font-size:14px;scrollbar-width:thin}
 .media-channel-entry {height:68px;padding-inline:max(32px,calc((100vw - 1056px)/2))}
-.media-screen button {min-height:44px;border-radius:9px}
+.media-screen button:not(:where(.sheet-header *, .sheet-footer *)) {min-height:44px;border-radius:9px}
 .media-screen :is(input:not([type=checkbox]):not([type=radio]):not([type=range]),select) {min-height:44px}
 .media-screen :is(.media-heading,.media-settings-heading,.media-narrator-heading) {min-height:56px}
 .media-screen :is(.media-page-heading h1,.media-page-heading h2,.media-heading>strong,.media-settings-heading h1) {font-size:16px;font-weight:650;line-height:1.4}
@@ -248,8 +248,6 @@
 .searchable-select-options button {display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:38px;padding:8px 10px;border:0;border-radius:6px;background:transparent;color:var(--text);text-align:left}
 .searchable-select-options button:hover,.searchable-select-options button[aria-selected=true] {background:var(--media-selection);color:var(--media-accent)}
 .searchable-select-options p {padding:12px;color:var(--muted);font-size:12px}
-.media-audio-sheet,.media-video-sheet {max-height:85dvh}
-.media-audio-sheet>header,.media-video-sheet>header {height:56px;min-height:56px;position:sticky;top:-16px;background:inherit;z-index:2;margin-bottom:12px}
 @media(min-width:701px){
  .media-screen>.media-heading:has(.media-tabs:not([hidden])) {display:block;height:auto;min-height:0;margin:0;border:0;padding:0}
  .media-screen .media-mobile-title {display:none}
@@ -265,7 +263,6 @@
  .media-utility-workspace .media-settings-heading {left:max(24px,calc((100vw - 1060px)/2))}
  .media-screen .media-mobile-title {height:68px;left:max(145px,calc((100vw - 1056px)/2 + 110px))}
  .media-heading:has(.media-mobile-title) .media-heading-actions {top:12px}
- .media-audio-sheet,.media-video-sheet {inset:0;margin:auto;border:1px solid var(--border);border-radius:14px;height:fit-content}
  .media-screen .media-playback-status[data-panel=main] {display:grid;grid-template-columns:360px minmax(0,1fr);grid-template-rows:1fr auto auto auto 1fr;column-gap:64px;min-height:540px;align-content:center}
  .media-playback-status[data-panel=main] .media-playing-artwork {display:contents}
  .media-playback-status[data-panel=main] .media-playing-artwork>.media-cover {grid-column:1;grid-row:1/6;width:360px;margin:auto;align-self:center}
@@ -577,7 +574,6 @@
  .media-video-workspace:has(.media-episode-rail) .media-episode-rail {position:absolute;right:0;top:16px;width:300px;box-sizing:border-box;margin:0}
 }
 @media(max-width:700px){
- .media-resource-panel .source-modal {inset:auto 0 0;width:100%;max-width:100%;margin:0;border-radius:14px 14px 0 0;max-height:85dvh}
  .media-screen {padding:0 16px calc(24px + env(safe-area-inset-bottom))}
  .media-screen.media-catalog-page .media-heading:has(.media-mobile-title) {display:flex;grid-template-rows:none;min-height:56px;height:56px}
  .media-screen .media-heading:has(.media-mobile-title) {grid-template-rows:56px 44px;min-height:100px}
@@ -913,14 +909,9 @@
 .media-screen .media-actions nav :is(a,button) svg {flex:none;stroke:currentColor}
 .media-screen .media-library-management-actions>summary {color:var(--text)}
 .media-screen .media-library-management-actions[open]>summary {background:var(--media-selection);color:var(--media-accent)}
-.media-modal:has(.media-match-confirm){width:min(560px,calc(100vw - 32px));max-width:560px;padding:0;border-radius:16px;overflow:hidden}
-.media-modal:has(.media-match-confirm) .media-match-confirm{margin:0;padding:20px;border:0;border-radius:0;background:var(--media-paper)}
-.media-modal:has(.media-match-confirm) .media-match-confirm p{font-size:14px;line-height:1.75;margin:0 0 18px}
-.media-modal:has(.media-match-confirm) .media-match-confirm .dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
-.media-modal:has(.media-match-confirm) .media-match-confirm .dialog-actions button{min-height:44px}
 .search-split{position:relative;isolation:isolate}
 .sources-search .search-menu{right:0;left:auto;min-width:260px;box-sizing:border-box}
-@media(max-width:640px){.media-screen .media-modal .media-match-confirm .dialog-actions{justify-content:stretch}.media-screen .media-modal .media-match-confirm .dialog-actions button{flex:1 1 140px}.sources-search .search-menu{right:0;min-width:min(290px,calc(100vw - 32px))}}
+@media(max-width:640px){.sources-search .search-menu{right:0;min-width:min(290px,calc(100vw - 32px))}}
 
 /* Keep the embedded player's own controls independent from the reader theme. */
 .media-video-stage,.media-video-stage *{color-scheme:dark}

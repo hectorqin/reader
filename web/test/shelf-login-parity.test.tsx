@@ -63,13 +63,13 @@ it('keeps the shelf entry points available and restores clear, settings and OPDS
   const value = mount(<ShelfPage />, runtime(), '/shelf?q=三体');
   expect(root.textContent).toContain('书源');
   expect(root.textContent).not.toContain('刷新');
-  expect(root.textContent).toContain('设置');
+  expect(root.querySelector('button[aria-label^="书架设置"]')).not.toBeNull();
   expect(root.querySelector('[aria-label="清除搜索"]')).not.toBeNull();
   const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
   await act(async () => root.querySelector<HTMLButtonElement>('[aria-label="清除搜索"]')!.click());
   expect(search.value).toBe('');
 
-  const settingsButton = [...root.querySelectorAll('button')].find(button => button.textContent === '设置');
+  const settingsButton = root.querySelector<HTMLButtonElement>('button[aria-label^="书架设置"]');
   await act(async () => settingsButton?.click());
   expect(root.textContent).toContain('连接外部阅读器');
   await act(async () => [...root.querySelectorAll('button')].find(button => button.textContent === '连接外部阅读器')?.click());

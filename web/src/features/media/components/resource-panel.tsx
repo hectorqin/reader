@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Ellipsis, FileText, Layers } from 'lucide-react';
-import { Modal } from '../../../ui/modal.tsx';
+import { Sheet } from '../../../ui/sheet.tsx';
 import { ResourceInfo } from './resource-info.tsx';
 import { EditionTools, type EditionDetailsProps } from './edition-details.tsx';
 import type { MediaApi } from '../api/media-api.ts';
@@ -19,7 +19,7 @@ type ResourcePanelProps = {
 };
 
 /**
- * Resource details are rendered in a modal. The legacy detail screen exposes
+ * Resource details are rendered in a sheet. The legacy detail screen exposes
  * the entry point from the page action menu, so the summary trigger is opt-in
  * for standalone consumers and hidden on the detail page.
  */
@@ -67,8 +67,9 @@ export function ResourcePanel({
   }
 
   const modal = panel && (
-    <Modal
+    <Sheet
       className="media-modal"
+      size="wide"
       title={panel === 'files' ? '资源信息' : panel === 'source' ? '来源' : manage ? '版本管理' : '播放版本'}
       busy={!!editionOptions?.busy}
       onClose={close}
@@ -80,16 +81,11 @@ export function ResourcePanel({
             ? sourceInfo
             : <>{versionPicker}{manage && editionOptions && <EditionTools {...editionOptions} managementOnly />}</>}
       </div>
-    </Modal>
+    </Sheet>
   );
 
   if (!showTrigger) return modal;
-  return <>{modal}<section className="media-resource-panel media-resource-trigger" onClick={event => {
-    if (event.target instanceof HTMLDialogElement && !editionOptions?.busy) {
-      const rect = event.target.getBoundingClientRect();
-      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close();
-    }
-  }}>
+  return <>{modal}<section className="media-resource-panel media-resource-trigger">
     <header>
       <h2>资源信息</h2>
       {(files.length > 0 || manage || versionPicker || sourceInfo) && <details className="media-actions" ref={menu} onKeyDown={event => {
