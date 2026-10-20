@@ -26,8 +26,8 @@ function Row({ icon: Icon, label, value, to, state, onClick, danger = false }: {
     : <button type="button" className={className} onClick={onClick}>{body}</button>;
 }
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
-  return <section className="mine-group" aria-label={title}><h2>{title}</h2><div className="mine-card">{children}</div></section>;
+function Group({ title, order, children }: { title: string; order: number; children: ReactNode }) {
+  return <section className="mine-group" aria-label={title} style={{ order }}><h2>{title}</h2><div className="mine-card">{children}</div></section>;
 }
 
 function serverHost(baseUrl: string): string {
@@ -59,30 +59,38 @@ export function MinePage() {
       {user && <section className="mine-profile" aria-label="当前账号">
         <div className="mine-avatar" aria-hidden="true">{Array.from(name)[0]}</div>
         <div className="mine-profile-text">
-          <strong>{name}</strong>
-          <small><span className="mine-dot" aria-hidden="true" />{serverHost(runtime.api.baseUrl)} · {admin ? '管理员' : '成员'}</small>
+          <strong>{name}<span className="mine-role">{admin ? '管理员' : '成员'}</span></strong>
+          <small><span className="mine-dot" aria-hidden="true" />已连接 {serverHost(runtime.api.baseUrl)}</small>
         </div>
       </section>}
-      <Group title="内容">
-        <Row icon={LibraryBig} label="书库" to="/library" />
-        <Row icon={Rss} label="书源" to="/sources" />
-        {admin && <Row icon={Film} label="媒体库" to="/media/video/settings/libraries" state={{ returnTo: '/me' }} />}
-      </Group>
-      <Group title="偏好">
-        <Row icon={Palette} label="外观与主题" value={themeName} to="/me/theme" />
-        <Row icon={LayoutGrid} label="书架显示" value={DENSITY_LABELS[settings.shelfDensity]} onClick={() => setSheet('shelf')} />
-        <Row icon={SlidersHorizontal} label="影音浏览" value={mediaDensity} to="/me/browse" />
-        <Row icon={PlayCircle} label="播放" to="/me/playback" />
-      </Group>
-      {admin && <Group title="管理">
-        <Row icon={Settings} label="系统设置" value="用户、注册、服务配置" onClick={() => setSheet('system')} />
-        <Row icon={RefreshCw} label="扫描与刮削" to="/media/video/settings/tasks" state={{ returnTo: '/me' }} />
-        <Row icon={Puzzle} label="来源与刮削" to="/me/plugins" />
-      </Group>}
-      <Group title="账号">
-        <Row icon={UserRound} label="账号与连接" to="/me/account" />
-        <Row icon={LogOut} label="退出登录" danger onClick={() => { void runtime.api.signOut(); }} />
-      </Group>
+      {/* Two columns on a wide window, each filled top to bottom so uneven groups don't
+        * leave holes; on a narrow one the columns dissolve and `order` restores reading order. */}
+      <div className="mine-groups">
+        <div className="mine-column">
+          <Group title="内容" order={1}>
+            <Row icon={LibraryBig} label="书库" to="/library" />
+            <Row icon={Rss} label="书源" to="/sources" />
+            {admin && <Row icon={Film} label="媒体库" to="/media/video/settings/libraries" state={{ returnTo: '/me' }} />}
+          </Group>
+          {admin && <Group title="管理" order={3}>
+            <Row icon={Settings} label="系统设置" value="用户、注册、服务配置" onClick={() => setSheet('system')} />
+            <Row icon={RefreshCw} label="扫描与刮削" to="/media/video/settings/tasks" state={{ returnTo: '/me' }} />
+            <Row icon={Puzzle} label="来源与刮削" to="/me/plugins" />
+          </Group>}
+        </div>
+        <div className="mine-column">
+          <Group title="偏好" order={2}>
+            <Row icon={Palette} label="外观与主题" value={themeName} to="/me/theme" />
+            <Row icon={LayoutGrid} label="书架显示" value={DENSITY_LABELS[settings.shelfDensity]} onClick={() => setSheet('shelf')} />
+            <Row icon={SlidersHorizontal} label="影音浏览" value={mediaDensity} to="/me/browse" />
+            <Row icon={PlayCircle} label="播放" to="/me/playback" />
+          </Group>
+          <Group title="账号" order={4}>
+            <Row icon={UserRound} label="账号与连接" to="/me/account" />
+            <Row icon={LogOut} label="退出登录" danger onClick={() => { void runtime.api.signOut(); }} />
+          </Group>
+        </div>
+      </div>
     </div>
     {/* Outside the media screen, so its sheet styles are the shelf's own, not media's. */}
     <ShelfSettingsPanel open={sheet === 'shelf'} settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSheet(null)} onOpenExternalReader={() => setSheet('opds')} />
