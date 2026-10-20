@@ -75,7 +75,15 @@ export interface Book {
    * already on the shelf is the one thing that decides whether it gets a control.
    */
   shelfState?: 'on' | 'off';
+  /**
+   * 在读 / 想读 / 已读 on this account's shelf (the shelf list only). A reader's mark
+   * wins; otherwise the server derives it from progress, and 想读 gives way to 在读
+   * once the book is read. `null`: not started and not marked.
+   */
+  readingState?: ReadingState | null;
 }
+
+export type ReadingState = 'reading' | 'want' | 'finished';
 
 export interface BookListPage {
   items: Book[];

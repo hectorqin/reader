@@ -1,7 +1,7 @@
 import type { Db } from '../db/index.ts';
 import { applyOverrides, type BaseMetadata } from './merge.ts';
 import { safeJsonParse } from '../lib/text.ts';
-import { notFound } from '../lib/errors.ts';
+import { badRequest, notFound } from '../lib/errors.ts';
 
 export interface BookDto {
   id: string;
@@ -51,6 +51,11 @@ export interface BookDto {
    * the library, add it to your shelf" could not say which of the two a card was.
    */
   shelfState?: 'on' | 'off';
+  /**
+   * 在读 / 想读 / 已读, on the shelf's own list only (see READING_STATE). Absent
+   * elsewhere, so a single-book lookup never reports a state it did not compute.
+   */
+  readingState?: ReadingState | null;
 }
 
 interface BookRow {
@@ -59,6 +64,8 @@ interface BookRow {
   added_at?: number;
   /** `user_books.hidden`, or `null` when there is no row at all. */
   shelf_hidden?: number | null;
+  /** READING_STATE, selected only by the shelf's own list. */
+  reading_state?: ReadingState | null;
   identifier: string | null;
   content_hash: string;
   format: string;
@@ -78,6 +85,23 @@ interface BookRow {
   source: string;
   updated_at: number;
 }
+
+export const READING_STATES = ['reading', 'want', 'finished'] as const;
+export type ReadingState = typeof READING_STATES[number];
+/**
+ * A book's reading state on this account's shelf.
+ *
+ * An explicit 在读 or 已读 mark is the reader's word and wins. Otherwise progress
+ * decides: 99% or more is 已读, anything started is 在读. 想读 is only ever a mark, and
+ * it gives way as soon as the book is opened and read — a book being read is not
+ * one the reader still "wants to read".
+ */
+const READING_STATE = `CASE
+  WHEN ub.reading_status IN ('reading','finished') THEN ub.reading_status
+  WHEN rp.percentage >= 0.99 THEN 'finished'
+  WHEN rp.percentage > 0 THEN 'reading'
+  WHEN ub.reading_status = 'want' THEN 'want'
+  ELSE NULL END`;
 
 const BOOK_COLUMNS = `id, identifier, content_hash, format, title, author, publisher, language, isbn,
   description, series, series_index, tags, pubdate, cover_path, file_size, page_count, source, updated_at`;
@@ -117,6 +141,8 @@ export interface ListOptions {
    * on the shelf yet.
    */
   scope?: 'shelf' | 'library';
+  /** 在读 / 想读 / 已读 filter; shelf scope only. */
+  status?: ReadingState;
   page?: number;
   pageSize?: number;
 }
@@ -223,6 +249,12 @@ export class ShelfService {
       params.push(`${escapeLike(prefix)}/%`);
     }
 
+    // 在读 / 想读 / 已读 reads reading_progress through the shelf join (below).
+    if (!library && options.status) {
+      if (!READING_STATES.includes(options.status)) throw badRequest('invalid reading status');
+      where.push(`(${READING_STATE}) = ?`);
+      params.push(options.status);
+    }
     const sortColumn = {
       title: 'b.title',
       author: 'b.author',
@@ -242,14 +274,14 @@ export class ShelfService {
     const orderColumn = sortColumn;
     const join = library
       ? 'LEFT JOIN user_books ub ON ub.book_id = b.id AND ub.user_id = ?'
-      : 'JOIN user_books ub ON ub.book_id = b.id';
+      : 'JOIN user_books ub ON ub.book_id = b.id LEFT JOIN reading_progress rp ON rp.user_id = ub.user_id AND rp.book_id = b.id';
     const joinParams: Array<string | number> = library ? [userId] : [];
     /*
      * `hidden` is selected only in library scope: on the shelf every row is
      * `hidden = 0` by construction, and a selected constant would become a field the
      * client reads as if it could say something.
      */
-    const shelfColumn = library ? ', ub.hidden AS shelf_hidden' : '';
+    const shelfColumn = library ? ', ub.hidden AS shelf_hidden' : `, (${READING_STATE}) AS reading_state`;
 
     const totalRow = this.db.get<{ n: number }>(
       `SELECT COUNT(*) AS n FROM books b ${join} WHERE ${whereSql}`,
@@ -362,6 +394,7 @@ export class ShelfService {
       ...(row.shelf_hidden === undefined
         ? {}
         : { shelfState: row.shelf_hidden === 0 ? ('on' as const) : ('off' as const) }),
+      ...(row.reading_state === undefined ? {} : { readingState: row.reading_state }),
     };
   }
 
@@ -394,6 +427,17 @@ export class ShelfService {
   clearOverride(bookId: string, field: string): void {
     this.db.run('DELETE FROM metadata_overrides WHERE book_id = ? AND field = ?', bookId, field);
     this.db.run('UPDATE books SET updated_at = ? WHERE id = ?', Date.now(), bookId);
+  }
+
+  /**
+   * Marks a book on this account's shelf 想读, 在读 or 已读, or clears the mark
+   * (`null`) so progress decides again. A book not on the shelf has no state.
+   */
+  setReadingStatus(userId: string, bookId: string, status: ReadingState | null): void {
+    if (status !== null && !READING_STATES.includes(status)) throw badRequest('invalid reading status');
+    const row = this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM user_books WHERE user_id = ? AND book_id = ? AND hidden = 0', userId, bookId);
+    if (!row?.n) throw notFound('book not on shelf');
+    this.db.run('UPDATE user_books SET reading_status = ? WHERE user_id = ? AND book_id = ?', status, userId, bookId);
   }
 
   /** Library-wide facets, used to build the client's filter UI. */

@@ -12,6 +12,7 @@ import { LoginPage } from '../src/features/auth/pages/LoginPage.tsx';
 
 vi.mock('../src/features/shelf/queries/shelf.queries.ts', () => ({
   useShelf: () => ({ data: { items: [], total: 0, pageSize: 60 }, isPending: false, error: null }),
+  useShelfGroups: () => ({ data: undefined, isPending: false, error: null }),
 }));
 
 const root = document.createElement('div');

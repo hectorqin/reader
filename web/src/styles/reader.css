@@ -4283,3 +4283,33 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .catalog-source-search input { width:100%; min-height:42px; box-sizing:border-box; padding:.6rem .8rem; border:1px solid var(--reader-line); border-radius:.7rem; background:var(--reader-paper); color:var(--reader-ink); }
 .catalog-source-search input:focus { border-color:var(--reader-accent); outline:2px solid color-mix(in srgb,var(--reader-accent) 25%,transparent); outline-offset:1px; }
 @media (max-width:600px) { .catalog-source-meta { align-items:stretch; flex-direction:column; gap:.55rem; } .catalog-source-search { max-width:none; } }
+
+/* ---- 书架: 在读 / 想读 / 已读 and 分组 (prototypes 2 and 19) ----
+ * One row of chips above the toolbar; the selected one is brand-soft with brand
+ * text, like every segmented choice. A card's state is a small label on its cover. */
+.shelf-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0 0 var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.shelf-filters::-webkit-scrollbar { display: none; }
+.shelf-status { display: flex; gap: var(--space-1); }
+.shelf-filters .chip[aria-pressed='true'] { background: var(--color-brand-soft); border-color: transparent; color: var(--reader-accent); font-weight: 600; }
+.shelf-filters .shelf-group, .shelf-filters .shelf-group-active { margin-inline-start: auto; flex: none; white-space: nowrap; }
+.book-card .book-state {
+  position: absolute;
+  inset-block-start: 0.35rem;
+  inset-inline-start: 0.35rem;
+  z-index: 1;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  background: var(--color-brand-soft);
+  color: var(--reader-accent);
+  font-size: 0.66rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+.book-card .book-state[data-state='finished'] { background: var(--color-surface-2); color: var(--reader-muted); }

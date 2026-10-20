@@ -632,6 +632,22 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 ---
 
+### `PUT /books/:id/reading-status`
+
+把书架上的书标记为想读、在读或已读，或清除标记（`null`），返回 204。不在当前账号书架上的书返回 404。
+
+```json
+{ "status": "want" }
+```
+
+`GET /books` 在书架范围内（默认 `scope`）接受 `status=reading|want|finished` 筛选，并给每本书带上 `readingState`（`"reading" | "want" | "finished" | null`）：
+
+- 手动标记的在读、已读优先；
+- 否则按进度推断：进度 ≥ 99% 为已读，已开始为在读；
+- 想读只来自标记，开始阅读后让位于在读。
+
+`scope=library` 和单本 `GET /books/:id` 不带这个字段。
+
 ## 朗读（HTTP TTS）
 
 这两条路由只在服务端配置了 HTTP 朗读合成接口 时才有意义，并且分工明确：
