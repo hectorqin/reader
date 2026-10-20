@@ -2,15 +2,13 @@ import { Alert } from '@mantine/core';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { BookOpen, LibraryBig, MoreHorizontal, Search, Settings, SlidersVertical } from 'lucide-react';
+import { BookOpen, LibraryBig, MoreHorizontal, Search, SlidersVertical } from 'lucide-react';
 import type { Book, ContinueReadingItem, ReadingState } from '../../../api/types.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
-import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
 import { useShelf, useShelfGroups, type ShelfFilters } from '../queries/shelf.queries.ts';
 import { SHELF_SORTS, ShelfSettingsPanel } from '../../../ui/shelf-settings.tsx';
 import { OpdsAccess } from '../../../ui/opds-access.tsx';
-import { SystemSettings } from '../../../ui/system-settings.tsx';
 import { DialogView, type Dialog } from '../../../ui/dialog.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 
@@ -61,7 +59,6 @@ export function ShelfPage() {
   const runtime = useRuntime();
   const queryClient = useQueryClient();
   const settings = useSettingsStore(state => state.settings);
-  const user = useAuthStore(state => state.verifiedUser);
   const [params, setParams] = useSearchParams();
   const page = Math.max(1, Number(params.get('page')) || 1);
   const [sort, setSort] = useState<typeof settings.shelfSort>((params.get('sort') as typeof settings.shelfSort) || settings.shelfSort);
@@ -69,7 +66,6 @@ export function ShelfPage() {
   const [queryText, setQueryText] = useState(params.get('q') || '');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [opdsOpen, setOpdsOpen] = useState(false);
-  const [systemSettingsOpen, setSystemSettingsOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<Book | ContinueReadingItem | null>(null);
   const [menuTarget, setMenuTarget] = useState<Book | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
@@ -120,7 +116,6 @@ export function ShelfPage() {
     <header className="shelf-head">
       <div className="shelf-head-text"><h1 className="shelf-title">{queryText ? '搜索结果' : '书架'}</h1><p className="shelf-subtitle muted">{subtitle}</p></div>
       <div className="shelf-head-actions">
-        {user?.role === 'admin' && <button className="icon-button" aria-label="系统设置" title="系统设置" onClick={() => setSystemSettingsOpen(true)}><Settings className="icon" size="1em" strokeWidth={1.8} /><span className="media-visually-hidden">系统设置</span></button>}
         <button className="icon-button" aria-label={`书架设置 · ${densityLabel}`} title={`书架设置 · ${densityLabel}`} onClick={() => setSettingsOpen(true)}><SlidersVertical className="icon" size="1em" strokeWidth={1.8} /><span className="media-visually-hidden">设置</span></button>
       </div>
     </header>
@@ -156,7 +151,6 @@ export function ShelfPage() {
     </section>
     <ShelfSettingsPanel open={settingsOpen} settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSettingsOpen(false)} onOpenExternalReader={() => { setSettingsOpen(false); setOpdsOpen(true); }} />
     {opdsOpen && <OpdsAccess api={runtime.api} onSignedOut={() => { void runtime.api.signOut(); }} onClose={() => { setOpdsOpen(false); setSettingsOpen(true); }} />}
-    {systemSettingsOpen && <SystemSettings api={runtime.api} onClose={() => setSystemSettingsOpen(false)} />}
     {menuTarget && <DialogView dialog={{ kind: 'pick', title: `《${menuTarget.title || '未命名'}》`, options: menuOptions(menuTarget), resolve: (_value: string | null) => undefined } satisfies Dialog} destructive="从书架拿掉" onClose={answer => { const target = menuTarget; setMenuTarget(null); if (typeof answer === 'string' && answer) void act(target, answer as BookAction); }} />}
     {groupsOpen && <DialogView dialog={{ kind: 'pick', title: groups.isPending ? '分组 · 正在读取…' : groups.error ? '分组 · 读取失败' : '分组', options: groupOptions, resolve: (_value: string | null) => undefined } satisfies Dialog} destructive="" onClose={answer => {
       setGroupsOpen(false);

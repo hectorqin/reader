@@ -1,5 +1,10 @@
 /* 我的: reuses the media aliases of the theme tokens, so it follows the chosen theme. */
-.mine-page { max-width: 640px; }
+/* The page column is the shared one (app/shell.css). On a wide window the groups sit
+ * two to a row instead of stretching each row across the whole column. */
+@media (min-width: 64rem) {
+  .mine-page { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 24px; align-content: start; align-items: start; }
+  .mine-page > :not(.mine-group) { grid-column: 1 / -1; }
+}
 .mine-page .media-back-button { color: inherit; text-decoration: none; }
 
 .mine-profile {

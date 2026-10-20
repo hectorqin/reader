@@ -42,17 +42,31 @@ describe('我的', () => {
     const links = [...root.querySelectorAll<HTMLAnchorElement>('a.mine-row')].map(a => [a.textContent, a.getAttribute('href')]);
     expect(links).toEqual([
       ['书库', '/library'], ['书源', '/sources'],
-      ['外观与主题跟随系统', '/media/video/settings/theme'], ['播放', '/media/video/settings/playback'],
-      ['账号与连接', '/media/video/settings/account'],
+      ['外观与主题跟随系统', '/me/theme'], ['影音浏览紧凑', '/me/browse'], ['播放', '/me/playback'],
+      ['账号与连接', '/me/account'],
     ]);
+    // Members see no administration group.
+    expect(root.querySelector('[aria-label="管理"]')).toBeNull();
   });
 
-  it('offers media library management only to administrators and shows the chosen theme', () => {
+  it('opens the shelf display sheet in place', () => {
+    useAuthStore.setState({ verifiedUser: user('member') });
+    paint();
+    const sheet = () => root.querySelector<HTMLElement>('[role=dialog][aria-label="书架设置"]')!;
+    expect(sheet().hidden).toBe(true);
+    act(() => { [...root.querySelectorAll<HTMLButtonElement>('button.mine-row')].find(b => b.textContent?.startsWith('书架显示'))!.click(); });
+    expect(sheet().hidden).toBe(false);
+  });
+
+  it('gathers administration under 管理 for administrators and shows the chosen theme', () => {
     saveThemePreference('mine-test', { theme: 'blue', mode: 'dark' });
     useAuthStore.setState({ verifiedUser: user('admin') });
     paint();
     const labels = [...root.querySelectorAll('.mine-row-label')].map(el => el.textContent);
     expect(labels).toContain('媒体库');
+    const admin = [...root.querySelectorAll('[aria-label="管理"] .mine-row-label')].map(el => el.textContent);
+    expect(admin).toEqual(['系统设置', '扫描与刮削', '来源与刮削']);
+    expect(root.querySelector('[aria-label="管理"] a[href="/me/plugins"]')).not.toBeNull();
     expect(root.textContent).toContain('雾蓝 · 深色');
     expect(root.querySelector('.mine-profile')?.textContent).toContain('管理员');
   });

@@ -10,15 +10,15 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
   const go=async hash=>page.evaluate(hash=>location.hash=hash,hash);
   const palette=selector=>page.locator(selector).evaluate(node=>({bg:getComputedStyle(node).getPropertyValue('--media-background').trim(),ink:getComputedStyle(node).getPropertyValue('--text').trim(),scheme:getComputedStyle(node).colorScheme}));
   await page.goto(baseUrl+'/#/media/music/settings');await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();
-  await page.getByRole('button',{name:/主题外观/}).click();await page.getByRole('heading',{name:'主题外观',exact:true}).waitFor();assert.match(page.url(),/music\/settings\/theme/);
-  await shot('themes-mobile');await page.getByRole('button',{name:'返回影音设置',exact:true}).click();await page.getByRole('heading',{name:'影音设置',exact:true}).waitFor();await page.getByRole('button',{name:/主题外观/}).click();
+  await page.goto(baseUrl+'/#/me');await page.getByRole('link',{name:/外观与主题/}).click();await page.getByRole('heading',{name:'外观与主题',exact:true}).waitFor();assert.match(page.url(),/#\/me\/theme/);
+  await shot('themes-mobile');await page.getByRole('button',{name:'返回我的',exact:true}).click();await page.getByRole('heading',{name:'我的',exact:true}).waitFor();await page.getByRole('link',{name:/外观与主题/}).click();
   const readingTheme=await page.evaluate(()=>document.documentElement.getAttribute('data-theme'));
   for(const [id,name] of [['forest','原野'],['sand','暖纸'],['ocean','雾蓝'],['rose','蔷薇'],['midnight','深夜'],['graphite','石墨']]){
    await page.getByRole('button',{name,exact:true}).click();assert.equal(await page.getByRole('button',{name,exact:true}).getAttribute('aria-pressed'),'true');
    assert.equal(await page.locator('body').getAttribute('data-media-theme'),id);
    await go('#/media/music/albums');await page.locator('.media-tile').first().waitFor();await shot('channel-'+id);
    assert.deepEqual(await palette('.media-screen'),await palette('.media-channel-entry'));
-   await go('#/media/music/settings/theme');await page.getByRole('heading',{name:'主题外观',exact:true}).waitFor();
+   await go('#/media/music/settings/theme');await page.getByRole('heading',{name:'外观与主题',exact:true}).waitFor();
   }
   await page.getByRole('button',{name:'深夜',exact:true}).click();await page.reload();await page.getByRole('button',{name:'深夜',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'深夜',exact:true}).getAttribute('aria-pressed'),'true');
   await shot('themes-dark-mobile');await page.setViewportSize({width:1120,height:900});await shot('themes-desktop');await page.setViewportSize({width:427,height:900});

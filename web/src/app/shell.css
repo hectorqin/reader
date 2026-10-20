@@ -89,12 +89,42 @@
   color: var(--reader-ink);
 }
 
+/* ---- one page column for the four tabs ----
+ * 首页, 书架, 影音 and 我的 share --page-measure / --page-gutter (styles/reader.css), so
+ * switching tabs never moves the content edges. The media-family pages are their own
+ * scrollers, so the column is made with padding (the scrollbar stays at the window
+ * edge); the shelf caps its bands instead, which keeps its sticky toolbar working. */
+@media (min-width: 701px) {
+  :root { --page-gutter: 32px; }
+}
+.media-screen:is(.home-page, .mine-page, .media-catalog-page) {
+  max-width: none;
+  padding-inline: max(var(--page-gutter), calc((100% - var(--page-measure)) / 2));
+}
+/* Phone: the same 20px top as the shelf's header, clear of the notch; the shelf's
+ * 0.9rem band padding is topped up to the shared gutter. */
+@media (max-width: 700px) {
+  .media-screen:is(.home-page, .mine-page) { padding-top: calc(20px + var(--safe-top)); }
+  .shelf { padding-inline: calc(var(--page-gutter) - 0.9rem); }
+}
+@media (min-width: 701px) {
+  .shelf { --shelf-measure: var(--collection-measure); }
+  .shelf-head, .shelf-discovery, .shelf-section { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); }
+  .shelf-head { padding-top: 24px; }
+}
+/* Between the sidebar breakpoint and 64rem the discovery row is display: contents,
+ * so its two children are bands of their own. */
+@media (min-width: 701px) and (max-width: 63.99rem) {
+  .shelf-links, .shelf-search { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); }
+}
+
 /* The old fixed channel rail is gone; its top gutter goes with it. */
 @media (min-width: 701px) {
   /* Only pages whose header scrolls with them; pages with a fixed header keep their 68px. */
   body[data-app-nav] .media-screen:is(.media-catalog-page, .mine-page, .home-page) { padding-top: 24px; }
-  /* Search and the ⋯ menu used to hang from the rail with a negative offset. */
-  body[data-app-nav] .media-heading:has(.media-mobile-title) .media-heading-actions { position: fixed; z-index: 81; top: 12px; right: 32px; }
+  /* Search and the ⋯ menu used to hang from the rail with a negative offset. They end
+   * where the page column ends, not at the window edge. */
+  body[data-app-nav] .media-heading:has(.media-mobile-title) .media-heading-actions { position: fixed; z-index: 81; top: 12px; right: max(var(--page-gutter), calc((100vw - var(--app-nav-width) - var(--page-measure)) / 2)); }
 }
 
 /* Fixed page headers were placed to clear the old rail's brand; they now clear the sidebar. */

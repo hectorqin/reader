@@ -32,6 +32,15 @@
   /* Colours are the theme's: styles/theme-tokens.css. */
   --reader-radius: 10px;
   --collection-measure: 80rem;
+  /*
+   * The page column every top-level page shares (首页, 书架, 影音, 我的, and the
+   * collection pages behind them): the content between the gutters is at most
+   * `--page-measure` wide and never nearer the edge than `--page-gutter`. Bands
+   * that carry their own 0.9rem inner padding (the shelf's) add it back, so the
+   * *content* edges line up across pages rather than the boxes.
+   */
+  --page-measure: calc(var(--collection-measure) - 1.8rem);
+  --page-gutter: 16px;
 
   /*
    * How far a search field is inset inside its content column, on *both* sides.
@@ -4060,7 +4069,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 /* Desktop keeps navigation compact and settings beside the collection. */
 @media (min-width: 64rem) {
   .shelf { --shelf-measure: var(--collection-measure); }
-  .shelf-head, .shelf-discovery, .shelf-section { width: calc(100% - 3rem); }
+  .shelf-head, .shelf-discovery, .shelf-section { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); }
   .shelf-head { padding-top: 2rem; padding-bottom: 1.25rem; }
   .shelf-discovery { display: flex; align-items: center; gap: 1.5rem; max-width: var(--shelf-measure); margin: 0 auto 1rem; padding-inline: .9rem; }
   .shelf-discovery .shelf-links { flex: none; margin: 0; padding: 0; }
@@ -4069,18 +4078,18 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   .collection-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem 2rem; padding-top: 2rem; }
   .collection-header .collection-links { margin-top: 0; }
   .collection-header .manager-crumbs { grid-column: 1 / -1; }
-  .collection-header, .library-browse-body, .library-files-screen .manager-body { width: calc(100% - 3rem); max-width: var(--collection-measure); margin-inline: auto; }
+  .collection-header, .library-browse-body, .library-files-screen .manager-body { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); max-width: var(--collection-measure); margin-inline: auto; }
   .library-files-screen .manager-row { grid-template-columns: 24px minmax(0, 1fr) minmax(15rem, 22rem) 44px; min-height: 64px; padding-block: .5rem; }
   .library-files-screen .manager-check { grid-row: 1; }
   .library-files-screen .manager-meta { grid-column: 3; grid-row: 1; justify-content: flex-end; padding-left: 0; }
   .library-files-screen .manager-more { grid-column: 4; grid-row: 1; }
   .shelf-settings.panel { inset: 1rem 1rem auto auto; width: 26rem; height: min(42rem, calc(100dvh - 2rem)); max-height: calc(100dvh - 2rem); border: 1px solid var(--reader-line); border-radius: 1rem; box-shadow: 0 12px 48px #0003; overflow: hidden; animation-name: shelf-settings-in; }
   .shelf-settings .switch-field { grid-template-columns: minmax(0, 1fr) auto; }
-  .sources-header { width: calc(100% - 3rem); max-width: var(--collection-measure); margin-inline: auto; padding: 2rem .9rem .75rem; border-bottom: 0; }
+  .sources-header { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); max-width: var(--collection-measure); margin-inline: auto; padding: 2rem .9rem .75rem; border-bottom: 0; }
   .sources-header h1 { font-size: 1.5rem; font-weight: 650; }
   .sources-hub .sources-tabs [role=tab] { flex: 0 1 auto; min-width: 9rem; padding-inline: 1.5rem; }
   .extension-tabs button { min-width: 7rem; padding-inline: 1.5rem; }
-  .sources-hub .sources-body, .extension-screen .sources-body, .sources-hub .sources-tabs, .extension-toolbar { width: calc(100% - 3rem); max-width: var(--collection-measure); margin-inline: auto; padding-inline: .9rem; }
+  .sources-hub .sources-body, .extension-screen .sources-body, .sources-hub .sources-tabs, .extension-toolbar { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); max-width: var(--collection-measure); margin-inline: auto; padding-inline: .9rem; }
   .sources-body .sources-card { max-width: none; }
   .reader-screen { --reader-footer-height: 5.5rem; }
   .reader-screen { --desktop-page-width: 52rem; }

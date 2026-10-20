@@ -655,7 +655,7 @@ function SpeechSettings({ state, handlers }: { state: ChromeState; handlers: Chr
   if (state.speechUnavailable) {
     return (
       <div className="notice">
-        当前环境没有可用的朗读引擎。请管理员在「系统设置 → 服务配置 → HTTP 朗读」配置语音服务，或启用设备的系统语音。
+        当前环境没有可用的朗读引擎。请管理员在「我的 → 系统设置 → 服务配置 → HTTP 朗读」配置语音服务，或启用设备的系统语音。
       </div>
     );
   }

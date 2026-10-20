@@ -1,6 +1,6 @@
 import { Alert } from '@mantine/core';
 import { MoreHorizontal, Plus, RefreshCw } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -20,6 +20,8 @@ function safeChannel(value: string | undefined): MediaChannel {
 export function MediaLibrariesPage() {
   const runtime = useRuntime();
   const navigate = useNavigate();
+  // Opened from 我的, back returns there; otherwise to the channel's 影音设置.
+  const fromMine = useLocation().state?.returnTo === '/me';
   const { channel: routeChannel } = useParams();
   const channel = safeChannel(routeChannel);
   const role = useAuthStore(state => state.verifiedUser?.role);
@@ -49,7 +51,7 @@ export function MediaLibrariesPage() {
   };
   const scan = (id: string) => act(id, () => runtime.mediaApi.request(`libraries/${encodeURIComponent(id)}/scan`, 'POST'), '扫描请求失败，请稍后重试。');
   const cancel = (job: ScanJob) => act(job.libraryId ?? job.id, () => runtime.mediaApi.request(`jobs/${encodeURIComponent(job.id)}/cancel`, 'POST'), '取消扫描失败，请稍后重试。');
-  return <MediaPageFrame className="media-manager-workspace" title="媒体库管理" backTo={`/media/${channel}/settings`} backLabel="返回影音设置" actions={<details className="media-actions media-library-management-actions">
+  return <MediaPageFrame className="media-manager-workspace" title="媒体库管理" backTo={fromMine ? '/me' : `/media/${channel}/settings`} backLabel={fromMine ? '返回我的' : '返回影音设置'} actions={<details className="media-actions media-library-management-actions">
     <summary aria-label="媒体库管理操作" title="媒体库管理操作"><MoreHorizontal size={20} aria-hidden="true" /></summary>
     <nav aria-label="媒体库管理操作">
       <Link to={`/media/${channel}/settings/libraries/new`}><Plus size={16} aria-hidden="true" />新建媒体库</Link>

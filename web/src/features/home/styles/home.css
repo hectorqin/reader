@@ -1,6 +1,4 @@
 /* 首页: continue where you left off. Uses the shared theme tokens. */
-.home-page { max-width: 1000px; }
-.media-screen.home-page { padding-top: 20px; }
 .home-header h1 { margin: 6px 0 0; font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; font-size: 28px; line-height: 1.2; }
 .home-header p { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 

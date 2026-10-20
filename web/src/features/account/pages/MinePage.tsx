@@ -1,14 +1,19 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight, Film, LibraryBig, LogOut, Palette, PlayCircle, Rss, UserRound, type LucideIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { ChevronRight, Film, LayoutGrid, LibraryBig, LogOut, Palette, PlayCircle, Puzzle, RefreshCw, Rss, Settings, SlidersHorizontal, UserRound, type LucideIcon } from 'lucide-react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
+import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
 import { themeSummary } from '../../../shared/theme/theme.ts';
 import { useThemeState } from '../../../shared/theme/use-theme.ts';
+import { readMediaPreferences } from '../../media/services/preferences.ts';
+import { DENSITY_LABELS, ShelfSettingsPanel } from '../../../ui/shelf-settings.tsx';
+import { OpdsAccess } from '../../../ui/opds-access.tsx';
+import { SystemSettings } from '../../../ui/system-settings.tsx';
 import '../../home/styles/home.css';
 import '../styles/mine.css';
 
-function Row({ icon: Icon, label, value, to, onClick, danger = false }: { icon: LucideIcon; label: string; value?: string; to?: string; onClick?: () => void; danger?: boolean }) {
+function Row({ icon: Icon, label, value, to, state, onClick, danger = false }: { icon: LucideIcon; label: string; value?: string; to?: string; state?: unknown; onClick?: () => void; danger?: boolean }) {
   const body = <>
     <span className="mine-row-icon" aria-hidden="true"><Icon size={18} /></span>
     <span className="mine-row-label">{label}</span>
@@ -17,7 +22,7 @@ function Row({ icon: Icon, label, value, to, onClick, danger = false }: { icon: 
   </>;
   const className = danger ? 'mine-row is-danger' : 'mine-row';
   return to
-    ? <Link className={className} to={to}>{body}</Link>
+    ? <Link className={className} to={to} state={state}>{body}</Link>
     : <button type="button" className={className} onClick={onClick}>{body}</button>;
 }
 
@@ -30,37 +35,58 @@ function serverHost(baseUrl: string): string {
 }
 
 /**
- * 我的: the one place for who you are, what is connected, and the settings that
- * already exist elsewhere. It owns no settings of its own: every row links to the
- * page that does, so there is still exactly one place to change each thing.
+ * 我的: the settings hub. Every setting in the app is reachable from here, grouped by
+ * what it is about rather than by which page happens to own it:
+ * - 偏好: how things look and behave for *you* (theme, the shelf, media browsing, playback);
+ * - 管理: what an administrator changes for everyone (users, services, media libraries);
+ * - 账号: who you are on this server.
+ * Each row opens the one place that setting lives; the shelf sheet and 影音设置 are
+ * shortcuts to subsets of this list, not separate settings.
  */
 export function MinePage() {
   const runtime = useRuntime();
   const user = useAuthStore(state => state.verifiedUser ?? state.session?.user ?? null);
+  const settings = useSettingsStore(state => state.settings);
   const admin = user?.role === 'admin';
-  const themeName = themeSummary(useThemeState(runtime.mediaApi.preferenceScope()).preference);
+  const scope = runtime.mediaApi.preferenceScope();
+  const themeName = themeSummary(useThemeState(scope).preference);
+  const mediaDensity = readMediaPreferences(scope).density === 'compact' ? '紧凑' : '宽松';
+  const [sheet, setSheet] = useState<'shelf' | 'opds' | 'system' | null>(null);
   const name = user?.displayName || user?.username || '';
-  return <div className="media-screen media-page mine-page">
-    <header className="home-header"><h1>我的</h1></header>
-    {user && <section className="mine-profile" aria-label="当前账号">
-      <div className="mine-avatar" aria-hidden="true">{Array.from(name)[0]}</div>
-      <div className="mine-profile-text">
-        <strong>{name}</strong>
-        <small><span className="mine-dot" aria-hidden="true" />{serverHost(runtime.api.baseUrl)} · {admin ? '管理员' : '成员'}</small>
-      </div>
-    </section>}
-    <Group title="内容">
-      <Row icon={LibraryBig} label="书库" to="/library" />
-      <Row icon={Rss} label="书源" to="/sources" />
-      {admin && <Row icon={Film} label="媒体库" to="/media/video/settings/libraries" />}
-    </Group>
-    <Group title="偏好">
-      <Row icon={Palette} label="外观与主题" value={themeName} to="/media/video/settings/theme" />
-      <Row icon={PlayCircle} label="播放" to="/media/video/settings/playback" />
-    </Group>
-    <Group title="账号">
-      <Row icon={UserRound} label="账号与连接" to="/media/video/settings/account" />
-      <Row icon={LogOut} label="退出登录" danger onClick={() => { void runtime.api.signOut(); }} />
-    </Group>
-  </div>;
+  return <>
+    <div className="media-screen media-page mine-page">
+      <header className="home-header"><h1>我的</h1></header>
+      {user && <section className="mine-profile" aria-label="当前账号">
+        <div className="mine-avatar" aria-hidden="true">{Array.from(name)[0]}</div>
+        <div className="mine-profile-text">
+          <strong>{name}</strong>
+          <small><span className="mine-dot" aria-hidden="true" />{serverHost(runtime.api.baseUrl)} · {admin ? '管理员' : '成员'}</small>
+        </div>
+      </section>}
+      <Group title="内容">
+        <Row icon={LibraryBig} label="书库" to="/library" />
+        <Row icon={Rss} label="书源" to="/sources" />
+        {admin && <Row icon={Film} label="媒体库" to="/media/video/settings/libraries" state={{ returnTo: '/me' }} />}
+      </Group>
+      <Group title="偏好">
+        <Row icon={Palette} label="外观与主题" value={themeName} to="/me/theme" />
+        <Row icon={LayoutGrid} label="书架显示" value={DENSITY_LABELS[settings.shelfDensity]} onClick={() => setSheet('shelf')} />
+        <Row icon={SlidersHorizontal} label="影音浏览" value={mediaDensity} to="/me/browse" />
+        <Row icon={PlayCircle} label="播放" to="/me/playback" />
+      </Group>
+      {admin && <Group title="管理">
+        <Row icon={Settings} label="系统设置" value="用户、注册、服务配置" onClick={() => setSheet('system')} />
+        <Row icon={RefreshCw} label="扫描与刮削" to="/media/video/settings/tasks" state={{ returnTo: '/me' }} />
+        <Row icon={Puzzle} label="来源与刮削" to="/me/plugins" />
+      </Group>}
+      <Group title="账号">
+        <Row icon={UserRound} label="账号与连接" to="/me/account" />
+        <Row icon={LogOut} label="退出登录" danger onClick={() => { void runtime.api.signOut(); }} />
+      </Group>
+    </div>
+    {/* Outside the media screen, so its sheet styles are the shelf's own, not media's. */}
+    <ShelfSettingsPanel open={sheet === 'shelf'} settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSheet(null)} onOpenExternalReader={() => setSheet('opds')} />
+    {sheet === 'opds' && <OpdsAccess api={runtime.api} onSignedOut={() => { void runtime.api.signOut(); }} onClose={() => setSheet('shelf')} />}
+    {sheet === 'system' && <SystemSettings api={runtime.api} onClose={() => setSheet(null)} />}
+  </>;
 }

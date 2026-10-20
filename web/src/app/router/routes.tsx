@@ -63,7 +63,12 @@ export const routes = [{
     { path: 'settings', element: <Navigate to="/shelf" replace /> },
     { path: 'book/:bookId', element: <ReaderPage /> },
     // 我的 shares MediaLayout so it follows the chosen theme and keeps the channel rail.
-    { path: 'me', element: <MediaLayout />, children: [{ index: true, element: <MinePage /> }] },
+    // Its settings rows open /me/:panel (theme, browse, playback, plugins, account),
+    // so back from any of them returns to 我的.
+    { path: 'me', element: <MediaLayout />, children: [
+      { index: true, element: <MinePage /> },
+      { path: ':panel', element: <MediaSettingsPage hub="me" /> },
+    ] },
     { path: 'media', element: <MediaLayout />, children: [
       { index: true, element: <Navigate to="video" replace /> },
       { path: 'music', element: <Navigate to="/media/music/albums" replace /> },

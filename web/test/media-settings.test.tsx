@@ -20,7 +20,7 @@ it('isolates device preferences by server/account and leaves reading storage unt
 });
 it('saves explicit changes and reports storage errors without applying them',async()=>{
   const onSaved=vi.fn();
-  await act(async()=>render(<MediaSettings scope="test" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={onSaved} onBack={vi.fn()} onPersonal={vi.fn()} onManage={vi.fn()}/>,root));
+  await act(async()=>render(<MediaSettings scope="test" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={onSaved} onBack={vi.fn()} onManage={vi.fn()}/>,root));
   act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent?.startsWith('浏览偏好'))!.click());
   const select=root.querySelector('select')!;
   act(()=>{select.value='comfortable';select.dispatchEvent(new Event('change',{bubbles:true}));});
@@ -34,7 +34,7 @@ it('saves explicit changes and reports storage errors without applying them',asy
 });
 it('uses the active player for live playback options and exposes admin management',async()=>{
   const speed=vi.fn(),sleep=vi.fn(),onManage=vi.fn();
-  await act(async()=>render(<MediaSettings scope="test" preferences={defaultMediaPreferences} player={{active:true,playbackRate:1,sleepAt:0,speed,sleep} as unknown as MediaPlayer} admin onSaved={vi.fn()} onBack={vi.fn()} onPersonal={vi.fn()} onManage={onManage}/>,root));
+  await act(async()=>render(<MediaSettings scope="test" preferences={defaultMediaPreferences} player={{active:true,playbackRate:1,sleepAt:0,speed,sleep} as unknown as MediaPlayer} admin onSaved={vi.fn()} onBack={vi.fn()} onManage={onManage}/>,root));
   act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent?.startsWith('播放设置'))!.click());
   const current=root.querySelector<HTMLSelectElement>('[aria-label="播放倍速"]')!;
   act(()=>{current.value='1.5';current.dispatchEvent(new Event('change',{bubbles:true}));Array.from(root.querySelectorAll('button')).find(b=>b.textContent==='30分钟')!.click();});
@@ -43,13 +43,13 @@ it('uses the active player for live playback options and exposes admin managemen
   act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent?.startsWith('媒体库管理'))!.click());expect(onManage).toHaveBeenCalled();
 });
 it('keeps member navigation usable without exposing administrator actions',async()=>{
-  const onPersonal=vi.fn(),onBack=vi.fn();
-  await act(async()=>render(<MediaSettings scope="member" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={vi.fn()} onBack={onBack} onPersonal={onPersonal} onManage={vi.fn()}/>,root));
+  const onGeneral=vi.fn(),onBack=vi.fn();
+  await act(async()=>render(<MediaSettings scope="member" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={vi.fn()} onBack={onBack} onManage={vi.fn()} onGeneral={onGeneral}/>,root));
   expect(root.textContent).not.toContain('媒体库管理');
-  for(const [title,view] of [['我的收藏','favorites'],['播放历史','history']]){
-    act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent?.startsWith(title!))!.click());
-    expect(onPersonal).toHaveBeenLastCalledWith(view);
-  }
+  // App-wide settings live in 我的; the media panel links there instead of repeating them.
+  expect(root.textContent).not.toContain('外观与主题');expect(root.textContent).not.toContain('我的收藏');
+  act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent?.startsWith('外观、账号与系统设置'))!.click());
+  expect(onGeneral).toHaveBeenCalled();
   act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent?.startsWith('播放设置'))!.click());
   expect(root.querySelector('[aria-label="默认倍速"]')).not.toBeNull();expect(root.textContent).toContain('连续播放');
   act(()=>root.querySelector<HTMLButtonElement>('[aria-label="返回影音设置"]')!.click());expect(onBack).not.toHaveBeenCalled();
@@ -57,13 +57,13 @@ it('keeps member navigation usable without exposing administrator actions',async
 it('shows account identity without exposing credentials or administrator source controls to a member',async()=>{
   const api=new MediaApi({baseUrl:'https://reader.example',currentSession:()=>({user:{username:'lin',displayName:'林间',role:'member'},accessToken:'secret-access',refreshToken:'secret-refresh'})} as unknown as ReaderApi);
   expect(api.accountInfo()).toEqual({username:'lin',displayName:'林间',role:'member',server:'https://reader.example'});
-  await act(async()=>render(<MediaSettings scope="member" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} api={api} account={api.accountInfo()} onSaved={vi.fn()} onBack={vi.fn()} onPersonal={vi.fn()} onManage={vi.fn()}/>,root));
+  await act(async()=>render(<MediaSettings scope="member" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} api={api} account={api.accountInfo()} onSaved={vi.fn()} onBack={vi.fn()} onManage={vi.fn()}/>,root));
   expect(root.textContent).not.toContain('来源与刮削');
-  act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent?.startsWith('账号与连接'))!.click());
+  await act(async()=>render(<MediaSettings scope="member" panel="account" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} api={api} account={api.accountInfo()} onSaved={vi.fn()} onBack={vi.fn()} onManage={vi.fn()}/>,root));
   expect(root.textContent).toContain('@lin');expect(root.textContent).toContain('https://reader.example');expect(root.textContent).not.toContain('secret');
 });
 it('asks before dropping an unsaved preference draft',async()=>{
-  await act(async()=>render(<MediaSettings scope="draft" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={vi.fn()} onBack={vi.fn()} onPersonal={vi.fn()} onManage={vi.fn()}/>,root));
+  await act(async()=>render(<MediaSettings scope="draft" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={vi.fn()} onBack={vi.fn()} onManage={vi.fn()}/>,root));
   act(()=>Array.from(root.querySelectorAll('button')).find(b=>b.textContent?.startsWith('浏览偏好'))!.click());
   act(()=>{const select=root.querySelector('select')!;select.value='comfortable';select.dispatchEvent(new Event('change',{bubbles:true}));});
   act(()=>root.querySelector<HTMLButtonElement>('[aria-label="返回影音设置"]')!.click());
@@ -77,7 +77,7 @@ it('asks before dropping an unsaved preference draft',async()=>{
 });
 it('retains an unsaved draft through route back/forward and discards it only explicitly',async()=>{
   const onPanelChange=vi.fn();let panel:'home'|'browse'='browse';
-  const draw=()=>render(<MediaSettings scope="route-draft" panel={panel} onPanelChange={onPanelChange} preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={vi.fn()} onBack={vi.fn()} onPersonal={vi.fn()} onManage={vi.fn()}/>,root);
+  const draw=()=>render(<MediaSettings scope="route-draft" panel={panel} onPanelChange={onPanelChange} preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={vi.fn()} onBack={vi.fn()} onManage={vi.fn()}/>,root);
   await act(async()=>draw());
   act(()=>{const select=root.querySelector('select')!;select.value='comfortable';select.dispatchEvent(new Event('change',{bubbles:true}));});
   act(()=>{panel='home';draw();});
@@ -91,7 +91,7 @@ it('retains an unsaved draft through route back/forward and discards it only exp
   act(()=>{panel='browse';draw();});expect(root.querySelector('select')!.value).toBe('compact');
 });
 it('does not show playback settings when a member follows the provider deep link',async()=>{
-  await act(async()=>render(<MediaSettings scope="member" panel="plugins" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={vi.fn()} onBack={vi.fn()} onPersonal={vi.fn()} onManage={vi.fn()}/>,root));
+  await act(async()=>render(<MediaSettings scope="member" panel="plugins" preferences={defaultMediaPreferences} player={{active:false} as MediaPlayer} admin={false} onSaved={vi.fn()} onBack={vi.fn()} onManage={vi.fn()}/>,root));
   expect(root.querySelector('[role=alert]')?.textContent).toContain('需要管理员权限');
   expect(root.textContent).not.toContain('还没有正在播放');
 });

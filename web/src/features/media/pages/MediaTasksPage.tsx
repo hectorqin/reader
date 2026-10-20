@@ -27,10 +27,11 @@ export function MediaTasksPage() {
   const [actionNotice, setActionNotice] = useState('');
   const tab = params.get('tab') === 'ai' || params.get('tab') === 'scrape' ? params.get('tab')! : 'scan';
   const requestedLibraryId = params.get('library') ?? '';
-  const returnTo = typeof location.state?.returnTo === 'string' && location.state.returnTo.startsWith('/media/')
-    ? location.state.returnTo
+  const stateReturn = location.state?.returnTo;
+  const returnTo = typeof stateReturn === 'string' && (stateReturn.startsWith('/media/') || stateReturn === '/me')
+    ? stateReturn
     : `/media/${channel}/settings`;
-  const returnLabel = returnTo.includes('/settings/libraries') ? '返回媒体库管理' : '返回影音设置';
+  const returnLabel = returnTo === '/me' ? '返回我的' : returnTo.includes('/settings/libraries') ? '返回媒体库管理' : '返回影音设置';
   const libraries = useQuery(librariesQuery(runtime));
   const libraryId = libraries.data?.items.some(item => item.id === requestedLibraryId)
     ? requestedLibraryId
