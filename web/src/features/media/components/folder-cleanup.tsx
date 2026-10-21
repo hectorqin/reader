@@ -8,8 +8,9 @@ export interface CleanupPreview {
 }
 export interface CleanupResult extends CleanupPreview {returnPath:string}
 
-export function FolderCleanup({api,libraryId,path,disabled,onBusy,onCleaned,menuOnly=false}:{
-  api:MediaApi;libraryId:string;path:string;disabled:boolean;onBusy:(busy:boolean)=>void;onCleaned:(result:CleanupResult)=>void;menuOnly?:boolean;
+/** `startRef`: the screen opens this from its own menu, so no trigger is drawn here. */
+export function FolderCleanup({api,libraryId,path,disabled,onBusy,onCleaned,startRef}:{
+  api:MediaApi;libraryId:string;path:string;disabled:boolean;onBusy:(busy:boolean)=>void;onCleaned:(result:CleanupResult)=>void;startRef?:{current:(()=>void)|null};
 }){
   const [preview,setPreview]=useState<CleanupPreview|null>(null),[message,setMessage]=useState(''),[error,setError]=useState('');
   const request=useRef<AbortController|null>(null);
@@ -29,8 +30,9 @@ export function FolderCleanup({api,libraryId,path,disabled,onBusy,onCleaned,menu
     }catch(error){if(!abort.signal.aborted)setError((error instanceof Error?error.message:'清理失败')+(remove?'。请重新预览，核对当前记录后再操作。':''));}
     finally{if(!abort.signal.aborted){request.current=null;onBusy(false);}}
   }
+  if(startRef)startRef.current=()=>void run();
   return <>
-    <>{menuOnly?<button disabled={disabled} onClick={()=>void run()}><Trash2 size={16} aria-hidden="true"/>清理失效资源</button>:<div className="media-folder-operation"><span><strong>失效资源</strong><small>检查当前目录及子目录的缺失记录</small></span><button disabled={disabled} onClick={()=>void run()}><Trash2 size={16} aria-hidden="true"/>清理失效资源</button></div>}</>
+    <>{startRef?null:<div className="media-folder-operation"><span><strong>失效资源</strong><small>检查当前目录及子目录的缺失记录</small></span><button disabled={disabled} onClick={()=>void run()}><Trash2 size={16} aria-hidden="true"/>清理失效资源</button></div>}</>
     {message&&<p role="status">{message}</p>}{error&&<p className="media-error" role="alert">{error}</p>}
     {preview&&<ConfirmSheet danger title="清理失效资源" confirmText="确认清理" cancelText="取消" onCancel={()=>setPreview(null)} onConfirm={()=>void run(true)} text={`清理「${path||'库内根目录'}」及其子目录中的 ${preview.assets} 个缺失文件记录。将移除 ${preview.parts} 个播放片段、${preview.editions} 个空版本和 ${preview.items} 个空作品/分类，以及所有用户关联的 ${preview.favorites} 条收藏、${preview.progress} 条播放进度和 ${preview.queue} 条队列记录。不会删除原始文件或仍有资源的作品。此操作不可撤销；如目录暂未挂载，请取消并在恢复后重新扫描。`}/>}
   </>;

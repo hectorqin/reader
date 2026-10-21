@@ -3,7 +3,8 @@ import {FolderCleanup} from './folder-cleanup.tsx';
 import {MediaSelect} from './select.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import {Folder,FolderOpen,File,ChevronRight,ChevronLeft,ArrowUpRight,Ellipsis} from 'lucide-react';
+import {Folder,FolderOpen,File,ChevronRight,ChevronLeft,ArrowUpRight,Settings2,Trash2} from 'lucide-react';
+import {ActionMenu} from '../../../ui/action-menu.tsx';
 import type {Detail,MediaApi,Part} from '../api/media-api.ts';
 import {EditionDetails,type ChapterPosition} from './edition-details.tsx';
 import {ResourceInfo} from './resource-info.tsx';
@@ -40,13 +41,15 @@ export function MediaFolders({api,admin=false,video=false,libraryId,initialLocat
   useEffect(()=>{onLocationChange?.({path,offset,assetId,editions,chapters});},[path,offset,assetId]);
   function open(next:string){setCleanupNotice('');setPath(next);setOffset(0);setAssetId(null);}
   async function action(run:()=>Promise<void>,queue=false){if(busy)return;const current=generation.current;setBusy(true);setActionError('');setNotice('');try{await run();if(current===generation.current)setNotice(queue?'已加入队列':'');}catch(error){if(current===generation.current)setActionError((error instanceof ApiError&&error.kind==='offline'?'无法连接服务器':error instanceof Error?error.message:'操作失败')+(queue?'。加入结果尚未确认，请先到待播队列核对，再决定是否重新添加。':'。可以重新选择章节播放。'));}finally{if(current===generation.current)setBusy(false);}}
-  const managementActions = admin && listing ? <details className="media-actions media-folder-actions" aria-label="文件管理操作">
-    <summary aria-label="文件管理操作" title="文件管理操作"><Ellipsis size={20} aria-hidden="true" /></summary>
-    <nav aria-label="文件管理操作">
-    {video && <FolderRecognition key={libraryId+'-rules-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onApplied={()=>{setCleanupNotice('已应用识别结果，原文件与播放进度保留。');setRetry(value=>value+1);}}/>}
-    <FolderCleanup key={libraryId+'-cleanup-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} menuOnly onBusy={setBusy} onCleaned={result=>{setCleanupNotice('已清理 '+result.assets+' 个失效资源记录'+(result.returnPath!==path?'，已返回上级有效目录。':'。'));setPath(result.returnPath);setOffset(0);setRetry(value=>value+1);}}/>
-    </nav>
-  </details> : null;
+  const startRecognition=useRef<(()=>void)|null>(null),startCleanup=useRef<(()=>void)|null>(null);
+  const managementActions = admin && listing ? <>
+    <ActionMenu className="media-folder-actions media-icon-button" label="文件管理操作" items={[
+      video && {label:'识别规则与预览',icon:<Settings2 size={16}/>,disabled:busy||loading,onSelect:()=>startRecognition.current?.()},
+      {label:'清理失效资源',icon:<Trash2 size={16}/>,danger:true,disabled:busy||loading,onSelect:()=>startCleanup.current?.()},
+    ]}/>
+    {video && <FolderRecognition key={libraryId+'-rules-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} startRef={startRecognition} onBusy={setBusy} onApplied={()=>{setCleanupNotice('已应用识别结果，原文件与播放进度保留。');setRetry(value=>value+1);}}/>}
+    <FolderCleanup key={libraryId+'-cleanup-'+path} api={api} libraryId={libraryId} path={path} disabled={busy||loading} startRef={startCleanup} onBusy={setBusy} onCleaned={result=>{setCleanupNotice('已清理 '+result.assets+' 个失效资源记录'+(result.returnPath!==path?'，已返回上级有效目录。':'。'));setPath(result.returnPath);setOffset(0);setRetry(value=>value+1);}}/>
+  </> : null;
   const segments=path?path.split('/'):[];
   return <section ref={folderRoot} className="media-folders" aria-label="影音文件夹">
     {actionsHost && managementActions ? createPortal(managementActions,actionsHost) : managementActions}

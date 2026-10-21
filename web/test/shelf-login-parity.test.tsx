@@ -2,7 +2,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, type ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { MantineProvider } from '@mantine/core';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { render } from '../src/shared/ui/render-root.ts';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
@@ -49,7 +48,7 @@ function runtime() {
 
 function mount(node: ReactNode, value = runtime(), initialEntry = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  act(() => render(<RuntimeContext value={value}><QueryClientProvider client={queryClient}><MantineProvider><MemoryRouter initialEntries={[initialEntry]}>{node}</MemoryRouter></MantineProvider></QueryClientProvider></RuntimeContext>, root));
+  act(() => render(<RuntimeContext value={value}><QueryClientProvider client={queryClient}><><MemoryRouter initialEntries={[initialEntry]}>{node}</MemoryRouter></></QueryClientProvider></RuntimeContext>, root));
   return value;
 }
 

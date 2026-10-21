@@ -230,7 +230,22 @@ body {
   font-family: system-ui, -apple-system, 'Segoe UI', 'Noto Sans SC', sans-serif;
   line-height: normal;
   -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
+}
+
+/* Controls take the page's type instead of the platform's 13px system font. */
+input,
+button,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+select {
+  text-transform: none;
 }
 
 #app {
@@ -2784,6 +2799,38 @@ book-content {
   margin-bottom: 0.9rem;
 }
 
+/* A page-level message (toolkit Callout): text, then an optional action and close. */
+.callout {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--reader-ink);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.callout-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.callout .button {
+  flex: none;
+  min-height: 36px;
+}
+
+.callout.is-error {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.callout.is-warning {
+  background: var(--color-surface-2);
+}
+
 .muted {
   color: var(--reader-muted);
 }
@@ -2802,6 +2849,33 @@ book-content {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* A whole-page state: opening, failed, nothing here. Centred in the page column. */
+.page-state {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--reader-ink);
+}
+
+.page-state h2 {
+  margin: 0;
+  font-size: var(--text-title);
+}
+
+.page-state p {
+  margin: 0;
+  color: var(--reader-muted);
+}
+
+.page-state .spinner {
+  margin: 0;
 }
 
 .segmented {
@@ -3461,6 +3535,8 @@ book-content {
 .sources-screen { display:flex; flex-direction:column; min-height:0; height:100%; flex:1; }
 .sources-header { display:flex; align-items:center; gap:1rem; padding:1rem; border-bottom:1px solid var(--reader-line); }
 .sources-header h1 { font-size:1.25rem; flex:1; margin:0; }
+.sources-header-text { flex:1; min-width:0; }
+.sources-header-text p { margin:.25rem 0 0; font-size:var(--text-meta); }
 .sources-tabs { display:flex; flex-wrap:wrap; gap:.5rem; padding:.75rem 1rem; }
 .sources-body { overflow:auto; padding:0 1rem 2rem; flex:1; }
 .sources-card { max-width:64rem; margin:0 auto 1rem; padding:1rem; border:1px solid var(--reader-line); border-radius:1rem; }
@@ -3793,11 +3869,6 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .file-manager-header .collection-links { align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: .55rem; }
 .file-manager-header .collection-link.button { flex: 0 0 auto; min-width: 8.5rem; min-height: 44px; justify-content: flex-start; }
 .file-manager-header .collection-link.button > span { flex: 1 1 auto; }
-.library-file-menu { min-width: 10rem; padding: .35rem; border: 1px solid var(--reader-line); border-radius: .75rem; background: var(--reader-paper); color: var(--reader-ink); box-shadow: 0 .75rem 2rem #0003; }
-.library-file-menu .mantine-Menu-item { min-height: 2.5rem; border-radius: .5rem; color: var(--reader-ink); font: inherit; }
-.library-file-menu .mantine-Menu-item:hover, .library-file-menu .mantine-Menu-item:focus-visible { background: color-mix(in srgb, var(--reader-accent) 12%, transparent); color: var(--reader-ink); }
-.library-file-menu .mantine-Menu-item[data-disabled] { opacity: .45; }
-.library-file-menu .mantine-Menu-item[data-color='red'] { color: #b23a31; }
 .shelf-settings .section-title:first-child { margin-top: 0; }
 .shelf-discovery { display: contents; }
 .plugin-install { margin-block: 1rem 1.5rem; border: 1px solid var(--reader-line); border-radius: .85rem; overflow: hidden; }

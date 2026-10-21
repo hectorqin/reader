@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowLeft, Check, Package, Upload, X } from 'lucide-react';
+import { Check, Package, Upload, X } from 'lucide-react';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { usePlugins, useSourceMutations } from '../hooks/sourceQueries.ts';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
+import { SourcesHeader } from '../components/SourcesHeader.tsx';
 
 export function PluginManagementPage() {
   const admin = useAuthStore(state => state.verifiedUser?.role === 'admin');
@@ -27,7 +27,7 @@ export function PluginManagementPage() {
     } catch (reason) { setError(reason instanceof Error ? reason.message : '插件安装失败'); }
   };
   return <div className="sources-screen plugin-management-screen">
-    <header className="sources-header"><Link className="icon-button" to="/sources" aria-label="返回" title="返回"><ArrowLeft size={20} /></Link><h1>插件管理</h1><span /></header>
+    <SourcesHeader title="插件管理" />
     <main className="sources-body plugin-management-body">
       {plugins.isPending && <FloatingNotice message="正在加载插件列表…" busy />}
       {error && <div className="notice error" role="alert">{error}</div>}

@@ -22,14 +22,15 @@ it('paginates and searches the full playlist without changing jump indices',asyn
   const locate=Array.from(host.querySelectorAll('button')).find(button=>button.textContent==='定位当前播放')!;
   act(()=>locate.click());expect(input.value).toBe('');expect(host.querySelectorAll('.media-current-playlist li')).toHaveLength(23);
   expect(host.querySelector<HTMLButtonElement>('[aria-current="true"]')!.disabled).toBe(true);
-  act(()=>host.querySelector<HTMLButtonElement>('[aria-label="编辑播放列表"]')!.click());
+  const menu=(item:string)=>{act(()=>host.querySelector<HTMLButtonElement>('[aria-label="队列操作"]')!.click());act(()=>Array.from(host.querySelectorAll<HTMLButtonElement>('[role=menuitem]')).find(button=>button.textContent===item)!.click());};
+  menu('编辑队列');
   expect(host.querySelector<HTMLButtonElement>('[aria-label="移除 章节 101"]')!.disabled).toBe(true);
   act(()=>host.querySelector<HTMLButtonElement>('[aria-label="上移 章节 123"]')!.click());
   expect(editPlaylist).toHaveBeenCalledWith(122,-1);
   act(()=>host.querySelector<HTMLButtonElement>('[aria-label="移除 章节 123"]')!.click());
   expect(editPlaylist).toHaveBeenCalledWith(122,0);
   act(()=>{input.value='123';input.dispatchEvent(new Event('input',{bubbles:true}));});
-  act(()=>host.querySelector<HTMLButtonElement>('[aria-label="查找播放列表"]')!.click());
+  menu('收起查找');
   expect(host.querySelector('input[type=search]')).toBeNull();
   expect(host.querySelectorAll('.media-current-playlist li')).toHaveLength(50);
 });

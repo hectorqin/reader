@@ -1,6 +1,5 @@
-import { Alert, Button, Title, UnstyledButton, VisuallyHidden } from '@mantine/core';
-import { ChevronLeft } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
+import { Callout, Icon } from '../../../ui/toolkit.tsx';
 import type { ReactNode } from 'react';
 import { useMediaChannel } from '../hooks/use-media-channel.ts';
 import { ChannelSegments } from './channel-navigation.tsx';
@@ -19,12 +18,12 @@ export function MediaPageFrame({ title, subtitle, children, actions, className, 
       {catalog
         ? <>
           {/* The visible title is the segmented switch; the page still needs its one h1. */}
-          <VisuallyHidden component="h1">{title}</VisuallyHidden>
+          <h1 className="media-visually-hidden">{title}</h1>
           <span className="media-mobile-title"><ChannelSegments current={channel} /></span>
         </>
         : <div className="media-page-heading">
-          <UnstyledButton className="media-back-button" component={Link} to={target} aria-label="← 返回" title={label}><ChevronLeft size={20} aria-hidden="true" /></UnstyledButton>
-          <Title order={1}>{title}</Title>
+          <Link className="media-back-button" to={target} aria-label="← 返回" title={label}><Icon name="chevron-left" /></Link>
+          <h1>{title}</h1>
           {subtitle && <span className="media-heading-context">{subtitle}</span>}
         </div>}
       <div id={className?.split(/\s+/).includes('media-secondary-page') ? 'media-heading-actions-host' : undefined} className="media-heading-actions">{actions}</div>
@@ -34,6 +33,6 @@ export function MediaPageFrame({ title, subtitle, children, actions, className, 
 }
 export function QueryFeedback({ pending, error, retry }: { pending?: boolean; error?: Error | null; retry?: () => void }) {
   if (pending) return <FloatingNotice message="正在加载…" busy />;
-  if (error) return <Alert color="red" title="加载失败" role="alert">{error.message}{retry && <Button variant="subtle" onClick={retry}>重试</Button>}</Alert>;
+  if (error) return <Callout tone="error" title="加载失败" {...(retry ? { action: { label: '重试', onClick: retry } } : {})}>{error.message}</Callout>;
   return null;
 }

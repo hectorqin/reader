@@ -1,5 +1,5 @@
-import { Button } from '@mantine/core';
-import { FolderOpen, History, LibraryBig, ListVideo, MoreHorizontal, Search, Settings2, SlidersHorizontal, Star } from 'lucide-react';
+import { FolderOpen, Search, SlidersHorizontal } from 'lucide-react';
+import { ChannelMenu } from '../components/channel-menu.tsx';
 import { Link, NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -43,17 +43,8 @@ export function MediaCatalogPage() {
     }
   }, [channelLibraries, params, selectedFromUrl, setParams]);
   return <MediaPageFrame className="media-catalog-page" title={channelLabels[channel]} actions={<>
-    <Button component={Link} to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Button>
-    <details className="media-actions media-catalog-actions">
-      <summary aria-label="更多操作" title="更多操作"><MoreHorizontal size={20} aria-hidden="true" /></summary>
-      <nav aria-label="更多操作">
-        <Link to={`/media/${channel}/settings`}><Settings2 size={16} aria-hidden="true" />影音设置</Link>
-        <Link to="/media/favorites"><Star size={16} aria-hidden="true" />收藏</Link>
-        <Link to={`/media/${channel}/history`}><History size={16} aria-hidden="true" />历史</Link>
-        <Link to={`/media/${channel}/queue`}><ListVideo size={16} aria-hidden="true" />队列</Link>
-        <Link to={`/media/${channel}/settings/libraries`}><LibraryBig size={16} aria-hidden="true" />媒体库管理</Link>
-      </nav>
-    </details>
+    <Link to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Link>
+    <ChannelMenu channel={channel} />
   </>}>
     {!emptyWithoutLibraries && <>
       <nav className="media-tabs" aria-label={`${channelLabels[channel]}分类`}>{categories.map(item => {
@@ -78,7 +69,7 @@ export function MediaCatalogPage() {
         {query.data && <span className="media-catalog-count">{query.data.total} {countLabels[current.kind] ?? '项'}</span>}
       </div>
       <div className="media-browse-actions">
-        <Button component={Link} to={`/media/${channel}/folders${selectedLibrary ? `/${encodeURIComponent(selectedLibrary)}` : ''}`} className="media-icon-button" aria-label="打开文件夹" title="打开文件夹"><FolderOpen size={19} aria-hidden="true" /></Button>
+        <Link to={`/media/${channel}/folders${selectedLibrary ? `/${encodeURIComponent(selectedLibrary)}` : ''}`} className="media-icon-button" aria-label="打开文件夹" title="打开文件夹"><FolderOpen size={19} aria-hidden="true" /></Link>
         <details className="media-browse-filters">
           <summary aria-label="筛选与排序" title="筛选与排序"><SlidersHorizontal size={19} aria-hidden="true" />{params.get('sort') && params.get('sort') !== 'default' && <i aria-label="已应用筛选" />}</summary>
           <div className="media-browse-filter-panel">
@@ -90,9 +81,9 @@ export function MediaCatalogPage() {
       </div>
     </div>}
     {!emptyCatalog && query.data && <><MediaItemGrid items={query.data.items} channel={channel} />{query.data.total > 60 && <nav className="media-toolbar media-pagination" aria-label="分页">
-      <Button disabled={offset === 0 || query.isFetching} onClick={() => patch({ offset: offset >= 60 ? String(offset - 60) : '' })}>上一页</Button>
+      <button type="button" disabled={offset === 0 || query.isFetching} onClick={() => patch({ offset: offset >= 60 ? String(offset - 60) : '' })}>上一页</button>
       <span>{Math.floor(offset / 60) + 1} / {Math.ceil(query.data.total / 60)}</span>
-      <Button disabled={offset + 60 >= query.data.total || query.isFetching} onClick={() => patch({ offset: String(offset + 60) })}>下一页</Button>
+      <button type="button" disabled={offset + 60 >= query.data.total || query.isFetching} onClick={() => patch({ offset: String(offset + 60) })}>下一页</button>
     </nav>}</>}
   </MediaPageFrame>;
 }

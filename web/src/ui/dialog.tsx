@@ -12,9 +12,8 @@
  *
  * ## The type is a union, and the union is the honesty
  *
- * Three of the four dialogs answer with a string, one with a boolean, one with a
- * record, and the *shape* of the answer is known from `dialog.kind` at the moment it
- * is resolved. The single guarded cast in `DialogView` is what keeps that knowledge
+ * Two of the three dialogs answer with a string and one with a boolean, and the
+ * *shape* of the answer is known from `dialog.kind` at the moment it is resolved. The single guarded cast in `DialogView` is what keeps that knowledge
  * in one place instead of at every call site.
  *
  * ## Why the dialog is state and not an appended DOM node
@@ -30,6 +29,7 @@
 
 import { Button } from './toolkit.tsx';
 import { ConfirmSheet, Sheet } from './sheet.tsx';
+import { ActionSheet } from './action-menu.tsx';
 import { type JSX, useLayoutEffect, useRef } from 'react';
 
 /** One question with one answer. Held by the screen, rendered by the tree. */
@@ -41,17 +41,10 @@ export type Dialog =
       title: string;
       options: Array<{ value: string; label: string }>;
       resolve(value: string | null): void;
-    }
-  | {
-      kind: 'form';
-      title: string;
-      count: number;
-      fields: Array<{ key: string; label: string }>;
-      resolve(fields: Record<string, string> | null): void;
     };
 
 /** The answer to a dialog, before `kind` is known to have picked its shape. */
-export type DialogAnswer = string | boolean | Record<string, string> | null;
+export type DialogAnswer = string | boolean | null;
 
 /**
  * The dialog currently open, as markup.
@@ -85,17 +78,11 @@ export function DialogView({
       onConfirm={() => onClose(true)} onCancel={() => onClose(false)} />;
   }
   if (dialog.kind === 'prompt') return <PromptDialog title={dialog.title} value={dialog.value} onClose={onClose} />;
-  if (dialog.kind === 'form') return <MetadataDialog dialog={dialog} onClose={onClose} />;
+  // A pick is a menu whose answer is the option picked.
   return (
-    <Sheet title={dialog.title} size="compact" onClose={() => onClose(null)}>
-      <div className="sheet-list">
-        {dialog.options.map((option) => (
-          <Button key={option.value} onClick={() => onClose(option.value)}>
-            {option.label}
-          </Button>
-        ))}
-      </div>
-    </Sheet>
+    <ActionSheet title={dialog.title}
+      items={dialog.options.map((option) => ({ label: option.label, onSelect: () => onClose(option.value) }))}
+      onDismiss={() => onClose(null)} />
   );
 }
 
@@ -132,65 +119,3 @@ function PromptDialog({
     </Sheet>
   );
 }
-
-function MetadataDialog({
-  dialog,
-  onClose,
-}: {
-  dialog: Extract<Dialog, { kind: 'form' }>;
-  onClose(fields: Record<string, string> | null): void;
-}): JSX.Element {
-  const inputs = useRef(new Map<string, HTMLInputElement>());
-  const submit = () => {
-    const patch: Record<string, string> = {};
-    for (const [key, input] of inputs.current) {
-      const value = input.value.trim();
-      if (value !== '') patch[key] = value;
-    }
-    onClose(patch);
-  };
-  // The fields scroll inside the sheet body and 保存 sits in the pinned footer, so a
-  // form with seven fields never puts its only way to commit below the fold.
-  return (
-    <Sheet title={dialog.title} onClose={() => onClose(null)} initialFocus="input[name=author]"
-      footer={<>
-        <Button onClick={() => onClose(null)}>取消</Button>
-        <Button className="primary" onClick={submit}>保存</Button>
-      </>}>
-      <form className="sheet-form" onSubmit={(event) => { event.preventDefault(); submit(); }}>
-        <p className="sheet-text">留空的字段保持不变。目录会写成它里面每一本书的资料</p>
-        {dialog.fields.map((field) => (
-          <label className="sheet-field" key={field.key}>
-            <span>{field.label}</span>
-            <input
-              type="text"
-              name={field.key}
-              placeholder="留空则不改"
-              ref={(node) => {
-                if (node) inputs.current.set(field.key, node);
-                else inputs.current.delete(field.key);
-              }}
-            />
-          </label>
-        ))}
-      </form>
-    </Sheet>
-  );
-}
-
-/**
- * The batch metadata fields.
- *
- * Shared between the two library pages for the same reason the dialog is: the
- * preview page can change a book's author and the manager can change a folder's,
- * and they are one operation on the server.
- */
-export const METADATA_FIELDS: Array<{ key: string; label: string }> = [
-  { key: 'author', label: '作者' },
-  { key: 'publisher', label: '出版社' },
-  { key: 'series', label: '系列' },
-  { key: 'seriesIndex', label: '系列序号' },
-  { key: 'language', label: '语言' },
-  { key: 'tags', label: '标签（逗号分隔）' },
-  { key: 'pubdate', label: '出版日期' },
-];

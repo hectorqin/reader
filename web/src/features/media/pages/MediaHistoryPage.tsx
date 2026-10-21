@@ -1,4 +1,3 @@
-import { Button } from '@mantine/core';
 import { Clock3, Play } from 'lucide-react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
@@ -25,9 +24,9 @@ export function MediaHistoryPage() {
     </div>)}</div>
     {query.data && query.data.items.length === 0 && <div className="media-personal-empty"><Clock3 size={32} strokeWidth={1.4} aria-hidden="true" /><p>暂无记录。</p></div>}
     {query.data && query.data.total > 60 && <nav className="media-toolbar media-pagination" aria-label="分页">
-      <Button disabled={Number(params.get('offset') ?? 0) <= 0 || query.isFetching} onClick={() => setParams({ offset: Math.max(0, Number(params.get('offset') ?? 0) - 60) ? String(Math.max(0, Number(params.get('offset') ?? 0) - 60)) : '' })}>上一页</Button>
+      <button type="button" disabled={Number(params.get('offset') ?? 0) <= 0 || query.isFetching} onClick={() => setParams({ offset: Math.max(0, Number(params.get('offset') ?? 0) - 60) ? String(Math.max(0, Number(params.get('offset') ?? 0) - 60)) : '' })}>上一页</button>
       <span>{Math.floor(Number(params.get('offset') ?? 0) / 60) + 1} / {Math.ceil(query.data.total / 60)}</span>
-      <Button disabled={Number(params.get('offset') ?? 0) + 60 >= query.data.total || query.isFetching} onClick={() => setParams({ offset: String(Number(params.get('offset') ?? 0) + 60) })}>下一页</Button>
+      <button type="button" disabled={Number(params.get('offset') ?? 0) + 60 >= query.data.total || query.isFetching} onClick={() => setParams({ offset: String(Number(params.get('offset') ?? 0) + 60) })}>下一页</button>
     </nav>}
   </section>
   </MediaPageFrame>;

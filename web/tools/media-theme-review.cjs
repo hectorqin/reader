@@ -30,7 +30,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
   await page.getByRole('button',{name:'关闭播放器',exact:true}).click();
   for(const [id,name] of [['sand','暖纸'],['midnight','深夜']]){
    await go('#/media/video/settings/theme');await page.getByRole('button',{name,exact:true}).click();
-   await go('#/media/video/items/'+movie.id);await page.locator('summary[aria-label="作品操作"]').click();await page.getByRole('button',{name:'版本管理',exact:true}).click();
+   await go('#/media/video/items/'+movie.id);await page.locator('button[aria-label="作品操作"]').click();await page.getByRole('menuitem',{name:'版本管理',exact:true}).click();
    const dialog=page.getByRole('dialog',{name:'版本管理'});await dialog.waitFor();
    for(const width of [390,535,1120]){
     await page.setViewportSize({width,height:834});const header=await dialog.locator('.sheet-header').boundingBox();assert.ok(header.height<=60,'resource header must be compact');heights.push({theme:id,width,height:header.height});

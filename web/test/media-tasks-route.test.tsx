@@ -2,7 +2,6 @@
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { MantineProvider } from '@mantine/core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '../src/shared/ui/render-root.ts';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
@@ -24,13 +23,13 @@ function mount(initialEntry: { pathname: string; state?: unknown }) {
   act(() => render(
     <RuntimeContext.Provider value={runtime}>
       <QueryClientProvider client={queryClient}>
-        <MantineProvider>
+        <>
           <MemoryRouter initialEntries={[initialEntry]}>
             <Routes>
               <Route path="/media/:channel/settings/tasks" element={<MediaTasksPage />} />
             </Routes>
           </MemoryRouter>
-        </MantineProvider>
+        </>
       </QueryClientProvider>
     </RuntimeContext.Provider>,
     root,

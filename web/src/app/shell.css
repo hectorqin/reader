@@ -150,32 +150,8 @@
 /* Page titles in the serif face, the way the prototype sets them. */
 .shelf-title { font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; }
 
-/* Mantine components (forms, dialogs) wear the same theme instead of Mantine's default blue. */
 body {
   background: var(--color-bg);
-  --mantine-color-body: var(--color-bg);
-  --mantine-color-text: var(--color-ink);
-  --mantine-color-dimmed: var(--color-muted);
-  --mantine-color-placeholder: var(--color-muted);
-  --mantine-color-default: var(--color-surface);
-  --mantine-color-default-hover: var(--color-surface-2);
-  --mantine-color-default-color: var(--color-ink);
-  --mantine-color-default-border: var(--color-line);
-  --mantine-color-anchor: var(--color-brand-text);
-  --mantine-primary-color-filled: var(--color-brand);
-  --mantine-primary-color-filled-hover: color-mix(in srgb, var(--color-brand) 88%, var(--color-ink));
-  --mantine-primary-color-light: var(--color-brand-soft);
-  --mantine-primary-color-light-hover: color-mix(in srgb, var(--color-brand-soft) 85%, var(--color-brand));
-  --mantine-primary-color-light-color: var(--color-brand-text);
-  --mantine-primary-color-contrast: var(--color-on-brand);
-  /* Components that name their colour "blue" (Mantine's default) follow the brand too. */
-  --mantine-color-blue-filled: var(--color-brand);
-  --mantine-color-blue-filled-hover: color-mix(in srgb, var(--color-brand) 88%, var(--color-ink));
-  --mantine-color-blue-light: var(--color-brand-soft);
-  --mantine-color-blue-light-hover: color-mix(in srgb, var(--color-brand-soft) 85%, var(--color-brand));
-  --mantine-color-blue-light-color: var(--color-brand-text);
-  --mantine-color-blue-outline: var(--color-brand-text);
-  --mantine-color-blue-text: var(--color-brand-text);
 }
 
 /* ---- video player, wide screens: the episode rail sits beside the picture ----

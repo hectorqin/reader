@@ -436,7 +436,8 @@ SweetAlert、Mantine `Modal`、自绘遮罩或角落浮动卡片。
 - 就地渲染、不走 portal，所以继承打开它的页面主题（阅读器黑白灰、影音别名）。
 - 调用方的 `className` 只管**内容**样式，不得设置位置、尺寸、圆角、背景遮罩或标题栏。
 - 确认框焦点默认在「取消」；破坏性操作传 `danger`，按钮用危险色。
-- 锚定在控件上的下拉（选择框、`⋯` 菜单、选区工具条）不是弹层，不在此列。
+- `⋯` 操作菜单和单选筛选（收藏类型等）用 `web/src/ui/action-menu.tsx` 的 `ActionMenu` / `ActionSheet`：就是 compact Sheet 里的一列菜单项，跟手出现；动作是数据（`label`、`onSelect`、`danger`、`checked`），菜单先关再执行动作，所以动作可以再开一个 Sheet 或跳转。不再使用 Mantine `Menu` 或 `<details>` 下拉。
+- 仍然锚定在控件上的只有选择框（`MediaSelect`、`SearchableSelect`）和正文选区工具条，它们不是弹层。
 
 以下是阅读器面板最初改成底部半屏的理由，仍然适用于手机形态：
 
@@ -689,7 +690,7 @@ TXT 是唯一一种**没有作者排版**的书，所以它也是唯一一处「
 | `web/src/ui/shelf-membership.ts` | 两个方向的措辞与批量报告那句话的唯一来源（§3.5.2） |
 | `web/src/ui/shelf-order.ts` | 排序的**唯一**定义：方向、客户端/服务端的键怎么翻译、阅读时间怎么排 |
 | `web/src/ui/sheet.tsx` / `web/src/styles/sheet.css` | 唯一的弹层 `Sheet` 与 `ConfirmSheet`（§3.7） |
-| `web/src/ui/dialog.tsx` | 提问（文本框/确认/选择/改资料），基于 `Sheet`，两个书库页面共用 |
+| `web/src/ui/dialog.tsx` | 提问（文本框/确认/选择），基于 `Sheet`，书架与文件管理共用 |
 | `web/src/ui/pager.tsx` | 翻页器，书架与书库共用（§3.5） |
 | `web/test/shelf-order.test.ts` | 书架排序（默认项、`recent` 是客户端排）、排序方向和稳定性 |
 | `web/test/shelf-order.test.ts` | 排序的方向、客户端/服务端的键、阅读时间排序与并列时的稳定 |

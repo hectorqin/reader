@@ -3,7 +3,6 @@ import { act } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MantineProvider } from '@mantine/core';
 import { render } from '../src/shared/ui/render-root.ts';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
 
@@ -31,9 +30,9 @@ let location = '';
 function Where() { location = useLocation().search; return null; }
 const paint = (path: string) => act(() => render(
   <RuntimeContext.Provider value={runtime}>
-    <QueryClientProvider client={new QueryClient()}><MantineProvider>
+    <QueryClientProvider client={new QueryClient()}><>
       <MemoryRouter initialEntries={[path]}><Routes><Route path="/shelf" element={<><ShelfPage /><Where /></>} /></Routes></MemoryRouter>
-    </MantineProvider></QueryClientProvider>
+    </></QueryClientProvider>
   </RuntimeContext.Provider>, root));
 const click = (text: string) => act(() => [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === text)!.click());
 afterEach(() => { act(() => render(null, root)); shelfCalls.length = 0; setReadingStatus.mockClear(); });

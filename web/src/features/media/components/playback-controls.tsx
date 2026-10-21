@@ -1,6 +1,7 @@
 import {MediaSelect} from './select.tsx';
 import {SleepTimerOptions} from './sleep-timer.tsx';
 import {PlayModeCycle,PlayModeSegments} from './play-mode.tsx';
+import { ActionMenu } from '../../../ui/action-menu.tsx';
 import { ChevronLeft, Layers, Play, Pause, SkipBack, SkipForward, RotateCcw, RotateCw, Square, Timer, Gauge, Ellipsis, BookOpen, MicVocal, ListMusic, Search, ArrowUp, ArrowDown, X, Volume2, Pencil } from 'lucide-react';
 import type { MediaPlayer } from '../services/player.ts';
 import { useEffect, useState, useRef, useLayoutEffect } from 'react';
@@ -46,7 +47,7 @@ function CurrentPlaylist({player,modes}:{player:MediaPlayer;modes:boolean}){
   const entries=player.currentPlaylist,filtered=entries.filter(entry=>entry.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const last=Math.max(0,Math.ceil(filtered.length/50)-1),currentPage=Math.min(page,last);
   const active=entries.find(entry=>entry.index===selected);
-  return <section className="media-current-playlist" aria-label="当前播放列表"><div className="media-playlist-toolbar"><h2>当前队列</h2><small>{entries.length} 首 · 正在播放第 {Math.max(0,entries.findIndex(entry=>entry.current))+1} 首</small><details className="media-actions media-playlist-tools"><summary aria-label="队列操作"><Ellipsis size={20} aria-hidden="true"/></summary><nav><button aria-label="查找播放列表" title="查找播放列表" aria-expanded={searchOpen} onClick={()=>{setSearchOpen(!searchOpen);if(searchOpen){setQuery('');setPage(0);}}}><Search size={18} aria-hidden="true"/>查找曲目</button><button aria-label={editing?'完成编辑':'编辑播放列表'} title={editing?'完成编辑':'编辑播放列表'} aria-pressed={editing} disabled={!player.canEditPlaylist} onClick={()=>setEditing(!editing)}><Pencil size={18} aria-hidden="true"/>{editing?'完成编辑':'编辑队列'}</button></nav></details></div>
+  return <section className="media-current-playlist" aria-label="当前播放列表"><div className="media-playlist-toolbar"><h2>当前队列</h2><small>{entries.length} 首 · 正在播放第 {Math.max(0,entries.findIndex(entry=>entry.current))+1} 首</small><ActionMenu className="media-playlist-tools media-icon-button" label="队列操作" items={[{label:searchOpen?'收起查找':'查找曲目',icon:<Search size={18}/>,onSelect:()=>{setSearchOpen(!searchOpen);if(searchOpen){setQuery('');setPage(0);}}},{label:editing?'完成编辑':'编辑队列',icon:<Pencil size={18}/>,disabled:!player.canEditPlaylist,onSelect:()=>setEditing(!editing)}]}/></div>
     {modes&&player.canChoosePlayMode&&<PlayModeSegments player={player}/>}
     {searchOpen&&<div className="media-playlist-search"><label>查找曲目或章节<input type="search" value={query} onInput={event=>{setQuery(event.currentTarget.value);setPage(0);}}/></label><button onClick={()=>{setQuery('');setPage(Math.floor(Math.max(0,entries.findIndex(entry=>entry.current))/50));}}>定位当前播放</button></div>}
     {editing&&<p>调整本次播放顺序，或移除其他条目；正在播放的内容不中断。已保存的待播队列不随此处修改。</p>}

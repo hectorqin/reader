@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import type { ExtensionContent, ExtensionField, ExtensionForm, ExtensionPage } from '../../../api/sources.ts';
 import { ApiError } from '../../../api/errors.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { ConfirmSheet } from '../../../ui/sheet.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
-import { Button, IconButton } from '../../../ui/toolkit.tsx';
+import { Button } from '../../../ui/toolkit.tsx';
+import { SourcesHeader } from '../components/SourcesHeader.tsx';
 
 type FormValues = Record<string, unknown>;
 
@@ -99,7 +100,7 @@ function ContentView({ content, scope, values, busy, selected, expanded, onChang
 }
 
 export function SourceExtensionPage() {
-  const runtime = useRuntime(); const { api } = runtime; const navigate = useNavigate();
+  const runtime = useRuntime(); const { api } = runtime;
   const { sourceId, pluginId, pageId = '' } = useParams(); const admin = useAuthStore(state => state.verifiedUser?.role === 'admin');
   const queryClient = useQueryClient(); const owner = sourceId ? `source:${sourceId}` : `plugin:${pluginId}`; const queryKey = ['source-extension', api.baseUrl, owner, pageId];
   const pageQuery = useQuery({ queryKey, queryFn: () => sourceId ? api.sourcePage(sourceId, pageId) : api.pluginPage(pluginId!, pageId), enabled: Boolean(pageId && (sourceId || admin)) });
@@ -148,7 +149,7 @@ export function SourceExtensionPage() {
   if (pageQuery.error) return <div className="sources-screen extension-screen"><main className="sources-body"><p className="notice error">{pageQuery.error instanceof Error ? pageQuery.error.message : '加载失败'}</p></main></div>;
   if (!page) return null;
   const status = busy ? '正在处理…' : error || (noticeTab === activeTab ? page.notice ?? '' : ''); const statusError = Boolean(error || (!busy && page.noticeKind === 'error'));
-  return <div className="sources-screen extension-screen"><header className="sources-header"><IconButton label="返回" icon="arrow-left" onClick={() => navigate('/sources')} /><h1>{page.title}</h1><Button disabled={busy} onClick={() => void execute()}>刷新</Button></header>
+  return <div className="sources-screen extension-screen"><SourcesHeader title={page.title} actions={<Button disabled={busy} onClick={() => void execute()}>刷新</Button>} />
     {tabs.length > 0 && <div className="extension-toolbar"><div className="extension-tabs" role="tablist" aria-label="配置分类">{tabs.map((tab, index) => <button type="button" key={tab.id} id={`extension-tab-${tab.id}`} role="tab" aria-selected={activeTab === tab.id} aria-controls={`extension-panel-${tab.id}`} tabIndex={activeTab === tab.id ? 0 : -1} disabled={busy} onClick={() => { setActiveTab(tab.id); if (tab.loadAction) void execute(tab.loadAction); }} onKeyDown={event => { let next = index; if (event.key === 'ArrowRight') next = (index + 1) % tabs.length; else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length; else if (event.key === 'Home') next = 0; else if (event.key === 'End') next = tabs.length - 1; else return; event.preventDefault(); const nextTab = tabs[next]!; setActiveTab(nextTab.id); document.getElementById(`extension-tab-${nextTab.id}`)?.focus({ preventScroll: true }); }}>{tab.title}</button>)}</div></div>}
     {status && <FloatingNotice message={status} busy={busy} error={statusError} kind="success" />}
     <main className="sources-body" aria-busy={busy} tabIndex={-1}>{page.description && <p className="extension-description">{page.description}</p>}

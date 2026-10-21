@@ -1,12 +1,9 @@
 import { useEffect, type ReactNode } from 'react';
-import { MantineProvider } from '@mantine/core';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { AppRuntime } from '../runtime.ts';
 import { RuntimeContext } from './runtime-context.tsx';
-import { useAppThemeDark } from '../../shared/theme/use-theme.ts';
 
 export function AppProviders({ runtime, children }: { runtime: AppRuntime; children: ReactNode }) {
-  const dark = useAppThemeDark(runtime.mediaApi.preferenceScope());
   useEffect(() => {
     const host = runtime.player.element;
     document.body.append(host);
@@ -31,10 +28,6 @@ export function AppProviders({ runtime, children }: { runtime: AppRuntime; child
     };
   }, [runtime]);
   return <RuntimeContext value={runtime}>
-    <QueryClientProvider client={runtime.queryClient}>
-      <MantineProvider forceColorScheme={dark ? 'dark' : 'light'}>
-        {children}
-      </MantineProvider>
-    </QueryClientProvider>
+    <QueryClientProvider client={runtime.queryClient}>{children}</QueryClientProvider>
   </RuntimeContext>;
 }

@@ -1,4 +1,3 @@
-import { Button, Center, Stack } from '@mantine/core';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
@@ -70,8 +69,8 @@ export function MediaPlayerPage() {
       <button type="button" className="media-back-button" aria-label="← 返回浏览" title="返回浏览" onClick={back}><ChevronLeft size={20} aria-hidden="true" /></button>
       <strong>视频播放</strong>
     </header>}
-    {restoreError ? <Center mih="60vh"><Stack align="center"><strong>无法恢复播放</strong><div role="alert">{restoreError}</div><Button variant="subtle" onClick={() => navigate(`/media/${channel}`)}>返回频道</Button></Stack></Center>
-      : !active ? <div className="media-player-empty"><p>当前没有播放内容。</p><Button variant="subtle" onClick={() => navigate(`/media/${channel}`)}>选择作品</Button></div>
+    {restoreError ? <div className="page-state" role="alert"><h2>无法恢复播放</h2><p>{restoreError}</p><button type="button" onClick={() => navigate(`/media/${channel}`)}>返回频道</button></div>
+      : !active ? <div className="media-player-empty"><p>当前没有播放内容。</p><button type="button" onClick={() => navigate(`/media/${channel}`)}>选择作品</button></div>
       : video ? createPortal(<VideoControls player={runtime.player} api={runtime.mediaApi} onBack={back} />, runtime.player.videoControlsHost)
       : <PlaybackControls player={runtime.player} api={runtime.mediaApi} panel={requested} onPanelChange={value => navigate(value === 'main' ? `/media/${channel}/player` : `/media/${channel}/player/${value}`, { replace: true })} onBack={back} />}
   </div>;

@@ -6,7 +6,6 @@ import {
   ThemeController, defaultThemePreference, migrateLegacyTheme, readThemePreference, resolveAppTheme,
   resolveReaderSurface, resolveReadingTheme, saveThemePreference, themeSummary,
 } from '../src/shared/theme/theme.ts';
-import { useAppThemeDark } from '../src/shared/theme/use-theme.ts';
 import { MediaThemeSettings } from '../src/features/media/components/theme-settings.tsx';
 
 const root = document.createElement('div');
@@ -118,20 +117,6 @@ describe('ThemeController', () => {
     window.dispatchEvent(new StorageEvent('storage', { key: 'reader.theme.v2:a' }));
     expect(controller.current).toEqual({ theme: 'blue', mode: 'dark' });
     controller.dispose();
-  });
-});
-
-describe('useAppThemeDark', () => {
-  function Probe() { return <span data-dark={String(useAppThemeDark('dark-test'))} />; }
-  it('follows the chosen mode live, so Mantine switches scheme with the app', () => {
-    stubSystem(false);
-    act(() => render(<Probe />, root));
-    const dark = () => root.querySelector('span')!.getAttribute('data-dark');
-    expect(dark()).toBe('false');
-    act(() => { saveThemePreference('dark-test', { mode: 'dark' }); });
-    expect(dark()).toBe('true');
-    act(() => { saveThemePreference('dark-test', { mode: 'light' }); });
-    expect(dark()).toBe('false');
   });
 });
 

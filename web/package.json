@@ -18,8 +18,6 @@
     "ui:sources": "npm run build && node --import ../server/node_modules/tsx/dist/loader.mjs tools/ui-review/host-source-flow.mjs"
   },
   "dependencies": {
-    "@mantine/core": "^8.3.5",
-    "@mantine/hooks": "^8.3.5",
     "@tanstack/query-core": "^5.104.0",
     "@tanstack/react-query": "^5.90.5",
     "dplayer": "^1.27.1",

@@ -2,7 +2,7 @@
    DPlayer owns the video controls; this sheet only lays out its stage. */
 .media-screen {padding:68px 32px 96px;font-size:14px;scrollbar-width:thin}
 .media-channel-entry {height:68px;padding-inline:max(32px,calc((100vw - 1056px)/2))}
-.media-screen button:not(:where(.sheet-header *, .sheet-footer *)) {min-height:44px;border-radius:9px}
+.media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu-trigger)) {min-height:44px;border-radius:9px}
 .media-screen :is(input:not([type=checkbox]):not([type=radio]):not([type=range]),select) {min-height:44px}
 .media-screen :is(.media-heading,.media-settings-heading,.media-narrator-heading) {min-height:56px}
 .media-screen :is(.media-page-heading h1,.media-page-heading h2,.media-heading>strong,.media-settings-heading h1) {font-size:16px;font-weight:650;line-height:1.4}
@@ -351,25 +351,6 @@
   min-width: 0;
   max-width: min(70%, 420px);
 }
-.media-screen.media-catalog-page .media-library-filter .mantine-Select-root {
-  min-width: 0;
-  width: max-content;
-  max-width: 100%;
-}
-.media-screen.media-catalog-page .media-library-filter .mantine-Input-wrapper { width: max-content; min-width: 0; }
-.media-screen.media-catalog-page .media-library-filter .mantine-Select-input {
-  width: auto;
-  max-width: min(180px,100%);
-  min-height: 44px;
-  height: 44px;
-  padding: 0 21px 0 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  box-shadow: none;
-}
 .media-screen.media-catalog-page .media-library-filter :is(input,button,[role="button"]) {
   border: 0 !important;
   background: transparent !important;
@@ -389,19 +370,6 @@
   min-width: 44px;
   height: 44px;
   color: var(--muted);
-  cursor: pointer;
-}
-.media-screen.media-catalog-page .media-sort-control .mantine-Select-root {
-  position: absolute;
-  inset: 0;
-  width: 44px;
-  min-width: 44px;
-  opacity: 0;
-}
-.media-screen.media-catalog-page .media-sort-control .mantine-Select-input {
-  width: 44px;
-  height: 44px;
-  min-height: 44px;
   cursor: pointer;
 }
 .media-screen.media-catalog-page .media-browse-actions .media-icon-button,
@@ -987,3 +955,9 @@ body:has(.media-narrators:not([data-view=directory])) .media-channel-entry {
 .media-screen .media-sleep-actions button:disabled {opacity:.5}
 .media-screen .media-sleep-actions .media-sleep-off span {flex:none}
 .media-sleep-note {margin:10px 0 0;font-size:12px;color:var(--muted)}
+.media-task-panel{display:flex;flex-direction:column;gap:16px}
+.media-task-intro .media-task-actions{display:flex;flex-wrap:wrap}
+.media-text-link{color:var(--media-accent);text-decoration:none;display:inline-flex;align-items:center;min-height:44px}
+.media-icon-button>.icon{font-size:1.25rem}
+.media-manager-card{display:grid;gap:12px;padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+.media-manager-card>:is(h3,h4){margin:0;font-size:15px}

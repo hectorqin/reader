@@ -26,8 +26,8 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-screen { max-width:1120px; padding:62px 30px 150px; background:var(--media-background); }
 .media-screen button, .media-screen input, .media-screen select, .media-screen textarea { font:inherit; }
 /* The shared sheet's header and footer use the app's own buttons, not media's. */
-.media-screen button:not(:where(.sheet-header *, .sheet-footer *)) { border:0; background:transparent; border-radius:7px; min-height:38px; padding:9px 12px; }
-.media-screen button:not(:where(.sheet-header *, .sheet-footer *)):hover:not(:disabled) { background:var(--surface); }
+.media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu-trigger)) { border:0; background:transparent; border-radius:7px; min-height:38px; padding:9px 12px; }
+.media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu-trigger)):hover:not(:disabled) { background:var(--surface); }
 .media-screen button:focus-visible, .media-channel-entry a:focus-visible { outline:2px solid var(--media-accent); outline-offset:3px; }
 .media-screen input:not([type=range]):not([type=checkbox]):not([type=radio]), .media-screen textarea {
   background:var(--media-paper); border:1px solid var(--border); border-radius:7px;
@@ -129,7 +129,8 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 /* Audio player: the prototype's 420px column, square cover and 58px play control. */
 .media-playback-page {max-width:1120px}
 .media-playback-page .media-heading {position:relative;top:auto;justify-content:flex-start;gap:6px;z-index:4;border:0}
-.media-screen .media-back-button {width:40px;min-width:40px;height:44px;display:grid;place-items:center;padding:10px}
+.media-screen .media-back-button {width:40px;min-width:40px;height:44px;display:grid;place-items:center;padding:10px;color:inherit}
+.media-back-button>.icon {font-size:1.25rem}
 .media-playback-status {display:grid;gap:14px;padding:18px;max-width:600px;margin:24px auto;border:1px solid var(--border);border-radius:9px;background:var(--surface)}
 .media-playback-status p {margin:0}
 .media-playback-page:not(.media-video-page) .media-playback-status {max-width:420px;gap:0;padding:25px 25px 35px;margin:0 auto;border:0;background:transparent}
