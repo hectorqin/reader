@@ -2,7 +2,7 @@ import { Sheet } from '../../../ui/sheet.tsx';
 import { Button, Callout } from '../../../ui/toolkit.tsx';
 import { SourcesHeader } from '../components/SourcesHeader.tsx';
 import { SourceBookDetailSheet } from '../components/SourceBookDetailSheet.tsx';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Plus, Search } from 'lucide-react';
@@ -14,6 +14,7 @@ import { mergePages } from './SourceCatalogPage.tsx';
 import { SearchableSelect } from '../../../ui/searchable-select.tsx';
 import { groupSourceResults } from '../../../ui/source-results.ts';
 import { CatalogFeedback } from '../../../ui/catalog-feedback.tsx';
+import { PluginManager } from '../components/PluginManager.tsx';
 
 type SourceTab = 'search' | 'sources' | 'updates' | 'plugins';
 type SearchState = 'idle' | 'searching' | 'stopped' | 'complete' | 'error' | 'limited';
@@ -23,7 +24,8 @@ export function SourcesPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const admin = useAuthStore(state => state.verifiedUser?.role === 'admin');
-  const [tab, setTab] = useState<SourceTab>('search');
+  // /sources/plugins opens the hub on its 插件管理 tab.
+  const [tab, setTab] = useState<SourceTab>(useLocation().pathname === '/sources/plugins' ? 'plugins' : 'search');
   const [sourceId, setSourceId] = useState('');
   const [keyword, setKeyword] = useState('');
   const [managing, setManaging] = useState<string | null>(null);
@@ -45,7 +47,6 @@ export function SourcesPage() {
   const sources = useQuery({ queryKey: ['sources', runtime.api.baseUrl], queryFn: () => runtime.api.sources() });
   const types = useQuery({ queryKey: ['source-types', runtime.api.baseUrl], queryFn: () => runtime.api.sourceTypes(), staleTime: 300_000 });
   const subscriptions = useQuery({ queryKey: ['subscriptions', runtime.api.baseUrl], queryFn: () => runtime.api.subscriptions(), enabled: tab === 'updates' });
-  const plugins = useQuery({ queryKey: ['source-plugins', runtime.api.baseUrl], queryFn: () => runtime.api.plugins(), enabled: tab === 'plugins' && admin });
   const [busy, setBusy] = useState<string | null>(null);
   const enabledSources = (sources.data ?? []).filter(source => source.enabled && source.descriptor);
   const selectedSourceId = sourceId || enabledSources.find(source => source.isDefault)?.id || enabledSources[0]?.id || '';
@@ -141,7 +142,7 @@ export function SourcesPage() {
         {(sources.data ?? []).map(source => <article className="sources-row source-entry" key={source.id}><div className="source-entry-top"><div className="source-entry-info"><strong>{source.name}{source.isDefault && <span className="source-default-badge">默认</span>}</strong><small>{source.descriptor?.label ?? sourceTypeLabel(source.sourceType)}</small><span className={'source-state' + (source.enabled ? ' is-enabled' : '')}>{source.enabled ? '已启用' : '已暂停'}</span></div><div className="source-entry-actions">{source.descriptor?.credentialKeys?.length ? <Link className="button" to={'/sources/' + encodeURIComponent(source.id) + '/credentials'}>书源登录</Link> : null}{admin && <button className="source-manage-trigger" type="button" aria-expanded={managing === source.id} onClick={() => setManaging(current => current === source.id ? null : source.id)}>管理<ChevronRight size={16} /></button>}</div></div>{admin && managing === source.id && <div className="source-management" role="group" aria-label={`${source.name}管理`}>{source.descriptor?.extensions?.pages?.map(page => <Link className="source-management-link" key={page.id} to={'/sources/' + encodeURIComponent(source.id) + '/' + encodeURIComponent(page.id)}>{page.title}<ChevronRight size={16} /></Link>)}<Link className="source-management-link" to={'/sources/manage/' + encodeURIComponent(source.id)}>基本设置<ChevronRight size={16} /></Link><button className="source-management-link" type="button" disabled={busy === source.id || (!source.isDefault && (!source.enabled || !source.descriptor?.capabilities.includes('search')))} onClick={() => void updateSource(source.id, { isDefault: !source.isDefault })}>{source.isDefault ? '取消默认' : '设为默认'}</button><button className="source-management-link source-toggle" type="button" disabled={busy === source.id} onClick={() => void updateSource(source.id, { enabled: !source.enabled })}>{source.enabled ? '暂停' : '启用'}</button></div>}</article>)}
       </section>}
       {tab === 'updates' && <section className="sources-card"><h2>自动追更</h2><p className="notice">服务端定时检查目录，浏览器关闭后继续运行。正文和图片在阅读时缓存。</p>{subscriptions.isPending && <FloatingNotice message="正在加载追更列表…" busy />}{!subscriptions.isPending && !subscriptions.data?.length && <p>先从章节书源加入书籍，再开启追更。</p>}{(subscriptions.data ?? []).map(item => <article className="sources-row" key={item.bookId}><div><strong>{item.title}</strong><small>{item.newChapters ? '新增 ' + item.newChapters + ' 章 · ' : ''}上次成功：{item.lastSuccessAt ? new Date(item.lastSuccessAt).toLocaleString() : '尚未检查'}</small><small>{item.enabled ? '下次检查：' + new Date(item.nextCheckAt).toLocaleString() : '自动追更已关闭'}{item.lastError ? ' · 检查失败：' + item.lastError : ''}</small></div><div className="sources-actions"><label className="source-interval">检查间隔<select aria-label={`${item.title}检查间隔`} value={item.intervalMinutes} disabled={busy === item.bookId} onChange={event => { const intervalMinutes = Number(event.currentTarget.value); setBusy(item.bookId); void runtime.api.configureSubscription(item.bookId, { intervalMinutes }).then(() => queryClient.invalidateQueries({ queryKey: ['subscriptions'] })).finally(() => setBusy(null)); }}><option value="15">15 分钟</option><option value="60">1 小时</option><option value="360">6 小时</option><option value="1440">1 天</option></select></label><button className="button" type="button" disabled={busy === item.bookId} onClick={() => void mutateSubscription(item.bookId, !item.enabled)}>{item.enabled ? '关闭追更' : '开启追更'}</button><button className="button" type="button" disabled={busy === item.bookId} onClick={() => void mutateSubscription(item.bookId)}>立即检查</button><Link className="button" to={'/book/' + encodeURIComponent(item.bookId)}>阅读</Link></div></article>)}</section>}
-      {tab === 'plugins' && admin && <section className="sources-card"><h2>插件管理</h2><Link className="button primary" to="/sources/plugins">插件安装与管理</Link>{plugins.isPending && <FloatingNotice message="正在加载插件列表…" busy />}{(plugins.data ?? []).map(plugin => <article className="sources-row" key={plugin.pluginId}><div><strong>{plugin.name || plugin.pluginId}</strong><small>{plugin.version || '未知版本'} · {plugin.builtin ? '内置' : plugin.enabled ? '已启用' : '已停用'}</small></div></article>)}</section>}
+      {tab === 'plugins' && (admin ? <PluginManager /> : <Callout tone="warning">只有管理员可以管理插件</Callout>)}
     </main>
     {activeGroup && <Sheet title="书源列表" subtitle={`${activeGroup.entries.length} 条书源`} onClose={() => { setResultGroupKey(null); setSourceNameQuery(''); }}>
       <div className="sheet-form">
