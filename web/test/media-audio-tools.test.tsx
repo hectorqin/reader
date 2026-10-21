@@ -51,3 +51,16 @@ it('reads uncertain favorite state before allowing another write',async()=>{
   await vi.waitFor(()=>expect(root.querySelector('[aria-label="取消收藏"]')).not.toBeNull());expect(writes).toBe(1);
   const signal=request.mock.calls.at(-1)?.[3] as unknown as AbortSignal;act(()=>render(null,root));expect(signal.aborted).toBe(true);
 });
+it('offers one more-options entry point and keeps the book icon for chapters only',async()=>{
+  const detail=vi.fn().mockResolvedValue(work('song','track'));
+  const api={detail,request:vi.fn().mockResolvedValue({favorite:false})} as unknown as MediaApi,player={active:true,currentItemId:'song',title:'歌',currentPlaylist:[]} as unknown as MediaPlayer;
+  for(const withBack of [true,false]){
+    await act(async()=>render(<PlaybackControls api={api} player={player} {...(withBack?{onBack:()=>{}}:{})}/>,root));
+    await vi.waitFor(()=>expect(root.querySelector('[data-channel]')?.getAttribute('data-channel')).toBe('music'));
+    // The title-row ellipsis used to open the same sheet as the header/options ellipsis.
+    expect(root.querySelectorAll('[aria-label="更多播放选项"]').length).toBe(1);
+    expect(root.querySelector('[aria-label="当前内容操作"]')).toBeNull();
+    expect(root.querySelector('[aria-label="歌词"] svg')?.classList.contains('lucide-mic-vocal')).toBe(true);
+    await act(async()=>render(null,root));
+  }
+});

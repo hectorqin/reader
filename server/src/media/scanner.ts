@@ -27,10 +27,15 @@ export interface MediaAsset {
 }
 export interface MediaScanJob {
   id:string; libraryId:string; state:'queued'|'running'|'complete'|'failed'|'cancelled';
-  inspected:number; error:string|null; startedAt:number; finishedAt:number|null;
+  /** Files checked so far, and (once the listing finished) how many there are in all. */
+  inspected:number; total:number|null; error:string|null; startedAt:number; finishedAt:number|null;
   diagnostics?:ScanDiagnostics;
 }
-interface JobRow { id:string;library_id:string;state:MediaScanJob['state'];inspected:number;error:string|null;started_at:number;finished_at:number|null;diagnostics_json:string|null }
+interface JobRow { id:string;library_id:string;state:MediaScanJob['state'];inspected:number;total:number|null;error:string|null;started_at:number;finished_at:number|null;diagnostics_json:string|null }
+/** `hidden`: also scan names starting with "." (the default here keeps a bare scanner's old behaviour). */
+export interface ScanSettings { libraries:number; files:number; mediaHidden?:boolean }
+export interface ScanFinished { actor:MediaActor; libraryId:string; jobId:string; state:'complete'|'failed'|'cancelled' }
+const hiddenRef=(ref:string)=>ref.split('/').some(segment=>segment.startsWith('.'));
 
 /** Stage a complete snapshot before publishing it; failed scans never mark missing. */
 export class MediaScanner {
@@ -40,7 +45,9 @@ export class MediaScanner {
   private running=0;
   private pending:Array<()=>void>=[];
   private readonly traces=new Map<string,ScanTrace>();
-  constructor(db:MediaDatabase & Pick<Db,'prepare'>,private readonly libraries:MediaLibraries,private readonly probe:MediaProbe=probeMedia,private readonly logger?:ScanLogger,private readonly settings=()=>({libraries:2,files:4})) {
+  /** Called once per scan when it ends, e.g. to start automatic scraping. Errors are the caller's. */
+  onFinished?:(event:ScanFinished)=>void;
+  constructor(db:MediaDatabase & Pick<Db,'prepare'>,private readonly libraries:MediaLibraries,private readonly probe:MediaProbe=probeMedia,private readonly logger?:ScanLogger,private readonly settings:()=>ScanSettings=()=>({libraries:2,files:4,mediaHidden:true})) {
     this.db=new MediaStatementDatabase(db);
     db.transaction(()=>{
       db.run(`CREATE TABLE IF NOT EXISTS media_assets (
@@ -57,6 +64,8 @@ export class MediaScanner {
       db.run('CREATE INDEX IF NOT EXISTS media_scan_jobs_library_time ON media_scan_jobs(library_id,started_at)');
       if(!db.all<{name:string}>('PRAGMA table_info(media_scan_jobs)').some(column=>column.name==='diagnostics_json'))
         db.run('ALTER TABLE media_scan_jobs ADD COLUMN diagnostics_json TEXT');
+      if(!db.all<{name:string}>('PRAGMA table_info(media_scan_jobs)').some(column=>column.name==='total'))
+        db.run('ALTER TABLE media_scan_jobs ADD COLUMN total INTEGER');
       db.run(`CREATE TABLE IF NOT EXISTS media_scan_stage (
         job_id TEXT NOT NULL REFERENCES media_scan_jobs(id) ON DELETE CASCADE,ref TEXT NOT NULL,payload TEXT NOT NULL,
         PRIMARY KEY(job_id,ref))`);
@@ -77,7 +86,7 @@ export class MediaScanner {
     const execute=()=>{
       entry.cancelQueued=undefined;this.running++;
       this.db.run("UPDATE media_scan_jobs SET state='running' WHERE id=?",id);
-      void this.scan(actor,libraryId,id,controller.signal,options.files).finally(()=>{this.active.delete(libraryId);this.running--;finish();this.drain();});
+      void this.scan(actor,libraryId,id,controller.signal,options.files,options.mediaHidden!==false).finally(()=>{this.active.delete(libraryId);this.running--;finish();this.drain();this.finished(actor,libraryId,id);});
     };
     const entry:{controller:AbortController;done:Promise<void>;cancelQueued:(()=>void)|undefined}={controller,done,cancelQueued:()=>{
       this.pending=this.pending.filter(task=>task!==execute);this.active.delete(libraryId);
@@ -88,6 +97,13 @@ export class MediaScanner {
   }
 
   private drain(){while(this.running<this.settings().libraries&&this.pending.length)this.pending.shift()!();}
+  private finished(actor:MediaActor,libraryId:string,jobId:string){
+    const state=this.db.get<{state:MediaScanJob['state']}>('SELECT state FROM media_scan_jobs WHERE id=?',jobId)?.state;
+    if(state!=='complete'&&state!=='failed'&&state!=='cancelled')return;
+    try{this.onFinished?.({actor,libraryId,jobId,state});}catch(error){this.logger?.warn?.({err:error,libraryId},'scan completion hook failed');}
+  }
+  /** Libraries with a scan queued or running right now. */
+  isScanning(libraryId:string):boolean{return this.active.has(libraryId);}
   startAll(actor:MediaActor){
     if(actor.role!=='admin')throw forbidden('admin role required','ADMIN_REQUIRED');
     const items:MediaScanJob[]=[],skipped:string[]=[];
@@ -129,7 +145,7 @@ export class MediaScanner {
   }
 
   private jobDto(row:JobRow):MediaScanJob {
-    return {id:row.id,libraryId:row.library_id,state:row.state,inspected:row.inspected,error:row.error,startedAt:row.started_at,finishedAt:row.finished_at,
+    return {id:row.id,libraryId:row.library_id,state:row.state,inspected:row.inspected,total:row.total??null,error:row.error,startedAt:row.started_at,finishedAt:row.finished_at,
       diagnostics:this.traces.get(row.id)?.snapshot()??(row.diagnostics_json?JSON.parse(row.diagnostics_json):undefined)};
   }
 
@@ -154,7 +170,7 @@ export class MediaScanner {
       probe:{status:row.probe_status,info:row.technical_json?JSON.parse(row.technical_json):null}};
   }
 
-  private async scan(actor:MediaActor,libraryId:string,jobId:string,signal:AbortSignal,files=4):Promise<void> {
+  private async scan(actor:MediaActor,libraryId:string,jobId:string,signal:AbortSignal,files=4,hidden=true):Promise<void> {
     const trace=new ScanTrace(jobId,libraryId,this.logger);this.traces.set(jobId,trace);trace.note('开始扫描');
     const heartbeat=setInterval(()=>{
       trace.note('扫描进度');
@@ -204,7 +220,8 @@ export class MediaScanner {
       // every batch before failure/cleanup so no worker writes after staging is removed.
       const concurrency=storage.filePath?1:files;
       const entries:StorageEntry[]=[];const iterator=storage.list(signal)[Symbol.asyncIterator]();
-      try{for(;;){const next=await trace.measure('list',undefined,()=>iterator.next());if(next.done)break;if(supported.has(extname(next.value.ref).toLowerCase()))entries.push(next.value);}}finally{await iterator.return?.();}
+      try{for(;;){const next=await trace.measure('list',undefined,()=>iterator.next());if(next.done)break;if(!hidden&&hiddenRef(next.value.ref))continue;if(supported.has(extname(next.value.ref).toLowerCase()))entries.push(next.value);}}finally{await iterator.return?.();}
+      this.db.run('UPDATE media_scan_jobs SET total=? WHERE id=?',entries.length,jobId);
       if(library.kind==='video'){
         const groups=new Map<string,StorageEntry[]>();
         for(const entry of entries){const rule=rules.filter(value=>withinDirectory(entry.ref,value.path)).sort((a,b)=>b.path.length-a.path.length)[0];if(!rule||!['series','season'].includes(rule.mode))continue;const key=rule.path+'\0'+String(rule.season??'正片');const group=groups.get(key)??[];group.push(entry);groups.set(key,group);}

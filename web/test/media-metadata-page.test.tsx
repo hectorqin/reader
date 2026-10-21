@@ -14,7 +14,7 @@ it('keeps unsaved fields when staying and requires a deliberate discard before l
   const onBack=vi.fn(),request=vi.fn();
   await act(async()=>render(<MediaMetadataPage api={{request} as unknown as MediaApi} item={item} initialView="edit" onUpdated={vi.fn()} onBack={onBack}/>,root));
   await fill('标题','尚未保存');await act(async()=>button('返回作品详情').click());
-  expect(root.querySelector('[role=alert]')?.textContent).toContain('有未保存的修改');expect(onBack).not.toHaveBeenCalled();
+  expect(root.querySelector('[role=alertdialog]')?.textContent).toContain('有未保存的修改');expect(onBack).not.toHaveBeenCalled();
   await act(async()=>button('继续编辑').click());expect(root.querySelector<HTMLInputElement>('[aria-label="标题"]')!.value).toBe('尚未保存');
   await act(async()=>button('返回作品详情').click());await act(async()=>button('放弃修改并离开').click());expect(onBack).toHaveBeenCalledOnce();expect(request).not.toHaveBeenCalled();
 });

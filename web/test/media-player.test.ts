@@ -401,3 +401,44 @@ describe('media playback lifecycle',()=>{
   });
 
 });
+
+describe('queue play modes and stopping after the current entry',()=>{
+  beforeEach(()=>{localStorage.clear();vi.spyOn(HTMLMediaElement.prototype,'play').mockImplementation(async function(this:HTMLMediaElement){Object.defineProperty(this,'paused',{configurable:true,value:false});});vi.spyOn(HTMLMediaElement.prototype,'pause').mockImplementation(function(this:HTMLMediaElement){Object.defineProperty(this,'paused',{configurable:true,value:true});});vi.spyOn(HTMLMediaElement.prototype,'load').mockImplementation(()=>{});});
+  afterEach(()=>{vi.restoreAllMocks();vi.useRealTimers();});
+  const finish=(player:MediaPlayer)=>{ready(player);player.audio.currentTime=100;player.audio.dispatchEvent(new Event('ended'));};
+  it('repeats the same entry on single-repeat even when continuous playback is off',async()=>{
+    savePlaybackPreferences('player-test',{defaultRate:1,continuous:false});
+    const {player,playback}=setup();await player.play([part('a'),part('b')]);expect(player.playMode).toBe('sequential');
+    player.setPlayMode('repeat-one');finish(player);
+    await vi.waitFor(()=>expect(playback).toHaveBeenCalledTimes(2));
+    expect(playback).toHaveBeenLastCalledWith('a');expect(player.currentPartId).toBe('a');await player.stop();
+  });
+  it('shuffles without repeating until every entry has played, and steps back through what was played',async()=>{
+    vi.spyOn(Math,'random').mockReturnValue(0);
+    const {player,playback}=setup();await player.play([part('a'),part('b'),part('c')]);
+    player.setPlayMode('shuffle');expect(player.canPrevious).toBe(false);expect(player.canNext).toBe(true);
+    finish(player);await vi.waitFor(()=>expect(playback).toHaveBeenLastCalledWith('b'));
+    expect(player.canPrevious).toBe(true);
+    finish(player);await vi.waitFor(()=>expect(playback).toHaveBeenLastCalledWith('c'));
+    ready(player);await player.move(-1);expect(playback).toHaveBeenLastCalledWith('b');expect(player.currentPartId).toBe('b');
+    ready(player);await player.move(-1);expect(playback).toHaveBeenLastCalledWith('a');expect(player.canPrevious).toBe(false);
+    await player.stop();
+  });
+  it('keeps manual next and previous in queue order outside shuffle, and ignores a mode the web player cannot honour',async()=>{
+    const {player}=setup();expect(()=>player.setPlayMode('shuffle')).not.toThrow();expect(player.playMode).toBe('sequential');
+    await player.play([part('a'),part('b')]);player.setPlayMode('repeat-one');expect(player.canNext).toBe(true);expect(player.canPrevious).toBe(false);
+    player.setPlayMode('bogus' as never);expect(player.playMode).toBe('repeat-one');await player.stop();
+  });
+  it('pauses once at the end of the current entry, then continues normally',async()=>{
+    const {player,playback}=setup();await player.play([part('a'),part('b')]);
+    player.setSleepAfterPart(true);expect(player.sleepAfterPart).toBe(true);
+    finish(player);await vi.waitFor(()=>expect(player.sleepAfterPart).toBe(false));
+    expect(playback).toHaveBeenCalledTimes(1);expect(player.currentPartId).toBe('a');await player.stop();
+  });
+  it('replaces stop-after-entry with a minute timer, and the other way round',async()=>{
+    const {player}=setup();await player.play([part('a')]);
+    player.setSleepAfterPart(true);player.sleep(15);expect(player.sleepAfterPart).toBe(false);expect(player.sleepAt).toBeGreaterThan(0);
+    player.setSleepAfterPart(true);expect(player.sleepAt).toBe(0);expect(player.sleepAfterPart).toBe(true);
+    await player.stop();expect(player.sleepAfterPart).toBe(false);
+  });
+});

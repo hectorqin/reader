@@ -24,7 +24,7 @@ const assert=require('node:assert/strict');
     const token=(await result.json()).session.accessToken,headers={authorization:'Bearer '+token,'content-type':'application/json'};
     browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(origin);await page.locator('input[autocomplete="username"]').fill('settings-admin');await page.locator('input[type="password"]').fill('settings-test-password');await page.locator('form button[type=submit]').click();
-    async function open(){await page.getByRole('button',{name:'系统设置',exact:true}).click();await page.getByRole('button',{name:'服务配置',exact:true}).click();await page.getByLabel('配置分类').selectOption('tts');}
+    async function open(){await page.goto(origin+'/#/me');await page.getByRole('button',{name:/^系统设置/}).click();await page.getByRole('button',{name:'服务配置',exact:true}).click();await page.getByLabel('配置分类').selectOption('tts');}
     await open();await page.getByLabel('启用 HTTP 朗读',{exact:true}).check();await page.getByLabel('语音合成接口',{exact:true}).fill(tts+'/tts');await page.getByLabel('音色列表接口（可选）',{exact:true}).fill(tts+'/voices');
     await page.getByRole('button',{name:'检测连接并获取音色',exact:true}).click();await page.locator('#business-tts-voices option').waitFor({state:'attached'});
     await page.getByRole('button',{name:'生成试听音频',exact:true}).click();await page.locator('audio[aria-label="HTTP 朗读试听"]').waitFor();

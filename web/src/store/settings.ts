@@ -1,5 +1,6 @@
 import type { KeyValueStore } from '../core/platform.ts';
 import type { ViewSettings } from '../ui/reader-view.ts';
+import { validReaderPaper, type ReaderPaper } from '../shared/theme/theme.ts';
 
 /**
  * Reader preferences, persisted per device.
@@ -53,6 +54,13 @@ export interface AppSettings extends ViewSettings {
   txtEncoding: string;
   /** Only meaningful for fixed-layout books. */
   comicDirection: 'ltr' | 'rtl';
+  /**
+   * The page's own colours (阅读纸色): 白纸, 暖黄, 浅绿, 灰调, 夜间, or `theme` for the
+   * reading theme's. Per device, like the font size; the chrome keeps its theme.
+   */
+  paper: ReaderPaper;
+  /** A light paper gives way to the theme's dark values while the app is dark. */
+  paperFollowsDark: boolean;
   /** Read-aloud preferences. The voice itself is per device, like the rest. */
   ttsRate: number;
   ttsPitch: number;
@@ -111,6 +119,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   txtParagraphGap: 0.55,
   txtEncoding: '',
   comicDirection: 'ltr',
+  paper: 'theme',
+  paperFollowsDark: true,
   ttsRate: 1,
   ttsPitch: 1,
   ttsVolume: 1,
@@ -154,6 +164,17 @@ export class SettingsStore {
          * `title` and `author` are untouched: they still mean what they meant.
          */
         if (this.settings.shelfSort === ('updated' as string)) this.settings.shelfSort = 'added';
+        /*
+         * The reading paper is the reader's old page theme coming back as its own
+         * setting: a device that had chosen sepia, green or dark before V3 gets the
+         * matching paper the first time, instead of silently losing it.
+         */
+        if (parsed.paper === undefined) {
+          const legacy: Record<string, ReaderPaper> = { sepia: 'warm', green: 'green', dark: 'night' };
+          this.settings.paper = legacy[String(parsed.theme)] ?? 'theme';
+        }
+        this.settings.paper = validReaderPaper(this.settings.paper);
+        if (typeof this.settings.paperFollowsDark !== 'boolean') this.settings.paperFollowsDark = true;
         if (!['recent', 'added', 'title', 'author'].includes(this.settings.shelfSort)) {
           this.settings.shelfSort = DEFAULT_APP_SETTINGS.shelfSort;
         }

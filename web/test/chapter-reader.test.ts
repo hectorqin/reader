@@ -195,7 +195,7 @@ describe('chapter publication reading', () => {
     await vi.waitFor(() => expect(env.screen.element.textContent).toContain('100 字符'));
     expect(body(env.screen)?.textContent).toContain('resource:r1:a');
     select.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(env.screen.element.querySelector('dialog')?.textContent).not.toContain('100 字符');
+    expect(env.screen.element.querySelector('dialog[aria-label="选择阅读章节"]')?.textContent).not.toContain('100 字符');
     let finish!: (value: {chapterId:string;title:string;latestChapter:string;characters:number;images:number;bytes:number;elapsedMs:number}) => void;
     quality.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
     await click(env.screen, '检测所选章节 / 重试');
@@ -203,7 +203,7 @@ describe('chapter publication reading', () => {
     expect(quality.mock.calls.at(-1)?.[3]?.signal?.aborted).toBe(true);
     finish({chapterId:'x',title:'迟到结果',latestChapter:'末章',characters:999,images:0,bytes:999,elapsedMs:1});
     await new Promise(resolve => setTimeout(resolve, 0));
-    expect(env.screen.element.querySelector('dialog')?.textContent).not.toContain('999 字符');
+    expect(env.screen.element.querySelector('dialog[aria-label="选择阅读章节"]')?.textContent).not.toContain('999 字符');
     await click(env.screen, '确认换源并阅读');
     await vi.waitFor(() => expect(noticeText()).toContain('正文获取失败'));
     expect(body(env.screen)?.textContent).toContain('resource:r1:a');
@@ -421,9 +421,9 @@ it('opens tools, searches the whole book, navigates and returns, and persists a 
  await vi.waitFor(()=>expect(env.screen.element.querySelector('.reading-note-editor')).toBeNull());
  await act(() => click(env.screen,'删除笔记'));
  expect(env.offline.notesFor(book.id)).toHaveLength(1);
- await act(() => document.querySelector<HTMLButtonElement>('.swal2-cancel')!.click());
- await vi.waitFor(()=>expect(document.querySelector('.confirmation-host')).toBeNull());
+ await act(() => document.querySelector<HTMLButtonElement>('dialog[role=alertdialog] .sheet-cancel')!.click());
+ await vi.waitFor(()=>expect(document.querySelector('dialog[role=alertdialog]')).toBeNull());
  expect(env.offline.notesFor(book.id)).toHaveLength(1);
- await act(() => click(env.screen,'删除笔记'));await act(() => document.querySelector<HTMLButtonElement>('.swal2-confirm')!.click());
+ await act(() => click(env.screen,'删除笔记'));await act(() => document.querySelector<HTMLButtonElement>('dialog[role=alertdialog] .sheet-footer .primary')!.click());
  await vi.waitFor(()=>expect(env.offline.notesFor(book.id)).toHaveLength(0));
 });

@@ -1,4 +1,4 @@
-import type { MouseEvent as ReactMouseEvent } from 'react';
+import type { ButtonHTMLAttributes, MouseEvent as ReactMouseEvent } from 'react';
 /**
  * The primitives every screen was re-writing by hand.
  *
@@ -100,21 +100,19 @@ export function IconTextButton({ label, icon, onClick, disabled, className }: Ic
   );
 }
 
-export interface PrimaryButtonProps {
+export interface PrimaryButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type'> {
   children: ReactNode;
-  onClick?: (event: ReactMouseEvent<HTMLButtonElement>) => void;
-  disabled?: boolean;
   type?: 'button' | 'submit';
-  className?: string;
 }
 
-export function Button({ children, onClick, disabled, type, className }: PrimaryButtonProps): JSX.Element {
+/** A text button. `className="primary"` for the one main action, `"danger"` for a destructive one. */
+export function Button({ children, disabled, type, className, ...rest }: PrimaryButtonProps): JSX.Element {
   return (
     <button
+      {...rest}
       type={type ?? 'button'}
       className={className ? `button ${className}` : 'button'}
       disabled={disabled ?? false}
-      onClick={onClick}
     >
       {children}
     </button>
@@ -154,6 +152,37 @@ export function Segmented<T extends string>({ options, value, onChange, label }:
   );
 }
 
+export interface CalloutProps {
+  children: ReactNode;
+  /** `error` is announced (`role=alert`); the others are polite. */
+  tone?: 'info' | 'error' | 'warning';
+  title?: string;
+  /** A recovery action drawn after the message, e.g. 重试. */
+  action?: { label: string; onClick(): void };
+  onDismiss?(): void;
+  className?: string;
+}
+
+/**
+ * A message that belongs to the page: a load that failed, a state to explain.
+ *
+ * Operation feedback ("已保存", "删除失败") is not this — that is `notify` /
+ * `FloatingNotice` (docs/ui.md §3.6), which does not move the page.
+ */
+export function Callout({ children, tone = 'info', title, action, onDismiss, className }: CalloutProps): JSX.Element {
+  const classes = ['notice', 'callout', `is-${tone}`, className].filter(Boolean).join(' ');
+  return (
+    <div className={classes} role={tone === 'error' ? 'alert' : 'status'}>
+      <div className="callout-text">
+        {title ? <strong>{title}</strong> : null}
+        <span>{children}</span>
+      </div>
+      {action ? <Button onClick={action.onClick}>{action.label}</Button> : null}
+      {onDismiss ? <IconButton icon="close" label="关闭提示" onClick={onDismiss} /> : null}
+    </div>
+  );
+}
+
 export interface SwitchRowProps {
   label: string;
   hint: string;
@@ -182,33 +211,6 @@ export function SwitchRow({ label, hint, checked, onChange }: SwitchRowProps): J
         aria-pressed={checked}
         onClick={() => onChange(!checked)}
       />
-    </div>
-  );
-}
-
-export interface ScrimProps {
-  onDismiss?(): void;
-  children: ReactNode;
-  className?: string;
-}
-
-/**
- * The element panels and dialogs sit on.
- *
- * Clicking outside a panel to dismiss it is the one interaction a reader expects
- * from a sheet, and re-implementing it per screen is how a screen ends up
- * dismissing the panel when the reader tapped *inside* it (a click that lands on
- * the panel's own padding still bubbles). The check is on the target, once.
- */
-export function Scrim({ onDismiss, children, className }: ScrimProps): JSX.Element {
-  return (
-    <div
-      className={className ?? 'panel-host'}
-      onClick={(event) => {
-        if (onDismiss && event.target === event.currentTarget) onDismiss();
-      }}
-    >
-      {children}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import {FloatingNotice} from './floating-notice.tsx';
-import {FloatingConfirm} from './floating-confirm.tsx';
+import { ConfirmSheet } from './sheet.tsx';
 import '../styles/business-settings.css';
 import type { ChangeEvent } from 'react';
 
@@ -63,7 +63,7 @@ export function BusinessSettings({api,group,onSaved,selectControl}:{api:Settings
         {audio&&<audio controls src={audio} aria-label="HTTP 朗读试听"/>}
         <button className="button" disabled={busy} onClick={()=>setClear(true)}>清理音频缓存</button>
       </div>}
-      {clear&&<FloatingConfirm text="清理服务器音频缓存？下次朗读将重新合成。" onCancel={()=>setClear(false)} onConfirm={()=>{setClear(false);void work(async()=>{await api.businessSettingsRequest('tts/clear-cache','POST');setMessage('音频缓存已清理');});}}/>}
+      {clear&&<ConfirmSheet danger text="清理服务器音频缓存？下次朗读将重新合成。" onCancel={()=>setClear(false)} onConfirm={()=>{setClear(false);void work(async()=>{await api.businessSettingsRequest('tts/clear-cache','POST');setMessage('音频缓存已清理');});}}/>}
       {selected==='webdav'&&<details><summary>上传已验证的离线备份</summary><p>先停服制作完整备份，再启动服务上传。这里不会在线复制运行中的数据库。目录须能从服务器内访问；上传使用已保存的 WebDAV 配置。</p>
         <form className="user-manager-form" onSubmit={event=>{event.preventDefault();void work(async()=>{await api.businessSettingsRequest('webdav/upload','POST',{directory,name});setMessage('备份已上传并验证');});}}>
           <label>服务器上的备份目录<input required value={directory} onInput={event=>setDirectory(event.currentTarget.value)}/></label>

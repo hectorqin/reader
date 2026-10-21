@@ -25,6 +25,7 @@ import {MediaDirectoryRules} from '../../media/directory-rules.ts';
 import {MediaRecognitionReview} from '../../media/recognition-review.ts';
 import type {VideoRule} from '../../media/video-recognition.ts';
 import { MediaScrapeJobs,SCRAPE_RESULT_STATES } from '../../media/scrape-jobs.ts';
+import { MediaAutomation } from '../../media/automation.ts';
 import { MediaBackgroundGrants } from '../../media/background-grants.ts';
 import { DatabaseMediaAccounts, MediaAccountReferences } from '../../media/accounts.ts';
 import type { MediaDatabase } from '../../media/read-database.ts';
@@ -50,8 +51,11 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   const hierarchy=new MediaHierarchy(database,scanner.catalog);
   const scrapeJobs=new MediaScrapeJobs(database,scanner.catalog,scraping,accounts);
   const artwork=new MediaArtwork(database,libraries);
-  const subtitles=new MediaSubtitles(database,libraries);
-  const lyrics=new MediaLyrics(database,libraries);
+  const embeddedEnabled=()=>settings.read('scanning').mediaEmbedded;
+  const subtitles=new MediaSubtitles(database,libraries,undefined,embeddedEnabled);
+  const lyrics=new MediaLyrics(database,libraries,embeddedEnabled);
+  // 扫描与元数据 (业务配置 · 扫描设置): hourly automatic scans, and scraping after a scan.
+  const automation=new MediaAutomation(ctx.db,database,libraries,scanner,scraping,scrapeJobs,()=>settings.read('scanning'),app.log);
   const folders=new MediaFolders(database,libraries,scanner.catalog);
   const cleanup=new MediaCleanup(database,libraries,scanner.catalog);
   const directoryRules=new MediaDirectoryRules(database),recognition=new MediaRecognitionReview(database,libraries,scanner.catalog,directoryRules);
@@ -134,7 +138,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
     preHandler:scrapeAdmin,schema:{body:{type:'object',additionalProperties:false,required:['candidateId'],properties:{candidateId:{type:'string',minLength:1,maxLength:100}}}},
   },async request=>scraping.confirm(currentUser(request),request.params.id,request.body.candidateId));
   app.delete<{Params:{id:string}}>('/api/v1/media/items/:id/match',{preHandler:scrapeAdmin},async request=>scraping.clear(currentUser(request),request.params.id));
-  app.addHook('onClose',async()=>{await ai.close();await catalogReader?.close();await scrapeJobs.close();await scanner.close();});
+  app.addHook('onClose',async()=>{automation.stop();await ai.close();await catalogReader?.close();await scrapeJobs.close();await scanner.close();});
   const pagination={type:'object',properties:{offset:{type:'integer',minimum:0,default:0},limit:{type:'integer',minimum:1,maximum:200,default:100}}};
   app.get('/api/v1/media/libraries',{preHandler:auth},async request=>({items:libraries.list(currentUser(request))}));
   app.get('/api/v1/media/library-summaries',{preHandler:scrapeAdmin},async(request,reply)=>{reply.header('cache-control','private, no-store');return queryCatalog(request,reply,{method:'librarySummaries',args:[currentUser(request)]});});

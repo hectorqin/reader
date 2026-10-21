@@ -1,4 +1,5 @@
-import {Check,ChevronRight,Heart,SlidersHorizontal} from 'lucide-react';
+import {ChevronRight,Heart} from 'lucide-react';
+import {ActionMenu} from '../../../ui/action-menu.tsx';
 import {MediaCover} from './cover.tsx';
 import {itemLabel} from './item-label.ts';
 import type {Item,MediaApi,MediaChannel} from '../api/media-api.ts';
@@ -15,7 +16,7 @@ export function MediaFavorites({api,items,total,offset,scope,busy,onScope,onPage
   onScope:(scope:FavoriteScope)=>void;onPage:(offset:number)=>void;onOpen:(item:Item)=>void;
 }){
   return <section className="media-favorites" aria-label="收藏列表">
-    <div className="media-favorite-tools"><p>{total} 项收藏{scope!=='all'?' · '+scopes.find(([value])=>value===scope)![1]:''}</p><details className="media-favorite-filter-menu"><summary aria-label="筛选收藏"><SlidersHorizontal size={16} strokeWidth={1.8} aria-hidden="true"/><span>筛选</span></summary><div className="media-favorite-filter-options" role="listbox" aria-label="收藏类型">{scopes.map(([value,label])=><button key={value} type="button" role="option" aria-selected={scope===value} onClick={event=>{event.currentTarget.closest('details')?.removeAttribute('open');if(scope!==value)onScope(value);}}><span>{label}</span>{scope===value&&<Check size={16} strokeWidth={1.9} aria-hidden="true"/>}</button>)}</div></details></div>
+    <div className="media-favorite-tools"><p>{total} 项收藏{scope!=='all'?' · '+scopes.find(([value])=>value===scope)![1]:''}</p><ActionMenu className="media-favorite-filter-menu" label="筛选收藏" title="收藏类型" text="筛选" icon="sliders" items={scopes.map(([value,label])=>({label,checked:scope===value,onSelect:()=>{if(scope!==value)onScope(value);}}))}/></div>
     <div className="media-favorite-list">{items.map(item=><button type="button" key={item.id} className="media-favorite-row" onClick={()=>onOpen(item)}>
       <MediaCover api={api} item={item} square={favoriteChannel(item)==='music'}/>
       <span className="media-favorite-copy"><strong title={item.title}>{item.title}</strong><small>{[kindNames[item.kind],itemLabel(item)].filter(Boolean).join(' · ')}</small></span>

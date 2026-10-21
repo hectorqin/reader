@@ -333,10 +333,12 @@ describe('ReaderView settings', () => {
     document.body.append(container);
   });
 
-  it('applies the theme to the document root so the shell matches the book', () => {
+  it('leaves the document theme to the app theme controller', () => {
+    // Colours come from ThemeController (<html data-theme data-mode>); the legacy
+    // settings.theme must not overwrite them, or 'green' would select 青绿.
     const view = make(container, reflowableDoc(1));
     view.applySettings({ theme: 'dark' });
-    expect(document.documentElement.dataset['theme']).toBe('dark');
+    expect(document.documentElement.dataset['theme']).toBeUndefined();
   });
 
   it('toggles paged mode on the book host, not on the shell', () => {

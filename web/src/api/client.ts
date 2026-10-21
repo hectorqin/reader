@@ -13,6 +13,7 @@ import type {
   BookListPage,
   ContinueReadingItem,
   Facets,
+  ReadingState,
   InstanceInfo,
   Manifest,
   Note,
@@ -52,6 +53,8 @@ export interface TtsCapabilities {
 }
 
 export interface ListQuery {
+  /** 在读 / 想读 / 已读; shelf scope only. */
+  status?: ReadingState;
   search?: string;
   author?: string;
   series?: string;
@@ -438,6 +441,11 @@ export class ReaderApi {
       options,
     );
     return result.toc;
+  }
+
+  /** Marks a shelf book 想读 / 在读 / 已读, or clears the mark (`null`) so progress decides. */
+  async setReadingStatus(bookId: string, status: ReadingState | null, options: RequestOptions = {}): Promise<void> {
+    await this.call(`/api/v1/books/${encodeURIComponent(bookId)}/reading-status`, 'PUT', { status }, options);
   }
 
   async facets(options: RequestOptions = {}): Promise<Facets> {

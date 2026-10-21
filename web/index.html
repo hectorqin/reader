@@ -22,7 +22,7 @@
       covered by the same rule: nothing here reaches the network.
     -->
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#fbfaf7" />
+    <meta name="theme-color" content="#fdf9f6" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="icon" type="image/svg+xml" href="./icons/reader.svg" />
     <link rel="alternate icon" type="image/png" href="./icons/icon-192.png" />
@@ -74,13 +74,13 @@
       body {
         margin: 0;
         height: 100%;
-        background: #fbfaf7;
+        background: #fdf9f6;
       }
-      html[data-theme='dark'],
-      html[data-theme='dark'] body {
-        background: #16171a;
+      .app-startup { position: fixed; inset: 0; display: grid; place-items: center; background: #fdf9f6; z-index: 9999; }
+      /* 暖陶 is the default theme; its dark half until the stored choice is applied. */
+      @media (prefers-color-scheme: dark) {
+        html, body, .app-startup { background: #1f1713; }
       }
-      .app-startup { position: fixed; inset: 0; display: grid; place-items: center; background: #fbfaf7; z-index: 9999; }
       .app-startup img { width: 96px; height: 96px; }
     </style>
   </head>

@@ -17,6 +17,7 @@ it('reports real summaries, retains management when reading fails, and retries o
   await act(async()=>render(<MediaLibraryList api={{request} as unknown as MediaApi} libraries={libraries} busy={false} position={{query:'',page:0}} onPosition={()=>{}} onEdit={edit} onScan={()=>{}} onJobs={()=>{}} onPermissions={()=>{}}/>,root));
   await vi.waitFor(()=>expect(root.querySelector('[role=alert]')).not.toBeNull());
   expect(root.textContent).not.toContain('0 部电影');
+  await act(async()=>root.querySelector<HTMLButtonElement>('[aria-label="媒体库操作 电影"]')!.click());
   await act(async()=>button('编辑媒体库').click());expect(edit).toHaveBeenCalledWith(libraries[0]);
   await act(async()=>button('重试读取摘要').click());
   await vi.waitFor(()=>expect(root.textContent).toContain('6 部电影 · 1 部剧集'));

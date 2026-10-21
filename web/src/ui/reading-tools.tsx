@@ -1,6 +1,6 @@
 import type { ReadingOverrides } from './reading-overrides.ts';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Modal } from './modal.tsx';
+import { ConfirmSheet, Sheet } from './sheet.tsx';
 import type { ReaderApi } from '../api/client.ts';
 import type { Manifest, Note } from '../api/types.ts';
 import type { OfflineStore } from '../store/offline.ts';
@@ -10,7 +10,6 @@ import { OfflineDownload, type DownloadState } from '../core/offline-download.ts
 import { decodeAnchor, encodeAnchor, findText, type SearchHit, type TextAnchor } from './text-anchor.ts';
 import { ApiError } from '../api/errors.ts';
 import { newId } from '../core/id.ts';
-import { FloatingConfirm } from './floating-confirm.tsx';
 import { FloatingNotice } from './floating-notice.tsx';
 
 export interface SearchSection { id: string; title: string; text: string }
@@ -119,15 +118,15 @@ export function ReadingTools(props: ReadingToolsProps) {
     if (!bookmark) { setComment(''); setEditing(null); setComposing(false); }
     setNoteFilter(bookmark ? 'bookmark' : 'all'); props.onNotes(); setMessage(bookmark ? '已添加当前位置书签' : '笔记已保存');
   }
-  return <Modal title="阅读工具" busy={saving} onClose={props.onClose}>
+  return <Sheet title="阅读工具" busy={saving} onClose={props.onClose}>
     <div className="reading-tools">
       <nav className="reading-tool-tabs" aria-label="阅读工具分类">{([
         ['search', '搜索', '书内搜索'], ['notes', '笔记', '笔记'], ['offline', '缓存', '离线缓存'], ['speech', '朗读', '朗读检测'], ['edit', '整理', '内容整理'],
         ] as const).map(([id, label, accessible]) => <button key={id} className="reading-tool-tab" type="button" aria-label={accessible} aria-pressed={tab === id} aria-controls="reading-tool-panel" onClick={() => { setTab(id); setMessage(''); }}>{label}</button>)}</nav>
       <div className="reading-tool-panel" id="reading-tool-panel">
       <FloatingNotice message={message} error={messageError} />
-      {deleteId && <FloatingConfirm title="删除笔记" text="确定删除这条笔记或书签？" confirmText="确认删除" cancelText="取消" onCancel={()=>setDeleteId('')} onConfirm={()=>{const id=deleteId;setDeleteId('');void edit(async()=>{await props.offline.deleteNote(id);props.sync.schedule();setNotes(props.offline.notesFor(bookId));props.onNotes();});}} />}
-      {removeId && <FloatingConfirm title="清理缓存" text="只删除此设备的书籍缓存，保留原书、进度和笔记。" confirmText="确认清理" cancelText="保留缓存" onCancel={()=>setRemoveId('')} onConfirm={()=>{const id=removeId;setRemoveId('');void action(async()=>{await props.cache.removeBook(id);setDownload(null);await storage();});}} />}
+      {deleteId && <ConfirmSheet danger title="删除笔记" text="确定删除这条笔记或书签？" confirmText="确认删除" onCancel={()=>setDeleteId('')} onConfirm={()=>{const id=deleteId;setDeleteId('');void edit(async()=>{await props.offline.deleteNote(id);props.sync.schedule();setNotes(props.offline.notesFor(bookId));props.onNotes();});}} />}
+      {removeId && <ConfirmSheet danger title="清理缓存" text="只删除此设备的书籍缓存，保留原书、进度和笔记。" confirmText="确认清理" cancelText="保留缓存" onCancel={()=>setRemoveId('')} onConfirm={()=>{const id=removeId;setRemoveId('');void action(async()=>{await props.cache.removeBook(id);setDownload(null);await storage();});}} />}
       {tab === 'search' && <section aria-label="书内搜索">
         <h3>书内搜索</h3>
         <form className="reading-tool-search" onSubmit={event => { event.preventDefault(); if (query.trim()) void search(); }}><label>关键词<input placeholder="输入要查找的文字" value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} /></label><button className="button primary" disabled={searching || !query.trim()}>搜索全文</button></form>
@@ -183,5 +182,5 @@ export function ReadingTools(props: ReadingToolsProps) {
       {tab === 'speech' && <section aria-label="朗读检测"><p>使用当前朗读设置试听。HTTP 引擎会请求服务端合成试听音频。</p><button className="button" onClick={() => void action(async () => setMessage(await props.previewSpeech()))}>检测并试听</button><button className="button" onClick={props.stopPreview}>停止试听</button><p>若浏览器限制播放，请点击试听后允许音频；可在朗读设置切换系统或 HTTP 引擎。</p></section>}
       </div>
     </div>
-  </Modal>;
+  </Sheet>;
 }

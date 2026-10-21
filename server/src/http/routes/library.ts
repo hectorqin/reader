@@ -19,6 +19,7 @@ import { FilePublications } from '../../publications/files.ts';
 import { withSignal } from '../request-signal.ts';
 import { searchBookPage } from '../../services/book-search.ts';
 import { ReadingOverrideService } from '../../services/reading-overrides.ts';
+import { READING_STATES, type ReadingState } from '../../services/shelf.ts';
 
 /**
  * The handler that owns a book, resolved from its recorded format.
@@ -118,11 +119,21 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       // the only reason a card on it can offer 加入书架 at all. Any other value is
       // the shelf, which is where the parameter's absence already pointed.
       ...(q.scope === 'library' ? { scope: 'library' as const } : {}),
+      // 在读 / 想读 / 已读; an unknown value is rejected by the service.
+      ...(q.status ? { status: q.status as ReadingState } : {}),
       ...(q.sort !== undefined ? { sort: q.sort as 'title' } : {}),
       ...(q.order !== undefined ? { order: q.order as 'asc' } : {}),
       ...(q.page !== undefined ? { page: Number.parseInt(q.page, 10) || 1 } : {}),
       ...(q.pageSize !== undefined ? { pageSize: Number.parseInt(q.pageSize, 10) || 50 } : {}),
     });
+  });
+
+  // 想读 / 在读 / 已读 mark on the reader's shelf; `null` clears it so progress decides.
+  app.put('/api/v1/books/:id/reading-status', { preHandler: auth, schema: { body: { type: 'object', additionalProperties: false, required: ['status'], properties: { status: { anyOf: [{ type: 'string', enum: [...READING_STATES] }, { type: 'null' }] } } } } }, async (request, reply) => {
+    const user = currentUser(request);
+    const { id } = request.params as { id: string };
+    ctx.shelf.setReadingStatus(user.id, id, (request.body as { status: ReadingState | null }).status);
+    return reply.status(204).send();
   });
 
   app.get('/api/v1/books/:id', { preHandler: auth }, async (request) => {

@@ -28,9 +28,9 @@ body .notyf {
 .global-notice .notyf__dismiss-btn:hover { background: var(--reader-line); }
 .global-notice .notyf__dismiss-btn:focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 2px; }
 .global-notice[data-kind='error'] { color: #a32c22; }
-[data-theme='dark'] .global-notice[data-kind='error'] { color: #ffaaa0; }
+[data-mode='dark'] .global-notice[data-kind='error'] { color: #ffaaa0; }
 .global-notice[data-kind='success'] { color: #326c46; }
-[data-theme='dark'] .global-notice[data-kind='success'] { color: #9dd9ac; }
+[data-mode='dark'] .global-notice[data-kind='success'] { color: #9dd9ac; }
 .global-notice[data-kind='loading'] .notyf__wrapper::before {
   content: ''; width: 14px; height: 14px; flex: none; border: 2px solid var(--reader-line);
   border-top-color: var(--reader-accent); border-radius: 50%; animation: notice-spin .8s linear infinite;

@@ -21,8 +21,9 @@ it('only administrators see directory cleanup',async()=>{
   const props={api:{request} as unknown as MediaApi,libraryId:'lib',onPlay:vi.fn(),onQueue:vi.fn(),onDetail:vi.fn()};
   await act(async()=>render(<MediaFolders {...props}/>,root));
   await vi.waitFor(()=>expect(root.textContent).toContain('暂无已扫描'));
-  expect(button('清理失效资源')).toBeUndefined();
+  expect(root.querySelector('[aria-label="文件管理操作"]')).toBeNull();
   await act(async()=>render(<MediaFolders {...props} admin/>,root));
+  await act(async()=>root.querySelector<HTMLButtonElement>('[aria-label="文件管理操作"]')!.click());
   expect(button('清理失效资源')).toBeDefined();
 });
 it('opens a folder and file, plays its chapters and returns to the same directory',async()=>{

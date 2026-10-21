@@ -8,7 +8,7 @@ export interface BusinessValues {
   tmdb:{enabled:boolean;token:string;apiKey:string;language:string};
   musicbrainz:{enabled:boolean;userAgent:string};
   tts:{enabled:boolean;url:string;token:string;voicesUrl:string;timeoutMs:number;cacheMaxBytes:number};
-  scanning:{interval:number;libraries:number;files:number};
+  scanning:{interval:number;libraries:number;files:number;mediaAutoScan:boolean;mediaScrape:boolean;mediaEmbedded:boolean;mediaHidden:boolean};
   scraping:{timeoutMs:number;retries:number};
   access:{publicUrl:string;corsOrigins:string;accessTokenTtl:number;refreshTokenTtl:number};
   webdav:{url:string;username:string;password:string;maxBytes:number};
@@ -51,6 +51,10 @@ export const SETTINGS_SCHEMA:Record<SettingsGroup,{label:string;fields:Field[]}>
     {key:'interval',label:'阅读书库自动检查间隔（秒，0 关闭）',type:'number',default:60,min:0,max:604800,help:'统一原定时扫描与变化检查；保存后重新计时'},
     {key:'libraries',label:'同时扫描的媒体库数',type:'number',default:2,min:1,max:4},
     {key:'files',label:'远端文件处理并发数',type:'number',default:4,min:1,max:8},
+    {key:'mediaAutoScan',label:'自动扫描新文件',type:'checkbox',default:true,help:'影音库每小时检查一次新增和变化的文件'},
+    {key:'mediaScrape',label:'刮削封面与简介',type:'checkbox',default:false,help:'扫描完成后，用已配置的 TMDB 或 MusicBrainz 为还没有在线资料的作品刮削'},
+    {key:'mediaEmbedded',label:'读取内嵌字幕与歌词',type:'checkbox',default:true},
+    {key:'mediaHidden',label:'扫描隐藏文件夹',type:'checkbox',default:false,help:'名称以“.”开头的文件夹和文件；关闭后它们在下次扫描时视为不存在'},
   ]},
   scraping:{label:'刮削高级设置',fields:[
     {key:'timeoutMs',label:'请求超时（毫秒）',type:'number',default:12000,min:1000,max:120000},
@@ -158,7 +162,7 @@ function legacySettings<K extends SettingsGroup>(group:K,config:AppConfig):Busin
     tmdb:{enabled:!!(text('MEDIA_TMDB_TOKEN')||text('MEDIA_TMDB_API_KEY')),token:text('MEDIA_TMDB_TOKEN'),apiKey:text('MEDIA_TMDB_API_KEY'),language:'zh-CN'},
     musicbrainz:{enabled:!!text('MEDIA_MUSICBRAINZ_USER_AGENT'),userAgent:text('MEDIA_MUSICBRAINZ_USER_AGENT')},
     tts:{enabled:!!text('TTS_URL'),url:text('TTS_URL'),token:text('TTS_TOKEN'),voicesUrl:text('TTS_VOICES_URL'),timeoutMs:integer('TTS_TIMEOUT_MS',20000),cacheMaxBytes:integer('TTS_CACHE_BYTES',268435456)},
-    scanning:{interval:intervals.length?Math.min(...intervals):0,libraries:2,files:4},
+    scanning:{interval:intervals.length?Math.min(...intervals):0,libraries:2,files:4,mediaAutoScan:true,mediaScrape:false,mediaEmbedded:true,mediaHidden:false},
     access:{publicUrl:config.publicUrl,corsOrigins:config.corsOrigins.join(','),accessTokenTtl:config.accessTokenTtl,refreshTokenTtl:config.refreshTokenTtl},
     webdav:{url:text('WEBDAV_URL'),username:text('WEBDAV_USERNAME'),password:text('WEBDAV_PASSWORD'),maxBytes:integer('WEBDAV_MAX_BYTES',2147483648)},
   };

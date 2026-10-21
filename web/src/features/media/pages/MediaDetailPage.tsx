@@ -1,8 +1,9 @@
-import { Alert, Button } from '@mantine/core';
-import { Ellipsis, Heart, Play } from 'lucide-react';
+import { Heart, Play } from 'lucide-react';
+import { ActionMenu } from '../../../ui/action-menu.tsx';
+import { Callout } from '../../../ui/toolkit.tsx';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { detailQuery } from '../queries/media.queries.ts';
 import { MediaPageFrame, QueryFeedback } from '../components/MediaPageFrame.tsx';
@@ -32,8 +33,7 @@ export function MediaDetailPage() {
   const { itemId = '' } = useParams();
   const admin = useAuthStore(state => state.verifiedUser?.role === 'admin');
   const [resourcePanel, setResourcePanel] = useState<'files' | 'versions' | 'source' | null>(null);
-  const detailMenu = useRef<HTMLDetailsElement>(null);
-  useEffect(() => { setResourcePanel(null); detailMenu.current?.removeAttribute('open'); }, [itemId]);
+  useEffect(() => { setResourcePanel(null); }, [itemId]);
   const query = useQuery(detailQuery(runtime, itemId));
   const favorite = useQuery({
     queryKey: ['media', runtime.mediaApi.preferenceScope(), 'favorite', itemId],
@@ -49,31 +49,22 @@ export function MediaDetailPage() {
   const playEdition = (current: Detail, parts: Part[], index = 0) => play(parts.map(part => ({ part, title: current.title + ' · ' + part.title, video: channel === 'video' })), index);
   const queueParts = async (ids: string[]) => { await runtime.mediaApi.request('queue', 'POST', { partIds: ids }); };
 
-  const openResourcePanel = (panel: 'files' | 'versions' | 'source') => {
-    detailMenu.current?.removeAttribute('open');
-    setResourcePanel(panel);
-  };
-  const detailActions = detail ? <details className="media-actions media-item-actions" ref={detailMenu}>
-    <summary aria-label={detail.kind === 'artist' ? '歌手操作' : '作品操作'} title={detail.kind === 'artist' ? '歌手操作' : '作品操作'}><Ellipsis size={20} aria-hidden="true" /></summary>
-    <nav aria-label={detail.kind === 'artist' ? '歌手操作' : '作品操作'}>
-      <button type="button" disabled={toggleFavorite.isPending} onClick={() => { detailMenu.current?.removeAttribute('open'); toggleFavorite.mutate(!favorite.data?.favorite); }}>{favorite.data?.favorite ? (detail.kind === 'artist' ? '取消收藏歌手' : '取消收藏作品') : (detail.kind === 'artist' ? '收藏歌手' : '收藏作品')}</button>
-      {detail.kind !== 'artist' && <>
-        {detail.editions.some(edition => edition.parts.length > 0) && <button type="button" onClick={() => openResourcePanel('files')}>资源信息</button>}
-        {(detail.editions.length > 1 || (admin && detail.editions.length > 0)) && <button type="button" onClick={() => openResourcePanel('versions')}>{admin ? '版本管理' : '播放版本'}</button>}
-        <button type="button" onClick={() => openResourcePanel('source')}>资料来源</button>
-      </>}
-      {admin && <>
-        <button type="button" onClick={() => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/metadata`)}>{detail.kind === 'artist' ? '编辑歌手资料' : '编辑资料'}</button>
-        <button type="button" onClick={() => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/match`)}>{detail.kind === 'artist' ? '匹配歌手资料' : '匹配元数据'}</button>
-        {detail.kind === 'audiobook' && <button type="button" onClick={() => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/chapters`)}>章节列表</button>}
-        {['track', 'album', 'season', 'episode'].includes(detail.kind) && <button type="button" onClick={() => navigate(`/media/${channel}/items/${encodeURIComponent(detail.id)}/structure`)}>结构整理</button>}
-      </>}
-    </nav>
-  </details> : undefined;
+  const artist = detail?.kind === 'artist';
+  const itemPath = (suffix: string) => `/media/${channel}/items/${encodeURIComponent(detail!.id)}/${suffix}`;
+  const detailActions = detail ? <ActionMenu className="media-icon-button" label={artist ? '歌手操作' : '作品操作'} items={[
+    { label: favorite.data?.favorite ? (artist ? '取消收藏歌手' : '取消收藏作品') : (artist ? '收藏歌手' : '收藏作品'), disabled: toggleFavorite.isPending, onSelect: () => toggleFavorite.mutate(!favorite.data?.favorite) },
+    !artist && detail.editions.some(edition => edition.parts.length > 0) && { label: '资源信息', onSelect: () => setResourcePanel('files') },
+    !artist && (detail.editions.length > 1 || (admin && detail.editions.length > 0)) && { label: admin ? '版本管理' : '播放版本', onSelect: () => setResourcePanel('versions') },
+    !artist && { label: '资料来源', onSelect: () => setResourcePanel('source') },
+    admin && { label: artist ? '编辑歌手资料' : '编辑资料', onSelect: () => navigate(itemPath('metadata')) },
+    admin && { label: artist ? '匹配歌手资料' : '匹配元数据', onSelect: () => navigate(itemPath('match')) },
+    admin && detail.kind === 'audiobook' && { label: '章节列表', onSelect: () => navigate(itemPath('chapters')) },
+    admin && ['track', 'album', 'season', 'episode'].includes(detail.kind) && { label: '结构整理', onSelect: () => navigate(itemPath('structure')) },
+  ]} /> : undefined;
   return <MediaPageFrame className="media-detail-shell" title={detail ? mediaDetailLabel(detail.kind) : '作品详情'} actions={detailActions}>
     <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
     {detail && <DetailContent detail={detail} channel={channel} favorite={favorite.data?.favorite ?? false} favoriteBusy={toggleFavorite.isPending} onToggleFavorite={() => toggleFavorite.mutate(!favorite.data?.favorite)} onPlay={(parts, index) => void playEdition(detail, parts, index)} onQueue={queueParts} onPlayEntries={play} onRefresh={() => { void query.refetch(); }} onUpdated={updated => { queryClient.setQueryData(detailQuery(runtime, itemId).queryKey, updated); }} runtime={runtime} navigate={navigate} resourcePanel={resourcePanel} onResourcePanelChange={setResourcePanel} />}
-    {!query.isPending && !query.error && !detail && <Alert>找不到这个作品。</Alert>}
+    {!query.isPending && !query.error && !detail && <Callout>找不到这个作品。</Callout>}
   </MediaPageFrame>;
 }
 
@@ -120,7 +111,7 @@ function DetailContent({ detail, channel, favorite, favoriteBusy, onToggleFavori
   if (edition?.parts.length && !playable.length) return <>{resourceControl}<MissingEdition title={detail.title} label={edition.label} busy={false} onRefresh={onRefresh} onChooseVersion={detail.editions.length > 1 ? () => onResourcePanelChange('versions') : undefined} /></>;
   return <>{resourceControl}<article className={detailClass}>
     <div className="media-hero"><MediaCover api={runtime.mediaApi} item={detail} square={['album', 'artist', 'track'].includes(detail.kind)} /><div className={detail.kind === 'artist' ? 'media-person-copy' : 'media-detail-hero-copy'}><MediaDetailHeading item={detail} edition={edition} {...(detail.kind === 'album' ? { trackCount: detail.children.length } : {})} {...(detail.kind === 'series' ? { seasonCount: detail.children.length } : {})} />{detail.kind === 'artist' && <span className="media-person-count">{detail.children.filter(item => item.kind === 'album').length} 张专辑</span>}</div></div>
-    <div className="media-detail-actions">{detail.kind === 'series' && <Button className="media-primary" leftSection={<Play size={16} />} disabled={!detail.children.length} onClick={() => void playSeries()}>播放剧集</Button>}{edition && <Button className="media-primary" leftSection={<Play size={16} />} disabled={!playable.length} onClick={() => onPlay(playable)}>{detail.kind === 'movie' ? '播放电影' : detail.kind === 'track' ? '播放音频' : detail.kind === 'audiobook' ? '开始收听' : '播放此版本'}</Button>}{detail.kind !== 'album' && <Button className="media-detail-favorite" variant="subtle" loading={favoriteBusy} aria-label={favorite ? '取消收藏' : '收藏'} title={favorite ? '取消收藏' : '收藏'} onClick={onToggleFavorite}><Heart size={18} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" /></Button>}</div>
+    <div className="media-detail-actions">{detail.kind === 'series' && <button type="button" className="media-primary" disabled={!detail.children.length} onClick={() => void playSeries()}><Play size={16} aria-hidden="true" />播放剧集</button>}{edition && <button type="button" className="media-primary" disabled={!playable.length} onClick={() => onPlay(playable)}><Play size={16} aria-hidden="true" />{detail.kind === 'movie' ? '播放电影' : detail.kind === 'track' ? '播放音频' : detail.kind === 'audiobook' ? '开始收听' : '播放此版本'}</button>}{detail.kind !== 'album' && <button type="button" className="media-detail-favorite" aria-label={favorite ? '取消收藏' : '收藏'} title={favorite ? '取消收藏' : '收藏'} onClick={onToggleFavorite} disabled={favoriteBusy}><Heart size={18} fill={favorite ? 'currentColor' : 'none'} aria-hidden="true" /></button>}</div>
     {artistPlot && <p className="media-person-bio">{artistPlot}</p>}
     <div className={'media-detail-columns' + (detail.kind === 'album' ? ' media-album-detail' : '')}><div className="media-detail-main">
       {!['artist', 'album'].includes(detail.kind) && plot && <section className="media-detail-description"><h2>{['movie', 'series', 'season', 'episode'].includes(detail.kind) ? '剧情简介' : '内容简介'}</h2><p>{plot}</p></section>}

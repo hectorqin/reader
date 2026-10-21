@@ -11,6 +11,8 @@ import { AudioTrackControls } from '../components/audio-tracks.ts';
 import { NativeAudio } from './native-audio.ts';
 import { playbackSupport, playbackFailure, type PlaybackStream } from './playback-support.ts';
 
+import { playModes, type PlayMode } from './play-mode.ts';
+export { playModes, type PlayMode };
 /** Lives outside screen mounts. Navigation must not destroy background audio. */
 export class MediaPlayer extends EventTarget {
   readonly element=document.createElement('div');
@@ -64,6 +66,24 @@ export class MediaPlayer extends EventTarget {
   private queueIndex=0;
   private switching=false;
   playbackRate=1;
+  /** How the queue advances: in order, at random without repeats, or the same entry again. */
+  playMode:PlayMode='sequential';
+  private shuffleTrail:number[]=[];
+  private trailBack=false;
+  /** Pause once the current entry (chapter, track or episode) ends. */
+  sleepAfterPart=false;
+  // The Android service owns its own queue and has no mode or end-of-entry command, so these stay web-only.
+  get canChoosePlayMode(){return this.active&&!this.nativeActive;}
+  get canSleepAfterPart(){return this.active&&!this.nativeActive;}
+  setPlayMode(mode:PlayMode){if(!this.canChoosePlayMode||!playModes.includes(mode))return;this.playMode=mode;this.shuffleTrail=[this.queueIndex];this.changed();}
+  setSleepAfterPart(on:boolean){if(on&&!this.canSleepAfterPart)return;if(on)this.sleep(0);this.sleepAfterPart=on;this.changed();}
+  private pickShuffle():number{
+    const others=this.queue.map((_,index)=>index).filter(index=>index!==this.queueIndex);
+    const fresh=others.filter(index=>!this.shuffleTrail.includes(index));
+    if(!fresh.length)this.shuffleTrail=[this.queueIndex];
+    const pool=fresh.length?fresh:others;
+    return pool[Math.floor(Math.random()*pool.length)]!;
+  }
   get isVideo(){return this.media===this.video;}
   get isWebVideo(){return this.isVideo&&!this.nativeActive;}
   get canOpenNativeVideo(){return !!this.native&&this.active&&this.media===this.video;}
@@ -153,6 +173,16 @@ export class MediaPlayer extends EventTarget {
       this.chapterSeek.setAttribute('aria-label','当前章节播放位置');
     };
   }
+  /** The subtitle state the 字幕与音轨 sheet draws (web video only; native has its own menu). */
+  get subtitleControls():SubtitleControls{return this.subtitles;}
+  /** 字号 in the subtitle sheet: drives `::cue` through a data attribute on the player. Per device. */
+  subtitleSize:SubtitleSize=readSubtitleSize();
+  setSubtitleSize(size:SubtitleSize){
+    if(!subtitleSizes.includes(size))return;
+    this.subtitleSize=size;this.element.dataset.subtitleSize=size;
+    try{localStorage.setItem(subtitleSizeKey,size);}catch{/* the choice still applies for this session */}
+    this.changed();
+  }
   mountVideoTracks(host:HTMLElement,kind:'subtitles'|'tracks'):()=>void {
     const control=kind==='subtitles'?this.subtitles.element:this.audioTracks.element;
     host.append(control);return ()=>{this.element.append(control);};
@@ -193,6 +223,7 @@ export class MediaPlayer extends EventTarget {
     this.volumeLabel.className='media-volume';this.volumeLabel.textContent='音量';this.volumeLabel.append(volume);
     this.audioControls.append(this.chapterSeek,this.volumeLabel);
     this.subtitles=new SubtitleControls(api,this.video);
+    this.element.dataset.subtitleSize=this.subtitleSize;
     this.audioTracks=new AudioTrackControls(api);
     this.nativeControls.className='media-native-controls';this.nativeControls.hidden=true;
     const nativeTrackLabel=document.createElement('label');nativeTrackLabel.textContent='音轨 ';nativeTrackLabel.hidden=true;
@@ -324,15 +355,24 @@ export class MediaPlayer extends EventTarget {
     const next=this.queue.slice();
     if(direction===0){next.splice(index,1);if(index<this.queueIndex)this.queueIndex--;}
     else{const target=index+direction;[next[index],next[target]]=[next[target]!,next[index]!];if(this.queueIndex===index)this.queueIndex=target;else if(this.queueIndex===target)this.queueIndex=index;}
-    this.queue=next;this.changed();
+    this.queue=next;this.shuffleTrail=[this.queueIndex];this.changed();
   }
   get paused(){return this.nativeActive?this.native!.state.paused:this.media.paused;}
   get hasQueueNavigation(){return this.active&&(this.nativeActive?this.native!.state.canPrevious===true||this.native!.state.canNext===true||this.native!.state.queueSwitching===true:this.queue.length>1);}
-  get canPrevious(){return this.active&&!this.switching&&!this.playbackBlocked&&(this.nativeActive?this.native!.state.canPrevious===true:this.queueIndex>0);}
-  get canNext(){return this.active&&!this.switching&&!this.playbackBlocked&&(this.nativeActive?this.native!.state.canNext===true:this.queueIndex+1<this.queue.length);}
+  get canPrevious(){return this.active&&!this.switching&&!this.playbackBlocked&&(this.nativeActive?this.native!.state.canPrevious===true:this.playMode==='shuffle'?this.shuffleTrail.length>1:this.queueIndex>0);}
+  get canNext(){return this.active&&!this.switching&&!this.playbackBlocked&&(this.nativeActive?this.native!.state.canNext===true:this.playMode==='shuffle'?this.queue.length>1:this.queueIndex+1<this.queue.length);}
   async move(direction:-1|1):Promise<void>{
     if(direction===-1?!this.canPrevious:direction===1?!this.canNext:true)return;
     if(this.nativeActive){this.native!.command(direction<0?'previous':'next');return;}
+    if(this.playMode==='shuffle'){
+      if(direction===1){await this.selectPlaylist(this.pickShuffle());return;}
+      const trail=this.shuffleTrail.slice(0,-1),target=trail.at(-1);
+      if(target===undefined)return;
+      this.trailBack=true;
+      try{await this.selectPlaylist(target);}finally{this.trailBack=false;}
+      if(this.queueIndex===target)this.shuffleTrail=trail;
+      return;
+    }
     await this.selectPlaylist(this.queueIndex+direction);
   }
   async selectPlaylist(target:number):Promise<void>{
@@ -364,6 +404,8 @@ export class MediaPlayer extends EventTarget {
     const session=await (options.signal?this.api.playback(selected.part.id,options.signal):this.api.playback(selected.part.id));
     if(generation!==this.generation||options.signal?.aborted)return;
     if(selected.video&&!nativeVideo){await this.ensureWebVideo();if(generation!==this.generation||options.signal?.aborted)return;}
+    if(parts!==this.queue||!this.shuffleTrail.length)this.shuffleTrail=[index];
+    else if(!this.trailBack&&this.shuffleTrail.at(-1)!==index)this.shuffleTrail=[...this.shuffleTrail,index].slice(-200);
     this.queue=parts;this.queueIndex=index;
     this.lease?.stop();this.lease=null;
     if(!this.active)this.playbackRate=readPlaybackPreferences(this.api.preferenceScope()).defaultRate;
@@ -424,6 +466,9 @@ export class MediaPlayer extends EventTarget {
       this.finishedSession='';this.error='本章完成进度尚未保存，点击继续重试。';this.changed();return;
     }
     if(intent!==this.resumeIntent){this.finishedSession='';return;}
+    if(this.sleepAfterPart){this.sleepAfterPart=false;this.changed();return;}
+    if(this.playMode==='repeat-one'){await this.play(this.queue,this.queueIndex);return;}
+    if(this.playMode==='shuffle'&&this.queue.length>1){await this.play(this.queue,this.pickShuffle());return;}
     if(readPlaybackPreferences(this.api.preferenceScope()).continuous&&this.queueIndex+1<this.queue.length)await this.play(this.queue,this.queueIndex+1);
   }
   async flush(completed=false):Promise<void> {
@@ -504,7 +549,7 @@ export class MediaPlayer extends EventTarget {
   speed(value:number){if(Number.isFinite(value)&&value>=0.5&&value<=3){this.playbackRate=value;if(this.nativeActive)this.native?.command('speed',{value});else{this.media.defaultPlaybackRate=value;this.media.playbackRate=value;}this.changed();}}
   sleep(minutes:number){
     if(!Number.isFinite(minutes)||minutes<0||minutes>1440)return;
-    if(this.timer)clearTimeout(this.timer);if(this.sleepTicker)clearInterval(this.sleepTicker);
+    this.sleepAfterPart=false;if(this.timer)clearTimeout(this.timer);if(this.sleepTicker)clearInterval(this.sleepTicker);
     this.timer=null;this.sleepTicker=null;this.sleepAt=minutes>0?Date.now()+minutes*60000:0;
     if(this.nativeActive)this.native?.command('sleep',{minutes});
     else if(minutes>0){
@@ -513,5 +558,12 @@ export class MediaPlayer extends EventTarget {
     }
     this.changed();
   }
-  async stop(){this.restoreNative=false;++this.generation;this.clearStartupTimer();this.loadingStatus='';this.error='';this.pause();const pending=this.flush();this.native?.command('stop');this.nativeActive=false;this.nativeControls.hidden=true;this.subtitles.clear();this.audioTracks.clear();this.lease?.stop();this.lease=null;this.session=null;this.ready=false;this.audio.removeAttribute('src');this.video.removeAttribute('src');this.audio.load();this.video.load();this.active=false;this.element.hidden=true;this.sleep(0);this.queue=[];this.changed();await pending;}
+  async stop(){this.restoreNative=false;++this.generation;this.clearStartupTimer();this.loadingStatus='';this.error='';this.pause();const pending=this.flush();this.native?.command('stop');this.nativeActive=false;this.nativeControls.hidden=true;this.subtitles.clear();this.audioTracks.clear();this.lease?.stop();this.lease=null;this.session=null;this.ready=false;this.audio.removeAttribute('src');this.video.removeAttribute('src');this.audio.load();this.video.load();this.active=false;this.element.hidden=true;this.sleep(0);this.queue=[];this.shuffleTrail=[];this.changed();await pending;}
+}
+
+export const subtitleSizes=['small','normal','large'] as const;
+export type SubtitleSize=typeof subtitleSizes[number];
+const subtitleSizeKey='reader.media.subtitle-size.v1';
+function readSubtitleSize():SubtitleSize{
+  try{const stored=localStorage.getItem(subtitleSizeKey);return subtitleSizes.includes(stored as SubtitleSize)?stored as SubtitleSize:'normal';}catch{return 'normal';}
 }

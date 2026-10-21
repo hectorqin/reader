@@ -1,0 +1,191 @@
+/* V3 shell: one navigation for reading and media.
+ * A tab bar up to 700px, a sidebar from 701px up. Colours are the theme's --color-*
+ * tokens (styles/theme-tokens.css), so every theme restyles it. */
+:root { --app-nav-width: 232px; --app-nav-bar: 64px; }
+
+.app-shell { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+/* Pages were direct children of #app (a flex column that clips); keep exactly that
+ * contract for them one level down. */
+.app-shell-body { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+
+.app-nav {
+  --nav-ink: var(--color-ink);
+  --nav-muted: var(--color-muted);
+  --nav-line: var(--color-line);
+  --nav-surface: var(--color-surface);
+  --nav-accent: var(--color-brand-text);
+  --nav-soft: var(--color-brand-soft);
+  flex: none;
+  box-sizing: border-box;
+  background: var(--nav-surface);
+  color: var(--nav-ink);
+  border-color: var(--nav-line);
+}
+.app-nav ul { list-style: none; margin: 0; padding: 0; }
+.app-nav a { color: inherit; text-decoration: none; }
+.app-nav a:focus-visible { outline: 2px solid var(--nav-accent); outline-offset: 2px; }
+.app-nav-icon { display: grid; place-items: center; }
+
+/* ---- phone: tab bar ---- */
+@media (max-width: 700px) {
+  .app-nav { order: 2; display: flex; height: calc(var(--app-nav-bar) + env(safe-area-inset-bottom)); padding: 6px 12px env(safe-area-inset-bottom); border-top: 1px solid var(--nav-line); }
+  .app-nav[data-mode='push'] { display: none; }
+  .app-nav-brand, .app-nav-sub, .app-nav-user, .app-nav-search { display: none; }
+  .app-nav-list { display: flex; flex: 1; }
+  .app-nav-list > li { flex: 1; min-width: 0; }
+  .app-nav-item { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: 52px; font-size: 11px; font-weight: 500; color: var(--nav-muted); }
+  .app-nav-item[aria-current='page'] { color: var(--nav-accent); font-weight: 600; }
+  .app-nav-item .app-nav-icon { width: 52px; height: 30px; border-radius: 15px; }
+  .app-nav-item[aria-current='page'] .app-nav-icon { background: var(--nav-soft); }
+}
+
+/* ---- desktop: sidebar ---- */
+@media (min-width: 701px) {
+  .app-shell { flex-direction: row; }
+  /* After the page in the DOM (so the phone bar follows the content), before it on screen. */
+  .app-nav { order: -1; display: flex; flex-direction: column; width: var(--app-nav-width); padding: 24px 14px; border-right: 1px solid var(--nav-line); overflow-y: auto; }
+  .app-nav-brand { padding: 0 14px 22px; font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; font-size: 26px; font-weight: 700; color: var(--nav-accent); }
+  .app-nav-item { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-radius: 12px; font-size: 15px; color: var(--nav-ink); }
+  .app-nav-item:hover { background: var(--color-surface-2); }
+  .app-nav-item[aria-current='page'] { background: var(--nav-soft); color: var(--nav-accent); font-weight: 600; }
+  .app-nav-sub { margin-top: 2px; }
+  .app-nav-subitem { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 14px 0 46px; border-radius: 10px; font-size: 14px; color: var(--nav-muted); }
+  .app-nav-subitem i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-ch-video); }
+  .app-nav-subitem[data-channel='music'] i { background: var(--color-ch-music); }
+  .app-nav-subitem[data-channel='audiobook'] i { background: var(--color-ch-audio); }
+  .app-nav-subitem[aria-current='page'] { background: var(--color-surface-2); color: var(--nav-ink); font-weight: 600; }
+  .app-nav-user { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 10px 12px; border-radius: 14px; background: var(--color-bg); }
+  .app-nav-avatar { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--color-brand); color: var(--color-on-brand); font-weight: 600; }
+  .app-nav-user-text { min-width: 0; }
+  .app-nav-user-text strong, .app-nav-user-text small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .app-nav-user-text strong { font-size: 14px; }
+  .app-nav-user-text small { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--nav-muted); }
+  .app-nav-status { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--color-ch-audio); }
+  .app-nav-status[data-state='offline'] { background: var(--nav-muted); }
+  .app-nav-status[data-state='error'] { background: var(--color-danger); }
+  .app-nav-search { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 0 12px; border-radius: 12px; background: var(--color-surface-2); color: var(--nav-muted); }
+  .app-nav-search input { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--nav-ink); font: inherit; font-size: 13px; outline: none; }
+  .app-nav-search input::-webkit-search-cancel-button { display: none; }
+  .app-nav-search:focus-within { box-shadow: 0 0 0 2px var(--nav-accent); }
+}
+
+/* ---- the persistent mini player sits clear of the bar / sidebar ---- */
+@media (max-width: 700px) {
+  body[data-app-nav='top'] .media-player:is(.media-player-audio, .media-player-native-video) { bottom: calc(var(--app-nav-bar) + env(safe-area-inset-bottom) + 10px); }
+}
+@media (min-width: 701px) {
+  body[data-app-nav] .media-player:is(.media-player-audio, .media-player-native-video) { left: calc(var(--app-nav-width) + 24px); }
+}
+
+/* ---- reading pages wear the theme too; their --reader-* names alias the tokens
+ * (theme-tokens.css). The reader may wear 黑白灰 on its own container, and a
+ * reading paper on its page (--reader-paper / --reader-ink). ---- */
+:is(.shelf-screen, .library-screen, .sources-screen, .home-page) {
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+.reader-screen {
+  background: var(--reader-paper);
+  color: var(--reader-ink);
+}
+
+/* ---- one page column for the four tabs ----
+ * 首页, 书架, 影音 and 我的 share --page-measure / --page-gutter (styles/reader.css), so
+ * switching tabs never moves the content edges. The media-family pages are their own
+ * scrollers, so the column is made with padding (the scrollbar stays at the window
+ * edge); the shelf caps its bands instead, which keeps its sticky toolbar working. */
+@media (min-width: 701px) {
+  :root { --page-gutter: 32px; }
+}
+.media-screen:is(.home-page, .mine-page, .media-catalog-page) {
+  max-width: none;
+  padding-inline: max(var(--page-gutter), calc((100% - var(--page-measure)) / 2));
+}
+/* Phone: the same 20px top as the shelf's header, clear of the notch; the shelf's
+ * 0.9rem band padding is topped up to the shared gutter. */
+@media (max-width: 700px) {
+  .media-screen:is(.home-page, .mine-page) { padding-top: calc(20px + var(--safe-top)); }
+  .shelf { padding-inline: calc(var(--page-gutter) - 0.9rem); }
+}
+@media (min-width: 701px) {
+  .shelf { --shelf-measure: var(--collection-measure); }
+  .shelf-head, .shelf-discovery, .shelf-section { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); }
+  .shelf-head { padding-top: 24px; }
+}
+/* Between the sidebar breakpoint and 64rem the discovery row is display: contents,
+ * so its two children are bands of their own. */
+@media (min-width: 701px) and (max-width: 63.99rem) {
+  .shelf-links, .shelf-search { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); }
+}
+
+/* The old fixed channel rail is gone; its top gutter goes with it. */
+@media (min-width: 701px) {
+  /* Only pages whose header scrolls with them; pages with a fixed header keep their 68px. */
+  body[data-app-nav] .media-screen:is(.media-catalog-page, .mine-page, .home-page) { padding-top: 24px; }
+  /* Search and the ⋯ menu used to hang from the rail with a negative offset. They end
+   * where the page column ends, not at the window edge. */
+  body[data-app-nav] .media-heading:has(.media-mobile-title) .media-heading-actions { position: fixed; z-index: 81; top: 12px; right: max(var(--page-gutter), calc((100vw - var(--app-nav-width) - var(--page-measure)) / 2)); }
+}
+
+/* Fixed page headers were placed to clear the old rail's brand; they now clear the sidebar. */
+@media (min-width: 701px) {
+  body[data-app-nav] .media-screen .media-mobile-title,
+  body[data-app-nav] .media-screen.media-secondary-page > .media-heading,
+  body[data-app-nav] .media-narrators:not([data-view=directory]) > .media-narrator-heading,
+  body[data-app-nav] .media-utility-workspace .media-settings-heading,
+  body[data-app-nav] .media-manager-workspace > .media-heading { left: calc(var(--app-nav-width) + 24px); right: 32px; }
+  body[data-app-nav] .media-screen.media-detail-shell > .media-heading { left: var(--app-nav-width); right: 0; }
+}
+
+/* ---- reader chrome, V3: a rounded bottom sheet and a quiet top bar ---- */
+.reader-screen .footer {
+  border-top: 0;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -8px 30px color-mix(in srgb, var(--color-ink) 10%, transparent);
+}
+.reader-screen .topbar { border-bottom: 1px solid var(--reader-line); box-shadow: none; }
+.reader-screen .reader-actions button[aria-current='true'],
+.reader-screen .reader-actions button:active { color: var(--reader-accent); }
+
+/* Page titles in the serif face, the way the prototype sets them. */
+.shelf-title { font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; }
+
+body {
+  background: var(--color-bg);
+}
+
+/* ---- video player, wide screens: the episode rail sits beside the picture ----
+ * Only when there is a rail (episodes). A film keeps the single centred column. The
+ * wrappers around the controls become transparent so caption, toolbar and rail are
+ * placed directly on the workspace grid. */
+@media (min-width: 1100px) {
+  .media-player-expanded .media-video-workspace:has(.media-episode-rail) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-auto-rows: min-content;
+    column-gap: 24px;
+    align-content: start;
+    box-sizing: border-box;
+    width: min(1280px, 100%);
+    max-width: none;
+    margin: 0 auto;
+    padding: 20px 32px 32px;
+  }
+  .media-video-workspace:has(.media-episode-rail) > div:not(.media-video-stage),
+  .media-video-workspace:has(.media-episode-rail) .media-video-controls { display: contents; }
+  .media-video-workspace:has(.media-episode-rail) .media-video-stage { grid-column: 1; grid-row: 1; overflow: hidden; border-radius: 20px; }
+  .media-video-workspace:has(.media-episode-rail) .media-video-controls > :not(.media-episode-rail) { grid-column: 1; width: auto; max-width: none; justify-self: stretch; }
+  .media-video-workspace:has(.media-episode-rail) .media-video-caption { margin-top: 16px; }
+  .media-video-workspace:has(.media-episode-rail) .media-episode-rail { position: static; inset: auto; width: auto; margin: 0; grid-column: 2; grid-row: 1 / span 8; align-self: start; max-height: calc(100dvh - 120px); overflow-y: auto; }
+}
+
+/* ---- phone: the channel switch is three segments in the page header ---- */
+.media-channel-segments { display: flex; flex: 1; gap: 2px; padding: 4px; border-radius: 14px; background: var(--media-surface, var(--surface)); }
+.media-channel-segments a { flex: 1; display: grid; place-items: center; min-height: 36px; border-radius: 10px; color: var(--muted); font-size: 14px; text-decoration: none; }
+.media-channel-segments a[aria-current='page'] { background: var(--media-paper, #fff); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px color-mix(in srgb, var(--color-ink) 18%, transparent); }
+.media-channel-segments a:focus-visible { outline: 2px solid var(--media-accent); outline-offset: 2px; }
+@media (min-width: 701px) { .media-mobile-title { display: none !important; } }
+@media (max-width: 700px) {
+  .media-screen .media-mobile-title { width: 100%; max-width: 300px; }
+  .media-channel-segments a { white-space: nowrap; }
+}

@@ -5,7 +5,7 @@ import {Search} from 'lucide-react';
 import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';
 import {ApiError} from '../../../api/errors.ts';
-import {Modal} from '../../../ui/modal.tsx';
+import {ConfirmSheet} from '../../../ui/sheet.tsx';
 import {FloatingNotice} from '../../../ui/floating-notice.tsx';
 
 interface Provider { id: string; label: string; kinds: string[]; configured: boolean }
@@ -123,10 +123,13 @@ export function MetadataMatcher({ api, item, onUpdated,layout='inline',onBusyCha
       <div className="media-match-copy"><strong>{candidate.title}</strong><small>{candidate.year || ''} {candidate.artist || ''} · {candidate.provider} / {candidate.externalId}</small>{candidate.evidence&&<small>{({strong:'较强匹配',review:'需要核对',conflict:'存在冲突'})[candidate.evidence.level]}：{candidate.evidence.reasons.join('、')}</small>}{candidate.description && <small className="media-match-excerpt">{candidate.description.length>160?candidate.description.slice(0,160)+'…':candidate.description}</small>}{candidate.description&&candidate.description.length>160&&<details className="media-match-description"><summary>完整简介</summary><p tabIndex={0} aria-label="候选完整简介">{candidate.description}</p></details>}</div>
       <button aria-label="预览匹配" disabled={busy} onClick={() => setSelected(candidate)}>{layout==='page'?'选择':'预览匹配'}</button>
     </div>)}
-    {selected && <Modal className="media-modal" title="确认元数据匹配" busy={busy} onClose={()=>{if(!busy)setSelected(null);}}><div className="media-match-confirm" aria-label="确认元数据匹配"><p>将“{item.title}”匹配为“{selected.title}”。在线标题、年份和简介等字段将采用此来源；人工编辑的字段仍优先显示。</p><div className="dialog-actions"><button className="media-primary" disabled={busy} onClick={() => void run(async signal => {
+    {selected && <ConfirmSheet title="确认元数据匹配" busy={busy} confirmText="确认此匹配"
+      text={`将“${item.title}”匹配为“${selected.title}”。在线标题、年份和简介等字段将采用此来源；人工编辑的字段仍优先显示。`}
+      onCancel={() => setSelected(null)}
+      onConfirm={() => void run(async signal => {
         const detail = await api.request<Detail>(`items/${item.id}/match`, 'PUT', { candidateId: selected.candidateId }, signal);
         if (!signal.aborted) { onUpdated(detail); setSelected(null); setCandidates([]); setSearched(false); }
-      })}>确认此匹配</button><button disabled={busy} onClick={()=>setSelected(null)}>取消</button></div></div></Modal>}
+      })} />}
     <small>TMDB 数据来源于 TMDB，本应用未经 TMDB 认可或认证。MusicBrainz 数据来源于 MetaBrainz 社区。</small>
   </Wrapper>;
 }

@@ -24,7 +24,7 @@
 - 恢复本地会话、服务地址、离线作用域和同步状态；
 - 暴露 flush、登录状态、阅读器注册和设置更新等宿主能力。
 
-`AppProviders` 提供 `RuntimeContext`、`QueryClientProvider`、`MantineProvider` 和全局通知。Provider 生命周期负责启动/停止播放服务、连接会话与同步监听、写入根主题属性，并在页面隐藏或离开时刷新进度、离线数据和播放器状态，重新联网时续期会话。
+`AppProviders` 提供 `RuntimeContext`、`QueryClientProvider`、`MantineProvider` 和全局通知。Provider 生命周期负责启动/停止播放服务、连接会话与同步监听、让 Mantine 跟随主题明暗，并在页面隐藏或离开时刷新进度、离线数据和播放器状态，重新联网时续期会话。
 
 ## 目录边界
 
@@ -53,7 +53,7 @@ web/src/
 
 ## 路由与兼容
 
-路由定义集中在 `web/src/app/router/routes.tsx`，根级 `AppShell` 先经过 `AuthBoundary`，认证后渲染页面 Outlet。影音由 `MediaLayout` 提供频道上下文、主题生命周期和公共频道入口，具体页面继续按路由拆分。
+路由定义集中在 `web/src/app/router/routes.tsx`，根级 `AppShell` 先经过 `AuthBoundary`，认证后渲染页面 Outlet。影音由 `MediaLayout` 提供频道上下文和公共频道入口，具体页面继续按路由拆分；主题由 `AuthenticatedShell` 统一应用。
 
 保留的兼容入口是有意的：
 
@@ -70,11 +70,11 @@ web/src/
 
 `ReaderScreen` 内部仍负责章节加载、Shadow DOM、分页量测、手势、朗读和阅读工具；React 只托管它的创建、更新和销毁，不介入书籍正文的布局量测。ReaderScreen 的 chrome 使用 React 组件，正文舞台保持命令式 DOM，以确保 `getBoundingClientRect()` 和章节分页的节点生命周期稳定。
 
-## 播放器和媒体主题生命周期
+## 播放器和主题生命周期
 
 播放器是应用级资源。`AppProviders` 把 `runtime.player.element` 挂到 `document.body`，调用 `runtime.playback.start()` 建立 `PlaybackService` 对 `MediaPlayer` 的监听；路由切换只卸载控制界面，不销毁播放会话。`AuthenticatedShell` 根据当前 URL 控制播放器可见性，并处理播放器发出的 `open-controls` 事件，将用户带到带有 `item` 和 `part` 查询参数的播放器路由。Provider 卸载时停止监听并移除播放器节点。
 
-影音主题由 `MediaLayout` 创建 `MediaThemeController`，作用域来自 `runtime.mediaApi.preferenceScope()`。控制器只向 `body` 写入带 `--media-theme-` 前缀的变量，响应系统主题、同页主题事件和存储变化；离开影音路由时清理变量和监听器，因此不会污染书架或阅读器主题。
+应用主题由 `AuthenticatedShell` 创建 `ThemeController`（`web/src/shared/theme/theme.ts`），作用域来自 `runtime.mediaApi.preferenceScope()`。控制器只在 `<html>` 上写 `data-theme` 与 `data-mode`，组件只读 `web/src/styles/theme-tokens.css` 的 `--color-*` 令牌；响应系统深浅色、同页保存和存储变化，退出登录时清理属性和监听器。阅读器的黑白灰主题只写在阅读器容器上。
 
 ## 后续改动约定
 

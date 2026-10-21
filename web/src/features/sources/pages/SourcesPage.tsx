@@ -1,8 +1,11 @@
-import { Alert, Button, Modal, Stack, Text } from '@mantine/core';
+import { Sheet } from '../../../ui/sheet.tsx';
+import { Button, Callout } from '../../../ui/toolkit.tsx';
+import { SourcesHeader } from '../components/SourcesHeader.tsx';
+import { SourceBookDetailSheet } from '../components/SourceBookDetailSheet.tsx';
 import { Link, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ChevronRight, Plus, Search } from 'lucide-react';
+import { ChevronRight, Plus, Search } from 'lucide-react';
 import type { ExtensionField, SourceEntry, SourcePage } from '../../../api/sources.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
@@ -103,11 +106,7 @@ export function SourcesPage() {
   }, [selectedSourceId]);
   useEffect(() => { if (detail && detailQuery.data) setDetail({ ...detail, ...detailQuery.data }); }, [detailQuery.data]);
   return <div className="sources-screen sources-hub">
-    <header className="sources-header">
-      <Link className="icon-button" to="/shelf" aria-label="返回" title="返回"><ArrowLeft size={20} /></Link>
-      <h1>书源与追更</h1>
-      <span aria-hidden="true" />
-    </header>
+    <SourcesHeader title="书源与追更" backTo="/shelf" />
     <nav className="sources-tabs" role="tablist" aria-label="书源功能">
       {([['search', '搜书'], ['sources', '书源管理'], ['updates', '自动追更'], ...(admin ? [['plugins', '插件管理']] : [])] as Array<[SourceTab, string]>).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}{id === 'updates' && (subscriptions.data ?? []).some(item => item.newChapters > 0) && <span className="sources-tab-dot" aria-label="有更新" />}</button>)}
     </nav>
@@ -119,7 +118,7 @@ export function SourcesPage() {
           {!selectedSourceId && <p className="muted">{enabledSources.length ? '选择来源后，即可搜索书籍或浏览目录。' : '暂无可用来源，请先添加或启用来源。'}</p>}
         </section>
         {selectedSource && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>
-          {catalogError && <Alert color="red" withCloseButton onClose={() => setCatalogError('')}>{catalogError}</Alert>}
+          {catalogError && <Callout tone="error" onDismiss={() => setCatalogError('')}>{catalogError}</Callout>}
           {selectedSource.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={event => { event.preventDefault(); void searchSources(resume); }}>
             {sourceFilters.data?.filter(field => field.type === 'select').map(field => <SearchableSelect key={field.key} label={field.label} value={catalogFilters[field.key] ?? ''} disabled={catalogBusy} options={filterOptions(field)} onChange={value => setCatalogFilters(previous => { const next = { ...previous, [field.key]: value }; for (const dependent of sourceFilters.data ?? []) { if ((dependent.changeAction ?? dependent.dependsOn) === field.key && !dependent.options?.some(option => option.value === next[dependent.key] && (!option.parentValues || !value || option.parentValues.includes(value)))) next[dependent.key] = ''; } return next; })} />)}
             <label className="source-keyword">搜索书籍<input type="search" placeholder="输入书名或作者" required disabled={catalogBusy} value={keyword} onChange={event => setKeyword(event.currentTarget.value)} /></label>
@@ -128,7 +127,7 @@ export function SourcesPage() {
           {searchState !== 'idle' && <div className="search-progress" role="status"><span>{({ searching: '正在搜索', stopped: '已停止搜索', complete: '搜索完成', error: '搜索中断', limited: '已达到结果上限' })[searchState]}{catalogPage?.batch ? ` · 已检查 ${catalogPage.batch.completed} / ${catalogPage.batch.total} 个来源` : ''} · 已找到 {results.length} 本书</span>{catalogPage?.batch && <progress aria-label="书源搜索进度" max={Math.max(1, catalogPage.batch.total)} value={catalogPage.batch.completed} />}</div>}
           {catalogPage && grouped && <label className="catalog-group-filter">筛选分组<input type="search" placeholder="搜索书名或作者" value={resultGroupQuery} onChange={event => setResultGroupQuery(event.currentTarget.value)} /></label>}
           {catalogPage && <CatalogFeedback page={catalogPage} count={results.length} merged={searchState !== 'idle'} searching={searchState === 'searching'} />}
-          {catalogPage?.navigation && <div className="source-navigation">{catalogPage.navigation.map(item => <Button className="button" key={item.ref} variant="subtle" onClick={() => void loadCatalog(item.ref)}>{item.title}</Button>)}</div>}
+          {catalogPage?.navigation && <div className="source-navigation">{catalogPage.navigation.map(item => <Button  key={item.ref} onClick={() => void loadCatalog(item.ref)}>{item.title}</Button>)}</div>}
           {catalogBusy && !catalogPage && <FloatingNotice message="正在加载目录…" busy />}
           {catalogPage && <div className="source-results">{results.filter(group => { const q = resultGroupQuery.trim().toLocaleLowerCase(); return !q || group.entry.title.toLocaleLowerCase().includes(q) || group.entry.authors?.some(author => author.toLocaleLowerCase().includes(q)); }).map(group => <article className="sources-row catalog-book" key={group.key}><div><strong>{group.entry.title}</strong><small>{group.entry.authors?.join(' / ') || '作者未知'}</small>{!grouped && group.entry.description && <p className="source-description">{group.entry.description}</p>}</div>{grouped ? <button className="button catalog-source-count" type="button" onClick={() => setResultGroupKey(group.key)}><span>{group.entries.length} 条书源</span><ChevronRight size={16} /></button> : <div className="sources-actions"><button className="button" type="button" onClick={() => setDetail(group.entry)}>详情</button>{(group.entry.options?.length ? group.entry.options : [{ id: '', label: '加入书架' }]).map(option => <button className="button primary" type="button" key={option.id} disabled={option.available === false || acquire.isPending} onClick={() => acquireEntry(group.entry, option.id)}>{option.label}</button>)}</div>}</article>)}</div>}
           {catalogPage && !catalogBusy && !catalogPage.items.length && <div className="catalog-empty"><strong>没有找到匹配书籍</strong><p>试试其他关键词，或调整搜索范围。</p></div>}
@@ -144,7 +143,13 @@ export function SourcesPage() {
       {tab === 'updates' && <section className="sources-card"><h2>自动追更</h2><p className="notice">服务端定时检查目录，浏览器关闭后继续运行。正文和图片在阅读时缓存。</p>{subscriptions.isPending && <FloatingNotice message="正在加载追更列表…" busy />}{!subscriptions.isPending && !subscriptions.data?.length && <p>先从章节书源加入书籍，再开启追更。</p>}{(subscriptions.data ?? []).map(item => <article className="sources-row" key={item.bookId}><div><strong>{item.title}</strong><small>{item.newChapters ? '新增 ' + item.newChapters + ' 章 · ' : ''}上次成功：{item.lastSuccessAt ? new Date(item.lastSuccessAt).toLocaleString() : '尚未检查'}</small><small>{item.enabled ? '下次检查：' + new Date(item.nextCheckAt).toLocaleString() : '自动追更已关闭'}{item.lastError ? ' · 检查失败：' + item.lastError : ''}</small></div><div className="sources-actions"><label className="source-interval">检查间隔<select aria-label={`${item.title}检查间隔`} value={item.intervalMinutes} disabled={busy === item.bookId} onChange={event => { const intervalMinutes = Number(event.currentTarget.value); setBusy(item.bookId); void runtime.api.configureSubscription(item.bookId, { intervalMinutes }).then(() => queryClient.invalidateQueries({ queryKey: ['subscriptions'] })).finally(() => setBusy(null)); }}><option value="15">15 分钟</option><option value="60">1 小时</option><option value="360">6 小时</option><option value="1440">1 天</option></select></label><button className="button" type="button" disabled={busy === item.bookId} onClick={() => void mutateSubscription(item.bookId, !item.enabled)}>{item.enabled ? '关闭追更' : '开启追更'}</button><button className="button" type="button" disabled={busy === item.bookId} onClick={() => void mutateSubscription(item.bookId)}>立即检查</button><Link className="button" to={'/book/' + encodeURIComponent(item.bookId)}>阅读</Link></div></article>)}</section>}
       {tab === 'plugins' && admin && <section className="sources-card"><h2>插件管理</h2><Link className="button primary" to="/sources/plugins">插件安装与管理</Link>{plugins.isPending && <FloatingNotice message="正在加载插件列表…" busy />}{(plugins.data ?? []).map(plugin => <article className="sources-row" key={plugin.pluginId}><div><strong>{plugin.name || plugin.pluginId}</strong><small>{plugin.version || '未知版本'} · {plugin.builtin ? '内置' : plugin.enabled ? '已启用' : '已停用'}</small></div></article>)}</section>}
     </main>
-    {activeGroup && <Modal opened onClose={() => { setResultGroupKey(null); setSourceNameQuery(''); }} title="书源列表"><Stack><Text>{activeGroup.entry.title} · {activeGroup.entries.length} 条书源</Text><input className="catalog-source-search" type="search" placeholder="搜索书源" value={sourceNameQuery} onChange={event => setSourceNameQuery(event.currentTarget.value)} />{activeGroup.entries.filter(entry => (entry.sourceName ?? selectedSource?.name ?? '').toLocaleLowerCase().includes(sourceNameQuery.trim().toLocaleLowerCase())).map(entry => { const option = entry.options?.[0]; return <article className="catalog-source-item" key={entry.ref}><div><strong>{entry.sourceName ?? selectedSource?.name}</strong><p className="source-description">最新章节：{entry.latestChapter || '暂无信息'}</p></div><div className="sources-actions"><Button className="button" onClick={() => setDetail(entry)}>详情</Button><Button className="button primary" disabled={option?.available === false} onClick={() => acquireEntry(entry, option?.id)}>{option?.label ?? '加入书架'}</Button></div></article>; })}</Stack></Modal>}
-    <Modal opened={!!detail} onClose={() => setDetail(null)} title={detail?.title ?? '书籍详情'}><Stack>{detailQuery.isPending && <FloatingNotice message="正在读取书籍详情…" busy />}{detailQuery.error && <Alert color="red">{detailQuery.error.message}</Alert>}{detail && <><Text>{detail.description || '暂无简介'}</Text><Text size="sm" c="dimmed">{detail.authors?.join('、') || '作者未知'}</Text>{detail.options?.map(option => <Button key={option.id} disabled={option.available === false} loading={acquire.isPending} onClick={() => acquireEntry(detail, option.id)}>{option.label}</Button>)}{(!detail.options || detail.options.length === 0) && <Button loading={acquire.isPending} onClick={() => acquireEntry(detail)}>加入书架</Button>}</>}</Stack></Modal>
+    {activeGroup && <Sheet title="书源列表" subtitle={`${activeGroup.entries.length} 条书源`} onClose={() => { setResultGroupKey(null); setSourceNameQuery(''); }}>
+      <div className="sheet-form">
+        <p className="sheet-text">{activeGroup.entry.title}</p>
+        <input className="catalog-source-search" type="search" aria-label="搜索书源" placeholder="搜索书源" value={sourceNameQuery} onChange={event => setSourceNameQuery(event.currentTarget.value)} />
+        {activeGroup.entries.filter(entry => (entry.sourceName ?? selectedSource?.name ?? '').toLocaleLowerCase().includes(sourceNameQuery.trim().toLocaleLowerCase())).map(entry => { const option = entry.options?.[0]; return <article className="catalog-source-item" key={entry.ref}><div><strong>{entry.sourceName ?? selectedSource?.name}</strong><p className="source-description">最新章节：{entry.latestChapter || '暂无信息'}</p></div><div className="sources-actions"><Button onClick={() => setDetail(entry)}>详情</Button><Button className="primary" disabled={option?.available === false} onClick={() => acquireEntry(entry, option?.id)}>{option?.label ?? '加入书架'}</Button></div></article>; })}
+      </div>
+    </Sheet>}
+    {detail && <SourceBookDetailSheet detail={detail} pending={detailQuery.isPending} error={detailQuery.error} acquiring={acquire.isPending} onAcquire={acquireEntry} onClose={() => setDetail(null)} />}
   </div>;
 }

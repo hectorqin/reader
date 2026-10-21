@@ -22,8 +22,9 @@
  */
 
 import type { AppSettings } from '../store/settings.ts';
-import { Button, IconButton, SectionTitle, Segmented, SwitchRow } from './toolkit.tsx';
-import { type JSX, useLayoutEffect, useRef } from 'react';
+import { Button, SectionTitle, Segmented, SwitchRow } from './toolkit.tsx';
+import { Sheet } from './sheet.tsx';
+import type { JSX } from 'react';
 
 export const DENSITY_LABELS: Record<AppSettings['shelfDensity'], string> = {
   compact: '紧凑',
@@ -53,66 +54,51 @@ export interface ShelfSettingsOptions {
   onOpenExternalReader(): void;
 }
 
-export function ShelfSettingsPanel({
-  open,
+export function ShelfSettingsSheet({
   settings,
   onPatch,
   onClose,
   onOpenExternalReader,
-}: ShelfSettingsOptions & { open: boolean }): JSX.Element {
-  const panel = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    if (!open) return;
-    const trigger = document.activeElement;
-    panel.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
-    return () => { if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true }); };
-  }, [open]);
+}: ShelfSettingsOptions): JSX.Element {
   return (
-    <div className="panel shelf-settings" ref={panel} role="dialog" aria-label="书架设置" hidden={!open}
-      onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose(); } }}>
-      <div className="panel-header">
-        <h2>书架设置</h2>
-        <IconButton label="关闭" icon="close" onClick={onClose} />
-      </div>
-      <div className="panel-body">
-        <SectionTitle>封面大小</SectionTitle>
-        <Segmented
-          label="封面大小"
-          options={[
-            { value: 'compact', label: DENSITY_LABELS.compact },
-            { value: 'cozy', label: DENSITY_LABELS.cozy },
-            { value: 'comfortable', label: DENSITY_LABELS.comfortable },
-          ]}
-          value={settings.shelfDensity}
-          onChange={(value) => onPatch({ shelfDensity: value })}
-        />
+    <Sheet className="shelf-settings" title="书架设置" onClose={onClose}>
+      <SectionTitle>封面大小</SectionTitle>
+      <Segmented
+        label="封面大小"
+        options={[
+          { value: 'compact', label: DENSITY_LABELS.compact },
+          { value: 'cozy', label: DENSITY_LABELS.cozy },
+          { value: 'comfortable', label: DENSITY_LABELS.comfortable },
+        ]}
+        value={settings.shelfDensity}
+        onChange={(value) => onPatch({ shelfDensity: value })}
+      />
 
-        <SectionTitle>显示</SectionTitle>
-        <SwitchRow
-          label="显示作者"
-          hint="关闭后每本书只显示书名，封面可以更小"
-          checked={settings.shelfShowAuthor}
-          onChange={(checked) => onPatch({ shelfShowAuthor: checked })}
-        />
-        <SwitchRow
-          label="显示阅读进度"
-          hint="在封面底部画一条进度条"
-          checked={settings.shelfShowProgress}
-          onChange={(checked) => onPatch({ shelfShowProgress: checked })}
-        />
+      <SectionTitle>显示</SectionTitle>
+      <SwitchRow
+        label="显示作者"
+        hint="关闭后每本书只显示书名，封面可以更小"
+        checked={settings.shelfShowAuthor}
+        onChange={(checked) => onPatch({ shelfShowAuthor: checked })}
+      />
+      <SwitchRow
+        label="显示阅读进度"
+        hint="在封面底部画一条进度条"
+        checked={settings.shelfShowProgress}
+        onChange={(checked) => onPatch({ shelfShowProgress: checked })}
+      />
 
-        <SectionTitle>默认排序</SectionTitle>
-        <div className="notice">书架上的排序按钮会记住最后一次选择，这里设置的是首次打开时的默认值。</div>
-        <Segmented
-          label="默认排序"
-          options={SHELF_SORTS}
-          value={settings.shelfSort}
-          onChange={(value) => onPatch({ shelfSort: value })}
-        />
-        <SectionTitle>外部阅读器</SectionTitle>
-        <div className="notice">通过 OPDS，让其他阅读器只读访问你的书架。</div>
-        <Button onClick={onOpenExternalReader}>连接外部阅读器</Button>
-      </div>
-    </div>
+      <SectionTitle>默认排序</SectionTitle>
+      <div className="notice">书架上的排序按钮会记住最后一次选择，这里设置的是首次打开时的默认值</div>
+      <Segmented
+        label="默认排序"
+        options={SHELF_SORTS}
+        value={settings.shelfSort}
+        onChange={(value) => onPatch({ shelfSort: value })}
+      />
+      <SectionTitle>外部阅读器</SectionTitle>
+      <div className="notice">通过 OPDS，让其他阅读器只读访问你的书架</div>
+      <Button onClick={onOpenExternalReader}>连接外部阅读器</Button>
+    </Sheet>
   );
 }

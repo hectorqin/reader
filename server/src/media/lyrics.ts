@@ -36,7 +36,7 @@ export function parseLyrics(bytes:Uint8Array):Omit<Lyrics,'source'> {
 
 /** Part IDs resolve through the catalog; the client never supplies a file path. */
 export class MediaLyrics {
-  constructor(private readonly db:MediaDatabase,private readonly libraries:MediaLibraries){}
+  constructor(private readonly db:MediaDatabase,private readonly libraries:MediaLibraries,private readonly embeddedEnabled:()=>boolean=()=>true){}
   private asset(actor:MediaActor,partId:string){
     const asset=this.db.get<{id:string;library_id:string;ref:string;available:number;technical_json:string|null}>(`SELECT a.id,a.library_id,a.ref,a.available,a.technical_json FROM media_assets a JOIN media_parts p ON p.asset_id=a.id WHERE p.id=? AND p.active=1`,partId);
     if(!asset)throw notFound('media part not found');
@@ -54,7 +54,7 @@ export class MediaLyrics {
       const {stream}=await storage.open(sidecar.ref);const chunks:Buffer[]=[];let size=0;
       for await(const chunk of stream){size+=chunk.length;if(size>MAX_BYTES){stream.destroy();throw invalid();}chunks.push(Buffer.from(chunk));}
       bytes=Buffer.concat(chunks);source='sidecar';
-    }else{
+    }else if(this.embeddedEnabled()){
       const info:MediaTechnicalInfo|null=asset.technical_json?JSON.parse(asset.technical_json):null;
       const tag=Object.entries(info?.tags??{}).find(([key])=>/^(?:lyrics|unsyncedlyrics|unsynced_lyrics)(?:-|$)/i.test(key))?.[1];
       if(tag){bytes=Buffer.from(tag);source='embedded';}

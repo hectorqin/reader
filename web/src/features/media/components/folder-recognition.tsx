@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {Settings2} from 'lucide-react';
 import '../styles/folder-recognition.css';
-import {Modal} from '../../../ui/modal.tsx';
-import {FloatingConfirm} from '../../../ui/floating-confirm.tsx';
+import { ConfirmSheet, Sheet } from '../../../ui/sheet.tsx';
 import {MediaSelect} from './select.tsx';
 import type {MediaApi} from '../api/media-api.ts';
 type Mode='auto'|'movie'|'series'|'season'|'ignore';
@@ -11,7 +10,8 @@ interface Proposal {assetId:string;ref:string;before:{id:string;title:string;kin
 interface Preview {id:string;items:Proposal[]}
 const labels:Record<Mode,string>={auto:'自动识别',movie:'电影目录',series:'剧集目录',season:'指定季目录',ignore:'忽略目录'};
 
-export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied,menuOnly=false}:{api:MediaApi;libraryId:string;path:string;disabled:boolean;onBusy:(busy:boolean)=>void;onApplied:()=>void;menuOnly?:boolean}){
+/** `startRef`: the screen opens this from its own menu, so no trigger is drawn here. */
+export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied,startRef}:{api:MediaApi;libraryId:string;path:string;disabled:boolean;onBusy:(busy:boolean)=>void;onApplied:()=>void;startRef?:{current:(()=>void)|null}}){
   const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [mode,setMode]=useState<Mode|'inherit'>('inherit'),[title,setTitle]=useState(''),[season,setSeason]=useState(''),[year,setYear]=useState(''),[strip,setStrip]=useState(false),[filePattern,setFilePattern]=useState('');
   const [revision,setRevision]=useState(''),[inherited,setInherited]=useState<Rule|null>(null),[preview,setPreview]=useState<Preview|null>(null),[selected,setSelected]=useState<string[]>([]),[confirm,setConfirm]=useState(false),[page,setPage]=useState(0);
@@ -40,9 +40,10 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied,
   const selectable=(row:Proposal)=>['ready','review'].includes(row.status);
   const visible=preview?.items.slice(page*30,page*30+30)??[];
   const selectRows=(rows:Proposal[])=>setSelected(current=>[...new Set([...current,...rows.filter(selectable).map(row=>row.assetId)])]);
+  if(startRef)startRef.current=show;
   return <>
-    <>{menuOnly?<button disabled={disabled} onClick={show}><Settings2 size={16} aria-hidden="true"/>识别规则与预览</button>:<div className="media-folder-operation"><span><strong>影视识别</strong><small>设置当前目录及子目录的识别规则</small></span><button disabled={disabled} onClick={show}><Settings2 size={16} aria-hidden="true"/>识别规则与预览</button></div>}</>
-    {open&&<Modal className="media-modal" title="目录识别规则" busy={busy} onClose={()=>setOpen(false)}><div className="media-form media-recognition-form">
+    <>{startRef?null:<div className="media-folder-operation"><span><strong>影视识别</strong><small>设置当前目录及子目录的识别规则</small></span><button disabled={disabled} onClick={show}><Settings2 size={16} aria-hidden="true"/>识别规则与预览</button></div>}</>
+    {open&&<Sheet className="media-modal" size="wide" title="目录识别规则" busy={busy} onClose={()=>setOpen(false)}><div className="media-form media-recognition-form">
       <p className="media-folder-note">{path||'库内根目录'} · 包含子目录，子目录自己的规则优先。目录内文件统一应用下方文件正则。规则保存后用于后续扫描；已有作品通过下方预览确认重新识别。</p>
       {inherited&&<p>继承自「{inherited.path||'库内根目录'}」：{labels[inherited.mode]}{inherited.title?' · '+inherited.title:''}</p>}
       {error&&<p className="media-error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
@@ -69,7 +70,7 @@ export function FolderRecognition({api,libraryId,path,disabled,onBusy,onApplied,
         {preview.items.slice(page*30,page*30+30).map(row=><label key={row.assetId} className="media-recognition-row"><input type="checkbox" aria-label={'应用 '+row.ref} disabled={busy||!['ready','review'].includes(row.status)} checked={selected.includes(row.assetId)} onChange={e=>setSelected(e.currentTarget.checked?[...selected,row.assetId]:selected.filter(id=>id!==row.assetId))}/><span><strong>{row.ref}</strong><small>当前：{row.before?.title??'未关联'}</small><b>{description(row)}</b><small>{({ready:'可应用',review:'待确认',protected:'保留现有',ignored:'已忽略'} as const)[row.status]} · {row.reason}</small></span></label>)}
         {preview.items.length>30&&<nav className="media-toolbar" aria-label="识别预览分页"><button disabled={busy||!page} onClick={()=>setPage(page-1)}>上一页</button><span>{page+1} / {Math.ceil(preview.items.length/30)}</span><button disabled={busy||(page+1)*30>=preview.items.length} onClick={()=>setPage(page+1)}>下一页</button></nav>}
       </section>}
-    </div></Modal>}
-    {confirm&&<FloatingConfirm theme="media" title="确认重新识别" text={`将按预览调整 ${selected.length} 个文件的标题和作品归属。同一剧、季、集的版本可能合并到一个作品，收藏随之保留。不修改原文件，保留播放进度与队列。`} confirmText="应用识别结果" onCancel={()=>setConfirm(false)} onConfirm={()=>{setConfirm(false);void work(async signal=>{await api.request(base+'/recognition-apply','POST',{path,previewId:preview!.id,assetIds:selected},signal);if(!signal.aborted){setOpen(false);onApplied();}});}}/>}
+    </div></Sheet>}
+    {confirm&&<ConfirmSheet title="确认重新识别" text={`将按预览调整 ${selected.length} 个文件的标题和作品归属。同一剧、季、集的版本可能合并到一个作品，收藏随之保留。不修改原文件，保留播放进度与队列。`} confirmText="应用识别结果" onCancel={()=>setConfirm(false)} onConfirm={()=>{setConfirm(false);void work(async signal=>{await api.request(base+'/recognition-apply','POST',{path,previewId:preview!.id,assetIds:selected},signal);if(!signal.aborted){setOpen(false);onApplied();}});}}/>}
   </>;
 }

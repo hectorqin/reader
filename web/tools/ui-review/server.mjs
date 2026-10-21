@@ -712,7 +712,7 @@ export function createReviewServer({ port = 5199 } = {}) {
       return json(res, { authors: [AUTHOR], series: [], tags: [], formats: ['txt', 'epub'] });
     }
     if (/^\/api\/v1\/books\/[^/]+\/reading-overrides$/.test(path)) {
-      return json(res, { version: 0, corrections: [], headingPrefix: '' });
+      return json(reply, { version: 0, corrections: [], headingPrefix: '' });
     }
     if (path === '/api/v1/library/browse') {
       const dir = url.searchParams.get('path') ?? '';

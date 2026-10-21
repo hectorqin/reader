@@ -1,18 +1,21 @@
 import { Navigate, type RouteObject } from 'react-router-dom';
-import { AppShell, HomeRedirect, MediaLayout } from '../App.tsx';
+import { AppShell, MediaLayout } from '../App.tsx';
 import { MediaCatalogPage } from '../../features/media/pages/MediaCatalogPage.tsx';
 import { MediaSearchPage } from '../../features/media/pages/MediaSearchPage.tsx';
 import { MediaFavoritesPage } from '../../features/media/pages/MediaFavoritesPage.tsx';
 import { MediaHistoryPage } from '../../features/media/pages/MediaHistoryPage.tsx';
 import { MediaDetailPage } from '../../features/media/pages/MediaDetailPage.tsx';
 import { MediaQueuePage } from '../../features/media/pages/MediaQueuePage.tsx';
-import { MediaSettingsPage } from '../../features/media/pages/MediaSettingsPage.tsx';
+import { LegacyMediaSettingsRedirect, MediaSettingsPage } from '../../features/media/pages/MediaSettingsPage.tsx';
 import { MediaPlayerPage } from '../../features/media/pages/MediaPlayerPage.tsx';
 import { RouteErrorBoundary } from './error-boundary.tsx';
 import { ShelfPage } from '../../features/shelf/pages/ShelfPage.tsx';
 import { LibraryPage, LibraryBrowsePage, LibraryFilesPage } from '../../features/library/pages/LibraryPage.tsx';
 import { SourcesPage } from '../../features/sources/pages/SourcesPage.tsx';
 import { ReaderPage } from '../../features/reader/pages/ReaderPage.tsx';
+import { MinePage } from '../../features/account/pages/MinePage.tsx';
+import { HomePage } from '../../features/home/pages/HomePage.tsx';
+import { SearchPage } from '../../features/search/pages/SearchPage.tsx';
 import { MediaLibrariesPage, MediaLibraryCreatePage } from '../../features/media/pages/MediaLibrariesPage.tsx';
 import { MediaLibraryEditPage, MediaLibraryPermissionsPage } from '../../features/media/pages/MediaLibraryEditorPages.tsx';
 import { MediaTasksPage } from '../../features/media/pages/MediaTasksPage.tsx';
@@ -33,8 +36,9 @@ import { PluginManagementPage } from '../../features/sources/pages/PluginManagem
 
 export const routes = [{
   path: '/', element: <AppShell />, errorElement: <RouteErrorBoundary />, children: [
-    { index: true, element: <HomeRedirect /> },
+    { index: true, element: <HomePage /> },
     { path: 'shelf', element: <ShelfPage /> },
+    { path: 'search', element: <SearchPage /> },
     { path: 'library', element: <LibraryBrowsePage /> },
     { path: 'library/books', element: <LibraryPage /> },
     { path: 'library/files', element: <LibraryFilesPage /> },
@@ -55,9 +59,16 @@ export const routes = [{
     { path: 'sources/plugins/:pluginId/pages/:pageId', element: <SourceExtensionPage /> },
     // The legacy shell treats /settings as the shelf's admin settings overlay.
     // Keep the route compatible with old deep links; user preferences live in
-    // the shelf settings sheet and media settings has its own nested route.
+    // 我的 (/me).
     { path: 'settings', element: <Navigate to="/shelf" replace /> },
     { path: 'book/:bookId', element: <ReaderPage /> },
+    // 我的 shares MediaLayout so it follows the chosen theme and keeps the channel rail.
+    // Its settings rows open /me/:panel (theme, browse, playback, account),
+    // so back from any of them returns to 我的.
+    { path: 'me', element: <MediaLayout />, children: [
+      { index: true, element: <MinePage /> },
+      { path: ':panel', element: <MediaSettingsPage /> },
+    ] },
     { path: 'media', element: <MediaLayout />, children: [
       { index: true, element: <Navigate to="video" replace /> },
       { path: 'music', element: <Navigate to="/media/music/albums" replace /> },
@@ -67,13 +78,14 @@ export const routes = [{
       { path: 'queue', element: <MediaQueuePage /> },
       { path: ':channel/favorites', element: <MediaFavoritesPage /> },
       { path: ':channel/queue', element: <MediaQueuePage /> },
-      { path: ':channel/settings', element: <MediaSettingsPage /> },
+      // 影音设置 is gone; its panels live in 我的.
+      { path: ':channel/settings', element: <LegacyMediaSettingsRedirect /> },
       { path: ':channel/settings/libraries', element: <MediaLibrariesPage /> },
       { path: ':channel/settings/libraries/new', element: <MediaLibraryCreatePage /> },
       { path: ':channel/settings/libraries/:libraryId/edit', element: <MediaLibraryEditPage /> },
       { path: ':channel/settings/libraries/:libraryId/permissions', element: <MediaLibraryPermissionsPage /> },
       { path: ':channel/settings/tasks', element: <MediaTasksPage /> },
-      { path: ':channel/settings/:panel', element: <MediaSettingsPage /> },
+      { path: ':channel/settings/:panel', element: <LegacyMediaSettingsRedirect /> },
       { path: ':channel/folders/:libraryId?', element: <MediaFoldersPage /> },
       { path: 'audiobook/narrators', element: <MediaNarratorsPage /> },
       { path: 'audiobook/narrators/:narrator/works/:workId', element: <MediaNarratorsPage /> },

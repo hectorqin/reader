@@ -44,9 +44,9 @@ try {
  const opdsUser=await page.getByLabel('OPDS 用户名',{exact:true}).inputValue(),opdsPassword=await page.getByLabel('OPDS 密码',{exact:true}).inputValue();
  const authorization='Basic '+Buffer.from(opdsUser+':'+opdsPassword).toString('base64');
  const feed=await fetch(base+'/opds',{headers:{authorization}});assert.equal(feed.status,200);assert.match(await feed.text(),/opds-test/);
- await button('关闭弹窗').click();await button('连接外部阅读器').click();await button('撤销 浏览器验收客户端').waitFor();assert.equal(await page.getByLabel('OPDS 密码',{exact:true}).count(),0);
+ await page.locator('dialog[open] .sheet-close').last().click();await button('连接外部阅读器').click();await button('撤销 浏览器验收客户端').waitFor();assert.equal(await page.getByLabel('OPDS 密码',{exact:true}).count(),0);
  for(const width of [320,390,1280]) {await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'opds-access-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
- await button('撤销 浏览器验收客户端').click();await button('撤销 浏览器验收客户端').waitFor({state:'hidden'});assert.equal((await fetch(base+'/opds',{headers:{authorization}})).status,401);await button('关闭弹窗').click();
+ await button('撤销 浏览器验收客户端').click();await button('撤销 浏览器验收客户端').waitFor({state:'hidden'});assert.equal((await fetch(base+'/opds',{headers:{authorization}})).status,401);await page.locator('dialog[open] .sheet-close').last().click();
  await page.goto(base+'/#/sources');assert.equal(await button('连接外部阅读器').count(),0);
  await page.getByLabel('选择来源').selectOption('quality');
  assert.equal(await page.locator('.source-capabilities').count(),0);

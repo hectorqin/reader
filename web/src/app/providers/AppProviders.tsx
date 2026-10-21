@@ -1,13 +1,9 @@
 import { useEffect, type ReactNode } from 'react';
-import { MantineProvider } from '@mantine/core';
-import { Notifications } from '@mantine/notifications';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { AppRuntime } from '../runtime.ts';
 import { RuntimeContext } from './runtime-context.tsx';
-import { useSettingsStore } from '../../shared/stores/settings.store.ts';
 
 export function AppProviders({ runtime, children }: { runtime: AppRuntime; children: ReactNode }) {
-  const theme = useSettingsStore(state => state.settings.theme);
   useEffect(() => {
     const host = runtime.player.element;
     document.body.append(host);
@@ -15,9 +11,6 @@ export function AppProviders({ runtime, children }: { runtime: AppRuntime; child
     return () => { runtime.playback.stop(); host.remove(); };
   }, [runtime]);
   useEffect(() => runtime.connect(), [runtime]);
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
   useEffect(() => {
     const visibility = () => {
       if (document.visibilityState === 'hidden') void runtime.flush();
@@ -35,10 +28,6 @@ export function AppProviders({ runtime, children }: { runtime: AppRuntime; child
     };
   }, [runtime]);
   return <RuntimeContext value={runtime}>
-    <QueryClientProvider client={runtime.queryClient}>
-      <MantineProvider forceColorScheme={theme === 'dark' ? 'dark' : 'light'}>
-        <Notifications />{children}
-      </MantineProvider>
-    </QueryClientProvider>
+    <QueryClientProvider client={runtime.queryClient}>{children}</QueryClientProvider>
   </RuntimeContext>;
 }

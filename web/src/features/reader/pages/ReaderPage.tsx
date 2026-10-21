@@ -1,4 +1,4 @@
-import { Alert, Center, Loader, Stack, Text } from '@mantine/core';
+import { Button } from '../../../ui/toolkit.tsx';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -25,6 +25,7 @@ export function ReaderPage() {
       offline: runtime.offline,
       sync: runtime.sync,
       platform: runtime.platform,
+      themeScope: runtime.mediaApi.preferenceScope(),
       settings: runtime.settings.current,
       ...(runtime.pageHost ? { pageHost: runtime.pageHost } : {}),
       ...(runtime.speechBridge ? { speechBridge: runtime.speechBridge } : {}),
@@ -39,9 +40,9 @@ export function ReaderPage() {
     void screen.open(book);
     return () => { unregister(); screen.dispose(); host.current?.replaceChildren(); };
   }, [runtime, book, navigate]);
-  if (error) return <Center mih="60vh"><Stack align="center"><Alert color="red">无法打开这本书：{error instanceof Error ? error.message : '请求失败'}</Alert></Stack></Center>;
-  if (!book) return <Center mih="60vh"><Stack align="center"><Loader /><Text>正在打开书籍…</Text></Stack></Center>;
-  return <div ref={host} className="reader-route-host" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }} />;
+  if (error) return <div className="page-state" role="alert"><h2>无法打开这本书</h2><p>{error instanceof Error ? error.message : '请求失败'}</p><Button onClick={() => navigate(-1)}>返回</Button></div>;
+  if (!book) return <div className="page-state" role="status"><div className="spinner" aria-hidden="true" /><p>正在打开书籍…</p></div>;
+  return <div ref={host} className="reader-route-host" />;
 }
 
 

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { ReaderApi } from '../api/client.ts';
 import type { ManagedUser, RegistrationSettings } from '../api/types.ts';
-import { Modal } from './modal.tsx';
-import { FloatingConfirm } from './floating-confirm.tsx';
+import { ConfirmSheet, Sheet } from './sheet.tsx';
 import { FloatingNotice } from './floating-notice.tsx';
 import {BusinessSettings} from './business-settings.tsx';
 
@@ -17,10 +16,10 @@ export function SystemSettings({api,onClose}:{api:ReaderApi;onClose():void}) {
   async function work(action:()=>Promise<unknown>,success='已保存') { if(busy)return;setBusy(true);setError('');setMessage('');try{await action();await load();setConfirmation(null);setMessage(success);}catch(e){setError(e instanceof Error?e.message:'操作失败');}finally{setBusy(false);} }
   useEffect(()=>{void work(async()=>{},'');},[]);
   const self=api.currentSession()?.user.id;
-  return <Modal title="系统设置" busy={busy} onClose={onClose}><div className="user-management source-modal-content">
+  return <Sheet title="系统设置" size="wide" busy={busy} onClose={onClose}><div className="user-management">
     <nav className="extension-tabs" aria-label="系统设置分类"><button aria-pressed={tab==='users'} onClick={()=>setTab('users')}>用户管理</button><button aria-pressed={tab==='registration'} onClick={()=>setTab('registration')}>注册与邀请</button><button aria-pressed={tab==='business'} onClick={()=>setTab('business')}>服务配置</button></nav>
     <FloatingNotice message={error || message} error={!!error} kind="success" />
-    {confirmation && <FloatingConfirm text={confirmation.text} onCancel={()=>setConfirmation(null)} onConfirm={()=>{setConfirmation(null);void work(confirmation.run);}} />}
+    {confirmation && <ConfirmSheet text={confirmation.text} onCancel={()=>setConfirmation(null)} onConfirm={()=>{setConfirmation(null);void work(confirmation.run);}} />}
     {tab==='users' ? <>
       <div className="user-manager-actions"><input aria-label="筛选用户" placeholder="搜索用户名或显示名" value={query} onInput={e=>setQuery(e.currentTarget.value)} /><button className="button primary" disabled={busy} onClick={()=>{setForm(!form);setReset(null);setPassword('');}}>新增用户</button></div>
       {form && <form className="user-manager-form" onSubmit={e=>{e.preventDefault();void work(async()=>{await api.adminCreateUser({username:username.trim(),password,displayName:displayName.trim(),role});setForm(false);setUsername('');setPassword('');setDisplayName('');setRole('member');},'用户已创建');}}>
@@ -43,5 +42,5 @@ export function SystemSettings({api,onClose}:{api:ReaderApi;onClose():void}) {
       {code && <label className="user-manager-mode">新邀请码（仅本次显示，请复制保存）<input aria-label="新邀请码" readOnly value={code} onFocus={e=>e.currentTarget.select()} /></label>}
       <ul className="user-manager-list">{settings.invites.map(invite=><li key={invite.id}><strong>{invite.label||'未备注邀请码'}</strong><p>已用 {invite.usedCount} / {invite.maxUses} 次 · {invite.disabled?'已停用':invite.expiresAt<=Date.now()?'已过期':invite.usedCount>=invite.maxUses?'已用完':'可用'}</p><p className="muted">有效至 {new Date(invite.expiresAt).toLocaleString()}</p>{!invite.disabled && <button className="button" disabled={busy} onClick={()=>setConfirmation({text:'停用此邀请码？已注册账号不受影响。',run:()=>api.disableInvite(invite.id)})}>停用邀请码</button>}</li>)}</ul>
     </>}
-  </div></Modal>;
+  </div></Sheet>;
 }

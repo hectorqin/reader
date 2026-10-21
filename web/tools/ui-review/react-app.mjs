@@ -71,14 +71,14 @@ async function login(page, origin, target = '/#/shelf') {
   const username = page.locator('input[autocomplete="username"]');
   await Promise.race([
     username.waitFor({ state: 'visible' }).catch(() => undefined),
-    page.locator('.shelf-screen, .media-channel-entry, .media-screen').first().waitFor({ state: 'attached' }).catch(() => undefined),
+    page.locator('.shelf-screen, .home-page, .app-nav, .media-screen').first().waitFor({ state: 'attached' }).catch(() => undefined),
   ]);
   if (await username.isVisible().catch(() => false)) {
     await username.fill('reviewer');
     await page.locator('input[type="password"]').fill('review-test-pass');
     await page.locator('form button[type="submit"]').click();
   }
-  await page.locator('.shelf-screen, .media-channel-entry, .media-screen').first().waitFor({ state: 'attached' });
+  await page.locator('.shelf-screen, .home-page, .app-nav, .media-screen').first().waitFor({ state: 'attached' });
 }
 
 async function installReaderApiStubs(page) {
@@ -208,8 +208,9 @@ async function runReaderReview(browser, origin, checks, errors) {
     assert.equal(await page.getByText(/已选 1 项/).count(), 0);
   }
   await capture(page, 'library-files', checks, errors);
-  await page.goto(`${origin}/#/settings`);
-  await waitHeading(page, '设置');
+  // /settings redirects to the shelf; 我的 is the settings hub now.
+  await page.goto(`${origin}/#/me`);
+  await waitHeading(page, '我的');
   await capture(page, 'settings', checks, errors);
   await page.goto(`${origin}/#/sources`);
   await waitHeading(page, '书源');
@@ -227,12 +228,17 @@ async function runReaderReview(browser, origin, checks, errors) {
 async function loginAs(page, origin, username) {
   await page.goto(`${origin}/#/media/video`, { waitUntil: 'domcontentloaded' });
   const user = page.locator('input[autocomplete="username"]');
+  // The login form renders after the bundle boots; check once one of the two exists.
+  await Promise.race([
+    user.waitFor({ state: 'visible' }).catch(() => undefined),
+    page.locator('.media-screen, .app-nav').first().waitFor({ state: 'attached' }).catch(() => undefined),
+  ]);
   if (await user.isVisible().catch(() => false)) {
     await user.fill(username);
     await page.locator('input[type="password"]').fill('review-test-pass');
     await page.locator('form button[type="submit"]').click();
   }
-  await page.locator('.media-screen, .media-channel-entry').first().waitFor({ state: 'attached' });
+  await page.locator('.media-screen, .app-nav').first().waitFor({ state: 'attached' });
 }
 
 async function runMediaReview(browser, fixture, checks, errors) {
@@ -254,6 +260,8 @@ async function runMediaReview(browser, fixture, checks, errors) {
     { id: 'reviewer', username: 'reviewer', displayName: '评测', role: 'admin' },
     { id: fixture.reviewMemberId, username: 'review-member', displayName: '林间', role: 'member' },
   ] }) }));
+  // 媒体库管理 shows the scan switches, read from the business settings the fixture does not serve.
+  await page.route('**/api/v1/admin/settings**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groups: [] }) }));
   // Start the authenticated session on the real review library route. This
   // avoids an initial browse request without a library query before the first
   // screenshot route is loaded.
@@ -267,7 +275,7 @@ async function runMediaReview(browser, fixture, checks, errors) {
     ['media-history', '/#/media/video/history', '播放历史', '.media-screen'],
     ['media-queue', '/#/media/queue', '待播队列', '.media-screen'],
     ['media-folders', '/#/media/video/folders/review-lib', '文件夹浏览', '.media-folders'],
-    ['media-settings', '/#/media/video/settings', '影音设置', '.media-settings'],
+    ['media-settings', '/#/me/browse', '影音浏览', '.media-settings'],
     ['media-permissions', '/#/media/video/settings/libraries/review-lib/permissions', '访问权限', '.media-permissions-page'],
   ];
   for (const [name, path, heading, target] of pages) {
@@ -334,7 +342,7 @@ async function runMediaReview(browser, fixture, checks, errors) {
 
   await page.getByRole('button', { name: '清空当前频道队列' }).click();
   await page.getByRole('button', { name: '确认清空' }).waitFor({ state: 'visible' });
-  assert.match(await page.locator('[role="dialog"], .media-floating-confirm').last().innerText().catch(() => ''), /清空队列|确认清空/);
+  assert.match(await page.locator('dialog[open]').last().innerText().catch(() => ''), /清空队列|确认清空/);
   const clear = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/queue/clear'));
   await page.getByRole('button', { name: '确认清空' }).click();
   assert.equal((await clear).status(), 200, 'queue clear failed');
@@ -355,16 +363,20 @@ async function runMediaReview(browser, fixture, checks, errors) {
   // 65 fixture favorites exercise filter + the 60/5 pagination boundary + detail.
   await page.goto(`${origin}/#/media/favorites`);
   await waitMediaHeading(page, '我的收藏');
-  await page.getByRole('button', { name: '筛选收藏' }).click();
-  await page.getByRole('button', { name: '影视' }).last().click();
+  await page.locator('button[aria-label="筛选收藏"]').click();
+  await page.locator('.action-menu').getByRole('menuitemradio', { name: '影视' }).click();
   await page.waitForURL(/scope=video/);
-  await page.locator('.media-favorite-tools').filter({ hasText: '影视' }).waitFor({ state: 'visible' });
+  await page.locator('.media-favorite-tools p').filter({ hasText: '· 影视' }).waitFor({ state: 'visible' });
   assert.match(await page.locator('.media-favorite-tools').innerText(), /影视/);
   await page.getByRole('button', { name: '下一页' }).click();
   await page.waitForURL(/offset=60/);
   await page.getByText('收藏电影061', { exact: true }).waitFor({ state: 'visible' });
   await page.locator('.media-favorite-row').first().click();
-  await page.locator('.media-detail-page').waitFor({ state: 'attached' });
+  // Fixture favorites past the first page have no file on disk, so the detail can be
+  // the missing-edition state rather than the full detail page.
+  await page.locator('.media-detail-page, .media-missing-edition').first().waitFor({ state: 'attached' }).catch(async error => {
+    throw new Error(`favorite detail did not open at ${page.url()}: ${(await page.locator('body').innerText()).slice(0, 1500)}\n${error.message}`);
+  });
   await capture(page, 'media-favorites-detail', checks, errors);
 
   // Detail favorite is a real PUT and is then reverted to keep the disposable
@@ -402,7 +414,7 @@ async function runMediaReview(browser, fixture, checks, errors) {
   // then reopen the persistent mini-player from the browse page.
   await page.getByRole('button', { name: '← 返回浏览' }).click();
   await page.locator('.media-mini').waitFor({ state: 'attached' });
-  await page.locator('.react-mini-player a').click();
+  await page.locator('.media-mini-title').click();
   await page.waitForURL(/#\/media\/video\/player\?item=review-film&part=review-film-part/);
   await page.locator('.media-playback-page').waitFor({ state: 'attached' });
   assert.equal(playbackPostsBeforeRoute.length, 0, 'route return created a new playback session');
@@ -430,10 +442,16 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await waitMediaHeading(page, '搜索');
   await page.goBack();
   await waitMediaHeading(page, '影视');
-  await page.locator('summary[aria-label="更多操作"]').click();
-  await page.locator('details[open] a').filter({ hasText: '设置' }).click();
-  await page.waitForURL(/#\/media\/video\/settings$/);
-  await waitMediaHeading(page, '影音设置');
+  await page.locator('button[aria-label="更多操作"]').click();
+  // The ⋯ menu is a dropdown: no sheet, closes on Escape, its items navigate.
+  await page.locator('.action-menu[role=menu]').waitFor();
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  await page.keyboard.press('Escape');
+  await page.locator('.action-menu').waitFor({ state: 'detached' });
+  await page.locator('button[aria-label="更多操作"]').click();
+  await page.locator('.action-menu').getByRole('menuitem', { name: '媒体库管理' }).click();
+  await page.waitForURL(/#\/media\/video\/settings\/libraries$/);
+  await waitMediaHeading(page, '媒体库管理');
 
   // Empty states distinguish a configured-but-empty music channel from a channel
   // with no accessible audiobook library.

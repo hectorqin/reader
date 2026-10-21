@@ -14,7 +14,15 @@ import { render } from '../src/shared/ui/render-root.ts';
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createElement as h } from 'react';
-import { ReaderChrome, type ChromeState, type ChromeHandlers } from '../src/ui/reader-chrome.tsx';
+import { ReaderChrome, type ChromeState, type ChromeHandlers, type ReaderThemeState } from '../src/ui/reader-chrome.tsx';
+import { defaultThemePreference, type ThemePreference } from '../src/shared/theme/theme.ts';
+
+const themeState = (preference: Partial<ThemePreference> = {}, dark = false): ReaderThemeState => {
+  const merged = { ...defaultThemePreference, ...preference };
+  const mode: 'dark' | 'light' = dark ? 'dark' : 'light';
+  const reading = { theme: merged.reading === 'gray' ? 'gray' as const : 'warm' as const, mode };
+  return { preference: merged, app: { theme: 'warm', mode }, reading, surface: { ...reading, paper: null } };
+};
 
 function chromeState(overrides: Partial<ChromeState> = {}): ChromeState {
   return {
@@ -61,6 +69,8 @@ function chromeState(overrides: Partial<ChromeState> = {}): ChromeState {
     txtIndent: 2,
     txtParagraphGap: 0.55,
     comicDirection: 'ltr',
+    paper: 'theme',
+    paperFollowsDark: true,
     ttsRate: 1,
     ttsPitch: 1,
     ttsVolume: 1,
@@ -82,13 +92,15 @@ function chromeState(overrides: Partial<ChromeState> = {}): ChromeState {
 }
 
 /** Every handler is a no-op: this file asserts the tree, not the behaviour. */
-function handlers(): ChromeHandlers {
+function handlers(theme: ReaderThemeState = themeState(), onTheme: ChromeHandlers['onTheme'] = () => undefined): ChromeHandlers {
   const noop = (): void => undefined;
   return {
     onBack: noop,
     toggleToc: noop,
     toggleSettings: noop,
     onSetting: noop,
+    theme: () => theme,
+    onTheme,
     onSpeechSetting: noop,
     onVoice: noop,
     onSpeakFromHere: noop,
@@ -155,13 +167,101 @@ describe('ReaderChrome', () => {
 
   it('separates appearance and behavior settings and omits text controls for comics', () => {
     let tree = paint({ settingsOpen: true, settingsTab: 'appearance' });
-    expect(tree.querySelector('.panel')?.textContent).toContain('浅绿');
-    expect(tree.querySelector('.panel')?.textContent).not.toContain('点击区域');
+    expect(tree.querySelector('.sheet')?.textContent).toContain('黑白灰');
+    expect(tree.querySelector('.sheet')?.textContent).not.toContain('点击区域');
     tree = paint({ settingsOpen: true, settingsTab: 'behavior' });
-    expect(tree.querySelector('.panel')?.textContent).toContain('点击区域');
-    expect(tree.querySelector('.panel')?.textContent).not.toContain('字号');
+    expect(tree.querySelector('.sheet')?.textContent).toContain('点击区域');
+    expect(tree.querySelector('.sheet')?.textContent).not.toContain('字号');
     tree = paint({ settingsOpen: true, settingsTab: 'appearance', layout: 'fixed' });
-    expect(tree.querySelector('.panel')?.textContent).not.toContain('字号');
+    expect(tree.querySelector('.sheet')?.textContent).not.toContain('字号');
+  });
+
+  it('puts the most-used appearance rows first and folds the rarely changed ones', () => {
+    const tree = paint({ settingsOpen: true, settingsTab: 'appearance' });
+    const body = tree.querySelector('.sheet-body')!;
+    const order = [...body.children].map((element) =>
+      element.matches('details.panel-fold')
+        ? `fold:${element.querySelector('.panel-fold-title')?.textContent}`
+        : (element.querySelector('label')?.textContent ?? '').split(' ')[0],
+    );
+    // Size, spacing, theme and brightness fill the first screen; the readouts that
+    // used to come first are behind a fold, closed by default.
+    expect(order).toEqual(['纸色', '字号', '行距', '主题', '明暗', '亮度', 'fold:更多排版', 'fold:页眉页脚']);
+    for (const fold of body.querySelectorAll<HTMLDetailsElement>('details.panel-fold')) expect(fold.open).toBe(false);
+    expect(body.querySelector('details.panel-fold input[aria-label="页边距"]')).not.toBeNull();
+    expect(body.querySelector('details.panel-fold select[aria-label="顶部左侧"]')).not.toBeNull();
+  });
+
+  it('offers the reading themes as swatches, follow-app or 黑白灰, and marks the current one', () => {
+    const tree = paint({ settingsOpen: true, settingsTab: 'appearance' });
+    const swatches = [...tree.querySelectorAll<HTMLButtonElement>('[aria-label="主题"] .theme-swatch')];
+    expect(swatches.map((button) => button.querySelector('.theme-swatch-label')?.textContent)).toEqual(['跟随应用', '黑白灰']);
+    expect(swatches.filter((button) => button.getAttribute('aria-pressed') === 'true').map((button) => button.querySelector('.theme-swatch-label')?.textContent)).toEqual(['跟随应用']);
+    // Each chip is drawn in that theme's own background (light mode here): 黑白灰 #F5F5F5.
+    const chip = swatches[1]!.querySelector<HTMLElement>('.theme-swatch-chip')!;
+    expect(chip.style.background).toContain('rgb(245, 245, 245)');
+    const modes = [...tree.querySelectorAll<HTMLButtonElement>('[aria-label="明暗"] button')];
+    expect(modes.map((button) => button.textContent)).toEqual(['跟随系统', '浅色', '深色']);
+    expect(modes.find((button) => button.getAttribute('aria-pressed') === 'true')?.textContent).toBe('跟随系统');
+  });
+
+  it('saves reading-theme and day/night choices as theme preference patches', () => {
+    const patches: Array<Partial<ThemePreference>> = [];
+    render(h(ReaderChrome, { state: chromeState({ settingsOpen: true, settingsTab: 'appearance' }), stage: document.createElement('div'), handlers: handlers(themeState({}, true), (patch) => patches.push(patch)) }), container);
+    const tree = container;
+    [...tree.querySelectorAll<HTMLButtonElement>('[aria-label="主题"] .theme-swatch')][1]!.click();
+    [...tree.querySelectorAll<HTMLButtonElement>('[aria-label="明暗"] button')][1]!.click();
+    // The rail's day/night button: dark now, so it offers day and leaves follow-system.
+    const rail = tree.querySelector<HTMLButtonElement>('.reader-rail button')!;
+    expect(rail.getAttribute('aria-label')).toBe('日间');
+    rail.click();
+    expect(patches).toEqual([{ reading: 'gray' }, { mode: 'light', theme: 'warm' }, { mode: 'light', theme: 'warm' }]);
+  });
+
+  it('offers the reading papers as a page setting, and the follow-dark switch only for a light paper', () => {
+    const settings: Array<Record<string, unknown>> = [];
+    const paint2 = (state: Partial<ChromeState>) => {
+      const h2 = handlers();
+      (h2 as { onSetting: ChromeHandlers['onSetting'] }).onSetting = (patch) => settings.push(patch);
+      render(h(ReaderChrome, { state: chromeState({ settingsOpen: true, settingsTab: 'appearance', ...state }), stage: document.createElement('div'), handlers: h2 }), container);
+      return container;
+    };
+    let tree = paint2({});
+    const papers = [...tree.querySelectorAll<HTMLButtonElement>('[aria-label="纸色"] .theme-swatch')];
+    expect(papers.map((button) => button.querySelector('.theme-swatch-label')?.textContent)).toEqual(['跟随主题', '白纸', '暖黄', '浅绿', '灰调', '夜间']);
+    expect(papers[0]!.getAttribute('aria-pressed')).toBe('true');
+    // 暖黄 is drawn in its own paper: #F4ECD8.
+    expect(papers[2]!.querySelector<HTMLElement>('.theme-swatch-chip')!.style.background).toContain('rgb(244, 236, 216)');
+    expect(tree.textContent).not.toContain('跟随系统深色模式');
+    papers[2]!.click();
+    expect(settings).toEqual([{ paper: 'warm' }]);
+    tree = paint2({ paper: 'warm' });
+    expect(tree.textContent).toContain('跟随系统深色模式');
+    tree.querySelector<HTMLButtonElement>('.switch')!.click();
+    expect(settings).toEqual([{ paper: 'warm' }, { paperFollowsDark: false }]);
+    tree = paint2({ paper: 'night' });
+    expect(tree.textContent).not.toContain('跟随系统深色模式');
+  });
+
+  it('keeps typography folded away for fixed layouts and offers only the readouts', () => {
+    const tree = paint({ settingsOpen: true, settingsTab: 'appearance', layout: 'fixed' });
+    const folds = [...tree.querySelectorAll('details.panel-fold .panel-fold-title')].map((element) => element.textContent);
+    expect(folds).toEqual(['页眉页脚']);
+    expect(tree.querySelector('.sheet')?.textContent).not.toContain('字号');
+    expect(tree.querySelector('.sheet')?.textContent).toContain('黑白灰');
+  });
+
+  it('puts the start action first in the read-aloud sheet and folds pitch and volume', () => {
+    const tree = paint({ settingsOpen: true, settingsTab: 'speech', ttsRate: 1.2, showPitchRow: true });
+    const body = tree.querySelector('.sheet-body')!;
+    // The action the sheet exists for is not buried under five sliders.
+    expect(body.firstElementChild?.textContent).toBe('从当前位置朗读');
+    expect(body.firstElementChild?.classList.contains('primary')).toBe(true);
+    const presets = [...body.querySelectorAll('[aria-label="常用"] button')];
+    expect(presets.map((button) => button.textContent)).toEqual(['0.8×', '1.0×', '1.2×', '1.5×', '2.0×']);
+    expect(presets.filter((button) => button.getAttribute('aria-pressed') === 'true').map((button) => button.textContent)).toEqual(['1.2×']);
+    expect(body.querySelector('details.panel-fold input[aria-label="音量"]')).not.toBeNull();
+    expect(body.querySelector('details.panel-fold input[aria-label="音调"]')).not.toBeNull();
   });
 
   it('draws every read-aloud control, including stop, in their own row', () => {

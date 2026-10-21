@@ -1,4 +1,3 @@
-import {FloatingConfirm} from './floating-confirm.tsx';
 /**
  * The questions a screen asks, and the one shape each answer has.
  *
@@ -13,9 +12,8 @@ import {FloatingConfirm} from './floating-confirm.tsx';
  *
  * ## The type is a union, and the union is the honesty
  *
- * Three of the four dialogs answer with a string, one with a boolean, one with a
- * record, and the *shape* of the answer is known from `dialog.kind` at the moment it
- * is resolved. The single guarded cast in `DialogView` is what keeps that knowledge
+ * Two of the three dialogs answer with a string and one with a boolean, and the
+ * *shape* of the answer is known from `dialog.kind` at the moment it is resolved. The single guarded cast in `DialogView` is what keeps that knowledge
  * in one place instead of at every call site.
  *
  * ## Why the dialog is state and not an appended DOM node
@@ -25,10 +23,14 @@ import {FloatingConfirm} from './floating-confirm.tsx';
  * prompt attached to a different file) and every path that forgot to remove it was a
  * path nobody tested. Held in state, "there is one dialog and it is the current
  * question" is not a rule anybody has to keep.
+ *
+ * Every kind is drawn as a `Sheet` (ui/sheet.tsx), like every other overlay.
  */
 
 import { Button } from './toolkit.tsx';
-import { type JSX, useEffect, useRef } from 'react';
+import { ConfirmSheet, Sheet } from './sheet.tsx';
+import { ActionSheet } from './action-menu.tsx';
+import { type JSX, useLayoutEffect, useRef } from 'react';
 
 /** One question with one answer. Held by the screen, rendered by the tree. */
 export type Dialog =
@@ -39,17 +41,10 @@ export type Dialog =
       title: string;
       options: Array<{ value: string; label: string }>;
       resolve(value: string | null): void;
-    }
-  | {
-      kind: 'form';
-      title: string;
-      count: number;
-      fields: Array<{ key: string; label: string }>;
-      resolve(fields: Record<string, string> | null): void;
     };
 
 /** The answer to a dialog, before `kind` is known to have picked its shape. */
-export type DialogAnswer = string | boolean | Record<string, string> | null;
+export type DialogAnswer = string | boolean | null;
 
 /**
  * The dialog currently open, as markup.
@@ -78,34 +73,16 @@ export function DialogView({
    */
   destructive: string;
 }): JSX.Element {
-  if(dialog.kind==='confirm')return <FloatingConfirm title={dialog.title} text={dialog.body} confirmText={destructive} cancelText="取消" onConfirm={()=>onClose(true)} onCancel={()=>onClose(false)}/>;
+  if (dialog.kind === 'confirm') {
+    return <ConfirmSheet title={dialog.title} text={dialog.body} confirmText={destructive} danger
+      onConfirm={() => onClose(true)} onCancel={() => onClose(false)} />;
+  }
+  if (dialog.kind === 'prompt') return <PromptDialog title={dialog.title} value={dialog.value} onClose={onClose} />;
+  // A pick is a menu whose answer is the option picked.
   return (
-    <div
-      className="dialog-overlay"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose(null);
-      }}
-    >
-      {dialog.kind === 'prompt' ? (
-        <PromptDialog title={dialog.title} value={dialog.value} onClose={(value) => onClose(value)} />
-      ) : null}
-      {dialog.kind === 'pick' ? (
-        <div className="dialog sheet">
-          <h3>{dialog.title}</h3>
-          <div className="dialog-list">
-            {dialog.options.map((option) => (
-              <Button key={option.value} onClick={() => onClose(option.value)}>
-                {option.label}
-              </Button>
-            ))}
-          </div>
-          <div className="dialog-actions">
-            <Button onClick={() => onClose(null)}>取消</Button>
-          </div>
-        </div>
-      ) : null}
-      {dialog.kind === 'form' ? <MetadataDialog dialog={dialog} onClose={(fields) => onClose(fields)} /> : null}
-    </div>
+    <ActionSheet title={dialog.title}
+      items={dialog.options.map((option) => ({ label: option.label, onSelect: () => onClose(option.value) }))}
+      onDismiss={() => onClose(null)} />
   );
 }
 
@@ -119,98 +96,26 @@ function PromptDialog({
   onClose(value: string | null): void;
 }): JSX.Element {
   const input = useRef<HTMLInputElement | null>(null);
-  useEffect(() => {
-    input.current?.focus();
-    input.current?.select();
-  }, []);
+  // Runs after the sheet has opened and focused the field, so the selection sticks.
+  useLayoutEffect(() => { input.current?.select(); }, []);
+  const submit = () => onClose(input.current?.value ?? '');
   return (
-    <form
-      className="dialog"
-      onSubmit={(event) => {
-        event.preventDefault();
-        onClose(input.current?.value ?? '');
-      }}
-    >
-      <h3>{title}</h3>
-      <input ref={input} type="text" defaultValue={value} />
-      <div className="dialog-actions">
+    <Sheet title={title} size="compact" onClose={() => onClose(null)} initialFocus=".sheet-prompt-input"
+      footer={<>
         <Button onClick={() => onClose(null)}>取消</Button>
-        <Button type="submit" className="primary">
-          确定
-        </Button>
-      </div>
-    </form>
+        <Button className="primary" onClick={submit}>确定</Button>
+      </>}>
+      <form className="sheet-form" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+        <label className="sheet-field">
+          <input
+            ref={input}
+            aria-label={title}
+            className="sheet-prompt-input"
+            type="text"
+            defaultValue={value}
+          />
+        </label>
+      </form>
+    </Sheet>
   );
 }
-
-function MetadataDialog({
-  dialog,
-  onClose,
-}: {
-  dialog: Extract<Dialog, { kind: 'form' }>;
-  onClose(fields: Record<string, string> | null): void;
-}): JSX.Element {
-  const inputs = useRef(new Map<string, HTMLInputElement>());
-  return (
-    <form
-      className="dialog"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const patch: Record<string, string> = {};
-        for (const [key, input] of inputs.current) {
-          const value = input.value.trim();
-          if (value !== '') patch[key] = value;
-        }
-        onClose(patch);
-      }}
-    >
-      <h3>{dialog.title}</h3>
-      <p className="muted">留空的字段保持不变。目录会写成它里面每一本书的资料。</p>
-      {/* The fields are their own scroller so the actions below them stay
-          reachable: a sheet that scrolls whole puts 保存 past the fold, and a form
-          with no visible way to commit it reads as a dead end. */}
-      <div className="dialog-fields">
-        {dialog.fields.map((field) => (
-          <label className="dialog-field" key={field.key}>
-            <span>{field.label}</span>
-            <input
-              type="text"
-              placeholder="留空则不改"
-              ref={(node) => {
-                if (node) {
-                  inputs.current.set(field.key, node);
-                  if (field.key === 'author') node.focus();
-                } else {
-                  inputs.current.delete(field.key);
-                }
-              }}
-            />
-          </label>
-        ))}
-      </div>
-      <div className="dialog-actions">
-        <Button onClick={() => onClose(null)}>取消</Button>
-        <Button type="submit" className="primary">
-          保存
-        </Button>
-      </div>
-    </form>
-  );
-}
-
-/**
- * The batch metadata fields.
- *
- * Shared between the two library pages for the same reason the dialog is: the
- * preview page can change a book's author and the manager can change a folder's,
- * and they are one operation on the server.
- */
-export const METADATA_FIELDS: Array<{ key: string; label: string }> = [
-  { key: 'author', label: '作者' },
-  { key: 'publisher', label: '出版社' },
-  { key: 'series', label: '系列' },
-  { key: 'seriesIndex', label: '系列序号' },
-  { key: 'language', label: '语言' },
-  { key: 'tags', label: '标签（逗号分隔）' },
-  { key: 'pubdate', label: '出版日期' },
-];

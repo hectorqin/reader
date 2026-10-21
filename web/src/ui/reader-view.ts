@@ -399,7 +399,6 @@ export class ReaderView {
     // Capture the live position before typography changes its scroll extent.
     if (next) this.measureWithin();
     if (next) this.settings = { ...this.settings, ...next };
-    document.documentElement.dataset['theme'] = this.settings.theme;
     this.host.setAttribute('data-paginated', String(this.settings.mode === 'paged'));
     this.container.style.setProperty('--reader-font-scale', String(this.settings.fontScale));
     // `inherit` is what keeps the author's line-height; only an explicit user

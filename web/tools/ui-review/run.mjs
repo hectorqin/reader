@@ -46,14 +46,14 @@ const SCENES = [
   { name: '04-panel-toc', label: '目录 · 半屏', what: '下半屏，上半屏正文仍可见', openBook: true, openPanel: '目录' },
   { name: '05-panel-settings', label: '阅读设置 · 半屏', what: '一行式行：标签在左、控件在右', openBook: true, openPanel: '设置' },
   { name: '06-reader-paged', label: '阅读页 · 翻页模式', what: '分栏后的一页，页数应与可翻次数一致', openBook: true, choose: ['设置', '翻页'], closePanel: true },
-  { name: '07-reader-sepia', label: '阅读页 · 米黄', what: '主题切换后的同一页', openBook: true, theme: '米黄' },
-  { name: '08-reader-dark', label: '阅读页 · 夜间', what: '暗色下的正文与工具栏', openBook: true, theme: '夜间' },
+  { name: '07-reader-light', label: '阅读页 · 浅色', what: '主题切换后的同一页', openBook: true, theme: '浅色' },
+  { name: '08-reader-dark', label: '阅读页 · 深色', what: '暗色下的正文与工具栏', openBook: true, theme: '深色' },
   {
     name: '09-panel-txt',
     label: 'TXT · 正文排版',
     what: '纯文本专属的缩进/段间距/编码三行，且面板仍是半屏',
     openBook: true,
-    openPanel: '界面',
+    openPanel: '外观',
   },
   // The two list screens, as a reader flips between them.
   //
@@ -170,7 +170,7 @@ async function audit(cdp, origin, scenes, results) {
   // geometry step above leaves the *contents* sheet up, and a blind click on the
   // settings button would close it and then wait for a sheet that is already there.
   const settingsTitle = await cdp.evaluate(
-    `document.querySelector('.panel')?.querySelector('.panel-title, h2, header')?.textContent?.trim() ?? ''`,
+    `document.querySelector('.sheet')?.querySelector('.sheet-header h2')?.textContent?.trim() ?? ''`,
   );
   if (!settingsTitle.includes('设置')) {
     if (settingsTitle) {
@@ -178,7 +178,7 @@ async function audit(cdp, origin, scenes, results) {
       await cdp.sleep(300);
     }
     await cdp.click('button[aria-label="设置"]');
-    await cdp.waitFor('document.querySelector(".panel") !== null', 10_000);
+    await cdp.waitFor('document.querySelector(".sheet") !== null', 10_000);
   }
   await cdp.sleep(300);
   await cdp.clickText('.segmented button', '滚动');
@@ -1103,7 +1103,7 @@ async function main() {
       const theme = scene.theme;
       if (theme) {
         await cdp.click('button[aria-label="界面"]');
-        await cdp.waitFor('document.querySelector(".panel") !== null');
+        await cdp.waitFor('document.querySelector(".sheet") !== null');
         await cdp.clickText('.segmented button', theme);
         await cdp.sleep(250);
         await cdp.click('button[aria-label="关闭"]');
@@ -1111,12 +1111,12 @@ async function main() {
       }
       if (scene.openPanel) {
         await cdp.click(`button[aria-label="${scene.openPanel}"]`);
-        await cdp.waitFor('document.querySelector(".panel") !== null');
+        await cdp.waitFor('document.querySelector(".sheet") !== null');
         await cdp.sleep(350);
       }
       if (scene.choose) {
         await cdp.click(`button[aria-label="${scene.choose[0]}"]`);
-        await cdp.waitFor('document.querySelector(".panel") !== null');
+        await cdp.waitFor('document.querySelector(".sheet") !== null');
         await cdp.clickText('.segmented button', scene.choose[1]);
         await cdp.sleep(300);
       }
@@ -1163,17 +1163,17 @@ async function main() {
     // starting position — off the bottom of the screen — and every number derived
     // from it is then about the animation rather than about the layout.
     await cdp.click('button[aria-label="目录"]');
-    await cdp.waitFor('document.querySelector(".panel") !== null', 10_000);
+    await cdp.waitFor('document.querySelector(".sheet") !== null', 10_000);
     await cdp.sleep(400);
     const panelGeometry = await cdp.evaluate(`(() => {
-      const panel = document.querySelector('.panel');
+      const panel = document.querySelector('.sheet');
       const stage = document.querySelector('.stage');
       if (!panel || !stage) return null;
       const p = panel.getBoundingClientRect();
       const s = stage.getBoundingClientRect();
       return {
         panelTop: p.top, panelHeight: p.height, stageTop: s.top, stageHeight: s.height,
-        hasScrim: !!document.querySelector('.scrim'), grip: !!document.querySelector('.panel-grip'),
+        hasScrim: !!document.querySelector('dialog.sheet[open]'), grip: !!document.querySelector('.sheet-grip'),
         visibleText: p.top - s.top,
       };
     })()`);

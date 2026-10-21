@@ -1,4 +1,3 @@
-import { Button, Center, Stack } from '@mantine/core';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ChevronLeft } from 'lucide-react';
@@ -8,6 +7,8 @@ import { PlaybackControls, type PlaybackPanel } from '../components/playback-con
 import { VideoControls } from '../components/video-controls.tsx';
 import { restorePlaybackEntries } from '../services/restore-playback.ts';
 import { useEffect, useState } from 'react';
+import { resolveAppTheme, themes } from '../../../shared/theme/theme.ts';
+import { useThemeState } from '../../../shared/theme/use-theme.ts';
 
 export function MediaPlayerPage() {
   const runtime = useRuntime();
@@ -24,6 +25,19 @@ export function MediaPlayerPage() {
   const videoPage = video || channel === 'video';
   const rootClassName = ['media-screen', 'media-secondary-page', 'media-playback-page', 'media-player-page', videoPage ? 'media-video-page' : undefined].filter(Boolean).join(' ');
   const [restoreError, setRestoreError] = useState('');
+  // Video and music play on a fixed dark, immersive surface: the current theme's dark
+  // values, whatever the app's mode (theme spec §4.7). Audiobooks keep the app's mode.
+  const { preference, systemDark } = useThemeState(runtime.mediaApi.preferenceScope());
+  const immersiveTheme = videoPage || channel === 'music' ? resolveAppTheme(preference, systemDark).theme : undefined;
+  useEffect(() => {
+    if (!immersiveTheme) return;
+    // The live player sits outside this tree (it survives navigation), and the page
+    // column does not span wide screens, so both the player and the body follow too.
+    const player = runtime.player.element, body = document.body;
+    player.dataset.theme = immersiveTheme; player.dataset.mode = 'dark';
+    body.style.background = themes[immersiveTheme].dark.bg;
+    return () => { delete player.dataset.theme; delete player.dataset.mode; body.style.removeProperty('background'); };
+  }, [runtime, immersiveTheme]);
   // The player element lives outside the routed React tree so playback survives
   // navigation. A player route is the explicit full-screen/expanded view; mirror
   // that lifecycle here and collapse the persistent mini-player when leaving it.
@@ -50,13 +64,13 @@ export function MediaPlayerPage() {
     }
     navigate(-1);
   };
-  return <div className={rootClassName}>
+  return <div className={rootClassName} data-theme={immersiveTheme} data-mode={immersiveTheme ? 'dark' : undefined}>
     {videoPage && <header className="media-heading">
       <button type="button" className="media-back-button" aria-label="← 返回浏览" title="返回浏览" onClick={back}><ChevronLeft size={20} aria-hidden="true" /></button>
       <strong>视频播放</strong>
     </header>}
-    {restoreError ? <Center mih="60vh"><Stack align="center"><strong>无法恢复播放</strong><div role="alert">{restoreError}</div><Button variant="subtle" onClick={() => navigate(`/media/${channel}`)}>返回频道</Button></Stack></Center>
-      : !active ? <div className="media-player-empty"><p>当前没有播放内容。</p><Button variant="subtle" onClick={() => navigate(`/media/${channel}`)}>选择作品</Button></div>
+    {restoreError ? <div className="page-state" role="alert"><h2>无法恢复播放</h2><p>{restoreError}</p><button type="button" onClick={() => navigate(`/media/${channel}`)}>返回频道</button></div>
+      : !active ? <div className="media-player-empty"><p>当前没有播放内容。</p><button type="button" onClick={() => navigate(`/media/${channel}`)}>选择作品</button></div>
       : video ? createPortal(<VideoControls player={runtime.player} api={runtime.mediaApi} onBack={back} />, runtime.player.videoControlsHost)
       : <PlaybackControls player={runtime.player} api={runtime.mediaApi} panel={requested} onPanelChange={value => navigate(value === 'main' ? `/media/${channel}/player` : `/media/${channel}/player/${value}`, { replace: true })} onBack={back} />}
   </div>;

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Ellipsis, FileText, Layers } from 'lucide-react';
-import { Modal } from '../../../ui/modal.tsx';
+import { useEffect, useState, type ReactNode } from 'react';
+import { FileText, Layers } from 'lucide-react';
+import { ActionMenu } from '../../../ui/action-menu.tsx';
+import { Sheet } from '../../../ui/sheet.tsx';
 import { ResourceInfo } from './resource-info.tsx';
 import { EditionTools, type EditionDetailsProps } from './edition-details.tsx';
 import type { MediaApi } from '../api/media-api.ts';
@@ -19,7 +20,7 @@ type ResourcePanelProps = {
 };
 
 /**
- * Resource details are rendered in a modal. The legacy detail screen exposes
+ * Resource details are rendered in a sheet. The legacy detail screen exposes
  * the entry point from the page action menu, so the summary trigger is opt-in
  * for standalone consumers and hidden on the detail page.
  */
@@ -35,7 +36,6 @@ export function ResourcePanel({
   showTrigger = true,
 }: ResourcePanelProps) {
   const [panel, setPanel] = useState<ResourcePanelKind | null>(null);
-  const menu = useRef<HTMLDetailsElement>(null);
   const files = [...new Map(assets.map(asset => [asset.id, asset])).values()];
   const manage = !!(editionOptions?.onUpdated || editionOptions?.onAssigned || editionOptions?.onRename);
 
@@ -43,19 +43,7 @@ export function ResourcePanel({
     setPanel(openPanel ?? null);
   }, [openPanel]);
 
-  useEffect(() => {
-    const close = (event: PointerEvent) => {
-      if (menu.current && !menu.current.contains(event.target as Node)) menu.current.open = false;
-    };
-    document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
-  }, []);
-
   function open(value: ResourcePanelKind) {
-    if (menu.current) {
-      menu.current.open = false;
-      menu.current.querySelector('summary')?.focus();
-    }
     setPanel(value);
     onPanelChange?.(value);
   }
@@ -63,12 +51,12 @@ export function ResourcePanel({
   function close() {
     setPanel(null);
     onPanelChange?.(null);
-    menu.current?.querySelector('summary')?.focus();
   }
 
   const modal = panel && (
-    <Modal
+    <Sheet
       className="media-modal"
+      size="wide"
       title={panel === 'files' ? '资源信息' : panel === 'source' ? '来源' : manage ? '版本管理' : '播放版本'}
       busy={!!editionOptions?.busy}
       onClose={close}
@@ -80,33 +68,18 @@ export function ResourcePanel({
             ? sourceInfo
             : <>{versionPicker}{manage && editionOptions && <EditionTools {...editionOptions} managementOnly />}</>}
       </div>
-    </Modal>
+    </Sheet>
   );
 
   if (!showTrigger) return modal;
-  return <>{modal}<section className="media-resource-panel media-resource-trigger" onClick={event => {
-    if (event.target instanceof HTMLDialogElement && !editionOptions?.busy) {
-      const rect = event.target.getBoundingClientRect();
-      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close();
-    }
-  }}>
+  return <>{modal}<section className="media-resource-panel media-resource-trigger">
     <header>
       <h2>资源信息</h2>
-      {(files.length > 0 || manage || versionPicker || sourceInfo) && <details className="media-actions" ref={menu} onKeyDown={event => {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          event.stopPropagation();
-          menu.current!.open = false;
-          menu.current!.querySelector('summary')?.focus();
-        }
-      }}>
-        <summary aria-label="资源信息操作" title="资源信息操作"><Ellipsis size={19} aria-hidden="true" /></summary>
-        <nav aria-label="资源信息操作">
-          {files.length > 0 && <button onClick={() => open('files')}><FileText size={16} aria-hidden="true" />资源信息</button>}
-          {(manage || versionPicker) && <button data-media-versions onClick={() => open('versions')}><Layers size={16} aria-hidden="true" />{manage ? '版本管理' : '播放版本'}</button>}
-          {sourceInfo && <button onClick={() => open('source')}><FileText size={16} aria-hidden="true" />来源</button>}
-        </nav>
-      </details>}
+      <ActionMenu className="media-icon-button" label="资源信息操作" items={[
+        files.length > 0 && { label: '资源信息', icon: <FileText size={16} />, onSelect: () => open('files') },
+        (manage || !!versionPicker) && { label: manage ? '版本管理' : '播放版本', icon: <Layers size={16} />, onSelect: () => open('versions') },
+        !!sourceInfo && { label: '来源', icon: <FileText size={16} />, onSelect: () => open('source') },
+      ]} />
     </header>
     <p>{summary}</p>
   </section></>;

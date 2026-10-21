@@ -1,4 +1,4 @@
-import {FloatingConfirm} from '../../../ui/floating-confirm.tsx';
+import { ConfirmSheet } from '../../../ui/sheet.tsx';
 import { useEffect, useRef, useState } from 'react';
 import type { Library, MediaApi, MediaChannel } from '../api/media-api.ts';
 import { newId } from '../../../core/id.ts';
@@ -37,7 +37,7 @@ export function MediaLibraryCreate({ api, channel, disabled, onCreated, onJobs,o
   };
   return <section className="media-library-create">
     {!hideHeader && <h2>新建{labels[channel]}媒体库</h2>}
-    {leaving&&<FloatingConfirm theme="media" title="放弃新建媒体库？" text="媒体库尚未创建，离开后将丢弃已填写的内容。" confirmText="放弃修改" cancelText="继续编辑" onCancel={()=>setLeaving(false)} onConfirm={()=>{setLeaving(false);onCancel?.();}}/>}
+    {leaving&&<ConfirmSheet danger title="放弃新建媒体库？" text="媒体库尚未创建，离开后将丢弃已填写的内容。" confirmText="放弃修改" cancelText="继续编辑" onCancel={()=>setLeaving(false)} onConfirm={()=>{setLeaving(false);onCancel?.();}}/>}
     {error && <p className="media-error" role="alert">{error}</p>}
     {created ? <>
       <p role="status">媒体库“{created.name}”已创建。{scanStarted ? '扫描请求已提交，可查看任务结果。' : '尚未确认扫描启动，请先查看任务；如无任务，再启动扫描。'}</p>

@@ -1,50 +1,43 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { MediaPageFrame } from '../components/MediaPageFrame.tsx';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
-import { MediaSettings } from '../components/settings.tsx';
-import type { SettingsPanel } from '../components/settings.tsx';
+import { MediaSettings, SETTINGS_TITLES, type SettingsPanel } from '../components/settings.tsx';
 import { readMediaPreferences } from '../services/preferences.ts';
-import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 
-const panels: readonly SettingsPanel[] = ['home', 'theme', 'browse', 'playback', 'plugins', 'account'];
-const titles: Record<SettingsPanel, string> = {
-  home: '影音设置', theme: '主题外观', browse: '浏览偏好', playback: '播放设置',
-  plugins: '来源与刮削', account: '账号与连接',
-};
-
-function safePanel(value: string | undefined): SettingsPanel {
-  return value && panels.includes(value as SettingsPanel) ? value as SettingsPanel : 'home';
+function isPanel(value: string | undefined): value is SettingsPanel {
+  return (Object.keys(SETTINGS_TITLES) as string[]).includes(value ?? '');
 }
 
+/**
+ * One settings panel of 我的, at /me/:panel. Back returns to 我的. An unknown panel,
+ * and the old media settings home (/media/:channel/settings[/:panel]), lead to 我的.
+ */
 export function MediaSettingsPage() {
   const runtime = useRuntime();
   const navigate = useNavigate();
-  const { channel: routeChannel, panel: routePanel } = useParams();
+  const { channel: routeChannel, panel } = useParams();
   const channel = routeChannel === 'music' || routeChannel === 'audiobook' ? routeChannel : 'video';
-  const panel = safePanel(routePanel);
-  const admin = useAuthStore(state => state.verifiedUser?.role === 'admin');
   const [preferences, setPreferences] = useState(() => readMediaPreferences(runtime.mediaApi.preferenceScope()));
-  const settingsPath = (next: SettingsPanel) => next === 'home'
-    ? `/media/${channel}/settings`
-    : `/media/${channel}/settings/${next}`;
+  if (!isPanel(panel)) return <Navigate to="/me" replace />;
 
-  return <MediaPageFrame className="media-utility-workspace" title={titles[panel]} {...(panel !== 'home' ? { backTo: `/media/${channel}/settings`, backLabel: '返回影音设置' } : {})}>
+  return <MediaPageFrame className="media-utility-workspace" title={SETTINGS_TITLES[panel]} backTo="/me" backLabel="返回我的">
     <MediaSettings
       scope={runtime.mediaApi.preferenceScope()}
       preferences={preferences}
       player={runtime.player}
-      admin={admin}
-      api={runtime.mediaApi}
       account={runtime.mediaApi.accountInfo()}
       panel={panel}
       onSaved={setPreferences}
-      onBack={() => navigate(`/media/${channel}`)}
-      onPanelChange={next => navigate(settingsPath(next))}
-      onPersonal={view => navigate(view === 'favorites' ? '/media/favorites' : view === 'queue' ? `/media/${channel}/queue` : `/media/${channel}/history`, { state: { returnTo: `/media/${channel}/settings` } })}
-      onManage={() => navigate(`/media/${channel}/settings/libraries`)}
-      onTasks={() => navigate(`/media/${channel}/settings/tasks`, { state: { returnTo: `/media/${channel}/settings` } })}
+      onBack={() => navigate('/me')}
       onPlayback={() => navigate(`/media/${channel}/player`)}
+      onReaderSettings={patch => { void runtime.updateSettings(patch); }}
     />
   </MediaPageFrame>;
+}
+
+/** Old links to the media settings home and its panels: the panels now live in 我的. */
+export function LegacyMediaSettingsRedirect() {
+  const { panel } = useParams();
+  return <Navigate to={isPanel(panel) ? `/me/${panel}` : '/me'} replace />;
 }

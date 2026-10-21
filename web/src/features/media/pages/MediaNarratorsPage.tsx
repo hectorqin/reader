@@ -1,5 +1,5 @@
-import { Button } from '@mantine/core';
-import { History, LibraryBig, ListVideo, MoreHorizontal, Search, Settings2, Star } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { ChannelMenu } from '../components/channel-menu.tsx';
 import { Link } from 'react-router-dom';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -65,17 +65,8 @@ export function MediaNarratorsPage() {
   };
 
   const actions = <>
-    <Button component={Link} to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Button>
-    <details className="media-actions media-catalog-actions">
-      <summary aria-label="更多操作" title="更多操作"><MoreHorizontal size={20} aria-hidden="true" /></summary>
-      <nav aria-label="更多操作">
-        <Link to="/media/audiobook/settings"><Settings2 size={16} aria-hidden="true" />影音设置</Link>
-        <Link to="/media/favorites"><Star size={16} aria-hidden="true" />收藏</Link>
-        <Link to="/media/audiobook/history"><History size={16} aria-hidden="true" />历史</Link>
-        <Link to="/media/audiobook/queue"><ListVideo size={16} aria-hidden="true" />队列</Link>
-        <Link to="/media/audiobook/settings/libraries"><LibraryBig size={16} aria-hidden="true" />媒体库管理</Link>
-      </nav>
-    </details>
+    <Link to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Link>
+    <ChannelMenu channel="audiobook" />
   </>;
   return <MediaPageFrame className="media-catalog-page" title="有声书" actions={actions}>
     <QueryFeedback pending={libraries.isPending} error={libraries.error} retry={() => { void libraries.refetch(); }} />
