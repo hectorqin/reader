@@ -26,8 +26,8 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-screen { max-width:1120px; padding:62px 30px 150px; background:var(--media-background); }
 .media-screen button, .media-screen input, .media-screen select, .media-screen textarea { font:inherit; }
 /* The shared sheet's header and footer use the app's own buttons, not media's. */
-.media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu-trigger)) { border:0; background:transparent; border-radius:7px; min-height:38px; padding:9px 12px; }
-.media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu-trigger)):hover:not(:disabled) { background:var(--surface); }
+.media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu *, .action-menu-trigger)) { border:0; background:transparent; border-radius:7px; min-height:38px; padding:9px 12px; }
+.media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu *, .action-menu-trigger)):hover:not(:disabled) { background:var(--surface); }
 .media-screen button:focus-visible, .media-channel-entry a:focus-visible { outline:2px solid var(--media-accent); outline-offset:3px; }
 .media-screen input:not([type=range]):not([type=checkbox]):not([type=radio]), .media-screen textarea {
   background:var(--media-paper); border:1px solid var(--border); border-radius:7px;

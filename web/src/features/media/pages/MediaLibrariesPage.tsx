@@ -53,7 +53,7 @@ export function MediaLibrariesPage() {
   };
   const scan = (id: string) => act(id, () => runtime.mediaApi.request(`libraries/${encodeURIComponent(id)}/scan`, 'POST'), '扫描请求失败，请稍后重试。');
   const cancel = (job: ScanJob) => act(job.libraryId ?? job.id, () => runtime.mediaApi.request(`jobs/${encodeURIComponent(job.id)}/cancel`, 'POST'), '取消扫描失败，请稍后重试。');
-  return <MediaPageFrame className="media-manager-workspace" title="媒体库管理" backTo={fromMine ? '/me' : `/media/${channel}/settings`} backLabel={fromMine ? '返回我的' : '返回影音设置'} actions={<ActionMenu className="media-icon-button" label="媒体库管理操作" items={[
+  return <MediaPageFrame className="media-manager-workspace" title="媒体库管理" backTo={fromMine ? '/me' : `/media/${channel}`} backLabel={fromMine ? '返回我的' : '返回频道'} actions={<ActionMenu className="media-icon-button" label="媒体库管理操作" items={[
     { label: '新建媒体库', icon: <Plus size={16} />, onSelect: () => navigate(`/media/${channel}/settings/libraries/new`) },
     { label: '扫描与刮削', icon: <RefreshCw size={16} />, onSelect: () => navigate(`/media/${channel}/settings/tasks`, { state: { returnTo: `/media/${channel}/settings/libraries` } }) },
   ]} />}>

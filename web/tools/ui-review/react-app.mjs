@@ -260,6 +260,8 @@ async function runMediaReview(browser, fixture, checks, errors) {
     { id: 'reviewer', username: 'reviewer', displayName: '评测', role: 'admin' },
     { id: fixture.reviewMemberId, username: 'review-member', displayName: '林间', role: 'member' },
   ] }) }));
+  // 媒体库管理 shows the scan switches, read from the business settings the fixture does not serve.
+  await page.route('**/api/v1/admin/settings**', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ groups: [] }) }));
   // Start the authenticated session on the real review library route. This
   // avoids an initial browse request without a library query before the first
   // screenshot route is loaded.
@@ -273,7 +275,7 @@ async function runMediaReview(browser, fixture, checks, errors) {
     ['media-history', '/#/media/video/history', '播放历史', '.media-screen'],
     ['media-queue', '/#/media/queue', '待播队列', '.media-screen'],
     ['media-folders', '/#/media/video/folders/review-lib', '文件夹浏览', '.media-folders'],
-    ['media-settings', '/#/media/video/settings', '影音设置', '.media-settings'],
+    ['media-settings', '/#/me/browse', '影音浏览', '.media-settings'],
     ['media-permissions', '/#/media/video/settings/libraries/review-lib/permissions', '访问权限', '.media-permissions-page'],
   ];
   for (const [name, path, heading, target] of pages) {
@@ -362,7 +364,7 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await page.goto(`${origin}/#/media/favorites`);
   await waitMediaHeading(page, '我的收藏');
   await page.locator('button[aria-label="筛选收藏"]').click();
-  await page.locator('dialog[open]').getByRole('menuitemradio', { name: '影视' }).click();
+  await page.locator('.action-menu').getByRole('menuitemradio', { name: '影视' }).click();
   await page.waitForURL(/scope=video/);
   await page.locator('.media-favorite-tools p').filter({ hasText: '· 影视' }).waitFor({ state: 'visible' });
   assert.match(await page.locator('.media-favorite-tools').innerText(), /影视/);
@@ -441,9 +443,15 @@ async function runMediaReview(browser, fixture, checks, errors) {
   await page.goBack();
   await waitMediaHeading(page, '影视');
   await page.locator('button[aria-label="更多操作"]').click();
-  await page.locator('dialog[open]').getByRole('menuitem', { name: '影音设置' }).click();
-  await page.waitForURL(/#\/media\/video\/settings$/);
-  await waitMediaHeading(page, '影音设置');
+  // The ⋯ menu is a dropdown: no sheet, closes on Escape, its items navigate.
+  await page.locator('.action-menu[role=menu]').waitFor();
+  assert.equal(await page.locator('dialog[open]').count(), 0);
+  await page.keyboard.press('Escape');
+  await page.locator('.action-menu').waitFor({ state: 'detached' });
+  await page.locator('button[aria-label="更多操作"]').click();
+  await page.locator('.action-menu').getByRole('menuitem', { name: '媒体库管理' }).click();
+  await page.waitForURL(/#\/media\/video\/settings\/libraries$/);
+  await waitMediaHeading(page, '媒体库管理');
 
   // Empty states distinguish a configured-but-empty music channel from a channel
   // with no accessible audiobook library.

@@ -376,7 +376,7 @@ URL 从头到尾不变。手机上这一点几乎看不见——直到读者按�
 | `#/media/:channel` | 影音频道目录 |
 | `#/media/:channel/items/:itemId` | 影音详情及管理子页 |
 | `#/media/:channel/player?item=&part=` | 播放器 |
-| `#/media/:channel/settings/...` | 影音设置及媒体库管理 |
+| `#/media/:channel/settings/libraries`、`.../tasks` | 媒体库管理、扫描与刮削（旧的 `#/media/:channel/settings[/:panel]` 重定向到「我的」） |
 
 `/sources/search`、旧的 `/sources/:sourceId/:pageId` 扩展页形状和
 `/media`、`/media/music`、`/media/audiobook` 默认入口仍由路由表兼容；

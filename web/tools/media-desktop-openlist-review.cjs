@@ -75,7 +75,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),fs=
     await screenshot('favorites-'+width,'收藏列表 · '+width,width===1308?null:'favorites');
     const list=await page.locator('.media-favorites').boundingBox();if(width>900){assert.equal(Math.round(list.width),850);assert.ok(Math.abs(list.x+list.width/2-width/2)<1);}
     await page.getByRole('button',{name:'筛选收藏',exact:true}).click();await page.getByRole('dialog').waitFor();await screenshot('favorite-filter-'+width,'收藏类型筛选 · '+width);
-    await page.locator('dialog[open]').getByRole('menuitemradio',{name:'音乐',exact:true}).click();await page.waitForURL('**/#/media/favorites?scope=music');await page.waitForFunction(()=>document.querySelectorAll('.media-favorite-row').length===2);await page.reload();await page.locator('.media-favorite-row').first().waitFor();assert.equal(await page.locator('.media-favorite-row').count(),2);
+    await page.locator('.action-menu').getByRole('menuitemradio',{name:'音乐',exact:true}).click();await page.waitForURL('**/#/media/favorites?scope=music');await page.waitForFunction(()=>document.querySelectorAll('.media-favorite-row').length===2);await page.reload();await page.locator('.media-favorite-row').first().waitFor();assert.equal(await page.locator('.media-favorite-row').count(),2);
     await page.goto(baseUrl+'/#/media/video/settings/libraries/new');await page.locator('.media-library-create').waitFor();
     await page.getByRole('combobox',{name:'接入方式',exact:true}).click();await page.getByRole('option',{name:'OpenList',exact:true}).click();
     await page.locator('input[name=name]').fill('云端影院');await page.locator('input[name=baseUrl]').fill('https://openlist.example.com');await page.locator('input[name=root]').fill('/影视');

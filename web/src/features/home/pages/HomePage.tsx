@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { BookOpen, ChevronRight, Clapperboard, Headphones, Play, type LucideIcon } from 'lucide-react';
+import { ChevronRight, Clapperboard, Headphones, Play, type LucideIcon } from 'lucide-react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { BookCard, useCover } from '../../shelf/pages/ShelfPage.tsx';
@@ -32,7 +32,6 @@ function Resume({ book }: { book: ContinueReadingItem }) {
   return <Link className="home-hero" to={`/book/${encodeURIComponent(book.id)}`} aria-label={`继续阅读 ${book.title}`}>
     <span className="home-hero-cover" aria-hidden="true">{src ? <img src={src} alt="" /> : <b>{book.title}</b>}</span>
     <span className="home-hero-text">
-      <span className="home-pill"><BookOpen size={13} aria-hidden="true" />继续阅读</span>
       <strong>{book.title || '未命名'}</strong>
       {book.chapterTitle && <small>{book.chapterTitle}</small>}
       <span className="home-hero-foot">

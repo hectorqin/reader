@@ -436,8 +436,8 @@ SweetAlert、Mantine `Modal`、自绘遮罩或角落浮动卡片。
 - 就地渲染、不走 portal，所以继承打开它的页面主题（阅读器黑白灰、影音别名）。
 - 调用方的 `className` 只管**内容**样式，不得设置位置、尺寸、圆角、背景遮罩或标题栏。
 - 确认框焦点默认在「取消」；破坏性操作传 `danger`，按钮用危险色。
-- `⋯` 操作菜单和单选筛选（收藏类型等）用 `web/src/ui/action-menu.tsx` 的 `ActionMenu` / `ActionSheet`：就是 compact Sheet 里的一列菜单项，跟手出现；动作是数据（`label`、`onSelect`、`danger`、`checked`），菜单先关再执行动作，所以动作可以再开一个 Sheet 或跳转。不再使用 Mantine `Menu` 或 `<details>` 下拉。
-- 仍然锚定在控件上的只有选择框（`MediaSelect`、`SearchableSelect`）和正文选区工具条，它们不是弹层。
+- `⋯` 操作菜单和单选筛选（收藏类型等）用 `web/src/ui/action-menu.tsx` 的 `ActionMenu`：从触发按钮下方弹出的下拉菜单（手机和桌面一致），没有标题栏和遮罩，选中、Esc、Tab 或点外部即关闭，支持方向键；样式在 `web/src/styles/action-menu.css`。需要以问题形式出现的单选（书架的选择对话框）用 `ActionSheet`，即 compact Sheet 里的同一列菜单项。动作是数据（`label`、`onSelect`、`danger`、`checked`），菜单先关再执行动作，所以动作可以再开一个 Sheet 或跳转。不再使用 Mantine `Menu` 或 `<details>` 下拉。
+- 锚定在控件上的只有 `ActionMenu` 下拉、选择框（`MediaSelect`、`SearchableSelect`）和正文选区工具条，它们不是 Sheet。
 
 以下是阅读器面板最初改成底部半屏的理由，仍然适用于手机形态：
 

@@ -20,10 +20,11 @@ it('keeps the resource trigger visible and exposes resource, version and source 
 
   await act(async () => (panel?.querySelector('[aria-label="资源信息操作"]') as HTMLElement).click());
   expect(root.textContent).toContain('资源信息');
-  const buttons = [...document.querySelectorAll<HTMLButtonElement>('dialog[open] [role=menuitem]')];
+  const buttons = [...document.querySelectorAll<HTMLButtonElement>('.action-menu[role=menu] [role=menuitem]')];
   expect(buttons.map(button => button.textContent)).toEqual(['资源信息', '播放版本', '来源']);
 
   await act(async () => buttons[1]!.click());
+  expect(document.querySelector('.action-menu')).toBeNull();
   expect(document.querySelector('dialog[open]')?.getAttribute('aria-label')).toBe('播放版本');
 });
 

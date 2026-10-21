@@ -2,7 +2,7 @@
    DPlayer owns the video controls; this sheet only lays out its stage. */
 .media-screen {padding:68px 32px 96px;font-size:14px;scrollbar-width:thin}
 .media-channel-entry {height:68px;padding-inline:max(32px,calc((100vw - 1056px)/2))}
-.media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu-trigger)) {min-height:44px;border-radius:9px}
+.media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu *, .action-menu-trigger)) {min-height:44px;border-radius:9px}
 .media-screen :is(input:not([type=checkbox]):not([type=radio]):not([type=range]),select) {min-height:44px}
 .media-screen :is(.media-heading,.media-settings-heading,.media-narrator-heading) {min-height:56px}
 .media-screen :is(.media-page-heading h1,.media-page-heading h2,.media-heading>strong,.media-settings-heading h1) {font-size:16px;font-weight:650;line-height:1.4}

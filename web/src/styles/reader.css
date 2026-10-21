@@ -3806,43 +3806,6 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .shelf-links .collection-link.button { min-height: 44px; padding: .6rem .75rem; border-radius: .65rem; box-shadow: none; }
 .shelf-links .collection-link.button > svg { flex: 0 0 auto; width: 17px; height: 17px; }
 .shelf-links .collection-link.button > span:last-child { flex: 0 0 auto; font-size: 1rem; line-height: 1; }
-.plugin-management-screen .sources-header { flex: 0 0 auto; }
-.plugin-management-body { gap: 1rem; }
-.plugin-install-card, .plugin-list-card { display: grid; gap: 1rem; }
-.plugin-card-heading, .plugin-list-heading { display: flex; align-items: flex-start; gap: .75rem; }
-.plugin-card-heading > svg { color: var(--reader-accent); flex: 0 0 auto; margin-top: .2rem; }
-.plugin-card-heading h2, .plugin-list-heading h2 { margin: 0; }
-.plugin-card-heading p { margin: .3rem 0 0; }
-.plugin-install-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem; }
-.plugin-install-grid label { display: grid; gap: .45rem; font-size: .82rem; color: var(--reader-muted); }
-.plugin-install-grid input[type=text], .plugin-install-grid input[type=file] { width: 100%; min-height: 42px; box-sizing: border-box; }
-.plugin-trust { display: flex; align-items: center; gap: .55rem; font-size: .84rem; color: var(--reader-muted); }
-.plugin-trust input { width: 18px; height: 18px; margin: 0; }
-.plugin-install-submit { justify-self: start; display: inline-flex; align-items: center; gap: .45rem; }
-.plugin-install { margin: 0; border: 1px solid var(--reader-line); border-radius: .7rem; overflow: hidden; }
-.plugin-install-tabs { display:flex; border-bottom:1px solid var(--reader-line); }
-.plugin-install-tabs button { flex:1; min-height:44px; padding:.65rem .8rem; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--reader-muted); font:inherit; cursor:pointer; }
-.plugin-install-tabs button[aria-selected=true] { border-bottom-color:var(--reader-accent); color:var(--reader-ink); font-weight:650; }
-.plugin-install-form { display:flex; flex-direction:column; gap:.75rem; padding:1rem; }
-.plugin-install-form label { display:grid; gap:.4rem; font-size:.85rem; color:var(--reader-muted); }
-.plugin-install-form input { width:100%; min-height:42px; box-sizing:border-box; }
-.plugin-install-form small { color:var(--reader-muted); line-height:1.5; }
-.plugin-list-heading { align-items: center; }
-.plugin-list-heading .source-count { margin-left: .25rem; }
-.plugin-list { display: grid; gap: .55rem; }
-.plugin-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
-.plugin-row-info { display: grid; gap: .22rem; min-width: 0; }
-.plugin-row-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plugin-row-info small { color: var(--reader-muted); }
-.plugin-row-info .plugin-error { color: var(--reader-danger, #a4473c); }
-.plugin-row-actions { flex: 0 0 auto; display: flex; align-items: center; gap: .5rem; }
-.plugin-row-actions .button { display: inline-flex; align-items: center; gap: .35rem; }
-.plugin-row-actions .button.danger { color: var(--reader-danger, #a4473c); }
-@media (max-width: 640px) {
-  .plugin-install-grid { grid-template-columns: 1fr; }
-  .plugin-row { align-items: stretch; flex-direction: column; }
-  .plugin-row-actions { justify-content: flex-start; }
-}
 .shelf-screen .shelf-search input, .library-search input { border-radius: .85rem; min-height: 48px; }
 .library-browse-screen .library-search { margin-top: .35rem; }
 .library-path { margin-top: .75rem; padding: .25rem 0 0; }
@@ -3871,16 +3834,6 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .file-manager-header .collection-link.button > span { flex: 1 1 auto; }
 .shelf-settings .section-title:first-child { margin-top: 0; }
 .shelf-discovery { display: contents; }
-.plugin-install { margin-block: 1rem 1.5rem; border: 1px solid var(--reader-line); border-radius: .85rem; overflow: hidden; }
-.plugin-install-tabs { display: flex; border-bottom: 1px solid var(--reader-line); }
-.plugin-install-tabs button { flex: 1; min-height: 44px; padding: .75rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--reader-muted); font: inherit; cursor: pointer; }
-.plugin-install-tabs button[aria-selected=true] { border-bottom-color: var(--reader-accent); color: var(--reader-ink); font-weight: 600; }
-.plugin-install form { display: flex; flex-direction: column; gap: .85rem; padding: 1.25rem; margin: 0; min-width: 0; }
-.plugin-install form[hidden] { display: none; }
-.plugin-install small { color: var(--reader-muted); line-height: 1.5; }
-.plugin-install input { width: 100%; min-width: 0; box-sizing: border-box; }
-.plugin-install input[type=file] { padding: .5rem; }
-.plugin-install .button { align-self: flex-start; }
 /* Desktop keeps navigation compact and settings beside the collection. */
 @media (min-width: 64rem) {
   .shelf { --shelf-measure: var(--collection-measure); }
@@ -4077,7 +4030,6 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .extension-workbench pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 65vh; overflow: auto; }
 @media (max-width: 800px) { .extension-workbench { grid-template-columns: minmax(0, 1fr); } .extension-workbench textarea { min-height: 20rem; } }
 .sources-row > .source-capabilities { flex-basis: 100%; }
-.plugin-install-disclosure > summary { cursor: pointer; padding-block: .75rem; font-weight: 600; }
 .source-capabilities dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
 .source-capabilities dl > div { padding: 8px; border: 1px solid currentColor; border-radius: 6px; }
 .source-capabilities dd { margin: 4px 0 0; }

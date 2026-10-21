@@ -1,0 +1,118 @@
+/*
+ * The ⋯ dropdown (web/src/ui/action-menu.tsx). Positioned by the component;
+ * nothing else sets its place, size or rows.
+ */
+
+.action-menu {
+  position: fixed;
+  inset: auto;
+  z-index: 1000;
+  box-sizing: border-box;
+  min-width: 11rem;
+  max-width: min(18rem, calc(100vw - 16px));
+  max-height: min(24rem, calc(100dvh - 16px));
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-body, 15px);
+  line-height: 1.4;
+  box-shadow: 0 10px 32px color-mix(in srgb, #000 18%, transparent), 0 2px 6px color-mix(in srgb, #000 8%, transparent);
+  animation: action-menu-in 120ms ease-out;
+}
+
+/* The popover UA sheet centres and hides it; the component shows and places it. */
+.action-menu:popover-open {
+  display: block;
+}
+
+.action-menu .action-menu-item {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.action-menu .action-menu-item.is-danger {
+  color: var(--color-danger);
+}
+
+.action-menu .action-menu-item:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.action-menu .action-menu-item:focus-visible {
+  outline: 2px solid var(--color-brand-text);
+  outline-offset: -2px;
+}
+
+.action-menu .action-menu-item[aria-checked='true'] {
+  color: var(--color-brand-text);
+  font-weight: 600;
+}
+
+.action-menu-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.125rem;
+  color: var(--color-muted);
+}
+
+.action-menu .action-menu-item.is-danger .action-menu-icon {
+  color: inherit;
+}
+
+.action-menu-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.action-menu-check {
+  flex: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .action-menu .action-menu-item:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--color-ink) 7%, transparent);
+  }
+}
+
+/* Two classes, so the media screens' generic `.media-screen button` rules lose. */
+/* Touch: a finger-sized row. */
+@media (pointer: coarse) {
+  .action-menu .action-menu-item {
+    min-height: 44px;
+  }
+}
+
+@keyframes action-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .action-menu {
+    animation: none;
+  }
+}

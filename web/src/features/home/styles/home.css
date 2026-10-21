@@ -42,7 +42,6 @@
 .home-hero-cover b { padding: 10px; font-family: 'Songti SC', 'Noto Serif SC', serif; font-size: 15px; font-weight: 600; line-height: 1.35; letter-spacing: 0.05em; text-align: center; overflow-wrap: anywhere; }
 
 .home-hero-text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
-.home-pill { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px; border-radius: 12px; background: var(--color-surface); color: var(--color-ch-read-text); font-size: 12px; font-weight: 600; }
 .home-hero-text strong { margin-top: 8px; font-family: 'Songti SC', 'Noto Serif SC', serif; font-size: 22px; font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
 .home-hero-text small { font-size: 13px; color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

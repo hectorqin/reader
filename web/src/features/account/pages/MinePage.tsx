@@ -40,8 +40,8 @@ function serverHost(baseUrl: string): string {
  * - 偏好: how things look and behave for *you* (theme, the shelf, media browsing, playback);
  * - 管理: what an administrator changes for everyone (users, services, media libraries);
  * - 账号: who you are on this server.
- * Each row opens the one place that setting lives; the shelf sheet and 影音设置 are
- * shortcuts to subsets of this list, not separate settings.
+ * Each row opens the one place that setting lives; the shelf sheet is a shortcut
+ * to a subset of this list, not a separate setting.
  */
 export function MinePage() {
   const runtime = useRuntime();

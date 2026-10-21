@@ -59,10 +59,10 @@ describe('media task page return route', () => {
     expect(backLink().getAttribute('title')).toBe('返回媒体库管理');
   });
 
-  it('falls back to the channel settings route for a direct deep link', () => {
+  it('falls back to 我的 for a direct deep link', () => {
     useAuthStore.setState({ verifiedUser: { role: 'admin' } as any });
     mount({ pathname: '/media/video/settings/tasks' });
-    expect(backLink().getAttribute('href')).toBe('/media/video/settings');
-    expect(backLink().getAttribute('title')).toBe('返回影音设置');
+    expect(backLink().getAttribute('href')).toBe('/me');
+    expect(backLink().getAttribute('title')).toBe('返回我的');
   });
 });

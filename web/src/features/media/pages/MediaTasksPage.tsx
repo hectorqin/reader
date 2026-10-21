@@ -1,7 +1,7 @@
 import { Callout } from '../../../ui/toolkit.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState } from 'react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
@@ -18,8 +18,6 @@ export function MediaTasksPage() {
   const runtime = useRuntime();
   const navigate = useNavigate();
   const location = useLocation();
-  const { channel: routeChannel } = useParams();
-  const channel = routeChannel === 'music' || routeChannel === 'audiobook' ? routeChannel : 'video';
   const [params, setParams] = useSearchParams();
   const role = useAuthStore(state => state.verifiedUser?.role);
   const queryClient = useQueryClient();
@@ -31,8 +29,8 @@ export function MediaTasksPage() {
   const stateReturn = location.state?.returnTo;
   const returnTo = typeof stateReturn === 'string' && (stateReturn.startsWith('/media/') || stateReturn === '/me')
     ? stateReturn
-    : `/media/${channel}/settings`;
-  const returnLabel = returnTo === '/me' ? '返回我的' : returnTo.includes('/settings/libraries') ? '返回媒体库管理' : '返回影音设置';
+    : '/me';
+  const returnLabel = returnTo === '/me' ? '返回我的' : returnTo.includes('/settings/libraries') ? '返回媒体库管理' : '返回上一页';
   const libraries = useQuery(librariesQuery(runtime));
   const libraryId = libraries.data?.items.some(item => item.id === requestedLibraryId)
     ? requestedLibraryId
