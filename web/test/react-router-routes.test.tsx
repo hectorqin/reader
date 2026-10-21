@@ -37,7 +37,7 @@ describe('React Router route tree', () => {
     ['/sources/source-1/browse', 'SourceCatalogPage'],
     ['/sources/manage/new', 'SourceEditorPage'],
     ['/sources/source-1/credentials', 'SourceCredentialsPage'],
-    ['/sources/plugins', 'PluginManagementPage'],
+    ['/sources/plugins', 'SourcesPage'],
     ['/sources/source-1/pages/settings', 'SourceExtensionPage'],
     ['/sources/source-1/library', 'SourceExtensionPage'],
     ['/sources/plugins/plugin-1/pages/settings', 'SourceExtensionPage'],

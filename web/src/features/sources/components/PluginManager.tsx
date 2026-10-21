@@ -1,38 +1,30 @@
 import { useState } from 'react';
-import { Package } from 'lucide-react';
-import { useAuthStore } from '../../../shared/stores/auth.store.ts';
+import { Upload } from 'lucide-react';
 import { usePlugins, useSourceMutations } from '../hooks/sourceQueries.ts';
 import type { SourcePlugin } from '../../../api/sources.ts';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 import { ActionMenu } from '../../../ui/action-menu.tsx';
 import { ConfirmSheet, Sheet } from '../../../ui/sheet.tsx';
-import { Button, Callout, Icon, Segmented, SwitchRow } from '../../../ui/toolkit.tsx';
+import { Button, Callout, Segmented, SwitchRow } from '../../../ui/toolkit.tsx';
 import { notify } from '../../../ui/notifications.ts';
-import { SourcesHeader } from '../components/SourcesHeader.tsx';
 import '../styles/plugins.css';
 
 function message(reason: unknown, fallback: string): string {
   return reason instanceof Error && reason.message ? reason.message : fallback;
 }
 
-function status(plugin: SourcePlugin): { label: string; tone: 'on' | 'off' | 'error' | 'builtin' } {
+function status(plugin: SourcePlugin): { label: string; tone?: 'on' | 'error' } {
   if (plugin.error) return { label: '加载失败', tone: 'error' };
-  if (plugin.builtin) return { label: '内置', tone: 'builtin' };
-  return plugin.enabled ? { label: '已启用', tone: 'on' } : { label: '已停用', tone: 'off' };
+  if (!plugin.enabled) return { label: '已停用' };
+  return { label: '已启用', tone: 'on' };
 }
 
-/** 插件管理: the installed source plugins, and a sheet to install another. */
-export function PluginManagementPage() {
-  const admin = useAuthStore(state => state.verifiedUser?.role === 'admin');
-  const plugins = usePlugins(admin);
+/** 插件管理 tab of the sources hub, laid out like 书源管理: the installed plugins, and a sheet to install another. Admin only. */
+export function PluginManager() {
+  const plugins = usePlugins();
   const mutations = useSourceMutations();
   const [installing, setInstalling] = useState(false);
   const [removing, setRemoving] = useState<SourcePlugin | null>(null);
-  if (!admin) return <div className="sources-screen plugin-management-screen">
-    <SourcesHeader title="插件管理" />
-    <main className="sources-body plugin-body"><Callout tone="warning">只有管理员可以管理插件</Callout></main>
-  </div>;
-
   const list = plugins.data ?? [];
   const toggle = (plugin: SourcePlugin) => mutations.enablePlugin.mutate({ id: plugin.pluginId, enabled: !plugin.enabled }, {
     onError: reason => notify(message(reason, plugin.enabled ? '停用失败' : '启用失败'), { kind: 'error' }),
@@ -42,42 +34,32 @@ export function PluginManagementPage() {
     onError: reason => { setRemoving(null); notify(message(reason, '卸载失败'), { kind: 'error' }); },
   });
 
-  return <div className="sources-screen plugin-management-screen">
-    <SourcesHeader title="插件管理" {...(plugins.data ? { subtitle: `${list.length} 个插件` } : {})}
-      actions={<Button className="primary plugin-install-open" onClick={() => setInstalling(true)}><Icon name="upload" /><span>安装插件</span></Button>} />
-    <main className="sources-body plugin-body">
-      {plugins.isPending && <FloatingNotice message="正在读取插件列表…" busy />}
-      {plugins.error && <Callout tone="error" title="读取失败" action={{ label: '重试', onClick: () => { void plugins.refetch(); } }}>{plugins.error.message}</Callout>}
-      {plugins.data && !list.length && <section className="plugin-empty">
-        <span className="plugin-empty-icon" aria-hidden="true"><Package size={28} /></span>
-        <strong>还没有安装插件</strong>
-        <p>插件可以接入新的书源类型</p>
-        <Button className="primary" onClick={() => setInstalling(true)}>安装插件</Button>
-      </section>}
-      {list.length > 0 && <ul className="plugin-list" aria-label="已安装插件">
-        {list.map(plugin => {
-          const state = status(plugin);
-          const name = plugin.name || plugin.pluginId;
-          return <li className="plugin-row" key={plugin.pluginId} data-disabled={!plugin.enabled || undefined}>
-            <span className="plugin-row-icon" aria-hidden="true"><Package size={20} /></span>
-            <div className="plugin-row-text">
-              <div className="plugin-row-title"><strong>{name}</strong><span className="plugin-tag" data-tone={state.tone}>{state.label}</span></div>
-              <small>{[plugin.version ? `v${plugin.version}` : '未知版本', plugin.name ? plugin.pluginId : ''].filter(Boolean).join(' · ')}</small>
-              {plugin.error && <small className="plugin-row-error">{plugin.error.message}</small>}
-            </div>
-            {!plugin.builtin && <ActionMenu className="plugin-row-more" label={`${name} 的操作`} items={[
-              { label: plugin.enabled ? '停用' : '启用', disabled: mutations.enablePlugin.isPending, onSelect: () => toggle(plugin) },
-              { label: '卸载…', danger: true, disabled: mutations.uninstallPlugin.isPending, onSelect: () => setRemoving(plugin) },
-            ]} />}
-          </li>;
-        })}
-      </ul>}
-    </main>
+  return <section className="sources-card sources-list plugin-manager">
+    <div className="sources-list-heading"><h2>已安装插件 <span className="source-count">{list.length}</span></h2><button className="button source-add" type="button" onClick={() => setInstalling(true)}><Upload size={16} />安装插件</button></div>
+    {plugins.isPending && <FloatingNotice message="正在加载插件列表…" busy />}
+    {plugins.error && <Callout tone="error" title="读取失败" action={{ label: '重试', onClick: () => { void plugins.refetch(); } }}>{plugins.error.message}</Callout>}
+    {plugins.data && !list.length && <p className="muted">还没有安装插件。插件可以接入新的书源类型。</p>}
+    {list.map(plugin => {
+      const state = status(plugin);
+      const name = plugin.name || plugin.pluginId;
+      return <article className="sources-row source-entry" key={plugin.pluginId}><div className="source-entry-top">
+        <div className="source-entry-info">
+          <strong>{name}{plugin.builtin && <span className="source-default-badge">内置</span>}</strong>
+          <small>{[plugin.version ? `v${plugin.version}` : '未知版本', plugin.name ? plugin.pluginId : ''].filter(Boolean).join(' · ')}</small>
+          {plugin.error && <small className="plugin-error">{plugin.error.message}</small>}
+          <span className={'source-state' + (state.tone === 'on' ? ' is-enabled' : '') + (state.tone === 'error' ? ' is-error' : '')}>{state.label}</span>
+        </div>
+        {!plugin.builtin && <div className="source-entry-actions"><ActionMenu label={`${name} 的操作`} items={[
+          { label: plugin.enabled ? '停用' : '启用', disabled: mutations.enablePlugin.isPending, onSelect: () => toggle(plugin) },
+          { label: '卸载…', danger: true, disabled: mutations.uninstallPlugin.isPending, onSelect: () => setRemoving(plugin) },
+        ]} /></div>}
+      </div></article>;
+    })}
     {installing && <InstallPluginSheet onClose={() => setInstalling(false)} />}
     {removing && <ConfirmSheet danger title="卸载插件？" confirmText="卸载" busy={mutations.uninstallPlugin.isPending}
       text={`卸载「${removing.name || removing.pluginId}」后，使用它的书源将无法再搜索和更新`}
       onCancel={() => setRemoving(null)} onConfirm={() => uninstall(removing)} />}
-  </div>;
+  </section>;
 }
 
 function InstallPluginSheet({ onClose }: { onClose(): void }) {

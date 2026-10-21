@@ -32,7 +32,6 @@ import { SourceCatalogPage } from '../../features/sources/pages/SourceCatalogPag
 import { SourceEditorPage } from '../../features/sources/pages/SourceEditorPage.tsx';
 import { SourceCredentialsPage } from '../../features/sources/pages/SourceCredentialsPage.tsx';
 import { SourceExtensionPage } from '../../features/sources/pages/SourceExtensionPage.tsx';
-import { PluginManagementPage } from '../../features/sources/pages/PluginManagementPage.tsx';
 
 export const routes = [{
   path: '/', element: <AppShell />, errorElement: <RouteErrorBoundary />, children: [
@@ -50,7 +49,7 @@ export const routes = [{
     { path: 'sources/manage/:sourceId', element: <SourceEditorPage /> },
     { path: 'sources/:sourceId/browse', element: <SourceCatalogPage /> },
     { path: 'sources/:sourceId/credentials', element: <SourceCredentialsPage /> },
-    { path: 'sources/plugins', element: <PluginManagementPage /> },
+    { path: 'sources/plugins', element: <SourcesPage /> },
     { path: 'sources/:sourceId/pages/:pageId', element: <SourceExtensionPage /> },
     // Legacy source extension links use /sources/:sourceId/:pageId. Keep the
     // old deep-link shape working while the React shell emits the namespaced
