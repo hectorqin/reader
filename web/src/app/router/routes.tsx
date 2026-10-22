@@ -12,26 +12,18 @@ import { RouteErrorBoundary } from './error-boundary.tsx';
 import { ShelfPage } from '../../features/shelf/pages/ShelfPage.tsx';
 import { LibraryPage, LibraryBrowsePage, LibraryFilesPage } from '../../features/library/pages/LibraryPage.tsx';
 import { SourcesPage } from '../../features/sources/pages/SourcesPage.tsx';
-import { ReaderPage } from '../../features/reader/pages/ReaderPage.tsx';
 import { MinePage } from '../../features/account/pages/MinePage.tsx';
 import { HomePage } from '../../features/home/pages/HomePage.tsx';
 import { SearchPage } from '../../features/search/pages/SearchPage.tsx';
-import { MediaLibrariesPage, MediaLibraryCreatePage } from '../../features/media/pages/MediaLibrariesPage.tsx';
-import { MediaLibraryEditPage, MediaLibraryPermissionsPage } from '../../features/media/pages/MediaLibraryEditorPages.tsx';
-import { MediaTasksPage } from '../../features/media/pages/MediaTasksPage.tsx';
 import { MediaFoldersPage } from '../../features/media/pages/MediaFoldersPage.tsx';
 import { MediaNarratorsPage } from '../../features/media/pages/MediaNarratorsPage.tsx';
 import {
-  MediaMetadataEditPage,
-  MediaMatchPage,
-  MediaChaptersPage,
-  MediaEditionPage,
-  MediaStructurePage,
-} from '../../features/media/pages/MediaItemManagementPages.tsx';
+  ReaderPage,
+  MediaLibrariesPage, MediaLibraryCreatePage, MediaLibraryEditPage, MediaLibraryPermissionsPage, MediaTasksPage,
+  MediaMetadataEditPage, MediaMatchPage, MediaChaptersPage, MediaEditionPage, MediaStructurePage,
+  SourceEditorPage, SourceCredentialsPage, SourceExtensionPage,
+} from './lazy-pages.tsx';
 import { SourceCatalogPage } from '../../features/sources/pages/SourceCatalogPage.tsx';
-import { SourceEditorPage } from '../../features/sources/pages/SourceEditorPage.tsx';
-import { SourceCredentialsPage } from '../../features/sources/pages/SourceCredentialsPage.tsx';
-import { SourceExtensionPage } from '../../features/sources/pages/SourceExtensionPage.tsx';
 
 export const routes = [{
   path: '/', element: <AppShell />, errorElement: <RouteErrorBoundary />, children: [
