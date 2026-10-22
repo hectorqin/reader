@@ -288,6 +288,9 @@
   --reader-accent: var(--color-brand-text);
   --reader-fill: var(--color-brand);
   --reader-on-fill: var(--color-on-brand);
+  /* Primary action: brand-text filled, bg on it (spec §5 already holds this pair to 4.5:1). */
+  --reader-primary: var(--color-brand-text);
+  --reader-on-primary: var(--color-bg);
   --reader-scrim: var(--color-scrim);
 }
 :root, [data-theme][data-mode="light"] { color-scheme: light; }

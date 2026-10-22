@@ -12,6 +12,8 @@
   --media-accent: var(--color-brand-text);
   --media-fill: var(--color-brand);
   --media-on-accent: var(--color-on-brand);
+  --media-primary: var(--color-brand-text);
+  --media-on-primary: var(--color-bg);
   --media-selection: var(--color-brand-soft);
   --media-error-ink: var(--color-danger);
   --media-error-background: var(--color-danger-soft);
@@ -110,8 +112,8 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-cover.square {border-radius:6px}
 .media-hero {gap:26px;margin-top:24px}
 .media-hero .media-cover {width:170px;min-width:170px}
-.media-screen .media-primary {background:var(--media-fill);color:var(--media-on-accent)}
-.media-screen button.media-primary:hover:not(:disabled) {background:var(--media-fill);color:var(--media-on-accent);filter:brightness(.94)}
+.media-screen .media-primary {background:var(--media-primary);color:var(--media-on-primary)}
+.media-screen button.media-primary:hover:not(:disabled) {background:var(--media-primary);color:var(--media-on-primary);filter:brightness(.94)}
 .media-task-retry {display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:40px;padding:0 10px;border:1px solid var(--border);border-radius:8px;background:var(--media-selection);color:var(--media-accent);font-size:12px;font-weight:600}
 .media-task-retry:disabled {opacity:.5}
 @media(max-width:430px){.media-task-retry span{display:inline}.media-task-retry{min-width:64px}.media-scan-job .media-task-icon{min-width:40px}}
@@ -765,7 +767,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-playback-problem>p {font-size:12px;line-height:1.8;margin:0;max-width:480px}
 .media-playback-problem>div {display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:4px}
 .media-playback-problem button {font-size:12px}
-.media-video-workspace .media-playback-problem .media-primary {background:var(--media-fill);color:var(--media-on-accent)}
+.media-video-workspace .media-playback-problem .media-primary {background:var(--media-primary);color:var(--media-on-primary)}
 .media-video-controls .media-screen-error {margin:18px 0;font-size:12px}
 .media-video-controls .media-screen-error-actions {display:flex;gap:8px}
 .media-video-sheet .sheet-body {font-size:14px;line-height:1.6}

@@ -698,10 +698,12 @@ book-content {
   text-decoration: none;
 }
 
+/* The one action on a screen: the deep brand colour, so it outweighs the quiet secondary
+   buttons beside it. The soft --reader-fill stays for states (selected, progress, on). */
 .button.primary {
-  background: var(--reader-fill);
-  border-color: var(--reader-fill);
-  color: var(--reader-on-fill);
+  background: var(--reader-primary);
+  border-color: var(--reader-primary);
+  color: var(--reader-on-primary);
 }
 
 .button:disabled {
@@ -812,7 +814,7 @@ book-content {
   }
 
   .button.primary:hover {
-    background: color-mix(in srgb, var(--reader-fill) 88%, var(--reader-ink));
+    background: color-mix(in srgb, var(--reader-primary) 88%, var(--reader-ink));
     border-color: transparent;
   }
 

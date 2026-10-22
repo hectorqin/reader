@@ -757,7 +757,7 @@
 .media-screen .media-browse-tools {height:auto;flex-wrap:wrap}
 .media-loading-status {color:var(--muted);font-size:13px;min-height:24px}
 .media-scan-job .media-task-retry {grid-column:1/-1;justify-self:start;min-height:44px}
-.media-player .media-playback-problem .media-primary {background:var(--media-fill);color:var(--media-on-accent)}
+.media-player .media-playback-problem .media-primary {background:var(--media-primary);color:var(--media-on-primary)}
 .media-player .dplayer-host .dplayer-bar-wrap .dplayer-played,.media-player .dplayer-host .dplayer-volume-bar-inner {background:var(--media-fill)!important}
 .media-player .dplayer-host .dplayer-setting-box,.media-player .dplayer-host .dplayer-setting-item {background:var(--media-paper);color:var(--text)}
 .media-player .dplayer-host .dplayer-setting-item:hover {background:var(--media-selection)}
