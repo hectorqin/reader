@@ -115,7 +115,7 @@ export function ShelfPage() {
   const densityLabel = settings.shelfDensity === 'compact' ? '紧凑' : settings.shelfDensity === 'comfortable' ? '宽松' : '适中';
   return <div id="shelf-scroll" className="shelf shelf-screen">
     <header className="shelf-head">
-      <div className="shelf-head-text"><h1 className="shelf-title">{queryText ? '搜索结果' : '书架'}</h1><p className="shelf-subtitle muted">{subtitle}</p></div>
+      <div className="shelf-head-text"><h1 className="shelf-title">{queryText ? '筛选结果' : '书架'}</h1><p className="shelf-subtitle muted">{subtitle}</p></div>
       <div className="shelf-head-actions">
         <IconButton icon="tune" label={`书架设置 · ${densityLabel}`} onClick={() => setSettingsOpen(true)} />
       </div>
@@ -127,11 +127,11 @@ export function ShelfPage() {
       </nav>
       <form className="shelf-search" role="search" onSubmit={onSearch}>
         <Search className="search-glyph" size={18} aria-hidden="true" />
-        <input type="search" aria-label="搜索书库" placeholder="搜索书名、作者、系列" value={search} onChange={event => setSearch(event.currentTarget.value)} />
+        <input type="search" aria-label="筛选书架" placeholder="在书架中筛选书名、作者、系列" value={search} onChange={event => setSearch(event.currentTarget.value)} />
         {search && <button type="button" className="search-clear" aria-label="清除搜索" onClick={clearSearch}>×</button>}
       </form>
     </div>
-    <section className="shelf-section" aria-label={queryText ? '搜索结果' : '全部书籍'}>
+    <section className="shelf-section" aria-label={queryText ? '筛选结果' : '全部书籍'}>
       <div className="shelf-filters">
         <div className="shelf-status" role="group" aria-label="阅读状态">
           <button type="button" className="chip" aria-pressed={!status} onClick={() => go({ status: null })}>全部</button>
