@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Item, MediaApi } from '../api/media-api.ts';
 import { ApiError } from '../../../api/errors.ts';
 import {personColor} from './person-portrait.tsx';
+import {coverTint} from '../../../ui/cover-tint.ts';
 
 import { createStores } from '../../../store/idb.ts';
 const coverStores=createStores().catch(()=>null);
@@ -50,7 +51,7 @@ export function MediaCover({ api, item, square, retryable=false, loadWithoutMeta
     } else void load();
     return () => { controller.abort(); observer?.disconnect(); if (blobUrl) URL.revokeObjectURL(blobUrl); };
   }, [api, item.id, item.metadata.coverRef, item.metadata.tmdbPosterPath, item.metadata.embeddedCoverAssetId,item.metadata.musicBrainzCoverGroupId,attempt,loadWithoutMetadata]);
-  return <span ref={host} style={item.kind==='artist'?{backgroundColor:personColor(item.title)}:undefined} className={'media-cover ' + (square ? 'square ' : '') + (item.kind==='artist'?'media-portrait '+(!url||failed?'media-person-placeholder ':''):'') + (failed&&retryable?'media-cover-failed ':'') + (url && !failed ? 'has-image' : '')}>
+  return <span ref={host} style={item.kind==='artist'?{backgroundColor:personColor(item.title)}:url&&!failed?undefined:coverTint(item.title)} className={'media-cover ' + (square ? 'square ' : '') + (item.kind==='artist'?'media-portrait '+(!url||failed?'media-person-placeholder ':''):'') + (failed&&retryable?'media-cover-failed ':'') + (url && !failed ? 'has-image' : '')}>
     {url && !failed ? <img src={url} alt="" decoding="async" onError={() => setFailed('封面图片无法解码')}/> : <span className="media-cover-title" aria-label={item.title}>{item.kind==='artist'?Array.from(item.title)[0]:({movie:'电影',series:'剧集',season:'剧集',episode:'单集',album:'专辑',track:'音乐',audiobook:'有声书'} as Record<string,string>)[item.kind]||'影音'}</span>}
     {failed&&retryable&&<span className="media-cover-retry"><small role="status">{failed}</small><button type="button" onClick={()=>setAttempt(value=>value+1)}>重试封面</button></span>}
   </span>;

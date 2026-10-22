@@ -1636,6 +1636,17 @@ book-content {
   word-break: break-word;
 }
 
+/* Per-title tint (ui/cover-tint.ts, ui.md §2.7): mixed into the theme surface, so
+   it stays a tint in every theme and mode and the title on it keeps its contrast. */
+.book-card .cover .placeholder[style*='--cover-hue'] {
+  background:
+    linear-gradient(
+      150deg,
+      color-mix(in oklab, hsl(var(--cover-hue) 55% 55%) 20%, var(--reader-surface)) 0%,
+      color-mix(in oklab, hsl(var(--cover-hue) 55% 55%) 12%, var(--reader-line)) 100%
+    );
+}
+
 .book-card .format-badge {
   position: absolute;
   inset-block-end: 0.3rem;

@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { coverTint } from '../../../ui/cover-tint.ts';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { BookOpen, LibraryBig, MoreHorizontal, Search } from 'lucide-react';
@@ -38,7 +39,7 @@ export function BookCard({ book, showAuthor, showProgress, onRemove }: { book: B
   return <div className="book-card">
     <Link className="book-open" aria-label={`${book.title} ${book.author ?? ''}`.trim()} to={`/book/${encodeURIComponent(book.id)}`}>
       <div className="cover">
-        {src ? <img src={src} alt="" loading="lazy" /> : <div className="placeholder">{book.title || '无封面'}</div>}
+        {src ? <img src={src} alt="" loading="lazy" /> : <div className="placeholder" style={coverTint(book.title || '')}>{book.title || '无封面'}</div>}
         <span className="format-badge">{book.format || '书籍'}</span>
         {showProgress && progress !== undefined && progress > 0 && <div className="cover-progress"><span style={{ width: `${Math.round(Math.max(0, Math.min(1, progress)) * 100)}%` }} /></div>}
       </div>

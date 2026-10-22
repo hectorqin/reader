@@ -19,6 +19,8 @@
 .media-screen .media-tile small {display:block;font-size:11px;line-height:1.5;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .media-screen .media-cover {border-radius:var(--radius-sm);box-shadow:0 3px 8px #15211714}
 .media-screen .media-cover:not(.has-image):not(.media-portrait) {background:var(--surface);color:var(--muted);border:1px solid var(--border)}
+/* Per-title tint, as on the shelf (ui/cover-tint.ts, ui.md §2.7). */
+.media-screen .media-cover:not(.has-image):not(.media-portrait)[style*='--cover-hue'] {background:linear-gradient(150deg,color-mix(in oklab,hsl(var(--cover-hue) 55% 55%) 18%,var(--media-paper)),color-mix(in oklab,hsl(var(--cover-hue) 55% 55%) 10%,var(--surface)));border-color:color-mix(in oklab,hsl(var(--cover-hue) 55% 55%) 14%,var(--border))}
 .media-screen .media-cover:not(.has-image):not(.media-portrait) .media-cover-title {font-family:inherit;font-size:13px;font-weight:500;line-height:1.5;letter-spacing:.08em;writing-mode:horizontal-tb}
 .media-screen .media-detail-page {padding-top:26px}
 .media-detail-page .media-hero {align-items:center;gap:28px;margin:0}

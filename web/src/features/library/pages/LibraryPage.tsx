@@ -1,4 +1,5 @@
 import { BookOpen, FileText, Folder, Plus, Search, Upload } from 'lucide-react';
+import { coverTint } from '../../../ui/cover-tint.ts';
 import { ActionMenu } from '../../../ui/action-menu.tsx';
 import { Callout, Icon } from '../../../ui/toolkit.tsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -25,7 +26,7 @@ function Cover({ book }: { book: Book }) {
     }).catch(() => { if (live) setSrc(null); });
     return () => { live = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [runtime.api, book.coverUrl]);
-  return <div className="cover">{src ? <img src={src} alt="" loading="lazy" /> : <div className="placeholder">{book.title || '无封面'}</div>}<span className="format-badge">{book.format || '书籍'}</span></div>;
+  return <div className="cover">{src ? <img src={src} alt="" loading="lazy" /> : <div className="placeholder" style={coverTint(book.title || '')}>{book.title || '无封面'}</div>}<span className="format-badge">{book.format || '书籍'}</span></div>;
 }
 
 function CollectionHeader({ title, subtitle, backTo, actions, className, footer }: { title: string; subtitle: string; backTo?: string; actions?: React.ReactNode; className?: string; footer?: React.ReactNode }) {
