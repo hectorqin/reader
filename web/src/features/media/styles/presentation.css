@@ -451,6 +451,9 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-history-row>button:first-child small {font-size:11px;color:var(--muted);opacity:1;margin-top:4px}
 .media-history-row>button:first-child .media-history-unavailable {color:var(--media-error-ink)}
 .media-screen .media-row>.media-history-play {display:grid;place-items:center;width:44px;min-width:44px;min-height:44px;padding:10px;background:transparent;color:var(--media-accent)}
+/* An unplayable row must not wear the accent: the disabled button reads as idle, not as "tap me". */
+.media-screen .media-row>.media-history-play:disabled {color:var(--muted);opacity:.35;cursor:not-allowed}
+.media-screen .media-history-row:has(.media-history-play:disabled) .media-personal-title {color:var(--muted)}
 
 .media-screen .media-folder-row {margin:0;padding:0}
 .media-screen .media-folder-row>button {display:flex;align-items:center;gap:12px;width:100%;padding:14px 0;min-height:68px;background:transparent;border:0;border-radius:0}
@@ -940,7 +943,8 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-video-stage .dplayer-host:fullscreen video,.media-video-stage .dplayer-host:-webkit-full-screen video {max-height:none;height:100%}
 .media-video-stage .dplayer-controller button {border:0;min-width:36px;min-height:36px}
 @media(max-width:600px){
-  .media-video-stage .dplayer-host .dplayer-time .dplayer-dtime {display:none}
+  /* Keep "elapsed / total": hiding only the total left a dangling "/". */
+  .media-video-stage .dplayer-host .dplayer-time {font-variant-numeric:tabular-nums;white-space:nowrap}
   .media-video-stage .dplayer-host .dplayer-volume {flex:0 0 auto;min-width:0;width:auto}
 }
 

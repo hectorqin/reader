@@ -110,7 +110,7 @@ export function ShelfPage() {
   ];
   const groupLabel = series ? '系列 · ' + series : tag ? '标签 · ' + tag : '';
   const remove = async (book: Book | ContinueReadingItem) => { await runtime.api.browseBatchShelf({ bookIds: [book.id] }, 'remove'); await queryClient.invalidateQueries({ queryKey: ['shelf'] }); };
-  const subtitle = queryText ? (query.data?.total ? `「${queryText}」匹配 ${query.data.total} 本` : `没有匹配「${queryText}」的书`) : query.data?.total ? (sort === 'recent' ? `最近阅读 · 共 ${query.data.total} 本` : `按${SHELF_SORTS.find(item => item.value === sort)?.label ?? ''}排列 · ${query.data.total} 本`) : '收藏好书，随时接着读';
+  const subtitle = queryText ? (query.data?.total ? `「${queryText}」匹配 ${query.data.total} 本` : `没有匹配「${queryText}」的书`) : '收藏好书，随时接着读'; // count and sort live in the sticky toolbar below; saying them twice is noise
   const densityLabel = settings.shelfDensity === 'compact' ? '紧凑' : settings.shelfDensity === 'comfortable' ? '宽松' : '适中';
   return <div id="shelf-scroll" className="shelf shelf-screen">
     <header className="shelf-head">

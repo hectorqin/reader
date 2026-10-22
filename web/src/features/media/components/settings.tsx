@@ -88,8 +88,8 @@ export function MediaSettings({ scope, preferences, player, account, onSaved, on
           <option value="title-desc">名称降序</option>
         </MediaSelect>
       </label>
-      <label className="media-settings-check"><span>首页显示最近续播</span><input type="checkbox" checked={draft.showContinue} onChange={event => change({ showContinue: event.currentTarget.checked })} /></label>
-      <label className="media-settings-check"><span>列表工具栏显示来源库</span><input type="checkbox" checked={draft.showLibraryName} onChange={event => change({ showLibraryName: event.currentTarget.checked })} /></label>
+      <label className="media-settings-check"><span>首页显示最近续播</span><input type="checkbox" role="switch" checked={draft.showContinue} onChange={event => change({ showContinue: event.currentTarget.checked })} /></label>
+      <label className="media-settings-check"><span>列表工具栏显示来源库</span><input type="checkbox" role="switch" checked={draft.showLibraryName} onChange={event => change({ showLibraryName: event.currentTarget.checked })} /></label>
       <div className="media-settings-footer">
         <button type="button" onClick={() => { setDraft({ ...defaultMediaPreferences }); setSaved(false); }}>恢复默认值</button>
         <button className="media-primary" type="submit">保存偏好</button>

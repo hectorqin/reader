@@ -14,7 +14,8 @@
 .media-screen .media-browse-tools :is(button,select) {min-height:44px}
 .media-screen .media-grid {grid-template-columns:repeat(6,minmax(0,1fr));gap:20px}
 .media-screen .media-tile {padding:0;text-align:left;border-radius:0;min-width:0}
-.media-screen .media-tile strong {display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:13px;font-weight:550;line-height:1.5;margin-top:8px}
+/* Same weight as the shelf's .book-card .title, so a cover title reads the same in every channel. */
+.media-screen .media-tile strong {display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:13px;font-weight:520;line-height:1.5;margin-top:8px}
 .media-screen .media-tile small {display:block;font-size:11px;line-height:1.5;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .media-screen .media-cover {border-radius:7px;box-shadow:0 3px 8px #15211714}
 .media-screen .media-cover:not(.has-image):not(.media-portrait) {background:var(--surface);color:var(--muted);border:1px solid var(--border)}
@@ -95,7 +96,15 @@
 .media-setting-row small {font-size:11px}
 .media-screen .media-settings-panel,.media-screen .media-form {max-width:760px;margin-inline:auto}
 .media-screen .media-setting-field,.media-screen .media-settings-check {min-height:56px;padding:12px 0;border-bottom:1px solid var(--border)}
-.media-screen .media-settings-check input {accent-color:var(--media-accent);width:20px;height:20px}
+/* Boolean preferences wear the same switch as the reader's sheets (.sheet .switch): one control for "on/off" app-wide. */
+.media-screen .media-settings-check input[role=switch] {appearance:none;-webkit-appearance:none;position:relative;flex:0 0 auto;width:2.7rem;height:1.6rem;min-height:1.6rem;margin:0;padding:0;border:0;border-radius:1rem;background:var(--color-line);cursor:pointer;transition:background var(--motion-duration) var(--motion-ease)}
+.media-screen .media-settings-check input[role=switch]::after {content:'';position:absolute;top:.2rem;inset-inline-start:.2rem;width:1.2rem;height:1.2rem;border-radius:50%;background:var(--color-surface);box-shadow:0 1px 2px rgb(0 0 0 / .25);transition:inset-inline-start var(--motion-duration) var(--motion-ease)}
+.media-screen .media-settings-check input[role=switch]:checked {background:var(--color-brand)}
+.media-screen .media-settings-check input[role=switch]:checked::after {inset-inline-start:1.3rem}
+.media-screen .media-settings-check input[role=switch]:focus-visible {outline:var(--focus-ring);outline-offset:var(--focus-offset)}
+/* The label is a few characters; it keeps its line and the select takes the rest. */
+.media-screen .media-settings .media-setting-field {white-space:nowrap}
+.media-screen .media-settings .media-setting-field>.media-select-control {flex:1;min-width:0;max-width:24rem;white-space:normal}
 .media-screen .media-library-list {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:12px 0;}
 .media-screen .media-library-row {display:grid;grid-template-columns:24px minmax(0,1fr) 44px;gap:10px;padding:16px;margin:0;border:1px solid var(--border);border-radius:11px;background:var(--media-paper);align-items:start}
 .media-library-row>svg {margin-top:8px;color:var(--media-accent)}

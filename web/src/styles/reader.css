@@ -1276,13 +1276,6 @@ book-content {
   display: none;
 }
 
-.shelf-status {
-  font-size: 0.78rem;
-  text-align: center;
-  color: var(--reader-muted);
-  padding: 0.75rem 0.9rem calc(0.75rem + var(--safe-bottom));
-}
-
 
 /* ---- the pager ----
  *
@@ -3784,6 +3777,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   .source-picker > div p { margin:0; font-size:.85rem; }
   .source-picker > label { flex:1; margin:0; font-size:.85rem; color:var(--reader-muted); }
   .source-picker > p { flex-basis:100%; margin:0; }
+  .source-picker > .source-picker-cta { margin-top: calc(var(--space-3) * -0.5); }
 }
 /* Collection pages share a quiet heading, labelled destinations and useful empty states. */
 .shelf-head { align-items: center; padding-top: calc(1.25rem + var(--safe-top)); padding-bottom: .85rem; }
@@ -3816,7 +3810,8 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .collection-empty p.muted { max-width: 23rem; font-size: .875rem; line-height: 1.8; text-wrap: pretty; }
 .collection-empty .empty-actions { margin-top: .6rem; gap: .65rem; }
 .collection-empty .button { min-height: 44px; font-size: .875rem; }
-.library-browse-body > .manager-status { background: transparent; border: 0; margin: .75rem auto; }
+/* Browsing pages with a pager, so the count is a footer line, not a sticky overlay over the grid. */
+.library-browse-body > .manager-status { position: static; background: transparent; backdrop-filter: none; border: 0; margin: .75rem auto; }
 .file-manager-header .manager-crumbs { margin-top: .75rem; padding: .25rem 0; }
 .file-manager-header .manager-crumb { min-height: 44px; }
 .library-files-screen .manager-list { margin: .5rem 1rem; border: 1px solid var(--reader-line); border-radius: 1rem; overflow: hidden; }

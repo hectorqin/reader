@@ -46,7 +46,11 @@
   .app-nav { order: -1; display: flex; flex-direction: column; width: var(--app-nav-width); padding: 24px 14px; border-right: 1px solid var(--nav-line); overflow-y: auto; }
   .app-nav-brand { padding: 0 14px 22px; font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; font-size: 26px; font-weight: 700; color: var(--nav-accent); }
   .app-nav-item { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-radius: 12px; font-size: 15px; color: var(--nav-ink); }
-  .app-nav-item:hover { background: var(--color-surface-2); }
+  /* ui.md §2.5: hover only where a pointer can hover, or a tap leaves the item looking selected. */
+  @media (hover: hover) and (pointer: fine) {
+    .app-nav-item:hover:not([aria-current='page']),
+    .app-nav-subitem:hover:not([aria-current='page']) { background: color-mix(in srgb, var(--color-surface-2) 60%, transparent); }
+  }
   .app-nav-item[aria-current='page'] { background: var(--nav-soft); color: var(--nav-accent); font-weight: 600; }
   .app-nav-sub { margin-top: 2px; }
   .app-nav-subitem { display: flex; align-items: center; gap: 12px; height: 38px; padding: 0 14px 0 46px; border-radius: 10px; font-size: 14px; color: var(--nav-muted); }

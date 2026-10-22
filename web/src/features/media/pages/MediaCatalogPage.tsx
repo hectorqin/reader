@@ -54,7 +54,6 @@ export function MediaCatalogPage() {
       })}</nav>
     </>}
     <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
-    {emptyCatalog && <EmptyMediaLibrary channel={channel} hasLibraries={hasLibraries} admin={admin} category={current.label} onCreate={() => navigate(`/media/${channel}/settings/libraries/new`)} onManage={() => navigate(`/media/${channel}/settings/libraries`)} />}
     {!emptyCatalog && !playerActive && offset === 0 && (current.kind === 'video' || current.kind === 'album' || current.kind === 'audiobook') && <ContinuePlaying
       api={runtime.mediaApi}
       libraryId={selectedLibrary}
@@ -80,6 +79,8 @@ export function MediaCatalogPage() {
         </details>
       </div>
     </div>}
+    {/* After the toolbar: the empty state answers "this library/category has nothing", so the selector it refers to sits above it. */}
+    {emptyCatalog && <EmptyMediaLibrary channel={channel} hasLibraries={hasLibraries} admin={admin} category={current.label} onCreate={() => navigate(`/media/${channel}/settings/libraries/new`)} onManage={() => navigate(`/media/${channel}/settings/libraries`)} />}
     {!emptyCatalog && query.data && <><MediaItemGrid items={query.data.items} channel={channel} />{query.data.total > 60 && <nav className="media-toolbar media-pagination" aria-label="分页">
       <button type="button" disabled={offset === 0 || query.isFetching} onClick={() => patch({ offset: offset >= 60 ? String(offset - 60) : '' })}>上一页</button>
       <span>{Math.floor(offset / 60) + 1} / {Math.ceil(query.data.total / 60)}</span>
