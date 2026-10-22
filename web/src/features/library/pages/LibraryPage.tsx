@@ -30,7 +30,7 @@ function Cover({ book }: { book: Book }) {
 }
 
 function CollectionHeader({ title, subtitle, backTo, actions, className, footer }: { title: string; subtitle: string; backTo?: string; actions?: React.ReactNode; className?: string; footer?: React.ReactNode }) {
-  return <header className={'collection-header' + (className ? ` ${className}` : '')}><div className="collection-heading">{backTo && <Link to={backTo} className="icon-button" aria-label="返回"><Icon name="arrow-left" /></Link>}<div className="collection-heading-text"><h1>{title}</h1><p className="muted">{subtitle}</p></div></div>{actions && <nav className="collection-links" aria-label="页面操作">{actions}</nav>}{footer}</header>;
+  return <header className={'collection-header' + (className ? ` ${className}` : '')}><div className="collection-heading">{backTo && <Link to={backTo} className="icon-button" aria-label="返回" title="返回"><Icon name="chevron-left" /></Link>}<div className="collection-heading-text"><h1>{title}</h1><p className="muted">{subtitle}</p></div></div>{actions && <nav className="collection-links" aria-label="页面操作">{actions}</nav>}{footer}</header>;
 }
 
 export function LibraryPage() { return <LibraryBrowsePage />; }

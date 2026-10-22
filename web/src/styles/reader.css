@@ -3847,6 +3847,15 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .file-manager-header .collection-links { align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: .55rem; }
 .file-manager-header .collection-link.button { flex: 0 0 auto; min-width: 8.5rem; min-height: 44px; justify-content: flex-start; }
 .file-manager-header .collection-link.button > span { flex: 1 1 auto; }
+/* The trailing "›" is a glyph, not a label: it ends the button instead of sharing the
+   label's flex and landing in the middle of the leftover space. */
+.collection-link.button > span[aria-hidden='true'] { flex: 0 0 auto; color: var(--reader-muted); }
+/* Phones: the file actions split the row under the title, edge to edge with the list,
+   rather than hanging off the right with a gap the title does not explain. */
+@media (max-width: 63.999rem) {
+  .file-manager-header .collection-links { justify-content: stretch; }
+  .file-manager-header .collection-link.button { flex: 1 1 0; min-width: 0; }
+}
 .shelf-settings .section-title:first-child { margin-top: 0; }
 .shelf-discovery { display: contents; }
 /* Desktop keeps navigation compact and settings beside the collection. */
