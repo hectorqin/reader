@@ -15,7 +15,7 @@ body .notyf {
   border-radius: var(--radius-lg);
   color: var(--reader-ink);
   box-shadow: 0 6px 24px #00000014;
-  font-size: .82rem;
+  font-size: var(--text-label);
   text-align: start;
   pointer-events: none;
   animation-duration: .15s;

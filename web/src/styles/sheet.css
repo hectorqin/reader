@@ -148,7 +148,7 @@
   background: var(--reader-paper);
   color: var(--reader-ink);
   /* 16px, so iOS does not zoom the page on focus and push the sheet off-screen. */
-  font-size: 16px;
+  font-size: var(--text-title);
   font-family: inherit;
 }
 

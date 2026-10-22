@@ -22,4 +22,15 @@ describe('design tokens', () => {
     });
     expect(offenders).toEqual([]);
   });
+
+  it('uses --text-* instead of literal font sizes up to 24px (ui.md §2.2)', () => {
+    // Above 24px is decorative (a player's initial, a hero numeral) and stays literal.
+    const offenders = stylesheets(root).flatMap(file => {
+      const source = readFileSync(file, 'utf8');
+      return [...source.matchAll(/font-size:\s*(\d*\.?\d+)(px|rem)/g)]
+        .filter(([, size, unit]) => (unit === 'rem' ? Number(size) * 16 : Number(size)) <= 24)
+        .map(match => `${relative(root, file)}: ${match[0]}`);
+    });
+    expect(offenders).toEqual([]);
+  });
 });

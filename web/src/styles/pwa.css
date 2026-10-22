@@ -18,7 +18,7 @@
   background: var(--reader-surface);
   color: var(--reader-ink);
   box-shadow: 0 4px 16px #0000000d;
-  font-size: .875rem;
+  font-size: var(--text-ui);
   line-height: 1.5;
 }
 .pwa-update .button {
