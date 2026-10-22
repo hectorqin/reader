@@ -14,7 +14,7 @@
   gap: 1rem;
   padding: .625rem .625rem .625rem 1rem;
   border: 1px solid var(--reader-line);
-  border-radius: 1rem;
+  border-radius: var(--radius-lg);
   background: var(--reader-surface);
   color: var(--reader-ink);
   box-shadow: 0 4px 16px #0000000d;
@@ -25,7 +25,7 @@
   min-height: 44px;
   flex: none;
   padding: .625rem 1rem;
-  border-radius: .75rem;
+  border-radius: var(--radius-md);
   font: inherit;
   font-weight: 600;
   white-space: nowrap;

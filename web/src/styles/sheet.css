@@ -19,7 +19,7 @@
   padding: 0;
   border: 1px solid var(--reader-line);
   border-bottom: 0;
-  border-radius: 16px 16px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--reader-surface);
   color: var(--reader-ink);
   font: inherit;
@@ -45,7 +45,7 @@
   width: 2.25rem;
   height: 0.25rem;
   margin: 0.5rem auto 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--reader-line);
 }
 
@@ -268,7 +268,7 @@
     width: min(30rem, calc(100vw - 2rem));
     max-height: calc(100dvh - 2rem);
     border-bottom: 1px solid var(--reader-line);
-    border-radius: 1rem;
+    border-radius: var(--radius-lg);
     box-shadow: 0 12px 48px color-mix(in srgb, #000 20%, transparent);
   }
 

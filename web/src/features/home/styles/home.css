@@ -3,8 +3,8 @@
 .home-header h1 { margin: 6px 0 0; font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; font-size: 28px; font-weight: 600; line-height: 1.2; color: var(--color-ink); }
 .home-header p { margin: 6px 0 0; font-size: 14px; color: var(--color-muted); }
 
-.home-progress { display: block; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--color-ink) 10%, transparent); overflow: hidden; }
-.home-progress > i { display: block; height: 100%; min-width: 4px; border-radius: 2px; background: var(--color-brand); }
+.home-progress { display: block; height: 4px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--color-ink) 10%, transparent); overflow: hidden; }
+.home-progress > i { display: block; height: 100%; min-width: 4px; border-radius: var(--radius-xs); background: var(--color-brand); }
 
 /* Reading takes the lead; unfinished media sits beside it on a wide window, below it otherwise. */
 .home-continue { display: grid; gap: 12px; margin-top: 20px; }
@@ -17,7 +17,7 @@
   gap: 20px;
   padding: 20px;
   border: 1px solid color-mix(in srgb, var(--color-ch-read) 35%, transparent);
-  border-radius: 24px;
+  border-radius: var(--radius-xl);
   background: var(--color-ch-read-soft);
   color: var(--color-ink);
   text-decoration: none;
@@ -33,7 +33,7 @@
   width: 96px;
   aspect-ratio: 5 / 7;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-ink);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 12%, transparent), 0 10px 22px color-mix(in srgb, var(--color-ink) 16%, transparent);
@@ -46,7 +46,7 @@
 .home-hero-text small { font-size: 13px; color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .home-hero-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: auto; padding-top: 14px; }
-.home-hero-action { display: inline-flex; align-items: center; gap: 6px; flex: none; height: 38px; padding: 0 18px; border-radius: 19px; background: var(--color-brand); color: var(--color-on-brand); font-size: 14px; font-weight: 600; }
+.home-hero-action { display: inline-flex; align-items: center; gap: 6px; flex: none; height: 38px; padding: 0 18px; border-radius: var(--radius-pill); background: var(--color-brand); color: var(--color-on-brand); font-size: 14px; font-weight: 600; }
 .home-hero-meter { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 140px; max-width: 320px; }
 .home-hero-meter .home-progress { flex: 1; }
 .home-hero-percent { flex: none; font-size: 12px; color: var(--color-muted); font-variant-numeric: tabular-nums; }
@@ -65,7 +65,7 @@
   gap: 14px;
   padding: 14px 14px 14px 16px;
   border: 1px solid var(--color-line);
-  border-radius: 20px;
+  border-radius: var(--radius-xl);
   background: var(--color-surface);
   color: var(--color-ink);
   text-decoration: none;
@@ -74,7 +74,7 @@
 }
 .home-card[data-channel='audiobook'] { --ch: var(--color-ch-audio); --ch-soft: var(--color-ch-audio-soft); --ch-text: var(--color-ch-audio-text); }
 .home-card:hover { border-color: var(--ch); }
-.home-card-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 14px; background: var(--ch-soft); color: var(--ch-text); }
+.home-card-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: var(--radius-lg); background: var(--ch-soft); color: var(--ch-text); }
 .home-card-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .home-card-label { font-size: 12px; font-weight: 600; color: var(--ch-text); }
 .home-card strong { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
