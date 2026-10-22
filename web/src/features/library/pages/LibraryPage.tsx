@@ -1,5 +1,6 @@
 import { BookOpen, FileText, Folder, Plus, Search, Upload } from 'lucide-react';
 import { coverTint } from '../../../ui/cover-tint.ts';
+import { BookGridSkeleton } from '../../../ui/book-grid-skeleton.tsx';
 import { ActionMenu } from '../../../ui/action-menu.tsx';
 import { Callout, Icon } from '../../../ui/toolkit.tsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -49,7 +50,7 @@ export function LibraryBrowsePage() {
     {listing.data && listing.data.crumbs.length > 1 && <div className="manager-crumbs library-path" aria-label="当前文件夹">{listing.data.crumbs.map((crumb, index) => <span key={`${crumb.path}-${index}`}>{index > 0 && <span className="manager-crumb-sep">/</span>}<button type="button" className="manager-crumb" onClick={() => navigate(crumb.path)}>{crumb.name}</button></span>)}</div>}
     <main className="manager-body library-browse-body">
       <form className="shelf-search library-search" role="search" onSubmit={(event: FormEvent) => { event.preventDefault(); navigate(path, 1, draft.trim()); }}><Search className="search-glyph" size={18} aria-hidden="true" /><input type="search" aria-label="搜索书库" placeholder="在书库中搜索书名、作者" value={draft} onChange={event => setDraft(event.currentTarget.value)} />{draft && <button type="button" className="search-clear" aria-label="清除搜索" onClick={() => { setDraft(''); navigate(path); }}>×</button>}</form>
-      {books.isPending && <FloatingNotice message="正在加载书库…" busy />}{books.error && <Callout tone="error" title="书库加载失败">{books.error.message}</Callout>}
+      {books.isPending && <><FloatingNotice message="正在加载书库…" busy /><BookGridSkeleton className="library-browse-grid" density="cozy" /></>}{books.error && <Callout tone="error" title="书库加载失败">{books.error.message}</Callout>}
       {empty && <div className="empty-state collection-empty"><BookOpen className="empty-glyph" aria-hidden="true" /><p>{search ? '没有匹配的书' : '书库还没有书'}</p><p className="muted">{search ? '换个关键词，或者检查一下作者名的写法。' : '前往文件管理添加书籍，再回到这里浏览。'}</p><div className="empty-actions">{search ? <button type="button" className="button" onClick={() => { setDraft(''); navigate(path); }}>清除搜索</button> : role === 'admin' ? <Link className="button primary" to="/library/files"><Folder size={16} />文件管理</Link> : null}</div></div>}
       {books.data && books.data.items.length > 0 && <div className="book-grid library-browse-grid" data-density="cozy" data-show-author="true">{books.data.items.map(book => <div className="book-card is-row" key={book.id}><Link className="book-open" to={`/book/${encodeURIComponent(book.id)}`} aria-label={`${book.title} ${book.author ?? ''}`}><Cover book={book} /><div className="title">{book.title || '未命名'}</div><div className="author">{book.author || '未知作者'}</div></Link>{book.shelfState === 'off' && <button type="button" className="book-shelve" aria-label={`把${book.title}加入书架`} disabled={busy === book.id} onClick={() => void toggle(book)}>+ 加入书架</button>}</div>)}</div>}
       {books.data && <div className="manager-status muted">{search ? `找到 ${count} 本` : `${count} 本 · 第 ${page} / ${pages} 页`}</div>}
