@@ -85,12 +85,12 @@
 }
 
 .sheet-body {
-  flex: 1 1 0%;
+  flex: 1 1 auto;
   /* Let the body give up intrinsic content height so long lists scroll inside
      the capped sheet instead of overflowing past the viewport. */
   flex-basis: 0;
   min-height: 0;
-  height: 0;
+  height: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
