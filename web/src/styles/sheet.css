@@ -85,12 +85,12 @@
 }
 
 .sheet-body {
-  flex: 1 1 auto;
+  flex: 1 1 0%;
   /* Let the body give up intrinsic content height so long lists scroll inside
      the capped sheet instead of overflowing past the viewport. */
   flex-basis: 0;
   min-height: 0;
-  max-height: 100%;
+  height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -267,6 +267,7 @@
      body's overflow area never becomes a scroll container. Compact prompts
      remain content-sized. */
   .sheet:not([data-size='compact']) {
+    height: min(80vh, calc(100vh - var(--safe-top) - 1.5rem));
     height: min(80dvh, calc(100dvh - var(--safe-top) - 1.5rem));
   }
 
