@@ -276,6 +276,50 @@
   }
 }
 
+/* Android System WebView has a different <dialog> intrinsic-size algorithm
+   from Chromium. It can collapse a flex child even when the dialog has a
+   viewport height, leaving only a thin strip of the body visible. Use explicit
+   regions there; desktop Chrome keeps the normal flex layout above. */
+@media (max-width: 700px) {
+  .sheet[data-host='android']:not([data-size='compact']) {
+    display: block;
+    height: min(80vh, calc(100vh - var(--safe-top) - 1.5rem));
+    height: min(80dvh, calc(100dvh - var(--safe-top) - 1.5rem));
+    max-height: none;
+  }
+
+  .sheet[data-host='android']:not([data-size='compact']) > .sheet-grip {
+    position: absolute;
+    inset: 0.5rem auto auto 50%;
+    transform: translateX(-50%);
+  }
+
+  .sheet[data-host='android']:not([data-size='compact']) > .sheet-header {
+    position: absolute;
+    inset: 1.25rem 0 auto;
+    z-index: 1;
+    background: var(--reader-surface);
+  }
+
+  .sheet[data-host='android']:not([data-size='compact']) > .sheet-body {
+    position: absolute;
+    inset: 4.5rem 0 0;
+    height: auto;
+    overflow-y: scroll;
+  }
+
+  .sheet[data-host='android']:not([data-size='compact']):has(> .sheet-footer) > .sheet-body {
+    bottom: 4.5rem;
+  }
+
+  .sheet[data-host='android']:not([data-size='compact']) > .sheet-footer {
+    position: absolute;
+    inset: auto 0 0;
+    z-index: 1;
+    background: var(--reader-surface);
+  }
+}
+
 @media (min-width: 701px) {
   .sheet {
     inset: 1rem 1rem 1rem auto;

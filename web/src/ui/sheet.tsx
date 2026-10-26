@@ -100,6 +100,7 @@ export function Sheet({
       ref={ref}
       className={className ? `sheet ${className}` : 'sheet'}
       data-size={size}
+      data-host={typeof window !== 'undefined' && window.ReaderAndroid ? 'android' : undefined}
       role={role}
       aria-label={title}
       aria-busy={busy}
