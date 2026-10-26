@@ -15,6 +15,7 @@
   max-width: 100%;
   height: auto;
   max-height: calc(100dvh - var(--safe-top) - 1.5rem);
+  min-height: 0;
   margin: 0;
   padding: 0;
   border: 1px solid var(--reader-line);
@@ -85,7 +86,11 @@
 
 .sheet-body {
   flex: 1 1 auto;
+  /* Let the body give up intrinsic content height so long lists scroll inside
+     the capped sheet instead of overflowing past the viewport. */
+  flex-basis: 0;
   min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -257,6 +262,14 @@
 }
 
 @media (max-width: 700px) {
+  /* Give regular sheets a definite flex height. Without one, some mobile
+     WebViews keep the native dialog at its intrinsic content height and the
+     body's overflow area never becomes a scroll container. Compact prompts
+     remain content-sized. */
+  .sheet:not([data-size='compact']) {
+    height: min(80dvh, calc(100dvh - var(--safe-top) - 1.5rem));
+  }
+
   .sheet-footer .button {
     flex: 1 1 0;
   }
