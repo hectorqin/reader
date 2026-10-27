@@ -206,6 +206,18 @@ export class ReaderView {
    * value it would write is the one already there.
    */
   private trimApplied: number | null = null;
+  /**
+   * What the highlight boxes were painted from, kept so they can be painted again.
+   *
+   * A highlight is a set of absolutely positioned boxes measured from the text's
+   * rects at one moment. Anything that re-flows the text — font size, margins,
+   * line height, switching between scroll and paged, a rotation, a picture
+   * finishing loading — moves the text and leaves the boxes where they were, over
+   * the wrong words. So the anchors are kept and re-measured after every reflow
+   * (`repaintMarks`).
+   */
+  private noteAnchors: Array<{ id?: string; anchor: TextAnchor; color: string }> = [];
+  private searchAnchor: TextAnchor | null = null;
 
   constructor(options: ReaderViewOptions) {
     this.options = options;
@@ -221,6 +233,12 @@ export class ReaderView {
     this.resolver = new ResourceResolver(options.doc.resources);
     this.container.append(this.host);
     this.bindChapterLinks();
+    this.host.flow.addEventListener('scroll', () => this.snapStrayScroll(), { passive: true });
+    // `load` does not bubble, so it is caught on the way down. A picture that
+    // arrives after the highlights were painted pushes the text below it.
+    this.host.flow.addEventListener('load', (event) => {
+      if (event.target instanceof HTMLImageElement) this.repaintMarks();
+    }, true);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const changed = () => {
       clearTimeout(timer);
@@ -421,7 +439,10 @@ export class ReaderView {
     this.host.style.direction = this.settings.direction;
     // Toggling pagination changes the column count, so the stored offset has to
     // be re-applied after the browser has laid out the new column box.
-    requestAnimationFrame(() => this.restoreOffset());
+    requestAnimationFrame(() => {
+      this.restoreOffset();
+      this.repaintMarks();
+    });
 
     // A page turn is the only place an animation is wanted, and only the two
     // settings that change where a page *is* can start one.
@@ -523,6 +544,9 @@ export class ReaderView {
     if (this.staged) await this.staged.loadSection(index);
     this.sectionIndex = index;
     this.sectionOffset = Math.min(1, Math.max(0, offset));
+    // The search box belongs to the chapter it was found in; a new chapter's
+    // content has already dropped the box itself.
+    this.searchAnchor = null;
     this.releaseObjectUrl();
 
     if (this.doc.layout === 'fixed') {
@@ -585,6 +609,7 @@ export class ReaderView {
     const range = anchorRange(this.host.flow, anchor);
     if (!range) return false;
     this.revealRange(range);
+    this.searchAnchor = anchor;
     this.paintRange(range, '#f5a623', 'search');
     return true;
   }
@@ -595,6 +620,7 @@ export class ReaderView {
   }
 
   paintAnnotations(anchors: Array<{ id?: string; anchor: TextAnchor; color: string }>): void {
+    this.noteAnchors = anchors;
     for (const mark of this.host.flow.querySelectorAll('[data-reader-mark="note"]')) mark.remove();
     const sectionId = this.doc.sections[this.sectionIndex]?.id;
     for (const { id, anchor, color } of anchors) {
@@ -602,6 +628,16 @@ export class ReaderView {
       const range = anchorRange(this.host.flow, anchor);
       if (range) this.paintRange(range, /^#[0-9a-f]{6}$/i.test(color) ? color : '#ffd54f', 'note', id);
     }
+  }
+
+  /** Re-measures every highlight box against the text as it is laid out now. */
+  private repaintMarks(): void {
+    if (this.doc.layout === 'fixed') return;
+    this.paintAnnotations(this.noteAnchors);
+    const search = this.searchAnchor;
+    if (!search || this.doc.sections[this.sectionIndex]?.id !== search.sectionId) return;
+    const range = anchorRange(this.host.flow, search);
+    if (range) this.paintRange(range, '#f5a623', 'search');
   }
 
   private paintRange(range: Range, color: string, kind: string, id?: string): void {
@@ -623,10 +659,7 @@ export class ReaderView {
     const rect = rangeRect(range);
     if (rect) {
       const scroller = this.scroller, box = scroller.getBoundingClientRect();
-      if (this.settings.mode === 'paged') {
-          const stride = this.columnStride(this.columnCount());
-          scroller.scrollLeft = Math.floor((scroller.scrollLeft + rect.left - box.left) / stride) * stride;
-        }
+      if (this.settings.mode === 'paged') this.scrollToColumnAt(scroller.scrollLeft + rect.left - box.left);
       else scroller.scrollTop += rect.top - box.top - box.height / 3;
     }
     this.emitPosition();
@@ -1033,8 +1066,12 @@ export class ReaderView {
     // exist: a trim applied afterwards would move the reader by the trim.
     this.syncPageTrim();
     if (this.settings.mode === 'paged') {
-      const max = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-      scroller.scrollLeft = max * this.sectionOffset;
+      // The fraction becomes a page *index* before it becomes an offset: the column
+      // count may have changed since the fraction was measured, and `max * fraction`
+      // is then almost never a column boundary (see scrollToColumnAt).
+      const columns = this.columnCount();
+      const page = Math.round(this.sectionOffset * (columns - 1));
+      scroller.scrollLeft = page * this.columnStride(columns);
       return;
     }
     const limit = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
@@ -1065,6 +1102,7 @@ export class ReaderView {
       // A rotation changes the viewport, and the page's line grid with it: the trim is
       // recomputed before the offset is restored for the same reason as everywhere else.
       this.restoreOffset();
+      this.repaintMarks();
       this.emitPosition();
     });
     this.resizeObserver.observe(this.host);
@@ -1443,6 +1481,47 @@ export class ReaderView {
     return Math.max(1, this.scroller.clientWidth);
   }
 
+  /**
+   * Lands paged mode on the page that contains `x`, a horizontal offset into the
+   * chapter's column strip.
+   *
+   * Every paged-mode write of `scrollLeft` goes through here, because an offset
+   * that is not a column boundary is a screen showing the right half of one page
+   * and the left half of the next. The writes that skipped this — restoring a
+   * fraction after the viewport changed height, centring a spoken sentence —
+   * are what produced the half-and-half pages: a phone changes the viewport's
+   * height every time its address bar or keyboard moves, and a different height
+   * is a different column count, so `max * fraction` was almost never a boundary.
+   */
+  private scrollToColumnAt(x: number): void {
+    const columns = this.columnCount();
+    const stride = this.columnStride(columns);
+    // A hair of tolerance so an offset measured a sub-pixel short of a boundary
+    // still lands on the page that starts there, not on the one before it.
+    const page = Math.min(columns - 1, Math.max(0, Math.floor((x + 1) / stride)));
+    this.scroller.scrollLeft = page * stride;
+  }
+
+  /**
+   * Puts paged mode back on a column boundary after the browser scrolled it.
+   *
+   * The column strip is `overflow: hidden`, which stops the reader from scrolling it
+   * but not the browser: focusing a highlight's button, a find-in-page match, or
+   * selection autoscroll all move it to wherever the element happens to be. The
+   * page turns would then step from that offset, keeping the reader between two
+   * pages for the rest of the chapter.
+   */
+  private snapStrayScroll(): void {
+    if (this.settings.mode !== 'paged' || this.doc.layout === 'fixed') return;
+    const scroller = this.scroller;
+    const stride = this.columnStride(this.columnCount());
+    const offset = scroller.scrollLeft;
+    const off = offset - Math.round(offset / stride) * stride;
+    if (Math.abs(off) <= 1) return;
+    this.scrollToColumnAt(Math.round(offset / stride) * stride);
+    this.emitPosition();
+  }
+
   // ---- read aloud ----
 
   /**
@@ -1557,9 +1636,10 @@ export class ReaderView {
     if (this.settings.mode === 'paged') {
       // In paged mode the page is found by measurement, not by `scrollIntoView`,
       // because the browser's idea of "into view" is a horizontal jump to a
-      // column boundary that ignores the chapter's own padding.
-      const target = flow.scrollLeft + rect.left - flow.getBoundingClientRect().left - flow.clientWidth / 2;
-      flow.scrollLeft = Math.max(0, target);
+      // column boundary that ignores the chapter's own padding. The sentence's
+      // own page, not the sentence centred: centring is an offset between pages.
+      const x = flow.scrollLeft + rect.left - flow.getBoundingClientRect().left;
+      if (x < flow.scrollLeft || x >= flow.scrollLeft + flow.clientWidth) this.scrollToColumnAt(x);
       return;
     }
     const hostRect = flow.getBoundingClientRect();
@@ -1627,7 +1707,7 @@ export class ReaderView {
     if (!(block instanceof HTMLElement)) return;
     if (this.settings.mode === 'paged') {
       const flow = this.host.flow;
-      flow.scrollLeft = Math.max(0, block.offsetLeft - flow.clientWidth / 2);
+      this.scrollToColumnAt(flow.scrollLeft + block.getBoundingClientRect().left - flow.getBoundingClientRect().left);
       return;
     }
     const flow = this.host.flow;

@@ -120,6 +120,10 @@ try {
   await cdp.sleep(300);
   assert.equal((await read()).page,'2','reverse tap returns to same page');
   await cdp.screenshot(join(shots, 'paged.png'));
+  // A page-turn tap puts the toolbar away; the middle third brings it back.
+  assert.equal((await read()).chrome, 'hidden', 'tap page turn hides the toolbar');
+  await cdp.tapMiddle();
+  await cdp.sleep(200);
   await cdp.clickText('.footer button', '下一章');
   await cdp.sleep(350);
   assert.equal((await read()).page,'1','next chapter starts at page one');
