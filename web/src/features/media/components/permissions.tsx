@@ -41,7 +41,7 @@ export function MediaPermissions({api,library,onSaved,onCancel}:{api:MediaApi;li
     catch(error){if(!controller.signal.aborted)setError(error instanceof ApiError&&error.kind==='offline'?'无法连接服务器，请检查连接。当前选择已保留，可以重新保存。':error instanceof ApiError&&error.code==='ADMIN_REQUIRED'?'需要管理员权限才能保存。当前选择已保留。':error instanceof Error?error.message:'保存失败');}
     finally {if(pending.current===controller)pending.current=null;if(!controller.signal.aborted)setSaving(false);}
   };
-  return <section className="media-permissions-page"><header className="media-settings-heading"><button className="media-back-button" data-media-back aria-label="返回媒体库" disabled={saving} onClick={close}><ChevronLeft size={20} aria-hidden="true"/></button><h1>访问权限</h1></header>
+  return <section className="media-permissions-page"><header className="media-settings-heading"><button className="media-back-button" data-media-back aria-label="返回媒体库管理" title="返回媒体库管理" disabled={saving} onClick={close}><ChevronLeft size={20} aria-hidden="true"/></button><h1>访问权限</h1></header>
     {leaving&&<ConfirmSheet danger title="放弃访问权限修改？" text="访问权限尚未保存，离开后将丢弃本次选择。" confirmText="放弃修改" cancelText="继续编辑" onCancel={()=>setLeaving(false)} onConfirm={()=>{setLeaving(false);onCancel();}}/>}
     <form className="media-form media-permissions-form" aria-label="媒体库访问权限" onSubmit={event=>{event.preventDefault();if(ready&&!saving)void save();}}>
     <div className="media-permissions-intro"><h2>{library.name}</h2><p>允许访问的用户共享作品资料，收藏与进度各自独立。</p></div>

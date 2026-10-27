@@ -16,7 +16,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--color-line);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-ink);
   font: inherit;
@@ -41,7 +41,7 @@
   margin: 0;
   padding: 8px 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: inherit;
   font: inherit;

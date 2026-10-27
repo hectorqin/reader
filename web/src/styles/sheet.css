@@ -15,11 +15,12 @@
   max-width: 100%;
   height: auto;
   max-height: calc(100dvh - var(--safe-top) - 1.5rem);
+  min-height: 0;
   margin: 0;
   padding: 0;
   border: 1px solid var(--reader-line);
   border-bottom: 0;
-  border-radius: 16px 16px 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   background: var(--reader-surface);
   color: var(--reader-ink);
   font: inherit;
@@ -45,7 +46,7 @@
   width: 2.25rem;
   height: 0.25rem;
   margin: 0.5rem auto 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--reader-line);
 }
 
@@ -85,7 +86,11 @@
 
 .sheet-body {
   flex: 1 1 auto;
+  /* Let the body give up intrinsic content height so long lists scroll inside
+     the capped sheet instead of overflowing past the viewport. */
+  flex-basis: 0;
   min-height: 0;
+  height: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -148,7 +153,7 @@
   background: var(--reader-paper);
   color: var(--reader-ink);
   /* 16px, so iOS does not zoom the page on focus and push the sheet off-screen. */
-  font-size: 16px;
+  font-size: var(--text-title);
   font-family: inherit;
 }
 
@@ -257,8 +262,38 @@
 }
 
 @media (max-width: 700px) {
+  /* Give regular sheets a definite flex height. Without one, some mobile
+     WebViews keep the native dialog at its intrinsic content height and the
+     body's overflow area never becomes a scroll container. Compact prompts
+     remain content-sized. */
+  .sheet:not([data-size='compact']) {
+    height: min(80vh, calc(100vh - var(--safe-top) - 1.5rem));
+    height: min(80dvh, calc(100dvh - var(--safe-top) - 1.5rem));
+  }
+
   .sheet-footer .button {
     flex: 1 1 0;
+  }
+}
+
+/* Android System WebView has a different <dialog> intrinsic-size algorithm
+   from Chromium. It can collapse a flex child even when the dialog has a
+   viewport height, leaving only a thin strip of the body visible. Use explicit
+   regions there; desktop Chrome keeps the normal flex layout above. */
+@media (max-width: 700px) {
+  .sheet[data-host='pwa']:not([data-size='compact']) {
+    inset: 20vh 0 0;
+    height: auto;
+    max-height: none;
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  .sheet[data-host='pwa']:not([data-size='compact']) > .sheet-body {
+    flex: 1 1 0%;
+    height: auto;
+    min-height: 0;
+    overflow-y: auto;
   }
 }
 
@@ -268,7 +303,7 @@
     width: min(30rem, calc(100vw - 2rem));
     max-height: calc(100dvh - 2rem);
     border-bottom: 1px solid var(--reader-line);
-    border-radius: 1rem;
+    border-radius: var(--radius-lg);
     box-shadow: 0 12px 48px color-mix(in srgb, #000 20%, transparent);
   }
 

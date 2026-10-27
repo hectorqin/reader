@@ -215,6 +215,12 @@ async function runReaderReview(browser, origin, checks, errors) {
   await page.goto(`${origin}/#/sources`);
   await waitHeading(page, '书源');
   await capture(page, 'sources', checks, errors);
+  // The reader is a lazily loaded chunk (app/router/lazy-pages.tsx): opening a book
+  // must fetch it and render the chapter, not stop at the Suspense fallback.
+  const readerChunk = page.waitForResponse(response => /\/assets\/ReaderPage-[\w-]+\.js$/.test(response.url()));
+  await page.goto(`${origin}/#/book/review-book`);
+  assert.equal((await readerChunk).status(), 200);
+  await page.locator('book-content').getByText('第 1 段', { exact: false }).first().waitFor();
   // Hash history is part of the router contract.
   await page.goto(`${origin}/#/shelf`);
   await page.goto(`${origin}/#/library`);

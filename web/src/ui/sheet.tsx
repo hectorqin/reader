@@ -56,6 +56,13 @@ export function Sheet({
   title, onClose, children, busy = false, subtitle, actions, footer,
   size = 'regular', className, initialFocus, role = 'dialog',
 }: SheetProps): JSX.Element {
+  const host = typeof window !== 'undefined'
+    ? window.ReaderAndroid
+      ? 'android'
+      : typeof window.matchMedia === 'function' && window.matchMedia('(display-mode: standalone)').matches
+        ? 'pwa'
+        : undefined
+    : undefined;
   const ref = useRef<HTMLDialogElement>(null);
   /** Whether the platform opened it as a modal; without it Escape is ours to handle. */
   const native = useRef(false);
@@ -100,6 +107,7 @@ export function Sheet({
       ref={ref}
       className={className ? `sheet ${className}` : 'sheet'}
       data-size={size}
+      data-host={host}
       role={role}
       aria-label={title}
       aria-busy={busy}

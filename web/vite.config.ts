@@ -2,14 +2,17 @@ import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { pwa } from './tools/pwa/build.ts';
 
-// The build output is consumed twice:
+// The build output is consumed three ways:
 //   - served directly by the server for the browser/H5 build
-//   - copied into the Android app's assets and loaded from file:// in a WebView
+//   - precached by the service worker (tools/pwa/build.ts lists every emitted file)
+//   - copied into the Android app's assets and served by WebViewAssetLoader from
+//     https://appassets.androidplatform.net/ (see WebHost.kt), not from file://
 //
-// Because of the second consumer the build is a single self-contained bundle
-// with relative asset URLs (base: './') and no code-splitting: a WebView loading
-// from file:// cannot fetch sibling chunks over the network, and every extra
-// request through the file protocol is a chance to meet a platform quirk.
+// So relative asset URLs (base: './'), a fixed entry name (client.js) and one
+// stylesheet (index.css, so a lazily loaded screen never paints unstyled), but
+// rarely used screens (the reader, admin pages; app/router/lazy-pages.tsx) are
+// split into content-hashed chunks: every host fetches them like any sibling file,
+// and the server caches the hashed names forever.
 export default defineConfig({
   plugins: [react(), pwa()],
   base: './',
@@ -18,12 +21,13 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'es2020',
     assetsInlineLimit: 0,
+    cssCodeSplit: false,
     rollupOptions: {
       output: {
-        inlineDynamicImports: true,
         entryFileNames: 'assets/client.js',
-        chunkFileNames: 'assets/[name].js',
-        assetFileNames: 'assets/[name][extname]',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        // With cssCodeSplit off Vite names the one stylesheet style.css; keep index.css.
+        assetFileNames: asset => asset.names?.[0] === 'style.css' ? 'assets/index.css' : 'assets/[name][extname]',
       },
     },
     modulePreload: { polyfill: false },

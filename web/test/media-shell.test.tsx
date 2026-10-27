@@ -84,7 +84,7 @@ describe('shell navigation', () => {
     expect(root.querySelector('.app-nav-user small')?.textContent).toBe('离线');
     act(() => useSyncStore.getState().update({ state: 'idle', lastSyncAt: null, pending: false, message: '' }));
     expect(root.querySelector('.app-nav-user small')?.textContent).toBe('已连接');
-    expect(root.querySelector<HTMLInputElement>('.app-nav-search input')?.placeholder).toBe('搜索书名、片名、歌曲、有声书');
+    expect(root.querySelector<HTMLInputElement>('.app-nav-search input')?.placeholder).toBe('搜索书籍和影音');
   });
 
   it('marks the reading destinations under 书架 and the account page under 我的', () => {

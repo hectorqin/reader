@@ -1,13 +1,13 @@
 /* 搜索: one query, books and media. Uses the media page frame and its aliases. */
 .search-page { max-width: 1000px; }
-.search-page-form { display: flex; align-items: center; gap: 10px; margin: 8px 0 20px; padding: 0 6px 0 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--media-paper); color: var(--muted); }
-.search-page-form input { flex: 1; min-width: 0; min-height: 46px; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; outline: none; }
+.search-page-form { display: flex; align-items: center; gap: 10px; margin: 8px 0 20px; padding: 0 6px 0 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--media-paper); color: var(--muted); }
+.search-page-form input { flex: 1; min-width: 0; min-height: 46px; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--text-body); outline: none; }
 .search-page-form input::-webkit-search-cancel-button { display: none; }
 .search-page-form:focus-within { border-color: var(--media-accent); box-shadow: 0 0 0 1px var(--media-accent); }
-.search-page-hint, .search-page-empty { color: var(--muted); font-size: 14px; }
+.search-page-hint, .search-page-empty { color: var(--muted); font-size: var(--text-ui); }
 .search-page-section { margin: 0 0 28px; }
 .search-page-section > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-.search-page-section h2 { margin: 0; font-size: 17px; }
-.search-page-section h2 small { margin-left: 8px; font-size: 12px; font-weight: 400; color: var(--muted); }
-.search-page-section > header a { display: inline-flex; align-items: center; color: var(--media-accent); font-size: 13px; text-decoration: none; }
+.search-page-section h2 { margin: 0; font-size: var(--text-title); }
+.search-page-section h2 small { margin-left: 8px; font-size: var(--text-meta); font-weight: 400; color: var(--muted); }
+.search-page-section > header a { display: inline-flex; align-items: center; color: var(--media-accent); font-size: var(--text-label); text-decoration: none; }
 .search-page-media { display: grid; gap: 4px; }

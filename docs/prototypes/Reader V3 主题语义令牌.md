@@ -34,10 +34,10 @@ Reader V3 内置 4 个主题，每个主题含浅色和深色两套取值，共 
 | ink | `--color-ink` | 正文与标题 |
 | muted | `--color-muted` | 次要文字、图标 |
 | line | `--color-line` | 分隔线、描边 |
-| brand | `--color-brand` | 主按钮底色、选中态、进度条填充（只作填充，不作文字色） |
+| brand | `--color-brand` | 选中态、进度条、开关等状态填充（只作填充，不作文字色） |
 | brand-soft | `--color-brand-soft` | 选中底色、标签底色 |
 | on-brand | `--color-on-brand` | 品牌色填充上的文字和图标 |
-| brand-text | `--color-brand-text` | 品牌色的文字、图标、链接（新增） |
+| brand-text | `--color-brand-text` | 品牌色的文字、图标、链接；主按钮底色（新增） |
 | ch-{read\|video\|music\|audio} | `--color-ch-read` 等 | 频道图标底色、进度条填充 |
 | ch-\*-soft | `--color-ch-read-soft` 等 | 继续卡片、频道入口底色 |
 | ch-\*-text | `--color-ch-read-text` 等 | 频道色的文字（新增） |
@@ -153,9 +153,10 @@ Reader V3 内置 4 个主题，每个主题含浅色和深色两套取值，共 
 3. 品牌色的文字、链接、选中态图标，用 brand-text；频道色的文字用 ch-*-text。不要直接把 brand 或 ch-* 当文字色，浅色主题下对比度不够。
 4. 继续卡片、频道入口的底色用 ch-*-soft，文字用 ink 或 ch-*-text。
 5. 选中的标签、分段控件用 brand-soft 底加 brand-text 文字。
-6. 抽屉、弹层的遮罩用 scrim。
-7. 影视、音乐播放页是固定深色沉浸界面，使用当前主题的深色取值，不随浅色切换。
-8. 不使用纯黑 `#000` 作背景；纯白只作浅色主题的 surface。
+6. 主按钮（每屏唯一的主要操作，如「保存」「播放」）用 brand-text 底加 bg 文字，与危险按钮（danger 底加 bg 文字）同一种画法。浅色主题的 brand 太淡，作主按钮底色时比旁边的白色次按钮还轻，看不出主次。brand 填充保留给选中、进度、开关这类状态。
+7. 抽屉、弹层的遮罩用 scrim。
+8. 影视、音乐播放页是固定深色沉浸界面，使用当前主题的深色取值，不随浅色切换。
+9. 不使用纯黑 `#000` 作背景；纯白只作浅色主题的 surface。
 
 ## 5. 对比度要求
 
@@ -165,7 +166,7 @@ Reader V3 内置 4 个主题，每个主题含浅色和深色两套取值，共 
 | --- | --- |
 | ink 对 bg、surface | 4.5:1 以上 |
 | muted 对 bg、surface-2 | 4.5:1 以上 |
-| brand-text 对 brand-soft、bg | 4.5:1 以上 |
+| brand-text 对 brand-soft、bg（bg 文字在 brand-text 主按钮上即此组合） | 4.5:1 以上 |
 | on-brand 对 brand | 4.5:1 以上 |
 | ch-*-text 对 ch-*-soft | 4.5:1 以上 |
 | on-ch 对 ch-\* | 4.5:1 以上 |

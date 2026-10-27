@@ -1,5 +1,5 @@
 import { Sheet } from '../../../ui/sheet.tsx';
-import { Button, Callout } from '../../../ui/toolkit.tsx';
+import { Button, Callout, IconTextButton } from '../../../ui/toolkit.tsx';
 import { SourcesHeader } from '../components/SourcesHeader.tsx';
 import { SourceBookDetailSheet } from '../components/SourceBookDetailSheet.tsx';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -117,6 +117,8 @@ export function SourcesPage() {
           <div><h2>搜书</h2><p className="muted">选择来源，发现想读的书。</p></div>
           <SearchableSelect label="选择来源" value={selectedSourceId} options={enabledSources.map(source => ({ value: source.id, label: source.name + (source.isDefault ? '（默认）' : '') }))} onChange={setSourceId} />
           {!selectedSourceId && <p className="muted">{enabledSources.length ? '选择来源后，即可搜索书籍或浏览目录。' : '暂无可用来源，请先添加或启用来源。'}</p>}
+          {/* An empty state names its way out: the fix for "no source" lives on the next tab. */}
+          {!selectedSourceId && !enabledSources.length && <IconTextButton className="primary source-picker-cta" icon="plus" label="前往书源管理" onClick={() => setTab('sources')} />}
         </section>
         {selectedSource && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>
           {catalogError && <Callout tone="error" onDismiss={() => setCatalogError('')}>{catalogError}</Callout>}

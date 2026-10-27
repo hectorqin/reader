@@ -9,7 +9,7 @@
   margin: 20px 0 4px;
   padding: 18px 20px;
   border: 1px solid color-mix(in srgb, var(--color-brand) 35%, transparent);
-  border-radius: 24px;
+  border-radius: var(--radius-xl);
   background: var(--color-brand-soft);
   color: var(--color-ink);
 }
@@ -23,15 +23,15 @@
   border-radius: 50%;
   background: var(--color-brand);
   color: var(--color-on-brand);
-  font-size: 22px;
+  font-size: var(--text-display);
   font-weight: 700;
   box-shadow: 0 0 0 3px var(--color-surface);
 }
 
 .mine-profile-text { min-width: 0; }
-.mine-profile-text strong { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
-.mine-role { flex: none; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--color-surface); color: var(--color-brand-text); font-size: 11px; font-weight: 600; line-height: 20px; }
-.mine-profile-text small { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 12px; color: var(--color-muted); overflow-wrap: anywhere; }
+.mine-profile-text strong { display: flex; align-items: center; gap: 8px; font-size: var(--text-title); font-weight: 600; overflow-wrap: anywhere; }
+.mine-role { flex: none; height: 20px; padding: 0 8px; border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-brand-text); font-size: var(--text-meta); font-weight: 600; line-height: 20px; }
+.mine-profile-text small { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: var(--text-meta); color: var(--color-muted); overflow-wrap: anywhere; }
 .mine-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--color-brand-text); }
 
 /* Narrow: one list in reading order. Wide: two independent columns. */
@@ -43,12 +43,12 @@
 }
 
 .mine-group { margin: 24px 0 0; }
-.mine-group > h2 { margin: 0 0 8px 6px; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; color: var(--color-muted); }
+.mine-group > h2 { margin: 0 0 8px 6px; font-size: var(--text-meta); font-weight: 600; letter-spacing: 0.08em; color: var(--color-muted); }
 
 .mine-card {
   overflow: hidden;
   border: 1px solid var(--color-line);
-  border-radius: 18px;
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
 }
 
@@ -81,7 +81,7 @@
   border-top: 1px solid var(--color-line);
 }
 .mine-page .mine-row:hover { background: var(--color-surface-2); }
-.mine-page .mine-row:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: -2px; border-radius: 18px; }
+.mine-page .mine-row:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: -2px; border-radius: var(--radius-lg); }
 
 .mine-row-icon {
   display: grid;
@@ -89,13 +89,13 @@
   flex: none;
   width: 34px;
   height: 34px;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: var(--color-brand-soft);
   color: var(--color-brand-text);
 }
 
-.mine-row-label { flex: 1; min-width: 0; font-size: 15px; font-weight: 500; }
-.mine-row-value { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--color-muted); }
+.mine-row-label { flex: 1; min-width: 0; font-size: var(--text-body); font-weight: 500; }
+.mine-row-value { flex: none; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-label); color: var(--color-muted); }
 .mine-row-chevron { flex: none; color: var(--color-muted); opacity: .7; }
 
 .mine-page .mine-row.is-danger { color: var(--media-error-ink); }
