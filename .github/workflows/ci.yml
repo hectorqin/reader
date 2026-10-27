@@ -77,7 +77,11 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: |
+            web/package-lock.json
+            server/package-lock.json
+      # The review starts its media fixture through the server's tsx.
+      - run: npm ci --prefix server
       - run: npm ci --prefix web
       - run: npx playwright install --with-deps chromium
         working-directory: web
