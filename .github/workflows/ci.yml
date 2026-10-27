@@ -1,0 +1,124 @@
+# Build and test: server (Node/TypeScript), web client, UI review, Android shell.
+#
+# Runs on pull requests and on pushes to any branch except main. Pushes to main and
+# release tags run it through release.yml (workflow_call), before any image is
+# published, so main is tested exactly once per push.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A workflow_call run shares the caller's ref; keep it apart from a direct run.
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 24
+
+jobs:
+  server:
+    name: Server · typecheck, test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  web:
+    name: Web · typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            server/package-lock.json
+      # The web suite imports server code (search parity), so both are installed.
+      - run: npm ci --prefix server
+      - run: npm ci --prefix web
+      - run: npm run typecheck --prefix web
+      - run: npm test --prefix web
+      - run: npm run build --prefix web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          retention-days: 7
+
+  ui-review:
+    # The production bundle rendered in a real Chromium and measured; see docs/ui.md §7.
+    name: Web · UI review
+    runs-on: ubuntu-latest
+    needs: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --prefix web
+      - run: npx playwright install --with-deps chromium
+        working-directory: web
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+      - run: npm run ui:review:only --prefix web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-review
+          path: artifacts/ui-review/react-app
+          retention-days: 14
+
+  android:
+    name: Android · shell contract, debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: sh android/scripts/check-shell.sh
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # The APK carries the current web build; verify-web-assets checks it is packed.
+      - run: sh android/scripts/build-web-assets.sh
+      - run: sh android/scripts/verify-web-assets.sh
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+      # The hosted runner ships the Android SDK; this only accepts and adds what the
+      # build asks for (platform 35, build-tools 35.0.1).
+      - uses: android-actions/setup-android@v3
+      - run: ./gradlew --no-daemon :app:assembleDebug
+        working-directory: android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reader-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 14
