@@ -14,7 +14,7 @@ Docs (mostly Chinese) live in `docs/`; `docs/architecture.md` explains *why* thi
 
 ## Commands
 
-Run from repo root (or `cd` into the package). CI runs install → typecheck → test → build per package: GitHub Actions `.github/workflows/ci.yml` (PRs and non-main pushes; also server, UI review, Android shell check + debug APK) and CNB `.cnb.yml`. `.github/workflows/release.yml` runs CI on main pushes and `v*` tags, then publishes the multi-arch (amd64 + arm64, native runners) image to Docker Hub `hectorqin/reader-pro` (`main`/`sha-*`, or `x.y.z`/`x.y`/`latest` for tags); it needs the `DOCKERHUB_USERNAME`/`DOCKERHUB_TOKEN` secrets. `android/scripts/check-shell.sh` checks the JS bridge contract: only `@JavascriptInterface` methods count, and each must be declared in `web/src/android-bridge.d.ts` (method syntax, `name?(): T` for optional).
+Run from repo root (or `cd` into the package). CI runs install → typecheck → test → build per package: GitHub Actions `.github/workflows/ci.yml` (PRs and non-main pushes; also server, UI review, Android shell check + debug APK) and CNB `.cnb.yml`. `.github/workflows/release.yml` runs CI on main pushes and `v*` tags, then publishes the multi-arch (amd64 + arm64, native runners) image to Docker Hub `hectorqin/reader-pro` (`main`/`sha-*`, or `x.y.z`/`x.y`/`latest` for tags); it needs the `DOCKER_USERNAME`/`DOCKER_PASSWORD` secrets. `android/scripts/check-shell.sh` checks the JS bridge contract: only `@JavascriptInterface` methods count, and each must be declared in `web/src/android-bridge.d.ts` (method syntax, `name?(): T` for optional).
 
 ```sh
 npm ci --prefix server && npm ci --prefix web
