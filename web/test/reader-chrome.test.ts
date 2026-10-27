@@ -12,7 +12,7 @@ import { render } from '../src/shared/ui/render-root.ts';
  *    of them — stop — was pushed off the right edge and the reader could not stop
  *    the voice at all (没法停止).
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createElement as h } from 'react';
 import { ReaderChrome, type ChromeState, type ChromeHandlers, type ReaderThemeState } from '../src/ui/reader-chrome.tsx';
 import { defaultThemePreference, type ThemePreference } from '../src/shared/theme/theme.ts';
@@ -123,6 +123,13 @@ describe('ReaderChrome', () => {
   beforeEach(() => {
     container = document.createElement('div');
     document.body.append(container);
+  });
+  // Unmount before jsdom is torn down: a root left mounted can still commit a
+  // scheduled update afterwards, which surfaced in CI as an unhandled
+  // "Right-hand side of 'instanceof' is not an object" from react-dom.
+  afterEach(() => {
+    render(null, container);
+    container.remove();
   });
 
   function paint(state: Partial<ChromeState>): HTMLElement {
