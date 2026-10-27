@@ -299,6 +299,8 @@ const FLOW_STYLESHEET = `
   column-width: 100%;
   column-fill: auto;
   overflow: hidden;
+  /* Every move here is a page turn; see touch-action in styles/reader.css. */
+  touch-action: none;
 }
 :host([data-paginated='true']) .book-flow > * {
   break-inside: auto;

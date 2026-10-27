@@ -373,6 +373,8 @@ select {
   overflow: hidden;
   display: grid;
   place-items: center;
+  /* Every move is the pager's; see "Which touch moves the browser may claim". */
+  touch-action: none;
 }
 
 /*
@@ -421,6 +423,27 @@ select {
  */
 book-content {
   display: block;
+}
+
+/*
+ * Which touch moves the browser may claim.
+ *
+ * Unset, a horizontal drag on the page was the browser's: it fired pointercancel
+ * the moment the finger moved, so the gesture layer never saw a swipe and no
+ * swipe ever turned a page on a phone. Worse, a rightward one was taken as the
+ * browser's own back gesture and left the book.
+ *
+ * Scroll mode keeps vertical panning — that is how the chapter scrolls — and
+ * nothing else. Paged and fixed layouts have nothing the browser should pan at
+ * all, so every move is the gesture layer's. Declared on the host *and* on the
+ * column inside the shadow root (see ui/shadow.ts): the column is the paged
+ * scroll container, and a touch on the text is decided by the boxes up to it.
+ */
+.book-host[data-layout='reflowable']:not([data-paginated='true']) {
+  touch-action: pan-y;
+}
+.book-host[data-layout='reflowable'][data-paginated='true'] {
+  touch-action: none;
 }
 
 /* ------------------------------------------------------------------ *

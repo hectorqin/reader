@@ -1,4 +1,5 @@
 import { Clapperboard, Music2, Headphones } from 'lucide-react';
+import { channelCategories } from '../hooks/use-media-channel.ts';
 
 /** The three media channels. Reading, home and the account page live in the app navigation. */
 export const mediaChannels = [
@@ -18,4 +19,33 @@ export function ChannelSegments({ current }: { current: string }) {
     {mediaChannels.map(({ id, label }) =>
       <a key={id} href={'#' + channelPath(id)} aria-current={id === current ? 'page' : undefined}>{label}</a>)}
   </nav>;
+}
+
+/**
+ * Every catalog tab on one line, channel by channel: 影视（首页 电影 剧集）, 音乐（专辑
+ * 歌手 曲目）, 有声书（有声书 演播者）. A swipe past a channel's last category is
+ * the next channel's first, which is where the channel switch above would go.
+ */
+const catalogTabs = mediaChannels.flatMap(({ id }) => channelCategories[id].map((category, index) => ({
+  channel: id,
+  path: category.path ? `/media/${id}/${category.path}` : `/media/${id}`,
+  // A channel's bare path is its first category: /media/music redirects to albums.
+  alias: index === 0 ? `/media/${id}` : undefined,
+})));
+
+/**
+ * The catalog tab a swipe from `pathname` lands on, or null at either end and on
+ * any page that is not a catalog tab. Library and sort carry over within a channel
+ * (they name that channel's libraries); a new channel starts unfiltered.
+ */
+export function swipeCatalogTarget(pathname: string, search: string, direction: 'next' | 'previous'): string | null {
+  const index = catalogTabs.findIndex(tab => tab.path === pathname || tab.alias === pathname);
+  const from = catalogTabs[index];
+  const to = catalogTabs[index + (direction === 'next' ? 1 : -1)];
+  if (!from || !to) return null;
+  if (from.channel !== to.channel) return to.path;
+  const params = new URLSearchParams(search), kept = new URLSearchParams();
+  for (const key of ['library', 'sort']) { const value = params.get(key); if (value) kept.set(key, value); }
+  const query = kept.toString();
+  return query ? `${to.path}?${query}` : to.path;
 }
