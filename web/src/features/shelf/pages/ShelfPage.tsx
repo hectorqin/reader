@@ -13,6 +13,7 @@ import { IconButton, Callout } from '../../../ui/toolkit.tsx';
 import { OpdsAccess } from '../../../ui/opds-access.tsx';
 import { DialogView, type Dialog } from '../../../ui/dialog.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
+import { useSwipeTabs } from '../../../shared/ui/use-swipe-tabs.ts';
 
 const coverCache = new WeakMap<object, Map<string, string>>();
 export function useCover(api: ReturnType<typeof useRuntime>['api'], coverUrl: string | null | undefined): string | null {
@@ -92,6 +93,14 @@ export function ShelfPage() {
   const onSearch = (event: FormEvent) => { event.preventDefault(); setQueryText(search.trim()); go({ q: search.trim() }); };
   const clearSearch = () => { setSearch(''); setQueryText(''); go({ q: '' }); };
   const clearFilters = () => go({ status: null, series: null, tag: null });
+  // On a phone the status chips are also a swipe apart: 全部 · 在读 · 想读 · 已读.
+  const swipe = useSwipeTabs<HTMLDivElement>(direction => {
+    const order = [null, ...readingStates] as const;
+    const next = order[order.indexOf(status ?? null) + (direction === 'next' ? 1 : -1)];
+    if (next === undefined) return false;
+    go({ status: next });
+    return true;
+  });
   const act = async (book: Book, action: BookAction) => {
     if (action === 'remove') { setRemoveTarget(book); return; }
     setActionError('');
@@ -114,7 +123,7 @@ export function ShelfPage() {
   const remove = async (book: Book | ContinueReadingItem) => { await runtime.api.browseBatchShelf({ bookIds: [book.id] }, 'remove'); await queryClient.invalidateQueries({ queryKey: ['shelf'] }); };
   const subtitle = queryText ? (query.data?.total ? `「${queryText}」匹配 ${query.data.total} 本` : `没有匹配「${queryText}」的书`) : '收藏好书，随时接着读'; // count and sort live in the sticky toolbar below; saying them twice is noise
   const densityLabel = settings.shelfDensity === 'compact' ? '紧凑' : settings.shelfDensity === 'comfortable' ? '宽松' : '适中';
-  return <div id="shelf-scroll" className="shelf shelf-screen">
+  return <div ref={swipe} id="shelf-scroll" className="shelf shelf-screen">
     <header className="shelf-head">
       <div className="shelf-head-text"><h1 className="shelf-title">{queryText ? '筛选结果' : '书架'}</h1><p className="shelf-subtitle muted">{subtitle}</p></div>
       <div className="shelf-head-actions">

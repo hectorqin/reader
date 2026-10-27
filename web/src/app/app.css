@@ -4,3 +4,17 @@
    screen whenever the bar was showing and put the reader's own bottom toolbar under it.
    100vh stays only as the fallback for a WebView that predates dvh. */
 .reader-route-host { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
+
+/* Swipe between tabs (shared/ui/use-swipe-tabs.ts). Vertical panning stays the
+   browser's; a horizontal move is the hook's rather than the browser's back gesture. */
+.swipe-tabs { touch-action: pan-y; }
+/* The page the swipe brought in slides from the side the finger came from. Only the
+   body moves: a transform on the page itself would re-anchor the header's fixed
+   actions to it for the length of the slide, and the header and the tab row name the tabs anyway. */
+[data-swipe='next'] .swipe-tabs > :not(header, nav) { animation: swipe-in-next var(--motion-duration, 200ms) var(--motion-ease, ease-out); }
+[data-swipe='previous'] .swipe-tabs > :not(header, nav) { animation: swipe-in-previous var(--motion-duration, 200ms) var(--motion-ease, ease-out); }
+@keyframes swipe-in-next { from { transform: translateX(32px); opacity: .4; } }
+@keyframes swipe-in-previous { from { transform: translateX(-32px); opacity: .4; } }
+@media (prefers-reduced-motion: reduce) {
+  [data-swipe] .swipe-tabs > * { animation: none; }
+}

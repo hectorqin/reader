@@ -147,3 +147,13 @@ describe('the reading surface fills the screen', () => {
     expect(declaration(body, 'inset-block-end')).toContain('var(--safe-bottom)');
   });
 });
+
+describe('touch on the page', () => {
+  // Unset, the browser claimed every horizontal drag (pointercancel), so a swipe
+  // never turned a page on a phone and a rightward one left the book.
+  it('leaves horizontal moves to the gesture layer in every mode', () => {
+    expect(declaration(rule(".book-host[data-layout='reflowable']:not([data-paginated='true'])"), 'touch-action')).toBe('pan-y');
+    expect(declaration(rule(".book-host[data-layout='reflowable'][data-paginated='true']"), 'touch-action')).toBe('none');
+    expect(declaration(rule(".book-host[data-layout='fixed']"), 'touch-action')).toBe('none');
+  });
+});
