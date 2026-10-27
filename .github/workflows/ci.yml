@@ -1,14 +1,14 @@
 # Build and test: server (Node/TypeScript), web client, UI review, Android shell.
 #
-# Runs on pull requests and on pushes to any branch except main. Pushes to main and
-# release tags run it through release.yml (workflow_call), before any image is
-# published, so main is tested exactly once per push.
+# Runs on pull requests and on pushes to every branch, main included (main is the
+# long-lived development branch). Release tags and manual releases run it through
+# release.yml (workflow_call) before any image is published.
 name: CI
 
 on:
   pull_request:
   push:
-    branches-ignore: [main]
+    branches: ['**']
   workflow_call:
   workflow_dispatch:
 
@@ -112,9 +112,12 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: gradle
-      # The hosted runner ships the Android SDK; this only accepts and adds what the
-      # build asks for (platform 35, build-tools 35.0.1).
+      # The hosted runner ships the Android SDK; this accepts the licences and adds
+      # exactly what the build asks for. The action's default package list includes
+      # `tools`, which current command-line tools no longer carry (sdkmanager fails).
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-35 build-tools;35.0.1
       - run: ./gradlew --no-daemon :app:assembleDebug
         working-directory: android
       - uses: actions/upload-artifact@v4

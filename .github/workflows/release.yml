@@ -1,8 +1,10 @@
 # Release the single-container image (server + web) to Docker Hub for amd64 and arm64.
 #
-#   push to main      -> hectorqin/reader-pro:main, :sha-<short>
 #   tag v1.2.3        -> hectorqin/reader-pro:1.2.3, :1.2, :latest, :sha-<short>
-#   manual run        -> tags for the chosen ref, as above
+#   manual run        -> the chosen branch's name (e.g. :main) and :sha-<short>
+#
+# Never on a plain push: main is the long-lived development branch, and a release
+# is a decision (a tag, or "Run workflow" in the Actions tab), not a side effect.
 #
 # CI (ci.yml) runs first; nothing is published from a red build. Each architecture
 # is built on its own native runner — the arm64 image under QEMU would run npm ci
@@ -15,7 +17,6 @@ name: Release
 
 on:
   push:
-    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
