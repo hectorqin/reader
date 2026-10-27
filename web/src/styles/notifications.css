@@ -4,6 +4,16 @@ body .notyf {
   gap: .5rem;
   font: inherit;
 }
+/* In the reader, notices stack above its bottom bar, not on it. Bottom-centre is
+   exactly where the 朗读/外观 buttons are, so a "已恢复到上次阅读位置" notice and its
+   dismiss button sat over them and swallowed the next tap. The heights are the
+   footer's own (`--reader-footer-height` in reader.css), and the 1.8rem strip
+   when the chrome is hidden. */
+body:has(.reader-screen) .notyf { padding-bottom: calc(1.8rem + env(safe-area-inset-bottom) + .5rem); }
+body:has(.reader-screen[data-chrome='visible']) .notyf { padding-bottom: calc(8.5rem + env(safe-area-inset-bottom) + .5rem); }
+@media (min-width: 64rem) {
+  body:has(.reader-screen[data-chrome='visible']) .notyf { padding-bottom: calc(5.5rem + .5rem); }
+}
 .notyf .global-notice {
   width: fit-content;
   max-width: min(28rem, calc(100vw - 2rem));

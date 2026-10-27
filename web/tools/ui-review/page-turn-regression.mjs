@@ -11,7 +11,7 @@ try {
   await page.locator('input[autocomplete=username]').fill('review');
   await page.locator('input[type=password]').fill('password12');
   await page.locator('button[type=submit]').click();
-  await page.locator('.shelf-screen').waitFor();
+  await page.locator('input[type=password]').waitFor({ state: 'detached' });
   for (const width of [1366, 390]) {
     await page.setViewportSize({width,height:768});
     await page.goto(base + '/#/shelf');

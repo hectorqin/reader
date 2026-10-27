@@ -647,6 +647,14 @@ export class ReaderScreen {
     }
   }
   private localSectionId(id: string): string {
+    // The loaded document is the authority on its own section ids. Guessing the
+    // `xhtml:` prefix from the format alone is wrong for a windowed book whose ids
+    // never had one, and a highlight whose id gains a prefix the chapter does not
+    // have matches no chapter: saved, synced, and never drawn.
+    const bare = id.replace(/^xhtml:/, '');
+    const sections = this.doc?.sections ?? [];
+    const known = sections.find(section => section.id === id) ?? sections.find(section => section.id.replace(/^xhtml:/, '') === bare);
+    if (known) return known.id;
     if (!this.content && this.book?.format === 'epub') return id.replace(/^xhtml:/, '');
     if (this.content && this.book?.format === 'epub' && !id.startsWith('xhtml:')) return 'xhtml:' + id;
     return id;
@@ -1187,6 +1195,12 @@ export class ReaderScreen {
    * So the two gestures are now disjoint, one meaning each, which is the property
    * the old version lacked: 左/右 = 翻页, 中 = 显隐工具栏. Nothing is revealed by a
    * page turn, and nothing is turned by a tap that asked for the controls.
+   *
+   * One step further, by request ("点击翻页时自动隐藏工具栏"): a page turn *hides*
+   * a toolbar that is showing. A reader who turns the page has gone back to reading,
+   * and the bars would otherwise sit over the page they just turned to until they
+   * found the middle third. Hiding never moves the text — the bars float over a
+   * constant page (see `.reader-screen` in reader.css) — so this costs no reflow.
    */
   private onTapZone(zone: 'previous' | 'toggle-chrome' | 'next'): void {
     if (this.chrome.tocOpen || this.chrome.settingsOpen) return;
@@ -1196,12 +1210,13 @@ export class ReaderScreen {
       return;
     }
 
-    // The page turn, and nothing else: the chrome's visibility is the middle
-    // third's business alone (see the doc comment above). `tapZone` decides which
+    // The page turn, which also puts a showing toolbar away (see the doc comment
+    // above); only the middle third brings it back. `tapZone` decides which
     // physical side is *forward*, so a left-handed reader can put next-page under
     // the thumb that holds the phone.
     const reversed = this.settings.tapZone === 'reversed';
     const forward = reversed ? zone === 'previous' : zone === 'next';
+    if (this.chromeVisible) this.setChromeVisible(false);
     void this.turnPage(forward ? 'next' : 'previous');
   }
 

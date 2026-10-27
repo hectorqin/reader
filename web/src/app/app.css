@@ -1,2 +1,6 @@
 .media-page { max-width: 1440px; margin-inline: auto; padding-bottom: 7rem; }
-.reader-route-host { display: flex; flex-direction: column; height: 100dvh; min-height: 100vh; overflow: hidden; }
+/* The *visible* viewport, never the largest one. A phone browser's 100vh is the height
+   with its address bar hidden, so `min-height: 100vh` made the reader taller than the
+   screen whenever the bar was showing and put the reader's own bottom toolbar under it.
+   100vh stays only as the fallback for a WebView that predates dvh. */
+.reader-route-host { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
