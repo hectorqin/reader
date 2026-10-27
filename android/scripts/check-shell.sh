@@ -21,7 +21,8 @@ err() { printf 'FAIL: %s\n' "$1" >&2; fail=1; }
 note "==> checking package declarations match directory layout"
 for file in $(find "$android_dir/app/src" -name '*.kt'); do
   pkg=$(sed -n 's/^package \(.*\)$/\1/p' "$file" | head -1)
-  rel=${file#"$android_dir"/app/src/main/java/}
+  # Any source set (main, test, androidTest): the package is the path under its java/.
+  rel=${file#"$android_dir"/app/src/*/java/}
   expected=$(dirname "$rel" | tr '/' '.')
   if [ "$pkg" != "$expected" ]; then
     err "$file declares '$pkg' but lives in '$expected'"
@@ -58,10 +59,16 @@ bridge_file="$android_dir/app/src/main/java/cool/cnb/reader/bridge/ReaderBridge.
 speech_file="$android_dir/app/src/main/java/cool/cnb/reader/bridge/SpeechBridge.kt"
 types_file="$repo_dir/web/src/android-bridge.d.ts"
 
-# A method is "implemented" if either bridge class has it at method indentation.
-# Both files are searched for both interfaces: the Kotlin class a method happens
-# to live in is an implementation detail, not part of the contract.
-implemented=$(sed -n 's/^    fun \([A-Za-z][A-Za-z0-9_]*\)(.*/\1/p' "$bridge_file" "$speech_file" | sort -u)
+# A method is "implemented" if either bridge class exposes it to the page: a
+# method-level `fun` directly under `@JavascriptInterface`. Both files are searched
+# for both interfaces: the Kotlin class a method happens to live in is an
+# implementation detail, not part of the contract. A `fun` without the annotation
+# is Kotlin-only (SpeechBridge.interruptForMedia is called by the media bridge,
+# never by the page), and the page cannot call it, so declaring it would be wrong.
+implemented=$(awk '
+  /^    fun [A-Za-z][A-Za-z0-9_]*\(/ && exposed { name = $2; sub(/\(.*/, "", name); print name }
+  NF { exposed = ($0 ~ /^[[:space:]]*@JavascriptInterface[[:space:]]*$/) }
+' "$bridge_file" "$speech_file" | sort -u)
 
 # The declaration side has two shapes, and the difference matters:
 #
