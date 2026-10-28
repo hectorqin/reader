@@ -210,6 +210,11 @@ export class ReaderView {
   private maskedAt: number | null = null;
   private maskTimer: ReturnType<typeof setTimeout> | undefined;
   /**
+   * A paged-mode drag the column strip is following, from `beginDrag` until the glide
+   * that ends it lands. `base` is the page's offset when the finger went down.
+   */
+  private drag: { base: number; frame: number | null; finish: (() => void) | null } | null = null;
+  /**
    * What the highlight boxes were painted from, kept so they can be painted again.
    *
    * A highlight is a set of absolutely positioned boxes measured from the text's
@@ -776,6 +781,7 @@ export class ReaderView {
   async seekPageInChapter(page: number): Promise<void> {
     if (this.doc.layout === 'fixed') return;
     if (this.settings.mode === 'paged') {
+      this.settleDrag();
       const columns = this.columnCount();
       const target = Math.min(columns - 1, Math.max(0, Math.round(page)));
       this.scroller.scrollLeft = target * this.columnStride(columns);
@@ -794,6 +800,8 @@ export class ReaderView {
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     clearTimeout(this.maskTimer);
+    if (this.drag?.frame != null) cancelAnimationFrame(this.drag.frame);
+    this.drag = null;
     if (this.animationTimer !== null) clearTimeout(this.animationTimer);
     this.animationTimer = null;
     this.detachChapterLinks?.();
@@ -1070,6 +1078,7 @@ export class ReaderView {
   private restoreOffset(): void {
     const scroller = this.scroller;
     if (this.doc.layout === 'fixed') return;
+    this.settleDrag();
     // Before the offset is applied, because the page's height decides which offsets
     // exist: a trim applied afterwards would move the reader by the trim.
     this.syncPageTrim();
@@ -1504,7 +1513,96 @@ export class ReaderView {
    * step land on the boundaries the layout actually created, which is the only
    * definition of "one column" that survives both directions.
    */
+  // ---- following the finger (paged mode) ----
+
+  /**
+   * Starts moving the page with the finger. Only paged reflowable text can: its
+   * neighbouring pages are columns already laid out beside this one, so dragging the
+   * strip shows the real next page. Scroll mode is the browser's own (vertical)
+   * scroll; a fixed-layout page is a separate document; right-to-left columns run the
+   * other way from the swipe-to-turn convention.
+   */
+  beginDrag(): boolean {
+    if (this.settings.mode !== 'paged' || this.doc.layout === 'fixed' || this.settings.direction === 'rtl') return false;
+    this.settleDrag();
+    const columns = this.columnCount();
+    this.drag = { base: this.columnIndex() * this.columnStride(columns), frame: null, finish: null };
+    return true;
+  }
+
+  get dragging(): boolean {
+    return this.drag !== null;
+  }
+
+  /** The page follows the finger: `deltaX` is how far it moved since `beginDrag`. */
+  dragTo(deltaX: number): void {
+    if (!this.drag || this.drag.finish) return;
+    this.scroller.scrollLeft = this.drag.base - deltaX;
+  }
+
+  /**
+   * Lets go. With a direction the page glides on to the neighbouring page and this
+   * answers true; at the chapter's edge (no column that way) the strip is put straight
+   * back and this answers false, so the caller turns into the next chapter the normal
+   * way. Without a direction the page springs back.
+   */
+  endDrag(direction: 'next' | 'previous' | null): boolean {
+    const drag = this.drag;
+    if (!drag) return false;
+    const columns = this.columnCount();
+    const stride = this.columnStride(columns);
+    const from = Math.round(drag.base / stride);
+    const target = direction ? from + (direction === 'next' ? 1 : -1) : from;
+    if (target < 0 || target >= columns) {
+      this.scroller.scrollLeft = drag.base;
+      this.drag = null;
+      return false;
+    }
+    this.glide(target * stride, () => {
+      if (target !== from) this.emitPosition();
+    });
+    return target !== from;
+  }
+
+  /**
+   * Animates the strip to `x` from wherever the finger left it. A short ease-out, so a
+   * flick carries on at the speed it was going; immediate when page animation is off
+   * or the reader asked for reduced motion.
+   */
+  private glide(x: number, done: () => void): void {
+    const drag = this.drag!;
+    const scroller = this.scroller;
+    const from = scroller.scrollLeft;
+    const still = this.settings.pageAnimation === 'none'
+      || (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    drag.finish = () => {
+      if (drag.frame !== null) cancelAnimationFrame(drag.frame);
+      scroller.scrollLeft = x;
+      if (this.drag === drag) this.drag = null;
+      done();
+    };
+    if (still || Math.abs(x - from) < 1) { drag.finish(); return; }
+    const duration = 200;
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      if (t >= 1) { drag.finish?.(); return; }
+      scroller.scrollLeft = from + (x - from) * (1 - (1 - t) ** 3);
+      drag.frame = requestAnimationFrame(step);
+    };
+    drag.frame = requestAnimationFrame(step);
+  }
+
+  /** Lands a glide still in flight at once: a new turn starts from a real page. */
+  private settleDrag(): void {
+    const drag = this.drag;
+    if (!drag) return;
+    if (drag.finish) drag.finish();
+    else { this.scroller.scrollLeft = drag.base; this.drag = null; }
+  }
+
   private stepColumn(delta: number): boolean {
+    this.settleDrag();
     const scroller = this.scroller;
     const columns = this.columnCount();
     const current = this.columnIndex();
@@ -1576,6 +1674,8 @@ export class ReaderView {
    * pages for the rest of the chapter.
    */
   private snapStrayScroll(): void {
+    // A drag being followed is between two pages on purpose.
+    if (this.drag) return;
     if (this.settings.mode !== 'paged' || this.doc.layout === 'fixed') return;
     const scroller = this.scroller;
     const stride = this.columnStride(this.columnCount());

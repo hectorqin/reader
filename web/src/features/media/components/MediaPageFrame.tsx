@@ -6,7 +6,8 @@ import { ChannelSegments, swipeCatalogTarget } from './channel-navigation.tsx';
 import { useSwipeTabs } from '../../../shared/ui/use-swipe-tabs.ts';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 
-export function MediaPageFrame({ title, subtitle, children, actions, className, backTo, backLabel, hideHeader = false }: { title: string; subtitle?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string; backTo?: string; backLabel?: string; hideHeader?: boolean }) {
+/** `emptyChannel`: the channel has no library, so a swipe moves by channel (see swipeCatalogTarget). */
+export function MediaPageFrame({ title, subtitle, children, actions, className, backTo, backLabel, hideHeader = false, emptyChannel = false }: { title: string; subtitle?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string; backTo?: string; backLabel?: string; hideHeader?: boolean; emptyChannel?: boolean }) {
   const channel = useMediaChannel();
   const location = useLocation();
   const stateReturn = typeof location.state?.returnTo === 'string' && location.state.returnTo.startsWith('/media/') ? location.state.returnTo : undefined;
@@ -17,7 +18,7 @@ export function MediaPageFrame({ title, subtitle, children, actions, className, 
   const navigate = useNavigate();
   // On a phone the catalog tabs are also a swipe apart (see swipeCatalogTarget).
   const swipe = useSwipeTabs<HTMLDivElement>(catalog ? direction => {
-    const target = swipeCatalogTarget(location.pathname, location.search, direction);
+    const target = swipeCatalogTarget(location.pathname, location.search, direction, emptyChannel ? 'channel' : 'category');
     if (target) navigate(target);
     return target !== null;
   } : null);

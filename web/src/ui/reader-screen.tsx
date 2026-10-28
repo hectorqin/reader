@@ -1092,6 +1092,10 @@ export class ReaderScreen {
       );
     }
 
+    // Paged mode moves the page with the finger: a drag starts once the finger has
+    // clearly gone sideways, and the release decides between turning and springing
+    // back (see ReaderView.beginDrag). Mouse drags stay text selection.
+    let following = false;
     this.detachGestures = attachGestures(this.stage, {
       onTapZone: (zone) => this.onTapZone(zone),
       onSwipe: (direction) => {
@@ -1102,7 +1106,25 @@ export class ReaderScreen {
         if (direction === 'left') void this.turnPage('next');
         else if (direction === 'right') void this.turnPage('previous');
       },
-      onDragDelta: () => undefined,
+      onDragDelta: (deltaX, deltaY, pointerType) => {
+        const view = this.view;
+        if (!view) return;
+        if (!following) {
+          if (pointerType === 'mouse' || Math.abs(deltaX) <= 12 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+          if (this.chrome.refreshing || hasTextSelection(this.stage) || !view.beginDrag()) return;
+          following = true;
+        }
+        view.dragTo(deltaX);
+      },
+      onRelease: (deltaX, _deltaY, duration) => {
+        if (!following) return false;
+        following = false;
+        // A flick turns as a swipe always has; a slow drag turns once it has carried
+        // the page a third of the way, which is where the next page is mostly in view.
+        const turn = (Math.abs(deltaX) >= 48 && duration < 800) || Math.abs(deltaX) > this.stage.clientWidth * 0.3;
+        void this.finishDrag(turn ? (deltaX < 0 ? 'next' : 'previous') : null);
+        return true;
+      },
       onLongPress: () => this.setChromeVisible(true),
       hasSelection: () => hasTextSelection(this.stage),
     });
@@ -1147,6 +1169,14 @@ export class ReaderScreen {
    * a turn that bypassed this method would leave the engine speaking from a
    * detached node, which sounds exactly like the reader being ignored.
    */
+  /** Ends a followed drag: the page glides on, springs back, or crosses the chapter. */
+  private async finishDrag(direction: 'next' | 'previous' | null): Promise<void> {
+    const view = this.view;
+    if (!view) return;
+    if (view.endDrag(direction)) this.pendingSpeechAnchor = null;
+    else if (direction) await this.turnPage(direction);
+  }
+
   private async turnPage(direction: 'next' | 'previous'): Promise<void> {
     if (this.chrome.refreshing) return;
     const view = this.view;

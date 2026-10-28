@@ -1,7 +1,10 @@
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import type { MediaChannel } from '../api/media-api.ts';
 export function useMediaChannel(): MediaChannel {
-  const { channel } = useParams();
+  const { channel: param } = useParams();
+  const { pathname } = useLocation();
+  // Static routes (audiobook/narrators…) have no :channel param; the path still names it.
+  const channel = param ?? /^\/media\/([^/]+)/.exec(pathname)?.[1];
   return channel === 'music' || channel === 'audiobook' ? channel : 'video';
 }
 export const channelLabels = { video: '影视', music: '音乐', audiobook: '有声书' };

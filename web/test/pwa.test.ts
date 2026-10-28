@@ -135,6 +135,9 @@ it('ships standalone launch metadata and a first-paint startup shell', () => {
   // The page draws nothing in a title-bar area, so the overlay would hide the drag
   // region and put the window controls over the content.
   expect(manifest.display_override).not.toContain('window-controls-overlay');
+  // Any `orientation` overrides the phone's rotation lock: Chrome maps `any` to the full
+  // sensor. Without the key the installed app follows the system auto-rotate switch.
+  expect(manifest).not.toHaveProperty('orientation');
   // Android masks launcher icons; without a maskable one it shrinks ours into a disc.
   expect(manifest.icons.some((icon: { purpose?: string }) => icon.purpose === 'maskable')).toBe(true);
   expect(manifest.launch_handler.client_mode).toBe('navigate-existing');

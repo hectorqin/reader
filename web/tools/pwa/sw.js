@@ -5,6 +5,7 @@ const cacheName = `${prefix}__VERSION__`;
 const files = __PRECACHE__;
 const urls = files.map((file) => new URL(file, scope).href);
 const shell = new URL('index.html', scope).href;
+const manifest = new URL('manifest.webmanifest', scope).href;
 
 self.addEventListener('install', (event) => {
   // Reload bypasses HTTP caches for the fixed-name Android-compatible bundle.
@@ -38,6 +39,15 @@ self.addEventListener('fetch', (event) => {
   if (!isHome && !urls.includes(key)) return;
   event.respondWith((async () => {
     const cache = await caches.open(cacheName);
+    // The manifest is network-first: Chrome re-reads it to update an installed app
+    // (orientation, icons, colours), and a cache-first copy would pin every install to
+    // the manifest it first cached until the reader happened to accept an update.
+    if (key === manifest) {
+      try {
+        const response = await fetch(request, { cache: 'no-cache' });
+        if (response.ok) return response;
+      } catch { /* Offline: the cached copy below. */ }
+    }
     return (await cache.match(key)) ?? fetch(request);
   })());
 });

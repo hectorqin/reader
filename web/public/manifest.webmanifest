@@ -8,7 +8,6 @@
   "scope": "./",
   "display_override": ["standalone"],
   "display": "standalone",
-  "orientation": "any",
   "launch_handler": { "client_mode": "navigate-existing" },
   "background_color": "#fdf9f6",
   "theme_color": "#fdf9f6",

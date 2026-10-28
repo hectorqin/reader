@@ -43,7 +43,8 @@ afterEach(() => {
 
 describe('shell navigation', () => {
   it('decides where the bar shows: top-level pages, pushed pages, and the full-screen ones', () => {
-    expect(['/', '/shelf', '/me', '/media/video', '/media/music/albums', '/media/audiobook/books'].map(navMode)).toEqual(Array(6).fill('top'));
+    expect(['/', '/shelf', '/me', '/media/video', '/media/music/albums', '/media/audiobook/books', '/media/audiobook/narrators'].map(navMode)).toEqual(Array(7).fill('top'));
+    expect(navMode('/media/audiobook/narrators/someone')).toBe('push');
     expect(['/library', '/sources', '/media/video/items/x', '/media/video/settings', '/media/video/favorites', '/media/queue'].map(navMode)).toEqual(Array(6).fill('push'));
     expect(['/book/abc', '/media/video/player', '/media/music/player/lyrics'].map(navMode)).toEqual(Array(3).fill('hidden'));
   });

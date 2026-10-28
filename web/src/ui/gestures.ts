@@ -34,8 +34,14 @@
 export interface GestureHandlers {
   onTapZone(zone: 'previous' | 'toggle-chrome' | 'next'): void;
   onSwipe(direction: 'left' | 'right' | 'up' | 'down'): void;
-  /** Fires continuously while a finger is down and moving, for scroll mode. */
-  onDragDelta(deltaX: number, deltaY: number): void;
+  /** Fires continuously while a finger is down and moving; paged mode follows it. */
+  onDragDelta(deltaX: number, deltaY: number, pointerType: string): void;
+  /**
+   * The pointer lifted (or the browser cancelled it). Return true when a drag the
+   * screen was following has already decided the gesture, so it is not also read as a
+   * swipe or a tap — the page that followed the finger has turned, or sprung back.
+   */
+  onRelease?(deltaX: number, deltaY: number, duration: number): boolean;
   onLongPress(x: number, y: number): void;
   /** True when a text selection is active: gestures must then stand aside. */
   hasSelection(): boolean;
@@ -198,7 +204,7 @@ export function attachGestures(element: HTMLElement, handlers: GestureHandlers):
     const deltaX = event.clientX - startX;
     const deltaY = event.clientY - startY;
     if (Math.hypot(deltaX, deltaY) > TAP_MAX_DISTANCE) clearLongPress();
-    handlers.onDragDelta(deltaX, deltaY);
+    handlers.onDragDelta(deltaX, deltaY, event.pointerType);
   };
 
   const onPointerUp = (event: PointerEvent): void => {
@@ -214,6 +220,10 @@ export function attachGestures(element: HTMLElement, handlers: GestureHandlers):
     const duration = Date.now() - startTime;
     const distance = Math.hypot(deltaX, deltaY);
 
+    if (handlers.onRelease?.(deltaX, deltaY, duration)) {
+      suppressClick = true;
+      return;
+    }
     if (suppressClick || handlers.hasSelection()) return;
 
     const horizontal = Math.abs(deltaX) > Math.abs(deltaY) * SWIPE_MAX_OFF_AXIS;
@@ -274,9 +284,12 @@ export function attachGestures(element: HTMLElement, handlers: GestureHandlers):
   };
 
   const onPointerCancel = (): void => {
+    const wasTracking = tracking && !owned;
     tracking = false;
     owned = false;
     clearLongPress();
+    // A followed drag the browser took over springs back: no distance, no turn.
+    if (wasTracking) handlers.onRelease?.(0, 0, Number.POSITIVE_INFINITY);
   };
 
   const onClickCapture = (event: MouseEvent): void => {
