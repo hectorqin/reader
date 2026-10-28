@@ -97,6 +97,14 @@ describe('swipeCatalogTarget', () => {
     expect(swipeCatalogTarget('/media/video/series', '?library=a', 'next')).toBe('/media/music/albums');
   });
 
+  it('moves a whole channel when the channel has no library', () => {
+    expect(swipeCatalogTarget('/media/video', '', 'next', 'channel')).toBe('/media/music/albums');
+    expect(swipeCatalogTarget('/media/music/artists', '', 'next', 'channel')).toBe('/media/audiobook/books');
+    expect(swipeCatalogTarget('/media/audiobook/books', '', 'previous', 'channel')).toBe('/media/music/albums');
+    expect(swipeCatalogTarget('/media/audiobook/narrators', '', 'next', 'channel')).toBeNull();
+    expect(swipeCatalogTarget('/media/video/series', '', 'previous', 'channel')).toBeNull();
+  });
+
   it('does nothing off the catalog', () => {
     expect(swipeCatalogTarget('/media/video/items/1', '', 'next')).toBeNull();
     expect(swipeCatalogTarget('/media/audiobook/narrators/someone', '', 'previous')).toBeNull();

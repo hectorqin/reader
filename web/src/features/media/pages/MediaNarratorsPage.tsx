@@ -68,7 +68,7 @@ export function MediaNarratorsPage() {
     <Link to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Link>
     <ChannelMenu channel="audiobook" />
   </>;
-  return <MediaPageFrame className="media-catalog-page" title="有声书" actions={actions}>
+  return <MediaPageFrame className="media-catalog-page" title="有声书" actions={actions} emptyChannel={!libraries.isPending && !libraries.error && !libraryId}>
     <QueryFeedback pending={libraries.isPending} error={libraries.error} retry={() => { void libraries.refetch(); }} />
     {!libraries.isPending && !libraries.error && !libraryId && <EmptyMediaLibrary channel="audiobook" hasLibraries={false} admin={role === 'admin'} category="演播者" onCreate={() => navigate('/media/audiobook/settings/libraries/new')} onManage={() => navigate('/media/audiobook/settings/libraries')} />}
     {!libraries.isPending && !libraries.error && libraryId && <Narrators

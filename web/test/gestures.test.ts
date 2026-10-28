@@ -269,3 +269,42 @@ describe('selection and long press', () => {
     expect(h.saw.longPresses).toBe(0);
   });
 });
+
+describe('a drag the screen follows', () => {
+  it('passes the pointer type with every move', () => {
+    const types: string[] = [];
+    const h = harness();
+    h.handlers.onDragDelta = (_x, _y, type) => { types.push(type); };
+    press(h.stage, [200, 300], [80, 300]);
+    expect(types).toEqual(['touch']);
+  });
+
+  it('lets a consumed release stand instead of also counting as a swipe', () => {
+    const released: number[] = [];
+    const h = harness();
+    h.handlers.onRelease = (deltaX) => { released.push(deltaX); return true; };
+    press(h.stage, [200, 300], [80, 300]);
+    expect(released).toEqual([-120]);
+    expect(h.saw.swipes).toEqual([]);
+    expect(h.saw.zones).toEqual([]);
+  });
+
+  it('still swipes and taps when the release was not consumed', () => {
+    const h = harness();
+    h.handlers.onRelease = () => false;
+    press(h.stage, [200, 300], [80, 300]);
+    press(h.stage, [260, 300]);
+    expect(h.saw.swipes).toEqual(['left']);
+    expect(h.saw.zones).toEqual(['next']);
+  });
+
+  it('springs a drag back when the browser cancels the pointer', () => {
+    const released: Array<[number, number]> = [];
+    const h = harness();
+    h.handlers.onRelease = (deltaX, _y, duration) => { released.push([deltaX, duration]); return true; };
+    h.stage.dispatchEvent(pointer('pointerdown', { clientX: 200, clientY: 300 }));
+    h.stage.dispatchEvent(pointer('pointermove', { clientX: 120, clientY: 300 }));
+    h.stage.dispatchEvent(pointer('pointercancel', { clientX: 120, clientY: 300 }));
+    expect(released).toEqual([[0, Number.POSITIVE_INFINITY]]);
+  });
+});

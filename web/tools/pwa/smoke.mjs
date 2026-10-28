@@ -97,7 +97,7 @@ try {
     const bounds = await page.locator('.pwa-update').boundingBox();
     assert(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 320);
     await page.evaluate(() => {
-      window.readerApp.saveBeforeUpdate = async () => {
+      window.__readerFlush = async () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
         sessionStorage.setItem('pwa-saved', 'yes');
       };

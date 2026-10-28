@@ -42,7 +42,7 @@ export function MediaCatalogPage() {
       setParams(next, { replace: true });
     }
   }, [channelLibraries, params, selectedFromUrl, setParams]);
-  return <MediaPageFrame className="media-catalog-page" title={channelLabels[channel]} actions={<>
+  return <MediaPageFrame className="media-catalog-page" title={channelLabels[channel]} emptyChannel={emptyWithoutLibraries} actions={<>
     <Link to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Link>
     <ChannelMenu channel={channel} />
   </>}>
