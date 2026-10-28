@@ -441,6 +441,9 @@ book-content {
  */
 .book-host[data-layout='reflowable']:not([data-paginated='true']) {
   touch-action: pan-y;
+  /* The line the page's bottom edge cuts through; see ReaderView.syncPageMask. A clip,
+     not a height, so the page geometry the turns are computed from does not move. */
+  clip-path: inset(0 0 var(--reader-page-mask, 0px) 0);
 }
 .book-host[data-layout='reflowable'][data-paginated='true'] {
   touch-action: none;
@@ -967,8 +970,8 @@ book-content {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  padding: calc(0.9rem + var(--safe-top)) calc(0.9rem + var(--safe-left)) 0.5rem
-    var(--shelf-gutter-end);
+  padding: calc(0.9rem + var(--safe-top)) var(--shelf-gutter-end) 0.5rem
+    calc(0.9rem + var(--safe-left));
   max-width: var(--shelf-measure);
   margin-inline: auto;
 }
@@ -1567,10 +1570,14 @@ book-content {
   transition: opacity var(--motion-duration) var(--motion-ease);
 }
 
-.book-card .book-more:hover,
 .book-card .book-more:focus-visible,
 .book-card .book-more:active {
   opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .book-card .book-more:hover {
+    opacity: 1;
+  }
 }
 
 /* A pointer can hover, so the glyph can afford to be invisible until it does; a
@@ -1973,8 +1980,10 @@ book-content {
   touch-action: manipulation;
 }
 
-.toc-list li button:hover {
-  background: color-mix(in srgb, var(--reader-ink) 6%, transparent);
+@media (hover: hover) and (pointer: fine) {
+  .toc-list li button:hover {
+    background: color-mix(in srgb, var(--reader-ink) 6%, transparent);
+  }
 }
 
 .toc-list li button[aria-current='true'] {
@@ -1991,8 +2000,10 @@ book-content {
   cursor: default;
 }
 
-.toc-list li button[data-unreachable='true']:hover {
-  background: transparent;
+@media (hover: hover) and (pointer: fine) {
+  .toc-list li button[data-unreachable='true']:hover {
+    background: transparent;
+  }
 }
 
 /* A chapter's title, and the whole-book position beside it. The position is what
@@ -2575,6 +2586,24 @@ book-content {
   cursor: pointer;
 }
 
+/*
+ * Small controls keep their look but get a finger-sized hit area: a chip is 29px and the
+ * card corner controls 28px or less, against the 44px a fingertip needs. Horizontally the
+ * chip grows only a little, so neighbours in a row do not steal each other's taps.
+ */
+@media (pointer: coarse) {
+  .chip { position: relative; }
+  .chip::before,
+  .book-card .book-more::before,
+  .book-card .book-shelve::before {
+    content: '';
+    position: absolute;
+    inset: -0.5rem;
+  }
+  .chip::before { inset-inline: -0.15rem; }
+  .book-card .book-shelve::before { inset-block: -0.75rem; }
+}
+
 .chip[aria-pressed='true'] {
   background: color-mix(in srgb, var(--reader-accent) 12%, var(--reader-surface));
   border-color: color-mix(in srgb, var(--reader-accent) 45%, transparent);
@@ -2807,9 +2836,9 @@ book-content {
 .login-password-input { position:relative; }
 .login-password-input input { padding-right:3rem; }
 .login-password-toggle { position:absolute; right:.15rem; top:50%; transform:translateY(-50%); display:grid; place-items:center; width:2.5rem; height:2.5rem; min-height:0; padding:0; border:0; background:transparent; color:var(--reader-muted); cursor:pointer; }
-.login-password-toggle:hover { color:var(--reader-ink); }
+@media (hover: hover) and (pointer: fine) { .login-password-toggle:hover { color:var(--reader-ink); }}
 .login-submit { width: 100%; min-height: 50px; margin-top: .8rem; font-size: var(--text-title); border-radius: var(--radius-sm); background:var(--reader-fill); border-color:var(--reader-fill); color:var(--reader-on-fill); }
-.login-submit:hover { background:color-mix(in srgb, var(--reader-fill) 88%, var(--reader-ink)); border-color:transparent; }
+@media (hover: hover) and (pointer: fine) { .login-submit:hover { background:color-mix(in srgb, var(--reader-fill) 88%, var(--reader-ink)); border-color:transparent; }}
 .login-card .login-notice { margin-top:.95rem; padding:1rem 1.1rem; border-radius:var(--radius-xs); background:var(--color-brand-soft); color:var(--reader-ink); font-size:var(--text-title); line-height:1.6; }
 .login-card .login-notice.is-warning { background:var(--color-surface-2); color:var(--reader-ink); }
 .login-card .login-notice.is-error { background:var(--color-danger-soft); color:var(--color-danger); }
@@ -3572,7 +3601,7 @@ book-content {
 }
 /* Source management shares the reader's type and colour tokens. */
 .sources-screen { display:flex; flex-direction:column; min-height:0; height:100%; flex:1; }
-.sources-header { display:flex; align-items:center; gap:1rem; padding:1rem; border-bottom:1px solid var(--reader-line); }
+.sources-header { display:flex; align-items:center; gap:1rem; padding:calc(1rem + var(--safe-top)) calc(1rem + var(--safe-right)) 1rem calc(1rem + var(--safe-left)); border-bottom:1px solid var(--reader-line); }
 .sources-header h1 { font-size:var(--text-display); flex:1; margin:0; }
 .sources-header-text { flex:1; min-width:0; }
 .sources-header-text p { margin:.25rem 0 0; font-size:var(--text-meta); }
@@ -3612,7 +3641,8 @@ book-content {
 .search-menu-toggle .icon { transform:rotate(90deg); }
 .search-menu { position:absolute; right:0; top:calc(100% + .45rem); z-index:5; width:min(17rem, calc(100vw - 4rem)); padding:.35rem; border:1px solid var(--reader-line); border-radius:var(--radius-md); background:var(--reader-paper); box-shadow:0 8px 24px #0002; }
 .search-menu button { display:flex; align-items:center; width:100%; padding:.65rem .75rem; text-align:left; border:0; background:transparent; color:var(--reader-ink); border-radius:var(--radius-sm); }
-.search-menu button:hover, .search-menu button:focus-visible { background:color-mix(in srgb, var(--reader-accent) 12%, transparent); }
+.search-menu button:focus-visible { background:color-mix(in srgb, var(--reader-accent) 12%, transparent); }
+@media (hover: hover) and (pointer: fine) { .search-menu button:hover { background:color-mix(in srgb, var(--reader-accent) 12%, transparent); }}
 .search-menu small { display:block; margin-top:.2rem; color:var(--reader-muted); font-size:var(--text-meta); }
 .catalog-summary { display:flex; flex-wrap:wrap; gap:.5rem 1rem; justify-content:space-between; align-items:center; }
 .catalog-summary strong { font-size:var(--text-title); }
@@ -3678,7 +3708,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   gap: 0.5rem;
   height: auto;
   min-height: calc(4.5rem + var(--safe-top));
-  padding: calc(0.6rem + var(--safe-top)) 1rem 0.6rem;
+  padding: calc(0.6rem + var(--safe-top)) calc(1rem + var(--safe-right)) 0.6rem calc(1rem + var(--safe-left));
   background: var(--reader-surface);
   border: 0;
   box-shadow: 0 2px 12px #0000000a;
@@ -3689,7 +3719,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reader-heading strong, .reader-heading span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reader-screen .footer {
   height: var(--reader-footer-height);
-  padding: 0.5rem 1rem calc(0.4rem + var(--safe-bottom));
+  padding: 0.5rem calc(1rem + var(--safe-right)) calc(0.4rem + var(--safe-bottom)) calc(1rem + var(--safe-left));
   background: var(--reader-surface);
   border: 0;
   box-shadow: 0 -2px 12px #0000000a;
@@ -3926,7 +3956,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   .reader-screen .progress-row { flex: 1; min-width: 0; }
   .reader-screen .reader-actions { display: flex; gap: .25rem; padding-left: .75rem; border-left: 1px solid var(--reader-line); }
   .reader-screen .reader-actions .top-button { flex-direction: row; min-width: 4.75rem; min-height: 44px; padding: .5rem .7rem; border-radius: var(--radius-md); }
-  .reader-screen .reader-actions .top-button:hover { background: color-mix(in srgb, var(--reader-accent) 10%, transparent); }
+  @media (hover: hover) and (pointer: fine) { .reader-screen .reader-actions .top-button:hover { background: color-mix(in srgb, var(--reader-accent) 10%, transparent); }}
   .reader-screen .reader-actions .icon { font-size: var(--text-title); }
   .reader-screen .reader-rail { right: max(1rem, calc((100% - var(--desktop-page-width)) / 2 - 4.5rem)); bottom: 2.25rem; }
   .reader-screen .reading-indicator { width: var(--desktop-page-width); max-width: 100%; margin-inline: auto; padding-inline: 1.5rem; font-size: var(--text-meta); }
@@ -3935,7 +3965,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   .reader-screen .section-title:first-child { margin-top: 0; }
 }
 @media (max-width: 600px) {
-  .sources-header { gap:.6rem; padding-inline:.75rem; }
+  .sources-header { gap:.6rem; padding-inline:calc(.75rem + var(--safe-left)) calc(.75rem + var(--safe-right)); }
   .sources-header h1 { font-size:var(--text-title); }
   .source-entry-top { align-items:flex-start; flex-direction:column; gap:.6rem; }
   .source-entry-actions, .sources-actions { width:100%; flex-wrap:wrap; }
@@ -3958,7 +3988,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reader-source-info { flex: 1 0 100%; display: flex; gap: .65rem; align-items: center; min-width: 0; font-size: var(--text-meta); color: var(--reader-muted); border-top: 1px solid var(--reader-line); padding-top: .45rem; }
 .reader-source-info span { flex: 0 1 auto; max-width: 35%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .reader-source-info a { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: inherit; text-decoration: none; }
-.reader-source-info a:hover { text-decoration: underline; }
+@media (hover: hover) and (pointer: fine) { .reader-source-info a:hover { text-decoration: underline; }}
 .book-detail { display: grid; gap: .5rem; }
 .book-detail h3 { margin: 0; font-size: var(--text-display); overflow-wrap: anywhere; }
 .book-detail-author { color: var(--reader-muted); }
@@ -4001,7 +4031,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .source-switch-hint { margin: .65rem 0 1rem; color: var(--reader-muted); font-size: var(--text-meta); line-height: 1.6; }
 .source-switch-list { display: grid; gap: .7rem; }
 .source-switch-card { display: flex; flex-direction: column; gap: .55rem; width: 100%; min-width: 0; padding: 1rem; border: 1px solid var(--reader-line); border-radius: var(--radius-lg); background: var(--reader-paper); color: var(--reader-ink); text-align: start; font: inherit; cursor: pointer; }
-.source-switch-card:hover { border-color: var(--reader-accent); background: color-mix(in srgb, var(--reader-accent) 4%, var(--reader-paper)); }
+@media (hover: hover) and (pointer: fine) { .source-switch-card:hover { border-color: var(--reader-accent); background: color-mix(in srgb, var(--reader-accent) 4%, var(--reader-paper)); }}
 .source-switch-card:focus-visible { outline: var(--focus-ring); outline-offset: 2px; }
 .source-switch-card:disabled { opacity: .55; cursor: default; }
 .source-switch-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; font-size: var(--text-body); }
@@ -4048,7 +4078,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .annotation-popover { position: fixed; z-index: 60; box-sizing: border-box; padding: .6rem; border: 1px solid var(--reader-line); border-radius: var(--radius-md); box-shadow: 0 6px 28px #0003; background: var(--reader-paper); color: var(--reader-ink); font: var(--text-ui)/1.5 system-ui,sans-serif; }
 .annotation-actions { display: flex; gap: .25rem; }
 .annotation-actions button { flex: 1; min-height: 44px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--reader-accent); font: inherit; cursor: pointer; }
-.annotation-actions button:hover { background: var(--reader-surface); }
+@media (hover: hover) and (pointer: fine) { .annotation-actions button:hover { background: var(--reader-surface); }}
 .annotation-popover blockquote, .annotation-editor blockquote { margin: .3rem 0 .75rem; padding: .5rem .75rem; border-inline-start: 3px solid var(--reader-accent); max-height: 6rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .annotation-comment { margin: .5rem; max-height: 8rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .annotation-editor { display: grid; gap: 1rem; }

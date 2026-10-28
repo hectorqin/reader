@@ -11,7 +11,8 @@
       maximum-scale=1 disables pinch-zoom. That is deliberate: text size belongs
       to the reader's own control, and a visual zoom fights CSS pagination, which
       is measured in viewport units. Android WebView honours this; iOS Safari
-      ignores it, which is acceptable since iOS is out of scope for v1.
+      ignores it, and also zooms into any focused field whose text is under 16px,
+      so fields a finger can reach are 16px or more (see docs/ui.md, PWA).
 
       No external font: a self-hosted reader must work with no outbound network
       at all, and a webfont would also fail on the LAN with no internet uplink.
@@ -27,8 +28,15 @@
     <link rel="icon" type="image/svg+xml" href="./icons/reader.svg" />
     <link rel="alternate icon" type="image/png" href="./icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="reader" />
+    <!--
+      `default`, not `black-translucent`: translucent draws the status bar over the page
+      with *white* text whatever the theme, which is unreadable on the light default. So
+      on iOS the page starts below the status bar and --safe-top is 0 in portrait; the
+      top-edge headers still add it for browsers and orientations that report one.
+    -->
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <!-- startup-images:start -->
     <link rel="apple-touch-startup-image" href="./startup/startup-640x1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />

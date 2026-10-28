@@ -33,4 +33,28 @@ describe('design tokens', () => {
     });
     expect(offenders).toEqual([]);
   });
+
+  it('only styles :hover where a pointer can hover (ui.md §2.5)', () => {
+    // On a touch screen a tap leaves the control in its hover look until the next tap
+    // elsewhere, so every :hover rule sits inside a `@media (hover: hover)` block.
+    const offenders = stylesheets(root).flatMap(file => {
+      const source = readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+      const open: string[] = [];
+      const found: string[] = [];
+      let start = 0;
+      for (let i = 0; i < source.length; i += 1) {
+        const char = source[i];
+        if (char !== '{' && char !== '}') continue;
+        if (char === '}') { open.pop(); start = i + 1; continue; }
+        const prelude = source.slice(start, i).replace(/^[\s\S]*;/, '').trim();
+        if (prelude.includes(':hover') && !open.some(block => block.startsWith('@media') && block.includes('hover'))) {
+          found.push(`${relative(root, file)}: ${prelude}`);
+        }
+        open.push(prelude);
+        start = i + 1;
+      }
+      return found;
+    });
+    expect(offenders).toEqual([]);
+  });
 });

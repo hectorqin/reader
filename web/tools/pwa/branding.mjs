@@ -1,4 +1,4 @@
-// One PWA icon supplies APK launcher sizes and iOS startup images.
+// One PWA icon supplies APK launcher sizes, the maskable PWA icon and iOS startup images.
 // Run: node web/tools/pwa/branding.mjs
 import { chromium } from 'playwright';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -13,7 +13,7 @@ try {
     const bytes = await page.evaluate(async ({ source, width, height, size }) => {
       const img = new Image(); img.src = source; await img.decode();
       const canvas = document.querySelector('canvas'); canvas.width = width; canvas.height = height;
-      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fbfaf7'; ctx.fillRect(0, 0, width, height);
+      const ctx = canvas.getContext('2d'); ctx.fillStyle = '#fdf9f6'; ctx.fillRect(0, 0, width, height);
       ctx.drawImage(img, (width - size) / 2, (height - size) / 2, size, size);
       return canvas.toDataURL('image/png').split(',')[1];
     }, { source: `data:image/png;base64,${icon.toString('base64')}`, width, height, size });
@@ -23,6 +23,17 @@ try {
   for (const [density, size] of Object.entries({ mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 })) {
     await render(`../android/app/src/main/res/mipmap-${density}/ic_launcher.png`, size, size, size);
   }
+  // Maskable: the tile's own colour to the edge, so the launcher's mask (circle,
+  // squircle…) cuts the background and never the glyph, which sits well inside the
+  // central 80% safe zone.
+  const svg = (await readFile(new URL('public/icons/reader.svg', root), 'utf8')).replace(/ rx="[^"]*"/, '');
+  const maskable = await page.evaluate(async (source) => {
+    const img = new Image(); img.src = source; await img.decode();
+    const canvas = document.querySelector('canvas'); canvas.width = 512; canvas.height = 512;
+    canvas.getContext('2d').drawImage(img, 0, 0, 512, 512);
+    return canvas.toDataURL('image/png').split(',')[1];
+  }, `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`);
+  await writeFile(new URL('public/icons/maskable-512.png', root), Buffer.from(maskable, 'base64'));
   const devices = [[320,568,2],[375,667,2],[414,736,3],[375,812,3],[390,844,3],[393,852,3],[402,874,3],[414,896,2],[414,896,3],[428,926,3],[430,932,3],[440,956,3],[768,1024,2],[810,1080,2],[820,1180,2],[834,1194,2],[1024,1366,2]];
   const links = [];
   for (const [w,h,dpr] of devices) {

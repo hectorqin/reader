@@ -132,6 +132,11 @@ it('ships standalone launch metadata and a first-paint startup shell', () => {
   const manifest = JSON.parse(readFileSync(resolve(process.cwd(), 'public/manifest.webmanifest'), 'utf8'));
   expect(manifest.display).toBe('standalone');
   expect(manifest.display_override).toContain('standalone');
+  // The page draws nothing in a title-bar area, so the overlay would hide the drag
+  // region and put the window controls over the content.
+  expect(manifest.display_override).not.toContain('window-controls-overlay');
+  // Android masks launcher icons; without a maskable one it shrinks ours into a disc.
+  expect(manifest.icons.some((icon: { purpose?: string }) => icon.purpose === 'maskable')).toBe(true);
   expect(manifest.launch_handler.client_mode).toBe('navigate-existing');
   const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8');
   expect(html).toContain('id="app-startup"');

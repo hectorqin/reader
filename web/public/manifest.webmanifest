@@ -6,14 +6,15 @@
   "lang": "zh-CN",
   "start_url": "./",
   "scope": "./",
-  "display_override": ["window-controls-overlay", "standalone"],
+  "display_override": ["standalone"],
   "display": "standalone",
   "orientation": "any",
   "launch_handler": { "client_mode": "navigate-existing" },
-  "background_color": "#fbfaf7",
-  "theme_color": "#fbfaf7",
+  "background_color": "#fdf9f6",
+  "theme_color": "#fdf9f6",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }

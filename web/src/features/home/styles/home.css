@@ -23,7 +23,7 @@
   text-decoration: none;
   transition: border-color .15s ease, box-shadow .15s ease;
 }
-.home-hero:hover { border-color: var(--color-ch-read); box-shadow: 0 8px 24px color-mix(in srgb, var(--color-ink) 8%, transparent); }
+@media (hover: hover) and (pointer: fine) { .home-hero:hover { border-color: var(--color-ch-read); box-shadow: 0 8px 24px color-mix(in srgb, var(--color-ink) 8%, transparent); }}
 .home-hero:focus-visible, .home-card:focus-visible, .home-empty a:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: 3px; }
 
 .home-hero-cover {
@@ -73,7 +73,7 @@
   --ch: var(--color-ch-video); --ch-soft: var(--color-ch-video-soft); --ch-text: var(--color-ch-video-text);
 }
 .home-card[data-channel='audiobook'] { --ch: var(--color-ch-audio); --ch-soft: var(--color-ch-audio-soft); --ch-text: var(--color-ch-audio-text); }
-.home-card:hover { border-color: var(--ch); }
+@media (hover: hover) and (pointer: fine) { .home-card:hover { border-color: var(--ch); }}
 .home-card-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: var(--radius-lg); background: var(--ch-soft); color: var(--ch-text); }
 .home-card-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .home-card-label { font-size: var(--text-meta); font-weight: 600; color: var(--ch-text); }
@@ -85,7 +85,7 @@
 .home-section { display: flex; align-items: baseline; margin: 32px 0 12px; }
 .home-section h2 { flex: 1; margin: 0; font-family: 'Songti SC', 'Noto Serif SC', serif; font-size: var(--text-title); font-weight: 600; }
 .home-section a { display: inline-flex; align-items: center; color: var(--color-muted); font-size: var(--text-label); text-decoration: none; }
-.home-section a:hover { color: var(--color-brand-text); }
+@media (hover: hover) and (pointer: fine) { .home-section a:hover { color: var(--color-brand-text); }}
 .home-shelf-row { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
 .home-shelf-row .book-card { flex: none; width: 112px; }
 

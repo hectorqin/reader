@@ -68,9 +68,24 @@
   .app-nav-status[data-state='offline'] { background: var(--nav-muted); }
   .app-nav-status[data-state='error'] { background: var(--color-danger); }
   .app-nav-search { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 0 12px; border-radius: var(--radius-md); background: var(--color-surface-2); color: var(--nav-muted); }
-  .app-nav-search input { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--nav-ink); font: inherit; font-size: var(--text-label); outline: none; }
+  .app-nav-search input { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--nav-ink); font: inherit; font-size: var(--text-label); text-overflow: ellipsis; outline: none; }
   .app-nav-search input::-webkit-search-cancel-button { display: none; }
   .app-nav-search:focus-within { box-shadow: 0 0 0 2px var(--nav-accent); }
+  /* iOS zooms the page into any field under 16px when it is focused (it ignores
+     maximum-scale), so a finger-driven sidebar (iPad, phone in landscape) gets 16px. */
+  @media (pointer: coarse) { .app-nav-search input { font-size: var(--text-title); } }
+  /* A phone in landscape is wide enough for the sidebar, with a notch on either side.
+     The sidebar takes the left inset; the page column takes the right one once, here,
+     because its centred bands are sized from the column and do not add --safe-right.
+     Inside the column both insets are then zero, or a band that does add them would be
+     indented a second time (or by a notch it does not touch). */
+  .app-nav { padding-left: calc(14px + var(--safe-left)); }
+  body[data-app-nav] .app-shell-body {
+    --safe-left: 0px;
+    --safe-right: 0px;
+    box-sizing: border-box;
+    padding-right: env(safe-area-inset-right, 0px);
+  }
 }
 
 /* ---- the persistent mini player sits clear of the bar / sidebar ---- */
