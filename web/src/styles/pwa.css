@@ -1,11 +1,12 @@
 .pwa-update {
   position: fixed;
   z-index: 1000;
-  bottom: max(1rem, env(safe-area-inset-bottom));
+  /* Clear of whatever owns the bottom edge; the same offsets as styles/notifications.css. */
+  bottom: calc(1rem + var(--safe-bottom));
   left: 50%;
   transform: translateX(-50%);
   width: max-content;
-  max-width: calc(100vw - 2rem);
+  max-width: calc(100vw - 2rem - var(--safe-left) - var(--safe-right));
   box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
@@ -20,6 +21,14 @@
   box-shadow: 0 4px 16px #0000000d;
   font-size: var(--text-ui);
   line-height: 1.5;
+}
+@media (max-width: 700px) {
+  body[data-app-nav] .pwa-update { bottom: calc(var(--app-nav-bar) + var(--safe-bottom) + .75rem); }
+}
+body:has(.reader-screen) .pwa-update { bottom: calc(1.8rem + var(--safe-bottom) + .5rem); }
+body:has(.reader-screen[data-chrome='visible']) .pwa-update { bottom: calc(8.5rem + var(--safe-bottom) + .5rem); }
+@media (min-width: 64rem) {
+  body:has(.reader-screen[data-chrome='visible']) .pwa-update { bottom: calc(5.5rem + .5rem); }
 }
 .pwa-update .button {
   min-height: 44px;

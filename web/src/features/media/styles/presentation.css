@@ -29,7 +29,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-screen button, .media-screen input, .media-screen select, .media-screen textarea { font:inherit; }
 /* The shared sheet's header and footer use the app's own buttons, not media's. */
 .media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu *, .action-menu-trigger)) { border:0; background:transparent; border-radius:var(--radius-sm); min-height:38px; padding:9px 12px; }
-.media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu *, .action-menu-trigger)):hover:not(:disabled) { background:var(--surface); }
+@media (hover: hover) and (pointer: fine) { .media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu *, .action-menu-trigger)):hover:not(:disabled) { background:var(--surface); }}
 .media-screen button:focus-visible, .media-channel-entry a:focus-visible { outline:2px solid var(--media-accent); outline-offset:3px; }
 .media-screen input:not([type=range]):not([type=checkbox]):not([type=radio]), .media-screen textarea {
   background:var(--media-paper); border:1px solid var(--border); border-radius:var(--radius-sm);
@@ -69,7 +69,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-screen .media-browse-tools button {display:flex;align-items:center;gap:6px;font-size:var(--text-meta);padding:6px 8px;min-height:34px}
 .media-screen .media-browse-tools select {font-size:var(--text-meta);max-width:200px}
 .media-screen .media-grid {gap:22px 17px}
-.media-screen .media-tile:hover {background:transparent}
+@media (hover: hover) and (pointer: fine) { .media-screen .media-tile:hover {background:transparent}}
 .media-tile strong {font-size:var(--text-label);margin-top:8px;font-weight:500}
 .media-tile small {color:var(--muted);opacity:1;font-size:var(--text-meta);margin-top:3px}
 .media-read-loading {margin:18px 0 24px}
@@ -113,7 +113,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-hero {gap:26px;margin-top:24px}
 .media-hero .media-cover {width:170px;min-width:170px}
 .media-screen .media-primary {background:var(--media-primary);color:var(--media-on-primary)}
-.media-screen button.media-primary:hover:not(:disabled) {background:var(--media-primary);color:var(--media-on-primary);filter:brightness(.94)}
+@media (hover: hover) and (pointer: fine) { .media-screen button.media-primary:hover:not(:disabled) {background:var(--media-primary);color:var(--media-on-primary);filter:brightness(.94)}}
 .media-task-retry {display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:40px;padding:0 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--media-selection);color:var(--media-accent);font-size:var(--text-meta);font-weight:600}
 .media-task-retry:disabled {opacity:.5}
 @media(max-width:430px){.media-task-retry span{display:inline}.media-task-retry{min-width:64px}.media-scan-job .media-task-icon{min-width:40px}}
@@ -126,7 +126,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-channel-entry a {color:inherit;text-decoration:none;padding:8px 14px;font-size:var(--text-ui);border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;white-space:nowrap}
 .media-channel-entry .media-channel-icon {display:none}
 .media-channel-entry a[aria-current=page] {background:var(--media-selection);color:var(--media-accent);font-weight:500}
-.media-channel-entry a:hover {background:var(--surface)}
+@media (hover: hover) and (pointer: fine) { .media-channel-entry a:hover {background:var(--surface)}}
 
 /* Audio player: the prototype's 420px column, square cover and 58px play control. */
 .media-playback-page {max-width:1120px}
@@ -162,7 +162,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-transport {display:flex;align-items:center;justify-content:center;gap:25px;margin:18px 0}
 .media-screen .media-symbol-button {display:grid;place-items:center;width:44px;height:44px;padding:10px;flex-shrink:0;border:0;background:transparent;color:var(--text)}
 .media-screen .media-toggle-play {display:grid;place-items:center;width:58px;height:58px;min-height:58px;padding:0;flex-shrink:0;border:0;border-radius:50%;background:var(--media-fill);color:var(--media-on-accent)}
-.media-screen .media-toggle-play:hover {background:var(--media-fill);filter:brightness(.95)}
+@media (hover: hover) and (pointer: fine) { .media-screen .media-toggle-play:hover {background:var(--media-fill);filter:brightness(.95)}}
 .media-toggle-play svg {width:25px;height:25px}
 .media-screen .media-skip {position:relative}
 .media-skip small {position:absolute;inset:18px 0 auto;text-align:center;font-size:var(--text-micro);font-weight:600}
@@ -292,7 +292,8 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-channel-switcher nav {position:absolute;left:-60px;top:46px;z-index:100;width:176px;padding:6px;background:var(--media-paper);border:1px solid var(--border);border-radius:var(--radius-md);box-shadow:0 8px 28px #0002}
 .media-channel-switcher a {display:flex;align-items:center;gap:12px;min-height:44px;padding:0 12px;color:var(--text);text-decoration:none;border-radius:var(--radius-sm);font-size:var(--text-ui)}
 .media-channel-switcher a span {flex:1}
-.media-channel-switcher a:hover,.media-channel-switcher a[aria-current=page] {background:var(--media-selection);color:var(--media-accent)}
+.media-channel-switcher a[aria-current=page] {background:var(--media-selection);color:var(--media-accent)}
+@media (hover: hover) and (pointer: fine) { .media-channel-switcher a:hover {background:var(--media-selection);color:var(--media-accent)}}
 .media-channel-switcher :focus-visible {outline:2px solid var(--media-accent);outline-offset:2px}
 .media-page-context {font-size:var(--text-meta);color:var(--muted);font-weight:400;margin-left:8px;white-space:nowrap}
 .media-heading-actions[hidden] {display:none!important}
@@ -361,7 +362,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-library-actions>summary::-webkit-details-marker {display:none}
 .media-library-actions>nav {position:absolute;z-index:10;right:0;top:42px;display:grid;min-width:150px;padding:6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--media-paper);box-shadow:0 5px 18px #0002}
 .media-manager .media-library-actions button {text-align:left;background:transparent;border-radius:var(--radius-xs);padding:10px 12px}
-.media-manager .media-library-actions button:hover {background:var(--surface)}
+@media (hover: hover) and (pointer: fine) { .media-manager .media-library-actions button:hover {background:var(--surface)}}
 .media-manager-note {padding:12px 14px;background:var(--surface);border-radius:var(--radius-sm);color:var(--muted);font-size:var(--text-meta);line-height:1.8;margin:20px 0}
 .media-connection-row {display:flex;gap:12px;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)}
 .media-connection-row>span {flex:1;font-size:var(--text-label)}
@@ -530,7 +531,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-person-placeholder:after {content:'';position:absolute;width:62%;aspect-ratio:1;border:1px solid #ede3ca55;border-radius:50%;right:-13%;top:23%;z-index:-1}
 .media-person-placeholder .media-cover-title {font:400 24px/1.6 Georgia,"Songti SC",SimSun,serif;letter-spacing:2px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .media-screen .media-person-tile {padding:0;border:0;background:transparent;text-align:left;min-width:0;display:block}
-.media-screen .media-person-tile:hover {background:transparent}
+@media (hover: hover) and (pointer: fine) { .media-screen .media-person-tile:hover {background:transparent}}
 .media-person-tile strong,.media-person-tile small {display:block;white-space:nowrap;text-overflow:ellipsis;overflow:hidden}
 .media-person-tile strong {font-weight:500;font-size:var(--text-label);margin-top:8px}
 .media-person-tile small {color:var(--muted);font-size:var(--text-meta);margin-top:3px}
@@ -747,7 +748,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-video-workspace button,.media-video-workspace select,.media-video-sheet .sheet-body button,.media-video-sheet .sheet-body input,.media-video-sheet .sheet-body select {font:inherit;color:inherit;box-sizing:border-box;min-height:44px;border:0;border-radius:var(--radius-sm);padding:9px 12px;background:transparent}
 .media-video-workspace button,.media-video-sheet .sheet-body button {cursor:pointer}
 .media-video-workspace button:disabled,.media-video-sheet .sheet-body button:disabled {opacity:.45;cursor:default}
-.media-video-workspace button:hover:not(:disabled),.media-video-sheet .sheet-body button:hover:not(:disabled) {background:var(--surface)}
+@media (hover: hover) and (pointer: fine) { .media-video-workspace button:hover:not(:disabled),.media-video-sheet .sheet-body button:hover:not(:disabled) {background:var(--surface)}}
 .media-video-workspace :focus-visible,.media-video-sheet :focus-visible {outline:2px solid var(--media-accent);outline-offset:2px}
 .media-video-toolbar,.media-video-toolbar>div {display:flex;align-items:center;gap:6px;min-width:0}
 .media-video-toolbar {justify-content:space-between;margin:5px 0}
@@ -892,7 +893,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-mini .media-mini-toggle,.media-mini .media-mini-close {display:grid;place-items:center;width:40px;min-width:40px;height:40px;min-height:40px;padding:8px;border-radius:50%}
 .media-mini .media-mini-toggle {background:var(--media-fill);color:var(--media-on-accent)}
 .media-mini .media-mini-close {color:var(--muted)}
-.media-mini .media-mini-close:hover {background:var(--border)}
+@media (hover: hover) and (pointer: fine) { .media-mini .media-mini-close:hover {background:var(--border)}}
 
 .media-resource-panel>header {display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:20px}
 .media-screen .media-resource-panel>header h2 {margin:0;font-size:var(--text-title)}
@@ -979,7 +980,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .theme-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .media-screen .theme-card {display:block;min-width:0;padding:10px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--media-paper);color:var(--text);text-align:left}
 .media-screen .theme-card[aria-pressed=true] {border-color:var(--media-accent);box-shadow:0 0 0 1px var(--media-accent)}
-.media-screen .theme-card:hover:not(:disabled) {background:var(--media-paper);border-color:var(--media-accent)}
+@media (hover: hover) and (pointer: fine) { .media-screen .theme-card:hover:not(:disabled) {background:var(--media-paper);border-color:var(--media-accent)}}
 .theme-preview {display:flex;height:64px;overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-md)}
 .theme-preview>span {flex:1;padding:10px 8px;box-sizing:border-box}
 .theme-preview-title {display:block;width:28px;height:6px;border-radius:var(--radius-xs)}
@@ -1038,7 +1039,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-video-landscape button:focus-visible {outline:2px solid #fff;outline-offset:2px}
 /* Hide with DPlayer's own controller after a few idle seconds. */
 .media-player:fullscreen:has(.dplayer-hide-controller) .media-video-landscape:not([data-locked]) {opacity:0}
-.media-player:fullscreen:has(.dplayer-hide-controller) .media-video-landscape:not([data-locked]):hover {opacity:1}
+@media (hover: hover) and (pointer: fine) { .media-player:fullscreen:has(.dplayer-hide-controller) .media-video-landscape:not([data-locked]):hover {opacity:1}}
 /* 锁定: taps no longer reach the player; only the unlock button remains. */
 .media-video-landscape[data-locked] {inset:0 auto 0 0;background:none;padding:0 0 0 max(16px,env(safe-area-inset-left))}
 .media-video-landscape .media-video-unlock {width:48px;height:48px;padding:0;justify-content:center;border-radius:50%;background:rgb(0 0 0 / .45)}

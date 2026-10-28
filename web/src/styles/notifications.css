@@ -35,7 +35,7 @@ body:has(.reader-screen[data-chrome='visible']) .notyf { padding-bottom: calc(8.
 .global-notice .notyf__dismiss { position: relative; width: 32px; height: 32px; margin: 0; flex: none; animation: none; opacity: 1; }
 .global-notice .notyf__dismiss-btn { padding: 0; border-radius: var(--radius-sm); color: var(--reader-muted); background: transparent; opacity: 1; pointer-events: auto; }
 .global-notice .notyf__dismiss-btn::before, .global-notice .notyf__dismiss-btn::after { background: currentColor; }
-.global-notice .notyf__dismiss-btn:hover { background: var(--reader-line); }
+@media (hover: hover) and (pointer: fine) { .global-notice .notyf__dismiss-btn:hover { background: var(--reader-line); }}
 .global-notice .notyf__dismiss-btn:focus-visible { outline: 2px solid var(--reader-accent); outline-offset: 2px; }
 .global-notice[data-kind='error'] { color: #a32c22; }
 [data-mode='dark'] .global-notice[data-kind='error'] { color: #ffaaa0; }
