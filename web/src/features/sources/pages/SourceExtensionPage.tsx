@@ -5,7 +5,8 @@ import type { ExtensionContent, ExtensionField, ExtensionForm, ExtensionPage } f
 import { ApiError } from '../../../api/errors.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
-import { ConfirmSheet } from '../../../ui/sheet.tsx';
+import { ActionMenu } from '../../../ui/action-menu.tsx';
+import { ConfirmSheet, Sheet } from '../../../ui/sheet.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 import { Button } from '../../../ui/toolkit.tsx';
 import { SourcesHeader } from '../components/SourcesHeader.tsx';
@@ -71,12 +72,12 @@ function FormView({ form, formKey, values, busy, selected, onChange, onSubmit, o
   </form>;
 }
 
-function ContentView({ content, scope, values, busy, selected, expanded, onChange, onSubmit, onSelectAction, onToggle, onToggleSelected }: {
-  content: ExtensionContent; scope: string; values: Record<string, FormValues>; busy: boolean; selected: Set<string>; expanded: Set<string>;
+function ContentView({ content, scope, values, busy, selected, onChange, onSubmit, onSelectAction, onEdit, onToggleSelected }: {
+  content: ExtensionContent; scope: string; values: Record<string, FormValues>; busy: boolean; selected: Set<string>;
   onChange(scope: string, key: string, value: unknown): void;
   onSubmit(form: ExtensionForm, values: FormValues, formKey: string): void;
   onSelectAction(field: ExtensionField, value: string, form: ExtensionForm, formKey: string): void;
-  onToggle(key: string): void; onToggleSelected(key: string): void;
+  onEdit(form: ExtensionForm, formKey: string, title: string): void; onToggleSelected(key: string): void;
 }) {
   const editor = <>
     {content.links?.filter(link => safeExternalUrl(link.url)).map(link => <a className="button" key={link.url} href={link.url} target="_blank" rel="noopener noreferrer">{link.title}</a>)}
@@ -86,12 +87,18 @@ function ContentView({ content, scope, values, busy, selected, expanded, onChang
     {content.sections?.map((section, sectionIndex) => <section className="extension-section" key={`${scope}:section:${sectionIndex}`}>
       <h2>{section.title}</h2>
       {!section.items.length && section.emptyText && <p className="extension-empty">{section.emptyText}</p>}
-      {section.items.map((item, itemIndex) => { const key = `${scope}:item:${sectionIndex}:${itemIndex}`; const open = expanded.has(key); return <article className="sources-card extension-item" key={key}>
+      {section.items.map((item, itemIndex) => { const key = `${scope}:item:${sectionIndex}:${itemIndex}`; const formKey = (form: ExtensionForm) => `${key}:form:${form.id}`;
+        // A collapsible item's forms are its row actions: a ⋯ menu, never an in-place expansion.
+        // A form with fields opens in a Sheet; a bare button form submits (confirming first if asked).
+        const menu = item.collapsible ? (item.forms ?? []).map(form => form.fields.length
+          ? { label: form.title || form.submit, disabled: busy, onSelect: () => onEdit(form, formKey(form), item.title) }
+          : { label: form.submit, danger: !!form.confirm, disabled: busy, onSelect: () => onSubmit(form, values[formKey(form)] ?? initialValues(form), formKey(form)) }) : [];
+        return <article className="sources-card extension-item" key={key}>
         <div className="extension-item-heading"><div>
           {item.selectable && item.key && <input type="checkbox" aria-label={`选择 ${item.title}`} checked={selected.has(item.key)} onChange={() => onToggleSelected(item.key!)} />}
           <h3>{item.title}</h3>{item.description && <p className="source-description">{item.description}</p>}
-        </div>{item.collapsible && <button className="button" type="button" aria-expanded={open} aria-controls={`extension-item-${key}`} onClick={() => onToggle(key)}>{open ? '收起' : '管理'}</button>}</div>
-        <div id={`extension-item-${key}`} hidden={item.collapsible && !open} className="extension-actions">{item.forms?.map(form => { const formKey = `${key}:form:${form.id}`; return <FormView key={formKey} form={form} formKey={formKey} values={values[formKey] ?? initialValues(form)} busy={busy} selected={selected} onChange={(field, value) => onChange(formKey, field, value)} onSubmit={onSubmit} onSelectAction={onSelectAction} />; })}</div>
+        </div>{item.collapsible && <ActionMenu label="管理" title={`${item.title}管理`} items={menu} />}</div>
+        {!item.collapsible && !!item.forms?.length && <div className="extension-actions">{item.forms.map(form => <FormView key={formKey(form)} form={form} formKey={formKey(form)} values={values[formKey(form)] ?? initialValues(form)} busy={busy} selected={selected} onChange={(field, value) => onChange(formKey(form), field, value)} onSubmit={onSubmit} onSelectAction={onSelectAction} />)}</div>}
       </article>; })}
     </section>)}
     {content.outputs?.map(output => <details className="sources-card extension-output" open key={`${scope}:output:${output.title}`}><summary>{output.title}</summary><pre tabIndex={0} aria-label={output.title} data-format={output.format}>{output.text}</pre></details>)}
@@ -106,17 +113,16 @@ export function SourceExtensionPage() {
   const pageQuery = useQuery({ queryKey, queryFn: () => sourceId ? api.sourcePage(sourceId, pageId) : api.pluginPage(pluginId!, pageId), enabled: Boolean(pageId && (sourceId || admin)) });
   const action = useMutation({ mutationFn: ({ id, values }: { id?: string; values?: FormValues }) => sourceId ? api.sourcePage(sourceId, pageId, id, values) : api.pluginPage(pluginId!, pageId, id, values) });
   const page = pageQuery.data as ExtensionPage | undefined; const [activeTab, setActiveTab] = useState('');
-  const [values, setValues] = useState<Record<string, FormValues>>({}); const [selected, setSelected] = useState<Set<string>>(new Set()); const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [values, setValues] = useState<Record<string, FormValues>>({}); const [selected, setSelected] = useState<Set<string>>(new Set()); const [editing, setEditing] = useState<{ form: ExtensionForm; key: string; title: string } | null>(null);
   const [error, setError] = useState(''); const [noticeTab, setNoticeTab] = useState(''); const [confirmation, setConfirmation] = useState<{ form: ExtensionForm; values: FormValues; key: string } | null>(null); const busy = action.isPending;
   const tabs = page?.tabs ?? []; const selectedTab = useMemo(() => tabs.find(tab => tab.id === activeTab), [tabs, activeTab]);
-  useEffect(() => { setActiveTab(''); setValues({}); setSelected(new Set()); setExpanded(new Set()); setError(''); setNoticeTab(''); setConfirmation(null); }, [owner, pageId]);
+  useEffect(() => { setActiveTab(''); setValues({}); setSelected(new Set()); setEditing(null); setError(''); setNoticeTab(''); setConfirmation(null); }, [owner, pageId]);
   useEffect(() => { if (!page) return; setActiveTab(current => page.activeTab && !current ? page.activeTab : (current && tabs.some(tab => tab.id === current) ? current : tabs[0]?.id ?? '')); setNoticeTab(current => current || page.activeTab || tabs[0]?.id || ''); }, [page, tabs]);
   const updateValue = (key: string, field: string, value: unknown) => setValues(previous => {
     const form = findForm(page, key);
     const base = previous[key] ?? (form ? initialValues(form) : {});
     return { ...previous, [key]: { ...base, [field]: value } };
   });
-  const toggleExpanded = (key: string) => setExpanded(previous => { const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next; });
   const toggleSelected = (key: string) => setSelected(previous => { const next = new Set(previous); if (next.has(key)) next.delete(key); else next.add(key); return next; });
   const execute = async (id?: string, payload?: FormValues, submittedKey?: string, submittedForm?: ExtensionForm) => {
     setError('');
@@ -127,6 +133,7 @@ export function SourceExtensionPage() {
       const next = await action.mutateAsync(request);
       queryClient.setQueryData(queryKey, next);
       if (submittedKey) setValues(previous => { const copy = { ...previous }; delete copy[submittedKey]; return copy; });
+      if (submittedKey) setEditing(current => current?.key === submittedKey ? null : current);
       setNoticeTab(activeTab);
       setConfirmation(null);
       return true;
@@ -153,9 +160,11 @@ export function SourceExtensionPage() {
     {tabs.length > 0 && <div className="extension-toolbar"><div className="extension-tabs" role="tablist" aria-label="配置分类">{tabs.map((tab, index) => <button type="button" key={tab.id} id={`extension-tab-${tab.id}`} role="tab" aria-selected={activeTab === tab.id} aria-controls={`extension-panel-${tab.id}`} tabIndex={activeTab === tab.id ? 0 : -1} disabled={busy} onClick={() => { setActiveTab(tab.id); if (tab.loadAction) void execute(tab.loadAction); }} onKeyDown={event => { let next = index; if (event.key === 'ArrowRight') next = (index + 1) % tabs.length; else if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length; else if (event.key === 'Home') next = 0; else if (event.key === 'End') next = tabs.length - 1; else return; event.preventDefault(); const nextTab = tabs[next]!; setActiveTab(nextTab.id); document.getElementById(`extension-tab-${nextTab.id}`)?.focus({ preventScroll: true }); }}>{tab.title}</button>)}</div></div>}
     {status && <FloatingNotice message={status} busy={busy} error={statusError} kind="success" />}
     <main className="sources-body" aria-busy={busy} tabIndex={-1}>{page.description && <p className="extension-description">{page.description}</p>}
-      <ContentView content={page} scope="page" values={values} busy={busy} selected={selected} expanded={expanded} onChange={updateValue.bind(null)} onSubmit={submit} onSelectAction={selectAction} onToggle={toggleExpanded} onToggleSelected={toggleSelected} />
-      {selectedTab && <div role="tabpanel" id={`extension-panel-${selectedTab.id}`} aria-labelledby={`extension-tab-${selectedTab.id}`} tabIndex={-1}>{selectedTab.description && <p className="extension-description">{selectedTab.description}</p>}<ContentView content={selectedTab} scope={`tab:${selectedTab.id}`} values={values} busy={busy} selected={selected} expanded={expanded} onChange={updateValue.bind(null)} onSubmit={submit} onSelectAction={selectAction} onToggle={toggleExpanded} onToggleSelected={toggleSelected} /></div>}
-    </main>{confirmation && <ConfirmSheet title="确认操作" text={confirmation.form.confirm ?? ''} confirmText={`确认${confirmation.form.submit}`} cancelText="取消" onCancel={() => setConfirmation(null)} onConfirm={() => void execute(confirmation.form.id, confirmation.values, confirmation.key, confirmation.form)} />}
+      <ContentView content={page} scope="page" values={values} busy={busy} selected={selected} onChange={updateValue.bind(null)} onSubmit={submit} onSelectAction={selectAction} onEdit={(form, key, title) => setEditing({ form, key, title })} onToggleSelected={toggleSelected} />
+      {selectedTab && <div role="tabpanel" id={`extension-panel-${selectedTab.id}`} aria-labelledby={`extension-tab-${selectedTab.id}`} tabIndex={-1}>{selectedTab.description && <p className="extension-description">{selectedTab.description}</p>}<ContentView content={selectedTab} scope={`tab:${selectedTab.id}`} values={values} busy={busy} selected={selected} onChange={updateValue.bind(null)} onSubmit={submit} onSelectAction={selectAction} onEdit={(form, key, title) => setEditing({ form, key, title })} onToggleSelected={toggleSelected} /></div>}
+    </main>{editing && <Sheet title={editing.title} subtitle={editing.form.title} busy={busy} size={editing.form.fields.length === 1 && editing.form.fields[0]!.type !== 'textarea' ? 'compact' : 'regular'} onClose={() => setEditing(null)}>
+      <div className="extension-sheet-form"><FormView form={{ ...editing.form, title: '' }} formKey={editing.key} values={values[editing.key] ?? initialValues(editing.form)} busy={busy} selected={selected} onChange={(field, value) => updateValue(editing.key, field, value)} onSubmit={submit} onSelectAction={selectAction} /></div>
+    </Sheet>}{confirmation && <ConfirmSheet title="确认操作" text={confirmation.form.confirm ?? ''} confirmText={`确认${confirmation.form.submit}`} cancelText="取消" onCancel={() => setConfirmation(null)} onConfirm={() => void execute(confirmation.form.id, confirmation.values, confirmation.key, confirmation.form)} />}
   </div>;
 }
 

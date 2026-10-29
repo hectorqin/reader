@@ -97,6 +97,12 @@
   padding: var(--space-3) var(--space-3) calc(var(--space-3) + var(--safe-bottom));
 }
 
+/* A compact sheet is as tall as its content: a zero basis would collapse its body to
+   the padding and clip the prompt. It still shrinks and scrolls past the height cap. */
+.sheet[data-size='compact'] > .sheet-body {
+  flex-basis: auto;
+}
+
 .sheet:has(> .sheet-footer) > .sheet-body {
   padding-bottom: var(--space-3);
 }
@@ -209,6 +215,13 @@
 .sheet-list-label {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.sheet-list-description {
+  display: block;
+  color: var(--color-muted);
+  font-size: var(--text-meta);
+  line-height: 1.4;
 }
 
 .sheet-list-item[aria-checked='true'] {

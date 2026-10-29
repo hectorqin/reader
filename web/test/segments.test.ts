@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import {
+  cleanTextMarkup,
+  htmlToText,
+  isTextOnlyMarkup,
   endsAtParagraphBreak,
   escapeHtml,
   paragraphElement,
@@ -126,10 +129,14 @@ describe('the markup form', () => {
   it('escapes a file that contains markup', () => {
     // A TXT is user data: a novel with a `<` in it must not be able to produce an
     // element, and `escapeHtml` is the one place that decides so.
-    const html = textToParagraphHtml('<img src=x onerror=alert(1)>\n\n<b>粗</b>');
+    // Known page tags (`<img>`, `<b>`) are cleaned away as web-page residue; any
+    // other markup is escaped. Neither path can produce an element.
+    const html = textToParagraphHtml('<img src=x onerror=alert(1)>\n\n<b>粗</b>\n\n<script>alert(1)</script>');
     expect(html).not.toContain('<img');
     expect(html).not.toContain('<b>');
-    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(html).not.toContain('<script');
+    expect(html).toContain('粗');
+    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
     expect(escapeHtml(`a & b "c" 'd'`)).toBe('a &amp; b &quot;c&quot; &#39;d&#39;');
   });
 
@@ -252,5 +259,61 @@ describe('chunk boundaries and the carry', () => {
     drawn.push(...settle(`${carry}\n\n`).settled);
 
     expect(drawn).toEqual(splitTextParagraphs(whole).map((p) => p.text));
+  });
+});
+
+/**
+ * TXT files saved from a web page still carry its markup. Escaped, the tags are
+ * drawn as text and every `<br/>` line becomes a gap, so they are cleaned before
+ * paragraphs are inferred.
+ */
+describe('web-page markup in a TXT', () => {
+  const scraped = '<div>\n    天斗星作为第一颗被人类发现并且移民成功的行政星，距今已经有数千年的历史了。<br/>\n    <br/>\n    <br/>\n    <br/>\n    这颗星球大约有原本斗罗星二分之一大。<br/>\n</div>';
+
+  it('turns the scraped block into clean paragraphs with no tags or gaps', () => {
+    expect(splitTextParagraphs(scraped).map((p) => p.text)).toEqual([
+      '天斗星作为第一颗被人类发现并且移民成功的行政星，距今已经有数千年的历史了。',
+      '这颗星球大约有原本斗罗星二分之一大。',
+    ]);
+  });
+
+  it('renders no literal tags and no empty paragraphs', () => {
+    const html = textToChapterHtml(scraped);
+    expect(html).not.toMatch(/&lt;|<br|<div>\s*<\/div>|<p><\/p>/);
+    expect(html.match(/<p>/g)).toHaveLength(2);
+  });
+
+  it('keeps a heading that follows the markup', () => {
+    expect(splitChapterHeading('<div>\n第一章 天斗星<br/>\n正文。</div>').heading).toBe('第一章 天斗星');
+  });
+
+  it('drops inline tags, decodes entities and leaves prose angle brackets alone', () => {
+    expect(cleanTextMarkup('<p>他说&ldquo;<span style="x">好</span>&rdquo;&nbsp;a&lt;b&#65281;</p>')).toBe('\n他说“好” a<b！\n');
+    expect(cleanTextMarkup('如果 a<b 且 <书名> 未知')).toBe('如果 a<b 且 <书名> 未知');
+    expect(cleanTextMarkup(cleanTextMarkup(scraped))).toBe(cleanTextMarkup(scraped));
+  });
+
+  it('treats a trailing break tag as the end of a paragraph when streaming', () => {
+    expect(endsAtParagraphBreak('一段。<br/>')).toBe(true);
+    expect(endsAtParagraphBreak('一段')).toBe(false);
+  });
+});
+
+/** A book source's chapter is a scraped HTML fragment; legado-E reads it as text. */
+describe('book-source HTML chapters', () => {
+  const fragment = '<div>    天斗星作为第一颗行政星。<br /><br /><br /><br />    星球表面本来是没有生物的。<br /><br /></div>';
+
+  it('reads a text-only fragment back into the paragraphs it meant', () => {
+    expect(splitTextParagraphs(htmlToText(fragment)).map((p) => p.text)).toEqual(['天斗星作为第一颗行政星。', '星球表面本来是没有生物的。']);
+  });
+
+  it('strips every tag but keeps escaped angle brackets as text', () => {
+    expect(htmlToText('<p>a&lt;b&gt;<custom-tag x>c</custom-tag><!-- ad --><script>bad()</script></p>')).toBe('\na<b>c\n');
+  });
+
+  it('keeps chapters with images or tables as markup', () => {
+    expect(isTextOnlyMarkup(fragment)).toBe(true);
+    expect(isTextOnlyMarkup('<p>图</p><img src="x">')).toBe(false);
+    expect(isTextOnlyMarkup('<table><tr><td>1</td></tr></table>')).toBe(false);
   });
 });

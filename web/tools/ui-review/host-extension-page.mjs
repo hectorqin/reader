@@ -41,8 +41,8 @@ try {
   if(json!==undefined)return route.fulfill({contentType:'application/json',body:JSON.stringify(json)});
   return route.continue();
  });
- await page.goto(base); await page.locator('input[autocomplete="username"]').fill('review');await page.locator('input[type="password"]').fill('password12');await page.locator('button[type=submit]').click();await page.locator('.shelf-screen').waitFor();
- await page.goto(base+'/#/sources');await page.getByRole('tab',{name:'书源管理',exact:true}).click();await page.getByRole('button',{name:'管理',exact:true}).click();await page.getByRole('link',{name:'来源配置'}).click();await page.getByRole('heading',{name:'我的远程书源',exact:true}).waitFor();
+ await page.goto(base); await page.locator('input[autocomplete="username"]').fill('review');await page.locator('input[type="password"]').fill('password12');await page.locator('button[type=submit]').click();await page.locator('.home-page').waitFor();
+ await page.goto(base+'/#/sources');await page.getByRole('tab',{name:'书源管理',exact:true}).click();await page.getByRole('button',{name:'管理',exact:true}).click();await page.getByRole('menuitem',{name:'来源配置'}).click();await page.getByRole('heading',{name:'我的远程书源',exact:true}).waitFor();
  assert.equal(new URL(page.url()).hash,'#/sources/catalog/library');
  assert.equal(await page.getByRole('tab').count(),2);
  await page.getByLabel('配置名称').fill('修改后的配置');

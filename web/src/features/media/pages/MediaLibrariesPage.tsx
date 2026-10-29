@@ -1,7 +1,6 @@
 import { Callout } from '../../../ui/toolkit.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
-import { Plus, RefreshCw } from 'lucide-react';
-import { ActionMenu } from '../../../ui/action-menu.tsx';
+import { FolderOpen, Plus, RefreshCw } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -53,14 +52,18 @@ export function MediaLibrariesPage() {
   };
   const scan = (id: string) => act(id, () => runtime.mediaApi.request(`libraries/${encodeURIComponent(id)}/scan`, 'POST'), '扫描请求失败，请稍后重试。');
   const cancel = (job: ScanJob) => act(job.libraryId ?? job.id, () => runtime.mediaApi.request(`jobs/${encodeURIComponent(job.id)}/cancel`, 'POST'), '取消扫描失败，请稍后重试。');
-  return <MediaPageFrame className="media-manager-workspace" title="媒体库管理" backTo={fromMine ? '/me' : `/media/${channel}`} backLabel={fromMine ? '返回我的' : '返回频道'} actions={<ActionMenu className="media-icon-button" label="媒体库管理操作" items={[
-    { label: '新建媒体库', icon: <Plus size={16} />, onSelect: () => navigate(`/media/${channel}/settings/libraries/new`) },
-    { label: '扫描与刮削', icon: <RefreshCw size={16} />, onSelect: () => navigate(`/media/${channel}/settings/tasks`, { state: { returnTo: `/media/${channel}/settings/libraries` } }) },
-  ]} />}>
+  const create = () => navigate(`/media/${channel}/settings/libraries/new`);
+  const ready = !query.isPending && !query.error;
+  return <MediaPageFrame className="media-manager-workspace" title="媒体库管理" backTo={fromMine ? '/me' : `/media/${channel}`} backLabel={fromMine ? '返回我的' : '返回频道'}>
     <FloatingNotice message={actionError} error />
     <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
+    {ready && libraries.length > 0 && <div className="media-manager-bar">
+      <span>{libraries.length} 个媒体库</span>
+      <button type="button" onClick={() => navigate(`/media/${channel}/settings/tasks`, { state: { returnTo: `/media/${channel}/settings/libraries` } })}><RefreshCw size={16} aria-hidden="true" />扫描与刮削</button>
+      <button type="button" className="media-primary" onClick={create}><Plus size={16} aria-hidden="true" />新建媒体库</button>
+    </div>}
     <div className="media-libraries-layout"><div>
-    {!query.isPending && !query.error && <MediaLibraryList
+    {ready && libraries.length > 0 && <MediaLibraryList
       api={runtime.mediaApi}
       libraries={libraries}
       busy={busyId !== null}
@@ -73,7 +76,12 @@ export function MediaLibrariesPage() {
       onCancel={job => { void cancel(job); }}
       onDetails={library => tasks(library.id)}
     />}
-    {!query.isPending && !query.error && libraries.length === 0 && <Callout>还没有媒体库。请先创建一个媒体库并扫描目录。</Callout>}
+    {ready && libraries.length === 0 && <section className="media-library-empty" aria-label="媒体库空状态">
+      <span className="media-empty-emblem"><FolderOpen size={30} strokeWidth={1.7} aria-hidden="true" /></span>
+      <h2>还没有媒体库</h2>
+      <p>添加服务端能读取的影视、音乐或有声书目录，创建后会自动扫描。</p>
+      <button type="button" className="media-primary" onClick={create}><Plus size={16} aria-hidden="true" />新建媒体库</button>
+    </section>}
     </div><MediaScanSettings api={runtime.mediaApi} /></div>
   </MediaPageFrame>;
 }
