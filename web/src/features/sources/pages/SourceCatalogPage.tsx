@@ -1,3 +1,4 @@
+import { notify } from '../../../ui/notifications.ts';
 import { Button, Callout } from '../../../ui/toolkit.tsx';
 import { SourcesHeader } from '../components/SourcesHeader.tsx';
 import { SourceBookDetailSheet } from '../components/SourceBookDetailSheet.tsx';
@@ -34,10 +35,10 @@ export function SourceCatalogPage() {
   const [filters, setFilters] = useState<Record<string, string>>({});
   const filterQuery = useQuery({ queryKey: ['source-filters', api.baseUrl, sourceId], queryFn: () => api.sourceFilters(sourceId), enabled: !!source?.descriptor?.capabilities.includes('search.filters') });
   const detailQuery = useQuery({ queryKey: ['source-detail', api.baseUrl, sourceId, detail?.ref], queryFn: () => api.sourceDetail(sourceId, detail!.ref), enabled: !!detail });
-  const acquire = useMutation({ mutationFn: ({ ref, option }: { ref: string; option?: string }) => api.acquireSource(sourceId, ref, option), onError: reason => setError(reason instanceof Error ? reason.message : '加入书架失败') });
+  const acquire = useMutation({ mutationFn: ({ ref, option }: { ref: string; option?: string }) => api.acquireSource(sourceId, ref, option), onError: reason => notify(reason instanceof Error ? reason.message : '加入书架失败', { kind: 'error' }) });
   useEffect(() => { if (detail && detailQuery.data) setDetail({ ...detail, ...detailQuery.data }); }, [detailQuery.data]);
   useEffect(() => { const next = params.get('q') ?? ''; if (next !== query) setQuery(next); }, [params]);
-  const acquireEntry = (entry: SourceEntry, option?: string) => acquire.mutate(option === undefined ? { ref: entry.ref } : { ref: entry.ref, option }, { onSuccess: result => { if (result.kind === 'action-required') setError(result.action?.label ?? '请先完成授权'); else if (result.publicationId) navigate(`/book/${encodeURIComponent(result.publicationId)}`); } });
+  const acquireEntry = (entry: SourceEntry, option?: string) => acquire.mutate(option === undefined ? { ref: entry.ref } : { ref: entry.ref, option }, { onSuccess: result => { if (result.kind === 'action-required') notify(result.action?.label ?? '请先完成授权', { kind: 'error' }); else if (result.publicationId) navigate(`/book/${encodeURIComponent(result.publicationId)}`); } });
 
   const search = async (append = false) => {
     const term = query.trim(); if (!term || !source) return;

@@ -1,5 +1,6 @@
 import { Sheet } from '../../../ui/sheet.tsx';
 import { ActionMenu } from '../../../ui/action-menu.tsx';
+import { notify } from '../../../ui/notifications.ts';
 import { Button, Callout, IconTextButton } from '../../../ui/toolkit.tsx';
 import { SourcesHeader } from '../components/SourcesHeader.tsx';
 import { SourceBookDetailSheet } from '../components/SourceBookDetailSheet.tsx';
@@ -52,7 +53,7 @@ export function SourcesPage() {
   const selectedSource = enabledSources.find(source => source.id === selectedSourceId);
   const sourceFilters = useQuery({ queryKey: ['source-filters', runtime.api.baseUrl, selectedSourceId], queryFn: () => runtime.api.sourceFilters(selectedSourceId), enabled: !!selectedSourceId && !!selectedSource?.descriptor?.capabilities.includes('search.filters') });
   const detailQuery = useQuery({ queryKey: ['source-detail', runtime.api.baseUrl, selectedSourceId, detail?.ref], queryFn: () => runtime.api.sourceDetail(selectedSourceId, detail!.ref), enabled: !!detail });
-  const acquire = useMutation({ mutationFn: ({ ref, option }: { ref: string; option?: string }) => runtime.api.acquireSource(selectedSourceId, ref, option), onError: reason => setCatalogError(reason instanceof Error ? reason.message : '加入书架失败') });
+  const acquire = useMutation({ mutationFn: ({ ref, option }: { ref: string; option?: string }) => runtime.api.acquireSource(selectedSourceId, ref, option), onError: reason => notify(reason instanceof Error ? reason.message : '加入书架失败', { kind: 'error' }) });
   const grouped = searchState !== 'idle' && !(selectedSource?.descriptor?.builtin && selectedSource.sourceType === 'local');
   const results = groupSourceResults(catalogPage?.items ?? [], grouped);
   const activeGroup = results.find(group => group.key === resultGroupKey);
@@ -94,7 +95,7 @@ export function SourcesPage() {
     } catch (reason) { if (current()) { setCatalogError(reason instanceof Error ? reason.message : '搜索失败，已保留找到的书籍。'); setSearchState('error'); } }
     finally { if (current()) { searchRun.current = null; setCatalogBusy(false); } }
   };
-  const acquireEntry = (entry: SourceEntry, option?: string) => acquire.mutate(option === undefined ? { ref: entry.ref } : { ref: entry.ref, option }, { onSuccess: result => { if (result.kind === 'action-required') setCatalogError(result.action?.label ?? '请先完成授权'); else if (result.publicationId) { setAcquired({ id: result.publicationId, ref: entry.ref, title: entry.title }); void queryClient.invalidateQueries({ queryKey: ['shelf'] }); } } });
+  const acquireEntry = (entry: SourceEntry, option?: string) => acquire.mutate(option === undefined ? { ref: entry.ref } : { ref: entry.ref, option }, { onSuccess: result => { if (result.kind === 'action-required') notify(result.action?.label ?? '请先完成授权', { kind: 'error' }); else if (result.publicationId) { setAcquired({ id: result.publicationId, ref: entry.ref, title: entry.title }); notify(`已加入书架：《${entry.title}》`, { kind: 'success' }); void queryClient.invalidateQueries({ queryKey: ['shelf'] }); } } });
   const mutateSubscription = async (id: string, enabled?: boolean) => { setBusy(id); try { if (enabled === undefined) await runtime.api.refreshPublication(id); else await runtime.api.configureSubscription(id, { enabled }); await queryClient.invalidateQueries({ queryKey: ['subscriptions'] }); } finally { setBusy(null); } };
   const updateSource = async (id: string, patch: { enabled?: boolean; isDefault?: boolean }) => { setBusy(id); try { await runtime.api.saveSource(id, patch); await sources.refetch(); } finally { setBusy(null); } };
   useEffect(() => {
