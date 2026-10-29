@@ -124,7 +124,7 @@ try {
   await tab('书源管理').click();
   const row = page.locator('.sources-row').filter({hasText:'示例章节源'});
   await row.getByRole('button',{name:'管理',exact:true}).click();
-  await row.getByRole('button', { name: '设为默认', exact: true }).click(); await idle();
+  await page.getByRole('menuitem', { name: '设为默认', exact: true }).click(); await idle();
   await row.locator('.source-default-badge').waitFor();
   await shot('hub-management-mobile');
   for (const width of [320,390,1280]) { await page.setViewportSize({width,height:844}); await shot('hub-'+width); }

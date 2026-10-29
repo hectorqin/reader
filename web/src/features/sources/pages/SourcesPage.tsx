@@ -1,4 +1,5 @@
 import { Sheet } from '../../../ui/sheet.tsx';
+import { ActionMenu } from '../../../ui/action-menu.tsx';
 import { Button, Callout, IconTextButton } from '../../../ui/toolkit.tsx';
 import { SourcesHeader } from '../components/SourcesHeader.tsx';
 import { SourceBookDetailSheet } from '../components/SourceBookDetailSheet.tsx';
@@ -28,14 +29,12 @@ export function SourcesPage() {
   const [tab, setTab] = useState<SourceTab>(useLocation().pathname === '/sources/plugins' ? 'plugins' : 'search');
   const [sourceId, setSourceId] = useState('');
   const [keyword, setKeyword] = useState('');
-  const [managing, setManaging] = useState<string | null>(null);
   const [catalogPage, setCatalogPage] = useState<SourcePage>();
   const [catalogError, setCatalogError] = useState('');
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [catalogFilters, setCatalogFilters] = useState<Record<string, string>>({});
   const [detail, setDetail] = useState<SourceEntry | null>(null);
   const [searchState, setSearchState] = useState<SearchState>('idle');
-  const [searchMenu, setSearchMenu] = useState(false);
   const [resultGroupKey, setResultGroupKey] = useState<string | null>(null);
   const [resultGroupQuery, setResultGroupQuery] = useState('');
   const [sourceNameQuery, setSourceNameQuery] = useState('');
@@ -81,7 +80,7 @@ export function SourcesPage() {
     if (!request?.query || !selectedSource || catalogBusy || (append && !canResume)) return;
     const run = new AbortController(); searchRun.current = run; ++catalogEpoch.current;
     const current = () => searchRun.current === run;
-    setCatalogBusy(true); setCatalogError(''); setSearchState('searching'); setSearchMenu(false);
+    setCatalogBusy(true); setCatalogError(''); setSearchState('searching');
     if (!append) { setCatalogPage(undefined); searchSession.current = crypto.randomUUID(); setAcquired(null); setResultGroupKey(null); }
     searchRequest.current = request;
     try {
@@ -97,7 +96,7 @@ export function SourcesPage() {
   };
   const acquireEntry = (entry: SourceEntry, option?: string) => acquire.mutate(option === undefined ? { ref: entry.ref } : { ref: entry.ref, option }, { onSuccess: result => { if (result.kind === 'action-required') setCatalogError(result.action?.label ?? '请先完成授权'); else if (result.publicationId) { setAcquired({ id: result.publicationId, ref: entry.ref, title: entry.title }); void queryClient.invalidateQueries({ queryKey: ['shelf'] }); } } });
   const mutateSubscription = async (id: string, enabled?: boolean) => { setBusy(id); try { if (enabled === undefined) await runtime.api.refreshPublication(id); else await runtime.api.configureSubscription(id, { enabled }); await queryClient.invalidateQueries({ queryKey: ['subscriptions'] }); } finally { setBusy(null); } };
-  const updateSource = async (id: string, patch: { enabled?: boolean; isDefault?: boolean }) => { setBusy(id); try { await runtime.api.saveSource(id, patch); await sources.refetch(); setManaging(null); } finally { setBusy(null); } };
+  const updateSource = async (id: string, patch: { enabled?: boolean; isDefault?: boolean }) => { setBusy(id); try { await runtime.api.saveSource(id, patch); await sources.refetch(); } finally { setBusy(null); } };
   useEffect(() => {
     ++catalogEpoch.current; searchRun.current?.abort(); searchRun.current = null;
     setCatalogBusy(false); setCatalogPage(undefined); setCatalogError(''); setCatalogFilters({}); setDetail(null); searchSession.current = null;
@@ -125,7 +124,10 @@ export function SourcesPage() {
           {selectedSource.descriptor?.capabilities.includes('search') && <form className="sources-search" onSubmit={event => { event.preventDefault(); void searchSources(resume); }}>
             {sourceFilters.data?.filter(field => field.type === 'select').map(field => <SearchableSelect key={field.key} label={field.label} value={catalogFilters[field.key] ?? ''} disabled={catalogBusy} options={filterOptions(field)} onChange={value => setCatalogFilters(previous => { const next = { ...previous, [field.key]: value }; for (const dependent of sourceFilters.data ?? []) { if ((dependent.changeAction ?? dependent.dependsOn) === field.key && !dependent.options?.some(option => option.value === next[dependent.key] && (!option.parentValues || !value || option.parentValues.includes(value)))) next[dependent.key] = ''; } return next; })} />)}
             <label className="source-keyword">搜索书籍<input type="search" placeholder="输入书名或作者" required disabled={catalogBusy} value={keyword} onChange={event => setKeyword(event.currentTarget.value)} /></label>
-            {searchState === 'searching' ? <button className="button search-stop" type="button" onClick={stopSearch}>停止搜索</button> : <div className="search-split"><button className="button primary" type="submit" disabled={catalogBusy}><Search size={16} />{resume ? '继续搜索' : '搜索'}</button>{searchRequest.current && <><button className="button primary search-menu-toggle" type="button" aria-label="搜索选项" aria-haspopup="menu" aria-expanded={searchMenu} onClick={() => setSearchMenu(open => !open)}><ChevronRight size={16} /></button>{searchMenu && <div className="search-menu" role="menu" aria-label="搜索选项"><button type="button" role="menuitem" disabled={!canResume} onClick={() => void searchSources(true)}>继续搜索<small>保留结果，继续未完成的来源</small></button><button type="button" role="menuitem" onClick={() => void searchSources(false)}>重新搜索<small>清空结果，从头搜索</small></button></div>}</>}</div>}
+            {searchState === 'searching' ? <button className="button search-stop" type="button" onClick={stopSearch}>停止搜索</button> : <div className="search-split"><button className="button primary" type="submit" disabled={catalogBusy}><Search size={16} />{resume ? '继续搜索' : '搜索'}</button>{searchRequest.current && <ActionMenu className="button primary search-menu-toggle" label="搜索选项" items={[
+                { label: '继续搜索', description: '保留结果，继续未完成的来源', disabled: !canResume, onSelect: () => void searchSources(true) },
+                { label: '重新搜索', description: '清空结果，从头搜索', onSelect: () => void searchSources(false) },
+              ]} />}</div>}
           </form>}
           {searchState !== 'idle' && <div className="search-progress" role="status"><span>{({ searching: '正在搜索', stopped: '已停止搜索', complete: '搜索完成', error: '搜索中断', limited: '已达到结果上限' })[searchState]}{catalogPage?.batch ? ` · 已检查 ${catalogPage.batch.completed} / ${catalogPage.batch.total} 个来源` : ''} · 已找到 {results.length} 本书</span>{catalogPage?.batch && <progress aria-label="书源搜索进度" max={Math.max(1, catalogPage.batch.total)} value={catalogPage.batch.completed} />}</div>}
           {catalogPage && grouped && <label className="catalog-group-filter">筛选分组<input type="search" placeholder="搜索书名或作者" value={resultGroupQuery} onChange={event => setResultGroupQuery(event.currentTarget.value)} /></label>}
@@ -141,7 +143,12 @@ export function SourcesPage() {
       {tab === 'sources' && <section className="sources-card sources-list">
         <div className="sources-list-heading"><h2>我的来源 <span className="source-count">{sources.data?.length ?? 0}</span></h2>{admin && <Link className="button source-add" to="/sources/manage/new"><Plus size={16} />添加来源</Link>}</div>
         {sources.isPending && <FloatingNotice message="正在加载书源…" busy />}{sources.error && <p className="notice error">{sources.error.message}</p>}{!sources.isPending && !sources.data?.length && <p className="muted">还没有配置书源。请添加来源或启用插件。</p>}
-        {(sources.data ?? []).map(source => <article className="sources-row source-entry" key={source.id}><div className="source-entry-top"><div className="source-entry-info"><strong>{source.name}{source.isDefault && <span className="source-default-badge">默认</span>}</strong><small>{source.descriptor?.label ?? sourceTypeLabel(source.sourceType)}</small><span className={'source-state' + (source.enabled ? ' is-enabled' : '')}>{source.enabled ? '已启用' : '已暂停'}</span></div><div className="source-entry-actions">{source.descriptor?.credentialKeys?.length ? <Link className="button" to={'/sources/' + encodeURIComponent(source.id) + '/credentials'}>书源登录</Link> : null}{admin && <button className="source-manage-trigger" type="button" aria-expanded={managing === source.id} onClick={() => setManaging(current => current === source.id ? null : source.id)}>管理<ChevronRight size={16} /></button>}</div></div>{admin && managing === source.id && <div className="source-management" role="group" aria-label={`${source.name}管理`}>{source.descriptor?.extensions?.pages?.map(page => <Link className="source-management-link" key={page.id} to={'/sources/' + encodeURIComponent(source.id) + '/' + encodeURIComponent(page.id)}>{page.title}<ChevronRight size={16} /></Link>)}<Link className="source-management-link" to={'/sources/manage/' + encodeURIComponent(source.id)}>基本设置<ChevronRight size={16} /></Link><button className="source-management-link" type="button" disabled={busy === source.id || (!source.isDefault && (!source.enabled || !source.descriptor?.capabilities.includes('search')))} onClick={() => void updateSource(source.id, { isDefault: !source.isDefault })}>{source.isDefault ? '取消默认' : '设为默认'}</button><button className="source-management-link source-toggle" type="button" disabled={busy === source.id} onClick={() => void updateSource(source.id, { enabled: !source.enabled })}>{source.enabled ? '暂停' : '启用'}</button></div>}</article>)}
+        {(sources.data ?? []).map(source => <article className="sources-row source-entry" key={source.id}><div className="source-entry-top"><div className="source-entry-info"><strong>{source.name}{source.isDefault && <span className="source-default-badge">默认</span>}</strong><small>{source.descriptor?.label ?? sourceTypeLabel(source.sourceType)}</small><span className={'source-state' + (source.enabled ? ' is-enabled' : '')}>{source.enabled ? '已启用' : '已暂停'}</span></div><div className="source-entry-actions">{source.descriptor?.credentialKeys?.length ? <Link className="button" to={'/sources/' + encodeURIComponent(source.id) + '/credentials'}>书源登录</Link> : null}{admin && <ActionMenu text="管理" label="管理" title={`${source.name}管理`} items={[
+            ...(source.descriptor?.extensions?.pages ?? []).map(page => ({ label: page.title, onSelect: () => navigate('/sources/' + encodeURIComponent(source.id) + '/' + encodeURIComponent(page.id)) })),
+            { label: '基本设置', onSelect: () => navigate('/sources/manage/' + encodeURIComponent(source.id)) },
+            { label: source.isDefault ? '取消默认' : '设为默认', disabled: busy === source.id || (!source.isDefault && (!source.enabled || !source.descriptor?.capabilities.includes('search'))), onSelect: () => void updateSource(source.id, { isDefault: !source.isDefault }) },
+            { label: source.enabled ? '暂停' : '启用', disabled: busy === source.id, onSelect: () => void updateSource(source.id, { enabled: !source.enabled }) },
+          ]} />}</div></div></article>)}
       </section>}
       {tab === 'updates' && <section className="sources-card"><h2>自动追更</h2><p className="notice">服务端定时检查目录，浏览器关闭后继续运行。正文和图片在阅读时缓存。</p>{subscriptions.isPending && <FloatingNotice message="正在加载追更列表…" busy />}{!subscriptions.isPending && !subscriptions.data?.length && <p>先从章节书源加入书籍，再开启追更。</p>}{(subscriptions.data ?? []).map(item => <article className="sources-row" key={item.bookId}><div><strong>{item.title}</strong><small>{item.newChapters ? '新增 ' + item.newChapters + ' 章 · ' : ''}上次成功：{item.lastSuccessAt ? new Date(item.lastSuccessAt).toLocaleString() : '尚未检查'}</small><small>{item.enabled ? '下次检查：' + new Date(item.nextCheckAt).toLocaleString() : '自动追更已关闭'}{item.lastError ? ' · 检查失败：' + item.lastError : ''}</small></div><div className="sources-actions"><label className="source-interval">检查间隔<select aria-label={`${item.title}检查间隔`} value={item.intervalMinutes} disabled={busy === item.bookId} onChange={event => { const intervalMinutes = Number(event.currentTarget.value); setBusy(item.bookId); void runtime.api.configureSubscription(item.bookId, { intervalMinutes }).then(() => queryClient.invalidateQueries({ queryKey: ['subscriptions'] })).finally(() => setBusy(null)); }}><option value="15">15 分钟</option><option value="60">1 小时</option><option value="360">6 小时</option><option value="1440">1 天</option></select></label><button className="button" type="button" disabled={busy === item.bookId} onClick={() => void mutateSubscription(item.bookId, !item.enabled)}>{item.enabled ? '关闭追更' : '开启追更'}</button><button className="button" type="button" disabled={busy === item.bookId} onClick={() => void mutateSubscription(item.bookId)}>立即检查</button><Link className="button" to={'/book/' + encodeURIComponent(item.bookId)}>阅读</Link></div></article>)}</section>}
       {tab === 'plugins' && (admin ? <PluginManager /> : <Callout tone="warning">只有管理员可以管理插件</Callout>)}

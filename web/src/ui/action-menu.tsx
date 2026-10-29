@@ -33,6 +33,8 @@ export interface MenuAction {
   danger?: boolean;
   /** A choice in a single-select menu (a filter, a sort order): marked when current. */
   checked?: boolean;
+  /** A second, muted line under the label, for actions whose names alone are close. */
+  description?: string;
 }
 
 /** `false`, `null` and `undefined` entries are skipped, so callers can write `admin && {…}`. */
@@ -156,15 +158,19 @@ function ActionDropdown({ id, label, anchor, actions, onClose, onPick }: {
 /** One row; `base` names its classes (`sheet-list-item`, `sheet-list-label`, …). */
 function MenuRow({ action, base, onPick }: { action: MenuAction; base: 'action-menu' | 'sheet-list'; onPick(): void }): JSX.Element {
   const className = `${base}-item`;
+  const descriptionId = useId();
   return (
     <button type="button"
       role={action.checked === undefined ? 'menuitem' : 'menuitemradio'}
       aria-checked={action.checked}
+      // The name stays the label alone; the second line is a description.
+      aria-label={action.description ? action.label : undefined}
+      aria-describedby={action.description ? descriptionId : undefined}
       className={action.danger ? `${className} is-danger` : className}
       disabled={action.disabled ?? false}
       onClick={onPick}>
       {action.icon ? <span className={`${base}-icon`} aria-hidden="true">{action.icon}</span> : null}
-      <span className={`${base}-label`}>{action.label}</span>
+      <span className={`${base}-label`}>{action.label}{action.description ? <small id={descriptionId} className={`${base}-description`}>{action.description}</small> : null}</span>
       {action.checked ? <Icon name="check" className={`${base}-check`} /> : null}
     </button>
   );
