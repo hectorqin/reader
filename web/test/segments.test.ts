@@ -2,6 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   cleanTextMarkup,
+  htmlToText,
+  isTextOnlyMarkup,
   endsAtParagraphBreak,
   escapeHtml,
   paragraphElement,
@@ -294,5 +296,24 @@ describe('web-page markup in a TXT', () => {
   it('treats a trailing break tag as the end of a paragraph when streaming', () => {
     expect(endsAtParagraphBreak('一段。<br/>')).toBe(true);
     expect(endsAtParagraphBreak('一段')).toBe(false);
+  });
+});
+
+/** A book source's chapter is a scraped HTML fragment; legado-E reads it as text. */
+describe('book-source HTML chapters', () => {
+  const fragment = '<div>    天斗星作为第一颗行政星。<br /><br /><br /><br />    星球表面本来是没有生物的。<br /><br /></div>';
+
+  it('reads a text-only fragment back into the paragraphs it meant', () => {
+    expect(splitTextParagraphs(htmlToText(fragment)).map((p) => p.text)).toEqual(['天斗星作为第一颗行政星。', '星球表面本来是没有生物的。']);
+  });
+
+  it('strips every tag but keeps escaped angle brackets as text', () => {
+    expect(htmlToText('<p>a&lt;b&gt;<custom-tag x>c</custom-tag><!-- ad --><script>bad()</script></p>')).toBe('\na<b>c\n');
+  });
+
+  it('keeps chapters with images or tables as markup', () => {
+    expect(isTextOnlyMarkup(fragment)).toBe(true);
+    expect(isTextOnlyMarkup('<p>图</p><img src="x">')).toBe(false);
+    expect(isTextOnlyMarkup('<table><tr><td>1</td></tr></table>')).toBe(false);
   });
 });

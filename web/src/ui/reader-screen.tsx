@@ -36,7 +36,7 @@ import { ReadingTools, type SearchSection } from './reading-tools.tsx';
 import { decodeAnchor, encodeAnchor, searchableText, type TextAnchor } from './text-anchor.ts';
 import { AnnotationPopover, type AnnotationTarget } from './annotation-popover.tsx';
 import { newId } from '../core/id.ts';
-import { textToChapterHtml } from '../formats/segments.ts';
+import { htmlToText, isTextOnlyMarkup, textToChapterHtml } from '../formats/segments.ts';
 import { parseLocator } from './locator.ts';
 
 export interface ReaderScreenOptions {
@@ -489,7 +489,7 @@ export class ReaderScreen {
   private async readStagedSection(
     book: Book,
     item: { href: string; kind: string; mediaType: string; format?: string; resourceRef?: string },
-  ): Promise<{ html?: string; image?: { mediaType: string; bytes: Uint8Array } }> {
+  ): Promise<{ html?: string; image?: { mediaType: string; bytes: Uint8Array }; plainText?: boolean }> {
     const ref = renditionRef(item);
     // Keyed by the rendition, not just the section: a client that read the plain
     // text before this change and the markup after it must not serve the cached
@@ -505,7 +505,16 @@ export class ReaderScreen {
     if (item.kind === 'page') {
       return { image: { mediaType: item.mediaType, bytes: new Uint8Array(await blob.arrayBuffer()) } };
     }
-    return { html: await blob.text() };
+    const body = await blob.text();
+    // A book source's chapter is a scraped page fragment (`<div>…<br><br><br>`), not
+    // an authored document: like legado-E, read a text-only one back as characters so
+    // it gets the TXT paragraphs and the reader's indent. Applied when *read*, so
+    // chapters the server cached before this change are cleaned too. Chapters with
+    // images or tables keep their markup; EPUBs never reach this branch.
+    if (book.format === 'chapters' && item.kind === 'chapter' && /html/i.test(item.mediaType) && isTextOnlyMarkup(body)) {
+      return { html: htmlToText(body), plainText: true };
+    }
+    return { html: body };
   }
 
   dispose(): void {

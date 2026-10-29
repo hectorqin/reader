@@ -71,16 +71,43 @@ const WHITESPACE_LINE = /^[ \t\u3000\u00a0]+$/gm;
  * consumer escapes it, so nothing here can turn into markup.
  */
 export function cleanTextMarkup(text: string): string {
-  return text
-    .replace(LINE_ENDINGS, '\n')
-    .replace(BLOCK_TAG, '\n')
-    .replace(INLINE_TAG, '')
-    .replace(ENTITY, (all, decimal: string | undefined, hex: string | undefined, name: string | undefined) => {
-      if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? all;
-      const code = decimal ? Number(decimal) : Number.parseInt(hex!, 16);
-      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
-    })
+  return decodeEntities(text.replace(LINE_ENDINGS, '\n').replace(BLOCK_TAG, '\n').replace(INLINE_TAG, ''))
     .replace(WHITESPACE_LINE, '');
+}
+
+function decodeEntities(text: string): string {
+  return text.replace(ENTITY, (all, decimal: string | undefined, hex: string | undefined, name: string | undefined) => {
+    if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? all;
+    const code = decimal ? Number(decimal) : Number.parseInt(hex!, 16);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
+  });
+}
+
+/** Elements a chapter cannot lose by being read as text. */
+const RICH_MARKUP = /<(?:img|svg|table|video|audio|iframe|math|canvas|picture|object|embed|ruby)\b/i;
+const COMMENT = /<!--[\s\S]*?-->/g;
+const HIDDEN_BLOCK = /<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+const ANY_TAG = /<\/?[a-zA-Z][^<>]*>/g;
+
+/**
+ * Whether a book source's HTML chapter is only text with line-level markup, so it
+ * can be typeset like a TXT without losing anything (no images, tables or media).
+ */
+export function isTextOnlyMarkup(html: string): boolean {
+  return !RICH_MARKUP.test(html);
+}
+
+/**
+ * A book source's HTML chapter as characters, the way legado-E reads it
+ * (`HtmlFormatter.format`): block tags and line breaks become newlines and every
+ * other tag is removed. Unlike {@link cleanTextMarkup} the input *is* markup, so
+ * no tag survives as text; entities are decoded last, so an escaped `&lt;b&gt;`
+ * in the prose becomes the characters `<b>` rather than being stripped.
+ */
+export function htmlToText(html: string): string {
+  const stripped = html.replace(LINE_ENDINGS, '\n').replace(COMMENT, '').replace(HIDDEN_BLOCK, '')
+    .replace(BLOCK_TAG, '\n').replace(ANY_TAG, '');
+  return decodeEntities(stripped).replace(WHITESPACE_LINE, '');
 }
 
 /** Paragraphs are separated by a blank line. */
