@@ -3849,7 +3849,11 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .sources-search .searchable-select > .searchable-select-trigger { min-height: 46px; border-radius: var(--radius-md); background: var(--reader-surface); }
 .sources-search .searchable-select-menu { width: min(22rem, calc(100vw - 3rem)); border-radius: var(--radius-md); }
 .sources-screen .searchable-select-menu { background: var(--reader-paper, #fff); opacity: 1; }
-.sources-search .searchable-select-search { margin: 0; }
+/* The card's generic label/input/button rules must not reach the picker's own controls:
+   they stacked the search icon above a second bordered 14px field and centred the triggers. */
+.sources-card .searchable-select-search { flex-direction: row; flex: none; gap: .5rem; margin: 0; padding: .25rem .5rem; color: var(--reader-muted); }
+.sources-card .searchable-select-search input { min-height: 40px; padding: 0; border: 0; border-radius: 0; background: transparent; font-size: var(--text-title); }
+.sources-search .searchable-select-trigger, .sources-search .searchable-select-options button { justify-content: space-between; }
 .sources-search .searchable-select-options { max-height: 15rem; }
 .sources-search .searchable-select-options button { min-height: 42px; }
 @media (min-width: 768px) {

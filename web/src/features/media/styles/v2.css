@@ -246,20 +246,22 @@
   color:var(--color-brand-text);
 }
 :root body .media-video-stage .dplayer-host { color-scheme:dark; }
+/* Also used outside media (sources search), so every media alias falls back to a global token. */
 .searchable-select {position:relative;display:inline-flex;flex-direction:column;min-width:190px;max-width:100%}
-.searchable-select-label {display:block;margin:0 0 5px;color:var(--muted);font-size:var(--text-meta);font-weight:600}
+.searchable-select-label {display:block;margin:0 0 5px;color:var(--muted,var(--color-muted));font-size:var(--text-meta);font-weight:600}
 .searchable-select-native {position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none!important}
-.searchable-select-trigger {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font:inherit;text-align:left}
+.searchable-select-trigger {display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--border,var(--color-line));border-radius:var(--radius-sm);background:var(--surface,var(--color-surface-2));color:var(--text,var(--color-ink));font:inherit;text-align:left}
 .searchable-select-trigger:disabled {opacity:.55}
 .searchable-select-trigger>span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.searchable-select-menu {position:absolute;top:calc(100% + 6px);left:0;z-index:50;width:max(100%,240px);padding:6px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--media-paper,var(--surface,#fff));opacity:1;box-shadow:0 12px 35px #0003}
-.searchable-select-search {display:flex;align-items:center;gap:7px;padding:7px 8px;border-bottom:1px solid var(--border);color:var(--muted)}
-.searchable-select-search input {min-width:0;width:100%;border:0;outline:0;background:transparent;color:var(--text);font:inherit}
+.searchable-select-menu {position:absolute;top:calc(100% + 6px);left:0;z-index:50;width:max(100%,240px);padding:6px;border:1px solid var(--border,var(--color-line));border-radius:var(--radius-md);background:var(--media-paper,var(--color-surface));opacity:1;box-shadow:0 12px 35px #0003}
+.searchable-select-search {display:flex;align-items:center;gap:7px;padding:7px 8px;border-bottom:1px solid var(--border,var(--color-line));color:var(--muted,var(--color-muted))}
+.searchable-select-search input {min-width:0;width:100%;border:0;outline:0;background:transparent;color:var(--text,var(--color-ink));font:inherit;font-size:var(--text-title)}
+.searchable-select-search input::-webkit-search-cancel-button,.searchable-select-search input::-webkit-search-decoration {appearance:none;display:none}
 .searchable-select-options {max-height:260px;overflow:auto;padding-top:4px}
-.searchable-select-options button {display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:38px;padding:8px 10px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--text);text-align:left}
-.searchable-select-options button[aria-selected=true] {background:var(--media-selection);color:var(--media-accent)}
-@media (hover: hover) and (pointer: fine) { .searchable-select-options button:hover {background:var(--media-selection);color:var(--media-accent)}}
-.searchable-select-options p {padding:12px;color:var(--muted);font-size:var(--text-meta)}
+.searchable-select-options button {display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:38px;padding:8px 10px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--text,var(--color-ink));text-align:left}
+.searchable-select-options button[aria-selected=true] {background:var(--media-selection,var(--color-brand-soft));color:var(--media-accent,var(--color-brand-text))}
+@media (hover: hover) and (pointer: fine) { .searchable-select-options button:hover {background:var(--media-selection,var(--color-brand-soft));color:var(--media-accent,var(--color-brand-text))}}
+.searchable-select-options p {padding:12px;color:var(--muted,var(--color-muted));font-size:var(--text-meta)}
 @media(min-width:701px){
  .media-screen>.media-heading:has(.media-tabs:not([hidden])) {display:block;height:auto;min-height:0;margin:0;border:0;padding:0}
  .media-screen .media-mobile-title {display:none}
