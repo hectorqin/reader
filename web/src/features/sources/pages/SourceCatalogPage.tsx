@@ -12,7 +12,9 @@ import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 export function mergePages(current: SourcePage | undefined, page: SourcePage): SourcePage {
   const items = new Map((current?.items ?? []).map(item => [item.ref, item]));
   page.items.forEach(item => items.set(item.ref, { ...items.get(item.ref), ...item }));
-  return { ...page, items: [...items.values()] };
+  // Each streamed chunk only carries the failures that happened since the previous one.
+  const errors = new Map([...(current?.errors ?? []), ...(page.errors ?? [])].map(error => [error.source + ':' + error.code, error]));
+  return { ...page, items: [...items.values()], ...(errors.size ? { errors: [...errors.values()] } : {}) };
 }
 
 export function SourceCatalogPage() {
