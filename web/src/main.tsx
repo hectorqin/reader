@@ -4,6 +4,7 @@ import './app/app.css';
 import './features/media/styles/media.css';
 import './features/media/styles/presentation.css';
 import './features/media/styles/v2.css';
+import './features/media/styles/manager.css';
 import './app/shell.css';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';

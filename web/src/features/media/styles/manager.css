@@ -1,0 +1,84 @@
+/*
+ * 媒体库管理 and 扫描与刮削 (`.media-manager-workspace`). Loaded after v2.css so these
+ * rules settle the layered card/task styles from the older sheets for these two pages.
+ */
+
+/* 媒体库管理: count, then the page's two actions; the empty state carries its own. */
+.media-manager-bar {display:flex;align-items:center;gap:8px;margin:4px 0 12px}
+.media-manager-bar>span {flex:1;min-width:0;color:var(--muted);font-size:var(--text-label)}
+.media-screen .media-manager-bar>button {display:inline-flex;align-items:center;gap:6px;flex:none;min-height:40px;padding:0 14px;font-size:var(--text-label)}
+.media-screen .media-manager-bar>button:not(.media-primary) {border:1px solid var(--border);background:var(--media-paper)}
+.media-screen.media-manager-workspace .media-library-empty>button {display:inline-flex;align-items:center;gap:6px}
+
+/* One column next to 扫描与元数据, two or more when the cards have the width. */
+.media-screen.media-manager-workspace .media-library-list {grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:12px;padding:0}
+.media-screen.media-manager-workspace .media-library-row {display:grid;grid-template-columns:40px minmax(0,1fr) 40px;align-items:start;gap:4px 12px;padding:14px 14px 4px 16px;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--media-paper)}
+.media-library-icon {display:grid;place-items:center;width:40px;height:40px;border-radius:var(--radius-md);background:var(--color-ch-video-soft);color:var(--color-ch-video-text)}
+.media-library-row[data-kind=music] .media-library-icon {background:var(--color-ch-music-soft);color:var(--color-ch-music-text)}
+.media-library-row[data-kind=audiobook] .media-library-icon {background:var(--color-ch-audio-soft);color:var(--color-ch-audio-text)}
+.media-library-copy {min-width:0}
+.media-screen.media-manager-workspace .media-library-copy>strong {display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;font-size:var(--text-ui);font-weight:600;line-height:1.5}
+.media-library-name {min-width:0;overflow-wrap:anywhere}
+.media-screen.media-manager-workspace .media-library-kind {flex:none;margin:0;padding:1px 6px;font-size:var(--text-micro);line-height:1.6;white-space:nowrap}
+.media-library-kind[data-access=restricted] {background:var(--media-selection);color:var(--media-accent)}
+.media-screen.media-manager-workspace .media-library-copy>small {line-height:1.6;margin-top:2px}
+.media-screen.media-manager-workspace .media-library-directory {margin:2px 0 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,Consolas,monospace}
+.media-screen.media-manager-workspace .media-library-actions {margin:-4px -6px 0 0}
+.media-screen.media-manager-workspace .media-library-footer {grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin-top:8px;padding:4px 0 0;border-top:1px solid var(--border);font-size:var(--text-meta);color:var(--muted)}
+.media-library-missing[data-missing] {color:var(--media-error-ink)}
+.media-screen.media-manager-workspace .media-library-footer button {flex:none;min-height:40px;padding:0 8px;font-size:var(--text-label);color:var(--media-accent);background:transparent}
+.media-screen.media-manager-workspace .media-library-scan[data-state=running] {padding-bottom:4px}
+
+/* 扫描与刮削: a lead line, one toolbar (library, refresh, primary action), then the records. */
+.media-screen.media-manager-workspace .media-task-tabs {margin:0 0 16px}
+.media-screen.media-manager-workspace .media-task-panel {gap:12px}
+.media-task-lead {margin:0;color:var(--muted);font-size:var(--text-label);line-height:1.7}
+.media-task-toolbar {display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:end;gap:8px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--media-paper)}
+.media-task-library-select {display:grid;gap:6px;min-width:0;color:var(--muted);font-size:var(--text-meta)}
+.media-task-library-select select {width:100%;max-width:100%}
+.media-screen .media-task-toolbar>button {min-height:44px}
+.media-screen .media-task-toolbar>.media-task-icon {width:44px;height:44px}
+.media-screen .media-task-toolbar>.media-primary {padding:0 18px}
+.media-screen .media-manager .media-task-section-title {display:flex;align-items:center;gap:8px;margin:12px 0 0;font-size:var(--text-ui);font-weight:600;color:var(--text)}
+.media-task-section-title>small {padding:0 7px;border-radius:var(--radius-pill);background:var(--surface);color:var(--muted);font-size:var(--text-meta);font-weight:500;line-height:1.7}
+.media-task-empty {margin:0;padding:28px 16px;border:1px dashed var(--border);border-radius:var(--radius-md);color:var(--muted);font-size:var(--text-label);line-height:1.7;text-align:center}
+.media-screen.media-manager-workspace .media-ai-jobs {margin-top:0;padding-top:0;border-top:0}
+@media (max-width:560px) {
+  .media-task-toolbar {grid-template-columns:minmax(0,1fr) auto}
+  .media-screen .media-task-toolbar>.media-primary {grid-column:1/-1}
+}
+
+/* 刮削: the form fields sit in two columns when there is room; 开始批量匹配 stays in reach. */
+.media-screen.media-manager-workspace .media-scrape-manager>.media-task-create {margin:0;padding:0 16px;border-radius:var(--radius-md);background:var(--media-paper)}
+.media-screen.media-manager-workspace .media-task-create>summary {padding:14px 0;font-size:var(--text-ui);font-weight:600;color:var(--text);cursor:pointer}
+.media-screen.media-manager-workspace .media-task-create>.media-task-lead {margin:0 0 12px;font-size:var(--text-meta)}
+.media-screen.media-manager-workspace .media-scrape-manager .media-form {display:grid;grid-template-columns:minmax(0,1fr);gap:12px 16px;max-width:none;margin:0}
+@media (min-width:760px) {.media-screen.media-manager-workspace .media-scrape-manager .media-form {grid-template-columns:repeat(2,minmax(0,1fr))}}
+.media-screen.media-manager-workspace .media-scrape-selection-toolbar {flex-wrap:wrap;margin:16px 0 10px}
+.media-screen.media-manager-workspace .media-scrape-search {flex:1 1 260px;min-width:0}
+.media-screen.media-manager-workspace .media-scrape-search input {width:100%;box-sizing:border-box;min-height:44px;font-size:var(--text-title)}
+.media-screen.media-manager-workspace .media-scrape-selection-toolbar>div {gap:4px}
+.media-screen.media-manager-workspace .media-scrape-selection-toolbar>div>button {min-height:40px;padding:0 10px;font-size:var(--text-label)}
+.media-scrape-selection-pager {display:flex;align-items:center;justify-content:center;gap:12px;padding:8px 0 0;color:var(--muted);font-size:var(--text-label)}
+.media-screen.media-manager-workspace .media-scrape-selection-footer {position:sticky;bottom:0;z-index:2;margin:8px -16px 0;padding:10px 16px calc(10px + var(--safe-bottom,0px));border-top:1px solid var(--border);border-radius:0 0 var(--radius-md) var(--radius-md);background:var(--media-paper)}
+.media-scrape-selection-footer strong {color:var(--text);font-weight:600}
+.media-screen .media-scrape-selection-footer>.media-primary {flex:none;padding:0 18px}
+.media-screen.media-manager-workspace .media-scrape-manager>.media-task-history {margin-top:20px}
+/* An older server has no 扫描与元数据 card; the cards then take the whole width. */
+@media (min-width:1100px) {.media-libraries-layout:not(:has(>.media-scan-settings)) {grid-template-columns:minmax(0,1fr)}}
+
+/* Scan records: title, state and its one icon action on the first line at every width. */
+.media-screen.media-manager-workspace .media-scan-job {grid-template-columns:minmax(0,1fr) auto 40px;gap:6px 10px;padding:14px 0}
+.media-screen.media-manager-workspace .media-scan-job.is-running {padding:14px;margin:0 0 4px;border-radius:var(--radius-md);background:var(--media-paper)}
+.media-screen.media-manager-workspace .media-scan-job>.media-task-copy {grid-column:1;grid-row:1}
+.media-screen.media-manager-workspace .media-scan-job>.media-task-state {grid-column:2;grid-row:1}
+.media-screen.media-manager-workspace .media-scan-job>:is(.media-task-icon,.media-task-icon-placeholder) {grid-column:3;grid-row:1;min-width:0}
+.media-screen.media-manager-workspace .media-scan-job>:not(.media-task-copy,.media-task-state,.media-task-icon,.media-task-icon-placeholder) {grid-column:1/-1}
+.media-screen.media-manager-workspace .media-task-note>p {margin:0}
+.media-screen.media-manager-workspace .media-task-note>details {margin-top:4px}
+.media-task-error {padding:10px 12px;border-radius:var(--radius-sm);background:var(--media-error-background);color:var(--media-error-ink)}
+.media-screen.media-manager-workspace .media-scan-job>.media-task-retry {justify-self:start;min-height:40px}
+@media (max-width:560px) {
+  .media-screen.media-manager-workspace .media-scrape-search,.media-screen.media-manager-workspace .media-scrape-selection-toolbar>div {flex:1 1 100%;flex-wrap:nowrap}
+  .media-screen.media-manager-workspace .media-scrape-selection-toolbar>div>button {flex:1 1 auto;padding:0 4px;white-space:nowrap}
+}
