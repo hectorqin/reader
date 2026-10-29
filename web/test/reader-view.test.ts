@@ -551,13 +551,15 @@ describe('plain-text chapters are typeset by the reader', () => {
     // assertion is on the *absence* of an element, not on the presence of the words.
     const container = document.createElement('div');
     document.body.append(container);
-    const view = make(container, txtDoc('<img src=x onerror=alert(1)>\n\n<b>粗</b>'));
+    // Known web-page tags are cleaned away (`cleanTextMarkup`); anything else stays text.
+    const view = make(container, txtDoc('<img src=x onerror=alert(1)>\n\n<b>粗</b>\n\n<script>alert(1)</script>'));
     await view.open(0, 0);
     const shadow = shadowOf(container);
     expect(shadow.querySelector('.txt-body img')).toBeNull();
     expect(shadow.querySelector('.txt-body b')).toBeNull();
+    expect(shadow.querySelector('.txt-body script')).toBeNull();
     const paragraphs = [...shadow.querySelectorAll('.txt-body > p')].map((p) => p.textContent);
-    expect(paragraphs).toEqual(['<img src=x onerror=alert(1)>', '<b>粗</b>']);
+    expect(paragraphs).toEqual(['粗', '<script>alert(1)</script>']);
   });
 
   it('re-typesets a chapter an older server sent as markup', async () => {

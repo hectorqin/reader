@@ -35,12 +35,53 @@
  *     scraped novels that need this rule are the ones that indent every paragraph
  *     with two full-width spaces, so a rule that read the leading whitespace as
  *     "this line continues the one above" never fired on any of them.
+ *  0. **Web-page markup is cleaned first.** Novels saved from a site arrive as
+ *     TXT with the page's `<div>`, `<br/>` and `&nbsp;` still in them; escaped,
+ *     they are drawn literally and every `<br/>` line is a gap. See
+ *     {@link cleanTextMarkup}.
  *  4. **Every paragraph loses its leading whitespace.** What "段前空格" is: the
  *     full-width spaces a scraper indented with, which the client draws itself
  *     from the reader's own indent setting. Kept, they would be indent *added to*
  *     indent, and the setting would appear to do nothing on exactly the files that
  *     needed it most.
  */
+
+/**
+ * HTML tags a scraped page leaves in a TXT. Only real tag names are matched, so a
+ * `<` in prose (`a<b`, a quoted `<书名>`) is text and stays text.
+ */
+const BLOCK_TAG = /<\/?(?:br|p|div|h[1-6]|li|ul|ol|tr|table|tbody|section|article|blockquote|center|pre|hr|dd|dt|dl)\b[^<>]*>/gi;
+const INLINE_TAG = /<\/?(?:span|font|b|i|u|em|strong|small|big|a|img|sup|sub|ins|del|s|strike|tt|code|mark|abbr|cite|q|wbr|o:p)\b[^<>]*>/gi;
+const NAMED_ENTITIES: Record<string, string> = {
+  nbsp: ' ', ensp: ' ', emsp: '\u3000', thinsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'",
+  ldquo: '“', rdquo: '”', lsquo: '‘', rsquo: '’', hellip: '…', mdash: '—', ndash: '–', middot: '·',
+};
+const ENTITY = /&(?:#(\d{1,7})|#x([0-9a-f]{1,6})|([a-z]{2,8}));/gi;
+/** A line holding only whitespace is a blank line: a reader cannot tell them apart. */
+const WHITESPACE_LINE = /^[ \t\u3000\u00a0]+$/gm;
+
+/**
+ * Removes the markup a web page leaves behind in a TXT, keeping its line structure.
+ *
+ * Block tags (`<br>`, `<p>`, `<div>`, headings, list items) become line breaks, so
+ * the paragraphs they marked survive as the blank lines the rules below read;
+ * inline tags (`<span>`, `<font>`) are dropped; common character entities become
+ * the characters they stand for. Idempotent, and a file without markup is returned
+ * with only its whitespace-only lines emptied. The result is still *text*: every
+ * consumer escapes it, so nothing here can turn into markup.
+ */
+export function cleanTextMarkup(text: string): string {
+  return text
+    .replace(LINE_ENDINGS, '\n')
+    .replace(BLOCK_TAG, '\n')
+    .replace(INLINE_TAG, '')
+    .replace(ENTITY, (all, decimal: string | undefined, hex: string | undefined, name: string | undefined) => {
+      if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? all;
+      const code = decimal ? Number(decimal) : Number.parseInt(hex!, 16);
+      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : all;
+    })
+    .replace(WHITESPACE_LINE, '');
+}
 
 /** Paragraphs are separated by a blank line. */
 const PARAGRAPH_BREAK = /\n{2,}/;
@@ -110,8 +151,7 @@ export interface TextParagraph {
  * transport happened to deliver it.
  */
 export function splitTextParagraphs(text: string): TextParagraph[] {
-  return text
-    .replace(LINE_ENDINGS, '\n')
+  return cleanTextMarkup(text)
     .split(PARAGRAPH_BREAK)
     .flatMap((block) => splitSentenceBreaks(block))
     .map(toParagraph)
@@ -271,7 +311,7 @@ function isHeadingLine(line: string): boolean {
  * the book rather than render it.
  */
 export function splitChapterHeading(text: string): { heading: string; body: string } {
-  const normalised = text.replace(LINE_ENDINGS, '\n');
+  const normalised = cleanTextMarkup(text);
   const lines = normalised.split('\n');
   const firstIndex = lines.findIndex((line) => line.trim().length > 0);
   if (firstIndex === -1) return { heading: '', body: '' };
@@ -308,5 +348,5 @@ export function textToChapterHtml(text: string): string {
  * in the middle of a novel: invisible in any test and obvious on the page.
  */
 export function endsAtParagraphBreak(text: string): boolean {
-  return /(?:\r\n?|\n)\s*$/.test(text);
+  return /\n\s*$/.test(cleanTextMarkup(text));
 }
