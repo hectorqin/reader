@@ -4129,11 +4129,11 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .search-menu button > .icon { width:2rem; height:2rem; display:grid; place-items:center; }
 .search-menu button > span { min-width:0; line-height:1.35; }
 .search-menu small { line-height:1.4; }
-.catalog-source-meta { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-top:.75rem; }
-.catalog-source-search { display:block; flex:1 1 16rem; max-width:22rem; }
-.catalog-source-search input { width:100%; min-height:42px; box-sizing:border-box; padding:.6rem .8rem; border:1px solid var(--reader-line); border-radius:var(--radius-md); background:var(--reader-paper); color:var(--reader-ink); }
-.catalog-source-search input:focus { border-color:var(--reader-accent); outline:2px solid color-mix(in srgb,var(--reader-accent) 25%,transparent); outline-offset:1px; }
-@media (max-width:600px) { .catalog-source-meta { align-items:stretch; flex-direction:column; gap:.55rem; } .catalog-source-search { max-width:none; } }
+/* The class is on the sheet's <input> itself; a 16px font keeps iOS from zooming on focus. */
+.catalog-source-search { display:block; flex:none; width:100%; min-height:44px; box-sizing:border-box; padding:.6rem .8rem; border:1px solid var(--reader-line); border-radius:var(--radius-md); background:var(--reader-paper); color:var(--reader-ink); font:inherit; font-size:var(--text-title); }
+.catalog-source-search:focus { border-color:var(--reader-accent); outline:2px solid color-mix(in srgb,var(--reader-accent) 25%,transparent); outline-offset:1px; }
+.catalog-source-search::placeholder { color:color-mix(in srgb,var(--reader-muted) 85%,transparent); }
+.catalog-source-search::-webkit-search-cancel-button, .catalog-source-search::-webkit-search-decoration { appearance:none; display:none; }
 
 /* ---- 书架: 在读 / 想读 / 已读 and 分组 (prototypes 2 and 19) ----
  * One row of chips above the toolbar; the selected one is brand-soft with brand
