@@ -3831,6 +3831,8 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .source-state::before { content: ''; display: inline-block; height: 5px; width: 5px; border-radius: 50%; background: currentColor; vertical-align: middle; margin-right: .35rem; }
 .source-state.is-enabled { color: var(--reader-accent); }
 .source-entry-actions { display: flex; align-items: center; gap: .6rem; flex-shrink: 0; margin-inline-start: auto; }
+/* Row ⋯ menus: a full 44px thumb target. */
+.sources-card .action-menu-trigger.icon-button { width: 2.75rem; height: 2.75rem; }
 .sources-hub [role=tab]:disabled { opacity: .5; cursor: default; }
 .sources-hub .sources-tabs [role=tab] { font-size: var(--text-ui); }
 .source-picker label { max-width: 32rem; }

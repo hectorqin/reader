@@ -97,7 +97,7 @@ function ContentView({ content, scope, values, busy, selected, onChange, onSubmi
         <div className="extension-item-heading"><div>
           {item.selectable && item.key && <input type="checkbox" aria-label={`选择 ${item.title}`} checked={selected.has(item.key)} onChange={() => onToggleSelected(item.key!)} />}
           <h3>{item.title}</h3>{item.description && <p className="source-description">{item.description}</p>}
-        </div>{item.collapsible && <ActionMenu text="管理" label="管理" title={`${item.title}管理`} items={menu} />}</div>
+        </div>{item.collapsible && <ActionMenu label="管理" title={`${item.title}管理`} items={menu} />}</div>
         {!item.collapsible && !!item.forms?.length && <div className="extension-actions">{item.forms.map(form => <FormView key={formKey(form)} form={form} formKey={formKey(form)} values={values[formKey(form)] ?? initialValues(form)} busy={busy} selected={selected} onChange={(field, value) => onChange(formKey(form), field, value)} onSubmit={onSubmit} onSelectAction={onSelectAction} />)}</div>}
       </article>; })}
     </section>)}
@@ -162,7 +162,7 @@ export function SourceExtensionPage() {
     <main className="sources-body" aria-busy={busy} tabIndex={-1}>{page.description && <p className="extension-description">{page.description}</p>}
       <ContentView content={page} scope="page" values={values} busy={busy} selected={selected} onChange={updateValue.bind(null)} onSubmit={submit} onSelectAction={selectAction} onEdit={(form, key, title) => setEditing({ form, key, title })} onToggleSelected={toggleSelected} />
       {selectedTab && <div role="tabpanel" id={`extension-panel-${selectedTab.id}`} aria-labelledby={`extension-tab-${selectedTab.id}`} tabIndex={-1}>{selectedTab.description && <p className="extension-description">{selectedTab.description}</p>}<ContentView content={selectedTab} scope={`tab:${selectedTab.id}`} values={values} busy={busy} selected={selected} onChange={updateValue.bind(null)} onSubmit={submit} onSelectAction={selectAction} onEdit={(form, key, title) => setEditing({ form, key, title })} onToggleSelected={toggleSelected} /></div>}
-    </main>{editing && <Sheet title={editing.title} subtitle={editing.form.title} busy={busy} onClose={() => setEditing(null)}>
+    </main>{editing && <Sheet title={editing.title} subtitle={editing.form.title} busy={busy} size={editing.form.fields.length === 1 && editing.form.fields[0]!.type !== 'textarea' ? 'compact' : 'regular'} onClose={() => setEditing(null)}>
       <div className="extension-sheet-form"><FormView form={{ ...editing.form, title: '' }} formKey={editing.key} values={values[editing.key] ?? initialValues(editing.form)} busy={busy} selected={selected} onChange={(field, value) => updateValue(editing.key, field, value)} onSubmit={submit} onSelectAction={selectAction} /></div>
     </Sheet>}{confirmation && <ConfirmSheet title="确认操作" text={confirmation.form.confirm ?? ''} confirmText={`确认${confirmation.form.submit}`} cancelText="取消" onCancel={() => setConfirmation(null)} onConfirm={() => void execute(confirmation.form.id, confirmation.values, confirmation.key, confirmation.form)} />}
   </div>;
