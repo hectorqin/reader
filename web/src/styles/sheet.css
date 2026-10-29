@@ -97,6 +97,12 @@
   padding: var(--space-3) var(--space-3) calc(var(--space-3) + var(--safe-bottom));
 }
 
+/* A compact sheet is as tall as its content: a zero basis would collapse its body to
+   the padding and clip the prompt. It still shrinks and scrolls past the height cap. */
+.sheet[data-size='compact'] > .sheet-body {
+  flex-basis: auto;
+}
+
 .sheet:has(> .sheet-footer) > .sheet-body {
   padding-bottom: var(--space-3);
 }
