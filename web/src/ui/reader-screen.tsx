@@ -506,11 +506,13 @@ export class ReaderScreen {
       return { image: { mediaType: item.mediaType, bytes: new Uint8Array(await blob.arrayBuffer()) } };
     }
     const body = await blob.text();
-    // A book source's chapter is a scraped page fragment (`<div>…<br><br><br>`), not
+    // A text source's chapter is a scraped page fragment (`<div>…<br><br><br>`), not
     // an authored document: like legado-E, read a text-only one back as characters so
-    // it gets the TXT paragraphs and the reader's indent. Applied when *read*, so
-    // chapters the server cached before this change are cleaned too. Chapters with
-    // images or tables keep their markup; EPUBs never reach this branch.
+    // it gets the TXT paragraphs and the reader's indent. The plugin decides cleaning
+    // by the source's declared type (text is paragraphed, image/comic sources are left
+    // as they are); this only re-typesets, and applies when *read*, so chapters the
+    // server cached before the plugin cleaned them are fixed too. A chapter with
+    // images (every comic chapter) or tables keeps its markup; EPUBs never get here.
     if (book.format === 'chapters' && item.kind === 'chapter' && /html/i.test(item.mediaType) && isTextOnlyMarkup(body)) {
       return { html: htmlToText(body), plainText: true };
     }
