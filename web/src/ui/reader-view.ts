@@ -422,10 +422,18 @@ export class ReaderView {
     return this.windowOffset + this.sectionIndex;
   }
 
+  private relayoutPending = false;
+
   applySettings(next?: Partial<ViewSettings>): void {
     const previous = this.settings;
-    // Capture the live position before typography changes its scroll extent.
-    if (next) this.measureWithin();
+    // Brightness is an overlay over the page: nothing moves, so there is nothing to
+    // measure or restore — and a slider sends one of these per step of a drag.
+    const changed = next ? (Object.keys(next) as Array<keyof ViewSettings>).filter(key => next[key] !== previous[key]) : null;
+    const relayout = !changed || changed.some(key => key !== 'brightness');
+    // Capture the live position before typography changes its scroll extent — once
+    // per frame. A drag delivers several steps before the restore below runs, and a
+    // second measurement would read the half-reflowed page and lose the place.
+    if (next && relayout && !this.relayoutPending) this.measureWithin();
     if (next) this.settings = { ...this.settings, ...next };
     this.host.setAttribute('data-paginated', String(this.settings.mode === 'paged'));
     this.container.style.setProperty('--reader-font-scale', String(this.settings.fontScale));
@@ -449,10 +457,14 @@ export class ReaderView {
     this.host.style.direction = this.settings.direction;
     // Toggling pagination changes the column count, so the stored offset has to
     // be re-applied after the browser has laid out the new column box.
-    requestAnimationFrame(() => {
-      this.restoreOffset();
-      this.repaintMarks();
-    });
+    if (relayout && !this.relayoutPending) {
+      this.relayoutPending = true;
+      requestAnimationFrame(() => {
+        this.relayoutPending = false;
+        this.restoreOffset();
+        this.repaintMarks();
+      });
+    }
 
     // A page turn is the only place an animation is wanted, and only the two
     // settings that change where a page *is* can start one.

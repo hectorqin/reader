@@ -698,3 +698,27 @@ describe('ReaderView chapter links', () => {
     view.dispose();
   });
 });
+
+describe('ReaderView settings', () => {
+  it('measures the place once per frame while a slider is dragged, and not at all for brightness', async () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const frames: FrameRequestCallback[] = [];
+    const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation(callback => { frames.push(callback); return frames.length; });
+    const view = make(container, reflowableDoc(2));
+    await view.open(0, 0);
+    frames.splice(0).forEach(callback => callback(0));
+    const measure = vi.spyOn(view as unknown as { measureWithin(): void }, 'measureWithin');
+    view.applySettings({ fontScale: 1.1 });
+    view.applySettings({ fontScale: 1.2 });
+    view.applySettings({ fontScale: 1.3 });
+    // One measurement before the first step, one restore after the last.
+    expect(measure).toHaveBeenCalledTimes(1);
+    expect(frames).toHaveLength(1);
+    frames.splice(0).forEach(callback => callback(0));
+    view.applySettings({ brightness: 0.8 });
+    expect(measure).toHaveBeenCalledTimes(1);
+    expect(frames).toHaveLength(0);
+    raf.mockRestore();
+  });
+});
