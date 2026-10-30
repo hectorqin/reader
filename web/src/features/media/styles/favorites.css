@@ -6,12 +6,6 @@
 .media-screen .media-favorite-filter-menu>summary::-webkit-details-marker {display:none}
 @media (hover: hover) and (pointer: fine) { .media-screen .media-favorite-filter-menu>summary:hover {color:var(--text)}}
 .media-screen .media-favorite-filter-menu>summary:focus-visible {outline:2px solid var(--media-accent);outline-offset:3px;border-radius:var(--radius-xs)}
-.media-screen .media-favorite-filter-options {position:absolute;z-index:40;top:calc(100% + 4px);right:0;display:grid;min-width:148px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--media-paper,var(--surface));box-shadow:0 8px 24px #0002}
-.media-screen .media-favorite-filter-options button {display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;min-height:40px;padding:9px 10px;border:0;border-radius:var(--radius-sm);background:transparent;color:var(--text);font:inherit;font-size:var(--text-meta);line-height:1.4;text-align:left;cursor:pointer}
-.media-screen .media-favorite-filter-options button:focus-visible {background:var(--media-selection);color:var(--media-accent);outline:0}
-@media (hover: hover) and (pointer: fine) { .media-screen .media-favorite-filter-options button:hover {background:var(--media-selection);color:var(--media-accent);outline:0}}
-.media-screen .media-favorite-filter-options button[aria-selected=true] {color:var(--media-accent);font-weight:600}
-.media-screen .media-favorite-filter-options button svg {flex:none;color:var(--media-accent)}
 .media-screen .media-favorites .media-favorite-list {max-width:none}
 .media-screen .media-favorites .media-favorite-row {display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:0;border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent;text-align:left;color:var(--text)}
 @media (hover: hover) and (pointer: fine) { .media-screen .media-favorites .media-favorite-row:hover {background:var(--surface)}}
