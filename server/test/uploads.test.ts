@@ -482,17 +482,63 @@ describe('uploading a book', () => {
     assert.equal((res.json() as { writable: boolean }).writable, true);
   });
 
-  test('members cannot probe or upload, and rejected uploads leave the library unchanged', async () => {
+  test('members may add book files, and only add them', async () => {
     await ctx.users.createAsAdmin({ username: 'upload-member', password: 'password123', role: 'member' });
     const member = await ctx.users.login('upload-member', 'password123');
     const headers = { authorization: `Bearer ${member.accessToken}` };
-    const before = await readdir(booksDir);
     const probe = await app.inject({ method: 'GET', url: '/api/v1/library/upload', headers });
-    assert.equal(probe.statusCode, 403);
-    const body = multipart([{ field: 'files', filename: 'member-forbidden.txt', content: Buffer.from('not allowed') }]);
+    assert.equal(probe.statusCode, 200);
+
+    const zip = new JSZip();
+    zip.file('inside.txt', 'from an archive');
+    const body = multipart([
+      { field: 'files', filename: 'member-book.txt', content: Buffer.from('a member book') },
+      { field: 'files', filename: 'member-notes.docx', content: Buffer.from('not a book') },
+      { field: 'files', filename: 'member-comic.zip', content: await zip.generateAsync({ type: 'nodebuffer' }) },
+    ], { path: '成员上传' });
+    await mkdir(join(booksDir, '成员上传'), { recursive: true });
+    const upload = await app.inject({ method: 'POST', url: '/api/v1/library/upload', headers: { ...headers, 'content-type': body.contentType }, payload: body.body });
+    assert.equal(upload.statusCode, 200, upload.body);
+    const result = upload.json() as { uploaded: Array<{ path: string; kind: string }>; skipped: Array<{ name: string }> };
+    // The zip is stored as the comic archive it names, not unpacked into the library.
+    assert.deepEqual(result.uploaded.map((item) => item.path).sort(), ['成员上传/member-book.txt', '成员上传/member-comic.zip']);
+    assert.ok(result.uploaded.every((item) => item.kind === 'file'));
+    assert.deepEqual(result.skipped.map((item) => item.name), ['member-notes.docx']);
+    assert.deepEqual((await readdir(join(booksDir, '成员上传'))).sort(), ['member-book.txt', 'member-comic.zip']);
+  });
+
+  test('member uploads follow the library.memberUpload setting', async () => {
+    const member = await ctx.users.login('upload-member', 'password123');
+    const headers = { authorization: `Bearer ${member.accessToken}` };
+    const settings = ctx.settings!;
+    settings.save('library', { memberUpload: false }, settings.view('library').revision);
+    try {
+      const probe = await app.inject({ method: 'GET', url: '/api/v1/library/upload', headers });
+      assert.deepEqual(probe.json(), { writable: true, allowed: false });
+      const before = await readdir(join(booksDir, '成员上传'));
+      const body = multipart([{ field: 'files', filename: 'turned-off.txt', content: Buffer.from('no') }], { path: '成员上传' });
+      const upload = await app.inject({ method: 'POST', url: '/api/v1/library/upload', headers: { ...headers, 'content-type': body.contentType }, payload: body.body });
+      assert.equal(upload.statusCode, 403);
+      assert.equal((upload.json() as { error: { code: string } }).error.code, 'UPLOAD_DISABLED');
+      assert.deepEqual(await readdir(join(booksDir, '成员上传')), before);
+      // The switch is about members: an administrator still uploads.
+      const adminProbe = await app.inject({ method: 'GET', url: '/api/v1/library/upload', headers: auth() });
+      assert.deepEqual(adminProbe.json(), { writable: true, allowed: true });
+    } finally {
+      settings.save('library', { memberUpload: true }, settings.view('library').revision);
+    }
+  });
+
+  test('members cannot overwrite, and a refused upload leaves the library unchanged', async () => {
+    const member = await ctx.users.login('upload-member', 'password123');
+    const headers = { authorization: `Bearer ${member.accessToken}` };
+    const before = await readdir(join(booksDir, '成员上传'));
+    const body = multipart([{ field: 'files', filename: 'member-book.txt', content: Buffer.from('replaced') }], { path: '成员上传', onConflict: 'overwrite' });
     const upload = await app.inject({ method: 'POST', url: '/api/v1/library/upload', headers: { ...headers, 'content-type': body.contentType }, payload: body.body });
     assert.equal(upload.statusCode, 403);
-    assert.deepEqual(await readdir(booksDir), before);
+    assert.equal((upload.json() as { error: { code: string } }).error.code, 'ADMIN_REQUIRED');
+    assert.deepEqual(await readdir(join(booksDir, '成员上传')), before);
+    assert.equal(await readFile(join(booksDir, '成员上传', 'member-book.txt'), 'utf8'), 'a member book');
   });
 });
 

@@ -4,13 +4,13 @@
 
 ## 自动测试与构建
 
-分别在 web 和 server 目录执行 npm test、npm run build。依赖 ffmpeg/ffprobe 的真实媒体测试需显式配置相应工具；跳过的测试不计为通过。CI 配置见[.cnb.yml](../.cnb.yml)。
+分别在 web 和 server 目录执行 npm run typecheck、npm test、npm run build。依赖 ffmpeg/ffprobe 的真实媒体测试需显式配置相应工具；跳过的测试不计为通过。CI 配置见 [GitHub Actions](../.github/workflows/ci.yml)。
 
 ## 浏览器与原型
 
 先构建 web，再从 web 目录运行：
 
-- `npm run ui:review:only`：启动真实服务端媒体夹具，使用生产 React bundle 在 390/1120px 检查书架、书库、影音频道、详情、收藏、播放器、设置和权限页面；同时覆盖搜索、收藏筛选分页、收藏写回、播放会话恢复、媒体库增改和普通用户权限边界。报告写入忽略的 `artifacts/ui-review/react-app/verification.json`，以报告中的 `passed`、`screenshots`、页面错误和横向溢出结果为准，不把历史截图数量写入文档。
+- `npm run ui:review:only`（`npm run ui:review` 会先构建再运行）：启动真实服务端媒体夹具，使用生产 React bundle 在 390/1120px 检查书架、书库、我的、影音频道、详情、收藏、播放器、设置和权限页面；同时覆盖搜索、收藏筛选分页、收藏写回、播放会话恢复、媒体库增改和普通用户权限边界。报告写入忽略的 `artifacts/ui-review/react-app/verification.json`，以报告中的 `passed`、`screenshots`、页面错误和横向溢出结果为准，不把历史截图数量写入文档。
 
 - node tools/media-desktop-openlist-review.cjs：桌面分类、选择器、收藏、OpenList 表单及视口边界。
 - node tools/media-openlist-e2e.cjs：生产页面、真实 Reader 服务、临时数据库，以及本机模拟 OpenList 的建库、扫描、播放和凭据维护闭环。
@@ -18,7 +18,7 @@
 - node tools/media-v2-review.cjs：读取 MEDIA_REVIEW_SAMPLE_PACK 指定的[验收媒体包](media-acceptance-pack.md)，进行较完整页面对照。
 - node tools/media-playback-review.cjs：实际音视频播放、刷新恢复、歌词队列切换与视频控件检查。
 
-通过 PROTOTYPE_CHROMIUM 指定 Chromium。生成结果写入忽略的 artifacts/media 目录，截图不自动入库。提交中只保留明确选定的最新参考资料；本轮参考见[原型入口](prototypes/media/README.md)。
+上述 node tools/media-*.cjs 工具通过 PROTOTYPE_CHROMIUM 指定 Chromium，`ui:review` 使用 CHROME_PATH。生成结果写入忽略的 artifacts/media 目录，截图不自动入库。提交中只保留明确选定的最新参考资料；本轮参考见[原型入口](prototypes/media/README.md)。
 
 原型自身检查：node docs/prototypes/media/v2-review/verify.cjs（从仓库根目录）。原型检查、布局断言和生产功能检查需要分别解释，截图数量不代表逐张视觉验收。
 

@@ -12,6 +12,7 @@ export interface BusinessValues {
   scraping:{timeoutMs:number;retries:number};
   access:{publicUrl:string;corsOrigins:string;accessTokenTtl:number;refreshTokenTtl:number};
   webdav:{url:string;username:string;password:string;maxBytes:number};
+  library:{memberUpload:boolean};
 }
 export type SettingsGroup=keyof BusinessValues;
 type Field={key:string;label:string;type:'text'|'textarea'|'password'|'number'|'checkbox'|'url'|'select';default:string|number|boolean;min?:number;max?:number;help?:string;options?:Array<{value:string;label:string}>};
@@ -71,6 +72,9 @@ export const SETTINGS_SCHEMA:Record<SettingsGroup,{label:string;fields:Field[]}>
     {key:'username',label:'账号',type:'text',default:''},
     {key:'password',label:'密码',type:'password',default:''},
     {key:'maxBytes',label:'单次上传上限（字节）',type:'number',default:2147483648,min:1,max:4294967295},
+  ]},
+  library:{label:'书库',fields:[
+    {key:'memberUpload',label:'允许成员上传书籍',type:'checkbox',default:true,help:'成员只能新增支持格式的书籍文件：不解包压缩包、不覆盖已有文件。改名、移动、删除和新建目录始终仅限管理员'},
   ]},
 };
 export function settingsDefaults<K extends SettingsGroup>(group:K):BusinessValues[K]{

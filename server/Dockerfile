@@ -8,13 +8,11 @@
 # fails, so the client stage is gated behind a build arg and the runtime stage
 # tolerates an absent bundle. A server-only deployment stays possible.
 #
-# The base image is overridable because `docker.cnb.cool` is an authenticated
-# mirror: a plain `docker build` on a machine whose token has no pull rights on
-# it fails at the very first stage. Docker Hub is the default; pass the mirror
-# where it is reachable (CNB pipelines, or anywhere Hub is slow):
+# The base image is overridable so a build can pull Node from a registry mirror
+# where Docker Hub is slow or unreachable. Docker Hub is the default:
 #
 #   docker build . -f server/Dockerfile \
-#     --build-arg NODE_IMAGE=docker.cnb.cool/dockerhub/node:24-alpine
+#     --build-arg NODE_IMAGE=<mirror>/node:24-alpine
 ARG NODE_IMAGE=node:24-alpine
 
 FROM ${NODE_IMAGE} AS web

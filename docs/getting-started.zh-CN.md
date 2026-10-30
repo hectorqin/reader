@@ -4,7 +4,7 @@
 
 本文带你完成 Docker 部署、注册账号和读取第一本书。直接从源码运行请看[开发指南](development.zh-CN.md)。
 
-本指南对应当前 Node 版工作区。CI 发布 `main`（开发分支）和提交短哈希标签，没有发布 `latest` 的配置；标签可用性以对应构建成功为准。部署后核对版本，长期使用建议固定提交标签。旧 Java 版镜像、`/storage` 数据不与新版直接兼容。
+本指南对应当前 Node 版工作区。正式版本镜像发布到 Docker Hub `hectorqin/reader-pro`（amd64 与 arm64），标签为 `x.y.z`、`x.y`、`latest` 和 `sha-<短哈希>`，只在推送 `v*` 版本标签或手动触发发布时生成；`main` 是长期开发分支，推送不会发布 Docker Hub 镜像。仓库自带的 Compose 文件默认使用 `hectorqin/reader-pro:latest`；长期使用建议固定正式版本号（`READER_IMAGE=hectorqin/reader-pro:x.y.z`）。旧 Java 版镜像、`/storage` 数据不与新版直接兼容。
 
 ## 1. 准备环境
 
@@ -17,7 +17,7 @@
 ## 2. 获取部署配置
 
 ```sh
-git clone https://cnb.cool/hectorqin/reader.git
+git clone https://github.com/hectorqin/reader.git
 cd reader
 ```
 
@@ -41,7 +41,7 @@ volumes:
 ### 选择只读或可写书库
 
 - **只浏览和阅读**：保留 `:ro`。通过宿主机或 NAS 放入新书，等待扫描。
-- **在网页管理文件**：改为 `:rw`，并确保服务进程对该目录有写权限。管理员可以在书库文件管理页上传、改名、移动、删除和新建目录。
+- **在网页管理文件**：改为 `:rw`，并确保服务进程对该目录有写权限。管理员可以在书库文件管理页上传、改名、移动、删除和新建目录；普通成员只能在书库页上传书籍文件（可在「我的 → 系统设置 → 服务配置 → 书库」关闭）。
 
 只读书库不会妨碍进度、笔记或书架保存，这些数据写入 `/data`。挂载和权限的详细说明见[部署配置](configuration.zh-CN.md)。
 
@@ -59,7 +59,7 @@ docker compose logs --tail=100 reader
 2. 等待初次扫描，在书架或书库中打开一本书。
 3. 为家人或其他成员创建账号。首个账号创建后默认关闭公开注册。
 
-如需开放后续注册，在 Compose 的 `environment` 中设置 `ALLOW_REGISTRATION: "true"`，然后执行 `docker compose up -d`。
+如需开放后续注册，由管理员在「我的 → 系统设置 → 注册与邀请」中改为开放注册或仅邀请码注册。Compose 中的 `ALLOW_REGISTRATION: "true"` 只在首次启动初始化注册策略时生效，之后以页面设置为准。
 
 健康检查地址为 `/api/v1/health`。若启动失败、目录为空或无法写入，请看[故障排查](configuration.zh-CN.md#故障排查)。
 
@@ -69,7 +69,7 @@ docker compose logs --tail=100 reader
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
-此方式仍需能下载 Node 基础镜像和 npm 依赖。后续管理该部署时继续使用同样的两个 `-f` 参数。发布镜像部署可在 `.env` 设置 `READER_IMAGE=cnb.cool/hectorqin/reader:<已发布的提交标签>` 固定版本。
+此方式仍需能下载 Node 基础镜像和 npm 依赖。后续管理该部署时继续使用同样的两个 `-f` 参数。使用正式版本时，在 `.env` 设置 `READER_IMAGE=hectorqin/reader-pro:<版本号>`（例如 `0.1.0`）固定版本。
 
 ### 不使用 Compose
 
@@ -81,7 +81,7 @@ docker run -d --name reader --restart unless-stopped \
   -p 5888:5888 \
   -v /path/to/your/books:/books:ro \
   -v "$(pwd)/data:/data" \
-  cnb.cool/hectorqin/reader:main
+  hectorqin/reader-pro:latest
 ```
 
 Windows 推荐使用上面的 Compose 配置，避免不同 shell 的路径和换行语法差异。
@@ -90,13 +90,13 @@ Windows 推荐使用上面的 Compose 配置，避免不同 shell 的路径和�
 
 ### 本地书籍
 
-把 EPUB、TXT、PDF、CBZ/ZIP 或漫画图片目录放到挂载的书库中。默认每 30 分钟定时扫描，每 60 秒检查变化；管理员也可手动触发扫描。可写挂载下，上传入口位于管理员文件管理页。
+把 EPUB、TXT、PDF、CBZ/ZIP 或漫画图片目录放到挂载的书库中。默认每 60 秒自动检查书库变化，间隔可在「我的 → 系统设置 → 服务配置 → 扫描设置」调整（0 关闭）；服务启动时也会扫描一次。可写挂载下，管理员在文件管理页上传，普通成员在书库页头部的「上传书籍」上传（只收书籍格式，不解包、不覆盖）。
 
 书架显示可阅读的书籍；书库按磁盘目录浏览。从书架移除书籍与删除磁盘文件是两种不同操作。详见[使用手册](user-guide.zh-CN.md)。
 
 ### OPDS
 
-管理员从书架的「书源」入口进入书源中心，添加 OPDS 来源并设置服务地址。需要认证时填写当前账号的来源凭据。打开来源后可浏览或搜索目录，获取书籍并加入书架。
+从书架的「书源」入口进入书源中心，管理员在「书源管理」中点「添加来源」，添加 OPDS 来源并设置服务地址。需要认证时填写当前账号的来源凭据。打开来源后可浏览或搜索目录，获取书籍并加入书架。
 
 ## 5. 添加影音媒体库
 

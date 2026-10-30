@@ -6,9 +6,9 @@
 # automatically becomes the instance admin.
 services:
   reader:
-    # CI publishes branch and commit tags; it does not publish :latest.
-    # Pin READER_IMAGE to a published commit tag for repeatable upgrades.
-    image: ${READER_IMAGE:-cnb.cool/hectorqin/reader:main}
+    # Releases (v* tags) publish x.y.z, x.y, latest and sha-* tags to Docker Hub.
+    # Pin READER_IMAGE to a release version for repeatable upgrades.
+    image: ${READER_IMAGE:-hectorqin/reader-pro:latest}
     # To build from source instead of pulling the published image. The context is
     # the repository root because the image bakes in the H5 client built from
     # ./web as well as the server.

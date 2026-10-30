@@ -46,6 +46,8 @@ Reader V3 内置 4 个主题，每个主题含浅色和深色两套取值，共 
 
 新增 brand-text 和 ch-\*-text 的原因：浅色主题的 brand 和频道色已改为柔和的浅色，直接当文字用对比度不够，所以文字和图标改用更深的同色相取值。
 
+危险色（第 4 节第 6 条的 danger）不属于主题：实现里是 `--color-danger` 和 `--color-danger-soft`，只分浅色和深色两套取值，不随主题变（`web/src/styles/theme-tokens.css`）。
+
 ## 3. 主题取值
 
 ### 3.1 暖陶

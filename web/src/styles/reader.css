@@ -3621,7 +3621,7 @@ book-content {
 .source-catalog-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; margin:.5rem 0 1rem; }
 .source-navigation { flex-wrap:wrap; margin:.5rem 0 1rem; }
 .library-files-screen .manager-status { padding:.65rem 1rem 1rem; }
-.library-files-screen .collection-link.is-disabled { opacity:.5; pointer-events:none; }
+.collection-link.is-disabled { opacity:.5; pointer-events:none; }
 .sources-actions { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
 .sources-actions label { margin:0; }
 .sources-card .sources-consent { flex-direction:row; align-items:center; }

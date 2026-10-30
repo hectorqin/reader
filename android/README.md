@@ -1,109 +1,94 @@
 # Android 外壳
 
-**状态：契约已定义，实现未开始。**
+Kotlin 写的 WebView 外壳：加载与 H5 **同一份** `web/` 构建产物，只补 WebView 做不到
+或做不好的部分——连接状态、设备名、原生整页图片、系统 TTS、Media3 后台播放与原生视频。
+排版的唯一实现在 `web/`，**外壳不重写排版**；两条实现只会让「最小覆盖 CSS」的策略分叉。
 
-这个目录目前只有设计契约，没有可编译的代码。原因很直接：本次开发环境没有
-JDK 与 Android SDK，写一个编译不过、跑不起来的 APK 只是往仓库里堆未经验证
-的代码。宁可把边界写清楚，等有构建环境时一次写对。
+与 H5 的接口见 [contract.md](contract.md)。
 
-下面是已经定死、并且**已被 H5 侧验证过**的部分。
+## 构建
+
+需要 JDK 17+、Android SDK 35、Build Tools 35.0.1（AGP 8.7.3、Kotlin 2.0.21、
+Gradle Wrapper 8.11.1，`compileSdk`/`targetSdk` 35，`minSdk` 24）。从仓库根目录：
+
+```sh
+sh android/scripts/build-web-assets.sh   # 构建 web/ 并复制到 app/src/main/assets/web-assets/
+cd android
+./gradlew :app:assembleDebug             # Windows 原生终端用 gradlew.bat
+```
+
+产物为 `android/app/build/outputs/apk/debug/app-debug.apk`。编译通过不等于真机阅读、
+播放验证通过。
+
+- **服务地址**：默认留空，首次启动在登录页填写并记住。个人构建可预设：
+  `./gradlew :app:assembleDebug -PdefaultServerUrl=http://nas.local:5888`
+  （写入 `BuildConfig.DEFAULT_SERVER_URL`，经桥接方法 `configuredServerUrl()` 交给 H5 预填）。
+- **资源目录**：`app/build.gradle.kts` 把 assets 根目录**替换**为 `src/main/assets/web-assets`，
+  所以 `web/dist` 的内容平铺在 APK 的 `assets/` 下。该目录除 `README.txt` 占位外被 Git 忽略。
+- release 构建在没有提供 keystore 时使用 debug 签名。
+- **包名**：`applicationId` 与 `namespace` 均为 `com.htmake.readerpro`，Kotlin 源码在
+  `app/src/main/java/com/htmake/readerpro/`（媒体快捷方式的 action 也以此为前缀）。旧包名
+  `cool.cnb.reader` 的安装与新包是两个不同的应用，不能覆盖升级，也不迁移其本地数据。
+
+### 不需要 JDK 的检查
+
+```sh
+sh android/scripts/check-shell.sh        # 秒级
+sh android/scripts/verify-web-assets.sh  # 在 build-web-assets.sh 之后运行
+```
+
+- `check-shell.sh`：包名与目录一致；`com.htmake.readerpro.*` 导入都能解析；JS 桥接契约双向一致
+  （只把 `ReaderBridge.kt`、`SpeechBridge.kt` 里紧跟 `@JavascriptInterface` 的方法算作桥接方法，
+  每个都必须在 `web/src/android-bridge.d.ts` 中声明，反之亦然；没有注解的 Kotlin 方法页面调不到，
+  不应声明）；`ReaderBridge.kt` 分支用到的渲染模式都在 `web/src/formats/types.ts` 的 `RenderMode` 中；
+  `NativePageView` 能解码 JPEG/PNG/WebP。
+- `verify-web-assets.sh`：确认暂存的 Web 产物正是 Gradle 会打进 APK 的那份——否则 APK
+  能构建成功却启动即白屏。
+- `scripts/verify-web-apk.ps1`（PowerShell）：逐文件比对已构建 APK 的 `assets/` 与 `web/dist` 的哈希。
+
+CI：GitHub Actions `ci.yml` 的 Android 任务依次运行 `check-shell.sh`、`build-web-assets.sh`、
+`verify-web-assets.sh` 和 `./gradlew --no-daemon :app:assembleDebug`，并上传 debug APK 制品；
 
 ---
+
+## 宿主与来源
+
+`WebHost.kt` 用 `WebViewAssetLoader` 把打包的客户端从
+`https://appassets.androidplatform.net/assets/index.html` 提供，而不是 `file://`：
+`file://` 下对服务端的 `fetch()` 是不透明跨域请求，常见绕法是关掉 Web 安全。HTTPS 资源来源让
+请求成为普通 CORS 请求（服务端 `server/src/http/cors.ts` 放行该来源），`isSecureContext` 为真，
+IndexedDB 等 API 与浏览器一致。因为资源加载器不能为任意路径回退到 `index.html`，客户端只用哈希路由。
+
+- 登录、会话与离线数据都由 H5 自己管理（与浏览器相同的存储层）；外壳不注入令牌。
+- 服务端通常是局域网 `http://`，所以清单允许明文流量，WebView 允许混合内容。
+- 书内外链交给系统浏览器打开；`reader-res:`、`blob:`、`data:`、`about:` 与资源来源留在 WebView 内。
+- 返回键先走 WebView 历史，没有历史时才退出。
+- `onPause` 调用 `window.__readerFlush()`，让阅读进度在切到后台前落盘。
+- 桌面快捷方式 `OPEN_VIDEO` / `OPEN_MUSIC` / `OPEN_AUDIOBOOK` 分别打开 `#/media/video`、
+  `#/media/music`、`#/media/audiobook`。
+- debug 构建开启 WebView 远程调试；页面 console 输出到 logcat（标签 `ReaderWeb`）。
 
 ## 分工：谁渲染什么
 
-用户的问题原话是：**「Android 端 epub 书籍可以使用 H5 渲染，但是其他类型的
-书籍需要使用原生来渲染，提升性能。」** 这条已经落进代码
-（`web/src/ui/reader-view.ts` 的 `capabilities()`），外壳只需要认这个契约：
-
-| `kind` | 渲染方 | 为什么 |
+| 内容 | 渲染方 | 说明 |
 | --- | --- | --- |
-| `reflowable`（epub） | **WebView** | 设备上只有 WebView 实现了 CSS 多栏、内嵌字体、竖排、振假名。原生文本栈要把这些重做一遍，只会更差。 |
-| `text`（txt） | **WebView** | 同上，且它只是纯文本，没有原生收益。 |
-| `paged`（cbz / 漫画目录 / 单图） | **原生 Pager** | 一页是一个 JPEG。原生 `ImageView` 走硬件解码并复用 bitmap；WebView 每页一个合成层并在主线程解码。真正的原因是内存：300MB 的画册在 WebView 里是中端机 OOM，在原生里没事。 |
-| `document`（pdf） | **系统查看器** | 系统已经有一个了。在 WebView 里套 iframe 只是把同样的事做两遍。 |
+| EPUB、TXT 等可重排内容 | **WebView** | 只有 WebView 实现了 CSS 多栏、内嵌字体、竖排、振假名；原生重做只会更差。 |
+| 整页图片（漫画页、图片页，`RenderMode = 'image'`） | **原生 `NativePageView`**（shell ≥ 2） | 平台解码并按视口采样，避免 WebView 每页一次解码和布局。仅在「适应整页」(`contain`) 时使用；外壳返回 `false` 就由 WebView 照常绘制，没有第三种结果。 |
+| PDF（`document`） | **WebView** | `canOpenDocument()` 目前总是返回 `false`：系统查看器是独立页面，会把读者带出应用。 |
 
-**API 已经提供了路由所需的全部信息**，不需要外壳自己嗅探扩展名或 UA：
+路由由 H5 决定（`web/src/ui/reader-view.ts` 通过 `pageHost` 询问外壳），外壳不嗅探扩展名或 UA。
 
-```
-GET /api/v1/books/:id/manifest
-→ { content: { kind: "reflowable" | "paged" | "text" | "document" | "single-image", ... },
-    kind: "reflowable" | ...,      // 与 content.kind 相同，冗余保留给旧客户端
-    files: [ { rel_path, size, missing } ] }
-```
+## 朗读与影音
 
-`kind` 同时出现在 `content.kind` 和顶层，两边永远是同一个值。外壳读哪个都行，
-但**不要**改用扩展名或 UA 去猜——`kind` 就是那个唯一开关。
-
-`files` 对 `paged` 的书是**逐页下载的路径清单**：漫画目录没有单一的书文件，
-外壳按这份清单取页。清单同时是 `/books/:id/file?path=` 的契约——
-manifest 列出的路径就是这个端点会服务的路径，多一条也没有。压缩包里的页面按压缩包
-自己的路径列出，包内页码走 `/assets?ref=page:卷:页`，不是文件路径。
-
-H5 侧在没有外壳时的降级路径也已实测通过（`paged` → 内置翻页器、
-`document` → iframe），所以外壳缺失或被停用不会让 App 白屏。
-
----
-
-## 桥接契约
-
-外壳在 WebView 加载 assets 之前，往 `window` 上写一个对象
-（`web/src/bridge.ts` 是唯一的定义处）：
-
-```js
-window.readerBridge = {
-  serverUrl: 'http://192.168.1.10:8080',  // file:// 下没有 origin，必须给
-  platform: 'android',
-  deviceName: 'Pixel 8',                  // 写进进度，多设备同步时能看出是哪台
-  onBookOpened(bookId) {},                // 外壳接管输入（硬件键、原生翻页）
-  onTurnPage(turn) {},                    // 外壳把翻页手势交回给 H5
-  cacheBook(bookId) {},                   // 请求离线缓存
-};
-```
-
-三条约定：
-
-1. **外壳只写这一个对象，不 eval 字符串。** 同进程，走对象比走
-   `addJavascriptInterface` 的字符串协议简单，也不会因为转义出错。
-2. **`platform: 'android'` 是唯一的路由开关。** 不嗅探 UA —— UA 是猜的，
-   桥是事实。
-3. **H5 不碰 refresh token。** 令牌由外壳的加密存储管理；WebView 的
-   `localStorage` 里放长期凭证，任何被注入的脚本都能读。
-
-`web/src/bridge.ts` 已实现读取侧，并且**无桥时正常工作**（纯 H5 部署即如此）。
-
----
-
-## 离线缓存
-
-服务端已经把「按书缓存」所需的接口准备好了，外壳侧直接可用：
-
-- `GET /books/:id/content` — 整本书文件流式下载，带 `ETag` 与 `Range`。
-  书内容按哈希不可变，所以缓存永不失效，**断点续传也是免费的**。
-- 目录型书籍（漫画目录）没有单一文件，返回 `400 DIRECTORY_BOOK`；
-  这类书按 `items?group=N` 逐卷取图。
-
-进度与笔记走 `GET /sync?since=<serverTime>` 增量拉取。服务端是唯一真相源，
-冲突是 last-writer-wins —— 一台设备属于一个读者，多设备之间不存在「编辑
-冲突」，只存在「某台设备落后了」。离线期间本地记录，恢复后合并。
-
----
+- **朗读**：`SpeechBridge.kt` 封装系统 `TextToSpeech`（shell ≥ 3），注册为独立接口
+  `window.ReaderAndroidSpeech`，H5 把它挂到 `ReaderAndroid.speech`。队列和句子游标留在 JS；
+  没有原生朗读时回退到 WebView 的 `speechSynthesis`。
+- **影音**：`media/` 下的 `MediaPlaybackService`（Media3 `MediaSessionService`，前台服务、通知与
+  后台播放）、`MediaVideoActivity`（原生视频画面，支持画中画）和 `MediaBridge`。`MediaBridge` 不是
+  `@JavascriptInterface`，而是只对资源来源、只对主框架开放的 `WebMessageListener`（`window.ReaderMedia`），
+  需要 WebView 支持 `WEB_MESSAGE_LISTENER`，否则 H5 使用网页播放器。播放与朗读互相打断。
 
 ## 分发
 
-AGPL 免费、无收入，所以不走应用商店：直接发 APK。
-
-- 侧载 APK 到 GitHub Releases / CNB 制品库
-- 没有审核周期，没有 Apple 的 99 美元
-- iOS 按设计文档的判断等有赞助再说，本目录不涉及
-
-## 开工前需要的东西
-
-1. JDK 17+ 与 Android SDK（`ANDROID_HOME`）
-2. AGP + Kotlin 版本对齐（建议 AGP 8.x / Kotlin 2.x）
-3. `web/dist` 的产物打进 `app/src/main/assets/www/` —— 第一步是把
-   `web/` 的构建产物复制进去，**不是**在 Android 侧重写渲染
-4. 一个可连的服务端实例（`docker compose up` 即可）
-
-第 3 条是这个仓库的结构性约束：**外壳不重写排版**。排版的唯一实现在
-`web/`，两条实现只会让「最小覆盖 CSS」的策略分叉。
+AGPL 免费、无收入，不走应用商店，直接侧载 APK。当前 CI 只产出 debug APK 制品；Docker 镜像发布
+（`release.yml`）不包含 APK。iOS 不在本目录范围内。

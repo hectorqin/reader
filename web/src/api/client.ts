@@ -591,10 +591,14 @@ export class ReaderApi {
     return this.call('/api/v1/library/browse/shelf', 'POST', { ...target, action }, options);
   }
 
-  /** Whether the mount accepts an upload at all; asked before sending bytes. */
-  async uploadProbe(options: RequestOptions = {}): Promise<boolean> {
-    const result = await this.get<{ writable: boolean }>('/api/v1/library/upload', options);
-    return result.writable;
+  /**
+   * Whether the mount accepts an upload at all, and whether this user may upload
+   * (members only when the `library.memberUpload` setting is on); asked before
+   * sending bytes.
+   */
+  async uploadProbe(options: RequestOptions = {}): Promise<{ writable: boolean; allowed: boolean }> {
+    const result = await this.get<{ writable: boolean; allowed?: boolean }>('/api/v1/library/upload', options);
+    return { writable: result.writable, allowed: result.allowed ?? true };
   }
 
   /**

@@ -32,14 +32,14 @@ done
 # 2. Every import of our own code must resolve to a file that exists.
 note "==> checking project imports resolve"
 for file in $(find "$android_dir/app/src" -name '*.kt'); do
-  sed -n 's/^import cool\.cnb\.reader\.\(.*\)$/\1/p' "$file" | while read -r symbol; do
+  sed -n 's/^import com\.htmake\.readerpro\.\(.*\)$/\1/p' "$file" | while read -r symbol; do
     # `BuildConfig` is generated, and a class name is the last dot segment.
     case "$symbol" in
       BuildConfig) continue ;;
     esac
-    path="$android_dir/app/src/main/java/cool/cnb/reader/$(printf '%s' "$symbol" | tr '.' '/').kt"
+    path="$android_dir/app/src/main/java/com/htmake/readerpro/$(printf '%s' "$symbol" | tr '.' '/').kt"
     if [ ! -f "$path" ]; then
-      err "$file imports cool.cnb.reader.$symbol but $path does not exist"
+      err "$file imports com.htmake.readerpro.$symbol but $path does not exist"
     fi
   done
 done
@@ -55,8 +55,8 @@ done
 #    methods against `ReaderBridge.kt` is what produced eleven false failures the
 #    first time this was run.
 note "==> checking the JS bridge contract in both directions"
-bridge_file="$android_dir/app/src/main/java/cool/cnb/reader/bridge/ReaderBridge.kt"
-speech_file="$android_dir/app/src/main/java/cool/cnb/reader/bridge/SpeechBridge.kt"
+bridge_file="$android_dir/app/src/main/java/com/htmake/readerpro/bridge/ReaderBridge.kt"
+speech_file="$android_dir/app/src/main/java/com/htmake/readerpro/bridge/SpeechBridge.kt"
 types_file="$repo_dir/web/src/android-bridge.d.ts"
 
 # A method is "implemented" if either bridge class exposes it to the page: a
@@ -119,7 +119,7 @@ note "==> checking the render-mode vocabulary matches"
 web_modes=$(sed -n "s/^export type RenderMode = \(.*\);/\1/p" "$repo_dir/web/src/formats/types.ts" \
   | tr -d "'" | tr -d ' ' | tr '|' '\n' | sort -u)
 shell_modes=$(sed -n 's/.*mode != "\([a-z]*\)".*/\1/p' \
-  "$android_dir/app/src/main/java/cool/cnb/reader/bridge/ReaderBridge.kt" | sort -u)
+  "$android_dir/app/src/main/java/com/htmake/readerpro/bridge/ReaderBridge.kt" | sort -u)
 if [ -z "$web_modes" ]; then
   err "cannot read RenderMode from web/src/formats/types.ts"
 fi
@@ -130,7 +130,7 @@ for mode in $shell_modes; do
 done
 # The shell draws images natively, so it must know the client's image vocabulary.
 decodable=$(sed -n '/private val DECODABLE = setOf(/,/)/p' \
-  "$android_dir/app/src/main/java/cool/cnb/reader/web/NativePageView.kt" \
+  "$android_dir/app/src/main/java/com/htmake/readerpro/web/NativePageView.kt" \
   | sed -n 's/.*"\(image\/[a-z]*\)".*/\1/p' | sort -u)
 for mediaType in "image/jpeg" "image/png" "image/webp"; do
   if ! printf '%s\n' "$decodable" | grep -qx "$mediaType"; then

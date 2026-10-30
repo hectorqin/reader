@@ -29,10 +29,10 @@ import { isPageExtension, supportedExtensions } from '../indexer/formats/index.t
  *     before doing anything, so a read-only mount
  *     answers a clean 403 instead of an `EROFS` stack trace.
  *
- * The mount is the security boundary, and there is no second one: a user who can
- * move a file in their library can move any file in it. That is the same trust
- * level the admin scan endpoint already assumes, and inventing a per-path ACL on
- * top of it would be security theatre.
+ * The mount is the security boundary for paths, and there is no per-path ACL on
+ * top of it: an administrator who can move one file can move any file in it.
+ * Who may write at all is decided by the routes — every mutating call here is
+ * admin-only, and members only add books through the upload endpoint.
  */
 
 /** Directories the scanner skips. Reported to the UI rather than filtered. */
