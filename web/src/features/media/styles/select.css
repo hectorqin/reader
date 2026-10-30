@@ -6,7 +6,7 @@
 .media-screen .media-library-filter .media-select-trigger>svg {position:static;transform:none;pointer-events:none}
 .media-screen .media-library-filter .media-select-trigger[aria-expanded=true]>svg {transform:rotate(180deg)}
 .media-select-trigger[aria-expanded=true]>svg {transform:rotate(180deg)}
-.media-select-control .media-select-trigger:focus-visible {outline:2px solid var(--media-accent);outline-offset:3px}
+.media-select-control .media-select-trigger:focus-visible {outline:var(--focus-ring);outline-offset:var(--focus-offset)}
 .media-select-control .media-select-trigger:disabled {opacity:.45;cursor:default}
 .media-select-error {display:block;margin-top:5px;font-size:var(--text-meta);color:var(--media-error-ink)}
 .media-select-control[data-variant=plain] {width:auto}

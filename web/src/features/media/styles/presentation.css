@@ -30,7 +30,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 /* The shared sheet's header and footer use the app's own buttons, not media's. */
 .media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu *, .action-menu-trigger)) { border:0; background:transparent; border-radius:var(--radius-sm); min-height:38px; padding:9px 12px; }
 @media (hover: hover) and (pointer: fine) { .media-screen button:not(:where(.sheet-header *, .sheet-footer *, .sheet-list *, .action-menu *, .action-menu-trigger)):hover:not(:disabled) { background:var(--surface); }}
-.media-screen button:focus-visible { outline:2px solid var(--media-accent); outline-offset:3px; }
+.media-screen button:focus-visible { outline:var(--focus-ring);outline-offset:var(--focus-offset); }
 .media-screen input:not([type=range]):not([type=checkbox]):not([type=radio]), .media-screen textarea {
   background:var(--media-paper); border:1px solid var(--border); border-radius:var(--radius-sm);
 }
@@ -153,7 +153,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-lyrics-lines {height:320px;padding:65px 8px;overflow-anchor:none}
 
 @media(max-width:700px) {
-  .media-screen {padding:0 14px calc(24px + env(safe-area-inset-bottom))}
+  .media-screen {padding:0 14px calc(24px + var(--safe-bottom))}
   .media-screen .media-tabs {gap:22px;min-height:49px}
   .media-screen .media-tabs button {padding:10px 0;min-height:49px}
   .media-screen .media-grid {gap:17px 12px}
@@ -255,9 +255,9 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-mobile-title {gap:3px;font-size:var(--text-title);min-width:0}
 .media-heading-actions[hidden] {display:none!important}
 @media(max-width:700px){
-  .media-player:not(.media-player-expanded),.media-player:is(.media-player-audio,.media-player-native-video):not(.media-player-expanded) {bottom:calc(10px + env(safe-area-inset-bottom))}
-  body:has(.media-player:not([hidden]):not(.media-player-expanded)) .media-screen {padding-bottom:calc(96px + env(safe-area-inset-bottom))}
-  .media-screen.media-playback-page:not(.media-video-page) {padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+  .media-player:not(.media-player-expanded),.media-player:is(.media-player-audio,.media-player-native-video):not(.media-player-expanded) {bottom:calc(10px + var(--safe-bottom))}
+  body:has(.media-player:not([hidden]):not(.media-player-expanded)) .media-screen {padding-bottom:calc(96px + var(--safe-bottom))}
+  .media-screen.media-playback-page:not(.media-video-page) {padding-bottom:calc(24px + var(--safe-bottom))}
 }
 @media(min-width:701px){
   .media-screen.media-secondary-page>.media-heading {position:fixed;z-index:90;top:0;left:max(140px,calc((100vw - 1060px)/2 + 110px));right:max(24px,calc((100vw - 1060px)/2));height:62px;min-height:62px;margin:0;border:0;background:var(--media-background);box-shadow:inset 0 -1px var(--border)}
@@ -909,7 +909,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-player:fullscreen .media-video-stage .dplayer-host video {max-height:none;height:100dvh}
 .media-player:fullscreen .media-video-controls {display:block!important;position:static}
 .media-player:fullscreen .media-video-controls>:not(.media-video-landscape):not(dialog) {display:none!important}
-.media-video-landscape {position:absolute;inset:0 0 auto;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 28px max(16px,env(safe-area-inset-left));background:linear-gradient(rgb(0 0 0 / .62),transparent);color:#fff;pointer-events:none;transition:opacity var(--motion-duration) var(--motion-ease)}
+.media-video-landscape {position:absolute;inset:0 0 auto;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:16px;padding:max(12px,var(--safe-top)) max(16px,var(--safe-right)) 28px max(16px,var(--safe-left));background:linear-gradient(rgb(0 0 0 / .62),transparent);color:#fff;pointer-events:none;transition:opacity var(--motion-duration) var(--motion-ease)}
 .media-video-landscape>* {pointer-events:auto}
 .media-video-landscape-title {display:flex;align-items:center;gap:8px;min-width:0}
 .media-video-landscape-title strong {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--text-body)}
@@ -921,7 +921,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-player:fullscreen:has(.dplayer-hide-controller) .media-video-landscape:not([data-locked]) {opacity:0}
 @media (hover: hover) and (pointer: fine) { .media-player:fullscreen:has(.dplayer-hide-controller) .media-video-landscape:not([data-locked]):hover {opacity:1}}
 /* 锁定: taps no longer reach the player; only the unlock button remains. */
-.media-video-landscape[data-locked] {inset:0 auto 0 0;background:none;padding:0 0 0 max(16px,env(safe-area-inset-left))}
+.media-video-landscape[data-locked] {inset:0 auto 0 0;background:none;padding:0 0 0 max(16px,var(--safe-left))}
 .media-video-landscape .media-video-unlock {width:48px;height:48px;padding:0;justify-content:center;border-radius:50%;background:rgb(0 0 0 / .45)}
 .media-player[data-locked] .dplayer-host {pointer-events:none}
 .media-player[data-locked] :is(.dplayer-controller,.dplayer-controller-mask,.dplayer-notice-list) {display:none!important}

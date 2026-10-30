@@ -3514,7 +3514,7 @@ book-content {
   gap: 0.5rem;
   align-items: center;
   padding: 0.6rem 0.75rem;
-  padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(0.6rem + var(--safe-bottom));
   border-top: 1px solid var(--reader-line);
   background: var(--reader-surface);
   overflow-x: auto;
@@ -3538,7 +3538,7 @@ book-content {
 
 .manager-selection {
   position: absolute;
-  inset-block-start: calc(env(safe-area-inset-top) + 0.25rem);
+  inset-block-start: calc(var(--safe-top) + 0.25rem);
   inset-inline-start: 50%;
   transform: translateX(-50%);
   background: var(--reader-ink);

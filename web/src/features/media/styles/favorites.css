@@ -5,7 +5,7 @@
 .media-screen .media-favorite-filter-menu>summary {display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0;border:0;border-radius:0;background:transparent;color:inherit;cursor:pointer;list-style:none;white-space:nowrap}
 .media-screen .media-favorite-filter-menu>summary::-webkit-details-marker {display:none}
 @media (hover: hover) and (pointer: fine) { .media-screen .media-favorite-filter-menu>summary:hover {color:var(--text)}}
-.media-screen .media-favorite-filter-menu>summary:focus-visible {outline:2px solid var(--media-accent);outline-offset:3px;border-radius:var(--radius-xs)}
+.media-screen .media-favorite-filter-menu>summary:focus-visible {outline:var(--focus-ring);outline-offset:var(--focus-offset);border-radius:var(--radius-xs)}
 .media-screen .media-favorites .media-favorite-list {max-width:none}
 .media-screen .media-favorites .media-favorite-row {display:flex;align-items:center;gap:12px;width:100%;min-height:60px;padding:0;border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent;text-align:left;color:var(--text)}
 @media (hover: hover) and (pointer: fine) { .media-screen .media-favorites .media-favorite-row:hover {background:var(--surface)}}

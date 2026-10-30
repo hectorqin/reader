@@ -480,7 +480,7 @@
  .media-video-workspace:has(.media-episode-rail) .media-episode-rail {position:absolute;right:0;top:16px;width:300px;box-sizing:border-box;margin:0}
 }
 @media(max-width:700px){
- .media-screen {padding:var(--safe-top) 16px calc(24px + env(safe-area-inset-bottom))}
+ .media-screen {padding:var(--safe-top) 16px calc(24px + var(--safe-bottom))}
  .media-screen.media-catalog-page .media-heading:has(.media-mobile-title) {display:flex;grid-template-rows:none;min-height:56px;height:56px}
  .media-screen .media-heading:has(.media-mobile-title) {grid-template-rows:56px 44px;min-height:100px}
  .media-screen .media-mobile-title {height:56px;font-size:var(--text-title)}
@@ -637,7 +637,7 @@
 @media (hover: hover) and (pointer: fine) { .media-task-tabs button:hover {background:var(--media-selection)}}
 .media-screen .media-task-tabs {align-items:stretch;width:100%}
 .media-screen .media-task-tabs button {font-size:var(--text-label);transition:color var(--motion-duration) var(--motion-ease),border-color var(--motion-duration) var(--motion-ease)}
-:is(.media-screen,.media-player,.media-modal) :is(button,a,input,select,summary):focus-visible {outline:2px solid var(--media-accent);outline-offset:3px}
+:is(.media-screen,.media-player,.media-modal) :is(button,a,input,select,summary):focus-visible {outline:var(--focus-ring);outline-offset:var(--focus-offset)}
 .media-screen .media-grid:not(.media-season-picker) .media-tile strong {white-space:normal;min-height:3em}
 .media-screen .media-grid .media-tile {text-decoration:none;color:inherit;display:block}
 .media-screen .media-browse-tools {height:auto;flex-wrap:wrap}
