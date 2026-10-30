@@ -1,3 +1,4 @@
+import { shouldPrefetch } from '../render/prefetch.ts';
 import type { BookDoc, Section, StagedBook } from '../formats/types.ts';
 import type { BookContent } from '../net/api.ts';
 import type { NativePageHost } from './native-page.ts';
@@ -552,7 +553,13 @@ export class ReaderView {
     // A staged section has no body until it is asked for. Doing it here, rather
     // than in the loader, is what keeps "opening a book" and "showing a chapter"
     // from both needing to know about windows.
-    if (this.staged) await this.staged.loadSection(index);
+    if (this.staged) {
+      await this.staged.loadSection(index);
+      // The next section is fetched while this one is read, so turning onto it (a
+      // comic page, a serial's next chapter) does not wait on the network. Best effort:
+      // a failure surfaces, if at all, when that section is actually opened.
+      if (shouldPrefetch()) void this.staged.loadSection(index + 1).catch(() => undefined);
+    }
     this.sectionIndex = index;
     this.sectionOffset = Math.min(1, Math.max(0, offset));
     // The search box belongs to the chapter it was found in; a new chapter's

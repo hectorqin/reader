@@ -2946,6 +2946,17 @@ book-content {
   margin: 0;
 }
 
+/* A book that could not open: covers the empty stage, under the bars so 返回 still works. */
+.reader-open-failure {
+  position: absolute;
+  inset: 0;
+  z-index: var(--reader-layer-readout);
+  min-height: 0;
+  padding: var(--space-4);
+  text-align: center;
+  background: var(--reader-paper);
+}
+
 .segmented {
   display: flex;
   border: 1px solid var(--reader-line);
@@ -3725,6 +3736,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reader-screen .progress-scrubber { width: 100%; min-height: 28px; margin: 0; }
 .reader-screen .progress-page { font-size: var(--text-micro); color: var(--reader-muted); }
 .reader-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.25rem; }
+.reader-actions .top-button[aria-pressed='true'] { color: var(--reader-accent); }
 .reader-actions .top-button { min-width: 0; max-width: none; min-height: 60px; padding: 0.45rem 0; gap: 0.45rem; }
 .reader-actions .icon { font-size: var(--text-display); }
 .reader-actions .top-button-label { font-size: var(--text-meta); font-weight: 400; }

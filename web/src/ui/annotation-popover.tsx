@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Note } from '../api/types.ts';
 import type { TextAnchor } from './text-anchor.ts';
 import { ConfirmSheet, Sheet } from './sheet.tsx';
@@ -16,8 +16,15 @@ export function AnnotationPopover({ target, save, remove, close }: {
   const panel = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null);
   const viewport = window.visualViewport;
   const width = Math.min(328, (viewport?.width ?? innerWidth) - 24);
-  const left = Math.max(12, Math.min((viewport?.offsetLeft ?? 0) + (viewport?.width ?? innerWidth) - width - 12, target.rect.left));
-  const top = Math.max((viewport?.offsetTop ?? 0) + 12, Math.min(target.rect.bottom + 10, (viewport?.offsetTop ?? 0) + (viewport?.height ?? innerHeight) - 260));
+  const viewLeft = viewport?.offsetLeft ?? 0, viewTop = viewport?.offsetTop ?? 0, viewBottom = viewTop + (viewport?.height ?? innerHeight);
+  const left = Math.max(viewLeft + 12, Math.min(viewLeft + (viewport?.width ?? innerWidth) - width - 12, target.rect.left));
+  // Below the selection when it fits, above it otherwise (ui.md §3.7), using the card's
+  // measured height: the selection toolbar is a short row, and placing it as if it were
+  // the tall note card pushed it over the very words selected near the bottom of the page.
+  const [height, setHeight] = useState(target.note ? 260 : 64);
+  useLayoutEffect(() => { const measured = panel.current?.offsetHeight; if (measured && measured !== height) setHeight(measured); });
+  const below = target.rect.bottom + 10, above = target.rect.top - 10 - height;
+  const top = below + height <= viewBottom - 12 ? below : above >= viewTop + 12 ? above : Math.max(viewTop + 12, viewBottom - 12 - height);
   async function work(action: () => Promise<void>) {
     if (busy) return; setBusy(true); setError('');
     try { await action(); close(); } catch (e) { setError(e instanceof Error ? e.message : '操作失败'); setBusy(false); }

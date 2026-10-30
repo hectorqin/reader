@@ -67,6 +67,8 @@ export interface ChromeState {
   chromeVisible: boolean;
   statusText: string;
   statusState: string;
+  /** Set when the book itself could not be opened: the stage is empty, so say why and offer a way on. */
+  openFailure?: string;
   /** 0..1. */
   progress: number;
   chapterLabel: string;
@@ -148,6 +150,7 @@ export interface ChromeState {
 export interface ChromeHandlers {
   onTools?(): void;
   onBack(): void;
+  onRetryOpen?(): void;
   toggleToc(): void;
   toggleSettings(tab?: 'appearance' | 'behavior' | 'speech'): void;
   onSetting(patch: Partial<AppSettings>): void;
@@ -245,6 +248,14 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
       {state.aiSummaryBusy && <div className="floating-notice" role="status">正在生成章节总结…</div>}
       {state.aiSummary && <Sheet title="AI 章节总结" onClose={() => handlers.onAiSummary?.()}><article className="book-detail"><p className="book-detail-description">{state.aiSummary}</p></article></Sheet>}
       <StageHost stage={stage} />
+      {state.openFailure && <div className="page-state reader-open-failure" role="alert">
+        <h2>无法打开这本书</h2>
+        <p>{state.openFailure}</p>
+        <div className="empty-actions">
+          {handlers.onRetryOpen && <Button className="primary" onClick={handlers.onRetryOpen}>重试</Button>}
+          <Button onClick={handlers.onBack}>返回</Button>
+        </div>
+      </div>}
       <ReaderIndicators state={state} />
       <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作">
         {/* Day/night picks the mode explicitly (leaving 跟随系统), keeping the theme on screen. */}
@@ -269,7 +280,8 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         <div className="reader-actions">
           {handlers.onTools && <TopButton icon="search" label="工具" onClick={handlers.onTools} />}
           <TopButton icon="menu" label="目录" onClick={handlers.toggleToc} />
-          <TopButton icon="volume" label="朗读" onClick={() => handlers.toggleSettings('speech')} />
+          {/* 朗读 keeps going with its panel closed (ui.md §3.11), so the button says it is on. */}
+          <TopButton icon="volume" label={state.tts.active ? '朗读中' : '朗读'} pressed={state.tts.active} onClick={() => handlers.toggleSettings('speech')} />
           <TopButton icon="text-size" label="外观" onClick={() => handlers.toggleSettings('appearance')} />
           <TopButton icon="settings" label="设置" onClick={() => handlers.toggleSettings('behavior')} />
         </div>
@@ -279,7 +291,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
           {state.toc.length === 0 ? (
             <div className="empty-state">这本书没有目录</div>
           ) : (
-            <ul className="toc-list">
+            <ul className="toc-list" ref={revealCurrentChapter}>
               {state.toc.map((entry, index) => {
                 // A entry the loaded window cannot reach is *marked*, not hidden and
                 // not silently inert. It is a real chapter of the book, so removing
@@ -361,6 +373,18 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
  * *where* the stage sits (between the status line and the footer, which is where
  * its stacking context comes from) and the screen owns its contents.
  */
+/**
+ * Opens the 目录 at the chapter being read: in a long serial the reader is in
+ * chapter 800, and a list that opens at chapter 1 hides both where they are and
+ * everything near it. Runs once, when the list mounts with the sheet.
+ */
+function revealCurrentChapter(list: HTMLUListElement | null): void {
+  const current = list?.querySelector<HTMLElement>('button[aria-current=true]');
+  if (!current) return;
+  current.scrollIntoView?.({ block: 'center' });
+  current.focus({ preventScroll: true });
+}
+
 function StageHost({ stage }: { stage: HTMLElement }): JSX.Element {
   return (
     <div
@@ -932,9 +956,9 @@ function SelectRow({
  * is no word under them). Centred, equal-width, and full-height so the whole
  * column of the bar is the target rather than the glyph.
  */
-function TopButton({ icon, label, onClick }: { icon: IconName; label: string; onClick(): void }): JSX.Element {
+function TopButton({ icon, label, onClick, pressed }: { icon: IconName; label: string; onClick(): void; pressed?: boolean }): JSX.Element {
   return (
-    <button type="button" className="top-button" aria-label={label} onClick={onClick}>
+    <button type="button" className="top-button" aria-label={label} aria-pressed={pressed} onClick={onClick}>
       <Icon name={icon} />
       <span className="top-button-label">{label}</span>
     </button>
