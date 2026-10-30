@@ -307,6 +307,7 @@ export class ReaderScreen {
             onCancelSwitch: () => this.closeAlternatives(),
             onCancelAlternative: () => { this.qualityRun?.abort(); this.patch({ alternativeChapters: undefined, alternativeChapter: '', alternativeQuality:null, alternativeQualityError:'', alternativeQualityBusy:false }); },
             onScrubPage: (page) => void this.scrubToPage(page),
+            onScrubChapter: (chapter) => { if (!this.navigating && !this.chrome.refreshing && !this.chrome.switching) void this.goToSection(chapter - 1); },
             onTurnPage: (direction) => void this.turnPage(direction),
             onSpeechToggle: () => this.toggleSpeech(),
             onSpeechPrevious: () => void this.tts?.previous(),

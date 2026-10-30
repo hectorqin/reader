@@ -180,6 +180,8 @@ export interface ChromeHandlers {
    * names.
    */
   onScrubPage(page: number): void;
+  /** Jumps to a whole-book chapter, 1-based; a comic's page slider. */
+  onScrubChapter?(chapter: number): void;
   onTurnPage(direction: 'next' | 'previous'): void;
   /**
    * The stored theme preference, what the app wears, and what the book wears (the
@@ -267,13 +269,15 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         <div className="progress-row">
           <button type="button" className="nav-chapter" disabled={state.navigating || state.chapterIndex <= 1}
             onClick={() => handlers.onChapter(-1)}>{fixed ? '上一页' : '上一章'}</button>
-          <div className="reader-scrub">
-            <input className="progress-scrubber" type="range" min={1} max={totalPages} step={1}
-              value={currentPage} aria-label="章节内页数"
-              aria-valuetext={pageLabel} disabled={totalPages <= 1 || state.navigating}
-              onInput={(event) => handlers.onScrubPage(Number((event.currentTarget as HTMLInputElement).value))} />
-            <span className="progress-page">{pageLabel}</span>
-          </div>
+          {fixed && totalPages <= 1 && handlers.onScrubChapter
+            ? <PageScrubber key={state.chapterIndex} page={state.chapterIndex} count={state.chapterCount} disabled={state.navigating} onCommit={handlers.onScrubChapter} />
+            : <div className="reader-scrub">
+              <input className="progress-scrubber" type="range" min={1} max={totalPages} step={1}
+                value={currentPage} aria-label="章节内页数"
+                aria-valuetext={pageLabel} disabled={totalPages <= 1 || state.navigating}
+                onInput={(event) => handlers.onScrubPage(Number((event.currentTarget as HTMLInputElement).value))} />
+              <span className="progress-page">{pageLabel}</span>
+            </div>}
           <button type="button" className="nav-chapter" disabled={state.navigating || state.chapterIndex >= state.chapterCount}
             onClick={() => handlers.onChapter(1)}>{fixed ? '下一页' : '下一章'}</button>
         </div>
@@ -917,6 +921,27 @@ function SliderRow({
         value={value}
         onInput={(event) => onChange(Number((event.currentTarget as HTMLInputElement).value))}
       />
+    </div>
+  );
+}
+
+/**
+ * The slider for a comic, whose chapters are its pages (one image each): it moves
+ * through the whole book, not "this chapter's pages", which for a comic is always 1.
+ * The label follows the thumb; the page opens when the thumb is let go, so dragging
+ * across 200 pages decodes one image instead of 200.
+ */
+function PageScrubber({ page, count, disabled, onCommit }: { page: number; count: number; disabled: boolean; onCommit(page: number): void }): JSX.Element {
+  const [draft, setDraft] = useState(page);
+  const label = `第 ${draft}/${count} 页`;
+  const commit = () => { if (draft !== page) onCommit(draft); };
+  return (
+    <div className="reader-scrub">
+      <input className="progress-scrubber" type="range" min={1} max={Math.max(1, count)} step={1}
+        value={draft} aria-label="页码" aria-valuetext={label} disabled={count <= 1 || disabled}
+        onInput={(event) => setDraft(Number((event.currentTarget as HTMLInputElement).value))}
+        onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+      <span className="progress-page">{label}</span>
     </div>
   );
 }
