@@ -360,6 +360,15 @@ export class ReaderScreen {
         }
       } catch (error) { if (error instanceof ApiError && error.isAuthFailure) throw error; }
       if (token !== this.loadingToken) return;
+      // 无能力 → 不渲染 (ui.md §5): AI 总结 only appears when the server will answer it.
+      // An older server without the endpoint keeps the button, as it always had.
+      if (typeof this.options.api.aiCapabilities === 'function' && this.chrome.aiSummaryAvailable === undefined) {
+        void this.options.api.aiCapabilities().then(capabilities => {
+          if (!this.disposed) this.patch({ aiSummaryAvailable: capabilities.summary });
+        }).catch(error => {
+          if (!this.disposed && error instanceof ApiError && error.kind === 'not_found') this.patch({ aiSummaryAvailable: true });
+        });
+      }
       if (book.format === 'chapters' && typeof this.options.api.sourceOptions === 'function') {
         void this.options.api.sourceOptions(book.id).then(options => {
           if (token === this.loadingToken) this.patch({ canSwitch: options.canSwitch });

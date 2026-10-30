@@ -73,6 +73,23 @@ test('admin API changes HTTP speech and OPDS live, preserves secrets, and blocks
   assert.equal(locked.statusCode,400);assert.equal(ctx.config.corsOrigins.length,0);
 });
 
+test('AI capabilities tell a reader whether 章节总结 is available, without the configuration',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'ai-capabilities-')),db=new Db(':memory:'),cfg=config(root);
+  const ctx={config:cfg,db,users:new UserService(db,cfg)} as AppContext;
+  for(const [id,role] of [['admin','admin'],['member','member']])db.run('INSERT INTO users(id,username,display_name,password_hash,role,created_at,updated_at) VALUES(?,?,?,?,?,0,0)',id!,id!,id!,'unused',role!);
+  const app=buildApp(ctx);await app.ready();
+  t.after(async()=>{await app.close();db.close();await rm(root,{recursive:true,force:true});});
+  const admin={authorization:'Bearer '+signAccessToken(cfg,{id:'admin',role:'admin'}).token},member={authorization:'Bearer '+signAccessToken(cfg,{id:'member',role:'member'}).token};
+  assert.equal((await app.inject({url:'/api/v1/ai/capabilities'})).statusCode,401);
+  assert.deepEqual((await app.inject({url:'/api/v1/ai/capabilities',headers:member})).json(),{summary:false});
+  const save=(values:object)=>app.inject({method:'PATCH',url:'/api/v1/admin/settings/ai',headers:admin,payload:{values,revision:ctx.settings!.view('ai').revision}});
+  const on=await save({enabled:true,baseUrl:'https://ai.example/v1',apiKey:'secret-key',model:'m'});assert.equal(on.statusCode,200,on.body);
+  assert.deepEqual((await app.inject({url:'/api/v1/ai/capabilities',headers:member})).json(),{summary:false},'AI on, 总结 still off');
+  assert.equal((await save({summaryEnabled:true})).statusCode,200);
+  const ready=await app.inject({url:'/api/v1/ai/capabilities',headers:member});
+  assert.deepEqual(ready.json(),{summary:true});assert.ok(!ready.body.includes('secret-key'));
+});
+
 test('registration stores legacy default once instead of falling back after later env changes',()=>{
   const db=new Db(':memory:'),old=process.env.ALLOW_REGISTRATION;
   try{process.env.ALLOW_REGISTRATION='true';const service=new RegistrationService(db);assert.equal(service.mode(),'open');service.setMode('closed');assert.equal(new RegistrationService(db).mode(),'closed');}

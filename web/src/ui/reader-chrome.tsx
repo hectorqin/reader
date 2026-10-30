@@ -67,6 +67,8 @@ export interface ChromeState {
   chromeVisible: boolean;
   statusText: string;
   statusState: string;
+  /** Whether the server offers AI 章节总结; unknown (undefined) draws no button. */
+  aiSummaryAvailable?: boolean;
   /** Whether the page on screen carries a bookmark; drives the top bar's 书签 toggle. */
   bookmarked?: boolean;
   /** Set when the book itself could not be opened: the stage is empty, so say why and offer a way on. */
@@ -247,12 +249,12 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
           {state.canSwitch && <IconButton label="切换书源" icon="sort" disabled={state.switching || state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onAlternatives?.()} />}
           {state.canRefresh && <IconButton label="刷新当前章节" icon="refresh" disabled={state.switching || state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onRefreshChapter?.()} />}
           {handlers.onToggleBookmark && <IconButton className="reader-bookmark" icon="bookmark" label={state.bookmarked ? '移除本页书签' : '为本页加书签'} pressed={!!state.bookmarked} onClick={handlers.onToggleBookmark} />}
-          <IconButton label="AI 总结" icon="file-text" disabled={state.aiSummaryBusy || state.navigating} onClick={() => handlers.onAiSummary?.()} />
+          {state.aiSummaryAvailable && <IconButton label="AI 总结" icon="file-text" disabled={state.aiSummaryBusy || state.navigating} onClick={() => handlers.onAiSummary?.()} />}
         </div>
         {(state.sourceName || state.chapterUrl) && <div className="reader-source-info"><span>{state.sourceName || '当前书源'}</span>{state.chapterUrl && <a href={state.chapterUrl} target="_blank" rel="noopener noreferrer" title={state.chapterUrl}>{state.chapterUrl}</a>}</div>}
       </div>
       {state.bookInfoOpen && <Sheet title="书籍信息" onClose={() => handlers.onBookInfo?.()}><article className="book-detail"><h3>{state.title}</h3><p className="book-detail-author">{state.author || '作者未知'}</p><dl><dt>书源</dt><dd>{state.sourceName || (state.canRefresh ? '远程书源' : '本地书籍')}</dd><dt>当前章节</dt><dd>{state.chapterLabel || '暂无信息'}</dd></dl><h4>内容简介</h4><p className="book-detail-description">{state.description || '暂无简介'}</p></article></Sheet>}
-      {state.aiSummaryBusy && <div className="floating-notice" role="status">正在生成章节总结…</div>}
+      <FloatingNotice message={state.aiSummaryBusy ? '正在生成章节总结…' : ''} busy />
       {state.aiSummary && <Sheet title="AI 章节总结" onClose={() => handlers.onAiSummary?.()}><article className="book-detail"><p className="book-detail-description">{state.aiSummary}</p></article></Sheet>}
       <StageHost stage={stage} />
       {state.openFailure && <div className="page-state reader-open-failure" role="alert">

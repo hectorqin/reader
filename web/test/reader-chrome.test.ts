@@ -152,6 +152,12 @@ describe('ReaderChrome', () => {
     expect(onScrubChapter).toHaveBeenCalledWith(7);
   });
 
+  it('offers AI 总结 only when the server says it can answer', () => {
+    expect(paint({}).querySelector('[aria-label="AI 总结"]')).toBeNull();
+    expect(paint({ aiSummaryAvailable: false }).querySelector('[aria-label="AI 总结"]')).toBeNull();
+    expect(paint({ aiSummaryAvailable: true }).querySelector('[aria-label="AI 总结"]')).not.toBeNull();
+  });
+
   it('keeps only the page-local controls on the rail', () => {
     // 主题 / 字号 / 听书. The five that were removed all open or reach the settings
     // sheet, so having them on the rail as well made it a worse copy of that sheet
