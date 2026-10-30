@@ -74,7 +74,7 @@ export function AppNav({ mode }: { mode: Exclude<NavMode, 'hidden'> }) {
         </li>;
       })}
     </ul>
-    {user && <Link className="app-nav-user" to="/me" aria-label="我的账号">
+    {user && <Link className="app-nav-user" to="/me" aria-label={`我的账号：${name}，${connection.label}`}>
       <span className="app-nav-avatar" aria-hidden="true">{Array.from(name)[0]}</span>
       <span className="app-nav-user-text"><strong>{name}</strong><small title={host(runtime.api.baseUrl)}><i className="app-nav-status" data-state={connection.state} aria-hidden="true" />{connection.label}</small></span>
     </Link>}

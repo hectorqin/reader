@@ -4,7 +4,7 @@ import { notify } from '../../../ui/notifications.ts';
 import { Button, Callout, IconTextButton } from '../../../ui/toolkit.tsx';
 import { SourcesHeader } from '../components/SourcesHeader.tsx';
 import { SourceBookDetailSheet } from '../components/SourceBookDetailSheet.tsx';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight, Plus, Search } from 'lucide-react';
@@ -19,6 +19,7 @@ import { CatalogFeedback } from '../../../ui/catalog-feedback.tsx';
 import { PluginManager } from '../components/PluginManager.tsx';
 
 type SourceTab = 'search' | 'sources' | 'updates' | 'plugins';
+const SOURCE_TABS: SourceTab[] = ['search', 'sources', 'updates', 'plugins'];
 type SearchState = 'idle' | 'searching' | 'stopped' | 'complete' | 'error' | 'limited';
 
 export function SourcesPage() {
@@ -27,7 +28,13 @@ export function SourcesPage() {
   const queryClient = useQueryClient();
   const admin = useAuthStore(state => state.verifiedUser?.role === 'admin');
   // /sources/plugins opens the hub on its 插件管理 tab.
-  const [tab, setTab] = useState<SourceTab>(useLocation().pathname === '/sources/plugins' ? 'plugins' : 'search');
+  // The tab is part of the URL (?tab=), so back from a source's editor or a reload
+  // returns to it; /sources/plugins stays the plugins tab's own address.
+  const [params, setParams] = useSearchParams();
+  const pluginsPath = useLocation().pathname === '/sources/plugins';
+  const requested = params.get('tab') as SourceTab | null;
+  const tab: SourceTab = requested && SOURCE_TABS.includes(requested) ? requested : pluginsPath ? 'plugins' : 'search';
+  const setTab = (next: SourceTab) => setParams(previous => { const merged = new URLSearchParams(previous); if (next === 'search' && !pluginsPath) merged.delete('tab'); else merged.set('tab', next); return merged; }, { replace: true });
   const [sourceId, setSourceId] = useState('');
   const [keyword, setKeyword] = useState('');
   const [catalogPage, setCatalogPage] = useState<SourcePage>();
@@ -106,12 +113,22 @@ export function SourcesPage() {
     return () => { ++catalogEpoch.current; searchRun.current?.abort(); searchRun.current = null; };
   }, [selectedSourceId]);
   useEffect(() => { if (detail && detailQuery.data) setDetail({ ...detail, ...detailQuery.data }); }, [detailQuery.data]);
+  const tabList = ([['search', '搜书'], ['sources', '书源管理'], ['updates', '自动追更'], ...(admin ? [['plugins', '插件管理']] : [])] as Array<[SourceTab, string]>);
   return <div className="sources-screen sources-hub">
     <SourcesHeader title="书源与追更" backTo="/shelf" />
     <nav className="sources-tabs" role="tablist" aria-label="书源功能">
-      {([['search', '搜书'], ['sources', '书源管理'], ['updates', '自动追更'], ...(admin ? [['plugins', '插件管理']] : [])] as Array<[SourceTab, string]>).map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}{id === 'updates' && (subscriptions.data ?? []).some(item => item.newChapters > 0) && <span className="sources-tab-dot" aria-label="有更新" />}</button>)}
+      {tabList.map(([id, label], index) => <button key={id} id={`sources-tab-${id}`} type="button" role="tab" aria-selected={tab === id} aria-controls="sources-panel" tabIndex={tab === id ? 0 : -1} onClick={() => setTab(id)} onKeyDown={event => {
+        // Arrow keys move between tabs, one tab stop for the whole row (WAI-ARIA tabs).
+        const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+        const target = event.key === 'Home' ? 0 : event.key === 'End' ? tabList.length - 1 : step ? (index + step + tabList.length) % tabList.length : -1;
+        if (target < 0) return;
+        event.preventDefault();
+        const next = tabList[target]![0];
+        setTab(next);
+        document.getElementById(`sources-tab-${next}`)?.focus();
+      }}>{label}{id === 'updates' && (subscriptions.data ?? []).some(item => item.newChapters > 0) && <span className="sources-tab-dot" aria-label="有更新" />}</button>)}
     </nav>
-    <main className="sources-body" role="tabpanel">
+    <main className="sources-body" role="tabpanel" id="sources-panel" aria-labelledby={`sources-tab-${tab}`}>
       {tab === 'search' && <>
         <section className="sources-card source-picker">
           {/* The tab already says 搜书; with no source there is nothing to pick, so no disabled picker either. */}

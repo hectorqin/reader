@@ -29,7 +29,7 @@ function Resume({ book }: { book: ContinueReadingItem }) {
   const runtime = useRuntime();
   const src = useCover(runtime.api, book.coverUrl);
   const percent = Math.round(Math.max(0, Math.min(1, book.percentage)) * 100);
-  return <Link className="home-hero" to={`/book/${encodeURIComponent(book.id)}`} aria-label={`继续阅读 ${book.title}`}>
+  return <Link className="home-hero" to={`/book/${encodeURIComponent(book.id)}`}>
     <span className="home-hero-cover" aria-hidden="true">{src ? <img src={src} alt="" /> : <b>{book.title}</b>}</span>
     <span className="home-hero-text">
       <strong>{book.title || '未命名'}</strong>
