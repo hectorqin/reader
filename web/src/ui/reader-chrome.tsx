@@ -745,7 +745,8 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
         <button
           type="button"
           className="tts-chip"
-          aria-label="从头朗读这一章"
+          aria-label={`${state.chip}，从当前页重新朗读`}
+          title="从当前页重新朗读"
           onClick={handlers.onSpeakFromHere}
         >
           {state.chip}
