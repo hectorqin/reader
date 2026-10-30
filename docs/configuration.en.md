@@ -15,13 +15,13 @@ Read-only books do not prevent account or progress updates in the data directory
 
 ## Business settings in the UI
 
-Administrators configure HTTP speech, scanning, login lifetimes, public URL, browser origins, TMDB, MusicBrainz and WebDAV under System settings → Service configuration. Registration remains under Registration and invitations. Values persist in reader.db and apply without restarting.
+Administrators configure AI features, media playback mode, HTTP speech, scanning, scraping, login lifetimes, public URL, browser origins, TMDB, MusicBrainz and WebDAV under Me → System settings → Service configuration (我的 → 系统设置 → 服务配置). Registration is set in the same panel under Registration and invitations (注册与邀请). Values persist in reader.db and apply without restarting.
 
 On first upgrade, legacy business environment variables are imported once. Existing database values, including cleared credentials, always win. See [business settings (中文)](business-settings.zh-CN.md).
 
 ## Deployment environment variables
 
-These are defaults when running the server directly. The Docker image additionally sets `DATA_DIR=/data` and `WEB_DIR=/app/web`, with `BOOKS_DIR=/books`.
+These are defaults when running the server directly. The Docker image additionally sets `DATA_DIR=/data`, `WEB_DIR=/app/web`, `BOOKS_DIR=/books`, and `MEDIA_FFPROBE_PATH=/usr/bin/ffprobe`.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -31,8 +31,8 @@ These are defaults when running the server directly. The Docker image additional
 | `PORT` | `5888` | Listen port |
 | `READER_TOKEN_SECRET` | Generated | Signing secret, at least 16 characters; otherwise stored in `DATA_DIR/token.secret` |
 | `LOG_LEVEL` | `info` | Logging level |
-| `MEDIA_FFPROBE_PATH` | `ffprobe` | Local media probe executable |
-| `MEDIA_FFMPEG_PATH` | `ffmpeg` | Embedded artwork and subtitle extraction |
+| `MEDIA_FFPROBE_PATH` | `ffprobe` | Local media probe executable; without it media is still indexed, but duration, tags, and chapters may be incomplete |
+| `MEDIA_FFMPEG_PATH` | `ffmpeg` | Embedded artwork and subtitle extraction; no transcoding |
 | `WEB_DIR` | `web` under the current working directory | Built Web client directory |
 
 Run `docker compose up -d` after changing environment variables. Keep the signing secret stable to preserve sessions. Accounts, progress, and notes cannot be recovered by rescanning book files.
@@ -49,7 +49,7 @@ reader.example.com {
 }
 ```
 
-Set the public URL to `https://reader.example.com` in Login and service access. If Caddy also runs in a container, use reader's service address on the container network instead.
+Set the public URL to `https://reader.example.com` in Me → System settings → Service configuration → Login and service access (登录与服务访问). If Caddy also runs in a container, use reader's service address on the container network instead.
 
 For separately hosted frontends, set allowed browser origins in Login and service access to the Web client's actual origin. Source search uses Streamable HTTP: proxies must forward `text/event-stream` incrementally rather than buffer the entire response. A VPN or tunnel can provide access when you have no public IP.
 
@@ -57,7 +57,7 @@ For separately hosted frontends, set allowed browser origins in Login and servic
 
 Use Android system speech or browser `speechSynthesis` when available. To enable an HTTP speech service, configure a compatible upstream in the administrator UI:
 
-Configure the synthesis URL, token, voices URL, timeout and cache limit in System settings → Service configuration → HTTP speech. Test the connection and preview audio before saving.
+Configure the synthesis URL, token, voices URL, timeout and cache limit in Me → System settings → Service configuration → HTTP speech (HTTP 朗读). Test the connection and preview audio before saving.
 
 reader proxies speech requests and does not include a synthesis model. The upstream must implement the expected request protocol; a service's name alone does not establish compatibility. See the [TTS API (中文)](api.md). The address must be reachable from the reader container; `localhost` inside a container refers to that container.
 
@@ -76,19 +76,19 @@ Setting `READER_TOKEN_SECRET` only avoids writing the secret file. It does not r
 
 ### File management returns `READ_ONLY_MOUNT`
 
-Check whether the mount uses `:ro`. After switching to `:rw` and recreating the container, verify the server process can write the target directory. Uploads are available only on the administrator file-management page.
+Check whether the mount uses `:ro`. After switching to `:rw` and recreating the container, verify the server process can write the target directory. Administrators upload from the file-management page and members upload book files from the library page; renaming, moving, deleting and creating directories are administrator-only.
 
 ### The UI opens but books are missing
 
-Check that the mounted files are readable and supported, then wait for scanning or trigger a scan as an administrator. The scanner skips directories such as `.git`, `@eaDir`, and `#recycle` and does not follow symlinks. Use the library file page to inspect the actual directory.
+Check that the mounted files are readable and supported, then wait for the next automatic check (every 60 seconds by default, see Scan settings); administrators can also call `POST /api/v1/library/scan` to scan immediately. The scanner skips directories such as `.git`, `@eaDir`, and `#recycle` and does not follow symlinks. Use the library file page to inspect the actual directory.
 
 ## Media libraries
 
-Mount local movie, series, music, and audiobook directories separately (read-only is recommended), then enter their container paths in media settings. For a native server, use absolute local paths. Do not use DATA_DIR as a media root. Users see authorized libraries; administrators manage scans, matching, and metadata.
+Mount local movie, series, music, and audiobook directories separately (read-only is recommended), then enter their container paths under Me → Media libraries (我的 → 媒体库). For a native server, use absolute local paths. Do not use DATA_DIR as a media root. Users see authorized libraries; administrators manage scans, matching, and metadata.
 
 The official image includes ffprobe and ffmpeg. For native runs, put them on PATH or set MEDIA_FFPROBE_PATH / MEDIA_FFMPEG_PATH to executable paths. They probe metadata and extract embedded resources; they do not enable transcoding.
 
-Configure TMDB credentials and MusicBrainz contact information under System settings → Service configuration. Changes apply without restarting. Local tags and NFO work without online credentials.
+Configure TMDB credentials and MusicBrainz contact information under Me → System settings → Service configuration. Changes apply without restarting. Local tags and NFO work without online credentials.
 
 Configure OpenList in the library creation form; no local mount is needed. Reader must reach OpenList and its download upstreams. Remote embedded metadata is not read, and some drivers require OpenList Web proxy. See [OpenList setup (中文)](media-openlist.md).
 

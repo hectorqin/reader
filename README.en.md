@@ -32,11 +32,11 @@ A self-hosted reading and media library for browsers and Android, with EPUB typo
 
 ## Get started
 
-Prepare Docker, Docker Compose, a book directory, and a separate data directory. Open `http://<your-host>:5888` after starting the service. The first registered account becomes the administrator. Follow the [getting started guide](docs/getting-started.en.md).
+Prepare Docker, Docker Compose, a book directory, and a separate data directory. Open `http://<your-host>:5888` after starting the service. The first registered account becomes the administrator. Release images are published on Docker Hub as `hectorqin/reader-pro` (amd64 / arm64). Follow the [getting started guide](docs/getting-started.en.md).
 
-Reader opens on the video page (`#/media/video`) by default. Use the channel navigation to switch between video, music, audiobooks, and reading; the media entry on the shelf also opens the video page. Media settings include multiple themes; reading controls and bookshelf settings remain separate.
+Reader opens on Home (首页), where you can resume reading and playback. The bottom navigation (a sidebar on wide screens) has four tabs: Home, Shelf (书架), Media (影音), and Me (我的). On phones, swipe sideways to move between shelf states and media categories; the wide-screen sidebar has a search box covering both books and media. Me gathers every setting: appearance and theme (one theme shared by reading and media, with a separate reading paper colour), shelf display, media browsing, playback, and account.
 
-From the video page, open More actions → Media settings → Media libraries to add a server directory or OpenList library. Mount local media into Docker first and enter its container path. Library creation starts a scan. See the [media guide (中文)](docs/media-user-guide.zh-CN.md) and [OpenList setup (中文)](docs/media-openlist.md).
+As an administrator, open Me → Media libraries (我的 → 媒体库), or More actions → Media library management (更多操作 → 媒体库管理) on the video page, to add a server directory or OpenList library. Mount local media into Docker first and enter its container path. Library creation starts a scan. System settings and Scan and scrape (扫描与刮削) are also under Me → Admin (管理). See the [media guide (中文)](docs/media-user-guide.zh-CN.md) and [OpenList setup (中文)](docs/media-openlist.md).
 
 ## Documentation
 

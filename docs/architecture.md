@@ -11,7 +11,7 @@
 
 | 位置 | 内容 | 读写 |
 | --- | --- | --- |
-| `BOOKS_DIR` (`/books`) | 用户自己的电子书；管理员可执行文件管理操作 | 按挂载权限读写 |
+| `BOOKS_DIR` (`/books`) | 用户自己的电子书；管理员可执行文件管理操作，成员只能上传书籍 | 按挂载权限读写 |
 | `DATA_DIR` (`/data`) | SQLite、封面缓存、扫描记录、上传暂存、令牌密钥和影音数据 | 读写 |
 | 客户端本地 | 离线书文件缓存、本地进度 | 读写 |
 
@@ -20,7 +20,7 @@
 ### 数据目录边界
 
 `src/config/index.ts` 在启动时断言 `DATA_DIR` 不在 `BOOKS_DIR` 内，否则拒绝启动。这是运行时硬约束。
-`BOOKS_DIR` 是否只读由部署挂载权限决定：只读挂载适合浏览和阅读；可写挂载允许管理员文件管理器上传、改名、移动、删除和新建目录。
+`BOOKS_DIR` 是否只读由部署挂载权限决定：只读挂载适合浏览和阅读；可写挂载允许管理员文件管理器上传、改名、移动、删除和新建目录；成员只能在书库浏览页上传书籍文件（只收书籍格式、不解包、不覆盖），且可由业务设置 `library.memberUpload` 整体关闭，改动已有文件的端点都要求管理员（`requireAdmin`，见 [API](api.md#书库文件管理器)）。
 
 扫描器与所有文件访问都经过 `src/lib/paths.ts` 的 `resolveInside()`——
 唯一的路径解析出口，`../` 逃逸会抛 `PATH_TRAVERSAL`。
@@ -78,7 +78,8 @@ id = sha256( (dc:identifier ?? '').toLowerCase() + '\0' + sha256(fileBytes) )
 1. **`mtime + size`**：便宜，跳过绝大多数文件
 2. **内容哈希**：权威，确认字节真的变了
 
-只有第一阶段判断"可能变了"才读文件算哈希。所以每 60 秒轮询一次也很轻。
+只有第一阶段判断"可能变了"才读文件算哈希。所以每 60 秒轮询一次（默认值，
+管理员可在「系统设置 → 服务配置」里改扫描间隔）也很轻。
 
 `Scanner.scan()` 对并发调用做去重（共享同一个 Promise），
 避免定时器和手动触发同时砸磁盘。
@@ -211,8 +212,9 @@ id = sha256( (dc:identifier ?? '').toLowerCase() + '\0' + sha256(fileBytes) )
 顺序不能反，反了就是「重读把报告覆盖掉」的那个老问题（§5 里 `manager-status`
 已经为此改过一次）。
 
-**「移除」这件事为什么必须在书架那一屏。** 书库**曾经**能下架，但书库是**管理员那一半**
-（§7 的路由按角色守），成员打不开。只有书库能下架，等于只有管理员能整理自己的书架。
+**「移除」这件事为什么必须在书架那一屏。** 书库**曾经**能下架，但当时书库是**管理员那一半**，
+成员打不开（现在书库浏览对所有人开放，只有 `#/library/files` 文件管理要求管理员）。
+只有书库能下架，等于只有管理员能整理自己的书架。
 所以书架上每张封面自己带一个「⋯」，写入前用一个确认框说清「磁盘上的文件一个都不会动」——
 那句话才是读者真正在问的。`docs/ui.md` §3.5.2/§3.5.3 写的是它的形状与命中区。
 
@@ -287,6 +289,10 @@ chrome 树，而一个同步循环本来会通知三次（进门 `syncing`、出
 `node:sqlite` 和 `node:crypto` 的 `scrypt` 都是内置的，所以当前依赖树里
 **没有任何需要编译的包**。
 
+这也是发布镜像能做成多架构的前提：`.github/workflows/release.yml`（只在 `v*` 标签或手动运行时触发，
+先跑完 CI）在 amd64 和 arm64 各自的原生 runner 上构建同一个单容器镜像，再合成多架构标签；
+`npm ci` 在两个架构上都只是下载，不需要编译工具链。
+
 ---
 
 ## 7. 向后兼容承诺
@@ -295,6 +301,8 @@ chrome 树，而一个同步循环本来会通知三次（进门 `syncing`、出
 
 - API 只做加法：加字段、加端点。不改已有字段语义、不删端点。
 - 数据库 schema 用 `CREATE TABLE IF NOT EXISTS`，升级时新增列/表，不动旧的。
+  新列写进 `server/src/db/schema.ts` 的 `MIGRATIONS_SQL`（`ALTER TABLE … ADD COLUMN`，必须带默认值），
+  启动时逐条执行、忽略「列已存在」——旧版本跑在新库上也不会因为多出来的列出错。
 - 错误响应格式全站统一，客户端可以一直用同一套解析逻辑。
 
 ---
@@ -325,16 +333,29 @@ Readium 用 Readium CSS 主动接管排版、覆盖出版方样式，这与本�
 
 - `react-router-dom` 的 `createHashRouter` 负责 Hash 路由、嵌套路由、参数、Outlet 和错误边界；
 - `@tanstack/react-query` 的 `QueryClientProvider` 负责服务端状态、缓存、加载、重试和失效；
-- Zustand stores 负责认证、设置、同步和播放器等跨页面客户端状态；
-- Mantine 提供基础组件、主题和通知，Lucide React 提供统一图标；
+- Zustand stores 负责认证、设置、同步（`shared/stores/`）和播放状态（`features/media/stores/`）等跨页面客户端状态；
+- 基础组件是项目自己的：`ui/toolkit.tsx`（`Button`、`IconButton`、`Segmented`、`Callout`、`SwitchRow` 等）、`ui/sheet.tsx`
+  （**唯一**的弹层类型，设置面板、表单、选择器、确认框都是 `Sheet`/`ConfirmSheet`）、
+  `ui/action-menu.tsx`（每一个「⋯」菜单）、`ui/dialog.tsx`、`ui/pager.tsx`；全局提示在
+  `ui/notifications.ts`，单个操作的失败用 `ui/floating-notice.tsx`。图标来自 Lucide React
+  和项目自己的图标字体（`ui/icon.tsx`）。Mantine 已整体移除，组件只读本项目的设计令牌；
 - `RuntimeContext` 暴露 API、同步、播放、设置和平台能力，页面不自行组装这些依赖。
 
 业务按 `features/<domain>` 拆分，每个领域按实际需要拥有 `pages`、`components`、
 `queries`、`mutations`、`services` 和 `styles`。影音实现位于
-`web/src/features/media`；登录、书架、书库、书源、设置和阅读页面也通过各自
-feature 接入同一棵路由树。旧的 `web/src/media`、旧 Screen 页面、旧手写生产路由
+`web/src/features/media`；登录（`auth`）、首页（`home`）、全局搜索（`search`）、书架、
+书库、书源、「我的」（`account`）和阅读页面也通过各自 feature 接入同一棵路由树。
+旧的 `web/src/media`、旧 Screen 页面、旧手写生产路由
 和 `mountUI` 已从生产入口移除。`web/src/app.ts` 与
 `app/legacy-compat.ts` 只保留 Android 诊断和旧测试需要的兼容形状，不负责页面调度。
+
+**少数人才打开的屏幕不进首屏。** 阅读器（EPUB/PDF/ZIP 解析、分页、朗读）和管理员页面
+（媒体库管理、扫描与刮削、条目元数据/匹配/章节/版本/结构、书源编辑、凭据、扩展页）曾占了
+只看书架的人 1.5 MB 首屏加载的一半。它们在 `web/src/app/router/lazy-pages.tsx` 里
+各自包成带 `Suspense` 的同名组件，路由表里仍写 `ReaderPage`、`MediaLibrariesPage`……
+新的懒加载屏幕加在这里，不在页面里临时 `import()`。入口固定为 `assets/client.js`、
+样式只有一份（`cssCodeSplit: false`），懒加载块带内容哈希；Service Worker 的预缓存清单由
+`web/tools/pwa/build.ts` 列出全部产物，新块不需要手动登记。
 
 React 组件只声明布局和状态，副作用放在 effect、query 或 service 中。这样登录、
 书架、书库、书源、设置和影音页面共享同一套生命周期语义，加载、错误、空状态和
@@ -368,12 +389,16 @@ URL 从头到尾不变。手机上这一点几乎看不见——直到读者按�
 
 | 路由 | 页面 |
 | --- | --- |
+| `#/` | 首页 |
 | `#/shelf` | 书架 |
-| `#/library`、`#/library/books`、`#/library/files` | 书库浏览、书籍列表、文件管理 |
-| `#/sources` 及 `#/sources/...` | 书源中心、浏览、凭据、扩展和插件管理 |
+| `#/search?q=` | 书籍与影音的全局搜索 |
+| `#/library`、`#/library/books`、`#/library/files` | 书库浏览、书籍列表、文件管理（仅管理员） |
+| `#/sources` 及 `#/sources/...` | 书源中心、浏览、书源编辑、凭据、扩展和插件管理 |
+| `#/me`、`#/me/:panel` | 「我的」及其设置面板（主题、浏览、播放、账号等） |
 | `#/settings` | 兼容旧深链接，重定向到书架 |
 | `#/book/:bookId` | 阅读器 |
 | `#/media/:channel` | 影音频道目录 |
+| `#/media/:channel/folders/:libraryId?`、`#/media/audiobook/narrators/...` | 按文件夹浏览、演播者 |
 | `#/media/:channel/items/:itemId` | 影音详情及管理子页 |
 | `#/media/:channel/player?item=&part=` | 播放器 |
 | `#/media/:channel/settings/libraries`、`.../tasks` | 媒体库管理、扫描与刮削（旧的 `#/media/:channel/settings[/:panel]` 重定向到「我的」） |
@@ -387,6 +412,11 @@ URL 从头到尾不变。手机上这一点几乎看不见——直到读者按�
 Hash 路由适配 WebView 和静态服务器：宿主只需要返回同一个 `index.html`，客户端从
 `#` 后解析页面，不依赖服务端为每个深层路径配置回退规则。登录是认证边界而不是业务
 页面；未认证时由 `AuthBoundary` 显示登录表单，认证完成后 React Router 渲染目标地址。
+
+导航只有一份：`web/src/app/AppNav.tsx`，手机上是底部标签栏，701px 起是侧栏（首页、书架、影音、我的）。
+它显示与否也由 URL 决定（`navMode()`）：阅读器和播放器是 `hidden`，整屏归内容；
+顶层目的地是 `top`；从顶层进入的下一级页面是 `push`，手机上用自己的返回箭头替换标签栏，
+桌面侧栏保留。
 
 ### 阅读器与长生命周期资源
 
@@ -409,6 +439,13 @@ ReaderScreen 持有的舞台节点放到 chrome 树中的正确位置。React �
 `web/src/styles/theme-tokens.css` 的 `--color-*` 语义令牌给出；系统深浅色、同页保存和
 其他标签页的存储变化都会重新应用。阅读器选择黑白灰时只在自己的容器上写
 `data-theme="gray"`，视频和音乐播放页在自己的根节点上使用当前主题的深色取值。
+主题偏好只经 `readThemePreference` / `saveThemePreference` / `resolveAppTheme`
+（React 里用 `shared/theme/use-theme.ts` 的 `useThemeState`）读写，不直接碰存储。
+令牌取值的出处是 `docs/prototypes/Reader V3 主题语义令牌.md`：`theme.ts` 里的调色板和样式表
+是同一组值，`web/test/theme-tokens.test.ts` 保持两者一致并检查规范里的对比度配对。
+字号和圆角同样是按角色命名的令牌（`--text-display` … `--text-micro` 七级、
+`--radius-xs` … `--radius-pill` 六级，定义在 `styles/reader.css` 的 `:root`），
+新的颜色、间距、时长也写成令牌而不是字面量，细则见 `ui.md` §2。
 
 ### 只有一份渲染层
 
@@ -498,6 +535,25 @@ shadow root 拿到完整样式隔离且没有文档边界，App 还能进去做�
 两条规则里的**值**不重复：全部是自定义属性，而属性本身定义在 `:root` 上，
 shadow root 会继承。
 
+`touch-action` 是同一条边界上的又一个例子。不声明它，浏览器会认领每一次横向拖动
+（触发 `pointercancel`）：手机上滑动从来翻不了页，向右滑还会被当成浏览器的返回手势、
+直接离开这本书。翻页和固定版式把所有移动交给手势层（`touch-action: none`），滚动模式只留
+纵向平移（`pan-y`）。它必须**同时**写在 host（`styles/reader.css`）和 shadow root 里的分页列
+（`ui/shadow.ts`）上：分页列才是滚动容器，手指落在文字上时由它往上的那些盒子决定归谁。
+
+### 翻页模式只落在列边界上
+
+翻页模式下，一个不在列边界上的 `scrollLeft` 就是「左半屏是这一页、右半屏是下一页」。
+手机每次地址栏或键盘出没都会改视口高度，高度变了列数就变，于是恢复位置时的
+`max * fraction` 几乎从来不是边界。所以 `ReaderView` 里所有翻页模式的 `scrollLeft` 写入
+（恢复位置、朗读跟随、定位块、搜索）都经过同一个 `scrollToColumnAt()`；浏览器自己发起的滚动
+（聚焦、选区自动滚动）由 `snapStrayScroll()` 拉回边界，只有正在跟手的拖动例外。
+
+用户高亮同理不是「量一次就完」：字号、页边距、模式切换、窗口尺寸或一张晚到的图片都会
+挪动它下面的文字，所以每次重排之后重画。高亮的章节 id 以**已加载文档自己的** section id
+为准（`ReaderScreen.localSectionId`），不按格式猜 `xhtml:` 前缀——猜错的高亮能保存、能同步，
+却永远画不出来。
+
 ### 窗口化的三个接缝
 
 「一份产物两个宿主」和「一千二百章的书不能先下载整本」是同一件事的两面，
@@ -516,8 +572,6 @@ shadow root 会继承。
 另外，位置必须按**整书坐标**判断，不能按窗口内的下标：
 在窗口最后一章时下标是 39，拿它和窗口长度 40 比会得出「已经是最后一章」，
 而后面还有八十章。窗口长度是传输细节，不该决定书在哪里结束。
-
-### 阅读位置格式
 
 ### 书不能联网
 
@@ -569,6 +623,17 @@ GB18030 再试 Big5，而是两种都解一遍再挑更干净的那个。原因�
 一个 800 字的段落以「第三章」开头时不能当标题，而正文里提到「他在第二章读过」
 更不能当标题。两条都有测试固定住。推断不出章节时按长度分段：
 一本五千章的网文如果变成一整节，分页会直接卡死。
+
+网页残留：从网站另存的小说常把 `<div>`、`<br/>`、`&nbsp;` 留在 TXT 里。转义后这些标签会被
+当成文字画出来，整章还会连成一段。所以在推断段落和章节标题**之前**先过
+`cleanTextMarkup()`（`web/src/formats/segments.ts`）：块级标签变换行、行内标签去掉、常见实体解码、
+只有空白的行算空行。只认真实的标签名——正文里的 `a<b`、`<书名>` 不动，仍按文字转义。
+
+书源（`format: 'chapters'`）的 `text/html` 章节是抓下来的网页片段，同样没有作者排版。
+**清洗由插件按书源声明的类型决定**（文本源整理成段落，图片/漫画源原样保留）；
+阅读器只负责排版：只含文字和换行的章节（`isTextOnlyMarkup`）在读取时用 `htmlToText()`
+读回成字符、走上面同一套 TXT 分段和缩进，含图片、表格、媒体的章节保留标记，EPUB 不进这条路径。
+放在**读取时**而不是写入时，是为了让服务端早先缓存的章节也被修好。细则见 `ui.md` 的 TXT 排版一节。
 
 ### 漫画的页序
 
@@ -652,7 +717,7 @@ Android 上经典的「页面自己往边上飘」bug。
 | --- | --- | --- |
 | `native` | Android 外壳的 `TextToSpeech` | 有 `speech` 接口的外壳（版本 ≥ 3） |
 | `system` | WebView / 浏览器的 `speechSynthesis` | 默认。免费、离线、无往返 |
-| `http` | 服务端的 `TTS_URL`，经 `/api/v1/tts` 代理 | 前两者都不可用时 |
+| `http` | 服务端配置的 HTTP 朗读服务（系统设置 → 服务配置；`TTS_URL` 环境变量只作初始值），经 `/api/v1/tts` 代理 | 前两者都不可用时 |
 
 `auto` 的优先级是 native → system → http，理由不是「谁更好」而是**谁知道得更多**：
 
@@ -660,7 +725,7 @@ Android 上经典的「页面自己往边上飘」bug。
   手机系统装好的中文语音经常不在 WebView 的 `getVoices()` 列表里，
   于是读者听到英文或听不到声音，而 Web 层拿到的列表本身就是缺的，修不了。
   这是「朗读没有中文声音」最常见的原因，唯一的解法是直接问平台。
-- http 排最后，因为它的每一句都要一次请求，而且它需要一个配了 `TTS_URL` 的服务端。
+- http 排最后，因为它的每一句都要一次请求，而且它需要一个配了 HTTP 朗读服务的服务端。
 
 三者的**暂停语义真的不同**，所以它们不是同一个基类：
 
@@ -768,3 +833,29 @@ Android WebView 是真实会发生的）才推进，不是为了给朗读计时�
 （注意：`check-shell.sh` 里新增的渲染模式词表校验，以及 `colors.xml` 里
 `--` 在 XML 注释中非法、Kotlin 侧 `Uint8Array` 不存在这两处，
 都是**第一次真正编译 Android 壳**时才暴露的。写不能编译的代码等于没写。）
+
+---
+
+## 10. 书源与插件
+
+书源是「书库之外的书从哪来」：本地书库、OPDS 目录和进程插件（`server/src/sources/`）。
+宿主 `SourceHost`（`server/src/services/source-host.ts`）持有注册表、来源实例的生命周期和
+凭据边界；路由在 `http/routes/sources.ts`，接口形状见 [`api.md`](api.md)。
+
+- **插件是进程，不是模块。** `ProcessPlugin` 以子进程运行受信任的 Node 插件，按行收发
+  JSON-RPC（stdio），有超时和单条消息大小上限，返回值经 `protocol.ts` 解码后才进入宿主。
+  这是**故障隔离而不是沙箱**：插件有服务进程同一个系统用户的权限，所以安装是管理员操作，
+  安装包必须留在 `DATA_DIR/plugins` 里（`PLUGIN_PATH_ESCAPE`）。一个插件崩了、卡了，
+  丢的是这一次调用，不是整个服务端。示例在 `examples/plugins/demo-chapters`。
+- **凭据加密存库。** 来源凭据用从签名密钥派生的密钥加密，接口只回报「有没有」，不回原文。
+- **搜索是一条流，失败按来源报告。** `POST /sources/:id/search` 的响应是
+  `text/event-stream`（`http/search-stream.ts`）：同一个请求里依次推出每一页结果，宿主按
+  `ref` 去重、按 `resultLimit` 截断、校验游标不重复和批次进度不倒退。一个来源实例可能聚合了
+  很多书源（例如书源插件），其中几个超时或报错不应让整次搜索失败，所以每一页可以带
+  `errors[]`（`source` + `code` + `message`）。每一块只带**自上一块以来**的失败，客户端
+  （`SourceCatalogPage` 的 `mergePages`）必须按 `source:code` 累积，而不是用最新一块替换——
+  否则读者只看得到最后一个出错的书源。同一用户、同一来源、同一 `sessionId` 的新连接会先中止旧连接，
+  `…/search/cancel` 显式结束会话。
+- **书源的书也是书。** 取得（acquire）一本书源书时，`publications/chapters.ts` 把它写进同一张
+  `books` 表（`format: 'chapters'`）并缓存章节，书行仍只由 `ShelfService` 组装（§5 那条规则）；
+  章节的清洗与排版边界见 §8「TXT 的编码与章节」。

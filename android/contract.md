@@ -1,80 +1,105 @@
 # 外壳与 H5 的接口
 
-这份文件是外壳实现时必须照抄的部分。它很短，因为两边只在一个对象上耦合。
+这份文件是外壳与 H5 之间的全部约定。两边分别用 Kotlin 和 TypeScript 写，互相无法类型检查，
+所以以 `web/src/android-bridge.d.ts` 为准，由 `android/scripts/check-shell.sh` 双向核对。
+改动任何一侧都要同步另一侧和本文件。
 
 ## 1. 启动流程
 
 ```
-外壳启动
-  → 读加密存储里的 serverUrl + refreshToken
-  → 通过 /auth/refresh 换一个 accessToken（失败则显示登录）
-  → 把 web/dist 的 index.html 加载进 WebView
-      · 注入 window.readerBridge（见下）
-      · 注入 accessToken 到 localStorage 的 `reader.session`
-  → H5 自己完成后续所有请求
+MainActivity 启动
+  → WebHost 配置 WebView，注册 JS 接口与媒体消息通道
+  → 加载 https://appassets.androidplatform.net/assets/index.html（+ 快捷方式对应的 #/media/... 片段）
+  → H5 检测 window.ReaderAndroid，选择 Android 平台
+  → 服务地址：用户已保存的地址 > configuredServerUrl()（构建时 -PdefaultServerUrl）> 留空待填
+  → H5 自己完成登录、会话保存（存储层与浏览器相同）和后续所有请求
 ```
 
-H5 只从 `localStorage['reader.session']` 读会话（`web/src/net/api.ts` 的
-`defaultStorage()`）。外壳必须在页面脚本执行前把它写好 —— 用
-`WebViewClient.onPageStarted` 或 `evaluateJavascript` 在 `loadUrl` 之前
-注入都可以，但**必须在 `index.html` 的 module script 之前**。
+外壳**不**读写令牌、**不**向 `localStorage` 注入会话，也不 eval 业务脚本。资源来源
+`https://appassets.androidplatform.net` 被 H5 视为无效的服务地址，服务端 CORS 单独放行它。
 
-## 2. 路由
+## 2. JS 接口
 
-H5 会自己解析 manifest 并决定谁来渲染。外壳只要监听：
+外壳用 `addJavascriptInterface` 注册两个对象。只有标注 `@JavascriptInterface` 的方法对页面可见。
 
-```kotlin
-// 外壳侧：H5 请求原生接管分页内容
-webView.addJavascriptInterface(object {
-    @JavascriptInterface fun openPaged(bookId: String) { /* 起原生 Pager */ }
-}, "readerNative")
+### `window.ReaderAndroid`（`bridge/ReaderBridge.kt`，当前 `SHELL_VERSION = 3`）
+
+| 方法 | 返回 | 说明 |
+| --- | --- | --- |
+| `shellVersion()` | number | H5 要求 ≥ `MIN_SHELL_VERSION`（1），否则按普通浏览器运行 |
+| `configuredServerUrl()` | string | 构建时预设的服务地址，可为空；d.ts 中为可选方法 |
+| `deviceLabel()` | string | 写进进度记录的设备名 |
+| `connectivity()` | string | `online` / `offline`，来自系统连接管理器 |
+| `watchConnectivity(cb)` | void | 见下文「回调」 |
+| `toast(message)` | void | 原生 Toast |
+| `hasNetwork()` | boolean | 当前是否有网络 |
+| `viewport()` | string | JSON：物理像素视口与密度 |
+| `cacheUsage()` | string | JSON：`webViewBytes`、`dataBytes`、`availableBytes` |
+| `diagnostics()` | string | JSON：外壳版本、设备、系统、应用版本，用于问题报告 |
+| `renderPage(request)` | boolean | shell ≥ 2。见第 3 节 |
+| `hidePage()` | void | 移除原生页面，露出 WebView |
+| `canOpenDocument(mediaType)` | boolean | 目前总是 `false`，PDF 留在 WebView |
+| `speech()` | object | Kotlin 侧访问器；页面看到的是下面的独立接口 |
+
+### `window.ReaderAndroidSpeech`（`bridge/SpeechBridge.kt`，shell ≥ 3）
+
+`addJavascriptInterface` 只能暴露对象的方法，不能暴露属性，所以朗读接口单独注册；
+H5 的 `promoteSpeechInterface`（`web/src/core/android-platform.ts`）把它挂到
+`ReaderAndroid.speech`，d.ts 中声明为 `speech?: SpeechBridge`。
+
+方法：`available()`、`init()`、`onSpeechEvent(cb)`、`onVoices(cb)`、`speak(text, utteranceId)`、
+`pause()`、`stop()`、`setRate(rate)`、`setPitch(pitch)`、`setVolume(volume)`、`setVoice(voiceId)`、`shutdown()`。
+朗读队列与游标在 JS；`utteranceId` 由 H5 生成，事件原样带回，用来丢弃过期句子的 `done`。
+`interruptForMedia()` 没有注解，只供 Kotlin 侧在开始播放影音时调用，不属于页面契约。
+
+### 回调
+
+JS 接口只能传原始类型，所以 Kotlin 端的 `watchConnectivity`、`onSpeechEvent`、`onVoices`
+接收的是**全局函数名**（须是安全标识符），之后用 `evaluateJavascript` 调用它。H5 包装层把函数注册为
+`window.__readerConnectivity`、`__readerSpeechEvent`、`__readerSpeechVoices` 再把名字传过去；
+连接状态传字符串，朗读事件与声音列表传 JSON。页面代码按 d.ts 直接传函数即可。
+
+## 3. 原生整页图片
+
+H5 在 `reader-view.ts` 中通过 `pageHost` 询问外壳，仅在页面为 `image` 模式且读者选择「适应整页」时：
+
+```
+ReaderAndroid.renderPage(JSON.stringify({ sectionId, mode: 'image', mediaType, bytes: <base64>, fit: 'contain' }))
+  → true：NativePageView 已覆盖在 WebView 上绘制
+  → false：外壳拒绝（模式/适配方式不支持、无法解码、超时 2 秒），H5 在 WebView 中照常绘制
 ```
 
-H5 侧分发的时机在 `ReaderView.open()` 里（`caps.paged === 'native'` 分支），
-目前通过 `CustomEvent('reader:native-page')` 触发。外壳把它接成上面那个
-接口即可。
+外壳只解码请求里的 `bytes`（JPEG/PNG/WebP），不按 `path` 自行取图。离开该页时 H5 调用 `hidePage()`。
+外壳分支用到的模式名必须在 `web/src/formats/types.ts` 的 `RenderMode` 中，`check-shell.sh` 会检查。
 
-## 3. 返回
+## 4. 影音通道 `window.ReaderMedia`
 
-原生 Pager 退出时回到 WebView，并通知 H5 重新拉一次进度：
+`media/MediaBridge.kt` 用 `WebViewCompat.addWebMessageListener` 注册，只接受资源来源、只接受主框架，
+需要 WebView 支持 `WEB_MESSAGE_LISTENER`；不支持时不注册，H5 使用网页播放器。H5 发送 JSON 字符串
+`{ action, ... }`（`web/src/features/media/services/native-audio.ts`），外壳通过回复通道回传播放状态。
 
-```js
-window.dispatchEvent(new CustomEvent('reader:native-return'))
-```
+`action`：`play`、`showVideo`、`pause`、`resume`、`stop`、`previous`、`next`、`selectQueue`、`editQueue`、
+`seek`、`speed`（0.5–3.0）、`audioTrack`、`sleep`、`reconnect`、`status`。播放由
+`MediaPlaybackService`（Media3）执行；视频画面在 `MediaVideoActivity` 中显示。消息超过约 900 KB 被忽略。
 
-H5 侧的监听尚未实现（`reader-view.ts` 里留了位置），因为尚无外壳可测。
-第 1 条之所以只写「已实现的部分」，就是因为这类回调**没测过就不能算数**。
+## 5. 生命周期与系统键
 
-## 4. 硬件键
+- `onPause` 时外壳执行 `window.__readerFlush && window.__readerFlush()`，H5 借此保存阅读位置。
+- 返回键：WebView 有历史则后退，否则退出。
+- 外壳**目前不拦截音量键**，也没有「原生翻页器退出后通知 H5」的事件；旧版文档中的
+  `reader:native-page` / `reader:native-return` 事件并不存在。
 
-音量键翻页是阅读器的基本期待。外壳把它转成：
+## 6. 离线
 
-```js
-window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }))
-```
-
-H5 的键盘处理已经被浏览器实测过（`bindGestures()`），所以这条路不用新增
-代码。
-
-## 5. 离线
+离线下载与缓存由 H5 负责（与浏览器共用实现），外壳不另建书籍缓存。H5 使用的服务端接口：
 
 ```
 GET /api/v1/books/:id/content
-  → 200，带 ETag 与 Accept-Ranges: bytes
-  → 中断后用 Range: bytes=<已收字节>- 续传
+  → 整本书，带 ETag，可 Range 续传
+  → 目录书（漫画目录）返回 400 DIRECTORY_BOOK；分章书返回 400 CHAPTER_BOOK
+
+GET /api/v1/books/:id/file?path=<manifest files 中列出的 rel_path>
+  → 单个文件；path 只能取 manifest 列出的值，其他值得不到别的文件
 ```
 
-目录书（漫画目录）没有单一文件，`/content` 会返回 `400 DIRECTORY_BOOK`。
-这类书要缓存的是 manifest 里 `files` 列出的**每一页**：
-
-```
-GET /api/v1/books/:id/file?path=<manifest 里列出的 rel_path>
-  → 200，一张图；ETag 按文件算
-```
-
-`path` 只能取 `files` 里出现过的值。服务端只按这份契约匹配，不会用 query 拼路径，
-所以乱填只会拿到 404，不会拿到别的书的东西。
-
-`/data` 里的书架元数据由客户端自己缓存（`GET /api/v1/books` 的响应）。
-服务端离线时，外壳读本地缓存渲染书架，并静默降级 —— 设计文档 §8.2
-要求「客户端必须优雅处理服务端不可达」，这条不能靠报错弹窗实现。
+服务端不可达时客户端读本地缓存并静默降级，不能靠报错弹窗。

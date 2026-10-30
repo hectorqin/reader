@@ -4,7 +4,7 @@
 
 This guide takes you through Docker deployment, account registration, and opening your first book. To run from source, use the [development guide](development.en.md).
 
-This guide describes the current Node implementation. CI publishes `main` (development) and short commit tags, not `latest`; availability depends on a successful build. Pin a published commit tag for repeatable deployments. Legacy Java images and `/storage` data are not directly compatible with this version.
+This guide describes the current Node implementation. Release images are published to Docker Hub as `hectorqin/reader-pro` (amd64 and arm64) with `x.y.z`, `x.y`, `latest`, and `sha-<short>` tags, only when a `v*` version tag is pushed or a release is run manually; `main` is the long-lived development branch and pushing to it does not publish to Docker Hub. The bundled Compose file defaults to `hectorqin/reader-pro:latest`; pin a release version (`READER_IMAGE=hectorqin/reader-pro:x.y.z`) for long-term use. Legacy Java images and `/storage` data are not directly compatible with this version.
 
 ## 1. Prepare your environment
 
@@ -17,7 +17,7 @@ The container serves both the API and Web UI. No separate frontend deployment is
 ## 2. Get the deployment configuration
 
 ```sh
-git clone https://cnb.cool/hectorqin/reader.git
+git clone https://github.com/hectorqin/reader.git
 cd reader
 ```
 
@@ -41,7 +41,7 @@ For example, use `/srv/books:/books:ro` on Linux, or `"D:/books:/books:ro"` with
 ### Choose read-only or writable books
 
 - **Browse and read only**: keep `:ro`. Add books through the host or NAS and let reader scan them.
-- **Manage files in the browser**: use `:rw` and give the server process write permission. Administrators can upload, rename, move, delete, and create directories in the library file manager.
+- **Manage files in the browser**: use `:rw` and give the server process write permission. Administrators can upload, rename, move, delete, and create directories in the library file manager; members can only upload book files from the library page (an administrator can turn this off under Me → System settings → Service configuration → 书库).
 
 A read-only book mount still allows shelves, progress, and notes to be saved in `/data`. See [configuration](configuration.en.md) for permissions and mount details.
 
@@ -59,7 +59,7 @@ Open `http://localhost:5888`, or `http://<server-ip>:5888` from another device.
 2. Wait for the initial scan, then open a book from the shelf or library.
 3. Create accounts for other members. Public registration is disabled by default after the first account.
 
-To allow later self-registration, set `ALLOW_REGISTRATION: "true"` in the Compose `environment` section and run `docker compose up -d` again.
+To allow later self-registration, an administrator switches Me → System settings → Registration and invitations (我的 → 系统设置 → 注册与邀请) to open or invite-only registration. `ALLOW_REGISTRATION: "true"` in Compose only seeds the registration policy on the first start; afterwards the setting in the UI wins.
 
 The health endpoint is `/api/v1/health`. For startup failures, missing books, or write errors, see [troubleshooting](configuration.en.md#troubleshooting).
 
@@ -69,7 +69,7 @@ If the image is unavailable, build the checked-out source:
 docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
 ```
 
-This still requires access to the Node base image and npm dependencies. Keep both `-f` arguments for subsequent management commands. For published images, set `READER_IMAGE=cnb.cool/hectorqin/reader:<published-commit-tag>` in `.env` to pin a version.
+This still requires access to the Node base image and npm dependencies. Keep both `-f` arguments for subsequent management commands. To pin a release, set `READER_IMAGE=hectorqin/reader-pro:<version>` (for example `0.1.0`) in `.env`.
 
 ### Without Compose
 
@@ -81,7 +81,7 @@ docker run -d --name reader --restart unless-stopped \
   -p 5888:5888 \
   -v /path/to/your/books:/books:ro \
   -v "$(pwd)/data:/data" \
-  cnb.cool/hectorqin/reader:main
+  hectorqin/reader-pro:latest
 ```
 
 On Windows, the Compose setup above avoids shell-specific path and line-continuation syntax.
@@ -90,13 +90,13 @@ On Windows, the Compose setup above avoids shell-specific path and line-continua
 
 ### Local books
 
-Place EPUB, TXT, PDF, CBZ/ZIP, or comic image directories in your mounted library. By default, the server runs scheduled scans every 30 minutes and checks for changes every 60 seconds. Administrators can trigger a scan manually. With a writable mount, uploads are available in the administrator file manager.
+Place EPUB, TXT, PDF, CBZ/ZIP, or comic image directories in your mounted library. By default, the server checks the library for changes every 60 seconds; administrators can change the interval (0 disables it) under Me → System settings → Service configuration → Scan settings (扫描设置). The server also scans once at startup. With a writable mount, administrators upload from the file manager and members use 上传书籍 (Upload books) at the top of the library page (book formats only; no unpacking, no overwriting).
 
 The shelf contains readable books; the library lets you browse the disk directory. Removing a book from a shelf is different from deleting its file. See the [user guide (中文)](user-guide.zh-CN.md).
 
 ### OPDS
 
-As an administrator, open Sources (书源) from the shelf, add an OPDS source, and configure its server URL. If authentication is required, set credentials for your current account. Open the source to browse or search its catalog and acquire books for your shelf.
+Open Sources (书源) from the shelf. As an administrator, choose Add source (添加来源) on the Source management (书源管理) tab, add an OPDS source, and configure its server URL. If authentication is required, set credentials for your current account. Open the source to browse or search its catalog and acquire books for your shelf.
 
 ## 5. Add media libraries
 
@@ -108,7 +108,7 @@ Mount local media separately by adding the directories you need to Compose volum
   - /path/to/your/audiobooks:/media/audiobook:ro
 ```
 
-Run `docker compose up -d`, open the video page (`#/media/video`), and use More actions → Media settings → Media libraries. Choose video, music, or audiobooks, set a container path such as `/media/video`, and choose access permissions. Creation starts a scan; inspect Scan and scrape if it fails.
+Run `docker compose up -d`, then open Me → Media libraries (我的 → 媒体库), or More actions → Media library management (更多操作 → 媒体库管理) on the video page. Choose video, music, or audiobooks, set a container path such as `/media/video`, and choose access permissions. Creation starts a scan; inspect Scan and scrape (扫描与刮削) if it fails.
 
 When running directly on Windows, use an absolute local path such as `D:\Media\Music`. With Docker Desktop, mount the directory and enter its container path instead.
 

@@ -2,10 +2,10 @@
 
 基础路径 `/api/v1`。除标注「公开」外都需要 `Authorization: Bearer <accessToken>`。
 
-错误响应统一格式：
+错误响应统一格式（请求体 / 查询参数校验失败时 `code` 为 `BAD_REQUEST`，未处理的服务端错误为 `INTERNAL`）：
 
 ```json
-{ "error": { "code": "BOOK_NOT_FOUND", "message": "book not found" } }
+{ "error": { "code": "NOT_FOUND", "message": "book not found" } }
 ```
 
 ## 兼容性承诺
@@ -20,7 +20,8 @@
 ### `GET /instance` — 公开
 
 ```json
-{ "name": "reader", "apiVersion": 1, "registrationOpen": false, "userCount": 3 }
+{ "name": "reader", "apiVersion": 1, "registrationOpen": false,
+  "registrationMode": "closed", "invitationRequired": false, "userCount": 3 }
 ```
 
 客户端用它区分「全新实例」（可以注册）和「已被占用」（需要管理员开账号）。
@@ -75,6 +76,7 @@
 - 之后按管理员设置的注册策略开放；首次初始化时从旧 `ALLOW_REGISTRATION` 导入，随后以数据库配置为准。
 - 邀请模式需要提交 `inviteCode`，无效、过期、停用或用尽的邀请码返回 `400 INVITE_INVALID`，未填写返回 `400 INVITE_REQUIRED`。普通注册只创建普通用户。
 - 关闭时返回 `400 REGISTRATION_DISABLED`
+- 用户名 / 密码缺失或超长（用户名、显示名 ≤100，密码 ≤1024）返回 `400 BAD_REQUEST`；用户名少于 3 位返回 `409 USERNAME_TOO_SHORT`，密码少于 8 位返回 `409 PASSWORD_TOO_SHORT`，重名返回 `409 USERNAME_TAKEN`
 
 返回 `201`：
 
@@ -110,7 +112,7 @@
 
 `{ "currentPassword": "...", "newPassword": "..." }` → `{ "ok": true }`
 
-会撤销该账号**所有**会话（含当前设备），需要重新登录。
+当前密码错误返回 `401 BAD_CREDENTIALS`。会撤销该账号**所有**会话（含当前设备），需要重新登录。
 
 ---
 
@@ -126,9 +128,10 @@
 | `author` `series` `tag` `format` | 精确过滤 |
 | `path` | 只返回**这个目录下**（含子目录）有文件的书。库内相对路径，`''` 等于不过滤 |
 | `scope` | `shelf`（默认）\| `library`。见下 |
+| `status` | `reading` \| `want` \| `finished`，仅书架范围生效，见 [`PUT /books/:id/reading-status`](#put-booksidreading-status) |
 | `sort` | `title` \| `author` \| `added` \| `updated`，默认 `added` |
 | `order` | `asc` \| `desc`，默认 `desc` |
-| `page` `pageSize` | 默认 1 / 50，`pageSize` 上限 200 |
+| `page` `pageSize` | 默认 1 / 50，`pageSize` 夹到 1–200 |
 
 ```json
 { "items": [ { "id": "...", "title": "三体", "author": "刘慈欣",
@@ -268,7 +271,8 @@
 拿到单窗也能把跳转落到正确章节，不需要把前面的 count 加一遍。
 
 按格式：epub 取 spine 标题（NCX / nav），txt 取分章结果，漫画目录取卷，
-pdf / 单图没有独立目录，回落到 items。
+pdf / 单图没有独立目录，回落到 items。来源章节出版物（`chapters`）的目录取自当前快照，
+响应额外带 `revision`。
 
 ### `GET /books/:id/assets?ref=<ref>`
 
@@ -347,7 +351,8 @@ pdf / 单图没有独立目录，回落到 items。
 `Range: bytes=`，所以**离线下载可以续传**。
 
 目录型书籍（漫画目录）没有单一文件，返回 `400 DIRECTORY_BOOK`；
-这类书按 `items?group=N` 逐卷取图。
+这类书按 `items?group=N` 逐卷取图。来源章节出版物没有整书文件，返回 `400 CHAPTER_BOOK`；
+文件已从磁盘消失返回 `404 FILE_MISSING`。
 
 ## 书库（文件管理器）
 
@@ -358,11 +363,16 @@ pdf / 单图没有独立目录，回落到 items。
 路径都是**书库内相对路径**，`''` 表示根目录；每一个都会过
 `resolveInside`，逃逸直接被拒。
 
-> **信任边界**：挂载点就是边界，没有第二道。能在这里改文件的人，能改书库里的
-> 任何文件——和 `POST /library/scan` 已有的信任级别一致。在这之上再叠一层按路径的
-> ACL 只是安全表演。
+> **信任边界**：路径上，挂载点就是边界，不再叠一层按路径的 ACL。**谁能写**由角色决定：
+>
+> | 端点 | 管理员 | 成员 |
+> | --- | --- | --- |
+> | `GET /library/browse`、`POST /library/browse/shelf` | ✓ | ✓（`shelf` 只改自己的书架） |
+> | `POST /library/browse/move` / `rename` / `mkdir` / `delete` / `metadata` | ✓ | `403 ADMIN_REQUIRED` |
+> | `GET /library/upload`、`POST /library/upload` | ✓ | 业务设置「书库 → 允许成员上传书籍」开启时（默认开启）✓，只能新增书籍文件（见下）；关闭时 `POST` 返回 `403 UPLOAD_DISABLED` |
+> | `POST /library/scan` | ✓ | `403 ADMIN_REQUIRED` |
 
-### `GET /library/browse?path=<相对路径>&page=<页>`（管理员页面用）
+### `GET /library/browse?path=<相对路径>&page=<页>`
 
 ```json
 { "path": "科幻/已读",
@@ -408,13 +418,15 @@ pdf / 单图没有独立目录，回落到 items。
 符号链接按链接本身显示（`lstat`），不跟随——扫描器也不跟随，跟随等于描述一棵
 索引里并不存在的树，还会顺着链接走出挂载点。
 
-### `POST /library/browse/move`
+### `POST /library/browse/move` — 管理员
 
 ```json
 { "paths": ["科幻/三体.epub"], "target": "科幻/已读" }
 ```
 
-→ `{ "moved": 1, "target": "科幻/已读" }`
+→ `{ "moved": 1, "merged": 1, "target": "科幻/已读" }`
+
+`merged` 是随移动一起改写索引路径的条目数；当前实现中每移动一项计一次，与 `moved` 相同。
 
 同挂载点内 `rename`，不复制删除：文件字节、`mtime`、`inode` 都不变，扫描器视为
 无变化，书籍身份（`identifier + 内容哈希`）因此保持，进度和笔记都还在。
@@ -426,7 +438,7 @@ pdf / 单图没有独立目录，回落到 items。
 目标已有同名条目 → `409 DESTINATION_EXISTS`。合并还是报错只有调用方知道，
 猜错就是数据丢失。把目录移进它自己 → `400 MOVE_INTO_SELF`。
 
-### `POST /library/browse/rename`
+### `POST /library/browse/rename` — 管理员
 
 ```json
 { "path": "科幻/三体.epub", "name": "三体（修订版）.epub" }
@@ -434,7 +446,7 @@ pdf / 单图没有独立目录，回落到 items。
 
 `name` 是单个路径段，不含斜杠。→ `{ "path": "科幻/三体（修订版）.epub" }`
 
-### `POST /library/browse/mkdir`
+### `POST /library/browse/mkdir` — 管理员
 
 ```json
 { "path": "科幻", "name": "待整理" }
@@ -442,7 +454,7 @@ pdf / 单图没有独立目录，回落到 items。
 
 → `{ "path": "科幻/待整理" }`
 
-### `POST /library/browse/delete`
+### `POST /library/browse/delete` — 管理员
 
 ```json
 { "paths": ["科幻/其他/球状闪电.epub"] }
@@ -471,13 +483,25 @@ pdf / 单图没有独立目录，回落到 items。
       "size": 1234567, "kind": "file",
       "bookId": "…", "title": "三体" } ],
   "skipped": [ { "name": "坏.zip", "reason": "无法解压（METHOD_UNSUPPORTED）" } ],
-  "scan": { "added": 1, "updated": 0, "scaned": 1, "removed": 0, "failed": 0,
-            "startedAt": 1789537864820, "finishedAt": 1789537864831 } }
+  "scan": { "running": false, "scanned": 1, "added": 1, "updated": 0, "unchanged": 0,
+            "removed": 0, "failed": 0, "lastError": null,
+            "startedAt": 1789537864820, "finishedAt": 1789537864831, "durationMs": 11 } }
 ```
 
 **这是往 `/books` 写入新书籍字节的端点。** `BOOKS_DIR` 可以按需以只读方式挂载，
-也可以以可写方式挂载以启用管理员文件管理。改名、移动、删除和新建目录等端点同样会修改
+也可以以可写方式挂载以启用上传和管理员文件管理。改名、移动、删除和新建目录等端点同样会修改
 可写书库中的目录项；只读挂载时所有这些写操作统一返回 `403 READ_ONLY_MOUNT`。
+
+**成员只能新增书籍。** 管理员的上传不受限制。成员能否上传由业务设置 `library.memberUpload`
+（「我的 → 系统设置 → 服务配置 → 书库 → 允许成员上传书籍」，默认开启）决定；关闭时成员的
+`POST` 在读取请求体之前就返回 `403 UPLOAD_DISABLED`。开启时，成员（`role=member`）的上传：
+
+- 只保存扫描器能识别为书籍的文件（扩展名在 `GET /library/formats` 里），其余文件记入
+  `skipped`，原因「不是支持的书籍格式」。
+- `.zip` / `.cbz` 按漫画压缩包原样保存，**不解包**——解包会把压缩包里的任意内容写进书库，
+  那属于文件管理。
+- `onConflict=overwrite` 返回 `403 ADMIN_REQUIRED`，书库保持不变；`rename`（默认）、`skip`、
+  `fail` 可用。可以指定任意书库内目录作为 `path`，但不能新建目录（新建目录要管理员）。
 
 上传流程：
 
@@ -497,6 +521,10 @@ pdf / 单图没有独立目录，回落到 items。
 - `overwrite` — 同一个路径，索引看到的是「原位编辑」，书保持身份，进度和笔记都在
 - `fail` — 整批 `409 DESTINATION_EXISTS`
 
+其他取值返回 `400 BAD_CONFLICT_POLICY`。请求不是 multipart 返回 `400 NOT_MULTIPART`，没有文件返回
+`400 NO_FILES`。单文件上限 4 GiB，单次请求最多 20 个文件。`bookId` / `title` 只在文件是可识别的
+书籍格式并已被索引时出现。
+
 `.zip` / `.cbz` 会被当**合集**解开（`kind: "archive-entry"`）。这是读者真正下载到的
 东西：四十卷装在一个包里。单层包裹目录会被抹平（`系列/第01卷.epub` 落成 `第01卷.epub`），
 更深的树保持原样——`系列/第01卷/001.jpg` 是一本**目录书**，抹平它正好毁掉扫描器要读的结构。
@@ -509,9 +537,9 @@ pdf / 单图没有独立目录，回落到 items。
 一个上传不进去第二次的书库比没有这个功能更糟。
 
 挂载只读 → 写入 `BOOKS_DIR` 前返回 `403 READ_ONLY_MOUNT`；请求暂存位于 `DATA_DIR`。
-`GET /library/upload` 返回 `{ "writable": true }`，让客户端在开始传 400MB 之前先问一句。
+`GET /library/upload`（任何已登录用户）返回 `{ "writable": true, "allowed": true }`，让客户端在开始传 400MB 之前先问一句：`writable` 是书库根目录是否可写，`allowed` 是当前用户能否上传（管理员恒为 `true`，成员取 `library.memberUpload`）。
 
-### `POST /library/browse/metadata`
+### `POST /library/browse/metadata` — 管理员
 
 ```json
 { "paths": ["科幻/合集", "科幻/合集/第三卷.epub"],
@@ -546,7 +574,7 @@ pdf / 单图没有独立目录，回落到 items。
 所以只有一对操作。名字保留是因为删掉一个已文档化的取值是破坏性变更）。
 
 **目标两种命名，只收一种**：`paths`（文件管理器手里是路径）或 `bookIds`（一张卡片手里是
-书）。两个都给、或都不给，都是 400 `AMBIGUOUS_TARGETS`——两份命名说的是同一个写，
+书）。`action` 不是这四个之一返回 `400 BAD_ACTION`。两个都给、或都不给，都是 400 `AMBIGUOUS_TARGETS`——两份命名说的是同一个写，
 同时带上就是「调用方自己不知道该说哪一个」，合并还会让同一本书被写两次、被数两次。
 
 **`bookIds` 是「从书架移除时，找不到「xxx」在磁盘上的路径」的修法**（#40）。
@@ -622,13 +650,14 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 ```
 
 可改字段：`title` `author` `publisher` `language` `isbn` `description` `series`
-`seriesIndex` `pubdate` `tags`（`tags` 用逗号分隔的字符串）。
+`seriesIndex` `pubdate` `tags`（`tags` 用逗号分隔的字符串）。其他键被忽略；一个可改字段都没有时返回
+`400 BAD_REQUEST`。→ `{ "book": {...} }`（应用覆盖后的书籍 DTO）
 
 写入的是覆盖层，**扫描永远不会覆盖它**。
 
 ### `DELETE /books/:id/metadata/:field`
 
-撤销单个字段，回落到内嵌值。可用来实现 UI 上的「还原」按钮。
+撤销单个字段，回落到内嵌值。可用来实现 UI 上的「还原」按钮。→ `{ "book": {...} }`
 
 ---
 
@@ -657,7 +686,7 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 能力查询，朗读设置面板打开时调用一次。
 
-→ `{ "http": false, "formats": ["audio/mpeg", ...], "maxLength": 800, "voices": [] }`
+→ `{ "http": false, "timeoutMs": 20000, "formats": ["audio/mpeg", ...], "maxLength": 800, "voices": [] }`
 
 - 未配置 HTTP 朗读合成接口 时返回 `http: false` 而**不是 404**：客户端问的是「这里能用什么引擎」，
   不是「这个接口存在吗」。一个 HTTP 朗读合成接口 没配的实例是完全正常的实例。
@@ -673,13 +702,16 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
   它同时把响应限制在手机可以边走边缓冲的大小，并让缓存以句为单位而不是以书为单位。
 - `speed` 夹在 0.25–4；`text` 上限 800 字，超了返回 `TEXT_TOO_LONG`，
   **不会转发给上游**。
-- 上游返回非 `audio/*` 时返回 `TTS_UPSTREAM` 而不是把 HTML 当音频流出去：
+- 上游返回非 `audio/*` 时返回 `TTS_CONTENT` 而不是把 HTML 当音频流出去：
   一个配错的 HTTP 朗读合成接口（指到一个网页）会以 200 返回 HTML，塞进 `<audio>` 里
   既没有声音也没有事件——这是最难排查的一种「成功」。
 - 这是唯一接受**查询串令牌**的接口之一（另一个是 `/books/:id/assets`、`/cover`、`/content`）：
   `<audio src>` 无法携带 `Authorization` 头。因此它被精确地限制为 `GET /tts`，
   能力查询 `/tts/voices` 不支持查询串令牌。
-- 响应带 `cache-control: private, no-store`，避免服务配置更新后继续使用旧音频；服务端按上游配置缓存合成结果。
+- 响应带 `cache-control: private, no-store`，避免服务配置更新后继续使用旧音频；服务端按上游配置缓存合成结果，
+  并用 `x-tts-cache: hit | miss` 标明本次是否命中缓存。
+- 未配置时返回 `400 TTS_DISABLED`；`text` 为空返回 `400 BAD_REQUEST`。上游失败细分为 `TTS_AUTH`（401/403）、
+  `TTS_TIMEOUT`、`TTS_CONTENT`（非音频）、`TTS_EMPTY`（空音频）和 `TTS_UPSTREAM`（其余），均为 400。
 
 在「系统设置 → 服务配置 → HTTP 朗读」修改以下配置：
 
@@ -699,8 +731,9 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 - 找不到客户端产物时这些路由**不会注册**，纯服务端部署不受影响
 - 都是公开的：它们只是静态资源，背后的 API 仍然要令牌
-- 不带扩展名的路径一律回落到 `index.html`，方便深链
-- `.html` 不缓存（否则升级后拿不到新产物），其余资源缓存 1 小时
+- 不存在的文件路径一律回落到 `index.html`；但 `/api/...` 下未匹配的路径仍返回 JSON `404 NOT_FOUND`
+- 只有 `assets/` 下带内容哈希的文件名缓存一年（`immutable`）；其余文件（含 `index.html`、固定名的
+  `assets/client.js`、`sw.js`）都是 `no-cache`，否则升级后拿不到新产物
 
 ## 书库
 
@@ -711,7 +744,7 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 ### `GET /library/continue?limit=20`
 
-继续阅读列表，按最近阅读时间倒序。每一项是**一整本书**（与 `GET /books` 同样的字段）
+继续阅读列表，按最近阅读时间倒序，`limit` 默认 20、上限 100，响应为 `{ "items": [...] }`。每一项是**一整本书**（与 `GET /books` 同样的字段）
 加上 `percentage`、`chapterTitle` 和 `lastReadAt`。
 
 **它是 `Book` 的扩展，不是另一套形状。** 这里曾经返回进度行自己的命名——
@@ -741,6 +774,9 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 ### `POST /library/scan` — 管理员
 
 触发一次扫描，同步等待结果。并发调用会共享同一次扫描。
+
+→ `{ "result": { "running": false, "scanned": 12, "added": 1, "updated": 0, "unchanged": 11,
+"removed": 0, "failed": 0, "lastError": null, "startedAt": ..., "finishedAt": ..., "durationMs": 840 } }`
 
 ### `GET /library/scan`
 
@@ -775,18 +811,18 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
                "updatedAt": 1000, "deleted": false } ] }
 ```
 
-两个数组至少给一个，总数上限 5000（超了返回 `400 BATCH_TOO_LARGE`）。
+两个数组至少给一个（都缺、或不是数组返回 `400 BAD_PAYLOAD`），总数上限 5000（超了返回 `400 BATCH_TOO_LARGE`）。
 
 `updatedAt` 是**客户端时钟**的毫秒时间戳，决定 LWW 谁赢。
 
-响应把合并后的当前状态一并返回，客户端不用再多发一次拉取：
+响应把合并后的当前状态（相当于 `since=0` 的全量拉取）一并返回，客户端不用再多发一次拉取：
 
 ```json
 { "accepted": 1, "rejected": 0, "serverTime": 1789537864820,
   "progress": [...], "notes": [...] }
 ```
 
-注意：`notes[].type` 只接受 `note` / `highlight` / `bookmark`。
+注意：`notes[].type` 只接受 `note` / `highlight` / `bookmark`，其他值整批返回 `400 BAD_NOTE_TYPE`。
 `notes[].deleted: true` 是删除（写墓碑）。
 
 ### `GET /sync/progress/:bookId`
@@ -802,11 +838,11 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
   "chapterTitle": "第七章", "device": "android-a", "updatedAt": 1789537864623 }
 ```
 
-`percentage` 会被夹到 `[0, 1]`。
+`percentage` 会被夹到 `[0, 1]`，`updatedAt` 缺省为服务端当前时间。→ `{ "progress": {...} }`
 
 ### `GET /notes?bookId=<可选>&since=<可选>`
 
-已过滤掉墓碑，只返回可见笔记。
+→ `{ "notes": [...], "serverTime": 1789537864820 }`。已过滤掉墓碑，只返回可见笔记。
 
 ### `POST /notes`
 
@@ -815,7 +851,7 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
   "text": "选中的原文", "comment": "我的批注", "color": "yellow" }
 ```
 
-`id` 可省略或由客户端生成（推荐，便于离线创建）。返回 `201`。
+`bookId` 必填；`type` 缺省为 `note`。`id` 可省略或由客户端生成（推荐，便于离线创建）。返回 `201 { "note": {...} }`。
 
 ### `DELETE /notes/:id`
 
@@ -825,18 +861,26 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 ## 本地与 OPDS 来源
 
-以下接口需账号令牌。内置类型为 reader.local 和 reader.opds；管理员配置来源，用户浏览、搜索和获取书籍。
+以下接口需账号令牌。内置类型为 reader.local 和 reader.opds，另可安装扩展插件提供的来源类型；管理员配置来源，用户浏览、搜索和获取书籍。
 
 | 接口 | 用途 |
 | --- | --- |
-| GET /sources/types | 查询内置来源类型及能力 |
-| GET /sources | 查询来源实例；普通用户不返回管理配置 |
+| GET /sources/types | 查询已安装的来源类型及能力（`{types}`，含 `pluginId`、`builtin`） |
+| GET /sources | 查询来源实例（`{sources}`）；普通用户不返回管理配置 |
 | POST /sources | 管理员创建来源 |
-| PATCH /sources/:id | 管理员修改名称、配置、启停或默认搜索来源 |
-| GET /sources/:id/browse | 浏览目录 |
-| POST /sources/:id/search | 搜索书籍 |
+| PATCH /sources/:id | 管理员修改 `name`、`config`、`enabled` 或 `isDefault`，至少给一项 → `{source}` |
+| DELETE /sources/:id | 管理员删除来源 → `{ok:true}` |
+| GET /sources/:id/browse?ref=&cursor=&limit= | 浏览目录；`limit` 1–200 |
+| POST /sources/:id/search | 搜索书籍（SSE，见下） |
+| POST /sources/:id/search/cancel | body `{sessionId}`，取消进行中的搜索 → `{ok:true}` |
+| GET /sources/:id/search-filters | 来源声明的搜索筛选项 |
 | GET /sources/:id/entries?ref=条目引用 | 查询条目详情 |
-| POST /sources/:id/acquire | 获取条目并加入当前账号书架 |
+| POST /sources/:id/acquire | body `{entryRef, optionId?}`，获取条目并加入当前账号书架 → `{kind:"ready", publicationId}` |
+| GET /sources/:id/credentials | 当前账号在该来源的凭据状态：`available`、`fields:[{key,label,configured}]` 等，不含明文 |
+| PUT /sources/:id/credentials/:key、DELETE 同路径 | 保存（body `{value}`）/ 删除当前账号的一项凭据 → `{ok:true}` |
+| GET /sources/:id/publications/:publicationRef/manifest | 调试用：直接读取来源的章节目录 |
+| GET /sources/:id/publications/:publicationRef/resource?ref= | 调试用：读取单个章节资源，只返回 JSON `{mediaType, text?, base64?}` |
+| GET/POST /sources/:id/pages/:pageId | 管理员：来源自定义配置页面（POST body `{action, values}`） |
 
 创建 OPDS 示例：
 
@@ -846,38 +890,89 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 pluginId 是接口兼容字段。创建返回 201 与 source 对象。本地来源使用 BOOKS_DIR；OPDS 文件下载到 DATA_DIR/acquired。来源浏览、搜索和详情的游标及条目引用以响应为准，不应从外部 URL 自行拼接。
 
-搜索请求 body 包含 query 和 sessionId，响应以 text/event-stream 返回 results、done 或 error；获取请求 body 使用 entryRef。
+搜索请求 body 必填 query 和 sessionId（16–80 位字母、数字、`_`、`-`），可选 cursor、limit（1–200）、resultLimit（1–10000）和 filters；响应以 text/event-stream 返回 results、done（`{reason: "complete" | "limit"}`）或 error 事件。获取请求 body 使用 entryRef。
 
 当前账号可使用 PUT /sources/:id/credentials/password，body 为 {"value":"密码"}，保存自己的 OPDS 密码；凭据不会通过普通来源列表回显。暂停来源不删除已获取的文件书。
 
-Reader 对外提供的只读 OPDS 服务与 WebDAV 备份上传见[接入指南](opds-webdav.zh-CN.md)。
+### 来源书籍（章节出版物）
+
+以下接口针对当前账号书架上、由来源获取的书：
+
+| 接口 | 用途 |
+| --- | --- |
+| POST /books/:id/refresh | 立即检查远程章节目录更新；非来源章节书返回 `400 SOURCE_UNSUPPORTED` |
+| POST /books/:id/refresh-chapter | body `{ref}`，绕过缓存重新取一章，直接返回章节内容（`no-store`） |
+| GET /books/:id/source-options | → `{canSwitch}`，是否可以换源 |
+| POST /books/:id/alternatives | body `{sessionId, cursor?, resultLimit?}`，以 SSE 返回可替换的来源结果（事件同搜索） |
+| POST /books/:id/switch-preview | body `{entryRef}`，读取候选条目的目录 → `{chapters:[{id,title}], latestChapter}` |
+| POST /books/:id/switch-source | body `{entryRef, chapterId, revision}`，换源 |
+| POST /books/:id/switch-quality | body `{entryRef, chapterId}`，试读候选条目的一章用于比较（返回该章内容、`latestChapter` 和 `elapsedMs`），不改动书 |
+| GET /subscriptions | 当前账号的章节更新订阅（`{subscriptions}`） |
+| PATCH /books/:id/subscription | body `{enabled?, intervalMinutes?（15–10080）, acknowledge?}` → `{subscription}` |
+
+### 插件（管理员）
+
+| 接口 | 用途 |
+| --- | --- |
+| GET /plugins | 已安装插件（`{plugins}`） |
+| POST /plugins | body `{trusted: true, package}`（npm 包名）或 `{trusted: true, folder}` 安装 → `201 {plugin}`；缺 `trusted: true` 返回 `400 PLUGIN_TRUST_REQUIRED` |
+| POST /plugins/upload | multipart：字段 `trusted=true` 与一个 `file`（`npm pack` 生成的 `.tgz`，≤100 MiB）→ `201 {plugin}` |
+| PATCH /plugins/:id | body `{enabled: boolean}` → `{plugin}` |
+| DELETE /plugins/:id | 卸载 → `{ok:true}` |
+| GET/POST /plugins/:id/pages/:pageId | 插件自定义页面（POST body `{action, values}`） |
+
+Reader 对外提供的只读 OPDS 服务（`/opds`，Basic 认证；客户端凭据由 `GET/POST /api/v1/opds/credentials`、`DELETE /api/v1/opds/credentials/:id` 管理）与 WebDAV 备份上传见[接入指南](opds-webdav.zh-CN.md)。
 
 ## 影音
 
-接口前缀为 /api/v1/media，沿用账号令牌。用户只能访问已授权媒体库；建库、权限、扫描、刮削和人工资料编辑需要管理员权限。准备中返回 MEDIA_STARTING，启动失败返回 MEDIA_UNAVAILABLE。阅读健康检查不能替代影音就绪检查。
+接口前缀为 /api/v1/media，沿用账号令牌。用户只能访问已授权媒体库；建库、权限、扫描、刮削、识别规则、作品 / 版本整理和人工资料编辑需要管理员权限。准备中返回 503 MEDIA_STARTING，启动失败返回 503 MEDIA_UNAVAILABLE。阅读健康检查不能替代影音就绪检查。
+
+影音运行在独立 worker 中，阅读进程只做转发：同时在途请求超过 64 个返回 503 MEDIA_BUSY；转发中断返回 503 MEDIA_REQUEST_UNCERTAIN（写操作请重新查询结果确认）；目录查询期间账号或可访问媒体库发生变化返回 503 MEDIA_ACCESS_CHANGED。
 
 | 接口（省略 /api/v1/media） | 用途 |
 | --- | --- |
 | GET /libraries | 当前账号可访问的媒体库 |
-| POST /libraries | 创建本地或 OpenList 媒体库 |
+| POST /libraries | 创建本地或 OpenList 媒体库，返回 201；目录不可访问返回 400 MEDIA_DIRECTORY_UNAVAILABLE |
+| GET /libraries/:id | 单个媒体库 |
+| GET /library-summaries | 管理员：各媒体库统计摘要 |
 | GET /libraries/:id/configuration | 管理员查看连接配置摘要，不回传凭据原值 |
 | PATCH /libraries/:id | 修改名称或 OpenList 凭据 |
-| PUT /libraries/:id/access | 设置访问范围与用户列表 |
-| POST /libraries/:id/scan | 提交扫描任务 |
+| PUT /libraries/:id/access | body `{access: "all" \| "restricted", userIds}`，返回 204 |
+| POST /libraries/:id/scan | 提交扫描任务，返回 202 |
+| GET /scan-jobs、POST /scan-jobs、DELETE /scan-jobs/:id | 管理员：各库最近扫描任务 / 扫描全部库（202）/ 删除任务记录（204） |
+| POST /jobs/:id/cancel | 管理员取消扫描任务，返回 202 |
 | GET /libraries/:id/missing-resources?path=库内相对目录 | 管理员预览当前目录及子目录的缺失资源清理范围；path 空字符串表示根目录 |
 | POST /libraries/:id/missing-resources/cleanup | 管理员提交 {path,revision}；revision 来自预览，范围变化返回 MEDIA_CLEANUP_CHANGED |
 | GET /libraries/:id/jobs、GET /jobs/:id | 查看任务状态 |
-| GET /browse、GET /libraries/:id/items | 按频道、分类或库浏览 |
+| GET /libraries/:id/folders?path=&offset=&limit= | 按目录浏览媒体库（`limit` ≤200） |
+| GET /libraries/:id/assets、GET /assets/:id、GET /assets/:id/catalog | 库内文件列表（分页）、单个文件、文件所关联的作品与版本 |
+| GET /assets/:id/subtitles、GET /assets/:id/subtitles/:subtitleId | 字幕列表与字幕内容 |
+| GET /parts/:id/lyrics | 歌词 |
+| GET /browse、GET /libraries/:id/items | 按频道、分类或库浏览；`/browse` 必填 `channel`、`kind` |
+| GET /narrators、GET /libraries/:id/narrators | 有声书演播者 |
 | GET /items/:id | 作品、版本与章节详情 |
-| GET /search、GET /favorites、GET /history、GET /queue | 搜索及当前账号收藏、历史与队列 |
-| PUT /items/:id/favorite | 设置收藏，body 为 {"favorite":true} 或 {"favorite":false} |
-| PATCH /items/:id/metadata | 管理员保存人工资料 |
-| GET /metadata/providers | 可用在线资料提供者 |
-| POST /items/:id/matches、PUT /items/:id/match | 搜索候选、确认资料匹配 |
-| POST /playback | 根据 partId 创建播放会话 |
+| GET /items/:id/cover | 作品封面 |
+| GET /items/:id/album-playback、season-playback、series-playback | 专辑 / 季 / 剧集的连续播放列表 |
+| GET /search、GET /favorites、GET /history、GET /queue | 搜索（必填 `query`）及当前账号收藏、历史与队列 |
+| GET /items/:id/favorite、PUT /items/:id/favorite | 读取 / 设置收藏，body 为 {"favorite":true} 或 {"favorite":false} |
+| POST /queue、DELETE /queue/:id、POST /queue/:id/move | 追加（body `{partIds}`）、移除、上下移动（body `{neighborId, direction: "up" \| "down"}`）队列项 |
+| POST /queue/preview、PUT /queue/snapshot、POST /queue/clear | 预览队列、按 `expectedRevision` 整体替换队列、按频道清除指定条目（body `{channel, entryIds}`） |
+| PATCH /items/:id/metadata | 管理员保存人工资料，返回作品详情 |
+| POST/PUT /items/:id/hierarchy、POST/PUT /items/:id/parent | 管理员：调整视频所属剧集 / 季，或音乐所属专辑（均带 `expectedParentId` 并发校验） |
+| PATCH /editions/:id、PUT /editions/:id/item、POST /editions/:id/new-item、POST /editions/:id/split、POST /editions/:id/merge、PUT /editions/:id/order | 管理员：重命名、改归属、拆出新作品、拆分、合并版本及调整分段顺序（带 expected 字段并发校验） |
+| GET /metadata/providers | 管理员：可用在线资料提供者 |
+| POST /items/:id/matches、GET /items/:id/matches、PUT /items/:id/match、DELETE /items/:id/match | 管理员：搜索候选（body `{provider, query, artist?}`）、读取已有候选、确认资料匹配（body `{candidateId}`）、清除匹配 |
+| POST /items/:id/auto-match | 管理员：按 `provider` 自动匹配 |
+| GET /scrape-jobs、POST /scrape-jobs、GET /scrape-jobs/:id、GET /scrape-jobs/:id/results | 管理员：刮削任务列表（`?summary=true` 只要摘要）、提交（body `{provider, itemIds, matchMode?}`，202）、详情、结果分页（`limit` ≤50） |
+| POST /scrape-jobs/:id/retry、POST /scrape-jobs/:id/cancel、DELETE /scrape-jobs/:id、POST /items/:id/child-scrape-job | 管理员：重试（202）、取消、删除（204）、刮削剧集子项（202） |
+| GET/PUT /libraries/:id/recognition-rule、POST /libraries/:id/recognition-preview、POST /libraries/:id/recognition-apply | 管理员：目录识别规则、预览识别结果、按预览应用到选中文件 |
+| POST /ai-scan-jobs、GET /ai-scan-jobs、GET /ai-scan-jobs/:id、GET /ai-scan-jobs/:id/batches、DELETE /ai-scan-jobs/:id | 管理员：AI 识别任务（提交 body `{libraryId?, path?}`，202） |
+| POST /playback | 根据 partId 创建播放会话，返回 201 |
 | POST /playback/:id/renew | 续期播放会话 |
-| GET /parts/:id/progress、PUT /playback/:id/progress | 读取与保存播放进度 |
-| GET /streams/:id | 校验播放票据；OpenList 默认 307 跳转至临时下载地址，本地或代理模式返回字节流。`proxy=1` 请求代理回退，支持有效的字节 Range；响应不缓存 |
+| POST /playback/recover | body `{partId, previousSessionId}`，按旧会话恢复播放，返回 201 |
+| GET /parts/:id/progress、PUT /playback/:id/progress | 读取与保存播放进度（body `{sequence, revision, position, completed?}`） |
+| POST /background-grants、DELETE /background-grants/current、/background/playback… | 后台播放授权及其专用播放、续期、进度、字幕接口，使用 `X-Media-Background` 头，见[后台播放](media-background-auth.md) |
+| GET /streams/:id?ticket= | 不用 Bearer 令牌，凭查询串中的播放票据访问；OpenList 默认 307 跳转至临时下载地址，本地或代理模式返回字节流。`proxy=1` 请求代理回退，支持有效的字节 Range（无法满足返回 416 MEDIA_RANGE），文件缺失返回 404 MEDIA_MISSING；响应不缓存 |
 
 本地建库请求示例：
 
@@ -905,21 +1000,21 @@ kind 为 video、music 或 audiobook；OpenList 建库和凭据更新见[OpenLis
   "displayName": "家人", "role": "member" }
 ```
 
-不受注册策略限制——管理员本就该能加家庭成员。
+返回 `201 { "user": {...} }`。`role` 缺省为 `member`。不受注册策略限制——管理员本就该能加家庭成员。
 
 ### `PATCH /admin/users/:id`
 
-`{ "disabled": true }` 或 `{ "role": "admin" }`。
+`{ "disabled": true }` 或 `{ "role": "admin" }` → 更新后的完整列表 `{ "users": [...] }`。用户不存在返回 `404`。
 
-不能停用自己或移除自己的管理员角色（`400 SELF_LOCKOUT`），并须保留至少一名启用的管理员。停用立即撤销旧会话，重新启用仍需重新登录。
+不能停用自己或移除自己的管理员角色（`400 SELF_LOCKOUT`），并须保留至少一名启用的管理员（`400 LAST_ADMIN`）。停用立即撤销旧会话，重新启用仍需重新登录。
 
 ### `POST /admin/users/:id/password`
 
-`{ "password": "至少8位的新密码" }` → `{ "ok": true }`。重置其他用户的密码，同时撤销其访问令牌和续期令牌。本人请使用 `/auth/password`。
+`{ "password": "至少8位的新密码" }` → `{ "ok": true }`。重置其他用户的密码，同时撤销其访问令牌和续期令牌。本人请使用 `/auth/password`，对自己调用返回 `400 SELF_LOCKOUT`。
 
 ### `GET /admin/registration`、`PATCH /admin/registration`
 
-GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "closed" | "open" | "invite" }`，对应关闭、开放、仅邀请码注册。数据库设置优先于环境变量，重启后保留。首个账号仍可直接注册为管理员。
+GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "closed" | "open" | "invite" }` 并返回 `{ "mode": ... }`，对应关闭、开放、仅邀请码注册。数据库设置优先于环境变量，重启后保留。首个账号仍可直接注册为管理员。
 
 `GET /instance` 额外返回 `registrationMode` 和 `invitationRequired`，不暴露邀请码；`registrationOpen` 为开放或邀请模式时均为 true。
 
@@ -927,13 +1022,29 @@ GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "c
 
 创建参数 `{ "label": "家人", "maxUses": 1, "days": 7 }`，备注最多 80 字、次数 1–1000、有效期 1–365 天。返回 `201 { "code": "新邀请码", "invite": {...} }`。明文仅创建时返回，数据库只保存摘要。
 
-列表条目含 `id/label/maxUses/usedCount/expiresAt/disabled/createdAt`。DELETE 停用邀请码，不删除已注册用户。邀请码消费与账号创建在同一事务内，失败不扣次数，并发不超额。上述管理接口均仅管理员可用。
+列表条目含 `id/label/maxUses/usedCount/expiresAt/disabled/createdAt`。DELETE 停用邀请码（返回 `{ "ok": true }`），不删除已注册用户。邀请码消费与账号创建在同一事务内，失败不扣次数，并发不超额。上述管理接口均仅管理员可用。
 
 ### `GET /providers`
 
 → `{ "providers": [ { "id": "none", "displayName": "...", "enabled": true } ] }`
 
 本地书籍元数据提供者目前只有 `none`；影音的在线资料提供者使用 `/media/metadata/providers`。
+
+## AI
+
+AI 配置在业务设置的 `ai` 分组（见下文 Administrator business settings）。
+
+### `POST /admin/ai/models` — 管理员
+
+`{ "baseUrl": "可选", "apiKey": "可选" }` → `{ "models": ["..."] }`。未传的字段使用已保存配置，所以可以在保存之前用草稿获取模型列表；
+两者都缺返回 `400`，上游失败返回 `502 AI_MODELS_FAILED`。
+
+### `POST /ai/summary`
+
+`{ "bookId": "...", "chapterId": "...", "content": "章节正文" }` → `{ "summary": "...", "cached": false }`。
+
+正文按配置的 `maxInputChars` 截断；结果按账号、书、章节、正文哈希和提示词哈希缓存。AI 或章节总结未启用返回 `403 AI_DISABLED`，
+地址 / 密钥 / 模型未配置完整返回 `400`。
 
 ---
 
@@ -944,8 +1055,12 @@ GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "c
 | `BAD_REQUEST` | 400 | 参数不合法 |
 | `BAD_PAYLOAD` | 400 | 请求体结构错误 |
 | `BATCH_TOO_LARGE` | 400 | 同步批次超过 5000 |
+| `BAD_NOTE_TYPE` | 400 | 笔记 `type` 不是 `note` / `highlight` / `bookmark` |
 | `REGISTRATION_DISABLED` | 400 | 实例已关闭公开注册 |
-| `SELF_LOCKOUT` | 400 | 不能停用自己 |
+| `INVITE_REQUIRED` | 400 | 邀请模式下未填写邀请码 |
+| `INVITE_INVALID` | 400 | 邀请码无效、过期、停用或已用完 |
+| `SELF_LOCKOUT` | 400 | 不能停用自己、移除自己的管理员角色或经管理员接口重置自己的密码 |
+| `LAST_ADMIN` | 400 | 必须保留至少一名启用的管理员 |
 | `NO_TOKEN` | 401 | 缺少 Bearer 令牌 |
 | `TOKEN_INVALID` | 401 | 签名错误 / 载荷被改 / 类型不对 |
 | `TOKEN_EXPIRED` | 401 | 访问令牌过期，用 refresh 换新 |
@@ -953,12 +1068,13 @@ GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "c
 | `REFRESH_EXPIRED` | 401 | 刷新令牌过期，需要重新登录 |
 | `BAD_CREDENTIALS` | 401 | 用户名或口令错误 |
 | `ACCOUNT_DISABLED` | 403 | 账号被停用 |
-| `FORBIDDEN` | 403 | 越权访问 |
+| `FORBIDDEN` | 403 | 越权访问，或请求来源不在 CORS 允许列表中 |
 | `PATH_TRAVERSAL` | 403 | 路径逃逸出挂载点 |
 | `DIRECTORY_BOOK` | 400 | 这本书由目录承载，按页取而不是整本下载 |
 | `UNSUPPORTED_FORMAT` | 400 | 该格式不提供可寻址结构 |
 | `EMPTY_ASSET` | 400 | 资源既没有数据也没有流 |
 | `ADMIN_REQUIRED` | 403 | 需要管理员权限 |
+| `UPLOAD_DISABLED` | 403 | 成员上传已在业务设置中关闭（`library.memberUpload`） |
 | `READ_ONLY_MOUNT` | 403 | 书库目录不可写，无法上传 / 改名 / 移动 / 删除 / 新建目录 |
 | `DIR_NOT_FOUND` | 404 | 目录不存在 |
 | `NOT_A_DIRECTORY` | 400 | 目标不是目录 |
@@ -968,19 +1084,45 @@ GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "c
 | `BAD_NAME` | 400 | 名称含斜杠或非法 |
 | `NAME_REQUIRED` | 400 | 名称为空 |
 | `NO_PATHS` | 400 | 没有给出路径 |
+| `NO_BOOK_IDS` | 400 | 没有给出书籍 id |
+| `BAD_BOOK_ID` | 400 | `bookIds` 中含非字符串 |
+| `BAD_ACTION` | 400 | 书架批量操作的 `action` 不合法 |
+| `AMBIGUOUS_TARGETS` | 400 | `paths` 与 `bookIds` 都给或都没给 |
+| `NOT_MULTIPART` | 400 | 上传请求不是 `multipart/form-data` |
+| `NO_FILES` | 400 | 上传请求里没有文件 |
+| `EMPTY_UPLOAD` | 400 | 上传的文件为空 |
+| `EMPTY_ARCHIVE` | 400 | 上传的压缩包里没有文件 |
+| `BAD_CONFLICT_POLICY` | 400 | `onConflict` 取值不合法 |
+| `SEARCH_LOCAL_LAYOUT` | 400 | 使用自定义 TXT 标题规则的书须在客户端本地搜索 |
 | `NOT_FOUND` | 404 | 资源不存在 |
 | `NO_COVER` | 404 | 这本书没有封面 |
 | `FILE_MISSING` | 404 | 文件已从磁盘消失 |
 | `USERNAME_TAKEN` | 409 | 用户名已占用 |
-| `PASSWORD_TOO_SHORT` | 409 | 口令少于 8 位 |
+| `USERNAME_TOO_SHORT` | 409 | 用户名少于 3 位 |
+| `PASSWORD_TOO_SHORT` | 409 | 口令不在 8–1024 位之间 |
+| `CONFLICT` | 409 | 个人纠错版本已过期 |
+| `SETTINGS_CONFLICT` | 409 | 业务设置 revision 已过期 |
+| `SETTINGS_TEST_BUSY` | 409 | 同一分组的连接测试正在进行 |
+| `BACKUP_BUSY` | 409 | 已有 WebDAV 备份正在上传 |
+| `SETTINGS_TEST_FAILED` | 502 | 业务设置连接测试失败 |
+| `AI_DISABLED` | 403 | AI 或对应 AI 功能未启用 |
+| `AI_MODELS_FAILED` | 502 | 获取 AI 模型列表失败 |
 | `TTS_DISABLED` | 400 | 该实例没有配置 HTTP 朗读合成接口，无法使用 HTTP 朗读 |
-| `TTS_UPSTREAM` | 400 | 上游合成服务不可达、超时、报错，或返回的不是音频 |
+| `TTS_UPSTREAM` | 400 | 上游合成服务不可达或报错 |
+| `TTS_AUTH` | 400 | 上游合成服务拒绝认证（401/403） |
+| `TTS_TIMEOUT` | 400 | 上游合成超时 |
+| `TTS_CONTENT` | 400 | 上游返回的不是音频 |
+| `TTS_EMPTY` | 400 | 上游返回空音频 |
 | `TEXT_TOO_LONG` | 400 | 单条语句超过 800 字，请客户端先切句 |
 | `INVALID_SOURCE_CONFIG` | 400 | 来源配置不符合内置来源要求 |
 | `SOURCE_UNSUPPORTED` | 400 | 来源未声明或未实现请求能力 |
 | `SOURCE_DISABLED` | 400 | 来源实例已停用 |
 | `SOURCE_NOT_FOUND` | 404 | 来源实例不存在 |
 | `SOURCE_TYPE_NOT_FOUND` | 404 | 来源类型未安装 |
+| `PLUGIN_UNAVAILABLE` | 404 | 来源实例所属插件未安装或未加载 |
+| `PLUGIN_TRUST_REQUIRED` | 400 | 安装插件时未确认 `trusted: true` |
+| `PLUGIN_INVALID_PACKAGE` | 400 | 上传的插件不是 `.tgz` 安装包 |
+| `PLUGIN_PACKAGE_TOO_LARGE` | 400 | 插件安装包超过 100 MiB |
 | `ENTRY_NOT_FOUND` | 404 | 来源条目不存在 |
 | `AUTH_REQUIRED` | 401 | 来源需要凭据或凭据无法解密 |
 | `OPDS_UNSAFE_URL` | 400 | OPDS 链接跳转到未允许的 origin 或包含 URL 凭据 |
@@ -988,13 +1130,17 @@ GET 返回 `{ "mode": "closed", "invites": [...] }`；PATCH 接受 `{ "mode": "c
 | `ACQUISITION_TOO_LARGE` | 413 | 获取文件超过 256 MiB 上限 |
 | `CHAPTER_BOOK` | 400 | 章节出版物没有整书文件，请按 manifest 读取章节 |
 | `CHAPTER_SNAPSHOT_EXPIRED` | 409 | 旧目录的请求章节未缓存，无法再取得该版本 |
-| `CHAPTER_TOO_LARGE` | 413 | 章节正文或声明大小超过 2 MiB |
+| `CHAPTER_TOO_LARGE` | 413 | 章节正文或声明大小超过 2 MiB；HTML 章节内嵌图片超过 32 张或展开后超过 8 MiB |
 | `MANIFEST_TOO_LARGE` | 413 | 章节目录超过 10,000 项或 2 MiB |
 | `INVALID_MANIFEST` | 400 | 章节目录版本字段不合法 |
 | `INVALID_RESOURCE` | 400 | 获取内容为空、媒体类型不匹配或解析失败 |
 | `RATE_LIMITED` | 429 | 上游限流或宿主来源并发达到上限 |
 | `SOURCE_TIMEOUT` | 504 | 宿主来源调用超过 60 秒 |
 | `SOURCE_CANCELLED` | 499 | 客户端断开或主动取消来源调用 |
+| `MEDIA_STARTING` | 503 | 影音服务正在准备 |
+| `MEDIA_UNAVAILABLE` | 503 | 影音服务启动失败或不可用 |
+| `MEDIA_BUSY` | 503 | 影音转发的在途请求已满 |
+| `MEDIA_REQUEST_UNCERTAIN` | 503 | 影音请求转发中断，写入结果需重新查询确认 |
 | `INTERNAL` | 500 | 服务端错误 |
 
 ## 客户端应当遵守的约定
@@ -1023,14 +1169,15 @@ All `/api/v1/admin/settings` routes require an administrator bearer token. Respo
 
 - `GET /api/v1/admin/settings` returns `{groups:[{group,label,fields,values,secrets,revision}]}`. Secret values are omitted; `secrets` contains presence flags only.
 - `PATCH /api/v1/admin/settings/:group` accepts `{values,revision}`. Omitted fields retain their values; an explicit empty secret clears it. Stale revisions return `409 SETTINGS_CONFLICT`. Unknown fields and invalid values return 400.
-- Groups: `tmdb`, `musicbrainz`, `tts`, `scanning`, `scraping`, `access`, `webdav`. Registration continues using its existing API.
-- `POST /api/v1/admin/settings/:group/test` accepts `{values}` for TMDB, MusicBrainz, TTS or WebDAV. It tests the draft without saving it. TTS additionally returns voices.
-- `POST /api/v1/admin/settings/tts/preview` accepts `{values,voice?}` and returns sample audio. `POST /api/v1/admin/settings/tts/clear-cache` clears cached audio.
-- `POST /api/v1/admin/settings/webdav/upload` accepts `{directory,name}` and uploads a verified offline backup using saved WebDAV settings. It never creates an online snapshot or overwrites a remote backup.
+- `PATCH` returns the updated group view. For `access`, a request carrying an `Origin` header is rejected with 400 if the new CORS origin list is non-empty and does not include that origin.
+- Groups: `ai`, `playback`, `tmdb`, `musicbrainz`, `tts`, `scanning`, `scraping`, `access`, `webdav`, `library` (`memberUpload`, default `true`: whether members may upload books). Unknown groups return 400. Registration continues using its existing API.
+- `POST /api/v1/admin/settings/:group/test` accepts `{values}` for TMDB, MusicBrainz, TTS or WebDAV (other groups return 400). It tests the draft without saving it and returns `{ok,elapsedMs}`; TTS additionally returns `bytes` and `voices`. A test already running for the same group returns `409 SETTINGS_TEST_BUSY`; an upstream failure returns `502 SETTINGS_TEST_FAILED`.
+- `POST /api/v1/admin/settings/tts/preview` accepts `{values,voice?}` and returns sample audio. `POST /api/v1/admin/settings/tts/clear-cache` clears cached audio and returns `{ok:true}`.
+- `POST /api/v1/admin/settings/webdav/upload` accepts `{directory,name}` and uploads a verified offline backup using saved WebDAV settings. It never creates an online snapshot or overwrites a remote backup. A concurrent upload returns `409 BACKUP_BUSY`; any upload failure returns 400.
 
 All endpoints require the account access token in the Authorization header. Reading overrides additionally check book access.
 
 - GET /api/v1/books/:id/reading-overrides returns { version, headingPrefix, corrections }.
-- PUT /api/v1/books/:id/reading-overrides accepts the same object. A correction contains id, anchor (sectionId, start, end, quote, prefix, suffix), and replacement. The submitted version must match the latest version; stale writes return 409. Up to 500 corrections are allowed, with each quote/replacement at most 4,000 characters. headingPrefix is a literal prefix of at most 60 characters.
+- PUT /api/v1/books/:id/reading-overrides accepts the same object. A correction contains id, anchor (sectionId, start, end, quote, prefix, suffix), and replacement. The submitted version must match the latest version; stale writes return `409 CONFLICT`. The response is the saved object with `version` incremented by one. Up to 500 corrections are allowed, with each quote/replacement at most 4,000 characters. headingPrefix is a literal single-line prefix of at most 60 characters.
 - POST /api/v1/books/:id/reading-overrides/undo accepts { version } and saves the preceding snapshot as a new version. History is scoped to account/book and stored in DATA_DIR/reader.db; it never rewrites library files.
 - POST /api/v1/tts/test accepts { voice?, speed? }, synthesizes a fixed sample and returns { bytes, contentType, elapsedMs, cached }. Failure codes include TTS_DISABLED, TTS_AUTH, TTS_TIMEOUT, TTS_CONTENT, TTS_EMPTY and TTS_UPSTREAM. It does not accept an upstream URL. Audio playback remains GET /api/v1/tts.
