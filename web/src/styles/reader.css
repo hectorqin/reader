@@ -3052,6 +3052,16 @@ book-content {
  * and a search field that stopped growing while the covers beside it kept going would
  * be the row that disagrees with the page.
  */
+/* 书库's subfolders: one scrollable row of chips under the search field, on its gutter. */
+.library-folders {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  padding: 0 var(--shelf-search-inset) var(--space-2);
+  scrollbar-width: none;
+}
+.library-folders .chip { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; white-space: nowrap; }
+
 .library-search {
   max-width: none;
   /*
