@@ -4,29 +4,12 @@ import { MediaCover } from './cover.tsx';
 import { MediaLoading } from './loading.tsx';
 import { MediaScreenError } from './screen-error.tsx';
 import type { MediaApi, MediaChannel, SearchItem } from '../api/media-api.ts';
-import { newId } from '../../../core/id.ts';
 
 const labels={video:'影视',music:'音乐',audiobook:'有声书'};
 const kinds:Record<string,string>={movie:'电影',series:'剧集',season:'季',episode:'单集',album:'专辑',artist:'歌手',track:'曲目',audiobook:'有声书'};
-interface SearchReturn { identity:string;channel:MediaChannel;targetChannel:MediaChannel;itemId:string;input:string;query:string;scope:MediaChannel|'all';kind?:string;offset:number;scroll:number;restore?:boolean }
+interface SearchReturn { identity:string;channel:MediaChannel;input:string;query:string;scope:MediaChannel|'all';kind?:string;offset:number;scroll:number }
 const returns=new WeakMap<MediaApi,SearchReturn>();
-const historyEntries=new WeakMap<MediaApi,Map<string,SearchReturn>>();
-function tagHistory(key:string,detail:boolean){window.history.replaceState({...window.history.state,readerMediaSearch:{key,detail}},'');}
-export function restoreSearchHistory(api:MediaApi,channel:MediaChannel,itemId?:string){
-  const marker=window.history.state?.readerMediaSearch;
-  if(!marker||typeof marker.key!=='string')return;
-  const saved=historyEntries.get(api)?.get(marker.key);
-  if(!saved||saved.identity!==api.preferenceScope())return;
-  if(itemId?marker.detail&&saved.targetChannel===channel&&saved.itemId===itemId:!marker.detail&&saved.channel===channel){
-    returns.set(api,{...saved,restore:!itemId});
-  }
-}
 export function searchReturnFor(api:MediaApi){const saved=returns.get(api);return saved?.identity===api.preferenceScope()?saved:undefined;}
-export function clearSearchReturn(api:MediaApi){
-  returns.delete(api);
-  if(window.history.state?.readerMediaSearch){const state={...window.history.state};delete state.readerMediaSearch;window.history.replaceState(state,'');}
-}
-export function restoreSearchReturn(api:MediaApi){const saved=searchReturnFor(api);if(saved)saved.restore=true;}
 
 function resultDescription(item:SearchItem):string {
   const field=(key:string)=>{const value=item.overrides[key]??item.metadata[key];return typeof value==='string'||typeof value==='number'?String(value).trim():'';};
@@ -51,14 +34,9 @@ export function MediaSearch({api,channel,navigate,initialLocation,onLocationChan
   const [offset,setOffset]=useState(initial?.offset??0);
   useEffect(()=>{if(returns.get(api)===initial)returns.delete(api);},[api,initial]);
   const open=(item:SearchItem)=>{
-    const snapshot:SearchReturn={identity:api.preferenceScope(),channel,targetChannel:item.channel,itemId:item.id,input,query,scope,offset,scroll:host.current?.closest('.media-screen')?.scrollTop??0};
+    const snapshot:SearchReturn={identity:api.preferenceScope(),channel,input,query,scope,offset,scroll:host.current?.closest('.media-screen')?.scrollTop??0};
     returns.set(api,snapshot);
-    const key=newId(),entries=historyEntries.get(api)??new Map<string,SearchReturn>();
-    entries.set(key,snapshot);while(entries.size>30)entries.delete(entries.keys().next().value!);historyEntries.set(api,entries);
-    const sourceHash='#/media/'+channel;
-    if(window.location.hash===sourceHash)tagHistory(key,false);
     navigate(item.channel,item.id);
-    if(window.location.hash==='#/media/'+item.channel+'/'+encodeURIComponent(item.id))tagHistory(key,true);
   };
   function change(next:Partial<{q:string;scope:MediaChannel|'all';offset:number}>){onLocationChange?.({q:next.q??query,scope:next.scope??scope,offset:String(next.offset??offset)});}
   const [attempt,setAttempt]=useState(0);

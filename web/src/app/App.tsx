@@ -5,7 +5,6 @@ import { useRuntime } from './providers/runtime-context.tsx';
 import { LoginPage } from '../features/auth/pages/LoginPage.tsx';
 import { AppNav, navMode } from './AppNav.tsx';
 import { ThemeController } from '../shared/theme/theme.ts';
-import { FloatingNotice } from '../ui/floating-notice.tsx';
 
 export function AppShell() {
   return <AuthBoundary><AuthenticatedShell /></AuthBoundary>;
@@ -48,8 +47,4 @@ export function AuthBoundary({ children }: { children?: ReactNode }) {
 
 /** Media routes: the page itself. Theme and navigation belong to AuthenticatedShell. */
 export function MediaLayout() { return <Outlet />; }
-
-export function LoadingPage() { return <FloatingNotice message="正在加载…" busy />; }
-
-
 

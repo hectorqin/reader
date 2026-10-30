@@ -507,8 +507,6 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-episode-selection>span {flex:1;min-width:0;overflow-wrap:anywhere}
 .media-episode-selection select {max-width:100%;font-size:var(--text-meta)}
 .media-screen .media-episode-selection button {font-size:var(--text-meta);color:var(--media-accent)}
-.media-series-playback {font-size:var(--text-label);margin:22px 0}
-.media-series-playback>summary {cursor:pointer;padding:12px 0;border-bottom:1px solid var(--border)}
 @media(max-width:700px){.media-episode-grid {grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.media-series-seasons .media-season-playback>.media-toolbar>span {flex-basis:100%}}
 @media(min-width:900px){.media-edition-detail {display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:36px}.media-edition-detail>.media-edition-tools {padding-top:14px}.media-detail-page .media-album-playback {max-width:800px}}
 @media(max-width:700px){.media-detail-page .media-hero {gap:16px;margin-top:17px}.media-detail-page .media-hero .media-cover {width:105px;min-width:105px}.media-detail-page .media-detail-heading {padding:0;gap:6px}.media-detail-page .media-detail-heading h1 {font-size:var(--text-display)}.media-detail-actions,.media-album-actions {gap:7px}.media-detail-actions>button,.media-album-actions>button {font-size:var(--text-meta);padding:9px 11px}.media-edition-picker {max-width:100%}.media-edition-picker select {max-width:190px}.media-detail-description p {font-size:var(--text-label)}.media-edition-tools {margin-top:18px}}

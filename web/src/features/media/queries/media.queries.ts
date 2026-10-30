@@ -1,7 +1,7 @@
 import { queryOptions, useQuery } from '@tanstack/react-query';
 import type { AppRuntime } from '../../../app/runtime.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
-import type { Detail, Item, MediaChannel, Part, ScanJob, AiScanJob } from '../api/media-api.ts';
+import type { Detail, Item, MediaChannel, ScanJob, AiScanJob } from '../api/media-api.ts';
 
 export interface Activity {
   id: string; itemId: string; partId: string; assetId: string; libraryId: string; kind: string;
@@ -19,7 +19,6 @@ export function librariesQuery(runtime: AppRuntime) {
 export function detailQuery(runtime: AppRuntime, id: string) {
   return queryOptions({ queryKey: mediaKeys.detail(runtime, id), queryFn: ({ signal }) => runtime.mediaApi.detail(id, signal) });
 }
-export const useMediaDetail = (id: string) => useQuery(detailQuery(useRuntime(), id));
 export const useMediaLibraries = () => useQuery(librariesQuery(useRuntime()));
 export function catalogQuery(runtime: AppRuntime, channel: MediaChannel, kind: string, params: URLSearchParams) {
   const library = params.get('library') ?? '', offset = Math.max(0, Number(params.get('offset')) || 0);
@@ -31,11 +30,6 @@ export function catalogQuery(runtime: AppRuntime, channel: MediaChannel, kind: s
       ? runtime.mediaApi.items(library, kind, search, offset, signal, sort, filters)
       : runtime.mediaApi.browse(channel, kind, offset, signal, sort, filters),
   });
-}
-export function searchQuery(runtime: AppRuntime, params: URLSearchParams) {
-  const text = params.get('q') ?? '', channel = params.get('scope') ?? 'all', offset = Math.max(0, Number(params.get('offset')) || 0);
-  const scopeChannel: MediaChannel | 'all' = channel === 'video' || channel === 'music' || channel === 'audiobook' ? channel : 'all';
-  return queryOptions({ queryKey: [...scope(runtime), 'search', text, scopeChannel, offset], queryFn: ({ signal }) => runtime.mediaApi.search(text, scopeChannel, offset, signal), enabled: !!text });
 }
 export function favoritesQuery(runtime: AppRuntime, params: URLSearchParams) {
   const channel = params.get('scope') ?? 'all', offset = Math.max(0, Number(params.get('offset')) || 0);
@@ -68,9 +62,5 @@ export function aiJobsQuery(runtime: AppRuntime, libraryId = '') {
     queryFn: () => runtime.mediaApi.aiScanJobs(libraryId || undefined),
     refetchInterval: query => query.state.data?.items.some(job => job.state === 'running' || job.state === 'queued') === false ? 30_000 : 5000,
   });
-}
-export function useMediaPlayback() {
-  const { player } = useRuntime();
-  return (parts: Part[], index: number, title: string, channel: MediaChannel) => player.play(parts.map(part => ({ part, title, video: channel === 'video' })), index);
 }
 export type { Detail, AiScanJob };

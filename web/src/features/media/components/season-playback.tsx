@@ -33,10 +33,7 @@ export function SeriesSeasons({seasons,...props}:Omit<SeasonPlaybackProps,'id'>&
   </section>;
 }
 
-export function SeriesPlayback(props:SeasonPlaybackProps){
-  const [open,setOpen]=useState(false);
-  return <details className="media-series-playback" onToggle={event=>setOpen(event.currentTarget.open)}><summary>跨季顺序播放</summary>{open&&<SeasonPlayback {...props} scope="series"/>}</details>;
-}
+
 
 export function SeasonPlayback({api,id,scope='season',layout='list',currentPartId,onPlay,onDetail}:SeasonPlaybackProps){
   const [episodes,setEpisodes]=useState<SeasonEpisode[]>([]),[start,setStart]=useState(0),[choices,setChoices]=useState<Record<string,string>>({});
