@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '../src/shared/ui/render-root.ts';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
@@ -27,14 +27,15 @@ const runtime = {
   updateSettings: async () => undefined,
 } as any;
 let location = '';
-function Where() { location = useLocation().search; return null; }
+let navigateTo: (path: string) => void = () => undefined;
+function Where() { location = useLocation().search; navigateTo = useNavigate(); return null; }
 const paint = (path: string) => act(() => render(
   <RuntimeContext.Provider value={runtime}>
     <QueryClientProvider client={new QueryClient()}><>
       <MemoryRouter initialEntries={[path]}><Routes><Route path="/shelf" element={<><ShelfPage /><Where /></>} /></Routes></MemoryRouter>
     </></QueryClientProvider>
   </RuntimeContext.Provider>, root));
-const click = (text: string) => act(() => [...root.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === text)!.click());
+const click = (text: string) => act(() => [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === text)!.click());
 afterEach(() => { act(() => render(null, root)); shelfCalls.length = 0; setReadingStatus.mockClear(); });
 
 it('filters by reading state and by one 分组, keeping both in the URL', async () => {
@@ -57,11 +58,22 @@ it('shows a card\'s state and marks it from the ⋯ menu', async () => {
   paint('/shelf');
   expect(root.querySelector('.book-state')?.textContent).toBe('在读');
   await act(() => root.querySelector<HTMLButtonElement>('.book-more')!.click());
-  const options = [...root.querySelectorAll('.sheet-list button')].map(button => button.textContent);
+  const options = [...document.querySelectorAll('[role^=menuitem]')].map(button => button.textContent);
   expect(options).toEqual(['标记为想读', '标记为已读', '清除标记', '从书架拿掉']);
   await click('标记为已读');
   expect(setReadingStatus).toHaveBeenCalledWith('b1', 'finished');
   await act(() => root.querySelector<HTMLButtonElement>('.book-more')!.click());
   await click('清除标记');
   expect(setReadingStatus).toHaveBeenLastCalledWith('b1', null);
+});
+
+it('reads the filter and sort from the URL on every navigation, not once at mount', async () => {
+  paint('/shelf?q=夜航&sort=bogus');
+  expect(shelfCalls.at(-1)?.slice(1, 3)).toEqual(['recent', '夜航']);
+  expect(root.querySelector<HTMLInputElement>('input[type=search]')!.value).toBe('夜航');
+  // The nav's plain 书架 link lands on the same route: the filter must go with the URL.
+  await act(() => navigateTo('/shelf'));
+  expect(shelfCalls.at(-1)?.slice(1, 3)).toEqual(['recent', '']);
+  expect(root.querySelector<HTMLInputElement>('input[type=search]')!.value).toBe('');
+  expect(root.querySelector('.shelf-title')?.textContent).toBe('书架');
 });
