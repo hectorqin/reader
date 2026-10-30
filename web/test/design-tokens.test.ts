@@ -34,6 +34,39 @@ describe('design tokens', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('keeps every typed field at 16px+ on touch screens so iOS does not zoom (ui.md §3.3)', () => {
+    const shell = readFileSync(join(root, 'app', 'shell.css'), 'utf8');
+    expect(shell).toMatch(/@media \(pointer: coarse\) \{\s*:is\(input:not\([^)]*\), textarea, select\) \{\s*font-size: max\(var\(--text-title\), 1em\) !important;/);
+  });
+
+  it('times transitions with the motion tokens (ui.md §2.3)', () => {
+    // One duration and one curve, so prefers-reduced-motion (which shortens the token)
+    // reaches every state change. Looping animations (spinners, skeletons) keep their
+    // own pace; `0s` (an instant switch) and the reduced-motion overrides are allowed.
+    const offenders = stylesheets(root).flatMap(file => {
+      const source = readFileSync(file, 'utf8');
+      return [...source.matchAll(/transition(?:-duration)?:[^;}]*/g)]
+        .map(match => match[0])
+        .filter(declaration => /\b(?!0m?s\b)\d*\.?\d+m?s\b/.test(declaration.replace(/var\([^)]*\)/g, '')) && !/\b(?:0\.001s|1ms)\b/.test(declaration))
+        .map(declaration => `${relative(root, file)}: ${declaration}`);
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it('reads safe areas through the --safe-* variables (ui.md §3.1)', () => {
+    // The Android shell zeroes the four variables (its WebView is already inset), and a
+    // layer that owns an edge overrides them; a rule reading env() directly escapes both.
+    // The variables' own definitions and the sidebar column's right inset (which zeroes
+    // --safe-right for everything inside it, so must read the device value) are the exceptions.
+    const offenders = stylesheets(root).flatMap(file => {
+      const source = readFileSync(file, 'utf8');
+      return source.split('\n').filter(line => /env\(safe-area-inset/.test(line) && !/^\s*--safe-(top|right|bottom|left):/.test(line))
+        .filter(line => !(relative(root, file).endsWith(join('app', 'shell.css')) && line.trim() === 'padding-right: env(safe-area-inset-right, 0px);'))
+        .map(line => `${relative(root, file)}: ${line.trim()}`);
+    });
+    expect(offenders).toEqual([]);
+  });
+
   it('only styles :hover where a pointer can hover (ui.md §2.5)', () => {
     // On a touch screen a tap leaves the control in its hover look until the next tap
     // elsewhere, so every :hover rule sits inside a `@media (hover: hover)` block.

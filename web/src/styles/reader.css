@@ -666,19 +666,14 @@ book-content {
   white-space: nowrap;
 }
 
-/* Shared sizing for the SVG icon primitive. */
+/* Shared sizing for the SVG icon primitive (ui/icon.tsx): 1em of the title size unless
+   the icon is given a size, which sets its font-size. */
 .icon {
   font-size: var(--text-title);
-  font-style: normal;
-  font-weight: 400;
-  font-synthesis: none;
   line-height: 1;
   display: inline-block;
   width: 1em;
-  text-align: center;
   vertical-align: middle;
-  speak: never;
-  /* The code point itself must never be selectable or copied. */
   user-select: none;
   -webkit-user-select: none;
 }
@@ -696,10 +691,6 @@ book-content {
  * area is the same box, so the pixels are the same pixels on every browser that
  * exists; saying it in terms of the box is what keeps that true when the button grows
  * a border or a padding, because the centre is still the centre.
- *
- * This is also why `.icon` must be a *line box* rather than a 1em square: a grid
- * centres the box it is given, so the ink has to be in the middle of that box for the
- * centring to be visible. See the derivation on `.icon`.
  */
 .icon-button {
   appearance: none;
@@ -1220,11 +1211,6 @@ book-content {
   margin-inline: auto;
 }
 
-.shelf-section-head {
-  display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-}
 
 /*
  * A section heading that reads as a heading rather than as bold body text.
@@ -1235,13 +1221,6 @@ book-content {
  * heading *of* the section, so it also loses the underline the toolbar used to carry:
  * two horizontal rules 40px apart made the count row look like a separate band.
  */
-.shelf-section-title {
-  margin: 0.9rem 0 0.55rem;
-  font-size: var(--text-label);
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--reader-muted);
-}
 
 /* ---- toolbar: the count and the sort, pinned to their section ---- */
 
@@ -1303,16 +1282,7 @@ book-content {
   display: none;
 }
 
-.shelf-refresh {
-  font-size: var(--text-label);
-  color: var(--reader-muted);
-  text-align: center;
-  padding: 0.35rem 0;
-}
 
-.shelf-refresh[hidden] {
-  display: none;
-}
 
 
 /* ---- the pager ----
@@ -2177,13 +2147,6 @@ book-content {
  * The two buttons are text-with-chevron rather than bare chevrons — the whole row
  * is a labelled destination, and a bare "‹" beside a bare "›" is a guess.
  */
-.footer-row.chapter-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  padding: 0.15rem var(--reader-band-inset) 0.65rem;
-}
 
 /*
  * The chapter buttons' horizontal padding is *zero*.
@@ -2221,16 +2184,6 @@ book-content {
   cursor: default;
 }
 
-.nav-progress {
-  flex: 1 1 auto;
-  text-align: center;
-  font-size: var(--text-label);
-  color: var(--reader-muted);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
 /* ---- quick-action rail ----
  *
@@ -2391,46 +2344,11 @@ book-content {
 
 /* ---- quick rows in the settings sheet ---- */
 
-.quick-row {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-2);
-  padding: 0 0 var(--space-2);
-}
 
-.quick-button {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.15rem;
-  padding: 0.55rem 0.3rem;
-  border: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
-  border-radius: var(--reader-radius);
-  background: color-mix(in srgb, var(--reader-ink) 4%, transparent);
-  color: var(--reader-ink);
-  font: inherit;
-  cursor: pointer;
-  touch-action: manipulation;
-}
 
-.quick-button:active {
-  background: color-mix(in srgb, var(--reader-ink) 10%, transparent);
-}
 
-.quick-button:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
 
-.quick-button .quick-label {
-  font-size: var(--text-meta);
-  color: var(--reader-muted);
-}
 
-.quick-button .quick-value {
-  font-size: var(--text-label);
-  font-variant-numeric: tabular-nums;
-}
 
 /* ---- read-aloud bar ---- */
 
@@ -2821,7 +2739,7 @@ book-content {
 .login-heading p { font-size:var(--text-title); line-height:1.7; margin:.3rem 0 0; color:var(--reader-muted); }
 .login-card .field { display: flex; flex-direction: column; align-items: stretch; gap: .5rem; margin: 0 0 1rem; }
 .login-card .field label { font-size: var(--text-title); color: var(--reader-ink); }
-.login-card .field label em { color:#e66d67; font-style:normal; }
+.login-card .field label em { color:var(--color-danger); font-style:normal; }
 .login-card input { width: 100%; min-width: 0; min-height: 46px; box-sizing:border-box; padding: .65rem .85rem; font-size: var(--text-title); border:1px solid var(--reader-line); border-radius:var(--radius-xs); background:var(--reader-surface); color:var(--reader-ink); }
 .login-card input:focus { border-color:var(--reader-accent); outline:2px solid color-mix(in srgb,var(--reader-accent) 28%,transparent); outline-offset:1px; }
 .login-connection { margin-bottom: 1.4rem; border-bottom: 1px solid var(--reader-line); padding-bottom: .9rem; }
@@ -2830,8 +2748,8 @@ book-content {
 .login-connection[open] .field { margin: 1rem 0 0; }
 .login-server-input { position:relative; }
 .login-server-input input { padding-right:3.25rem; }
-.login-server-status { position:absolute; right:.45rem; top:50%; transform:translateY(-50%); display:grid; place-items:center; min-width:1.8rem; height:1.8rem; border-radius:50%; background:#51b95b; color:#fff; font-size:var(--text-label); font-weight:700; }
-.login-server-status.is-probing { background:#9aa3ae; }
+.login-server-status { position:absolute; right:.45rem; top:50%; transform:translateY(-50%); display:grid; place-items:center; min-width:1.8rem; height:1.8rem; border-radius:50%; background:var(--color-brand); color:var(--color-on-brand); font-size:var(--text-label); font-weight:700; }
+.login-server-status.is-probing { background:var(--reader-line); color:var(--reader-muted); }
 .login-server-meta { display:flex; align-items:center; justify-content:space-between; color:var(--reader-muted); font-size:var(--text-ui); margin-top:.35rem; }
 .login-password-input { position:relative; }
 .login-password-input input { padding-right:3rem; }
@@ -2946,6 +2864,17 @@ book-content {
   margin: 0;
 }
 
+/* A book that could not open: covers the empty stage, under the bars so 返回 still works. */
+.reader-open-failure {
+  position: absolute;
+  inset: 0;
+  z-index: var(--reader-layer-readout);
+  min-height: 0;
+  padding: var(--space-4);
+  text-align: center;
+  background: var(--reader-paper);
+}
+
 .segmented {
   display: flex;
   border: 1px solid var(--reader-line);
@@ -2993,8 +2922,7 @@ book-content {
  * the wrapper with no reader-visible effect and one more way for a stale selector to
  * silently stop matching.
  */
-.library-screen,
-.manager-screen {
+.library-screen {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -3012,10 +2940,6 @@ book-content {
  * bar off the bottom of the phone. `display: contents` makes the host vanish for
  * layout purposes and keeps the tree's children exactly where they were.
  */
-.library-ui,
-.manager-ui {
-  display: contents;
-}
 
 /* ---- library: the header's two-page switch ---- */
 
@@ -3041,6 +2965,16 @@ book-content {
  * and a search field that stopped growing while the covers beside it kept going would
  * be the row that disagrees with the page.
  */
+/* 书库's subfolders: one scrollable row of chips under the search field, on its gutter. */
+.library-folders {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  padding: 0 var(--shelf-search-inset) var(--space-2);
+  scrollbar-width: none;
+}
+.library-folders .chip { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; white-space: nowrap; }
+
 .library-search {
   max-width: none;
   /*
@@ -3148,15 +3082,7 @@ book-content {
  * sentence and an empty one should cost no space at all: a blank 18px row above a
  * grid of covers is a gap the reader reads as a rendering mistake.
  */
-.library-preview-hint {
-  padding: 0.5rem calc(0.9rem + var(--shelf-search-inset)) 0;
-  font-size: var(--text-meta);
-  line-height: 1.4;
-}
 
-.library-preview-hint:empty {
-  display: none;
-}
 
 /*
  * A preview card: the shelf's card, with a *second* control on it.
@@ -3503,7 +3429,7 @@ book-content {
   gap: 0.5rem;
   align-items: center;
   padding: 0.6rem 0.75rem;
-  padding-bottom: calc(0.6rem + env(safe-area-inset-bottom));
+  padding-bottom: calc(0.6rem + var(--safe-bottom));
   border-top: 1px solid var(--reader-line);
   background: var(--reader-surface);
   overflow-x: auto;
@@ -3525,23 +3451,7 @@ book-content {
   white-space: nowrap;
 }
 
-.manager-selection {
-  position: absolute;
-  inset-block-start: calc(env(safe-area-inset-top) + 0.25rem);
-  inset-inline-start: 50%;
-  transform: translateX(-50%);
-  background: var(--reader-ink);
-  color: var(--reader-paper);
-  border-radius: var(--radius-pill);
-  padding: 0.2rem 0.7rem;
-  font-size: var(--text-meta);
-  pointer-events: none;
-  z-index: 25;
-}
 
-.manager-selection[hidden] {
-  display: none;
-}
 
 .button.danger {
   border-color: color-mix(in srgb, #c0392b 55%, transparent);
@@ -3555,21 +3465,6 @@ book-content {
  * laid out still takes a tab stop, and this one has no meaning of its own — the
  * button beside it is what the user operates.
  */
-.manager-upload-input {
-  /* Android WebView may reject click() on an input with display:none. Keep the
-     native picker in the layout as an invisible, non-obstructing control. */
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  overflow: hidden;
-  white-space: nowrap;
-}
 
 /* ---- reduced motion ---- */
 
@@ -3725,6 +3620,10 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reader-screen .progress-scrubber { width: 100%; min-height: 28px; margin: 0; }
 .reader-screen .progress-page { font-size: var(--text-micro); color: var(--reader-muted); }
 .reader-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.25rem; }
+.reader-actions .top-button[aria-pressed='true'] { color: var(--reader-accent); }
+/* The page's bookmark: filled in the accent colour when this page has one. */
+.reader-bookmark[aria-pressed='true'] { color: var(--reader-accent); }
+.reader-bookmark[aria-pressed='true'] .icon { fill: currentColor; }
 .reader-actions .top-button { min-width: 0; max-width: none; min-height: 60px; padding: 0.45rem 0; gap: 0.45rem; }
 .reader-actions .icon { font-size: var(--text-display); }
 .reader-actions .top-button-label { font-size: var(--text-meta); font-weight: 400; }
@@ -3794,11 +3693,8 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .extension-screen input[type=checkbox] { width: 1.25rem; height: 1.25rem; }
 .extension-actions form + form { margin-top: 0; }
 .extension-actions .extension-form-inline { border-top: 1px solid var(--reader-line); padding-top: .75rem; }
-.extension-confirm { border: 1px solid var(--reader-line); border-radius: var(--radius-sm); padding: .75rem; margin-top: .5rem; }
-.extension-confirm p { margin: 0 0 .75rem; }
-.extension-confirm button + button { margin-inline-start: .5rem; }
-.extension-screen button, .source-next-step .button { min-height: 44px; }
-.source-catalog, .source-editor { scroll-margin-top: 1rem; }
+.extension-screen button { min-height: 44px; }
+.source-catalog { scroll-margin-top: 1rem; }
 @media (max-width: 600px) {
   .extension-screen .extension-form-inline label { flex-basis: 100%; }
   .extension-screen .extension-form-inline label[data-field-type=number] { flex: 1 1 9rem; }
@@ -3997,10 +3893,6 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .catalog-book:has(.catalog-source-count) { display: flex; align-items: center; gap: 1rem; }
 .catalog-book:has(.catalog-source-count) > div { flex: 1; min-width: 0; }
 .catalog-source-count { display: inline-flex; align-items: center; gap: .5rem; flex: none; min-height: 44px; white-space: nowrap; }
-.catalog-source-heading { padding-block: 1rem; border-bottom: 1px solid var(--reader-line); }
-.catalog-source-heading h3 { margin: 0; font-size: var(--text-title); overflow-wrap: anywhere; }
-.catalog-source-heading p { margin: .4rem 0; color: var(--reader-muted); }
-.catalog-source-heading small { color: var(--reader-muted); }
 .catalog-source-item { padding-block: 1rem; border-bottom: 1px solid var(--reader-line); }
 .catalog-source-item:last-child { border-bottom: 0; }
 .catalog-source-item strong { overflow-wrap: anywhere; }
@@ -4064,7 +3956,6 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reading-tool-empty { text-align: center; padding: 1.5rem .5rem; }
 .reading-tool-empty strong { font-weight: 500; }
 .reading-tool-empty .button { margin-top: .75rem; }
-.reading-tool-feedback { padding: .6rem .75rem; border-radius: var(--radius-sm); background: var(--reader-surface); color: var(--reader-accent); }
 .annotation-popover { position: fixed; z-index: 60; box-sizing: border-box; padding: .6rem; border: 1px solid var(--reader-line); border-radius: var(--radius-md); box-shadow: 0 6px 28px #0003; background: var(--reader-paper); color: var(--reader-ink); font: var(--text-ui)/1.5 system-ui,sans-serif; }
 .annotation-actions { display: flex; gap: .25rem; }
 .annotation-actions button { flex: 1; min-height: 44px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--reader-accent); font: inherit; cursor: pointer; }
@@ -4098,17 +3989,11 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reading-tools p { margin: .3rem 0; font-size: var(--text-ui); line-height: 1.6; }
 .reading-tool-results .button { text-align: start; width: 100%; margin-top: .25rem; }
 .reading-tools blockquote { border-inline-start: 3px solid var(--reader-accent); padding: .5rem .75rem; line-height: 1.6; }
-.source-capabilities { margin-block: 12px; overflow-wrap: anywhere; }
-.source-capabilities summary { cursor: pointer; }
 .extension-workbench { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
 .extension-workbench > div { min-width: 0; }
 .extension-workbench textarea { min-height: 28rem; resize: vertical; font-family: ui-monospace, monospace; tab-size: 2; }
 .extension-workbench pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 65vh; overflow: auto; }
 @media (max-width: 800px) { .extension-workbench { grid-template-columns: minmax(0, 1fr); } .extension-workbench textarea { min-height: 20rem; } }
-.sources-row > .source-capabilities { flex-basis: 100%; }
-.source-capabilities dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
-.source-capabilities dl > div { padding: 8px; border: 1px solid currentColor; border-radius: var(--radius-sm); }
-.source-capabilities dd { margin: 4px 0 0; }
 
 /* The class is on the sheet's <input> itself; a 16px font keeps iOS from zooming on focus. */
 .catalog-source-search { display:block; flex:none; width:100%; min-height:44px; box-sizing:border-box; padding:.6rem .8rem; border:1px solid var(--reader-line); border-radius:var(--radius-md); background:var(--reader-paper); color:var(--reader-ink); font:inherit; font-size:var(--text-title); }

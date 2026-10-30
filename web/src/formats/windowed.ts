@@ -23,14 +23,11 @@
  *
  * ### 3. A window is fetched when the reader asks for something outside it
  *
- * Windows are not a cache to be filled in the background; they are on-demand.
- * `RemoteZip` is the exception: for an EPUB, reading one chapter means reading
- * the archive's central directory once and then one entry, which is what keeps
- * the open cost at one chapter rather than one archive.
+ * Windows are not a cache to be filled in the background; they are on-demand
+ * (apart from the one section ahead that `ReaderView.open` prefetches).
  */
 
 import type { BookContent, ContentItem } from '../net/api.ts';
-import { RemoteZip, type RangeSource } from './remote-zip.ts';
 import type { BookDoc, Section, StagedBook, TocEntry } from './types.ts';
 
 /**
@@ -161,6 +158,19 @@ export function createStagedDoc(options: StagedDocOptions): StagedDoc {
   let offset =
     options.content.groups[options.content.group ?? 0]?.offset ?? options.content.items[0]?.seq ?? 0;
 
+  async function fill(section: Section, item: ContentItem): Promise<Section> {
+    const loaded = await options.loader.read(item);
+    if (loaded.html !== undefined) section.html = loaded.html;
+    if (loaded.image !== undefined) section.image = loaded.image;
+    // The loader read the body and found characters (a book source's text-only
+    // HTML chapter, converted): typeset it like a TXT, and do not parse it.
+    if (loaded.plainText) { section.plainText = true; section.bodyIsMarkup = false; }
+    return section;
+  }
+
+  // One request per section at a time: a prefetch and the page turn that catches up
+  // with it, or two quick taps, share the read instead of fetching twice.
+  const inFlight = new Map<Section, Promise<Section>>();
   const doc: StagedDoc = {
     ...base,
     async loadSection(index: number): Promise<Section | null> {
@@ -170,13 +180,11 @@ export function createStagedDoc(options: StagedDocOptions): StagedDoc {
       // Already loaded: a re-style or a resize asks for the same section twice
       // and must not re-fetch it.
       if (section.html !== undefined || section.image !== undefined) return section;
-      const loaded = await options.loader.read(item);
-      if (loaded.html !== undefined) section.html = loaded.html;
-      if (loaded.image !== undefined) section.image = loaded.image;
-      // The loader read the body and found characters (a book source's text-only
-      // HTML chapter, converted): typeset it like a TXT, and do not parse it.
-      if (loaded.plainText) { section.plainText = true; section.bodyIsMarkup = false; }
-      return section;
+      const pending = inFlight.get(section);
+      if (pending) return pending;
+      const read = fill(section, item).finally(() => inFlight.delete(section));
+      inFlight.set(section, read);
+      return read;
     },
     setWindow(content: BookContent, spine: number): number {
       // Checked *before* anything is mutated. A window that does not hold the
@@ -301,5 +309,3 @@ export function isStagedKind(kind: BookContent['kind'] | undefined): boolean {
   return kind === 'reflowable' || kind === 'paged' || kind === 'text';
 }
 
-export { RemoteZip };
-export type { RangeSource };

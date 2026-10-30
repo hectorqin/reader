@@ -1,3 +1,4 @@
+import { Icon } from '../../../ui/icon.tsx';
 import { Callout } from '../../../ui/toolkit.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,7 +12,6 @@ import { ScanJobs } from '../components/scan-jobs.tsx';
 import { AiScanJobs } from '../components/ai-scan-jobs.tsx';
 import { ScrapeJobs } from '../components/scrape-jobs.tsx';
 import { MediaSelect } from '../components/select.tsx';
-import { RefreshCw } from 'lucide-react';
 import type { MediaChannel } from '../api/media-api.ts';
 
 export function MediaTasksPage() {
@@ -53,8 +53,16 @@ export function MediaTasksPage() {
       } else {
         // The legacy task workspace scans every media library, regardless of
         // which channel opened the settings route.
-        await Promise.all((libraries.data?.items ?? []).map(library =>
+        // One library refusing (already scanning, path gone) must not hide that the
+        // others were submitted, or the admin presses the button again.
+        const all = libraries.data?.items ?? [];
+        const results = await Promise.allSettled(all.map(library =>
           runtime.mediaApi.request(`libraries/${encodeURIComponent(library.id)}/scan`, 'POST')));
+        await jobs.refetch();
+        const failed = results.flatMap((result, index) => result.status === 'rejected'
+          ? [`${all[index]!.name}（${result.reason instanceof Error ? result.reason.message : '提交失败'}）`] : []);
+        if (failed.length) throw new Error(`已提交 ${all.length - failed.length} 个媒体库，${failed.length} 个未能开始：${failed.join('、')}`);
+        return;
       }
       await jobs.refetch();
     },
@@ -73,7 +81,7 @@ export function MediaTasksPage() {
   // 媒体库扫描 and AI 扫描 share one library choice (kept in the URL), one primary action and a refresh.
   const toolbar = (scope: string, start: () => void, refresh: () => void, refreshing: boolean) => <div className="media-task-toolbar">
     <label className="media-task-library-select"><span>媒体库</span><MediaSelect aria-label={`${scope}媒体库`} value={libraryId} onChange={event => setLibrary(event.currentTarget.value)}><option value="">全部媒体库</option>{libraryItems.map(library => <option key={library.id} value={library.id}>{library.name}</option>)}</MediaSelect></label>
-    <button type="button" className="media-task-icon" aria-label={`刷新${scope}任务`} title={`刷新${scope}任务`} disabled={refreshing} onClick={refresh}><RefreshCw size={17} aria-hidden="true" /></button>
+    <button type="button" className="media-task-icon" aria-label={`刷新${scope}任务`} title={`刷新${scope}任务`} disabled={refreshing} onClick={refresh}><Icon name="refresh" size={16} /></button>
     <button type="button" className="media-primary" disabled={!libraryItems.length || actionBusy} onClick={start}>{scope === 'AI 扫描' ? 'AI 扫描' : '扫描'}{libraryId ? '此媒体库' : '全部媒体库'}</button>
   </div>;
   return <MediaPageFrame className="media-manager-workspace" title="扫描与刮削" backTo={returnTo} backLabel={returnLabel}>
@@ -93,7 +101,7 @@ export function MediaTasksPage() {
         <p className="media-task-lead">用 AI 识别{libraryName ? `「${libraryName}」中` : '各媒体库中'}未归档的文件，结果需要核对后再处理。</p>
         {toolbar('AI 扫描', () => { void startAiScan(libraryId || undefined); }, () => { void aiJobs.refetch(); }, aiJobs.isFetching)}
         <h2 className="media-task-section-title">扫描记录{filteredAiJobs.length ? <small>{filteredAiJobs.length}</small> : null}</h2>
-        <AiScanJobs api={runtime.mediaApi} jobs={filteredAiJobs} libraries={libraryItems} busy={aiJobs.isFetching || actionBusy} onRefresh={() => { void aiJobs.refetch(); }} onDelete={id => { void runAction(async () => { await runtime.mediaApi.deleteAiScanJob(id); await aiJobs.refetch(); }, 'AI 扫描记录已删除。'); }} />
+        <AiScanJobs api={runtime.mediaApi} jobs={filteredAiJobs} libraries={libraryItems} busy={aiJobs.isFetching || actionBusy} onDelete={id => { void runAction(async () => { await runtime.mediaApi.deleteAiScanJob(id); await aiJobs.refetch(); }, 'AI 扫描记录已删除。'); }} />
       </div>}
       {tab === 'scrape' && !libraries.isPending && !libraries.error && <ScrapeJobs api={runtime.mediaApi} libraries={libraryItems} initialLibraryId={libraryId} navigate={(mediaChannel: MediaChannel, id: string) => { navigate(`/media/${mediaChannel}/items/${encodeURIComponent(id)}`); }} />}
     </section>

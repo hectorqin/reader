@@ -163,11 +163,14 @@
   font-family: inherit;
 }
 
-/* A switch row: label and hint take the width, the switch sits on the trailing edge. */
+/* A switch row: label and hint take the width, the switch sits on the trailing edge.
+   The row is the 44px hit target (ui.md §3.3); SwitchRow forwards a press on the words. */
 .sheet .switch-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  min-height: 44px;
+  cursor: pointer;
 }
 
 /* A list of choices: one full-width row per option. */
@@ -217,29 +220,13 @@
   min-width: 0;
 }
 
-.sheet-list-description {
-  display: block;
-  color: var(--color-muted);
-  font-size: var(--text-meta);
-  line-height: 1.4;
-}
 
 .sheet-list-item[aria-checked='true'] {
   color: var(--reader-accent);
   font-weight: 600;
 }
 
-.sheet-list-check {
-  flex: none;
-}
 
-.sheet-list-icon {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 1.25rem;
-  color: var(--reader-muted);
-}
 
 @media (hover: hover) and (pointer: fine) {
   .sheet-list-item:hover:not(:disabled) {

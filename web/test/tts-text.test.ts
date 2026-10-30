@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { collectSpokenChunks, splitSentence, ChunkCursor } from '../src/render/tts-text.ts';
+import { collectSpokenChunks, splitSentence } from '../src/render/tts-text.ts';
 
 /**
  * Sentence chunking.
@@ -95,43 +95,5 @@ describe('collectSpokenChunks', () => {
     const chunks = chunksFor('<p>一句话。</p>');
     expect(chunks[0]?.node?.data).toBe('一句话。');
     expect(chunks[0]?.start).toBe(0);
-  });
-});
-
-describe('ChunkCursor', () => {
-  const chunks = ['a', 'b', 'c'].map((text, index) => ({
-    text,
-    node: null,
-    start: 0,
-    blockIndex: index,
-  }));
-
-  it('advances and stops at the end instead of wrapping', () => {
-    const cursor = new ChunkCursor();
-    cursor.reset(chunks, 0);
-    expect(cursor.current?.text).toBe('a');
-    expect(cursor.next()?.text).toBe('b');
-    expect(cursor.next()?.text).toBe('c');
-    expect(cursor.next()).toBeNull();
-  });
-
-  it('does not move before the first chunk', () => {
-    const cursor = new ChunkCursor();
-    cursor.reset(chunks, 0);
-    expect(cursor.previous()).toBeNull();
-    expect(cursor.index).toBe(0);
-  });
-
-  it('clamps a reset index past the end', () => {
-    const cursor = new ChunkCursor();
-    cursor.reset(chunks, 99);
-    expect(cursor.index).toBe(2);
-  });
-
-  it('reports no current chunk for an empty queue', () => {
-    const cursor = new ChunkCursor();
-    cursor.reset([], 0);
-    expect(cursor.current).toBeNull();
-    expect(cursor.next()).toBeNull();
   });
 });

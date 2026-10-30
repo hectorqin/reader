@@ -48,7 +48,10 @@ export interface GestureHandlers {
 }
 
 const TAP_MAX_DISTANCE = 12;
-const TAP_MAX_DURATION = 260;
+// A tap is decided by the finger staying put; the time limit only has to stay under
+// the long press. At 260 ms a deliberate tap (an older reader, an e-ink screen's slow
+// panel) fell between tap and long press and did nothing at all.
+const TAP_MAX_DURATION = 450;
 const SWIPE_MIN_DISTANCE = 48;
 const SWIPE_MAX_OFF_AXIS = 0.8;
 const LONG_PRESS_MS = 500;
@@ -195,7 +198,9 @@ export function attachGestures(element: HTMLElement, handlers: GestureHandlers):
       // A long press is the reader asking to select text, so gestures must not
       // turn it into a page turn when the finger lifts.
       suppressClick = true;
-      handlers.onLongPress(event.clientX, event.clientY);
+      // The system's own long press selects a word at about the same moment; the
+      // bars would then open over the text being selected.
+      if (!handlers.hasSelection()) handlers.onLongPress(event.clientX, event.clientY);
     }, LONG_PRESS_MS);
   };
 

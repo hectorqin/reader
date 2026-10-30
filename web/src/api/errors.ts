@@ -76,10 +76,6 @@ export function errorForStatus(status: number): ApiErrorKind {
   return 'server';
 }
 
-export function isApiError(value: unknown): value is ApiError {
-  return value instanceof ApiError;
-}
-
 export function parseErrorBody(raw: string): { code: string; message: string } {
   try {
     const parsed = JSON.parse(raw) as ApiErrorBody;

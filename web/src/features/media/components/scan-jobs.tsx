@@ -1,4 +1,4 @@
-import { RefreshCw, Trash2, X } from 'lucide-react';
+import { Icon } from '../../../ui/icon.tsx';
 import { useState } from 'react';
 import type { Library, ScanJob } from '../api/media-api.ts';
 import { scanFeedback } from './scan-feedback.ts';
@@ -14,8 +14,8 @@ export function ScanJobs({jobs,libraryName,libraries,busy,onCancel,onRetry=()=>{
   return <div className="media-scan-jobs">{jobs.slice(current*30,current*30+30).map(job=><article className={'media-scan-job'+(job.state==='running'?' is-running':'')} key={job.id}>
     <div className="media-task-copy"><strong>{libraries?.find(library=>library.id===job.libraryId)?.name||libraryName} · 目录扫描</strong><small>已检查 {job.inspected} 个文件{job.finishedAt?` · ${scanTime(job.finishedAt)}`:job.startedAt?` · 开始于 ${scanTime(job.startedAt)}`:''}</small></div>
     <span className="media-task-state" data-state={job.state}>{states[job.state]||job.state}</span>
-    {['running','queued'].includes(job.state)?<button className="media-task-icon" aria-label="取消扫描" title="取消扫描" disabled={busy} onClick={()=>onCancel(job.id)}><X size={18} aria-hidden="true"/></button>:<button className="media-task-icon" aria-label="删除扫描记录" title="删除扫描记录" disabled={busy} onClick={()=>onDelete(job.id)}><Trash2 size={17} aria-hidden="true"/></button>}
-    {job.state==='running'&&<progress className="media-task-progress" aria-label="扫描进度"/>}
+    {['running','queued'].includes(job.state)?<button className="media-task-icon" aria-label="取消扫描" title="取消扫描" disabled={busy} onClick={()=>onCancel(job.id)}><Icon name="close" size={18} /></button>:<button className="media-task-icon" aria-label="删除扫描记录" title="删除扫描记录" disabled={busy} onClick={()=>onDelete(job.id)}><Icon name="trash" size={16} /></button>}
+    {job.state==='running'&&<progress className="media-task-progress" aria-label="扫描进度" max={100} {...(job.total?{value:Math.min(100,Math.round(job.inspected/job.total*100))}:{})}/>}
     {job.diagnostics&&<div className="media-task-note">
       <p>耗时 {duration(job.diagnostics.elapsedMs)}{job.diagnostics.elapsedMs>0?` · 平均 ${(job.inspected*1000/job.diagnostics.elapsedMs).toFixed(1)} 个文件/秒`:''}</p>
       {job.state==='running'&&job.diagnostics.active.map((activity,index)=><p key={index}>{phases[activity.phase]||activity.phase}{activity.ref?` · ${activity.ref}`:''} · 已等待 {duration(activity.elapsedMs)}</p>)}
@@ -25,6 +25,6 @@ export function ScanJobs({jobs,libraryName,libraries,busy,onCancel,onRetry=()=>{
       </details>
     </div>}
     {job.error&&<p className="media-task-note media-task-error">{scanFeedback(job.error)}</p>}
-    {job.state==='failed'&&<button className="media-task-retry" aria-label="重新扫描媒体库" title={scanningFor(job.libraryId)?'请等待当前扫描完成':'重新扫描媒体库'} disabled={busy||scanningFor(job.libraryId)} onClick={()=>onRetry(job.libraryId)}><RefreshCw size={16} aria-hidden="true"/><span>重试</span></button>}
+    {job.state==='failed'&&<button className="media-task-retry" aria-label="重新扫描媒体库" title={scanningFor(job.libraryId)?'请等待当前扫描完成':'重新扫描媒体库'} disabled={busy||scanningFor(job.libraryId)} onClick={()=>onRetry(job.libraryId)}><Icon name="refresh" size={16} /><span>重试</span></button>}
   </article>)}{last>0&&<nav className="media-toolbar" aria-label="扫描任务分页"><button disabled={!current} onClick={()=>setPage(current-1)}>上一页</button><span>{current+1} / {last+1}</span><button disabled={current===last} onClick={()=>setPage(current+1)}>下一页</button></nav>}</div>;
 }

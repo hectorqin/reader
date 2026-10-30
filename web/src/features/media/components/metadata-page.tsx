@@ -1,6 +1,6 @@
+import { Icon } from '../../../ui/icon.tsx';
 import { ConfirmSheet } from '../../../ui/sheet.tsx';
 import { useEffect, useRef, useState } from 'react';
-import {ChevronLeft} from 'lucide-react';
 import type {Detail,MediaApi} from '../api/media-api.ts';
 import {MetadataEditor,type MetadataEditState} from './metadata-editor.tsx';
 import {MetadataMatcher} from './metadata-matcher.tsx';
@@ -16,7 +16,7 @@ export function MediaMetadataPage({api,item,initialView,onViewChange,onUpdated,o
   const busy=editState.busy||matching;
   const navigate=(next:MetadataView|'back')=>{setDestination(null);setNotice('');setEditState({dirty:false,busy:false});if(next==='back')onBack();else {setView(next);onViewChange?.(next);}};
   const requestLeave=(next:MetadataView|'back')=>{if(busy)return;if(view==='edit'&&editState.dirty)setDestination(next);else navigate(next);};
-  return <><header className="media-heading"><div className="media-page-heading"><button className="media-back-button" aria-label="返回作品详情" disabled={busy} onClick={()=>requestLeave('back')}><ChevronLeft size={20} aria-hidden="true"/></button><h1>{view==='edit'?'元数据':'匹配作品'}</h1></div><button className="media-metadata-mode" disabled={busy} onClick={()=>requestLeave(view==='edit'?'match':'edit')}>{view==='edit'?'在线匹配':'手动编辑'}</button></header>
+  return <><header className="media-heading"><div className="media-page-heading"><button className="media-back-button" aria-label="返回作品详情" disabled={busy} onClick={()=>requestLeave('back')}><Icon name="chevron-left" size={20} /></button><h1>{view==='edit'?'元数据':'匹配作品'}</h1></div><button className="media-metadata-mode" disabled={busy} onClick={()=>requestLeave(view==='edit'?'match':'edit')}>{view==='edit'?'在线匹配':'手动编辑'}</button></header>
     <article className="media-metadata-page" data-view={view} ref={page}>
       {destination&&<ConfirmSheet danger title="放弃未保存的修改？" text="有未保存的修改。离开后本次修改会丢失，已保存的资料不受影响。" confirmText="放弃修改并离开" cancelText="继续编辑" onCancel={()=>setDestination(null)} onConfirm={()=>navigate(destination)}/>}
       {notice&&<p role="status" className="media-metadata-notice">{notice}</p>}

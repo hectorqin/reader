@@ -1,3 +1,4 @@
+import { Icon } from './icon.tsx';
 import type { ReadingOverrides } from './reading-overrides.ts';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ConfirmSheet, Sheet } from './sheet.tsx';
@@ -137,12 +138,12 @@ export function ReadingTools(props: ReadingToolsProps) {
         <ol className="reading-tool-results">{hits.map((hit, index) => <li key={index}><button className="button" onClick={() => void action(async () => { await props.navigate(hit.anchor); props.onClose(); })}><strong>{hit.title}</strong><span>{hit.excerpt}</span></button></li>)}</ol>
       </section>}
       {tab === 'notes' && <section aria-label="笔记管理">
-        <div className="reading-tool-heading"><h3>笔记与书签 <small>{notes.length}</small></h3><button className="button" aria-label={bookmarked ? '已添加当前位置书签' : '添加当前位置书签'} disabled={saving || !props.locator || bookmarked} onClick={() => void edit(() => saveNote(true))}>{bookmarked ? '已加书签' : '＋ 加书签'}</button></div>
+        <div className="reading-tool-heading"><h3>笔记与书签 <small>{notes.length}</small></h3><button className="button" aria-label={bookmarked ? '已添加当前位置书签' : '添加当前位置书签'} disabled={saving || !props.locator || bookmarked} onClick={() => void edit(() => saveNote(true))}>{bookmarked ? '已加书签' : <><Icon name="bookmark" size={16} />加书签</>}</button></div>
         {(editing || composing) && <div className="reading-note-editor" ref={editorRef}>
           <h4>{editing ? '编辑' + (editing.type === 'bookmark' ? '书签' : '笔记') : '记录所选文字'}</h4>
           <blockquote>{editing?.text ?? props.selection?.quote}</blockquote>
           <label><span>批注 <small>可选</small></span><textarea aria-label="批注" disabled={saving} placeholder={editing?.type === 'bookmark' ? '为这个位置添加备注' : '写下想法，或留空仅保存高亮'} value={comment} maxLength={4000} onInput={event => setComment(event.currentTarget.value)} /></label>
-          {editing?.type !== 'bookmark' && <div className="reading-note-colors" role="group" aria-label="高亮颜色"><span>高亮颜色</span>{[['#ffd54f', '黄色'], ['#80cbc4', '绿色'], ['#ce93d8', '紫色']].map(([value, label]) => <button key={value} type="button" disabled={saving} aria-label={label} aria-pressed={color === value} style={{ '--note-color': value }} onClick={() => setColor(value)}>{color === value ? '✓' : ''}</button>)}</div>}
+          {editing?.type !== 'bookmark' && <div className="reading-note-colors" role="group" aria-label="高亮颜色"><span>高亮颜色</span>{[['#ffd54f', '黄色'], ['#80cbc4', '绿色'], ['#ce93d8', '紫色']].map(([value, label]) => <button key={value} type="button" disabled={saving} aria-label={label} aria-pressed={color === value} style={{ '--note-color': value }} onClick={() => setColor(value)}>{color === value && <Icon name="check" size={16} />}</button>)}</div>}
           <div className="reading-tool-actions"><button className="button" disabled={saving} onClick={() => { setEditing(null); setComposing(false); setComment(''); }}>取消编辑</button><button className="button primary" disabled={saving} onClick={() => void edit(() => saveNote())}>{editing ? '保存修改' : comment.trim() ? '保存批注' : '保存高亮'}</button></div>
         </div>}
         {!editing && !composing && props.selection && <button className="button" onClick={() => setComposing(true)}>为所选文字添加笔记</button>}

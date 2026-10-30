@@ -21,10 +21,10 @@
   background: var(--color-ch-read-soft);
   color: var(--color-ink);
   text-decoration: none;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: border-color var(--motion-duration) var(--motion-ease), box-shadow var(--motion-duration) var(--motion-ease);
 }
 @media (hover: hover) and (pointer: fine) { .home-hero:hover { border-color: var(--color-ch-read); box-shadow: 0 8px 24px color-mix(in srgb, var(--color-ink) 8%, transparent); }}
-.home-hero:focus-visible, .home-card:focus-visible, .home-empty a:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: 3px; }
+.home-hero:focus-visible, .home-card:focus-visible, .home-empty a:focus-visible, .home-retry:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: 3px; }
 
 .home-hero-cover {
   display: grid;
@@ -53,7 +53,9 @@
 
 .home-empty { flex-direction: column; justify-content: center; align-items: flex-start; gap: 8px; min-height: 120px; }
 .home-empty strong { font-family: 'Songti SC', 'Noto Serif SC', serif; font-size: var(--text-title); }
-.home-empty a { display: inline-flex; align-items: center; color: var(--color-ch-read-text); font-size: var(--text-ui); font-weight: 600; text-decoration: none; }
+.home-empty a, .home-retry { display: inline-flex; align-items: center; color: var(--color-ch-read-text); font-size: var(--text-ui); font-weight: 600; text-decoration: none; }
+.home-retry { min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; }
+.home-empty-pending strong { color: var(--color-muted); }
 
 .home-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; align-content: start; }
 @media (min-width: 64rem) {
@@ -69,7 +71,7 @@
   background: var(--color-surface);
   color: var(--color-ink);
   text-decoration: none;
-  transition: border-color .15s ease;
+  transition: border-color var(--motion-duration) var(--motion-ease);
   --ch: var(--color-ch-video); --ch-soft: var(--color-ch-video-soft); --ch-text: var(--color-ch-video-text);
 }
 .home-card[data-channel='audiobook'] { --ch: var(--color-ch-audio); --ch-soft: var(--color-ch-audio-soft); --ch-text: var(--color-ch-audio-text); }

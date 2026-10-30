@@ -1,4 +1,4 @@
-import { FolderOpen } from 'lucide-react';
+import { Icon } from '../../../ui/icon.tsx';
 import type { MediaChannel } from '../api/media-api.ts';
 
 export function EmptyMediaLibrary({channel,hasLibraries,admin,category,onCreate,onManage}: {
@@ -7,7 +7,7 @@ export function EmptyMediaLibrary({channel,hasLibraries,admin,category,onCreate,
 }) {
   const label={video:'影视',music:'音乐',audiobook:'有声书'}[channel];
   return <section className="media-library-empty" aria-label="媒体库空状态">
-    <span className="media-empty-emblem"><FolderOpen size={30} strokeWidth={1.7} aria-hidden="true"/></span>
+    <span className="media-empty-emblem"><Icon name="folder-browse" size={32} /></span>
     <h2>{hasLibraries?`还没有${category}`:'让喜欢的作品住进来'}</h2>
     <p>{hasLibraries
       ?admin?'可以切换分类，或到媒体库管理中扫描已添加的目录。':'这个分类暂时没有内容，可以切换分类或稍后再来。'

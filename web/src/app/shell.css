@@ -28,7 +28,7 @@
 
 /* ---- phone: tab bar ---- */
 @media (max-width: 700px) {
-  .app-nav { order: 2; display: flex; height: calc(var(--app-nav-bar) + env(safe-area-inset-bottom)); padding: 6px 12px env(safe-area-inset-bottom); border-top: 1px solid var(--nav-line); }
+  .app-nav { order: 2; display: flex; height: calc(var(--app-nav-bar) + var(--safe-bottom)); padding: 6px 12px var(--safe-bottom); border-top: 1px solid var(--nav-line); }
   .app-nav[data-mode='push'] { display: none; }
   .app-nav-brand, .app-nav-sub, .app-nav-user, .app-nav-search { display: none; }
   .app-nav-list { display: flex; flex: 1; }
@@ -90,7 +90,7 @@
 
 /* ---- the persistent mini player sits clear of the bar / sidebar ---- */
 @media (max-width: 700px) {
-  body[data-app-nav='top'] .media-player:is(.media-player-audio, .media-player-native-video) { bottom: calc(var(--app-nav-bar) + env(safe-area-inset-bottom) + 10px); }
+  body[data-app-nav='top'] .media-player:is(.media-player-audio, .media-player-native-video) { bottom: calc(var(--app-nav-bar) + var(--safe-bottom) + 10px); }
 }
 @media (min-width: 701px) {
   body[data-app-nav] .media-player:is(.media-player-audio, .media-player-native-video) { left: calc(var(--app-nav-width) + 24px); }
@@ -207,4 +207,14 @@ body {
 @media (max-width: 700px) {
   .media-screen .media-mobile-title { width: 100%; max-width: 300px; }
   .media-channel-segments a { white-space: nowrap; }
+}
+
+/* iOS zooms the page when a focused field's text is under 16px (ui.md §3.3, `--text-title`).
+   Screens size their fields for density (the media screens inherit 14px), so the floor is
+   enforced once here for every typed field on a touch screen rather than screen by screen;
+   `!important` because it must win over any screen's own field rule. */
+@media (pointer: coarse) {
+  :is(input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color], [type=button], [type=submit]), textarea, select) {
+    font-size: max(var(--text-title), 1em) !important;
+  }
 }

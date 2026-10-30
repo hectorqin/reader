@@ -67,6 +67,12 @@ export interface ChromeState {
   chromeVisible: boolean;
   statusText: string;
   statusState: string;
+  /** Whether the server offers AI 章节总结; unknown (undefined) draws no button. */
+  aiSummaryAvailable?: boolean;
+  /** Whether the page on screen carries a bookmark; drives the top bar's 书签 toggle. */
+  bookmarked?: boolean;
+  /** Set when the book itself could not be opened: the stage is empty, so say why and offer a way on. */
+  openFailure?: string;
   /** 0..1. */
   progress: number;
   chapterLabel: string;
@@ -148,6 +154,9 @@ export interface ChromeState {
 export interface ChromeHandlers {
   onTools?(): void;
   onBack(): void;
+  onRetryOpen?(): void;
+  /** Adds a bookmark at the page on screen, or removes the one there. */
+  onToggleBookmark?(): void;
   toggleToc(): void;
   toggleSettings(tab?: 'appearance' | 'behavior' | 'speech'): void;
   onSetting(patch: Partial<AppSettings>): void;
@@ -177,6 +186,8 @@ export interface ChromeHandlers {
    * names.
    */
   onScrubPage(page: number): void;
+  /** Jumps to a whole-book chapter, 1-based; a comic's page slider. */
+  onScrubChapter?(chapter: number): void;
   onTurnPage(direction: 'next' | 'previous'): void;
   /**
    * The stored theme preference, what the app wears, and what the book wears (the
@@ -237,14 +248,23 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         <div className="reader-top-actions">
           {state.canSwitch && <IconButton label="切换书源" icon="sort" disabled={state.switching || state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onAlternatives?.()} />}
           {state.canRefresh && <IconButton label="刷新当前章节" icon="refresh" disabled={state.switching || state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onRefreshChapter?.()} />}
-          <IconButton label="AI 总结" icon="file-text" disabled={state.aiSummaryBusy || state.navigating} onClick={() => handlers.onAiSummary?.()} />
+          {handlers.onToggleBookmark && <IconButton className="reader-bookmark" icon="bookmark" label={state.bookmarked ? '移除本页书签' : '为本页加书签'} pressed={!!state.bookmarked} onClick={handlers.onToggleBookmark} />}
+          {state.aiSummaryAvailable && <IconButton label="AI 总结" icon="file-text" disabled={state.aiSummaryBusy || state.navigating} onClick={() => handlers.onAiSummary?.()} />}
         </div>
         {(state.sourceName || state.chapterUrl) && <div className="reader-source-info"><span>{state.sourceName || '当前书源'}</span>{state.chapterUrl && <a href={state.chapterUrl} target="_blank" rel="noopener noreferrer" title={state.chapterUrl}>{state.chapterUrl}</a>}</div>}
       </div>
       {state.bookInfoOpen && <Sheet title="书籍信息" onClose={() => handlers.onBookInfo?.()}><article className="book-detail"><h3>{state.title}</h3><p className="book-detail-author">{state.author || '作者未知'}</p><dl><dt>书源</dt><dd>{state.sourceName || (state.canRefresh ? '远程书源' : '本地书籍')}</dd><dt>当前章节</dt><dd>{state.chapterLabel || '暂无信息'}</dd></dl><h4>内容简介</h4><p className="book-detail-description">{state.description || '暂无简介'}</p></article></Sheet>}
-      {state.aiSummaryBusy && <div className="floating-notice" role="status">正在生成章节总结…</div>}
+      <FloatingNotice message={state.aiSummaryBusy ? '正在生成章节总结…' : ''} busy />
       {state.aiSummary && <Sheet title="AI 章节总结" onClose={() => handlers.onAiSummary?.()}><article className="book-detail"><p className="book-detail-description">{state.aiSummary}</p></article></Sheet>}
       <StageHost stage={stage} />
+      {state.openFailure && <div className="page-state reader-open-failure" role="alert">
+        <h2>无法打开这本书</h2>
+        <p>{state.openFailure}</p>
+        <div className="empty-actions">
+          {handlers.onRetryOpen && <Button className="primary" onClick={handlers.onRetryOpen}>重试</Button>}
+          <Button onClick={handlers.onBack}>返回</Button>
+        </div>
+      </div>}
       <ReaderIndicators state={state} />
       <div className="reader-rail" role="toolbar" aria-label="阅读快捷操作">
         {/* Day/night picks the mode explicitly (leaving 跟随系统), keeping the theme on screen. */}
@@ -256,20 +276,23 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         <div className="progress-row">
           <button type="button" className="nav-chapter" disabled={state.navigating || state.chapterIndex <= 1}
             onClick={() => handlers.onChapter(-1)}>{fixed ? '上一页' : '上一章'}</button>
-          <div className="reader-scrub">
-            <input className="progress-scrubber" type="range" min={1} max={totalPages} step={1}
-              value={currentPage} aria-label="章节内页数"
-              aria-valuetext={pageLabel} disabled={totalPages <= 1 || state.navigating}
-              onInput={(event) => handlers.onScrubPage(Number((event.currentTarget as HTMLInputElement).value))} />
-            <span className="progress-page">{pageLabel}</span>
-          </div>
+          {fixed && totalPages <= 1 && handlers.onScrubChapter
+            ? <PageScrubber key={state.chapterIndex} page={state.chapterIndex} count={state.chapterCount} disabled={state.navigating} onCommit={handlers.onScrubChapter} />
+            : <div className="reader-scrub">
+              <input className="progress-scrubber" type="range" min={1} max={totalPages} step={1}
+                value={currentPage} aria-label="章节内页数"
+                aria-valuetext={pageLabel} disabled={totalPages <= 1 || state.navigating}
+                onInput={(event) => handlers.onScrubPage(Number((event.currentTarget as HTMLInputElement).value))} />
+              <span className="progress-page">{pageLabel}</span>
+            </div>}
           <button type="button" className="nav-chapter" disabled={state.navigating || state.chapterIndex >= state.chapterCount}
             onClick={() => handlers.onChapter(1)}>{fixed ? '下一页' : '下一章'}</button>
         </div>
         <div className="reader-actions">
           {handlers.onTools && <TopButton icon="search" label="工具" onClick={handlers.onTools} />}
           <TopButton icon="menu" label="目录" onClick={handlers.toggleToc} />
-          <TopButton icon="volume" label="朗读" onClick={() => handlers.toggleSettings('speech')} />
+          {/* 朗读 keeps going with its panel closed (ui.md §3.11), so the button says it is on. */}
+          <TopButton icon="read-aloud" label={state.tts.active ? '朗读中' : '朗读'} pressed={state.tts.active} onClick={() => handlers.toggleSettings('speech')} />
           <TopButton icon="text-size" label="外观" onClick={() => handlers.toggleSettings('appearance')} />
           <TopButton icon="settings" label="设置" onClick={() => handlers.toggleSettings('behavior')} />
         </div>
@@ -279,7 +302,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
           {state.toc.length === 0 ? (
             <div className="empty-state">这本书没有目录</div>
           ) : (
-            <ul className="toc-list">
+            <ul className="toc-list" ref={revealCurrentChapter}>
               {state.toc.map((entry, index) => {
                 // A entry the loaded window cannot reach is *marked*, not hidden and
                 // not silently inert. It is a real chapter of the book, so removing
@@ -293,7 +316,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
                 const reachable = entry.spine !== undefined && entry.spine >= 0;
                 return (
                   <li key={entry.id + index} data-section={entry.id}>
-                    {hasChildren && <button className="toc-collapse" aria-label={entry.label + (collapsed.has(entry.id) ? ' 展开' : ' 折叠')} aria-expanded={!collapsed.has(entry.id)} onClick={() => { const next = new Set(collapsed); if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id); setCollapsed(next); }}>{collapsed.has(entry.id) ? '+' : '−'}</button>}
+                    {hasChildren && <button className="toc-collapse" aria-label={entry.label + (collapsed.has(entry.id) ? ' 展开' : ' 折叠')} aria-expanded={!collapsed.has(entry.id)} onClick={() => { const next = new Set(collapsed); if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id); setCollapsed(next); }}><Icon name={collapsed.has(entry.id) ? 'chevron-right' : 'chevron-down'} size={16} /></button>}
                     <button
                       type="button"
                       aria-current={entry.id.split('#')[0] === state.currentSectionId}
@@ -361,6 +384,18 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
  * *where* the stage sits (between the status line and the footer, which is where
  * its stacking context comes from) and the screen owns its contents.
  */
+/**
+ * Opens the 目录 at the chapter being read: in a long serial the reader is in
+ * chapter 800, and a list that opens at chapter 1 hides both where they are and
+ * everything near it. Runs once, when the list mounts with the sheet.
+ */
+function revealCurrentChapter(list: HTMLUListElement | null): void {
+  const current = list?.querySelector<HTMLElement>('button[aria-current=true]');
+  if (!current) return;
+  current.scrollIntoView?.({ block: 'center' });
+  current.focus({ preventScroll: true });
+}
+
 function StageHost({ stage }: { stage: HTMLElement }): JSX.Element {
   return (
     <div
@@ -710,7 +745,8 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
         <button
           type="button"
           className="tts-chip"
-          aria-label="从头朗读这一章"
+          aria-label={`${state.chip}，从当前页重新朗读`}
+          title="从当前页重新朗读"
           onClick={handlers.onSpeakFromHere}
         >
           {state.chip}
@@ -897,6 +933,27 @@ function SliderRow({
   );
 }
 
+/**
+ * The slider for a comic, whose chapters are its pages (one image each): it moves
+ * through the whole book, not "this chapter's pages", which for a comic is always 1.
+ * The label follows the thumb; the page opens when the thumb is let go, so dragging
+ * across 200 pages decodes one image instead of 200.
+ */
+function PageScrubber({ page, count, disabled, onCommit }: { page: number; count: number; disabled: boolean; onCommit(page: number): void }): JSX.Element {
+  const [draft, setDraft] = useState(page);
+  const label = `第 ${draft}/${count} 页`;
+  const commit = () => { if (draft !== page) onCommit(draft); };
+  return (
+    <div className="reader-scrub">
+      <input className="progress-scrubber" type="range" min={1} max={Math.max(1, count)} step={1}
+        value={draft} aria-label="页码" aria-valuetext={label} disabled={count <= 1 || disabled}
+        onInput={(event) => setDraft(Number((event.currentTarget as HTMLInputElement).value))}
+        onPointerUp={commit} onKeyUp={commit} onBlur={commit} />
+      <span className="progress-page">{label}</span>
+    </div>
+  );
+}
+
 /** A labelled native select, for the lists that outgrow a segmented control. */
 function SelectRow({
   label,
@@ -932,9 +989,9 @@ function SelectRow({
  * is no word under them). Centred, equal-width, and full-height so the whole
  * column of the bar is the target rather than the glyph.
  */
-function TopButton({ icon, label, onClick }: { icon: IconName; label: string; onClick(): void }): JSX.Element {
+function TopButton({ icon, label, onClick, pressed }: { icon: IconName; label: string; onClick(): void; pressed?: boolean }): JSX.Element {
   return (
-    <button type="button" className="top-button" aria-label={label} onClick={onClick}>
+    <button type="button" className="top-button" aria-label={label} aria-pressed={pressed} onClick={onClick}>
       <Icon name={icon} />
       <span className="top-button-label">{label}</span>
     </button>

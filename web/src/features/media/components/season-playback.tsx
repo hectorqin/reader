@@ -1,9 +1,9 @@
+import { Icon } from '../../../ui/icon.tsx';
 import {MediaSelect} from './select.tsx';
 import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';
 import { useEffect, useState } from 'react';
 import type {Edition,Item,MediaApi,Part} from '../api/media-api.ts';
-import {Play} from 'lucide-react';
 
 export interface SeasonEpisode {id:string;title:string;editions:Edition[]}
 export function episodeDisplayTitle(index:number,title:string){
@@ -33,10 +33,7 @@ export function SeriesSeasons({seasons,...props}:Omit<SeasonPlaybackProps,'id'>&
   </section>;
 }
 
-export function SeriesPlayback(props:SeasonPlaybackProps){
-  const [open,setOpen]=useState(false);
-  return <details className="media-series-playback" onToggle={event=>setOpen(event.currentTarget.open)}><summary>跨季顺序播放</summary>{open&&<SeasonPlayback {...props} scope="series"/>}</details>;
-}
+
 
 export function SeasonPlayback({api,id,scope='season',layout='list',currentPartId,onPlay,onDetail}:SeasonPlaybackProps){
   const [episodes,setEpisodes]=useState<SeasonEpisode[]>([]),[start,setStart]=useState(0),[choices,setChoices]=useState<Record<string,string>>({});
@@ -58,7 +55,7 @@ export function SeasonPlayback({api,id,scope='season',layout='list',currentPartI
   async function play(from=start){const next=seasonQueue(episodes,from,choices);if(busy)return;setStart(from);setError('');if(!next.entries.length)return;setBusy(true);try{await onPlay(next.entries);}catch(error){setError(error instanceof Error?error.message:'播放失败');}finally{setBusy(false);}}
   return <section className="media-season-playback" aria-label="剧集顺序播放">
     {loading?<MediaLoading layout={layout==='grid'?'episodes':'tracks'} label="正在读取选集…"/>:loadError?<MediaScreenError error={loadCause} message={loadError} busy={loading} retryLabel="重新读取" onRetry={()=>setAttempt(attempt+1)}/>:<>
-      {layout==='list'&&<div className="media-toolbar"><span>{episodes[start]?'从 '+episodes[start]!.title+' 开始':'暂无剧集'}</span><button className="media-primary" disabled={busy||!queue.entries.length} onClick={()=>void play()}><Play size={16} aria-hidden="true"/>顺序播放 {queue.count} 集</button></div>}
+      {layout==='list'&&<div className="media-toolbar"><span>{episodes[start]?'从 '+episodes[start]!.title+' 开始':'暂无剧集'}</span><button className="media-primary" disabled={busy||!queue.entries.length} onClick={()=>void play()}><Icon name="play" size={16} />顺序播放 {queue.count} 集</button></div>}
       {episodes.length>(layout==='grid'?50:10)&&<div className="media-chapter-filter"><label>查找集数<input type="search" value={query} onInput={event=>{setQuery(event.currentTarget.value);setPage(0);}}/></label><button onClick={()=>{setQuery('');setPage(Math.floor(start/50));}}>定位起播集</button></div>}
       {queue.notice&&<p className="media-season-notice">{queue.notice}</p>}
       {layout==='grid'?<><div className="media-episode-grid">{filtered.slice(currentPage*50,(currentPage+1)*50).map(({episode,index})=><button key={episode.id} aria-label={'播放 '+episode.title} title={episode.title} aria-pressed={episode.editions.some(e=>e.parts.some(p=>p.id===currentPartId))} disabled={busy||!episode.editions.some(e=>e.parts.length&&e.parts.every(p=>p.available))} onClick={()=>void play(index)}><strong>{episodeDisplayTitle(index,episode.title)}</strong><small>{episode.editions.some(e=>e.parts.some(p=>p.id===currentPartId))?'正在播放':episode.editions[0]?.parts.every(p=>p.end!==null)?Math.max(1,Math.round(episode.editions[0].parts.reduce((sum,p)=>sum+p.end!-p.start,0)/60))+' 分钟':'可播放'}</small></button>)}</div>{episodes[start]&&episodes[start]!.editions.length>1&&<div className="media-episode-selection"><span>{episodes[start]!.title}</span>{episodes[start]!.editions.length>1&&<MediaSelect aria-label={episodes[start]!.title+' 版本'} value={choices[episodes[start]!.id]??(episodes[start]!.editions.filter(e=>e.parts.length&&e.parts.every(p=>p.available)).length===1?episodes[start]!.editions.find(e=>e.parts.length&&e.parts.every(p=>p.available))!.id:'')} onChange={event=>setChoices({...choices,[episodes[start]!.id]:event.currentTarget.value})}><option key="empty" value="">选择版本</option>{episodes[start]!.editions.map(edition=><option key={edition.id} value={edition.id} disabled={!edition.parts.length||edition.parts.some(part=>!part.available)}>{edition.label}</option>)}</MediaSelect>}<button className="media-primary" disabled={busy||!queue.entries.length} onClick={()=>void play()}>播放所选版本</button><button onClick={()=>onDetail(episodes[start]!.id)}>单集详情</button></div>}</>:<div className="media-season-list">{filtered.slice(currentPage*50,(currentPage+1)*50).map(({episode,index})=><div className="media-season-row" key={episode.id}>

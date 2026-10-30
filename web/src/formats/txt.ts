@@ -197,14 +197,3 @@ export function chunkByLength(text: string, maxLength: number): Chunk[] {
   }
   return chunks;
 }
-
-/**
- * A chapter body as the reader's own paragraph markup.
- *
- * Kept as a named export because the loader has always had one and the name is
- * what the tests look for; the work itself moved to `segments.ts`, which is the
- * single definition of what a paragraph is for a TXT — shared with the server's
- * `chapter-full:` rendition's consumer and with the text reader, so a book cannot
- * be typeset one way locally and another way when it arrives windowed.
- */
-export const textToHtml = textToChapterHtml;

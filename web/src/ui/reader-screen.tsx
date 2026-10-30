@@ -203,6 +203,7 @@ export class ReaderScreen {
   private overrides: ReadingOverrides = emptyOverrides();
   private toolsOpen = false;
   private annotation: AnnotationTarget | null = null;
+  private annotationClosedAt = -Infinity;
   private toolsSelection: TextAnchor | null = null;
   private toolsReturn = '';
   private preview: SpeechEngine | null = null;
@@ -264,7 +265,7 @@ export class ReaderScreen {
 <ReaderChrome
           tools={<>{this.annotation && <AnnotationPopover key={this.annotation.note?.id ?? encodeAnchor(this.annotation.anchor)} target={this.annotation}
             save={(type, comment, color) => this.saveAnnotation(type, comment, color)} remove={() => this.removeAnnotation()}
-            close={() => { this.annotation = null; this.view?.clearSelection(); this.patch({}); }} />}{this.toolsOpen && this.manifest ? <ReadingTools
+            close={() => { this.annotation = null; this.annotationClosedAt = performance.now(); this.view?.clearSelection(); this.patch({}); }} />}{this.toolsOpen && this.manifest ? <ReadingTools
             api={this.options.api} cache={this.publicationCache} offline={this.options.offline}
             sync={this.options.sync} manifest={this.manifest} selection={this.toolsSelection}
             locator={this.view?.position()?.locator ?? ''} returnLocator={this.toolsReturn}
@@ -278,6 +279,8 @@ export class ReaderScreen {
           handlers={{
             onTools: () => this.openTools(),
             onBack: () => this.options.onBack(),
+            onRetryOpen: () => { if (this.book) void this.open(this.book); },
+            onToggleBookmark: () => void this.toggleBookmark(),
             toggleToc: () => this.toggleToc(),
             toggleSettings: (tab) => this.toggleSettings(tab),
             onSetting: (patch) => void this.updateSetting(patch),
@@ -305,6 +308,7 @@ export class ReaderScreen {
             onCancelSwitch: () => this.closeAlternatives(),
             onCancelAlternative: () => { this.qualityRun?.abort(); this.patch({ alternativeChapters: undefined, alternativeChapter: '', alternativeQuality:null, alternativeQualityError:'', alternativeQualityBusy:false }); },
             onScrubPage: (page) => void this.scrubToPage(page),
+            onScrubChapter: (chapter) => { if (!this.navigating && !this.chrome.refreshing && !this.chrome.switching) void this.goToSection(chapter - 1); },
             onTurnPage: (direction) => void this.turnPage(direction),
             onSpeechToggle: () => this.toggleSpeech(),
             onSpeechPrevious: () => void this.tts?.previous(),
@@ -337,7 +341,8 @@ export class ReaderScreen {
     const token = ++this.loadingToken;
     this.toolsOpen = false; this.annotation = null; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
     this.content = null; this.book = book;
-    this.patch({ title: book.title, author: book.author, description: book.description, bookInfoOpen: false, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null, refreshingChapter: false, sourceName: '', chapterUrl: '', toc: [] });
+    let opened = false;
+    this.patch({ openFailure: '', title: book.title, author: book.author, description: book.description, bookInfoOpen: false, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null, refreshingChapter: false, sourceName: '', chapterUrl: '', toc: [] });
     this.setStatus('loading', '正在载入…');
     this.setChromeVisible(true);
 
@@ -355,6 +360,15 @@ export class ReaderScreen {
         }
       } catch (error) { if (error instanceof ApiError && error.isAuthFailure) throw error; }
       if (token !== this.loadingToken) return;
+      // 无能力 → 不渲染 (ui.md §5): AI 总结 only appears when the server will answer it.
+      // An older server without the endpoint keeps the button, as it always had.
+      if (typeof this.options.api.aiCapabilities === 'function' && this.chrome.aiSummaryAvailable === undefined) {
+        void this.options.api.aiCapabilities().then(capabilities => {
+          if (!this.disposed) this.patch({ aiSummaryAvailable: capabilities.summary });
+        }).catch(error => {
+          if (!this.disposed && error instanceof ApiError && error.kind === 'not_found') this.patch({ aiSummaryAvailable: true });
+        });
+      }
       if (book.format === 'chapters' && typeof this.options.api.sourceOptions === 'function') {
         void this.options.api.sourceOptions(book.id).then(options => {
           if (token === this.loadingToken) this.patch({ canSwitch: options.canSwitch });
@@ -370,6 +384,7 @@ export class ReaderScreen {
       const staged = await this.openStaged(book, token);
       if (staged) {
         this.doc = staged.doc;
+        opened = true;
         this.afterDocLoaded();
         // Cleared *after* the position is restored, not before. `restorePosition`
         // ends in `flashStatus('已恢复到上次阅读位置')`, and clearing the line first
@@ -388,6 +403,7 @@ export class ReaderScreen {
       if (token !== this.loadingToken) return;
 
       this.doc = loaded.doc;
+      opened = true;
       this.afterDocLoaded();
       if (loaded.notes.length > 0) this.setStatus('idle', loaded.notes.join(' · '));
       else this.hideStatus();
@@ -396,6 +412,8 @@ export class ReaderScreen {
     } catch (err) {
       if (token !== this.loadingToken) return;
       this.handleLoadError(err);
+      // A toast fades after a few seconds; an empty stage behind it must keep saying why.
+      if (!opened && !this.disposed && (this.chrome.statusState === 'error' || this.chrome.statusState === 'offline')) this.patch({ openFailure: this.chrome.statusText || '无法打开这本书' });
     }
   }
 
@@ -1114,8 +1132,10 @@ export class ReaderScreen {
         // mode a horizontal swipe has no meaning and hijacking it would fight
         // the reader's own scrolling.
         if (doc.layout !== 'fixed' && this.settings.mode !== 'paged') return;
-        if (direction === 'left') void this.turnPage('next');
-        else if (direction === 'right') void this.turnPage('previous');
+        // Right-to-left (a manga) is read by swiping the other way.
+        const rtl = this.isRtl();
+        if (direction === (rtl ? 'right' : 'left')) void this.turnPage('next');
+        else if (direction === (rtl ? 'left' : 'right')) void this.turnPage('previous');
       },
       onDragDelta: (deltaX, deltaY, pointerType) => {
         const view = this.view;
@@ -1133,24 +1153,31 @@ export class ReaderScreen {
         // A flick turns as a swipe always has; a slow drag turns once it has carried
         // the page a third of the way, which is where the next page is mostly in view.
         const turn = (Math.abs(deltaX) >= 48 && duration < 800) || Math.abs(deltaX) > this.stage.clientWidth * 0.3;
-        void this.finishDrag(turn ? (deltaX < 0 ? 'next' : 'previous') : null);
+        const forward = this.isRtl() ? deltaX > 0 : deltaX < 0;
+        void this.finishDrag(turn ? (forward ? 'next' : 'previous') : null);
         return true;
       },
       onLongPress: () => this.setChromeVisible(true),
       hasSelection: () => hasTextSelection(this.stage),
     });
 
-    // Hardware keys, which is how a Bluetooth page-turner and an Android volume
-    // rocker reach the reader (the shell maps them to ArrowLeft/Right). Space is
-    // the desktop convention and costs nothing.
+    // Hardware keys: a desktop keyboard and a Bluetooth page-turner. Space and
+    // Shift+Space page as they do in every browser; S starts or pauses 朗读. The
+    // arrows follow the reading direction, so in a right-to-left comic ← is forward.
     this.viewListeners.push(
-      bindKeys(this.element, (key) => {
-        if (key === 'ArrowRight' || key === 'PageDown') void this.turnPage('next');
-        else if (key === 'ArrowLeft' || key === 'PageUp') void this.turnPage('previous');
-        else if (key === ' ') this.toggleSpeech();
+      bindKeys(this.element, (key, shift) => {
+        const rtl = this.isRtl();
+        if (key === 'PageDown' || (key === ' ' && !shift) || key === (rtl ? 'ArrowLeft' : 'ArrowRight')) void this.turnPage('next');
+        else if (key === 'PageUp' || (key === ' ' && shift) || key === (rtl ? 'ArrowRight' : 'ArrowLeft')) void this.turnPage('previous');
+        else if (key === 's' || key === 'S') this.toggleSpeech();
         else if (key === 'Escape') this.setChromeVisible(false);
       }),
     );
+  }
+
+  /** Whether forward is to the left: a comic set to 右→左, or a right-to-left book. */
+  private isRtl(): boolean {
+    return (this.doc?.layout === 'fixed' ? this.settings.comicDirection : this.doc?.direction) === 'rtl';
   }
 
   private viewSettings(): Partial<ViewSettings> {
@@ -1245,6 +1272,9 @@ export class ReaderScreen {
    */
   private onTapZone(zone: 'previous' | 'toggle-chrome' | 'next'): void {
     if (this.chrome.tocOpen || this.chrome.settingsOpen) return;
+    // The tap that dismissed a note card (it closes on pointerdown) is spent on that:
+    // it must not also turn the page or toggle the bars (ui.md §3.8).
+    if (performance.now() - this.annotationClosedAt < 600) return;
 
     if (zone === 'toggle-chrome') {
       this.setChromeVisible(!this.chromeVisible);
@@ -1255,7 +1285,9 @@ export class ReaderScreen {
     // above); only the middle third brings it back. `tapZone` decides which
     // physical side is *forward*, so a left-handed reader can put next-page under
     // the thumb that holds the phone.
-    const reversed = this.settings.tapZone === 'reversed';
+    // A right-to-left book reads forward to the left, as does a left-handed `reversed`
+    // layout; both together cancel out.
+    const reversed = (this.settings.tapZone === 'reversed') !== (this.isRtl());
     const forward = reversed ? zone === 'previous' : zone === 'next';
     if (this.chromeVisible) this.setChromeVisible(false);
     void this.turnPage(forward ? 'next' : 'previous');
@@ -1314,6 +1346,31 @@ export class ReaderScreen {
    * and the *write* is debounced below, because a scroll is a gesture in progress
    * rather than a sequence of decisions to persist.
    */
+  /** Bookmarks at this exact reading position — the same test 阅读工具 uses for 已加书签. */
+  private bookmarksHere(locator: string | undefined): Note[] {
+    if (!this.book || !locator) return [];
+    return this.options.offline.notesFor(this.book.id).filter(note => note.type === 'bookmark' && note.locator === locator);
+  }
+
+  /**
+   * One press from the top bar, where it used to take four (toolbar → 工具 → 笔记 →
+   * 加书签), and the same button shows whether this page already has one.
+   */
+  private async toggleBookmark(): Promise<void> {
+    const book = this.book, locator = this.view?.position()?.locator;
+    if (!book || !locator) return;
+    const here = this.bookmarksHere(locator);
+    if (here.length) {
+      for (const note of here) await this.options.offline.deleteNote(note.id);
+      this.flashStatus('已移除本页书签', 1800);
+    } else {
+      await this.options.offline.upsertNotes([{ id: newId(), bookId: book.id, type: 'bookmark', locator, text: book.title, comment: '', color: '', updatedAt: Date.now() }]);
+      this.flashStatus('已为本页加书签', 1800);
+    }
+    this.options.sync.schedule();
+    this.patch({ bookmarked: !here.length });
+  }
+
   private onPosition(position: Position | null): void {
     if (!position || !this.book) return;
     this.paintNotes();
@@ -1322,6 +1379,7 @@ export class ReaderScreen {
     const sectionId = position.sectionId;
     const chapterMoved = sectionId !== this.chrome.currentSectionId;
     this.patch({
+      bookmarked: this.bookmarksHere(position.locator).length > 0,
       progress: position.percentage,
       pageInChapter: position.pageInChapter,
       chapterPages: position.chapterPages,
@@ -2300,21 +2358,28 @@ function addDebouncedListener(
  * page-turner. The same handler therefore serves a Bluetooth remote and a
  * desktop keyboard, with no per-host branching.
  */
-function bindKeys(target: HTMLElement, handler: (key: string) => void): () => void {
+function bindKeys(target: HTMLElement, handler: (key: string, shift: boolean) => void): () => void {
   const onKeyDown = (event: KeyboardEvent): void => {
+    // On the document, not the reader element: nothing in the reader holds focus
+    // when a book opens, so a listener on the element heard no key until the reader
+    // happened to click a toolbar button first.
+    if (!target.isConnected || event.defaultPrevented) return;
     const element = event.target as HTMLElement | null;
     const tag = element?.tagName ?? '';
     // A typing surface owns the keys: the settings panel has range inputs, and
     // space on a focused control must not also turn the page.
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || element?.isContentEditable) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
-    // A panel that is open owns the keyboard: the arrow keys are how a range
+    // Space and Enter on a focused button press that button; they are not the page's.
+    if ((event.key === ' ' || event.key === 'Enter') && element?.closest('button, [role=button], a')) return;
+    // A sheet that is open owns the keyboard: the arrow keys are how a range
     // input is adjusted, and the settings panel is a column of range inputs.
-    if (target.querySelector('.panel:not([hidden]), dialog[open]')) return;
-    handler(event.key);
+    if (document.querySelector('dialog[open], [role=dialog], [role=alertdialog]')) return;
+    if (event.key === ' ' || event.key === 'PageDown' || event.key === 'PageUp') event.preventDefault();
+    handler(event.key, event.shiftKey);
   };
-  target.addEventListener('keydown', onKeyDown);
-  return () => target.removeEventListener('keydown', onKeyDown);
+  document.addEventListener('keydown', onKeyDown);
+  return () => document.removeEventListener('keydown', onKeyDown);
 }
 
 /**

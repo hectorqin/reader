@@ -79,8 +79,8 @@ cd server && npx tsx --test test/media-api.test.ts
 
 # Most Web tests use Vitest
 cd web && npx vitest run test/foo.test.ts
-# The few files written for node:test (api, asset-url, paginator, window, windowed-toc)
-cd web && npx tsx --test test/paginator.test.ts
+# The few files written for node:test (api, asset-url, windowed-toc)
+cd web && npx tsx --test test/windowed-toc.test.ts
 ```
 
 The Web package has two test runners: `npm test` runs Vitest, then runs the node:test files above with `tsx --test`; those files are excluded from Vitest in `web/vite.config.ts`. When adding a node:test file, add it to both the `test` script and the Vitest `exclude` list. The Web suite imports server code, so run `npm ci` for both packages first.
@@ -100,7 +100,7 @@ Set `UI_REVIEW_DIR` to change the output directory. Run a review and look at the
 
 ### Icons
 
-To add an icon, add its path to `web/tools/icons/paths.mjs` (use this project's own English names; `test/icons.test.ts` rejects names borrowed from other icon sets), then run `npm run icons --prefix web`.
+Icons are mapped from a name to a Lucide glyph in one place, `ICONS` in `web/src/ui/icon.tsx` (use this project's own English names; `test/icons.test.ts` rejects names borrowed from other icon sets and any other file importing `lucide-react`). The rules are in `docs/ui.md` §1.
 
 ## CI and releases
 

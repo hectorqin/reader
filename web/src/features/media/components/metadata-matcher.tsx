@@ -1,7 +1,7 @@
+import { Icon } from '../../../ui/icon.tsx';
 import {MediaSelect} from './select.tsx';
 import { useEffect, useRef, useState } from 'react';
 import type { Detail, MediaApi } from '../api/media-api.ts';
-import {Search} from 'lucide-react';
 import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';
 import {ApiError} from '../../../api/errors.ts';
@@ -19,7 +19,9 @@ export function MetadataMatcher({ api, item, onUpdated,layout='inline',onBusyCha
   const [artist,setArtist]=useState('');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [searched, setSearched] = useState(false);
+  // `selected` is only ever set by pressing a candidate's button: it opens the confirm sheet.
   const [selected, setSelected] = useState<Candidate | null>(null);
+  const [confirmUnmatch, setConfirmUnmatch] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [loadError,setLoadError]=useState('');
@@ -37,7 +39,7 @@ export function MetadataMatcher({ api, item, onUpdated,layout='inline',onBusyCha
     const controller = new AbortController();
     abort.current = controller;
     const generation=++previewGeneration.current;
-    setProvider(''); setCandidates([]); setSelected(null); setSearched(false);
+    setProvider(''); setCandidates([]); setSelected(null); setConfirmUnmatch(false); setSearched(false);
     setProviders([]); setError(''); setLoadError('');setLoadCause(undefined); setBusy(false); setJobNotice('');setLoading(true);
     const available = api.request<{ items: Provider[] }>('metadata/providers', 'GET', undefined, controller.signal).then(result => {
       if (controller.signal.aborted) return [];
@@ -53,7 +55,7 @@ export function MetadataMatcher({ api, item, onUpdated,layout='inline',onBusyCha
       const supported = await available;
       if(controller.signal.aborted||generation!==previewGeneration.current)return;
       const saved=result.items.filter(candidate=>typeof candidate.candidateId==='string'&&typeof candidate.title==='string'&&supported.some(p=>p.id===candidate.provider&&p.configured));
-      if(saved.length){setProvider(saved[0]!.provider);setCandidates(saved);setSelected(saved[0]!);setSearched(true);}
+      if(saved.length){setProvider(saved[0]!.provider);setCandidates(saved);setSearched(true);}
     }).catch(error=>{
       if(!controller.signal.aborted&&generation===previewGeneration.current){setLoadError('读取已存候选失败，请重试；服务器中的候选未被修改。');setLoadCause(error);}
     });
@@ -83,17 +85,21 @@ export function MetadataMatcher({ api, item, onUpdated,layout='inline',onBusyCha
       await api.request(`items/${item.id}/child-scrape-job`,'POST',{},signal);
       if(!signal.aborted)setJobNotice('季集候选任务已创建，可在媒体库管理的批量刮削中查看进度。季集编号可能与来源不同，需逐项核对确认。');
     })}>批量获取季集候选</button>{jobNotice&&<p role="status">{jobNotice}</p>}</>}
-    {match && <p>当前来源：{match.provider} · {match.externalId} <button disabled={busy} onClick={() => void run(async signal => {
-      const detail = await api.request<Detail>(`items/${item.id}/match`, 'DELETE', undefined, signal);
-      if (!signal.aborted) { onUpdated(detail); setCandidates([]); setSelected(null); setSearched(false); }
-    })}>移除在线匹配</button></p>}
+    {match && <p>当前来源：{match.provider} · {match.externalId} <button disabled={busy} onClick={() => setConfirmUnmatch(true)}>移除在线匹配</button></p>}
+    {confirmUnmatch && <ConfirmSheet danger title="移除在线匹配" busy={busy} confirmText="移除匹配"
+      text={`“${item.title}”将不再使用 ${match?.provider ?? ''} 的在线资料${item.kind === 'series' ? '，所属季和集的在线资料也会一并清除' : ''}。人工修改、播放进度和本地文件保留，之后可以重新匹配。`}
+      onCancel={() => setConfirmUnmatch(false)}
+      onConfirm={() => void run(async signal => {
+        const detail = await api.request<Detail>(`items/${item.id}/match`, 'DELETE', undefined, signal);
+        if (!signal.aborted) { onUpdated(detail); setCandidates([]); setSelected(null); setSearched(false); setConfirmUnmatch(false); }
+      })} />}
     <p>{child?'按所属剧集已确认的 TMDB 匹配和本地季集编号获取资料，请先核对编号。':'搜索会将关键词发送给所选来源。'}确认匹配后更新作品资料，保留人工修改、播放进度及版本关系。</p>
     <form className="media-form media-match-search" onSubmit={event => {
       event.preventDefault();
       void run(async signal => {
         setSelected(null); setCandidates([]); setSearched(false);
         const result = await api.request<{ items: Candidate[] }>(`items/${item.id}/matches`, 'POST', { provider, query,...(supportsArtist&&artist.trim()?{artist:artist.trim()}:{}) }, signal);
-        if (!signal.aborted) { setCandidates(result.items); setSelected(result.items[0] ?? null); setSearched(true); }
+        if (!signal.aborted) { setCandidates(result.items); setSearched(true); }
       });
     }}>
       <label>来源<MediaSelect aria-label="刮削来源" value={provider} disabled={busy} onChange={e => { ++previewGeneration.current;setLoading(false); setProvider(e.currentTarget.value); setCandidates([]); setSelected(null); setSearched(false); setError(''); }}>
@@ -103,25 +109,26 @@ export function MetadataMatcher({ api, item, onUpdated,layout='inline',onBusyCha
       {!child&&<label>搜索词<input aria-label="刮削搜索词" value={query} required maxLength={200} disabled={busy} onInput={e => setQuery(e.currentTarget.value)}/></label>}
       {supportsArtist&&<label>艺人限定（可选）<input aria-label="刮削艺人限定" value={artist} maxLength={200} disabled={busy} onInput={event=>setArtist(event.currentTarget.value)}/><small>与搜索词一同发送给 MusicBrainz，仅用于“搜索候选”。没有结果时可清空重搜，不会修改作品标签。</small></label>}
       <button className="media-primary" disabled={busy || !provider || !query.trim()} type="submit">{child?'获取季集候选':'搜索候选'}</button>
-      {!child&&<details className="media-auto-match"><summary>自动匹配</summary><button disabled={busy||!provider||!!match} type="button" onClick={()=>void run(async signal=>{
+      {/* A primary way to match, so it sits beside 搜索候选 rather than behind a disclosure. */}
+      {!child&&<div className="media-auto-match"><button disabled={busy||!provider||!!match} type="button" onClick={()=>void run(async signal=>{
         setSelected(null);setCandidates([]);setSearched(false);
         const result=await api.request<{status:string;item?:Detail;items?:Candidate[]}>(`items/${item.id}/auto-match`,'POST',{provider},signal);
         if(signal.aborted)return;
         if(result.item)onUpdated(result.item);
-        else{const next=result.items||[];setCandidates(next);setSelected(next[0]??null);setSearched(true);setError(result.status==='unmatched'?'':'未满足唯一且一致的匹配条件，请核对候选后确认。');}
+        else{const next=result.items||[];setCandidates(next);setSearched(true);setError(result.status==='unmatched'?'':'未满足唯一且一致的匹配条件，请核对候选后确认。');}
       })}>按作品信息自动匹配</button>
-      <small>使用当前标题搜索，仅唯一较强候选且详情复核一致时保存；已有在线匹配不会覆盖。</small></details>}
+      <small>使用当前标题搜索，仅唯一较强候选且详情复核一致时保存；已有在线匹配不会覆盖。</small></div>}
     </form>
-    {!loading&&!loadError&&!provider&&<div className="media-match-unavailable" role="status"><Search size={26} strokeWidth={1.4} aria-hidden="true"/><strong>{providers.length?'尚未配置可用来源':'当前作品暂无支持的在线来源。'}</strong><p>{providers.length?'请由服务器管理员设置访问凭证或联系信息，再重新读取。':'可以返回手动编辑，本地资料和播放不受影响。'}</p>{providers.length>0&&<button type="button" disabled={busy} onClick={()=>setLoadRetry(value=>value+1)}>重新检查来源</button>}</div>}
+    {!loading&&!loadError&&!provider&&<div className="media-match-unavailable" role="status"><Icon name="search" size={24} /><strong>{providers.length?'尚未配置可用来源':'当前作品暂无支持的在线来源。'}</strong><p>{providers.length?'请由服务器管理员设置访问凭证或联系信息，再重新读取。':'可以返回手动编辑，本地资料和播放不受影响。'}</p>{providers.length>0&&<button type="button" disabled={busy} onClick={()=>setLoadRetry(value=>value+1)}>重新检查来源</button>}</div>}
     {loading&&<MediaLoading layout="list" label="正在读取来源与候选…" count={2}/>}
     {error && <p className="media-error" role="alert">{error}</p>}
     {busy && <FloatingNotice message="正在处理元数据…" busy />}
     {searched && candidates.length === 0 && <p>未找到候选，请修改关键词后重试。</p>}
     {layout==='page'&&<h2>候选作品</h2>}
     {candidates.map(candidate => <div className="media-row media-match-candidate" key={candidate.candidateId}>
-      {layout==='page'&&<div className="media-match-placeholder" aria-hidden="true"><Search size={21} strokeWidth={1.4}/></div>}
+      {layout==='page'&&<div className="media-match-placeholder" aria-hidden="true"><Icon name="search" size={20} /></div>}
       <div className="media-match-copy"><strong>{candidate.title}</strong><small>{candidate.year || ''} {candidate.artist || ''} · {candidate.provider} / {candidate.externalId}</small>{candidate.evidence&&<small>{({strong:'较强匹配',review:'需要核对',conflict:'存在冲突'})[candidate.evidence.level]}：{candidate.evidence.reasons.join('、')}</small>}{candidate.description && <small className="media-match-excerpt">{candidate.description.length>160?candidate.description.slice(0,160)+'…':candidate.description}</small>}{candidate.description&&candidate.description.length>160&&<details className="media-match-description"><summary>完整简介</summary><p tabIndex={0} aria-label="候选完整简介">{candidate.description}</p></details>}</div>
-      <button aria-label="预览匹配" disabled={busy} onClick={() => setSelected(candidate)}>{layout==='page'?'选择':'预览匹配'}</button>
+      <button aria-label={`${layout==='page'?'选择':'预览匹配'}：${candidate.title}`} disabled={busy} onClick={() => setSelected(candidate)}>{layout==='page'?'选择':'预览匹配'}</button>
     </div>)}
     {selected && <ConfirmSheet title="确认元数据匹配" busy={busy} confirmText="确认此匹配"
       text={`将“${item.title}”匹配为“${selected.title}”。在线标题、年份和简介等字段将采用此来源；人工编辑的字段仍优先显示。`}

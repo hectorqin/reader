@@ -263,7 +263,8 @@ describe('chapter publication reading', () => {
     const kv = new MemoryKv();
     const blobs = new MemoryBlobs();
     const first = await setup(kv, blobs);
-    serve(first.transport, content(['a', 'b']));
+    // Three chapters: opening a also prefetches b, so c is the one never cached.
+    serve(first.transport, content(['a', 'b', 'c']));
     await first.screen.open(book);
     expect(body(first.screen)?.textContent).toContain('<script>alert(1)</script>');
     expect(body(first.screen)?.querySelector('script')).toBeNull();
@@ -277,11 +278,11 @@ describe('chapter publication reading', () => {
     await second.screen.open(book);
     expect(body(second.screen)?.textContent).toContain('resource:r1:a');
     await click(second.screen, '目录');
-    expect(second.screen.element.querySelectorAll('.toc-list li')).toHaveLength(2);
-    await click(second.screen, '2章节 b');
+    expect(second.screen.element.querySelectorAll('.toc-list li')).toHaveLength(3);
+    await click(second.screen, '3章节 c');
     await vi.waitFor(() => expect(noticeText()).toContain('这一章尚未缓存'));
     expect(body(second.screen)?.textContent).toContain('resource:r1:a');
-    expect(body(second.screen)?.textContent).not.toContain('resource:r1:b');
+    expect(body(second.screen)?.textContent).not.toContain('resource:r1:c');
   });
 
   it('refreshes by stable href, preserving the chapter after insertion and keeping old content on failure', async () => {
@@ -426,4 +427,46 @@ it('opens tools, searches the whole book, navigates and returns, and persists a 
  expect(env.offline.notesFor(book.id)).toHaveLength(1);
  await act(() => click(env.screen,'删除笔记'));await act(() => document.querySelector<HTMLButtonElement>('dialog[role=alertdialog] .sheet-footer .primary')!.click());
  await vi.waitFor(()=>expect(env.offline.notesFor(book.id)).toHaveLength(0));
+});
+
+it('keeps saying why a book did not open, and 重试 opens it once the server answers', async () => {
+  const env = await setup();
+  env.transport.json({ error: { code: 'BROKEN', message: '服务器出错了' } }, 500);
+  await env.screen.open(book);
+  await vi.waitFor(() => expect(env.screen.element.querySelector('.reader-open-failure')?.textContent).toContain('服务器出错了'));
+  serve(env.transport, content(['a']));
+  await click(env.screen, '重试');
+  await vi.waitFor(() => expect(body(env.screen)?.textContent ?? '').toContain('正文'));
+  expect(env.screen.element.querySelector('.reader-open-failure')).toBeNull();
+});
+
+it('turns pages from the keyboard without the reader having focused anything first', async () => {
+  const env = await setup(); serve(env.transport, content(['a', 'b']));
+  await env.screen.open(book);
+  const turn = vi.spyOn(env.screen as unknown as { turnPage(direction: string): Promise<void> }, 'turnPage').mockResolvedValue(undefined);
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', shiftKey: true, bubbles: true }));
+  expect(turn.mock.calls.map(call => call[0])).toEqual(['next', 'previous']);
+});
+
+it('fetches the next chapter while the current one is read, once', async () => {
+  const env = await setup(); serve(env.transport, content(['a', 'b', 'c']));
+  await env.screen.open(book);
+  const assets = () => env.transport.requests.filter((request) => request.url.includes('/assets?')).map((request) => new URL(request.url, 'http://test').searchParams.get('ref'));
+  await vi.waitFor(() => expect(assets()).toContain('resource:r1:b'));
+  expect(assets().filter((ref) => ref === 'resource:r1:b')).toHaveLength(1);
+  expect(assets()).not.toContain('resource:r1:c');
+});
+
+it('bookmarks the page on screen from the top bar, and the same button removes it', async () => {
+  const env = await setup(); serve(env.transport, content(['a', 'b']));
+  await env.screen.open(book);
+  const button = () => env.screen.element.querySelector<HTMLButtonElement>('.reader-bookmark')!;
+  expect(button().getAttribute('aria-pressed')).toBe('false');
+  await act(async () => { button().click(); });
+  await vi.waitFor(() => expect(button().getAttribute('aria-pressed')).toBe('true'));
+  expect(env.offline.notesFor(book.id).filter((note) => note.type === 'bookmark')).toHaveLength(1);
+  await act(async () => { button().click(); });
+  await vi.waitFor(() => expect(button().getAttribute('aria-pressed')).toBe('false'));
+  expect(env.offline.notesFor(book.id).filter((note) => note.type === 'bookmark')).toHaveLength(0);
 });

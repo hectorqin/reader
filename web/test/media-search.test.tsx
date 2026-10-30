@@ -41,7 +41,7 @@ it('restores a cross-channel search on return and does not restore another accou
   await vi.waitFor(()=>expect(root.querySelector('.media-search-result')).not.toBeNull());
   root.scrollTop=420;
   await act(async()=>root.querySelector<HTMLButtonElement>('.media-search-result')!.click());
-  expect(searchReturnFor(api)).toMatchObject({channel:'music',targetChannel:'video',itemId:'film',query:'电影',scope:'all'});
+  expect(searchReturnFor(api)).toMatchObject({channel:'music',query:'电影',scope:'all'});
   act(()=>render(null,root));root.scrollTop=0;await act(async()=>mount());
   expect(root.querySelector('input')!.value).toBe('电影');expect(root.querySelector('[data-scope=all]')!.getAttribute('aria-pressed')).toBe('true');
   await vi.waitFor(()=>expect(search).toHaveBeenCalledTimes(2));

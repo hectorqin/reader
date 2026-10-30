@@ -1,5 +1,5 @@
+import { Icon } from '../../../ui/icon.tsx';
 import { useState } from 'react';
-import { Check, SunMoon } from 'lucide-react';
 import {
   appThemes, paperIds, readerPapers, resolveAppTheme, resolveReadingTheme, saveThemePreference, themes,
   type AppThemeId, type ReaderPaper, type ThemeId, type ThemeMode, type ThemePreference,
@@ -22,7 +22,7 @@ function ThemePreview({ id }: { id: ThemeId }) {
 function ThemeCard({ id, label, note, pressed, onClick }: { id: ThemeId; label: string; note: string; pressed: boolean; onClick(): void }) {
   return <button type="button" className="theme-card" aria-label={label} aria-pressed={pressed} onClick={onClick}>
     <ThemePreview id={id} />
-    <span className="theme-card-label"><strong>{label}</strong>{pressed && <Check size={18} aria-hidden="true" />}</span>
+    <span className="theme-card-label"><strong>{label}</strong>{pressed && <Icon name="check" size={18} />}</span>
     <small>{note}</small>
   </button>;
 }
@@ -82,7 +82,7 @@ export function MediaThemeSettings({ scope, onReaderSettings }: { scope: string;
   return <section className="theme-settings">
     <div className="theme-settings-card">
       <button type="button" className="theme-follow" aria-label="跟随系统" aria-pressed={following} onClick={toggleFollow}>
-        <span className="theme-follow-icon" aria-hidden="true"><SunMoon size={20} /></span>
+        <span className="theme-follow-icon" aria-hidden="true"><Icon name="appearance" size={20} /></span>
         <span className="theme-follow-text"><strong>跟随系统</strong><small>按系统深浅色自动切换</small></span>
         <span className="theme-switch" aria-hidden="true" />
       </button>

@@ -97,10 +97,3 @@ export function MediaStructurePage() {
     return <ItemPageFrame title="结构整理" channel={channel} itemId={itemId} admin><AdminOnly><ItemQuery query={query}>{detail => <div className="media-task-panel"><section className="media-manager-card"><h3>作品归属与结构</h3><p className="media-manager-note">调整所属专辑、歌手、剧集、季和集号。文件、版本与播放进度会保留</p><VideoHierarchyEditor api={runtime.mediaApi} item={detail} onUpdated={updateDetail} /><MusicParentEditor api={runtime.mediaApi} item={detail} onUpdated={updateDetail} /></section>{detail.editions.map(edition => <section className="media-manager-card" key={edition.id}><h4>{edition.label}</h4><EditionTools api={runtime.mediaApi} item={detail} edition={edition} busy={false} onPlay={(parts, index) => { void playParts(runtime, channel, detail.title, parts, index); }} onQueue={ids => { void runtime.mediaApi.request('queue', 'POST', { partIds: ids }); }} onUpdated={updateDetail} onAssigned={target => navigate(`/media/${channel}/items/${encodeURIComponent(target.id)}`)} /></section>)}</div>}</ItemQuery></AdminOnly></ItemPageFrame>;
 }
 
-// Short route-facing names keep the route module readable while preserving
-// the feature-prefixed names for imports from tests and other media pages.
-export const MetadataEditPage = MediaMetadataEditPage;
-export const MatchPage = MediaMatchPage;
-export const ChaptersPage = MediaChaptersPage;
-export const EditionManagementPage = MediaEditionPage;
-export const StructureManagementPage = MediaStructurePage;

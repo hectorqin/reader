@@ -240,41 +240,6 @@ function toParagraph(block: string): TextParagraph {
 }
 
 /**
- * One paragraph as a `<p>`.
- *
- * `textContent`, never `innerHTML`: a TXT is user data, and a novel containing a
- * `&` or a `<` must not be able to produce markup. The absence of `white-space:
- * pre-wrap` is deliberate as well — the paragraph is now a paragraph, and the
- * lines inside it were soft wraps, so the *browser* is what decides where a line
- * ends. That decision is a function of the reader's font size and the column
- * width, which is the whole reason the flow is reflowable.
- */
-export function paragraphElement(paragraph: TextParagraph): HTMLParagraphElement {
-  const element = document.createElement('p');
-  element.textContent = paragraph.text;
-  return element;
-}
-
-/**
- * A chapter body as a fragment of `<p>` elements.
- *
- * The wrapper is a `<div class="txt-body">` rather than bare paragraphs, because
- * that class is what scopes the plain-text typesheet: an EPUB's chapter must not
- * inherit an indent the reader set for a different book, and the two meet in the
- * same shadow root.
- */
-export function textToParagraphs(text: string): DocumentFragment {
-  const fragment = document.createDocumentFragment();
-  const wrapper = document.createElement('div');
-  wrapper.className = 'txt-body';
-  for (const paragraph of splitTextParagraphs(text)) {
-    wrapper.append(paragraphElement(paragraph));
-  }
-  fragment.append(wrapper);
-  return fragment;
-}
-
-/**
  * The same rendition, as an HTML string.
  *
  * The string form exists for the local TXT loader, whose sections are HTML rather
@@ -363,17 +328,4 @@ export function textToChapterHtml(text: string): string {
   const { heading, body } = splitChapterHeading(text);
   const promoted = heading ? `<h3>${escapeHtml(heading)}</h3>\n` : '';
   return `<div class="txt-body">\n${promoted}${textToParagraphHtml(body)}\n</div>\n`;
-}
-
-/**
- * Whether a text ends at a paragraph break.
- *
- * Exported because the streaming reader has to decide, per chunk, whether the
- * paragraph it is looking at is finished — and the decision is a *rule about
- * paragraphs*, which is what this module owns. Duplicating the regex at the call
- * site would let the two drift, and the failure would be one extra indent somewhere
- * in the middle of a novel: invisible in any test and obvious on the page.
- */
-export function endsAtParagraphBreak(text: string): boolean {
-  return /\n\s*$/.test(cleanTextMarkup(text));
 }

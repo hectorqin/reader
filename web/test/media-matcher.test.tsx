@@ -136,6 +136,8 @@ describe('media metadata review', () => {
     const api = { request } as unknown as MediaApi;
     await act(async () => render(<MetadataMatcher api={api} item={item} onUpdated={()=>{}}/>, root));
     await vi.waitFor(() => expect(root.textContent).toContain('旧作品候选'));
+    // Saved candidates are listed for review; nothing asks to confirm until one is picked.
+    expect(root.querySelector('[aria-label="确认元数据匹配"]')).toBeNull();
     await click('预览匹配');
     await act(async () => render(<MetadataMatcher api={api} item={{...item, id: 'next', title: '下一作品'}} onUpdated={()=>{}}/>, root));
     await vi.waitFor(() => expect(root.querySelector('input')?.value).toBe('下一作品'));

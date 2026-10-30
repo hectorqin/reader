@@ -1,4 +1,4 @@
-import { Heart } from 'lucide-react';
+import { Icon } from '../../../ui/icon.tsx';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { MediaApi } from '../api/media-api.ts';
 import { Sheet } from '../../../ui/sheet.tsx';
@@ -23,5 +23,5 @@ export function PlaybackFavorite({api,itemId,onChanged}:{api:MediaApi;itemId:str
     catch{if(!signal.aborted){setError('收藏保存失败，请重读状态后重试');setFavorite(null);}}
     finally{if(!signal.aborted)setBusy(false);}
   }
-  return <div className="media-playback-favorite"><button className="media-lyrics-toggle" aria-label={favorite?'取消收藏':'收藏'} aria-pressed={favorite??false} disabled={busy||favorite===null} onClick={()=>void toggle()}><Heart size={18} fill={favorite?'currentColor':'none'} aria-hidden="true"/><span>{favorite?'已收藏':'收藏'}</span></button>{error&&<div className="media-favorite-error" role="alert"><p>{error}</p><button disabled={busy} onClick={()=>setRetry(value=>value+1)}>重读收藏状态</button></div>}</div>;
+  return <div className="media-playback-favorite"><button className="media-lyrics-toggle" aria-label={favorite?'取消收藏':'收藏'} aria-pressed={favorite??false} disabled={busy||favorite===null} onClick={()=>void toggle()}><Icon name="favorite" size={18} filled={!!favorite} /><span>{favorite?'已收藏':'收藏'}</span></button>{error&&<div className="media-favorite-error" role="alert"><p>{error}</p><button disabled={busy} onClick={()=>setRetry(value=>value+1)}>重读收藏状态</button></div>}</div>;
 }

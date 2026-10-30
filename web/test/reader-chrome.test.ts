@@ -12,8 +12,8 @@ import { render } from '../src/shared/ui/render-root.ts';
  *    of them — stop — was pushed off the right edge and the reader could not stop
  *    the voice at all (没法停止).
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createElement as h } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, createElement as h } from 'react';
 import { ReaderChrome, type ChromeState, type ChromeHandlers, type ReaderThemeState } from '../src/ui/reader-chrome.tsx';
 import { defaultThemePreference, type ThemePreference } from '../src/shared/theme/theme.ts';
 
@@ -138,6 +138,25 @@ describe('ReaderChrome', () => {
     render(h(ReaderChrome, { state: chromeState(state), stage, handlers: handlers() }), container);
     return container;
   }
+
+  it('pages a comic through the whole book, opening the page only when the thumb is let go', () => {
+    const stage = document.createElement('div');
+    const onScrubChapter = vi.fn();
+    render(h(ReaderChrome, { state: chromeState({ layout: 'fixed', chapterPages: 1, pageInChapter: 1, chapterIndex: 3, chapterCount: 10 }), stage, handlers: { ...handlers(), onScrubChapter } }), container);
+    const slider = container.querySelector<HTMLInputElement>('.progress-scrubber')!;
+    expect([slider.disabled, slider.max, slider.value]).toEqual([false, '10', '3']);
+    act(() => { slider.value = '7'; slider.dispatchEvent(new Event('input', { bubbles: true })); });
+    expect(container.querySelector('.progress-page')?.textContent).toBe('第 7/10 页');
+    expect(onScrubChapter).not.toHaveBeenCalled();
+    act(() => { slider.dispatchEvent(new Event('pointerup', { bubbles: true })); });
+    expect(onScrubChapter).toHaveBeenCalledWith(7);
+  });
+
+  it('offers AI 总结 only when the server says it can answer', () => {
+    expect(paint({}).querySelector('[aria-label="AI 总结"]')).toBeNull();
+    expect(paint({ aiSummaryAvailable: false }).querySelector('[aria-label="AI 总结"]')).toBeNull();
+    expect(paint({ aiSummaryAvailable: true }).querySelector('[aria-label="AI 总结"]')).not.toBeNull();
+  });
 
   it('keeps only the page-local controls on the rail', () => {
     // 主题 / 字号 / 听书. The five that were removed all open or reach the settings

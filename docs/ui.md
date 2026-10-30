@@ -12,9 +12,15 @@
 
 ## 1. 图标
 
-图标统一使用 `lucide-react` 的 SVG，`web/src/ui/icon.tsx` 集中维护名称映射，线宽 1.8，尺寸 1em。
-界面使用 Icon / IconButton / IconTextButton，不直接嵌入字体码位或 emoji。
-装饰图标标记 aria-hidden；没有文字的按钮必须有中文 aria-label。原字体文件与生成工具仅供历史兼容，不再加载到阅读界面。
+图标统一使用 `lucide-react` 的 SVG，`web/src/ui/icon.tsx` 集中维护名称映射，也是**唯一**引入 `lucide-react` 的文件
+（`test/icons.test.ts` 守住）。界面使用 Icon / IconButton / IconTextButton，不直接嵌入字体码位、emoji 或 ✓ × ＋ 这类字符。
+
+- **名称**：一个意思一个名字、一个字形，用本项目自己的英文名（`video`、`audiobook`、`lock`、`folder-browse`），
+  不借用其他图标集的名字。新增图标只改 `icon.tsx` 的 `ICONS`。
+- **尺寸**：不传 `size` 时为 1em（控件里用这个）；需要固定尺寸时只取 14 / 16 / 18 / 20 / 24 / 32 六档。
+- **线宽**：一律 1.8；32px 的空状态大图标用 1.4，否则放大后像粗体图示；导航当前项用 `strong`（2.1）。
+  `filled` 用文字颜色填充（播放三角、已收藏）。
+- 装饰图标默认 `aria-hidden`；独立表意时传 `label`。没有文字的按钮必须有中文 aria-label。
 
 ## 2. 设计令牌
 
@@ -276,6 +282,8 @@ Android 壳在原生层处理系统栏（`MainActivity.applyInsets`），WebView
   事实，宽屏上读者想要的是**多看见一些**而不是多两边的留白。所以这一页是
   `auto-fill` 无上限，并且封面尺寸阶梯比书架高一档——去掉上限以后用书架的阶梯
   会立刻退化成一屏 130px 的缩略图，正是阶梯存在的理由。
+- **子文件夹是搜索框下的一行芯片**（取自 `/library/browse` 的目录项，扫描忽略的不画），
+  点一个就把范围缩小一级；面包屑负责放大回去。下面的书是「这个文件夹及其子文件夹」的。
 - **每张封面一个动作。** 「加入书架」只画在**不在书架上**的那几本上（§3.4.1 末段、§3.5.2）。
 
 ##### 3.4.1.2 搜索框两边的留白
@@ -639,9 +647,8 @@ TXT 是唯一一种**没有作者排版**的书，所以它也是唯一一处「
   对一章节全是纯文本的章节会答「不是」——读者于是看到一本没有段落、没有缩进、
   样式表也没挂上的小说，而这看起来像排版偏好而不像 bug。`.txt-body` 标记只留作
   最后兜底（旧服务端／旧缓存）。
-- **阅读设置**：段落缩进、段间距、编码三行，只在 TXT 上出现；设置面板顶部的
-  「快捷」一行（字号／缩进／段间距／主题）也是同一批值的另一个入口，一次点击
-  走一档。前两个是写在 stage 上的自定义属性（`--reader-txt-indent` /
+- **阅读设置**：段落缩进、段间距、编码三行，只在 TXT 上出现，位于“外观”面板的
+  “更多排版”里。前两个是写在 stage 上的自定义属性（`--reader-txt-indent` /
   `--reader-txt-para-gap`），所以调整不需要重新注入章节、也不需要请求。
 
 引用保持 `chapter:<n>` 不变，`format: 'html'` 字段告诉客户端取哪一份
@@ -677,8 +684,10 @@ TXT 是唯一一种**没有作者排版**的书，所以它也是唯一一处「
 ### 3.10 手机阅读
 
 - 顶部：返回、书名、当前章节。
-- 底部：上一章、本章页数滑杆、下一章；下一行是目录、朗读、外观、设置。
-- 中间滑杆始终控制本章页数，不能变成全书进度。固定页章节只有一页时禁用滑杆。
+- 底部：上一章、本章页数滑杆、下一章；下一行是工具（书内搜索、笔记与书签）、目录、朗读、外观、设置。朗读进行中时“朗读”按钮显示“朗读中”（按下态），因为关掉朗读面板不会停止朗读。
+- 中间滑杆控制本章页数，不能变成全书进度。例外是漫画：它每“章”就是一页，本章页数恒为 1，所以滑杆改为全书页码（“第 7/200 页”），拖动时只更新标签，松手才打开那一页。
+- 书打不开时（服务端错误、未缓存的离线书），舞台上一直显示原因和“重试”“返回”，不只弹一条会消失的提示。直接打开阅读链接、没有上一页时，“返回”回到书架。
+- 键盘：方向键与 PageUp/PageDown 翻页，空格／Shift+空格翻下／上一页，S 开始或暂停朗读，Esc 收起工具栏；右→左的漫画方向键随方向镜像。焦点在按钮上时空格和回车只按下那个按钮。
 - 顶部左/右、底部左/右阅读信息可在“外观”分别选择书名、章节名、章节进度（章内页码与全书百分比）、时间或不显示。默认顶部左侧章节名，底部左侧章节进度，底部右侧时间。配置按设备保存，工具栏隐藏后仍显示；长文本省略。关闭信息仍保留固定边界，避免改变正文分页。日夜圆形快捷按钮随工具栏一起显隐。
 - 正文宿主的上下边界不依赖工具栏状态。工具栏覆盖正文，显隐不得改变页码、滚动位置、正文尺寸。
 - 每页底部不出现被切掉一半的行。滚动翻页模式下，页高先按行高取整（`--reader-page-trim`，整章一个值，页数由它算）；但段间距和标题会让后面的行偏离这个网格，所以每翻一页还要把底边切过的那一行用 `clip-path` 遮住（`--reader-page-mask`，`ReaderView.syncPageMask`）。下一页从这一行的行首开始，不会漏字。遮罩不改变 `clientHeight`，所以页数和翻页位置都不受影响；翻页动画期间不测量（行框还带着 `translateY`），动画结束后再测。
@@ -768,9 +777,9 @@ TXT 是唯一一种**没有作者排版**的书，所以它也是唯一一处「
 
 1. 新颜色 / 新间距 / 新时长 → 先看 `:root` 里有没有，没有就**加令牌**，
    不要在规则里写字面量。
-2. 新图标 → 加一条路径到 `tools/icons/paths.mjs`，**键名用这个项目自己的英语词**
-   （不许借别的图标集的名字，`test/icons.test.ts` 会拒），跑 `npm run icons`，
-   在 `web/src/ui/icon.tsx` 里把名字映射到 Lucide 图标，然后用 `IconButton` 引用名字。
+2. 新图标 → 在 `web/src/ui/icon.tsx` 的 `ICONS` 里加一个名字映射到 Lucide 图标，**名字用这个项目
+   自己的英语词**（不许借别的图标集的名字，`test/icons.test.ts` 会拒），然后用 `Icon` / `IconButton` 引用名字。
+   已有意思相同的名字就复用，不要为同一个意思再加一个字形。
 3. 新控件 → 确认它出现在 §2.4 的焦点选择器列表里。
 4. 新动画 → 用 `--motion-duration` 和 `--motion-ease`，不要自己写时长。
 5. 有状态变化的控件 → 对照 §5 那张表，确认用的是对的那一种。
@@ -797,11 +806,8 @@ TXT 是唯一一种**没有作者排版**的书，所以它也是唯一一处「
 
 | 路径 | 内容 |
 | --- | --- |
-| `web/src/ui/icon.tsx` | `Icon` 组件：图标名到 Lucide SVG 的映射 |
-| `web/src/ui/icon-names.ts` | 码位表（生成），`IconName` 的来源 |
-| `web/src/styles/reader-icons.ttf` | 字体（生成，界面不再加载） |
-| `web/tools/icons/` | 生成器 |
-| `web/test/icons.test.ts` | 字体度量、字形包围盒、码位表、**没有借来的名字**、词汇表与 `.icon` 规则的契约 |
+| `web/src/ui/icon.tsx` | 图标集：名称（`IconName`）到 Lucide SVG 的唯一映射，尺寸档与线宽 |
+| `web/test/icons.test.ts` | **没有借来的名字**、只有 `icon.tsx` 引入 lucide-react、`.icon` 规则与图标按钮的契约 |
 | `web/src/ui/toolkit.tsx` | `IconButton` / `IconTextButton` / `Button` / `Segmented` / `Callout` / `SwitchRow` / `SectionTitle` |
 | `web/src/ui/action-menu.tsx` / `web/src/styles/action-menu.css` | 每个 `⋯` 菜单的 `ActionMenu` 下拉，以及 `ActionSheet`（§3.7） |
 | `web/src/ui/cover-tint.ts` | 无封面占位的色相（§2.7） |
@@ -809,11 +815,9 @@ TXT 是唯一一种**没有作者排版**的书，所以它也是唯一一处「
 | `web/src/features/shelf/pages/ShelfPage.tsx` | 书架；排序、分页器与书库入口 |
 | `web/src/features/library/pages/LibraryPage.tsx` | 书库浏览、书籍列表和文件管理路由；搜索、面包屑、分页器、上传后重读 |
 | `web/src/ui/shelf-membership.ts` | 两个方向的措辞与批量报告那句话的唯一来源（§3.5.2） |
-| `web/src/ui/shelf-order.ts` | 排序的**唯一**定义：方向、客户端/服务端的键怎么翻译、阅读时间怎么排 |
 | `web/src/ui/sheet.tsx` / `web/src/styles/sheet.css` | 唯一的弹层 `Sheet` 与 `ConfirmSheet`（§3.7） |
 | `web/src/ui/dialog.tsx` | 提问（文本框/确认/选择），基于 `Sheet`，书架与文件管理共用 |
-| `web/src/ui/pager.tsx` | 翻页器组件（§3.5）；书架和书库目前各自画「上一页 / 下一页」，没有用它 |
-| `web/test/shelf-order.test.ts` | 排序的方向、客户端/服务端的键、阅读时间排序与并列时的稳定 |
+| `web/src/ui/pager.tsx` | 翻页器组件（§3.5），书架、书库浏览和文件管理共用 |
 | `web/test/react-router-routes.test.tsx` | React Router 的页面、影音嵌套路由和权限边界 |
 | `web/test/media-library-list.test.tsx` | 媒体库列表、分页和空状态 |
 | `web/test/media-library-editor.test.tsx` | 媒体库编辑、权限和保存后的重读 |

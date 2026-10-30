@@ -1,4 +1,4 @@
-import { FolderOpen, Search, SlidersHorizontal } from 'lucide-react';
+import { Icon } from '../../../ui/icon.tsx';
 import { ChannelMenu } from '../components/channel-menu.tsx';
 import { Link, NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useEffect } from 'react';
@@ -43,7 +43,7 @@ export function MediaCatalogPage() {
     }
   }, [channelLibraries, params, selectedFromUrl, setParams]);
   return <MediaPageFrame className="media-catalog-page" title={channelLabels[channel]} emptyChannel={emptyWithoutLibraries} actions={<>
-    <Link to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Link>
+    <Link to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Icon name="search" size={18} /></Link>
     <ChannelMenu channel={channel} />
   </>}>
     {!emptyWithoutLibraries && <>
@@ -68,9 +68,9 @@ export function MediaCatalogPage() {
         {query.data && <span className="media-catalog-count">{query.data.total} {countLabels[current.kind] ?? '项'}</span>}
       </div>
       <div className="media-browse-actions">
-        <Link to={`/media/${channel}/folders${selectedLibrary ? `/${encodeURIComponent(selectedLibrary)}` : ''}`} className="media-icon-button" aria-label="打开文件夹" title="打开文件夹"><FolderOpen size={19} aria-hidden="true" /></Link>
+        <Link to={`/media/${channel}/folders${selectedLibrary ? `/${encodeURIComponent(selectedLibrary)}` : ''}`} className="media-icon-button" aria-label="打开文件夹" title="打开文件夹"><Icon name="folder-browse" size={18} /></Link>
         <details className="media-browse-filters">
-          <summary aria-label="筛选与排序" title="筛选与排序"><SlidersHorizontal size={19} aria-hidden="true" />{params.get('sort') && params.get('sort') !== 'default' && <i aria-label="已应用筛选" />}</summary>
+          <summary aria-label="筛选与排序" title="筛选与排序"><Icon name="sliders" size={18} />{params.get('sort') && params.get('sort') !== 'default' && <i aria-label="已应用筛选" />}</summary>
           <div className="media-browse-filter-panel">
             <label>排序<MediaSelect aria-label="排序" value={params.get('sort') ?? 'default'} onChange={event => patch({ sort: event.currentTarget.value, offset: '' })}>
               <option value="default">默认顺序</option><option value="title-asc">名称升序</option><option value="title-desc">名称降序</option>

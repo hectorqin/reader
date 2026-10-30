@@ -1,32 +1,15 @@
+import { Icon } from '../../../ui/icon.tsx';
 import { useEffect, useRef, useState } from 'react';
-import { Search, ChevronRight } from 'lucide-react';
 import { MediaCover } from './cover.tsx';
 import { MediaLoading } from './loading.tsx';
 import { MediaScreenError } from './screen-error.tsx';
 import type { MediaApi, MediaChannel, SearchItem } from '../api/media-api.ts';
-import { newId } from '../../../core/id.ts';
 
 const labels={video:'影视',music:'音乐',audiobook:'有声书'};
 const kinds:Record<string,string>={movie:'电影',series:'剧集',season:'季',episode:'单集',album:'专辑',artist:'歌手',track:'曲目',audiobook:'有声书'};
-interface SearchReturn { identity:string;channel:MediaChannel;targetChannel:MediaChannel;itemId:string;input:string;query:string;scope:MediaChannel|'all';kind?:string;offset:number;scroll:number;restore?:boolean }
+interface SearchReturn { identity:string;channel:MediaChannel;input:string;query:string;scope:MediaChannel|'all';kind?:string;offset:number;scroll:number }
 const returns=new WeakMap<MediaApi,SearchReturn>();
-const historyEntries=new WeakMap<MediaApi,Map<string,SearchReturn>>();
-function tagHistory(key:string,detail:boolean){window.history.replaceState({...window.history.state,readerMediaSearch:{key,detail}},'');}
-export function restoreSearchHistory(api:MediaApi,channel:MediaChannel,itemId?:string){
-  const marker=window.history.state?.readerMediaSearch;
-  if(!marker||typeof marker.key!=='string')return;
-  const saved=historyEntries.get(api)?.get(marker.key);
-  if(!saved||saved.identity!==api.preferenceScope())return;
-  if(itemId?marker.detail&&saved.targetChannel===channel&&saved.itemId===itemId:!marker.detail&&saved.channel===channel){
-    returns.set(api,{...saved,restore:!itemId});
-  }
-}
 export function searchReturnFor(api:MediaApi){const saved=returns.get(api);return saved?.identity===api.preferenceScope()?saved:undefined;}
-export function clearSearchReturn(api:MediaApi){
-  returns.delete(api);
-  if(window.history.state?.readerMediaSearch){const state={...window.history.state};delete state.readerMediaSearch;window.history.replaceState(state,'');}
-}
-export function restoreSearchReturn(api:MediaApi){const saved=searchReturnFor(api);if(saved)saved.restore=true;}
 
 function resultDescription(item:SearchItem):string {
   const field=(key:string)=>{const value=item.overrides[key]??item.metadata[key];return typeof value==='string'||typeof value==='number'?String(value).trim():'';};
@@ -51,14 +34,9 @@ export function MediaSearch({api,channel,navigate,initialLocation,onLocationChan
   const [offset,setOffset]=useState(initial?.offset??0);
   useEffect(()=>{if(returns.get(api)===initial)returns.delete(api);},[api,initial]);
   const open=(item:SearchItem)=>{
-    const snapshot:SearchReturn={identity:api.preferenceScope(),channel,targetChannel:item.channel,itemId:item.id,input,query,scope,offset,scroll:host.current?.closest('.media-screen')?.scrollTop??0};
+    const snapshot:SearchReturn={identity:api.preferenceScope(),channel,input,query,scope,offset,scroll:host.current?.closest('.media-screen')?.scrollTop??0};
     returns.set(api,snapshot);
-    const key=newId(),entries=historyEntries.get(api)??new Map<string,SearchReturn>();
-    entries.set(key,snapshot);while(entries.size>30)entries.delete(entries.keys().next().value!);historyEntries.set(api,entries);
-    const sourceHash='#/media/'+channel;
-    if(window.location.hash===sourceHash)tagHistory(key,false);
     navigate(item.channel,item.id);
-    if(window.location.hash==='#/media/'+item.channel+'/'+encodeURIComponent(item.id))tagHistory(key,true);
   };
   function change(next:Partial<{q:string;scope:MediaChannel|'all';offset:number}>){onLocationChange?.({q:next.q??query,scope:next.scope??scope,offset:String(next.offset??offset)});}
   const [attempt,setAttempt]=useState(0);
@@ -95,9 +73,9 @@ export function MediaSearch({api,channel,navigate,initialLocation,onLocationChan
     </form>
     <nav className="media-search-scopes" aria-label="搜索范围">{(['all','video','music','audiobook'] as const).map(value=><button key={value} type="button" aria-pressed={scope===value} data-scope={value} onClick={()=>{scrollToRestore.current=null;setScope(value);setOffset(0);change({scope:value,offset:0});}}>{value==='all'?'全部':labels[value]}</button>)}</nav>
     {loaded&&!busy&&!error&&<p className="media-search-count media-visually-hidden" role="status">找到 {total} 项内容</p>}
-    {busy?<MediaLoading label="正在搜索…" layout="list"/>:error?<MediaScreenError fullPage error={errorCause} message={error} busy={busy} onRetry={()=>setAttempt(value=>value+1)}/>:!query||!items.length?<div className="media-search-empty"><Search size={32} strokeWidth={1.4} aria-hidden="true"/><h2>{query?'没有找到相关内容':'搜索你的影音'}</h2><p>{query?'没有匹配内容，请调整搜索词或搜索范围。':'输入名称，搜索有权访问的媒体库。'}</p>{query&&<button onClick={()=>{setInput('');setQuery('');setOffset(0);change({q:'',offset:0});host.current?.querySelector<HTMLInputElement>('input')?.focus();}}>清空关键词</button>}</div>:<div className="media-search-results">{(['video','music','audiobook'] as const).map(group=>{
+    {busy?<MediaLoading label="正在搜索…" layout="list"/>:error?<MediaScreenError fullPage error={errorCause} message={error} busy={busy} onRetry={()=>setAttempt(value=>value+1)}/>:!query||!items.length?<div className="media-search-empty"><Icon name="search" size={32} /><h2>{query?'没有找到相关内容':'搜索你的影音'}</h2><p>{query?'没有匹配内容，请调整搜索词或搜索范围。':'输入名称，搜索有权访问的媒体库。'}</p>{query&&<button onClick={()=>{setInput('');setQuery('');setOffset(0);change({q:'',offset:0});host.current?.querySelector<HTMLInputElement>('input')?.focus();}}>清空关键词</button>}</div>:<div className="media-search-results">{(['video','music','audiobook'] as const).map(group=>{
       const entries=items.filter(item=>item.channel===group);if(!entries.length)return null;
-      return <section key={group} className="media-search-group" aria-label={labels[group]+'搜索结果'}><h2>{labels[group]} <small>{entries.length}{total>60?' · 本页':''}</small></h2>{entries.map(item=><button className="media-search-result" key={item.id} onClick={()=>open(item)}><MediaCover api={api} item={item} square={item.channel==='music'}/><span className="media-search-copy"><strong title={item.title}>{item.title}</strong>{resultDescription(item)&&<small className="media-search-description" title={resultDescription(item)}>{resultDescription(item)}</small>}<small title={(kinds[item.kind]||item.kind)+' · '+item.libraryName}>{kinds[item.kind]||item.kind} · {item.libraryName}</small></span><ChevronRight size={18} aria-hidden="true"/></button>)}</section>;
+      return <section key={group} className="media-search-group" aria-label={labels[group]+'搜索结果'}><h2>{labels[group]} <small>{entries.length}{total>60?' · 本页':''}</small></h2>{entries.map(item=><button className="media-search-result" key={item.id} onClick={()=>open(item)}><MediaCover api={api} item={item} square={item.channel==='music'}/><span className="media-search-copy"><strong title={item.title}>{item.title}</strong>{resultDescription(item)&&<small className="media-search-description" title={resultDescription(item)}>{resultDescription(item)}</small>}<small title={(kinds[item.kind]||item.kind)+' · '+item.libraryName}>{kinds[item.kind]||item.kind} · {item.libraryName}</small></span><Icon name="chevron-right" size={18} /></button>)}</section>;
     })}</div>}
     {total>60&&<div className="media-toolbar"><button disabled={busy||offset===0} onClick={()=>{setOffset(Math.max(0,offset-60));change({offset:Math.max(0,offset-60)});}}>上一页</button><span>{Math.floor(offset/60)+1} / {Math.ceil(total/60)}</span><button disabled={busy||offset+60>=total} onClick={()=>{setOffset(offset+60);change({offset:offset+60});}}>下一页</button></div>}
   </section>;

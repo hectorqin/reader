@@ -79,8 +79,8 @@ cd server && npx tsx --test test/media-api.test.ts
 
 # Web 大多数测试使用 Vitest
 cd web && npx vitest run test/foo.test.ts
-# 少数为 node:test 编写的文件（api、asset-url、paginator、window、windowed-toc）
-cd web && npx tsx --test test/paginator.test.ts
+# 少数为 node:test 编写的文件（api、asset-url、windowed-toc）
+cd web && npx tsx --test test/windowed-toc.test.ts
 ```
 
 Web 有两套测试运行器：`npm test` 先跑 Vitest，再用 `tsx --test` 跑上述 node:test 文件；这些文件在 `web/vite.config.ts` 中被 Vitest 排除。新增 node:test 文件时，要同时加入 `test` 脚本和 Vitest 的 `exclude` 列表。Web 测试会引用服务端代码，运行前两端都需要 `npm ci`。
@@ -100,7 +100,7 @@ UI 评审在真实 Chromium 中通过 CDP 截图并测量；浏览器缺失时�
 
 ### 图标
 
-新增图标时把路径加入 `web/tools/icons/paths.mjs`（使用本项目自己的英文名，`test/icons.test.ts` 会拒绝借用其他图标集的名称），然后运行 `npm run icons --prefix web`。
+图标统一在 `web/src/ui/icon.tsx` 的 `ICONS` 中把名称映射到 Lucide 图标（使用本项目自己的英文名，`test/icons.test.ts` 会拒绝借用其他图标集的名称，也只允许这个文件引入 `lucide-react`）。规则见 `docs/ui.md` §1。
 
 ## 持续集成与发布
 

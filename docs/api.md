@@ -1039,6 +1039,11 @@ AI 配置在业务设置的 `ai` 分组（见下文 Administrator business setti
 `{ "baseUrl": "可选", "apiKey": "可选" }` → `{ "models": ["..."] }`。未传的字段使用已保存配置，所以可以在保存之前用草稿获取模型列表；
 两者都缺返回 `400`，上游失败返回 `502 AI_MODELS_FAILED`。
 
+### `GET /ai/capabilities`
+
+任何已登录账号可读 → `{ "summary": true }`。`summary` 为 AI 与章节总结都已启用且地址、密钥、模型齐全；不返回任何配置值。
+阅读器据此决定是否显示「AI 总结」按钮；旧服务端没有此接口（404）时客户端照旧显示。
+
 ### `POST /ai/summary`
 
 `{ "bookId": "...", "chapterId": "...", "content": "章节正文" }` → `{ "summary": "...", "cached": false }`。

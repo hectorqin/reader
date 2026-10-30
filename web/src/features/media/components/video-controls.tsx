@@ -1,7 +1,7 @@
+import { Icon } from '../../../ui/icon.tsx';
 import {VideoEpisodeRail} from './video-episode-rail.tsx';
 import {SleepTimerOptions} from './sleep-timer.tsx';
 import {Sheet} from '../../../ui/sheet.tsx';
-import {Ellipsis,Square,Check,Subtitles,AudioLines,Layers,ListVideo,Maximize,Minimize,Lock,LockOpen,Gauge,Expand,Shrink,Upload} from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import {subtitleSizes,type MediaPlayer,type SubtitleSize} from '../services/player.ts';
 import type {Detail,MediaApi} from '../api/media-api.ts';
@@ -30,10 +30,10 @@ function SubtitlePanel({player}:{player:MediaPlayer}){
   const nudge=(delta:number)=>controls.setDelay(controls.delay+delta);
   return <div className="media-subtitle-panel">
     <div className="media-subtitle-list" role="radiogroup" aria-label="字幕">{options.map(option=><button type="button" role="radio" key={option.value||'off'} aria-checked={value===option.value} onClick={()=>controls.pick(option.value)}>
-      <span><strong>{option.label}</strong>{option.note&&<small>{option.note}</small>}</span>{value===option.value&&<Check size={18} aria-hidden="true"/>}
+      <span><strong>{option.label}</strong>{option.note&&<small>{option.note}</small>}</span>{value===option.value&&<Icon name="check" size={18} />}
     </button>)}</div>
     {controls.message&&<p className="media-subtitle-status" role="status">{controls.message}</p>}
-    <button type="button" className="media-subtitle-add" onClick={()=>file.current?.click()}><Upload size={18} aria-hidden="true"/>添加外挂字幕</button>
+    <button type="button" className="media-subtitle-add" onClick={()=>file.current?.click()}><Icon name="upload" size={18} />添加外挂字幕</button>
     <input ref={file} type="file" accept=".srt,.vtt,.ass,.ssa" hidden aria-label="选择字幕文件" onChange={event=>void add(event.currentTarget.files?.[0])}/>
     {error&&<p className="media-error" role="alert">{error}</p>}
     <div className="media-subtitle-row"><span>字幕延迟</span><div className="media-subtitle-steps" role="group" aria-label="字幕延迟">
@@ -97,16 +97,16 @@ export function VideoControls({player,api,onBack}:{player:MediaPlayer;api:MediaA
   async function run(action:()=>Promise<void>,close=false){if(busy)return;setBusy(true);setNotice('');try{await action();if(close&&!player.error)setTool(null);}catch(error){setNotice(error instanceof Error?error.message:'操作失败，请重试。');}finally{setBusy(false);}}
   return <section className="media-playback-status media-video-controls" aria-label="播放控制">
     <div className="media-video-caption"><div><strong>{item?.title||player.title}</strong>{edition&&<small>{edition.label}</small>}</div></div>
-    <div className="media-video-toolbar media-video-tools">{entries.length>1&&<button onClick={()=>open('episodes')}><ListVideo size={20} aria-hidden="true"/>选集</button>}<button onClick={()=>open('subtitles')}><Subtitles size={20} aria-hidden="true"/>字幕</button><button onClick={()=>open('tracks')}><AudioLines size={20} aria-hidden="true"/>音轨</button><button onClick={()=>open('versions')}><Layers size={20} aria-hidden="true"/>版本</button>{player.isWebVideo&&<button aria-label="横屏全屏播放" onClick={()=>void toggleFullscreen()}><Maximize size={20} aria-hidden="true"/>全屏</button>}<button aria-label="更多播放选项" onClick={()=>open('more')}><Ellipsis size={20} aria-hidden="true"/>更多</button></div>
+    <div className="media-video-toolbar media-video-tools">{entries.length>1&&<button onClick={()=>open('episodes')}><Icon name="episodes" size={20} />选集</button>}<button onClick={()=>open('subtitles')}><Icon name="subtitles" size={20} />字幕</button><button onClick={()=>open('tracks')}><Icon name="audio-track" size={20} />音轨</button><button onClick={()=>open('versions')}><Icon name="versions" size={20} />版本</button>{player.isWebVideo&&<button aria-label="横屏全屏播放" onClick={()=>void toggleFullscreen()}><Icon name="fullscreen" size={20} />全屏</button>}<button aria-label="更多播放选项" onClick={()=>open('more')}><Icon name="more" size={20} />更多</button></div>
     {fullscreen&&<div className="media-video-landscape" data-locked={locked?'true':undefined}>
-      {locked?<button type="button" className="media-video-unlock" aria-label="解除锁定" onClick={()=>setLocked(false)}><LockOpen size={22} aria-hidden="true"/></button>:<>
-        <div className="media-video-landscape-title"><button type="button" className="media-video-icon" aria-label="退出全屏" onClick={()=>void toggleFullscreen()}><Minimize size={20} aria-hidden="true"/></button><strong>{item?.title||player.title}</strong></div>
+      {locked?<button type="button" className="media-video-unlock" aria-label="解除锁定" onClick={()=>setLocked(false)}><Icon name="unlock" size={20} /></button>:<>
+        <div className="media-video-landscape-title"><button type="button" className="media-video-icon" aria-label="退出全屏" onClick={()=>void toggleFullscreen()}><Icon name="fullscreen-exit" size={20} /></button><strong>{item?.title||player.title}</strong></div>
         <div className="media-video-landscape-tools" role="toolbar" aria-label="横屏播放工具">
-          {entries.length>1&&<button type="button" onClick={()=>open('episodes')}><ListVideo size={18} aria-hidden="true"/>选集</button>}
-          <button type="button" onClick={()=>open('speed')}><Gauge size={18} aria-hidden="true"/>倍速 {speedLabel(player.playbackRate??1)}</button>
-          <button type="button" aria-pressed={fill} onClick={()=>setFill(value=>!value)}>{fill?<Shrink size={18} aria-hidden="true"/>:<Expand size={18} aria-hidden="true"/>}{fill?'完整画面':'适应屏幕'}</button>
-          <button type="button" onClick={()=>open('subtitles')}><Subtitles size={18} aria-hidden="true"/>字幕</button>
-          <button type="button" onClick={()=>{setTool(null);setLocked(true);}}><Lock size={18} aria-hidden="true"/>锁定</button>
+          {entries.length>1&&<button type="button" onClick={()=>open('episodes')}><Icon name="episodes" size={18} />选集</button>}
+          <button type="button" onClick={()=>open('speed')}><Icon name="speed" size={18} />倍速 {speedLabel(player.playbackRate??1)}</button>
+          <button type="button" aria-pressed={fill} onClick={()=>setFill(value=>!value)}>{fill?<Icon name="fit-whole" size={18} />:<Icon name="fit-fill" size={18} />}{fill?'完整画面':'适应屏幕'}</button>
+          <button type="button" onClick={()=>open('subtitles')}><Icon name="subtitles" size={18} />字幕</button>
+          <button type="button" onClick={()=>{setTool(null);setLocked(true);}}><Icon name="lock" size={18} />锁定</button>
         </div>
       </>}
     </div>}
@@ -121,7 +121,7 @@ export function VideoControls({player,api,onBack}:{player:MediaPlayer;api:MediaA
       {tool==='volume'?<Volume player={player}/>:tool==='subtitles'?<SubtitlePanel player={player}/>:tool==='tracks'?<TrackOptions player={player} kind={tool}/>:tool==='speed'?<SpeedOptions player={player} onDone={()=>setTool(null)}/>:tool==='episodes'?<>
         <p>本次播放列表 · {entries.length} 项</p>
         {entries.length>10&&<label className="media-video-search">查找集数<input type="search" value={query} onInput={event=>{setQuery(event.currentTarget.value);setPage(0);}}/></label>}
-        <div className="media-video-episodes">{filtered.slice(currentPage*50,currentPage*50+50).map(entry=><button key={entry.index} aria-current={entry.current?'true':undefined} disabled={busy||entry.current||!player.canSelectPlaylist} onClick={()=>void run(()=>player.selectPlaylist(entry.index),true)}><span>{entry.index+1}</span><span>{entry.title}</span>{entry.current&&<Check size={17} aria-label="正在播放"/>}</button>)}</div>
+        <div className="media-video-episodes">{filtered.slice(currentPage*50,currentPage*50+50).map(entry=><button key={entry.index} aria-current={entry.current?'true':undefined} disabled={busy||entry.current||!player.canSelectPlaylist} onClick={()=>void run(()=>player.selectPlaylist(entry.index),true)}><span>{entry.index+1}</span><span>{entry.title}</span>{entry.current&&<Icon name="check" size={16} label="正在播放" />}</button>)}</div>
         {!filtered.length&&<p>没有匹配的集数。</p>}{last>0&&<nav aria-label="选集分页"><button disabled={!currentPage} onClick={()=>setPage(currentPage-1)}>上一页</button><span>{currentPage+1} / {last+1}</span><button disabled={currentPage===last} onClick={()=>setPage(currentPage+1)}>下一页</button></nav>}
       </>:tool==='versions'?<div className="media-video-episodes">{item?.editions.map(value=><button disabled={busy||value.id===edition?.id&&!player.error||!value.parts.length||value.parts.some(part=>!part.available)} aria-current={value.id===edition?.id?'true':undefined} onClick={()=>void run(()=>player.play(value.parts.map(part=>({part,title:item.title+' · '+part.title,video:true}))),true)}><span>{value.label}</span><small>{value.parts.some(part=>!part.available)?'资源缺失':value.id===edition?.id?'当前版本':`${value.parts.length} 个片段`}</small></button>)}</div>:<>
         {entries.length>1&&item?.kind!=='episode'&&<button onClick={()=>open('episodes')}>本次播放列表 · {entries.length} 项</button>}
@@ -130,7 +130,7 @@ export function VideoControls({player,api,onBack}:{player:MediaPlayer;api:MediaA
         <SleepTimerOptions player={player}/>
         {player.canOpenNativeVideo&&<button onClick={()=>void player.openNativeVideo()}>打开 Android 视频播放器</button>}
         {player.support&&<p>{player.support}</p>}
-        <button className="media-video-end" onClick={()=>void player.stop()}><Square size={17} aria-hidden="true"/>结束播放</button>
+        <button className="media-video-end" onClick={()=>void player.stop()}><Icon name="stop" size={16} />结束播放</button>
       </>}
       {(player.error||notice)&&<p role="alert" className="media-error">{player.error||notice}</p>}
     </ToolSheet>}

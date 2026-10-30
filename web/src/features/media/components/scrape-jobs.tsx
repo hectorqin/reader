@@ -1,7 +1,7 @@
+import { Icon } from '../../../ui/icon.tsx';
 import { ConfirmSheet } from '../../../ui/sheet.tsx';
 import {FloatingNotice} from '../../../ui/floating-notice.tsx';
 import {MediaSelect} from './select.tsx';
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Item, Library, MediaApi, MediaChannel } from '../api/media-api.ts';
 interface Job {id:string;provider:string;state:string;created_at?:number;total?:number;counts?:Record<string,number>;items:Array<{itemId:string;state:string;error:string|null;title?:string;channel?:MediaChannel}>}
@@ -36,7 +36,7 @@ function JobResults({job,api,navigate}:{job:Job;api:MediaApi;navigate:(channel:M
     {job.counts&&status==='loading'&&<FloatingNotice message="正在读取任务结果…" busy />}
     {job.counts&&status==='error'&&<p role="alert">任务结果读取失败。<button onClick={()=>setRetry(value=>value+1)}>重新读取结果</button></p>}
     {ready&&!rows.length&&<p role="status">当前没有此状态的结果。</p>}
-    {ready&&rows.map(row=><div className="media-row media-task-result" key={row.itemId}><span>{row.title||'作品已移除'}<small>{names[row.state]||row.state}{row.error?' · '+(row.error==='server-restarted'?'服务重启，处理已中断':row.error):''}</small></span>{row.channel&&row.title&&<button className="media-task-icon" aria-label="查看作品" title="查看作品" onClick={()=>navigate(row.channel!,row.itemId)}><ChevronRight size={18} aria-hidden="true"/></button>}</div>)}
+    {ready&&rows.map(row=><div className="media-row media-task-result" key={row.itemId}><span>{row.title||'作品已移除'}<small>{names[row.state]||row.state}{row.error?' · '+(row.error==='server-restarted'?'服务重启，处理已中断':row.error):''}</small></span>{row.channel&&row.title&&<button className="media-task-icon" aria-label="查看作品" title="查看作品" onClick={()=>navigate(row.channel!,row.itemId)}><Icon name="chevron-right" size={18} /></button>}</div>)}
     {explanations[filter]&&<p className="media-task-note">{explanations[filter]}</p>}
     {last>0&&<nav className="media-toolbar" aria-label="任务结果分页"><button disabled={!ready||current===0} onClick={()=>setPage(current-1)}>上一页结果</button><span>{current+1} / {last+1}</span><button disabled={!ready||current===last} onClick={()=>setPage(current+1)}>下一页结果</button></nav>}
   </section>;
@@ -58,7 +58,7 @@ export function ScrapeJobs({api,libraries,initialLibraryId,navigate}:{api:MediaA
   const libraryKinds=library?.kind==='video'?['movie','series','season','episode']:library?.kind==='music'?['album','artist','track']:['audiobook'];
   const compatibleProviders=providers.filter(p=>libraryKinds.some(kind=>p.kinds.includes(kind)));
   const allowed=libraryKinds.filter(value=>providers.find(p=>p.id===provider)?.kinds.includes(value));
-  useEffect(()=>{let live=true;void api.request<{items:Provider[]}>('metadata/providers').then(result=>{if(live){setProviders(result.items);setProvider(result.items.find(p=>p.configured)?.id||'');}}).catch(e=>{if(live)setError(String(e));});return ()=>{live=false;};},[api,providerRetry]);
+  useEffect(()=>{let live=true;void api.request<{items:Provider[]}>('metadata/providers').then(result=>{if(live){setProviders(result.items);setProvider(result.items.find(p=>p.configured)?.id||'');}}).catch(e=>{if(live)setError(e instanceof Error?e.message:'请求失败，请稍后重试。');});return ()=>{live=false;};},[api,providerRetry]);
   useEffect(()=>{
     if(!compatibleProviders.some(p=>p.id===provider&&p.configured))setProvider(compatibleProviders.find(p=>p.configured)?.id||'');
   },[libraryId,providers,provider]);
@@ -67,7 +67,7 @@ export function ScrapeJobs({api,libraries,initialLibraryId,navigate}:{api:MediaA
     const controller=new AbortController();setItems([]);setTotal(0);
     if(!libraryId||!kind||!allowed.includes(kind)){setLoading(false);return ()=>controller.abort();}
     setLoading(true);
-    void api.items(libraryId,kind,'',offset,controller.signal).then(result=>{if(!controller.signal.aborted){setItems(result.items);setTotal(result.total);}}).catch(e=>{if(!controller.signal.aborted)setError(String(e));}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
+    void api.items(libraryId,kind,'',offset,controller.signal).then(result=>{if(!controller.signal.aborted){setItems(result.items);setTotal(result.total);}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'请求失败，请稍后重试。');}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
   },[api,libraryId,kind,provider,providers,offset,refresh]);
   useEffect(()=>{
@@ -89,7 +89,7 @@ export function ScrapeJobs({api,libraries,initialLibraryId,navigate}:{api:MediaA
     {jobsState==='loading'&&<FloatingNotice message="正在读取任务状态…" busy />}
     {jobsState==='error'&&<p role="alert">任务状态读取失败。{jobs.length?'下方为上次读取的结果，可能已变化。':''}请重新读取后操作。<button disabled={busy} onClick={()=>setJobsRetry(value=>value+1)}>重新读取任务</button></p>}
     {jobsState==='ready'&&!jobs.length&&<p className="media-task-empty">暂无批量刮削任务。</p>}
-    {jobs.map(job=>{const total=jobTotal(job),ended=Math.max(0,total-countState(job,'running')-countState(job,'pending')),review=countState(job,'review'),failed=countState(job,'failed');return <details className="media-scrape-job" key={job.id} onToggle={event=>{const opened=event.currentTarget.open;setOpenJobs(ids=>opened?[...new Set([...ids,job.id])]:ids.filter(id=>id!==job.id));}}><summary aria-label={job.provider+' · '+(names[job.state]||job.state)+' · 已结束 '+ended+'/'+total+' 项'}><span className="media-task-copy"><strong>{providers.find(p=>p.id===job.provider)?.label||job.provider} · 元数据匹配</strong><small>已结束 {ended}/{total} 项{review?' · 待确认 '+review:''}{failed?' · 失败 '+failed:''}</small></span><span className="media-task-state" data-state={job.state==='running'?'running':failed?'failed':review?'review':job.state}>{job.state==='running'?'进行中':failed?'有失败项':review?'待确认':names[job.state]||job.state}</span><ChevronDown className="media-task-chevron" size={16} aria-hidden="true"/>{job.state==='running'&&<progress className="media-task-progress" aria-label="匹配进度" max={total||1} value={ended}/>}</summary>
+    {jobs.map(job=>{const total=jobTotal(job),ended=Math.max(0,total-countState(job,'running')-countState(job,'pending')),review=countState(job,'review'),failed=countState(job,'failed');return <details className="media-scrape-job" key={job.id} onToggle={event=>{const opened=event.currentTarget.open;setOpenJobs(ids=>opened?[...new Set([...ids,job.id])]:ids.filter(id=>id!==job.id));}}><summary aria-label={job.provider+' · '+(names[job.state]||job.state)+' · 已结束 '+ended+'/'+total+' 项'}><span className="media-task-copy"><strong>{providers.find(p=>p.id===job.provider)?.label||job.provider} · 元数据匹配</strong><small>已结束 {ended}/{total} 项{review?' · 待确认 '+review:''}{failed?' · 失败 '+failed:''}</small></span><span className="media-task-state" data-state={job.state==='running'?'running':failed?'failed':review?'review':job.state}>{job.state==='running'?'进行中':failed?'有失败项':review?'待确认':names[job.state]||job.state}</span><Icon name="chevron-down" size={16} className="media-task-chevron" />{job.state==='running'&&<progress className="media-task-progress" aria-label="匹配进度" max={total||1} value={ended}/>}</summary>
       {typeof job.created_at==='number'&&Number.isFinite(job.created_at)&&<p>创建时间：<time dateTime={new Date(job.created_at).toISOString()}>{new Date(job.created_at).toLocaleString('zh-CN',{hour12:false})}</time></p>}
       <p>{Object.entries(names).flatMap(([state,label])=>{const count=countState(job,state);return count?[`${label} ${count}`]:[];}).join(' · ')}</p>
       {job.state==='complete'&&<p>任务处理已结束，请核对下方结果；待审阅、无匹配和失败项尚未保存新的匹配。</p>}

@@ -827,8 +827,8 @@ Android WebView 是真实会发生的）才推进，不是为了给朗读计时�
 这是 `zip-reader.ts` 只解析中央目录、`openStream` 按偏移读单个条目的原因；
 整包 `loadAsync` 会让「翻到下一章」变成「重新解压整本书」。
 
-客户端的对等物是 `formats/remote-zip.ts`：同样的中央目录解析，走 HTTP Range。
-它存在的意义是让**浏览器端**也能不下整本书——否则「服务端分章」只对原生端成立。
+客户端不解析压缩包：分章的书按章向服务端要正文（`formats/windowed.ts` 的 `loadSection`），
+所以浏览器端同样不必下整本书。
 
 （注意：`check-shell.sh` 里新增的渲染模式词表校验，以及 `colors.xml` 里
 `--` 在 XML 注释中非法、Kotlin 侧 `Uint8Array` 不存在这两处，
