@@ -5,6 +5,8 @@ import { useMediaChannel } from '../hooks/use-media-channel.ts';
 import { ChannelSegments, swipeCatalogTarget } from './channel-navigation.tsx';
 import { useSwipeTabs } from '../../../shared/ui/use-swipe-tabs.ts';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
+import { ApiError } from '../../../api/errors.ts';
+import { MediaScreenError } from './screen-error.tsx';
 
 /** `emptyChannel`: the channel has no library, so a swipe moves by channel (see swipeCatalogTarget). */
 export function MediaPageFrame({ title, subtitle, children, actions, className, backTo, backLabel, hideHeader = false, emptyChannel = false }: { title: string; subtitle?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string; backTo?: string; backLabel?: string; hideHeader?: boolean; emptyChannel?: boolean }) {
@@ -31,7 +33,7 @@ export function MediaPageFrame({ title, subtitle, children, actions, className, 
           <span className="media-mobile-title"><ChannelSegments current={channel} /></span>
         </>
         : <div className="media-page-heading">
-          <Link className="media-back-button" to={target} aria-label="← 返回" title={label}><Icon name="chevron-left" /></Link>
+          <Link className="media-back-button" to={target} aria-label={label} title={label}><Icon name="chevron-left" /></Link>
           <h1>{title}</h1>
           {subtitle && <span className="media-heading-context">{subtitle}</span>}
         </div>}
@@ -42,6 +44,7 @@ export function MediaPageFrame({ title, subtitle, children, actions, className, 
 }
 export function QueryFeedback({ pending, error, retry }: { pending?: boolean; error?: Error | null; retry?: () => void }) {
   if (pending) return <FloatingNotice message="正在加载…" busy />;
-  if (error) return <Callout tone="error" title="加载失败" {...(retry ? { action: { label: '重试', onClick: retry } } : {})}>{error.message}</Callout>;
+  // Media-service states (starting, unavailable, offline, no permission) get MediaScreenError's words, not the raw error code.
+  if (error) return error instanceof ApiError ? <MediaScreenError error={error} message={error.message} busy={false} onRetry={retry ?? (() => undefined)} /> : <Callout tone="error" title="加载失败" {...(retry ? { action: { label: '重试', onClick: retry } } : {})}>{error.message}</Callout>;
   return null;
 }

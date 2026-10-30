@@ -53,8 +53,16 @@ export function MediaTasksPage() {
       } else {
         // The legacy task workspace scans every media library, regardless of
         // which channel opened the settings route.
-        await Promise.all((libraries.data?.items ?? []).map(library =>
+        // One library refusing (already scanning, path gone) must not hide that the
+        // others were submitted, or the admin presses the button again.
+        const all = libraries.data?.items ?? [];
+        const results = await Promise.allSettled(all.map(library =>
           runtime.mediaApi.request(`libraries/${encodeURIComponent(library.id)}/scan`, 'POST')));
+        await jobs.refetch();
+        const failed = results.flatMap((result, index) => result.status === 'rejected'
+          ? [`${all[index]!.name}（${result.reason instanceof Error ? result.reason.message : '提交失败'}）`] : []);
+        if (failed.length) throw new Error(`已提交 ${all.length - failed.length} 个媒体库，${failed.length} 个未能开始：${failed.join('、')}`);
+        return;
       }
       await jobs.refetch();
     },

@@ -15,7 +15,7 @@ export function ScanJobs({jobs,libraryName,libraries,busy,onCancel,onRetry=()=>{
     <div className="media-task-copy"><strong>{libraries?.find(library=>library.id===job.libraryId)?.name||libraryName} · 目录扫描</strong><small>已检查 {job.inspected} 个文件{job.finishedAt?` · ${scanTime(job.finishedAt)}`:job.startedAt?` · 开始于 ${scanTime(job.startedAt)}`:''}</small></div>
     <span className="media-task-state" data-state={job.state}>{states[job.state]||job.state}</span>
     {['running','queued'].includes(job.state)?<button className="media-task-icon" aria-label="取消扫描" title="取消扫描" disabled={busy} onClick={()=>onCancel(job.id)}><X size={18} aria-hidden="true"/></button>:<button className="media-task-icon" aria-label="删除扫描记录" title="删除扫描记录" disabled={busy} onClick={()=>onDelete(job.id)}><Trash2 size={17} aria-hidden="true"/></button>}
-    {job.state==='running'&&<progress className="media-task-progress" aria-label="扫描进度"/>}
+    {job.state==='running'&&<progress className="media-task-progress" aria-label="扫描进度" max={100} {...(job.total?{value:Math.min(100,Math.round(job.inspected/job.total*100))}:{})}/>}
     {job.diagnostics&&<div className="media-task-note">
       <p>耗时 {duration(job.diagnostics.elapsedMs)}{job.diagnostics.elapsedMs>0?` · 平均 ${(job.inspected*1000/job.diagnostics.elapsedMs).toFixed(1)} 个文件/秒`:''}</p>
       {job.state==='running'&&job.diagnostics.active.map((activity,index)=><p key={index}>{phases[activity.phase]||activity.phase}{activity.ref?` · ${activity.ref}`:''} · 已等待 {duration(activity.elapsedMs)}</p>)}

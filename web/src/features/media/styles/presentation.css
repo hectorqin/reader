@@ -673,7 +673,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-match-confirm h3 {font-size:var(--text-body);font-weight:500;margin:0}
 .media-match-confirm p {font-size:var(--text-meta);color:var(--muted)}
 .media-metadata-matcher[data-layout=page]>small {display:block;font-size:var(--text-meta);color:var(--muted);line-height:1.8;margin-top:24px}
-@media(max-width:700px){.media-metadata-page {margin-top:18px}.media-metadata-fields {grid-template-columns:1fr;gap:14px}.media-metadata-page .media-match-search {grid-template-columns:1fr}.media-metadata-page .media-form input,.media-metadata-page .media-form textarea {font-size:var(--text-label)}.media-match-placeholder {width:40px;min-width:40px;height:58px}}
+@media(max-width:700px){.media-metadata-page {margin-top:18px}.media-metadata-fields {grid-template-columns:1fr;gap:14px}.media-metadata-page .media-match-search {grid-template-columns:1fr}.media-match-placeholder {width:40px;min-width:40px;height:58px}}
 .media-chapter-heading {display:flex;align-items:center;justify-content:space-between;gap:12px}
 .media-chapter-heading h2 {margin:16px 0}
 .media-screen .media-chapter-heading>button {font-size:var(--text-meta);color:var(--media-accent);padding:6px 0;white-space:nowrap}
