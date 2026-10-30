@@ -114,11 +114,11 @@ export function SourcesPage() {
     <main className="sources-body" role="tabpanel">
       {tab === 'search' && <>
         <section className="sources-card source-picker">
-          <div><h2>搜书</h2><p className="muted">选择来源，发现想读的书。</p></div>
-          <SearchableSelect label="选择来源" value={selectedSourceId} options={enabledSources.map(source => ({ value: source.id, label: source.name + (source.isDefault ? '（默认）' : '') }))} onChange={setSourceId} />
-          {!selectedSourceId && <p className="muted">{enabledSources.length ? '选择来源后，即可搜索书籍或浏览目录。' : '暂无可用来源，请先添加或启用来源。'}</p>}
+          {/* The tab already says 搜书; with no source there is nothing to pick, so no disabled picker either. */}
+          {enabledSources.length > 0 && <SearchableSelect label="选择来源" value={selectedSourceId} options={enabledSources.map(source => ({ value: source.id, label: source.name + (source.isDefault ? '（默认）' : '') }))} onChange={setSourceId} />}
+          {!selectedSourceId && <p className="muted">{enabledSources.length ? '选择来源后，即可搜索书籍或浏览目录。' : sources.isPending ? '正在读取来源…' : '还没有可用的书源。添加或启用一个书源后，就能在这里搜书。'}</p>}
           {/* An empty state names its way out: the fix for "no source" lives on the next tab. */}
-          {!selectedSourceId && !enabledSources.length && <IconTextButton className="primary source-picker-cta" icon="plus" label="前往书源管理" onClick={() => setTab('sources')} />}
+          {!selectedSourceId && !enabledSources.length && !sources.isPending && <IconTextButton className="primary source-picker-cta" icon="plus" label="前往书源管理" onClick={() => setTab('sources')} />}
         </section>
         {selectedSource && <section className="sources-card source-catalog"><h2>搜索与浏览</h2>
           {catalogError && <Callout tone="error" onDismiss={() => setCatalogError('')}>{catalogError}</Callout>}
