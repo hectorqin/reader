@@ -58,7 +58,7 @@ export function ScrapeJobs({api,libraries,initialLibraryId,navigate}:{api:MediaA
   const libraryKinds=library?.kind==='video'?['movie','series','season','episode']:library?.kind==='music'?['album','artist','track']:['audiobook'];
   const compatibleProviders=providers.filter(p=>libraryKinds.some(kind=>p.kinds.includes(kind)));
   const allowed=libraryKinds.filter(value=>providers.find(p=>p.id===provider)?.kinds.includes(value));
-  useEffect(()=>{let live=true;void api.request<{items:Provider[]}>('metadata/providers').then(result=>{if(live){setProviders(result.items);setProvider(result.items.find(p=>p.configured)?.id||'');}}).catch(e=>{if(live)setError(String(e));});return ()=>{live=false;};},[api,providerRetry]);
+  useEffect(()=>{let live=true;void api.request<{items:Provider[]}>('metadata/providers').then(result=>{if(live){setProviders(result.items);setProvider(result.items.find(p=>p.configured)?.id||'');}}).catch(e=>{if(live)setError(e instanceof Error?e.message:'请求失败，请稍后重试。');});return ()=>{live=false;};},[api,providerRetry]);
   useEffect(()=>{
     if(!compatibleProviders.some(p=>p.id===provider&&p.configured))setProvider(compatibleProviders.find(p=>p.configured)?.id||'');
   },[libraryId,providers,provider]);
@@ -67,7 +67,7 @@ export function ScrapeJobs({api,libraries,initialLibraryId,navigate}:{api:MediaA
     const controller=new AbortController();setItems([]);setTotal(0);
     if(!libraryId||!kind||!allowed.includes(kind)){setLoading(false);return ()=>controller.abort();}
     setLoading(true);
-    void api.items(libraryId,kind,'',offset,controller.signal).then(result=>{if(!controller.signal.aborted){setItems(result.items);setTotal(result.total);}}).catch(e=>{if(!controller.signal.aborted)setError(String(e));}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
+    void api.items(libraryId,kind,'',offset,controller.signal).then(result=>{if(!controller.signal.aborted){setItems(result.items);setTotal(result.total);}}).catch(e=>{if(!controller.signal.aborted)setError(e instanceof Error?e.message:'请求失败，请稍后重试。');}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});
     return ()=>controller.abort();
   },[api,libraryId,kind,provider,providers,offset,refresh]);
   useEffect(()=>{

@@ -101,7 +101,7 @@ export function MediaTasksPage() {
         <p className="media-task-lead">用 AI 识别{libraryName ? `「${libraryName}」中` : '各媒体库中'}未归档的文件，结果需要核对后再处理。</p>
         {toolbar('AI 扫描', () => { void startAiScan(libraryId || undefined); }, () => { void aiJobs.refetch(); }, aiJobs.isFetching)}
         <h2 className="media-task-section-title">扫描记录{filteredAiJobs.length ? <small>{filteredAiJobs.length}</small> : null}</h2>
-        <AiScanJobs api={runtime.mediaApi} jobs={filteredAiJobs} libraries={libraryItems} busy={aiJobs.isFetching || actionBusy} onRefresh={() => { void aiJobs.refetch(); }} onDelete={id => { void runAction(async () => { await runtime.mediaApi.deleteAiScanJob(id); await aiJobs.refetch(); }, 'AI 扫描记录已删除。'); }} />
+        <AiScanJobs api={runtime.mediaApi} jobs={filteredAiJobs} libraries={libraryItems} busy={aiJobs.isFetching || actionBusy} onDelete={id => { void runAction(async () => { await runtime.mediaApi.deleteAiScanJob(id); await aiJobs.refetch(); }, 'AI 扫描记录已删除。'); }} />
       </div>}
       {tab === 'scrape' && !libraries.isPending && !libraries.error && <ScrapeJobs api={runtime.mediaApi} libraries={libraryItems} initialLibraryId={libraryId} navigate={(mediaChannel: MediaChannel, id: string) => { navigate(`/media/${mediaChannel}/items/${encodeURIComponent(id)}`); }} />}
     </section>

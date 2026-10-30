@@ -553,7 +553,6 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-match-search label:has([aria-label="刮削艺人限定"]) {grid-column:1/-1}
 .media-match-search>button {justify-self:start;font-size:var(--text-meta)}
 .media-auto-match {grid-column:1/-1;font-size:var(--text-meta);color:var(--muted)}
-.media-auto-match summary {cursor:pointer;min-height:36px;padding:8px 0}
 .media-auto-match small {display:block;font-size:var(--text-meta);line-height:1.8;margin-top:6px}
 .media-metadata-page .media-metadata-matcher>h2 {font-size:var(--text-title);margin:24px 0 8px}
 .media-screen .media-match-candidate {gap:12px;align-items:center;margin:0;padding:14px 0}

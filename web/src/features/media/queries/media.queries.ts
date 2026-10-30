@@ -57,14 +57,16 @@ export function jobsQuery(runtime: AppRuntime, libraryId = '') {
   return queryOptions({
     queryKey: [...scope(runtime), 'jobs', libraryId],
     queryFn: ({ signal }) => runtime.mediaApi.request<{ items: ScanJob[] }>(path, 'GET', undefined, signal),
-    refetchInterval: 5000,
+    // Every 5 s while something is moving; a settled list only needs to notice a scan
+    // started elsewhere (another tab, a scheduled scan), which 30 s is enough for.
+    refetchInterval: query => query.state.data?.items.some(job => job.state === 'running' || job.state === 'queued') === false ? 30_000 : 5000,
   });
 }
 export function aiJobsQuery(runtime: AppRuntime, libraryId = '') {
   return queryOptions({
     queryKey: [...scope(runtime), 'ai-jobs', libraryId],
     queryFn: () => runtime.mediaApi.aiScanJobs(libraryId || undefined),
-    refetchInterval: 5000,
+    refetchInterval: query => query.state.data?.items.some(job => job.state === 'running' || job.state === 'queued') === false ? 30_000 : 5000,
   });
 }
 export function useMediaPlayback() {

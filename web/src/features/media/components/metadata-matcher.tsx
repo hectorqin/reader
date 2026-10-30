@@ -109,14 +109,15 @@ export function MetadataMatcher({ api, item, onUpdated,layout='inline',onBusyCha
       {!child&&<label>搜索词<input aria-label="刮削搜索词" value={query} required maxLength={200} disabled={busy} onInput={e => setQuery(e.currentTarget.value)}/></label>}
       {supportsArtist&&<label>艺人限定（可选）<input aria-label="刮削艺人限定" value={artist} maxLength={200} disabled={busy} onInput={event=>setArtist(event.currentTarget.value)}/><small>与搜索词一同发送给 MusicBrainz，仅用于“搜索候选”。没有结果时可清空重搜，不会修改作品标签。</small></label>}
       <button className="media-primary" disabled={busy || !provider || !query.trim()} type="submit">{child?'获取季集候选':'搜索候选'}</button>
-      {!child&&<details className="media-auto-match"><summary>自动匹配</summary><button disabled={busy||!provider||!!match} type="button" onClick={()=>void run(async signal=>{
+      {/* A primary way to match, so it sits beside 搜索候选 rather than behind a disclosure. */}
+      {!child&&<div className="media-auto-match"><button disabled={busy||!provider||!!match} type="button" onClick={()=>void run(async signal=>{
         setSelected(null);setCandidates([]);setSearched(false);
         const result=await api.request<{status:string;item?:Detail;items?:Candidate[]}>(`items/${item.id}/auto-match`,'POST',{provider},signal);
         if(signal.aborted)return;
         if(result.item)onUpdated(result.item);
         else{const next=result.items||[];setCandidates(next);setSearched(true);setError(result.status==='unmatched'?'':'未满足唯一且一致的匹配条件，请核对候选后确认。');}
       })}>按作品信息自动匹配</button>
-      <small>使用当前标题搜索，仅唯一较强候选且详情复核一致时保存；已有在线匹配不会覆盖。</small></details>}
+      <small>使用当前标题搜索，仅唯一较强候选且详情复核一致时保存；已有在线匹配不会覆盖。</small></div>}
     </form>
     {!loading&&!loadError&&!provider&&<div className="media-match-unavailable" role="status"><Search size={26} strokeWidth={1.4} aria-hidden="true"/><strong>{providers.length?'尚未配置可用来源':'当前作品暂无支持的在线来源。'}</strong><p>{providers.length?'请由服务器管理员设置访问凭证或联系信息，再重新读取。':'可以返回手动编辑，本地资料和播放不受影响。'}</p>{providers.length>0&&<button type="button" disabled={busy} onClick={()=>setLoadRetry(value=>value+1)}>重新检查来源</button>}</div>}
     {loading&&<MediaLoading layout="list" label="正在读取来源与候选…" count={2}/>}

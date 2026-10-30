@@ -190,8 +190,7 @@
 .media-screen .media-metadata-page .media-match-search>label small {grid-column:2}
 .media-screen .media-metadata-page .media-match-search>.media-primary {grid-column:1/-1;justify-self:start}
 .media-screen .media-metadata-page .media-auto-match {grid-column:1/-1;margin:0;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--media-paper)}
-.media-screen .media-metadata-page .media-auto-match summary {font-weight:600;color:var(--text)}
-.media-screen .media-metadata-page .media-auto-match button {margin-top:8px;background:var(--surface);border:1px solid var(--border)}
+.media-screen .media-metadata-page .media-auto-match button {background:var(--surface);border:1px solid var(--border)}
 .media-screen .media-metadata-page .media-metadata-matcher>h2 {margin:30px 0 8px;font-size:var(--text-title)}
 .media-screen .media-metadata-page .media-match-candidate {border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin:8px 0;background:var(--media-paper)}
 .media-screen .media-metadata-page .media-match-candidate>button {flex:none}
