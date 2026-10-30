@@ -21,7 +21,7 @@
   background: var(--color-ch-read-soft);
   color: var(--color-ink);
   text-decoration: none;
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: border-color var(--motion-duration) var(--motion-ease), box-shadow var(--motion-duration) var(--motion-ease);
 }
 @media (hover: hover) and (pointer: fine) { .home-hero:hover { border-color: var(--color-ch-read); box-shadow: 0 8px 24px color-mix(in srgb, var(--color-ink) 8%, transparent); }}
 .home-hero:focus-visible, .home-card:focus-visible, .home-empty a:focus-visible, .home-retry:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: 3px; }
@@ -71,7 +71,7 @@
   background: var(--color-surface);
   color: var(--color-ink);
   text-decoration: none;
-  transition: border-color .15s ease;
+  transition: border-color var(--motion-duration) var(--motion-ease);
   --ch: var(--color-ch-video); --ch-soft: var(--color-ch-video-soft); --ch-text: var(--color-ch-video-text);
 }
 .home-card[data-channel='audiobook'] { --ch: var(--color-ch-audio); --ch-soft: var(--color-ch-audio-soft); --ch-text: var(--color-ch-audio-text); }

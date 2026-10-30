@@ -16,7 +16,7 @@
 /* Same weight as the shelf's .book-card .title, so a cover title reads the same in every channel. */
 .media-screen .media-tile strong {display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:var(--text-label);font-weight:520;line-height:1.5;margin-top:8px}
 .media-screen .media-tile small {display:block;font-size:var(--text-meta);line-height:1.5;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.media-screen .media-cover {border-radius:var(--radius-sm);box-shadow:0 3px 8px #15211714}
+.media-screen .media-cover {border-radius:var(--radius-sm);box-shadow:0 3px 8px #00000014}
 .media-screen .media-cover:not(.has-image):not(.media-portrait) {background:var(--surface);color:var(--muted);border:1px solid var(--border)}
 /* Per-title tint, as on the shelf (ui/cover-tint.ts, ui.md §2.7). */
 .media-screen .media-cover:not(.has-image):not(.media-portrait)[style*='--cover-hue'] {background:linear-gradient(150deg,color-mix(in oklab,hsl(var(--cover-hue) 55% 55%) 18%,var(--media-paper)),color-mix(in oklab,hsl(var(--cover-hue) 55% 55%) 10%,var(--surface)));border-color:color-mix(in oklab,hsl(var(--cover-hue) 55% 55%) 14%,var(--border))}
@@ -527,7 +527,7 @@
 .media-screen .media-detail-favorite {background:transparent;border-radius:50%}
 
 .media-ai-jobs{margin-top:28px;border-top:1px solid var(--border);padding-top:18px}.media-ai-job-actions{display:flex;align-items:center;justify-content:flex-start;gap:12px;margin-top:10px}.media-ai-batches{margin-top:10px;padding-left:10px}.media-ai-batch{border-top:1px solid var(--border);padding:8px 0}.media-ai-batch-toggle{display:flex;align-items:center;gap:5px;background:transparent;border:0;padding:4px;color:inherit}.media-ai-batch-detail{padding:8px 20px;font-size:var(--text-label)}.media-ai-batch-detail pre{max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;background:color-mix(in srgb,var(--text) 5%,var(--media-paper));padding:10px}
-.media-task-tabs{display:inline-flex;align-items:center;gap:3px;margin:8px 0 28px;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-muted,#f3f4ef);box-shadow:inset 0 1px 2px rgba(31,42,34,.06)}.media-task-tabs button{min-height:36px;border:0;border-radius:var(--radius-sm);background:transparent;padding:0 18px;color:var(--muted);font-size:var(--text-ui);font-weight:500;white-space:nowrap;transition:background .15s ease,color .15s ease,box-shadow .15s ease}@media (hover: hover) and (pointer: fine) { .media-task-tabs button:hover{color:var(--text)}}.media-task-tabs button[aria-current=page]{background:var(--surface,#fff);color:var(--text);font-weight:650;box-shadow:0 1px 3px rgba(31,42,34,.14)}
+.media-task-tabs{display:inline-flex;align-items:center;gap:3px;margin:8px 0 28px;padding:4px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-muted);box-shadow:inset 0 1px 2px rgb(0 0 0 / .06)}.media-task-tabs button{min-height:36px;border:0;border-radius:var(--radius-sm);background:transparent;padding:0 18px;color:var(--muted);font-size:var(--text-ui);font-weight:500;white-space:nowrap;transition:background var(--motion-duration) var(--motion-ease),color var(--motion-duration) var(--motion-ease),box-shadow var(--motion-duration) var(--motion-ease)}@media (hover: hover) and (pointer: fine) { .media-task-tabs button:hover{color:var(--text)}}.media-task-tabs button[aria-current=page]{background:var(--surface);color:var(--text);font-weight:650;box-shadow:0 1px 3px rgb(0 0 0 / .14)}
 .media-task-library>label{min-width:0}
 .media-ai-jobs .media-scan-job>.media-task-copy{width:auto;min-width:0}
 .media-ai-jobs .media-scan-job{grid-template-columns:minmax(0,1fr) auto 40px}
@@ -632,13 +632,13 @@
  .media-screen .media-playback-status[data-panel=main][data-channel=music] .media-audio-bottom {grid-row:2}
  .media-playlist-tools {top:12px;right:max(32px,calc((100vw - 1120px)/2 + 32px))}
 }
-.media-task-icon-placeholder{width:36px;height:36px;display:block}.media-scrape-selection-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:16px 0 10px}.media-scrape-selection-toolbar>div{display:flex;gap:8px;flex-wrap:wrap}.media-scrape-search{display:grid;gap:6px;min-width:min(360px,100%);font-size:var(--text-label);color:var(--muted)}.media-scrape-search input{min-height:38px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 12px;background:var(--surface)}.media-scrape-item-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px;max-height:460px;overflow:auto;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-muted,#f8f9f6)}.media-scrape-item-list .media-user-option{min-width:0;border-bottom:1px solid color-mix(in srgb,var(--border) 65%,transparent);padding:10px 4px}.media-scrape-item-list .media-user-option span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.media-scrape-selection-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0}.media-scrape-selection-footer span{color:var(--muted);font-size:var(--text-label)}
+.media-task-icon-placeholder{width:36px;height:36px;display:block}.media-scrape-selection-toolbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin:16px 0 10px}.media-scrape-selection-toolbar>div{display:flex;gap:8px;flex-wrap:wrap}.media-scrape-search{display:grid;gap:6px;min-width:min(360px,100%);font-size:var(--text-label);color:var(--muted)}.media-scrape-search input{min-height:38px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 12px;background:var(--surface)}.media-scrape-item-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 24px;max-height:460px;overflow:auto;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--surface-muted)}.media-scrape-item-list .media-user-option{min-width:0;border-bottom:1px solid color-mix(in srgb,var(--border) 65%,transparent);padding:10px 4px}.media-scrape-item-list .media-user-option span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.media-scrape-selection-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0}.media-scrape-selection-footer span{color:var(--muted);font-size:var(--text-label)}
 
 /* Shared media interaction tokens also cover layers outside the screen. */
 :root body {--surface-muted:var(--color-surface-2)}
 @media (hover: hover) and (pointer: fine) { .media-task-tabs button:hover {background:var(--media-selection)}}
 .media-screen .media-task-tabs {align-items:stretch;width:100%}
-.media-screen .media-task-tabs button {font-size:var(--text-label);transition:color .15s ease,border-color .15s ease}
+.media-screen .media-task-tabs button {font-size:var(--text-label);transition:color var(--motion-duration) var(--motion-ease),border-color var(--motion-duration) var(--motion-ease)}
 :is(.media-screen,.media-player,.media-modal) :is(button,a,input,select,summary):focus-visible {outline:2px solid var(--media-accent);outline-offset:3px}
 .media-screen .media-grid:not(.media-season-picker) .media-tile strong {white-space:normal;min-height:3em}
 .media-screen .media-grid .media-tile {text-decoration:none;color:inherit;display:block}
@@ -668,7 +668,7 @@
 
 /* Library cards keep the directory, summary and action areas visually compact. */
 .media-screen .media-manager .media-library-list{gap:12px}
-.media-screen .media-manager .media-library-row{grid-template-columns:30px minmax(0,1fr) 40px;gap:12px;padding:14px 16px;border-radius:var(--radius-lg);box-shadow:0 1px 2px rgba(31,42,34,.04)}
+.media-screen .media-manager .media-library-row{grid-template-columns:30px minmax(0,1fr) 40px;gap:12px;padding:14px 16px;border-radius:var(--radius-lg);box-shadow:0 1px 2px rgb(0 0 0 / .04)}
 .media-screen .media-manager .media-library-row>svg{margin-top:3px}
 .media-screen .media-manager .media-library-row strong{font-size:var(--text-ui);line-height:1.5}
 .media-screen .media-manager .media-library-row small{line-height:1.5}
@@ -677,9 +677,9 @@
 .media-screen .media-manager .media-library-footer button{min-height:36px;padding-inline:8px;border-radius:var(--radius-sm)}
 @media(max-width:700px){.media-screen .media-manager .media-library-list{gap:10px}.media-screen .media-manager .media-library-row{grid-template-columns:28px minmax(0,1fr) 36px;padding:13px 14px;border-radius:var(--radius-md)}.media-screen .media-manager .media-library-footer{margin-top:7px;padding-top:9px}.media-screen .media-manager .media-library-footer button{min-height:34px}}
 
-.media-screen .media-continue{cursor:pointer;transition:border-color .15s ease,box-shadow .15s ease}
-.media-screen .media-continue:focus-visible{border-color:var(--media-accent);box-shadow:0 3px 12px rgba(31,42,34,.08);outline:none}
-@media (hover: hover) and (pointer: fine) { .media-screen .media-continue:hover{border-color:var(--media-accent);box-shadow:0 3px 12px rgba(31,42,34,.08);outline:none}}
+.media-screen .media-continue{cursor:pointer;transition:border-color var(--motion-duration) var(--motion-ease),box-shadow var(--motion-duration) var(--motion-ease)}
+.media-screen .media-continue:focus-visible{border-color:var(--media-accent);box-shadow:0 3px 12px rgb(0 0 0 / .08);outline:none}
+@media (hover: hover) and (pointer: fine) { .media-screen .media-continue:hover{border-color:var(--media-accent);box-shadow:0 3px 12px rgb(0 0 0 / .08);outline:none}}
 .media-screen .media-continue-play{display:grid!important;place-items:center;width:38px!important;min-width:38px!important;height:38px!important;min-height:38px!important;padding:0!important;border:1px solid color-mix(in srgb,var(--media-accent) 35%,var(--border))!important;border-radius:50%!important;background:transparent!important;color:var(--media-accent)!important}
 @media (hover: hover) and (pointer: fine) { .media-screen .media-continue-play:hover{background:var(--media-selection)!important}}
 .media-screen:has(>.media-read-loading-detail)>.media-heading{align-items:center;border-bottom:0;box-shadow:none}

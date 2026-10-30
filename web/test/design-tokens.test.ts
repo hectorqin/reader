@@ -39,6 +39,20 @@ describe('design tokens', () => {
     expect(shell).toMatch(/@media \(pointer: coarse\) \{\s*:is\(input:not\([^)]*\), textarea, select\) \{\s*font-size: max\(var\(--text-title\), 1em\) !important;/);
   });
 
+  it('times transitions with the motion tokens (ui.md §2.3)', () => {
+    // One duration and one curve, so prefers-reduced-motion (which shortens the token)
+    // reaches every state change. Looping animations (spinners, skeletons) keep their
+    // own pace; `0s` (an instant switch) and the reduced-motion overrides are allowed.
+    const offenders = stylesheets(root).flatMap(file => {
+      const source = readFileSync(file, 'utf8');
+      return [...source.matchAll(/transition(?:-duration)?:[^;}]*/g)]
+        .map(match => match[0])
+        .filter(declaration => /\b(?!0m?s\b)\d*\.?\d+m?s\b/.test(declaration.replace(/var\([^)]*\)/g, '')) && !/\b(?:0\.001s|1ms)\b/.test(declaration))
+        .map(declaration => `${relative(root, file)}: ${declaration}`);
+    });
+    expect(offenders).toEqual([]);
+  });
+
   it('only styles :hover where a pointer can hover (ui.md §2.5)', () => {
     // On a touch screen a tap leaves the control in its hover look until the next tap
     // elsewhere, so every :hover rule sits inside a `@media (hover: hover)` block.

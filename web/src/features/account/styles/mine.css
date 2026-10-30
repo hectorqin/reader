@@ -70,7 +70,7 @@
   text-align: left;
   text-decoration: none;
   cursor: pointer;
-  transition: background-color .12s ease;
+  transition: background-color var(--motion-duration) var(--motion-ease);
 }
 
 /* Separators start after the icon, so the icons read as one column. */

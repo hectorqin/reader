@@ -32,7 +32,7 @@ body:has(.reader-screen[data-chrome='visible']) .notyf { padding-bottom: calc(8.
   font-size: var(--text-label);
   text-align: start;
   pointer-events: none;
-  animation-duration: .15s;
+  animation-duration: var(--motion-duration);
 }
 .global-notice .notyf__wrapper { gap: .65rem; padding: 0; }
 .global-notice .notyf__message { min-width: 0; overflow-wrap: anywhere; white-space: pre-wrap; animation: none; opacity: 1; }

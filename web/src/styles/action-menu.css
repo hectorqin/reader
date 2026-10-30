@@ -23,7 +23,7 @@
   font-size: var(--text-body, 15px);
   line-height: 1.4;
   box-shadow: 0 10px 32px color-mix(in srgb, #000 18%, transparent), 0 2px 6px color-mix(in srgb, #000 8%, transparent);
-  animation: action-menu-in 120ms ease-out;
+  animation: action-menu-in var(--motion-duration) var(--motion-ease);
 }
 
 /* The popover UA sheet centres and hides it; the component shows and places it. */
