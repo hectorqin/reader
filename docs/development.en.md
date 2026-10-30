@@ -79,8 +79,8 @@ cd server && npx tsx --test test/media-api.test.ts
 
 # Most Web tests use Vitest
 cd web && npx vitest run test/foo.test.ts
-# The few files written for node:test (api, asset-url, paginator, window, windowed-toc)
-cd web && npx tsx --test test/paginator.test.ts
+# The few files written for node:test (api, asset-url, windowed-toc)
+cd web && npx tsx --test test/windowed-toc.test.ts
 ```
 
 The Web package has two test runners: `npm test` runs Vitest, then runs the node:test files above with `tsx --test`; those files are excluded from Vitest in `web/vite.config.ts`. When adding a node:test file, add it to both the `test` script and the Vitest `exclude` list. The Web suite imports server code, so run `npm ci` for both packages first.

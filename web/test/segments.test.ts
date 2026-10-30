@@ -4,9 +4,7 @@ import {
   cleanTextMarkup,
   htmlToText,
   isTextOnlyMarkup,
-  endsAtParagraphBreak,
   escapeHtml,
-  paragraphElement,
   splitChapterHeading,
   splitTextParagraphs,
   textToChapterHtml,
@@ -167,13 +165,6 @@ describe('the markup form', () => {
     expect(html).not.toContain('<h3>');
     expect(html).toContain('<p>他说第二章他看过。</p>');
   });
-
-  it('uses textContent for the node form, so the DOM is the escaper', () => {
-    const element = paragraphElement({ text: '<b>不是标签</b>', leading: 0 });
-    expect(element.tagName).toBe('P');
-    expect(element.textContent).toBe('<b>不是标签</b>');
-    expect(element.querySelector('b')).toBeNull();
-  });
 });
 
 describe('splitChapterHeading', () => {
@@ -208,61 +199,6 @@ describe('splitChapterHeading', () => {
 });
 
 /**
- * Streaming across chunk boundaries.
- *
- * `render/text.ts` splits each 256KB chunk as it arrives, and both of the split's
- * rules look at the *next* line to decide — so a chunk boundary that lands inside a
- * paragraph would otherwise become a spurious paragraph break, one extra indent
- * somewhere in the middle of a novel. The fix is the carry: the last paragraph of a
- * chunk is held back until the chunk that continues it arrives.
- *
- * The arithmetic is asserted here rather than through the reader, because the
- * reader needs a DOM, a scroll container and a fetch to reach it, and the part that
- * goes wrong is the predicate.
- */
-describe('chunk boundaries and the carry', () => {
-  const endsAtBreak = endsAtParagraphBreak;
-
-  const settle = (text: string): { settled: string[]; rest: string } => {
-    const split = splitTextParagraphs(text);
-    if (endsAtBreak(text)) return { settled: split.map((p) => p.text), rest: '' };
-    return { settled: split.slice(0, -1).map((p) => p.text), rest: split[split.length - 1]?.text ?? '' };
-  };
-
-  it('holds back a paragraph that the next chunk continues', () => {
-    // The boundary landed mid-sentence: emitting the tail here would draw a
-    // paragraph break that the file does not have.
-    expect(settle('第一段。\n\n第二段')).toEqual({ settled: ['第一段。'], rest: '第二段' });
-  });
-
-  it('emits everything when the chunk ends at a paragraph break', () => {
-    expect(settle('第一段。\n\n第二段。\n')).toEqual({ settled: ['第一段。', '第二段。'], rest: '' });
-  });
-
-  it('carries the whole chunk when it has no complete paragraph yet', () => {
-    expect(settle('第一段')).toEqual({ settled: [], rest: '第一段' });
-  });
-
-  it('reassembles the same paragraphs as one pass over the whole text', () => {
-    // The property that matters: however the text is cut, what is drawn is what a
-    // single split would have drawn.
-    const whole = '他走了。\n\n她留下了。\n天亮了。\n\n风停了。';
-    const cuts = ['他走了。\n\n她留', '下了。\n天亮', '了。\n\n风停了。'];
-
-    const drawn: string[] = [];
-    let carry = '';
-    for (const cut of cuts) {
-      const { settled, rest } = settle(carry + cut);
-      drawn.push(...settled);
-      carry = rest;
-    }
-    drawn.push(...settle(`${carry}\n\n`).settled);
-
-    expect(drawn).toEqual(splitTextParagraphs(whole).map((p) => p.text));
-  });
-});
-
-/**
  * TXT files saved from a web page still carry its markup. Escaped, the tags are
  * drawn as text and every `<br/>` line becomes a gap, so they are cleaned before
  * paragraphs are inferred.
@@ -291,11 +227,6 @@ describe('web-page markup in a TXT', () => {
     expect(cleanTextMarkup('<p>他说&ldquo;<span style="x">好</span>&rdquo;&nbsp;a&lt;b&#65281;</p>')).toBe('\n他说“好” a<b！\n');
     expect(cleanTextMarkup('如果 a<b 且 <书名> 未知')).toBe('如果 a<b 且 <书名> 未知');
     expect(cleanTextMarkup(cleanTextMarkup(scraped))).toBe(cleanTextMarkup(scraped));
-  });
-
-  it('treats a trailing break tag as the end of a paragraph when streaming', () => {
-    expect(endsAtParagraphBreak('一段。<br/>')).toBe(true);
-    expect(endsAtParagraphBreak('一段')).toBe(false);
   });
 });
 

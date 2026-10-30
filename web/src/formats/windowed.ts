@@ -23,14 +23,11 @@
  *
  * ### 3. A window is fetched when the reader asks for something outside it
  *
- * Windows are not a cache to be filled in the background; they are on-demand.
- * `RemoteZip` is the exception: for an EPUB, reading one chapter means reading
- * the archive's central directory once and then one entry, which is what keeps
- * the open cost at one chapter rather than one archive.
+ * Windows are not a cache to be filled in the background; they are on-demand
+ * (apart from the one section ahead that `ReaderView.open` prefetches).
  */
 
 import type { BookContent, ContentItem } from '../net/api.ts';
-import { RemoteZip, type RangeSource } from './remote-zip.ts';
 import type { BookDoc, Section, StagedBook, TocEntry } from './types.ts';
 
 /**
@@ -312,5 +309,3 @@ export function isStagedKind(kind: BookContent['kind'] | undefined): boolean {
   return kind === 'reflowable' || kind === 'paged' || kind === 'text';
 }
 
-export { RemoteZip };
-export type { RangeSource };

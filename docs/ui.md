@@ -815,11 +815,9 @@ TXT 是唯一一种**没有作者排版**的书，所以它也是唯一一处「
 | `web/src/features/shelf/pages/ShelfPage.tsx` | 书架；排序、分页器与书库入口 |
 | `web/src/features/library/pages/LibraryPage.tsx` | 书库浏览、书籍列表和文件管理路由；搜索、面包屑、分页器、上传后重读 |
 | `web/src/ui/shelf-membership.ts` | 两个方向的措辞与批量报告那句话的唯一来源（§3.5.2） |
-| `web/src/ui/shelf-order.ts` | 排序的**唯一**定义：方向、客户端/服务端的键怎么翻译、阅读时间怎么排 |
 | `web/src/ui/sheet.tsx` / `web/src/styles/sheet.css` | 唯一的弹层 `Sheet` 与 `ConfirmSheet`（§3.7） |
 | `web/src/ui/dialog.tsx` | 提问（文本框/确认/选择），基于 `Sheet`，书架与文件管理共用 |
-| `web/src/ui/pager.tsx` | 翻页器组件（§3.5）；书架和书库目前各自画「上一页 / 下一页」，没有用它 |
-| `web/test/shelf-order.test.ts` | 排序的方向、客户端/服务端的键、阅读时间排序与并列时的稳定 |
+| `web/src/ui/pager.tsx` | 翻页器组件（§3.5），书架、书库浏览和文件管理共用 |
 | `web/test/react-router-routes.test.tsx` | React Router 的页面、影音嵌套路由和权限边界 |
 | `web/test/media-library-list.test.tsx` | 媒体库列表、分页和空状态 |
 | `web/test/media-library-editor.test.tsx` | 媒体库编辑、权限和保存后的重读 |

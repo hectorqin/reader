@@ -79,8 +79,8 @@ cd server && npx tsx --test test/media-api.test.ts
 
 # Web 大多数测试使用 Vitest
 cd web && npx vitest run test/foo.test.ts
-# 少数为 node:test 编写的文件（api、asset-url、paginator、window、windowed-toc）
-cd web && npx tsx --test test/paginator.test.ts
+# 少数为 node:test 编写的文件（api、asset-url、windowed-toc）
+cd web && npx tsx --test test/windowed-toc.test.ts
 ```
 
 Web 有两套测试运行器：`npm test` 先跑 Vitest，再用 `tsx --test` 跑上述 node:test 文件；这些文件在 `web/vite.config.ts` 中被 Vitest 排除。新增 node:test 文件时，要同时加入 `test` 脚本和 Vitest 的 `exclude` 列表。Web 测试会引用服务端代码，运行前两端都需要 `npm ci`。

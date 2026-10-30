@@ -53,8 +53,6 @@ export default defineConfig({
     exclude: [
       'test/api.test.ts',
       'test/asset-url.test.ts',
-      'test/paginator.test.ts',
-      'test/window.test.ts',
       'test/windowed-toc.test.ts',
       'node_modules/**',
     ],
