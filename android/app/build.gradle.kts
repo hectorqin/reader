@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "cool.cnb.reader"
+    namespace = "com.htmake.readerpro"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "cool.cnb.reader"
+        applicationId = "com.htmake.readerpro"
         minSdk = 24
         targetSdk = 35
         versionCode = 1
