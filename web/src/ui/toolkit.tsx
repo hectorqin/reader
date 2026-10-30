@@ -15,7 +15,7 @@ import type { ButtonHTMLAttributes, MouseEvent as ReactMouseEvent } from 'react'
  */
 
 import { Icon, type IconName } from './icon.tsx';
-import { type ReactNode, type JSX } from 'react';
+import { type ReactNode, type JSX, useId } from 'react';
 
 export { Icon, type IconName } from './icon.tsx';
 
@@ -199,16 +199,21 @@ export interface SwitchRowProps {
  * instead of from the DOM the click just modified.
  */
 export function SwitchRow({ label, hint, checked, onChange }: SwitchRowProps): JSX.Element {
+  const id = useId();
+  // The whole row is the hit target, as the note above promises: a press on the
+  // words toggles too. The button keeps the semantics and takes its name from them.
   return (
-    <div className="field switch-field">
+    <div className="field switch-field" onClick={event => { if (!(event.target as Element).closest('.switch')) onChange(!checked); }}>
       <div className="switch-text">
-        <div>{label}</div>
-        <div className="muted">{hint}</div>
+        <div id={`${id}-label`}>{label}</div>
+        <div className="muted" id={`${id}-hint`}>{hint}</div>
       </div>
       <button
         type="button"
         className="switch"
         aria-pressed={checked}
+        aria-labelledby={`${id}-label`}
+        aria-describedby={hint ? `${id}-hint` : undefined}
         onClick={() => onChange(!checked)}
       />
     </div>

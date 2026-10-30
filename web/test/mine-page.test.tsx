@@ -70,10 +70,13 @@ describe('我的', () => {
     expect(root.querySelector('.mine-profile')?.textContent).toContain('管理员');
   });
 
-  it('signs out through the API', () => {
+  it('signs out through the API, after a confirmation', () => {
     useAuthStore.setState({ verifiedUser: user('member') });
     paint();
     act(() => { root.querySelector<HTMLButtonElement>('.mine-row.is-danger')!.click(); });
+    expect(signOut).not.toHaveBeenCalled();
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('dialog button')].find(button => button.textContent === '退出登录')!;
+    act(() => { confirm.click(); });
     expect(signOut).toHaveBeenCalledTimes(1);
   });
 });

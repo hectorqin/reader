@@ -85,9 +85,15 @@ export function HomePage() {
   return <div className="media-screen media-page home-page">
     <header className="home-header"><h1>{greeting(new Date().getHours())}{name ? `，${name}` : ''}</h1><p>从上次停下的地方继续</p></header>
     <div className="home-continue" data-media={videoActivity || audioActivity ? 'true' : undefined}>
+      {/* Only a successful answer can say "nothing in progress": while loading the slot keeps
+          its shape, and a failure says so instead of telling a reader with books that they have none. */}
       {book
         ? <Resume book={book} />
-        : <section className="home-empty" aria-label="继续阅读"><strong>还没有在读的书</strong><Link to="/shelf">去书架挑一本<ChevronRight size={16} aria-hidden="true" /></Link></section>}
+        : reading.isPending
+          ? <section className="home-empty home-empty-pending" aria-label="继续阅读" aria-busy="true"><strong>正在读取在读的书…</strong></section>
+          : reading.error
+            ? <section className="home-empty" aria-label="继续阅读" role="alert"><strong>在读的书读取失败</strong><button type="button" className="home-retry" onClick={() => void reading.refetch()}>重试<ChevronRight size={16} aria-hidden="true" /></button></section>
+            : <section className="home-empty" aria-label="继续阅读"><strong>还没有在读的书</strong><Link to="/shelf">去书架挑一本<ChevronRight size={16} aria-hidden="true" /></Link></section>}
       {(videoActivity || audioActivity) && <div className="home-cards">
         {videoActivity && <ResumeMedia channel="video" label="影视" icon={Clapperboard} activity={videoActivity} />}
         {audioActivity && <ResumeMedia channel="audiobook" label="听书" icon={Headphones} activity={audioActivity} />}

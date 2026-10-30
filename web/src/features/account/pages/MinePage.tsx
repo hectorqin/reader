@@ -10,6 +10,9 @@ import { readMediaPreferences } from '../../media/services/preferences.ts';
 import { DENSITY_LABELS, ShelfSettingsSheet } from '../../../ui/shelf-settings.tsx';
 import { OpdsAccess } from '../../../ui/opds-access.tsx';
 import { SystemSettings } from '../../../ui/system-settings.tsx';
+import { ConfirmSheet } from '../../../ui/sheet.tsx';
+import { useSyncStore } from '../../../shared/stores/sync.store.ts';
+import { connectionLabel } from '../../../app/AppNav.tsx';
 import '../../home/styles/home.css';
 import '../styles/mine.css';
 
@@ -51,8 +54,11 @@ export function MinePage() {
   const scope = runtime.mediaApi.preferenceScope();
   const themeName = themeSummary(useThemeState(scope).preference);
   const mediaDensity = readMediaPreferences(scope).density === 'compact' ? '紧凑' : '宽松';
-  const [sheet, setSheet] = useState<'shelf' | 'opds' | 'system' | null>(null);
+  const [sheet, setSheet] = useState<'shelf' | 'opds' | 'system' | 'sign-out' | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
   const name = user?.displayName || user?.username || '';
+  // The same sync-engine verdict the sidebar shows; on a phone this page is the only place it appears.
+  const connection = connectionLabel(useSyncStore(state => state.status.state));
   return <>
     <div className="media-screen media-page mine-page">
       <header className="home-header"><h1>我的</h1></header>
@@ -60,7 +66,7 @@ export function MinePage() {
         <div className="mine-avatar" aria-hidden="true">{Array.from(name)[0]}</div>
         <div className="mine-profile-text">
           <strong>{name}<span className="mine-role">{admin ? '管理员' : '成员'}</span></strong>
-          <small><span className="mine-dot" aria-hidden="true" />已连接 {serverHost(runtime.api.baseUrl)}</small>
+          <small><span className="mine-dot" data-state={connection.state} aria-hidden="true" />{connection.label} {serverHost(runtime.api.baseUrl)}</small>
         </div>
       </section>}
       {/* Two columns on a wide window, each filled top to bottom so uneven groups don't
@@ -86,7 +92,7 @@ export function MinePage() {
           </Group>
           <Group title="账号" order={4}>
             <Row icon={UserRound} label="账号与连接" to="/me/account" />
-            <Row icon={LogOut} label="退出登录" danger onClick={() => { void runtime.api.signOut(); }} />
+            <Row icon={LogOut} label="退出登录" danger onClick={() => setSheet('sign-out')} />
           </Group>
         </div>
       </div>
@@ -95,5 +101,9 @@ export function MinePage() {
     {sheet === 'shelf' && <ShelfSettingsSheet settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSheet(null)} onOpenExternalReader={() => setSheet('opds')} />}
     {sheet === 'opds' && <OpdsAccess api={runtime.api} onSignedOut={() => { void runtime.api.signOut(); }} onClose={() => setSheet('shelf')} />}
     {sheet === 'system' && <SystemSettings api={runtime.api} onClose={() => setSheet(null)} />}
+    {sheet === 'sign-out' && <ConfirmSheet danger title="退出登录" busy={signingOut} confirmText={signingOut ? '正在退出…' : '退出登录'}
+      text={`将退出 ${serverHost(runtime.api.baseUrl)} 上的账号「${name}」，之后需要重新登录才能继续使用。`}
+      onCancel={() => setSheet(null)}
+      onConfirm={() => { setSigningOut(true); void runtime.api.signOut().finally(() => setSigningOut(false)); }} />}
   </>;
 }

@@ -34,6 +34,11 @@ describe('design tokens', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('keeps every typed field at 16px+ on touch screens so iOS does not zoom (ui.md §3.3)', () => {
+    const shell = readFileSync(join(root, 'app', 'shell.css'), 'utf8');
+    expect(shell).toMatch(/@media \(pointer: coarse\) \{\s*:is\(input:not\([^)]*\), textarea, select\) \{\s*font-size: max\(var\(--text-title\), 1em\) !important;/);
+  });
+
   it('only styles :hover where a pointer can hover (ui.md §2.5)', () => {
     // On a touch screen a tap leaves the control in its hover look until the next tap
     // elsewhere, so every :hover rule sits inside a `@media (hover: hover)` block.

@@ -33,6 +33,8 @@
 .mine-role { flex: none; height: 20px; padding: 0 8px; border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-brand-text); font-size: var(--text-meta); font-weight: 600; line-height: 20px; }
 .mine-profile-text small { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: var(--text-meta); color: var(--color-muted); overflow-wrap: anywhere; }
 .mine-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--color-brand-text); }
+.mine-dot[data-state='offline'] { background: var(--color-muted); }
+.mine-dot[data-state='error'] { background: var(--color-danger); }
 
 /* Narrow: one list in reading order. Wide: two independent columns. */
 .mine-groups { display: flex; flex-direction: column; }

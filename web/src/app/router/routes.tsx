@@ -93,7 +93,8 @@ export const routes = [{
       { path: ':channel/:category?', element: <MediaCatalogPage /> },
       { path: '*', element: <Navigate to="/media/video" replace /> },
     ] },
-    { path: '*', element: <Navigate to="/media/video" replace /> },
+    // A mistyped or outdated link lands on 首页, not inside one media channel.
+    { path: '*', element: <Navigate to="/" replace /> },
   ],
 }] satisfies RouteObject[];
 
