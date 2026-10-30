@@ -30,13 +30,13 @@ npm run typecheck --prefix web    && npm test --prefix web    && npm run build -
 Single tests:
 
 - Server (node:test): `cd server && npx tsx --test test/media-api.test.ts` (add `--test-name-pattern="..."` to filter).
-- Web has **two runners**. Most files are Vitest: `cd web && npx vitest run test/foo.test.ts`. A few files written for `node:test` (`api`, `asset-url`, `paginator`, `window`, `windowed-toc`) are excluded from Vitest in `vite.config.ts` and run with `npx tsx --test test/<file>`. When adding a node:test file, add it to both the `test` script and the Vitest `exclude` list.
+- Web has **two runners**. Most files are Vitest: `cd web && npx vitest run test/foo.test.ts`. A few files written for `node:test` (`api`, `asset-url`, `windowed-toc`) are excluded from Vitest in `vite.config.ts` and run with `npx tsx --test test/<file>`. When adding a node:test file, add it to both the `test` script and the Vitest `exclude` list.
 
 UI review (real Chromium via CDP; needs `npx playwright install chromium` or `CHROME_PATH`): `npm run ui:review --prefix web` (builds, then screenshots + measured assertions into git-ignored `artifacts/ui-review/react-app/`, result in `verification.json`). Also `ui:review:reader` and `ui:sources`. Never commit screenshots to `docs/`. Run this and look at the screenshots after layout changes.
 
 Docker image (context must be repo root): `docker build -f server/Dockerfile -t reader:local .`
 Android: `sh android/scripts/build-web-assets.sh && cd android && ./gradlew :app:assembleDebug`.
-Icons: add path to `web/tools/icons/paths.mjs` (use this project's own English names — `test/icons.test.ts` rejects names borrowed from other icon sets), then `npm run icons`.
+Icons: map a name to a Lucide glyph in `ICONS` in `web/src/ui/icon.tsx` (this project's own English names — `test/icons.test.ts` rejects borrowed names and any other file importing `lucide-react`); screens use `<Icon name>` / `IconButton`, sizes 14/16/18/20/24/32 only.
 
 ## Server architecture
 
@@ -59,7 +59,7 @@ Icons: add path to `web/tools/icons/paths.mjs` (use this project's own English n
 - Server data via React Query; shared client state via Zustand; long-lived resources (player, theme, sync) owned by Providers/services and cleaned up there. New pages go in `features/<domain>/pages`; cross-domain code goes through `shared/` or `app/`. Don't add to the old Screen dispatch (`app.ts`, `app/legacy-compat.ts` exist only for Android diagnostics/old tests).
 - **Reader is imperative**: `features/reader/pages/ReaderPage.tsx` mounts `ReaderScreen` (`ui/reader-screen.tsx`) in an effect. Book content lives in a Shadow DOM with pagination measured via the DOM (`ui/reader-view.ts`, `render/`). Don't rewrite the stage as a React subtree; only the chrome is React.
 - **Theming**: `ThemeController` (`shared/theme/theme.ts`) writes `data-theme`/`data-mode` on `<html>`; components use `--color-*` tokens from `styles/theme-tokens.css` (`--reader-*` and media aliases map onto them). Read/save theme via `readThemePreference`/`saveThemePreference`/`resolveAppTheme` (and `useThemeState` from `shared/theme/use-theme.ts` in React), never storage directly. New colors/spacing/durations become tokens, not literals.
-- UI is built from the project's own components (`ui/toolkit.tsx`, `ui/sheet.tsx` as the only modal type, `ui/action-menu.tsx` for every ⋯ menu, `ui/dialog.tsx`, `ui/pager.tsx`) with Lucide/own icon font. Mantine was removed; some docs still mention it.
+- UI is built from the project's own components (`ui/toolkit.tsx`, `ui/sheet.tsx` as the only modal type, `ui/action-menu.tsx` for every ⋯ menu, `ui/dialog.tsx`, `ui/pager.tsx`) with Lucide icons drawn only through `ui/icon.tsx`. Mantine was removed; some docs still mention it.
 - Lists are server-paginated with the page in the URL (`docs/ui.md` §3.5). After a write, re-fetch and only then report. The client must not reconstruct facts the server already knows (e.g. book↔file joins); write by book id.
 - Offline mirror (`store/offline.ts`) is additive-only; removals must call `offline.removeBooks` explicitly.
 - **Mobile/PWA layout** (`docs/ui.md` §2.5, §3.1, §3.3): every `:hover` goes inside `@media (hover: hover) and (pointer: fine)` (enforced by `test/design-tokens.test.ts`); safe areas via the `--safe-*` vars, added only by the layer touching that screen edge (in sidebar mode the sidebar owns the left inset and `.app-shell-body` the right one); finger-reachable inputs ≥16px (`--text-title`) or iOS zooms on focus. `ui:review` does not emulate safe areas — check edge-touching bars with CDP `Emulation.setSafeAreaInsetsOverride`. Manifest/icons/launch colours: `docs/pwa.zh-CN.md`.

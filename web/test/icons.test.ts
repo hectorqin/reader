@@ -3,316 +3,27 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ICON_ALIASES, ICON_CODEPOINTS, ICON_CODEPOINT_TABLE } from '../src/ui/icon-names.ts';
-import { GLYPHS } from '../tools/icons/paths.mjs';
-import { pathToSubpaths } from '../tools/icons/path.mjs';
-import { Icon } from '../src/ui/icon.tsx';
+import { Icon, ICONS } from '../src/ui/icon.tsx';
 import { IconButton } from '../src/ui/toolkit.tsx';
 
-
 /**
- * The icon set's contract with the font.
- *
- * These are the parts that cannot be caught by the type system and would fail
- * *silently* in the browser: a code point the font does not define renders as a
- * missing-glyph box, and a glyph name in the table that has no path in the source
- * means the font and the table were built from different inputs. Both look like a
- * stray square in a toolbar, which is easy to miss and impossible to trace back.
- *
- * The font is parsed here by reading its `cmap` directly rather than by embedding a
- * font parser: the table is small, and a test that depends on a font library is a
- * test that breaks when the library does.
+ * The names are the product's (ui.md §1). The set once borrowed Font Awesome 6's
+ * names verbatim (#40), which put a *known* name on different artwork; they were
+ * reverted to the plain English the rest of the codebase speaks, and this list keeps
+ * them from drifting back.
  */
-
-/** Reads the format-4 `cmap` of the bundled font and returns the code points it maps. */
-function fontCodePoints(): Set<number> {
-  const font = readFileSync(join(process.cwd(), 'src/styles/reader-icons.ttf'));
-  const numTables = font.readUInt16BE(4);
-  let cmapOffset = 0;
-  for (let i = 0; i < numTables; i++) {
-    const entry = 12 + i * 16;
-    if (font.toString('ascii', entry, entry + 4) === 'cmap') cmapOffset = font.readUInt32BE(entry + 8);
-  }
-  expect(cmapOffset).toBeGreaterThan(0);
-
-  // Only one encoding record is written: Windows / Unicode BMP.
-  const subtable = cmapOffset + font.readUInt32BE(cmapOffset + 8);
-  expect(font.readUInt16BE(subtable)).toBe(4); // format 4
-
-  const segCount = font.readUInt16BE(subtable + 6) / 2;
-  const endBase = subtable + 14;
-  const startBase = endBase + segCount * 2 + 2;
-  const deltaBase = startBase + segCount * 2;
-
-  const mapped = new Set<number>();
-  for (let segment = 0; segment < segCount; segment++) {
-    const end = font.readUInt16BE(endBase + segment * 2);
-    const start = font.readUInt16BE(startBase + segment * 2);
-    const delta = font.readInt16BE(deltaBase + segment * 2);
-    for (let code = start; code <= end && code !== 0xffff; code++) {
-      // Every segment here maps one code to one glyph by addition.
-      if (((code + delta) & 0xffff) !== 0) mapped.add(code);
-    }
-  }
-  return mapped;
-}
-
-describe('the icon font and its code point table', () => {
-  const mapped = fontCodePoints();
-  const table = Object.values(ICON_CODEPOINT_TABLE).map((value) => value.codePointAt(0)!);
-
-  it('maps every code point the table declares', () => {
-    // A code point in the table that the font does not map is a missing-glyph box.
-    for (const code of table) {
-      expect(mapped.has(code), `0x${code.toString(16)} is not in the font cmap`).toBe(true);
-    }
-  });
-
-  it('does not map anything outside the private use area', () => {
-    // The set has to be unreachable by typing: a font that also mapped ASCII would
-    // turn ordinary text into icons wherever the family is applied.
-    for (const code of mapped) {
-      expect(code, `0x${code.toString(16)} is outside the private use area`).toBeGreaterThanOrEqual(0xe000);
-      expect(code).toBeLessThanOrEqual(0xf8ff);
-    }
-  });
-
-  it('has one code point per icon, with no duplicates', () => {
-    // Counted on the *distinct* code points rather than on the table's length,
-    // because the table carries aliases: `font` and `text-size` are two spellings
-    // of one glyph, and a set that maps a code point twice is a rename, not a
-    // second icon. What has to hold either way is that the font draws exactly the
-    // code points the table names — no more, no fewer.
-    const distinct = new Set(table);
-    expect(distinct.size).toBe(Object.keys(ICON_CODEPOINTS).length);
-    expect(mapped.size).toBe(distinct.size);
-  });
-
-  it('was built from the same glyph names as the table', () => {
-    // Catches the case where the font is rebuilt from edited paths but the table is
-    // stale (or the reverse): the names are the join between the two.
-    const tableNames = Object.keys(ICON_CODEPOINTS).sort();
-    const sourceNames = Object.keys(GLYPHS).sort();
-    expect(tableNames).toEqual(sourceNames);
-  });
-
-  it('does not give two different icons the same path', () => {
-    // A duplicated path is a wrong icon that no other assertion here can see: the
-    // name is in the table, the code point maps, the glyph has ink and fits the em —
-    // and it draws the other icon. `chevron-right` was exactly this, byte for byte
-    // the same as `chevron-left`, so the "next chapter" button pointed backwards.
-    const byPath = new Map<string, string[]>();
-    for (const [name, path] of Object.entries(GLYPHS as Record<string, string>)) {
-      const key = path.replace(/\s+/g, '');
-      byPath.set(key, [...(byPath.get(key) ?? []), name]);
-    }
-    const duplicates = [...byPath.values()].filter((names) => names.length > 1);
-    expect(duplicates, `these icons share a path: ${duplicates.map((n) => n.join(' = ')).join('; ')}`).toEqual([]);
-  });
-
-  it('points the two chevrons in opposite directions', () => {
-    // The mirror is what makes this pair useful; two left chevrons are a working
-    // glyph and a broken control. Measured on the flattened polylines rather than
-    // on the strings, because "which way does it point" is a fact about the
-    // geometry and a regex over the path data is not that fact.
-    const points = (name: 'chevron-left' | 'chevron-right') =>
-      pathToSubpaths((GLYPHS as Record<string, string>)[name]!).flat();
-    const tip = (name: 'chevron-left' | 'chevron-right') => {
-      const xs = points(name).map((p) => p[0]);
-      // The tip is the extreme point along the direction the chevron points.
-      return name === 'chevron-left' ? Math.min(...xs) : Math.max(...xs);
-    };
-    const back = (name: 'chevron-left' | 'chevron-right') => {
-      const xs = points(name).map((p) => p[0]);
-      return name === 'chevron-left' ? Math.max(...xs) : Math.min(...xs);
-    };
-    // A chevron's tip is its leading edge; for it to point left, the leftmost x
-    // has to be the tip and the two back corners have to be further right.
-    expect(tip('chevron-left'), 'chevron-left points left').toBeLessThan(back('chevron-left'));
-    expect(tip('chevron-right'), 'chevron-right points right').toBeGreaterThan(back('chevron-right'));
-    // And the two are a matched pair: the same span, mirrored about the centre.
-    const span = (name: 'chevron-left' | 'chevron-right') => {
-      const xs = points(name).map((p) => p[0]);
-      return Math.max(...xs) - Math.min(...xs);
-    };
-    expect(span('chevron-right')).toBeCloseTo(span('chevron-left'), 5);
-  });
-
-  /*
-   * The names are the product's, and they have to stop claiming to be someone
-   * else's.
-   *
-   * The set borrowed Font Awesome 6's class names verbatim for one round of the
-   * review (#40), on the theory that a shared vocabulary stops "the magnifier" from
-   * having three spellings. What it actually did was put a *known* name on unknown
-   * artwork: a reader who knows that set opens `paths.mjs` expecting the glyph the
-   * name promises, and gets ours. The names were reverted to the plain English the
-   * rest of this codebase already speaks, and this is what keeps them there — a
-   * one-line assertion, because the failure is a name quietly drifting back to the
-   * borrowed list rather than a shape being wrong.
-   */
-  const BORROWED = [
-    'bars', 'magnifying-glass', 'xmark', 'file-lines', 'file-arrow-up', 'file-arrow-down',
-    'trash-can', 'arrows-rotate', 'table-columns', 'circle-info', 'triangle-exclamation',
-    'folder-open', 'ellipsis', 'power-off', 'right-from-bracket', 'circle-plus',
-    'backward-step', 'forward-step', 'volume-high', 'gear', 'books', 'pen',
-    'arrow-down-wide-short', 'up-down', 'font',
+const BORROWED = [
+  'bars', 'magnifying-glass', 'xmark', 'file-lines', 'file-arrow-up', 'file-arrow-down',
+  'trash-can', 'arrows-rotate', 'table-columns', 'circle-info', 'triangle-exclamation',
+  'folder-open', 'ellipsis', 'power-off', 'right-from-bracket', 'circle-plus',
+  'backward-step', 'forward-step', 'volume-high', 'gear', 'books', 'pen',
+  'arrow-down-wide-short', 'up-down', 'font',
   ];
 
+describe('the icon names', () => {
   it('does not borrow another icon set’s names', () => {
-    const names = Object.keys(GLYPHS);
-    const borrowed = names.filter((name) => BORROWED.includes(name));
-    expect(borrowed, `these names are another set's: ${borrowed.join(', ')}`).toEqual([]);
-    // The *table* may keep a borrowed spelling as an alias so that code written
-    // against the set this repository is based on keeps compiling. What it may not
-    // do is add a glyph under one: a borrowed name on our own artwork is what the
-    // list above is about.
-    const aliasNames = Object.keys(ICON_ALIASES);
-    const borrowedAliases = aliasNames.filter((name) => BORROWED.includes(name));
-    expect(borrowedAliases.length, `an alias is a borrowed name: ${borrowedAliases.join(', ')}`).toBeGreaterThan(0);
-  });
-
-  it('points every alias at a code point the font already draws', () => {
-    // An alias is a second *spelling*, not a second glyph: two names for one code
-    // point is a rename, a name for a code point nothing draws is a missing-glyph
-    // box that no other assertion here can see.
-    const drawn = new Set(Object.values(ICON_CODEPOINTS));
-    for (const [name, code] of Object.entries(ICON_ALIASES)) {
-      expect(drawn.has(code), `${name} points at 0x${code.codePointAt(0)!.toString(16)}, which no glyph uses`).toBe(true);
-    }
-  });
-
-  it('names every glyph after the thing it draws, in the vocabulary the UI uses', () => {
-    // A glyph whose name has to be *looked up* is a glyph nobody adds correctly. The
-    // list is the whole vocabulary, so adding an icon is a deliberate act rather than
-    // a free-form string that happens to compile.
-    const VOCABULARY = [
-      'add-circle', 'arrow-left', 'book', 'bookmark', 'check', 'chevron-left', 'chevron-right',
-      'clock', 'close', 'download', 'edit', 'eye', 'file-text', 'folder', 'indent',
-      'info', 'library', 'line-height', 'logout', 'menu', 'moon', 'more', 'pause',
-      'play', 'plus', 'refresh', 'search', 'settings', 'shelf', 'sign-out', 'sliders',
-      'sort', 'step-backward', 'step-forward', 'stop', 'sun', 'text-size', 'trash',
-      'tune', 'upload', 'volume', 'warning',
-    ];
-    expect(Object.keys(GLYPHS).sort()).toEqual(VOCABULARY);
-  });
-
-  it('assigns code points in the same order as the source, starting at 0xE900', () => {
-    const names = Object.keys(GLYPHS);
-    names.forEach((name, index) => {
-      const expected = 0xe900 + index;
-      expect((ICON_CODEPOINT_TABLE as Record<string, string>)[name]!.codePointAt(0)).toBe(expected);
-    });
-  });
-});
-
-/**
- * The font's vertical metrics.
- *
- * These are the numbers that decide whether an icon is *aligned*, and they are the ones
- * this file did not check while the icons were half an em out of place: `cmap` was
- * verified, the glyph names were verified, and the metrics — the only part a layout reads
- * — were not.
- *
- * The contract has two halves and both are needed:
- *
- *   - the ascent and descent must be equal, because a `1em` box is symmetric and every
- *     container in the UI centres a box. Asymmetric metrics make "centre the box" and
- *     "centre the glyph" two different operations, and the difference is exactly the
- *     asymmetry — which is how the icons were misaligned by a different amount in every
- *     row of the product.
- *   - no glyph's ink may leave that window. A glyph that reaches outside the em paints
- *     outside the box the layout aligned to, which is the same defect by another route,
- *     and it is invisible to every check that only reads a table.
- */
-function fontTables() {
-  const font = readFileSync(join(process.cwd(), 'src/styles/reader-icons.ttf'));
-  const numTables = font.readUInt16BE(4);
-  const offsets: Record<string, number> = {};
-  for (let i = 0; i < numTables; i++) {
-    const entry = 12 + i * 16;
-    offsets[font.toString('ascii', entry, entry + 4)] = font.readUInt32BE(entry + 8);
-  }
-  const unitsPerEm = font.readUInt16BE(offsets.head + 18);
-  const numGlyphs = font.readUInt16BE(offsets.maxp + 4);
-  return {
-    font,
-    offsets,
-    unitsPerEm,
-    numGlyphs,
-    hheaAscent: font.readInt16BE(offsets.hhea + 4),
-    hheaDescent: font.readInt16BE(offsets.hhea + 6),
-    typoAscent: font.readInt16BE(offsets['OS/2'] + 68),
-    typoDescent: font.readInt16BE(offsets['OS/2'] + 70),
-    winAscent: font.readUInt16BE(offsets['OS/2'] + 74),
-    winDescent: font.readUInt16BE(offsets['OS/2'] + 76),
-    selection: font.readUInt16BE(offsets['OS/2'] + 62),
-    weightClass: font.readUInt16BE(offsets['OS/2'] + 4),
-  };
-}
-
-describe('the font metrics', () => {
-  it('declares a symmetric window, so a centred box is a centred glyph', () => {
-    const t = fontTables();
-    // The em's middle is the line the glyphs are drawn around, and the metrics have to
-    // say the same thing or every container that centres an icon centres it off by the
-    // difference. Zero would be symmetric too and is what the font used to declare by
-    // accident, which sends an engine to a fallback it has to guess at.
-    expect(t.hheaAscent).toBe(t.unitsPerEm / 2);
-    expect(t.hheaDescent).toBe(-t.unitsPerEm / 2);
-    expect(t.typoAscent).toBe(t.hheaAscent);
-    expect(t.typoDescent).toBe(t.hheaDescent);
-  });
-
-  it('declares Windows metrics that are unsigned and contain the em', () => {
-    const t = fontTables();
-    // These were written at the wrong offsets for as long as the font existed, so they
-    // read as 0 / 65506 (-30, read unsigned) — a window that does not contain the glyphs
-    // it describes. An engine that falls back to them computes a box instead of using one.
-    expect(t.winAscent).toBe(t.unitsPerEm);
-    expect(t.winDescent).toBe(t.unitsPerEm);
-  });
-
-  it('tells engines to use the typographic metrics, and that the face is regular', () => {
-    const t = fontTables();
-    // Without USE_TYPO_METRICS a Windows engine prefers the win pair, so getting the win
-    // metrics right above is only half of it.
-    expect(t.selection & 0x80).toBeTruthy();
-    expect(t.selection & 0x40).toBeTruthy(); // regular
-    expect(t.selection & 0x20).toBeFalsy(); // ... and not bold
-    expect(t.weightClass).toBe(400);
-  });
-
-  it('keeps every glyph inside the em the metrics declare', () => {
-    const t = fontTables();
-    // Walk `glyf` through `loca` and read each glyph's own bounding box — that box *is*
-    // the glyph's ink in its own coordinate system, so it is exactly what has to fit.
-    const offsets = [...Array(t.numGlyphs + 1)].map((_, i) => t.font.readUInt32BE(t.offsets.loca + 4 * i));
-    for (let gid = 1; gid <= t.numGlyphs; gid++) {
-      if (offsets[gid + 1] === offsets[gid]) continue;
-      const start = t.offsets.glyf + offsets[gid];
-      const yMin = t.font.readInt16BE(start + 4);
-      const yMax = t.font.readInt16BE(start + 8);
-      expect(yMin, `glyph ${gid} reaches below the descender`).toBeGreaterThanOrEqual(-t.unitsPerEm / 2);
-      expect(yMax, `glyph ${gid} reaches above the ascender`).toBeLessThanOrEqual(t.unitsPerEm / 2);
-    }
-  });
-
-  it('gives every non-blank glyph a non-empty bounding box', () => {
-    const t = fontTables();
-    // An empty box is a glyph a rasteriser is entitled to skip, and `more` was one: three
-    // dots authored as 0.06-unit strokes rounded to a single point on each axis. The
-    // button drew blank while `cmap` still mapped its code point, so every table-reading
-    // assertion above was satisfied by a font that could not draw its own ellipsis.
-    const offsets = [...Array(t.numGlyphs + 1)].map((_, i) => t.font.readUInt32BE(t.offsets.loca + 4 * i));
-    for (let gid = 1; gid <= t.numGlyphs; gid++) {
-      if (offsets[gid + 1] === offsets[gid]) continue;
-      const start = t.offsets.glyf + offsets[gid];
-      const numContours = t.font.readInt16BE(start);
-      if (numContours <= 0) continue;
-      expect(t.font.readInt16BE(start + 6) - t.font.readInt16BE(start + 2), `glyph ${gid} has no width`).toBeGreaterThan(0);
-      expect(t.font.readInt16BE(start + 8) - t.font.readInt16BE(start + 4), `glyph ${gid} has no height`).toBeGreaterThan(0);
-    }
+    const names = Object.keys(ICONS);
+    expect(names.filter(name => BORROWED.includes(name))).toEqual([]);
   });
 });
 
@@ -331,9 +42,7 @@ describe('the icon box', () => {
     const host = document.createElement('div');
     render(Icon({ name: 'close', label: '关闭' }), host);
     const span = host.querySelector('.icon')!;
-    // `role="img"` is what makes a labelled span announce as an image rather than
-    // as a stray character, which is what a bare span containing a PUA code point
-    // would do.
+    // `role="img"` is what makes a labelled glyph announce as an image.
     expect(span.getAttribute('role')).toBe('img');
     expect(span.getAttribute('aria-label')).toBe('关闭');
     expect(span.hasAttribute('aria-hidden')).toBe(false);
@@ -343,8 +52,7 @@ describe('the icon box', () => {
 /**
  * The stylesheet's half of the contract.
  *
- * The font can only be right; whether the icon ends up where the font says is decided in
- * CSS. These read `.icon` out of the real stylesheet, because the rules that matter are
+ * Whether the icon ends up where it should is decided in CSS. These read `.icon` out of the real stylesheet, because the rules that matter are
  * the ones that were wrong and a test that re-states them in its own words would have
  * been updated alongside the bug.
  */
@@ -354,19 +62,8 @@ describe('the stylesheet', () => {
   const declaration = (property: string): string | undefined =>
     new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`).exec(iconRule)?.[1]?.trim();
 
-  it('lets the font own the line box instead of imposing a square on it', () => {
-    // `line-height: 1` gives the icon the font's own line box, which is symmetric because
-    // the font's metrics are. A fixed `height: 1em` plus `line-height: 0` anchors a box at
-    // the baseline while the ink is drawn around it, so the ink lands at the box's top
-    // edge and everything that centres the box centres the glyph half an em off — which is
-    // exactly what shipped, measured at 0.496em across `menu`, `close` and `folder`.
-    expect(declaration('line-height')).toBe('1');
-    expect(declaration('height')).toBeUndefined();
-  });
-
   it('keeps an explicit advance width', () => {
-    // The one thing the layout needs that the font cannot supply: a row of icons and
-    // labels has to be laid out the same way whatever glyphs are in it.
+    // A row of icons and labels has to be laid out the same way whatever glyphs are in it.
     expect(declaration('width')).toBe('1em');
   });
 

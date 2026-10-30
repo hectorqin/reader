@@ -100,7 +100,7 @@ UI 评审在真实 Chromium 中通过 CDP 截图并测量；浏览器缺失时�
 
 ### 图标
 
-新增图标时把路径加入 `web/tools/icons/paths.mjs`（使用本项目自己的英文名，`test/icons.test.ts` 会拒绝借用其他图标集的名称），然后运行 `npm run icons --prefix web`。
+图标统一在 `web/src/ui/icon.tsx` 的 `ICONS` 中把名称映射到 Lucide 图标（使用本项目自己的英文名，`test/icons.test.ts` 会拒绝借用其他图标集的名称，也只允许这个文件引入 `lucide-react`）。规则见 `docs/ui.md` §1。
 
 ## 持续集成与发布
 

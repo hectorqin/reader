@@ -292,7 +292,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
           {handlers.onTools && <TopButton icon="search" label="工具" onClick={handlers.onTools} />}
           <TopButton icon="menu" label="目录" onClick={handlers.toggleToc} />
           {/* 朗读 keeps going with its panel closed (ui.md §3.11), so the button says it is on. */}
-          <TopButton icon="volume" label={state.tts.active ? '朗读中' : '朗读'} pressed={state.tts.active} onClick={() => handlers.toggleSettings('speech')} />
+          <TopButton icon="read-aloud" label={state.tts.active ? '朗读中' : '朗读'} pressed={state.tts.active} onClick={() => handlers.toggleSettings('speech')} />
           <TopButton icon="text-size" label="外观" onClick={() => handlers.toggleSettings('appearance')} />
           <TopButton icon="settings" label="设置" onClick={() => handlers.toggleSettings('behavior')} />
         </div>

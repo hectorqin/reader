@@ -666,19 +666,14 @@ book-content {
   white-space: nowrap;
 }
 
-/* Shared sizing for the SVG icon primitive. */
+/* Shared sizing for the SVG icon primitive (ui/icon.tsx): 1em of the title size unless
+   the icon is given a size, which sets its font-size. */
 .icon {
   font-size: var(--text-title);
-  font-style: normal;
-  font-weight: 400;
-  font-synthesis: none;
   line-height: 1;
   display: inline-block;
   width: 1em;
-  text-align: center;
   vertical-align: middle;
-  speak: never;
-  /* The code point itself must never be selectable or copied. */
   user-select: none;
   -webkit-user-select: none;
 }
@@ -696,10 +691,6 @@ book-content {
  * area is the same box, so the pixels are the same pixels on every browser that
  * exists; saying it in terms of the box is what keeps that true when the button grows
  * a border or a padding, because the centre is still the centre.
- *
- * This is also why `.icon` must be a *line box* rather than a 1em square: a grid
- * centres the box it is given, so the ink has to be in the middle of that box for the
- * centring to be visible. See the derivation on `.icon`.
  */
 .icon-button {
   appearance: none;

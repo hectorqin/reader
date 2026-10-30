@@ -4,9 +4,9 @@ import {
   Upload, Trash2, Download, RefreshCw, RotateCw, RotateCcw, BookOpen, Library, LibraryBig,
   Play, PlayCircle, Pause, SkipBack, SkipForward, Square, Headphones, Volume2, Moon, Sun,
   SunMoon, Palette, Eye, EyeOff, Info, TriangleAlert, CloudOff, Clock, History, Timer,
-  TimerOff, Ellipsis, Pencil, ArrowDownUp, LogOut, CirclePlus, IndentIncrease, Type,
-  MoveVertical, Settings, SlidersVertical, Bookmark, Music, ListMusic, ListVideo, ListPlus,
-  ListOrdered, Layers, Heart, Star, Clapperboard, Film, UserRound, Lock, LockOpen, Gauge,
+  TimerOff, Ellipsis, Pencil, ArrowDownUp, LogOut, Type,
+  Settings, SlidersVertical, Bookmark, Music, ListMusic, ListVideo, ListPlus,
+  ListOrdered, Layers, Heart, Star, Clapperboard, UserRound, Lock, LockOpen, Gauge,
   Subtitles, AudioLines, MicVocal, Shuffle, Repeat, Repeat1, Maximize, Minimize, Expand,
   Shrink, LocateFixed, LayoutGrid, House, Rss,
 } from 'lucide-react';
@@ -23,10 +23,10 @@ import type { CSSProperties, JSX } from 'react';
  * what a screen asks for; which glyph answers it is decided once.
  *
  * The names are the product's, not another icon set's (`test/icons.test.ts` keeps
- * borrowed names out of the legacy font table; the same rule applies here). The
- * aliases at the end are older spellings kept so existing call sites compile.
+ * borrowed names out). A name nothing draws is removed rather than kept "just in case".
  */
-const ICONS = {
+/** Exported for the tests that check the names, not for screens: screens use `IconName`. */
+export const ICONS = {
   // navigation and structure
   menu: Menu, 'chevron-left': ChevronLeft, 'chevron-right': ChevronRight, 'chevron-down': ChevronDown,
   'arrow-left': ArrowLeft, 'arrow-up': ArrowUp, 'arrow-down': ArrowDown, external: ArrowUpRight,
@@ -37,7 +37,7 @@ const ICONS = {
   // actions
   search: Search, close: X, plus: Plus, check: Check, upload: Upload, trash: Trash2,
   download: Download, refresh: RefreshCw, edit: Pencil, sort: ArrowDownUp, more: Ellipsis,
-  'add-circle': CirclePlus, 'queue-add': ListPlus, logout: LogOut, 'sign-out': LogOut,
+  'queue-add': ListPlus, logout: LogOut,
   // playback
   play: Play, 'play-circle': PlayCircle, pause: Pause, stop: Square,
   'step-backward': SkipBack, 'step-forward': SkipForward,
@@ -47,17 +47,14 @@ const ICONS = {
   subtitles: Subtitles, 'audio-track': AudioLines, versions: Layers, episodes: ListVideo,
   playlist: ListMusic, 'ordered-list': ListOrdered, lyrics: MicVocal, speaker: Volume2,
   // media kinds
-  video: Clapperboard, film: Film, music: Music, audiobook: Headphones, volume: Headphones,
+  video: Clapperboard, music: Music, audiobook: Headphones, 'read-aloud': Headphones,
   // reading and appearance
-  'text-size': Type, 'line-height': MoveVertical, indent: IndentIncrease, appearance: SunMoon,
+  'text-size': Type, appearance: SunMoon,
   palette: Palette, moon: Moon, sun: Sun, settings: Settings, sliders: SlidersHorizontal,
   tune: SlidersVertical,
   // state and people
   eye: Eye, 'eye-off': EyeOff, info: Info, warning: TriangleAlert, offline: CloudOff,
   clock: Clock, history: History, favorite: Heart, star: Star, account: UserRound,
-  // older spellings
-  font: Type, 'volume-high': Headphones, 'backward-step': SkipBack, 'forward-step': SkipForward,
-  bars: Menu, gear: Settings, xmark: X, 'magnifying-glass': Search, books: LibraryBig,
 } as const;
 
 export type IconName = keyof typeof ICONS;

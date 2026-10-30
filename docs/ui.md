@@ -22,9 +22,6 @@
   `filled` 用文字颜色填充（播放三角、已收藏）。
 - 装饰图标默认 `aria-hidden`；独立表意时传 `label`。没有文字的按钮必须有中文 aria-label。
 
-原字体文件与生成工具（`tools/icons`、`reader-icons.ttf`、`icon-names.ts`）仅供历史兼容，不再加载到界面，
-图标名称也不再由它决定。
-
 ## 2. 设计令牌
 
 间距、字号、动效、焦点环、圆角、安全区定义在 `web/src/styles/reader.css` 的 `:root` 里；
@@ -780,9 +777,9 @@ TXT 是唯一一种**没有作者排版**的书，所以它也是唯一一处「
 
 1. 新颜色 / 新间距 / 新时长 → 先看 `:root` 里有没有，没有就**加令牌**，
    不要在规则里写字面量。
-2. 新图标 → 加一条路径到 `tools/icons/paths.mjs`，**键名用这个项目自己的英语词**
-   （不许借别的图标集的名字，`test/icons.test.ts` 会拒），跑 `npm run icons`，
-   在 `web/src/ui/icon.tsx` 里把名字映射到 Lucide 图标，然后用 `IconButton` 引用名字。
+2. 新图标 → 在 `web/src/ui/icon.tsx` 的 `ICONS` 里加一个名字映射到 Lucide 图标，**名字用这个项目
+   自己的英语词**（不许借别的图标集的名字，`test/icons.test.ts` 会拒），然后用 `Icon` / `IconButton` 引用名字。
+   已有意思相同的名字就复用，不要为同一个意思再加一个字形。
 3. 新控件 → 确认它出现在 §2.4 的焦点选择器列表里。
 4. 新动画 → 用 `--motion-duration` 和 `--motion-ease`，不要自己写时长。
 5. 有状态变化的控件 → 对照 §5 那张表，确认用的是对的那一种。
@@ -809,11 +806,8 @@ TXT 是唯一一种**没有作者排版**的书，所以它也是唯一一处「
 
 | 路径 | 内容 |
 | --- | --- |
-| `web/src/ui/icon.tsx` | `Icon` 组件：图标名到 Lucide SVG 的映射 |
-| `web/src/ui/icon-names.ts` | 码位表（生成），`IconName` 的来源 |
-| `web/src/styles/reader-icons.ttf` | 字体（生成，界面不再加载） |
-| `web/tools/icons/` | 生成器 |
-| `web/test/icons.test.ts` | 字体度量、字形包围盒、码位表、**没有借来的名字**、词汇表与 `.icon` 规则的契约 |
+| `web/src/ui/icon.tsx` | 图标集：名称（`IconName`）到 Lucide SVG 的唯一映射，尺寸档与线宽 |
+| `web/test/icons.test.ts` | **没有借来的名字**、只有 `icon.tsx` 引入 lucide-react、`.icon` 规则与图标按钮的契约 |
 | `web/src/ui/toolkit.tsx` | `IconButton` / `IconTextButton` / `Button` / `Segmented` / `Callout` / `SwitchRow` / `SectionTitle` |
 | `web/src/ui/action-menu.tsx` / `web/src/styles/action-menu.css` | 每个 `⋯` 菜单的 `ActionMenu` 下拉，以及 `ActionSheet`（§3.7） |
 | `web/src/ui/cover-tint.ts` | 无封面占位的色相（§2.7） |
