@@ -153,7 +153,7 @@
 .media-video-caption {border:0;padding:0;font-size:var(--text-title)}
 .media-video-caption strong {font-weight:650}
 .media-video-caption small {font-size:var(--text-meta)}
-.media-video-toolbar.media-video-tools {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(84px,100%),1fr));margin:16px 0;border-block:1px solid var(--border)}
+.media-video-toolbar.media-video-tools {display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);margin:16px 0;border-block:1px solid var(--border)}
 .media-video-tools>button {display:flex;min-width:0;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-height:62px;font-size:var(--text-meta)}
 .media-video-description summary {min-height:44px;cursor:pointer;display:flex;align-items:center}
 .media-episode-rail {padding:16px;background:var(--media-paper);color:var(--text);border:1px solid var(--border);border-radius:var(--radius-md);margin-top:20px}
@@ -263,7 +263,6 @@
  .media-screen .media-playback-status[data-panel=lyrics] {max-width:560px}
  .media-playback-status[data-panel=main][data-channel=audiobook] .media-playing-artwork>.media-cover {width:230px;aspect-ratio:2/3}
  .media-video-toolbar.media-video-tools {max-width:440px}
- .media-video-tools {grid-template-columns:repeat(auto-fit,minmax(min(84px,100%),1fr))}
  .media-video-tools>button {flex-direction:row;gap:8px;min-height:48px}
 }
 
