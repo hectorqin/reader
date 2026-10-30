@@ -1,16 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import type { InstanceInfo } from '../../../api/types.ts';
 import { ApiError } from '../../../api/errors.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
-import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { validServerUrl } from '../../../app/runtime.ts';
+import { Icon } from '../../../ui/toolkit.tsx';
 
 export function LoginPage() {
   const runtime = useRuntime();
-  const navigate = useNavigate();
-  const session = useAuthStore(state => state.session);
   const [serverUrl, setServerUrl] = useState(runtime.api.baseUrl);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -25,7 +22,6 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
   const probe = useRef<ReturnType<typeof setTimeout> | null>(null);
   const probeGeneration = useRef(0);
-  useEffect(() => { if (session) navigate('/media/video', { replace: true }); }, [session, navigate]);
   useEffect(() => {
     const value = serverUrl.trim();
     probeGeneration.current += 1;
@@ -73,7 +69,7 @@ export function LoginPage() {
     <header className="login-heading"><div className="login-brand">reader</div><p>你的私人书房</p></header>
     <details className="login-connection">
       <summary>连接设置<span>更换服务地址</span></summary>
-      <div className="field"><label htmlFor="login-server">服务端地址 <em>*</em></label><div className="login-server-input"><input id="login-server" type="url" value={serverUrl} onChange={event => setServerUrl(event.currentTarget.value)} placeholder="http://127.0.0.1:5888" required />{probing ? <span className="login-server-status is-probing">…</span> : instance ? <span className="login-server-status">在</span> : null}</div><div className="login-server-meta"><span>{instance?.name || '尚未连接服务端'}</span>{instance && <span>API v{instance.apiVersion}</span>}</div></div>
+      <div className="field"><label htmlFor="login-server">服务端地址 <em>*</em></label><div className="login-server-input"><input id="login-server" type="url" value={serverUrl} onChange={event => setServerUrl(event.currentTarget.value)} placeholder="http://127.0.0.1:5888" required />{probing ? <span className="login-server-status is-probing" role="status" aria-label="正在连接服务端">…</span> : instance ? <span className="login-server-status" role="img" aria-label="已连接服务端"><Icon name="check" /></span> : null}</div><div className="login-server-meta"><span>{instance?.name || '尚未连接服务端'}</span>{instance && <span>API v{instance.apiVersion}</span>}</div></div>
     </details>
     <div className="field"><label htmlFor="login-username">用户名 <em>*</em></label><input id="login-username" autoComplete="username" value={username} onChange={event => setUsername(event.currentTarget.value)} required /></div>
     {registering && <div className="field"><label htmlFor="login-display-name">显示名（可选）</label><input id="login-display-name" value={displayName} onChange={event => setDisplayName(event.currentTarget.value)} /></div>}

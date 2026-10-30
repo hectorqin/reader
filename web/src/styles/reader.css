@@ -2821,7 +2821,7 @@ book-content {
 .login-heading p { font-size:var(--text-title); line-height:1.7; margin:.3rem 0 0; color:var(--reader-muted); }
 .login-card .field { display: flex; flex-direction: column; align-items: stretch; gap: .5rem; margin: 0 0 1rem; }
 .login-card .field label { font-size: var(--text-title); color: var(--reader-ink); }
-.login-card .field label em { color:#e66d67; font-style:normal; }
+.login-card .field label em { color:var(--color-danger); font-style:normal; }
 .login-card input { width: 100%; min-width: 0; min-height: 46px; box-sizing:border-box; padding: .65rem .85rem; font-size: var(--text-title); border:1px solid var(--reader-line); border-radius:var(--radius-xs); background:var(--reader-surface); color:var(--reader-ink); }
 .login-card input:focus { border-color:var(--reader-accent); outline:2px solid color-mix(in srgb,var(--reader-accent) 28%,transparent); outline-offset:1px; }
 .login-connection { margin-bottom: 1.4rem; border-bottom: 1px solid var(--reader-line); padding-bottom: .9rem; }
@@ -2830,8 +2830,8 @@ book-content {
 .login-connection[open] .field { margin: 1rem 0 0; }
 .login-server-input { position:relative; }
 .login-server-input input { padding-right:3.25rem; }
-.login-server-status { position:absolute; right:.45rem; top:50%; transform:translateY(-50%); display:grid; place-items:center; min-width:1.8rem; height:1.8rem; border-radius:50%; background:#51b95b; color:#fff; font-size:var(--text-label); font-weight:700; }
-.login-server-status.is-probing { background:#9aa3ae; }
+.login-server-status { position:absolute; right:.45rem; top:50%; transform:translateY(-50%); display:grid; place-items:center; min-width:1.8rem; height:1.8rem; border-radius:50%; background:var(--color-brand); color:var(--color-on-brand); font-size:var(--text-label); font-weight:700; }
+.login-server-status.is-probing { background:var(--reader-line); color:var(--reader-muted); }
 .login-server-meta { display:flex; align-items:center; justify-content:space-between; color:var(--reader-muted); font-size:var(--text-ui); margin-top:.35rem; }
 .login-password-input { position:relative; }
 .login-password-input input { padding-right:3rem; }
