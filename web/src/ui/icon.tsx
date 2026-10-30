@@ -3,7 +3,7 @@ import {
   Search, X, Plus, Check, Upload, Trash2, Download, RefreshCw, BookOpen,
   Library, Play, Pause, SkipBack, SkipForward, Square, Headphones, Moon, Sun,
   Eye, Info, TriangleAlert, Clock, Ellipsis, Pencil, ArrowDownUp, LogOut,
-  CirclePlus, IndentIncrease, Type, MoveVertical, Settings, SlidersVertical,
+  CirclePlus, IndentIncrease, Type, MoveVertical, Settings, SlidersVertical, Bookmark,
 } from 'lucide-react';
 import type { IconName } from './icon-names.ts';
 import type { JSX } from 'react';
@@ -22,7 +22,7 @@ const ICONS = {
   settings: Settings, library: Library, tune: SlidersVertical,
   font: Type, 'volume-high': Headphones, 'backward-step': SkipBack,
   'forward-step': SkipForward, bars: Menu, gear: Settings, xmark: X,
-  'magnifying-glass': Search, books: Library,
+  'magnifying-glass': Search, books: Library, bookmark: Bookmark,
 } satisfies Record<IconName, typeof Menu>;
 export interface IconProps { name: IconName; label?: string | null; className?: string; }
 /** Shared geometry and stroke weight, independent of font rendering. */

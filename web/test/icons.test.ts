@@ -187,7 +187,7 @@ describe('the icon font and its code point table', () => {
     // list is the whole vocabulary, so adding an icon is a deliberate act rather than
     // a free-form string that happens to compile.
     const VOCABULARY = [
-      'add-circle', 'arrow-left', 'book', 'check', 'chevron-left', 'chevron-right',
+      'add-circle', 'arrow-left', 'book', 'bookmark', 'check', 'chevron-left', 'chevron-right',
       'clock', 'close', 'download', 'edit', 'eye', 'file-text', 'folder', 'indent',
       'info', 'library', 'line-height', 'logout', 'menu', 'moon', 'more', 'pause',
       'play', 'plus', 'refresh', 'search', 'settings', 'shelf', 'sign-out', 'sliders',

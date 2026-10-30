@@ -18,7 +18,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { GLYPHS } from './paths.mjs';
+import { ALIASES, GLYPHS } from './paths.mjs';
 import { pathToSubpaths } from './path.mjs';
 import { segmentPolygon } from './stroke.mjs';
 import { unionPolygons } from './union.mjs';
@@ -659,7 +659,21 @@ const table = [
   ...glyphs.map((glyph) => `  '${glyph.name}': '\\u${glyph.code.toString(16)}',`),
   '} as const;',
   '',
-  'export type IconName = keyof typeof ICON_CODEPOINTS;',
+  '/** Code points kept as aliases, the way the two spellings of 退出 coexist. */',
+  'export const ICON_ALIASES = {',
+  ...Object.entries(ALIASES).map(([alias, target]) => {
+    const glyph = glyphs.find((candidate) => candidate.name === target);
+    if (!glyph) throw new Error(`alias ${alias} points at missing glyph ${target}`);
+    return `  '${alias}': '\\u${glyph.code.toString(16)}',`;
+  }),
+  '} as const;',
+  '',
+  'export const ICON_CODEPOINT_TABLE = {',
+  '  ...ICON_CODEPOINTS,',
+  '  ...ICON_ALIASES,',
+  '} as const;',
+  '',
+  'export type IconName = keyof typeof ICON_CODEPOINT_TABLE;',
   '',
 ].join('\n');
 writeFileSync(join(here, '..', '..', 'src', 'ui', 'icon-names.ts'), table);

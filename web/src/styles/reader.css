@@ -3737,6 +3737,9 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reader-screen .progress-page { font-size: var(--text-micro); color: var(--reader-muted); }
 .reader-actions { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0.25rem; }
 .reader-actions .top-button[aria-pressed='true'] { color: var(--reader-accent); }
+/* The page's bookmark: filled in the accent colour when this page has one. */
+.reader-bookmark[aria-pressed='true'] { color: var(--reader-accent); }
+.reader-bookmark[aria-pressed='true'] .icon { fill: currentColor; }
 .reader-actions .top-button { min-width: 0; max-width: none; min-height: 60px; padding: 0.45rem 0; gap: 0.45rem; }
 .reader-actions .icon { font-size: var(--text-display); }
 .reader-actions .top-button-label { font-size: var(--text-meta); font-weight: 400; }

@@ -67,6 +67,8 @@ export interface ChromeState {
   chromeVisible: boolean;
   statusText: string;
   statusState: string;
+  /** Whether the page on screen carries a bookmark; drives the top bar's 书签 toggle. */
+  bookmarked?: boolean;
   /** Set when the book itself could not be opened: the stage is empty, so say why and offer a way on. */
   openFailure?: string;
   /** 0..1. */
@@ -151,6 +153,8 @@ export interface ChromeHandlers {
   onTools?(): void;
   onBack(): void;
   onRetryOpen?(): void;
+  /** Adds a bookmark at the page on screen, or removes the one there. */
+  onToggleBookmark?(): void;
   toggleToc(): void;
   toggleSettings(tab?: 'appearance' | 'behavior' | 'speech'): void;
   onSetting(patch: Partial<AppSettings>): void;
@@ -242,6 +246,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         <div className="reader-top-actions">
           {state.canSwitch && <IconButton label="切换书源" icon="sort" disabled={state.switching || state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onAlternatives?.()} />}
           {state.canRefresh && <IconButton label="刷新当前章节" icon="refresh" disabled={state.switching || state.refreshing || state.refreshingChapter || state.navigating} onClick={() => handlers.onRefreshChapter?.()} />}
+          {handlers.onToggleBookmark && <IconButton className="reader-bookmark" icon="bookmark" label={state.bookmarked ? '移除本页书签' : '为本页加书签'} pressed={!!state.bookmarked} onClick={handlers.onToggleBookmark} />}
           <IconButton label="AI 总结" icon="file-text" disabled={state.aiSummaryBusy || state.navigating} onClick={() => handlers.onAiSummary?.()} />
         </div>
         {(state.sourceName || state.chapterUrl) && <div className="reader-source-info"><span>{state.sourceName || '当前书源'}</span>{state.chapterUrl && <a href={state.chapterUrl} target="_blank" rel="noopener noreferrer" title={state.chapterUrl}>{state.chapterUrl}</a>}</div>}

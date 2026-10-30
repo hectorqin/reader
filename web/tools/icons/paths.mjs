@@ -79,4 +79,22 @@ export const GLYPHS = {
   'settings': 'M12 15.4a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8zM19.6 12a7.6 7.6 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7.6 7.6 0 0 0-2.1-1.2L14.6 3H9.4L9 5.7a7.6 7.6 0 0 0-2.1 1.2l-2.4-1-2 3.4 2 1.5a7.6 7.6 0 0 0 0 2.4l-2 1.5 2 3.4 2.4-1a7.6 7.6 0 0 0 2.1 1.2l.4 2.7h5.2l.4-2.7a7.6 7.6 0 0 0 2.1-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z',
   'library': 'M4.5 5.2h3.4v14H4.5zM10.3 5.2h3.4v14h-3.4zM16.6 5.8l3.2.7-2.9 13.3-3.2-.7z',
   'tune': 'M4 8.5h9M17 8.5h3M4 15.5h3M11 15.5h9M15 6.5v4M9 13.5v4',
+  'bookmark': 'M6.5 3.5h11v17L12 16l-5.5 4.5z',
+};
+
+/**
+ * Old spellings kept as aliases of a glyph above (the way the two spellings of 退出
+ * coexist), so code written against them keeps working. They are not glyphs: each
+ * shares its target's code point, and no new artwork may be added under one.
+ */
+export const ALIASES = {
+  'font': 'text-size',
+  'volume-high': 'volume',
+  'backward-step': 'step-backward',
+  'forward-step': 'step-forward',
+  'bars': 'menu',
+  'gear': 'settings',
+  'xmark': 'close',
+  'magnifying-glass': 'search',
+  'books': 'library',
 };

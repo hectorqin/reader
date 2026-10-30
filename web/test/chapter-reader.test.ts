@@ -457,3 +457,16 @@ it('fetches the next chapter while the current one is read, once', async () => {
   expect(assets().filter((ref) => ref === 'resource:r1:b')).toHaveLength(1);
   expect(assets()).not.toContain('resource:r1:c');
 });
+
+it('bookmarks the page on screen from the top bar, and the same button removes it', async () => {
+  const env = await setup(); serve(env.transport, content(['a', 'b']));
+  await env.screen.open(book);
+  const button = () => env.screen.element.querySelector<HTMLButtonElement>('.reader-bookmark')!;
+  expect(button().getAttribute('aria-pressed')).toBe('false');
+  await act(async () => { button().click(); });
+  await vi.waitFor(() => expect(button().getAttribute('aria-pressed')).toBe('true'));
+  expect(env.offline.notesFor(book.id).filter((note) => note.type === 'bookmark')).toHaveLength(1);
+  await act(async () => { button().click(); });
+  await vi.waitFor(() => expect(button().getAttribute('aria-pressed')).toBe('false'));
+  expect(env.offline.notesFor(book.id).filter((note) => note.type === 'bookmark')).toHaveLength(0);
+});

@@ -280,6 +280,7 @@ export class ReaderScreen {
             onTools: () => this.openTools(),
             onBack: () => this.options.onBack(),
             onRetryOpen: () => { if (this.book) void this.open(this.book); },
+            onToggleBookmark: () => void this.toggleBookmark(),
             toggleToc: () => this.toggleToc(),
             toggleSettings: (tab) => this.toggleSettings(tab),
             onSetting: (patch) => void this.updateSetting(patch),
@@ -1336,6 +1337,31 @@ export class ReaderScreen {
    * and the *write* is debounced below, because a scroll is a gesture in progress
    * rather than a sequence of decisions to persist.
    */
+  /** Bookmarks at this exact reading position — the same test 阅读工具 uses for 已加书签. */
+  private bookmarksHere(locator: string | undefined): Note[] {
+    if (!this.book || !locator) return [];
+    return this.options.offline.notesFor(this.book.id).filter(note => note.type === 'bookmark' && note.locator === locator);
+  }
+
+  /**
+   * One press from the top bar, where it used to take four (toolbar → 工具 → 笔记 →
+   * 加书签), and the same button shows whether this page already has one.
+   */
+  private async toggleBookmark(): Promise<void> {
+    const book = this.book, locator = this.view?.position()?.locator;
+    if (!book || !locator) return;
+    const here = this.bookmarksHere(locator);
+    if (here.length) {
+      for (const note of here) await this.options.offline.deleteNote(note.id);
+      this.flashStatus('已移除本页书签', 1800);
+    } else {
+      await this.options.offline.upsertNotes([{ id: newId(), bookId: book.id, type: 'bookmark', locator, text: book.title, comment: '', color: '', updatedAt: Date.now() }]);
+      this.flashStatus('已为本页加书签', 1800);
+    }
+    this.options.sync.schedule();
+    this.patch({ bookmarked: !here.length });
+  }
+
   private onPosition(position: Position | null): void {
     if (!position || !this.book) return;
     this.paintNotes();
@@ -1344,6 +1370,7 @@ export class ReaderScreen {
     const sectionId = position.sectionId;
     const chapterMoved = sectionId !== this.chrome.currentSectionId;
     this.patch({
+      bookmarked: this.bookmarksHere(position.locator).length > 0,
       progress: position.percentage,
       pageInChapter: position.pageInChapter,
       chapterPages: position.chapterPages,

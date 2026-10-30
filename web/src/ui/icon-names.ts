@@ -48,6 +48,7 @@ export const ICON_CODEPOINTS = {
   'settings': '\ue926',
   'library': '\ue927',
   'tune': '\ue928',
+  'bookmark': '\ue929',
 } as const;
 
 /** Code points kept as aliases, the way the two spellings of 退出 coexist. */
