@@ -31,88 +31,19 @@
   display: block;
 }
 
-.action-menu .action-menu-item {
-  appearance: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-height: 40px;
-  margin: 0;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: start;
-  white-space: nowrap;
-  cursor: pointer;
-}
 
-.action-menu .action-menu-item.is-danger {
-  color: var(--color-danger);
-}
 
-.action-menu .action-menu-item:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 
-.action-menu .action-menu-item:focus-visible {
-  outline: 2px solid var(--color-brand-text);
-  outline-offset: -2px;
-}
 
-.action-menu .action-menu-item[aria-checked='true'] {
-  color: var(--color-brand-text);
-  font-weight: 600;
-}
 
-.action-menu-icon {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 1.125rem;
-  color: var(--color-muted);
-}
 
-.action-menu .action-menu-item.is-danger .action-menu-icon {
-  color: inherit;
-}
 
-.action-menu-label {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 
-.action-menu-description {
-  display: block;
-  color: var(--color-muted);
-  font-size: var(--text-meta);
-  line-height: 1.4;
-  white-space: normal;
-}
 
-.action-menu-check {
-  flex: none;
-}
 
-@media (hover: hover) and (pointer: fine) {
-  .action-menu .action-menu-item:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--color-ink) 7%, transparent);
-  }
-}
 
 /* Two classes, so the media screens' generic `.media-screen button` rules lose. */
 /* Touch: a finger-sized row. */
-@media (pointer: coarse) {
-  .action-menu .action-menu-item {
-    min-height: 44px;
-  }
-}
 
 @keyframes action-menu-in {
   from { opacity: 0; transform: translateY(-4px); }

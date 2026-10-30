@@ -220,29 +220,13 @@
   min-width: 0;
 }
 
-.sheet-list-description {
-  display: block;
-  color: var(--color-muted);
-  font-size: var(--text-meta);
-  line-height: 1.4;
-}
 
 .sheet-list-item[aria-checked='true'] {
   color: var(--reader-accent);
   font-weight: 600;
 }
 
-.sheet-list-check {
-  flex: none;
-}
 
-.sheet-list-icon {
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  width: 1.25rem;
-  color: var(--reader-muted);
-}
 
 @media (hover: hover) and (pointer: fine) {
   .sheet-list-item:hover:not(:disabled) {

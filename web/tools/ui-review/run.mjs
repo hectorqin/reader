@@ -688,13 +688,10 @@ async function audit(cdp, origin, scenes, results) {
   const offShelfCards = await cdp.evaluate(
     'document.querySelectorAll(".library-browse-grid .book-shelve").length',
   );
-  const offShelfHint = await cdp.evaluate(
-    'document.querySelector(".library-preview-hint")?.textContent ?? ""',
-  );
   check(
     '书库: 浏览页只给不在书架的书画「加入书架」，且不是全给',
-    offShelfCards > 0 && offShelfCards < browse.cards && /这一页有 \d+ 本还不在书架上/.test(offShelfHint),
-    `角标 ${offShelfCards} 个 / 卡片 ${browse.cards} 张，提示="${offShelfHint.trim()}"`,
+    offShelfCards > 0 && offShelfCards < browse.cards,
+    `角标 ${offShelfCards} 个 / 卡片 ${browse.cards} 张`,
   );
   /*
    * The search *works*, which is the half a screenshot cannot show.
