@@ -12,9 +12,18 @@
 
 ## 1. 图标
 
-图标统一使用 `lucide-react` 的 SVG，`web/src/ui/icon.tsx` 集中维护名称映射，线宽 1.8，尺寸 1em。
-界面使用 Icon / IconButton / IconTextButton，不直接嵌入字体码位或 emoji。
-装饰图标标记 aria-hidden；没有文字的按钮必须有中文 aria-label。原字体文件与生成工具仅供历史兼容，不再加载到阅读界面。
+图标统一使用 `lucide-react` 的 SVG，`web/src/ui/icon.tsx` 集中维护名称映射，也是**唯一**引入 `lucide-react` 的文件
+（`test/icons.test.ts` 守住）。界面使用 Icon / IconButton / IconTextButton，不直接嵌入字体码位、emoji 或 ✓ × ＋ 这类字符。
+
+- **名称**：一个意思一个名字、一个字形，用本项目自己的英文名（`video`、`audiobook`、`lock`、`folder-browse`），
+  不借用其他图标集的名字。新增图标只改 `icon.tsx` 的 `ICONS`。
+- **尺寸**：不传 `size` 时为 1em（控件里用这个）；需要固定尺寸时只取 14 / 16 / 18 / 20 / 24 / 32 六档。
+- **线宽**：一律 1.8；32px 的空状态大图标用 1.4，否则放大后像粗体图示；导航当前项用 `strong`（2.1）。
+  `filled` 用文字颜色填充（播放三角、已收藏）。
+- 装饰图标默认 `aria-hidden`；独立表意时传 `label`。没有文字的按钮必须有中文 aria-label。
+
+原字体文件与生成工具（`tools/icons`、`reader-icons.ttf`、`icon-names.ts`）仅供历史兼容，不再加载到界面，
+图标名称也不再由它决定。
 
 ## 2. 设计令牌
 
