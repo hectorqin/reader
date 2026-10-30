@@ -10,6 +10,7 @@ import { resolveInside } from '../lib/paths.ts';
 import { badRequest, conflict, forbidden, notFound } from '../lib/errors.ts';
 import { ZipArchive, ZipError } from '../indexer/formats/zip-reader.ts';
 import type { Scanner, ScanResult } from '../indexer/scanner.ts';
+import { fileHandlerForExtension } from '../indexer/formats/registry.ts';
 
 /**
  * Uploading books into the library. BOOKS_DIR may be mounted read-only for a
@@ -112,6 +113,16 @@ export interface UploadInput {
 
 export type ConflictPolicy = 'rename' | 'skip' | 'overwrite' | 'fail';
 
+export interface CommitOptions {
+  /**
+   * A member's upload: only files the scanner can open as a book are stored, and
+   * a zip is stored as the comic archive it names rather than unpacked. Unpacking
+   * writes whatever the archive holds into the library, which is file management,
+   * and file management is the administrator's.
+   */
+  booksOnly?: boolean;
+}
+
 const CONFLICT_POLICIES: readonly ConflictPolicy[] = ['rename', 'skip', 'overwrite', 'fail'];
 
 export function parseConflictPolicy(value: unknown): ConflictPolicy {
@@ -206,7 +217,12 @@ export class UploadService {
    * the library, a read-only mount — throws, and it throws before anything is
    * written into the library.
    */
-  async commit(staged: StagedUpload[], target: string, policy: ConflictPolicy): Promise<UploadResult> {
+  async commit(
+    staged: StagedUpload[],
+    target: string,
+    policy: ConflictPolicy,
+    { booksOnly = false }: CommitOptions = {},
+  ): Promise<UploadResult> {
     if (staged.length === 0) throw badRequest('no file was uploaded', 'NO_FILES');
     const resolved = this.resolveTarget(target);
     await this.guardWritable(resolved);
@@ -218,14 +234,18 @@ export class UploadService {
     // and then refuses has left a library the user has to reason about, and no
     // response can describe it. Later policies (`rename`, `skip`) resolve
     // conflicts rather than refusing, so they never reach this check.
-    if (policy === 'fail') await this.assertNoConflicts(staged, resolved);
+    if (policy === 'fail') await this.assertNoConflicts(staged, resolved, booksOnly);
 
     const uploaded: UploadResultItem[] = [];
     const skipped: Array<{ name: string; reason: string }> = [];
     const written: string[] = [];
     try {
       for (const item of staged) {
-        if (isZipContainer(item.name)) {
+        if (booksOnly && !isBookFile(item.name)) {
+          skipped.push({ name: item.originalName, reason: '不是支持的书籍格式' });
+          continue;
+        }
+        if (!booksOnly && isZipContainer(item.name)) {
           await this.importArchive(item.stagedPath, item.name, resolved, policy, uploaded, skipped, written);
         } else {
           const placed = await this.place(item.stagedPath, resolved, item.name, item.originalName, policy);
@@ -277,9 +297,10 @@ export class UploadService {
    * and a client uploading `系列.zip` on top of an existing `系列/` deserves the
    * same answer as one uploading the files directly.
    */
-  private async assertNoConflicts(staged: StagedUpload[], target: string): Promise<void> {
+  private async assertNoConflicts(staged: StagedUpload[], target: string, booksOnly: boolean): Promise<void> {
     for (const item of staged) {
-      if (!isZipContainer(item.name)) {
+      if (booksOnly && !isBookFile(item.name)) continue;
+      if (booksOnly || !isZipContainer(item.name)) {
         if (await this.existingName(target, item.name)) {
           throw conflict(`${target === '' ? '' : `${target}/`}${item.name} is already taken`, 'DESTINATION_EXISTS');
         }
@@ -633,6 +654,11 @@ function isZipContainer(name: string): boolean {
   const dot = name.lastIndexOf('.');
   if (dot <= 0) return false;
   return ZIP_CONTAINER_EXTENSIONS.has(name.slice(dot).toLowerCase());
+}
+
+function isBookFile(name: string): boolean {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 && fileHandlerForExtension(name.slice(dot)) !== null;
 }
 
 function segmentsOf(entryName: string): string[] {

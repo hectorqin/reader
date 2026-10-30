@@ -9,7 +9,7 @@
  */
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rename, rm, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rename, rm, stat, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import JSZip from 'jszip';
@@ -386,6 +386,31 @@ describe('library file management', () => {
   });
 });
 
+describe('file management is admin-only', () => {
+  test('a member can browse but cannot move, rename, create, delete or batch-edit', async () => {
+    await ctx.users.createAsAdmin({ username: 'browse-member', password: 'password123', role: 'member' });
+    const member = await ctx.users.login('browse-member', 'password123');
+    const headers = { authorization: `Bearer ${member.accessToken}` };
+    const listed = await app.inject({ method: 'GET', url: '/api/v1/library/browse', headers });
+    assert.equal(listed.statusCode, 200);
+
+    const before = await readdir(booksDir);
+    const writes: Array<[string, Record<string, unknown>]> = [
+      ['move', { paths: ['说明.txt'], target: '科幻' }],
+      ['rename', { path: '说明.txt', name: '改名.txt' }],
+      ['mkdir', { path: '', name: '成员文件夹' }],
+      ['delete', { paths: ['说明.txt'] }],
+      ['metadata', { paths: ['说明.txt'], fields: { title: '成员改的' } }],
+    ];
+    for (const [action, payload] of writes) {
+      const res = await app.inject({ method: 'POST', url: `/api/v1/library/browse/${action}`, headers, payload });
+      assert.equal(res.statusCode, 403, action);
+      assert.equal((res.json() as { error: { code: string } }).error.code, 'ADMIN_REQUIRED', action);
+    }
+    assert.deepEqual(await readdir(booksDir), before);
+  });
+});
+
 describe('a read-only mount', () => {
   test('reports itself as not writable and refuses writes with 403', async () => {
     const service = new BrowseService(ctx.db, ctx.config, ctx.shelf);
@@ -520,12 +545,12 @@ describe('the shelf add/remove pair', () => {
     await writeFile(join(booksDir, `${DIR}/改日期.epub`), await makeEpub('改日期', 'urn:readd'));
     await ctx.scanner.scan();
     const book = ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '改日期'")!;
-    ctx.db.run('UPDATE user_books SET added_at = 0 WHERE book_id = ?', book.id);
+    ctx.db.run('UPDATE user_books SET added_at = 0 WHERE book_id = ? AND user_id = ?', book.id, userId);
 
     await act(`${DIR}/改日期.epub`, 'remove');
     await act(`${DIR}/改日期.epub`, 'add');
     const readded = ctx.db.get<{ added_at: number }>(
-      'SELECT added_at FROM user_books WHERE book_id = ?', book.id,
+      'SELECT added_at FROM user_books WHERE book_id = ? AND user_id = ?', book.id, userId,
     )!;
     assert.ok(readded.added_at > 0, '重新加入必须刷新 added_at');
   });
@@ -558,7 +583,7 @@ describe('the shelf add/remove pair', () => {
     await ctx.scanner.scan();
     assert.equal(
       ctx.db.get<{ hidden: number }>(
-        'SELECT hidden FROM user_books WHERE book_id = ?', before.id,
+        'SELECT hidden FROM user_books WHERE book_id = ? AND user_id = ?', before.id, userId,
       )?.hidden,
       0,
       'the row is still there and still not hidden',
