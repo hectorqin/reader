@@ -1,4 +1,4 @@
-import {Check,TimerOff} from 'lucide-react';
+import { Icon } from '../../../ui/icon.tsx';
 import type {MediaPlayer} from '../services/player.ts';
 
 /** `partLabel` names what one entry is ("本章", "本曲", "本集"); without it the stop-after-entry choice is not offered. */
@@ -10,7 +10,7 @@ export function SleepTimerOptions({player,onSelected,partLabel}:{player:MediaPla
     <div className="media-sleep-presets">{[15,30,45,60,90,120].map(minutes=><button key={minutes} onClick={()=>choose(minutes)}>{minutes}<small>分钟</small></button>)}</div>
     <div className="media-sleep-actions">
       {partLabel&&<button className="media-sleep-part" aria-pressed={stopAfterPart} disabled={!player.canSleepAfterPart} onClick={chooseAfterPart}>播完{partLabel}</button>}
-      <button className="media-sleep-off" aria-label="关闭定时" aria-pressed={off} onClick={()=>choose(0)}><TimerOff size={18} aria-hidden="true"/><span>关闭定时</span>{off&&<Check size={17} aria-hidden="true"/>}</button>
+      <button className="media-sleep-off" aria-label="关闭定时" aria-pressed={off} onClick={()=>choose(0)}><Icon name="timer-off" size={18} /><span>关闭定时</span>{off&&<Icon name="check" size={16} />}</button>
     </div>
     {partLabel&&player.canSleepAfterPart===false&&<p className="media-sleep-note">当前播放器不支持播完后暂停。</p>}
   </div>;

@@ -1,6 +1,6 @@
+import { Icon, type IconName } from '../../../ui/icon.tsx';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Clapperboard, Headphones, Play, type LucideIcon } from 'lucide-react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { BookCard, useCover } from '../../shelf/pages/ShelfPage.tsx';
@@ -35,7 +35,7 @@ function Resume({ book }: { book: ContinueReadingItem }) {
       <strong>{book.title || '未命名'}</strong>
       {book.chapterTitle && <small>{book.chapterTitle}</small>}
       <span className="home-hero-foot">
-        <span className="home-hero-action"><Play size={14} fill="currentColor" aria-hidden="true" />继续阅读</span>
+        <span className="home-hero-action"><Icon name="play" size={14} filled />继续阅读</span>
         <span className="home-hero-meter">
           <span className="home-progress" aria-hidden="true"><i style={{ width: `${percent}%` }} /></span>
           <span className="home-hero-percent">已读 {percent}%</span>
@@ -45,7 +45,7 @@ function Resume({ book }: { book: ContinueReadingItem }) {
   </Link>;
 }
 
-function ResumeMedia({ channel, label, icon: Icon, activity }: { channel: 'video' | 'audiobook'; label: string; icon: LucideIcon; activity: Activity }) {
+function ResumeMedia({ channel, label, icon, activity }: { channel: 'video' | 'audiobook'; label: string; icon: IconName; activity: Activity }) {
   const progress = activityProgress(activity);
   const title = `${activity.title}${activity.partTitle && activity.partTitle !== activity.title ? ` · ${activity.partTitle}` : ''}`;
   const verb = channel === 'video' ? '观看' : '收听';
@@ -55,14 +55,14 @@ function ResumeMedia({ channel, label, icon: Icon, activity }: { channel: 'video
     ? `${channel === 'video' ? '已看' : '已听'} ${clock(activity.position - activity.start)} / ${clock(activity.end - activity.start)}`
     : `继续${verb}`;
   return <Link className="home-card" data-channel={channel} to={`/media/${channel}/items/${encodeURIComponent(activity.itemId)}`}>
-    <span className="home-card-icon" aria-hidden="true"><Icon size={20} /></span>
+    <span className="home-card-icon" aria-hidden="true"><Icon name={icon} size={20} /></span>
     <span className="home-card-text">
       <span className="home-card-label">{label}</span>
       <strong>{title}</strong>
       <small>{meta}</small>
       <span className="home-progress" aria-hidden="true"><i style={{ width: `${Math.round(progress * 100)}%` }} /></span>
     </span>
-    <ChevronRight size={16} aria-hidden="true" className="home-card-chevron" />
+    <Icon name="chevron-right" size={16} className="home-card-chevron" />
   </Link>;
 }
 
@@ -92,15 +92,15 @@ export function HomePage() {
         : reading.isPending
           ? <section className="home-empty home-empty-pending" aria-label="继续阅读" aria-busy="true"><strong>正在读取在读的书…</strong></section>
           : reading.error
-            ? <section className="home-empty" aria-label="继续阅读" role="alert"><strong>在读的书读取失败</strong><button type="button" className="home-retry" onClick={() => void reading.refetch()}>重试<ChevronRight size={16} aria-hidden="true" /></button></section>
-            : <section className="home-empty" aria-label="继续阅读"><strong>还没有在读的书</strong><Link to="/shelf">去书架挑一本<ChevronRight size={16} aria-hidden="true" /></Link></section>}
+            ? <section className="home-empty" aria-label="继续阅读" role="alert"><strong>在读的书读取失败</strong><button type="button" className="home-retry" onClick={() => void reading.refetch()}>重试<Icon name="chevron-right" size={16} /></button></section>
+            : <section className="home-empty" aria-label="继续阅读"><strong>还没有在读的书</strong><Link to="/shelf">去书架挑一本<Icon name="chevron-right" size={16} /></Link></section>}
       {(videoActivity || audioActivity) && <div className="home-cards">
-        {videoActivity && <ResumeMedia channel="video" label="影视" icon={Clapperboard} activity={videoActivity} />}
-        {audioActivity && <ResumeMedia channel="audiobook" label="听书" icon={Headphones} activity={audioActivity} />}
+        {videoActivity && <ResumeMedia channel="video" label="影视" icon="video" activity={videoActivity} />}
+        {audioActivity && <ResumeMedia channel="audiobook" label="听书" icon="audiobook" activity={audioActivity} />}
       </div>}
     </div>
     {books.length > 0 && <section className="home-shelf" aria-label="我的书架">
-      <div className="home-section"><h2>我的书架</h2><Link to="/shelf">全部<ChevronRight size={16} aria-hidden="true" /></Link></div>
+      <div className="home-section"><h2>我的书架</h2><Link to="/shelf">全部<Icon name="chevron-right" size={16} /></Link></div>
       <div className="home-shelf-row">{books.map(item => <BookCard key={item.id} book={item} showAuthor={false} showProgress />)}</div>
     </section>}
   </div>;

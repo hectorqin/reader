@@ -1,4 +1,4 @@
-import {Repeat,Repeat1,Shuffle} from 'lucide-react';
+import { Icon } from '../../../ui/icon.tsx';
 import type {MediaPlayer} from '../services/player.ts';
 import {playModeLabels,playModes} from '../services/play-mode.ts';
 
@@ -12,7 +12,7 @@ export function PlayModeSegments({player}:{player:MediaPlayer}){
 /** One tap on the transport row steps through the modes. Disabled, not hidden, where the player cannot honour a mode, so the row keeps its balance. */
 export function PlayModeCycle({player}:{player:MediaPlayer}){
   const mode=player.playMode??'sequential',next=playModes[(playModes.indexOf(mode)+1)%playModes.length]!;
-  const Icon=mode==='shuffle'?Shuffle:mode==='repeat-one'?Repeat1:Repeat;
+  const glyph=mode==='shuffle'?'shuffle':mode==='repeat-one'?'repeat-one':'repeat';
   const label='播放模式：'+playModeLabels[mode];
-  return <button className="media-symbol-button media-play-mode-cycle" data-mode={mode} aria-label={label} disabled={!player.canChoosePlayMode} title={player.canChoosePlayMode?label+'，点按切换为'+playModeLabels[next]:'当前播放器不支持切换播放模式'} onClick={()=>player.setPlayMode(next)}><Icon size={22} aria-hidden="true"/></button>;
+  return <button className="media-symbol-button media-play-mode-cycle" data-mode={mode} aria-label={label} disabled={!player.canChoosePlayMode} title={player.canChoosePlayMode?label+'，点按切换为'+playModeLabels[next]:'当前播放器不支持切换播放模式'} onClick={()=>player.setPlayMode(next)}><Icon name={glyph} size={20} /></button>;
 }

@@ -316,7 +316,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
                 const reachable = entry.spine !== undefined && entry.spine >= 0;
                 return (
                   <li key={entry.id + index} data-section={entry.id}>
-                    {hasChildren && <button className="toc-collapse" aria-label={entry.label + (collapsed.has(entry.id) ? ' 展开' : ' 折叠')} aria-expanded={!collapsed.has(entry.id)} onClick={() => { const next = new Set(collapsed); if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id); setCollapsed(next); }}>{collapsed.has(entry.id) ? '+' : '−'}</button>}
+                    {hasChildren && <button className="toc-collapse" aria-label={entry.label + (collapsed.has(entry.id) ? ' 展开' : ' 折叠')} aria-expanded={!collapsed.has(entry.id)} onClick={() => { const next = new Set(collapsed); if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id); setCollapsed(next); }}><Icon name={collapsed.has(entry.id) ? 'chevron-right' : 'chevron-down'} size={16} /></button>}
                     <button
                       type="button"
                       aria-current={entry.id.split('#')[0] === state.currentSectionId}

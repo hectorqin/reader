@@ -1,6 +1,6 @@
+import { Icon } from '../../../ui/icon.tsx';
 import { Callout } from '../../../ui/toolkit.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
-import { FolderOpen, Plus, RefreshCw } from 'lucide-react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -59,8 +59,8 @@ export function MediaLibrariesPage() {
     <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
     {ready && libraries.length > 0 && <div className="media-manager-bar">
       <span>{libraries.length} 个媒体库</span>
-      <button type="button" onClick={() => navigate(`/media/${channel}/settings/tasks`, { state: { returnTo: `/media/${channel}/settings/libraries` } })}><RefreshCw size={16} aria-hidden="true" />扫描与刮削</button>
-      <button type="button" className="media-primary" onClick={create}><Plus size={16} aria-hidden="true" />新建媒体库</button>
+      <button type="button" onClick={() => navigate(`/media/${channel}/settings/tasks`, { state: { returnTo: `/media/${channel}/settings/libraries` } })}><Icon name="refresh" size={16} />扫描与刮削</button>
+      <button type="button" className="media-primary" onClick={create}><Icon name="plus" size={16} />新建媒体库</button>
     </div>}
     <div className="media-libraries-layout"><div>
     {ready && libraries.length > 0 && <MediaLibraryList
@@ -77,10 +77,10 @@ export function MediaLibrariesPage() {
       onDetails={library => tasks(library.id)}
     />}
     {ready && libraries.length === 0 && <section className="media-library-empty" aria-label="媒体库空状态">
-      <span className="media-empty-emblem"><FolderOpen size={30} strokeWidth={1.7} aria-hidden="true" /></span>
+      <span className="media-empty-emblem"><Icon name="folder-browse" size={32} /></span>
       <h2>还没有媒体库</h2>
       <p>添加服务端能读取的影视、音乐或有声书目录，创建后会自动扫描。</p>
-      <button type="button" className="media-primary" onClick={create}><Plus size={16} aria-hidden="true" />新建媒体库</button>
+      <button type="button" className="media-primary" onClick={create}><Icon name="plus" size={16} />新建媒体库</button>
     </section>}
     </div><MediaScanSettings api={runtime.mediaApi} /></div>
   </MediaPageFrame>;

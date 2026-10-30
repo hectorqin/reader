@@ -1,5 +1,5 @@
+import { Icon } from '../../../ui/icon.tsx';
 import { useEffect, useState, type ReactNode } from 'react';
-import { FileText, Layers } from 'lucide-react';
 import { ActionMenu } from '../../../ui/action-menu.tsx';
 import { Sheet } from '../../../ui/sheet.tsx';
 import { ResourceInfo } from './resource-info.tsx';
@@ -76,9 +76,9 @@ export function ResourcePanel({
     <header>
       <h2>资源信息</h2>
       <ActionMenu className="media-icon-button" label="资源信息操作" items={[
-        files.length > 0 && { label: '资源信息', icon: <FileText size={16} />, onSelect: () => open('files') },
-        (manage || !!versionPicker) && { label: manage ? '版本管理' : '播放版本', icon: <Layers size={16} />, onSelect: () => open('versions') },
-        !!sourceInfo && { label: '来源', icon: <FileText size={16} />, onSelect: () => open('source') },
+        files.length > 0 && { label: '资源信息', icon: <Icon name="file-text" size={16} />, onSelect: () => open('files') },
+        (manage || !!versionPicker) && { label: manage ? '版本管理' : '播放版本', icon: <Icon name="versions" size={16} />, onSelect: () => open('versions') },
+        !!sourceInfo && { label: '来源', icon: <Icon name="file-text" size={16} />, onSelect: () => open('source') },
       ]} />
     </header>
     <p>{summary}</p>

@@ -2,7 +2,7 @@ import { render } from '../../../shared/ui/render-root.ts';
 import {MiniNowPlaying} from '../components/mini-now-playing.tsx';
 import {readPlaybackPreferences} from './playback-preferences.ts';
 import { createElement } from 'react';
-import {Play,Pause,X} from 'lucide-react';
+import { Icon } from '../../../ui/icon.tsx';
 import { MediaApi } from '../api/media-api.ts';
 import type { Part, Playback, Progress } from '../api/media-api.ts';
 import { PlaybackLease } from './playback-lease.ts';
@@ -204,7 +204,7 @@ export class MediaPlayer extends EventTarget {
     this.miniToggle.setAttribute('aria-label','暂停音频');this.miniToggle.addEventListener('click',()=>this.toggle());
     this.miniToggle.className='media-mini-toggle';this.miniTime.className='media-mini-time';
     this.miniProgress.className='media-mini-progress';this.miniProgress.setAttribute('aria-label','当前章节进度');
-    this.miniClose.className='media-mini-close';this.miniClose.setAttribute('aria-label','关闭播放器');this.miniClose.title='关闭播放器';this.miniClose.addEventListener('click',()=>void this.stop());render(createElement(X,{size:19,'aria-hidden':true}),this.miniClose);
+    this.miniClose.className='media-mini-close';this.miniClose.setAttribute('aria-label','关闭播放器');this.miniClose.title='关闭播放器';this.miniClose.addEventListener('click',()=>void this.stop());render(createElement(Icon,{name:'close',size:20}),this.miniClose);
     this.mini.append(this.miniTitle,this.miniToggle,this.miniClose,this.miniTime,this.miniProgress);
     this.audioControls.className='media-audio-controls';
     this.chapterSeek.type='range';this.chapterSeek.min='0';this.chapterSeek.step='0.1';
@@ -302,7 +302,7 @@ export class MediaPlayer extends EventTarget {
     this.element.classList.toggle('media-player-audio',audio);this.mini.hidden=false;
     this.element.classList.toggle('media-player-native-video',this.isVideo&&this.nativeActive);
     render(createElement(MiniNowPlaying,{api:this.api,itemId:this.currentItemId,title:this.title}),this.miniTitle);
-    render(createElement(this.paused?Play:Pause,{size:21,strokeWidth:1.8,'aria-hidden':true}),this.miniToggle);this.miniToggle.setAttribute('aria-label',(this.paused?'继续':'暂停')+(audio?'音频':'视频'));
+    render(createElement(Icon,{name:this.paused?'play':'pause',size:20}),this.miniToggle);this.miniToggle.setAttribute('aria-label',(this.paused?'继续':'暂停')+(audio?'音频':'视频'));
     this.miniToggle.disabled=this.playbackBlocked;
     this.audio.controls=false;this.video.controls=!this.webVideo&&!this.playbackBlocked&&!this.customVideoControls;
     this.videoWorkspace.hidden=!this.isWebVideo;

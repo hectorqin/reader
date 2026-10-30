@@ -1,11 +1,10 @@
-import { Clapperboard, Music2, Headphones } from 'lucide-react';
 import { channelCategories } from '../hooks/use-media-channel.ts';
 
 /** The three media channels. Reading, home and the account page live in the app navigation. */
 export const mediaChannels = [
-  { id: 'video', label: '影视', icon: Clapperboard },
-  { id: 'music', label: '音乐', icon: Music2 },
-  { id: 'audiobook', label: '有声书', icon: Headphones },
+  { id: 'video', label: '影视', icon: 'video' },
+  { id: 'music', label: '音乐', icon: 'music' },
+  { id: 'audiobook', label: '有声书', icon: 'audiobook' },
 ] as const;
 
 export const channelPath = (id: string) => `/media/${id}`;

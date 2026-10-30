@@ -1,7 +1,7 @@
+import { Icon } from '../../../ui/icon.tsx';
 import { ConfirmSheet } from '../../../ui/sheet.tsx';
 import { useEffect, useRef, useState } from 'react';
 import type { Library, LibraryConfiguration, MediaApi } from '../api/media-api.ts';
-import {ChevronLeft} from 'lucide-react';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 
 type Configuration = LibraryConfiguration;
@@ -48,7 +48,7 @@ export function MediaLibraryEditor({ api, library, onSaved, onCancel }: {
     }
   };
 
-  return <section className="media-library-workspace"><header className="media-settings-heading"><button className="media-back-button" data-media-back aria-label="返回媒体库管理" title="返回媒体库管理" disabled={saving} onClick={close}><ChevronLeft size={20} aria-hidden="true"/></button><h1>编辑媒体库</h1></header>
+  return <section className="media-library-workspace"><header className="media-settings-heading"><button className="media-back-button" data-media-back aria-label="返回媒体库管理" title="返回媒体库管理" disabled={saving} onClick={close}><Icon name="chevron-left" size={20} /></button><h1>编辑媒体库</h1></header>
     {leaving&&<ConfirmSheet danger title="放弃媒体库修改？" text="媒体库修改尚未保存，离开后将丢弃本次修改。" confirmText="放弃修改" cancelText="继续编辑" onCancel={()=>setLeaving(false)} onConfirm={()=>{setLeaving(false);onCancel();}}/>}
     <form className="media-form media-library-editor" aria-label="媒体库配置" onSubmit={event => { event.preventDefault(); void save(); }}>
     {error && <div role="alert" className="media-error">{error}{!configuration && <button type="button" onClick={() => setAttempt(value => value + 1)}>重试读取配置</button>}</div>}

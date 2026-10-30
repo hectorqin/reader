@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+import { Icon } from '../../../ui/icon.tsx';
 import { ChannelMenu } from '../components/channel-menu.tsx';
 import { Link } from 'react-router-dom';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -65,7 +65,7 @@ export function MediaNarratorsPage() {
   };
 
   const actions = <>
-    <Link to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Search size={19} aria-hidden="true" /></Link>
+    <Link to="/media/search" className="media-icon-button" aria-label="搜索" title="搜索"><Icon name="search" size={18} /></Link>
     <ChannelMenu channel="audiobook" />
   </>;
   return <MediaPageFrame className="media-catalog-page" title="有声书" actions={actions} emptyChannel={!libraries.isPending && !libraries.error && !libraryId}>

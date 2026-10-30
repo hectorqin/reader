@@ -1,7 +1,7 @@
 import { render } from '../src/shared/ui/render-root.ts';
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ICON_ALIASES, ICON_CODEPOINTS, ICON_CODEPOINT_TABLE } from '../src/ui/icon-names.ts';
 import { GLYPHS } from '../tools/icons/paths.mjs';
@@ -425,5 +425,17 @@ describe('icon buttons', () => {
     // arbitrary children, and Unicode punctuation is what it was given.
     expect(host.querySelector('.icon')).not.toBeNull();
     expect(host.querySelector('svg path')).not.toBeNull();
+  });
+});
+
+describe('one icon set', () => {
+  it('draws every icon through ui/icon.tsx (ui.md §1)', () => {
+    // A screen that imports lucide-react itself picks its own glyph, size and stroke;
+    // that is how the set drifted to three gears and five stroke weights.
+    const walk = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(entry =>
+      entry.isDirectory() ? walk(join(dir, entry.name)) : /\.tsx?$/.test(entry.name) ? [join(dir, entry.name)] : []);
+    const src = join(process.cwd(), 'src');
+    const importers = walk(src).filter(file => /from 'lucide-react'/.test(readFileSync(file, 'utf8'))).map(file => relative(src, file));
+    expect(importers).toEqual([join('ui', 'icon.tsx')]);
   });
 });

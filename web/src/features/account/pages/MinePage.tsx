@@ -1,6 +1,6 @@
+import { Icon, type IconName } from '../../../ui/icon.tsx';
 import { Link } from 'react-router-dom';
 import { useState, type ReactNode } from 'react';
-import { ChevronRight, Film, LayoutGrid, LibraryBig, LogOut, Palette, PlayCircle, RefreshCw, Rss, Settings, SlidersHorizontal, UserRound, type LucideIcon } from 'lucide-react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
@@ -16,12 +16,12 @@ import { connectionLabel } from '../../../app/AppNav.tsx';
 import '../../home/styles/home.css';
 import '../styles/mine.css';
 
-function Row({ icon: Icon, label, value, to, state, onClick, danger = false }: { icon: LucideIcon; label: string; value?: string; to?: string; state?: unknown; onClick?: () => void; danger?: boolean }) {
+function Row({ icon, label, value, to, state, onClick, danger = false }: { icon: IconName; label: string; value?: string; to?: string; state?: unknown; onClick?: () => void; danger?: boolean }) {
   const body = <>
-    <span className="mine-row-icon" aria-hidden="true"><Icon size={18} /></span>
+    <span className="mine-row-icon" aria-hidden="true"><Icon name={icon} size={18} /></span>
     <span className="mine-row-label">{label}</span>
     {value && <span className="mine-row-value">{value}</span>}
-    {!danger && <ChevronRight size={16} aria-hidden="true" className="mine-row-chevron" />}
+    {!danger && <Icon name="chevron-right" size={16} className="mine-row-chevron" />}
   </>;
   const className = danger ? 'mine-row is-danger' : 'mine-row';
   return to
@@ -74,25 +74,25 @@ export function MinePage() {
       <div className="mine-groups">
         <div className="mine-column">
           <Group title="内容" order={1}>
-            <Row icon={LibraryBig} label="书库" to="/library" />
-            <Row icon={Rss} label="书源" to="/sources" />
-            {admin && <Row icon={Film} label="媒体库" to="/media/video/settings/libraries" state={{ returnTo: '/me' }} />}
+            <Row icon="library" label="书库" to="/library" />
+            <Row icon="feed" label="书源" to="/sources" />
+            {admin && <Row icon="video" label="媒体库" to="/media/video/settings/libraries" state={{ returnTo: '/me' }} />}
           </Group>
           {admin && <Group title="管理" order={3}>
-            <Row icon={Settings} label="系统设置" value="用户、注册、服务配置" onClick={() => setSheet('system')} />
-            <Row icon={RefreshCw} label="扫描与刮削" to="/media/video/settings/tasks" state={{ returnTo: '/me' }} />
+            <Row icon="settings" label="系统设置" value="用户、注册、服务配置" onClick={() => setSheet('system')} />
+            <Row icon="refresh" label="扫描与刮削" to="/media/video/settings/tasks" state={{ returnTo: '/me' }} />
           </Group>}
         </div>
         <div className="mine-column">
           <Group title="偏好" order={2}>
-            <Row icon={Palette} label="外观与主题" value={themeName} to="/me/theme" />
-            <Row icon={LayoutGrid} label="书架显示" value={DENSITY_LABELS[settings.shelfDensity]} onClick={() => setSheet('shelf')} />
-            <Row icon={SlidersHorizontal} label="影音浏览" value={mediaDensity} to="/me/browse" />
-            <Row icon={PlayCircle} label="播放" to="/me/playback" />
+            <Row icon="palette" label="外观与主题" value={themeName} to="/me/theme" />
+            <Row icon="grid" label="书架显示" value={DENSITY_LABELS[settings.shelfDensity]} onClick={() => setSheet('shelf')} />
+            <Row icon="sliders" label="影音浏览" value={mediaDensity} to="/me/browse" />
+            <Row icon="play-circle" label="播放" to="/me/playback" />
           </Group>
           <Group title="账号" order={4}>
-            <Row icon={UserRound} label="账号与连接" to="/me/account" />
-            <Row icon={LogOut} label="退出登录" danger onClick={() => setSheet('sign-out')} />
+            <Row icon="account" label="账号与连接" to="/me/account" />
+            <Row icon="logout" label="退出登录" danger onClick={() => setSheet('sign-out')} />
           </Group>
         </div>
       </div>

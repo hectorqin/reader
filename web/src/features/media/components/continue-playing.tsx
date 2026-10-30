@@ -1,4 +1,4 @@
-import {Play} from 'lucide-react';
+import { Icon } from '../../../ui/icon.tsx';
 import { useEffect, useRef, useState } from 'react';
 import type { MediaApi, Part, Detail } from '../api/media-api.ts';
 import {MediaCover} from './cover.tsx';
@@ -48,7 +48,7 @@ export function ContinuePlaying({api,libraryId,libraryIds=[],onPlay}:{api:MediaA
   return <section className="media-continue" aria-label="最近续播" role="button" tabIndex={busy?-1:0} onClick={event=>{if(!(event.target as Element).closest('button'))void resume();}} onKeyDown={event=>{if((event.key==='Enter'||event.key===' ')&&!busy){event.preventDefault();void resume();}}}>
     <MediaCover api={api} item={cover??work??{id:recent.itemId,libraryId:recent.libraryId,kind:'recent',title:recent.title,parentId:null,metadata:{},overrides:{}}} square={false}/><div><small>最近播放</small><strong title={work?.title??recent.title}>{work?.title??recent.title}</strong><small>{work&&work.id!==recent.itemId?recent.title+' · ':''}已播放 {historyPosition(recent.position,recent.start)}{duration!==null&&duration>0?' / '+historyPosition(duration,0):''}</small>
       {duration!==null&&duration>0&&<progress aria-label="已播进度" max={duration} value={Math.min(elapsed,duration)}/>}</div>
-    <button className="media-continue-play" aria-label={busy?'正在打开…':'续播'} title="继续播放" disabled={busy} onClick={()=>void resume()}><Play size={17} fill="currentColor" aria-hidden="true"/></button>
+    <button className="media-continue-play" aria-label={busy?'正在打开…':'续播'} title="继续播放" disabled={busy} onClick={()=>void resume()}><Icon name="play" size={16} filled /></button>
     {error&&<p role="alert">{error}</p>}
   </section>;
 }

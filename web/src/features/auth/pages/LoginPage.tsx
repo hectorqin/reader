@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
 import type { InstanceInfo } from '../../../api/types.ts';
 import { ApiError } from '../../../api/errors.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -74,7 +73,7 @@ export function LoginPage() {
     <div className="field"><label htmlFor="login-username">用户名 <em>*</em></label><input id="login-username" autoComplete="username" value={username} onChange={event => setUsername(event.currentTarget.value)} required /></div>
     {registering && <div className="field"><label htmlFor="login-display-name">显示名（可选）</label><input id="login-display-name" value={displayName} onChange={event => setDisplayName(event.currentTarget.value)} /></div>}
     {registering && instance?.invitationRequired && <div className="field"><label htmlFor="login-invite">邀请码 <em>*</em></label><input id="login-invite" value={inviteCode} onChange={event => setInviteCode(event.currentTarget.value)} required /></div>}
-    <div className="field"><label htmlFor="login-password">密码 <em>*</em></label><div className="login-password-input"><input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete={registering ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.currentTarget.value)} required /><button type="button" className="login-password-toggle" aria-label={showPassword ? '隐藏密码' : '显示密码'} onClick={() => setShowPassword(value => !value)}>{showPassword ? <EyeOff size={18} aria-hidden="true" /> : <Eye size={18} aria-hidden="true" />}</button></div></div>
+    <div className="field"><label htmlFor="login-password">密码 <em>*</em></label><div className="login-password-input"><input id="login-password" type={showPassword ? 'text' : 'password'} autoComplete={registering ? 'new-password' : 'current-password'} value={password} onChange={event => setPassword(event.currentTarget.value)} required /><button type="button" className="login-password-toggle" aria-label={showPassword ? '隐藏密码' : '显示密码'} onClick={() => setShowPassword(value => !value)}>{showPassword ? <Icon name="eye-off" size={18} /> : <Icon name="eye" size={18} />}</button></div></div>
     {registering && <p className="login-register-hint">注册后会自动登录并保存此服务端地址。</p>}
     {notice && <div className={'login-notice' + (instance ? '' : ' is-warning')} role="status">{notice}</div>}{error && <div className="login-notice is-error" role="alert">{error}</div>}
     <button className="button primary login-submit" type="submit" disabled={!validServerUrl(serverUrl) || busy}>{busy ? '登录中…' : registering ? '注册并登录' : '登录'}</button>

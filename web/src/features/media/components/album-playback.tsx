@@ -1,8 +1,8 @@
+import { Icon } from '../../../ui/icon.tsx';
 import {MediaSelect} from './select.tsx';
 import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';
 import { useEffect, useState, type ReactNode } from 'react';
-import {Play,ListPlus,Ellipsis} from 'lucide-react';
 import type {Edition,MediaApi,Part} from '../api/media-api.ts';
 export interface AlbumTrack {id:string;title:string;disc:number;track:number|null;editions:Edition[]}
 type Entry={part:Part;title:string;video:boolean;credit?:string};
@@ -45,7 +45,7 @@ export function AlbumPlayback({api,id,onPlay,onQueue,onDetail,actions,credit,onT
   return <section className="media-album-playback" aria-label="专辑曲目">
     {actions&&(loading||loadError)&&<div className="media-toolbar media-album-actions">{actions}</div>}
     {loading?<MediaLoading layout="tracks" label="正在读取曲目…"/>:loadError?<MediaScreenError error={loadCause} message={loadError} busy={loading} retryLabel="重新读取" onRetry={()=>setRetry(retry+1)}/>:<>
-      <div className="media-toolbar media-album-actions"><button className="media-primary" disabled={busy||!queue.entries.length} onClick={()=>void run(()=>onPlay(queue.entries.map(entry=>({...entry,...(credit?{credit}:{})}))))}><Play size={17} aria-hidden="true"/>{start>0?'从此曲播放':'播放全部'}</button>{actions}<button className="media-icon-button" aria-label="加入队列" title="加入队列" disabled={busy||!queue.entries.length} onClick={()=>void run(()=>onQueue(queue.entries.map(entry=>entry.part.id)),'已加入队列','queue')}><ListPlus size={17} aria-hidden="true"/></button></div>
+      <div className="media-toolbar media-album-actions"><button className="media-primary" disabled={busy||!queue.entries.length} onClick={()=>void run(()=>onPlay(queue.entries.map(entry=>({...entry,...(credit?{credit}:{})}))))}><Icon name="play" size={16} />{start>0?'从此曲播放':'播放全部'}</button>{actions}<button className="media-icon-button" aria-label="加入队列" title="加入队列" disabled={busy||!queue.entries.length} onClick={()=>void run(()=>onQueue(queue.entries.map(entry=>entry.part.id)),'已加入队列','queue')}><Icon name="queue-add" size={16} /></button></div>
       <div className="media-album-columns"><div className="media-album-track-body"><div className="media-album-summary"><strong>曲目</strong><span>{tracks.length} 首{seconds!==null&&seconds>0?' · '+Math.floor(seconds/60)+' 分钟':''}{multipleDiscs?' · '+discCount+' 碟':''}</span>{start>0&&<button onClick={()=>{setStart(0);setQuery('');setPage(0);}}>从第一首开始</button>}</div>
       {start>0&&tracks[start]&&<p className="media-album-start">从「{tracks[start]!.title}」开始</p>}{queue.notice&&<p className="media-season-notice">{queue.notice}</p>}{notice&&<p role="status">{notice}</p>}
       {tracks.length>10&&<label className="media-chapter-filter">查找曲目<input type="search" value={query} onInput={event=>{setQuery(event.currentTarget.value);setPage(0);}}/></label>}
@@ -55,7 +55,7 @@ export function AlbumPlayback({api,id,onPlay,onQueue,onDetail,actions,credit,onT
         const duration=edition?.parts.every(part=>part.end!==null&&Number.isFinite(part.end)&&part.end>=part.start)?edition.parts.reduce((total,part)=>total+part.end!-part.start,0):null;
         return <div className="media-album-track" key={track.id}>
           {multipleDiscs&&(row===0||visible[row-1]!.track.disc!==track.disc)&&<h3 className="media-album-disc">第 {track.disc} 碟</h3>}
-          <div className="media-season-row" data-selected={index===start?'true':undefined}><span className="media-album-number">{String(track.track??index+1).padStart(2,'0')}</span><button className="media-album-track-link" aria-label={'从 '+track.title+' 开始播放'} disabled={busy||!available.length} onClick={()=>playFrom(index)}><span className="media-album-track-title">{track.title}<small>{!available.length?'资源缺失':credit}</small></span></button>{duration!==null&&<span className="media-album-duration" aria-label={'时长 '+Math.floor(duration/60)+' 分 '+Math.floor(duration%60)+' 秒'}>{Math.floor(duration/60)}:{String(Math.floor(duration%60)).padStart(2,'0')}</span>}<button className="media-album-track-detail" aria-label={'查看 '+track.title+' 详情'} title="曲目详情与版本" onClick={()=>onDetail(track.id)}><Ellipsis size={18} aria-hidden="true"/></button>
+          <div className="media-season-row" data-selected={index===start?'true':undefined}><span className="media-album-number">{String(track.track??index+1).padStart(2,'0')}</span><button className="media-album-track-link" aria-label={'从 '+track.title+' 开始播放'} disabled={busy||!available.length} onClick={()=>playFrom(index)}><span className="media-album-track-title">{track.title}<small>{!available.length?'资源缺失':credit}</small></span></button>{duration!==null&&<span className="media-album-duration" aria-label={'时长 '+Math.floor(duration/60)+' 分 '+Math.floor(duration%60)+' 秒'}>{Math.floor(duration/60)}:{String(Math.floor(duration%60)).padStart(2,'0')}</span>}<button className="media-album-track-detail" aria-label={'查看 '+track.title+' 详情'} title="曲目详情与版本" onClick={()=>onDetail(track.id)}><Icon name="more" size={18} /></button>
           {track.editions.length>1&&<MediaSelect aria-label={track.title+' 版本'} value={choices[track.id]??(available.length===1?available[0]!.id:'')} onChange={event=>setChoices({...choices,[track.id]:event.currentTarget.value})}><option key="empty" value="">选择版本</option>{track.editions.map(edition=><option key={edition.id} value={edition.id} disabled={!available.includes(edition)}>{edition.label}</option>)}</MediaSelect>}
         </div></div>;
       })}</div>

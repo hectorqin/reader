@@ -1,4 +1,4 @@
-import { Clock3, Play } from 'lucide-react';
+import { Icon } from '../../../ui/icon.tsx';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -20,9 +20,9 @@ export function MediaHistoryPage() {
   return <MediaPageFrame className="media-secondary-page" title="播放历史" subtitle={channelLabels[channel]}><section className="media-history-page"><QueryFeedback pending={query.isPending} error={query.error ?? play.error} retry={() => { void query.refetch(); }} />
     <div className="media-history-list">{query.data?.items.map((row, index, rows) => <div key={row.id || row.partId}>
       {(index === 0 || historyDay(row.updatedAt) !== historyDay(rows[index - 1]?.updatedAt)) && <h2 className="media-history-date">{historyDay(row.updatedAt)}</h2>}
-      <article className="media-row media-history-row"><div><Link className="media-personal-title" to={`/media/${channel}/items/${row.itemId}`} state={{ returnTo: location.pathname + location.search }}>{row.title}</Link><small>{[row.partTitle, row.editionLabel].filter(Boolean).join(' · ')}{row.completed ? ' · 已完成' : row.position !== undefined ? ` · ${historyPosition(row.position, row.start)}` : ''}</small>{!row.available && <small className="media-history-unavailable">资源不可用</small>}</div><button className="media-history-play" aria-label="播放" title={row.available ? '播放' : '资源不可用'} disabled={!row.available || play.isPending} onClick={() => play.mutate(row)}><Play size={18} aria-hidden="true" /></button></article>
+      <article className="media-row media-history-row"><div><Link className="media-personal-title" to={`/media/${channel}/items/${row.itemId}`} state={{ returnTo: location.pathname + location.search }}>{row.title}</Link><small>{[row.partTitle, row.editionLabel].filter(Boolean).join(' · ')}{row.completed ? ' · 已完成' : row.position !== undefined ? ` · ${historyPosition(row.position, row.start)}` : ''}</small>{!row.available && <small className="media-history-unavailable">资源不可用</small>}</div><button className="media-history-play" aria-label="播放" title={row.available ? '播放' : '资源不可用'} disabled={!row.available || play.isPending} onClick={() => play.mutate(row)}><Icon name="play" size={18} /></button></article>
     </div>)}</div>
-    {query.data && query.data.items.length === 0 && <div className="media-personal-empty"><Clock3 size={32} strokeWidth={1.4} aria-hidden="true" /><p>暂无记录。</p></div>}
+    {query.data && query.data.items.length === 0 && <div className="media-personal-empty"><Icon name="clock" size={32} /><p>暂无记录。</p></div>}
     {query.data && query.data.total > 60 && <nav className="media-toolbar media-pagination" aria-label="分页">
       <button type="button" disabled={Number(params.get('offset') ?? 0) <= 0 || query.isFetching} onClick={() => setParams({ offset: Math.max(0, Number(params.get('offset') ?? 0) - 60) ? String(Math.max(0, Number(params.get('offset') ?? 0) - 60)) : '' })}>上一页</button>
       <span>{Math.floor(Number(params.get('offset') ?? 0) / 60) + 1} / {Math.ceil(query.data.total / 60)}</span>

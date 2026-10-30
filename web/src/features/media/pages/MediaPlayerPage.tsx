@@ -1,6 +1,6 @@
+import { Icon } from '../../../ui/icon.tsx';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
 import { usePlaybackStore } from '../stores/playback.store.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { PlaybackControls, type PlaybackPanel } from '../components/playback-controls.tsx';
@@ -66,7 +66,7 @@ export function MediaPlayerPage() {
   };
   return <div className={rootClassName} data-theme={immersiveTheme} data-mode={immersiveTheme ? 'dark' : undefined}>
     {videoPage && <header className="media-heading">
-      <button type="button" className="media-back-button" aria-label="← 返回浏览" title="返回浏览" onClick={back}><ChevronLeft size={20} aria-hidden="true" /></button>
+      <button type="button" className="media-back-button" aria-label="← 返回浏览" title="返回浏览" onClick={back}><Icon name="chevron-left" size={20} /></button>
       <strong>视频播放</strong>
     </header>}
     {restoreError ? <div className="page-state" role="alert"><h2>无法恢复播放</h2><p>{restoreError}</p><button type="button" onClick={() => navigate(`/media/${channel}`)}>返回频道</button></div>

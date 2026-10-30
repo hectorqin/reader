@@ -1,7 +1,7 @@
+import { Icon } from '../../../ui/icon.tsx';
 import {MediaSelect} from './select.tsx';
 import { useEffect, useRef, useState } from 'react';
 import type { Detail, MediaApi } from '../api/media-api.ts';
-import {Search} from 'lucide-react';
 import {MediaLoading} from './loading.tsx';
 import {MediaScreenError} from './screen-error.tsx';
 import {ApiError} from '../../../api/errors.ts';
@@ -119,14 +119,14 @@ export function MetadataMatcher({ api, item, onUpdated,layout='inline',onBusyCha
       })}>按作品信息自动匹配</button>
       <small>使用当前标题搜索，仅唯一较强候选且详情复核一致时保存；已有在线匹配不会覆盖。</small></div>}
     </form>
-    {!loading&&!loadError&&!provider&&<div className="media-match-unavailable" role="status"><Search size={26} strokeWidth={1.4} aria-hidden="true"/><strong>{providers.length?'尚未配置可用来源':'当前作品暂无支持的在线来源。'}</strong><p>{providers.length?'请由服务器管理员设置访问凭证或联系信息，再重新读取。':'可以返回手动编辑，本地资料和播放不受影响。'}</p>{providers.length>0&&<button type="button" disabled={busy} onClick={()=>setLoadRetry(value=>value+1)}>重新检查来源</button>}</div>}
+    {!loading&&!loadError&&!provider&&<div className="media-match-unavailable" role="status"><Icon name="search" size={24} /><strong>{providers.length?'尚未配置可用来源':'当前作品暂无支持的在线来源。'}</strong><p>{providers.length?'请由服务器管理员设置访问凭证或联系信息，再重新读取。':'可以返回手动编辑，本地资料和播放不受影响。'}</p>{providers.length>0&&<button type="button" disabled={busy} onClick={()=>setLoadRetry(value=>value+1)}>重新检查来源</button>}</div>}
     {loading&&<MediaLoading layout="list" label="正在读取来源与候选…" count={2}/>}
     {error && <p className="media-error" role="alert">{error}</p>}
     {busy && <FloatingNotice message="正在处理元数据…" busy />}
     {searched && candidates.length === 0 && <p>未找到候选，请修改关键词后重试。</p>}
     {layout==='page'&&<h2>候选作品</h2>}
     {candidates.map(candidate => <div className="media-row media-match-candidate" key={candidate.candidateId}>
-      {layout==='page'&&<div className="media-match-placeholder" aria-hidden="true"><Search size={21} strokeWidth={1.4}/></div>}
+      {layout==='page'&&<div className="media-match-placeholder" aria-hidden="true"><Icon name="search" size={20} /></div>}
       <div className="media-match-copy"><strong>{candidate.title}</strong><small>{candidate.year || ''} {candidate.artist || ''} · {candidate.provider} / {candidate.externalId}</small>{candidate.evidence&&<small>{({strong:'较强匹配',review:'需要核对',conflict:'存在冲突'})[candidate.evidence.level]}：{candidate.evidence.reasons.join('、')}</small>}{candidate.description && <small className="media-match-excerpt">{candidate.description.length>160?candidate.description.slice(0,160)+'…':candidate.description}</small>}{candidate.description&&candidate.description.length>160&&<details className="media-match-description"><summary>完整简介</summary><p tabIndex={0} aria-label="候选完整简介">{candidate.description}</p></details>}</div>
       <button aria-label={`${layout==='page'?'选择':'预览匹配'}：${candidate.title}`} disabled={busy} onClick={() => setSelected(candidate)}>{layout==='page'?'选择':'预览匹配'}</button>
     </div>)}

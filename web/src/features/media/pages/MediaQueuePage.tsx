@@ -1,8 +1,8 @@
+import { Icon } from '../../../ui/icon.tsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useParams } from 'react-router-dom';
 import { useState } from 'react';
-import { ListMusic } from 'lucide-react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { queueQuery, type Activity } from '../queries/media.queries.ts';
 import { channelLabels } from '../hooks/use-media-channel.ts';
@@ -71,7 +71,7 @@ export function MediaQueuePage() {
       onRemove={id => { const row = entries.find(entry => entry.id === id); if (row) action.mutate({ type: 'remove', row }); }}
       onClear={() => setConfirming(true)}
     />}
-    {!query.isPending && !query.error && entries.length === 0 && <div className="media-personal-empty"><ListMusic size={30} strokeWidth={1.4} aria-hidden="true" /><p>暂无记录。</p></div>}
+    {!query.isPending && !query.error && entries.length === 0 && <div className="media-personal-empty"><Icon name="playlist" size={32} /><p>暂无记录。</p></div>}
     {confirming && <ConfirmSheet danger title="清空队列" text={`移除${channel ? `当前${channel === 'video' ? '影视' : channel === 'music' ? '音乐' : '有声书'}` : '全部'}队列中的 ${entries.length} 条记录？不会删除文件或停止当前播放。`} confirmText="确认清空" cancelText="保留队列" onConfirm={() => { setConfirming(false); action.mutate({ type: 'clear' }); }} onCancel={() => setConfirming(false)} />}
   </section></MediaPageFrame>;
 }

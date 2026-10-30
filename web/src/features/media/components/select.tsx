@@ -1,6 +1,6 @@
+import { Icon } from '../../../ui/icon.tsx';
 import type { SelectHTMLAttributes, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useLayoutEffect, useRef, useState } from 'react';
-import {Check,ChevronDown} from 'lucide-react';
 import '../styles/select.css';
 
 type Choice={value:string;label:string;disabled:boolean;group:string};
@@ -105,11 +105,11 @@ export function MediaSelect({variant='field',controlRef,...props}:Props){
   return <span ref={host} className={'media-select-control '+(className||'')} data-variant={variant} data-open={open||undefined}>
     <select {...attributes} id={fieldId?String(fieldId)+'-native':undefined} className="media-select-native" ref={native} aria-hidden="true" tabIndex={-1} onClick={event=>{event.preventDefault();trigger.current?.focus();show();onClick?.(event);}} onFocus={event=>{trigger.current?.focus();onFocus?.(event);}} onInvalid={event=>{event.preventDefault();setValidation(event.currentTarget.validationMessage||'请选择一项');trigger.current?.focus();onInvalid?.(event);}} onChange={event=>{setValidation('');sync();onChange?.(event);}}>{children}</select>
     <button ref={trigger} id={fieldId} type="button" className="media-select-trigger" role="combobox" aria-label={props['aria-label']||label||undefined} aria-labelledby={props['aria-labelledby']} aria-describedby={[props['aria-describedby'],validation?id+'-error':''].filter(Boolean).join(' ')||undefined} aria-invalid={props['aria-invalid']||(validation?true:undefined)} aria-required={props.required?true:undefined} aria-haspopup="listbox" aria-expanded={open} aria-controls={id} aria-activedescendant={open&&active>=0?id+'-'+active:undefined} disabled={props.disabled} title={props.title} onClick={()=>open?setOpen(false):show()} onKeyDown={keyboard}>
-      <span>{choices.find(choice=>choice.value===selected)?.label||'请选择'}</span><ChevronDown size={16} strokeWidth={1.7} aria-hidden="true"/>
+      <span>{choices.find(choice=>choice.value===selected)?.label||'请选择'}</span><Icon name="chevron-down" size={16} />
     </button>
     {validation&&<span id={id+'-error'} className="media-select-error" role="alert">{validation}</span>}
     {open&&<div ref={panel} id={id} className="media-select-menu" role="listbox" aria-label={props['aria-label']||label||undefined} aria-labelledby={props['aria-labelledby']} {...(supportsPopover?{popover:'manual' as const}:{})} onPointerDown={event=>event.preventDefault()}>
-      {choices.map((choice,index)=><div key={`${choice.group}\u0000${choice.value}\u0000${choice.label}`} id={id+'-'+index} data-index={index} className="media-select-option" role="option" aria-selected={choice.value===selected} aria-disabled={choice.disabled||undefined} data-active={index===active||undefined} onPointerMove={()=>!choice.disabled&&setActive(index)} onClick={event=>{event.preventDefault();event.stopPropagation();choose(index);}}><span>{choice.group&&<small>{choice.group}</small>}{choice.label}</span>{choice.value===selected&&<Check size={16} strokeWidth={1.9} aria-hidden="true"/>}</div>)}
+      {choices.map((choice,index)=><div key={`${choice.group}\u0000${choice.value}\u0000${choice.label}`} id={id+'-'+index} data-index={index} className="media-select-option" role="option" aria-selected={choice.value===selected} aria-disabled={choice.disabled||undefined} data-active={index===active||undefined} onPointerMove={()=>!choice.disabled&&setActive(index)} onClick={event=>{event.preventDefault();event.stopPropagation();choose(index);}}><span>{choice.group&&<small>{choice.group}</small>}{choice.label}</span>{choice.value===selected&&<Icon name="check" size={16} />}</div>)}
     </div>}
   </span>;
 }
