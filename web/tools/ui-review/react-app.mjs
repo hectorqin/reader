@@ -268,6 +268,8 @@ async function runMediaReview(browser, fixture, checks, errors) {
     { id: fixture.reviewMemberId, username: 'review-member', displayName: '林间', role: 'member' },
   ] }) }));
   // 媒体库管理 shows the scan switches, read from the business settings the fixture does not serve.
+  // The fixture serves media only; 扫描与刮削 asks which AI features are switched on.
+  await page.route('**/api/v1/ai/capabilities', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ summary: false, scan: true }) }));
   // 时长统计 has no recorded time in the fixture; serve a month of plausible numbers.
   await page.route(/\/api\/v1\/(media\/)?stats\//, route => {
     const url = new URL(route.request().url());
