@@ -35,27 +35,47 @@ const where = () => root.querySelector('[data-where]')?.getAttribute('data-where
 afterEach(() => { act(() => render(null, root)); localStorage.clear(); updateSettings.mockClear(); });
 
 describe('偏好设置', () => {
-  it('holds every personal preference as a section of one page', () => {
-    Element.prototype.scrollIntoView = vi.fn();
+  const tabs = () => [...root.querySelectorAll<HTMLButtonElement>('[role=tab]')];
+  const selected = () => tabs().filter(tab => tab.getAttribute('aria-selected') === 'true').map(tab => tab.textContent);
+
+  it('shows the four kinds of preference as tabs, one panel at a time', () => {
     paint('/me/settings');
-    expect([...root.querySelectorAll('.settings-section > h2')].map(h => h.textContent)).toEqual(['外观与主题', '书架', '影音浏览', '播放']);
+    expect(tabs().map(tab => tab.textContent)).toEqual(['外观与主题', '书架', '影音浏览', '播放']);
+    expect(selected()).toEqual(['外观与主题']);
+    expect(root.querySelectorAll('[role=tabpanel]')).toHaveLength(1);
+    expect(root.querySelector('.theme-settings')).not.toBeNull();
+    expect(root.querySelector('select[aria-label="封面密度"]')).toBeNull();
     // No save button anywhere: every control applies as it changes.
     expect([...root.querySelectorAll('button')].some(b => /保存/.test(b.textContent ?? ''))).toBe(false);
+  });
+
+  it('switches panels by tab, keeps the choice in the address, and applies changes at once', () => {
+    paint('/me/settings');
+    act(() => { tabs().find(tab => tab.textContent === '书架')!.click(); });
+    expect(where()).toBe('/me/settings?section=shelf');
+    expect(root.querySelector('.theme-settings')).toBeNull();
     act(() => { [...root.querySelectorAll<HTMLButtonElement>('.shelf-settings button')].find(b => b.textContent === '宽松')!.click(); });
     expect(updateSettings).toHaveBeenCalledWith({ shelfDensity: 'comfortable' });
+    expect(root.querySelector('a.settings-link')?.getAttribute('href')).toBe('/me/opds');
+    act(() => { tabs().find(tab => tab.textContent === '影音浏览')!.click(); });
     const density = root.querySelector<HTMLSelectElement>('select[aria-label="封面密度"]')!;
     act(() => { density.value = 'comfortable'; density.dispatchEvent(new Event('change', { bubbles: true })); });
     expect(readMediaPreferences('settings-test').density).toBe('comfortable');
-    expect(root.querySelector('a.settings-link')?.getAttribute('href')).toBe('/me/opds');
+    act(() => { tabs().find(tab => tab.textContent === '外观与主题')!.click(); });
+    expect(where()).toBe('/me/settings');
   });
 
-  it('jumps to a section and keeps it in the address', () => {
-    const scroll = vi.fn();
-    Element.prototype.scrollIntoView = scroll;
-    paint('/me/settings');
-    act(() => { [...root.querySelectorAll<HTMLButtonElement>('.settings-jump button')].find(b => b.textContent === '播放')!.click(); });
-    expect(where()).toBe('/me/settings?section=playback');
-    expect(scroll).toHaveBeenCalled();
+  it('opens on the tab the address names, and moves between tabs with the arrow keys', () => {
+    paint('/me/settings?section=playback');
+    expect(selected()).toEqual(['播放']);
+    const key = (name: string) => act(() => { root.querySelector<HTMLButtonElement>('[role=tab][aria-selected=true]')!.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true })); });
+    key('ArrowRight');
+    expect(selected()).toEqual(['外观与主题']);
+    expect(document.activeElement?.textContent).toBe('外观与主题');
+    key('End');
+    expect(selected()).toEqual(['播放']);
+    key('ArrowLeft');
+    expect(where()).toBe('/me/settings?section=browse');
   });
 
   it.each([
@@ -67,7 +87,6 @@ describe('偏好设置', () => {
     ['/media/music/settings', '/me/settings'],
     ['/media/music/settings/browse', '/me/settings?section=browse'],
   ])('sends the old address %s to %s', (from, to) => {
-    Element.prototype.scrollIntoView = vi.fn();
     paint(from);
     expect(where()).toBe(to);
   });

@@ -11,6 +11,6 @@ export function PlaybackSettings({scope,player,onPlayback}:{scope:string;player:
     <label className="media-settings-check"><span>连续播放</span><input type="checkbox" checked={value.continuous} onChange={event=>change({continuous:event.currentTarget.checked})}/></label>
     <p className="media-theme-note">默认倍速在结束后再次开始播放时使用。连续播放适用于网页播放器，原生播放器使用其自身的队列设置。</p>
     {error&&<p role="alert">{error}</p>}
-    {player.active&&<><h3>当前播放</h3><div className="media-settings-playing"><strong>{player.title}</strong>{onPlayback&&<button onClick={onPlayback}>打开播放器</button>}</div><label className="media-setting-field">当前倍速<MediaSelect aria-label="播放倍速" value={player.playbackRate} onChange={event=>player.speed(Number(event.currentTarget.value))}>{playbackRates.map(rate=><option key={rate} value={rate}>{rate}×</option>)}</MediaSelect></label><h3>睡眠定时</h3><SleepTimerOptions player={player}/></>}
+    {player.active&&<><h2>当前播放</h2><div className="media-settings-playing"><strong>{player.title}</strong>{onPlayback&&<button onClick={onPlayback}>打开播放器</button>}</div><label className="media-setting-field">当前倍速<MediaSelect aria-label="播放倍速" value={player.playbackRate} onChange={event=>player.speed(Number(event.currentTarget.value))}>{playbackRates.map(rate=><option key={rate} value={rate}>{rate}×</option>)}</MediaSelect></label><h2>睡眠定时</h2><SleepTimerOptions player={player}/></>}
   </section>;
 }
