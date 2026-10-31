@@ -256,6 +256,22 @@ CREATE TABLE IF NOT EXISTS reading_progress_history (
 );
 CREATE INDEX IF NOT EXISTS idx_progress_history ON reading_progress_history(user_id, book_id, updated_at);
 
+-- 时长统计: active reading seconds per book per 15-minute UTC slot, one row per
+-- device install (client_id). A device reports its running total for a slot, so the
+-- write is MAX(stored, reported) and a replayed report never counts twice. Quarter
+-- hours because every zone in use is a whole number of them from UTC: a day in the
+-- viewer's zone is an exact sum of slots. A new table, invisible to older builds.
+CREATE TABLE IF NOT EXISTS reading_time (
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  book_id    TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  slot       INTEGER NOT NULL,
+  client_id  TEXT NOT NULL,
+  seconds    INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, book_id, slot, client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_reading_time_user_slot ON reading_time(user_id, slot);
+
 -- Notes, highlights and bookmarks. deleted is a tombstone rather than a hard
 -- delete so that an offline client cannot resurrect a note it removed elsewhere.
 CREATE TABLE IF NOT EXISTS notes (

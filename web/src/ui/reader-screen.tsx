@@ -39,6 +39,7 @@ import { newId } from '../core/id.ts';
 import { htmlToText, isTextOnlyMarkup, textToChapterHtml } from '../formats/segments.ts';
 import { parseLocator } from './locator.ts';
 import { tapActionAt, tapZonePreset } from './tap-zones.ts';
+import { ReadingTimeTracker } from '../features/stats/reading-time.ts';
 
 export interface ReaderScreenOptions {
   /** Where the shared app theme is stored (see the media theme service). */
@@ -178,6 +179,8 @@ export class ReaderScreen {
    */
   private content: BookContent | null = null;
   private book: Book | null = null;
+  /** 时长统计: active reading time for the open book (see ReadingTimeTracker). */
+  private readonly readingTime: ReadingTimeTracker;
   private manifest: Manifest | null = null;
   private chromeVisible = true;
   /**
@@ -229,6 +232,19 @@ export class ReaderScreen {
     // scroll position and the shadow root with it.
     this.stage = document.createElement('div');
     this.stage.className = 'stage';
+    // Any touch, click or wheel on the page is the reader being there; page turns and
+    // scrolling also arrive through onPosition. Going to the background sends what is counted.
+    this.readingTime = new ReadingTimeTracker(options.api, options.platform.kv);
+    const active = (): void => this.readingTime.activity();
+    this.stage.addEventListener('pointerdown', active, { passive: true });
+    this.stage.addEventListener('wheel', active, { passive: true });
+    const visibility = (): void => { if (document.visibilityState === 'hidden') void this.readingTime.flush(); };
+    document.addEventListener('visibilitychange', visibility);
+    this.listeners.push(() => {
+      this.stage.removeEventListener('pointerdown', active);
+      this.stage.removeEventListener('wheel', active);
+      document.removeEventListener('visibilitychange', visibility);
+    });
 
     this.element = document.createElement('div');
     this.element.className = 'reader-screen';
@@ -550,6 +566,7 @@ export class ReaderScreen {
     this.tts?.dispose();
     this.tts = null;
     void this.flushProgress().catch(() => undefined);
+    void this.readingTime.stop();
     this.book = null;
     if (this.progressTimer) clearTimeout(this.progressTimer);
     dismissNotice(this.noticeId);
@@ -1022,6 +1039,7 @@ export class ReaderScreen {
 
   /** Publishes what the chrome needs to know about the book that just loaded. */
   private afterDocLoaded(): void {
+    if (this.book) this.readingTime.start(this.book.id);
     this.patch({
       layout: this.doc?.layout ?? 'reflowable',
       format: this.doc?.format ?? '',
@@ -1404,6 +1422,7 @@ export class ReaderScreen {
 
   private onPosition(position: Position | null): void {
     if (!position || !this.book) return;
+    this.readingTime.activity();
     this.paintNotes();
 
     const title = position.chapterTitle;
@@ -2057,6 +2076,8 @@ export class ReaderScreen {
     // The bar follows the *engine*, not the chrome: a reader listening while
     // walking wants the controls reachable without the header covering the text.
     const active = snapshot.state === 'playing' || snapshot.state === 'paused';
+    // Listening to the book is reading it, screen on or off (时长统计).
+    this.readingTime.setSpeaking(snapshot.state === 'playing');
     // The scrub range is expressed in *sentences*, not in engine fragments, so a
     // chapter with a 2000-character paragraph still shows one tick for it.
     const sentenceIndex = this.speechQueueIndex();

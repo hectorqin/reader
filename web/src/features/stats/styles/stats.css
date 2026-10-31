@@ -1,0 +1,75 @@
+/* 时长统计. Series colours are --color-chart-1..4 (theme-tokens.css), one per kind in
+ * the fixed order of STAT_KINDS; text stays in ink/muted, never a series colour. */
+.stats-page [data-kind='reading'] { --kind: var(--color-chart-1); }
+.stats-page [data-kind='video'] { --kind: var(--color-chart-2); }
+.stats-page [data-kind='audiobook'] { --kind: var(--color-chart-3); }
+.stats-page [data-kind='music'] { --kind: var(--color-chart-4); }
+
+.stats-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin: var(--space-3) 0; }
+.stats-controls .segmented { flex: 0 1 18rem; }
+.stats-nav { display: flex; align-items: center; gap: var(--space-1); }
+.stats-nav strong { min-width: 6.5rem; text-align: center; font-size: var(--text-ui); font-weight: 600; }
+
+/* The legend is also the filter: each kind with its total, pressed when filtered to. */
+.stats-kinds { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--space-1); }
+.stats-page .stats-kinds button {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; min-height: 44px;
+  padding: var(--space-1) var(--space-2); border: 1px solid var(--color-line); border-radius: var(--radius-md);
+  background: var(--color-surface); color: var(--color-ink); font: inherit; text-align: start; cursor: pointer;
+}
+.stats-page .stats-kinds button[aria-pressed='true'] { border-color: var(--color-brand-text); background: var(--color-brand-soft); }
+.stats-kinds span { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-meta); color: var(--color-muted); white-space: nowrap; }
+.stats-kinds strong { font-size: var(--text-ui); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.stats-swatch { width: 10px; height: 10px; border-radius: var(--radius-xs); background: var(--kind); }
+@media (max-width: 520px) {
+  .stats-kinds { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+.stats-note { margin: var(--space-2) 0 0; font-size: var(--text-meta); color: var(--color-muted); }
+.stats-note .button { margin-inline-start: var(--space-2); }
+
+.stats-chart { margin-top: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-line); border-radius: var(--radius-lg); background: var(--color-surface); }
+.stats-readout { display: grid; gap: 2px; min-height: 4.2rem; }
+.stats-readout small, .stats-readout span { font-size: var(--text-meta); color: var(--color-muted); }
+.stats-readout strong { font-size: var(--text-display); font-weight: 700; color: var(--color-ink); }
+
+.stats-bars {
+  display: flex; align-items: stretch; gap: 2px; height: 11rem; margin-top: var(--space-2);
+  border-bottom: 1px solid var(--color-line);
+}
+.stats-page .stats-bar {
+  position: relative; display: flex; flex: 1 1 0; flex-direction: column; justify-content: flex-end; min-width: 0;
+  min-height: 0; padding: 0 0 1.1rem; border: 0; border-radius: 0; background: none; color: var(--color-muted); font: inherit; cursor: pointer;
+}
+.stats-page .stats-bars[data-group='month'] .stats-bar, .stats-page .stats-bars[data-group='year'] .stats-bar { padding-inline: 3px; }
+/* One stack per bar: 2px surface gaps between kinds, 4px rounded data end at the top. */
+.stats-stack { display: flex; flex-direction: column-reverse; gap: 2px; min-height: 0; border-radius: var(--radius-xs) var(--radius-xs) 0 0; overflow: hidden; }
+.stats-segment { display: block; min-height: 2px; flex-basis: 0; background: var(--kind); }
+.stats-bar small { position: absolute; inset: auto 0 0; font-size: var(--text-micro); line-height: 1rem; text-align: center; white-space: nowrap; }
+.stats-bars:has([aria-pressed='true']) .stats-bar:not([aria-pressed='true']) .stats-stack { opacity: 0.4; }
+.stats-bar[aria-pressed='true'] small { color: var(--color-ink); font-weight: 600; }
+@media (hover: hover) and (pointer: fine) {
+  .stats-bar:hover .stats-stack { filter: brightness(1.08); }
+  .stats-bar:hover small { color: var(--color-ink); }
+}
+.stats-bar:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: 2px; border-radius: var(--radius-xs); }
+
+.stats-table { margin-top: var(--space-2); font-size: var(--text-meta); color: var(--color-muted); }
+.stats-table summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.stats-table table, .stats-admin table { width: 100%; border-collapse: collapse; font-size: var(--text-meta); }
+.stats-table th, .stats-table td, .stats-admin th, .stats-admin td { padding: 6px 4px; border-bottom: 1px solid var(--color-line); text-align: end; color: var(--color-ink); font-weight: 400; white-space: nowrap; }
+.stats-table th:first-child, .stats-admin th:first-child { text-align: start; }
+.stats-table thead th, .stats-admin thead th { color: var(--color-muted); }
+
+.stats-works h2, .stats-admin h2 { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-4) 0 var(--space-2); font-size: var(--text-title); font-weight: 600; }
+.stats-page .stats-clear { margin-inline-start: auto; padding: 4px 10px; border: 1px solid var(--color-line); border-radius: var(--radius-pill); background: var(--color-surface); color: var(--color-ink); font: inherit; font-size: var(--text-meta); font-weight: 400; cursor: pointer; }
+.stats-works ol { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.stats-works a { display: flex; align-items: center; gap: var(--space-2); min-height: 52px; padding: var(--space-1) var(--space-2); border-radius: var(--radius-md); color: var(--color-ink); text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { .stats-works a:hover { background: var(--color-surface-2); } }
+.stats-work-icon { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--kind) 16%, transparent); color: var(--color-ink); }
+.stats-work-text { display: grid; min-width: 0; flex: 1; }
+.stats-work-text strong { font-size: var(--text-ui); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-work-text small { font-size: var(--text-meta); color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-work-time { flex: none; font-size: var(--text-ui); font-variant-numeric: tabular-nums; }
+.stats-empty { color: var(--color-muted); font-size: var(--text-ui); }
+.stats-admin-scroll { overflow-x: auto; }
