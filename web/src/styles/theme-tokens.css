@@ -273,6 +273,16 @@
 @media (prefers-color-scheme: dark) { :root:not([data-mode]) { --color-danger: #F4A89D; --color-danger-soft: #F49A8C18; } }
 
 /*
+ * Chart series (时长统计): the categorical slots 1–4 of the dataviz reference palette,
+ * validated for colour-vision separation against these surfaces in each mode. Not
+ * part of a theme — a kind keeps its colour on every theme — only of light or dark.
+ * Order is fixed: 阅读, 观影, 有声书, 音乐.
+ */
+:root, [data-mode="light"] { --color-chart-1: #2A78D6; --color-chart-2: #EB6834; --color-chart-3: #1BAF7A; --color-chart-4: #EDA100; }
+[data-mode="dark"] { --color-chart-1: #3987E5; --color-chart-2: #D95926; --color-chart-3: #199E70; --color-chart-4: #C98500; }
+@media (prefers-color-scheme: dark) { :root:not([data-mode]) { --color-chart-1: #3987E5; --color-chart-2: #D95926; --color-chart-3: #199E70; --color-chart-4: #C98500; } }
+
+/*
  * Older token names, re-declared wherever a theme is (so a container with its own
  * theme re-resolves them): the reading screens use --reader-*. Brand is split per
  * the spec: --reader-accent is the brand *text* colour (links, selected icons, focus),

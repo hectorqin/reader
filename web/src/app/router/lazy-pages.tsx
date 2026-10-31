@@ -22,6 +22,7 @@ const tasks = () => import('../../features/media/pages/MediaTasksPage.tsx');
 const itemManagement = () => import('../../features/media/pages/MediaItemManagementPages.tsx');
 const sourceEditor = () => import('../../features/sources/pages/SourceEditorPage.tsx');
 const sourceCredentials = () => import('../../features/sources/pages/SourceCredentialsPage.tsx');
+const stats = () => import('../../features/stats/pages/StatsPage.tsx');
 const sourceExtension = () => import('../../features/sources/pages/SourceExtensionPage.tsx');
 
 const Reader = deferred(reader, 'ReaderPage');
@@ -38,6 +39,7 @@ const Structure = deferred(itemManagement, 'MediaStructurePage');
 const SourceEditor = deferred(sourceEditor, 'SourceEditorPage');
 const SourceCredentials = deferred(sourceCredentials, 'SourceCredentialsPage');
 const SourceExtension = deferred(sourceExtension, 'SourceExtensionPage');
+const Stats = deferred(stats, 'StatsPage');
 
 export function ReaderPage() { return <Suspense fallback={fallback}><Reader /></Suspense>; }
 export function MediaLibrariesPage() { return <Suspense fallback={fallback}><Libraries /></Suspense>; }
@@ -52,4 +54,5 @@ export function MediaEditionPage() { return <Suspense fallback={fallback}><Editi
 export function MediaStructurePage() { return <Suspense fallback={fallback}><Structure /></Suspense>; }
 export function SourceEditorPage() { return <Suspense fallback={fallback}><SourceEditor /></Suspense>; }
 export function SourceCredentialsPage() { return <Suspense fallback={fallback}><SourceCredentials /></Suspense>; }
+export function StatsPage() { return <Suspense fallback={fallback}><Stats /></Suspense>; }
 export function SourceExtensionPage() { return <Suspense fallback={fallback}><SourceExtension /></Suspense>; }

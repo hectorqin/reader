@@ -11,6 +11,7 @@ import type { CatalogQuery } from '../../media/catalog-query.ts';
 import { executeCatalogQuery } from '../../media/catalog-query.ts';
 import type { MediaItemKind, MediaBrowseKind, MediaSort } from '../../media/catalog.ts';
 import { MediaPlayback } from '../../media/playback.ts';
+import { MediaTimeStats } from '../../media/time-stats.ts';
 import { MediaUserState } from '../../media/user-state.ts';
 import { MediaScraping } from '../../media/scraping.ts';
 import { MediaHierarchy } from '../../media/hierarchy.ts';
@@ -149,6 +150,10 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
     preHandler:auth,schema:{querystring:{...pagination,required:['query'],additionalProperties:false,properties:{...pagination.properties,query:{type:'string',minLength:1,maxLength:200,pattern:'\\S'},kind:{type:'string',enum:['movie','series','season','episode','artist','album','track','audiobook']},channel:{type:'string',enum:['video','music','audiobook']}}}},
   },async (request,reply)=>queryCatalog(request,reply,{method:'search',args:[currentUser(request),request.query.query,request.query]}));
   app.get<{Querystring:{channel?:MediaLibraryKind;offset?:number;limit?:number}}>('/api/v1/media/favorites',{preHandler:auth,schema:{querystring:{type:'object',properties:{channel:{type:'string',enum:['video','music','audiobook']},offset:{type:'integer',minimum:0,default:0},limit:{type:'integer',minimum:1,maximum:500,default:500}}}}},async (request,reply)=>queryCatalog(request,reply,{method:'favorites',args:[currentUser(request),request.query]}));
+  // 时长统计, the media half: derived from progress saves (see media/time-stats.ts).
+  const timeStats=new MediaTimeStats(database,libraries);
+  app.get('/api/v1/media/stats/time',{preHandler:auth},async request=>timeStats.summary(currentUser(request),request.query as Record<string,string>));
+  app.get('/api/v1/media/stats/users',{preHandler:[auth,async request=>requireAdmin(request)]},async request=>({users:timeStats.users(request.query as Record<string,string>)}));
   app.get<{Querystring:{channel?:MediaLibraryKind;offset?:number;limit?:number}}>('/api/v1/media/history',{preHandler:auth,schema:{querystring:{type:'object',properties:{channel:{type:'string',enum:['video','music','audiobook']},offset:{type:'integer',minimum:0,default:0},limit:{type:'integer',minimum:1,maximum:500,default:100}}}}},async (request,reply)=>queryCatalog(request,reply,{method:'history',args:[currentUser(request),request.query]}));
   app.get('/api/v1/media/queue',{preHandler:auth},async request=>userState.queue(currentUser(request)));
   app.post<{Body:{partIds:string[]}}>('/api/v1/media/queue/preview',{preHandler:auth,schema:{body:{type:'object',additionalProperties:false,required:['partIds'],properties:{partIds:{type:'array',minItems:1,maxItems:2000,items:{type:'string',minLength:1,maxLength:100}}}}}},async request=>userState.previewQueue(currentUser(request),request.body.partIds));

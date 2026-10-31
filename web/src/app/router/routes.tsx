@@ -21,7 +21,7 @@ import {
   ReaderPage,
   MediaLibrariesPage, MediaLibraryCreatePage, MediaLibraryEditPage, MediaLibraryPermissionsPage, MediaTasksPage,
   MediaMetadataEditPage, MediaMatchPage, MediaChaptersPage, MediaEditionPage, MediaStructurePage,
-  SourceEditorPage, SourceCredentialsPage, SourceExtensionPage,
+  SourceEditorPage, SourceCredentialsPage, SourceExtensionPage, StatsPage,
 } from './lazy-pages.tsx';
 import { SourceCatalogPage } from '../../features/sources/pages/SourceCatalogPage.tsx';
 
@@ -58,6 +58,8 @@ export const routes = [{
     // so back from any of them returns to 我的.
     { path: 'me', element: <MediaLayout />, children: [
       { index: true, element: <MinePage /> },
+      // Before :panel, which would otherwise take it as a settings panel name.
+      { path: 'stats', element: <StatsPage /> },
       { path: ':panel', element: <MediaSettingsPage /> },
     ] },
     { path: 'media', element: <MediaLayout />, children: [

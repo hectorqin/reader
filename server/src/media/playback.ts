@@ -7,6 +7,7 @@ import { MediaLibraries } from './libraries.ts';
 import { DatabaseMediaAccounts } from './accounts.ts';
 import type { MediaAccounts } from './accounts.ts';
 import type { ByteRange } from './storage/types.ts';
+import { ensureWatchTimeTable, recordWatchTime } from './time-stats.ts';
 
 const CONTENT_TYPES:Record<string,string>={'.mp4':'video/mp4','.m4v':'video/mp4','.webm':'video/webm','.mkv':'video/x-matroska','.mov':'video/quicktime','.avi':'video/x-msvideo','.ts':'video/mp2t','.m2ts':'video/mp2t','.mpg':'video/mpeg','.mpeg':'video/mpeg','.mp3':'audio/mpeg','.m4a':'audio/mp4','.m4b':'audio/mp4','.aac':'audio/aac','.flac':'audio/flac','.ogg':'audio/ogg','.opus':'audio/ogg','.wav':'audio/wav','.aiff':'audio/aiff','.wma':'audio/x-ms-wma'};
 interface Part {id:string;item_id:string;edition_id:string;asset_id:string;start_seconds:number;end_seconds:number|null;ref:string;library_id:string;available:number;size:number;title:string}
@@ -41,6 +42,7 @@ export class MediaPlayback {
         session_id TEXT NOT NULL,updated_at INTEGER NOT NULL,PRIMARY KEY(user_id,part_id))`);
       db.run(`CREATE INDEX IF NOT EXISTS media_session_expiry ON media_playback_sessions(expires_at)`);
       db.run('CREATE INDEX IF NOT EXISTS media_progress_recent ON media_progress(user_id,updated_at DESC,part_id)');
+      ensureWatchTimeTable(db);
       db.run(`CREATE TABLE IF NOT EXISTS media_background_sessions(session_id TEXT PRIMARY KEY REFERENCES media_playback_sessions(id) ON DELETE CASCADE,grant_id TEXT NOT NULL,expires_at INTEGER NOT NULL)`);
     });
   }
@@ -100,7 +102,9 @@ export class MediaPlayback {
         input.position===current.position&&(input.completed?1:0)===current.completed)return;
       if(input.sequence<=session.sequence)throw conflict('out of order progress update','PLAYBACK_SEQUENCE');
       if(input.revision!==current.revision)throw conflict('progress version changed','PLAYBACK_REVISION');
-      this.db.run('UPDATE media_progress SET position=?,completed=?,revision=revision+1,updated_at=? WHERE user_id=? AND part_id=?',input.position,input.completed?1:0,Date.now(),actor.id,part.id);
+      const now=Date.now();
+      recordWatchTime(this.db,actor.id,part.id,current,input.position,now);
+      this.db.run('UPDATE media_progress SET position=?,completed=?,revision=revision+1,updated_at=? WHERE user_id=? AND part_id=?',input.position,input.completed?1:0,now,actor.id,part.id);
       this.db.run('UPDATE media_playback_sessions SET sequence=? WHERE id=?',input.sequence,id);
     });
     return this.progress(actor,part.id);

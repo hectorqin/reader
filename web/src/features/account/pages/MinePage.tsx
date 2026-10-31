@@ -76,6 +76,7 @@ export function MinePage() {
           <Group title="内容" order={1}>
             <Row icon="library" label="书库" to="/library" />
             <Row icon="feed" label="书源" to="/sources" />
+            <Row icon="clock" label="时长统计" value="阅读、观影、听书" to="/me/stats" />
             {admin && <Row icon="video" label="媒体库" to="/media/video/settings/libraries" state={{ returnTo: '/me' }} />}
           </Group>
           {admin && <Group title="管理" order={3}>

@@ -1,4 +1,4 @@
-import type { ReaderApi } from '../../../api/client.ts';
+import { statsParams, type ReaderApi, type TimeStatsQuery } from '../../../api/client.ts';
 
 export type MediaChannel = 'video' | 'music' | 'audiobook';
 export interface Library {id:string;name:string;kind:MediaChannel;access:'all'|'restricted';storage?:'local'|'openlist'}
@@ -34,6 +34,9 @@ export class MediaApi {
   request<T>(path:string,method='GET',body?:unknown,signal?:AbortSignal):Promise<T> {
     return this.reader.mediaRequest<T>('/api/v1/media/'+path,method,body,signal?{signal}:{});
   }
+  /** 时长统计, media half: seconds per period and channel, and per work. */
+  timeStats(query:TimeStatsQuery,signal?:AbortSignal){return this.request<MediaTimeStats>(`stats/time?${statsParams(query)}`,'GET',undefined,signal);}
+  async statsUsers(query:TimeStatsQuery,signal?:AbortSignal){return (await this.request<{users:Array<{userId:string;channel:MediaChannel;seconds:number}>}>(`stats/users?${statsParams(query)}`,'GET',undefined,signal)).users;}
   libraries(signal?:AbortSignal){return this.request<{items:Library[]}>('libraries','GET',undefined,signal);}
   users(){return this.reader.adminUsers();}
   search(query:string,channel:MediaChannel|'all',offset=0,signal?:AbortSignal,kind?:string){
@@ -76,4 +79,9 @@ export class MediaApi {
     if(!session.streamUrl.startsWith('/api/v1/media/streams/'))throw new Error('无效的播放地址');
     return this.reader.baseUrl.replace(/\/$/,'')+session.streamUrl;
   }
+}
+
+export interface MediaTimeStats {
+  series:Array<{key:string;channel:MediaChannel;seconds:number}>;
+  works:Array<{id:string;channel:MediaChannel;kind:string;title:string;seconds:number;lastAt:number}>;
 }

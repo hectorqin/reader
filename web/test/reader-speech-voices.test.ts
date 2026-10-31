@@ -5,7 +5,7 @@ import { ReaderScreen } from '../src/ui/reader-screen.tsx';
 it('publishes asynchronous voice changes without reopening the existing settings panel', () => {
   const context = {
     voices: [], lastSpeechQueue: [], chrome: { tts: {} }, speechQueueIndex: () => 0,
-    patch: vi.fn(), setStatus: vi.fn(), view: null,
+    patch: vi.fn(), setStatus: vi.fn(), view: null, readingTime: { setSpeaking: vi.fn() },
   };
   const voice = { id: 'zh', name: '中文', lang: 'zh-CN', default: true };
   Reflect.apply(ReaderScreen.prototype['renderSpeechState'], context, [{

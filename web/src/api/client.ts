@@ -696,6 +696,22 @@ export class ReaderApi {
     return result.history;
   }
 
+  // ---- 时长统计 ----
+
+  /** Active reading seconds per book per 15-minute slot; the server keeps the larger total per slot. */
+  async recordReadingTime(clientId: string, entries: ReadingTimeEntry[], options: RequestOptions = {}): Promise<{ accepted: number; rejected: number }> {
+    return this.call('/api/v1/stats/reading-time', 'POST', { clientId, entries }, options);
+  }
+
+  async readingStats(query: TimeStatsQuery, options: RequestOptions = {}): Promise<ReadingStats> {
+    return this.get<ReadingStats>(`/api/v1/stats/reading?${statsParams(query)}`, options);
+  }
+
+  /** Administrators: every account's reading total in the range. */
+  async readingStatsUsers(query: TimeStatsQuery, options: RequestOptions = {}): Promise<UserReadingTotal[]> {
+    return (await this.get<{ users: UserReadingTotal[] }>(`/api/v1/stats/reading/users?${statsParams(query)}`, options)).users;
+  }
+
   async putProgress(progress: ProgressInput, options: RequestOptions = {}): Promise<Progress | null> {
     const result = await this.call<{ progress: Progress | null }>(
       `/api/v1/sync/progress/${encodeURIComponent(progress.bookId)}`,
@@ -919,3 +935,17 @@ export class ReaderApi {
 }
 
 export { ApiError, errorForStatus, parseErrorBody };
+
+export interface ReadingTimeEntry { bookId: string; slot: number; seconds: number }
+export type TimeStatsGroup = 'day' | 'month' | 'year';
+export interface TimeStatsQuery { from: number; to: number; tz: number; group: TimeStatsGroup }
+export interface ReadingStats {
+  series: Array<{ key: string; seconds: number }>;
+  works: Array<{ id: string; title: string; author: string; coverUrl: string | null; seconds: number; lastAt: number }>;
+  total: number;
+}
+export interface UserReadingTotal { userId: string; username: string; displayName: string; seconds: number }
+
+export function statsParams(query: TimeStatsQuery): string {
+  return new URLSearchParams({ from: String(query.from), to: String(query.to), tz: String(query.tz), group: query.group }).toString();
+}
