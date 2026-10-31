@@ -294,6 +294,35 @@ test('a stale offline device cannot roll back newer progress', async () => {
   assert.equal((view.json() as { progress: { locator: string } }).progress.locator, 'fresh');
 });
 
+test('progress history keeps the places a write replaced, one entry per stretch of reading', async () => {
+  const owner = await login('owner');
+  const member = await login('family');
+  const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;
+  const push = (items: Array<{ locator: string; percentage: number; chapterTitle: string; device: string; updatedAt: number }>, token = owner.token) =>
+    app.inject({ method: 'POST', url: '/api/v1/sync', headers: auth(token), payload: { progress: items.map(item => ({ bookId: book.id, ...item })) } });
+  const minute = 60_000, base = 1_000_000_000_000;
+  // Reading on through chapter 3 on the phone: one entry that moves forward.
+  await push([{ locator: 'c3-a', percentage: 0.30, chapterTitle: '第三章', device: 'phone', updatedAt: base }]);
+  await push([{ locator: 'c3-b', percentage: 0.31, chapterTitle: '第三章', device: 'phone', updatedAt: base + minute }]);
+  // A mistapped 目录 entry jumps to chapter 40: a new entry, and chapter 3 stays restorable.
+  await push([{ locator: 'c40', percentage: 0.90, chapterTitle: '第四十章', device: 'phone', updatedAt: base + 2 * minute }]);
+  // A stale tablet loses the merge, but where it was is history too.
+  await push([{ locator: 'c2', percentage: 0.20, chapterTitle: '第二章', device: 'tablet', updatedAt: base - minute }]);
+  const read = async (token = owner.token) => (await app.inject({ method: 'GET', url: `/api/v1/sync/progress/${book.id}/history`, headers: auth(token) })).json() as { history: Array<{ locator: string; device: string }> };
+  // Newest first; earlier tests in this file left older entries for the same book behind.
+  assert.deepEqual((await read()).history.slice(0, 3).map(item => [item.locator, item.device]), [['c40', 'phone'], ['c3-b', 'phone'], ['c2', 'tablet']]);
+  const current = await app.inject({ method: 'GET', url: `/api/v1/sync/progress/${book.id}`, headers: auth(owner.token) });
+  assert.equal((current.json() as { progress: { locator: string } }).progress.locator, 'c40');
+  // Another account sees none of it (only its own places).
+  assert.ok((await read(member.token)).history.every(item => !['c40', 'c3-b', 'c2'].includes(item.locator)));
+  // Kept bounded: the newest 50.
+  await push(Array.from({ length: 60 }, (_, index) => ({ locator: `x${index}`, percentage: index / 60, chapterTitle: `第${index}章`, device: 'phone', updatedAt: base + (10 + index) * minute })));
+  const all = await app.inject({ method: 'GET', url: `/api/v1/sync/progress/${book.id}/history?limit=100`, headers: auth(owner.token) });
+  const entries = (all.json() as { history: Array<{ locator: string }> }).history;
+  assert.equal(entries.length, 50);
+  assert.equal(entries[0]!.locator, 'x59');
+});
+
 test('deleting a note leaves a tombstone that a stale device cannot undo', async () => {
   const owner = await login('owner');
   const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;

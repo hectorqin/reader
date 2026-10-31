@@ -55,6 +55,13 @@ export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void 
     return { progress: ctx.sync.progressFor(user.id, bookId) };
   });
 
+  app.get('/api/v1/sync/progress/:bookId/history', { preHandler: auth }, async (request) => {
+    const user = currentUser(request);
+    const { bookId } = request.params as { bookId: string };
+    const limit = Number((request.query as { limit?: string }).limit) || 30;
+    return { history: ctx.sync.progressHistory(user.id, bookId, limit) };
+  });
+
   app.put('/api/v1/sync/progress/:bookId', { preHandler: auth }, async (request) => {
     const user = currentUser(request);
     const { bookId } = request.params as { bookId: string };

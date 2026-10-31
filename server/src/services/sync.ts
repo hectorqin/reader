@@ -11,6 +11,11 @@ import type { BookDto, ShelfService } from './shelf.ts';
  * offline for a week can push its local changes and receive only what changed
  * on the server since `since`.
  */
+/** Progress history: entries kept per book, and what still counts as reading on in one place. */
+const HISTORY_KEEP = 50;
+const HISTORY_SESSION_MS = 30 * 60 * 1000;
+const HISTORY_JUMP = 0.05;
+
 export interface ProgressRecord {
   bookId: string;
   /** Opaque locator: EPUB CFI, pagination index or PDF page. Client-defined. */
@@ -123,6 +128,61 @@ export class SyncService {
       userId, record.bookId, record.locator ?? '', percentage,
       record.chapterTitle ?? '', record.device ?? '', record.updatedAt,
     );
+    this.recordHistory(userId, record, percentage);
+  }
+
+  /**
+   * Adds a progress write to the book's history (schema: reading_progress_history).
+   *
+   * Reading on through one chapter on one device is one entry that moves forward,
+   * not a row per page: the latest entry of the same device is updated when the
+   * write is newer, in the same chapter, within 5% of it and within half an hour.
+   * Anything else — another chapter, a jump, another device, a write that arrives
+   * out of order — is a new entry, because those are exactly the places a reader may
+   * want back. The newest 50 per book are kept.
+   */
+  private recordHistory(userId: string, record: ProgressRecord, percentage: number): void {
+    const device = record.device ?? '', chapter = record.chapterTitle ?? '';
+    const latest = this.db.get<{ id: number; chapter_title: string; percentage: number; updated_at: number }>(
+      `SELECT id, chapter_title, percentage, updated_at FROM reading_progress_history
+       WHERE user_id = ? AND book_id = ? AND device = ? ORDER BY updated_at DESC, id DESC LIMIT 1`,
+      userId, record.bookId, device,
+    );
+    const continues = latest
+      && record.updatedAt >= latest.updated_at
+      && record.updatedAt - latest.updated_at <= HISTORY_SESSION_MS
+      && latest.chapter_title === chapter
+      && Math.abs(latest.percentage - percentage) < HISTORY_JUMP;
+    if (continues) {
+      this.db.run(
+        'UPDATE reading_progress_history SET locator = ?, percentage = ?, updated_at = ? WHERE id = ?',
+        record.locator ?? '', percentage, record.updatedAt, latest.id,
+      );
+      return;
+    }
+    this.db.run(
+      `INSERT INTO reading_progress_history (user_id, book_id, locator, percentage, chapter_title, device, updated_at)
+       VALUES (?,?,?,?,?,?,?)`,
+      userId, record.bookId, record.locator ?? '', percentage, chapter, device, record.updatedAt,
+    );
+    this.db.run(
+      `DELETE FROM reading_progress_history WHERE user_id = ? AND book_id = ? AND id NOT IN (
+         SELECT id FROM reading_progress_history WHERE user_id = ? AND book_id = ?
+         ORDER BY updated_at DESC, id DESC LIMIT ?)`,
+      userId, record.bookId, userId, record.bookId, HISTORY_KEEP,
+    );
+  }
+
+  /** The book's reading history, newest first. */
+  progressHistory(userId: string, bookId: string, limit = 30): ProgressRecord[] {
+    return this.db.all<{ locator: string; percentage: number; chapter_title: string; device: string; updated_at: number }>(
+      `SELECT locator, percentage, chapter_title, device, updated_at FROM reading_progress_history
+       WHERE user_id = ? AND book_id = ? ORDER BY updated_at DESC, id DESC LIMIT ?`,
+      userId, bookId, Math.max(1, Math.min(HISTORY_KEEP, limit)),
+    ).map((row) => ({
+      bookId, locator: row.locator, percentage: row.percentage,
+      chapterTitle: row.chapter_title, device: row.device, updatedAt: row.updated_at,
+    }));
   }
 
   private upsertNote(userId: string, record: NoteRecord): void {
