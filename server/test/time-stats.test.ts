@@ -6,7 +6,15 @@ import { MediaScanner } from '../src/media/scanner.ts';
 import { MediaPlayback } from '../src/media/playback.ts';
 import { MediaTimeStats } from '../src/media/time-stats.ts';
 import { SLOT_MS, TimeStatsService } from '../src/services/time-stats.ts';
-import type { ShelfService } from '../src/services/shelf.ts';
+import { ShelfService } from '../src/services/shelf.ts';
+import { UserService } from '../src/services/users.ts';
+import { buildApp } from '../src/http/app.ts';
+import { signAccessToken } from '../src/services/tokens.ts';
+import type { AppConfig } from '../src/config/index.ts';
+import type { AppContext } from '../src/http/context.ts';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 const DAY = 24 * 60 * 60 * 1000;
 // 2026-08-31T16:00Z is 2026-09-01 00:00 in UTC+8.
@@ -109,4 +117,29 @@ test('watch time is derived from progress saves: the smaller of clock and positi
     db.run("UPDATE media_libraries SET access='restricted' WHERE id='tv'");
     assert.deepEqual(stats.summary(actor, { from: today - DAY, to: today + DAY, tz: 0, group: 'day' }).series, []);
   } finally { await scanner.close(); db.close(); }
+});
+
+test('the HTTP routes work when services are attached after the app is built, as main.ts does', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'time-stats-')), db = new Db(':memory:');
+  const config: AppConfig = { booksDir: root, dataDir: root, host: '127.0.0.1', port: 0, jwtSecret: 'time-stats-test-secret-16chars', accessTokenTtl: 604800, refreshTokenTtl: 31536000, scanInterval: 1800, watchInterval: 60, logLevel: 'silent', publicUrl: '', corsOrigins: [], webDir: join(root, 'web') };
+  // The placeholder context main.ts builds the app with: shelf and users come later.
+  const ctx = { config, db, shelf: undefined, users: undefined } as unknown as AppContext;
+  const app = buildApp(ctx);
+  ctx.users = new UserService(db, config);
+  ctx.shelf = new ShelfService(db);
+  await app.ready();
+  t.after(async () => { await app.close(); db.close(); await rm(root, { recursive: true, force: true }); });
+  db.run("INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES('alice','alice','x','admin',0,0)");
+  db.run("INSERT INTO books(id,content_hash,title,author,format,created_at,updated_at) VALUES('b1','h1','一','甲','epub',0,0)");
+  const headers = { authorization: 'Bearer ' + signAccessToken(config, { id: 'alice', role: 'admin' }).token };
+  const posted = await app.inject({ method: 'POST', url: '/api/v1/stats/reading-time', headers, payload: { clientId: 'device-aaaa', entries: [{ bookId: 'b1', slot: MIDNIGHT_SG, seconds: 120 }] } });
+  assert.equal(posted.statusCode, 200, posted.body);
+  const query = `from=${MIDNIGHT_SG - DAY}&to=${MIDNIGHT_SG + DAY}&tz=480&group=year`;
+  const summary = await app.inject({ url: `/api/v1/stats/reading?${query}`, headers });
+  assert.equal(summary.statusCode, 200, summary.body);
+  assert.deepEqual(summary.json().series, [{ key: '2026', seconds: 120 }]);
+  assert.equal(summary.json().works[0].title, '一');
+  const users = await app.inject({ url: `/api/v1/stats/reading/users?${query}`, headers });
+  assert.equal(users.statusCode, 200, users.body);
+  assert.equal((await app.inject({ url: `/api/v1/stats/reading?from=5&to=1&tz=0&group=day`, headers })).statusCode, 400);
 });
