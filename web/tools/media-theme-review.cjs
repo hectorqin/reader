@@ -12,16 +12,16 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
   const palette=selector=>page.locator(selector).first().evaluate(node=>({bg:getComputedStyle(node).getPropertyValue('--media-background').trim(),ink:getComputedStyle(node).getPropertyValue('--text').trim(),scheme:getComputedStyle(node).colorScheme}));
   // One app theme (暖陶/雾蓝/青绿 × 浅色/深色, or 跟随系统) now drives the reading side and media alike;
   // it is set in 我的 › 偏好设置 › 外观与主题.
-  const settings=async()=>{await go('#/me/settings?section=theme');await page.getByRole('heading',{name:'外观与主题',exact:true}).waitFor();};
+  const settings=async()=>{await go('#/me/settings?section=theme');await page.getByRole('tab',{name:'外观与主题',exact:true,selected:true}).waitFor();};
   const themeCard=name=>page.getByRole('group',{name:'应用主题',exact:true}).getByRole('button',{name,exact:true});
   const pressed=async locator=>(await locator.getAttribute('aria-pressed'))==='true';
   const follow=page.getByRole('button',{name:'跟随系统',exact:true});
   const html=()=>page.evaluate(()=>({theme:document.documentElement.dataset.theme,mode:document.documentElement.dataset.mode}));
   await page.goto(baseUrl+'/#/me');await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();
-  await page.getByRole('link',{name:/偏好设置/}).click();await page.getByRole('heading',{name:'外观与主题',exact:true}).waitFor();assert.match(page.url(),/#\/me\/settings/);
+  await page.getByRole('link',{name:/偏好设置/}).click();await page.getByRole('tab',{name:'外观与主题',exact:true,selected:true}).waitFor();assert.match(page.url(),/#\/me\/settings/);
   await shot('themes-mobile');await page.getByRole('link',{name:'返回我的',exact:true}).click();await page.getByRole('heading',{name:'我的',exact:true}).waitFor();
   // Old panel links still land on the theme section.
-  await go('#/me/theme');await page.waitForFunction(()=>/#\/me\/settings\?section=theme/.test(location.hash));await page.getByRole('heading',{name:'外观与主题',exact:true}).waitFor();
+  await go('#/me/theme');await page.waitForFunction(()=>/#\/me\/settings\?section=theme/.test(location.hash));await page.getByRole('tab',{name:'外观与主题',exact:true,selected:true}).waitFor();
   if(await pressed(follow))await follow.click();assert.equal(await pressed(follow),false);
   const backgrounds=new Set();
   for(const [id,name] of [['warm','暖陶'],['blue','雾蓝'],['green','青绿']])for(const [mode,modeName] of [['light','浅色'],['dark','深色']]){
@@ -33,7 +33,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
   }
   assert.equal(backgrounds.size,6,'every theme/mode pair has its own background');
   await settings();await themeCard('青绿').click();await page.getByRole('group',{name:'明暗',exact:true}).getByRole('button',{name:'深色',exact:true}).click();
-  await page.reload();await page.getByRole('heading',{name:'外观与主题',exact:true}).waitFor();assert.equal(await pressed(themeCard('青绿')),true);assert.deepEqual(await html(),{theme:'green',mode:'dark'});
+  await page.reload();await page.getByRole('tab',{name:'外观与主题',exact:true,selected:true}).waitFor();assert.equal(await pressed(themeCard('青绿')),true);assert.deepEqual(await html(),{theme:'green',mode:'dark'});
   await shot('themes-dark-mobile');await page.setViewportSize({width:1120,height:900});await shot('themes-desktop');await page.setViewportSize({width:427,height:900});
   const album=sampleItems.find(item=>item.kind==='album'&&item.title==='静谧时刻'),movie=sampleItems.find(item=>item.kind==='movie'&&item.title==='海岸线');assert.ok(album&&movie,'Use the real acceptance sample pack');
   await go('#/media/music/items/'+album.id);await page.getByRole('button',{name:'播放全部',exact:true}).click();await page.waitForFunction(()=>{const audio=document.querySelector('.media-player audio');return audio?.readyState>=2&&!audio.paused;});

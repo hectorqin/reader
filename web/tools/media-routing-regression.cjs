@@ -48,7 +48,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
   await page.getByRole('button',{name:'返回作品详情',exact:true}).click();await page.getByRole('heading',{name:'午后散步',exact:true}).waitFor();assert.match(page.url(),/items\/route-album$/);
   // 影音设置 is gone: old links land on the one preferences page in 我的.
   await page.evaluate(()=>location.hash='#/media/music/settings');await page.waitForFunction(()=>location.hash.startsWith('#/me/settings'));
-  await page.getByRole('heading',{name:'影音浏览',exact:true}).waitFor();
+  await page.getByRole('tab',{name:'外观与主题',exact:true,selected:true}).waitFor();
   await page.evaluate(()=>location.hash='#/media/music/settings/browse');await page.waitForFunction(()=>location.hash.startsWith('#/me/settings'));
   // Library administration keeps its own routes.
   await page.evaluate(()=>location.hash='#/media/music/settings/libraries');await page.getByRole('heading',{name:'媒体库管理',exact:true}).waitFor();const managerUrl=page.url();

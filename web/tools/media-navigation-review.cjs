@@ -51,12 +51,14 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
 
   // 影音设置 is gone: old addresses land on the one 偏好设置 page in 我的, which applies instantly.
   await page.evaluate(()=>location.hash='#/media/video/settings');await hash('#/me/settings');await heading('偏好设置');
-  for(const section of ['外观与主题','书架','影音浏览','播放'])await page.getByRole('heading',{name:section,exact:true}).waitFor();
+  // The four kinds are tabs of one page; 外观与主题 is selected by default.
+  for(const section of ['外观与主题','书架','影音浏览','播放'])await page.getByRole('tab',{name:section,exact:true}).waitFor();
+  await page.getByRole('tab',{name:'外观与主题',exact:true,selected:true}).waitFor();
   await capture('settings',{top:false});
   await page.evaluate(()=>location.hash='#/media/video/settings/browse');await hash('#/me/settings?section=browse');await heading('偏好设置');
-  await page.reload();await heading('影音浏览');assert.equal(await route(),'#/me/settings?section=browse');
+  await page.reload();await page.getByRole('tab',{name:'影音浏览',exact:true,selected:true}).waitFor();assert.equal(await route(),'#/me/settings?section=browse');
   await page.getByRole('combobox',{name:'封面密度',exact:true}).click();await page.getByRole('listbox',{name:'封面密度',exact:true}).getByRole('option',{name:'宽松（手机两列）',exact:true}).click();
-  await page.reload();await heading('影音浏览');assert.match(await page.getByRole('combobox',{name:'封面密度',exact:true}).innerText(),/宽松/,'browse preference applies without a save step');
+  await page.reload();await page.getByRole('tab',{name:'影音浏览',exact:true,selected:true}).waitFor();assert.match(await page.getByRole('combobox',{name:'封面密度',exact:true}).innerText(),/宽松/,'browse preference applies without a save step');
   await capture('preferences',{top:false});
   await page.getByRole('link',{name:'返回我的',exact:true}).click();await hash('#/me');
   await page.getByRole('link',{name:/^偏好设置/}).click();await hash('#/me/settings');await page.goBack();await hash('#/me');await page.goForward();await heading('偏好设置');
@@ -102,7 +104,7 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),{jo
   const source=await page.locator('.media-player audio').evaluate(a=>a.currentSrc);
   await page.getByRole('link',{name:'返回频道',exact:true}).click();await hash('#/media/music/albums');
   await segments.getByRole('link',{name:'有声书',exact:true}).click();await hash('#/media/audiobook/books');
-  await nav.getByRole('link',{name:'我的',exact:true}).click();await hash('#/me');await page.getByRole('link',{name:/^偏好设置/}).click();await heading('播放');
+  await nav.getByRole('link',{name:'我的',exact:true}).click();await hash('#/me');await page.getByRole('link',{name:/^偏好设置/}).click();await page.getByRole('tab',{name:'播放',exact:true}).click();await page.getByRole('tab',{name:'播放',exact:true,selected:true}).waitFor();
   await page.getByRole('heading',{name:'当前播放',exact:true}).waitFor();
   assert.equal(await page.locator('.media-player audio').evaluate(a=>a.currentSrc),source);assert.equal(await page.locator('.media-player audio').evaluate(a=>a.paused),false);assert.equal(starts,1);
   await page.getByRole('button',{name:'打开播放器',exact:true}).click();await page.waitForFunction(()=>/^#\/media\/[^/]+\/player/.test(location.hash));await page.locator('.media-audio-heading').waitFor();
