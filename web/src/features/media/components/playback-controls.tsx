@@ -4,7 +4,7 @@ import {SleepTimerOptions} from './sleep-timer.tsx';
 import {PlayModeCycle,PlayModeSegments} from './play-mode.tsx';
 import { ActionMenu } from '../../../ui/action-menu.tsx';
 import type { MediaPlayer } from '../services/player.ts';
-import { useEffect, useState, useRef, useLayoutEffect } from 'react';
+import { useEffect, useState, useRef, useLayoutEffect, useReducer } from 'react';
 import type {Detail,MediaApi,Part} from '../api/media-api.ts';
 import {MediaCover} from './cover.tsx';
 import {AudiobookChapters} from './audiobook-chapters.tsx';
@@ -40,7 +40,20 @@ function PlayingChapters({api,player,item,error,cause,onRetry}:{api:MediaApi;pla
   return <><AudiobookChapters api={api} item={item} editionId={editionId} currentPartId={player.currentPartId} busy={busy} onEditionChange={id=>{setEditionId(id);setPosition({query:'',page:0});setNotice('');}} onPlay={(parts:Part[],index:number)=>void run(()=>player.play(parts.map(part=>({part,title:item.title+' · '+part.title,video:false})),index))} onQueue={ids=>void run(async()=>{await api.request('queue','POST',{partIds:ids});},true)} onRefresh={onRetry} position={position} onPositionChange={setPosition}/>{notice&&<p role="status">{notice}</p>}</>;
 }
 
+/** The player is an imperative EventTarget: queue edits (上移 / 移除, native queue
+ * updates, track changes) only announce themselves through its `change` event. */
+function usePlayerChanges(player:MediaPlayer){
+  const [,changed]=useReducer((version:number)=>version+1,0);
+  useEffect(()=>{
+    if(typeof player.addEventListener!=='function')return;
+    const listener=()=>changed();
+    player.addEventListener('change',listener);
+    return ()=>player.removeEventListener('change',listener);
+  },[player]);
+}
+
 function CurrentPlaylist({player,modes}:{player:MediaPlayer;modes:boolean}){
+  usePlayerChanges(player);
   const [query,setQuery]=useState(''),[page,setPage]=useState(0);
   const [editing,setEditing]=useState(false),[selected,setSelected]=useState<number|null>(null);
   const [searchOpen,setSearchOpen]=useState(player.currentPlaylist.length>10);

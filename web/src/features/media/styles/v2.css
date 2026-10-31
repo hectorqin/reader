@@ -12,6 +12,8 @@
 .media-screen .media-browse-tools {min-height:44px}
 .media-screen .media-browse-tools :is(button,select) {min-height:44px}
 .media-screen .media-grid {grid-template-columns:repeat(6,minmax(0,1fr));gap:20px}
+/* 封面密度 (偏好设置 › 影音浏览): comfortable trades a column for larger covers. */
+.media-screen .media-grid[data-density=comfortable] {grid-template-columns:repeat(5,minmax(0,1fr))}
 .media-screen .media-tile {padding:0;text-align:left;border-radius:0;min-width:0}
 /* Same weight as the shelf's .book-card .title, so a cover title reads the same in every channel. */
 .media-screen .media-tile strong {display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:var(--text-label);font-weight:520;line-height:1.5;margin-top:8px}
@@ -485,6 +487,7 @@
  .media-screen .media-heading:has(.media-mobile-title) {grid-template-rows:56px 44px;min-height:100px}
  .media-screen .media-mobile-title {height:56px;font-size:var(--text-title)}
  .media-screen .media-grid {grid-template-columns:repeat(3,minmax(0,1fr));gap:20px 12px}
+ .media-screen .media-grid[data-density=comfortable] {grid-template-columns:repeat(2,minmax(0,1fr))}
  .media-detail-page .media-hero {gap:20px}
  .media-detail-page .media-hero>.media-cover {width:106px;min-width:106px}
  .media-detail-page .media-detail-heading h1 {font-size:var(--text-display)}

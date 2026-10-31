@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -13,13 +14,19 @@ export function MediaFavoritesPage() {
   const query = useQuery(favoritesQuery(runtime, queryParams));
   const scope = favoriteScope(queryParams.get('scope') ?? undefined);
   const offset = Math.max(0, Number(params.get('offset')) || 0);
-  const patch = (values: Record<string, string>) => {
+  const patch = (values: Record<string, string>, replace = false) => {
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(values)) value ? next.set(key, value) : next.delete(key);
-    setParams(next);
+    setParams(next, { replace });
   };
+  // Past the last page (a stale link, or favorites removed elsewhere) clamps to the last page instead of
+  // claiming there are no favorites; replace, so Back does not return to the empty page (docs/ui.md §3.5).
+  const total = query.data?.total;
+  const pastEnd = total !== undefined && offset > 0 && offset >= total;
+  const lastPage = total ? Math.floor((total - 1) / 60) * 60 : 0;
+  useEffect(() => { if (pastEnd) patch({ offset: lastPage ? String(lastPage) : '' }, true); });
   return <MediaPageFrame className="media-secondary-page" title="我的收藏" backLabel="返回影视">
     <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
-    {query.data && <MediaFavorites api={runtime.mediaApi} items={query.data.items} total={query.data.total} offset={offset} scope={scope} busy={query.isFetching} onScope={value => patch({ scope: value, offset: '' })} onPage={value => patch({ offset: String(value) })} onOpen={item => navigate(`/media/${favoriteChannel(item)}/items/${encodeURIComponent(item.id)}`, { state: { returnTo: location.pathname + location.search } })} />}
+    {query.data && !pastEnd && <MediaFavorites api={runtime.mediaApi} items={query.data.items} total={query.data.total} offset={offset} scope={scope} busy={query.isFetching} onScope={value => patch({ scope: value, offset: '' })} onPage={value => patch({ offset: String(value) })} onOpen={item => navigate(`/media/${favoriteChannel(item)}/items/${encodeURIComponent(item.id)}`, { state: { returnTo: location.pathname + location.search } })} />}
   </MediaPageFrame>;
 }

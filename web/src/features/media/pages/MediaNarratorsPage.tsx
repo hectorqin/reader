@@ -11,6 +11,7 @@ import { Narrators, type NarratorLocation } from '../components/narrators.tsx';
 import type { MediaChannel, Part } from '../api/media-api.ts';
 import { MediaSelect } from '../components/select.tsx';
 import { EmptyMediaLibrary } from '../components/empty-library.tsx';
+import { CatalogTabs } from '../components/channel-navigation.tsx';
 
 /**
  * Dedicated narrator workspace. Narrators are backed by the specialised
@@ -69,6 +70,10 @@ export function MediaNarratorsPage() {
     <ChannelMenu channel="audiobook" />
   </>;
   return <MediaPageFrame className="media-catalog-page" title="有声书" actions={actions} emptyChannel={!libraries.isPending && !libraries.error && !libraryId}>
+    {/* 演播者 is 有声书's second category: the directory carries the same tab row as the catalog.
+        A narrator's own page is a push page with its back button instead. Without any
+        library the channel is one empty page and shows no tabs, as in the catalog. */}
+    {!routeName && libraryId && <CatalogTabs channel="audiobook" />}
     <QueryFeedback pending={libraries.isPending} error={libraries.error} retry={() => { void libraries.refetch(); }} />
     {!libraries.isPending && !libraries.error && !libraryId && <EmptyMediaLibrary channel="audiobook" hasLibraries={false} admin={role === 'admin'} category="演播者" onCreate={() => navigate('/media/audiobook/settings/libraries/new')} onManage={() => navigate('/media/audiobook/settings/libraries')} />}
     {!libraries.isPending && !libraries.error && libraryId && <Narrators
