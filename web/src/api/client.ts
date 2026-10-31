@@ -781,14 +781,24 @@ export class ReaderApi {
     if (!isNavigationQuery(path)) return (await this.request(path, 'GET', undefined, options)).json as T;
     const generation = this.sessionGeneration;
     const key = readerQueryKey(this.currentBaseUrl, this.session?.user.id, this.queryScope, path);
-    const result = await this.queryClient.fetchQuery<T>({
-      queryKey: key,
-      // Keep the caller's AbortSignal semantics intact. These class-based
-      // screens already abort requests when disposed; letting fetchQuery own the
-      // signal would turn normal auth/session transitions into CancelledError.
-      queryFn: () => this.request(path, 'GET', undefined, options)
-        .then(response => response.json as T),
-    });
+    let result: T;
+    try {
+      result = await this.queryClient.fetchQuery<T>({
+        queryKey: key,
+        // Keep the caller's AbortSignal semantics intact. These class-based
+        // screens already abort requests when disposed; letting fetchQuery own the
+        // signal would turn normal auth/session transitions into CancelledError.
+        queryFn: () => this.request(path, 'GET', undefined, options)
+          .then(response => response.json as T),
+      });
+    } catch (error) {
+      // fetchQuery shares one in-flight request per path, run with the *first*
+      // caller's signal. When that caller goes away (a screen replaced right after
+      // login), a later caller that is still live must not inherit its abort.
+      if (!(error instanceof ApiError && error.kind === 'aborted') || options.signal?.aborted) throw error;
+      this.assertSession(generation);
+      result = (await this.request(path, 'GET', undefined, options)).json as T;
+    }
     // A response that completed after login/logout must never escape through a
     // cache promise, even when QueryClient returned a previously resolved value.
     this.assertSession(generation);

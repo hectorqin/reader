@@ -8,6 +8,7 @@ import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
 import { ShelfSettingsFields } from '../../../ui/shelf-settings.tsx';
 import { Icon } from '../../../ui/icon.tsx';
+import { playerPath } from '../../media/stores/playback.store.ts';
 import '../styles/mine.css';
 
 export const SETTINGS_SECTIONS = [
@@ -78,7 +79,7 @@ export function SettingsPage() {
 
       <section ref={ref('playback')} className="settings-section media-settings" aria-labelledby="settings-playback">
         <h2 id="settings-playback">播放</h2>
-        <PlaybackSettings scope={scope} player={runtime.player} onPlayback={() => navigate('/media/video/player')} />
+        <PlaybackSettings scope={scope} player={runtime.player} onPlayback={() => navigate(playerPath(runtime.playback.snapshot()))} />
       </section>
     </div>
   </MediaPageFrame>;

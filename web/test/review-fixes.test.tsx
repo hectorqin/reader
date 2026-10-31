@@ -86,3 +86,12 @@ describe('书源 writes refresh what they change', () => {
     await vi.waitFor(() => expect(probe.keys()).toContainEqual(['source-types']));
   });
 });
+
+describe('the expanded player’s address', async () => {
+  const { playerPath } = await import('../src/features/media/stores/playback.store.ts');
+  it('names the playing channel and the item/part a refresh restores, on every panel', () => {
+    expect(playerPath({ channel: 'music', itemId: 'a b', partId: 'p1' })).toBe('/media/music/player?item=a%20b&part=p1');
+    expect(playerPath({ channel: 'music', itemId: 'a', partId: 'p' }, 'lyrics')).toBe('/media/music/player/lyrics?item=a&part=p');
+    expect(playerPath({ channel: 'audiobook', itemId: '', partId: '' })).toBe('/media/audiobook/player');
+  });
+});

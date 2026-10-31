@@ -4,6 +4,7 @@ import { useAuthStore } from '../shared/stores/auth.store.ts';
 import { useRuntime } from './providers/runtime-context.tsx';
 import { LoginPage } from '../features/auth/pages/LoginPage.tsx';
 import { AppNav, navMode } from './AppNav.tsx';
+import { playerPath } from '../features/media/stores/playback.store.ts';
 import { ThemeController } from '../shared/theme/theme.ts';
 
 export function AppShell() {
@@ -16,8 +17,7 @@ function AuthenticatedShell() {
   const navigate = useNavigate();
   useEffect(() => {
     const openControls = () => {
-      const state = runtime.playback.snapshot();
-      navigate(`/media/${state.channel}/player?item=${encodeURIComponent(state.itemId)}&part=${encodeURIComponent(state.partId)}`);
+      navigate(playerPath(runtime.playback.snapshot()));
     };
     runtime.player.addEventListener('open-controls', openControls);
     return () => runtime.player.removeEventListener('open-controls', openControls);

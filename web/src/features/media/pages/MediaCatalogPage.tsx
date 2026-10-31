@@ -1,6 +1,6 @@
 import { Icon } from '../../../ui/icon.tsx';
 import { ChannelMenu } from '../components/channel-menu.tsx';
-import { Link, NavLink, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -19,6 +19,7 @@ const countLabels: Record<string, string> = {
 };
 
 export function MediaCatalogPage() {
+  const location = useLocation();
   const runtime = useRuntime(), navigate = useNavigate(), channel = useMediaChannel(), { category } = useParams(), [params, setParams] = useSearchParams();
   const categories = channelCategories[channel], current = categories.find(item => item.path === category) ?? categories[0]!;
   const query = useQuery(catalogQuery(runtime, channel, current.kind, params)), libraries = useMediaLibraries();
@@ -50,7 +51,11 @@ export function MediaCatalogPage() {
       <nav className="media-tabs" aria-label={`${channelLabels[channel]}分类`}>{categories.map(item => {
         const defaultCategory = categories[0]!;
         const isDefault = item.path === defaultCategory.path;
-        return <NavLink key={item.path} className="media-tab-link" to={isDefault ? `/media/${channel}` : `/media/${channel}/${item.path}`} end={isDefault}>{item.label}</NavLink>;
+        // The first category answers at both the channel's bare path and its own one
+        // (/media/music redirects to /media/music/albums), so either marks it current.
+        const own = `/media/${channel}/${item.path}`;
+        const selected = location.pathname === own || (isDefault && location.pathname === `/media/${channel}`);
+        return <Link key={item.path} className="media-tab-link" to={isDefault ? `/media/${channel}` : own} aria-current={selected ? 'page' : undefined}>{item.label}</Link>;
       })}</nav>
     </>}
     <QueryFeedback pending={query.isPending} error={query.error} retry={() => { void query.refetch(); }} />
