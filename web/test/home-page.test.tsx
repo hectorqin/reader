@@ -7,6 +7,7 @@ import { render } from '../src/shared/ui/render-root.ts';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
 import { useAuthStore } from '../src/shared/stores/auth.store.ts';
 import { HomePage, activityProgress, greeting } from '../src/features/home/pages/HomePage.tsx';
+import { saveMediaPreferences } from '../src/features/media/services/preferences.ts';
 
 const root = document.createElement('div');
 document.body.append(root);
@@ -47,7 +48,7 @@ function mount({ reading = [book], video = [activity({ title: '第 3 集', updat
 }
 const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
 
-afterEach(() => { act(() => render(null, root)); useAuthStore.setState({ session: null, verifiedUser: null }); });
+afterEach(() => { act(() => render(null, root)); useAuthStore.setState({ session: null, verifiedUser: null }); localStorage.clear(); });
 
 describe('首页', () => {
   it('greets by time of day', () => {
@@ -118,5 +119,17 @@ describe('首页', () => {
     await settle();
     expect(root.querySelector('a.home-resume')).toBeNull();
     expect(root.querySelector('.home-empty a')?.getAttribute('href')).toBe('/shelf');
+  });
+
+  it('leaves out media continue cards when 首页显示最近续播 is off, and brings them back when it is turned on', async () => {
+    useAuthStore.setState({ verifiedUser: user as any });
+    saveMediaPreferences('home-test', { density: 'compact', showContinue: false, showLibraryName: true });
+    const runtime = mount();
+    await settle();
+    expect([...root.querySelectorAll<HTMLAnchorElement>('a.home-resume')].map(card => card.dataset.channel)).toEqual(['read']);
+    expect(runtime.mediaApi.request.mock.calls.some(([path]: [string]) => path.startsWith('history'))).toBe(false);
+    act(() => { saveMediaPreferences('home-test', { density: 'compact', showContinue: true, showLibraryName: true }); });
+    await settle();
+    expect([...root.querySelectorAll<HTMLAnchorElement>('a.home-resume')].map(card => card.dataset.channel)).toEqual(['video', 'read']);
   });
 });

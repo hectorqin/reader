@@ -1,4 +1,4 @@
-import { combineAbortSignals } from '../core/abort.ts';
+import { abortedError, abortFailure, combineAbortSignals, isAbortError } from '../core/abort.ts';
 import type { ChapterQuality, CredentialStatus, OpdsCredential } from './sources.ts';
 import type { ReadingOverrides } from './types.ts';
 import { eventStream } from './event-stream.ts';
@@ -29,7 +29,8 @@ import type {
 } from './types.ts';
 import type { Platform } from '../core/platform.ts';
 import type { SourceType, SourceInstance, SourcePlugin, SourceEntry, SourcePage, SourceAcquisition, ChapterSubscription } from './sources.ts';
-import { affectedNavigationQuery, createReaderQueryClient, isNavigationQuery, readerQueryKey } from './query.ts';
+import { isCancelledError } from '@tanstack/query-core';
+import { affectedNavigationQuery, createReaderQueryClient, isLiveNavigationQuery, isNavigationQuery, readerQueryKey } from './query.ts';
 
 export interface SessionStore {
   load(): Promise<Session | null>;
@@ -790,12 +791,19 @@ export class ReaderApi {
         // signal would turn normal auth/session transitions into CancelledError.
         queryFn: () => this.request(path, 'GET', undefined, options)
           .then(response => response.json as T),
+        // Availability-bearing media resources are shared while in flight but
+        // always revalidated, so an explicit refresh reaches the server.
+        ...(isLiveNavigationQuery(path) ? { staleTime: 0 } : {}),
       });
     } catch (error) {
+      // A QueryClient cancellation (cache cleared on account change) or a raw
+      // AbortError is the same outcome as an aborted transport request.
+      const aborted = error instanceof ApiError ? error.kind === 'aborted' : isCancelledError(error) || isAbortError(error);
+      if (!aborted) throw error;
       // fetchQuery shares one in-flight request per path, run with the *first*
       // caller's signal. When that caller goes away (a screen replaced right after
       // login), a later caller that is still live must not inherit its abort.
-      if (!(error instanceof ApiError && error.kind === 'aborted') || options.signal?.aborted) throw error;
+      if (options.signal?.aborted) throw error instanceof ApiError ? error : abortedError();
       this.assertSession(generation);
       result = (await this.request(path, 'GET', undefined, options)).json as T;
     }
@@ -862,9 +870,13 @@ export class ReaderApi {
       if (generation !== this.sessionGeneration) await response.stream?.cancel().catch(() => {});
       assertCurrent();
       return response;
-    } catch (err) {
+    } catch (caught) {
       assertCurrent();
+      // Transports other than FetchTransport may still reject with the signal's
+      // raw reason; callers only ever see ApiError('aborted') for cancellation.
+      const err = caught instanceof ApiError ? caught : abortFailure(caught, options.signal) ?? caught;
       if (!(err instanceof ApiError)) throw err;
+      if (err.kind === 'aborted') throw err;
       this.platform.reportError?.(err);
       // Only an expired access token is worth a retry, and only if there is a
       // refresh token to spend. `TOKEN_INVALID` means the signature or payload

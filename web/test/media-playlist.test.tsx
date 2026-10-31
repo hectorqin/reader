@@ -34,3 +34,26 @@ it('paginates and searches the full playlist without changing jump indices',asyn
   expect(host.querySelector('input[type=search]')).toBeNull();
   expect(host.querySelectorAll('.media-current-playlist li')).toHaveLength(50);
 });
+it('re-renders the current queue when the player edits it',()=>{
+  class FakePlayer extends EventTarget {
+    active=true;title='专辑';currentItemId='';canSelectPlaylist=true;canEditPlaylist=true;
+    entries=['一','二','三'];selectPlaylist=vi.fn();
+    get currentPlaylist(){return this.entries.map((title,index)=>({index,title,current:index===0}));}
+    editPlaylist(index:number,direction:-1|0|1){
+      const next=this.entries.slice();
+      if(direction===0)next.splice(index,1);else[next[index],next[index+direction]]=[next[index+direction]!,next[index]!];
+      this.entries=next;this.dispatchEvent(new Event('change'));
+    }
+  }
+  const player=new FakePlayer();
+  act(()=>render(<PlaybackControls player={player as unknown as MediaPlayer} api={{} as MediaApi} panel="queue"/>,host));
+  const titles=()=>Array.from(host.querySelectorAll('.media-current-playlist li strong')).map(node=>node.textContent);
+  expect(titles()).toEqual(['一','二','三']);
+  act(()=>host.querySelector<HTMLButtonElement>('[aria-label="队列操作"]')!.click());
+  act(()=>Array.from(host.querySelectorAll<HTMLButtonElement>('[role=menuitem]')).find(button=>button.textContent==='编辑队列')!.click());
+  act(()=>host.querySelector<HTMLButtonElement>('[aria-label="上移 三"]')!.click());
+  expect(titles()).toEqual(['一','三','二']);
+  act(()=>host.querySelector<HTMLButtonElement>('[aria-label="移除 二"]')!.click());
+  expect(titles()).toEqual(['一','三']);
+  expect(host.querySelector('.media-playlist-toolbar small')!.textContent).toContain('2 首');
+});

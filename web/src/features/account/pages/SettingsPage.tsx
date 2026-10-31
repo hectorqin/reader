@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { MediaPageFrame } from '../../media/components/MediaPageFrame.tsx';
 import { MediaThemeSettings } from '../../media/components/theme-settings.tsx';
@@ -24,14 +23,15 @@ function isSection(value: string | null | undefined): value is SettingsSection {
 }
 
 /**
- * 偏好设置 (/me/settings): every personal preference on one page — how the app looks,
+ * 偏好设置 (/me/settings): every personal preference in one place — how the app looks,
  * the shelf, media browsing, playback — so none of them is a sheet in one place and
- * a page in another. Every control applies the moment it changes; there is no save
- * button anywhere on the page.
+ * a page in another. The four kinds are tabs: one panel shows at a time, chosen by
+ * `?section=` (外观与主题 when absent), which is also how old links (/me/theme,
+ * /me/browse, …) land. Switching replaces the entry, so back still leaves for 我的.
+ * Every control applies the moment it changes; there is no save button.
  *
- * `?section=` scrolls to one section, which is how old links (/me/theme, /me/browse,
- * …) and the jump bar land. The shelf's gear still opens the 书架 fields in a sheet:
- * that is a shortcut to this section, not a second setting.
+ * The shelf's gear still opens the 书架 fields in a sheet: a shortcut to this tab,
+ * not a second setting.
  */
 export function SettingsPage() {
   const runtime = useRuntime();
@@ -40,46 +40,46 @@ export function SettingsPage() {
   const scope = runtime.mediaApi.preferenceScope();
   const [params, setParams] = useSearchParams();
   const requested = params.get('section');
-  const sections = useRef(new Map<SettingsSection, HTMLElement>());
-  useEffect(() => {
-    if (isSection(requested)) sections.current.get(requested)?.scrollIntoView({ block: 'start' });
-  }, [requested]);
-  const jump = (id: SettingsSection) => {
-    sections.current.get(id)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    setParams({ section: id }, { replace: true });
+  const active: SettingsSection = isSection(requested) ? requested : 'theme';
+  const select = (id: SettingsSection, focus = false) => {
+    setParams(id === 'theme' ? {} : { section: id }, { replace: true });
+    if (focus) document.getElementById(`settings-tab-${id}`)?.focus();
   };
-  const ref = (id: SettingsSection) => (node: HTMLElement | null) => { if (node) sections.current.set(id, node); else sections.current.delete(id); };
   const patch = (value: Parameters<typeof runtime.updateSettings>[0]) => { void runtime.updateSettings(value); };
 
   return <MediaPageFrame className="media-secondary-page settings-page" title="偏好设置" backTo="/me" backLabel="返回我的">
     <div className="settings-body">
-      <nav className="settings-jump" aria-label="跳到分区">
-        {SETTINGS_SECTIONS.map(section => <button type="button" key={section.id} aria-current={requested === section.id ? 'true' : undefined} onClick={() => jump(section.id)}>{section.title}</button>)}
-      </nav>
+      <div className="settings-tabs" role="tablist" aria-label="设置分类">
+        {SETTINGS_SECTIONS.map((section, index) => <button type="button" role="tab" key={section.id} id={`settings-tab-${section.id}`}
+          aria-selected={active === section.id} aria-controls="settings-panel" tabIndex={active === section.id ? 0 : -1}
+          onClick={() => select(section.id)}
+          onKeyDown={event => {
+            // Arrow keys move between tabs, one tab stop for the row (WAI-ARIA tabs).
+            const last = SETTINGS_SECTIONS.length - 1;
+            const target = event.key === 'ArrowRight' ? (index === last ? 0 : index + 1)
+              : event.key === 'ArrowLeft' ? (index === 0 ? last : index - 1)
+              : event.key === 'Home' ? 0 : event.key === 'End' ? last : -1;
+            if (target < 0) return;
+            event.preventDefault();
+            select(SETTINGS_SECTIONS[target]!.id, true);
+          }}>{section.title}</button>)}
+      </div>
 
-      <section ref={ref('theme')} className="settings-section" aria-labelledby="settings-theme">
-        <h2 id="settings-theme">外观与主题</h2>
-        <MediaThemeSettings scope={scope} onReaderSettings={patch} />
-      </section>
-
-      <section ref={ref('shelf')} className="settings-section shelf-settings" aria-labelledby="settings-shelf">
-        <h2 id="settings-shelf">书架</h2>
-        <ShelfSettingsFields settings={settings} onPatch={patch} />
-        <Link className="settings-link" to="/me/opds" state={{ returnTo: '/me/settings?section=shelf' }}>
-          <span><strong>连接外部阅读器</strong><small>通过 OPDS，让其他阅读器只读访问你的书架</small></span>
-          <Icon name="chevron-right" size={16} />
-        </Link>
-      </section>
-
-      <section ref={ref('browse')} className="settings-section media-settings" aria-labelledby="settings-browse">
-        <h2 id="settings-browse">影音浏览</h2>
-        <p className="settings-note">仅影响影音页面，在当前设备为此服务器和账号保存</p>
-        <MediaBrowseSettings scope={scope} />
-      </section>
-
-      <section ref={ref('playback')} className="settings-section media-settings" aria-labelledby="settings-playback">
-        <h2 id="settings-playback">播放</h2>
-        <PlaybackSettings scope={scope} player={runtime.player} onPlayback={() => navigate(playerPath(runtime.playback.snapshot()))} />
+      <section id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${active}`}
+        className={'settings-section' + (active === 'shelf' ? ' shelf-settings' : active === 'browse' || active === 'playback' ? ' media-settings' : '')}>
+        {active === 'theme' && <MediaThemeSettings scope={scope} onReaderSettings={patch} />}
+        {active === 'shelf' && <>
+          <ShelfSettingsFields settings={settings} onPatch={patch} />
+          <Link className="settings-link" to="/me/opds" state={{ returnTo: '/me/settings?section=shelf' }}>
+            <span><strong>连接外部阅读器</strong><small>通过 OPDS，让其他阅读器只读访问你的书架</small></span>
+            <Icon name="chevron-right" size={16} />
+          </Link>
+        </>}
+        {active === 'browse' && <>
+          <p className="settings-note">仅影响影音页面，在当前设备为此服务器和账号保存</p>
+          <MediaBrowseSettings scope={scope} />
+        </>}
+        {active === 'playback' && <PlaybackSettings scope={scope} player={runtime.player} onPlayback={() => navigate(playerPath(runtime.playback.snapshot()))} />}
       </section>
     </div>
   </MediaPageFrame>;

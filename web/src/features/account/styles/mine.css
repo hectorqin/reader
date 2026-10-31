@@ -107,25 +107,32 @@
  * The sections bring their own controls (theme cards, the shelf's toolkit rows, the
  * media fields); this only lays them out as one page. */
 .settings-body { max-width: 640px; margin: 0 auto; padding-bottom: 40px; }
-.settings-jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
-.settings-page .settings-jump button {
-  min-height: 36px;
-  padding: 0 14px;
-  border: 1px solid var(--color-line);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface);
-  color: var(--color-ink);
+.settings-tabs { display: flex; margin: 8px 0 0; border-bottom: 1px solid var(--color-line); }
+/* Equal tabs that share the row, like the 书源 hub's: underlined, not chips. */
+.settings-page .settings-tabs [role='tab'] {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 4px;
+  margin-bottom: -1px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-muted);
   font: inherit;
   font-size: var(--text-label);
+  white-space: nowrap;
   cursor: pointer;
 }
-.settings-page .settings-jump button[aria-current='true'] { border-color: var(--color-brand); background: var(--color-brand-soft); color: var(--color-brand-text); }
-@media (hover: hover) and (pointer: fine) { .settings-page .settings-jump button:hover { background: var(--color-surface-2); } }
+.settings-page .settings-tabs [aria-selected='true'] { border-bottom-color: var(--color-brand); color: var(--color-ink); font-weight: 650; }
+.settings-page .settings-tabs [role='tab']:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: -2px; }
+@media (hover: hover) and (pointer: fine) { .settings-page .settings-tabs [role='tab']:hover { color: var(--color-ink); } }
 
-/* Clears the page's pinned title bar when a section is scrolled to. */
-.settings-section { margin: 32px 0 0; scroll-margin-top: 88px; }
-.settings-section > h2 { margin: 0 0 4px; padding-bottom: 10px; border-bottom: 1px solid var(--color-line); font-size: var(--text-title); font-weight: 650; color: var(--color-ink); }
-.settings-section h3 { margin: 22px 0 10px; font-size: var(--text-label); font-weight: 600; color: var(--color-muted); }
+/* The selected tab's panel; its sub-headings are the quiet labels the panels already use. */
+.settings-section { margin: 16px 0 0; }
+.settings-section h2 { margin: 22px 0 10px; font-size: var(--text-label); font-weight: 600; color: var(--color-muted); }
 .settings-note { margin: 10px 0 0; font-size: var(--text-label); color: var(--color-muted); }
 .settings-page .theme-settings { margin: 0; max-width: none; }
 .settings-page .media-settings { max-width: none; }

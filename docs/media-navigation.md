@@ -4,7 +4,7 @@
 
 全应用只有一套导航：手机为底部标签栏，701px 起为左侧边栏，包含首页（#/）、书架（#/shelf）、影音（#/media/video）和我的（#/me）。宽屏侧边栏在「影音」下列出影视、音乐、有声书三个频道；手机在频道分类页顶部用影视/音乐/有声书三段切换频道（旧的频道菜单和频道导轨已移除）。
 
-频道下方是分类标签：影视（首页、电影、剧集）、音乐（专辑、歌手、曲目）、有声书（有声书、演播者）。手机上左右滑动切换相邻分类，越过频道最后一个分类即进入下一频道；同频道内保留 library 和 sort 参数，跨频道重置。频道尚无媒体库时滑动按整个频道切换。分类页右上角 ⋯ 菜单提供收藏、历史、队列和媒体库管理，工具栏提供文件夹入口。
+频道下方是分类标签：影视（首页、电影、剧集）、音乐（专辑、歌手、曲目）、有声书（有声书、演播者）。手机上左右滑动切换相邻分类，越过频道最后一个分类即进入下一频道；同频道内保留 library 和 sort 参数，跨频道重置。频道尚无媒体库时滑动按整个频道切换。分类页右上角 ⋯ 菜单提供收藏、历史、队列，管理员另有媒体库管理（身份确认前按成员处理）；演播者目录页也显示同一排分类标签。工具栏提供文件夹入口。
 
 二级页显示返回、页面标题和当前页面的操作，不显示频道切换；手机上二级页以自己的返回栏替代底部标签栏，宽屏侧边栏保留。播放器与阅读页隐藏应用导航。设置、收藏、资源详情、播放器各自拥有路由。媒体库筛选位于列表工具栏左侧，版本、排序等选择器使用统一主题弹层。阅读界面和书架设置维持原有结构。
 
@@ -22,7 +22,7 @@ channel 表示 video、music 或 audiobook；itemId、part、libraryId 均为真
 | 收藏 | #/media/favorites，scope 和 offset 保存筛选、分页；#/media/:channel/favorites 预选该频道 |
 | 搜索 | #/media/search?q=…&scope=… |
 | 历史、待播队列 | #/media/:channel/history；#/media/queue、#/media/:channel/queue |
-| 偏好设置（我的） | #/me/settings（外观与主题、书架、影音浏览、播放四个分区，`?section=` 定位）；#/me/account；#/me/opds |
+| 偏好设置（我的） | #/me/settings（外观与主题、书架、影音浏览、播放四个标签，`?section=` 选中）；#/me/account；#/me/opds |
 | 媒体库管理 | #/media/:channel/settings/libraries |
 | 新建、编辑、权限 | #/media/:channel/settings/libraries/new、#/media/:channel/settings/libraries/:libraryId/edit、#/media/:channel/settings/libraries/:libraryId/permissions |
 | 扫描与刮削 | #/media/:channel/settings/tasks?tab=scan\|ai\|scrape&library=… |

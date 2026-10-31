@@ -11,6 +11,7 @@ import { useShelf } from '../../shelf/queries/shelf.queries.ts';
 import { historyQuery, mediaKeys, type Activity } from '../../media/queries/media.queries.ts';
 import { MediaCover } from '../../media/components/cover.tsx';
 import { resolveWork } from '../../media/services/work.ts';
+import { useMediaPreferences } from '../../media/hooks/use-media-preferences.ts';
 import type { SearchItem } from '../../media/api/media-api.ts';
 import type { ContinueReadingItem } from '../../../api/types.ts';
 import '../styles/home.css';
@@ -136,11 +137,13 @@ export function HomePage() {
     queryFn: ({ signal }) => runtime.api.continueReading(2, { signal }),
   });
   const shelf = useShelf(1, 'recent');
-  const video = useQuery(historyQuery(runtime, 'video', new URLSearchParams()));
-  const audio = useQuery(historyQuery(runtime, 'audiobook', new URLSearchParams()));
+  // 首页显示最近续播 (偏好设置 › 影音浏览) off: no video/audiobook continue cards; books are not media.
+  const { showContinue } = useMediaPreferences();
+  const video = useQuery({ ...historyQuery(runtime, 'video', new URLSearchParams()), enabled: showContinue });
+  const audio = useQuery({ ...historyQuery(runtime, 'audiobook', new URLSearchParams()), enabled: showContinue });
   const unfinished = (items?: Activity[]) => items?.find(item => !item.completed);
   const readingBooks = reading.data ?? [], book = readingBooks[0];
-  const videoActivity = unfinished(video.data?.items), audioActivity = unfinished(audio.data?.items);
+  const videoActivity = showContinue ? unfinished(video.data?.items) : undefined, audioActivity = showContinue ? unfinished(audio.data?.items) : undefined;
   const books = (shelf.data?.items ?? []).slice(0, 8);
   const name = user?.displayName || user?.username || '';
 

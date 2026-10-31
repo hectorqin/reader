@@ -1,5 +1,6 @@
 import { ApiError, errorForStatus, parseErrorBody } from '../api/errors.ts';
 import type { HttpRequest, HttpResponse, Transport } from './platform.ts';
+import { abortFailure } from './abort.ts';
 
 /**
  * `fetch`-based transport used by the browser and by the Android shell for
@@ -12,7 +13,26 @@ import type { HttpRequest, HttpResponse, Transport } from './platform.ts';
 export class FetchTransport implements Transport {
   constructor(private readonly baseUrl: () => string) {}
 
+  /**
+   * Cancellation surfaces as ApiError('aborted') however it happens: before the
+   * headers arrive, while the body is read (`text()`/`arrayBuffer()` reject with a
+   * raw AbortError), or with a custom abort reason. A raw DOMException would skip
+   * the client's shared-query retry and reach the UI as "signal is aborted
+   * without reason".
+   */
   async send(request: HttpRequest): Promise<HttpResponse> {
+    try {
+      return await this.exchange(request);
+    } catch (err) {
+      const aborted = abortFailure(err, request.signal);
+      if (aborted) throw aborted;
+      if (err instanceof ApiError) throw err;
+      // The connection dropped while the body was being read.
+      throw new ApiError('offline', err instanceof Error ? err.message : 'network error');
+    }
+  }
+
+  private async exchange(request: HttpRequest): Promise<HttpResponse> {
     const url = /^https?:/i.test(request.url) ? request.url : `${this.baseUrl()}${request.url}`;
     let response: Response;
     try {
@@ -28,9 +48,8 @@ export class FetchTransport implements Transport {
         credentials: 'omit',
       });
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new ApiError('aborted', 'request aborted');
-      }
+      const aborted = abortFailure(err, request.signal);
+      if (aborted) throw aborted;
       // DNS failure, refused connection, TLS error, CORS preflight rejection.
       // From the reader's point of view all of these mean "server not reachable
       // right now", and the UI must degrade to cached content instead of

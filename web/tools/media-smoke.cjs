@@ -211,7 +211,7 @@ const assert=require('node:assert/strict');
     await auditPage('track-detail');
     // 影音浏览 is a section of 我的 › 偏好设置; each control applies immediately.
     await go('#/me/settings?section=browse');
-    await page.getByRole('heading',{name:'影音浏览',exact:true}).waitFor();
+    await page.getByRole('tab',{name:'影音浏览',exact:true,selected:true}).waitFor();
     if(process.env.MEDIA_SMOKE_SETTINGS_SCREENSHOT)await page.screenshot({path:process.env.MEDIA_SMOKE_SETTINGS_SCREENSHOT});
     await auditPage('settings');
     assert.equal(await page.getByRole('button',{name:/^保存/}).count(),0,'preferences have no save button');
