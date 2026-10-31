@@ -12,6 +12,7 @@ import { ScanJobs } from '../components/scan-jobs.tsx';
 import { AiScanJobs } from '../components/ai-scan-jobs.tsx';
 import { ScrapeJobs } from '../components/scrape-jobs.tsx';
 import { MediaSelect } from '../components/select.tsx';
+import { ApiError } from '../../../api/errors.ts';
 import type { MediaChannel } from '../api/media-api.ts';
 
 export function MediaTasksPage() {
@@ -24,7 +25,21 @@ export function MediaTasksPage() {
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState('');
   const [actionNotice, setActionNotice] = useState('');
-  const tab = params.get('tab') === 'ai' || params.get('tab') === 'scrape' ? params.get('tab')! : 'scan';
+  // AI 扫描 is offered only while 启用 AI and 启用 AI 扫描 are on and AI is configured (系统设置 → AI 功能).
+  // Unknown (still asking) draws no tab, like the reader's AI 总结; a server without the
+  // capabilities endpoint predates the switches and keeps the tab.
+  const capabilities = useQuery({
+    queryKey: ['ai', 'capabilities'],
+    queryFn: async ({ signal }) => {
+      try { return await runtime.api.aiCapabilities({ signal }); }
+      catch (error) { if (error instanceof ApiError && error.kind === 'not_found') return { summary: true, scan: true }; throw error; }
+    },
+    refetchOnMount: 'always',
+    retry: false,
+  });
+  const aiScan = capabilities.data?.scan === true;
+  const requestedTab = params.get('tab');
+  const tab = requestedTab === 'scrape' || (requestedTab === 'ai' && aiScan) ? requestedTab : 'scan';
   const requestedLibraryId = params.get('library') ?? '';
   const stateReturn = location.state?.returnTo;
   const returnTo = typeof stateReturn === 'string' && (stateReturn.startsWith('/media/') || stateReturn === '/me')
@@ -86,7 +101,7 @@ export function MediaTasksPage() {
   </div>;
   return <MediaPageFrame className="media-manager-workspace" title="扫描与刮削" backTo={returnTo} backLabel={returnLabel}>
     <section className="media-manager">
-      <nav className="media-task-tabs" aria-label="任务类型">{[['scan','媒体库扫描'],['ai','AI 扫描'],['scrape','刮削']].map(([value,label]) => <button type="button" key={value} aria-current={tab === value ? 'page' : undefined} onClick={() => setTab(value)}>{label}</button>)}</nav>
+      <nav className="media-task-tabs" aria-label="任务类型">{([['scan','媒体库扫描'],aiScan&&['ai','AI 扫描'],['scrape','刮削']].filter(Boolean) as string[][]).map(([value,label]) => <button type="button" key={value} aria-current={tab === value ? 'page' : undefined} onClick={() => setTab(value)}>{label}</button>)}</nav>
       {requestedLibraryId && !libraryId && !libraries.isPending && !libraries.error && <Callout tone="warning">所选媒体库不存在，已切换为全部媒体库。</Callout>}
       <FloatingNotice message={actionError} error />
       <FloatingNotice message={actionNotice} kind="success" />
