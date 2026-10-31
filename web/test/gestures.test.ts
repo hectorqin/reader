@@ -12,7 +12,8 @@ import { attachGestures, type GestureHandlers } from '../src/ui/gestures.ts';
  *
  *   1. a control the reader actually touched owns the gesture, whatever it is;
  *   2. otherwise a drag is a swipe;
- *   3. otherwise a short press is a tap in one of the three zones.
+ *   3. otherwise a short press is a tap in one cell of the 3×3 grid (the zone
+ *      names below are the default grid's columns).
  *
  * Everything here is a *pointer* sequence, because the layer tracks pointers: a
  * `click` arrives after a drag that ended on a link, which is exactly why a tap
@@ -42,6 +43,7 @@ interface Harness {
   stage: HTMLDivElement;
   saw: {
     zones: string[];
+    cells: Array<[number, number]>;
     swipes: string[];
     drags: number;
     longPresses: number;
@@ -58,9 +60,12 @@ function harness(options: { selection?: boolean; width?: number } = {}): Harness
   Object.defineProperty(stage, 'clientWidth', { get: () => width, configurable: true });
   stage.getBoundingClientRect = () => ({ left: 0, top: 0, width, height: 600, right: width, bottom: 600, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect;
 
-  const saw = { zones: [] as string[], swipes: [] as string[], drags: 0, longPresses: 0 };
+  const saw = { zones: [] as string[], cells: [] as Array<[number, number]>, swipes: [] as string[], drags: 0, longPresses: 0 };
   const handlers: GestureHandlers = {
-    onTapZone: (zone) => saw.zones.push(zone),
+    onTapZone: (column, row) => {
+      saw.zones.push(['previous', 'toggle-chrome', 'next'][column]!);
+      saw.cells.push([column, row]);
+    },
     onSwipe: (direction) => saw.swipes.push(direction),
     onDragDelta: () => { saw.drags += 1; },
     onLongPress: () => { saw.longPresses += 1; },
@@ -97,6 +102,14 @@ describe('tap zones', () => {
     press(h.stage, [150, 300]);
     press(h.stage, [260, 300]);
     expect(h.saw.zones).toEqual(['previous', 'toggle-chrome', 'next']);
+  });
+
+  it('reports the row as well, so each of the nine cells can mean something', () => {
+    const h = harness();
+    press(h.stage, [40, 100]);
+    press(h.stage, [150, 300]);
+    press(h.stage, [260, 500]);
+    expect(h.saw.cells).toEqual([[0, 0], [1, 1], [2, 2]]);
   });
 
   it('reads the zones from layout geometry, so a scaled page still taps where the finger is', () => {

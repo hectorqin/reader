@@ -38,6 +38,7 @@ import { AnnotationPopover, type AnnotationTarget } from './annotation-popover.t
 import { newId } from '../core/id.ts';
 import { htmlToText, isTextOnlyMarkup, textToChapterHtml } from '../formats/segments.ts';
 import { parseLocator } from './locator.ts';
+import { tapActionAt, tapZonePreset } from './tap-zones.ts';
 
 export interface ReaderScreenOptions {
   /** Where the shared app theme is stored (see the media theme service). */
@@ -1129,7 +1130,7 @@ export class ReaderScreen {
     // back (see ReaderView.beginDrag). Mouse drags stay text selection.
     let following = false;
     this.detachGestures = attachGestures(this.stage, {
-      onTapZone: (zone) => this.onTapZone(zone),
+      onTapZone: (column, row) => this.onTapZone(column, row),
       onSwipe: (direction) => {
         // Swiping is only a page turn in fixed layout or paged mode. In scroll
         // mode a horizontal swipe has no meaning and hijacking it would fight
@@ -1249,8 +1250,10 @@ export class ReaderScreen {
    *      behind an open panel is the bug the reader reports as "翻页和设置抢事件".
    *      The gesture layer cannot enforce this — it sees the stage, and the panel
    *      is a sibling — so it is enforced here.
-   *   2. **The middle third toggles the chrome**, in both directions.
-   *   3. **The outer thirds turn the page**, and *only* that.
+   *   2. **What the cell means is the reader's 点击区域 grid** (`tap-zones.ts`),
+   *      by default 左/右 = 翻页, 中 = 显隐工具栏 — one meaning per cell. The grid
+   *      describes a left-to-right book and is mirrored for a right-to-left one.
+   *   3. **菜单 toggles the chrome, in both directions; nothing else reveals it.**
    *
    * The third rule is the one that changed, and the report behind it is the whole
    * of it: "在点击左右两边时只需要翻页、不需要显示工具栏，只有在中间点击时才需要切换
@@ -1260,40 +1263,31 @@ export class ReaderScreen {
    * reader who tapped the right third to go forward got the next page *and* a
    * toolbar across the text they had just turned to, so the immersive state was
    * impossible to stay in — every page turn undid it. And the reader who *did* want
-   * the toolbar back had a dedicated, discoverable way to ask for it: the middle
-   * third.
+   * the toolbar back had a dedicated, discoverable way to ask for it: a 菜单 cell,
+   * of which the grid always keeps at least one.
    *
-   * So the two gestures are now disjoint, one meaning each, which is the property
-   * the old version lacked: 左/右 = 翻页, 中 = 显隐工具栏. Nothing is revealed by a
-   * page turn, and nothing is turned by a tap that asked for the controls.
-   *
-   * One step further, by request ("点击翻页时自动隐藏工具栏"): a page turn *hides*
-   * a toolbar that is showing. A reader who turns the page has gone back to reading,
-   * and the bars would otherwise sit over the page they just turned to until they
-   * found the middle third. Hiding never moves the text — the bars float over a
-   * constant page (see `.reader-screen` in reader.css) — so this costs no reflow.
+   * One step further, by request ("点击翻页时自动隐藏工具栏"): a page or chapter turn
+   * *hides* a toolbar that is showing. A reader who turns the page has gone back to
+   * reading, and the bars would otherwise sit over the page they just turned to.
+   * Hiding never moves the text — the bars float over a constant page (see
+   * `.reader-screen` in reader.css) — so this costs no reflow. 无操作 does nothing
+   * at all, including hiding the bars.
    */
-  private onTapZone(zone: 'previous' | 'toggle-chrome' | 'next'): void {
+  private onTapZone(column: number, row: number): void {
     if (this.chrome.tocOpen || this.chrome.settingsOpen) return;
     // The tap that dismissed a note card (it closes on pointerdown) is spent on that:
     // it must not also turn the page or toggle the bars (ui.md §3.8).
     if (performance.now() - this.annotationClosedAt < 600) return;
 
-    if (zone === 'toggle-chrome') {
+    const action = tapActionAt(this.settings.tapZones, column, row, this.isRtl());
+    if (action === 'none') return;
+    if (action === 'menu') {
       this.setChromeVisible(!this.chromeVisible);
       return;
     }
-
-    // The page turn, which also puts a showing toolbar away (see the doc comment
-    // above); only the middle third brings it back. `tapZone` decides which
-    // physical side is *forward*, so a left-handed reader can put next-page under
-    // the thumb that holds the phone.
-    // A right-to-left book reads forward to the left, as does a left-handed `reversed`
-    // layout; both together cancel out.
-    const reversed = (this.settings.tapZone === 'reversed') !== (this.isRtl());
-    const forward = reversed ? zone === 'previous' : zone === 'next';
     if (this.chromeVisible) this.setChromeVisible(false);
-    void this.turnPage(forward ? 'next' : 'previous');
+    if (action === 'next' || action === 'previous') void this.turnPage(action);
+    else void this.goToChapter(action === 'next-chapter' ? 1 : -1);
   }
 
   private async restorePosition(book: Book, token: number): Promise<void> {
@@ -2256,6 +2250,7 @@ function emptyChromeSettings(): Partial<ChromeState> {
       brightness: 1,
       pageAnimation: 'slide',
       tapZone: 'standard',
+      tapZones: tapZonePreset('standard'),
       txtIndent: 2,
       txtParagraphGap: 0.55,
       txtEncoding: '',
@@ -2330,6 +2325,7 @@ function settingsView(
     brightness: settings.brightness,
     pageAnimation: settings.pageAnimation,
     tapZone: settings.tapZone,
+    tapZones: settings.tapZones,
     txtEncoding: settings.txtEncoding,
     txtIndent: settings.txtIndent,
     txtParagraphGap: settings.txtParagraphGap,

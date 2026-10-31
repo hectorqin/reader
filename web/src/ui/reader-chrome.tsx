@@ -30,6 +30,8 @@ import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ReactNode, type JSX, useState } from 'react';
 import { Button, IconButton, SectionTitle, SwitchRow } from './toolkit.tsx';
 import { Icon, type IconName } from './icon.tsx';
+import { ActionMenu } from './action-menu.tsx';
+import { TAP_ACTIONS, isLastMenuCell, normalizeTapZones, tapActionLabel, tapZonePreset, type TapZoneGrid } from './tap-zones.ts';
 
 /**
  * A table-of-contents row.
@@ -132,6 +134,8 @@ export interface ChromeState {
   brightness: number;
   pageAnimation: AppSettings['pageAnimation'];
   tapZone: AppSettings['tapZone'];
+  /** 点击区域, the 3×3 grid; optional so an older state shape still renders. */
+  tapZones?: TapZoneGrid;
   txtEncoding: string;
   txtIndent: number;
   txtParagraphGap: number;
@@ -604,14 +608,9 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
       <SectionTitle>翻页</SectionTitle>
       <Button onClick={() => { handlers.onSetting({ pageAnimation: 'none', mode: 'paged' }); handlers.onTheme({ reading: 'gray', mode: 'light', theme: handlers.theme().app.theme }); }}>应用电纸书预设</Button>
       <p className="muted">黑白灰浅色、分页、无翻页动画；仅保存到当前设备，可继续单独调整。屏幕刷新由设备控制。</p>
-      <SegmentedRow
-        label="点击区域"
-        options={[
-          { value: 'standard', label: '左退右进' },
-          { value: 'reversed', label: '左进右退' },
-        ]}
-        value={state.tapZone}
-        onChange={(value) => handlers.onSetting({ tapZone: value as AppSettings['tapZone'] })}
+      <TapZoneEditor
+        grid={normalizeTapZones(state.tapZones, state.tapZone)}
+        onChange={(tapZones) => handlers.onSetting({ tapZones })}
       />
       <SegmentedRow
         label="翻页动画"
@@ -922,6 +921,60 @@ function ReadingThemeRow({ label, state, onChange }: { label: string; state: Rea
 }
 
 /** Rows that are set once and left alone. A native <details>: keyboard and screen-reader behaviour for free. */
+const TAP_CELL_NAMES = ['左上', '上方', '右上', '左侧', '中间', '右侧', '左下', '下方', '右下'];
+
+/**
+ * 点击区域设置: the page as nine cells, each a menu of what a tap there does.
+ *
+ * Drawn as a small page rather than a list of nine selects, because the question
+ * the reader is answering is spatial — "what happens when my thumb lands *there*" —
+ * and a list makes them translate every row back into a position. The last 菜单
+ * cell cannot be changed to anything else (the menu says why): without one the
+ * bars, and this panel, could not be reached again by a tap.
+ */
+function TapZoneEditor({ grid, onChange }: { grid: TapZoneGrid; onChange(grid: TapZoneGrid): void }): JSX.Element {
+  const set = (index: number, action: TapZoneGrid[number]) => {
+    const next = [...grid];
+    next[index] = action;
+    onChange(next);
+  };
+  const mirrored = grid.map((_, index) => grid[index - (index % 3) + (2 - (index % 3))]!);
+  const isDefault = grid.every((action, index) => action === tapZonePreset('standard')[index]);
+  return (
+    <section className="tap-zones" aria-label="点击区域设置">
+      <div className="tap-zones-head">
+        <span className="tap-zones-title">点击区域</span>
+        <Button className="tap-zones-action" onClick={() => onChange(mirrored)}>左右互换</Button>
+        <Button className="tap-zones-action" disabled={isDefault} onClick={() => onChange(tapZonePreset('standard'))}>恢复默认</Button>
+      </div>
+      <div className="tap-zones-grid">
+        {grid.map((action, index) => {
+          const locked = isLastMenuCell(grid, index);
+          const name = TAP_CELL_NAMES[index]!;
+          return (
+            <ActionMenu
+              key={index}
+              className={`tap-zone-cell is-${action}`}
+              label={`${name}：${tapActionLabel(action)}`}
+              title={`点击${name}`}
+              icon={TAP_ACTIONS.find(item => item.value === action)?.icon ?? 'close'}
+              text={tapActionLabel(action)}
+              items={TAP_ACTIONS.map(item => ({
+                label: item.label,
+                checked: item.value === action,
+                disabled: locked && item.value !== 'menu',
+                ...(locked && item.value !== 'menu' ? { description: '至少保留一个菜单区域' } : {}),
+                onSelect: () => set(index, item.value),
+              }))}
+            />
+          );
+        })}
+      </div>
+      <p className="muted">点格子选择动作。从右到左排版的书会自动左右镜像。</p>
+    </section>
+  );
+}
+
 function FoldSection({ title, hint, children }: { title: string; hint?: string; children: ReactNode }): JSX.Element {
   return (
     <details className="panel-fold">

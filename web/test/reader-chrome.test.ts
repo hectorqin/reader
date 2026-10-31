@@ -202,6 +202,24 @@ describe('ReaderChrome', () => {
     expect(tree.querySelector('.sheet')?.textContent).not.toContain('字号');
   });
 
+  it('sets each of the nine tap cells, and keeps the last 菜单 cell a menu', () => {
+    const onSetting = vi.fn();
+    const stage = document.createElement('div');
+    const grid = ['previous', 'menu', 'next', 'previous', 'next', 'next', 'previous', 'next', 'next'];
+    render(h(ReaderChrome, { state: chromeState({ settingsOpen: true, settingsTab: 'behavior', tapZones: grid as NonNullable<ChromeState['tapZones']> }), stage, handlers: { ...handlers(), onSetting } }), container);
+    const cells = [...container.querySelectorAll<HTMLButtonElement>('.tap-zones-grid .tap-zone-cell')];
+    expect(cells.map(cell => cell.textContent)).toEqual(['上一页', '菜单', '下一页', '上一页', '下一页', '下一页', '上一页', '下一页', '下一页']);
+
+    act(() => cells[8]!.click());
+    const nextChapter = [...document.querySelectorAll<HTMLButtonElement>('.action-menu [role^=menuitem]')].find(item => item.textContent === '下一章')!;
+    act(() => nextChapter.click());
+    expect(onSetting).toHaveBeenLastCalledWith({ tapZones: [...grid.slice(0, 8), 'next-chapter'] });
+
+    act(() => cells[1]!.click());
+    const items = [...document.querySelectorAll<HTMLButtonElement>('.action-menu [role^=menuitem]')];
+    expect(items.filter(item => !item.disabled).map(item => item.getAttribute('aria-label') ?? item.textContent)).toEqual(['菜单']);
+  });
+
   it('puts the most-used appearance rows first and folds the rarely changed ones', () => {
     const tree = paint({ settingsOpen: true, settingsTab: 'appearance' });
     const body = tree.querySelector('.sheet-body')!;
