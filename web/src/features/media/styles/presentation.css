@@ -281,7 +281,6 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-settings .media-setting-field,.media-settings .media-settings-check {display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0;border-bottom:1px solid var(--border);font-size:var(--text-ui)}
 .media-settings .media-setting-field select {width:auto;max-width:60%;margin:0}
 .media-settings .media-settings-check input {margin:0;width:18px;height:18px;min-height:18px;flex-shrink:0}
-.media-settings-footer {display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:20px}
 @media(max-width:700px){.media-settings-heading h1 {font-size:var(--text-title)}}
 
 .media-task-library>button {display:flex;align-items:center;gap:6px}
@@ -701,9 +700,6 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-screen.media-video-page>.media-heading {background:var(--media-background);color:var(--text);border-color:var(--border)}
 
 /* Settings and library forms share the prototype's single page heading. */
-.media-utility-workspace .media-settings-heading {margin:0;min-height:49px}
-.media-utility-workspace .media-settings-heading h1 {font-size:var(--text-title);line-height:1.4}
-.media-utility-workspace .media-library-create>.media-form,.media-utility-workspace .media-library-editor,.media-utility-workspace .media-permissions-form {max-width:none;margin:24px 0 0;gap:16px}
 .media-library-fields {display:grid;grid-template-columns:1fr 1fr;gap:16px;min-width:0}
 .media-library-fields>div,.media-library-field {display:grid;gap:7px;min-width:0}
 .media-library-fields span,.media-library-field>span,.media-library-editor>label,.media-library-create label {font-size:var(--text-meta)}
@@ -744,12 +740,9 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-settings-playing svg {flex-shrink:0;color:var(--media-accent)}
 .media-screen .media-settings-playing button {font-size:var(--text-meta);white-space:nowrap}
 @media(min-width:701px){
-  .media-utility-workspace .media-settings-heading,.media-manager-workspace>.media-heading {position:fixed;z-index:90;top:0;left:max(140px,calc((100vw - 1060px)/2 + 110px));right:max(24px,calc((100vw - 1060px)/2));height:62px;min-height:62px;margin:0;border:0;background:var(--media-background);box-shadow:inset 0 -1px var(--border)}
+  .media-manager-workspace>.media-heading {position:fixed;z-index:90;top:0;left:max(140px,calc((100vw - 1060px)/2 + 110px));right:max(24px,calc((100vw - 1060px)/2));height:62px;min-height:62px;margin:0;border:0;background:var(--media-background);box-shadow:inset 0 -1px var(--border)}
 }
 @media(max-width:700px){
-  .media-utility-workspace {padding-top:0}
-  .media-utility-workspace .media-settings-heading {position:sticky;top:0;background:var(--media-background);z-index:4}
-  .media-utility-workspace .media-library-editor,.media-utility-workspace .media-library-create>.media-form,.media-utility-workspace .media-permissions-form {margin-top:17px}
   .media-library-fields {grid-template-columns:1fr;gap:16px}
   .media-account-panel {margin-top:24px}
 }
@@ -838,7 +831,7 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 
 /* 外观与主题 (V3.1, prototype 23). */
 .theme-settings {max-width:640px;margin:16px auto}
-.theme-settings h2 {margin:22px 0 10px;font-size:var(--text-label);font-weight:600;color:var(--muted)}
+.theme-settings :is(h2,h3) {margin:22px 0 10px;font-size:var(--text-label);font-weight:600;color:var(--muted)}
 .theme-settings-card {overflow:hidden;border:1px solid var(--border);border-radius:var(--radius-lg);background:var(--media-paper)}
 .media-screen .theme-follow {display:flex;align-items:center;gap:12px;width:100%;min-height:64px;padding:14px;border-radius:0;text-align:left;color:var(--text)}
 .theme-follow-icon {display:grid;place-items:center;flex:none;width:36px;height:36px;border-radius:var(--radius-md);background:var(--media-selection);color:var(--media-accent)}

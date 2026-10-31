@@ -8,7 +8,7 @@ import {
   Settings, SlidersVertical, Bookmark, Music, ListMusic, ListVideo, ListPlus,
   ListOrdered, Layers, Heart, Star, Clapperboard, UserRound, Lock, LockOpen, Gauge,
   Subtitles, AudioLines, MicVocal, Shuffle, Repeat, Repeat1, Maximize, Minimize, Expand,
-  Shrink, LocateFixed, LayoutGrid, House, Rss,
+  Shrink, LocateFixed, LayoutGrid, House, Rss, UsersRound, Ticket, Link2, ServerCog,
 } from 'lucide-react';
 import type { CSSProperties, JSX } from 'react';
 
@@ -55,6 +55,7 @@ export const ICONS = {
   // state and people
   eye: Eye, 'eye-off': EyeOff, info: Info, warning: TriangleAlert, offline: CloudOff,
   clock: Clock, history: History, favorite: Heart, star: Star, account: UserRound,
+  users: UsersRound, invite: Ticket, connect: Link2, server: ServerCog,
 } as const;
 
 export type IconName = keyof typeof ICONS;

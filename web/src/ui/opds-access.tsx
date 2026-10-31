@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, type ReaderApi } from '../api/client.ts';
 import type { OpdsCredential } from '../api/sources.ts';
-import { Sheet } from './sheet.tsx';
 import { Button } from './toolkit.tsx';
 import { FloatingNotice } from './floating-notice.tsx';
 
-export function OpdsAccess({ api, onClose, onSignedOut }: { api: ReaderApi; onClose(): void; onSignedOut(): void }) {
+/**
+ * OPDS credentials for the signed-in account: the catalogue URL, and one revocable
+ * username/password per external reader. A page of 我的 (/me/opds), reached from
+ * 我的, from 偏好设置 › 书架, and from the shelf's settings sheet.
+ */
+export function OpdsAccess({ api, onSignedOut }: { api: ReaderApi; onSignedOut(): void }) {
   const [items, setItems] = useState<OpdsCredential[]>([]), [name, setName] = useState('');
   const [created, setCreated] = useState<{ username: string; password: string } | null>(null);
   const [url, setUrl] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
@@ -27,8 +31,7 @@ export function OpdsAccess({ api, onClose, onSignedOut }: { api: ReaderApi; onCl
     setItems(value.credentials); setUrl(new URL(value.catalogUrl, api.baseUrl || location.href).href);
   };
   useEffect(() => { void run(reload); return () => { active.current = false; }; }, []);
-  return <Sheet title="连接外部阅读器" busy={busy} onClose={onClose}>
-    <div className="sheet-form opds-access">
+  return <div className="sheet-form opds-access">
       <FloatingNotice message={busy ? '正在处理…' : error} busy={busy} error={!!error} />
       <p className="sheet-text">通过 OPDS 1.2 只读目录访问当前账号书架中的文件书籍。章节书和目录漫画暂不发布</p>
       <label className="sheet-field">目录地址<input readOnly value={url} /></label>
@@ -47,6 +50,5 @@ export function OpdsAccess({ api, onClose, onSignedOut }: { api: ReaderApi; onCl
       </form>
       {items.map(item => <article className="sources-row" key={item.id}><div><strong>{item.name}</strong><small>到期：{new Date(item.expiresAt).toLocaleDateString()}</small></div>
         <Button disabled={busy} onClick={() => void run(async () => { await api.revokeOpdsCredential(item.id); if (!active.current) return; if (created?.username === item.id) setCreated(null); await reload(); })}>撤销 {item.name}</Button></article>)}
-    </div>
-  </Sheet>;
+  </div>;
 }

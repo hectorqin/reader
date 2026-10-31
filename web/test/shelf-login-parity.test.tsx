@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest';
 import { act, type ReactNode } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 import { render } from '../src/shared/ui/render-root.ts';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
@@ -58,8 +58,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function OpdsProbe() { return <p data-opds-return={useLocation().state?.returnTo} />; }
+
 it('keeps the shelf entry points available and restores clear, settings and OPDS actions', async () => {
-  const value = mount(<ShelfPage />, runtime(), '/shelf?q=三体');
+  mount(<Routes><Route path="/shelf" element={<ShelfPage />} /><Route path="/me/opds" element={<OpdsProbe />} /></Routes>, runtime(), '/shelf?q=三体');
   expect(root.textContent).toContain('书源');
   expect(root.textContent).not.toContain('刷新');
   expect(root.querySelector('button[aria-label^="书架设置"]')).not.toBeNull();
@@ -72,8 +74,8 @@ it('keeps the shelf entry points available and restores clear, settings and OPDS
   await act(async () => settingsButton?.click());
   expect(root.textContent).toContain('连接外部阅读器');
   await act(async () => [...root.querySelectorAll('button')].find(button => button.textContent === '连接外部阅读器')?.click());
-  await vi.waitFor(() => expect(root.querySelector('dialog')).not.toBeNull());
-  expect(value.api.opdsCredentials).toHaveBeenCalled();
+  // The OPDS page of 我的, which returns to the shelf.
+  await vi.waitFor(() => expect(root.querySelector('[data-opds-return]')?.getAttribute('data-opds-return')).toBe('/shelf'));
 });
 
 it('collapses the server address and explains that sessions are remembered on login', () => {

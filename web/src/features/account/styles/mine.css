@@ -102,3 +102,57 @@
 
 .mine-page .mine-row.is-danger { color: var(--media-error-ink); }
 .mine-page .mine-row.is-danger .mine-row-icon { background: var(--media-error-background); color: var(--media-error-ink); }
+
+/* 偏好设置 (/me/settings): one column of sections, each opened by its own heading.
+ * The sections bring their own controls (theme cards, the shelf's toolkit rows, the
+ * media fields); this only lays them out as one page. */
+.settings-body { max-width: 640px; margin: 0 auto; padding-bottom: 40px; }
+.settings-jump { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 4px; }
+.settings-page .settings-jump button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: var(--text-label);
+  cursor: pointer;
+}
+.settings-page .settings-jump button[aria-current='true'] { border-color: var(--color-brand); background: var(--color-brand-soft); color: var(--color-brand-text); }
+@media (hover: hover) and (pointer: fine) { .settings-page .settings-jump button:hover { background: var(--color-surface-2); } }
+
+/* Clears the page's pinned title bar when a section is scrolled to. */
+.settings-section { margin: 32px 0 0; scroll-margin-top: 88px; }
+.settings-section > h2 { margin: 0 0 4px; padding-bottom: 10px; border-bottom: 1px solid var(--color-line); font-size: var(--text-title); font-weight: 650; color: var(--color-ink); }
+.settings-section h3 { margin: 22px 0 10px; font-size: var(--text-label); font-weight: 600; color: var(--color-muted); }
+.settings-note { margin: 10px 0 0; font-size: var(--text-label); color: var(--color-muted); }
+.settings-page .theme-settings { margin: 0; max-width: none; }
+.settings-page .media-settings { max-width: none; }
+.settings-page .media-settings .media-settings-panel { margin: 4px 0 0; }
+
+/* The shelf's toolkit rows were drawn for a sheet: on the page their headings are
+ * plain sub-labels, not sticky bars. */
+.settings-page .shelf-settings .section-title { position: static; margin: 22px 0 10px; padding: 0; border: 0; background: none; color: var(--color-muted); }
+.settings-page .shelf-settings .segmented { width: 100%; }
+
+.settings-page .settings-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+  padding: 14px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  text-decoration: none;
+}
+.settings-link > span { flex: 1; min-width: 0; }
+.settings-link strong { display: block; font-size: var(--text-body); font-weight: 500; }
+.settings-link small { display: block; margin-top: 2px; font-size: var(--text-meta); color: var(--color-muted); }
+.settings-link svg { flex: none; color: var(--color-muted); }
+@media (hover: hover) and (pointer: fine) { .settings-page .settings-link:hover { background: var(--color-surface-2); } }
+
+/* 外部阅读器 and the 管理 pages: sheet-sized forms, given the same column. */
+.opds-page .opds-access, .admin-page .user-management { max-width: 640px; margin: 16px auto 40px; }

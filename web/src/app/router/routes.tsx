@@ -6,13 +6,14 @@ import { MediaFavoritesPage } from '../../features/media/pages/MediaFavoritesPag
 import { MediaHistoryPage } from '../../features/media/pages/MediaHistoryPage.tsx';
 import { MediaDetailPage } from '../../features/media/pages/MediaDetailPage.tsx';
 import { MediaQueuePage } from '../../features/media/pages/MediaQueuePage.tsx';
-import { LegacyMediaSettingsRedirect, MediaSettingsPage } from '../../features/media/pages/MediaSettingsPage.tsx';
 import { MediaPlayerPage } from '../../features/media/pages/MediaPlayerPage.tsx';
 import { RouteErrorBoundary } from './error-boundary.tsx';
 import { ShelfPage } from '../../features/shelf/pages/ShelfPage.tsx';
 import { LibraryPage, LibraryBrowsePage, LibraryFilesPage } from '../../features/library/pages/LibraryPage.tsx';
 import { SourcesPage } from '../../features/sources/pages/SourcesPage.tsx';
 import { MinePage } from '../../features/account/pages/MinePage.tsx';
+import { LegacySettingsRedirect, SettingsPage } from '../../features/account/pages/SettingsPage.tsx';
+import { AccountPage, OpdsPage } from '../../features/account/pages/AccountPages.tsx';
 import { HomePage } from '../../features/home/pages/HomePage.tsx';
 import { SearchPage } from '../../features/search/pages/SearchPage.tsx';
 import { MediaFoldersPage } from '../../features/media/pages/MediaFoldersPage.tsx';
@@ -22,6 +23,7 @@ import {
   MediaLibrariesPage, MediaLibraryCreatePage, MediaLibraryEditPage, MediaLibraryPermissionsPage, MediaTasksPage,
   MediaMetadataEditPage, MediaMatchPage, MediaChaptersPage, MediaEditionPage, MediaStructurePage,
   SourceEditorPage, SourceCredentialsPage, SourceExtensionPage, StatsPage,
+  AdminUsersPage, AdminRegistrationPage, AdminServicesPage,
 } from './lazy-pages.tsx';
 import { SourceCatalogPage } from '../../features/sources/pages/SourceCatalogPage.tsx';
 
@@ -54,13 +56,19 @@ export const routes = [{
     { path: 'settings', element: <Navigate to="/shelf" replace /> },
     { path: 'book/:bookId', element: <ReaderPage /> },
     // 我的 shares MediaLayout so it follows the chosen theme and keeps the channel rail.
-    // Its settings rows open /me/:panel (theme, browse, playback, account),
-    // so back from any of them returns to 我的.
+    // Every row of it opens a page under /me, so back from any of them returns to 我的:
+    // all personal preferences are sections of one page (/me/settings), administration
+    // is one page per job (/me/admin/*). Old panel links (/me/theme, …) redirect.
     { path: 'me', element: <MediaLayout />, children: [
       { index: true, element: <MinePage /> },
-      // Before :panel, which would otherwise take it as a settings panel name.
+      { path: 'settings', element: <SettingsPage /> },
       { path: 'stats', element: <StatsPage /> },
-      { path: ':panel', element: <MediaSettingsPage /> },
+      { path: 'account', element: <AccountPage /> },
+      { path: 'opds', element: <OpdsPage /> },
+      { path: 'admin/users', element: <AdminUsersPage /> },
+      { path: 'admin/registration', element: <AdminRegistrationPage /> },
+      { path: 'admin/services', element: <AdminServicesPage /> },
+      { path: ':panel', element: <LegacySettingsRedirect /> },
     ] },
     { path: 'media', element: <MediaLayout />, children: [
       { index: true, element: <Navigate to="video" replace /> },
@@ -72,13 +80,13 @@ export const routes = [{
       { path: ':channel/favorites', element: <MediaFavoritesPage /> },
       { path: ':channel/queue', element: <MediaQueuePage /> },
       // 影音设置 is gone; its panels live in 我的.
-      { path: ':channel/settings', element: <LegacyMediaSettingsRedirect /> },
+      { path: ':channel/settings', element: <LegacySettingsRedirect /> },
       { path: ':channel/settings/libraries', element: <MediaLibrariesPage /> },
       { path: ':channel/settings/libraries/new', element: <MediaLibraryCreatePage /> },
       { path: ':channel/settings/libraries/:libraryId/edit', element: <MediaLibraryEditPage /> },
       { path: ':channel/settings/libraries/:libraryId/permissions', element: <MediaLibraryPermissionsPage /> },
       { path: ':channel/settings/tasks', element: <MediaTasksPage /> },
-      { path: ':channel/settings/:panel', element: <LegacyMediaSettingsRedirect /> },
+      { path: ':channel/settings/:panel', element: <LegacySettingsRedirect /> },
       { path: ':channel/folders/:libraryId?', element: <MediaFoldersPage /> },
       { path: 'audiobook/narrators', element: <MediaNarratorsPage /> },
       { path: 'audiobook/narrators/:narrator/works/:workId', element: <MediaNarratorsPage /> },

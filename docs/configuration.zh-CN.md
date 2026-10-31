@@ -15,7 +15,7 @@
 
 ## 页面业务配置
 
-管理员在「我的 → 系统设置 → 服务配置」中管理 AI 功能、媒体播放方式、HTTP 朗读、扫描、刮削、登录有效期、对外地址、浏览器来源、TMDB、MusicBrainz 及 WebDAV 备份目标，注册策略在同一面板的「注册与邀请」中设置。配置写入 reader.db，保存后无需重启。详见[业务配置](business-settings.zh-CN.md)。
+管理员在「我的 → 服务配置」中管理 AI 功能、媒体播放方式、HTTP 朗读、扫描、刮削、登录有效期、对外地址、浏览器来源、TMDB、MusicBrainz 及 WebDAV 备份目标，注册策略在「我的 → 注册与邀请」中设置。配置写入 reader.db，保存后无需重启。详见[业务配置](business-settings.zh-CN.md)。
 
 升级首次启动会导入旧业务环境变量；数据库存在配置后不再读取这些环境变量，清空字段也不会恢复旧值。
 
@@ -49,13 +49,13 @@ reader.example.com {
 }
 ```
 
-在「我的 → 系统设置 → 服务配置 → 登录与服务访问」中设置对外服务地址为 `https://reader.example.com`。如果 Caddy 也在容器中，代理地址应改为容器网络中 reader 的服务地址。
+在「我的 → 服务配置 → 登录与服务访问」中设置对外服务地址为 `https://reader.example.com`。如果 Caddy 也在容器中，代理地址应改为容器网络中 reader 的服务地址。
 
 前后端分开部署时，在「登录与服务访问」中设置允许的浏览器来源为 Web 客户端的实际来源。书源搜索采用 Streamable HTTP，代理需要持续转发 `text/event-stream`；不要把搜索响应缓冲到完成后才返回。没有公网 IP 时也可用 VPN 或隧道连接服务。
 
 ## HTTP 朗读
 
-优先使用 Android 系统语音或浏览器 `speechSynthesis`。需要 HTTP 语音时，进入「我的 → 系统设置 → 服务配置 → HTTP 朗读」，填写合成接口、认证令牌和可选音色列表地址，启用后检测连接、试听并保存。请求超时和音频缓存上限也在此设置。
+优先使用 Android 系统语音或浏览器 `speechSynthesis`。需要 HTTP 语音时，进入「我的 → 服务配置 → HTTP 朗读」，填写合成接口、认证令牌和可选音色列表地址，启用后检测连接、试听并保存。请求超时和音频缓存上限也在此设置。
 
 reader 代理语音请求，不内置合成模型。上游接口需兼容项目的请求协议；不能仅凭服务名称判断是否兼容，详见 [TTS API](api.md)。地址必须从 reader 容器内可达，容器内的 `localhost` 指容器自身。
 
@@ -86,7 +86,7 @@ reader 代理语音请求，不内置合成模型。上游接口需兼容项目�
 
 官方镜像包含 ffprobe 和 ffmpeg。本机启动时将二者加入 PATH，或设置 MEDIA_FFPROBE_PATH / MEDIA_FFMPEG_PATH 为可执行文件路径。ffprobe 用于时长、编码、标签和章节，ffmpeg 用于内嵌资源提取，均不提供转码。
 
-在线匹配在「我的 → 系统设置 → 服务配置」的 TMDB 和 MusicBrainz 分类中配置令牌、API Key、应用标识与联系地址。可测试连接、调整资料语言并保存，无需重启。本地 NFO 和标签读取不依赖在线凭据。
+在线匹配在「我的 → 服务配置」的 TMDB 和 MusicBrainz 分类中配置令牌、API Key、应用标识与联系地址。可测试连接、调整资料语言并保存，无需重启。本地 NFO 和标签读取不依赖在线凭据。
 
 OpenList 连接信息在建库界面设置，无需本地挂载；服务端必须能访问 OpenList 和其下载源。远端内嵌资料暂不读取，某些驱动需要 OpenList Web 代理。配置与限制见 [OpenList 接入](media-openlist.md)。
 

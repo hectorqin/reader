@@ -15,7 +15,7 @@ Read-only books do not prevent account or progress updates in the data directory
 
 ## Business settings in the UI
 
-Administrators configure AI features, media playback mode, HTTP speech, scanning, scraping, login lifetimes, public URL, browser origins, TMDB, MusicBrainz and WebDAV under Me → System settings → Service configuration (我的 → 系统设置 → 服务配置). Registration is set in the same panel under Registration and invitations (注册与邀请). Values persist in reader.db and apply without restarting.
+Administrators configure AI features, media playback mode, HTTP speech, scanning, scraping, login lifetimes, public URL, browser origins, TMDB, MusicBrainz and WebDAV under Me → Service configuration (我的 → 服务配置). Registration is set under Me → Registration and invitations (我的 → 注册与邀请). Values persist in reader.db and apply without restarting.
 
 On first upgrade, legacy business environment variables are imported once. Existing database values, including cleared credentials, always win. See [business settings (中文)](business-settings.zh-CN.md).
 
@@ -49,7 +49,7 @@ reader.example.com {
 }
 ```
 
-Set the public URL to `https://reader.example.com` in Me → System settings → Service configuration → Login and service access (登录与服务访问). If Caddy also runs in a container, use reader's service address on the container network instead.
+Set the public URL to `https://reader.example.com` in Me → Service configuration → Login and service access (登录与服务访问). If Caddy also runs in a container, use reader's service address on the container network instead.
 
 For separately hosted frontends, set allowed browser origins in Login and service access to the Web client's actual origin. Source search uses Streamable HTTP: proxies must forward `text/event-stream` incrementally rather than buffer the entire response. A VPN or tunnel can provide access when you have no public IP.
 
@@ -57,7 +57,7 @@ For separately hosted frontends, set allowed browser origins in Login and servic
 
 Use Android system speech or browser `speechSynthesis` when available. To enable an HTTP speech service, configure a compatible upstream in the administrator UI:
 
-Configure the synthesis URL, token, voices URL, timeout and cache limit in Me → System settings → Service configuration → HTTP speech (HTTP 朗读). Test the connection and preview audio before saving.
+Configure the synthesis URL, token, voices URL, timeout and cache limit in Me → Service configuration → HTTP speech (HTTP 朗读). Test the connection and preview audio before saving.
 
 reader proxies speech requests and does not include a synthesis model. The upstream must implement the expected request protocol; a service's name alone does not establish compatibility. See the [TTS API (中文)](api.md). The address must be reachable from the reader container; `localhost` inside a container refers to that container.
 
@@ -88,7 +88,7 @@ Mount local movie, series, music, and audiobook directories separately (read-onl
 
 The official image includes ffprobe and ffmpeg. For native runs, put them on PATH or set MEDIA_FFPROBE_PATH / MEDIA_FFMPEG_PATH to executable paths. They probe metadata and extract embedded resources; they do not enable transcoding.
 
-Configure TMDB credentials and MusicBrainz contact information under Me → System settings → Service configuration. Changes apply without restarting. Local tags and NFO work without online credentials.
+Configure TMDB credentials and MusicBrainz contact information under Me → Service configuration. Changes apply without restarting. Local tags and NFO work without online credentials.
 
 Configure OpenList in the library creation form; no local mount is needed. Reader must reach OpenList and its download upstreams. Remote embedded metadata is not read, and some drivers require OpenList Web proxy. See [OpenList setup (中文)](media-openlist.md).
 

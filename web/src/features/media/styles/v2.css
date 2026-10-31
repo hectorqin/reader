@@ -248,8 +248,8 @@
 @media(min-width:701px){
  .media-screen>.media-heading:has(.media-tabs:not([hidden])) {display:block;height:auto;min-height:0;margin:0;border:0;padding:0}
  .media-screen .media-mobile-title {display:none}
- .media-screen:is(.media-secondary-page,.media-utility-workspace,.media-playback-page) .media-heading,.media-utility-workspace .media-settings-heading {height:68px;min-height:68px}
- .media-screen:is(.media-secondary-page,.media-playback-page,.media-manager-workspace)>.media-heading,.media-screen.media-metadata-workspace>.media-metadata-host>.media-heading,.media-screen:has(>.media-detail-page)>.media-heading,.media-utility-workspace .media-settings-heading {left:max(24px,calc((100vw - 1060px)/2))}
+ .media-screen:is(.media-secondary-page,.media-playback-page) .media-heading {height:68px;min-height:68px}
+ .media-screen:is(.media-secondary-page,.media-playback-page,.media-manager-workspace)>.media-heading,.media-screen.media-metadata-workspace>.media-metadata-host>.media-heading,.media-screen:has(>.media-detail-page)>.media-heading {left:max(24px,calc((100vw - 1060px)/2))}
  .media-screen .media-mobile-title {height:68px;left:max(145px,calc((100vw - 1056px)/2 + 110px))}
  .media-heading:has(.media-mobile-title) .media-heading-actions {top:12px}
  .media-screen .media-playback-status[data-panel=main] {display:grid;grid-template-columns:360px minmax(0,1fr);grid-template-rows:1fr auto auto auto 1fr;column-gap:64px;min-height:540px;align-content:center}
@@ -753,13 +753,13 @@
 /* Secondary routes own the page chrome. The channel rail belongs to catalogue
    landing pages and must not remain visible behind a secondary title row. */
 
-.media-screen:is(.media-secondary-page,.media-manager-workspace,.media-playback-page,.media-detail-shell)>.media-heading,.media-screen:has(>.media-detail-page)>.media-heading,.media-screen.media-metadata-workspace>.media-metadata-host>.media-heading,.media-utility-workspace .media-settings-heading,.media-narrators:not([data-view=directory])>.media-narrator-heading {
+.media-screen:is(.media-secondary-page,.media-manager-workspace,.media-playback-page,.media-detail-shell)>.media-heading,.media-screen:has(>.media-detail-page)>.media-heading,.media-screen.media-metadata-workspace>.media-metadata-host>.media-heading,.media-narrators:not([data-view=directory])>.media-narrator-heading {
   border-bottom:1px solid var(--border)!important;
   box-shadow:none!important;
 }
 
 @media(min-width:701px){
-  .media-screen:is(.media-secondary-page,.media-manager-workspace,.media-playback-page,.media-detail-shell)>.media-heading,.media-screen:has(>.media-detail-page)>.media-heading,.media-screen.media-metadata-workspace>.media-metadata-host>.media-heading,.media-utility-workspace .media-settings-heading,.media-narrators:not([data-view=directory])>.media-narrator-heading {
+  .media-screen:is(.media-secondary-page,.media-manager-workspace,.media-playback-page,.media-detail-shell)>.media-heading,.media-screen:has(>.media-detail-page)>.media-heading,.media-screen.media-metadata-workspace>.media-metadata-host>.media-heading,.media-narrators:not([data-view=directory])>.media-narrator-heading {
     height:68px;
     min-height:68px;
   }
