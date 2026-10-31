@@ -2705,6 +2705,73 @@ book-content {
   padding-bottom: var(--space-2);
 }
 
+/* 点击区域设置: the page drawn small, nine cells, each a menu trigger. The grid is
+ * portrait like the page it stands for, so a cell's place reads as the place on
+ * the screen; its height is capped so the sheet still shows the rows around it. */
+.tap-zones {
+  margin-bottom: var(--space-3);
+}
+
+.tap-zones-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.tap-zones-title {
+  margin-inline-end: auto;
+  font-size: var(--text-label);
+  color: var(--reader-muted);
+}
+
+.tap-zones-head .tap-zones-action {
+  padding: 0.35rem 0.6rem;
+  font-size: var(--text-label);
+}
+
+.tap-zones-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  gap: var(--space-1);
+  width: min(100%, 15rem);
+  aspect-ratio: 3 / 4;
+  margin-inline: auto;
+  padding: var(--space-1);
+  border: 1px solid var(--reader-line);
+  border-radius: var(--reader-radius);
+  background: var(--reader-paper);
+}
+
+.tap-zones-grid .tap-zone-cell {
+  flex-direction: column;
+  min-width: 0;
+  min-height: 44px;
+  height: 100%;
+  padding: var(--space-1);
+  border-style: dashed;
+  background: transparent;
+  font-size: var(--text-label);
+}
+
+.tap-zones-grid .tap-zone-cell.is-menu {
+  border-style: solid;
+  border-color: var(--reader-accent);
+  background: var(--reader-fill);
+  color: var(--reader-on-fill);
+}
+
+.tap-zones-grid .tap-zone-cell.is-none {
+  color: var(--reader-muted);
+}
+
+.tap-zones > .muted {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-meta);
+  text-align: center;
+}
+
 /* The one action the read-aloud sheet exists for: full width, first, and tall enough to hit. */
 .speech-start {
   display: flex;

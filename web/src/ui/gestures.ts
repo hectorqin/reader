@@ -3,9 +3,10 @@
  *
  * The rules that matter on a phone, and why:
  *
- *  - A tap in the middle third toggles the chrome; taps in the outer thirds turn
- *    the page. This is the convention every mobile reader uses, and violating it
- *    is immediately noticeable.
+ *  - A tap is reported as a cell of a 3×3 grid over the stage; what each cell
+ *    does is the reader's 点击区域 setting (`tap-zones.ts`), by default the
+ *    convention every mobile reader uses: the middle column toggles the chrome,
+ *    the outer columns turn the page.
  *  - A swipe must be mostly horizontal to count. A diagonal drag is almost
  *    always an attempt to scroll, and treating it as a page turn makes a
  *    reflowable book feel like it is fighting back.
@@ -32,7 +33,8 @@
  */
 
 export interface GestureHandlers {
-  onTapZone(zone: 'previous' | 'toggle-chrome' | 'next'): void;
+  /** A tap, as the cell of a 3×3 grid it fell in: `column` and `row` are each 0–2. */
+  onTapZone(column: number, row: number): void;
   onSwipe(direction: 'left' | 'right' | 'up' | 'down'): void;
   /** Fires continuously while a finger is down and moving; paged mode follows it. */
   onDragDelta(deltaX: number, deltaY: number, pointerType: string): void;
@@ -281,10 +283,15 @@ export function attachGestures(element: HTMLElement, handlers: GestureHandlers):
       // no-op — which is what makes this a correction rather than a conversion.
       const scale = layoutWidth > 0 && rect.width > 0 ? rect.width / layoutWidth : 1;
       const x = (event.clientX - rect.left - element.clientLeft * scale) / scale + element.scrollLeft;
-      const third = width / 3;
-      if (x < third) handlers.onTapZone('previous');
-      else if (x > third * 2) handlers.onTapZone('next');
-      else handlers.onTapZone('toggle-chrome');
+      // The row is the same arithmetic on the other axis. The stage itself does not
+      // scroll vertically (in scroll mode the shadow host inside it does), so the
+      // rows divide what is on screen, not the chapter.
+      const layoutHeight = element.offsetHeight;
+      const height = layoutHeight > 0 ? layoutHeight : rect.height || element.clientHeight;
+      const scaleY = layoutHeight > 0 && rect.height > 0 ? rect.height / layoutHeight : 1;
+      const y = (event.clientY - rect.top - element.clientTop * scaleY) / scaleY;
+      const cell = (offset: number, size: number): number => (offset < size / 3 ? 0 : offset > (size * 2) / 3 ? 2 : 1);
+      handlers.onTapZone(cell(x, width), height > 0 ? cell(y, height) : 1);
     }
   };
 

@@ -1,6 +1,7 @@
 import type { KeyValueStore } from '../core/platform.ts';
 import type { ViewSettings } from '../ui/reader-view.ts';
 import { validReaderPaper, type ReaderPaper } from '../shared/theme/theme.ts';
+import { normalizeTapZones, tapZonePreset, type TapZoneGrid } from '../ui/tap-zones.ts';
 
 /**
  * Reader preferences, persisted per device.
@@ -50,6 +51,12 @@ export interface AppSettings extends ViewSettings {
   readoutTopRight: ReadoutMode;
   readoutBottomLeft: ReadoutMode;
   readoutBottomRight: ReadoutMode;
+  /**
+   * 点击区域: one action per cell of a 3×3 grid, row-major (see `ui/tap-zones.ts`).
+   * Supersedes `tapZone`, which is kept so an older build on the same device still
+   * finds the setting it knows; a device without a grid derives it from `tapZone`.
+   */
+  tapZones: TapZoneGrid;
   /** UTF-8 by default; a reader can force another for an odd TXT file. */
   txtEncoding: string;
   /** Only meaningful for fixed-layout books. */
@@ -115,6 +122,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   brightness: 1,
   pageAnimation: 'slide',
   tapZone: 'standard',
+  tapZones: tapZonePreset('standard'),
   txtIndent: 2,
   txtParagraphGap: 0.55,
   txtEncoding: '',
@@ -174,6 +182,7 @@ export class SettingsStore {
           this.settings.paper = legacy[String(parsed.theme)] ?? 'theme';
         }
         this.settings.paper = validReaderPaper(this.settings.paper);
+        this.settings.tapZones = normalizeTapZones(parsed.tapZones, parsed.tapZone);
         if (typeof this.settings.paperFollowsDark !== 'boolean') this.settings.paperFollowsDark = true;
         if (!['recent', 'added', 'title', 'author'].includes(this.settings.shelfSort)) {
           this.settings.shelfSort = DEFAULT_APP_SETTINGS.shelfSort;
