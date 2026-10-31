@@ -237,6 +237,25 @@ CREATE TABLE IF NOT EXISTS reading_progress (
 );
 CREATE INDEX IF NOT EXISTS idx_progress_updated ON reading_progress(user_id, updated_at);
 
+-- Where the reader has been in a book, so a jump can be undone (P0: 进度历史).
+-- reading_progress keeps one row and last-writer-wins, which is right for "where am
+-- I" and wrong for "where was I": a stale device, a mistapped 目录 entry or a device
+-- whose clock runs fast all overwrite the place for good. Every valid progress write
+-- lands here too — including one that lost the merge — and a device reading on
+-- through one chapter updates its latest entry instead of adding rows. A new table,
+-- so older builds that share this database simply do not see it.
+CREATE TABLE IF NOT EXISTS reading_progress_history (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  book_id       TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  locator       TEXT NOT NULL DEFAULT '',
+  percentage    REAL NOT NULL DEFAULT 0,
+  chapter_title TEXT NOT NULL DEFAULT '',
+  device        TEXT NOT NULL DEFAULT '',
+  updated_at    INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_progress_history ON reading_progress_history(user_id, book_id, updated_at);
+
 -- Notes, highlights and bookmarks. deleted is a tombstone rather than a hard
 -- delete so that an offline client cannot resurrect a note it removed elsewhere.
 CREATE TABLE IF NOT EXISTS notes (

@@ -3880,6 +3880,15 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .book-detail-author { color: var(--reader-muted); }
 .book-detail dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .6rem 1rem; padding-block: .8rem; border-block: 1px solid var(--reader-line); }
 .book-detail dt { color: var(--reader-muted); }
+/* 阅读记录 in 书籍信息: one row per place, the one on screen marked and not pressable. */
+.reading-history ul { display: grid; gap: var(--space-1); margin: 0; padding: 0; list-style: none; }
+.reading-history button { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 var(--space-2); width: 100%; min-height: 44px; padding: var(--space-1) var(--space-2); border: 1px solid var(--reader-line); border-radius: var(--radius-sm); background: transparent; color: var(--reader-ink); font: inherit; text-align: start; cursor: pointer; }
+.reading-history button strong { grid-column: 1; font-weight: 500; overflow-wrap: anywhere; }
+.reading-history button small { grid-column: 1; color: var(--reader-muted); font-size: var(--text-meta); }
+.reading-history button:disabled { cursor: default; border-color: transparent; background: var(--color-brand-soft); }
+.reading-history button:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.reading-history-current { grid-column: 2; grid-row: 1 / span 2; color: var(--reader-accent); font-size: var(--text-meta); }
+@media (hover: hover) and (pointer: fine) { .reading-history button:not(:disabled):hover { border-color: var(--reader-accent); } }
 .book-detail dd { margin: 0; overflow-wrap: anywhere; }
 .book-detail-description { white-space: pre-wrap; line-height: 1.8; overflow-wrap: anywhere; }
 

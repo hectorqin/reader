@@ -296,7 +296,9 @@ export class ReaderScreen {
             onSwitchEngine: (kind) => this.switchSpeechEngine(kind),
             onTocEntry: (ref) => void this.goToChapterRef(ref),
             onChapter: (delta) => void this.goToChapter(delta),
-            onBookInfo: () => this.patch({ bookInfoOpen: !this.chrome.bookInfoOpen }),
+            onBookInfo: () => { const open = !this.chrome.bookInfoOpen; this.patch({ bookInfoOpen: open }); if (open) void this.loadHistory(); },
+            onRetryHistory: () => void this.loadHistory(),
+            onRestoreHistory: (locator) => void this.restoreHistory(locator),
             onAiSummary: () => void this.generateAiSummary(),
             onRefresh: () => void this.refreshPublication(),
             onRefreshChapter: () => void this.refreshChapter(),
@@ -1347,6 +1349,40 @@ export class ReaderScreen {
    * and the *write* is debounced below, because a scroll is a gesture in progress
    * rather than a sequence of decisions to persist.
    */
+  /**
+   * Reads 阅读记录 for 书籍信息. The position on screen is pushed first, so the list
+   * already holds where the reader is now and that entry can be marked 当前.
+   */
+  private async loadHistory(): Promise<void> {
+    const book = this.book;
+    if (!book || typeof this.options.api.progressHistory !== 'function') return;
+    this.patch({ historyState: 'loading' });
+    try {
+      await this.flushProgress().catch(() => undefined);
+      if (typeof this.options.sync.flush === 'function') await this.options.sync.flush();
+      const history = await this.options.api.progressHistory(book.id);
+      if (this.disposed || this.book !== book) return;
+      this.patch({ historyState: 'ready', history, historyCurrent: this.view?.position()?.locator ?? '' });
+    } catch (error) {
+      if (this.disposed || this.book !== book) return;
+      if (error instanceof ApiError && error.isAuthFailure) { this.options.onSignedOut(); return; }
+      this.patch({ historyState: error instanceof ApiError && error.isConnectivity ? 'offline' : 'error' });
+    }
+  }
+
+  /** Goes back to a place from 阅读记录; that place then becomes the saved position. */
+  private async restoreHistory(locator: string): Promise<void> {
+    this.patch({ bookInfoOpen: false });
+    try {
+      await this.navigateTool(locator);
+      this.onPosition(this.view?.position() ?? null);
+      await this.flushProgress();
+      this.flashStatus('已回到这个位置', 1800);
+    } catch (error) {
+      this.setStatus('error', error instanceof Error ? error.message : '无法回到这个位置');
+    }
+  }
+
   /** Bookmarks at this exact reading position — the same test 阅读工具 uses for 已加书签. */
   private bookmarksHere(locator: string | undefined): Note[] {
     if (!this.book || !locator) return [];
