@@ -61,7 +61,7 @@ export function StatsPage() {
   const [hover, setHover] = useState('');
   const focus = series.find(point => point.key === (hover || selected));
 
-  return <MediaPageFrame className="media-utility-workspace stats-page" title="时长统计" backTo="/me" backLabel="返回我的">
+  return <MediaPageFrame className="media-secondary-page stats-page" title="时长统计" backTo="/me" backLabel="返回我的">
     <div className="stats-controls">
       <Segmented label="统计方式" options={GROUPS} value={group} onChange={value => set({ g: value === 'day' ? '' : value, at: '', sel: '' })} />
       {group !== 'year' && <div className="stats-nav">
