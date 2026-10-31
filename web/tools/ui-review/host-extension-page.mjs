@@ -31,7 +31,8 @@ try {
   else if(p==='/api/v1/books/extension-book')json={book,progress:null};
   else if(p.endsWith('/extension-book/manifest'))json={book,files:[],contentUrl:'',coverUrl:null,content:content(revision),...content(revision)};
   else if(p.endsWith('/extension-book/source-options'))json={canSwitch:true};
-  else if(p.endsWith('/extension-book/alternatives'))json={title:'其它书源',items:[{ref:'candidate',title:book.title,authors:[book.author],description:'【示例书源 B】'}]};
+  // Alternatives stream like a search (event: results … event: done).
+  else if(p.endsWith('/extension-book/alternatives'))return route.fulfill({contentType:'text/event-stream',body:'event: results\ndata: '+JSON.stringify({title:'其它书源',items:[{ref:'candidate',title:book.title,authors:[book.author],sourceName:'示例书源 B',description:'【示例书源 B】'}]})+'\n\nevent: done\ndata: {}\n\n'});
   else if(p.endsWith('/extension-book/switch-preview'))json={chapters:[{id:'new-one',title:'第一章 初见'},{id:'new-two',title:'第二章 远行'}]};
   else if(p.endsWith('/extension-book/switch-source')) {
    if(fail)return route.fulfill({status:502,contentType:'application/json',body:JSON.stringify({error:{code:'SOURCE_ERROR',message:'测试：新源暂时不可用'}})});
@@ -59,7 +60,8 @@ try {
  for (const width of [1024, 1366, 1920]) {
   await page.setViewportSize({width,height:900});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-  assert.ok(await page.locator('.sources-body').evaluate(el=>el.getBoundingClientRect().width >= Math.min(innerWidth - 48, 1280)), 'desktop source page uses the shared content measure');
+  // Measured against the content column beside the sidebar nav, not the whole window.
+  assert.ok(await page.locator('.sources-body').evaluate(el=>el.getBoundingClientRect().width >= Math.min(document.querySelector('.app-shell-body').clientWidth - 64, 1200)), 'desktop source page uses the shared content measure');
   assert.ok(await page.getByRole('tab').first().evaluate(el=>el.getBoundingClientRect().width<240), 'desktop tabs stay compact');
   await page.screenshot({path:join(shots,`plugin-config-desktop-${width}.png`),animations:'disabled'});
   const bounds = selector => page.locator(selector).first().evaluate(el => {const r=el.getBoundingClientRect(); return {left:r.left,width:r.width};});
@@ -75,9 +77,11 @@ try {
   await page.screenshot({path:join(shots,`sources-hub-desktop-${width}.png`),animations:'disabled'});
   await page.goto(base+'/#/sources/catalog/library'); await page.getByRole('heading',{name:'我的远程书源',exact:true}).waitFor();
  }
- await page.setViewportSize({width:390,height:844});await page.goto(base+'/#/sources');await page.getByRole('combobox',{name:'选择来源',exact:true}).selectOption('catalog');await page.locator('.sources-search select').first().selectOption('fiction');await page.locator('input[type=search]').fill('多书源');await page.getByRole('button',{name:'搜索',exact:true}).click();await page.getByText('【示例书源 A】',{exact:true}).waitFor();
+ await page.setViewportSize({width:390,height:844});await page.goto(base+'/#/sources');await page.getByRole('combobox',{name:'选择来源',exact:true}).selectOption('catalog');await page.locator('.sources-search select').first().selectOption('fiction');await page.getByRole('searchbox',{name:'搜索书籍',exact:true}).fill('多书源');await page.getByRole('button',{name:'搜索',exact:true}).click();await page.locator('.catalog-book').filter({hasText:'1 条书源'}).waitFor();
  assert.equal(await page.locator('body').evaluate(el=>el.scrollWidth>innerWidth),false);await page.screenshot({path:join(shots,'plugin-search-mobile.png')});
- await page.goto(base+'/#/book/extension-book');await page.getByRole('button',{name:'目录',exact:true}).click();await page.getByRole('button',{name:'切换书源',exact:true}).click();await page.getByRole('button',{name:'查看此源目录',exact:true}).click();await page.locator('section[aria-label="切换书源"] select').selectOption('new-two');await page.screenshot({path:join(shots,'plugin-switch-mobile.png')});
+ await page.goto(base+'/#/book/extension-book');await page.locator('book-content').waitFor();
+ // 切换书源 is in the reader's top bar; each candidate card is named after its source.
+ await page.getByRole('button',{name:'切换书源',exact:true}).click();await page.getByRole('button',{name:/^查看此源目录/}).first().click();await page.getByLabel('切换后阅读的章节').selectOption('new-two');await page.screenshot({path:join(shots,'plugin-switch-mobile.png')});
  await page.getByRole('button',{name:'确认换源并阅读',exact:true}).click();await page.getByText('测试：新源暂时不可用',{exact:true}).waitFor();assert.match(await page.locator('book-content .book-flow').textContent(),/旧书源/);
  fail=false;await page.getByRole('button',{name:'确认换源并阅读',exact:true}).click();await page.getByText('已切换书源，从所选章节开头继续阅读',{exact:true}).waitFor();assert.match(await page.locator('book-content .book-flow').textContent(),/新书源/);assert.deepEqual(errors,[]);
  console.log('PASS production Chromium: mobile/desktop config, generic settings, safe log output, generic filters, failed switch preserves view, successful switch lands on selected chapter');

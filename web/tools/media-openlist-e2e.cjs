@@ -80,8 +80,9 @@ function sampleWav(){
     const config=await api('libraries/'+library.id+'/configuration');assert.equal(config.storage,'openlist');assert.equal(config.root,'/音乐');assert.equal(config.openlist.baseUrl,state.origin+'/mounted');assert.equal(config.openlist.hasToken,true);assert.equal(config.openlist.hasPassword,true);assert.ok(!JSON.stringify(config).includes(state.token));assert.ok(!JSON.stringify(config).includes(state.password));
     const catalog=await api('libraries/'+library.id+'/items?kind=track&offset=0&limit=50');assert.equal(catalog.items.length,1);assert.equal(catalog.items[0].title,'云端练习曲');
     checks.push('真实扫描任务完成并读取远程 NFO；服务地址和目录按规范保存，配置接口只返回凭据是否已配置，不回显令牌或密码。');
-    await go('#/media/music/tracks?library='+library.id);await page.getByRole('button',{name:'播放 云端练习曲',exact:true}).waitFor();await shot('02-scanned-track');
-    await page.getByRole('button',{name:'播放 云端练习曲',exact:true}).click();
+    // Tracks are tiles now; a track plays from its detail page.
+    await go('#/media/music/tracks?library='+library.id);await page.locator('.media-tile',{hasText:'云端练习曲'}).waitFor();await shot('02-scanned-track');
+    await page.locator('.media-tile',{hasText:'云端练习曲'}).click();await page.getByRole('button',{name:'播放音频',exact:true}).click();
     await page.waitForFunction(()=>{const audio=document.querySelector('.media-player audio');return audio?.readyState>=2&&!audio.paused&&audio.currentTime>0;});
     const source=await page.locator('.media-player audio').getAttribute('src');assert.ok(source);const streamUrl=new URL(source,baseUrl).href;
     assert.equal(new URL(streamUrl).origin,baseUrl);assert.ok(!streamUrl.startsWith(state.origin));

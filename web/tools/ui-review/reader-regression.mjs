@@ -144,8 +144,9 @@ try {
   const comic = await read();
   const chapter = await cdp.evaluate('document.querySelector(".reader-heading span").textContent');
   assert.equal(chapter, '第 2 页', 'comic page advances');
-  assert.equal(comic.page, '1', 'fixed page has one page inside its chapter');
-  assert.equal(comic.pages, '1', 'fixed chapter slider must not become a whole-book slider');
+  // A comic's slider moves through the whole book (5199f3d): page 2 of the fixture's 3.
+  assert.equal(comic.page, '2', 'comic slider follows the page turn');
+  assert.equal(comic.pages, '3', 'comic slider spans the whole book');
   for (let i=0; i<4; i++) {
     await cdp.tapMiddle();
     await cdp.sleep(200);
@@ -155,6 +156,8 @@ try {
   await cdp.screenshot(join(shots, 'comic.png'));
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 320, height: 568, deviceScaleFactor: 2, mobile: true });
   await cdp.sleep(250);
+  // The panels are reached from the toolbar, which the page turns above may have put away.
+  if ((await read()).chrome !== 'visible') { await cdp.tapMiddle(); await cdp.sleep(250); }
   for(const label of ['外观','设置']) {
     await cdp.clickText('.reader-actions button', label);
     await cdp.run(`await Promise.all(document.querySelector('.sheet').getAnimations().map(a=>a.finished));`);

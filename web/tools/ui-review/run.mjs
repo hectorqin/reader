@@ -66,7 +66,8 @@ const SCENES = [
     name: '10-shelf-paged',
     label: '书架 · 第二页',
     what: '没有「继续阅读」横排；默认按最近阅读排序（第一个 chip 是填充态）；分页器在封面下方；书库与书源入口在标题下方',
-    openShelfAt: '#/shelf/2',
+    // The page is in the query (docs/ui.md §3.5): #/shelf?…&page=2.
+    openShelfAt: 2,
   },
   {
     name: '11-library',
@@ -500,7 +501,9 @@ async function audit(cdp, origin, scenes, results) {
   })()`);
   check(
     '书架: 第一个排序是「最近阅读」且默认选中',
-    shelfSort.chips[0]?.label === '最近阅读' && shelfSort.selected === '最近阅读',
+    // The status filters (全部 / 在读 / …) come first now; the sort chips start at 最近阅读.
+    (() => { const sorts = shelfSort.chips.slice(shelfSort.chips.findIndex((chip) => chip.label === '最近阅读'));
+      return sorts[0]?.label === '最近阅读' && sorts[0].pressed; })(),
     `chips=${shelfSort.chips.map((chip) => `${chip.label}${chip.pressed ? '*' : ''}`).join(' / ')}`,
   );
   check(
@@ -603,7 +606,7 @@ async function audit(cdp, origin, scenes, results) {
     const screen = document.querySelector('.library-browse-screen');
     const cards = document.querySelectorAll('.book-card');
     const pills = [...document.querySelectorAll('.book-shelve')].map((node) => node.getAttribute('aria-label'));
-    const header = [...screen.querySelectorAll('.collection-header button')].filter(node => node.getClientRects().length > 0).map(labelOf);
+    const header = [...screen.querySelectorAll('.collection-header :is(button, a, label)')].filter(node => node.getClientRects().length > 0).map(labelOf);
     const search = document.querySelector('.library-search');
     const field = document.querySelector('.library-search input');
     const sr = search?.getBoundingClientRect();
@@ -696,15 +699,15 @@ async function audit(cdp, origin, scenes, results) {
   /*
    * The search *works*, which is the half a screenshot cannot show.
    *
-   * Typed rather than set: the field is debounced and the debounce is what turns the
-   * query into a navigation, so a check that set the value directly would pass on a
-   * field that is never read at all.
+   * Typed and then submitted, as the 搜索 key does: submitting is what turns the
+   * query into the URL's `q`, so the check reads the URL rather than the field.
    */
   await cdp.navigate(`${origin}/#/library`);
   await cdp.waitFor('document.querySelector(".library-search input") !== null', 20_000);
   await cdp.sleep(400);
   const beforeSearch = await cdp.evaluate('document.querySelectorAll(".book-card").length');
   await cdp.fill('.library-search input', '第1卷');
+  await cdp.run(`document.querySelector('.library-search').requestSubmit();`);
   await cdp.waitFor(`location.hash.includes('q=')`, 10_000);
   await cdp.sleep(600);
   const searched = await cdp.evaluate(`(() => ({
@@ -731,15 +734,15 @@ async function audit(cdp, origin, scenes, results) {
   );
 
   // Enter through the actual admin action; a deep link alone misses broken navigation.
-  await cdp.clickText('.library-browse-screen .collection-header button', '文件管理');
+  await cdp.clickText('.library-browse-screen .collection-links a', '文件管理');
   await cdp.waitFor('document.querySelector(".library-files-screen") !== null', 20_000);
   await cdp.waitFor('document.querySelector(".manager-row") !== null', 20_000);
   await cdp.sleep(400);
   const filesPage = await cdp.evaluate(`(() => {
     ${LABEL_OF}
-    const header = [...document.querySelectorAll('.library-files-screen .collection-header button')].filter(node => node.getClientRects().length > 0).map(labelOf);
+    const header = [...document.querySelectorAll('.library-files-screen .collection-header :is(button, a, label)')].filter(node => node.getClientRects().length > 0).map(labelOf);
     return {
-      view: document.querySelector('.library-screen')?.dataset.view,
+      files: document.querySelector('.library-files-screen') !== null,
       rows: document.querySelectorAll('.manager-row').length,
       cards: document.querySelectorAll('.book-card').length,
       hasSearch: document.querySelector('.library-search') !== null,
@@ -749,8 +752,8 @@ async function audit(cdp, origin, scenes, results) {
   })()`);
   check(
     '书库: 文件管理页画的是文件行，没有封面网格',
-    filesPage.view === 'files' && filesPage.rows > 0 && filesPage.cards === 0,
-    `view=${filesPage.view} 行 ${filesPage.rows} / 封面 ${filesPage.cards}，hash=${filesPage.hash}`,
+    filesPage.files && filesPage.rows > 0 && filesPage.cards === 0,
+    `文件页=${filesPage.files} 行 ${filesPage.rows} / 封面 ${filesPage.cards}，hash=${filesPage.hash}`,
   );
   check(
     '书库: 文件管理页有上传/新建，没有搜索框',
@@ -792,7 +795,7 @@ async function audit(cdp, origin, scenes, results) {
    * *leaves* the file manager for the browsing page and that Back comes home. A tab
    * would satisfy neither: it would keep one history entry and the same URL.
    */
-  await cdp.click('.library-files-screen .collection-header button[aria-label="返回"]');
+  await cdp.click('.library-files-screen .collection-header a[aria-label="返回"]');
   await cdp.waitFor('document.querySelector(".library-browse-screen") !== null', 20_000);
   await cdp.sleep(500);
   const switched = await cdp.evaluate(`(() => ({
@@ -995,7 +998,7 @@ async function main() {
           await cdp.navigate(`${origin}${scene.openLibraryAt}`);
           await cdp.waitFor('document.querySelector(".library-files-screen") !== null', 20_000);
         } else {
-          await cdp.click('button[aria-label="书库"]');
+          await cdp.click('a.collection-link[href="#/library"]');
           await cdp.waitFor('document.querySelector(".library-browse-screen") !== null', 20_000);
         }
         /*
@@ -1008,13 +1011,10 @@ async function main() {
         if (scene.folder) {
           await cdp.waitFor('document.querySelector(".manager-row") !== null', 20_000);
           await cdp.clickText('.manager-row .manager-label', scene.folder);
-          // `aria-current` is a boolean attribute rendered as the *string* "true"
-          // by the DOM, so the wait reads the attribute rather than comparing it to
-          // a boolean: a comparison against `true` in an in-page expression is
-          // comparing the string to a boolean, and it is false however the page
-          // renders.
+          // The current crumb carries `aria-current="location"` (a token, not a
+          // boolean), so the wait reads that attribute value.
           await cdp.waitFor(
-            `document.querySelector('.manager-crumb[aria-current="true"]')?.textContent === ${JSON.stringify(scene.folder)}`,
+            `document.querySelector('.manager-crumb[aria-current="location"]')?.textContent === ${JSON.stringify(scene.folder)}`,
             10_000,
           );
         } else if (files) {
@@ -1029,15 +1029,13 @@ async function main() {
           await cdp.sleep(400);
         }
         /*
-         * The shop's search, typed the way a reader types it.
-         *
-         * Dispatched as real key input rather than by setting the field's value: the
-         * field is debounced and the debounce is what decides when the query becomes a
-         * navigation, so a scene that set the value directly would screenshot a page
-         * whose URL never changed — i.e. the state the *defect* looks like.
+         * The shop's search, typed the way a reader types it, then submitted: the
+         * query becomes the URL's `q`, which is what the scene waits for.
          */
         if (scene.search) {
           await cdp.fill('.library-search input', scene.search);
+          // The query is applied on submit (it becomes the URL's `q`), as the 搜索 key does.
+          await cdp.run(`document.querySelector('.library-search').requestSubmit();`);
           await cdp.waitFor(`location.hash.includes('q=')`, 10_000);
           await cdp.sleep(500);
         }
@@ -1047,7 +1045,7 @@ async function main() {
         // A page turn from the pager, not a URL: the point of the scene is that the
         // control is there and looks like a control.
         await cdp.click('.shelf-pager button[aria-label="下一页"]');
-        await cdp.waitFor(`location.hash === '${scene.openShelfAt}'`, 10_000);
+        await cdp.waitFor(`new URLSearchParams(location.hash.split('?')[1] ?? '').get('page') === '${scene.openShelfAt}'`, 10_000);
         await cdp.sleep(400);
       }
       /*
@@ -1068,10 +1066,11 @@ async function main() {
          * the question a reader actually has before pressing 下架.
          */
         await cdp.click('.book-card .book-more');
-        await cdp.waitFor('document.querySelector(".dialog-list button") !== null', 10_000);
-        await cdp.clickText('.dialog-list button', '从书架拿掉');
+        // The ⋯ menu is the shared ActionMenu: a popover on a wide screen, a sheet list on a phone.
+        await cdp.waitFor('document.querySelector(".action-menu-item, .sheet-list-item") !== null', 10_000);
+        await cdp.clickText('.action-menu-item, .sheet-list-item', '从书架拿掉');
         await cdp.waitFor(
-          `/磁盘上的文件一个都不会动/.test(document.querySelector('.dialog')?.textContent ?? '')`,
+          `/书库里的文件不受影响/.test(document.querySelector('dialog[open]')?.textContent ?? '')`,
           10_000,
         );
         await cdp.sleep(300);
@@ -1099,12 +1098,12 @@ async function main() {
       }
       const theme = scene.theme;
       if (theme) {
-        await cdp.click('button[aria-label="界面"]');
-        await cdp.waitFor('document.querySelector(".sheet") !== null');
-        await cdp.clickText('.segmented button', theme);
-        await cdp.sleep(250);
-        await cdp.click('button[aria-label="关闭"]');
-        await cdp.sleep(250);
+        // Light and dark are one toolbar toggle (夜间 / 日间), not a theme sheet.
+        const toggle = theme === '深色' ? '夜间' : '日间';
+        if (await cdp.evaluate(`document.querySelector('button[aria-label="${toggle}"]') !== null`)) {
+          await cdp.click(`button[aria-label="${toggle}"]`);
+          await cdp.sleep(400);
+        }
       }
       if (scene.openPanel) {
         await cdp.click(`button[aria-label="${scene.openPanel}"]`);
@@ -1149,10 +1148,11 @@ async function main() {
 
     // Measure on a reader at a frozen position, so the numbers below are about the
     // *layout* rather than about whatever chapter happened to be left open.
-    await cdp.navigate(`${origin}/#/shelf`);
-    await cdp.waitFor('document.querySelector(".book-card:not(.skeleton)") !== null', 15_000);
-    await cdp.click('.book-card');
+    await cdp.navigate(`${origin}/#/book/review-book`);
     await cdp.waitFor('document.querySelector("book-content")?.shadowRoot?.querySelector(".book-flow") !== null', 15_000);
+    await cdp.sleep(500);
+    // The toolbar holds 目录; bring it back if the reader opened with it put away.
+    if (await cdp.evaluate(`document.querySelector('.reader-screen')?.dataset.chrome !== 'visible'`)) { await cdp.tapMiddle(); await cdp.sleep(300); }
 
     const measured = [];
     // Opened with a real tap and *then* measured, after the sheet's animation has

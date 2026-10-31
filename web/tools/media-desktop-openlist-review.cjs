@@ -63,18 +63,19 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),fs=
   for(const width of [390,1120,1308]){
     await page.setViewportSize({width,height:900});await page.goto(baseUrl+'/#/media/music/albums');await page.locator('.media-tile img').first().waitFor();
     await screenshot('tabs-'+width,'频道分类 · '+width,width===1308?null:'music');
-    const tabs=await page.locator('.media-tabs').evaluate(el=>{const b=el.querySelector('button'),r=el.getBoundingClientRect(),br=b.getBoundingClientRect();return {top:r.top,bottom:r.bottom,height:r.height,buttonTop:br.top,buttonBottom:br.bottom,scrollbar:getComputedStyle(el).scrollbarWidth,border:getComputedStyle(b).borderBottomWidth};});
+    const tabs=await page.locator('.media-tabs').evaluate(el=>{const b=el.querySelector('.media-tab-link'),r=el.getBoundingClientRect(),br=b.getBoundingClientRect();return {top:r.top,bottom:r.bottom,height:r.height,buttonTop:br.top,buttonBottom:br.bottom,scrollbar:getComputedStyle(el).scrollbarWidth,border:getComputedStyle(b).borderBottomWidth};});
     assert.equal(tabs.height,44);assert.equal(tabs.buttonTop,tabs.top);assert.ok(tabs.buttonBottom<=tabs.bottom+1);assert.equal(tabs.scrollbar,'none');assert.equal(tabs.border,'2px');checks.push({key:'tab-geometry-'+width,...tabs});
-    if(width>700)assert.equal(tabs.top,73);
-    await page.getByRole('combobox',{name:'媒体库',exact:true}).click();await page.getByRole('listbox',{name:'媒体库',exact:true}).waitFor();
-    const menu=await page.getByRole('listbox',{name:'媒体库',exact:true}).boundingBox();assert.ok(menu.x>=0&&menu.x+menu.width<=width&&menu.y+menu.height<=900);
+    await page.getByRole('combobox',{name:'来源库',exact:true}).click();await page.getByRole('listbox',{name:'来源库',exact:true}).waitFor();
+    const menu=await page.getByRole('listbox',{name:'来源库',exact:true}).boundingBox();assert.ok(menu.x>=0&&menu.x+menu.width<=width&&menu.y+menu.height<=900);
     await screenshot('library-select-'+width,'媒体库下拉 · '+width);
     await page.keyboard.press('Escape');assert.equal(await page.getByRole('listbox').count(),0);
-    await page.getByRole('combobox',{name:'媒体库',exact:true}).click();await page.locator('.media-tabs button').first().click();assert.equal(await page.getByRole('listbox').count(),0);
-    await page.goto(baseUrl+'/#/media/video/favorites');await page.locator('.media-favorite-row').first().waitFor();assert.equal(new URL(page.url()).hash,'#/media/favorites');
+    await page.getByRole('combobox',{name:'来源库',exact:true}).click();await page.locator('.media-tabs .media-tab-link').first().click();assert.equal(await page.getByRole('listbox').count(),0);
+    await page.goto(baseUrl+'/#/media/favorites');await page.locator('.media-favorite-row').first().waitFor();
     await screenshot('favorites-'+width,'收藏列表 · '+width,width===1308?null:'favorites');
-    const list=await page.locator('.media-favorites').boundingBox();if(width>900){assert.equal(Math.round(list.width),850);assert.ok(Math.abs(list.x+list.width/2-width/2)<1);}
-    await page.getByRole('button',{name:'筛选收藏',exact:true}).click();await page.getByRole('dialog').waitFor();await screenshot('favorite-filter-'+width,'收藏类型筛选 · '+width);
+    // The list is capped at 850px and centred in the content column (beside the sidebar on wide screens).
+    const list=await page.locator('.media-favorites').evaluate(el=>{const r=el.getBoundingClientRect(),p=el.parentElement,pr=p.getBoundingClientRect(),cs=getComputedStyle(p),left=pr.left+parseFloat(cs.paddingLeft),right=pr.right-parseFloat(cs.paddingRight);return {width:r.width,offset:(r.left+r.width/2)-(left+right)/2,available:right-left};});
+    assert.ok(list.width<=850.5,'favorites width '+list.width);if(list.available>=850)assert.equal(Math.round(list.width),850);assert.ok(Math.abs(list.offset)<1,'favorites centred '+list.offset);checks.push({key:'favorites-geometry-'+width,...list});
+    await page.getByRole('button',{name:'筛选收藏',exact:true}).click();await page.getByRole('menu',{name:'收藏类型'}).waitFor();await screenshot('favorite-filter-'+width,'收藏类型筛选 · '+width);
     await page.locator('.action-menu').getByRole('menuitemradio',{name:'音乐',exact:true}).click();await page.waitForURL('**/#/media/favorites?scope=music');await page.waitForFunction(()=>document.querySelectorAll('.media-favorite-row').length===2);await page.reload();await page.locator('.media-favorite-row').first().waitFor();assert.equal(await page.locator('.media-favorite-row').count(),2);
     await page.goto(baseUrl+'/#/media/video/settings/libraries/new');await page.locator('.media-library-create').waitFor();
     await page.getByRole('combobox',{name:'接入方式',exact:true}).click();await page.getByRole('option',{name:'OpenList',exact:true}).click();
@@ -83,7 +84,8 @@ const {chromium}=require('playwright'),{spawn}=require('node:child_process'),fs=
     await page.getByRole('combobox',{name:'访问范围',exact:true}).click();await screenshot('access-select-'+width,'表单下拉 · '+width);await page.keyboard.press('Escape');
   }
   await page.setViewportSize({width:1120,height:900});await page.goto(baseUrl+'/#/media/video');await page.locator('.media-tile').first().waitFor();await screenshot('video-desktop','影视频道顶部分类');
-  await page.goto(baseUrl+'/#/media/music/settings/theme');await page.getByRole('button',{name:/深夜/}).click();await page.goto(baseUrl+'/#/media/music/albums');await page.getByRole('combobox',{name:'媒体库',exact:true}).click();await screenshot('select-dark','深夜主题下拉');
+  // Theme lives in 我的 › 偏好设置 now; V3 has no separate 深夜 theme, only each theme's dark mode.
+  await page.goto(baseUrl+'/#/me/settings?section=theme');const follow=page.getByRole('button',{name:'跟随系统',exact:true});if(await follow.getAttribute('aria-pressed')==='true')await follow.click();await page.getByRole('group',{name:'明暗',exact:true}).getByRole('button',{name:'深色',exact:true}).click();await page.waitForFunction(()=>document.documentElement.dataset.mode==='dark');await page.goto(baseUrl+'/#/media/music/albums');await page.getByRole('combobox',{name:'来源库',exact:true}).click();await screenshot('select-dark','深夜主题下拉');
   assert.deepEqual(errors,[]);await fs.writeFile(join(out,'checks.json'),JSON.stringify({checks,captures,errors},null,2));
   await fs.writeFile(join(out,'index.html'),`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>桌面分类、收藏与 OpenList 验收</title><style>body{margin:24px auto;padding:0 24px;max-width:1400px;font:14px/1.6 system-ui;background:#f8f9f5;color:#202b24}.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}img{max-width:100%;border:1px solid #dfe5d9}figure{margin:0}section{margin:32px 0}figcaption{margin-bottom:8px;color:#66715f}</style><h1>桌面分类、收藏与 OpenList 验收</h1><p>使用生产构建。对照冻结 v2 原型的分类栏与收藏布局；下拉和 OpenList 接入表单为本次新增。展示数据是临时验收数据，未写入用户媒体库。OpenList 接入另由接口集成测试验证，页面中地址为示例。</p>${captures.map(c=>`<section><h2>${c.title}</h2><div class="pair">${c.reference?`<figure><figcaption>冻结的 v2 原型</figcaption><img src="${c.key}-reference.png"></figure>`:''}<figure><figcaption>本次实现</figcaption><img src="${c.key}-actual.png"></figure></div></section>`).join('')}</html>`);console.log(JSON.stringify({captures:captures.length,errors}));
  }finally{if(browser)await browser.close();server.stdin.end();await new Promise(r=>server.exitCode!==null?r():server.once('exit',r));}

@@ -33,19 +33,19 @@ try {
     return route.continue();
   });
   const button = name => page.getByRole('button', { name, exact: true });
+  const link = name => page.getByRole('link', { name, exact: true });
   async function shot(name) {
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, name + ' page overflow');
     if (await page.locator('.collection-links').count()) assert.equal(await page.locator('.collection-links').evaluate(el => el.scrollWidth > el.clientWidth), false, name + ' navigation overflow');
     await page.screenshot({ path: join(shots, 'collections-' + name + '.png'), animations: 'disabled' });
   }
-  await page.goto(base);
+  await page.goto(base + '/#/shelf');
   await page.locator('input[autocomplete=username]').fill('review'); await page.locator('input[type=password]').fill('password12');
   await page.locator('button[type=submit]').click(); await page.getByText('书架还没有书', { exact: true }).waitFor();
-  await button('刷新').click(); await page.getByText('书架还没有书', { exact: true }).waitFor();
   assert.equal(await page.getByRole('group', { name: '排序方式' }).count(), 0);
   for (const width of [320, 390, 1280]) { await page.setViewportSize({ width, height: 844 }); await shot('shelf-empty-' + width); }
-  await button('去搜书').click(); await page.getByRole('tab', { name: '搜书', exact: true }).waitFor();
-  await page.goto(base + '/#/shelf'); await button('打开书库').click();
+  await link('去搜书').click(); await page.getByRole('tab', { name: '搜书', exact: true }).waitFor();
+  await page.goto(base + '/#/shelf'); await link('打开书库').click();
   await page.getByText('书库还没有书', { exact: true }).waitFor();
   assert.equal(await page.getByText('0 本', { exact: true }).count(), 0);
   for (const width of [320, 390, 1280]) { await page.setViewportSize({ width, height: 844 }); await shot('library-empty-' + width); }
@@ -56,13 +56,15 @@ try {
   writable = false; await page.reload(); await page.getByText('前往文件管理添加书籍，再回到这里浏览。').waitFor();
   assert.equal(await button('上传书籍').count(), 0); assert.equal(await button('上传第一本书').count(), 0);
   await page.setViewportSize({ width: 390, height: 844 }); await shot('library-readonly');
-  files = 3; await page.reload(); await page.getByText('这里有 3 个文件，可在文件管理中查看识别结果。').waitFor();
-  await page.locator('.empty-actions').getByRole('button', { name: '文件管理', exact: true }).click();
+  // The empty library's admin action opens the file manager; a read-only mount says so and disables writing.
+  await page.locator('.empty-actions').getByRole('link', { name: '文件管理', exact: true }).click();
   await page.locator('.library-files-screen').waitFor();
-  await page.getByText('当前目录只读', { exact: true }).waitFor();
-  assert.equal(await button('上传书籍').count(), 0);
-  await button('返回').click(); await page.waitForURL('**/#/library');
-  empty = false; await page.goto(base + '/#/shelf'); await page.locator('.book-grid .book-card').first().waitFor(); await shot('shelf-books');
+  await page.getByText('当前目录只读', { exact: false }).waitFor();
+  assert.equal(await page.locator('.library-files-screen label.collection-link.is-disabled').filter({ hasText: '上传书籍' }).count(), 1);
+  assert.equal(await button('新建文件夹').isDisabled(), true);
+  await link('返回').click(); await page.waitForURL('**/#/library');
+  // The fixture now has books: reload so no screen answers from the empty state's cache.
+  empty = false; await page.goto(base + '/#/shelf'); await page.reload(); await page.locator('.book-grid .book-card').first().waitFor(); await shot('shelf-books');
   for (const width of [320, 390, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await page.locator('.shelf-head button[aria-label^=书架设置]').click();
@@ -96,17 +98,20 @@ try {
     await close.click(); assert.equal(await page.locator('.shelf-settings').isVisible(), false);
   }
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: '按书名排序', exact: true }).click();
-  await button('书库').click(); await page.locator('.library-browse-grid .book-card').first().waitFor(); await shot('library-books');
-  await page.goto(base + '/#/library/folder'); await page.locator('.library-path').waitFor(); await shot('library-folder');
-  await page.getByRole('button', { name: '书库', exact: true }).click(); await page.waitForURL('**/#/library');
-  await page.getByRole('searchbox').fill('不存在的关键词'); await page.getByRole('searchbox').press('Enter');
+  await page.locator('.shelf-sort').getByRole('button', { name: '书名', exact: true }).click();
+  await link('书库').click(); await page.locator('.library-browse-grid .book-card').first().waitFor(); await shot('library-books');
+  // Folders are a query parameter now (?path=), and the crumbs walk back up.
+  await page.goto(base + '/#/library?path=folder'); await page.locator('.library-path').waitFor(); await shot('library-folder');
+  await page.locator('.library-path').getByRole('button', { name: '书库', exact: true }).click(); await page.waitForURL('**/#/library');
+  const librarySearch = page.getByRole('searchbox', { name: '搜索书库', exact: true });
+  await librarySearch.fill('不存在的关键词'); await librarySearch.press('Enter');
   await page.getByText('没有匹配的书', { exact: true }).waitFor(); await shot('library-no-results'); await button('清除搜索').last().click();
   await page.goto(base + '/#/library/files'); await page.getByRole('heading', { name: '文件管理', exact: true }).waitFor();
   for (const width of [320, 390, 1280]) { await page.setViewportSize({ width, height: 844 }); await shot('files-' + width); }
-  const chooser = page.waitForEvent('filechooser'); await button('上传书籍').click(); await chooser;
-  await page.goto(base + '/#/library/files/folder'); await page.reload(); await button('返回').click(); await page.waitForURL('**/#/library/files');
-  await button('返回').click(); await page.waitForURL('**/#/library');
+  const chooser = page.waitForEvent('filechooser'); await page.locator('.library-files-screen label.collection-link').filter({ hasText: '上传书籍' }).click(); await chooser;
+  await page.goto(base + '/#/library/files?path=folder'); await page.reload();
+  await page.locator('.library-files-screen .manager-crumbs').getByRole('button', { name: '书库', exact: true }).click(); await page.waitForURL('**/#/library/files');
+  await link('返回').click(); await page.waitForURL('**/#/library');
   // Real desktop sizes, including a narrow window and a full-HD monitor.
   for (const [width, height] of [[1024, 768], [1366, 768], [1920, 1080]]) {
     await page.setViewportSize({ width, height });

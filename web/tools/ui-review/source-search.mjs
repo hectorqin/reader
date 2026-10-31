@@ -40,19 +40,21 @@ try {
     if (json !== undefined) return route.fulfill({ contentType: 'application/json', body: JSON.stringify(json) });
     return route.continue();
   });
-  await page.goto(base);
+  await page.goto(base + '/#/shelf');
   await page.locator('input[autocomplete=username]').fill('review');
   await page.locator('input[type=password]').fill('password12');
   await page.locator('button[type=submit]').click(); await page.locator('.shelf-screen').waitFor();
   await page.goto(base + '/#/sources');
   await page.getByRole('combobox', { name: '选择来源' }).selectOption('demo');
   await page.getByRole('combobox', { name: '分组', exact: true }).selectOption('fiction');
-  await page.locator('input[type=search]').fill('斗破苍穹');
+  await page.getByRole('searchbox', { name: '搜索书籍', exact: true }).fill('斗破苍穹');
   await mkdir(shots, { recursive: true });
   for (const width of [390, 1024, 1440, 1920]) {
     await page.setViewportSize({ width, height: 900 });
     mode = 'failed'; await page.getByRole('button', { name: '搜索', exact: true }).click();
-    await page.getByText('暂未返回书籍，部分来源搜索失败', { exact: true }).waitFor();
+    // No books and failed sources: the summary counts the unfinished sources and the details open.
+    await page.locator('.catalog-summary').filter({ hasText: '已找到 0 本书' }).filter({ hasText: '个来源未完成' }).waitFor();
+    await page.locator('.search-progress').filter({ hasText: '搜索完成' }).waitFor();
     assert.equal(await page.locator('.catalog-errors').evaluate(el => el.open), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
     assert.equal(await page.locator('.sources-body').evaluate(el => el.scrollWidth > el.clientWidth), false);

@@ -905,6 +905,10 @@ export function createReviewServer({ port = 5199 } = {}) {
     if (path === `/api/v1/books/${BOOK_ID}`) {
       return json(reply, { book, progress: null });
     }
+    // The reader page asks for the book record before mounting the reader.
+    if (path === `/api/v1/books/${ILLUSTRATED_ID}`) {
+      return json(reply, { book: illustratedBook(), progress: null });
+    }
     if (path === `/api/v1/books/${BOOK_ID}/progress`) {
       return json(reply, null);
     }
