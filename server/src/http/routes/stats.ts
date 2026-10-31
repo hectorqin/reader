@@ -10,19 +10,23 @@ import { TimeStatsService, type ReadingTimeEntry, type StatsQuery } from '../../
  */
 export function registerStatsRoutes(app: FastifyInstance, ctx: AppContext): void {
   const auth = authenticate(ctx);
-  const stats = new TimeStatsService(ctx.db, ctx.shelf);
+  // Built on first use, not here: main.ts registers routes before it creates the
+  // services (ctx.shelf is still undefined at this point), as every route that reads
+  // ctx.* per request already assumes.
+  let service: TimeStatsService | undefined;
+  const stats = (): TimeStatsService => (service ??= new TimeStatsService(ctx.db, ctx.shelf));
 
   app.post('/api/v1/stats/reading-time', { preHandler: auth }, async (request) => {
     const body = (request.body ?? {}) as { clientId?: string; entries?: ReadingTimeEntry[] };
-    return stats.record(currentUser(request).id, body.clientId ?? '', body.entries ?? []);
+    return stats().record(currentUser(request).id, body.clientId ?? '', body.entries ?? []);
   });
 
   app.get('/api/v1/stats/reading', { preHandler: auth }, async (request) => {
-    return stats.summary(currentUser(request).id, request.query as StatsQuery);
+    return stats().summary(currentUser(request).id, request.query as StatsQuery);
   });
 
   app.get('/api/v1/stats/reading/users', { preHandler: auth }, async (request) => {
     requireAdmin(request);
-    return { users: stats.users(request.query as StatsQuery) };
+    return { users: stats().users(request.query as StatsQuery) };
   });
 }
