@@ -14,7 +14,7 @@ try {
   const page = await browser.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto(base);
+  await page.goto(base + '/#/shelf');
   await page.locator('input[autocomplete=username]').fill('review');
   await page.locator('input[type=password]').fill('password12');
   await page.locator('button[type=submit]').click();

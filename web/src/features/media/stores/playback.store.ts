@@ -23,3 +23,12 @@ export const usePlaybackStore = create<PlaybackState>(set => ({
   itemId: '', partId: '', channel: 'video',
   set: snapshot => set(snapshot),
 }));
+
+/**
+ * The address of the expanded player for what is playing: its channel, and the
+ * item/part that let a refresh restore playback (docs/media-navigation.md).
+ */
+export function playerPath(state: Pick<PlaybackState, 'channel' | 'itemId' | 'partId'>, panel = ''): string {
+  const query = state.itemId && state.partId ? `?item=${encodeURIComponent(state.itemId)}&part=${encodeURIComponent(state.partId)}` : '';
+  return `/media/${state.channel}/player${panel ? '/' + panel : ''}${query}`;
+}

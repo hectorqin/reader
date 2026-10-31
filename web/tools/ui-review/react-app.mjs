@@ -313,7 +313,11 @@ async function runMediaReview(browser, fixture, checks, errors) {
     ['media-history', '/#/media/video/history', '播放历史', '.media-screen'],
     ['media-queue', '/#/media/queue', '待播队列', '.media-screen'],
     ['media-folders', '/#/media/video/folders/review-lib', '文件夹浏览', '.media-folders'],
-    ['media-settings', '/#/me/browse', '影音浏览', '.media-settings'],
+    // 我的: every preference is a section of one page; administration is one page per job.
+    ['preferences', '/#/me/settings', '偏好设置', '.settings-section'],
+    ['preferences-playback', '/#/me/settings?section=playback', '偏好设置', '.settings-section'],
+    ['account', '/#/me/account', '账号与连接', '.media-account-panel'],
+    ['admin-services', '/#/me/admin/services', '服务配置', '.business-settings'],
     ['stats', '/#/me/stats', '时长统计', '.stats-bars .stats-segment'],
     ['stats-month', '/#/me/stats?g=month&sel=' + new Date().getFullYear() + '-03', '时长统计', '.stats-bar[aria-pressed="true"]'],
     ['media-permissions', '/#/media/video/settings/libraries/review-lib/permissions', '访问权限', '.media-permissions-page'],

@@ -3,13 +3,8 @@ import { Link } from 'react-router-dom';
 import { useState, type ReactNode } from 'react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
-import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
 import { themeSummary } from '../../../shared/theme/theme.ts';
 import { useThemeState } from '../../../shared/theme/use-theme.ts';
-import { readMediaPreferences } from '../../media/services/preferences.ts';
-import { DENSITY_LABELS, ShelfSettingsSheet } from '../../../ui/shelf-settings.tsx';
-import { OpdsAccess } from '../../../ui/opds-access.tsx';
-import { SystemSettings } from '../../../ui/system-settings.tsx';
 import { ConfirmSheet } from '../../../ui/sheet.tsx';
 import { useSyncStore } from '../../../shared/stores/sync.store.ts';
 import { connectionLabel } from '../../../app/AppNav.tsx';
@@ -38,23 +33,22 @@ function serverHost(baseUrl: string): string {
 }
 
 /**
- * 我的: the settings hub. Every setting in the app is reachable from here, grouped by
- * what it is about rather than by which page happens to own it:
- * - 偏好: how things look and behave for *you* (theme, the shelf, media browsing, playback);
- * - 管理: what an administrator changes for everyone (users, services, media libraries);
- * - 账号: who you are on this server.
- * Each row opens the one place that setting lives; the shelf sheet is a shortcut
- * to a subset of this list, not a separate setting.
+ * 我的: the hub. Every row opens a page under /me (or the page it names), never a
+ * sheet, so the whole screen behaves one way:
+ * - 内容: where your things are (书库, 书源, statistics, media libraries);
+ * - 偏好: one row, 偏好设置 — theme, the shelf, media browsing and playback are
+ *   sections of a single page, so there is one place to look for any of them;
+ * - 管理: what an administrator changes for everyone, one page per job;
+ * - 账号: who you are on this server and which outside readers may see your shelf.
+ * Signing out is the one exception: a confirmation, not a place.
  */
 export function MinePage() {
   const runtime = useRuntime();
   const user = useAuthStore(state => state.verifiedUser ?? state.session?.user ?? null);
-  const settings = useSettingsStore(state => state.settings);
   const admin = user?.role === 'admin';
   const scope = runtime.mediaApi.preferenceScope();
   const themeName = themeSummary(useThemeState(scope).preference);
-  const mediaDensity = readMediaPreferences(scope).density === 'compact' ? '紧凑' : '宽松';
-  const [sheet, setSheet] = useState<'shelf' | 'opds' | 'system' | 'sign-out' | null>(null);
+  const [signOutOpen, setSignOutOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const name = user?.displayName || user?.username || '';
   // The same sync-engine verdict the sidebar shows; on a phone this page is the only place it appears.
@@ -80,31 +74,27 @@ export function MinePage() {
             {admin && <Row icon="video" label="媒体库" to="/media/video/settings/libraries" state={{ returnTo: '/me' }} />}
           </Group>
           {admin && <Group title="管理" order={3}>
-            <Row icon="settings" label="系统设置" value="用户、注册、服务配置" onClick={() => setSheet('system')} />
+            <Row icon="users" label="用户管理" to="/me/admin/users" />
+            <Row icon="invite" label="注册与邀请" to="/me/admin/registration" />
+            <Row icon="server" label="服务配置" value="朗读、AI、刮削、备份" to="/me/admin/services" />
             <Row icon="refresh" label="扫描与刮削" to="/media/video/settings/tasks" state={{ returnTo: '/me' }} />
           </Group>}
         </div>
         <div className="mine-column">
           <Group title="偏好" order={2}>
-            <Row icon="palette" label="外观与主题" value={themeName} to="/me/theme" />
-            <Row icon="grid" label="书架显示" value={DENSITY_LABELS[settings.shelfDensity]} onClick={() => setSheet('shelf')} />
-            <Row icon="sliders" label="影音浏览" value={mediaDensity} to="/me/browse" />
-            <Row icon="play-circle" label="播放" to="/me/playback" />
+            <Row icon="sliders" label="偏好设置" value={themeName} to="/me/settings" />
           </Group>
           <Group title="账号" order={4}>
             <Row icon="account" label="账号与连接" to="/me/account" />
-            <Row icon="logout" label="退出登录" danger onClick={() => setSheet('sign-out')} />
+            <Row icon="connect" label="外部阅读器" value="OPDS" to="/me/opds" />
+            <Row icon="logout" label="退出登录" danger onClick={() => setSignOutOpen(true)} />
           </Group>
         </div>
       </div>
     </div>
-    {/* Outside the media screen, so its sheet styles are the shelf's own, not media's. */}
-    {sheet === 'shelf' && <ShelfSettingsSheet settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSheet(null)} onOpenExternalReader={() => setSheet('opds')} />}
-    {sheet === 'opds' && <OpdsAccess api={runtime.api} onSignedOut={() => { void runtime.api.signOut(); }} onClose={() => setSheet('shelf')} />}
-    {sheet === 'system' && <SystemSettings api={runtime.api} onClose={() => setSheet(null)} />}
-    {sheet === 'sign-out' && <ConfirmSheet danger title="退出登录" busy={signingOut} confirmText={signingOut ? '正在退出…' : '退出登录'}
+    {signOutOpen && <ConfirmSheet danger title="退出登录" busy={signingOut} confirmText={signingOut ? '正在退出…' : '退出登录'}
       text={`将退出 ${serverHost(runtime.api.baseUrl)} 上的账号「${name}」，之后需要重新登录才能继续使用。`}
-      onCancel={() => setSheet(null)}
+      onCancel={() => setSignOutOpen(false)}
       onConfirm={() => { setSigningOut(true); void runtime.api.signOut().finally(() => setSigningOut(false)); }} />}
   </>;
 }

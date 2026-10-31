@@ -4,6 +4,7 @@ const {createServer}=require('node:http');
 const {mkdtemp,mkdir,rm}=require('node:fs/promises');
 const {tmpdir}=require('node:os');
 const {join,resolve,relative,isAbsolute}=require('node:path');
+const {pathToFileURL}=require('node:url');
 const {setTimeout:delay}=require('node:timers/promises');
 const assert=require('node:assert/strict');
 
@@ -16,15 +17,16 @@ const assert=require('node:assert/strict');
   const tts='http://127.0.0.1:'+upstream.address().port;
   const socket=createServer();await new Promise(resolve=>socket.listen(0,'127.0.0.1',resolve));const port=socket.address().port;await new Promise(resolve=>socket.close(resolve));
   const origin='http://127.0.0.1:'+port;
-  const server=spawn(process.execPath,[join(repo,'server/dist/main.js')],{cwd:repo,windowsHide:true,stdio:'ignore',env:{...process.env,BOOKS_DIR:join(root,'books'),DATA_DIR:join(root,'data'),WEB_DIR:join(repo,'web/dist'),HOST:'127.0.0.1',PORT:String(port),LOG_LEVEL:'silent',SCAN_INTERVAL:'0',WATCH_INTERVAL:'0'}});
+  const server=spawn(process.execPath,['--import',pathToFileURL(join(repo,'server/node_modules/tsx/dist/loader.mjs')).href,join(repo,'server/src/main.ts')],{cwd:repo,windowsHide:true,stdio:'ignore',env:{...process.env,BOOKS_DIR:join(root,'books'),DATA_DIR:join(root,'data'),WEB_DIR:join(repo,'web/dist'),HOST:'127.0.0.1',PORT:String(port),LOG_LEVEL:'silent',SCAN_INTERVAL:'0',WATCH_INTERVAL:'0'}});
   let browser;
   try{
-    for(let i=0;;i++){try{if((await fetch(origin+'/api/v1/health')).ok)break;}catch{}assert.ok(i<100&&server.exitCode===null,'fixture starts');await delay(100);}
+    for(let i=0;;i++){try{if((await fetch(origin+'/api/v1/health')).ok)break;}catch{}assert.ok(i<300&&server.exitCode===null,'fixture starts');await delay(100);}
     const result=await fetch(origin+'/api/v1/auth/register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username:'settings-admin',password:'settings-test-password'})});assert.equal(result.status,201);
     const token=(await result.json()).session.accessToken,headers={authorization:'Bearer '+token,'content-type':'application/json'};
     browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
-    await page.goto(origin);await page.locator('input[autocomplete="username"]').fill('settings-admin');await page.locator('input[type="password"]').fill('settings-test-password');await page.locator('form button[type=submit]').click();
-    async function open(){await page.goto(origin+'/#/me');await page.getByRole('button',{name:/^系统设置/}).click();await page.getByRole('button',{name:'服务配置',exact:true}).click();await page.getByLabel('配置分类').selectOption('tts');}
+    await page.goto(origin+'/#/me/admin/services');await page.locator('input[autocomplete="username"]').fill('settings-admin');await page.locator('input[type="password"]').fill('settings-test-password');await page.locator('form button[type=submit]').click();
+    // 我的 › 服务配置 is its own admin page (no 系统设置 sheet any more).
+    async function open(){await page.goto(origin+'/#/me/admin/services');await page.getByRole('heading',{name:'服务配置',exact:true}).waitFor();await page.getByLabel('配置分类').selectOption('tts');}
     await open();await page.getByLabel('启用 HTTP 朗读',{exact:true}).check();await page.getByLabel('语音合成接口',{exact:true}).fill(tts+'/tts');await page.getByLabel('音色列表接口（可选）',{exact:true}).fill(tts+'/voices');
     await page.getByRole('button',{name:'检测连接并获取音色',exact:true}).click();await page.locator('#business-tts-voices option').waitFor({state:'attached'});
     await page.getByRole('button',{name:'生成试听音频',exact:true}).click();await page.locator('audio[aria-label="HTTP 朗读试听"]').waitFor();

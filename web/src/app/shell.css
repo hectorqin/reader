@@ -151,7 +151,7 @@
   body[data-app-nav] .media-screen .media-mobile-title,
   body[data-app-nav] .media-screen.media-secondary-page > .media-heading,
   body[data-app-nav] .media-narrators:not([data-view=directory]) > .media-narrator-heading,
-  body[data-app-nav] .media-utility-workspace .media-settings-heading,
+  body[data-app-nav] .media-screen.media-metadata-workspace > .media-metadata-host > .media-heading,
   body[data-app-nav] .media-manager-workspace > .media-heading { left: calc(var(--app-nav-width) + 24px); right: 32px; }
   body[data-app-nav] .media-screen.media-detail-shell > .media-heading { left: var(--app-nav-width); right: 0; }
 }

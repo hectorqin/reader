@@ -3878,6 +3878,9 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   .file-manager-header .collection-links { justify-content: stretch; }
   .file-manager-header .collection-link.button { flex: 1 1 0; min-width: 0; }
 }
+/* The sticky section titles meet the sheet header: no body padding above them for the
+   controls to scroll through (the rule was lost when .panel-body became .sheet-body). */
+.sheet.shelf-settings > .sheet-body { padding-top: 0; }
 .shelf-settings .section-title:first-child { margin-top: 0; }
 .shelf-discovery { display: contents; }
 /* Desktop keeps navigation compact and settings beside the collection. */

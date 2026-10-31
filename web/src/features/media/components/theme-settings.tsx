@@ -92,12 +92,12 @@ export function MediaThemeSettings({ scope, onReaderSettings }: { scope: string;
       </> : <div className="theme-settings-row"><span>明暗</span><Chips label="明暗" options={modeOptions} value={resolved.mode} onChange={mode => save({ mode })} /></div>}
     </div>
 
-    <h2>应用主题</h2>
+    <h3>应用主题</h3>
     <div className="theme-grid" role="group" aria-label="应用主题">
       {appThemes.map(theme => <ThemeCard key={theme.id} id={theme.id} label={theme.name} note="浅色 · 深色" pressed={themePressed(theme.id)} onClick={() => chooseTheme(theme.id)} />)}
     </div>
 
-    <h2>阅读主题</h2>
+    <h3>阅读主题</h3>
     <div className="theme-grid" role="group" aria-label="阅读主题">
       <ThemeCard id={resolved.theme} label="跟随应用" note={'与应用一致 · ' + themes[resolved.theme].name} pressed={preference.reading === 'app'} onClick={() => save({ reading: 'app' })} />
       <ThemeCard id="gray" label={themes.gray.name} note="阅读专用 · 浅色 · 深色" pressed={preference.reading === 'gray'} onClick={() => save({ reading: 'gray' })} />
@@ -105,7 +105,7 @@ export function MediaThemeSettings({ scope, onReaderSettings }: { scope: string;
     <p className="theme-settings-note">黑白灰只用于阅读器，可以与应用主题分开设置；浅色和夜间跟随应用的明暗。主题偏好按服务器和账号保存在此设备。</p>
 
     {onReaderSettings && <>
-      <h2>阅读纸色</h2>
+      <h3>阅读纸色</h3>
       <ReadingPapers themeId={resolveReadingTheme(preference, systemDark).theme} settings={{ paper, paperFollowsDark }} onChange={patch => { onReaderSettings(patch); setSaved(true); setError(''); }} />
       <p className="theme-settings-note">纸色只改阅读页的底色和文字，工具栏仍用阅读主题；也可在阅读页的“外观”里切换。纸色按设备保存。</p>
     </>}

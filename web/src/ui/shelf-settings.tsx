@@ -1,7 +1,8 @@
 /**
  * The shelf's own settings.
  *
- * A sheet rather than a route, and a separate file rather than more rows in the
+ * On the shelf, a sheet rather than a route (a shortcut to the 书架 section of
+ * 我的 › 偏好设置, which shows the same fields); and a separate file rather than more rows in the
  * reader's panel — because the two answer different questions. The reader panel
  * is about the *page*: type size, line height, the engine that reads it aloud.
  * This one is about the *grid*: how many covers fit, what each cover shows, and
@@ -54,14 +55,14 @@ export interface ShelfSettingsOptions {
   onOpenExternalReader(): void;
 }
 
-export function ShelfSettingsSheet({
-  settings,
-  onPatch,
-  onClose,
-  onOpenExternalReader,
-}: ShelfSettingsOptions): JSX.Element {
+/**
+ * The shelf's controls themselves, without a container: the shelf's gear opens them
+ * in a sheet, and 我的 › 偏好设置 shows them as its 书架 section. One component, so
+ * the two can never offer different choices.
+ */
+export function ShelfSettingsFields({ settings, onPatch }: Pick<ShelfSettingsOptions, 'settings' | 'onPatch'>): JSX.Element {
   return (
-    <Sheet className="shelf-settings" title="书架设置" onClose={onClose}>
+    <>
       <SectionTitle>封面大小</SectionTitle>
       <Segmented
         label="封面大小"
@@ -96,6 +97,19 @@ export function ShelfSettingsSheet({
         value={settings.shelfSort}
         onChange={(value) => onPatch({ shelfSort: value })}
       />
+    </>
+  );
+}
+
+export function ShelfSettingsSheet({
+  settings,
+  onPatch,
+  onClose,
+  onOpenExternalReader,
+}: ShelfSettingsOptions): JSX.Element {
+  return (
+    <Sheet className="shelf-settings" title="书架设置" onClose={onClose}>
+      <ShelfSettingsFields settings={settings} onPatch={onPatch} />
       <SectionTitle>外部阅读器</SectionTitle>
       <div className="notice">通过 OPDS，让其他阅读器只读访问你的书架</div>
       <Button onClick={onOpenExternalReader}>连接外部阅读器</Button>

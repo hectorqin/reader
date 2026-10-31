@@ -21,7 +21,9 @@ async function saveShot(capture){for(let attempt=0;;attempt++){try{return await 
   page.on('pageerror',e=>errors.push(e.message));page.setDefaultTimeout(12000);
   await ref.goto(pathToFileURL(join(repo,'docs/prototypes/media/v2-review/index.html')).href);await ref.waitForFunction(()=>!!window.prototypeReview);
   const go=async hash=>{await page.evaluate(hash=>location.hash=hash,hash);await page.waitForTimeout(180);};
-  await page.goto(baseUrl+'/#/media/music/settings');await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');await page.locator('form button[type=submit]').click();await page.locator('.media-settings-intro').waitFor();
+  await page.goto(baseUrl+'/#/media/video');await page.locator('input[autocomplete="username"]').fill('reviewer');await page.locator('input[type="password"]').fill('review-test-pass');const verified=page.waitForResponse(r=>r.url().endsWith('/api/v1/auth/me'));await page.locator('form button[type=submit]').click();await page.locator('.media-catalog-page').waitFor();
+  // Let the post-login /auth/me check settle first: a detail page opened inside that window can fail with "request aborted" (app bug, reported separately).
+  await verified;await page.waitForLoadState('networkidle');
   async function shot(id,width=390,theme='forest',label=''){
    const height=width>700?900:844;await page.setViewportSize({width,height});
    await ref.evaluate(({id,width,theme,height})=>{window.prototypeReview.setWidth(width);window.prototypeReview.setTheme(theme==='midnight'?'dark':theme);window.prototypeReview.go(id,true);document.querySelector('#frame').style.height=height+'px';},{id,width,theme,height});
@@ -33,48 +35,52 @@ async function saveShot(capture){for(let attempt=0;;attempt++){try{return await 
    const layout=await page.evaluate(()=>{
     const rect=s=>{const e=document.querySelector(s);if(!e||!e.getClientRects().length)return null;const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};};
     const tab=document.querySelector('.media-tabs'),title=document.querySelector('.media-page-heading h1,.media-page-heading h2,.media-audio-heading>strong');
-    return {library:rect('.media-library-filter'),count:rect('.media-browse-tools>span,.media-person-toolbar>span'),tabsScrollbar:tab?getComputedStyle(tab).scrollbarWidth:null,titleSize:title?getComputedStyle(title).fontSize:null,synopsis:rect('.media-detail-description'),chapters:rect('.media-edition'),episodes:rect('.media-episode-grid'),episodeColumns:document.querySelector('.media-episode-grid')?getComputedStyle(document.querySelector('.media-episode-grid')).gridTemplateColumns.split(' ').length:null,episodeLabels:[...document.querySelectorAll('.media-episode-grid>button strong')].map(e=>e.textContent),queue:rect('.media-current-playlist'),contentActions:rect('[aria-label="更多播放选项"]'),stateIcon:rect('.media-state-icon,.media-empty-emblem'),stateTitle:document.querySelector('.media-state-page h2,.media-screen-error.is-page>strong,.media-library-empty h2')?.textContent};
+    return {library:rect('.media-library-filter .media-select-trigger,.media-person-toolbar .media-select-trigger'),count:rect('.media-catalog-count,.media-person-toolbar>span:not(.media-select-control)'),tabsScrollbar:tab?getComputedStyle(tab).scrollbarWidth:null,titleSize:title?getComputedStyle(title).fontSize:null,titleToken:(()=>{const probe=document.createElement('span');probe.style.fontSize='var(--text-title)';document.body.append(probe);const size=getComputedStyle(probe).fontSize;probe.remove();return size;})(),synopsis:rect('.media-detail-description'),chapters:rect('.media-edition'),episodes:rect('.media-episode-grid'),episodeColumns:document.querySelector('.media-episode-grid')?getComputedStyle(document.querySelector('.media-episode-grid')).gridTemplateColumns.split(' ').length:null,episodeLabels:[...document.querySelectorAll('.media-episode-grid>button strong')].map(e=>e.textContent),queue:rect('.media-current-playlist'),contentActions:rect('[aria-label="更多播放选项"]'),stateIcon:rect('.media-state-icon,.media-empty-emblem'),stateTitle:document.querySelector('.media-state-page h2,.media-screen-error.is-page>strong,.media-library-empty h2')?.textContent};
    });
-   if(layout.library&&layout.count)assert.ok(layout.library.x+layout.library.width<=layout.count.x+1,key+' library filter must be left of count');
+   if(layout.library&&layout.count)assert.ok(layout.library.x+layout.library.width<=layout.count.x+1,key+' library filter must be left of count '+JSON.stringify([layout.library,layout.count]));
    if(layout.tabsScrollbar)assert.equal(layout.tabsScrollbar,'none',key+' tabs must hide scrollbars');
-   if(layout.titleSize)assert.equal(layout.titleSize,'16px',key+' secondary heading size');
+   // v2 used a literal 16px; V3 sets every screen title in the --text-title token.
+   if(layout.titleSize)assert.equal(layout.titleSize,layout.titleToken,key+' secondary heading size');
    if(id==='narrators')assert.ok(layout.library,key+' narrator library selector');
    if(id==='book'&&layout.synopsis)assert.ok(layout.synopsis.y<layout.chapters.y,key+' synopsis before chapters');
    if(id==='show'){assert.equal(layout.episodeColumns,width>700?3:2);assert.ok(layout.episodeLabels.every(t=>/第 \d+ 集/.test(t)));assert.ok(layout.synopsis.y<layout.episodes.y);}
    if(id==='queue')assert.ok(layout.queue.width>=Math.min(850,width-32)-1,key+' queue fills content width');
    if(['music-player','audio-player'].includes(id))assert.ok(layout.contentActions,key+' current content menu');
-   if(['empty','missing','denied','unavailable'].includes(id)){assert.equal(layout.stateIcon.width,72);assert.equal(layout.stateIcon.height,72);}
+   // Denied/unavailable are now the inline media error card (QueryFeedback), not v2's full-page state with a 72px emblem.
+   if(['empty','missing'].includes(id)){assert.equal(layout.stateIcon.width,72);assert.equal(layout.stateIcon.height,72);}
    checks.push({id,key,width,theme,url:new URL(page.url()).hash,...metrics,layout});
    assert.ok(metrics.overflow<=1&&metrics.documentOverflow<=1,key+' overflows '+JSON.stringify(metrics));
   }
   const routes=[
    ['video',`video?library=${movie.libraryId}`,'.media-tile'],['movies',`video/movies?library=${movie.libraryId}`,'.media-tile'],['series',`video/series?library=${movie.libraryId}`,'.media-tile'],
    ['movie',`video/items/${movie.id}`,'.media-detail-heading'],['show',`video/items/${series.id}`,'.media-detail-heading'],
-   ['music',`music/albums?library=${album.libraryId}`,'.media-tile'],['artists',`music/artists?library=${album.libraryId}`,'.media-tile'],['tracks',`music/tracks?library=${album.libraryId}`,'.media-track-entry'],
+   ['music',`music/albums?library=${album.libraryId}`,'.media-tile'],['artists',`music/artists?library=${album.libraryId}`,'.media-tile'],['tracks',`music/tracks?library=${album.libraryId}`,'.media-tile'],
    ['album',`music/items/${album.id}`,'.media-album-track'],['artist',`music/items/${artist.id}`,'.media-detail-heading'],
    ['audiobooks',`audiobook/books?library=${book.libraryId}`,'.media-tile'],['narrators',`audiobook/narrators?library=${book.libraryId}`,'.media-person-tile'],['book',`audiobook/items/${book.id}`,'.media-detail-heading'],
    ['chapters',`audiobook/items/${book.id}/chapters`,'.media-audiobook-chapters'],['search','search?q=海&scope=all','.media-search-result'],
    ['favorites','favorites','.media-favorite-list'],['history','video/history','.media-history-row'],['folders',`music/folders?library=${album.libraryId}`,'.media-folder-row'],
-   ['settings','music/settings','.media-settings-intro'],['themes','music/settings/theme','.media-theme-card'],['browse-settings','music/settings/browse','.media-settings-panel'],['playback-settings','music/settings/playback','.media-settings-panel'],
    ['libraries','music/settings/libraries','.media-library-row'],['library-edit','video/settings/libraries/new','.media-library-create'],['permissions',`video/settings/libraries/${movie.libraryId}/permissions`,'.media-permissions-form'],
-   ['tasks','video/settings/tasks','.media-manager'],['metadata',`video/items/${movie.id}/metadata`,'.media-metadata-host'],['match',`video/items/${movie.id}/match`,'.media-metadata-host'],['account','music/settings/account','.media-account-panel'],
+   ['tasks','video/settings/tasks','.media-manager'],['metadata',`video/items/${movie.id}/metadata`,'.media-metadata-host'],['match',`video/items/${movie.id}/match`,'.media-metadata-host'],
   ];
-  for(const [channel,item] of [['music',album],['audiobook',book]]){await go('#/media/'+channel+'/items/'+item.id);await page.locator('.media-detail-favorite').waitFor();await page.locator('.media-detail-favorite').click();await page.waitForFunction(()=>document.querySelector('.media-detail-favorite')?.getAttribute('aria-pressed')==='true');}
+  // Albums have no heart button; every detail page favourites from its ⋯ 作品操作 menu.
+  for(const [channel,item] of [['music',album],['audiobook',book]]){await go('#/media/'+channel+'/items/'+item.id);await page.locator('.media-detail-heading').waitFor();await page.getByRole('button',{name:'作品操作',exact:true}).click();const saved=page.waitForResponse(r=>r.request().method()==='PUT'&&r.url().endsWith('/items/'+item.id+'/favorite'));await page.getByRole('menuitem',{name:'收藏作品',exact:true}).click();assert.equal((await saved).status(),200);await page.getByRole('button',{name:'作品操作',exact:true}).click();await page.getByRole('menuitem',{name:'取消收藏作品',exact:true}).waitFor();await page.keyboard.press('Escape');}
   const wanted=process.env.MEDIA_V2_ONLY?.split(',');
-  for(const [id,route,ready] of routes){if(wanted&&!wanted.includes(id))continue;await go('#/media/'+route);await page.locator(ready).first().waitFor();if(id==='match'){await page.getByRole('button',{name:'搜索候选',exact:true}).click();await page.getByRole('button',{name:'预览匹配',exact:true}).first().waitFor();}for(const width of [390,1120])await shot(id,width);console.log('reviewed '+id);}
+  for(const [id,route,ready] of routes){if(wanted&&!wanted.includes(id))continue;await go('#/media/'+route);await page.locator(ready).first().waitFor();if(id==='match'){await page.getByRole('button',{name:'搜索候选',exact:true}).click();await page.getByRole('button',{name:/^选择：/}).first().waitFor();}for(const width of [390,1120])await shot(id,width);console.log('reviewed '+id);}
   if(!wanted||wanted.includes('players')){
    await go('#/media/audiobook/narrators?library='+book.libraryId);await page.locator('.media-person-tile').first().click();await page.locator('.media-person-hero').waitFor();await shot('narrator');await shot('narrator',1120);
    await page.route('**/api/v1/media/libraries',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({items:[]})}));
-   await page.goto(baseUrl+'/#/media/video');await page.locator('.media-library-empty').waitFor();await shot('empty');await page.unroute('**/api/v1/media/libraries');await page.reload();await page.locator('.media-tabs:not([hidden])').waitFor();
+   await page.route('**/api/v1/media/browse?**',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({items:[],total:0})})); // no library, no catalog — as the server answers
+   await page.goto(baseUrl+'/#/media/video');await page.reload();await page.locator('.media-library-empty').waitFor();await shot('empty');await page.unroute('**/api/v1/media/libraries');await page.unroute('**/api/v1/media/browse?**');await page.reload();await page.locator('.media-tabs:not([hidden])').waitFor();
    await go('#/media/video/items/favorite-001');await page.locator('.media-missing-edition').waitFor();await shot('missing');
    for(const [id,status,code] of [['denied',403,'MEDIA_FORBIDDEN'],['unavailable',503,'MEDIA_UNAVAILABLE']]){
     const pattern=id==='unavailable'?/\/api\/v1\/media\/(browse|libraries\/[^/]+\/items)\?/:'**/api/v1/media/items/review-'+id;
     await page.route(pattern,route=>route.fulfill({status,contentType:'application/json',body:JSON.stringify({error:{code,message:id==='denied'?'当前账号没有此媒体库的访问权限':'暂时无法读取影音服务'}})}));
-    await go(id==='unavailable'?'#/media/video':'#/media/video/items/review-'+id);if(id==='unavailable')await page.reload();await page.locator('.media-screen-error.is-page').waitFor();await shot(id);await page.unroute(pattern);
+    await go(id==='unavailable'?'#/media/video':'#/media/video/items/review-'+id);if(id==='unavailable')await page.reload();await page.locator('.media-screen-error').waitFor();await shot(id);await page.unroute(pattern);
    }
-   const pending=[];await page.route('**/api/v1/media/browse?**',route=>pending.push(route));
-   await go('#/media/music/albums');await page.locator('.media-read-loading').waitFor();await shot('loading');
-   for(const route of pending)await route.continue().catch(()=>{});await page.unroute('**/api/v1/media/browse?**');
+   // Catalog loading is the app-wide floating notice now (v2 drew a skeleton); an uncached sort makes the request fresh.
+   const pending=[],catalog=/\/api\/v1\/media\/(browse|libraries\/[^/]+\/items)\?/;await page.route(catalog,route=>pending.push(route));
+   await go('#/media/music/albums?library='+album.libraryId+'&sort=title-desc');await page.getByText('正在加载…').first().waitFor();await shot('loading');
+   for(const route of pending)await route.continue().catch(()=>{});await page.unroute(catalog);
    await go('#/media/music/items/'+album.id);await page.getByRole('button',{name:'播放全部',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.media-player audio')?.readyState>=2);await page.getByRole('button',{name:'打开播放控制',exact:true}).click();await page.locator('.media-playing-artwork').waitFor();
    for(const width of [360,390,1120])await shot('music-player',width);
    await page.getByRole('button',{name:'歌词',exact:true}).click();await page.locator('.media-lyrics-lines').waitFor();await shot('lyrics');assert.equal(await page.locator('.media-lyrics-lines').evaluate(e=>getComputedStyle(e).scrollbarWidth),'none');
@@ -84,11 +90,14 @@ async function saveShot(capture){for(let attempt=0;;attempt++){try{return await 
    for(const [id,item] of [['video-player',movie],['episode-player',episode]]){await go('#/media/video/items/'+item.id);await page.locator('.media-detail-actions .media-primary').click();await page.locator('.dplayer-video').waitFor();await page.waitForFunction(()=>document.querySelector('.media-player video')?.readyState>=2);for(const width of [390,1120])await shot(id,width);}
   }
   if(!wanted||wanted.includes('players')){
-   await go('#/media/music/settings/theme');await page.getByRole('button',{name:'深夜',exact:true}).click();await go('#/media/music/albums?library='+album.libraryId);await page.locator('.media-tile').first().waitFor();await shot('music',390,'midnight');
-   await go('#/media/music/settings/theme');await page.getByRole('button',{name:'原野',exact:true}).click();
+   // V3 themes: v2's 深夜 is 暖陶 in dark mode, set in 我的 › 偏好设置 (the prototype still calls it midnight).
+   const follow=page.getByRole('button',{name:'跟随系统',exact:true}),mode=name=>page.getByRole('group',{name:'明暗',exact:true}).getByRole('button',{name,exact:true});
+   await go('#/me/settings?section=theme');if(await follow.getAttribute('aria-pressed')==='true')await follow.click();await mode('深色').click();await page.waitForFunction(()=>document.documentElement.dataset.mode==='dark');
+   await go('#/media/music/albums?library='+album.libraryId);await page.locator('.media-tile').first().waitFor();await shot('music',390,'midnight');
+   await go('#/me/settings?section=theme');await follow.click();await page.waitForFunction(()=>document.documentElement.dataset.mode==='light');
   }
   assert.deepEqual(errors,[]);await fs.writeFile(join(out,'checks.json'),JSON.stringify({complete:true,fixture:'Real local acceptance media and disposable server; reference content differs where the library lacks prototype metadata. Video internals use DPlayer.',checks,errors},null,2));
   await fs.writeFile(join(out,'index.html'),`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>影音 v2 实施验收</title><style>body{margin:24px;background:#f8f9f5;color:#202b24;font:14px/1.6 system-ui}h1{font-size:24px}section{margin:32px 0}.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:1600px}figure{margin:0;min-width:0}img{width:100%;border:1px solid #dfe5d9}figcaption{margin:8px 0}nav{display:flex;flex-wrap:wrap;gap:12px}a{color:#466638}@media(max-width:600px){body{margin:12px}.pair{gap:8px}}</style><h1>影音 v2 · 原型与实际页面</h1><p>左侧为已确认的 v2 原型，右侧为生产构建。尺寸与主题一致；实际页面使用本地验收资源，条目数量、封面及元数据可能不同。视频控件由 DPlayer 提供。</p><nav>${checks.map(r=>`<a href="#${r.key}">${r.id} ${r.width}</a>`).join('')}</nav>${checks.map(r=>`<section id="${r.key}"><h2>${r.id} · ${r.width}px</h2><div class="pair"><figure><figcaption>v2 原型</figcaption><img loading="lazy" src="${r.key}-reference.png"></figure><figure><figcaption>实际页面</figcaption><img loading="lazy" src="${r.key}-actual.png"></figure></div></section>`).join('')}</html>`);
   console.log(JSON.stringify({comparisons:checks.length,errors}));
- }finally{if(browser)await browser.close();server.stdin.end();await new Promise(r=>server.exitCode!==null?r():server.once('exit',r));}
+ }catch(error){await browser?.contexts()[0]?.pages()[0]?.screenshot({path:join(out,'failure.png')}).catch(()=>{});throw error;}finally{if(browser)await browser.close();server.stdin.end();await new Promise(r=>server.exitCode!==null?r():server.once('exit',r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

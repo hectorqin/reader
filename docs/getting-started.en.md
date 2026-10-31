@@ -41,7 +41,7 @@ For example, use `/srv/books:/books:ro` on Linux, or `"D:/books:/books:ro"` with
 ### Choose read-only or writable books
 
 - **Browse and read only**: keep `:ro`. Add books through the host or NAS and let reader scan them.
-- **Manage files in the browser**: use `:rw` and give the server process write permission. Administrators can upload, rename, move, delete, and create directories in the library file manager; members can only upload book files from the library page (an administrator can turn this off under Me → System settings → Service configuration → 书库).
+- **Manage files in the browser**: use `:rw` and give the server process write permission. Administrators can upload, rename, move, delete, and create directories in the library file manager; members can only upload book files from the library page (an administrator can turn this off under Me → Service configuration → 书库).
 
 A read-only book mount still allows shelves, progress, and notes to be saved in `/data`. See [configuration](configuration.en.md) for permissions and mount details.
 
@@ -59,7 +59,7 @@ Open `http://localhost:5888`, or `http://<server-ip>:5888` from another device.
 2. Wait for the initial scan, then open a book from the shelf or library.
 3. Create accounts for other members. Public registration is disabled by default after the first account.
 
-To allow later self-registration, an administrator switches Me → System settings → Registration and invitations (我的 → 系统设置 → 注册与邀请) to open or invite-only registration. `ALLOW_REGISTRATION: "true"` in Compose only seeds the registration policy on the first start; afterwards the setting in the UI wins.
+To allow later self-registration, an administrator switches Me → Registration and invitations (我的 → 注册与邀请) to open or invite-only registration. `ALLOW_REGISTRATION: "true"` in Compose only seeds the registration policy on the first start; afterwards the setting in the UI wins.
 
 The health endpoint is `/api/v1/health`. For startup failures, missing books, or write errors, see [troubleshooting](configuration.en.md#troubleshooting).
 
@@ -90,7 +90,7 @@ On Windows, the Compose setup above avoids shell-specific path and line-continua
 
 ### Local books
 
-Place EPUB, TXT, PDF, CBZ/ZIP, or comic image directories in your mounted library. By default, the server checks the library for changes every 60 seconds; administrators can change the interval (0 disables it) under Me → System settings → Service configuration → Scan settings (扫描设置). The server also scans once at startup. With a writable mount, administrators upload from the file manager and members use 上传书籍 (Upload books) at the top of the library page (book formats only; no unpacking, no overwriting).
+Place EPUB, TXT, PDF, CBZ/ZIP, or comic image directories in your mounted library. By default, the server checks the library for changes every 60 seconds; administrators can change the interval (0 disables it) under Me → Service configuration → Scan settings (扫描设置). The server also scans once at startup. With a writable mount, administrators upload from the file manager and members use 上传书籍 (Upload books) at the top of the library page (book formats only; no unpacking, no overwriting).
 
 The shelf contains readable books; the library lets you browse the disk directory. Removing a book from a shelf is different from deleting its file. See the [user guide (中文)](user-guide.zh-CN.md).
 

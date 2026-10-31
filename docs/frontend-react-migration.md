@@ -63,7 +63,7 @@ web/src/
 
 保留的兼容入口是有意的：
 
-- `/settings` 重定向到 `/shelf`，兼容旧书架设置深链接；用户设置在「我的」（`/me`、`/me/:panel`）；
+- `/settings` 重定向到 `/shelf`，兼容旧书架设置深链接；用户设置在「我的」（`/me`；全部个人偏好在 `/me/settings` 一页，旧 `/me/:panel` 跳到对应分区）；
 - 影音设置页已移除：`/media/:channel/settings` 与 `/media/:channel/settings/:panel` 重定向到「我的」，媒体库管理（`.../settings/libraries`）和扫描与刮削（`.../settings/tasks`）保留；
 - `/sources/search` 仍打开书源中心；
 - `/sources/:sourceId/:pageId` 与新的 `/sources/:sourceId/pages/:pageId` 都可打开扩展页；

@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ReaderApi } from '../src/api/client.ts';
+import { ApiError } from '../src/api/errors.ts';
 import type { Session } from '../src/api/types.ts';
 import { FakeTransport, makePlatform } from './helpers/env.ts';
 
@@ -58,5 +59,28 @@ describe('ReaderApi navigation query cache', () => {
     await api.browseBatchShelf({ bookIds: ['book-1'] }, 'remove');
     await api.listBooks();
     expect(transport.countMatching(request => request.url.startsWith('/api/v1/books'))).toBe(2);
+  });
+});
+
+describe('a shared in-flight navigation query', () => {
+  it('does not hand the first caller’s abort to a caller that is still live', async () => {
+    let calls = 0;
+    const transport = { async send(request: { signal?: AbortSignal }) {
+      calls += 1;
+      if (calls === 1) {
+        // The first request hangs until its caller aborts it.
+        await new Promise((_, reject) => request.signal?.addEventListener('abort', () => reject(new ApiError('aborted', 'request aborted'))));
+      }
+      return { status: 200, headers: { 'content-type': 'application/json' }, json: { items: ['ok'] } };
+    } } as any;
+    const api = new ReaderApi(makePlatform(transport), { load: async () => session, save: async () => {}, clear: async () => {} });
+    await api.restore();
+    const first = new AbortController();
+    const gone = api.listBooks({ page: 1 }, { signal: first.signal } as any).catch(error => error);
+    const live = api.listBooks({ page: 1 });
+    await vi.waitFor(() => expect(calls).toBe(1));
+    first.abort();
+    expect((await gone)?.kind).toBe('aborted');
+    expect((await live).items).toEqual(['ok']);
   });
 });

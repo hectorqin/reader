@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { coverTint } from '../../../ui/cover-tint.ts';
 import { BookGridSkeleton } from '../../../ui/book-grid-skeleton.tsx';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { Book, ContinueReadingItem, ReadingState } from '../../../api/types.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -9,7 +9,6 @@ import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
 import { useShelf, useShelfGroups, type ShelfFilters } from '../queries/shelf.queries.ts';
 import { SHELF_SORTS, ShelfSettingsSheet } from '../../../ui/shelf-settings.tsx';
 import { IconButton, Callout, Icon } from '../../../ui/toolkit.tsx';
-import { OpdsAccess } from '../../../ui/opds-access.tsx';
 import { DialogView, type Dialog } from '../../../ui/dialog.tsx';
 import { FloatingNotice } from '../../../ui/floating-notice.tsx';
 import { useSwipeTabs } from '../../../shared/ui/use-swipe-tabs.ts';
@@ -75,7 +74,7 @@ export function ShelfPage() {
   const [search, setSearch] = useState(queryText);
   useEffect(() => { setSearch(queryText); }, [queryText]);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [opdsOpen, setOpdsOpen] = useState(false);
+  const navigate = useNavigate();
   const [removeTarget, setRemoveTarget] = useState<Book | ContinueReadingItem | null>(null);
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -177,8 +176,7 @@ export function ShelfPage() {
       {cards.length > 0 && <div className="book-grid" data-density={settings.shelfDensity} data-show-author={String(settings.shelfShowAuthor)} data-show-progress={String(settings.shelfShowProgress)}>{cards.map(book => <BookCard key={book.id} book={book} showAuthor={settings.shelfShowAuthor} showProgress={settings.shelfShowProgress} menu={menuItems(book)} />)}</div>}
       {query.data && pages > 1 && <Pager className="shelf-pager" page={Math.min(page, pages)} pageCount={pages} busy={query.isFetching} onGo={next => go({ page: next })} />}
     </section>
-    {settingsOpen && <ShelfSettingsSheet settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSettingsOpen(false)} onOpenExternalReader={() => { setSettingsOpen(false); setOpdsOpen(true); }} />}
-    {opdsOpen && <OpdsAccess api={runtime.api} onSignedOut={() => { void runtime.api.signOut(); }} onClose={() => { setOpdsOpen(false); setSettingsOpen(true); }} />}
+    {settingsOpen && <ShelfSettingsSheet settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSettingsOpen(false)} onOpenExternalReader={() => { setSettingsOpen(false); navigate('/me/opds', { state: { returnTo: '/shelf' } }); }} />}
     {groupsOpen && <DialogView dialog={{ kind: 'pick', title: groups.isPending ? '分组 · 正在读取…' : groups.error ? '分组 · 读取失败' : '分组', options: groupOptions, resolve: (_value: string | null) => undefined } satisfies Dialog} destructive="" onClose={answer => {
       setGroupsOpen(false);
       if (typeof answer !== 'string') return;
