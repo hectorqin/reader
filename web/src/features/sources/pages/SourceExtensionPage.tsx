@@ -118,6 +118,15 @@ export function SourceExtensionPage() {
   const tabs = page?.tabs ?? []; const selectedTab = useMemo(() => tabs.find(tab => tab.id === activeTab), [tabs, activeTab]);
   useEffect(() => { setActiveTab(''); setValues({}); setSelected(new Set()); setEditing(null); setError(''); setNoticeTab(''); setConfirmation(null); }, [owner, pageId]);
   useEffect(() => { if (!page) return; setActiveTab(current => page.activeTab && !current ? page.activeTab : (current && tabs.some(tab => tab.id === current) ? current : tabs[0]?.id ?? '')); setNoticeTab(current => current || page.activeTab || tabs[0]?.id || ''); }, [page, tabs]);
+  // On a narrow screen the tab row scrolls sideways; keep the selected tab in view (a page
+  // may open on its last tab), moving only the row, never the page.
+  useEffect(() => {
+    const button = document.getElementById(`extension-tab-${activeTab}`), list = button?.parentElement;
+    if (!button || !list) return;
+    const left = button.offsetLeft - list.offsetLeft, right = left + button.offsetWidth;
+    if (left < list.scrollLeft) list.scrollLeft = left;
+    else if (right > list.scrollLeft + list.clientWidth) list.scrollLeft = right - list.clientWidth;
+  }, [activeTab, tabs.length]);
   const updateValue = (key: string, field: string, value: unknown) => setValues(previous => {
     const form = findForm(page, key);
     const base = previous[key] ?? (form ? initialValues(form) : {});

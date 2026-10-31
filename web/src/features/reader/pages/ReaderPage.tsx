@@ -5,6 +5,7 @@ import { ApiError } from '../../../api/errors.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { ReaderScreen } from '../../../ui/reader-screen.tsx';
 import type { Book } from '../../../api/types.ts';
+import { PublicationCache, publicationScope } from '../../../store/publications.ts';
 
 export function ReaderPage() {
   const runtime = useRuntime();
@@ -24,10 +25,19 @@ export function ReaderPage() {
     const id = decodeURIComponent(bookId);
     void runtime.api.getBook(id).then(result => { if (live) setBook(result.book); }).catch(reason => {
       if (!live) return;
-      // Offline, a book downloaded for offline reading still opens from its mirrored record;
-      // the reader then reads its bytes from the local cache.
-      const mirrored = reason instanceof ApiError && reason.isConnectivity ? runtime.offline.books().find(item => item.id === id) : undefined;
-      if (mirrored) setBook(mirrored); else setError(reason);
+      // Offline, a book downloaded for offline reading still opens: its record comes from
+      // the offline mirror, or else from the manifest the download stored next to its
+      // bytes (the mirror only holds what sync put there). The reader then reads the
+      // bytes from the local cache.
+      if (!(reason instanceof ApiError && reason.isConnectivity)) { setError(reason); return; }
+      const mirrored = runtime.offline.books().find(item => item.id === id);
+      if (mirrored) { setBook(mirrored); return; }
+      const cache = new PublicationCache(runtime.platform.kv, runtime.platform.blobs,
+        publicationScope(runtime.api.baseUrl || window.location.origin, runtime.api.currentSession()?.user.id ?? ''));
+      void cache.manifest(id).catch(() => null).then(manifest => {
+        if (!live) return;
+        if (manifest) setBook(manifest.book); else setError(reason);
+      });
     });
     return () => { live = false; };
   }, [runtime, bookId]);
