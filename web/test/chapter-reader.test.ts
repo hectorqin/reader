@@ -500,3 +500,29 @@ it('in scroll mode, pulling on past the end of a chapter opens the next one, and
   expect(turn).toHaveBeenLastCalledWith('next');
   clock.mockRestore();
 });
+
+it('lists 阅读记录 in 书籍信息 and goes back to a place from it', async () => {
+  const env = await setup(); serve(env.transport, content(['a', 'b']));
+  await env.screen.open(book);
+  const places = [
+    { bookId: book.id, locator: 'r1:0.0000:chapter:b', percentage: 0.9, chapterTitle: '章节 b', device: 'phone', updatedAt: Date.now() - 60_000 },
+    { bookId: book.id, locator: 'r1:0.5000:chapter:a', percentage: 0.25, chapterTitle: '章节 a', device: 'tablet', updatedAt: Date.now() - 3_600_000 },
+  ];
+  vi.spyOn(env.api, 'progressHistory').mockResolvedValue(places);
+  const navigate = vi.spyOn(env.screen as unknown as { navigateTool(target: string): Promise<void> }, 'navigateTool').mockResolvedValue(undefined);
+  await click(env.screen, '书籍信息');
+  await vi.waitFor(() => expect(env.screen.element.querySelectorAll('.reading-history li')).toHaveLength(2));
+  expect(env.screen.element.querySelector('.reading-history li small')?.textContent).toContain('90% · phone');
+  const older = [...env.screen.element.querySelectorAll<HTMLButtonElement>('.reading-history button')].find(button => button.textContent?.includes('tablet'))!;
+  older.click();
+  await vi.waitFor(() => expect(navigate).toHaveBeenCalledWith('r1:0.5000:chapter:a'));
+  expect(env.screen.element.querySelector('.reading-history')).toBeNull();
+});
+
+it('says 阅读记录 cannot be read offline instead of showing an empty list', async () => {
+  const env = await setup(); serve(env.transport, content(['a']));
+  await env.screen.open(book);
+  vi.spyOn(env.api, 'progressHistory').mockRejectedValue(new ApiError('offline', 'offline'));
+  await click(env.screen, '书籍信息');
+  await vi.waitFor(() => expect(env.screen.element.querySelector('.reading-history')?.textContent).toContain('离线时无法读取阅读记录'));
+});

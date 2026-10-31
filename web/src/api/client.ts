@@ -687,6 +687,15 @@ export class ReaderApi {
    * Single progress write. Cheaper than a batch and used for the periodic
    * "still reading" report, where there is nothing to reconcile.
    */
+  /** Where this account has been in a book, newest first (server keeps the latest 50). */
+  async progressHistory(bookId: string, options: RequestOptions = {}): Promise<Progress[]> {
+    const result = await this.get<{ history: Progress[] }>(
+      `/api/v1/sync/progress/${encodeURIComponent(bookId)}/history`,
+      options,
+    );
+    return result.history;
+  }
+
   async putProgress(progress: ProgressInput, options: RequestOptions = {}): Promise<Progress | null> {
     const result = await this.call<{ progress: Progress | null }>(
       `/api/v1/sync/progress/${encodeURIComponent(progress.bookId)}`,

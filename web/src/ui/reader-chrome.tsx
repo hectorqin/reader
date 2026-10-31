@@ -24,6 +24,7 @@ import { FloatingNotice } from './floating-notice.tsx';
 
 import type { AppSettings } from '../store/settings.ts';
 import { DEFAULT_APP_SETTINGS, READOUT_FIELDS, READOUT_OPTIONS, type ReadoutMode } from '../store/settings.ts';
+import { formatDate } from '../lib/format.ts';
 import { ReaderIndicators } from './reader-indicators.tsx';
 import type { SpeechEngineKind } from '../render/speech.ts';
 import { type ReactNode, type JSX, useState } from 'react';
@@ -69,6 +70,11 @@ export interface ChromeState {
   statusState: string;
   /** Whether the server offers AI 章节总结; unknown (undefined) draws no button. */
   aiSummaryAvailable?: boolean;
+  /** 阅读记录 in 书籍信息: where this account has been in the book, newest first. */
+  historyState?: 'loading' | 'ready' | 'offline' | 'error';
+  history?: Array<{ locator: string; percentage: number; chapterTitle: string; device: string; updatedAt: number }>;
+  /** The locator on screen when the history was read, so that entry is marked 当前. */
+  historyCurrent?: string;
   /** Whether the page on screen carries a bookmark; drives the top bar's 书签 toggle. */
   bookmarked?: boolean;
   /** Set when the book itself could not be opened: the stage is empty, so say why and offer a way on. */
@@ -155,6 +161,9 @@ export interface ChromeHandlers {
   onTools?(): void;
   onBack(): void;
   onRetryOpen?(): void;
+  /** Goes back to a place from 阅读记录. */
+  onRestoreHistory?(locator: string): void;
+  onRetryHistory?(): void;
   /** Adds a bookmark at the page on screen, or removes the one there. */
   onToggleBookmark?(): void;
   toggleToc(): void;
@@ -253,7 +262,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         </div>
         {(state.sourceName || state.chapterUrl) && <div className="reader-source-info"><span>{state.sourceName || '当前书源'}</span>{state.chapterUrl && <a href={state.chapterUrl} target="_blank" rel="noopener noreferrer" title={state.chapterUrl}>{state.chapterUrl}</a>}</div>}
       </div>
-      {state.bookInfoOpen && <Sheet title="书籍信息" onClose={() => handlers.onBookInfo?.()}><article className="book-detail"><h3>{state.title}</h3><p className="book-detail-author">{state.author || '作者未知'}</p><dl><dt>书源</dt><dd>{state.sourceName || (state.canRefresh ? '远程书源' : '本地书籍')}</dd><dt>当前章节</dt><dd>{state.chapterLabel || '暂无信息'}</dd></dl><h4>内容简介</h4><p className="book-detail-description">{state.description || '暂无简介'}</p></article></Sheet>}
+      {state.bookInfoOpen && <Sheet title="书籍信息" onClose={() => handlers.onBookInfo?.()}><article className="book-detail"><h3>{state.title}</h3><p className="book-detail-author">{state.author || '作者未知'}</p><dl><dt>书源</dt><dd>{state.sourceName || (state.canRefresh ? '远程书源' : '本地书籍')}</dd><dt>当前章节</dt><dd>{state.chapterLabel || '暂无信息'}</dd></dl><h4>内容简介</h4><p className="book-detail-description">{state.description || '暂无简介'}</p><ReadingHistory state={state} handlers={handlers} /></article></Sheet>}
       <FloatingNotice message={state.aiSummaryBusy ? '正在生成章节总结…' : ''} busy />
       {state.aiSummary && <Sheet title="AI 章节总结" onClose={() => handlers.onAiSummary?.()}><article className="book-detail"><p className="book-detail-description">{state.aiSummary}</p></article></Sheet>}
       <StageHost stage={stage} />
@@ -384,6 +393,35 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
  * *where* the stage sits (between the status line and the footer, which is where
  * its stacking context comes from) and the screen owns its contents.
  */
+/**
+ * 阅读记录: the places this account has been in the book, on any device, newest first.
+ * A jump — a mistapped 目录 entry, a stale device, a clock that ran ahead — overwrote the
+ * one saved position for good; here the place before it is one press away.
+ */
+function ReadingHistory({ state, handlers }: { state: ChromeState; handlers: ChromeHandlers }): JSX.Element | null {
+  if (!state.historyState) return null;
+  return (
+    <section className="reading-history" aria-label="阅读记录">
+      <h4>阅读记录</h4>
+      {state.historyState === 'loading' && <p className="muted" role="status">正在读取阅读记录…</p>}
+      {state.historyState === 'offline' && <p className="muted">离线时无法读取阅读记录，连上服务端后再试。</p>}
+      {state.historyState === 'error' && <p className="muted" role="alert">阅读记录读取失败。 <Button onClick={() => handlers.onRetryHistory?.()}>重试</Button></p>}
+      {state.historyState === 'ready' && (state.history?.length
+        ? <ul>{state.history.map((entry, index) => {
+          const current = entry.locator === state.historyCurrent;
+          return <li key={`${entry.updatedAt}-${index}`}>
+            <button type="button" disabled={current} aria-current={current ? 'location' : undefined} onClick={() => handlers.onRestoreHistory?.(entry.locator)}>
+              <strong>{entry.chapterTitle || '未命名章节'}</strong>
+              <small>{Math.round(Math.max(0, Math.min(1, entry.percentage)) * 100)}% · {entry.device || '未知设备'} · {formatDate(entry.updatedAt)}</small>
+              {current && <span className="reading-history-current">当前</span>}
+            </button>
+          </li>;
+        })}</ul>
+        : <p className="muted">还没有阅读记录。</p>)}
+    </section>
+  );
+}
+
 /**
  * Opens the 目录 at the chapter being read: in a long serial the reader is in
  * chapter 800, and a list that opens at chapter 1 hides both where they are and
