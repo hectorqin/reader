@@ -51,7 +51,21 @@ export function ReaderPage() {
     // would recurse through runtime.registerReader while the app is flushing.
     const unregister = runtime.registerReader(book, () => screen.flushProgress());
     void screen.open(book);
-    return () => { unregister(); screen.dispose(); host.current?.replaceChildren(); };
+    return () => {
+      unregister();
+      const saved = screen.flushProgress();
+      screen.dispose();
+      host.current?.replaceChildren();
+      // Leaving the reader is when 首页's 继续阅读 and the shelf's 最近阅读 are looked at
+      // next. Push the position now rather than after the sync debounce, then re-read
+      // both instead of showing the cached answer for up to a minute (#663).
+      void saved.catch(() => undefined)
+        .then(() => runtime.offline.flush()).then(() => runtime.sync.flush()).catch(() => undefined)
+        .finally(() => {
+          void runtime.queryClient.invalidateQueries({ queryKey: ['home'] });
+          void runtime.queryClient.invalidateQueries({ queryKey: ['shelf'] });
+        });
+    };
   }, [runtime, book, navigate]);
   if (error) return <div className="page-state" role="alert"><h2>无法打开这本书</h2><p>{error instanceof Error ? error.message : '请求失败'}</p><Button onClick={() => back.current()}>返回</Button></div>;
   if (!book) return <div className="page-state" role="status"><div className="spinner" aria-hidden="true" /><p>正在打开书籍…</p></div>;
