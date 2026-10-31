@@ -1119,6 +1119,7 @@ export class ReaderScreen {
       this.viewListeners.push(
         addDebouncedListener(this.view.elementHost, 'scroll', () => this.onPosition(this.view?.position() ?? null), 250),
       );
+      this.viewListeners.push(bindChapterPull(this.view.elementHost, () => this.settings.mode !== 'paged', direction => void this.turnPage(direction)));
     }
 
     // Paged mode moves the page with the finger: a drag starts once the finger has
@@ -2347,6 +2348,57 @@ function addDebouncedListener(
   return () => {
     if (timer) clearTimeout(timer);
     target.removeEventListener(event, wrapped);
+  };
+}
+
+/**
+ * Scroll mode: pulling on past the end of a chapter opens the next one (#702).
+ *
+ * Taps and keys already cross chapters (`ReaderView.next` falls through to the next
+ * section), but a reader scrolling by hand reached the last line and stopped there,
+ * with no way on except finding the toolbar's 下一章. A pull that *starts* at the end
+ * and keeps going is the request for more; one that merely arrives at the end is not,
+ * which is why the edge is read when the gesture begins. The top edge works the same
+ * way backwards.
+ *
+ * Touch events rather than pointer events: the browser cancels a pointer as soon as it
+ * starts scrolling natively, but keeps delivering touch events. The wheel is summed over
+ * a short window so one flick of a trackpad is one chapter, and a cooldown keeps the
+ * momentum that follows from turning a second one.
+ */
+function bindChapterPull(host: HTMLElement, active: () => boolean, turn: (direction: 'next' | 'previous') => void): () => void {
+  const PULL = 72, WHEEL = 240, COOLDOWN = 900;
+  const atEnd = () => host.scrollTop + host.clientHeight >= host.scrollHeight - 2;
+  const atStart = () => host.scrollTop <= 2;
+  let edge: 'end' | 'start' | null = null, startY = 0, wheel = 0, wheelAt = 0, quietUntil = 0;
+  const fire = (direction: 'next' | 'previous') => { quietUntil = performance.now() + COOLDOWN; wheel = 0; turn(direction); };
+  const onTouchStart = (event: TouchEvent) => {
+    edge = !active() || event.touches.length !== 1 ? null : atEnd() ? 'end' : atStart() ? 'start' : null;
+    startY = event.touches[0]?.clientY ?? 0;
+  };
+  const onTouchEnd = (event: TouchEvent) => {
+    const from = edge; edge = null;
+    if (!from || performance.now() < quietUntil || hasTextSelection(host)) return;
+    const dy = (event.changedTouches[0]?.clientY ?? startY) - startY;
+    if (from === 'end' && dy < -PULL && atEnd()) fire('next');
+    else if (from === 'start' && dy > PULL && atStart()) fire('previous');
+  };
+  const onWheel = (event: WheelEvent) => {
+    if (!active() || event.ctrlKey || performance.now() < quietUntil) return;
+    const down = event.deltaY > 0;
+    if (!(down ? atEnd() : event.deltaY < 0 && atStart())) { wheel = 0; return; }
+    const now = performance.now();
+    if (now - wheelAt > 600 || Math.sign(wheel) !== Math.sign(event.deltaY)) wheel = 0;
+    wheelAt = now; wheel += event.deltaY;
+    if (Math.abs(wheel) >= WHEEL) fire(down ? 'next' : 'previous');
+  };
+  host.addEventListener('touchstart', onTouchStart, { passive: true });
+  host.addEventListener('touchend', onTouchEnd, { passive: true });
+  host.addEventListener('wheel', onWheel, { passive: true });
+  return () => {
+    host.removeEventListener('touchstart', onTouchStart);
+    host.removeEventListener('touchend', onTouchEnd);
+    host.removeEventListener('wheel', onWheel);
   };
 }
 

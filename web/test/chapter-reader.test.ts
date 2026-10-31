@@ -470,3 +470,33 @@ it('bookmarks the page on screen from the top bar, and the same button removes i
   await vi.waitFor(() => expect(button().getAttribute('aria-pressed')).toBe('false'));
   expect(env.offline.notesFor(book.id).filter((note) => note.type === 'bookmark')).toHaveLength(0);
 });
+
+it('in scroll mode, pulling on past the end of a chapter opens the next one, and only a pull that starts there', async () => {
+  const env = await setup(); serve(env.transport, content(['a', 'b']));
+  await env.screen.open(book);
+  (env.screen as unknown as { settings: { mode: string } }).settings.mode = 'scroll';
+  const turn = vi.spyOn(env.screen as unknown as { turnPage(direction: string): Promise<void> }, 'turnPage').mockResolvedValue(undefined);
+  const host = env.screen.element.querySelector('book-content') as HTMLElement;
+  // jsdom lays nothing out: scrollTop 0 of a 0-high flow is both edges at once.
+  const touch = (type: string, y: number) => {
+    const event = new Event(type, { bubbles: true }) as Event & { touches: unknown[]; changedTouches: unknown[] };
+    Object.assign(event, { touches: type === 'touchend' ? [] : [{ clientY: y }], changedTouches: [{ clientY: y }] });
+    host.dispatchEvent(event);
+  };
+  touch('touchstart', 500); touch('touchend', 460);
+  expect(turn).not.toHaveBeenCalled();
+  touch('touchstart', 500); touch('touchend', 400);
+  expect(turn).toHaveBeenLastCalledWith('next');
+  // A trackpad flick is one chapter: the momentum that follows inside the cooldown is not another.
+  turn.mockClear();
+  for (let i = 0; i < 10; i += 1) host.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true }));
+  expect(turn).not.toHaveBeenCalled();
+  // Once the cooldown has passed, scrolling on past the end with the wheel turns too.
+  const later = performance.now() + 2000;
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(later);
+  host.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true }));
+  host.dispatchEvent(new WheelEvent('wheel', { deltaY: 130, bubbles: true }));
+  expect(turn).toHaveBeenCalledTimes(1);
+  expect(turn).toHaveBeenLastCalledWith('next');
+  clock.mockRestore();
+});
