@@ -74,6 +74,10 @@ test('search filters permissions before counting and paging, and respects effect
     const ascending=catalog.browse(member,'video','movie',{sort:'title-asc'});
     assert.deepEqual(ascending.items.map(item=>item.title),['100%_literal','AAA','ZZZ']);
     assert.deepEqual(catalog.browse(member,'video','movie',{sort:'title-desc',offset:1,limit:1}).items.map(item=>item.title),['AAA']);
+    const sampled=catalog.browse(member,'video','movie',{sort:'random',limit:2});
+    assert.equal(sampled.items.length,2);
+    assert.equal(sampled.total,3,'random sampling keeps the same access filter and total');
+    assert.ok(sampled.items.every(item=>ascending.items.some(visible=>visible.id===item.id)));
     assert.deepEqual(catalog.list(member,'public',{kind:'movie',sort:'title-asc'}).items.map(item=>item.id),ascending.items.map(item=>item.id));
   } finally {db.close();}
 });

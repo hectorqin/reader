@@ -1,99 +1,95 @@
-/* 首页: continue where you left off. Uses the shared theme tokens only:
- * continue cards sit on ch-*-soft with ink text, brand fills carry on-brand text. */
+/* 首页: continue cards (one shape for every channel), the shelf row, then random media rows.
+ * Uses the shared theme tokens only; channel colour comes from --color-ch-*. */
 .home-header h1 { margin: 6px 0 0; font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; font-size: 28px; font-weight: 600; line-height: 1.2; color: var(--color-ink); }
 .home-header p { margin: 6px 0 0; font-size: var(--text-ui); color: var(--color-muted); }
 
 .home-progress { display: block; height: 4px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--color-ink) 10%, transparent); overflow: hidden; }
 .home-progress > i { display: block; height: 100%; min-width: 4px; border-radius: var(--radius-xs); background: var(--color-brand); }
 
-/* Reading takes the lead; unfinished media sits beside it on a wide window, below it otherwise. */
-.home-continue { display: grid; gap: 12px; margin-top: 20px; }
-@media (min-width: 64rem) {
-  .home-continue[data-media] { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: stretch; }
-}
+/* Every "continue" — book, video, audiobook — is the same card, most recent first.
+ * Only the label, cover shape and progress colour say which channel it is. */
+.home-continue { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 12px; margin-top: 20px; }
 
-.home-hero, .home-empty {
-  display: flex;
-  gap: 20px;
-  padding: 20px;
-  border: 1px solid color-mix(in srgb, var(--color-ch-read) 35%, transparent);
-  border-radius: var(--radius-xl);
-  background: var(--color-ch-read-soft);
-  color: var(--color-ink);
-  text-decoration: none;
-  transition: border-color var(--motion-duration) var(--motion-ease), box-shadow var(--motion-duration) var(--motion-ease);
-}
-@media (hover: hover) and (pointer: fine) { .home-hero:hover { border-color: var(--color-ch-read); box-shadow: 0 8px 24px color-mix(in srgb, var(--color-ink) 8%, transparent); }}
-.home-hero:focus-visible, .home-card:focus-visible, .home-empty a:focus-visible, .home-retry:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: 3px; }
-
-.home-hero-cover {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 96px;
-  aspect-ratio: 5 / 7;
-  overflow: hidden;
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-ink);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 12%, transparent), 0 10px 22px color-mix(in srgb, var(--color-ink) 16%, transparent);
-}
-.home-hero-cover img { width: 100%; height: 100%; object-fit: cover; }
-.home-hero-cover b { padding: 10px; font-family: 'Songti SC', 'Noto Serif SC', serif; font-size: var(--text-body); font-weight: 600; line-height: 1.35; letter-spacing: 0.05em; text-align: center; overflow-wrap: anywhere; }
-
-.home-hero-text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
-.home-hero-text strong { margin-top: 8px; font-family: 'Songti SC', 'Noto Serif SC', serif; font-size: var(--text-display); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
-.home-hero-text small { font-size: var(--text-label); color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.home-hero-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: auto; padding-top: 14px; }
-.home-hero-action { display: inline-flex; align-items: center; gap: 6px; flex: none; height: 38px; padding: 0 18px; border-radius: var(--radius-pill); background: var(--color-brand); color: var(--color-on-brand); font-size: var(--text-ui); font-weight: 600; }
-.home-hero-meter { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 140px; max-width: 320px; }
-.home-hero-meter .home-progress { flex: 1; }
-.home-hero-percent { flex: none; font-size: var(--text-meta); color: var(--color-muted); font-variant-numeric: tabular-nums; }
-
-.home-empty { flex-direction: column; justify-content: center; align-items: flex-start; gap: 8px; min-height: 120px; }
-.home-empty strong { font-family: 'Songti SC', 'Noto Serif SC', serif; font-size: var(--text-title); }
-.home-empty a, .home-retry { display: inline-flex; align-items: center; color: var(--color-ch-read-text); font-size: var(--text-ui); font-weight: 600; text-decoration: none; }
-.home-retry { min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; }
-.home-empty-pending strong { color: var(--color-muted); }
-
-.home-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; align-content: start; }
-@media (min-width: 64rem) {
-  .home-continue[data-media] .home-cards { grid-template-columns: minmax(0, 1fr); }
-}
-.home-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 14px 14px 16px;
+.home-resume, .home-empty {
   border: 1px solid var(--color-line);
   border-radius: var(--radius-xl);
   background: var(--color-surface);
   color: var(--color-ink);
   text-decoration: none;
-  transition: border-color var(--motion-duration) var(--motion-ease);
-  --ch: var(--color-ch-video); --ch-soft: var(--color-ch-video-soft); --ch-text: var(--color-ch-video-text);
 }
-.home-card[data-channel='audiobook'] { --ch: var(--color-ch-audio); --ch-soft: var(--color-ch-audio-soft); --ch-text: var(--color-ch-audio-text); }
-@media (hover: hover) and (pointer: fine) { .home-card:hover { border-color: var(--ch); }}
-.home-card-icon { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: var(--radius-lg); background: var(--ch-soft); color: var(--ch-text); }
-.home-card-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
-.home-card-label { font-size: var(--text-meta); font-weight: 600; color: var(--ch-text); }
-.home-card strong { font-size: var(--text-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home-card small { margin-bottom: 6px; font-size: var(--text-meta); color: var(--color-muted); }
-.home-card .home-progress > i { background: var(--ch); }
-.home-card-chevron { flex: none; color: var(--color-muted); }
+.home-resume {
+  --ch: var(--color-ch-read); --ch-soft: var(--color-ch-read-soft); --ch-text: var(--color-ch-read-text);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px 12px 12px;
+  transition: border-color var(--motion-duration) var(--motion-ease), box-shadow var(--motion-duration) var(--motion-ease);
+}
+.home-resume[data-channel='video'] { --ch: var(--color-ch-video); --ch-soft: var(--color-ch-video-soft); --ch-text: var(--color-ch-video-text); }
+.home-resume[data-channel='audiobook'] { --ch: var(--color-ch-audio); --ch-soft: var(--color-ch-audio-soft); --ch-text: var(--color-ch-audio-text); }
+@media (hover: hover) and (pointer: fine) {
+  .home-resume:hover { border-color: var(--ch); box-shadow: 0 6px 18px color-mix(in srgb, var(--color-ink) 7%, transparent); }
+  .home-resume:hover .home-resume-play { background: var(--ch); color: var(--color-surface); }
+}
+.home-resume:focus-visible, .home-tile:focus-visible, .home-empty a:focus-visible, .home-retry:focus-visible, .home-shuffle:focus-visible { outline: 2px solid var(--color-brand-text); outline-offset: 3px; }
 
-.home-section { display: flex; align-items: baseline; margin: 32px 0 12px; }
+/* A fixed cover box: posters and book covers fill it, square art sits centred in it,
+ * so the text column starts at the same x on every card. */
+.home-resume-cover { display: grid; place-items: center; flex: none; width: 60px; height: 90px; }
+.home-resume-cover > img, .home-resume-cover > .home-resume-placeholder, .home-resume-cover > .media-cover {
+  width: 100%;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--color-ink) 14%, transparent), 0 4px 10px color-mix(in srgb, var(--color-ink) 8%, transparent);
+}
+.home-resume-cover > img, .home-resume-cover > .home-resume-placeholder { height: 100%; object-fit: cover; }
+.media-screen .home-resume-cover > .media-cover { padding: 4px; }
+.media-screen .home-resume-cover > .media-cover.has-image { padding: 0; }
+.media-screen .home-resume-cover > .media-cover:not(.has-image) .media-cover-title { font-size: var(--text-micro); letter-spacing: 0; }
+.home-resume-placeholder {
+  display: flex; align-items: center; justify-content: center; padding: 6px;
+  overflow: hidden; font-size: var(--text-micro); line-height: 1.3; text-align: center; overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--color-ink) 72%, transparent);
+  background: linear-gradient(150deg, color-mix(in oklab, hsl(var(--cover-hue, 20) 55% 55%) 20%, var(--color-surface)), color-mix(in oklab, hsl(var(--cover-hue, 20) 55% 55%) 12%, var(--color-line)));
+}
+
+.home-resume-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.home-resume-label { font-size: var(--text-meta); font-weight: 600; color: var(--ch-text); }
+.home-resume strong { font-size: var(--text-body); font-weight: 600; line-height: 1.4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-resume small { font-size: var(--text-meta); color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-resume-meter { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.home-resume-meter .home-progress { flex: 1; }
+.home-resume-meter .home-progress > i { background: var(--ch); }
+.home-resume-figure { flex: none; font-size: var(--text-meta); color: var(--color-muted); font-variant-numeric: tabular-nums; }
+.home-resume-play {
+  display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: var(--radius-pill);
+  background: var(--ch-soft); color: var(--ch-text);
+  transition: background var(--motion-duration) var(--motion-ease), color var(--motion-duration) var(--motion-ease);
+}
+
+.home-empty { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 4px; min-height: 116px; padding: 12px 20px; border-style: dashed; }
+.home-empty strong { font-size: var(--text-body); font-weight: 600; }
+.home-empty a, .home-retry { display: inline-flex; align-items: center; min-height: 44px; color: var(--color-ch-read-text); font-size: var(--text-ui); font-weight: 600; text-decoration: none; }
+.media-screen .home-retry { min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; }
+.home-empty-pending strong { color: var(--color-muted); }
+
+.home-section { display: flex; align-items: center; gap: 4px 16px; margin: 32px 0 12px; }
 .home-section h2 { flex: 1; margin: 0; font-family: 'Songti SC', 'Noto Serif SC', serif; font-size: var(--text-title); font-weight: 600; }
 .home-section a { display: inline-flex; align-items: center; color: var(--color-muted); font-size: var(--text-label); text-decoration: none; }
 @media (hover: hover) and (pointer: fine) { .home-section a:hover { color: var(--color-brand-text); }}
 .home-shelf-row { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
 .home-shelf-row .book-card { flex: none; width: 112px; }
 
-@media (max-width: 480px) {
-  .home-hero { gap: 14px; padding: 16px; }
-  .home-hero-cover { width: 80px; }
-  .home-hero-text strong { font-size: var(--text-title); }
-  .home-hero-meter { max-width: none; }
-}
+/* The row's own view switch: the toolkit control, compacted to sit beside a section title. */
+.home-section .segmented { flex: none; border-radius: var(--radius-pill); }
+.media-screen .home-section .segmented button { min-height: 30px; padding: 0 12px; border: 0; border-radius: 0; font-size: var(--text-meta); }
+.media-screen .home-shuffle { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; padding: 0; border: 0; background: none; color: var(--color-muted); font-size: var(--text-label); }
+@media (hover: hover) and (pointer: fine) { .media-screen .home-shuffle:not(:disabled):hover { color: var(--color-brand-text); }}
+
+/* Recommendation tiles keep the shelf row's width and title type, so the rows read as one page. */
+.home-tile { display: flex; flex-direction: column; flex: none; width: 112px; color: var(--color-ink); text-decoration: none; }
+.home-tile strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.6em; margin-top: 8px; font-size: var(--text-label); font-weight: 520; line-height: 1.3; }
+.media-screen .home-tile .media-cover:not(.has-image) .media-cover-title { font-size: var(--text-meta); }
+.home-shelf-row[data-square] .home-tile { width: 128px; }
+.home-tile small { margin-top: -2px; font-size: var(--text-meta); color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-tile strong:has(+ small) { min-height: 0; }
+@media (hover: hover) and (pointer: fine) { .home-tile:hover strong { color: var(--color-brand-text); }}
