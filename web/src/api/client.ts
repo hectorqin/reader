@@ -774,7 +774,7 @@ export class ReaderApi {
   }
   async businessAiModels(values?:{baseUrl?:string;apiKey?:string}):Promise<string[]> { return (await this.call<{models:string[]}>('/api/v1/admin/ai/models','POST',values??{})).models; }
   /** What the server's AI can do for a reader; older servers answer 404. */
-  async aiCapabilities(options: RequestOptions = {}): Promise<{ summary: boolean }> { return this.get('/api/v1/ai/capabilities', options); }
+  async aiCapabilities(options: RequestOptions = {}): Promise<{ summary: boolean; scan?: boolean }> { return this.get('/api/v1/ai/capabilities', options); }
   async aiSummary(bookId:string,chapterId:string,content:string):Promise<{summary:string;cached:boolean}>{ return this.call('/api/v1/ai/summary','POST',{bookId,chapterId,content}); }
 
   private async get<T>(path: string, options: RequestOptions = {}): Promise<T> {
