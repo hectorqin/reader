@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MediaApi, Part, Detail } from '../api/media-api.ts';
 import {MediaCover} from './cover.tsx';
 import {historyPosition} from './history-labels.ts';
+import {resolveWork} from '../services/work.ts';
 
 interface Recent {libraryId:string;itemId:string;partId:string;title:string;partTitle:string;start:number;end:number|null;position:number;completed:number;available:number;metadataJson?:string}
 
@@ -19,14 +20,8 @@ export function ContinuePlaying({api,libraryId,libraryIds=[],onPlay}:{api:MediaA
       const row=result.items.find(row=>allowed.has(row.libraryId)&&!row.completed&&row.available&&row.position>row.start)??null;
       if(abort.signal.aborted)return;setRecent(row);
       if(!row)return;
-      let detail=await api.detail(row.itemId,abort.signal);
-      const hasCover=(item:Detail)=>!!(item.metadata.coverRef||item.metadata.tmdbPosterPath||item.metadata.embeddedCoverAssetId||item.metadata.musicBrainzCoverGroupId);
-      let artwork:Detail|null=hasCover(detail)?detail:null;
-      for(let depth=0;detail.parentId&&depth<3&&['episode','season','track'].includes(detail.kind);depth++){
-        detail=await api.detail(detail.parentId,abort.signal);
-        if(!artwork&&hasCover(detail))artwork=detail;
-      }
-      if(!abort.signal.aborted){setWork(detail);setCover(artwork);}
+      const {work,artwork}=await resolveWork(api,row.itemId,abort.signal);
+      if(!abort.signal.aborted){setWork(work);setCover(artwork);}
     }).catch(()=>{/* Optional history must not prevent browsing. */});
     return ()=>abort.abort();
   },[api,scope]);

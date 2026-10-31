@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {Db} from '../src/db/index.ts';
 import {MediaLibraries} from '../src/media/libraries.ts';
 import {MediaCatalog} from '../src/media/catalog.ts';
+import {MediaScanner} from '../src/media/scanner.ts';
 
 test('video home pages movies and series together without episodes or inaccessible libraries',()=>{
   const db=new Db(':memory:');
@@ -21,5 +22,26 @@ test('video home pages movies and series together without episodes or inaccessib
     assert.throws(()=>catalog.browse(member,'music','video'),{code:'MEDIA_BROWSE_KIND'});
     catalog.override(admin,'item-0',{title:'zzz'});
     assert.equal(catalog.browse(member,'video','video',{sort:'title-desc',limit:1}).items[0]!.id,'item-0');
+  }finally{db.close();}
+});
+
+test('recently added orders works by their newest available file, counting episodes under a series',()=>{
+  const db=new Db(':memory:');
+  try{
+    const libraries=new MediaLibraries(db);new MediaScanner(db,libraries);
+    const catalog=new MediaCatalog(db,libraries),member={id:'member',role:'member'} as const;
+    db.run("INSERT INTO media_libraries(id,name,kind,root,access,created_at,updated_at) VALUES('lib','lib','video','/lib','all',0,0)");
+    const item=(id:string,kind:string,parent:string|null)=>db.run("INSERT INTO media_items(id,library_id,kind,parent_id,local_key,title,metadata_json) VALUES(?,'lib',?,?,?,?,'{}')",id,kind,parent,id,id);
+    const file=(itemId:string,mtime:number,available=1)=>{
+      db.run("INSERT INTO media_assets(id,library_id,ref,size,modified_at,available,probe_status) VALUES(?,'lib',?,1,?,?,'ready')",itemId+'-a',itemId+'.mp4',mtime,available);
+      db.run("INSERT INTO media_editions(id,item_id,local_key,label) VALUES(?,?,'e','')",itemId+'-e',itemId);
+      db.run("INSERT INTO media_parts(id,edition_id,asset_id,local_key,title,ordinal) VALUES(?,?,?,'p','',0)",itemId+'-p',itemId+'-e',itemId+'-a');
+    };
+    item('old-movie','movie',null);file('old-movie',100);
+    item('new-movie','movie',null);file('new-movie',300);
+    item('show','series',null);item('s1','season','show');item('ep1','episode','s1');file('ep1',50);item('ep2','episode','s1');file('ep2',400);
+    item('gone','movie',null);file('gone',999,0);
+    item('empty','movie',null);
+    assert.deepEqual(catalog.browse(member,'video','video',{sort:'added'}).items.map(row=>row.id),['show','new-movie','old-movie','empty','gone']);
   }finally{db.close();}
 });

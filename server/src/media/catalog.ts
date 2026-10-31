@@ -10,7 +10,8 @@ import {sameArtist,type ArtistProfile} from './artist-metadata.ts';
 
 export type MediaItemKind = 'movie' | 'series' | 'season' | 'episode' | 'artist' | 'album' | 'track' | 'audiobook';
 export type MediaBrowseKind = MediaItemKind | 'video';
-export type MediaSort = 'default'|'title-asc'|'title-desc';
+/** `random` and `added` are for the 首页 rows; only browse accepts them (random pages are not stable). */
+export type MediaSort = 'default'|'title-asc'|'title-desc'|'random'|'added';
 // Track tags identify an artist, but album artwork and descriptions are not a biography.
 function artistMetadata(title:string,metadata:LocalMediaMetadata,profile?:ArtistProfile):LocalMediaMetadata {
   return {title,sources:{title:metadata.sources?.albumArtist??metadata.sources?.artist??metadata.sources?.title??'filename',...(profile?.plot?{plot:'nfo' as const}:{})},externalIds:{},warnings:[],
@@ -29,8 +30,20 @@ function trackConditions(options:TrackFilters&{kind?:MediaBrowseKind},conditions
   }
   return joins.join(' ');
 }
+/**
+ * When a work last gained a playable file: the newest mtime among its own parts and those of
+ * its children and grandchildren (series → season → episode, album → track), so a new episode
+ * brings its series back up. File time rather than a stored "first seen" column: it needs no
+ * migration and already means something for libraries scanned before this existed.
+ */
+const ADDED_AT=`COALESCE((SELECT max(a.modified_at) FROM media_editions e JOIN media_parts p ON p.edition_id=e.id AND p.active=1
+  JOIN media_assets a ON a.id=p.asset_id AND a.available=1
+  WHERE e.item_id IN (SELECT i.id UNION ALL SELECT c.id FROM media_items c WHERE c.parent_id=i.id
+    UNION ALL SELECT g.id FROM media_items c JOIN media_items g ON g.parent_id=c.id WHERE c.parent_id=i.id)),0)`;
 function titleOrder(sort:MediaSort|undefined,fallback:string){
   if(!sort||sort==='default')return fallback;
+  if(sort==='random')return 'random()';
+  if(sort==='added')return `${ADDED_AT} DESC,i.id`;
   if(sort!=='title-asc'&&sort!=='title-desc')throw badRequest('无效排序');
   return `COALESCE((SELECT json_extract(o.value_json,'$') FROM media_metadata_overrides o WHERE o.item_id=i.id AND o.field='title'),(SELECT json_extract(m.fields_json,'$.title') FROM media_online_metadata m WHERE m.item_id=i.id),i.title) COLLATE NOCASE ${sort==='title-desc'?'DESC':'ASC'},i.id`;
 }
