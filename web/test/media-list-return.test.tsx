@@ -50,8 +50,10 @@ function mount(initial: string) {
   return router;
 }
 
+/** Polls until `done` holds, for up to 4s: a slow CI runner's first render alone can take over half a second. */
 async function settle(done: () => boolean) {
-  for (let i = 0; i < 50 && !done(); i++) await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+  const deadline = Date.now() + 4000;
+  while (!done() && Date.now() < deadline) await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
   expect(done()).toBe(true);
 }
 const screen = () => root.querySelector<HTMLElement>('.media-screen')!;
