@@ -62,7 +62,9 @@ function mount(entry: string) {
   ));
 }
 async function settle(done: () => boolean) {
-  for (let i = 0; i < 50 && !done(); i++) await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
+  // Up to 4s rather than 50 polls: a slow CI runner's first render alone can take over half a second.
+  const deadline = Date.now() + 4000;
+  while (!done() && Date.now() < deadline) await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
   expect(done()).toBe(true);
 }
 const prefer = (patch: Partial<MediaPreferences>) => saveMediaPreferences(scope, { density: 'compact', showContinue: true, showLibraryName: true, ...patch });
