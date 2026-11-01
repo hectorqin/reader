@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMemoryRouter, RouterProvider } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate, useNavigationType, type Location, type NavigateFunction, type NavigationType } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '../src/shared/ui/render-root.ts';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
@@ -38,19 +38,35 @@ function Detail() {
   return <MediaPageFrame className="media-secondary-page" title="详情"><p>详情内容</p></MediaPageFrame>;
 }
 
+/**
+ * A plain MemoryRouter, not createMemoryRouter: a data router builds a fetch Request
+ * per navigation, and on Node 24 undici rejects jsdom's AbortSignal there, so no
+ * navigation ever happens in CI. A probe hands the test the router's state instead.
+ */
+interface RouterHandle { state: { location: Location; historyAction: NavigationType }; navigate: NavigateFunction }
+function Probe({ handle }: { handle: RouterHandle }) {
+  handle.state = { location: useLocation(), historyAction: useNavigationType() };
+  handle.navigate = useNavigate();
+  return null;
+}
+
 function mount(initial: string) {
-  const router = createMemoryRouter([
-    { path: '/media/search', element: <MediaSearchPage /> },
-    { path: '/media/favorites', element: <MediaFavoritesPage /> },
-    { path: '/media/:channel/history', element: <MediaHistoryPage /> },
-    { path: '/media/:channel/items/:id', element: <Detail /> },
-  ], { initialEntries: [initial] });
+  const router = {} as RouterHandle;
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  act(() => render(<RuntimeContext.Provider value={{ ...runtime, queryClient }}><QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider></RuntimeContext.Provider>, root));
+  act(() => render(<RuntimeContext.Provider value={{ ...runtime, queryClient }}><QueryClientProvider client={queryClient}>
+    <MemoryRouter initialEntries={[initial]}>
+      <Probe handle={router} />
+      <Routes>
+        <Route path="/media/search" element={<MediaSearchPage />} />
+        <Route path="/media/favorites" element={<MediaFavoritesPage />} />
+        <Route path="/media/:channel/history" element={<MediaHistoryPage />} />
+        <Route path="/media/:channel/items/:id" element={<Detail />} />
+      </Routes>
+    </MemoryRouter>
+  </QueryClientProvider></RuntimeContext.Provider>, root));
   return router;
 }
 
-/** Polls until `done` holds, for up to 4s: a slow CI runner's first render alone can take over half a second. */
 async function settle(done: () => boolean) {
   const deadline = Date.now() + 4000;
   while (!done() && Date.now() < deadline) await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)); });
