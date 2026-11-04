@@ -1,5 +1,6 @@
 import { Icon } from '../../../ui/icon.tsx';
-import { useState } from 'react';
+import { useRef } from 'react';
+import { notify } from '../../../ui/notifications.ts';
 import {
   appThemes, paperIds, readerPapers, resolveAppTheme, resolveReadingTheme, saveThemePreference, themes,
   type AppThemeId, type ReaderPaper, type ThemeId, type ThemeMode, type ThemePreference,
@@ -68,12 +69,13 @@ export function MediaThemeSettings({ scope, onReaderSettings }: { scope: string;
   const { preference, systemDark } = useThemeState(scope);
   const paper = useSettingsStore(state => state.settings.paper);
   const paperFollowsDark = useSettingsStore(state => state.settings.paperFollowsDark);
-  const [error, setError] = useState(''), [saved, setSaved] = useState(false);
+  // One notice for the panel: a run of taps updates it in place instead of stacking (ui.md §3.6).
+  const notice = useRef(Symbol('theme-notice'));
+  const report = (message: string, kind: 'success' | 'error') => notify(message, { kind }, notice.current);
   const following = preference.mode === 'system';
   const resolved = resolveAppTheme(preference, systemDark);
   function save(patch: Partial<ThemePreference>) {
-    setError(''); setSaved(false);
-    try { saveThemePreference(scope, patch); setSaved(true); } catch (cause) { setError(cause instanceof Error ? cause.message : '主题保存失败'); }
+    try { saveThemePreference(scope, patch); report('主题已保存', 'success'); } catch (cause) { report(cause instanceof Error ? cause.message : '主题保存失败', 'error'); }
   }
   // Leaving follow-system keeps what is on screen now, so the switch never makes the page jump.
   const toggleFollow = () => save(following ? { mode: resolved.mode, theme: resolved.theme } : { mode: 'system' });
@@ -106,9 +108,8 @@ export function MediaThemeSettings({ scope, onReaderSettings }: { scope: string;
 
     {onReaderSettings && <>
       <h2>阅读纸色</h2>
-      <ReadingPapers themeId={resolveReadingTheme(preference, systemDark).theme} settings={{ paper, paperFollowsDark }} onChange={patch => { onReaderSettings(patch); setSaved(true); setError(''); }} />
+      <ReadingPapers themeId={resolveReadingTheme(preference, systemDark).theme} settings={{ paper, paperFollowsDark }} onChange={patch => { onReaderSettings(patch); report('主题已保存', 'success'); }} />
       <p className="theme-settings-note">纸色只改阅读页的底色和文字，工具栏仍用阅读主题；也可在阅读页的“外观”里切换。纸色按设备保存。</p>
     </>}
-    {saved && <p role="status">主题已保存</p>}{error && <p className="media-error" role="alert">{error}</p>}
   </section>;
 }

@@ -7,6 +7,7 @@ import {
   resolveReaderSurface, resolveReadingTheme, saveThemePreference, themeSummary,
 } from '../src/shared/theme/theme.ts';
 import { MediaThemeSettings } from '../src/features/media/components/theme-settings.tsx';
+import { noticeText } from './helpers/notices.ts';
 
 const root = document.createElement('div');
 document.body.append(root);
@@ -135,7 +136,8 @@ describe('外观与主题', () => {
     await click('青绿');
     expect(readThemePreference('a').system).toEqual({ light: 'green', dark: 'green' });
     expect(pressed('青绿')).toBe('true');
-    expect(root.querySelector('[role=status]')?.textContent).toBe('主题已保存');
+    expect(root.querySelector('[role=status]')).toBeNull();
+    expect(noticeText()).toBe('主题已保存');
   });
 
   it('leaving follow-system keeps what is on screen, then offers light or dark', async () => {
@@ -164,7 +166,8 @@ describe('外观与主题', () => {
     await act(async () => render(<MediaThemeSettings scope="a" />, root));
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('full'); });
     await click('雾蓝');
-    expect(root.querySelector('[role=alert]')?.textContent).toContain('无法保存主题');
+    expect(root.querySelector('[role=alert]')).toBeNull();
+    expect(document.querySelector('.notyf [role=alert]')?.textContent).toContain('无法保存主题');
     expect(readThemePreference('a').system.light).toBe('warm');
   });
 });

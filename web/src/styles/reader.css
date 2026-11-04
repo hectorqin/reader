@@ -1830,21 +1830,21 @@ book-content {
   margin-top: 0.85rem;
 }
 
-/* ---- shelf settings sheet ---- */
+/* ---- switch rows (SwitchRow: sheets and the 偏好设置 page) ---- */
 
-.sheet .switch-field {
+.switch-field {
   flex-direction: row;
   align-items: center;
   gap: 0.75rem;
 }
 
-.sheet .switch-text {
+.switch-text {
   flex: 1 1 auto;
   min-width: 0;
   font-size: var(--text-ui);
 }
 
-.sheet .switch-text .muted {
+.switch-text .muted {
   font-size: var(--text-meta);
   margin-top: 0.15rem;
 }
@@ -1857,7 +1857,7 @@ book-content {
  * this on" — a separate class would be a second one, and the two would eventually
  * disagree.
  */
-.sheet .switch {
+.switch {
   flex: 0 0 auto;
   position: relative;
   width: 2.7rem;
@@ -1869,7 +1869,7 @@ book-content {
   transition: background var(--motion-duration) var(--motion-ease);
 }
 
-.sheet .switch::after {
+.switch::after {
   content: '';
   position: absolute;
   top: 0.2rem;
@@ -1882,11 +1882,11 @@ book-content {
   transition: inset-inline-start var(--motion-duration) var(--motion-ease);
 }
 
-.sheet .switch[aria-pressed='true'] {
+.switch[aria-pressed='true'] {
   background: var(--reader-fill);
 }
 
-.sheet .switch[aria-pressed='true']::after {
+.switch[aria-pressed='true']::after {
   inset-inline-start: 1.3rem;
 }
 
@@ -1901,8 +1901,8 @@ book-content {
     animation: none;
   }
 
-  .sheet .switch,
-  .sheet .switch::after {
+  .switch,
+  .switch::after {
     transition: none;
   }
 
