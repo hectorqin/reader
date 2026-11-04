@@ -315,6 +315,7 @@ async function runMediaReview(browser, fixture, checks, errors) {
     ['media-folders', '/#/media/video/folders/review-lib', '文件夹浏览', '.media-folders'],
     // 我的: every preference is a section of one page; administration is one page per job.
     ['preferences', '/#/me/settings', '偏好设置', '.settings-section'],
+    ['preferences-shelf', '/#/me/settings?section=shelf', '偏好设置', '.settings-section .switch-field'],
     ['preferences-playback', '/#/me/settings?section=playback', '偏好设置', '.settings-section'],
     ['account', '/#/me/account', '账号与连接', '.media-account-panel'],
     ['admin-services', '/#/me/admin/services', '服务配置', '.business-settings'],
@@ -332,6 +333,26 @@ async function runMediaReview(browser, fixture, checks, errors) {
     }
     await capture(page, name, checks, errors);
   }
+
+  // 偏好设置 is a page, not a sheet: the shelf's switches must still be drawn there, and a
+  // theme change reports through the floating notice rather than a line in the page (§3.6).
+  await page.goto(`${origin}/#/me/settings?section=shelf`);
+  await waitMediaHeading(page, '偏好设置');
+  const switches = await page.locator('.settings-section .switch').evaluateAll(nodes => nodes.map(node => {
+    const box = node.getBoundingClientRect();
+    const style = getComputedStyle(node);
+    return { width: box.width, height: box.height, background: style.backgroundColor, radius: parseFloat(style.borderTopLeftRadius) };
+  }));
+  assert.equal(switches.length, 2, 'shelf preferences should show 显示作者 and 显示阅读进度');
+  for (const box of switches) {
+    assert.ok(box.width >= 40 && box.height >= 24 && box.height < 32 && box.radius >= box.height / 2, `settings switch is not the toolkit pill: ${JSON.stringify(box)}`);
+    assert.notEqual(box.background, 'rgba(0, 0, 0, 0)', 'settings switch has no track colour');
+  }
+  await page.goto(`${origin}/#/me/settings`);
+  await waitMediaHeading(page, '偏好设置');
+  await page.locator('.theme-grid [aria-pressed="false"]').first().click();
+  await page.locator('.notyf .global-notice').filter({ hasText: '主题已保存' }).waitFor({ state: 'visible' });
+  assert.equal(await page.locator('.settings-section [role=status]').count(), 0, 'theme feedback must not be inline');
 
   // The browse fixture includes one playable, partially watched video.  Keep
   // this assertion close to the route sweep so the recent continuation card

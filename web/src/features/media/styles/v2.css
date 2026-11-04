@@ -86,7 +86,7 @@
 .media-screen .media-settings {max-width:760px;margin-inline:auto}
 .media-screen .media-settings-panel,.media-screen .media-form {max-width:760px;margin-inline:auto}
 .media-screen .media-setting-field,.media-screen .media-settings-check {min-height:56px;padding:12px 0;border-bottom:1px solid var(--border)}
-/* Boolean preferences wear the same switch as the reader's sheets (.sheet .switch): one control for "on/off" app-wide. */
+/* Boolean preferences wear the same switch as the reader's sheets (.switch): one control for "on/off" app-wide. */
 .media-screen .media-settings-check input[role=switch] {appearance:none;-webkit-appearance:none;position:relative;flex:0 0 auto;width:2.7rem;height:1.6rem;min-height:1.6rem;margin:0;padding:0;border:0;border-radius:var(--radius-pill);background:var(--color-line);cursor:pointer;transition:background var(--motion-duration) var(--motion-ease)}
 .media-screen .media-settings-check input[role=switch]::after {content:'';position:absolute;top:.2rem;inset-inline-start:.2rem;width:1.2rem;height:1.2rem;border-radius:50%;background:var(--color-surface);box-shadow:0 1px 2px rgb(0 0 0 / .25);transition:inset-inline-start var(--motion-duration) var(--motion-ease)}
 .media-screen .media-settings-check input[role=switch]:checked {background:var(--color-brand)}

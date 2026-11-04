@@ -142,6 +142,10 @@
  * plain sub-labels, not sticky bars. */
 .settings-page .shelf-settings .section-title { position: static; margin: 22px 0 10px; padding: 0; border: 0; background: none; color: var(--color-muted); }
 .settings-page .shelf-settings .segmented { width: 100%; }
+/* The page's generic button rule (min-height, padding, a square radius, no background)
+ * outranks the toolkit switch; give the switch back its pill (ui.md: one on/off control). */
+.settings-page .shelf-settings .switch { min-height: 0; padding: 0; border: 0; border-radius: var(--radius-pill); background: var(--reader-line); }
+.settings-page .shelf-settings .switch[aria-pressed='true'] { background: var(--reader-fill); }
 
 .settings-page .settings-link {
   display: flex;

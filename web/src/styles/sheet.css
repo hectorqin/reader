@@ -165,7 +165,7 @@
 
 /* A switch row: label and hint take the width, the switch sits on the trailing edge.
    The row is the 44px hit target (ui.md §3.3); SwitchRow forwards a press on the words. */
-.sheet .switch-field {
+.field.switch-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
