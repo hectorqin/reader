@@ -228,6 +228,16 @@ export interface FileFormatHandler {
    */
   matches?(ctx: HandlerContext, head: Buffer): Promise<boolean> | boolean;
   parse(ctx: HandlerContext, buf: Buffer): Promise<ParsedSource>;
+  /**
+   * Parse a file that is already on disk at `ctx.absPath`, given its size and
+   * its whole-file sha256 (the same `contentHash` that `parse` derives).
+   *
+   * For formats that read what they need from the file themselves (a CBZ's
+   * central directory, a PDF that is served as-is): the scanner then streams the
+   * hash instead of buffering a multi-gigabyte archive just to fingerprint it.
+   * Handlers without it get the whole file through `parse`.
+   */
+  parseFile?(ctx: HandlerContext, file: { size: number; contentHash: string }): Promise<ParsedSource>;
   manifest(ctx: HandlerContext): Promise<Manifest>;
   asset(ctx: HandlerContext, req: AssetRequest): Promise<AssetPayload>;
 }
@@ -240,6 +250,13 @@ export interface DirectoryFormatHandler {
   /** Decide whether this directory is one book of this format. */
   matches(ctx: HandlerContext, entries: DirectoryEntry[]): Promise<boolean> | boolean;
   parse(ctx: HandlerContext, entries: DirectoryEntry[]): Promise<ParsedSource>;
+  /**
+   * The `contentHash` that `parse` would return, computed without the expensive
+   * parts of a parse (reading a cover image, for one). Lets a rescan skip an
+   * unchanged directory book. Must agree with `parse` exactly, or every rescan
+   * looks like a change.
+   */
+  fingerprint?(ctx: HandlerContext): Promise<string>;
   manifest(ctx: HandlerContext): Promise<Manifest>;
   /**
    * The files this directory book is made of.

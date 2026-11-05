@@ -54,6 +54,63 @@ function pageEntries(archive: ZipArchive): ReturnType<ZipArchive['files']> {
   return naturalSortBy(pages, (entry) => entry.name).slice(0, MAX_PAGES);
 }
 
+/** Reads the central directory and the first page from disk, never the whole archive. */
+async function parseArchiveOnDisk(ctx: HandlerContext, file: { size: number; contentHash: string }): Promise<ParsedSource> {
+  const fallback = filenameMetadata(ctx.relPath);
+  const { contentHash } = file;
+
+  try {
+    const archive = await ZipArchive.open(ctx.absPath);
+    const pages = pageEntries(archive);
+
+    // Use the first page as the cover when the archive carries no explicit
+    // one — for comics that is nearly always the actual cover art.
+    let cover: { data: Buffer; contentType: string } | undefined;
+    if (pages[0]) {
+      try {
+        cover = { data: await archive.read(pages[0].name), contentType: imageContentType(pages[0].name) };
+      } catch {
+        // A broken first page must not cost us the whole book.
+        cover = undefined;
+      }
+    }
+
+    return {
+      format: 'cbz',
+      kind: 'paged',
+      contentHash,
+      size: file.size,
+      pageCount: pages.length,
+      cover,
+      metadata: {
+        ...fallback,
+        series: fallback.series ?? '',
+        raw: {
+          ...fallback.raw,
+          entryCount: archive.files().length,
+          pageCount: pages.length,
+        },
+      },
+    };
+  } catch (err) {
+    // Record the failure rather than dropping the book: a library with one
+    // corrupt archive should still show it, with the reason, instead of
+    // silently having fewer books than files.
+    const reason = err instanceof ZipError ? err.code : 'ZIP_ERROR';
+    return {
+      format: 'cbz',
+      kind: 'paged',
+      contentHash,
+      size: file.size,
+      pageCount: 0,
+      metadata: {
+        ...fallback,
+        raw: { ...fallback.raw, error: reason, message: err instanceof Error ? err.message : String(err) },
+      },
+    };
+  }
+}
+
 export const comicArchiveHandler = registerFileHandler({
   format: 'cbz',
   kind: 'paged',
@@ -89,60 +146,10 @@ export const comicArchiveHandler = registerFileHandler({
   },
 
   async parse(ctx: HandlerContext, buf: Buffer): Promise<ParsedSource> {
-    const fallback = filenameMetadata(ctx.relPath);
-    const contentHash = createHash('sha256').update(buf).digest('hex');
-
-    try {
-      const archive = await ZipArchive.open(ctx.absPath);
-      const pages = pageEntries(archive);
-
-      // Use the first page as the cover when the archive carries no explicit
-      // one — for comics that is nearly always the actual cover art.
-      let cover: { data: Buffer; contentType: string } | undefined;
-      if (pages[0]) {
-        try {
-          cover = { data: await archive.read(pages[0].name), contentType: imageContentType(pages[0].name) };
-        } catch {
-          // A broken first page must not cost us the whole book.
-          cover = undefined;
-        }
-      }
-
-      return {
-        format: 'cbz',
-        kind: 'paged',
-        contentHash,
-        size: buf.byteLength,
-        pageCount: pages.length,
-        cover,
-        metadata: {
-          ...fallback,
-          series: fallback.series ?? '',
-          raw: {
-            ...fallback.raw,
-            entryCount: archive.files().length,
-            pageCount: pages.length,
-          },
-        },
-      };
-    } catch (err) {
-      // Record the failure rather than dropping the book: a library with one
-      // corrupt archive should still show it, with the reason, instead of
-      // silently having fewer books than files.
-      const reason = err instanceof ZipError ? err.code : 'ZIP_ERROR';
-      return {
-        format: 'cbz',
-        kind: 'paged',
-        contentHash,
-        size: buf.byteLength,
-        pageCount: 0,
-        metadata: {
-          ...fallback,
-          raw: { ...fallback.raw, error: reason, message: err instanceof Error ? err.message : String(err) },
-        },
-      };
-    }
+    return parseArchiveOnDisk(ctx, { size: buf.byteLength, contentHash: createHash('sha256').update(buf).digest('hex') });
   },
+
+  parseFile: parseArchiveOnDisk,
 
   async manifest(ctx: HandlerContext): Promise<Manifest> {
     const archive = await ZipArchive.open(ctx.absPath);

@@ -10,6 +10,18 @@ import {
 } from './registry.ts';
 import { filenameMetadata } from '../metadata.ts';
 
+/** Nothing is read from the document: it is served as-is. */
+async function parsePdfOnDisk(ctx: HandlerContext, file: { size: number; contentHash: string }): Promise<ParsedSource> {
+  return {
+    format: 'pdf',
+    kind: 'document',
+    contentHash: file.contentHash,
+    size: file.size,
+    pageCount: null,
+    metadata: filenameMetadata(ctx.relPath),
+  };
+}
+
 /**
  * PDF — readable, but explicitly not "精排".
  *
@@ -35,16 +47,10 @@ export const pdfHandler = registerFileHandler({
   label: 'PDF（原样下发，由客户端渲染）',
 
   async parse(ctx: HandlerContext, buf: Buffer): Promise<ParsedSource> {
-    const fallback = filenameMetadata(ctx.relPath);
-    return {
-      format: 'pdf',
-      kind: 'document',
-      contentHash: createHash('sha256').update(buf).digest('hex'),
-      size: buf.byteLength,
-      pageCount: null,
-      metadata: fallback,
-    };
+    return parsePdfOnDisk(ctx, { size: buf.byteLength, contentHash: createHash('sha256').update(buf).digest('hex') });
   },
+
+  parseFile: parsePdfOnDisk,
 
   async manifest(ctx: HandlerContext): Promise<Manifest> {
     return {

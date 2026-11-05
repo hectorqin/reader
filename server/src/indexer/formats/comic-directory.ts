@@ -273,6 +273,16 @@ async function collectVolumes(absDir: string): Promise<Volume[]> {
   return volumes;
 }
 
+/**
+ * Directory content has no single file to hash, so identity comes from the
+ * volume/page structure. Changing the contents changes the identity, which is
+ * what we want: it is effectively the "content hash" of the folder.
+ */
+function structureHash(volumes: Volume[]): string {
+  const structureKey = volumes.map((v) => `${v.title}:${v.pages.map((p) => p.name).join(',')}`).join('|');
+  return createHash('sha256').update(structureKey).digest('hex');
+}
+
 export const comicDirectoryHandler = registerDirectoryHandler({
   format: 'comic-dir',
   kind: 'paged',
@@ -296,11 +306,7 @@ export const comicDirectoryHandler = registerDirectoryHandler({
       }
     }
 
-    // Directory content has no single file to hash, so identity comes from the
-    // volume/page structure. Changing the contents changes the identity, which
-    // is what we want: it is effectively the "content hash" of the folder.
-    const structureKey = volumes.map((v) => `${v.title}:${v.pages.map((p) => p.name).join(',')}`).join('|');
-    const contentHash = createHash('sha256').update(structureKey).digest('hex');
+    const contentHash = structureHash(volumes);
 
     return {
       format: 'comic-dir',
@@ -319,6 +325,11 @@ export const comicDirectoryHandler = registerDirectoryHandler({
         },
       },
     };
+  },
+
+  /** The structure hash alone: directory listings, no page bytes. */
+  async fingerprint(ctx: HandlerContext): Promise<string> {
+    return structureHash(await collectVolumes(ctx.absPath));
   },
 
   /** One entry per volume: a comic's table of contents is its volumes. */

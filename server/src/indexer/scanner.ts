@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readdir, stat, readFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
 import { join } from 'node:path';
 import type { Db } from '../db/index.ts';
 import type { AppConfig } from '../config/index.ts';
@@ -168,7 +169,6 @@ export class Scanner {
       // book in a shelf full of covers.
       const shelfDirectories = await this.directoriesHoldingBooks(directories, holdsBook);
 
-      const claimed = new Set<string>();
       for (const candidate of directoryBooks) {
         seen.add(candidate.relPath);
         this.progress.scanned += 1;
@@ -180,31 +180,30 @@ export class Scanner {
           this.progress.lastError = err instanceof Error ? err.message : String(err);
           this.log.warn({ err, relPath: candidate.relPath }, 'failed to index directory');
         }
-        // Every page inside a claimed directory belongs to that book, so it must
-        // not be indexed a second time as a standalone book of its own. Files the
-        // library would index as books are deliberately left out: a shelf nested
-        // inside a comic folder is still a shelf, and its books are what the
-        // reader is looking for.
-        for (const owned of await this.listFilesUnder(candidate.absPath)) {
-          const rel = toRelative(this.config.booksDir, owned);
-          // A book of another format nested inside a comic folder is still a book
-          // (`藏书目录/` holds real books). An archive is not: it is this book's own
-          // page source, and indexing it separately would put the same volume on
-          // the shelf twice — once inside the series and once on its own.
-          if (isBookFileExtension(rel, true)) continue;
-          claimed.add(rel);
-        }
       }
 
-      const found = await this.walk(this.config.booksDir);
-      for (const entry of found) {
-        // A page of a claimed directory book, or a stray page sitting in a shelf
-        // that already has a real book in it.
-        const insideShelf = isInsideAny(entry.relPath, shelfDirectories);
-        if (claimed.has(entry.relPath) || (insideShelf && !isBookFileExtension(entry.relPath))) {
-          seen.add(entry.relPath);
-          continue;
-        }
+      // Decided per path BEFORE the walk stats anything, so the pages of a comic
+      // library cost one readdir each instead of a stat plus a second listing.
+      //
+      // Every page inside a claimed directory belongs to that book, so it must
+      // not be indexed a second time as a standalone book of its own. Files the
+      // library would index as books are deliberately left out: a shelf nested
+      // inside a comic folder is still a shelf, and its books are what the reader
+      // is looking for. An archive is not a book there: it is this book's own
+      // page source, and indexing it separately would put the same volume on the
+      // shelf twice — once inside the series and once on its own.
+      //
+      // A stray page sitting in a shelf that already has a real book in it is
+      // absorbed the same way.
+      const directoryBookPaths = new Set(directoryBooks.map((candidate) => candidate.relPath));
+      const shelfPaths = new Set(shelfDirectories);
+      const absorbed = (relPath: string): boolean =>
+        (hasAncestorIn(relPath, directoryBookPaths) && !isBookFileExtension(relPath, true)) ||
+        (hasAncestorIn(relPath, shelfPaths) && !isBookFileExtension(relPath));
+
+      const found = await this.walk(this.config.booksDir, absorbed);
+      for (const relPath of found.absorbed) seen.add(relPath);
+      for (const entry of found.files) {
         seen.add(entry.relPath);
         this.progress.scanned += 1;
         const previous = storedByPath.get(entry.relPath);
@@ -280,8 +279,12 @@ export class Scanner {
    * The extension set comes from the format registry rather than a hardcoded
    * list, so registering a handler is all it takes for its files to be walked.
    */
-  private async walk(root: string): Promise<FileEntry[]> {
+  private async walk(
+    root: string,
+    isAbsorbed: (relPath: string) => boolean,
+  ): Promise<{ files: FileEntry[]; absorbed: string[] }> {
     const out: FileEntry[] = [];
+    const absorbed: string[] = [];
     const extensions = supportedExtensions();
 
     const visit = async (dir: string): Promise<void> => {
@@ -306,12 +309,18 @@ export class Scanner {
         if (dot <= 0) continue;
         if (!extensions.has(entry.name.slice(dot).toLowerCase())) continue;
 
+        const relPath = toRelative(root, abs);
+        if (isAbsorbed(relPath)) {
+          absorbed.push(relPath);
+          continue;
+        }
+
         // Dirent carries no size or mtime, so a stat is unavoidable. Getting
         // this wrong (reading `entry.size`) makes every file look unchanged and
         // silently freezes the index — see the regression test.
         try {
           const info = await stat(abs);
-          out.push({ relPath: toRelative(root, abs), size: info.size, mtimeMs: Math.floor(info.mtimeMs) });
+          out.push({ relPath, size: info.size, mtimeMs: Math.floor(info.mtimeMs) });
         } catch (err) {
           this.log.warn({ err, abs }, 'stat failed, skipping');
         }
@@ -319,7 +328,7 @@ export class Scanner {
     };
 
     await visit(root);
-    return out;
+    return { files: out, absorbed };
   }
 
   /**
@@ -350,7 +359,7 @@ export class Scanner {
       return depth !== 0 ? depth : naturalCompare(a, b);
     });
 
-    const claimed: string[] = [];
+    const claimed = new Set<string>();
     const out: DirectoryCandidate[] = [];
 
     for (const relPath of shallowestFirst) {
@@ -358,7 +367,7 @@ export class Scanner {
       // that folder is itself a shelf of books, which the walk already refused to
       // enter. Absorbing it here would undo that decision one layer up.
       if (
-        claimed.some((owner) => relPath.startsWith(`${owner}/`)) &&
+        hasAncestorIn(relPath, claimed) &&
         !(await this.holdsBookFile(join(this.config.booksDir, relPath), holdsBook))
       ) {
         continue;
@@ -389,7 +398,7 @@ export class Scanner {
         }
         if (!matched) continue;
 
-        claimed.push(relPath);
+        claimed.add(relPath);
         out.push({ relPath, absPath, handler });
         break;
       }
@@ -469,35 +478,6 @@ export class Scanner {
   }
 
   /**
-   * Every file under a claimed directory, recursively.
-   *
-   * Used to exclude a directory book's own contents from the file walk: a page
-   * image is part of its book, not a book of its own.
-   */
-  private async listFilesUnder(absDir: string): Promise<string[]> {
-    const out: string[] = [];
-    const visit = async (dir: string): Promise<void> => {
-      let entries;
-      try {
-        entries = await readdir(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (entry.name.startsWith('.') || SKIP_DIRS.has(entry.name)) continue;
-        const abs = join(dir, entry.name);
-        if (entry.isDirectory()) {
-          await visit(abs);
-          continue;
-        }
-        if (entry.isFile()) out.push(abs);
-      }
-    };
-    await visit(absDir);
-    return out;
-  }
-
-  /**
    * The entries of a directory, with sizes.
    *
    * Sizes are stat'd rather than left at 0 because the decision "is this folder a
@@ -561,14 +541,34 @@ export class Scanner {
     }
 
     const abs = join(this.config.booksDir, entry.relPath);
-    const buf = await readFile(abs);
-    // A supported extension is not proof of format: a `.zip` may hold documents.
-    if (handler.matches && !(await handler.matches({ relPath: entry.relPath, absPath: abs }, buf.subarray(0, 4096)))) {
-      this.progress.unchanged += 1;
-      return;
+    const ctx = { relPath: entry.relPath, absPath: abs };
+    let parsed: ParsedSource;
+    if (handler.parseFile) {
+      // Hashed as a stream: a 2GB CBZ must not become a 2GB Buffer just to be
+      // fingerprinted, when the handler reads what it needs from disk itself.
+      const file = await fingerprintFile(abs);
+      if (handler.matches && !(await handler.matches(ctx, file.head))) {
+        this.progress.unchanged += 1;
+        return;
+      }
+      // Stage 2 before the parse: identical bytes under a touched mtime cost a
+      // read of the file, not a re-parse and a cover extraction.
+      if (previous && previous.book_content_hash === file.contentHash && !this.needsReparse(previous)) {
+        this.db.run('UPDATE book_files SET size = ?, mtime_ms = ?, missing = 0, parse_version = ? WHERE id = ?',
+          entry.size, entry.mtimeMs, PARSE_VERSION, previous.id);
+        this.progress.unchanged += 1;
+        return;
+      }
+      parsed = await handler.parseFile(ctx, { size: file.size, contentHash: file.contentHash });
+    } else {
+      const buf = await readFile(abs);
+      // A supported extension is not proof of format: a `.zip` may hold documents.
+      if (handler.matches && !(await handler.matches(ctx, buf.subarray(0, 4096)))) {
+        this.progress.unchanged += 1;
+        return;
+      }
+      parsed = await handler.parse(ctx, buf);
     }
-
-    const parsed = await handler.parse({ relPath: entry.relPath, absPath: abs }, buf);
 
     // Stage 2: identical bytes with a touched mtime is not a real change.
     if (previous && previous.book_content_hash === parsed.contentHash && !this.needsReparse(previous)) {
@@ -586,7 +586,17 @@ export class Scanner {
 
   /** Index a directory book. Its change key is derived from its contents. */
   private async indexDirectory(candidate: DirectoryCandidate, previous: StoredFile | undefined): Promise<void> {
-    const parsed = await candidate.handler.parse({ relPath: candidate.relPath, absPath: candidate.absPath }, []);
+    const ctx = { relPath: candidate.relPath, absPath: candidate.absPath };
+    // An unchanged directory book is the common case on a rescan; settle it from
+    // the listing alone instead of re-reading its cover image every time.
+    if (previous && candidate.handler.fingerprint && !this.needsReparse(previous)) {
+      if ((await candidate.handler.fingerprint(ctx)) === previous.book_content_hash) {
+        this.progress.unchanged += 1;
+        return;
+      }
+    }
+
+    const parsed = await candidate.handler.parse(ctx, []);
 
     if (
       previous &&
@@ -741,8 +751,17 @@ export class Scanner {
 }
 
 /** Whether a library-relative path is inside any of the given directories. */
-function isInsideAny(relPath: string, directories: string[]): boolean {
-  return directories.some((dir) => relPath.startsWith(`${dir}/`));
+/**
+ * Whether any proper ancestor directory of `relPath` is in `directories`.
+ * Walks the path's own ancestors, so the cost is its depth, not the number of
+ * directories — a prefix scan over every shelf made the walk quadratic.
+ */
+function hasAncestorIn(relPath: string, directories: ReadonlySet<string>): boolean {
+  if (directories.size === 0) return false;
+  for (let slash = relPath.lastIndexOf('/'); slash > 0; slash = relPath.lastIndexOf('/', slash - 1)) {
+    if (directories.has(relPath.slice(0, slash))) return true;
+  }
+  return false;
 }
 
 /**
@@ -769,7 +788,9 @@ function isBookFileExtension(name: string, insideDirectoryBook = false): boolean
   const dot = name.lastIndexOf('.');
   if (dot <= 0) return false;
   const ext = name.slice(dot).toLowerCase();
-  if (!supportedExtensions().has(ext)) return false;
+  // Same answer as `supportedExtensions().has(ext)` without building a Set
+  // for every file of the walk.
+  if (!fileHandlerForExtension(ext)) return false;
   if (isPageExtension(ext)) return false;
   if (insideDirectoryBook && isArchiveExtension(ext)) return false;
   return true;
@@ -783,6 +804,26 @@ function isArchiveExtension(ext: string): boolean {
 function fallbackTitle(parsed: { contentHash: string }): string {
   return `未命名 (${parsed.contentHash.slice(0, 8)})`;
 }
+
+/** Whole-file sha256, size and the first 4KiB, in one sequential read. */
+async function fingerprintFile(absPath: string): Promise<{ contentHash: string; size: number; head: Buffer }> {
+  const hash = createHash('sha256');
+  const headChunks: Buffer[] = [];
+  let headBytes = 0;
+  let size = 0;
+  for await (const chunk of createReadStream(absPath) as AsyncIterable<Buffer>) {
+    hash.update(chunk);
+    size += chunk.byteLength;
+    if (headBytes < HEAD_BYTES) {
+      const part = chunk.subarray(0, HEAD_BYTES - headBytes);
+      headChunks.push(part);
+      headBytes += part.byteLength;
+    }
+  }
+  return { contentHash: hash.digest('hex'), size, head: Buffer.concat(headChunks) };
+}
+
+const HEAD_BYTES = 4096;
 
 export function contentFingerprint(buf: Buffer): string {
   return createHash('sha256').update(buf).digest('hex');
