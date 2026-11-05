@@ -162,8 +162,11 @@ export async function looksLikeComicDirectory(absDir: string): Promise<boolean> 
  * inside it.
  */
 async function isBookCollection(absDir: string): Promise<boolean> {
+  // Only files another format would index as books count. Sidecars that live
+  // beside real scans (ComicInfo.xml, *.nfo, Thumbs.db) are not books, and
+  // treating them as such would silently drop the chapter they sit in.
   const entries = await listEntries(absDir);
-  return entries.some((entry) => !entry.isDirectory && !entry.isImage && !entry.isArchive);
+  return entries.some((entry) => entry.isBookFile);
 }
 
 /**
@@ -215,7 +218,7 @@ const MAX_PAGE_DEPTH = 3;
  * practice and keeps a stray `extras/` folder from turning into a thousand-page
  * book.
  */
-async function collectPages(absDir: string, prefix: string, depth = 0): Promise<Page[]> {
+async function collectPages(absDir: string, prefix: string, depth = 0, maxDepth = MAX_PAGE_DEPTH): Promise<Page[]> {
   const entries = await listEntries(absDir);
   const pages: Page[] = [];
   for (const entry of entries) {
@@ -227,11 +230,12 @@ async function collectPages(absDir: string, prefix: string, depth = 0): Promise<
       });
       continue;
     }
-    if (entry.isDirectory && depth < MAX_PAGE_DEPTH && !isBookCollection(join(absDir, entry.name))) {
+    if (entry.isDirectory && depth < maxDepth && !(await isBookCollection(join(absDir, entry.name)))) {
       const nested = await collectPages(
         join(absDir, entry.name),
         prefix ? `${prefix}/${entry.name}` : entry.name,
         depth + 1,
+        maxDepth,
       );
       pages.push(...nested);
     }
@@ -260,7 +264,9 @@ async function collectVolumes(absDir: string): Promise<Volume[]> {
     const pages = await collectPages(join(absDir, dir.name), dir.name);
     if (pages.length > 0) volumes.push({ title: dir.name, pages });
   }
-  const own = await collectPages(absDir, '');
+  // Loose pages only: every subdirectory is already its own volume above, and
+  // descending into them again would put the same pages in the book twice.
+  const own = await collectPages(absDir, '', 0, 0);
   if (own.length > 0) {
     volumes.push({ title: filenameMetadata(absDir).title || '单页', pages: own });
   }

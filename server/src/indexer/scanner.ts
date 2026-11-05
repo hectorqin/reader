@@ -15,6 +15,7 @@ import {
   supportedExtensions,
   type BookKind,
   type DirectoryEntry,
+  type DirectoryFormatHandler,
   type ParsedSource,
 } from './formats/index.ts';
 
@@ -45,8 +46,12 @@ interface FileEntry {
 interface DirectoryCandidate {
   relPath: string;
   absPath: string;
-  /** Coarse change key: child count plus the newest child mtime. */
-  signature: string;
+  /**
+   * The handler that claimed this directory during discovery. `matches` is
+   * async, so asking again later with `Array.find` would treat the pending
+   * Promise as a match and always pick the first handler.
+   */
+  handler: DirectoryFormatHandler;
 }
 
 interface StoredFile {
@@ -146,16 +151,22 @@ export class Scanner {
       const storedByPath = new Map(stored.map((row) => [row.rel_path, row]));
       const seen = new Set<string>();
 
+      // One tree listing per scan, shared by discovery and the shelf pass below.
+      // Both used to walk the whole library on their own, each asking every
+      // directory whether it holds a book; on a NAS that doubled the readdirs.
+      const holdsBook = new Map<string, Promise<boolean>>();
+      const directories = await this.listDirectories(this.config.booksDir, holdsBook);
+
       // Directory books are discovered BEFORE the file walk so their contents
       // can be excluded from it. Doing it the other way round means indexing
       // every page image first and then deleting them, which shows up as a
       // visible add-then-remove churn in the scan counters.
-      const directoryBooks = await this.discoverDirectoryBooks(storedByPath);
+      const directoryBooks = await this.discoverDirectoryBooks(directories, holdsBook);
       // A folder that holds a real book is a shelf. The book inside it is what
       // the reader is looking for; the loose scans and cover art sitting next to
       // it are not separate books, and listing them as such buries the actual
       // book in a shelf full of covers.
-      const shelfDirectories = await this.directoriesHoldingBooks();
+      const shelfDirectories = await this.directoriesHoldingBooks(directories, holdsBook);
 
       const claimed = new Set<string>();
       for (const candidate of directoryBooks) {
@@ -327,11 +338,13 @@ export class Scanner {
    * unrelated scans) collapses into the outer one. That is visible and fixable
    * by the user moving files; N near-duplicate shelf entries is not.
    */
-  private async discoverDirectoryBooks(storedByPath: Map<string, StoredFile>): Promise<DirectoryCandidate[]> {
+  private async discoverDirectoryBooks(
+    directories: string[],
+    holdsBook: Map<string, Promise<boolean>>,
+  ): Promise<DirectoryCandidate[]> {
     const handlers = allDirectoryHandlers();
     if (handlers.length === 0) return [];
 
-    const directories = await this.listDirectories(this.config.booksDir);
     const shallowestFirst = [...directories].sort((a, b) => {
       const depth = a.split('/').length - b.split('/').length;
       return depth !== 0 ? depth : naturalCompare(a, b);
@@ -346,7 +359,7 @@ export class Scanner {
       // enter. Absorbing it here would undo that decision one layer up.
       if (
         claimed.some((owner) => relPath.startsWith(`${owner}/`)) &&
-        !(await this.holdsBookFile(join(this.config.booksDir, relPath)))
+        !(await this.holdsBookFile(join(this.config.booksDir, relPath), holdsBook))
       ) {
         continue;
       }
@@ -377,7 +390,7 @@ export class Scanner {
         if (!matched) continue;
 
         claimed.push(relPath);
-        out.push({ relPath, absPath, signature: directorySignature(entries, storedByPath, relPath) });
+        out.push({ relPath, absPath, handler });
         break;
       }
     }
@@ -385,7 +398,7 @@ export class Scanner {
     return out;
   }
 
-  private async listDirectories(root: string): Promise<string[]> {
+  private async listDirectories(root: string, holdsBook: Map<string, Promise<boolean>>): Promise<string[]> {
     const out: string[] = [];
     const visit = async (dir: string): Promise<void> => {
       let entries;
@@ -404,7 +417,7 @@ export class Scanner {
         // says its contents are indexed as they are. Looking inside it for a
         // directory book would let an enclosing comic folder swallow the books
         // nested within, so the walk stops here just like discovery does.
-        if (await this.holdsBookFile(abs)) continue;
+        if (await this.holdsBookFile(abs, holdsBook)) continue;
         await visit(abs);
       }
     };
@@ -412,8 +425,20 @@ export class Scanner {
     return out;
   }
 
-  /** Whether a directory directly holds a file the server indexes as a book. */
-  private async holdsBookFile(absDir: string): Promise<boolean> {
+  /**
+   * Whether a directory directly holds a file the server indexes as a book.
+   * Answers are memoised per scan in `cache`, keyed by absolute path.
+   */
+  private holdsBookFile(absDir: string, cache: Map<string, Promise<boolean>>): Promise<boolean> {
+    let answer = cache.get(absDir);
+    if (!answer) {
+      answer = this.readHoldsBookFile(absDir);
+      cache.set(absDir, answer);
+    }
+    return answer;
+  }
+
+  private async readHoldsBookFile(absDir: string): Promise<boolean> {
     let entries;
     try {
       entries = await readdir(absDir, { withFileTypes: true });
@@ -432,20 +457,13 @@ export class Scanner {
    * EPUB is cover art, not a one-page book. Deliberately only images are
    * absorbed — a second EPUB next to the first is a second book.
    */
-  private async directoriesHoldingBooks(): Promise<string[]> {
-    const directories = await this.listDirectories(this.config.booksDir);
+  private async directoriesHoldingBooks(
+    directories: string[],
+    holdsBook: Map<string, Promise<boolean>>,
+  ): Promise<string[]> {
     const out: string[] = [];
     for (const relDir of directories) {
-      let entries;
-      try {
-        entries = await readdir(join(this.config.booksDir, relDir), { withFileTypes: true });
-      } catch {
-        continue;
-      }
-      const hasBook = entries.some(
-        (entry) => entry.isFile() && !entry.name.startsWith('.') && isBookFileExtension(entry.name),
-      );
-      if (hasBook) out.push(relDir);
+      if (await this.holdsBookFile(join(this.config.booksDir, relDir), holdsBook)) out.push(relDir);
     }
     return out;
   }
@@ -568,19 +586,7 @@ export class Scanner {
 
   /** Index a directory book. Its change key is derived from its contents. */
   private async indexDirectory(candidate: DirectoryCandidate, previous: StoredFile | undefined): Promise<void> {
-    const handler = allDirectoryHandlers().find((h) =>
-      h.matches({ relPath: candidate.relPath, absPath: candidate.absPath }, []),
-    );
-
-    // `matches` is async and was already evaluated during discovery; re-resolve
-    // the handler that claimed this path by asking each one again.
-    const owner = handler ?? (await this.resolveDirectoryHandler(candidate));
-    if (!owner) {
-      this.progress.unchanged += 1;
-      return;
-    }
-
-    const parsed = await owner.parse({ relPath: candidate.relPath, absPath: candidate.absPath }, []);
+    const parsed = await candidate.handler.parse({ relPath: candidate.relPath, absPath: candidate.absPath }, []);
 
     if (
       previous &&
@@ -598,20 +604,6 @@ export class Scanner {
       size: parsed.size,
       mtimeMs: Date.now(),
     });
-  }
-
-  private async resolveDirectoryHandler(candidate: DirectoryCandidate) {
-    const entries = await this.listDirectoryEntries(candidate.absPath);
-    for (const handler of allDirectoryHandlers()) {
-      try {
-        if (await handler.matches({ relPath: candidate.relPath, absPath: candidate.absPath }, entries)) {
-          return handler;
-        }
-      } catch {
-        // A handler that cannot inspect this directory simply does not claim it.
-      }
-    }
-    return null;
   }
 
   /** Shared book/file bookkeeping for both file and directory books. */
@@ -786,26 +778,6 @@ function isBookFileExtension(name: string, insideDirectoryBook = false): boolean
 /** Archive extensions a directory book reads its pages out of. */
 function isArchiveExtension(ext: string): boolean {
   return ext === '.cbz' || ext === '.zip';
-}
-
-/**
- * Coarse change key for a directory book.
- *
- * mtime of a directory does not change when a file deep inside is replaced, so
- * we combine the child count with the newest child mtime. It is a heuristic, and
- * `parse()` still compares the content hash before declaring a real change.
- */
-function directorySignature(
-  entries: DirectoryEntry[],
-  storedByPath: Map<string, StoredFile>,
-  relPath: string,
-): string {
-  let newest = 0;
-  for (const entry of entries) {
-    const child = storedByPath.get(`${relPath}/${entry.name}`);
-    if (child) newest = Math.max(newest, child.mtime_ms);
-  }
-  return `${entries.length}:${newest}`;
 }
 
 function fallbackTitle(parsed: { contentHash: string }): string {

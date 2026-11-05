@@ -5,6 +5,35 @@ import {AppError, badRequest} from '../lib/errors.ts';
 import type {FastifyBaseLogger} from 'fastify';
 
 export type AiConfig=BusinessValues['ai'];
+
+/**
+ * Split media paths into prompt batches of at most `size` paths.
+ *
+ * Paths from the same folder stay together when they fit, because the model
+ * classifies an episode far better next to its siblings. A folder larger than
+ * one batch is split into full chunks of its own; otherwise a 500-file season
+ * would ignore `batchSize` and blow up the prompt.
+ */
+export function splitPathBatches(paths:readonly string[],size:number):string[][]{
+  const limit=Math.max(1,Math.floor(size)||1);
+  const groups=new Map<string,string[]>();
+  for(const path of paths){
+    const index=path.lastIndexOf('/'),dir=index<0?'':path.slice(0,index),group=groups.get(dir)??[];
+    group.push(path);groups.set(dir,group);
+  }
+  const batches:string[][]=[];let current:string[]=[];
+  for(const group of groups.values()){
+    if(group.length>limit){
+      if(current.length){batches.push(current);current=[];}
+      for(let start=0;start<group.length;start+=limit)batches.push(group.slice(start,start+limit));
+      continue;
+    }
+    if(current.length&&current.length+group.length>limit){batches.push(current);current=[];}
+    current.push(...group);
+  }
+  if(current.length)batches.push(current);
+  return batches;
+}
 export interface AiScanJob {id:string;libraryId:string;path:string;state:'queued'|'running'|'complete'|'failed';totalPaths:number;processedPaths:number;batchCount:number;resultCount:number;error:string|null;startedAt:number;finishedAt:number|null}
 export interface AiScanBatch {id:string;jobId:string;batch:number;pathCount:number;paths:string[];raw:string|null;items:unknown[];state:'running'|'complete'|'failed';error:string|null;startedAt:number;finishedAt:number|null}
 interface JobRow {id:string;library_id:string;path:string;state:AiScanJob['state'];total_paths:number;processed_paths:number;batch_count:number;result_count:number;error:string|null;started_at:number;finished_at:number|null}
@@ -54,24 +83,10 @@ export class AiService {
     this.log?.info({jobId:id,libraryId,path,pathCount:paths.length},'ai media scan job accepted');
     return this.job(id);
   }
-  private splitBatches(paths:string[],size:number):string[][] {
-    const groups=new Map<string,string[]>();
-    for(const path of paths){
-      const index=path.lastIndexOf('/'),dir=index<0?'':path.slice(0,index),group=groups.get(dir)??[];
-      group.push(path);groups.set(dir,group);
-    }
-    const batches:string[][]=[];let current:string[]=[];
-    for(const group of groups.values()){
-      if(current.length&&current.length+group.length>size){batches.push(current);current=[];}
-      current.push(...group);
-    }
-    if(current.length)batches.push(current);
-    return batches;
-  }
   private async runJob(id:string,libraryId:string,paths:string[],config:AiConfig,signal:AbortSignal):Promise<void>{
     try{
       signal.throwIfAborted();
-      const batches=this.splitBatches(paths,config.batchSize);
+      const batches=splitPathBatches(paths,config.batchSize);
       this.db.run("UPDATE ai_scan_jobs SET state='running',batch_count=? WHERE id=?",batches.length,id);
       let processed=0,resultCount=0;
       for(const [index,part] of batches.entries()){
@@ -130,12 +145,9 @@ export class AiService {
     try{const response=await fetch(url,{...init,redirect:'error'});this.log?.info({url:parsed.origin+parsed.pathname,status:response.status,elapsedMs:Date.now()-started},'ai upstream response received');return response;}catch(error){this.log?.error({err:error,url:parsed.origin+parsed.pathname,elapsedMs:Date.now()-started},'ai upstream request failed');throw new AppError(502,'AI_CONNECTION_FAILED','AI 连接失败或超时，请检查服务地址及网络');}
   }
   async scanBatches(libraryId:string,paths:string[]){
-    const c=this.settings('scanEnabled'),groups=new Map<string,string[]>();
+    const c=this.settings('scanEnabled');
     this.log?.info({libraryId,pathCount:paths.length,batchSize:c.batchSize},'ai media scan started');
-    for(const path of paths){const index=path.lastIndexOf('/'),dir=index<0?'':path.slice(0,index);const group=groups.get(dir)??[];group.push(path);groups.set(dir,group);}
-    const batches:string[][]=[];let batch:string[]=[];
-    for(const group of groups.values()){if(batch.length&&batch.length+group.length>c.batchSize){batches.push(batch);batch=[];}batch.push(...group);}
-    if(batch.length)batches.push(batch);
+    const batches=splitPathBatches(paths,c.batchSize);
     const items:unknown[]=[];for(const [index,part] of batches.entries()){this.log?.info({libraryId,batch:index+1,totalBatches:batches.length,pathCount:part.length},'ai media scan batch started');items.push(...(await this.scan(libraryId,part)).items);this.log?.info({libraryId,batch:index+1,resultCount:items.length},'ai media scan batch completed');}
     this.log?.info({libraryId,pathCount:paths.length,batchCount:batches.length,resultCount:items.length},'ai media scan completed');
     return {items,total:paths.length,batches:batches.length};

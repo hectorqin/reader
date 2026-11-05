@@ -489,6 +489,54 @@ describe('library scanning across formats', () => {
     assert.equal(body.groups[0]!.title, '第01卷');
   });
 
+  test('chapter folders nested inside a volume contribute their pages', async () => {
+    // `第01卷/第001话/*.jpg` is how scans of one volume are routinely split. A
+    // sidecar such as ComicInfo.xml is metadata, not a book, and must not make
+    // the chapter look like a shelf.
+    const series = join(booksDir, '海贼王合集');
+    await mkdir(join(series, '第01卷', '第001话'), { recursive: true });
+    await mkdir(join(series, '第01卷', '第002话'), { recursive: true });
+    await mkdir(join(series, '第02卷'), { recursive: true });
+    await writeFile(join(series, '第01卷', '第001话', '001.jpg'), PNG);
+    await writeFile(join(series, '第01卷', '第001话', '002.jpg'), PNG);
+    await writeFile(join(series, '第01卷', '第002话', '001.jpg'), PNG);
+    await writeFile(join(series, '第01卷', '第002话', 'ComicInfo.xml'), '<ComicInfo/>');
+    await writeFile(join(series, '第02卷', '001.jpg'), PNG);
+    await writeFile(join(series, '第02卷', '002.jpg'), PNG);
+    await ctx.scanner.scan();
+    try {
+      const book = await findBook('海贼王合集');
+      const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
+      const body = res.json() as { total: number; groups: Array<{ title: string; count: number }> };
+      assert.deepEqual(body.groups.map((g) => [g.title, g.count]), [['第01卷', 3], ['第02卷', 2]]);
+      assert.equal(body.total, 5);
+    } finally {
+      await rm(series, { recursive: true, force: true });
+      await ctx.scanner.scan();
+    }
+  });
+
+  test('loose pages beside volume folders are not counted twice', async () => {
+    const series = join(booksDir, '混合布局漫画');
+    await mkdir(join(series, '第01卷'), { recursive: true });
+    await mkdir(join(series, '第02卷', '第001话'), { recursive: true });
+    await writeFile(join(series, 'cover.jpg'), PNG);
+    await writeFile(join(series, '第01卷', '001.jpg'), PNG);
+    await writeFile(join(series, '第01卷', '002.jpg'), PNG);
+    await writeFile(join(series, '第02卷', '第001话', '001.jpg'), PNG);
+    await ctx.scanner.scan();
+    try {
+      const book = await findBook('混合布局漫画');
+      const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
+      const body = res.json() as { total: number; groups: Array<{ title: string; count: number }> };
+      assert.deepEqual(body.groups.map((g) => g.count), [2, 1, 1]);
+      assert.equal(body.total, 4);
+    } finally {
+      await rm(series, { recursive: true, force: true });
+      await ctx.scanner.scan();
+    }
+  });
+
   test('txt books report their chapter count', async () => {
     const book = await findBook('小说');
     const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
