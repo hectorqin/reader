@@ -193,8 +193,27 @@ export function normalizeIsbn(candidate: string): string {
  * filename parsing, and manual edits win over both (applied later, in the
  * override layer — not here).
  */
-export async function parseEpub(buf: Buffer, relPath: string): Promise<ExtractedMetadata> {
-  const zip = await JSZip.loadAsync(buf);
+/**
+ * The slice of an EPUB container the metadata readers need. JSZip satisfies it
+ * directly; the scanner passes the project's own `ZipArchive` through an adapter
+ * so a large EPUB is read entry by entry from disk instead of as one Buffer.
+ */
+export interface EpubZip {
+  file(name: string): EpubZipFile | null;
+  readonly files: Record<string, unknown>;
+}
+
+export interface EpubZipFile {
+  async(type: 'string'): Promise<string>;
+  async(type: 'uint8array'): Promise<Uint8Array>;
+}
+
+async function openEpubZip(source: Buffer | EpubZip): Promise<EpubZip> {
+  return Buffer.isBuffer(source) ? JSZip.loadAsync(source) : source;
+}
+
+export async function parseEpub(source: Buffer | EpubZip, relPath: string): Promise<ExtractedMetadata> {
+  const zip = await openEpubZip(source);
   const containerFile = zip.file('META-INF/container.xml');
   let opfPath = '';
   if (containerFile) {
@@ -358,8 +377,8 @@ export function comicDirectoryMetadata(relDir: string, pages: string[], totalByt
  * Covers are cached into DATA_DIR/covers by the caller; the library directory is
  * never written to.
  */
-export async function extractEpubCover(buf: Buffer): Promise<{ data: Buffer; contentType: string } | undefined> {
-  const zip = await JSZip.loadAsync(buf);
+export async function extractEpubCover(source: Buffer | EpubZip): Promise<{ data: Buffer; contentType: string } | undefined> {
+  const zip = await openEpubZip(source);
   const opfPath = await findOpfPath(zip);
   if (!opfPath) return undefined;
   const opfFile = zip.file(opfPath);
@@ -413,7 +432,7 @@ export async function extractEpubCover(buf: Buffer): Promise<{ data: Buffer; con
  * depending on which endpoint the client hit.
  */
 export async function findEpubCoverTarget(
-  zip: JSZip,
+  zip: EpubZip,
   opfPath?: string,
 ): Promise<{ path: string; contentType: string } | undefined> {
   const opf = opfPath ?? (await findOpfPath(zip));
@@ -452,7 +471,7 @@ export async function findEpubCoverTarget(
   };
 }
 
-export async function findOpfPath(zip: JSZip): Promise<string> {
+export async function findOpfPath(zip: EpubZip): Promise<string> {
   const containerFile = zip.file('META-INF/container.xml');
   if (containerFile) {
     const container = xmlParser.parse(await containerFile.async('string')) as Record<string, any>;

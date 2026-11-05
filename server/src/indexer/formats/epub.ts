@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import { posix } from 'node:path';
 import { contentTypeFor } from './image-types.ts';
@@ -11,7 +12,7 @@ import {
   type ParsedSource,
   type TocEntry,
 } from './registry.ts';
-import { parseEpub, extractEpubCover } from '../metadata.ts';
+import { parseEpub, extractEpubCover, filenameMetadata, type EpubZip, type EpubZipFile } from '../metadata.ts';
 import { XMLParser } from 'fast-xml-parser';
 import { parseNavigation } from './navigation.ts';
 
@@ -104,6 +105,38 @@ export const epubHandler = registerFileHandler({
       // The spine length is cheap to read here and gives the client a real
       // progress denominator before it has fetched the manifest.
       pageCount: await spineLength(buf),
+      metadata,
+      cover,
+    };
+  },
+
+  /**
+   * The same result as `parse`, read entry by entry from disk. A fixed-layout
+   * manga EPUB is routinely several hundred MB; JSZip would hold all of it (and
+   * `parse` loads it twice) just to read the OPF and one cover image.
+   */
+  async parseFile(ctx: HandlerContext, file: { size: number; contentHash: string }): Promise<ParsedSource> {
+    let archive: ZipArchive;
+    try {
+      archive = await ZipArchive.open(ctx.absPath);
+    } catch {
+      // Whatever the streaming reader refuses (ZIP64, a damaged directory)
+      // keeps the buffered behaviour, including its filename fallback.
+      return epubHandler.parse(ctx, await readFile(ctx.absPath));
+    }
+    const zip = epubZipFromArchive(archive);
+    const metadata = await parseEpub(zip, ctx.relPath).catch((err: unknown) => {
+      const fallback = filenameMetadata(ctx.relPath);
+      fallback.raw = { parseError: err instanceof Error ? err.message : String(err) };
+      return fallback;
+    });
+    const cover = await extractEpubCover(zip).catch(() => undefined);
+    return {
+      format: 'epub',
+      kind: 'reflowable',
+      contentHash: file.contentHash,
+      size: file.size,
+      pageCount: await spineLengthOf(archive),
       metadata,
       cover,
     };
@@ -499,9 +532,34 @@ function resolveHref(base: string, href: string): string {
   return base === '.' ? posix.normalize(decoded) : posix.normalize(`${base}/${decoded}`);
 }
 
+/** An `EpubZip` view of a `ZipArchive`, reading each entry only when asked. */
+function epubZipFromArchive(archive: ZipArchive): EpubZip {
+  const files = Object.fromEntries(archive.files().map((entry) => [entry.name, entry]));
+  return {
+    files,
+    file(name: string): EpubZipFile | null {
+      if (!archive.has(name)) return null;
+      const read = async (type: 'string' | 'uint8array') => {
+        const bytes = await archive.read(name);
+        return type === 'string' ? bytes.toString('utf8') : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      };
+      return { async: read as EpubZipFile['async'] };
+    },
+  };
+}
+
 async function spineLength(buf: Buffer): Promise<number | null> {
   try {
-    const archive = await ZipArchive.openBuffer(buf);
+    return await spineLengthOf(await ZipArchive.openBuffer(buf));
+  } catch (err) {
+    const { log } = await import('../../lib/log.ts');
+    log.warn({ err: err instanceof Error ? err.message : String(err) }, 'could not read the epub spine');
+    return null;
+  }
+}
+
+async function spineLengthOf(archive: ZipArchive): Promise<number | null> {
+  try {
     // No titles: the spine is the only thing a scan needs, and skipping the NCX
     // and nav parse is the difference between one document per book and three.
     const { spine } = await readPackageWith(archive, false);

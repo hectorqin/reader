@@ -162,8 +162,11 @@ export async function looksLikeComicDirectory(absDir: string): Promise<boolean> 
  * inside it.
  */
 async function isBookCollection(absDir: string): Promise<boolean> {
+  // Only files another format would index as books count. Sidecars that live
+  // beside real scans (ComicInfo.xml, *.nfo, Thumbs.db) are not books, and
+  // treating them as such would silently drop the chapter they sit in.
   const entries = await listEntries(absDir);
-  return entries.some((entry) => !entry.isDirectory && !entry.isImage && !entry.isArchive);
+  return entries.some((entry) => entry.isBookFile);
 }
 
 /**
@@ -215,7 +218,7 @@ const MAX_PAGE_DEPTH = 3;
  * practice and keeps a stray `extras/` folder from turning into a thousand-page
  * book.
  */
-async function collectPages(absDir: string, prefix: string, depth = 0): Promise<Page[]> {
+async function collectPages(absDir: string, prefix: string, depth = 0, maxDepth = MAX_PAGE_DEPTH): Promise<Page[]> {
   const entries = await listEntries(absDir);
   const pages: Page[] = [];
   for (const entry of entries) {
@@ -227,11 +230,12 @@ async function collectPages(absDir: string, prefix: string, depth = 0): Promise<
       });
       continue;
     }
-    if (entry.isDirectory && depth < MAX_PAGE_DEPTH && !isBookCollection(join(absDir, entry.name))) {
+    if (entry.isDirectory && depth < maxDepth && !(await isBookCollection(join(absDir, entry.name)))) {
       const nested = await collectPages(
         join(absDir, entry.name),
         prefix ? `${prefix}/${entry.name}` : entry.name,
         depth + 1,
+        maxDepth,
       );
       pages.push(...nested);
     }
@@ -260,11 +264,23 @@ async function collectVolumes(absDir: string): Promise<Volume[]> {
     const pages = await collectPages(join(absDir, dir.name), dir.name);
     if (pages.length > 0) volumes.push({ title: dir.name, pages });
   }
-  const own = await collectPages(absDir, '');
+  // Loose pages only: every subdirectory is already its own volume above, and
+  // descending into them again would put the same pages in the book twice.
+  const own = await collectPages(absDir, '', 0, 0);
   if (own.length > 0) {
     volumes.push({ title: filenameMetadata(absDir).title || '单页', pages: own });
   }
   return volumes;
+}
+
+/**
+ * Directory content has no single file to hash, so identity comes from the
+ * volume/page structure. Changing the contents changes the identity, which is
+ * what we want: it is effectively the "content hash" of the folder.
+ */
+function structureHash(volumes: Volume[]): string {
+  const structureKey = volumes.map((v) => `${v.title}:${v.pages.map((p) => p.name).join(',')}`).join('|');
+  return createHash('sha256').update(structureKey).digest('hex');
 }
 
 export const comicDirectoryHandler = registerDirectoryHandler({
@@ -290,11 +306,7 @@ export const comicDirectoryHandler = registerDirectoryHandler({
       }
     }
 
-    // Directory content has no single file to hash, so identity comes from the
-    // volume/page structure. Changing the contents changes the identity, which
-    // is what we want: it is effectively the "content hash" of the folder.
-    const structureKey = volumes.map((v) => `${v.title}:${v.pages.map((p) => p.name).join(',')}`).join('|');
-    const contentHash = createHash('sha256').update(structureKey).digest('hex');
+    const contentHash = structureHash(volumes);
 
     return {
       format: 'comic-dir',
@@ -313,6 +325,11 @@ export const comicDirectoryHandler = registerDirectoryHandler({
         },
       },
     };
+  },
+
+  /** The structure hash alone: directory listings, no page bytes. */
+  async fingerprint(ctx: HandlerContext): Promise<string> {
+    return structureHash(await collectVolumes(ctx.absPath));
   },
 
   /** One entry per volume: a comic's table of contents is its volumes. */

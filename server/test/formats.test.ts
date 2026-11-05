@@ -8,7 +8,7 @@
  */
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, rm, readFile, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
@@ -487,6 +487,54 @@ describe('library scanning across formats', () => {
     assert.equal(body.total, 6);
     assert.equal(body.groups.length, 2);
     assert.equal(body.groups[0]!.title, '第01卷');
+  });
+
+  test('chapter folders nested inside a volume contribute their pages', async () => {
+    // `第01卷/第001话/*.jpg` is how scans of one volume are routinely split. A
+    // sidecar such as ComicInfo.xml is metadata, not a book, and must not make
+    // the chapter look like a shelf.
+    const series = join(booksDir, '海贼王合集');
+    await mkdir(join(series, '第01卷', '第001话'), { recursive: true });
+    await mkdir(join(series, '第01卷', '第002话'), { recursive: true });
+    await mkdir(join(series, '第02卷'), { recursive: true });
+    await writeFile(join(series, '第01卷', '第001话', '001.jpg'), PNG);
+    await writeFile(join(series, '第01卷', '第001话', '002.jpg'), PNG);
+    await writeFile(join(series, '第01卷', '第002话', '001.jpg'), PNG);
+    await writeFile(join(series, '第01卷', '第002话', 'ComicInfo.xml'), '<ComicInfo/>');
+    await writeFile(join(series, '第02卷', '001.jpg'), PNG);
+    await writeFile(join(series, '第02卷', '002.jpg'), PNG);
+    await ctx.scanner.scan();
+    try {
+      const book = await findBook('海贼王合集');
+      const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
+      const body = res.json() as { total: number; groups: Array<{ title: string; count: number }> };
+      assert.deepEqual(body.groups.map((g) => [g.title, g.count]), [['第01卷', 3], ['第02卷', 2]]);
+      assert.equal(body.total, 5);
+    } finally {
+      await rm(series, { recursive: true, force: true });
+      await ctx.scanner.scan();
+    }
+  });
+
+  test('loose pages beside volume folders are not counted twice', async () => {
+    const series = join(booksDir, '混合布局漫画');
+    await mkdir(join(series, '第01卷'), { recursive: true });
+    await mkdir(join(series, '第02卷', '第001话'), { recursive: true });
+    await writeFile(join(series, 'cover.jpg'), PNG);
+    await writeFile(join(series, '第01卷', '001.jpg'), PNG);
+    await writeFile(join(series, '第01卷', '002.jpg'), PNG);
+    await writeFile(join(series, '第02卷', '第001话', '001.jpg'), PNG);
+    await ctx.scanner.scan();
+    try {
+      const book = await findBook('混合布局漫画');
+      const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
+      const body = res.json() as { total: number; groups: Array<{ title: string; count: number }> };
+      assert.deepEqual(body.groups.map((g) => g.count), [2, 1, 1]);
+      assert.equal(body.total, 4);
+    } finally {
+      await rm(series, { recursive: true, force: true });
+      await ctx.scanner.scan();
+    }
   });
 
   test('txt books report their chapter count', async () => {
@@ -1398,5 +1446,88 @@ describe('windowed reading', () => {
 
     await rm(target);
     await ctx.scanner.scan();
+  });
+});
+
+describe('scanning without buffering whole files', () => {
+  test('parseFile gives the same result as parse for every handler that has one', async () => {
+    const { epubHandler } = await import('../src/indexer/formats/epub.ts');
+    const { comicArchiveHandler } = await import('../src/indexer/formats/comic-archive.ts');
+    const { pdfHandler } = await import('../src/indexer/formats/pdf.ts');
+    const dir = await mkdtemp(join(tmpdir(), 'reader-parsefile-'));
+    try {
+      const cases = [
+        { handler: epubHandler, name: '流式 - 作者.epub', bytes: makeEpub({ id: 'urn:uuid:stream-1', title: '流式', chapters: 3 }) },
+        { handler: comicArchiveHandler, name: '流式漫画.cbz', bytes: makeZip([['001.jpg', PNG], ['002.jpg', PNG]]) },
+        { handler: comicArchiveHandler, name: '坏档.cbz', bytes: Buffer.from('not a zip') },
+        { handler: pdfHandler, name: '流式.pdf', bytes: Buffer.from('%PDF-1.4\n%%EOF\n', 'latin1') },
+      ];
+      for (const { handler, name, bytes } of cases) {
+        const absPath = join(dir, name);
+        await writeFile(absPath, bytes);
+        const fileCtx = { relPath: name, absPath };
+        const buffered = await handler.parse(fileCtx, bytes);
+        assert.ok(handler.parseFile, `${handler.format} streams`);
+        const streamed = await handler.parseFile(fileCtx, { size: bytes.byteLength, contentHash: buffered.contentHash });
+        assert.deepEqual(streamed, buffered, `${name}: streamed parse diverged from buffered parse`);
+      }
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('a touched archive with identical bytes is not re-parsed', async () => {
+    const { comicArchiveHandler } = await import('../src/indexer/formats/comic-archive.ts');
+    const target = join(booksDir, '触碰测试.cbz');
+    await writeFile(target, makeZip([['001.jpg', PNG], ['002.jpg', PNG]]));
+    await ctx.scanner.scan();
+    const original = comicArchiveHandler.parseFile!;
+    let parses = 0;
+    comicArchiveHandler.parseFile = async (...args) => {
+      parses += 1;
+      return original(...args);
+    };
+    try {
+      const later = new Date(Date.now() + 60_000);
+      await utimes(target, later, later);
+      const result = await ctx.scanner.scan();
+      assert.equal(parses, 0, 'identical bytes must be settled by the streamed hash');
+      assert.equal(result.updated, 0);
+    } finally {
+      comicArchiveHandler.parseFile = original;
+      await rm(target);
+      await ctx.scanner.scan();
+    }
+  });
+
+  test('an unchanged comic directory is settled without a parse, a changed one is re-parsed', async () => {
+    const { comicDirectoryHandler } = await import('../src/indexer/formats/comic-directory.ts');
+    const series = join(booksDir, '指纹测试漫画');
+    await mkdir(join(series, '第01卷'), { recursive: true });
+    await mkdir(join(series, '第02卷'), { recursive: true });
+    await writeFile(join(series, '第01卷', '001.jpg'), PNG);
+    await writeFile(join(series, '第02卷', '001.jpg'), PNG);
+    await ctx.scanner.scan();
+    const original = comicDirectoryHandler.parse;
+    let parses = 0;
+    comicDirectoryHandler.parse = async (...args) => {
+      parses += 1;
+      return original(...args);
+    };
+    try {
+      await ctx.scanner.scan();
+      assert.equal(parses, 0, 'an unchanged comic directory must not be re-parsed');
+
+      await writeFile(join(series, '第02卷', '002.jpg'), PNG);
+      await ctx.scanner.scan();
+      assert.equal(parses, 1, 'a new page must be picked up');
+      const book = await findBook('指纹测试漫画');
+      const res = await app.inject({ method: 'GET', url: `/api/v1/books/${book.id}/items`, headers: auth() });
+      assert.equal((res.json() as { total: number }).total, 3);
+    } finally {
+      comicDirectoryHandler.parse = original;
+      await rm(series, { recursive: true, force: true });
+      await ctx.scanner.scan();
+    }
   });
 });
