@@ -50,6 +50,15 @@ test('media runtime serves scan/catalog/playback HTTP in its worker and reads li
     assert.equal(invalidRange.status,416);assert.equal(invalidRange.headers.get('content-range'),'bytes */12');
     const noAuth=await fetch(publicOrigin+'/api/v1/media/libraries',{headers:{'x-reader-media-internal':'forged'}});
     assert.equal(noAuth.status,401);
+    const grant=await call('background-grants','POST',{partIds:[detail.editions[0].parts[0].id]});
+    core.run("UPDATE users SET media_enabled=0 WHERE id='admin'");
+    const denied=await runtime.request('/api/v1/media/libraries',{headers:{authorization:'Bearer '+token}});
+    assert.equal(denied.status,403);assert.equal((await denied.json()).error.code,'MEDIA_DISABLED');
+    assert.equal((await fetch(publicOrigin+playback.streamUrl)).status,401);
+    const backgroundDenied=await runtime.request('/api/v1/media/background/playback',{method:'POST',headers:{'content-type':'application/json','x-media-background':grant.token},body:JSON.stringify({partId:detail.editions[0].parts[0].id})});
+    assert.equal(backgroundDenied.status,401);
+    core.run("UPDATE users SET media_enabled=1 WHERE id='admin'");
+    assert.equal((await runtime.request('/api/v1/media/libraries',{headers:{authorization:'Bearer '+token}})).status,200);
     assert.equal(core.get("SELECT name FROM sqlite_master WHERE name='media_assets'"),undefined);
     core.run("UPDATE users SET disabled=1 WHERE id='admin'");
     assert.equal((await runtime.request('/api/v1/media/libraries',{headers:{authorization:'Bearer '+token}})).status,403);

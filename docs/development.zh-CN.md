@@ -169,6 +169,8 @@ sh android/scripts/verify-web-assets.sh  # 在 build-web-assets.sh 之后，确�
 
 ## 贡献流程
 
+影音开关的隔离浏览器回归入口为 `npm --prefix web run ui:review:features`（在仓库根目录运行），使用生产构建与临时数据，不需要连接已部署实例。覆盖范围与产物见[影音验证](media-validation.md)。
+
 1. 描述问题、复现步骤和期望行为；日志、书源及示例请移除凭据。
 2. 将修改限制在相关模块，参考已有错误语义和测试方式。
 3. 为行为变更补充适当的回归验证；纯文档修改检查链接、命令和示例即可。

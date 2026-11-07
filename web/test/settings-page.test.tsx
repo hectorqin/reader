@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import { act } from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { render } from '../src/shared/ui/render-root.ts';
 import { LegacySettingsRedirect, SettingsPage } from '../src/features/account/pages/SettingsPage.tsx';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
 import { readMediaPreferences } from '../src/features/media/services/preferences.ts';
+import { useAuthStore } from '../src/shared/stores/auth.store.ts';
 
 const root = document.createElement('div');
 document.body.append(root);
@@ -32,11 +33,20 @@ const paint = (entry: string) => act(() => render(
 ));
 const where = () => root.querySelector('[data-where]')?.getAttribute('data-where');
 
-afterEach(() => { act(() => render(null, root)); localStorage.clear(); updateSettings.mockClear(); });
+beforeEach(()=>useAuthStore.setState({verifiedUser:{id:'settings-user',username:'reader',displayName:'Reader',role:'member',createdAt:0}}));
+afterEach(() => { act(() => render(null, root));useAuthStore.setState({session:null,verifiedUser:null});localStorage.clear(); updateSettings.mockClear(); });
 
 describe('偏好设置', () => {
   const tabs = () => [...root.querySelectorAll<HTMLButtonElement>('[role=tab]')];
   const selected = () => tabs().filter(tab => tab.getAttribute('aria-selected') === 'true').map(tab => tab.textContent);
+
+  it('pure reading hides media tabs and rejects an old playback tab selection',()=>{
+    useAuthStore.setState({verifiedUser:{id:'reader',username:'reader',displayName:'Reader',role:'admin',createdAt:0,features:{media:false}}});
+    paint('/me/settings?section=playback');
+    expect(tabs().map(tab=>tab.textContent)).toEqual(['外观与主题','书架']);
+    expect(selected()).toEqual(['外观与主题']);
+    expect(root.querySelector('.playback-settings')).toBeNull();
+  });
 
   it('shows the four kinds of preference as tabs, one panel at a time', () => {
     paint('/me/settings');

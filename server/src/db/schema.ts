@@ -16,6 +16,7 @@
  */
 export const MIGRATIONS_SQL = `
 ALTER TABLE users ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN media_enabled INTEGER NOT NULL DEFAULT 1 CHECK(media_enabled IN (0,1));
 ALTER TABLE source_instances ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0;
 CREATE UNIQUE INDEX IF NOT EXISTS source_single_default ON source_instances(is_default) WHERE is_default = 1;
 ALTER TABLE book_files ADD COLUMN parse_version INTEGER NOT NULL DEFAULT 0;

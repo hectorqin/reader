@@ -33,6 +33,15 @@ afterEach(() => {
 });
 
 describe('我的', () => {
+  it('pure reading hides media management but keeps administrator recovery controls',()=>{
+    useAuthStore.setState({verifiedUser:{...user('admin'),features:{media:false}}});
+    paint();
+    const links=[...root.querySelectorAll<HTMLAnchorElement>('a')];
+    expect(links.some(link=>link.getAttribute('href')?.startsWith('/media/'))).toBe(false);
+    expect(links.some(link=>link.getAttribute('href')==='/me/admin/users')).toBe(true);
+    expect(links.some(link=>link.getAttribute('href')==='/me/admin/services')).toBe(true);
+    expect(root.textContent).not.toContain('观影');
+  });
   it('shows who is signed in, which server, and opens every row as a page', () => {
     useAuthStore.setState({ verifiedUser: user('member') });
     paint();

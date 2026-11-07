@@ -4,8 +4,12 @@
 
 ## 数据与服务边界
 
+全站 `business_settings.modules.mediaEnabled` 和个人 `users.media_enabled` 保存在核心数据库，不依赖影音 worker。升级保留已有用户影音权限；新用户遵循 `newUserMediaEnabled`。总开关关闭时启动不会打开 `media.db` 或启动 worker，运行中可串行停止、重新启动；生命周期每两秒复核共享数据库设置，关闭超时十秒终止 worker。自动任务停止后不再派发新任务，重新开启不会自动恢复已中断任务。
+
+普通接口、播放票据、后台播放授权均重新读取核心账号权限，已有代理流每秒复核；前端按有效能力隐藏入口、停止播放器并清理影音查询缓存，纯阅读首次打开不初始化播放器。完整行为及第三方直链限制见[模块开关](media-features.md)。
+
 - 阅读与账号数据保存在 reader.db，影音目录、版本、章节、收藏、播放进度和配置保存在 media.db。两库及签名密钥必须成对备份和恢复。
-- 主服务先开放阅读，再异步启动影音 Worker。准备中返回 MEDIA_STARTING，失败返回 MEDIA_UNAVAILABLE；不会把影音启动或扫描任务排入阅读请求队列。
+- 主服务先开放阅读，仅在全站开启影音时异步启动影音 Worker。关闭时返回 MEDIA_DISABLED，准备中返回 MEDIA_STARTING，失败返回 MEDIA_UNAVAILABLE；不会把影音启动或扫描任务排入阅读请求队列。
 - MediaLibraries 管理媒体库权限与接入配置；MediaStorage 隔离本地目录和 OpenList。媒体资源引用不是外部下载 URL。
 - MediaScanner 收集资源与资料，发布阶段通过独立事务原子更新目录，保留稳定身份、人工整理及已存在的进度。目录或远端旁车读取失败不发布不完整快照。
 - 查询线程、发布线程及账号权限投影的边界见[写入隔离](media-write-isolation.md)。

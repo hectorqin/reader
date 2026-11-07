@@ -34,6 +34,7 @@ import type { Db } from '../../db/index.ts';
 import {BusinessSettingsReader} from '../../services/business-settings.ts';
 import {configuredProviders} from '../../media/configured-providers.ts';
 import {AiService} from '../../services/ai.ts';
+import {Readable} from 'node:stream';
 
 export type MediaRouteContext=Pick<AppContext,'config'> & {db:MediaDatabase & Pick<Db,'prepare'>;users:Pick<AppContext['users'],'byId'>};
 
@@ -42,10 +43,38 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   const accounts=new DatabaseMediaAccounts(ctx.db);
   const references=database!==ctx.db?new MediaAccountReferences(database,accounts):undefined;
   const settings=new BusinessSettingsReader(ctx.db);
+  app.addHook('onRequest',async request=>{
+    if(/^\/api\/v1\/media(?:\/|\?|$)/.test(request.raw.url??'')&&!settings.read('modules').mediaEnabled)throw new AppError(403,'MEDIA_DISABLED','影音模块已关闭');
+  });
   const ai=new AiService(database,()=>settings.read('ai'),app.log);
   ai.recoverJobs();
   const libraries=new MediaLibraries(database,true,accounts,references),scanner=new MediaScanner(database,libraries,undefined,app.log,()=>settings.read('scanning'));
   const playback=new MediaPlayback(database,libraries,accounts,()=>settings.read('playback').mode);
+  const streams=new Map<Readable,()=>void>();
+  app.addHook('onSend',async(request,reply,payload)=>{
+    if(!(payload instanceof Readable)||!request.url.startsWith('/api/v1/media/'))return payload;
+    const streamMatch=/^\/api\/v1\/media\/streams\/([^/?]+)/.exec(request.url);
+    const validate=()=>{
+      if(!settings.read('modules').mediaEnabled)throw new AppError(403,'MEDIA_DISABLED','影音模块已关闭');
+      if(streamMatch){
+        const ticket=new URL(request.url,'http://localhost').searchParams.get('ticket')??'';
+        playback.authorizeStream(decodeURIComponent(streamMatch[1]!),ticket);
+      }else if(request.currentUser){
+        const account=accounts.get(request.currentUser.id);
+        if(!account||account.disabled||account.media_enabled===0)throw new AppError(403,'MEDIA_DISABLED','此账号未启用影音');
+      }
+    };
+    try{validate();}catch(error){payload.destroy();throw error;}
+    streams.set(payload,validate);
+    const remove=()=>{streams.delete(payload);};
+    payload.once('close',remove);reply.raw.once('close',remove);
+    return payload;
+  });
+  const streamTimer=setInterval(()=>{
+    for(const [stream,validate] of streams){try{validate();}catch{streams.delete(stream);stream.destroy();}}
+  },1000);
+  streamTimer.unref();
+  app.addHook('preClose',async()=>{clearInterval(streamTimer);for(const stream of streams.keys())stream.destroy();streams.clear();});
   const background=new MediaBackgroundGrants(database,libraries,accounts);
   const userState=new MediaUserState(database,libraries,scanner.catalog);
   const scraping=new MediaScraping(database,scanner.catalog,options.metadataProviders??configuredProviders(settings));
@@ -63,6 +92,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
   const authenticateAccount=authenticate(ctx);
   const auth=async(request:import('fastify').FastifyRequest,reply:import('fastify').FastifyReply)=>{
     await authenticateAccount(request,reply);
+    if(!currentUser(request).mediaEnabled)throw new AppError(403,'MEDIA_DISABLED','此账号未启用影音');
     if(request.method!=='GET'&&request.method!=='HEAD')references?.ensure(currentUser(request).id);
   };
   const databasePath=database.all<{name:string;file:string}>('PRAGMA database_list').find(database=>database.name==='main')?.file;
@@ -139,7 +169,7 @@ export function registerMediaRoutes(app:FastifyInstance,ctx:MediaRouteContext,op
     preHandler:scrapeAdmin,schema:{body:{type:'object',additionalProperties:false,required:['candidateId'],properties:{candidateId:{type:'string',minLength:1,maxLength:100}}}},
   },async request=>scraping.confirm(currentUser(request),request.params.id,request.body.candidateId));
   app.delete<{Params:{id:string}}>('/api/v1/media/items/:id/match',{preHandler:scrapeAdmin},async request=>scraping.clear(currentUser(request),request.params.id));
-  app.addHook('onClose',async()=>{automation.stop();await ai.close();await catalogReader?.close();await scrapeJobs.close();await scanner.close();});
+  app.addHook('preClose',async()=>{automation.stop();await Promise.all([ai.close(),catalogReader?.close(),scrapeJobs.close(),scanner.close()]);});
   const pagination={type:'object',properties:{offset:{type:'integer',minimum:0,default:0},limit:{type:'integer',minimum:1,maximum:200,default:100}}};
   app.get('/api/v1/media/libraries',{preHandler:auth},async request=>({items:libraries.list(currentUser(request))}));
   app.get('/api/v1/media/library-summaries',{preHandler:scrapeAdmin},async(request,reply)=>{reply.header('cache-control','private, no-store');return queryCatalog(request,reply,{method:'librarySummaries',args:[currentUser(request)]});});

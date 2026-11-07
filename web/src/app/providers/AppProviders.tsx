@@ -2,14 +2,17 @@ import { useEffect, type ReactNode } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import type { AppRuntime } from '../runtime.ts';
 import { RuntimeContext } from './runtime-context.tsx';
+import { useMediaEnabled } from '../../shared/stores/features.ts';
 
 export function AppProviders({ runtime, children }: { runtime: AppRuntime; children: ReactNode }) {
+  const media=useMediaEnabled();
   useEffect(() => {
+    if(!media)return;
     const host = runtime.player.element;
     document.body.append(host);
     runtime.playback.start();
     return () => { runtime.playback.stop(); host.remove(); };
-  }, [runtime]);
+  }, [runtime,media]);
   useEffect(() => runtime.connect(), [runtime]);
   useEffect(() => {
     const visibility = () => {

@@ -21,7 +21,7 @@ export function registerOpdsRoutes(app: FastifyInstance, ctx: AppContext): void 
     try {
       const id = credentials.authenticate(request.headers.authorization);
       const user = ctx.users.byId(id)!;
-      request.currentUser = { id, username: user.username, displayName: user.display_name, role: user.role, createdAt: user.created_at };
+      request.currentUser = { id, username: user.username, displayName: user.display_name, role: user.role, createdAt: user.created_at, mediaEnabled:user.media_enabled!==0 };
     } catch (error) { reply.header('www-authenticate', 'Basic realm="Reader OPDS", charset="UTF-8"'); throw error; }
   };
   app.addHook('onSend', async (request, reply, payload) => {

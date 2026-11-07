@@ -23,6 +23,7 @@ interface Log { info(data: object, message: string): void; warn(data: object, me
  */
 export class MediaAutomation {
   private timer: ReturnType<typeof setInterval> | undefined;
+  private stopped=false;
   constructor(
     private readonly accounts: Pick<MediaDatabase, 'get'>,
     private readonly db: MediaDatabase,
@@ -38,16 +39,16 @@ export class MediaAutomation {
     if (interval > 0) { this.timer = setInterval(() => this.scanAll(), interval); this.timer.unref?.(); }
   }
 
-  stop() { if (this.timer) clearInterval(this.timer); this.timer = undefined; }
+  stop() { this.stopped=true;if (this.timer) clearInterval(this.timer); this.timer = undefined; }
 
   private systemActor(): MediaActor | null {
-    const row = this.accounts.get<{ id: string }>("SELECT id FROM users WHERE role='admin' AND disabled=0 ORDER BY created_at,id LIMIT 1");
+    const row = this.accounts.get<{ id: string }>("SELECT id FROM users WHERE role='admin' AND disabled=0 AND media_enabled=1 ORDER BY created_at,id LIMIT 1");
     return row ? { id: row.id, role: 'admin' } : null;
   }
 
   /** Starts a scan of every library not already scanning. Returns the libraries started. */
   scanAll(): string[] {
-    if (!this.settings().mediaAutoScan) return [];
+    if (this.stopped||!this.settings().mediaAutoScan) return [];
     const actor = this.systemActor();
     if (!actor) return [];
     const started: string[] = [];
@@ -71,7 +72,7 @@ export class MediaAutomation {
 
   /** Returns the started scrape job's id, or null when there was nothing to do. */
   afterScan(event: ScanFinished): string | null {
-    if (event.state !== 'complete' || !this.settings().mediaScrape) return null;
+    if (this.stopped||event.state !== 'complete' || !this.settings().mediaScrape) return null;
     const actor: MediaActor = event.actor.role === 'admin' ? event.actor : this.systemActor() ?? event.actor;
     try {
       const library = this.libraries.get(actor, event.libraryId);

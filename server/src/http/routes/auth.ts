@@ -72,8 +72,11 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext): void 
     return { ok: true };
   });
 
-  app.get('/api/v1/auth/me', { preHandler: authenticateFn }, async (request) => {
-    return { user: currentUser(request) };
+  app.get('/api/v1/auth/me', { preHandler: authenticateFn }, async (request,reply) => {
+    reply.header('cache-control','private, no-store');
+    const user=currentUser(request);
+    const enabled=ctx.settings!.read('modules').mediaEnabled;
+    return { user:{...user,features:{media:enabled&&user.mediaEnabled},mediaState:ctx.mediaState?.()??(enabled?'ready':'disabled')} };
   });
 
   app.post('/api/v1/auth/password', { preHandler: authenticateFn }, async (request) => {
@@ -84,12 +87,14 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext): void 
     return { ok: true };
   });
 
-  app.get('/api/v1/instance', async () => {
+  app.get('/api/v1/instance', async (_request,reply) => {
+    reply.header('cache-control','no-store');
     // Advertised so a client can tell a fresh instance from a claimed one
     // without attempting registration.
     return {
       name: 'reader',
       apiVersion: 1,
+      features:{media:ctx.settings!.read('modules').mediaEnabled},
       registrationOpen: ctx.users.canRegisterPublicly(),
       registrationMode: ctx.users.count() === 0 ? 'open' : registration.mode(),
       invitationRequired: ctx.users.count() > 0 && registration.mode() === 'invite',

@@ -1,11 +1,13 @@
 import type { MediaDatabase } from './read-database.ts';
 import {badRequest} from '../lib/errors.ts';
+import {BusinessSettingsReader} from '../services/business-settings.ts';
 
 export interface MediaAccount {
   id: string;
   role: 'admin' | 'member';
   disabled: number;
   auth_version: number;
+  media_enabled?: number;
 }
 
 /** Resolve current authority on every use; media storage is not an account cache. */
@@ -14,7 +16,9 @@ export interface MediaAccounts { get(id: string): MediaAccount | undefined }
 export class DatabaseMediaAccounts implements MediaAccounts {
   constructor(private readonly db: Pick<MediaDatabase, 'get'>) {}
   get(id: string): MediaAccount | undefined {
-    return this.db.get<MediaAccount>('SELECT id,role,disabled,auth_version FROM users WHERE id=?', id);
+    const account=this.db.get<MediaAccount>('SELECT id,role,disabled,auth_version,media_enabled FROM users WHERE id=?', id);
+    if(account&&(account.media_enabled===0||!new BusinessSettingsReader(this.db).read('modules').mediaEnabled))return {...account,media_enabled:0};
+    return account;
   }
 }
 

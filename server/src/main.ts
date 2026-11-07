@@ -38,6 +38,7 @@ async function main(): Promise<void> {
     app.log.error({err:error},'media service unavailable; reading remains available');
   });
   const app = buildApp(ctx,mediaRuntime);
+  ctx.mediaState=mediaRuntime.state;
   ctx.log = app.log;
   // Code that runs outside a request (the scanner, the format parsers) has no
   // request to borrow a logger from, so it gets the app's.
@@ -61,6 +62,7 @@ async function main(): Promise<void> {
 
   let scheduler = startSchedulers(ctx, app.log);
   ctx.settingsChanged=group=>{
+    if(group==='modules'){void mediaRuntime.setEnabled(ctx.settings!.read('modules').mediaEnabled);return;}
     if(group!=='scanning')return;
     if(scheduler.scanTimer)clearInterval(scheduler.scanTimer);
     scheduler=startSchedulers(ctx,app.log,false);

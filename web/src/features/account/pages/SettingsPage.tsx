@@ -9,6 +9,7 @@ import { ShelfSettingsFields } from '../../../ui/shelf-settings.tsx';
 import { Icon } from '../../../ui/icon.tsx';
 import { playerPath } from '../../media/stores/playback.store.ts';
 import '../styles/mine.css';
+import { useMediaEnabled } from '../../../shared/stores/features.ts';
 
 export const SETTINGS_SECTIONS = [
   { id: 'theme', title: '外观与主题' },
@@ -34,13 +35,15 @@ function isSection(value: string | null | undefined): value is SettingsSection {
  * not a second setting.
  */
 export function SettingsPage() {
+  const media=useMediaEnabled();
+  const sections=SETTINGS_SECTIONS.filter(section=>media||section.id==='theme'||section.id==='shelf');
   const runtime = useRuntime();
   const navigate = useNavigate();
   const settings = useSettingsStore(state => state.settings);
   const scope = runtime.mediaApi.preferenceScope();
   const [params, setParams] = useSearchParams();
   const requested = params.get('section');
-  const active: SettingsSection = isSection(requested) ? requested : 'theme';
+  const active: SettingsSection = isSection(requested)&&sections.some(section=>section.id===requested) ? requested : 'theme';
   const select = (id: SettingsSection, focus = false) => {
     setParams(id === 'theme' ? {} : { section: id }, { replace: true });
     if (focus) document.getElementById(`settings-tab-${id}`)?.focus();
@@ -50,18 +53,18 @@ export function SettingsPage() {
   return <MediaPageFrame className="media-secondary-page settings-page" title="偏好设置" backTo="/me" backLabel="返回我的">
     <div className="settings-body">
       <div className="settings-tabs" role="tablist" aria-label="设置分类">
-        {SETTINGS_SECTIONS.map((section, index) => <button type="button" role="tab" key={section.id} id={`settings-tab-${section.id}`}
+        {sections.map((section, index) => <button type="button" role="tab" key={section.id} id={`settings-tab-${section.id}`}
           aria-selected={active === section.id} aria-controls="settings-panel" tabIndex={active === section.id ? 0 : -1}
           onClick={() => select(section.id)}
           onKeyDown={event => {
             // Arrow keys move between tabs, one tab stop for the row (WAI-ARIA tabs).
-            const last = SETTINGS_SECTIONS.length - 1;
+            const last = sections.length - 1;
             const target = event.key === 'ArrowRight' ? (index === last ? 0 : index + 1)
               : event.key === 'ArrowLeft' ? (index === 0 ? last : index - 1)
               : event.key === 'Home' ? 0 : event.key === 'End' ? last : -1;
             if (target < 0) return;
             event.preventDefault();
-            select(SETTINGS_SECTIONS[target]!.id, true);
+            select(sections[target]!.id, true);
           }}>{section.title}</button>)}
       </div>
 

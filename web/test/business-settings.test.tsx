@@ -32,3 +32,17 @@ it('tests unsaved values without saving and keeps inputs after a rejected save',
   await click('保存配置');await vi.waitFor(()=>expect(document.querySelector('[role=alert]')?.textContent).toContain('配置已被其他管理员修改'));
   expect(input.value).toBe('new-secret');
 });
+
+it('requires confirmation before disabling media and saves only after confirmation',async()=>{
+  const modules={group:'modules',label:'功能模块',revision:1,values:{mediaEnabled:true,newUserMediaEnabled:true},secrets:{},fields:[{key:'mediaEnabled',label:'启用影音模块',type:'checkbox'},{key:'newUserMediaEnabled',label:'新用户默认启用影音',type:'checkbox'}]};
+  const request=vi.fn().mockImplementation(async(_path,method,body)=>method==='PATCH'?{...modules,revision:2,values:body.values}:{groups:[modules]});
+  const saved=vi.fn();
+  await act(async()=>render(<BusinessSettings api={{businessSettingsRequest:request,businessTtsPreview:vi.fn()}} group="modules" onSaved={saved}/>,root));
+  await act(async()=>root.querySelector<HTMLInputElement>('[type=checkbox]')!.click());
+  await click('保存配置');
+  expect(request.mock.calls.filter(call=>call[1]==='PATCH')).toHaveLength(0);
+  expect(document.querySelector('[role=alertdialog]')?.textContent).toContain('关闭影音模块');
+  await act(async()=>[...document.querySelectorAll<HTMLButtonElement>('[role=alertdialog] button')].find(button=>button.textContent==='确认')!.click());
+  expect(request).toHaveBeenCalledWith('modules','PATCH',{values:{mediaEnabled:false,newUserMediaEnabled:true},revision:1});
+  expect(saved).toHaveBeenCalledOnce();
+});

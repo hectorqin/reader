@@ -48,7 +48,7 @@ export class MediaRuntime {
     return fetch(url,{...options,headers,redirect:'manual'});
   }
   async close():Promise<void>{
-    if(this.closed)return;
+    if(this.closed)return this.exited;
     this.closed=true;this.worker.postMessage({type:'close'});
     const timer=setTimeout(()=>{void this.worker.terminate();},10000);
     try{await this.exited;}finally{clearTimeout(timer);}

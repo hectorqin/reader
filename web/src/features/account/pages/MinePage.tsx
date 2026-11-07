@@ -10,6 +10,7 @@ import { useSyncStore } from '../../../shared/stores/sync.store.ts';
 import { connectionLabel } from '../../../app/AppNav.tsx';
 import '../../home/styles/home.css';
 import '../styles/mine.css';
+import { useMediaEnabled } from '../../../shared/stores/features.ts';
 
 function Row({ icon, label, value, to, state, onClick, danger = false }: { icon: IconName; label: string; value?: string; to?: string; state?: unknown; onClick?: () => void; danger?: boolean }) {
   const body = <>
@@ -43,6 +44,7 @@ function serverHost(baseUrl: string): string {
  * Signing out is the one exception: a confirmation, not a place.
  */
 export function MinePage() {
+  const media=useMediaEnabled();
   const runtime = useRuntime();
   const user = useAuthStore(state => state.verifiedUser ?? state.session?.user ?? null);
   const admin = user?.role === 'admin';
@@ -70,14 +72,14 @@ export function MinePage() {
           <Group title="内容" order={1}>
             <Row icon="library" label="书库" to="/library" />
             <Row icon="feed" label="书源" to="/sources" />
-            <Row icon="clock" label="时长统计" value="阅读、观影、听书" to="/me/stats" />
-            {admin && <Row icon="video" label="媒体库" to="/media/video/settings/libraries" state={{ returnTo: '/me' }} />}
+            <Row icon="clock" label="时长统计" value={media?'阅读、观影、听书':'阅读'} to="/me/stats" />
+            {admin && media && <Row icon="video" label="媒体库" to="/media/video/settings/libraries" state={{ returnTo: '/me' }} />}
           </Group>
           {admin && <Group title="管理" order={3}>
             <Row icon="users" label="用户管理" to="/me/admin/users" />
             <Row icon="invite" label="注册与邀请" to="/me/admin/registration" />
-            <Row icon="server" label="服务配置" value="朗读、AI、刮削、备份" to="/me/admin/services" />
-            <Row icon="refresh" label="扫描与刮削" to="/media/video/settings/tasks" state={{ returnTo: '/me' }} />
+            <Row icon="server" label="服务配置" value={media?'功能模块、朗读、AI、刮削、备份':'功能模块、朗读、AI、备份'} to="/me/admin/services" />
+            {media&&<Row icon="refresh" label="扫描与刮削" to="/media/video/settings/tasks" state={{ returnTo: '/me' }} />}
           </Group>}
         </div>
         <div className="mine-column">

@@ -26,7 +26,7 @@ export class MediaBackgroundGrants {
     const parts=[...new Set(partIds)],now=Date.now();
     return this.db.transaction(()=>{
       const user=this.accounts.get(actor.id);
-      if(!user||user.disabled)throw unauthorized();
+      if(!user||user.disabled||user.media_enabled===0)throw unauthorized();
       for(const id of parts)this.part(actor,id);
       this.db.run('DELETE FROM media_playback_sessions WHERE id IN (SELECT session_id FROM media_background_sessions WHERE expires_at<=?)',now);
       this.db.run('DELETE FROM media_background_grants WHERE expires_at<=? OR revoked=1',now);
@@ -42,7 +42,7 @@ export class MediaBackgroundGrants {
     const grant=this.db.get<Grant>('SELECT * FROM media_background_grants WHERE token_hash=?',this.hash(token));
     if(!grant||grant.revoked||grant.expires_at<=Date.now())throw unauthorized('background authorization expired','MEDIA_BACKGROUND_INVALID');
     const user=this.accounts.get(grant.user_id);
-    if(!user||user.disabled||user.auth_version!==grant.auth_version)throw unauthorized('background authorization revoked','MEDIA_BACKGROUND_INVALID');
+    if(!user||user.disabled||user.media_enabled===0||user.auth_version!==grant.auth_version)throw unauthorized('background authorization revoked','MEDIA_BACKGROUND_INVALID');
     return {grant,actor:{id:user.id,role:user.role}};
   }
   authorizePart(token:string,partId:string){
