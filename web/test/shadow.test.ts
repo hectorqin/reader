@@ -282,6 +282,17 @@ describe('extractInlineStyles', () => {
  * rather than through a class selector that cannot match.
  */
 describe('BookShadowHost', () => {
+  it('sizes fixed-layout content to the host instead of the text column or iframe defaults', () => {
+    const host = createBookHost();
+    const sheet = host.shadow.querySelector('style')?.textContent ?? '';
+    const fixedSelector = ":host([data-layout='fixed']) .book-flow";
+    const fixed = /:host\(\[data-layout='fixed'\]\) \.book-flow \{[^}]*\}/.exec(sheet)?.[0] ?? '';
+    for (const declaration of ['width: 100%', 'height: 100%', 'min-width: 0', 'min-height: 0', 'max-inline-size: none', 'margin: 0', 'padding: 0', 'columns: auto']) {
+      expect(fixed).toContain(declaration);
+    }
+    expect(sheet.indexOf(fixedSelector)).toBeGreaterThan(sheet.indexOf(":host([data-paginated='true']) .book-flow > *"));
+  });
+
   it('injects the reading column rules into the shadow root', () => {
     const host = createBookHost();
     const sheet = host.shadow.querySelector('style')?.textContent ?? '';

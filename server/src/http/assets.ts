@@ -142,6 +142,10 @@ function sendStream(
   if (!range) {
     reply.header('accept-ranges', payload.seekable ? 'bytes' : 'none');
     if (total !== undefined) reply.header('content-length', String(total));
+    if (request.method === 'HEAD') {
+      stream.destroy();
+      return reply.send(stream);
+    }
     return sendWithRelease(request, reply, stream);
   }
 
@@ -154,6 +158,10 @@ function sendStream(
   reply.header('accept-ranges', 'bytes');
   reply.header('content-range', `bytes ${range.start}-${range.end}/${total}`);
   reply.header('content-length', String(length));
+  if (payload.openRange) {
+    stream.destroy();
+    return sendWithRelease(request, reply, payload.openRange(range.start, range.end));
+  }
 
   // A *suffix* range is the one that cannot be produced by skipping. The stream
   // is forward-only, and `start` is `total - suffix`, so surviving it means

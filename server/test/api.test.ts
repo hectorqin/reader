@@ -6,6 +6,7 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+
 import { mkdtemp, mkdir, writeFile, rm, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1085,4 +1086,16 @@ test('the folder filter is not fooled by LIKE wildcards in a name', async () => 
   });
   const titles = ((res.json() as { items: Array<{ title: string }> }).items).map((item) => item.title);
   assert.deepEqual(titles, ['百分号']);
+});
+
+test('PDF range preflight permits HEAD and Range and exposes byte metadata to Android', async () => {
+  const response = await app.inject({
+    method: 'OPTIONS', url: '/api/v1/books/pdf/content',
+    headers: { origin: 'https://appassets.androidplatform.net', 'access-control-request-method': 'HEAD', 'access-control-request-headers': 'authorization,range' },
+  });
+  assert.equal(response.statusCode, 204);
+  assert.equal(response.headers['access-control-allow-origin'], 'https://appassets.androidplatform.net');
+  assert.match(String(response.headers['access-control-allow-methods']), /HEAD/);
+  assert.match(String(response.headers['access-control-allow-headers']), /range/);
+  assert.match(String(response.headers['access-control-expose-headers']), /content-range/);
 });

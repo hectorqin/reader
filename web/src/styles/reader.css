@@ -448,6 +448,9 @@ book-content {
 .book-host[data-layout='reflowable'][data-paginated='true'] {
   touch-action: none;
 }
+.book-host[data-pdf='true'] {
+  touch-action: pan-y pinch-zoom;
+}
 
 /* ------------------------------------------------------------------ *
  * Chrome: header, shelf, panels

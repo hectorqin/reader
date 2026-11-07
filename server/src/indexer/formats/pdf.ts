@@ -74,6 +74,7 @@ export const pdfHandler = registerFileHandler({
     const info = await stat(ctx.absPath);
     return {
       stream: createReadStream(ctx.absPath),
+      openRange: (start, end) => createReadStream(ctx.absPath, { start, end }),
       contentType: 'application/pdf',
       filename: ctx.relPath.slice(ctx.relPath.lastIndexOf('/') + 1),
       size: info.size,
