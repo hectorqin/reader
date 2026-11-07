@@ -1,4 +1,4 @@
-import { Navigate, type RouteObject } from 'react-router-dom';
+import { Navigate, Outlet, type RouteObject } from 'react-router-dom';
 import { AppShell, MediaLayout } from '../App.tsx';
 import { MediaCatalogPage } from '../../features/media/pages/MediaCatalogPage.tsx';
 import { MediaSearchPage } from '../../features/media/pages/MediaSearchPage.tsx';
@@ -55,11 +55,10 @@ export const routes = [{
     // 我的 (/me).
     { path: 'settings', element: <Navigate to="/shelf" replace /> },
     { path: 'book/:bookId', element: <ReaderPage /> },
-    // 我的 shares MediaLayout so it follows the chosen theme and keeps the channel rail.
     // Every row of it opens a page under /me, so back from any of them returns to 我的:
     // all personal preferences are sections of one page (/me/settings), administration
     // is one page per job (/me/admin/*). Old panel links (/me/theme, …) redirect.
-    { path: 'me', element: <MediaLayout />, children: [
+    { path: 'me', element: <Outlet />, children: [
       { index: true, element: <MinePage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'stats', element: <StatsPage /> },
@@ -107,6 +106,5 @@ export const routes = [{
     { path: '*', element: <Navigate to="/" replace /> },
   ],
 }] satisfies RouteObject[];
-
 
 

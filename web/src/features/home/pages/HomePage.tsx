@@ -15,6 +15,7 @@ import { useMediaPreferences } from '../../media/hooks/use-media-preferences.ts'
 import type { SearchItem } from '../../media/api/media-api.ts';
 import type { ContinueReadingItem } from '../../../api/types.ts';
 import '../styles/home.css';
+import { useMediaEnabled } from '../../../shared/stores/features.ts';
 
 export function greeting(hour: number): string {
   return hour < 6 ? '夜深了' : hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
@@ -131,6 +132,7 @@ function Discover({ channel, kind, heading, to }: { channel: 'video' | 'audioboo
 /** 首页: where you left off across reading and media, the shelf, then something to pick up. */
 export function HomePage() {
   const runtime = useRuntime();
+  const media=useMediaEnabled();
   const user = useAuthStore(state => state.verifiedUser ?? state.session?.user ?? null);
   const reading = useQuery({
     queryKey: ['home', 'reading', runtime.api.baseUrl, user?.id],
@@ -139,11 +141,11 @@ export function HomePage() {
   const shelf = useShelf(1, 'recent');
   // 首页显示最近续播 (偏好设置 › 影音浏览) off: no video/audiobook continue cards; books are not media.
   const { showContinue } = useMediaPreferences();
-  const video = useQuery({ ...historyQuery(runtime, 'video', new URLSearchParams()), enabled: showContinue });
-  const audio = useQuery({ ...historyQuery(runtime, 'audiobook', new URLSearchParams()), enabled: showContinue });
+  const video = useQuery({ ...historyQuery(runtime, 'video', new URLSearchParams()), enabled: media&&showContinue });
+  const audio = useQuery({ ...historyQuery(runtime, 'audiobook', new URLSearchParams()), enabled: media&&showContinue });
   const unfinished = (items?: Activity[]) => items?.find(item => !item.completed);
   const readingBooks = reading.data ?? [], book = readingBooks[0];
-  const videoActivity = showContinue ? unfinished(video.data?.items) : undefined, audioActivity = showContinue ? unfinished(audio.data?.items) : undefined;
+  const videoActivity = media&&showContinue ? unfinished(video.data?.items) : undefined, audioActivity = media&&showContinue ? unfinished(audio.data?.items) : undefined;
   const books = (shelf.data?.items ?? []).slice(0, 8);
   const name = user?.displayName || user?.username || '';
 
@@ -171,8 +173,8 @@ export function HomePage() {
       <div className="home-section"><h2>我的书架</h2><Link to="/shelf">全部<Icon name="chevron-right" size={16} /></Link></div>
       <div className="home-shelf-row">{books.map(item => <BookCard key={item.id} book={item} showAuthor={false} showProgress />)}</div>
     </section>}
-    <Discover channel="video" kind="video" heading="看点什么" to="/media/video" />
+    {media&&<><Discover channel="video" kind="video" heading="看点什么" to="/media/video" />
     <Discover channel="audiobook" kind="audiobook" heading="听本书" to="/media/audiobook" />
-    <Discover channel="music" kind="album" heading="听张专辑" to="/media/music/albums" />
+    <Discover channel="music" kind="album" heading="听张专辑" to="/media/music/albums" /></>}
   </div>;
 }

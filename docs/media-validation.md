@@ -8,6 +8,8 @@
 
 ## 浏览器与原型
 
+从仓库根目录执行 `npm --prefix web run ui:review:features`，构建前后端后使用临时数据库和书籍目录验证功能开关：管理员全站/个人权限、自身权限恢复、worker 重启、纯阅读旧链接与设置/搜索/统计、无影音请求和播放器、跨窗口刷新以及 390/1120px 布局。截图位于忽略的 `artifacts/ui-review/media-features/`。请勿在共享真实数据库的部署实例中切换开关做验证。
+
 先构建 web，再从 web 目录运行：
 
 - `npm run ui:review:only`（`npm run ui:review` 会先构建再运行）：启动真实服务端媒体夹具，使用生产 React bundle 在 390/1120px 检查书架、书库、我的、影音频道、详情、收藏、播放器、设置和权限页面；同时覆盖搜索、收藏筛选分页、收藏写回、播放会话恢复、媒体库增改和普通用户权限边界。报告写入忽略的 `artifacts/ui-review/react-app/verification.json`，以报告中的 `passed`、`screenshots`、页面错误和横向溢出结果为准，不把历史截图数量写入文档。

@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword } from './passwords.ts';
 import { hashToken, newRefreshToken, signAccessToken } from './tokens.ts';
 import { conflict, forbidden, notFound, unauthorized } from '../lib/errors.ts';
 import { RegistrationService } from './registration.ts';
+import { BusinessSettingsReader } from './business-settings.ts';
 
 export type Role = 'admin' | 'member';
 
@@ -18,6 +19,7 @@ export interface UserRow {
   created_at: number;
   updated_at: number;
   auth_version?: number;
+  media_enabled?: number;
 }
 
 export interface PublicUser {
@@ -26,6 +28,7 @@ export interface PublicUser {
   displayName: string;
   role: Role;
   createdAt: number;
+  mediaEnabled: boolean;
 }
 
 export function toPublicUser(row: UserRow): PublicUser {
@@ -35,6 +38,7 @@ export function toPublicUser(row: UserRow): PublicUser {
     displayName: row.display_name || row.username,
     role: row.role,
     createdAt: row.created_at,
+    mediaEnabled: row.media_enabled !== 0,
   };
 }
 
@@ -74,6 +78,7 @@ export class UserService {
     password: string;
     displayName?: string;
     role?: Role;
+    mediaEnabled?: boolean;
   }, admission?: () => void): Promise<PublicUser> {
     const username = input.username.trim();
     if (username.length < 3) throw conflict('username must be at least 3 characters', 'USERNAME_TOO_SHORT');
@@ -94,13 +99,14 @@ export class UserService {
         // The first user to register owns the instance.
         role: input.role ?? (this.count() === 0 ? 'admin' : 'member'),
         disabled: 0,
+        media_enabled: (input.mediaEnabled ?? new BusinessSettingsReader(this.db).read('modules').newUserMediaEnabled) ? 1 : 0,
         created_at: now,
         updated_at: now,
       };
       this.db.run(
-        `INSERT INTO users (id, username, display_name, password_hash, role, disabled, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?)`,
-        row.id, row.username, row.display_name, row.password_hash, row.role, row.disabled, row.created_at, row.updated_at,
+        `INSERT INTO users (id, username, display_name, password_hash, role, disabled, created_at, updated_at, media_enabled)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+        row.id, row.username, row.display_name, row.password_hash, row.role, row.disabled, row.created_at, row.updated_at, row.media_enabled!,
       );
       // A new account must see the whole shared library straight away. Without
       // this, a book scanned before the account existed would stay invisible
@@ -125,6 +131,7 @@ export class UserService {
     password: string;
     displayName?: string;
     role?: Role;
+    mediaEnabled?: boolean;
   }): Promise<PublicUser> {
     const requestedRole = input.role ?? 'member';
     return this.create({ ...input, role: requestedRole });
@@ -235,6 +242,10 @@ export class UserService {
 
   setRole(userId: string, role: Role): void {
     this.db.run('UPDATE users SET role = ?, updated_at = ? WHERE id = ?', role, Date.now(), userId);
+  }
+
+  setMediaEnabled(userId: string, enabled: boolean): void {
+    this.db.run('UPDATE users SET media_enabled = ?, updated_at = ? WHERE id = ?', enabled ? 1 : 0, Date.now(), userId);
   }
 
   async resetPassword(userId: string, password: string): Promise<void> {

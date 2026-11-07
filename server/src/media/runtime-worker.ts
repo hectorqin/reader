@@ -35,7 +35,7 @@ app.addHook('onRequest',async(request,reply)=>{
 registerErrorHandler(app);
 registerMediaRoutes(app,{config,db:core,users:{byId:id=>core.get<UserRow>(
   // Authentication needs account status and public profile, never password hashes.
-  "SELECT id,username,display_name,role,disabled,created_at,updated_at,auth_version,'' AS password_hash FROM users WHERE id=?",id)}},{database:media});
+  "SELECT id,username,display_name,role,disabled,created_at,updated_at,auth_version,media_enabled,'' AS password_hash FROM users WHERE id=?",id)}},{database:media});
 let closing=false;
 const cleanup=new MediaAccountCleanup(media,new DatabaseMediaAccounts(core));
 let cleanupTimer:ReturnType<typeof setInterval>|undefined;

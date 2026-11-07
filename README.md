@@ -45,6 +45,7 @@
 | 部署服务、添加书籍与媒体 | [入门指南](docs/getting-started.zh-CN.md) |
 | 使用书架、阅读器、OPDS 和朗读 | [阅读手册](docs/user-guide.zh-CN.md) |
 | 建媒体库、刮削、看视频或听音乐与有声书 | [影音手册](docs/media-user-guide.zh-CN.md) |
+| 全站或按用户关闭影音，启用纯阅读模式 | [功能模块开关](docs/media-features.md) |
 | 对接 OpenList / NAS / 网盘挂载 | [OpenList 接入](docs/media-openlist.md) |
 | 配置环境变量、HTTPS、媒体探测或 TTS | [部署配置](docs/configuration.zh-CN.md) |
 | 备份账号、阅读与影音数据 | [备份恢复](docs/backup.zh-CN.md) |

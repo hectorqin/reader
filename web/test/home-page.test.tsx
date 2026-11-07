@@ -51,6 +51,14 @@ const settle = () => act(async () => { await new Promise(resolve => setTimeout(r
 afterEach(() => { act(() => render(null, root)); useAuthStore.setState({ session: null, verifiedUser: null }); localStorage.clear(); });
 
 describe('首页', () => {
+  it('pure reading never requests media history or discovery',async()=>{
+    useAuthStore.setState({verifiedUser:{...user,role:'member',features:{media:false}}});
+    const runtime=mount();await settle();
+    expect(runtime.mediaApi.request).not.toHaveBeenCalled();
+    expect(runtime.mediaApi.detail).not.toHaveBeenCalled();
+    expect(root.querySelectorAll('a[href^="/media/"]')).toHaveLength(0);
+    expect(root.textContent).toContain('我的书架');
+  });
   it('greets by time of day', () => {
     expect([2, 8, 14, 21].map(greeting)).toEqual(['夜深了', '早上好', '下午好', '晚上好']);
   });

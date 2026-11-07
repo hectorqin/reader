@@ -21,10 +21,13 @@
 
 ```json
 { "name": "reader", "apiVersion": 1, "registrationOpen": false,
-  "registrationMode": "closed", "invitationRequired": false, "userCount": 3 }
+  "registrationMode": "closed", "invitationRequired": false, "userCount": 3,
+  "features": { "media": true } }
 ```
 
 客户端用它区分「全新实例」（可以注册）和「已被占用」（需要管理员开账号）。
+
+`features.media` 表示全站影音开关，不代表当前账号的有效权限。响应禁止缓存。
 
 `apiVersion` 是**能力版本**，与包的版本号无关：只有在字段语义变化、客户端必须改行为时
 才动它。加字段、加端点都不动——这正是「只做加法」能成立的原因。
@@ -107,6 +110,8 @@
 ### `GET /auth/me`
 
 → `{ "user": { ... } }`
+
+用户对象包含个人开关 `mediaEnabled`、有效权限 `features.media`（全站与个人开关同时开启）和影音生命周期 `mediaState`（`disabled|stopping|starting|ready|failed|closed`）。响应禁止缓存；管理员没有绕过影音开关的特权，但仍可管理服务配置和用户权限。
 
 ### `POST /auth/password`
 
@@ -933,6 +938,8 @@ Reader 对外提供的只读 OPDS 服务（`/opds`，Basic 认证；客户端凭
 
 ## 影音
 
+全站或当前用户关闭影音时，普通影音接口返回 `403 MEDIA_DISABLED`。播放票据和后台播放授权每次使用检查最新权限，失效时沿用原有票据错误响应；已建立的服务器影音流每秒复核权限。第三方重定向直链无法由 Reader 断流。详见[影音模块开关](media-features.md)。
+
 接口前缀为 /api/v1/media，沿用账号令牌。用户只能访问已授权媒体库；建库、权限、扫描、刮削、识别规则、作品 / 版本整理和人工资料编辑需要管理员权限。准备中返回 503 MEDIA_STARTING，启动失败返回 503 MEDIA_UNAVAILABLE。阅读健康检查不能替代影音就绪检查。
 
 影音运行在独立 worker 中，阅读进程只做转发：同时在途请求超过 64 个返回 503 MEDIA_BUSY；转发中断返回 503 MEDIA_REQUEST_UNCERTAIN（写操作请重新查询结果确认）；目录查询期间账号或可访问媒体库发生变化返回 503 MEDIA_ACCESS_CHANGED。
@@ -1010,11 +1017,15 @@ kind 为 video、music 或 audiobook；OpenList 建库和凭据更新见[OpenLis
 
 返回 `201 { "user": {...} }`。`role` 缺省为 `member`。不受注册策略限制——管理员本就该能加家庭成员。
 
+可选布尔字段 `mediaEnabled` 覆盖新用户的影音权限；省略时采用 `modules.newUserMediaEnabled`，公开注册也采用该默认值。用户列表及创建响应均返回 `mediaEnabled`。
+
 ### `PATCH /admin/users/:id`
 
 `{ "disabled": true }` 或 `{ "role": "admin" }` → 更新后的完整列表 `{ "users": [...] }`。用户不存在返回 `404`。
 
 不能停用自己或移除自己的管理员角色（`400 SELF_LOCKOUT`），并须保留至少一名启用的管理员（`400 LAST_ADMIN`）。停用立即撤销旧会话，重新启用仍需重新登录。
+
+也接受 `{ "mediaEnabled": false }`，只撤销影音权限，不停用账号或撤销阅读会话。允许管理员修改自己的影音权限，全站关闭时也可预配置。
 
 ### `POST /admin/users/:id/password`
 
@@ -1183,7 +1194,8 @@ All `/api/v1/admin/settings` routes require an administrator bearer token. Respo
 - `GET /api/v1/admin/settings` returns `{groups:[{group,label,fields,values,secrets,revision}]}`. Secret values are omitted; `secrets` contains presence flags only.
 - `PATCH /api/v1/admin/settings/:group` accepts `{values,revision}`. Omitted fields retain their values; an explicit empty secret clears it. Stale revisions return `409 SETTINGS_CONFLICT`. Unknown fields and invalid values return 400.
 - `PATCH` returns the updated group view. For `access`, a request carrying an `Origin` header is rejected with 400 if the new CORS origin list is non-empty and does not include that origin.
-- Groups: `ai`, `playback`, `tmdb`, `musicbrainz`, `tts`, `scanning`, `scraping`, `access`, `webdav`, `library` (`memberUpload`, default `true`: whether members may upload books). Unknown groups return 400. Registration continues using its existing API.
+- Groups: `modules`, `ai`, `playback`, `tmdb`, `musicbrainz`, `tts`, `scanning`, `scraping`, `access`, `webdav`, `library` (`memberUpload`, default `true`: whether members may upload books). Unknown groups return 400. Registration continues using its existing API.
+- `modules` contains `mediaEnabled` and `newUserMediaEnabled` (both default `true`). The first controls media instance-wide; the second applies only to subsequently created users. Disabling media stops its worker and background tasks without deleting media data. Instances sharing `reader.db` share these settings.
 - `POST /api/v1/admin/settings/:group/test` accepts `{values}` for TMDB, MusicBrainz, TTS or WebDAV (other groups return 400). It tests the draft without saving it and returns `{ok,elapsedMs}`; TTS additionally returns `bytes` and `voices`. A test already running for the same group returns `409 SETTINGS_TEST_BUSY`; an upstream failure returns `502 SETTINGS_TEST_FAILED`.
 - `POST /api/v1/admin/settings/tts/preview` accepts `{values,voice?}` and returns sample audio. `POST /api/v1/admin/settings/tts/clear-cache` clears cached audio and returns `{ok:true}`.
 - `POST /api/v1/admin/settings/webdav/upload` accepts `{directory,name}` and uploads a verified offline backup using saved WebDAV settings. It never creates an online snapshot or overwrites a remote backup. A concurrent upload returns `409 BACKUP_BUSY`; any upload failure returns 400.

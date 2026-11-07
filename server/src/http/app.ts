@@ -13,6 +13,7 @@ import { registerSourceRoutes } from './routes/sources.ts';
 import { registerOpdsRoutes } from './routes/opds.ts';
 import { registerMediaRoutes } from './routes/media.ts';
 import {registerMediaProxy} from './routes/media-proxy.ts';
+import {AppError} from '../lib/errors.ts';
 import type {MediaService} from '../media/start-runtime.ts';
 import { isOriginAllowed, resolveCorsOrigin } from './cors.ts';
 import {BusinessSettings} from '../services/business-settings.ts';
@@ -67,6 +68,9 @@ export function buildApp(ctx: AppContext,mediaRuntime?:MediaService): FastifyIns
     // than fixed, otherwise a shared cache will serve one origin's response to
     // another.
     reply.header('vary', 'origin');
+    if(request.method!=='OPTIONS'&&/^\/api\/v1\/media(?:\/|\?|$)/.test(request.raw.url??'')&&!ctx.settings!.read('modules').mediaEnabled){
+      throw new AppError(403,'MEDIA_DISABLED','影音模块已关闭');
+    }
   });
 
   app.options('/*', async (_request, reply) => reply.status(204).send());

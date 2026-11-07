@@ -10,6 +10,7 @@ import { MediaPageFrame } from '../../media/components/MediaPageFrame.tsx';
 import type { MediaChannel } from '../../media/api/media-api.ts';
 import '../../home/styles/home.css';
 import '../styles/search.css';
+import { useMediaEnabled } from '../../../shared/stores/features.ts';
 
 const channelLabels: Record<MediaChannel, string> = { video: '影视', music: '音乐', audiobook: '有声书' };
 const BOOK_LIMIT = 12, MEDIA_LIMIT = 8;
@@ -21,6 +22,7 @@ const BOOK_LIMIT = 12, MEDIA_LIMIT = 8;
  */
 export function SearchPage() {
   const runtime = useRuntime();
+  const mediaEnabled=useMediaEnabled();
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const query = (params.get('q') ?? '').trim();
@@ -36,17 +38,17 @@ export function SearchPage() {
   const media = useQuery({
     queryKey: ['search', 'media', runtime.api.baseUrl, user, query],
     queryFn: ({ signal }) => runtime.mediaApi.search(query, 'all', 0, signal),
-    enabled: query.length > 0,
+    enabled: mediaEnabled&&query.length > 0,
   });
   const submit = (event: FormEvent) => { event.preventDefault(); const q = input.trim(); setParams(q ? { q } : {}); };
   const mediaItems = (media.data?.items ?? []).slice(0, MEDIA_LIMIT);
   return <MediaPageFrame className="media-secondary-page search-page" title="搜索" backTo="/" backLabel="返回首页">
     <form className="search-page-form" role="search" onSubmit={submit}>
       <Icon name="search" size={18} />
-      <input type="search" name="q" aria-label="搜索全部内容" placeholder="搜索书名、片名、歌曲、有声书" value={input} maxLength={200} onInput={event => setInput(event.currentTarget.value)} />
+      <input type="search" name="q" aria-label="搜索全部内容" placeholder={mediaEnabled?'搜索书名、片名、歌曲、有声书':'搜索书名、作者'} value={input} maxLength={200} onInput={event => setInput(event.currentTarget.value)} />
       <button type="submit" className="media-primary" disabled={!input.trim()}>搜索</button>
     </form>
-    {!query ? <p className="search-page-hint">输入名称，同时搜索书库和有权访问的影音库。</p> : <>
+    {!query ? <p className="search-page-hint">{mediaEnabled?'输入名称，同时搜索书库和有权访问的影音库。':'输入名称搜索书库。'}</p> : <>
       <section className="search-page-section" aria-label="书籍搜索结果">
         <header><h2>书籍{books.data ? <small>{books.data.total}</small> : null}</h2>
           {books.data && books.data.total > BOOK_LIMIT && <Link to={`/library?q=${encodeURIComponent(query)}`}>在书库查看全部<Icon name="chevron-right" size={16} /></Link>}</header>
@@ -57,7 +59,7 @@ export function SearchPage() {
             {books.data.items.map(book => <BookCard key={book.id} book={book} showAuthor={settings.shelfShowAuthor} showProgress={false} />)}
           </div>}
       </section>
-      <section className="search-page-section" aria-label="影音搜索结果">
+      {mediaEnabled&&<section className="search-page-section" aria-label="影音搜索结果">
         <header><h2>影音{media.data ? <small>{media.data.total}</small> : null}</h2>
           {media.data && media.data.total > MEDIA_LIMIT && <Link to={`/media/search?q=${encodeURIComponent(query)}&scope=all`}>查看全部影音结果<Icon name="chevron-right" size={16} /></Link>}</header>
         {media.isPending ? <p role="status">正在搜索影音…</p>
@@ -69,7 +71,7 @@ export function SearchPage() {
               <span className="media-search-copy"><strong title={item.title}>{item.title}</strong><small>{channelLabels[item.channel]} · {item.libraryName}</small></span>
               <Icon name="chevron-right" size={18} />
             </button>)}</div>}
-      </section>
+      </section>}
     </>}
   </MediaPageFrame>;
 }

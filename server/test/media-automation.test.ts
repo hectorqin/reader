@@ -60,6 +60,10 @@ test('automation scans every idle library, and after a scan scrapes only never-a
   assert.equal(automation.afterScan({ actor: admin, libraryId: library.id, jobId: 'x', state: 'complete' }), null);
   settings.mediaAutoScan = false;
   assert.deepEqual(automation.scanAll(), []);
+  settings.mediaAutoScan=true;
+  automation.stop();
+  assert.deepEqual(automation.scanAll(),[]);
+  assert.equal(automation.afterScan({actor:admin,libraryId:library.id,jobId:'stopped',state:'complete'}),null);
 });
 
 test('embedded subtitle streams can be turned off, and the new scanning settings have defaults', async () => {

@@ -241,13 +241,21 @@ export class ReaderApi {
   }
 
   async me(): Promise<User> {
+    const generation=this.sessionGeneration;
     const result = await this.get<{ user: User }>('/api/v1/auth/me');
+    if(generation===this.sessionGeneration&&this.session?.user.id===result.user.id){
+      const session={...this.session,user:result.user};
+      this.session=session;
+      const write=this.sessionWrites.catch(()=>undefined).then(()=>generation===this.sessionGeneration?this.sessions.save(session):undefined);
+      this.sessionWrites=write;
+      await write;
+    }
     return result.user;
   }
 
   async adminUsers(): Promise<{users:import('./types.ts').ManagedUser[]}> { return this.get('/api/v1/admin/users'); }
-  async adminCreateUser(input:{username:string;password:string;displayName:string;role:'admin'|'member'}): Promise<unknown> { return this.call('/api/v1/admin/users','POST',input); }
-  async adminUpdateUser(id:string,input:{disabled?:boolean;role?:'admin'|'member'}): Promise<unknown> { return this.call('/api/v1/admin/users/'+encodeURIComponent(id),'PATCH',input); }
+  async adminCreateUser(input:{username:string;password:string;displayName:string;role:'admin'|'member';mediaEnabled?:boolean}): Promise<unknown> { return this.call('/api/v1/admin/users','POST',input); }
+  async adminUpdateUser(id:string,input:{disabled?:boolean;role?:'admin'|'member';mediaEnabled?:boolean}): Promise<unknown> { return this.call('/api/v1/admin/users/'+encodeURIComponent(id),'PATCH',input); }
   async adminResetPassword(id:string,password:string): Promise<unknown> { return this.call('/api/v1/admin/users/'+encodeURIComponent(id)+'/password','POST',{password}); }
   async registrationSettings(): Promise<import('./types.ts').RegistrationSettings> { return this.get('/api/v1/admin/registration'); }
   async setRegistrationMode(mode:import('./types.ts').RegistrationSettings['mode']): Promise<unknown> { return this.call('/api/v1/admin/registration','PATCH',{mode}); }
@@ -949,6 +957,8 @@ export class ReaderApi {
         const session = response.json as Session;
         if (!session?.accessToken) throw new ApiError('unauthorized', 'refresh returned no session');
         if (session.user.id !== this.session?.user.id) throw new ApiError('unauthorized', 'refresh returned another account');
+        const previous=this.session?.user;
+        if(previous?.features)session.user={...session.user,features:previous.features,...(previous.mediaState?{mediaState:previous.mediaState}:{})};
         await this.setSession(session, true);
         this.assertSession(generation);
         return session;

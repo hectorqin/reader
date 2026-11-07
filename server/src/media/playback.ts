@@ -76,7 +76,7 @@ export class MediaPlayback {
     const part=this.part(actor,partId);
     if(!part.available)throw notFound('media resource is missing','MEDIA_MISSING');
     const user=this.accounts.get(actor.id);
-    if(!user||user.disabled)throw unauthorized();
+    if(!user||user.disabled||user.media_enabled===0)throw unauthorized();
     const id=randomUUID(),token=randomBytes(32).toString('base64url'),now=Date.now(),expiresAt=now+SESSION_TTL;
     const old=this.progress(actor,partId);
     const position=old.completed?part.start_seconds:Math.max(part.start_seconds,Math.min(old.position,part.end_seconds??Number.MAX_SAFE_INTEGER));
@@ -116,7 +116,7 @@ export class MediaPlayback {
       const session=this.db.get<SessionRow>('SELECT * FROM media_playback_sessions WHERE id=? AND user_id=?',id,actor.id);
       if(!session||session.expires_at+RENEWAL_GRACE<=now)throw notFound('playback session expired','MEDIA_SESSION_EXPIRED');
       const user=this.accounts.get(actor.id);
-      if(!user||user.disabled||user.auth_version!==session.auth_version)throw unauthorized('media session revoked','MEDIA_TICKET');
+      if(!user||user.disabled||user.media_enabled===0||user.auth_version!==session.auth_version)throw unauthorized('media session revoked','MEDIA_TICKET');
       const part=this.part(actor,session.part_id);
       if(!part.available)throw notFound('media resource is missing','MEDIA_MISSING');
       const progress=this.db.get<ProgressRow>('SELECT * FROM media_progress WHERE user_id=? AND part_id=?',actor.id,part.id);
@@ -133,7 +133,7 @@ export class MediaPlayback {
     const background=this.db.get<{expires_at:number}>('SELECT expires_at FROM media_background_sessions WHERE session_id=?',id);
     if(background&&background.expires_at<=Date.now())throw unauthorized('background authorization expired','MEDIA_TICKET');
     const user=this.accounts.get(session.user_id);
-    if(!user||user.disabled||user.auth_version!==session.auth_version)throw unauthorized('media session revoked','MEDIA_TICKET');
+    if(!user||user.disabled||user.media_enabled===0||user.auth_version!==session.auth_version)throw unauthorized('media session revoked','MEDIA_TICKET');
     const actor:MediaActor={id:user.id,role:user.role};const part=this.part(actor,session.part_id);
     if(!part.available)throw notFound('media resource is missing','MEDIA_MISSING');
     return {actor,part};

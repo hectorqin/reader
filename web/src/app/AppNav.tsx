@@ -6,6 +6,7 @@ import { useAuthStore } from '../shared/stores/auth.store.ts';
 import { useSyncStore } from '../shared/stores/sync.store.ts';
 import type { SyncStatus } from '../core/sync.ts';
 import { useRuntime } from './providers/runtime-context.tsx';
+import { useMediaEnabled } from '../shared/stores/features.ts';
 
 /**
  * hidden: the book and the player own the whole screen.
@@ -41,6 +42,7 @@ const destinations: Destination[] = [
 export function AppNav({ mode }: { mode: Exclude<NavMode, 'hidden'> }) {
   const { pathname } = useLocation();
   const runtime = useRuntime();
+  const media=useMediaEnabled();
   const user = useAuthStore(state => state.verifiedUser ?? state.session?.user ?? null);
   const channel = /^\/media\/(video|music|audiobook)/.exec(pathname)?.[1];
   const name = user?.displayName || user?.username || '';
@@ -54,10 +56,10 @@ export function AppNav({ mode }: { mode: Exclude<NavMode, 'hidden'> }) {
     {/* Desktop only: one search across books and media (the page is /search). */}
     <form className="app-nav-search" role="search" onSubmit={search}>
       <Icon name="search" size={16} />
-      <input type="search" aria-label="搜索书籍和影音" placeholder="搜索书籍和影音" value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} />
+      <input type="search" aria-label={media?'搜索书籍和影音':'搜索书籍'} placeholder={media?'搜索书籍和影音':'搜索书籍'} value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} />
     </form>
     <ul className="app-nav-list">
-      {destinations.map(({ to, label, icon, current }) => {
+      {destinations.filter(item=>media||item.to!=='/media/video').map(({ to, label, icon, current }) => {
         const active = current(pathname);
         return <li key={to}>
           <Link className="app-nav-item" to={to} aria-current={active ? 'page' : undefined}>

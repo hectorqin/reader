@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
+import { useMediaEnabled } from '../../../shared/stores/features.ts';
 import { MediaPageFrame } from '../../media/components/MediaPageFrame.tsx';
 import { IconButton, Segmented } from '../../../ui/toolkit.tsx';
 import { Icon } from '../../../ui/icon.tsx';
@@ -27,12 +28,14 @@ const GROUPS: Array<{ value: TimeStatsGroup; label: string }> = [
  */
 export function StatsPage() {
   const runtime = useRuntime();
+  const enabled=useMediaEnabled();
+  const kinds=STAT_KINDS.filter(item=>enabled||item.kind==='reading');
   const user = useAuthStore(state => state.verifiedUser ?? state.session?.user ?? null);
   const [params, setParams] = useSearchParams();
   const group = (['day', 'month', 'year'].includes(params.get('g') ?? '') ? params.get('g') : 'day') as TimeStatsGroup;
   const anchor = params.get('at') ?? '';
   const selected = params.get('sel') ?? '';
-  const kind = (STAT_KINDS.some(item => item.kind === params.get('kind')) ? params.get('kind') : '') as StatKind | '';
+  const kind = (kinds.some(item => item.kind === params.get('kind')) ? params.get('kind') : '') as StatKind | '';
   const set = (patch: Record<string, string>) => {
     const next = new URLSearchParams(params);
     for (const [key, value] of Object.entries(patch)) { if (value) next.set(key, value); else next.delete(key); }
@@ -48,12 +51,12 @@ export function StatsPage() {
   const worksQuery: TimeStatsQuery = pick ? { from: pick.from, to: pick.to, tz, group } : chartQuery;
 
   const reading = useQuery({ queryKey: ['stats', 'reading', chartQuery], queryFn: ({ signal }) => runtime.api.readingStats(chartQuery, { signal }) });
-  const media = useQuery({ queryKey: ['stats', 'media', chartQuery], queryFn: ({ signal }) => runtime.mediaApi.timeStats(chartQuery, signal), retry: false });
+  const media = useQuery({ queryKey: ['stats', 'media', chartQuery], queryFn: ({ signal }) => runtime.mediaApi.timeStats(chartQuery, signal), enabled, retry: false });
   const readingWorks = useQuery({ queryKey: ['stats', 'reading', worksQuery], queryFn: ({ signal }) => runtime.api.readingStats(worksQuery, { signal }), enabled: !!pick });
-  const mediaWorks = useQuery({ queryKey: ['stats', 'media', worksQuery], queryFn: ({ signal }) => runtime.mediaApi.timeStats(worksQuery, signal), enabled: !!pick, retry: false });
+  const mediaWorks = useQuery({ queryKey: ['stats', 'media', worksQuery], queryFn: ({ signal }) => runtime.mediaApi.timeStats(worksQuery, signal), enabled: enabled&&!!pick, retry: false });
 
-  const series = mergeSeries(periods, reading.data, media.data);
-  const works = mergeWorks(pick ? readingWorks.data : reading.data, pick ? mediaWorks.data : media.data).filter(work => !kind || work.kind === kind);
+  const series = mergeSeries(periods, reading.data, enabled?media.data:undefined);
+  const works = mergeWorks(pick ? readingWorks.data : reading.data, enabled?(pick ? mediaWorks.data : media.data):undefined).filter(work => !kind || work.kind === kind);
   const totals = Object.fromEntries(STAT_KINDS.map(item => [item.kind, series.reduce((sum, point) => sum + point.byKind[item.kind], 0)])) as Record<StatKind, number>;
   const shown = (point: { byKind: Record<StatKind, number> }) => kind ? point.byKind[kind] : STAT_KINDS.reduce((sum, item) => sum + point.byKind[item.kind], 0);
   const max = Math.max(1, ...series.map(shown));
@@ -72,11 +75,11 @@ export function StatsPage() {
     </div>
     <div className="stats-kinds" role="group" aria-label="类型">
       <button type="button" aria-pressed={!kind} onClick={() => set({ kind: '' })}><span>全部</span><strong>{formatDuration(STAT_KINDS.reduce((sum, item) => sum + totals[item.kind], 0))}</strong></button>
-      {STAT_KINDS.map(item => <button type="button" key={item.kind} aria-pressed={kind === item.kind} onClick={() => set({ kind: kind === item.kind ? '' : item.kind })}>
+      {kinds.map(item => <button type="button" key={item.kind} aria-pressed={kind === item.kind} onClick={() => set({ kind: kind === item.kind ? '' : item.kind })}>
         <span><i className="stats-swatch" data-kind={item.kind} aria-hidden="true" />{item.label}</span><strong>{formatDuration(totals[item.kind])}</strong>
       </button>)}
     </div>
-    {media.error && <p className="stats-note" role="status">影音时长暂时无法读取{isStarting(media.error) ? '（影音服务正在启动）' : ''}，下面只包含阅读时长。</p>}
+    {enabled&&media.error && <p className="stats-note" role="status">影音时长暂时无法读取{isStarting(media.error) ? '（影音服务正在启动）' : ''}，下面只包含阅读时长。</p>}
     {reading.error && <p className="stats-note" role="alert">阅读时长读取失败。<button type="button" className="button" onClick={() => void reading.refetch()}>重试</button></p>}
 
     <section className="stats-chart" aria-label={`${range.label}时长`}>
@@ -103,8 +106,8 @@ export function StatsPage() {
       <details className="stats-table">
         <summary>表格</summary>
         <table>
-          <thead><tr><th scope="col">{group === 'day' ? '日期' : group === 'month' ? '月份' : '年份'}</th>{STAT_KINDS.map(item => <th scope="col" key={item.kind}>{item.label}</th>)}</tr></thead>
-          <tbody>{series.filter(point => shown(point) > 0).map(point => <tr key={point.key}><th scope="row">{point.label}</th>{STAT_KINDS.map(item => <td key={item.kind}>{point.byKind[item.kind] ? formatDuration(point.byKind[item.kind]) : '—'}</td>)}</tr>)}</tbody>
+          <thead><tr><th scope="col">{group === 'day' ? '日期' : group === 'month' ? '月份' : '年份'}</th>{kinds.map(item => <th scope="col" key={item.kind}>{item.label}</th>)}</tr></thead>
+          <tbody>{series.filter(point => shown(point) > 0).map(point => <tr key={point.key}><th scope="row">{point.label}</th>{kinds.map(item => <td key={item.kind}>{point.byKind[item.kind] ? formatDuration(point.byKind[item.kind]) : '—'}</td>)}</tr>)}</tbody>
         </table>
       </details>
     </section>
@@ -131,21 +134,23 @@ export function StatsPage() {
 /** Administrators: each account's time in the range shown, by kind. */
 function AdminOverview({ query, label }: { query: TimeStatsQuery; label: string }) {
   const runtime = useRuntime();
+  const enabled=useMediaEnabled();
+  const kinds=STAT_KINDS.filter(item=>enabled||item.kind==='reading');
   const reading = useQuery({ queryKey: ['stats', 'users', 'reading', query], queryFn: ({ signal }) => runtime.api.readingStatsUsers(query, { signal }) });
-  const media = useQuery({ queryKey: ['stats', 'users', 'media', query], queryFn: ({ signal }) => runtime.mediaApi.statsUsers(query, signal), retry: false });
+  const media = useQuery({ queryKey: ['stats', 'users', 'media', query], queryFn: ({ signal }) => runtime.mediaApi.statsUsers(query, signal), enabled, retry: false });
   const rows = (reading.data ?? []).map(user => {
     const byKind: Record<StatKind, number> = { reading: user.seconds, video: 0, audiobook: 0, music: 0 };
-    for (const row of media.data ?? []) if (row.userId === user.userId) byKind[row.channel] += row.seconds;
+    for (const row of (enabled?media.data:undefined) ?? []) if (row.userId === user.userId) byKind[row.channel] += row.seconds;
     return { ...user, byKind, total: STAT_KINDS.reduce((sum, item) => sum + byKind[item.kind], 0) };
   }).sort((a, b) => b.total - a.total);
   return <section className="stats-admin" aria-label="全部用户">
     <h2>全部用户 · {label}</h2>
     {reading.isPending ? <p className="stats-empty">正在读取…</p> : <div className="stats-admin-scroll"><table>
-      <thead><tr><th scope="col">用户</th><th scope="col">合计</th>{STAT_KINDS.map(item => <th scope="col" key={item.kind}>{item.label}</th>)}</tr></thead>
+      <thead><tr><th scope="col">用户</th><th scope="col">合计</th>{kinds.map(item => <th scope="col" key={item.kind}>{item.label}</th>)}</tr></thead>
       <tbody>{rows.map(row => <tr key={row.userId}><th scope="row">{row.displayName || row.username}</th><td>{formatDuration(row.total)}</td>
-        {STAT_KINDS.map(item => <td key={item.kind}>{row.byKind[item.kind] ? formatDuration(row.byKind[item.kind]) : '—'}</td>)}</tr>)}</tbody>
+        {kinds.map(item => <td key={item.kind}>{row.byKind[item.kind] ? formatDuration(row.byKind[item.kind]) : '—'}</td>)}</tr>)}</tbody>
     </table></div>}
-    {media.error && <p className="stats-note">影音时长暂时无法读取，表中只有阅读时长。</p>}
+    {enabled&&media.error && <p className="stats-note">影音时长暂时无法读取，表中只有阅读时长。</p>}
   </section>;
 }
 

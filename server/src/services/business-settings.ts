@@ -3,6 +3,7 @@ import type { AppConfig } from '../config/index.ts';
 import { badRequest, conflict } from '../lib/errors.ts';
 
 export interface BusinessValues {
+  modules:{mediaEnabled:boolean;newUserMediaEnabled:boolean};
   ai:{enabled:boolean;scanEnabled:boolean;summaryEnabled:boolean;baseUrl:string;apiKey:string;model:string;scanPrompt:string;summaryPrompt:string;batchSize:number;maxInputChars:number};
   playback:{mode:'auto'|'direct'|'proxy'};
   tmdb:{enabled:boolean;token:string;apiKey:string;language:string};
@@ -17,6 +18,10 @@ export interface BusinessValues {
 export type SettingsGroup=keyof BusinessValues;
 type Field={key:string;label:string;type:'text'|'textarea'|'password'|'number'|'checkbox'|'url'|'select';default:string|number|boolean;min?:number;max?:number;help?:string;options?:Array<{value:string;label:string}>};
 export const SETTINGS_SCHEMA:Record<SettingsGroup,{label:string;fields:Field[]}>= {
+  modules:{label:'功能模块',fields:[
+    {key:'mediaEnabled',label:'启用影音模块',type:'checkbox',default:true,help:'关闭后全站进入纯阅读模式，停止影音播放和后台任务，保留媒体库与播放记录；不影响书籍朗读'},
+    {key:'newUserMediaEnabled',label:'新用户默认启用影音',type:'checkbox',default:true,help:'仅影响之后创建的账号，不修改已有用户的影音权限'},
+  ]},
   ai:{label:'AI 功能',fields:[
     {key:'enabled',label:'启用 AI',type:'checkbox',default:false},
     {key:'scanEnabled',label:'启用 AI 扫描',type:'checkbox',default:false},

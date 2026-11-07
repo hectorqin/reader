@@ -21,9 +21,13 @@ export interface User {
   displayName: string;
   role: 'admin' | 'member';
   createdAt: number;
+  mediaEnabled?: boolean;
+  features?: {media:boolean};
+  mediaState?: 'disabled'|'stopping'|'starting'|'ready'|'failed'|'closed';
 }
 
 export interface InstanceInfo {
+  features?: {media:boolean};
   registrationMode?: 'closed' | 'open' | 'invite';
   invitationRequired?: boolean;
   name: string;

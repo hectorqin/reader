@@ -15,6 +15,7 @@
     "ui:review:only": "node tools/ui-review/react-app.mjs",
     "ui:review:reader": "node tools/ui-review/run.mjs",
     "ui:review:pdf": "npm run build && node tools/ui-review/pdf-layout.mjs",
+    "ui:review:features": "npm run build && npm --prefix ../server run build && node tools/ui-review/media-features.mjs",
     "ui:sources": "npm run build && node --import ../server/node_modules/tsx/dist/loader.mjs tools/ui-review/host-source-flow.mjs"
   },
   "dependencies": {

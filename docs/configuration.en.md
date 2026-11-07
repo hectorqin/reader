@@ -15,6 +15,8 @@ Read-only books do not prevent account or progress updates in the data directory
 
 ## Business settings in the UI
 
+Me → Service configuration → Feature modules controls media globally and the default media permission for new users (both enabled by default). Me → User management controls each account, including administrators. Both switches must allow media. These are database settings, not environment variables; instances sharing the core database share the global switch. Disabling media preserves its data and leaves reading and book TTS available. See [media feature controls (中文)](media-features.md).
+
 Administrators configure AI features, media playback mode, HTTP speech, scanning, scraping, login lifetimes, public URL, browser origins, TMDB, MusicBrainz and WebDAV under Me → Service configuration (我的 → 服务配置). Registration is set under Me → Registration and invitations (我的 → 注册与邀请). Values persist in reader.db and apply without restarting.
 
 On first upgrade, legacy business environment variables are imported once. Existing database values, including cleared credentials, always win. See [business settings (中文)](business-settings.zh-CN.md).
