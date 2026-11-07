@@ -56,6 +56,7 @@ export class FilePublications {
     const info = await stat(context.absPath);
     return {
       stream: createReadStream(context.absPath), contentType: contentTypeFor(context.relPath),
+      openRange: (start, end) => createReadStream(context.absPath, { start, end }),
       filename: context.relPath.split('/').pop() ?? 'book', size: info.size,
       seekable: true, etag: bookId, lastModified: info.mtimeMs,
     };

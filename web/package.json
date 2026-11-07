@@ -14,6 +14,7 @@
     "ui:review": "npm run build && node tools/ui-review/react-app.mjs",
     "ui:review:only": "node tools/ui-review/react-app.mjs",
     "ui:review:reader": "node tools/ui-review/run.mjs",
+    "ui:review:pdf": "npm run build && node tools/ui-review/pdf-layout.mjs",
     "ui:sources": "npm run build && node --import ../server/node_modules/tsx/dist/loader.mjs tools/ui-review/host-source-flow.mjs"
   },
   "dependencies": {
@@ -24,6 +25,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
     "notyf": "^3.10.0",
+    "pdfjs-dist": "6.5.438",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.9.4",

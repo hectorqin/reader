@@ -176,6 +176,7 @@ export interface AssetPayload {
   size?: number;
   /** Supports HTTP Range requests. Only set this when the bytes are seekable. */
   seekable?: boolean;
+  openRange?: (start: number, end: number) => Readable;
   /** Trusted validator for the payload, e.g. the book's content hash. */
   etag?: string;
   /** Last-modified time in milliseconds, when the source has one. */

@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { pwa } from './tools/pwa/build.ts';
+import { pdfjsAssets } from './tools/pdfjs-assets.ts';
 
 // The build output is consumed three ways:
 //   - served directly by the server for the browser/H5 build
@@ -14,7 +15,7 @@ import { pwa } from './tools/pwa/build.ts';
 // split into content-hashed chunks: every host fetches them like any sibling file,
 // and the server caches the hashed names forever.
 export default defineConfig({
-  plugins: [react(), pwa()],
+  plugins: [react(), pdfjsAssets(), pwa()],
   base: './',
   build: {
     outDir: 'dist',
@@ -27,7 +28,7 @@ export default defineConfig({
         entryFileNames: 'assets/client.js',
         chunkFileNames: 'assets/[name]-[hash].js',
         // With cssCodeSplit off Vite names the one stylesheet style.css; keep index.css.
-        assetFileNames: asset => asset.names?.[0] === 'style.css' ? 'assets/index.css' : 'assets/[name][extname]',
+        assetFileNames: asset => asset.names?.[0] === 'style.css' ? 'assets/index.css' : asset.names?.[0]?.startsWith('pdf.worker') ? 'assets/[name]-[hash].js' : 'assets/[name][extname]',
       },
     },
     modulePreload: { polyfill: false },

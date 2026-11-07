@@ -653,6 +653,30 @@ export class ReaderApi {
 
   // ---- content ----
 
+  async pdfSource(id: string, options: RequestOptions = {}): Promise<import('../formats/types.ts').PdfSource> {
+    const generation = this.sessionGeneration;
+    const path = `/api/v1/books/${encodeURIComponent(id)}/content`;
+    const metadata = await this.request(path, 'HEAD', undefined, options);
+    const length = Number(metadata.headers['content-length']);
+    if (!Number.isSafeInteger(length) || length <= 0 || metadata.headers['accept-ranges'] !== 'bytes') {
+      throw new Error('PDF 在线阅读需要服务器支持字节范围请求');
+    }
+    return {
+      length,
+      readRange: async (begin, end, signal) => {
+        this.assertSession(generation);
+        const response = await this.request(path, 'GET', undefined, {
+          binary: true, signal, headers: { range: `bytes=${begin}-${end - 1}` },
+        });
+        this.assertSession(generation);
+        if (response.status !== 206 || response.headers['content-range'] !== `bytes ${begin}-${end - 1}/${length}` || response.bytes?.byteLength !== end - begin) {
+          throw new Error('服务器返回了无效的 PDF 字节范围');
+        }
+        return response.bytes;
+      },
+    };
+  }
+
   /** Authenticated book body. Not cacheable by the service worker: it needs a token. */
   async bookBytes(id: string, options: RequestOptions = {}): Promise<Uint8Array> {
     const response = await this.request(
@@ -834,13 +858,14 @@ export class ReaderApi {
     path: string,
     method: string,
     body: unknown,
-    options: RequestOptions & { binary?: boolean; stream?: boolean } = {},
+    options: RequestOptions & { binary?: boolean; stream?: boolean; headers?: Record<string, string> } = {},
   ): Promise<import('../core/platform.ts').HttpResponse> {
     const generation = this.sessionGeneration;
     const assertCurrent = (): void => this.assertSession(generation);
     const attempt = async (token: string | null) => {
       assertCurrent();
       const headers: Record<string, string> = { accept: options.stream ? 'text/event-stream' : options.binary ? '*/*' : 'application/json' };
+      Object.assign(headers, options.headers);
       const multipart = typeof FormData !== 'undefined' && body instanceof FormData;
       if (body !== undefined && !multipart) headers['content-type'] = 'application/json';
       if (token) headers.authorization = `Bearer ${token}`;

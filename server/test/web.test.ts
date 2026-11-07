@@ -24,6 +24,7 @@ before(async () => {
   await mkdir(join(root, 'assets'));
   await writeFile(join(root, 'assets', 'index-abc123.js'), 'console.log(1)');
   await writeFile(join(root, 'assets', 'client.js'), 'console.log(2)');
+  await writeFile(join(root, 'assets', 'decoder.wasm'), new Uint8Array([0, 97, 115, 109]));
   await writeFile(join(root, 'sw.js'), 'self.addEventListener("install", () => {})');
   await writeFile(join(root, 'manifest.webmanifest'), '{"name":"reader"}');
   // A file one level above the build, to prove traversal is refused.
@@ -43,6 +44,12 @@ after(async () => {
 });
 
 describe('static client hosting', () => {
+  test('PDF.js WASM decoders are served with the streaming compilation MIME type', async () => {
+    const response = await app.inject({ url: '/assets/decoder.wasm' });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers['content-type'], 'application/wasm');
+    assert.equal(response.rawPayload.byteLength, 4);
+  });
   test('the root serves the client', async () => {
     const res = await app.inject({ method: 'GET', url: '/' });
     assert.equal(res.statusCode, 200);

@@ -7,12 +7,15 @@ import { ReaderApi } from '../src/api/client.ts';
 import { ApiError } from '../src/api/errors.ts';
 import type { Book, BookContent, Manifest, Session } from '../src/api/types.ts';
 import { OfflineStore } from '../src/store/offline.ts';
-import { PublicationCache, publicationScope } from '../src/store/publications.ts';
+import { OFFLINE_FILE, PublicationCache, publicationScope } from '../src/store/publications.ts';
 import { DEFAULT_APP_SETTINGS } from '../src/store/settings.ts';
 import { ReaderScreen } from '../src/ui/reader-screen.tsx';
 import { App } from '../src/app.ts';
 import type { SyncEngine } from '../src/core/sync.ts';
 import { FakeTransport, MemoryBlobs, MemoryKv, makePlatform } from './helpers/env.ts';
+import { openPdf } from './helpers/pdf-renderer.ts';
+
+vi.mock('../src/formats/pdf-renderer.ts', () => import('./helpers/pdf-renderer.ts'));
 
 const book: Book = {
   id: 'book-1', title: '远程小说', author: '作者', publisher: '', language: 'zh', isbn: '',
@@ -100,6 +103,47 @@ function serve(transport: FakeTransport, current: BookContent, next = current) {
 function body(screen: ReaderScreen): ShadowRoot | null | undefined {
   return screen.element.querySelector('book-content')?.shadowRoot;
 }
+
+describe('PDF reading', () => {
+  function servePdf(transport: FakeTransport) {
+    transport.respondWith(request => {
+      if (request.url.endsWith('/manifest')) return {
+        status: 200, headers: {}, json: {
+          book: { ...book, format: 'pdf' }, files: [], contentUrl: '', coverUrl: null,
+          content: { kind: 'document', total: 1, items: [], groups: [] },
+        },
+      };
+      if (request.method === 'HEAD') return { status: 200, headers: { 'content-length': '1000000', 'accept-ranges': 'bytes' } };
+      return { status: 200, headers: {}, json: { progress: null } };
+    });
+  }
+
+  it('uses a range source rather than downloading or caching the complete file for online reading', async () => {
+    const env = await setup();
+    servePdf(env.transport);
+    await act(async () => env.screen.open({ ...book, format: 'pdf' }));
+    expect(env.transport.requests.filter(request => request.url.endsWith('/content')).map(request => request.method)).toEqual(['HEAD']);
+    expect(openPdf).toHaveBeenLastCalledWith(expect.objectContaining({ length: 1000000, readRange: expect.any(Function) }), expect.any(AbortSignal));
+    expect(body(env.screen)?.querySelector('canvas')).not.toBeNull();
+    const cache = new PublicationCache(env.platform.kv, env.platform.blobs, publicationScope('http://one.test', 'u1'));
+    expect(await cache.resource(book.id, OFFLINE_FILE)).toBeNull();
+    const document = await openPdf.mock.results.at(-1)!.value;
+    screens.splice(screens.indexOf(env.screen), 1);
+    await act(async () => env.screen.dispose());
+    expect(document.renderer.dispose).toHaveBeenCalled();
+  });
+
+  it('opens an explicitly downloaded PDF from cache without requesting its network content', async () => {
+    const env = await setup();
+    servePdf(env.transport);
+    const bytes = new Uint8Array([1, 2, 3]);
+    const cache = new PublicationCache(env.platform.kv, env.platform.blobs, publicationScope('http://one.test', 'u1'));
+    await cache.putResource(book.id, OFFLINE_FILE, bytes);
+    await act(async () => env.screen.open({ ...book, format: 'pdf' }));
+    expect(openPdf).toHaveBeenLastCalledWith(bytes, expect.any(AbortSignal));
+    expect(env.transport.requests.filter(request => request.url.endsWith('/content'))).toHaveLength(0);
+  });
+});
 
 async function click(screen: ReaderScreen, label: string): Promise<void> {
   const button = [...screen.element.querySelectorAll('button')].find((candidate) =>

@@ -113,7 +113,19 @@ export type Layout = 'reflowable' | 'fixed';
  */
 export type RenderMode = 'reflowable' | 'image' | 'document';
 
+export interface PdfSource {
+  length: number;
+  readRange(begin: number, end: number, signal: AbortSignal): Promise<Uint8Array>;
+}
+
+export interface PdfRenderer {
+  render(page: number, container: HTMLElement, fit: 'contain' | 'width'): Promise<void>;
+  cancel(): void;
+  dispose(): void;
+}
+
 export interface BookDoc {
+  pdf?: PdfRenderer;
   format: BookFormat;
   /** Reflowable pages can be re-paginated; fixed ones are one screen per section. */
   layout: Layout;

@@ -238,6 +238,7 @@ export class ReaderView {
     this.settings = { ...DEFAULT_SETTINGS, direction: options.doc.direction };
     this.host = createBookHost();
     this.host.setAttribute('data-layout', options.doc.layout);
+    if (options.doc.pdf) this.host.setAttribute('data-pdf', 'true');
     this.host.className = 'book-host';
     this.resolver = new ResourceResolver(options.doc.resources);
     this.container.append(this.host);
@@ -469,6 +470,12 @@ export class ReaderView {
     // A page turn is the only place an animation is wanted, and only the two
     // settings that change where a page *is* can start one.
     if (next && previous.mode !== this.settings.mode) this.animatePage('none');
+    if (next && previous.fit !== this.settings.fit && this.doc.pdf) {
+      const section = this.doc.sections[this.sectionIndex];
+      if (section) void this.renderFixed(section).catch(() => {
+        this.host.flow.textContent = 'PDF 页面渲染失败，请重新打开';
+      });
+    }
   }
 
   /**
@@ -815,6 +822,7 @@ export class ReaderView {
   }
 
   dispose(): void {
+    this.doc.pdf?.cancel();
     this.detachSelection?.(); this.detachSelection = null;
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
@@ -1001,6 +1009,16 @@ export class ReaderView {
   }
 
   private async renderFixed(section: Section): Promise<void> {
+    if (this.doc.pdf) {
+      this.options.pageHost?.hide();
+      const wrapper = document.createElement('div');
+      wrapper.className = 'fixed-page';
+      wrapper.dataset['fit'] = this.settings.fit;
+      this.host.setContent('', []);
+      this.host.flow.replaceChildren(wrapper);
+      await this.doc.pdf.render(this.sectionIndex + 1, wrapper, this.settings.fit);
+      return;
+    }
     // A native host is offered the page first. It declines for PDF (the platform
     // viewer is a separate screen, not an embeddable view) and for anything it
     // cannot decode, and then the DOM path below runs unchanged.

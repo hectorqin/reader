@@ -6,6 +6,8 @@ import { androidPageHost, serialisePage } from '../src/core/android-platform.ts'
 import type { AndroidBridge } from '../src/android-bridge.ts';
 import type { BookDoc } from '../src/formats/types.ts';
 
+vi.mock('../src/formats/pdf-renderer.ts', () => import('./helpers/pdf-renderer.ts'));
+
 /**
  * The native page path.
  *
@@ -206,15 +208,17 @@ describe('serialisePage', () => {
 });
 
 describe('androidPageHost', () => {
-  it('gives the browser a PDF blob instead of an empty fixed page', async () => {
+  it('renders PDF.js pages in the WebView without delegating to the native viewer', async () => {
     const { loadPdf } = await import('../src/formats/pdf.ts');
     const pdf = await loadPdf(new TextEncoder().encode('%PDF-1.7 fixture'));
-    const reader = view(pdf);
+    const show = vi.fn(async () => true);
+    const reader = view(pdf, createNativePageHost(show, () => undefined));
     try {
       await reader.open(0);
-      const frame = flowOf(reader).querySelector('iframe');
-      expect(frame).not.toBeNull();
-      expect(frame?.src).toMatch(/^blob:/);
+      expect(flowOf(reader).querySelector('canvas')).not.toBeNull();
+      expect(flowOf(reader).querySelector('iframe')).toBeNull();
+      expect(pdf.pdf?.render).toHaveBeenCalledWith(1, expect.any(HTMLElement), 'contain');
+      expect(show).not.toHaveBeenCalled();
     } finally { reader.dispose(); }
   });
   function bridge(overrides: Partial<AndroidBridge> = {}): AndroidBridge {

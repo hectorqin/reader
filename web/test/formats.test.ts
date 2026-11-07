@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { loadBook, detectFormat, extensionOf } from '../src/formats/index.ts';
 import { loadTxt } from '../src/formats/txt.ts';
 import { rewriteDocument, rewriteCss } from '../src/formats/epub.ts';
 import { resolveHref } from '../src/formats/zip.ts';
 import { makeCbz, makeEpub, PNG_1X1, utf8 } from './helpers/fixtures.ts';
+
+vi.mock('../src/formats/pdf-renderer.ts', () => import('./helpers/pdf-renderer.ts'));
 
 const ctx = (bytes: Uint8Array, fileName: string) => ({ bytes, fileName, bookId: 'book-1' });
 
@@ -345,12 +347,12 @@ describe('CBZ loading', () => {
 });
 
 describe('PDF loading', () => {
-  it('reports a single fixed-layout section so navigation stays uniform', async () => {
+  it('reports one fixed-layout section per PDF page', async () => {
     const { doc } = await loadBook(ctx(utf8('%PDF-1.7 fake'), 'doc.pdf'));
     expect(doc.format).toBe('pdf');
     expect(doc.layout).toBe('fixed');
-    expect(doc.sections).toHaveLength(1);
-    expect((doc.sections[0] as { document?: { bytes: Uint8Array } }).document?.bytes).toEqual(utf8('%PDF-1.7 fake'));
+    expect(doc.sections.map(section => section.id)).toEqual(['pdf', 'pdf:2', 'pdf:3']);
+    expect(doc.pdf).toBeDefined();
   });
 });
 
