@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import { Db } from '../src/db/index.ts';
 import { loadConfig } from '../src/config/index.ts';
 import { UserService } from '../src/services/users.ts';
+import { BusinessSettings } from '../src/services/business-settings.ts';
 import { registerMediaRoutes } from '../src/http/routes/media.ts';
 import { registerAuthRoutes } from '../src/http/routes/auth.ts';
 import { registerWebRoutes } from '../src/http/routes/web.ts';
@@ -26,7 +27,7 @@ const users=new UserService(db,config);
 await users.create({username:'reviewer',password:'review-test-pass'});
 let reviewMemberId='';
 if(process.env.MEDIA_REVIEW_MEMBER==='1')reviewMemberId=(await users.create({username:'review-member',password:'review-test-pass',displayName:'林间',role:'member'})).id;
-const ctx={config,db,users} as AppContext;
+const ctx={config,db,users,settings:new BusinessSettings(db,config)} as AppContext;
 registerErrorHandler(app);registerAuthRoutes(app,ctx);
 registerMediaRoutes(app,ctx,{metadataProviders:process.env.MEDIA_REVIEW_LIVE_TMDB==='1'?[new TmdbProvider(new MetadataHttp())]:process.env.MEDIA_REVIEW_LIVE_MUSICBRAINZ==='1'?[new MusicBrainzProvider(new MetadataHttp())]:[{
   id:'tmdb',label:'TMDB（测试响应）',configured:true,kinds:['movie'],
