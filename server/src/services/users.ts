@@ -2,10 +2,11 @@ import { randomUUID } from 'node:crypto';
 import type { Db } from '../db/index.ts';
 import type { AppConfig } from '../config/index.ts';
 import { hashPassword, verifyPassword } from './passwords.ts';
-import { hashToken, newRefreshToken, signAccessToken } from './tokens.ts';
+import { hashToken, newRefreshToken, signAccessToken, signResourceToken } from './tokens.ts';
 import { conflict, forbidden, notFound, unauthorized } from '../lib/errors.ts';
 import { RegistrationService } from './registration.ts';
 import { BusinessSettingsReader } from './business-settings.ts';
+import { AuthWorkLimiter } from './auth-limits.ts';
 
 export type Role = 'admin' | 'member';
 
@@ -43,6 +44,7 @@ export function toPublicUser(row: UserRow): PublicUser {
 }
 
 export class UserService {
+  private readonly passwordWork = new AuthWorkLimiter();
   constructor(
     private readonly db: Db,
     private readonly config: AppConfig,
@@ -86,7 +88,7 @@ export class UserService {
     const existing = this.db.get<{ id: string }>('SELECT id FROM users WHERE username = ? COLLATE NOCASE', username);
     if (existing) throw conflict('username already taken', 'USERNAME_TAKEN');
 
-    const passwordHash = await hashPassword(input.password);
+    const passwordHash = await this.passwordWork.run(() => hashPassword(input.password));
     return this.db.transaction(() => {
       admission?.();
       if (this.db.get('SELECT id FROM users WHERE username = ? COLLATE NOCASE', username)) throw conflict('username already taken', 'USERNAME_TAKEN');
@@ -141,19 +143,20 @@ export class UserService {
     user: PublicUser;
     accessToken: string;
     accessTokenExpiresAt: number;
+    resourceToken: string;
+    resourceTokenExpiresAt: number;
     refreshToken: string;
     refreshTokenExpiresAt: number;
   }> {
     const row = this.db.get<UserRow>('SELECT * FROM users WHERE username = ? COLLATE NOCASE', username.trim());
     // Always run a hash comparison so a missing user and a wrong password take
     // comparable time and cannot be distinguished by timing.
-    const ok = row
-      ? await verifyPassword(password, row.password_hash)
-      : await verifyPassword(password, 'scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAA');
+    const ok = await this.passwordWork.run(() => verifyPassword(password, row?.password_hash ?? 'scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAA'));
     if (!row || !ok) throw unauthorized('invalid username or password', 'BAD_CREDENTIALS');
     if (row.disabled === 1) throw forbidden('account disabled', 'ACCOUNT_DISABLED');
 
     const access = signAccessToken(this.config, { id: row.id, role: row.role, authVersion: row.auth_version ?? 0 });
+    const resource = signResourceToken(this.config, { id: row.id, role: row.role, authVersion: row.auth_version ?? 0 });
     const refresh = newRefreshToken();
     const refreshExpiresAt = Date.now() + this.config.refreshTokenTtl * 1000;
     this.db.run(
@@ -165,6 +168,8 @@ export class UserService {
       user: toPublicUser(row),
       accessToken: access.token,
       accessTokenExpiresAt: access.expiresAt,
+      resourceToken: resource.token,
+      resourceTokenExpiresAt: resource.expiresAt,
       refreshToken: refresh.token,
       refreshTokenExpiresAt: refreshExpiresAt,
     };
@@ -175,6 +180,8 @@ export class UserService {
     user: PublicUser;
     accessToken: string;
     accessTokenExpiresAt: number;
+    resourceToken: string;
+    resourceTokenExpiresAt: number;
     refreshToken: string;
     refreshTokenExpiresAt: number;
   }> {
@@ -192,6 +199,7 @@ export class UserService {
     this.db.run('UPDATE refresh_tokens SET revoked_at = ? WHERE id = ?', Date.now(), row.id);
 
     const access = signAccessToken(this.config, { id: user.id, role: user.role, authVersion: user.auth_version ?? 0 });
+    const resource = signResourceToken(this.config, { id: user.id, role: user.role, authVersion: user.auth_version ?? 0 });
     const next = newRefreshToken();
     const expiresAt = Date.now() + this.config.refreshTokenTtl * 1000;
     this.db.run(
@@ -203,6 +211,8 @@ export class UserService {
       user: toPublicUser(user),
       accessToken: access.token,
       accessTokenExpiresAt: access.expiresAt,
+      resourceToken: resource.token,
+      resourceTokenExpiresAt: resource.expiresAt,
       refreshToken: next.token,
       refreshTokenExpiresAt: expiresAt,
     };
@@ -223,13 +233,13 @@ export class UserService {
   async changePassword(userId: string, currentPassword: string, nextPassword: string): Promise<void> {
     const row = this.byId(userId);
     if (!row) throw notFound('user not found');
-    if (!(await verifyPassword(currentPassword, row.password_hash))) {
+    if (!(await this.passwordWork.run(() => verifyPassword(currentPassword, row.password_hash)))) {
       throw unauthorized('current password is incorrect', 'BAD_CREDENTIALS');
     }
     if (nextPassword.length < 8) throw conflict('password must be at least 8 characters', 'PASSWORD_TOO_SHORT');
     this.db.run(
       'UPDATE users SET password_hash = ?, auth_version = auth_version + 1, updated_at = ? WHERE id = ?',
-      await hashPassword(nextPassword), Date.now(), userId,
+      await this.passwordWork.run(() => hashPassword(nextPassword)), Date.now(), userId,
     );
     // A password change must invalidate every other device's session.
     this.revokeAll(userId);
@@ -251,7 +261,7 @@ export class UserService {
   async resetPassword(userId: string, password: string): Promise<void> {
     if (!this.byId(userId)) throw notFound('用户不存在');
     if (password.length < 8 || password.length > 1024) throw conflict('密码须为 8–1024 位','PASSWORD_TOO_SHORT');
-    const hash = await hashPassword(password);
+    const hash = await this.passwordWork.run(() => hashPassword(password));
     this.db.transaction(()=>{
       this.db.run('UPDATE users SET password_hash=?,auth_version=auth_version+1,updated_at=? WHERE id=?',hash,Date.now(),userId);
       this.revokeAll(userId);

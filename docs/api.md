@@ -69,6 +69,8 @@
 
 ## 认证
 
+认证请求超出频率或密码派生并发上限时返回 `429 AUTH_RATE_LIMITED` / `429 AUTH_BUSY`，并通过 `Retry-After` 指示最少等待秒数。客户端不应立即重试。
+
 ### `POST /auth/register` — 公开
 
 ```json
@@ -87,6 +89,7 @@
 { "user": { "id": "...", "username": "owner", "displayName": "图书馆长",
             "role": "admin", "createdAt": 1789537801289 },
   "session": { "user": {...}, "accessToken": "...", "accessTokenExpiresAt": 1789624201289,
+               "resourceToken": "...", "resourceTokenExpiresAt": 1789538701289,
                "refreshToken": "...", "refreshTokenExpiresAt": 1821073801289 } }
 ```
 
@@ -102,6 +105,8 @@
 `{ "refreshToken": "..." }` → 新的 `session`。
 
 **刷新令牌会轮转**：传入的那个立即作废。客户端必须持久化新的那个。
+
+登录、注册和刷新同时签发 `resourceToken`，最长有效期为 15 分钟，不超过访问令牌的有效期。它只允许通过 `resource_token` 查询参数访问本账号可读的书籍资源和 HTTP 朗读，不能用作普通 API 的 Bearer 凭据。客户端应依据 `resourceTokenExpiresAt` 提前刷新；旧服务端缺少这些字段时可回退到旧访问令牌。密码变更、账号停用和认证版本失效同样会撤销资源票据。
 
 ### `POST /auth/logout`
 
@@ -307,16 +312,16 @@ pdf / 单图没有独立目录，回落到 items。来源章节出版物（`chap
 所以服务端会说 `Accept-Ranges: none` 并回 200，让客户端能做计划，而不是付出一次它没
 预期到的下载。
 
-**子资源可以带 `?access_token=`。** 章节里的 `<img src>`、`<link href>` 是浏览器
+**子资源应携带 `?resource_token=`。** 为兼容旧客户端仍接受 `?access_token=`。章节里的 `<img src>`、`<link href>` 是浏览器
 自己发起的，没法带 `Authorization` 头。这类请求允许把令牌放进 query，
-但**仅限** `GET` + 下列端点：
+但**仅限** `GET` / `HEAD` + 下列端点：
 
 - `/api/v1/books/:id/assets`
 - `/api/v1/books/:id/cover`
 - `/api/v1/books/:id/content`
+- `/api/v1/tts`（HTTP 朗读）
 
-其他任何端点（含触发扫描、写元数据）都不接受 URL 里的令牌 —— URL 会进日志、
-进历史、进 `Referer`，能改状态的令牌不该走那条路。
+其他任何端点（含触发扫描、写元数据）都不接受 URL 里的令牌。短期资源票据不能访问一般 API，也不能修改状态。服务端请求日志不记录查询参数，并设置 `Referrer-Policy: no-referrer`；反向代理日志仍应另外配置凭据脱敏。
 
 **epub 章节返回的是重写过的 HTML。** 章节内的相对资源引用（`images/pic.png`）已经被
 服务端改写成指向本端点的绝对地址。客户端直接把 HTML 交给 WebView 即可，不需要自己
@@ -711,7 +716,7 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
   一个配错的 HTTP 朗读合成接口（指到一个网页）会以 200 返回 HTML，塞进 `<audio>` 里
   既没有声音也没有事件——这是最难排查的一种「成功」。
 - 这是唯一接受**查询串令牌**的接口之一（另一个是 `/books/:id/assets`、`/cover`、`/content`）：
-  `<audio src>` 无法携带 `Authorization` 头。因此它被精确地限制为 `GET /tts`，
+  `<audio src>` 无法携带 `Authorization` 头。优先使用短期只读 `resource_token`，兼容旧客户端的 `access_token`；查询串鉴权精确限制为 `GET/HEAD /tts`，
   能力查询 `/tts/voices` 不支持查询串令牌。
 - 响应带 `cache-control: private, no-store`，避免服务配置更新后继续使用旧音频；服务端按上游配置缓存合成结果，
   并用 `x-tts-cache: hit | miss` 标明本次是否命中缓存。
@@ -791,12 +796,12 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 ## 同步
 
-### `GET /sync?since=<ms>&bookId=<可选>`
+### `GET /sync?since=<cursor>&bookId=<可选>`
 
-`since` 是上次响应里的 `serverTime`（首次传 0）。
+`since` 是上次响应里的 `serverTime`（首次传 0）。`serverTime` 是服务端分配的单调递增同步游标，不应使用客户端时间或记录的 `updatedAt` 替代；密集写入时它可能领先于实际时钟。
 
 ```json
-{ "serverTime": 1789537864820,
+{ "serverTime": 1789537864820, "hasMore": false,
   "progress": [ { "bookId": "...", "locator": "epubcfi(/6/4!/4/2)", "percentage": 0.42,
                   "chapterTitle": "第七章", "device": "android-a", "updatedAt": 1000 } ],
   "notes": [ { "id": "...", "bookId": "...", "type": "highlight", "locator": "...",
@@ -804,7 +809,7 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
                "updatedAt": 1789537864623, "deleted": false } ] }
 ```
 
-**客户端必须保存返回的 `serverTime`**，下次带回来才能只拿增量。
+每页进度和笔记合计最多 5000 条。**客户端必须在应用本页后保存返回的 `serverTime`**；如果 `hasMore: true`，立即使用该游标继续拉取，直到 `hasMore: false`。旧客户端不识别 `hasMore` 时，也可以通过后续轮询取完剩余分页。记录的 `updatedAt` 仅用于冲突比较，离线写入仍会取得新的服务端游标。
 
 ### `POST /sync`
 
@@ -818,12 +823,12 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 两个数组至少给一个（都缺、或不是数组返回 `400 BAD_PAYLOAD`），总数上限 5000（超了返回 `400 BATCH_TOO_LARGE`）。
 
-`updatedAt` 是**客户端时钟**的毫秒时间戳，决定 LWW 谁赢。
+`updatedAt` 是**客户端时钟**的毫秒时间戳，决定 LWW 谁赢。即使上传的旧记录未赢得合并，服务端也会为本次写入发布新的同步游标，让增量响应包含合并后的权威记录，供客户端纠正本地状态。
 
-响应把合并后的当前状态（相当于 `since=0` 的全量拉取）一并返回，客户端不用再多发一次拉取：
+请求可以额外携带 `since`，使用上次响应中的 `serverTime`，让响应只返回该游标后的变更。省略时按 `since=0` 返回合并后的状态。响应同样分页，`hasMore: true` 时继续调用 `GET /sync`，不应重复推送整批数据：
 
 ```json
-{ "accepted": 1, "rejected": 0, "serverTime": 1789537864820,
+{ "accepted": 1, "rejected": 0, "serverTime": 1789537864820, "hasMore": false,
   "progress": [...], "notes": [...] }
 ```
 

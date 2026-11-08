@@ -120,6 +120,8 @@ export interface ProgressDto {
 
 export interface Session {
   accessToken: string;
+  resourceToken?: string;
+  resourceTokenExpiresAt?: number;
   refreshToken: string;
   accessTokenExpiresAt: number;
   refreshTokenExpiresAt: number;
@@ -280,9 +282,12 @@ export class ApiClient {
    * exists to avoid.
    */
   coverUrl(bookId: string): string {
-    const token = this.session?.accessToken;
+    const resource = this.session?.resourceToken && (this.session.resourceTokenExpiresAt ?? Infinity) > Date.now()
+      ? this.session.resourceToken : null;
+    const token = resource || this.session?.accessToken;
+    const parameter = resource ? 'resource_token' : 'access_token';
     const path = `/api/v1/books/${encodeURIComponent(bookId)}/cover`;
-    return this.url(token ? `${path}?access_token=${encodeURIComponent(token)}` : path);
+    return this.url(token ? `${path}?${parameter}=${encodeURIComponent(token)}` : path);
   }
 
   async shelf(params: { search?: string; page?: number; pageSize?: number } = {}): Promise<{
@@ -343,6 +348,9 @@ export class ApiClient {
   ): Promise<Response> {
     await this.acquire();
     try {
+      if (!options.anonymous && this.session?.resourceToken && (this.session.resourceTokenExpiresAt ?? Infinity) <= Date.now() + 5 * 60_000) {
+        await this.refresh();
+      }
       const response = await this.send(method, path, options);
       if (response.status !== 401 || options.anonymous) {
         if (!response.ok) throw await toApiError(response);

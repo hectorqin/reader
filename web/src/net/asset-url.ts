@@ -22,13 +22,6 @@
  * the other half of the arrangement — it is an allowlist, not a blanket rule, so
  * a leaked URL cannot trigger a scan or write metadata.
  *
- * Tokens in URLs do leak: into browser history, into a proxy's access log, into a
- * `Referer` header. Three things keep that acceptable here. Asset URLs are only
- * ever built for a document that is being displayed in the reading frame, never
- * for an outbound link. They are scoped to a single book and expire with the
- * access token. And the endpoint they reach serves immutable content addressed by
- * content hash — the worst a leaked URL gives away is a page of a book whose
- * reader already had it.
  */
 
 import type { ApiClient } from './api.ts';
@@ -47,8 +40,8 @@ import type { ApiClient } from './api.ts';
 export interface AssetSigning {
   /** The API's base, so a root-relative URL can be told from a foreign one. */
   baseUrl: string;
-  /** The access token, read at the moment the signer is built. */
-  accessToken: string;
+  accessToken: string | (() => string | null);
+  resourceToken?: string | (() => string | null);
 }
 
 /**
@@ -86,16 +79,21 @@ export interface AssetSigning {
  * about which URLs are real.
  */
 export function makeAssetSigner(api: AssetSigning): ((url: string) => string | null) | null {
-  const token = api.accessToken;
-  if (!token) return null;
+  const readToken = (value: AssetSigning['accessToken'] | undefined) => typeof value === 'function' ? value() : value;
+  if (!readToken(api.resourceToken) && !readToken(api.accessToken)) return null;
   return (url) => {
     if (!isApiAsset(url, api.baseUrl) || hasToken(url)) return null;
-    return appendToken(url, token);
+    const resource = readToken(api.resourceToken);
+    const token = resource || readToken(api.accessToken);
+    return token ? appendToken(url, token, resource ? 'resource_token' : 'access_token') : null;
   };
 }
 
 export function withAssetToken(html: string, api: ApiClient): string {
-  const token = api.currentSession?.accessToken;
+  const session = api.currentSession;
+  const resource = session?.resourceToken && (session.resourceTokenExpiresAt ?? Infinity) > Date.now() ? session.resourceToken : null;
+  const token = resource || session?.accessToken;
+  const parameter = resource ? 'resource_token' : 'access_token';
   if (!token) return html;
 
   const parser = new DOMParser();
@@ -113,7 +111,7 @@ export function withAssetToken(html: string, api: ApiClient): string {
       const value = element.getAttribute(attribute);
       if (!value || !isApiAsset(value, api.baseUrl)) continue;
       if (hasToken(value)) continue;
-      element.setAttribute(attribute, appendToken(value, token));
+      element.setAttribute(attribute, appendToken(value, token, parameter));
       touched = true;
     }
   }
@@ -122,7 +120,7 @@ export function withAssetToken(html: string, api: ApiClient): string {
   for (const element of Array.from(doc.querySelectorAll('[style]'))) {
     const value = element.getAttribute('style');
     if (!value) continue;
-    const rewritten = rewriteCssUrls(value, api.baseUrl, token);
+    const rewritten = rewriteCssUrls(value, api.baseUrl, token, parameter);
     if (rewritten !== value) {
       element.setAttribute('style', rewritten);
       touched = true;
@@ -131,7 +129,7 @@ export function withAssetToken(html: string, api: ApiClient): string {
   for (const style of Array.from(doc.querySelectorAll('style'))) {
     const value = style.textContent;
     if (!value) continue;
-    const rewritten = rewriteCssUrls(value, api.baseUrl, token);
+    const rewritten = rewriteCssUrls(value, api.baseUrl, token, parameter);
     if (rewritten !== value) {
       style.textContent = rewritten;
       touched = true;
@@ -156,20 +154,20 @@ function isApiAsset(value: string, base: string): boolean {
 }
 
 function hasToken(value: string): boolean {
-  return value.includes('access_token=');
+  return value.includes('access_token=') || value.includes('resource_token=');
 }
 
-function appendToken(value: string, token: string): string {
+function appendToken(value: string, token: string, parameter = 'access_token'): string {
   const [path, fragment] = splitFragment(value);
   const separator = path.includes('?') ? '&' : '?';
-  return `${path}${separator}access_token=${encodeURIComponent(token)}${fragment}`;
+  return `${path}${separator}${parameter}=${encodeURIComponent(token)}${fragment}`;
 }
 
 /** Rewrite `url(...)` inside a CSS string, leaving anything else untouched. */
-function rewriteCssUrls(css: string, base: string, token: string): string {
+function rewriteCssUrls(css: string, base: string, token: string, parameter = 'access_token'): string {
   return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (full, quote: string, value: string) => {
     if (!isApiAsset(value, base) || hasToken(value)) return full;
-    return `url(${quote}${appendToken(value, token)}${quote})`;
+    return `url(${quote}${appendToken(value, token, parameter)}${quote})`;
   });
 }
 

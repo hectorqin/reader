@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { AppError } from '../lib/errors.ts';
+import { AppError, RateLimitError } from '../lib/errors.ts';
 
 /**
  * Single error serialiser. Responses intentionally keep the same shape across
@@ -8,6 +8,7 @@ import { AppError } from '../lib/errors.ts';
 export function registerErrorHandler(app: FastifyInstance): void {
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
+      if (error instanceof RateLimitError) reply.header('retry-after', error.retryAfter);
       reply.status(error.statusCode).send({ error: { code: error.code, message: error.message } });
       return;
     }

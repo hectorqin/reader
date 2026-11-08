@@ -761,6 +761,8 @@ export class ReaderScreen {
     let failure = '';
     const engine = createSpeechEngine({ kind, baseUrl: this.options.api.baseUrl,
       accessToken: () => this.options.api.currentSession()?.accessToken ?? null,
+      resourceToken: () => this.options.api.currentSession()?.resourceToken ?? null,
+      prepareRequest: () => this.prepareSpeechRequest(),
       nativeBridge: this.options.speechBridge ?? null,
       onError: message => { failure = message; this.flashStatus(message, 6000); },
     });
@@ -1068,6 +1070,13 @@ export class ReaderScreen {
     void this.renderToc();
   }
 
+  private prepareSpeechRequest(): Promise<void> | void {
+    const session = this.options.api.currentSession();
+    if (session && Math.min(session.accessTokenExpiresAt, session.resourceTokenExpiresAt ?? Infinity) <= Date.now() + 5 * 60_000) {
+      return this.options.api.renewSessionIfNeeded();
+    }
+  }
+
   /**
    * Builds the view, the gestures and the key bindings against the stage.
    *
@@ -1083,14 +1092,10 @@ export class ReaderScreen {
     this.view?.dispose();
     if (!this.doc) return;
     const doc = this.doc;
-    // The token the browser cannot attach for itself. Built once per view rather
-    // than per chapter: the reader's session does not change while a book is open,
-    // and a signer that read the token lazily would have to be rebuilt whenever one
-    // arrived — which is a second lifecycle to keep in step with the first.
-    const token = this.options.api.currentSession()?.accessToken;
     const signAssetUrl = makeAssetSigner({
       baseUrl: this.options.api.baseUrl,
-      ...(token ? { accessToken: token } : { accessToken: '' }),
+      accessToken: () => this.options.api.currentSession()?.accessToken ?? null,
+      resourceToken: () => this.options.api.currentSession()?.resourceToken ?? null,
     });
     this.view = new ReaderView({
       onSelection: (anchor, rect) => {
@@ -1938,6 +1943,8 @@ export class ReaderScreen {
       kind,
       baseUrl: this.options.api.baseUrl,
       accessToken: () => this.options.api.currentSession()?.accessToken ?? null,
+      resourceToken: () => this.options.api.currentSession()?.resourceToken ?? null,
+      prepareRequest: () => this.prepareSpeechRequest(),
       nativeBridge: this.options.speechBridge ?? null,
       onError: (message) => this.flashStatus(message, 3200),
     });

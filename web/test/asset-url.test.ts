@@ -20,7 +20,26 @@ before(() => {
   g.document = dom.window.document;
 });
 
-const { withAssetToken } = await import('../src/net/asset-url.ts');
+const { withAssetToken, makeAssetSigner } = await import('../src/net/asset-url.ts');
+
+test('asset signing uses resource tickets and reads rotations lazily', () => {
+  let resource = 'resource-first';
+  const signer = makeAssetSigner({ baseUrl: '', accessToken: 'private-access', resourceToken: () => resource })!;
+  assert.equal(signer('/api/v1/books/book/assets?ref=image#cover'), '/api/v1/books/book/assets?ref=image&resource_token=resource-first#cover');
+  resource = 'resource-next';
+  assert.match(signer('/api/v1/books/book/assets?ref=image')!, /resource_token=resource-next/);
+  assert.equal(signer('https://foreign.test/api/v1/books/book/assets?ref=image'), null);
+  assert.equal(signer('/api/v1/books/book/assets?resource_token=existing'), null);
+});
+
+test('chapter markup prefers resource tickets for attributes and CSS', () => {
+  const api = { baseUrl: '', currentSession: { accessToken: 'private-access', resourceToken: 'readonly-ticket' } } as unknown as ApiClient;
+  const html = '<html xmlns="http://www.w3.org/1999/xhtml"><head><style>p{background:url(/api/v1/books/book/assets?ref=background)}</style></head><body><img src="/api/v1/books/book/assets?ref=image"/></body></html>';
+  const signed = withAssetToken(html, api);
+  assert.equal((signed.match(/resource_token=readonly-ticket/g) ?? []).length, 2);
+  assert.ok(!signed.includes('private-access'));
+  assert.equal(withAssetToken(signed, api), signed);
+});
 
 function client(token: string | null, baseUrl = ''): ApiClient {
   return {

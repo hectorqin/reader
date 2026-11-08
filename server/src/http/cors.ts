@@ -27,8 +27,8 @@ export function resolveCorsOrigin(config: AppConfig, request: FastifyRequest): s
 
   if (config.corsOrigins.includes(origin)) return origin;
 
-  const proto = (String(request.headers['x-forwarded-proto'] ?? request.protocol ?? 'http').split(',')[0] ?? '').trim();
-  const host = (String(request.headers['x-forwarded-host'] ?? request.headers.host ?? '').split(',')[0] ?? '').trim();
+  const proto = request.protocol ?? 'http';
+  const host = request.host ?? request.headers.host;
   if (host && origin === `${proto}://${host}`) return origin;
 
   // `file://` requests arrive with the literal origin "null". The Android shell
@@ -51,8 +51,8 @@ export function isOriginAllowed(config: AppConfig, request: FastifyRequest): boo
   // sharing its persisted settings with another hostname. Treat that request
   // as same-origin even when the stored allowlist belongs to the other host.
   // Reverse proxies provide the public scheme/host through these headers.
-  const proto = (String(request.headers['x-forwarded-proto'] ?? request.protocol ?? 'http').split(',')[0] ?? '').trim();
-  const host = (String(request.headers['x-forwarded-host'] ?? request.headers.host ?? '').split(',')[0] ?? '').trim();
+  const proto = request.protocol ?? 'http';
+  const host = request.host ?? request.headers.host;
   if (host && origin === `${proto}://${host}`) return true;
   return config.corsOrigins.includes(origin) || (origin === 'null' && config.corsOrigins.includes('null'));
 }

@@ -5,7 +5,7 @@ import { unauthorized } from '../lib/errors.ts';
 export interface TokenPayload {
   sub: string;
   role: 'admin' | 'member';
-  type: 'access';
+  type: 'access' | 'resource';
   iat: number;
   exp: number;
   ver?: number;
@@ -21,9 +21,25 @@ export function signAccessToken(
   config: AppConfig,
   user: { id: string; role: 'admin' | 'member'; authVersion?: number },
 ): { token: string; expiresAt: number } {
+  return signToken(config, user, 'access', config.accessTokenTtl);
+}
+
+export function signResourceToken(
+  config: AppConfig,
+  user: { id: string; role: 'admin' | 'member'; authVersion?: number },
+): { token: string; expiresAt: number } {
+  return signToken(config, user, 'resource', Math.min(config.accessTokenTtl, 15 * 60));
+}
+
+function signToken(
+  config: AppConfig,
+  user: { id: string; role: 'admin' | 'member'; authVersion?: number },
+  type: TokenPayload['type'],
+  ttl: number,
+): { token: string; expiresAt: number } {
   const issuedAt = Math.floor(Date.now() / 1000);
-  const expiresAt = issuedAt + config.accessTokenTtl;
-  const payload: TokenPayload = { sub: user.id, role: user.role, type: 'access', iat: issuedAt, exp: expiresAt, ver: user.authVersion ?? 0 };
+  const expiresAt = issuedAt + ttl;
+  const payload: TokenPayload = { sub: user.id, role: user.role, type, iat: issuedAt, exp: expiresAt, ver: user.authVersion ?? 0 };
   const header = base64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
   const body = base64url(JSON.stringify(payload));
   const signature = sign(config.jwtSecret, `${header}.${body}`);
@@ -31,6 +47,14 @@ export function signAccessToken(
 }
 
 export function verifyAccessToken(config: AppConfig, token: string): TokenPayload {
+  return verifyToken(config, token, 'access');
+}
+
+export function verifyResourceToken(config: AppConfig, token: string): TokenPayload {
+  return verifyToken(config, token, 'resource');
+}
+
+function verifyToken(config: AppConfig, token: string, type: TokenPayload['type']): TokenPayload {
   const parts = token.split('.');
   if (parts.length !== 3) throw unauthorized('malformed token', 'TOKEN_INVALID');
   const [header, body, signature] = parts as [string, string, string];
@@ -46,7 +70,7 @@ export function verifyAccessToken(config: AppConfig, token: string): TokenPayloa
   } catch {
     throw unauthorized('bad token payload', 'TOKEN_INVALID');
   }
-  if (payload.type !== 'access') throw unauthorized('wrong token type', 'TOKEN_INVALID');
+  if (!payload || typeof payload.sub !== 'string' || payload.type !== type || !Number.isSafeInteger(payload.exp)) throw unauthorized('wrong token type or payload', 'TOKEN_INVALID');
   if (payload.exp * 1000 <= Date.now()) throw unauthorized('token expired', 'TOKEN_EXPIRED');
   return payload;
 }

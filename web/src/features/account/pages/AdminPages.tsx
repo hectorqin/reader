@@ -33,5 +33,5 @@ export function AdminServicesPage() {
   const media=useMediaEnabled();
   const state=useAuthStore(store=>(store.verifiedUser??store.session?.user)?.mediaState);
   const labels={disabled:'已关闭',stopping:'正在停止',starting:'正在启动',ready:'已就绪',failed:'启动失败，请检查服务日志',closed:'已停止'};
-  return <AdminFrame title="服务配置"><div className="user-management"><p role="status">影音服务：{state?labels[state]:'状态待确认'}</p><BusinessSettings api={runtime.api} showMedia={media} onSaved={()=>void runtime.refreshCapabilities().catch(()=>undefined)} /></div></AdminFrame>;
+  return <AdminFrame title="服务配置"><div className="user-management"><BusinessSettings api={runtime.api} showMedia={media} modulesStatus={<p role="status">影音服务：{state?labels[state]:'状态待确认'}</p>} onSaved={()=>void runtime.refreshCapabilities().catch(()=>undefined)} /></div></AdminFrame>;
 }

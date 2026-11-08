@@ -2,6 +2,7 @@ import {Readable} from 'node:stream';
 import type {FastifyInstance} from 'fastify';
 import type {MediaRuntime} from '../../media/runtime.ts';
 import {AppError} from '../../lib/errors.ts';
+import {requestLogPath} from '../request-log.ts';
 
 /** Streaming bridge. No media database connection or synchronous work in the reading host. */
 export function registerMediaProxy(app:FastifyInstance,runtime:Pick<MediaRuntime,'request'|'close'>):void {
@@ -39,7 +40,7 @@ export function registerMediaProxy(app:FastifyInstance,runtime:Pick<MediaRuntime
       return reply.send(stream);
     }catch(error){
       release();
-      request.log.error({err:error,path:request.raw.url,method:request.method},'media proxy request failed');
+      request.log.error({errorName:error instanceof Error?error.name:'Error',code:error instanceof AppError?error.code:undefined,path:requestLogPath(request.raw.url??''),method:request.method},'media proxy request failed');
       if(error instanceof AppError)throw error;
       throw new AppError(503,'MEDIA_REQUEST_UNCERTAIN','影音请求未完成；写入结果请查询后确认');
     }

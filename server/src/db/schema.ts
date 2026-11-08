@@ -23,6 +23,34 @@ ALTER TABLE book_files ADD COLUMN parse_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE books ADD COLUMN content_hash_kind TEXT NOT NULL DEFAULT 'file';
 ALTER TABLE chapter_resources ADD COLUMN media_type TEXT NOT NULL DEFAULT 'text/plain';
 ALTER TABLE user_books ADD COLUMN reading_status TEXT;
+ALTER TABLE reading_progress ADD COLUMN sync_revision INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE notes ADD COLUMN sync_revision INTEGER NOT NULL DEFAULT 0;
+`;
+
+export const SYNC_TRACKING_SQL = `
+CREATE TABLE IF NOT EXISTS sync_clock (
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  revision INTEGER NOT NULL
+);
+INSERT OR IGNORE INTO sync_clock(id, revision) VALUES(1, 0);
+CREATE INDEX IF NOT EXISTS idx_progress_sync ON reading_progress(user_id, sync_revision);
+CREATE INDEX IF NOT EXISTS idx_notes_sync ON notes(user_id, sync_revision);
+${[
+  { table: 'reading_progress', key: 'user_id = NEW.user_id AND book_id = NEW.book_id', fields: ['locator', 'percentage', 'chapter_title', 'device', 'updated_at'] },
+  { table: 'notes', key: 'id = NEW.id', fields: ['type', 'locator', 'text', 'comment', 'color', 'updated_at', 'deleted'] },
+].map(({ table, key, fields }) => `
+CREATE TRIGGER IF NOT EXISTS ${table}_sync_insert AFTER INSERT ON ${table}
+BEGIN
+  UPDATE sync_clock SET revision = MAX(revision + 1, CAST(unixepoch('subsec') * 1000 AS INTEGER)) WHERE id = 1;
+  UPDATE ${table} SET sync_revision = (SELECT revision FROM sync_clock WHERE id = 1) WHERE ${key};
+END;
+CREATE TRIGGER IF NOT EXISTS ${table}_sync_update AFTER UPDATE OF ${fields.join(', ')} ON ${table}
+BEGIN
+  UPDATE sync_clock SET revision = MAX(revision + 1, CAST(unixepoch('subsec') * 1000 AS INTEGER)) WHERE id = 1;
+  UPDATE ${table} SET sync_revision = (SELECT revision FROM sync_clock WHERE id = 1) WHERE ${key};
+END;
+UPDATE ${table} SET updated_at = updated_at WHERE sync_revision = 0;
+`).join('\n')}
 `;
 
 export const SCHEMA_SQL = `

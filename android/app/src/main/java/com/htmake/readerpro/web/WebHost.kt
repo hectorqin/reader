@@ -1,5 +1,8 @@
 package com.htmake.readerpro.web
 
+import java.net.URI
+import java.util.Locale
+
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -163,7 +166,7 @@ class WebHost(
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
             val url = request.url.toString()
-            if (isInternalUrl(url)) return false
+            if (isInternalUrl(url, request.isForMainFrame)) return false
             openExternally(url)
             return true
         }
@@ -217,13 +220,13 @@ class WebHost(
  * images and stylesheets out of the in-memory resource map; letting it be treated
  * as external would break every illustrated book.
  */
-internal fun isInternalUrl(url: String): Boolean {
-    val internalPrefixes = listOf(
-        WebHost.ASSET_ORIGIN,
-        "reader-res:",
-        "blob:",
-        "data:",
-        "about:",
-    )
-    return internalPrefixes.any { url.startsWith(it) }
+internal fun isInternalUrl(url: String, isMainFrame: Boolean = true): Boolean {
+    val uri = runCatching { URI(url) }.getOrNull() ?: return false
+    return when (uri.scheme?.lowercase(Locale.ROOT)) {
+        "https" -> uri.host.equals(WebHost.ASSET_HOST, ignoreCase = true) &&
+            uri.rawUserInfo == null && (uri.port == -1 || uri.port == 443) &&
+            uri.rawPath.orEmpty().startsWith("/assets/")
+        "reader-res", "blob", "data", "about" -> !isMainFrame
+        else -> false
+    }
 }
