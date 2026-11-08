@@ -1,7 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 import type { AppConfig } from '../config/index.ts';
-import { MIGRATIONS_SQL, SCHEMA_SQL } from './schema.ts';
+import { MIGRATIONS_SQL, SCHEMA_SQL, SYNC_TRACKING_SQL } from './schema.ts';
 
 /**
  * Thin wrapper over the built-in node:sqlite driver.
@@ -22,6 +22,7 @@ export class Db {
     this.raw.exec('PRAGMA foreign_keys = ON;');
     this.raw.exec(SCHEMA_SQL);
     this.applyMigrations();
+    this.transaction(() => this.raw.exec(SYNC_TRACKING_SQL));
   }
 
   /**

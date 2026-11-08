@@ -16,7 +16,8 @@ test('admin users, persisted registration policy, bounded invites and immediate 
   const db=new Db(join(root,'data','reader.db')),users=new UserService(db,config);
   const app=buildApp({db,config,users} as AppContext);
   t.after(async()=>{await app.close();db.close();await rm(root,{recursive:true,force:true});});
-  const register=(username:string,inviteCode?:string)=>app.inject({method:'POST',url:'/api/v1/auth/register',payload:{username,password:'password123',inviteCode}});
+  let registrationClient=0;
+  const register=(username:string,inviteCode?:string)=>app.inject({method:'POST',url:'/api/v1/auth/register',remoteAddress:`192.0.2.${++registrationClient}`,payload:{username,password:'password123',inviteCode}});
   const first=await register('owner');assert.equal(first.statusCode,201);
   const owner=first.json().session,headers={authorization:'Bearer '+owner.accessToken};
   const setting=(mode:string)=>app.inject({method:'PATCH',url:'/api/v1/admin/registration',headers,payload:{mode}});

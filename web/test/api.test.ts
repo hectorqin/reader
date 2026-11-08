@@ -50,6 +50,32 @@ function client(): ApiClient {
 }
 
 describe('api client', () => {
+  test('cover URLs prefer resource credentials and fall back after resource expiry', async () => {
+    const api = client();
+    responder = () => json({ accessToken: 'access', resourceToken: 'resource', resourceTokenExpiresAt: Date.now() + 60_000 });
+    await api.login('reader', 'password');
+    assert.equal(new URL(api.coverUrl('book')).searchParams.get('resource_token'), 'resource');
+    responder = () => json({ accessToken: 'access', resourceToken: 'expired', resourceTokenExpiresAt: Date.now() - 1 });
+    await api.login('reader', 'password');
+    const url = new URL(api.coverUrl('book'));
+    assert.equal(url.searchParams.get('access_token'), 'access');
+    assert.equal(url.searchParams.has('resource_token'), false);
+  });
+
+  test('refreshes resource credentials proactively while the access token is valid', async () => {
+    const api = client();
+    responder = url => {
+      if (url.includes('/auth/login')) return json({ accessToken: 'access', resourceToken: 'old', resourceTokenExpiresAt: 0, refreshToken: 'refresh' });
+      if (url.includes('/auth/refresh')) return json({ accessToken: 'renewed', resourceToken: 'new', resourceTokenExpiresAt: Date.now() + 900_000 });
+      return json({ items: [] });
+    };
+    await api.login('reader', 'password');
+    await api.shelf();
+    assert.equal(api.currentSession?.resourceToken, 'new');
+    assert.equal(calls.filter(call => call.url.includes('/auth/refresh')).length, 1);
+    assert.equal((calls.at(-1)!.init.headers as Record<string, string>).authorization, 'Bearer renewed');
+  });
+
   test('a 401 is retried once after a refresh, and the new token is used', async () => {
     const api = client();
     responder = (url) => {

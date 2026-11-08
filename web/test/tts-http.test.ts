@@ -63,6 +63,8 @@ function makeEngine(options: {
   chunks: string[][];
   baseUrl?: string;
   token?: string | null;
+  resourceToken?: string;
+  prepareRequest?: () => Promise<void> | void;
   playFails?: boolean;
 }): { engine: HttpTtsEngine; audios: FakeAudio[]; spoken: string[]; errors: string[] } {
   const audios: FakeAudio[] = [];
@@ -73,6 +75,8 @@ function makeEngine(options: {
   const engine = new HttpTtsEngine({
     baseUrl: options.baseUrl ?? 'http://nas.local:8080',
     accessToken: () => options.token ?? null,
+    resourceToken: () => options.resourceToken ?? null,
+    ...(options.prepareRequest ? { prepareRequest: options.prepareRequest } : {}),
     createAudio: () => {
       const audio = new FakeAudio();
       audios.push(audio);
@@ -112,6 +116,13 @@ it('uses the current configured waiting limit for each sentence',async()=>{
 });
 
 describe('HttpTtsEngine', () => {
+  it('uses resource tickets for audio URLs without exposing the access token', async () => {
+    const { engine, audios } = makeEngine({ chunks: [['只读语音']], token: 'private-access', resourceToken: 'readonly-ticket' });
+    await engine.play(0);
+    expect(audios[0]!.src).toContain('resource_token=readonly-ticket');
+    expect(audios[0]!.src).not.toContain('private-access');
+    engine.stop();
+  });
   it('asks the server one sentence at a time, with the token in the query', async () => {
     const { engine, audios } = makeEngine({ chunks: [['第一句。', '第二句。']], token: 'tok-123' });
 
@@ -199,6 +210,53 @@ describe('HttpTtsEngine', () => {
     const { engine, errors } = makeEngine({ chunks: [['一。']], baseUrl: '' });
     await engine.play(0);
     expect(errors.length).toBeGreaterThan(0);
+    expect(engine.active).toBe(false);
+  });
+
+  it('renews resource credentials before starting the next sentence', async () => {
+    let finishRenewal!: () => void;
+    const options = {
+      chunks: [['一。', '二。']], resourceToken: 'old-resource',
+      prepareRequest: () => new Promise<void>(resolve => { finishRenewal = resolve; }),
+    };
+    const { engine, audios } = makeEngine(options);
+    await engine.play(0);
+    expect(audios).toHaveLength(0);
+    options.resourceToken = 'new-resource';
+    finishRenewal();
+    await Promise.resolve();
+    expect(audios).toHaveLength(1);
+    expect(new URL(audios[0]!.src).searchParams.get('resource_token')).toBe('new-resource');
+    audios[0]!.fire('ended');
+    expect(audios).toHaveLength(1);
+    finishRenewal();
+    await Promise.resolve();
+    expect(audios).toHaveLength(2);
+    engine.dispose();
+  });
+
+  it('does not start stale playback after stopping during credential renewal', async () => {
+    let finishRenewal!: () => void;
+    const { engine, audios } = makeEngine({
+      chunks: [['一。']],
+      prepareRequest: () => new Promise<void>(resolve => { finishRenewal = resolve; }),
+    });
+    await engine.play(0);
+    engine.stop();
+    finishRenewal();
+    await Promise.resolve();
+    expect(audios).toHaveLength(0);
+    expect(engine.active).toBe(false);
+  });
+
+  it('reports credential renewal failures without playing expired audio', async () => {
+    const { engine, audios, errors } = makeEngine({
+      chunks: [['一。']], prepareRequest: () => Promise.reject(new Error('offline')),
+    });
+    await engine.play(0);
+    await Promise.resolve();
+    expect(audios).toHaveLength(0);
+    expect(errors).toContain('朗读凭据续期失败，请重试');
     expect(engine.active).toBe(false);
   });
 

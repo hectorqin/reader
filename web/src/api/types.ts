@@ -11,6 +11,8 @@ export interface Session {
   user: User;
   accessToken: string;
   accessTokenExpiresAt: number;
+  resourceToken?: string;
+  resourceTokenExpiresAt?: number;
   refreshToken: string;
   refreshTokenExpiresAt: number;
 }
@@ -209,6 +211,7 @@ export interface Note {
 
 export interface SyncPull {
   serverTime: number;
+  hasMore?: boolean;
   progress: Progress[];
   notes: Note[];
 }

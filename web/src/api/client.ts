@@ -179,7 +179,7 @@ export class ReaderApi {
 
   /** Renew before expiry; transient failures leave the persisted login intact. */
   async renewSessionIfNeeded(): Promise<void> {
-    if (!this.session || this.session.accessTokenExpiresAt > Date.now() + 5 * 60_000) return;
+    if (!this.session || Math.min(this.session.accessTokenExpiresAt, this.session.resourceTokenExpiresAt ?? Infinity) > Date.now() + 5 * 60_000) return;
     await this.refreshSession(this.sessionGeneration);
   }
 
@@ -710,7 +710,7 @@ export class ReaderApi {
   }
 
   async push(
-    payload: { progress?: ProgressInput[]; notes?: NoteInput[] },
+    payload: { progress?: ProgressInput[]; notes?: NoteInput[]; since?: number },
     options: RequestOptions = {},
   ): Promise<SyncPushResult> {
     return this.call<SyncPushResult>('/api/v1/sync', 'POST', payload, options);

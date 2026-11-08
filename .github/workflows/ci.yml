@@ -122,7 +122,7 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: platform-tools platforms;android-35 build-tools;35.0.1
-      - run: ./gradlew --no-daemon :app:assembleDebug
+      - run: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
         working-directory: android
       - uses: actions/upload-artifact@v4
         with:

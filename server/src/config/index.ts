@@ -15,6 +15,7 @@ export interface AppConfig {
   /** Writable directory owned by this server. Never inside booksDir. */
   dataDir: string;
   host: string;
+  trustProxy?: false | string[];
   port: number;
   /** Persistent token signing secret, auto generated on first boot if absent. */
   jwtSecret: string;
@@ -112,10 +113,14 @@ export function loadConfig(): AppConfig {
   }
   mkdirSync(dataDir, { recursive: true });
 
+  const proxy = process.env.TRUST_PROXY?.trim();
+  if (proxy === 'true') throw new Error('TRUST_PROXY must list trusted proxy IPs or CIDRs, not true');
+
   return {
     booksDir,
     dataDir,
     host: process.env.HOST ?? '0.0.0.0',
+    trustProxy: proxy && proxy !== 'false' ? proxy.split(',').map(value => value.trim()).filter(Boolean) : false,
     port: envInt('PORT', 5888),
     jwtSecret: loadOrCreateSecret(dataDir),
     accessTokenTtl: envInt('ACCESS_TOKEN_TTL', 60 * 60 * 24 * 7),

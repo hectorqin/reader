@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '../context.ts';
 import { authenticate, currentUser } from '../auth.ts';
 import { badRequest } from '../../lib/errors.ts';
-import type { NoteRecord, ProgressRecord } from '../../services/sync.ts';
+import { validateSyncRecord, type NoteRecord, type ProgressRecord } from '../../services/sync.ts';
 
 export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void {
   const auth = authenticate(ctx);
@@ -15,8 +15,8 @@ export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void 
   app.get('/api/v1/sync', { preHandler: auth }, async (request) => {
     const user = currentUser(request);
     const q = request.query as { since?: string; bookId?: string };
-    const since = q.since ? Number.parseInt(q.since, 10) : 0;
-    if (!Number.isFinite(since) || since < 0) throw badRequest('since must be a non-negative integer');
+    const since = q.since ? Number(q.since) : 0;
+    if (!Number.isSafeInteger(since) || since < 0) throw badRequest('since must be a non-negative integer');
     return ctx.sync.pull(user.id, since, q.bookId);
   });
 
@@ -26,7 +26,9 @@ export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void 
    */
   app.post('/api/v1/sync', { preHandler: auth }, async (request) => {
     const user = currentUser(request);
-    const body = (request.body ?? {}) as { progress?: unknown; notes?: unknown };
+    const body = (request.body ?? {}) as { progress?: unknown; notes?: unknown; since?: unknown };
+    const since = body.since ?? 0;
+    if (typeof since !== 'number' || !Number.isSafeInteger(since) || since < 0) throw badRequest('since must be a non-negative integer');
     // Validate the shape explicitly. Iterating a non-array would otherwise walk
     // a string character by character and report nonsense rejections.
     if (body.progress !== undefined && !Array.isArray(body.progress)) {
@@ -46,7 +48,7 @@ export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void 
     const result = ctx.sync.push(user.id, { progress, notes });
     // Returning the merged state lets the client reconcile in the same round
     // trip instead of issuing a follow-up pull.
-    return { ...result, ...ctx.sync.pull(user.id, 0, undefined), accepted: result.accepted, rejected: result.rejected };
+    return { ...result, ...ctx.sync.pull(user.id, since, undefined) };
   });
 
   app.get('/api/v1/sync/progress/:bookId', { preHandler: auth }, async (request) => {
@@ -66,6 +68,7 @@ export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void 
     const user = currentUser(request);
     const { bookId } = request.params as { bookId: string };
     const body = (request.body ?? {}) as Partial<ProgressRecord>;
+    validateSyncRecord(body);
     ctx.sync.push(user.id, {
       progress: [{
         bookId,
@@ -82,14 +85,16 @@ export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void 
   app.get('/api/v1/notes', { preHandler: auth }, async (request) => {
     const user = currentUser(request);
     const q = request.query as { bookId?: string; since?: string };
-    const since = q.since ? Number.parseInt(q.since, 10) : 0;
-    const pulled = ctx.sync.pull(user.id, since, q.bookId);
-    return { notes: pulled.notes.filter((n) => !n.deleted), serverTime: pulled.serverTime };
+    const since = q.since ? Number(q.since) : 0;
+    if (!Number.isSafeInteger(since) || since < 0) throw badRequest('since must be a non-negative integer');
+    const pulled = ctx.sync.pull(user.id, since, q.bookId, false);
+    return { notes: pulled.notes.filter((n) => !n.deleted), serverTime: pulled.serverTime, hasMore: pulled.hasMore };
   });
 
   app.post('/api/v1/notes', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request);
     const body = (request.body ?? {}) as Partial<NoteRecord>;
+    validateSyncRecord(body);
     if (!body.bookId) throw badRequest('bookId is required');
     const note: NoteRecord = {
       id: body.id ?? crypto.randomUUID(),

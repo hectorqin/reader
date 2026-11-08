@@ -631,6 +631,70 @@ describe('SyncEngine', () => {
     expect(pulls[1]!.url).toContain('since=777');
   });
 
+  it('drains paginated pulls before declaring sync complete', async () => {
+    const { api, transport, offline, engine } = build();
+    transport.json(SESSION);
+    await api.login('me', 'password12');
+    await offline.load();
+    transport.respondWith(request => ({ status: 200, headers: {}, json: request.url.includes('since=0')
+      ? { serverTime: 10, hasMore: true, progress: [], notes: [{ id: 'first', bookId: 'b', type: 'note', locator: '', text: 'one', comment: '', color: '', updatedAt: 1 }] }
+      : { serverTime: 20, hasMore: false, progress: [], notes: [{ id: 'second', bookId: 'b', type: 'note', locator: '', text: 'two', comment: '', color: '', updatedAt: 1 }] },
+    }));
+    await engine.syncNow();
+    expect(offline.current.serverTime).toBe(20);
+    expect(Object.keys(offline.current.notes).sort()).toEqual(['first', 'second']);
+    const pulls = transport.requests.filter(request => request.url.includes('/sync?'));
+    expect(pulls.map(request => request.url.split('?')[1])).toEqual(['since=0', 'since=10']);
+    expect(engine.status().state).toBe('idle');
+  });
+
+  it('uses a push cursor and drains the rest of its merged response', async () => {
+    const { api, transport, offline, engine, platform } = build();
+    transport.json(SESSION);
+    await api.login('me', 'password12');
+    await offline.load();
+    await offline.applyPulled({ serverTime: 5, progress: [], notes: [] });
+    await offline.setProgress({ bookId: 'b', locator: 'new', percentage: 0.5, chapterTitle: '', device: platform.deviceLabel, updatedAt: 1 });
+    transport.respondWith(request => ({ status: 200, headers: {}, json: request.method === 'POST'
+      ? { accepted: 1, rejected: 0, serverTime: 10, hasMore: true, progress: [], notes: [] }
+      : { serverTime: 20, hasMore: false, progress: [], notes: [{ id: 'last', bookId: 'b', type: 'note', locator: '', text: 'last', comment: '', color: '', updatedAt: 1 }] },
+    }));
+    await engine.syncNow();
+    const push = transport.requests.find(request => request.url.endsWith('/sync') && request.method === 'POST')!;
+    expect(JSON.parse(bodyText(push)).since).toBe(5);
+    expect(offline.current.serverTime).toBe(20);
+    expect(offline.current.notes['last']?.text).toBe('last');
+    expect(isOutboxEmpty(offline.current)).toBe(true);
+  });
+
+  it('stops paginated sync if the server repeats its cursor', async () => {
+    const { api, transport, offline, engine } = build();
+    transport.json(SESSION);
+    await api.login('me', 'password12');
+    await offline.load();
+    transport.json({ serverTime: 10, hasMore: true, progress: [], notes: [] });
+    await engine.syncNow();
+    expect(engine.status().state).toBe('error');
+    expect(transport.requests.filter(request => request.url.includes('/sync?'))).toHaveLength(2);
+  });
+
+  it('retries a failed page from the last persisted cursor', async () => {
+    const { api, transport, offline, engine } = build();
+    transport.json(SESSION);
+    await api.login('me', 'password12');
+    await offline.load();
+    transport.respondWith(request => {
+      if (request.url.includes('since=0')) return { status: 200, headers: {}, json: { serverTime: 10, hasMore: true, progress: [], notes: [] } };
+      throw new Error('offline');
+    });
+    await engine.syncNow();
+    expect(offline.current.serverTime).toBe(10);
+    transport.json({ serverTime: 20, hasMore: false, progress: [], notes: [] });
+    await engine.syncNow();
+    expect(transport.requests.at(-1)!.url).toContain('since=10');
+    expect(offline.current.serverTime).toBe(20);
+  });
+
   it('degrades to offline without surfacing an error', async () => {
     const { api, transport, offline, engine, platform } = build();
     transport.json(SESSION);

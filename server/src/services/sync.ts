@@ -15,6 +15,11 @@ import type { BookDto, ShelfService } from './shelf.ts';
 const HISTORY_KEEP = 50;
 const HISTORY_SESSION_MS = 30 * 60 * 1000;
 const HISTORY_JUMP = 0.05;
+const SYNC_PAGE_SIZE = 5000;
+const SYNC_STRING_LIMITS: Record<string, number> = {
+  id: 16_384, bookId: 16_384, locator: 65_536, chapterTitle: 4096,
+  device: 1024, type: 32, text: 1_048_576, comment: 1_048_576, color: 100,
+};
 
 export interface ProgressRecord {
   bookId: string;
@@ -43,6 +48,25 @@ export interface NoteRecord {
 export interface SyncPushRequest {
   progress?: ProgressRecord[];
   notes?: NoteRecord[];
+}
+
+export interface SyncPullResult {
+  serverTime: number;
+  hasMore: boolean;
+  progress: ProgressRecord[];
+  notes: NoteRecord[];
+}
+
+export function validateSyncRecord(value: unknown): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw badRequest('sync records must be objects', 'BAD_PAYLOAD');
+  const record = value as Record<string, unknown>;
+  for (const [field, limit] of Object.entries(SYNC_STRING_LIMITS)) {
+    const fieldValue = record[field];
+    if (fieldValue !== undefined && (typeof fieldValue !== 'string' || fieldValue.length > limit)) throw badRequest(`invalid ${field}`, 'BAD_PAYLOAD');
+  }
+  if (record.updatedAt !== undefined && (typeof record.updatedAt !== 'number' || !Number.isSafeInteger(record.updatedAt) || record.updatedAt < 0)) throw badRequest('invalid updatedAt', 'BAD_PAYLOAD');
+  if (record.percentage !== undefined && (typeof record.percentage !== 'number' || !Number.isFinite(record.percentage))) throw badRequest('invalid percentage', 'BAD_PAYLOAD');
+  if (record.deleted !== undefined && typeof record.deleted !== 'boolean') throw badRequest('invalid deleted', 'BAD_PAYLOAD');
 }
 
 /**
@@ -89,10 +113,11 @@ export class SyncService {
   push(userId: string, payload: SyncPushRequest): { accepted: number; rejected: number } {
     let accepted = 0;
     let rejected = 0;
+    for (const item of [...(payload.progress ?? []), ...(payload.notes ?? [])]) validateSyncRecord(item);
 
     this.db.transaction(() => {
       for (const item of payload.progress ?? []) {
-        if (!item.bookId || typeof item.updatedAt !== 'number') {
+        if (!item || typeof item.bookId !== 'string' || !item.bookId || !Number.isSafeInteger(item.updatedAt) || item.updatedAt < 0) {
           rejected += 1;
           continue;
         }
@@ -100,7 +125,7 @@ export class SyncService {
         accepted += 1;
       }
       for (const item of payload.notes ?? []) {
-        if (!item.bookId || !item.id) {
+        if (!item || typeof item.bookId !== 'string' || !item.bookId || typeof item.id !== 'string' || !item.id) {
           rejected += 1;
           continue;
         }
@@ -208,34 +233,40 @@ export class SyncService {
   }
 
   /** Everything changed strictly after `since`, for the client's catch-up. */
-  pull(userId: string, since: number, bookId?: string): {
-    serverTime: number;
-    progress: ProgressRecord[];
-    notes: NoteRecord[];
-  } {
-    const progressRows = this.db.all<{
+  pull(userId: string, since: number, bookId?: string, includeProgress = true): SyncPullResult {
+    return this.db.transaction(() => this.pullPage(userId, since, bookId, includeProgress));
+  }
+
+  private pullPage(userId: string, since: number, bookId: string | undefined, includeProgress: boolean): SyncPullResult {
+    this.db.run('UPDATE sync_clock SET revision = MAX(revision, ?) WHERE id = 1', Date.now());
+    const watermark = this.db.get<{ revision: number }>('SELECT revision FROM sync_clock WHERE id = 1')!.revision;
+    const progressRows = includeProgress ? this.db.all<{
       book_id: string; locator: string; percentage: number; chapter_title: string;
-      device: string; updated_at: number;
+      device: string; updated_at: number; sync_revision: number;
     }>(
-      `SELECT book_id, locator, percentage, chapter_title, device, updated_at
-       FROM reading_progress WHERE user_id = ? AND updated_at > ? ${bookId ? 'AND book_id = ?' : ''}
-       ORDER BY updated_at ASC LIMIT 5000`,
+      `SELECT book_id, locator, percentage, chapter_title, device, updated_at, sync_revision
+       FROM reading_progress WHERE user_id = ? AND sync_revision > ? ${bookId ? 'AND book_id = ?' : ''}
+       ORDER BY sync_revision ASC LIMIT ${SYNC_PAGE_SIZE + 1}`,
       ...(bookId ? [userId, since, bookId] : [userId, since]),
-    );
+    ) : [];
 
     const noteRows = this.db.all<{
       id: string; book_id: string; type: string; locator: string; text: string;
-      comment: string; color: string; updated_at: number; deleted: number;
+      comment: string; color: string; updated_at: number; deleted: number; sync_revision: number;
     }>(
-      `SELECT id, book_id, type, locator, text, comment, color, updated_at, deleted
-       FROM notes WHERE user_id = ? AND updated_at > ? ${bookId ? 'AND book_id = ?' : ''}
-       ORDER BY updated_at ASC LIMIT 5000`,
+      `SELECT id, book_id, type, locator, text, comment, color, updated_at, deleted, sync_revision
+       FROM notes WHERE user_id = ? AND sync_revision > ? ${bookId ? 'AND book_id = ?' : ''}
+       ORDER BY sync_revision ASC LIMIT ${SYNC_PAGE_SIZE + 1}`,
       ...(bookId ? [userId, since, bookId] : [userId, since]),
     );
 
+    const revisions = [...progressRows, ...noteRows].map(row => row.sync_revision).sort((left, right) => left - right);
+    const hasMore = revisions.length > SYNC_PAGE_SIZE;
+    const serverTime = hasMore ? revisions[SYNC_PAGE_SIZE - 1]! : Math.max(since, watermark);
     return {
-      serverTime: Date.now(),
-      progress: progressRows.map((row) => ({
+      serverTime,
+      hasMore,
+      progress: progressRows.filter(row => row.sync_revision <= serverTime).map((row) => ({
         bookId: row.book_id,
         locator: row.locator,
         percentage: row.percentage,
@@ -243,7 +274,7 @@ export class SyncService {
         device: row.device,
         updatedAt: row.updated_at,
       })),
-      notes: noteRows.map((row) => ({
+      notes: noteRows.filter(row => row.sync_revision <= serverTime).map((row) => ({
         id: row.id,
         bookId: row.book_id,
         type: row.type as NoteRecord['type'],

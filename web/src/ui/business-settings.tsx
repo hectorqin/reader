@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useState } from 'react';
 import {FloatingNotice} from './floating-notice.tsx';
 import { ConfirmSheet } from './sheet.tsx';
 import '../styles/business-settings.css';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 
 export interface SettingsTransport {
   businessSettingsRequest<T>(path?:string,method?:string,body?:unknown,signal?:AbortSignal):Promise<T>;
@@ -13,7 +13,7 @@ interface SettingsView {
   group:string;label:string;revision:number;values:Record<string,string|number|boolean>;secrets:Record<string,boolean>;
   fields:Array<{key:string;label:string;type:'text'|'textarea'|'password'|'number'|'checkbox'|'url'|'select';min?:number;max?:number;help?:string;options?:Array<{value:string;label:string}>}>;
 }
-export function BusinessSettings({api,group,onSaved,selectControl,showMedia=true}:{api:SettingsTransport;group?:string;onSaved?:()=>void;selectControl?:any;showMedia?:boolean}){
+export function BusinessSettings({api,group,onSaved,selectControl,showMedia=true,modulesStatus}:{api:SettingsTransport;group?:string;onSaved?:()=>void;selectControl?:any;showMedia?:boolean;modulesStatus?:ReactNode}){
   const Select=selectControl??'select';
   const [groups,setGroups]=useState<SettingsView[]>([]),[selected,setSelected]=useState(group||'tts');
   const [values,setValues]=useState<Record<string,string|number|boolean>>({}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[retry,setRetry]=useState(0);
@@ -43,6 +43,7 @@ export function BusinessSettings({api,group,onSaved,selectControl,showMedia=true
     {!group&&<label className="user-manager-mode">配置分类<Select aria-label="配置分类" value={selected} disabled={busy} onChange={(event:ChangeEvent<HTMLSelectElement>)=>setSelected(event.currentTarget.value)}>{visibleGroups.map(item=><option key={item.group} value={item.group}>{item.label}</option>)}</Select></label>}
     {!current&&!busy&&<button onClick={()=>setRetry(value=>value+1)}>重新读取配置</button>}
     {current&&<>
+      {selected==='modules'&&modulesStatus}
       <p className="muted">{selected==='modules'?'保存后立即生效，无需重启。关闭影音将停止播放及后台任务，保留全部影音数据。':'保存后生效，无需重启。进行中的任务保留原配置，新任务使用更新后的配置。'}</p>
       <form className="user-manager-form" onSubmit={event=>{event.preventDefault();if(selected==='modules'&&current.values.mediaEnabled&&!values.mediaEnabled)setConfirmMedia(true);else save();}}>
         {current.fields.filter(field=>showMedia||!(selected==='scanning'&&(/^(media|libraries$|files$)/.test(field.key)))&&!(selected==='ai'&&['scanEnabled','scanPrompt','batchSize'].includes(field.key))).map(field=><label key={field.key} className={field.type==='checkbox'?'business-setting-toggle':undefined}>{field.label}

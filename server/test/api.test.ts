@@ -373,6 +373,52 @@ test('malformed and oversized sync payloads are rejected cleanly', async () => {
   assert.equal((res.json() as { error: { code: string } }).error.code, 'BATCH_TOO_LARGE');
 });
 
+test('malformed authentication and sync fields return client errors', async () => {
+  const owner = await login('owner');
+  const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;
+  for (const payload of [
+    { username: {}, password: 'password123' },
+    { username: 'owner', password: [] },
+    { username: 'owner', password: 'x'.repeat(1025) },
+  ]) {
+    const response = await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload });
+    assert.equal(response.statusCode, 400);
+  }
+  for (const action of ['refresh', 'logout']) {
+    const response = await app.inject({ method: 'POST', url: `/api/v1/auth/${action}`, payload: { refreshToken: {} } });
+    assert.equal(response.statusCode, 400);
+  }
+  for (const payload of [
+    { progress: [null] },
+    { progress: [{ bookId: book.id, updatedAt: 1, locator: {} }] },
+    { notes: [{ bookId: book.id, id: 'invalid-note', deleted: 'false' }] },
+    { since: -1, progress: [] },
+  ]) {
+    const response = await app.inject({ method: 'POST', url: '/api/v1/sync', headers: auth(owner.token), payload });
+    assert.equal(response.statusCode, 400);
+  }
+  for (const since of ['123oops', '-1', '1.5', '9007199254740992']) {
+    const response = await app.inject({ method: 'GET', url: `/api/v1/sync?since=${since}`, headers: auth(owner.token) });
+    assert.equal(response.statusCode, 400);
+  }
+});
+
+test('sync pushes return only changes after the supplied server cursor', async () => {
+  const owner = await login('owner');
+  const before = await app.inject({ method: 'GET', url: '/api/v1/sync?since=0', headers: auth(owner.token) });
+  const since = (before.json() as { serverTime: number }).serverTime;
+  const book = ctx.db.get<{ id: string }>('SELECT id FROM books')!;
+  const response = await app.inject({
+    method: 'POST', url: '/api/v1/sync', headers: auth(owner.token),
+    payload: { since, notes: [{ id: 'delta-note', bookId: book.id, text: 'delta', updatedAt: 1 }] },
+  });
+  assert.equal(response.statusCode, 200);
+  const result = response.json() as { notes: Array<{ id: string }>; progress: unknown[]; hasMore: boolean };
+  assert.deepEqual(result.notes.map(note => note.id), ['delta-note']);
+  assert.equal(result.progress.length, 0);
+  assert.equal(result.hasMore, false);
+});
+
 test('a tampered token is refused', async () => {
   // Use the member token: forging admin onto an already-admin token would
   // re-serialise to the identical string and prove nothing.
@@ -1014,6 +1060,23 @@ test('a volume archive beside volume folders stays on the shelf and serves its p
       /^image\//,
       `${file.rel_path} came back as ${String(res.headers['content-type'])}`,
     );
+  }
+});
+
+test('rate-limited authentication retains CORS and retry metadata', async () => {
+  for (let index = 0; index <= 60; index++) {
+    const response = await app.inject({
+      method: 'POST', url: '/api/v1/auth/login', remoteAddress: '192.0.2.99',
+      headers: { origin: 'https://reader-client.test' },
+      payload: { username: `missing-rate-user-${index}`, password: 'wrong-password' },
+    });
+    assert.equal(response.statusCode, index < 60 ? 401 : 429);
+    if (index === 60) {
+      assert.equal(response.headers['access-control-allow-origin'], 'https://reader-client.test');
+      assert.match(String(response.headers['access-control-expose-headers']), /retry-after/);
+      assert.equal(response.headers['referrer-policy'], 'no-referrer');
+      assert.ok(Number(response.headers['retry-after']) > 0);
+    }
   }
 });
 

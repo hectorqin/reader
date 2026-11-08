@@ -21,7 +21,8 @@ test('10,000 indexed books keep shelf queries paginated and incremental sync bou
   assert.equal(shelf.list('u',{search:'b09999'}).items.length,1);
   const queryMs=performance.now()-query,sync=new SyncService(db,shelf),syncStart=performance.now();
   sync.push('u',{progress:[{bookId:'b09999',locator:'r1:0:s',percentage:0,chapterTitle:'s',device:'test',updatedAt:10}]});
-  assert.equal(sync.pull('u',9).progress.length,1);assert.equal(sync.pull('u',10).progress.length,0);
+  const pulled=sync.pull('u',0);
+  assert.equal(pulled.progress.length,1);assert.equal(sync.pull('u',pulled.serverTime).progress.length,0);
   t.diagnostic(JSON.stringify({rows:10000,seedMs:Math.round(seedMs),threeQueriesMs:Math.round(queryMs),syncMs:Math.round(performance.now()-syncStart)}));
  }finally{db.close();}
 });

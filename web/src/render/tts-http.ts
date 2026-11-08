@@ -57,6 +57,8 @@ export interface HttpTtsOptions {
   baseUrl: string;
   /** Bearer token; sent as a query parameter, see the note above. */
   accessToken: () => string | null;
+  resourceToken?: () => string | null;
+  prepareRequest?: () => Promise<void> | void;
   /** Injectable for tests: the element factory, so no audio device is needed. */
   createAudio?: () => HTMLAudioElement;
   /** Injectable for tests. */
@@ -285,6 +287,19 @@ export class HttpTtsEngine {
    */
   private speakNext(): void {
     if (this.state !== 'playing') return;
+    const generation = ++this.generation;
+    const preparation = this.options.prepareRequest?.();
+    if (preparation) {
+      void preparation.then(() => this.playNext(generation), () => {
+        if (generation === this.generation && this.state === 'playing') this.fail('朗读凭据续期失败，请重试');
+      });
+      return;
+    }
+    this.playNext(generation);
+  }
+
+  private playNext(generation: number): void {
+    if (generation !== this.generation || this.state !== 'playing') return;
     const nextIndex = this.cursor + 1;
     const text = this.queue[nextIndex];
     if (text === undefined) {
@@ -294,7 +309,6 @@ export class HttpTtsEngine {
     this.cursor = nextIndex;
     this.emit();
 
-    const generation = this.generation;
     const url = this.buildUrl('/api/v1/tts', {
       text,
       ...(this.voiceId ? { voice: this.voiceId } : {}),
@@ -440,8 +454,9 @@ export class HttpTtsEngine {
     const base = this.options.baseUrl.replace(/\/+$/, '');
     if (!base) return null;
     const query = new URLSearchParams(params);
-    const token = this.options.accessToken();
-    if (token) query.set('access_token', token);
+    const resource = this.options.resourceToken?.();
+    const token = resource || this.options.accessToken();
+    if (token) query.set(resource ? 'resource_token' : 'access_token', token);
     const suffix = query.size > 0 ? `?${query.toString()}` : '';
     return `${base}${path}${suffix}`;
   }

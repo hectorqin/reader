@@ -4,28 +4,23 @@ import { MediaCatalogPage } from '../../features/media/pages/MediaCatalogPage.ts
 import { MediaSearchPage } from '../../features/media/pages/MediaSearchPage.tsx';
 import { MediaFavoritesPage } from '../../features/media/pages/MediaFavoritesPage.tsx';
 import { MediaHistoryPage } from '../../features/media/pages/MediaHistoryPage.tsx';
-import { MediaDetailPage } from '../../features/media/pages/MediaDetailPage.tsx';
 import { MediaQueuePage } from '../../features/media/pages/MediaQueuePage.tsx';
-import { MediaPlayerPage } from '../../features/media/pages/MediaPlayerPage.tsx';
 import { RouteErrorBoundary } from './error-boundary.tsx';
 import { ShelfPage } from '../../features/shelf/pages/ShelfPage.tsx';
-import { LibraryPage, LibraryBrowsePage, LibraryFilesPage } from '../../features/library/pages/LibraryPage.tsx';
-import { SourcesPage } from '../../features/sources/pages/SourcesPage.tsx';
 import { MinePage } from '../../features/account/pages/MinePage.tsx';
 import { LegacySettingsRedirect, SettingsPage } from '../../features/account/pages/SettingsPage.tsx';
 import { AccountPage, OpdsPage } from '../../features/account/pages/AccountPages.tsx';
 import { HomePage } from '../../features/home/pages/HomePage.tsx';
 import { SearchPage } from '../../features/search/pages/SearchPage.tsx';
-import { MediaFoldersPage } from '../../features/media/pages/MediaFoldersPage.tsx';
-import { MediaNarratorsPage } from '../../features/media/pages/MediaNarratorsPage.tsx';
 import {
   ReaderPage,
   MediaLibrariesPage, MediaLibraryCreatePage, MediaLibraryEditPage, MediaLibraryPermissionsPage, MediaTasksPage,
   MediaMetadataEditPage, MediaMatchPage, MediaChaptersPage, MediaEditionPage, MediaStructurePage,
   SourceEditorPage, SourceCredentialsPage, SourceExtensionPage, StatsPage,
   AdminUsersPage, AdminRegistrationPage, AdminServicesPage,
+  MediaDetailPage, MediaPlayerPage, MediaFoldersPage, MediaNarratorsPage,
+  LibraryPage, LibraryBrowsePage, LibraryFilesPage, SourcesPage, SourceCatalogPage,
 } from './lazy-pages.tsx';
-import { SourceCatalogPage } from '../../features/sources/pages/SourceCatalogPage.tsx';
 
 export const routes = [{
   path: '/', element: <AppShell />, errorElement: <RouteErrorBoundary />, children: [
@@ -106,5 +101,4 @@ export const routes = [{
     { path: '*', element: <Navigate to="/" replace /> },
   ],
 }] satisfies RouteObject[];
-
 

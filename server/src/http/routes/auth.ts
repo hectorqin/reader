@@ -54,20 +54,21 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext): void 
 
   app.post('/api/v1/auth/login', async (request) => {
     const body = (request.body ?? {}) as Credentials;
-    if (!body.username || !body.password) throw badRequest('username and password are required');
+    if (typeof body.username !== 'string' || !body.username || body.username.length > 100 || typeof body.password !== 'string' || !body.password || body.password.length > 1024) throw badRequest('valid username and password are required');
     const session = await ctx.users.login(body.username, body.password, request.headers['user-agent'] ?? '');
     return session;
   });
 
   app.post('/api/v1/auth/refresh', async (request) => {
     const body = (request.body ?? {}) as { refreshToken?: string };
-    if (!body.refreshToken) throw badRequest('refreshToken is required');
+    if (typeof body.refreshToken !== 'string' || !body.refreshToken || body.refreshToken.length > 4096) throw badRequest('valid refreshToken is required');
     return ctx.users.refresh(body.refreshToken);
   });
 
   app.post('/api/v1/auth/logout', async (request) => {
     const body = (request.body ?? {}) as { refreshToken?: string };
     // Logout is idempotent: a client that is already signed out must not error.
+    if (body.refreshToken !== undefined && (typeof body.refreshToken !== 'string' || body.refreshToken.length > 4096)) throw badRequest('valid refreshToken is required');
     if (body.refreshToken) ctx.users.revokeByToken(body.refreshToken);
     return { ok: true };
   });
@@ -82,7 +83,7 @@ export function registerAuthRoutes(app: FastifyInstance, ctx: AppContext): void 
   app.post('/api/v1/auth/password', { preHandler: authenticateFn }, async (request) => {
     const user = currentUser(request);
     const body = (request.body ?? {}) as { currentPassword?: string; newPassword?: string };
-    if (!body.currentPassword || !body.newPassword) throw badRequest('currentPassword and newPassword are required');
+    if (typeof body.currentPassword !== 'string' || !body.currentPassword || body.currentPassword.length > 1024 || typeof body.newPassword !== 'string' || !body.newPassword || body.newPassword.length > 1024) throw badRequest('valid currentPassword and newPassword are required');
     await ctx.users.changePassword(user.id, body.currentPassword, body.newPassword);
     return { ok: true };
   });

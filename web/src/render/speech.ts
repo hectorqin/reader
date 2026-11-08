@@ -119,6 +119,8 @@ export interface SpeechFactoryOptions {
   kind: Exclude<SpeechEngineKind, 'auto'>;
   baseUrl: string;
   accessToken: () => string | null;
+  resourceToken?: () => string | null;
+  prepareRequest?: () => Promise<void> | void;
   nativeBridge: NativeSpeechBridge | null;
   /** System-engine injection points, forwarded for tests. */
   synthesis?: SpeechSynthesis | null;
@@ -158,6 +160,8 @@ export function createSpeechEngine(options: SpeechFactoryOptions): SpeechEngine 
         ...(options.httpTimeoutMs?{requestTimeoutMs:options.httpTimeoutMs}:{}),
         baseUrl: options.baseUrl,
         accessToken: options.accessToken,
+        ...(options.resourceToken ? { resourceToken: options.resourceToken } : {}),
+        ...(options.prepareRequest ? { prepareRequest: options.prepareRequest } : {}),
         ...(options.onError ? { onError: options.onError } : {}),
       });
       return new HttpTtsAdapter(engine);

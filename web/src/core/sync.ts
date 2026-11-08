@@ -279,10 +279,16 @@ export class SyncEngine {
       // pull is the real work — that is the poll's whole purpose.
       const pushed = await this.pushOutbox(run);
       this.assertCurrent(run);
-      const pull = pushed ?? (await this.api.pull(this.offline.current.serverTime, undefined, { signal: run.signal }));
-      this.assertCurrent(run);
-      await this.offline.applyPulled(pull);
-      this.assertCurrent(run);
+      let pull = pushed ?? (await this.api.pull(this.offline.current.serverTime, undefined, { signal: run.signal }));
+      for (;;) {
+        this.assertCurrent(run);
+        await this.offline.applyPulled(pull);
+        this.assertCurrent(run);
+        if (!pull.hasMore) break;
+        const cursor = pull.serverTime;
+        pull = await this.api.pull(cursor, undefined, { signal: run.signal });
+        if (pull.serverTime <= cursor && pull.hasMore) throw new ApiError('server', '同步分页游标没有前进', 'INVALID_SYNC_CURSOR');
+      }
       this.rememberNoteBooks();
 
       this.backoff = RETRY_BASE_MS;
@@ -359,6 +365,7 @@ export class SyncEngine {
       const progressChunk = batch.progress.slice(offset, offset + CHUNK);
       const noteChunk = notes.slice(offset, offset + CHUNK);
       const result = await this.api.push({
+        since: this.offline.current.serverTime,
         ...(progressChunk.length > 0 ? { progress: progressChunk } : {}),
         ...(noteChunk.length > 0 ? { notes: noteChunk } : {}),
       }, { signal: run.signal });
