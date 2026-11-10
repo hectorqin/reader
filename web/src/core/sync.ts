@@ -1,4 +1,4 @@
-import { ApiError } from '../api/errors.ts';
+import { ApiError, describeError } from '../api/errors.ts';
 import type { ReaderApi, NoteInput } from '../api/client.ts';
 import type { SyncPull } from '../api/types.ts';
 import { isOutboxEmpty, type OfflineStore } from '../store/offline.ts';
@@ -413,7 +413,7 @@ export class SyncEngine {
       this.setState('signed-out', '登录已失效，请重新登录');
       return;
     }
-    this.setState('error', err instanceof Error ? err.message : '同步失败');
+    this.setState('error', describeError(err, '同步失败，稍后会自动重试'));
     this.backoff = Math.min(this.backoff * 2, RETRY_MAX_MS);
     // `force`: an error's exponential backoff must be able to shorten a wait the
     // poll has already armed, or the first retry after a blip would be 30 seconds

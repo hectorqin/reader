@@ -86,3 +86,38 @@ export function parseErrorBody(raw: string): { code: string; message: string } {
   }
   return { code: '', message: raw.slice(0, 200) };
 }
+
+const HAS_CJK = /[一-鿿]/;
+
+const TEXT_BY_KIND: Record<ApiErrorKind, string> = {
+  offline: '连不上服务器，请检查网络和服务地址后重试',
+  unauthorized: '登录已失效，请重新登录',
+  forbidden: '当前账号没有权限执行这个操作',
+  not_found: '没有找到请求的内容，它可能已被移走或删除',
+  conflict: '内容已在别处被修改，请刷新后重试',
+  bad_request: '请求没有被服务器接受，请检查输入后重试',
+  server: '服务器出错了，请稍后重试',
+  aborted: '请求已取消',
+};
+
+/**
+ * The sentence a screen shows for a failure (docs/ui.md §4: say what happened).
+ *
+ * Messages come from three places — the server's own wording, the transport
+ * (`request failed with status 502`, a browser's `Failed to fetch`) and a
+ * proxy's error page — and only the first is written for a reader. A message
+ * with Chinese in it was written for the interface and is shown as is; anything
+ * else is a diagnostic, and the screen says what kind of failure it was instead.
+ * Connectivity failures always use our sentence: the browser's text for them is
+ * never useful and differs per engine.
+ */
+export function describeError(error: unknown, fallback = '出错了，请重试'): string {
+  if (error instanceof ApiError) {
+    if (error.code === 'TIMEOUT') return '请求超时，请检查网络后重试';
+    if (error.kind === 'offline' && error.code !== 'STREAM_INTERRUPTED') return TEXT_BY_KIND.offline;
+    if (HAS_CJK.test(error.message)) return error.message;
+    return TEXT_BY_KIND[error.kind];
+  }
+  if (error instanceof Error && HAS_CJK.test(error.message)) return error.message;
+  return fallback;
+}

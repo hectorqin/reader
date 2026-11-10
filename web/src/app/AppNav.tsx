@@ -54,7 +54,7 @@ export function AppNav({ mode }: { mode: Exclude<NavMode, 'hidden'> }) {
   return <nav className="app-nav" aria-label="主导航" data-mode={mode}>
     <Link className="app-nav-brand" to="/" aria-label="reader. 首页">reader.</Link>
     {/* Desktop only: one search across books and media (the page is /search). */}
-    <form className="app-nav-search" role="search" onSubmit={search}>
+    <form className="app-nav-search" role="search" onSubmit={search} hidden={pathname === '/search'}>
       <Icon name="search" size={16} />
       <input type="search" aria-label={media?'搜索书籍和影音':'搜索书籍'} placeholder={media?'搜索书籍和影音':'搜索书籍'} value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} />
     </form>
@@ -76,7 +76,7 @@ export function AppNav({ mode }: { mode: Exclude<NavMode, 'hidden'> }) {
         </li>;
       })}
     </ul>
-    {user && <Link className="app-nav-user" to="/me" aria-label={`我的账号：${name}，${connection.label}`}>
+    {user && <Link className="app-nav-user" to={connection.state === 'online' ? '/me' : '/me/account'} aria-label={`我的账号：${name}，${connection.label}`}>
       <span className="app-nav-avatar" aria-hidden="true">{Array.from(name)[0]}</span>
       <span className="app-nav-user-text"><strong>{name}</strong><small title={host(runtime.api.baseUrl)}><i className="app-nav-status" data-state={connection.state} aria-hidden="true" />{connection.label}</small></span>
     </Link>}

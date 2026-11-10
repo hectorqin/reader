@@ -605,13 +605,6 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         onChange={(value) => handlers.onSetting({ mode: value as AppSettings['mode'] })}
       />
       : null}
-      <SectionTitle>翻页</SectionTitle>
-      <Button onClick={() => { handlers.onSetting({ pageAnimation: 'none', mode: 'paged' }); handlers.onTheme({ reading: 'gray', mode: 'light', theme: handlers.theme().app.theme }); }}>应用电纸书预设</Button>
-      <p className="muted">黑白灰浅色、分页、无翻页动画；仅保存到当前设备，可继续单独调整。屏幕刷新由设备控制。</p>
-      <TapZoneEditor
-        grid={normalizeTapZones(state.tapZones, state.tapZone)}
-        onChange={(tapZones) => handlers.onSetting({ tapZones })}
-      />
       <SegmentedRow
         label="翻页动画"
         options={[
@@ -647,10 +640,27 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
           onChange={(value) => handlers.onSetting({ comicDirection: value as AppSettings['comicDirection'] })}
         />
       ) : null}
+      {/* Set once, then left alone: the rows a reader changes between books stay on the
+          first screen, and these two open on demand (ui.md §3.10). */}
+      <FoldSection title="点击区域" hint={tapZonesAreDefault(state) ? '默认' : '已自定义'}>
+        <TapZoneEditor
+          grid={normalizeTapZones(state.tapZones, state.tapZone)}
+          onChange={(tapZones) => handlers.onSetting({ tapZones })}
+        />
+      </FoldSection>
+      <FoldSection title="电纸书预设" hint="黑白灰、分页、无动画">
+        <Button onClick={() => { handlers.onSetting({ pageAnimation: 'none', mode: 'paged' }); handlers.onTheme({ reading: 'gray', mode: 'light', theme: handlers.theme().app.theme }); }}>应用电纸书预设</Button>
+        <p className="muted">黑白灰浅色、分页、无翻页动画；仅保存到当前设备，可继续单独调整。屏幕刷新由设备控制。</p>
+      </FoldSection>
 
       </>}
     </>
   );
+}
+
+function tapZonesAreDefault(state: ChromeState): boolean {
+  const standard = tapZonePreset('standard');
+  return normalizeTapZones(state.tapZones, state.tapZone).every((action, index) => action === standard[index]);
 }
 
 /**
@@ -943,7 +953,7 @@ function TapZoneEditor({ grid, onChange }: { grid: TapZoneGrid; onChange(grid: T
   return (
     <section className="tap-zones" aria-label="点击区域设置">
       <div className="tap-zones-head">
-        <span className="tap-zones-title">点击区域</span>
+        <span className="tap-zones-title">每格的动作</span>
         <Button className="tap-zones-action" onClick={() => onChange(mirrored)}>左右互换</Button>
         <Button className="tap-zones-action" disabled={isDefault} onClick={() => onChange(tapZonePreset('standard'))}>恢复默认</Button>
       </div>

@@ -69,6 +69,8 @@
   .app-nav-status[data-state='error'] { background: var(--color-danger); }
   .app-nav-search { display: flex; align-items: center; gap: 8px; margin: 0 0 16px; padding: 0 12px; border-radius: var(--radius-md); background: var(--color-surface-2); color: var(--nav-muted); }
   .app-nav-search input { flex: 1; min-width: 0; height: 40px; border: 0; background: transparent; color: var(--nav-ink); font: inherit; font-size: var(--text-label); text-overflow: ellipsis; outline: none; }
+  /* On the search page the page's own field is the search; this one keeps its place and steps aside. */
+  .app-nav-search[hidden] { visibility: hidden; }
   .app-nav-search input::-webkit-search-cancel-button { display: none; }
   .app-nav-search:focus-within { box-shadow: 0 0 0 2px var(--nav-accent); }
   /* iOS zooms the page into any field under 16px when it is focused (it ignores

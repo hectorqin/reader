@@ -1,10 +1,13 @@
+import { FolderPicker, loadFolderChoices } from '../components/FolderPicker.tsx';
+import { describeError } from '../../../api/errors.ts';
 import { coverTint } from '../../../ui/cover-tint.ts';
 import { BookGridSkeleton } from '../../../ui/book-grid-skeleton.tsx';
 import { ActionMenu } from '../../../ui/action-menu.tsx';
 import { Callout, Icon } from '../../../ui/toolkit.tsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, Navigate, useSearchParams } from 'react-router-dom';
-import { useEffect, useState, type FormEvent } from 'react';
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useScrollMemory } from '../../../shared/ui/use-scroll-memory.ts';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Book, BrowseEntry } from '../../../api/types.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
@@ -43,7 +46,11 @@ export function LibraryBrowsePage() {
   // Only the crumbs and writability are read from the listing; it pages folders (200 a page), not books, so it stays on its first page.
   const listing = useQuery({ queryKey: ['library-browse', runtime.api.baseUrl, path], queryFn: ({ signal }) => runtime.api.browse(path, 1, { signal }) });
   const books = useQuery({ queryKey: ['library-books', runtime.api.baseUrl, 'browse', path, page, search], queryFn: ({ signal }) => runtime.api.listBooks({ scope: 'library', path, page, pageSize: 60, search, sort: 'title', order: 'asc' }, { signal }) });
-  const navigate = (nextPath: string, nextPage = 1, nextSearch = '', replace = false) => setParams({ ...(nextPath ? { path: nextPath } : {}), ...(nextSearch ? { q: nextSearch } : {}), ...(nextPage > 1 ? { page: String(nextPage) } : {}) }, { replace });
+  // Back from a book returns to the cover it was opened from; a folder, page or search
+  // chosen here is a new list.
+  const location = useLocation(); const body = useRef<HTMLElement>(null);
+  const skipRestore = useScrollMemory(body, (runtime.api.currentSession()?.user.id ?? '') + '\0' + location.pathname + location.search, books.data !== undefined, '.library-browse-body');
+  const navigate = (nextPath: string, nextPage = 1, nextSearch = '', replace = false) => { skipRestore(); setParams({ ...(nextPath ? { path: nextPath } : {}), ...(nextSearch ? { q: nextSearch } : {}), ...(nextPage > 1 ? { page: String(nextPage) } : {}) }, { replace }); };
   const [uploading, setUploading] = useState(false); const [feedback, setFeedback] = useState<{ text: string; error?: boolean } | null>(null);
   // Members add books here; everything else that touches files is the admin-only file manager.
   const upload = async (files: File[]) => { setFeedback(null); setUploading(true); try { const result = await runtime.api.upload(files, path, 'rename'); await Promise.all([queryClient.invalidateQueries({ queryKey: ['library-books'] }), queryClient.invalidateQueries({ queryKey: ['library-browse'] }), queryClient.invalidateQueries({ queryKey: ['shelf'] })]); setFeedback(describeUpload(result)); } catch (reason) { setFeedback({ text: reason instanceof Error ? reason.message : '上传失败，请重试', error: true }); } finally { setUploading(false); } };
@@ -59,13 +66,13 @@ export function LibraryBrowsePage() {
   return <div className="library-screen library-browse-screen">
     <CollectionHeader title="书库" subtitle="浏览本地书籍，发现下一本好书" backTo="/shelf" actions={role === 'admin' ? <Link className="button collection-link" to="/library/files"><Icon name="folder" size={18} /><span>文件管理</span><Icon name="chevron-right" /></Link> : uploadButton} />
     {listing.data && listing.data.crumbs.length > 1 && <div className="manager-crumbs library-path" aria-label="当前文件夹">{listing.data.crumbs.map((crumb, index) => <span key={`${crumb.path}-${index}`}>{index > 0 && <span className="manager-crumb-sep">/</span>}<button type="button" className="manager-crumb" onClick={() => navigate(crumb.path)}>{crumb.name}</button></span>)}</div>}
-    <main className="manager-body library-browse-body">
+    <main className="manager-body library-browse-body" ref={body}>
       <form className="shelf-search library-search" role="search" onSubmit={(event: FormEvent) => { event.preventDefault(); navigate(path, 1, draft.trim()); }}><Icon name="search" size={18} className="search-glyph" /><input type="search" aria-label="搜索书库" placeholder="在书库中搜索书名、作者" value={draft} onChange={event => setDraft(event.currentTarget.value)} />{draft && <button type="button" className="search-clear" aria-label="清除搜索" onClick={() => { setDraft(''); navigate(path); }}><Icon name="close" /></button>}</form>
       {/* The way into a folder: the books below are this folder's and everything under it,
           and each chip narrows the scope one level (the crumbs above widen it again). */}
       {folders.length > 0 && <nav className="library-folders" aria-label="子文件夹">{folders.map(folder => <button key={folder.path} type="button" className="chip" onClick={() => navigate(folder.path)}><Icon name="folder" size={14} />{folder.name}</button>)}</nav>}
       <FloatingNotice message={feedback?.text ?? ''} error={!!feedback?.error} kind="success" />
-      {books.isPending && <><FloatingNotice message="正在加载书库…" busy /><BookGridSkeleton className="library-browse-grid" density="cozy" /></>}{books.error && <Callout tone="error" title="书库加载失败" action={{ label: '重试', onClick: () => void books.refetch() }}>{books.error.message}</Callout>}
+      {books.isPending && <><FloatingNotice message="正在加载书库…" busy /><BookGridSkeleton className="library-browse-grid" density="cozy" /></>}{books.error && <Callout tone="error" title="书库加载失败" action={{ label: '重试', onClick: () => void books.refetch() }}>{describeError(books.error)}</Callout>}
       {empty && <div className="empty-state collection-empty"><Icon name="book" className="empty-glyph" /><p>{search ? '没有匹配的书' : '书库还没有书'}</p><p className="muted">{search ? '换个关键词，或者检查一下作者名的写法。' : role === 'admin' ? '前往文件管理添加书籍，再回到这里浏览。' : uploadAccess.data?.allowed ? '使用上方的上传书籍添加书籍，再回到这里浏览。' : '书库的书由管理员添加。'}</p><div className="empty-actions">{search ? <button type="button" className="button" onClick={() => { setDraft(''); navigate(path); }}>清除搜索</button> : role === 'admin' ? <Link className="button primary" to="/library/files"><Icon name="folder" size={16} />文件管理</Link> : null}</div></div>}
       {books.data && books.data.items.length > 0 && <div className="book-grid library-browse-grid" data-density="cozy" data-show-author="true">{books.data.items.map(book => <div className="book-card is-row" key={book.id}><Link className="book-open" to={`/book/${encodeURIComponent(book.id)}`} aria-label={`${book.title} ${book.author ?? ''}`}><Cover book={book} /><div className="title">{book.title || '未命名'}</div><div className="author">{book.author || '未知作者'}</div></Link>{book.shelfState === 'off' && <button type="button" className="book-shelve" aria-label={`把${book.title}加入书架`} disabled={busy === book.id} onClick={() => void toggle(book)}><Icon name="plus" />{SHELF_ACTION_LABELS.add}</button>}</div>)}</div>}
       {books.data && <div className="manager-status muted">{search ? `找到 ${count} 本` : `${count} 本 · 第 ${page} / ${pages} 页`}</div>}
@@ -122,7 +129,11 @@ function LibraryFilesAdminPage() {
   const confirm = (title: string, body: string) => new Promise<boolean>(resolve => setDialog({ kind: 'confirm', title, body, resolve }));
   const rename = async (entry: BrowseEntry) => { const name = (await prompt('重命名', entry.name))?.trim(); if (name && name !== entry.name) await mutate(() => runtime.api.browseRename(entry.path, name), () => ({ text: `已重命名为「${name}」` })); };
   const mkdir = async () => { const name = (await prompt('新建文件夹'))?.trim(); if (name) await mutate(() => runtime.api.browseMkdir(path, name), () => ({ text: `已新建文件夹「${name}」` })); };
-  const move = async (paths = selected) => { const target = await prompt('移动到（书库相对路径）', path); if (target !== null && paths.length) await mutate(() => runtime.api.browseMove(paths, target.trim()), result => ({ text: `已移动 ${result.moved} 项到「${result.target || '书库'}」` })); };
+  // The destination is picked by walking the library (FolderPicker), not typed as a path.
+  const [moving, setMoving] = useState<string[] | null>(null);
+  const move = (paths = selected) => { if (paths.length) setMoving(paths); };
+  const moveTo = (paths: string[], target: string) => { setMoving(null); void mutate(() => runtime.api.browseMove(paths, target), result => ({ text: `已移动 ${result.moved} 项到「${result.target || '书库'}」` })); };
+  const loadFolders = useCallback((folder: string, signal: AbortSignal) => loadFolderChoices((p, n, options) => runtime.api.browse(p, n, options), folder, signal), [runtime]);
   const remove = async (paths = selected) => { if (paths.length && await confirm(paths.length === 1 ? '删除' : `删除 ${paths.length} 项`, `${describePaths(paths)}将从磁盘上删除，无法撤销。`)) await mutate(() => runtime.api.browseDelete(paths), result => ({ text: `已删除 ${result.removed} 项` })); };
   const pages = query.data ? Math.max(1, Math.ceil(query.data.total / 200)) : 1;
   useEffect(() => { if (query.data && page > pages) setParams({ ...(path ? { path } : {}), ...(pages > 1 ? { page: String(pages) } : {}) }, { replace: true }); });
@@ -131,9 +142,9 @@ function LibraryFilesAdminPage() {
     <main className="manager-body">
       {selected.length > 0 && <div className="manager-actions"><span className="manager-selected-count">已选 {selected.length} 项</span><button type="button" className="button" onClick={() => void move()}>移动</button><button type="button" className="button danger" onClick={() => void remove()}>删除</button><button type="button" className="button" onClick={() => setSelected([])}>清除</button></div>}
       <FloatingNotice message={feedback?.text ?? ''} error={!!feedback?.error} kind="success" />
-      {query.isPending && <FloatingNotice message="正在读取文件列表…" busy />}{query.error && <Callout tone="error" title="文件列表加载失败" action={{ label: '重试', onClick: () => void query.refetch() }}>{query.error.message}</Callout>}
+      {query.isPending && <FloatingNotice message="正在读取文件列表…" busy />}{query.error && <Callout tone="error" title="文件列表加载失败" action={{ label: '重试', onClick: () => void query.refetch() }}>{describeError(query.error)}</Callout>}
       {query.data && <div className={'manager-list' + (selected.length ? ' selection-mode' : '')}>{query.data.entries.length === 0 ? <div className="empty-state collection-empty"><Icon name="folder" className="empty-glyph" /><p>这个文件夹是空的</p><p className="muted">{query.data.writable ? '使用上方的上传或新建文件夹，整理你的书库。' : '当前目录只读，可以浏览已有文件。'}</p></div> : query.data.entries.map(entry => { const checked = selected.includes(entry.path); return <div className="manager-row" data-type={entry.type} data-selected={checked ? 'true' : undefined} key={entry.path}><button type="button" className="manager-check" role="checkbox" aria-label={`选择${entry.name}`} aria-checked={checked} onClick={event => { event.stopPropagation(); setSelected(items => items.includes(entry.path) ? items.filter(item => item !== entry.path) : [...items, entry.path]); }} /><div className="manager-name"><span className="manager-icon">{entry.type === 'dir' ? <Icon name="folder" size={20} /> : <Icon name="file-text" size={20} />}</span><span className="manager-label">{entry.type === 'dir' ? <button type="button" className="manager-crumb" onClick={() => go(entry.path)}>{entry.name}</button> : entry.name}</span></div><div className="manager-meta muted">{entryMeta(entry)}</div><ActionMenu className="manager-more" label={`${entry.name} 的操作`} title={entry.name} items={[{ label: '重命名', disabled: !query.data.writable, onSelect: () => void rename(entry) }, { label: '选择', onSelect: () => setSelected([entry.path]) }, { label: '移动…', disabled: !query.data.writable, onSelect: () => void move([entry.path]) }, { label: '删除', danger: true, disabled: !query.data.writable, onSelect: () => void remove([entry.path]) }]} /></div>; })}</div>}
       {query.data && <div className="manager-status muted">{query.data.dirs} 个文件夹 · {query.data.files} 个文件 · {formatBytes(query.data.size)}</div>}
       {pages > 1 && <Pager className="manager-pager" page={Math.min(page, pages)} pageCount={pages} busy={query.isFetching} onGo={next => go(path, next)} />}
-    </main>{dialog && <DialogView dialog={dialog} destructive="删除" onClose={answer => { const current = dialog; setDialog(null); current.resolve(answer as never); }} />}</div>;
+    </main>{moving && <FolderPicker moving={moving} from={path} load={loadFolders} onPick={target => moveTo(moving, target)} onClose={() => setMoving(null)} />}{dialog && <DialogView dialog={dialog} destructive="删除" onClose={answer => { const current = dialog; setDialog(null); current.resolve(answer as never); }} />}</div>;
 }

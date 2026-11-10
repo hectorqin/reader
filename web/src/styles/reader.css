@@ -3246,6 +3246,82 @@ book-content {
   color: var(--reader-muted);
 }
 
+/*
+ * 移动到: the destination picker (features/library/components/FolderPicker.tsx).
+ * The crumbs are the file manager's own, so "where am I" reads the same in both;
+ * a row is 48px because it is the control a thumb walks the tree with (ui.md §3.3).
+ */
+.folder-picker-crumbs {
+  flex: none;
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--reader-line);
+}
+
+.folder-picker-crumbs .manager-crumb {
+  min-height: 44px;
+}
+
+.folder-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.folder-picker-row {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--reader-ink);
+  font: inherit;
+  font-size: var(--text-ui);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--motion-duration) var(--motion-ease);
+}
+
+.folder-picker-row > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.folder-picker-row > .icon:first-child {
+  flex: none;
+  color: var(--reader-accent);
+}
+
+.folder-picker-row > .icon:last-child,
+.folder-picker-row > small {
+  flex: none;
+  color: var(--reader-muted);
+  font-size: var(--text-meta);
+}
+
+.folder-picker-row:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .folder-picker-row:not(:disabled):hover {
+    background: var(--reader-surface);
+  }
+}
+
+.folder-picker-note {
+  margin: var(--space-3) var(--space-2);
+  font-size: var(--text-label);
+  line-height: 1.6;
+}
+
 .manager-body {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -3582,7 +3658,7 @@ book-content {
 .sources-row > div:first-child { flex:1 1 15rem; min-width:0; overflow-wrap:anywhere; }
 .sources-row small { display:block; margin-top:.35rem; opacity:.75; }
 .source-interval { display:inline-flex !important; flex-direction:row !important; align-items:center; gap:.45rem !important; margin:0 !important; color:var(--reader-muted); font-size:var(--text-label); }
-.source-interval select { min-height:40px !important; width:auto !important; padding:.45rem .55rem !important; }
+.source-interval select { min-height:40px !important; width:auto !important; padding:.45rem 1.9rem .45rem .55rem !important; }
 .source-catalog-actions { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; margin:.5rem 0 1rem; }
 .source-navigation { flex-wrap:wrap; margin:.5rem 0 1rem; }
 .library-files-screen .manager-status { padding:.65rem 1rem 1rem; }
@@ -3845,6 +3921,11 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .shelf-links .collection-link.button { min-height: 44px; padding: .6rem .75rem; border-radius: var(--radius-md); box-shadow: none; }
 .shelf-links .collection-link.button > svg { flex: 0 0 auto; width: 17px; height: 17px; }
 .shelf-links .collection-link.button > span:last-child { flex: 0 0 auto; font-size: var(--text-title); line-height: 1; }
+/* In the title row (phones): two words beside the settings button, no icons or chevrons — the row has ~200px. */
+.shelf-head-actions { gap: .4rem; }
+.shelf-head-actions .shelf-links { max-width: none; margin: 0; padding: 0; gap: .4rem; }
+.shelf-head-actions .shelf-links .collection-link.button { flex: none; min-width: 0; padding: 0 .75rem; }
+.shelf-head-actions .shelf-links .collection-link.button > svg { display: none; }
 .shelf-screen .shelf-search input, .library-search input { border-radius: var(--radius-lg); min-height: 48px; }
 .library-browse-screen .library-search { margin-top: .35rem; }
 .library-path { margin-top: .75rem; padding: .25rem 0 0; }
@@ -4112,3 +4193,60 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   pointer-events: none;
 }
 .book-card .book-state[data-state='finished'] { background: var(--color-surface-2); color: var(--reader-muted); }
+
+/*
+ * One back button for every pushed page (ui.md §10).
+ *
+ * 书库, 文件管理 and 书源 each drew their own: 40 or 44px boxes with a 17px glyph, 12–14px
+ * from the edge, so the arrow moved between sibling pages. The geometry here is the
+ * media page frame's (`.media-back-button`, used by 设置, 统计, 搜索 and every 影音
+ * page): a 44px box 4px from the edge, a 22px glyph, the title 4px after the box.
+ * Written as an offset from each header's own padding and gap, so the headers keep
+ * their layout and only the button moves.
+ */
+.collection-heading, .sources-header { --back-pad: 0.9rem; --back-gap: 0.5rem; --back-edge: 4px; }
+.sources-header { --back-pad: 1rem; --back-gap: 1rem; }
+@media (max-width: 600px) { .sources-header { --back-pad: 0.75rem; --back-gap: 0.6rem; } }
+@media (min-width: 64rem) { .collection-heading, .sources-header { --back-pad: 0.9rem; --back-edge: calc(0.9rem - 8px); } }
+.collection-heading > .icon-button[aria-label='返回'],
+.sources-header > .icon-button[aria-label='返回'] {
+  width: 44px;
+  height: 44px;
+  margin-inline: calc(var(--back-edge) - var(--back-pad)) calc(4px - var(--back-gap));
+}
+/* `.icon` carries its own size, so the glyph is sized here rather than on the button. */
+.collection-heading > .icon-button[aria-label='返回'] > .icon,
+.sources-header > .icon-button[aria-label='返回'] > .icon {
+  font-size: var(--text-display);
+}
+
+/*
+ * One arrow for every native select.
+ *
+ * Half of them were `appearance: none` with nothing drawn in its place — a select
+ * that looks exactly like a text field — and the other half showed the platform's
+ * own arrow, which is a different glyph per browser and ignores the theme. This is
+ * the one indicator: a small triangle painted in `currentColor`, so it follows
+ * every theme, the reading papers included. The control stays a native select (the
+ * OS picker on a phone is better than anything drawn here); the two selects that
+ * sit hidden behind a custom control are left alone.
+ *
+ * The weight of the selector is deliberate: the rules it has to outlast set
+ * `background` as a shorthand, which would otherwise erase the image.
+ */
+select:not(.media-select-native):not(.searchable-select-native):not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-size: 5px 5px, 5px 5px;
+  background-position: calc(100% - 0.95rem) 50%, calc(100% - 0.95rem + 5px) 50%;
+  background-repeat: no-repeat;
+  padding-inline-end: 1.9rem;
+  text-overflow: ellipsis;
+}
+
+[dir='rtl'] select:not(.media-select-native):not(.searchable-select-native):not([multiple]) {
+  background-position: 0.95rem 50%, calc(0.95rem - 5px) 50%;
+}

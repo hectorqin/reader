@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import {FloatingNotice} from './floating-notice.tsx';
+import { Callout } from './toolkit.tsx';
 import { ConfirmSheet } from './sheet.tsx';
 import '../styles/business-settings.css';
 import type { ChangeEvent, ReactNode } from 'react';
@@ -40,8 +41,9 @@ export function BusinessSettings({api,group,onSaved,selectControl,showMedia=true
   });
   return <section className="business-settings" aria-label={current?.label||'业务配置'}>
     <FloatingNotice message={busy?'正在处理…':error||message} busy={busy} error={!!error} kind="success"/>
-    {!group&&<label className="user-manager-mode">配置分类<Select aria-label="配置分类" value={selected} disabled={busy} onChange={(event:ChangeEvent<HTMLSelectElement>)=>setSelected(event.currentTarget.value)}>{visibleGroups.map(item=><option key={item.group} value={item.group}>{item.label}</option>)}</Select></label>}
-    {!current&&!busy&&<button onClick={()=>setRetry(value=>value+1)}>重新读取配置</button>}
+    {!group&&visibleGroups.length>0&&<label className="user-manager-mode">配置分类<Select aria-label="配置分类" value={selected} disabled={busy} onChange={(event:ChangeEvent<HTMLSelectElement>)=>setSelected(event.currentTarget.value)}>{visibleGroups.map(item=><option key={item.group} value={item.group}>{item.label}</option>)}</Select></label>}
+    {/* Nothing to choose from: say so and offer the way out, instead of an empty select. */}
+    {!current&&!busy&&<Callout tone={error?'error':'warning'} title="没有读到可配置的项目" action={{label:'重新读取配置',onClick:()=>setRetry(value=>value+1)}}>{error?'读取失败后这里是空的，可以重新读取。':'服务器没有返回任何配置分类，可能是版本较旧或正在启动。'}</Callout>}
     {current&&<>
       {selected==='modules'&&modulesStatus}
       <p className="muted">{selected==='modules'?'保存后立即生效，无需重启。关闭影音将停止播放及后台任务，保留全部影音数据。':'保存后生效，无需重启。进行中的任务保留原配置，新任务使用更新后的配置。'}</p>

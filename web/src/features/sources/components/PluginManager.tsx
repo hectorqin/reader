@@ -1,3 +1,4 @@
+import { describeError } from '../../../api/errors.ts';
 import { Icon } from '../../../ui/icon.tsx';
 import { useState } from 'react';
 import { usePlugins, useSourceMutations } from '../hooks/sourceQueries.ts';
@@ -37,7 +38,7 @@ export function PluginManager() {
   return <section className="sources-card sources-list plugin-manager">
     <div className="sources-list-heading"><h2>已安装插件 <span className="source-count">{list.length}</span></h2><button className="button source-add" type="button" onClick={() => setInstalling(true)}><Icon name="upload" size={16} />安装插件</button></div>
     {plugins.isPending && <FloatingNotice message="正在加载插件列表…" busy />}
-    {plugins.error && <Callout tone="error" title="读取失败" action={{ label: '重试', onClick: () => { void plugins.refetch(); } }}>{plugins.error.message}</Callout>}
+    {plugins.error && <Callout tone="error" title="读取失败" action={{ label: '重试', onClick: () => { void plugins.refetch(); } }}>{describeError(plugins.error)}</Callout>}
     {plugins.data && !list.length && <p className="muted">还没有安装插件。插件可以接入新的书源类型。</p>}
     {list.map(plugin => {
       const state = status(plugin);

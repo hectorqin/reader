@@ -1,6 +1,12 @@
 /* 首页: continue cards (one shape for every channel), the shelf row, then random media rows.
  * Uses the shared theme tokens only; channel colour comes from --color-ch-*. */
 .home-header h1 { margin: 6px 0 0; font-family: 'Songti SC', 'Noto Serif SC', 'Source Han Serif SC', serif; font-size: 28px; font-weight: 600; line-height: 1.2; color: var(--color-ink); }
+.home-page .home-header { position: relative; padding-right: 52px; }
+.home-search { position: absolute; top: 2px; right: 0; display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--radius-md); color: var(--color-ink); }
+.home-search:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+@media (hover: hover) and (pointer: fine) { .home-search:hover { background: var(--color-surface-2); } }
+/* The sidebar carries the search field from here up. */
+@media (min-width: 701px) { .home-page .home-header { padding-right: 0; } .home-search { display: none; } }
 .home-header p { margin: 6px 0 0; font-size: var(--text-ui); color: var(--color-muted); }
 
 .home-progress { display: block; height: 4px; border-radius: var(--radius-xs); background: color-mix(in srgb, var(--color-ink) 10%, transparent); overflow: hidden; }

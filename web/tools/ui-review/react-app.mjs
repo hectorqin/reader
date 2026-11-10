@@ -112,6 +112,17 @@ async function installReaderApiStubs(page) {
   });
 }
 
+/** Left edge, box size and glyph size of the page's back button, at phone width. */
+async function backBox(page) {
+  await page.setViewportSize({ width: 390, height: heightFor(390) });
+  return page.evaluate(() => {
+    const back = [...document.querySelectorAll('a, button')].find(el => /^返回/.test(el.getAttribute('aria-label') ?? '') && el.getClientRects().length > 0);
+    if (!back) return null;
+    const box = back.getBoundingClientRect(), glyph = back.querySelector('svg')?.getBoundingClientRect();
+    return { left: Math.round(box.left), width: Math.round(box.width), height: Math.round(box.height), glyph: Math.round(glyph?.width ?? 0) };
+  });
+}
+
 async function capture(page, name, checks, errors) {
   for (const width of widths) {
     const height = heightFor(width);
@@ -189,14 +200,27 @@ async function runReaderReview(browser, origin, checks, errors) {
   page.on('pageerror', error => errors.push({ page: 'reader', message: error.message }));
   await installReaderApiStubs(page);
   await page.goto(`${origin}/#/shelf`);
+  await page.locator('input[autocomplete="username"]').waitFor({ state: 'visible' });
+  await capture(page, 'login', checks, errors);
   await page.locator('input[autocomplete="username"]').fill('reviewer');
   await page.locator('input[type="password"]').fill('review-test-pass');
   await page.locator('form button[type="submit"]').click();
   await page.locator('.shelf-screen').waitFor();
   await capture(page, 'shelf', checks, errors);
+  // On a phone the shelf is for covers: the chrome above the first one (title row,
+  // filter field, status and sort rows) may not take more than a third of the screen.
+  await page.setViewportSize({ width: 390, height: heightFor(390) });
+  await page.locator('.book-grid .book-card').first().waitFor();
+  const firstCoverTop = await page.locator('.book-grid .book-card').first().evaluate(el => Math.round(el.getBoundingClientRect().top));
+  assert.ok(firstCoverTop <= Math.round(heightFor(390) / 3), `shelf 390px: first cover starts at ${firstCoverTop}px`);
+  // The same screen in the dark half of the theme (follow-system is the default).
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await capture(page, 'shelf-dark', checks, errors);
+  await page.emulateMedia({ colorScheme: 'light' });
   await page.goto(`${origin}/#/library`);
   await waitHeading(page, '书库');
   await capture(page, 'library', checks, errors);
+  const backBoxes = [['library', await backBox(page)]];
   await page.goto(`${origin}/#/library/files`);
   await waitHeading(page, '文件管理');
   // File-manager selection is local UI state; exercise it before taking the
@@ -216,6 +240,17 @@ async function runReaderReview(browser, origin, checks, errors) {
   await page.goto(`${origin}/#/sources`);
   await waitHeading(page, '书源');
   await capture(page, 'sources', checks, errors);
+  backBoxes.push(['sources', await backBox(page)]);
+  await page.goto(`${origin}/#/`);
+  await page.locator('.home-page').waitFor();
+  await capture(page, 'home', checks, errors);
+  await page.goto(`${origin}/#/search?q=${encodeURIComponent('剑来')}`);
+  await waitHeading(page, '搜索');
+  await page.locator('.search-page-section').first().waitFor();
+  await capture(page, 'search', checks, errors);
+  backBoxes.push(['search', await backBox(page)]);
+  // Every pushed page draws the same back button in the same place (ui.md §10).
+  for (const [name, box] of backBoxes) assert.deepEqual(box, backBoxes[0][1], `back button of ${name} ${JSON.stringify(box)} differs from ${backBoxes[0][0]} ${JSON.stringify(backBoxes[0][1])}`);
   // The reader is a lazily loaded chunk (app/router/lazy-pages.tsx): opening a book
   // must fetch it and render the chapter, not stop at the Suspense fallback.
   const readerChunk = page.waitForResponse(response => /\/assets\/ReaderPage-[\w-]+\.js$/.test(response.url()));

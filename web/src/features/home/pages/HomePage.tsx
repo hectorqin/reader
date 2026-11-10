@@ -157,7 +157,9 @@ export function HomePage() {
   resumes.sort((a, b) => b.at - a.at);
 
   return <div className="media-screen media-page home-page">
-    <header className="home-header"><h1>{greeting(new Date().getHours())}{name ? `，${name}` : ''}</h1><p>从上次停下的地方继续</p></header>
+    <header className="home-header"><h1>{greeting(new Date().getHours())}{name ? `，${name}` : ''}</h1><p>从上次停下的地方继续</p>
+      {/* A phone has no sidebar, so this is its way into the one search (ui.md §10). */}
+      <Link className="home-search" to="/search" aria-label={media ? '搜索书籍和影音' : '搜索书籍'}><Icon name="search" size={20} /></Link></header>
     <div className="home-continue">
       {resumes.map(entry => entry.node)}
       {/* Only a successful answer can say "nothing in progress": while loading the slot keeps

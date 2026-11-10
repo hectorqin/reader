@@ -366,6 +366,7 @@ export class ReaderScreen {
     this.toolsOpen = false; this.annotation = null; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
     this.content = null; this.book = book;
     let opened = false;
+    if (book.title) document.title = `${book.title} · reader`;
     this.patch({ openFailure: '', title: book.title, author: book.author, description: book.description, bookInfoOpen: false, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null, refreshingChapter: false, sourceName: '', chapterUrl: '', toc: [] });
     this.setStatus('loading', '正在载入…');
     this.setChromeVisible(true);
@@ -1330,13 +1331,19 @@ export class ReaderScreen {
 
   private async restorePosition(book: Book, token: number): Promise<void> {
     let latest = await this.options.offline.getProgress(book.id);
+    let fromElsewhere = false;
     try {
       const remote = await this.options.api.getProgress(book.id, { signal: AbortSignal.timeout(5000) });
       // A newer offline edit wins; a stale device must not reopen its old page
       // and immediately publish it as a new reading action.
       const local = await this.options.offline.getProgress(book.id);
       latest = local ?? latest;
-      if (remote?.locator && (!latest || remote.updatedAt > latest.updatedAt)) latest = remote;
+      if (remote?.locator && (!latest || remote.updatedAt > latest.updatedAt)) {
+        // This device had its own position and the server's is newer: the page about
+        // to open is not where this device left off, which is worth saying outright.
+        fromElsewhere = latest !== null && latest !== undefined && remote.locator !== latest.locator;
+        latest = remote;
+      }
     } catch (err) {
       if (err instanceof ApiError && err.isAuthFailure) this.options.onSignedOut();
     }
@@ -1348,7 +1355,7 @@ export class ReaderScreen {
       if (match && this.view.indexOfSection(match[2]!) < 0 && this.content) await this.goToChapterRef(match[2]!);
       const restored = await this.view.openLocator(this.compatibleLocator(locator));
       if (restored) {
-        this.flashStatus('已恢复到上次阅读位置', 2400);
+        this.flashStatus(fromElsewhere ? '已跳到其他设备上更新的阅读位置' : '已恢复到上次阅读位置', fromElsewhere ? 4000 : 2400);
         return;
       }
       // A locator that cannot be resolved means the book changed on disk under
