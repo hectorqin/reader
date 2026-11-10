@@ -1,6 +1,7 @@
 import { describeError } from '../../../api/errors.ts';
 import { Icon } from '../../../ui/icon.tsx';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { clearRecentSearches, readRecentSearches, rememberSearch } from '../recent.ts';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -15,6 +16,8 @@ import { useMediaEnabled } from '../../../shared/stores/features.ts';
 
 const channelLabels: Record<MediaChannel, string> = { video: '影视', music: '音乐', audiobook: '有声书' };
 const BOOK_LIMIT = 12, MEDIA_LIMIT = 8;
+/** Long enough to fold a word being typed into one request, short enough to feel live. */
+const SEARCH_DELAY_MS = 350;
 
 /**
  * 搜索 (desktop shell, prototype 15/19/20): one query across the book library and
@@ -28,7 +31,25 @@ export function SearchPage() {
   const [params, setParams] = useSearchParams();
   const query = (params.get('q') ?? '').trim();
   const [input, setInput] = useState(query);
-  useEffect(() => setInput(query), [query]);
+  // The URL is the query; the field follows it (Back, a sidebar search, a recent one),
+  // except while it is only ahead of the URL by whitespace the reader is still typing.
+  useEffect(() => { setInput(current => current.trim() === query ? current : query); }, [query]);
+  // Typing searches by itself after a pause. `replace`, so a word typed letter by
+  // letter is one history entry and Back leaves the page instead of un-typing it.
+  useEffect(() => {
+    const q = input.trim();
+    if (q === query) return;
+    const timer = window.setTimeout(() => setParams(q ? { q } : {}, { replace: true }), SEARCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [input, query, setParams]);
+  const scope = runtime.mediaApi.preferenceScope();
+  const [recent, setRecent] = useState(() => readRecentSearches(scope));
+  // A query is worth remembering once the reader committed to it: pressed Enter, or
+  // opened one of its results. Remembering every pause would fill the list with prefixes.
+  const remember = () => { if (query) setRecent(rememberSearch(scope, query)); };
+  const field = useRef<HTMLInputElement>(null);
+  // Arriving with nothing to search for means the next thing to do is type.
+  useEffect(() => { if (!query) field.current?.focus(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const settings = useSettingsStore(state => state.settings);
   const user = runtime.api.currentSession()?.user.id;
   const books = useQuery({
@@ -41,15 +62,21 @@ export function SearchPage() {
     queryFn: ({ signal }) => runtime.mediaApi.search(query, 'all', 0, signal),
     enabled: mediaEnabled&&query.length > 0,
   });
-  const submit = (event: FormEvent) => { event.preventDefault(); const q = input.trim(); setParams(q ? { q } : {}); };
+  const submit = (event: FormEvent) => { event.preventDefault(); const q = input.trim(); setParams(q ? { q } : {}, { replace: true }); if (q) setRecent(rememberSearch(scope, q)); };
   const mediaItems = (media.data?.items ?? []).slice(0, MEDIA_LIMIT);
   return <MediaPageFrame className="media-secondary-page search-page" title="搜索" backTo="/" backLabel="返回首页">
     <form className="search-page-form" role="search" onSubmit={submit}>
       <Icon name="search" size={18} />
-      <input type="search" name="q" aria-label="搜索全部内容" placeholder={mediaEnabled?'搜索书名、片名、歌曲、有声书':'搜索书名、作者'} value={input} maxLength={200} onInput={event => setInput(event.currentTarget.value)} />
+      <input ref={field} type="search" name="q" aria-label="搜索全部内容" placeholder={mediaEnabled?'搜索书名、片名、歌曲、有声书':'搜索书名、作者'} value={input} maxLength={200} onInput={event => setInput(event.currentTarget.value)} />
       <button type="submit" className="media-primary" disabled={!input.trim()}>搜索</button>
     </form>
-    {!query ? <p className="search-page-hint">{mediaEnabled?'输入名称，同时搜索书库和有权访问的影音库。':'输入名称搜索书库。'}</p> : <>
+    {!query ? <>
+      <p className="search-page-hint">{mediaEnabled?'输入名称，同时搜索书库和有权访问的影音库。':'输入名称搜索书库。'}</p>
+      {recent.length > 0 && <section className="search-page-recent" aria-label="最近搜索">
+        <header><h2>最近搜索</h2><button type="button" onClick={() => { clearRecentSearches(scope); setRecent([]); }}>清除</button></header>
+        <ul>{recent.map(item => <li key={item}><button type="button" className="chip" onClick={() => setParams({ q: item })}>{item}</button></li>)}</ul>
+      </section>}
+    </> : <div className="search-page-results" onClickCapture={event => { if ((event.target as Element).closest('a, .media-search-result, .book-card')) remember(); }}>
       <section className="search-page-section" aria-label="书籍搜索结果">
         <header><h2>书籍{books.data ? <small>{books.data.total}</small> : null}</h2>
           {books.data && books.data.total > BOOK_LIMIT && <Link to={`/library?q=${encodeURIComponent(query)}`}>在书库查看全部<Icon name="chevron-right" size={16} /></Link>}</header>
@@ -73,6 +100,6 @@ export function SearchPage() {
               <Icon name="chevron-right" size={18} />
             </button>)}</div>}
       </section>}
-    </>}
+    </div>}
   </MediaPageFrame>;
 }

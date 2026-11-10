@@ -1,3 +1,4 @@
+import { useMediaQuery } from '../../../shared/ui/use-media-query.ts';
 import { describeError } from '../../../api/errors.ts';
 import { useQueryClient } from '@tanstack/react-query';
 import { coverTint } from '../../../ui/cover-tint.ts';
@@ -140,18 +141,23 @@ export function ShelfPage() {
   };
   const subtitle = queryText ? (query.data?.total ? `「${queryText}」匹配 ${query.data.total} 本` : `没有匹配「${queryText}」的书`) : '收藏好书，随时接着读'; // count and sort live in the sticky toolbar below; saying them twice is noise
   const densityLabel = settings.shelfDensity === 'compact' ? '紧凑' : settings.shelfDensity === 'comfortable' ? '宽松' : '适中';
+  // On a phone the two ways out to more books sit in the title row: as a row of their
+  // own they pushed the first cover a third of the way down the screen (ui.md §3.4).
+  const phone = useMediaQuery('(max-width: 700px)');
+  const discover = <nav className="collection-links shelf-links" aria-label="发现书籍">
+    <Link className="button collection-link" to="/library"><Icon name="library" size={18} /><span>书库</span><Icon name="chevron-right" /></Link>
+    <Link className="button collection-link" to="/sources"><Icon name="search" size={18} /><span>书源</span><Icon name="chevron-right" /></Link>
+  </nav>;
   return <div ref={swipe} id="shelf-scroll" className="shelf shelf-screen">
     <header className="shelf-head">
       <div className="shelf-head-text"><h1 className="shelf-title">{queryText ? '筛选结果' : '书架'}</h1><p className="shelf-subtitle muted">{subtitle}</p></div>
       <div className="shelf-head-actions">
+        {phone && discover}
         <IconButton icon="tune" label={`书架设置 · ${densityLabel}`} onClick={() => setSettingsOpen(true)} />
       </div>
     </header>
     <div className="shelf-discovery">
-      <nav className="collection-links shelf-links" aria-label="发现书籍">
-        <Link className="button collection-link" to="/library"><Icon name="library" size={18} /><span>书库</span><Icon name="chevron-right" /></Link>
-        <Link className="button collection-link" to="/sources"><Icon name="search" size={18} /><span>书源</span><Icon name="chevron-right" /></Link>
-      </nav>
+      {!phone && discover}
       <form className="shelf-search" role="search" onSubmit={onSearch}>
         <Icon name="search" size={18} className="search-glyph" />
         <input type="search" aria-label="筛选书架" placeholder="在书架中筛选书名、作者、系列" value={search} onChange={event => setSearch(event.currentTarget.value)} />

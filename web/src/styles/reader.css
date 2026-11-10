@@ -3921,6 +3921,11 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .shelf-links .collection-link.button { min-height: 44px; padding: .6rem .75rem; border-radius: var(--radius-md); box-shadow: none; }
 .shelf-links .collection-link.button > svg { flex: 0 0 auto; width: 17px; height: 17px; }
 .shelf-links .collection-link.button > span:last-child { flex: 0 0 auto; font-size: var(--text-title); line-height: 1; }
+/* In the title row (phones): two words beside the settings button, no icons or chevrons — the row has ~200px. */
+.shelf-head-actions { gap: .4rem; }
+.shelf-head-actions .shelf-links { max-width: none; margin: 0; padding: 0; gap: .4rem; }
+.shelf-head-actions .shelf-links .collection-link.button { flex: none; min-width: 0; padding: 0 .75rem; }
+.shelf-head-actions .shelf-links .collection-link.button > svg { display: none; }
 .shelf-screen .shelf-search input, .library-search input { border-radius: var(--radius-lg); min-height: 48px; }
 .library-browse-screen .library-search { margin-top: .35rem; }
 .library-path { margin-top: .75rem; padding: .25rem 0 0; }
@@ -4188,3 +4193,29 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   pointer-events: none;
 }
 .book-card .book-state[data-state='finished'] { background: var(--color-surface-2); color: var(--reader-muted); }
+
+/*
+ * One back button for every pushed page (ui.md §10).
+ *
+ * 书库, 文件管理 and 书源 each drew their own: 40 or 44px boxes with a 17px glyph, 12–14px
+ * from the edge, so the arrow moved between sibling pages. The geometry here is the
+ * media page frame's (`.media-back-button`, used by 设置, 统计, 搜索 and every 影音
+ * page): a 44px box 4px from the edge, a 22px glyph, the title 4px after the box.
+ * Written as an offset from each header's own padding and gap, so the headers keep
+ * their layout and only the button moves.
+ */
+.collection-heading, .sources-header { --back-pad: 0.9rem; --back-gap: 0.5rem; --back-edge: 4px; }
+.sources-header { --back-pad: 1rem; --back-gap: 1rem; }
+@media (max-width: 600px) { .sources-header { --back-pad: 0.75rem; --back-gap: 0.6rem; } }
+@media (min-width: 64rem) { .collection-heading, .sources-header { --back-pad: 0.9rem; --back-edge: calc(0.9rem - 8px); } }
+.collection-heading > .icon-button[aria-label='返回'],
+.sources-header > .icon-button[aria-label='返回'] {
+  width: 44px;
+  height: 44px;
+  margin-inline: calc(var(--back-edge) - var(--back-pad)) calc(4px - var(--back-gap));
+}
+/* `.icon` carries its own size, so the glyph is sized here rather than on the button. */
+.collection-heading > .icon-button[aria-label='返回'] > .icon,
+.sources-header > .icon-button[aria-label='返回'] > .icon {
+  font-size: var(--text-display);
+}

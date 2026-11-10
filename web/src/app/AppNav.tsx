@@ -54,7 +54,7 @@ export function AppNav({ mode }: { mode: Exclude<NavMode, 'hidden'> }) {
   return <nav className="app-nav" aria-label="主导航" data-mode={mode}>
     <Link className="app-nav-brand" to="/" aria-label="reader. 首页">reader.</Link>
     {/* Desktop only: one search across books and media (the page is /search). */}
-    <form className="app-nav-search" role="search" onSubmit={search}>
+    <form className="app-nav-search" role="search" onSubmit={search} hidden={pathname === '/search'}>
       <Icon name="search" size={16} />
       <input type="search" aria-label={media?'搜索书籍和影音':'搜索书籍'} placeholder={media?'搜索书籍和影音':'搜索书籍'} value={query} maxLength={200} onInput={event => setQuery(event.currentTarget.value)} />
     </form>
