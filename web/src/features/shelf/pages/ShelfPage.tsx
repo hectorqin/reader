@@ -3,8 +3,9 @@ import { describeError } from '../../../api/errors.ts';
 import { useQueryClient } from '@tanstack/react-query';
 import { coverTint } from '../../../ui/cover-tint.ts';
 import { BookGridSkeleton } from '../../../ui/book-grid-skeleton.tsx';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useScrollMemory } from '../../../shared/ui/use-scroll-memory.ts';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Book, ContinueReadingItem, ReadingState } from '../../../api/types.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
@@ -91,9 +92,15 @@ export function ShelfPage() {
   const cards = useMemo(() => query.data?.items ?? [], [query.data]);
   useEffect(() => { void runtime.updateSettings({ shelfSort: sort }); }, [runtime, sort]);
   // Every navigation keeps what it does not change; a new filter or query starts at page 1.
+  // Back from a book returns to the cover it was opened from; a new page, sort or filter
+  // chosen here is a new list and starts where the page puts it (ui.md §3.5).
+  const location = useLocation();
+  const head = useRef<HTMLElement>(null);
+  const skipRestore = useScrollMemory(head, (runtime.api.currentSession()?.user.id ?? '') + '\0' + location.pathname + location.search, query.data !== undefined, '#shelf-scroll');
   const go = (next: { q?: string; sort?: typeof sort; page?: number; status?: ReadingState | null; series?: string | null; tag?: string | null }, replace = false) => {
     const q = next.q ?? queryText, nextStatus = next.status === undefined ? status : next.status ?? undefined;
     const nextSeries = next.series === undefined ? series : next.series ?? undefined, nextTag = next.tag === undefined ? tag : next.tag ?? undefined;
+    skipRestore();
     setParams({ ...(q ? { q } : {}), sort: next.sort ?? sort, page: String(next.page ?? 1), ...(nextStatus ? { status: nextStatus } : {}), ...(nextSeries ? { series: nextSeries } : nextTag ? { tag: nextTag } : {}) }, { replace });
   };
   // A bookmarked page past the end, or removing the last book of the last page, clamps
@@ -149,7 +156,7 @@ export function ShelfPage() {
     <Link className="button collection-link" to="/sources"><Icon name="search" size={18} /><span>书源</span><Icon name="chevron-right" /></Link>
   </nav>;
   return <div ref={swipe} id="shelf-scroll" className="shelf shelf-screen">
-    <header className="shelf-head">
+    <header className="shelf-head" ref={head}>
       <div className="shelf-head-text"><h1 className="shelf-title">{queryText ? '筛选结果' : '书架'}</h1><p className="shelf-subtitle muted">{subtitle}</p></div>
       <div className="shelf-head-actions">
         {phone && discover}

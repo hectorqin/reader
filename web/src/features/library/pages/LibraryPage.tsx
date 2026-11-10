@@ -5,8 +5,9 @@ import { BookGridSkeleton } from '../../../ui/book-grid-skeleton.tsx';
 import { ActionMenu } from '../../../ui/action-menu.tsx';
 import { Callout, Icon } from '../../../ui/toolkit.tsx';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, Navigate, useSearchParams } from 'react-router-dom';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom';
+import { useScrollMemory } from '../../../shared/ui/use-scroll-memory.ts';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { Book, BrowseEntry } from '../../../api/types.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
@@ -45,7 +46,11 @@ export function LibraryBrowsePage() {
   // Only the crumbs and writability are read from the listing; it pages folders (200 a page), not books, so it stays on its first page.
   const listing = useQuery({ queryKey: ['library-browse', runtime.api.baseUrl, path], queryFn: ({ signal }) => runtime.api.browse(path, 1, { signal }) });
   const books = useQuery({ queryKey: ['library-books', runtime.api.baseUrl, 'browse', path, page, search], queryFn: ({ signal }) => runtime.api.listBooks({ scope: 'library', path, page, pageSize: 60, search, sort: 'title', order: 'asc' }, { signal }) });
-  const navigate = (nextPath: string, nextPage = 1, nextSearch = '', replace = false) => setParams({ ...(nextPath ? { path: nextPath } : {}), ...(nextSearch ? { q: nextSearch } : {}), ...(nextPage > 1 ? { page: String(nextPage) } : {}) }, { replace });
+  // Back from a book returns to the cover it was opened from; a folder, page or search
+  // chosen here is a new list.
+  const location = useLocation(); const body = useRef<HTMLElement>(null);
+  const skipRestore = useScrollMemory(body, (runtime.api.currentSession()?.user.id ?? '') + '\0' + location.pathname + location.search, books.data !== undefined, '.library-browse-body');
+  const navigate = (nextPath: string, nextPage = 1, nextSearch = '', replace = false) => { skipRestore(); setParams({ ...(nextPath ? { path: nextPath } : {}), ...(nextSearch ? { q: nextSearch } : {}), ...(nextPage > 1 ? { page: String(nextPage) } : {}) }, { replace }); };
   const [uploading, setUploading] = useState(false); const [feedback, setFeedback] = useState<{ text: string; error?: boolean } | null>(null);
   // Members add books here; everything else that touches files is the admin-only file manager.
   const upload = async (files: File[]) => { setFeedback(null); setUploading(true); try { const result = await runtime.api.upload(files, path, 'rename'); await Promise.all([queryClient.invalidateQueries({ queryKey: ['library-books'] }), queryClient.invalidateQueries({ queryKey: ['library-browse'] }), queryClient.invalidateQueries({ queryKey: ['shelf'] })]); setFeedback(describeUpload(result)); } catch (reason) { setFeedback({ text: reason instanceof Error ? reason.message : '上传失败，请重试', error: true }); } finally { setUploading(false); } };
@@ -61,7 +66,7 @@ export function LibraryBrowsePage() {
   return <div className="library-screen library-browse-screen">
     <CollectionHeader title="书库" subtitle="浏览本地书籍，发现下一本好书" backTo="/shelf" actions={role === 'admin' ? <Link className="button collection-link" to="/library/files"><Icon name="folder" size={18} /><span>文件管理</span><Icon name="chevron-right" /></Link> : uploadButton} />
     {listing.data && listing.data.crumbs.length > 1 && <div className="manager-crumbs library-path" aria-label="当前文件夹">{listing.data.crumbs.map((crumb, index) => <span key={`${crumb.path}-${index}`}>{index > 0 && <span className="manager-crumb-sep">/</span>}<button type="button" className="manager-crumb" onClick={() => navigate(crumb.path)}>{crumb.name}</button></span>)}</div>}
-    <main className="manager-body library-browse-body">
+    <main className="manager-body library-browse-body" ref={body}>
       <form className="shelf-search library-search" role="search" onSubmit={(event: FormEvent) => { event.preventDefault(); navigate(path, 1, draft.trim()); }}><Icon name="search" size={18} className="search-glyph" /><input type="search" aria-label="搜索书库" placeholder="在书库中搜索书名、作者" value={draft} onChange={event => setDraft(event.currentTarget.value)} />{draft && <button type="button" className="search-clear" aria-label="清除搜索" onClick={() => { setDraft(''); navigate(path); }}><Icon name="close" /></button>}</form>
       {/* The way into a folder: the books below are this folder's and everything under it,
           and each chip narrows the scope one level (the crumbs above widen it again). */}
