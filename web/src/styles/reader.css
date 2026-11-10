@@ -3246,6 +3246,82 @@ book-content {
   color: var(--reader-muted);
 }
 
+/*
+ * 移动到: the destination picker (features/library/components/FolderPicker.tsx).
+ * The crumbs are the file manager's own, so "where am I" reads the same in both;
+ * a row is 48px because it is the control a thumb walks the tree with (ui.md §3.3).
+ */
+.folder-picker-crumbs {
+  flex: none;
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-1);
+  border-bottom: 1px solid var(--reader-line);
+}
+
+.folder-picker-crumbs .manager-crumb {
+  min-height: 44px;
+}
+
+.folder-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.folder-picker-row {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 48px;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--reader-ink);
+  font: inherit;
+  font-size: var(--text-ui);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--motion-duration) var(--motion-ease);
+}
+
+.folder-picker-row > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.folder-picker-row > .icon:first-child {
+  flex: none;
+  color: var(--reader-accent);
+}
+
+.folder-picker-row > .icon:last-child,
+.folder-picker-row > small {
+  flex: none;
+  color: var(--reader-muted);
+  font-size: var(--text-meta);
+}
+
+.folder-picker-row:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .folder-picker-row:not(:disabled):hover {
+    background: var(--reader-surface);
+  }
+}
+
+.folder-picker-note {
+  margin: var(--space-3) var(--space-2);
+  font-size: var(--text-label);
+  line-height: 1.6;
+}
+
 .manager-body {
   flex: 1 1 auto;
   overflow-y: auto;

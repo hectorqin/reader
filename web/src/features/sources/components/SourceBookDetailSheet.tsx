@@ -1,3 +1,4 @@
+import { describeError } from '../../../api/errors.ts';
 import type { SourceEntry } from '../../../api/sources.ts';
 import { Sheet } from '../../../ui/sheet.tsx';
 import { Button } from '../../../ui/toolkit.tsx';
@@ -23,7 +24,7 @@ export function SourceBookDetailSheet({ detail, pending, error, acquiring, onAcq
     <FloatingNotice message={pending ? '正在读取书籍详情…' : ''} busy />
     <div className="book-detail">
       <p className="book-detail-author">{detail.authors?.join('、') || '作者未知'}</p>
-      {error && <p className="notice error" role="alert">{error.message}</p>}
+      {error && <p className="notice error" role="alert">{describeError(error)}</p>}
       <p className="book-detail-description">{detail.description || '暂无简介'}</p>
     </div>
   </Sheet>;

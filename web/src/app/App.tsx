@@ -1,3 +1,4 @@
+import { pageTitle } from './page-title.ts';
 import { useEffect, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../shared/stores/auth.store.ts';
@@ -27,6 +28,7 @@ function AuthenticatedShell() {
   }, [runtime, navigate,media]);
   useEffect(() => {if(media)runtime.player.setVisible(location.pathname.startsWith('/media/'));}, [runtime, location.pathname,media]);
   const mode = !media&&location.pathname.startsWith('/media')?'push':navMode(location.pathname);
+  useEffect(() => { document.title = pageTitle(location.pathname); }, [location.pathname]);
   // One app theme for every page; the reader may wear its own reading theme on top.
   useEffect(() => {
     const theme = new ThemeController(runtime.mediaApi.preferenceScope());

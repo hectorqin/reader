@@ -35,6 +35,8 @@
 .mine-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--color-brand-text); }
 .mine-dot[data-state='offline'] { background: var(--color-muted); }
 .mine-dot[data-state='error'] { background: var(--color-danger); }
+/* The padding is hit area only: the line stays one line of meta text (ui.md §3.3). */
+.mine-status-link { margin: -10px 0 -10px 4px; padding: 10px 4px; color: var(--color-brand-text); text-decoration: underline; text-underline-offset: 2px; }
 
 /* Narrow: one list in reading order. Wide: two independent columns. */
 .mine-groups { display: flex; flex-direction: column; }

@@ -732,6 +732,12 @@ body:has(>#app>.media-screen) { background: var(--color-bg); }
 .media-account-panel p {font-size:var(--text-label);color:var(--muted);overflow-wrap:anywhere}
 .media-account-panel dl {font-size:var(--text-meta);line-height:1.8}
 .media-account-panel dd {margin:8px 0;overflow-wrap:anywhere}
+.account-sync {margin-top:0;padding-top:24px;border-top:1px solid var(--border)}
+.account-sync h3 {font-size:var(--text-title);margin:0 0 8px}
+.account-sync dt {color:var(--muted)}
+.account-sync dd {margin:0 0 8px;font-size:var(--text-ui)}
+.account-sync dd[data-state='error'],.account-sync dd[data-state='signed-out'] {color:var(--color-danger)}
+.account-sync>button {margin-top:8px}
 .media-settings-playing {display:flex;align-items:center;gap:12px;background:var(--surface);padding:14px;border-radius:var(--radius-sm);margin-bottom:8px}
 .media-settings-playing>span {flex:1;min-width:0}
 .media-settings-playing small,.media-settings-playing strong {display:block;overflow-wrap:anywhere}

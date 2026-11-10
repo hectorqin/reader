@@ -1,3 +1,4 @@
+import { describeError } from '../../../api/errors.ts';
 import { Icon } from '../../../ui/icon.tsx';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -53,7 +54,7 @@ export function SearchPage() {
         <header><h2>书籍{books.data ? <small>{books.data.total}</small> : null}</h2>
           {books.data && books.data.total > BOOK_LIMIT && <Link to={`/library?q=${encodeURIComponent(query)}`}>在书库查看全部<Icon name="chevron-right" size={16} /></Link>}</header>
         {books.isPending ? <p role="status">正在搜索书籍…</p>
-          : books.error ? <p className="media-error" role="alert">书籍搜索失败：{books.error.message} <button type="button" onClick={() => void books.refetch()}>重试</button></p>
+          : books.error ? <p className="media-error" role="alert">书籍搜索失败：{describeError(books.error)} <button type="button" onClick={() => void books.refetch()}>重试</button></p>
           : books.data.items.length === 0 ? <p className="search-page-empty">没有找到书籍</p>
           : <div className="book-grid" data-density={settings.shelfDensity} data-show-author={String(settings.shelfShowAuthor)}>
             {books.data.items.map(book => <BookCard key={book.id} book={book} showAuthor={settings.shelfShowAuthor} showProgress={false} />)}
@@ -63,7 +64,7 @@ export function SearchPage() {
         <header><h2>影音{media.data ? <small>{media.data.total}</small> : null}</h2>
           {media.data && media.data.total > MEDIA_LIMIT && <Link to={`/media/search?q=${encodeURIComponent(query)}&scope=all`}>查看全部影音结果<Icon name="chevron-right" size={16} /></Link>}</header>
         {media.isPending ? <p role="status">正在搜索影音…</p>
-          : media.error ? <p className="media-error" role="alert">影音搜索失败：{media.error.message} <button type="button" onClick={() => void media.refetch()}>重试</button></p>
+          : media.error ? <p className="media-error" role="alert">影音搜索失败：{describeError(media.error)} <button type="button" onClick={() => void media.refetch()}>重试</button></p>
           : mediaItems.length === 0 ? <p className="search-page-empty">没有找到影音</p>
           : <div className="search-page-media">{mediaItems.map(item =>
             <button type="button" key={item.id} className="media-search-result" onClick={() => navigate(`/media/${item.channel}/items/${encodeURIComponent(item.id)}`)}>

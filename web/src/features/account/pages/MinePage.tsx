@@ -62,7 +62,7 @@ export function MinePage() {
         <div className="mine-avatar" aria-hidden="true">{Array.from(name)[0]}</div>
         <div className="mine-profile-text">
           <strong>{name}<span className="mine-role">{admin ? '管理员' : '成员'}</span></strong>
-          <small><span className="mine-dot" data-state={connection.state} aria-hidden="true" />{connection.label} {serverHost(runtime.api.baseUrl)}</small>
+          <small><span className="mine-dot" data-state={connection.state} aria-hidden="true" />{connection.label} {serverHost(runtime.api.baseUrl)}{connection.state !== 'online' && <Link className="mine-status-link" to="/me/account">查看原因</Link>}</small>
         </div>
       </section>}
       {/* Two columns on a wide window, each filled top to bottom so uneven groups don't
