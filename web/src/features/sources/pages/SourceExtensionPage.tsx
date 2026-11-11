@@ -1,3 +1,4 @@
+import { Select } from '../../../ui/select.tsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -47,9 +48,9 @@ function FieldControl({ field, value, disabled, onChange, onSelectAction }: {
   if (field.type === 'textarea') return <textarea {...common} placeholder={field.placeholder} value={String(value ?? '')} onChange={event => onChange(event.currentTarget.value)} />;
   if (field.type === 'file') return <input {...common} type="file" onChange={event => { const file = event.currentTarget.files?.[0]; if (file) void fileToValue(file).then(onChange); }} />;
   if (field.type === 'boolean') return <input {...common} type="checkbox" checked={value === true} onChange={event => onChange(event.currentTarget.checked)} />;
-  if (field.type === 'select') return <select {...common} value={String(value ?? '')} onChange={event => { const next = event.currentTarget.value; onChange(next); if (field.changeAction) onSelectAction?.(field, next); }}>
+  if (field.type === 'select') return <Select {...common} value={String(value ?? '')} onChange={event => { const next = event.currentTarget.value; onChange(next); if (field.changeAction) onSelectAction?.(field, next); }}>
     {field.options?.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-  </select>;
+  </Select>;
   return <input {...common} type={field.type === 'password' ? 'password' : field.type === 'number' ? 'number' : 'text'} autoComplete={field.type === 'password' ? 'off' : undefined} placeholder={field.placeholder} min={field.min} max={field.max} value={value === undefined || value === null ? '' : String(value)} onChange={event => {
     const raw = event.currentTarget.value;
     onChange(field.type === 'number' ? (raw === '' ? '' : Number(raw)) : raw);

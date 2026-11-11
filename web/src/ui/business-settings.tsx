@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import {FloatingNotice} from './floating-notice.tsx';
 import { Callout } from './toolkit.tsx';
+import { Select as ThemedSelect } from './select.tsx';
 import { ConfirmSheet } from './sheet.tsx';
 import '../styles/business-settings.css';
 import type { ChangeEvent, ReactNode } from 'react';
@@ -15,7 +16,7 @@ interface SettingsView {
   fields:Array<{key:string;label:string;type:'text'|'textarea'|'password'|'number'|'checkbox'|'url'|'select';min?:number;max?:number;help?:string;options?:Array<{value:string;label:string}>}>;
 }
 export function BusinessSettings({api,group,onSaved,selectControl,showMedia=true,modulesStatus}:{api:SettingsTransport;group?:string;onSaved?:()=>void;selectControl?:any;showMedia?:boolean;modulesStatus?:ReactNode}){
-  const Select=selectControl??'select';
+  const Select=selectControl??ThemedSelect;
   const [groups,setGroups]=useState<SettingsView[]>([]),[selected,setSelected]=useState(group||'tts');
   const [values,setValues]=useState<Record<string,string|number|boolean>>({}),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState(''),[retry,setRetry]=useState(0);
   const [voices,setVoices]=useState<Array<{id:string;name:string}>>([]),[voice,setVoice]=useState(''),[audio,setAudio]=useState('');

@@ -26,7 +26,7 @@ const assert=require('node:assert/strict');
     browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:390,height:844}}),errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(origin+'/#/me/admin/services');await page.locator('input[autocomplete="username"]').fill('settings-admin');await page.locator('input[type="password"]').fill('settings-test-password');await page.locator('form button[type=submit]').click();
     // 我的 › 服务配置 is its own admin page (no 系统设置 sheet any more).
-    async function open(){await page.goto(origin+'/#/me/admin/services');await page.getByRole('heading',{name:'服务配置',exact:true}).waitFor();await page.getByLabel('配置分类').selectOption('tts');}
+    async function open(){await page.goto(origin+'/#/me/admin/services');await page.getByRole('heading',{name:'服务配置',exact:true}).waitFor();await page.getByLabel('配置分类').and(page.locator('select')).selectOption('tts');}
     await open();await page.getByLabel('启用 HTTP 朗读',{exact:true}).check();await page.getByLabel('语音合成接口',{exact:true}).fill(tts+'/tts');await page.getByLabel('音色列表接口（可选）',{exact:true}).fill(tts+'/voices');
     await page.getByRole('button',{name:'检测连接并获取音色',exact:true}).click();await page.locator('#business-tts-voices option').waitFor({state:'attached'});
     await page.getByRole('button',{name:'生成试听音频',exact:true}).click();await page.locator('audio[aria-label="HTTP 朗读试听"]').waitFor();
@@ -35,18 +35,18 @@ const assert=require('node:assert/strict');
     await page.reload();await open();assert.equal(await page.getByLabel('语音合成接口',{exact:true}).inputValue(),tts+'/tts');
     const overflow=await page.locator('.business-settings').evaluate(element=>element.scrollWidth>element.clientWidth+2);assert.equal(overflow,false,'mobile settings do not overflow');
     const artifacts=join(repo,'artifacts/business-settings');await mkdir(artifacts,{recursive:true});await page.screenshot({path:join(artifacts,'http-tts-mobile.png')});
-    await page.getByLabel('配置分类').selectOption('tmdb');await page.getByLabel('启用 TMDB',{exact:true}).check();await page.getByLabel('读取令牌',{exact:true}).fill('test-token');
+    await page.getByLabel('配置分类').and(page.locator('select')).selectOption('tmdb');await page.getByLabel('启用 TMDB',{exact:true}).check();await page.getByLabel('读取令牌',{exact:true}).fill('test-token');
     const tmdbSaved=page.waitForResponse(response=>response.url().endsWith('/admin/settings/tmdb')&&response.request().method()==='PATCH');await page.getByRole('button',{name:'保存配置',exact:true}).click();assert.equal((await tmdbSaved).status(),200);
     const provider=await (await fetch(origin+'/api/v1/media/metadata/providers',{headers})).json();assert.equal(provider.items.find(item=>item.id==='tmdb').configured,true,'isolated media worker sees configuration without restarting');
     assert.equal(await page.getByLabel('读取令牌',{exact:true}).inputValue(),'');
     await page.screenshot({path:join(artifacts,'tmdb-mobile.png')});
-    await page.getByLabel('配置分类').selectOption('playback');
-    assert.equal(await page.getByLabel('OpenList 播放方式',{exact:true}).inputValue(),'auto');
-    await page.getByLabel('OpenList 播放方式',{exact:true}).selectOption('proxy');
+    await page.getByLabel('配置分类').and(page.locator('select')).selectOption('playback');
+    assert.equal(await page.getByLabel('OpenList 播放方式',{exact:true}).and(page.locator('select')).inputValue(),'auto');
+    await page.getByLabel('OpenList 播放方式',{exact:true}).and(page.locator('select')).selectOption('proxy');
     const playbackSaved=page.waitForResponse(response=>response.url().endsWith('/admin/settings/playback')&&response.request().method()==='PATCH');
     await page.getByRole('button',{name:'保存配置',exact:true}).click();assert.equal((await playbackSaved).status(),200);
-    await page.reload();await open();await page.getByLabel('配置分类').selectOption('playback');
-    assert.equal(await page.getByLabel('OpenList 播放方式',{exact:true}).inputValue(),'proxy');assert.deepEqual(errors,[]);
+    await page.reload();await open();await page.getByLabel('配置分类').and(page.locator('select')).selectOption('playback');
+    assert.equal(await page.getByLabel('OpenList 播放方式',{exact:true}).and(page.locator('select')).inputValue(),'proxy');assert.deepEqual(errors,[]);
     console.log('PASS: mobile settings, draft TTS test and audio, save/reload, secret redaction, and live media worker configuration');
   }finally{
     await browser?.close();server.kill();await new Promise(resolve=>server.exitCode!==null?resolve():server.once('exit',resolve));upstream.closeAllConnections();await new Promise(resolve=>upstream.close(resolve));

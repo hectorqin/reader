@@ -1,3 +1,4 @@
+import { Select } from './select.tsx';
 import { Icon } from './icon.tsx';
 import type { ReadingOverrides } from './reading-overrides.ts';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -174,7 +175,7 @@ export function ReadingTools(props: ReadingToolsProps) {
         <button className="button" disabled={saving || props.overrides.version === 0} onClick={() => void edit(async () => { await props.undoOverrides(); setMessage('已撤销上一次整理修改'); })}>撤销上一次整理修改</button>
         {props.manifest.book.format === 'txt' && <>
           <h3>TXT 目录规则</h3><p>匹配以指定文字开头、长度不超过 80 字的行；留空恢复自动识别。应用会重新划分章节并从首章打开，旧笔记仍保留。</p>
-          <label>常用模板<select value="" onChange={e => { setPrefix(e.currentTarget.value); setHeadingPreview(null); }}><option value="">自动识别</option><option value="第">中文章回</option><option value="Chapter ">英文 Chapter</option><option value="【">方括号标题</option></select></label>
+          <label>常用模板<Select value="" onChange={e => { setPrefix(e.currentTarget.value); setHeadingPreview(null); }}><option value="">自动识别</option><option value="第">中文章回</option><option value="Chapter ">英文 Chapter</option><option value="【">方括号标题</option></Select></label>
           <label>标题开头<input maxLength={60} value={prefix} onInput={e => { setPrefix(e.currentTarget.value); setHeadingPreview(null); }} /></label>
           <button className="button" disabled={saving} onClick={() => void edit(async () => setHeadingPreview(await props.previewHeadings(prefix)))}>预览目录</button>
           {headingPreview && <><p>识别 {headingPreview.length} 个章节，展示前 100 项</p><ol>{headingPreview.slice(0,100).map((title,i) => <li key={i}>{title}</li>)}</ol><button className="button" disabled={saving} onClick={() => void edit(async () => { await props.saveOverrides({ ...props.overrides, headingPrefix:prefix }); setMessage('目录规则已保存'); })}>应用预览规则</button></>}
