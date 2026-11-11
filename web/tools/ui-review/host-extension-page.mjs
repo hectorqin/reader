@@ -81,7 +81,7 @@ try {
  assert.equal(await page.locator('body').evaluate(el=>el.scrollWidth>innerWidth),false);await page.screenshot({path:join(shots,'plugin-search-mobile.png')});
  await page.goto(base+'/#/book/extension-book');await page.locator('book-content').waitFor();
  // 切换书源 is in the reader's top bar; each candidate card is named after its source.
- await page.getByRole('button',{name:'切换书源',exact:true}).click();await page.getByRole('button',{name:/^查看此源目录/}).first().click();await page.getByLabel('切换后阅读的章节').selectOption('new-two');await page.screenshot({path:join(shots,'plugin-switch-mobile.png')});
+ await page.getByRole('button',{name:'切换书源',exact:true}).click();await page.getByRole('button',{name:/^查看此源目录/}).first().click();await page.getByLabel('切换后阅读的章节').and(page.locator('select')).selectOption('new-two');await page.screenshot({path:join(shots,'plugin-switch-mobile.png')});
  await page.getByRole('button',{name:'确认换源并阅读',exact:true}).click();await page.getByText('测试：新源暂时不可用',{exact:true}).waitFor();assert.match(await page.locator('book-content .book-flow').textContent(),/旧书源/);
  fail=false;await page.getByRole('button',{name:'确认换源并阅读',exact:true}).click();await page.getByText('已切换书源，从所选章节开头继续阅读',{exact:true}).waitFor();assert.match(await page.locator('book-content .book-flow').textContent(),/新书源/);assert.deepEqual(errors,[]);
  console.log('PASS production Chromium: mobile/desktop config, generic settings, safe log output, generic filters, failed switch preserves view, successful switch lands on selected chapter');

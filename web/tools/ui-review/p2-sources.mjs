@@ -61,11 +61,11 @@ try {
  for(const width of [320,390,1280]) {await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'credentials-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
  await button('清除站点密码').click();await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await page.getByText('站点密码 · 未配置',{exact:false}).waitFor();assert.equal(ctx.sources.credentialStatus('quality',user.id).fields[0].configured,false);
  await page.goto(base+'/#/book/'+acquired.publicationId);await page.locator('book-content p').first().waitFor();await button('切换书源').click();await button('查看此源目录：备选来源').click();
- await page.getByLabel('切换后阅读的章节').selectOption('empty');await button('检测所选章节 / 重试').click();await page.getByRole('dialog').locator('[role=alert]').getByText('此章节没有可读正文',{exact:false}).waitFor();assert.equal(ctx.sources.chapters.binding(user.id,acquired.publicationId).publication_ref,'original');
+ await page.getByLabel('切换后阅读的章节').and(page.locator('select')).selectOption('empty');await button('检测所选章节 / 重试').click();await page.getByRole('dialog').locator('[role=alert]').getByText('此章节没有可读正文',{exact:false}).waitFor();assert.equal(ctx.sources.chapters.binding(user.id,acquired.publicationId).publication_ref,'original');
  await button('确认换源并阅读').click();await page.locator('.notyf').getByText('此章节没有可读正文',{exact:false}).waitFor();assert.equal(ctx.sources.chapters.binding(user.id,acquired.publicationId).publication_ref,'original');
  // Dismiss every toast the rejected switch raised.
  while(await button('关闭提示').count()){await button('关闭提示').first().click();await page.waitForTimeout(400);}
- await page.getByLabel('切换后阅读的章节').selectOption('one');await button('检测所选章节 / 重试').click();await page.getByText('正文检测通过',{exact:true}).waitFor();
+ await page.getByLabel('切换后阅读的章节').and(page.locator('select')).selectOption('one');await button('检测所选章节 / 重试').click();await page.getByText('正文检测通过',{exact:true}).waitFor();
  for(const width of [320,390,1280]) {await page.setViewportSize({width,height:844});await page.screenshot({path:join(shots,'quality-'+width+'.png')});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
  await button('确认换源并阅读').click();await page.getByRole('dialog',{name:'切换书源'}).waitFor({state:'hidden'});await page.locator('book-content p').filter({hasText:'新来源的正文'}).waitFor();assert.equal(ctx.sources.chapters.binding(user.id,acquired.publicationId).publication_ref,'alternative');
  await button('设置').click();await page.locator('.panel-fold > summary',{hasText:'电纸书预设'}).click();await button('应用电纸书预设').click();

@@ -1,3 +1,4 @@
+import { Select } from './select.tsx';
 import { useEffect, useState } from 'react';
 import type { ReaderApi } from '../api/client.ts';
 import type { ManagedUser, RegistrationSettings } from '../api/types.ts';
@@ -52,7 +53,7 @@ export function UserManagement({ api,onSaved }: { api: ReaderApi;onSaved?:()=>vo
       <label>用户名<input required minLength={3} maxLength={100} value={username} onInput={e => setUsername(e.currentTarget.value)} /></label>
       <label>初始密码<input required type="password" autoComplete="new-password" minLength={8} maxLength={1024} value={password} onInput={e => setPassword(e.currentTarget.value)} /></label>
       <label>显示名<input maxLength={100} value={displayName} onInput={e => setDisplayName(e.currentTarget.value)} /></label>
-      <label>账号角色<select value={role} onChange={e => setRole(e.currentTarget.value as 'admin' | 'member')}><option value="member">普通用户</option><option value="admin">管理员</option></select></label>
+      <label>账号角色<Select value={role} onChange={e => setRole(e.currentTarget.value as 'admin' | 'member')}><option value="member">普通用户</option><option value="admin">管理员</option></Select></label>
       <label className="business-setting-toggle">允许使用影音<input type="checkbox" checked={mediaEnabled??defaultMedia} onChange={event=>setMediaEnabled(event.currentTarget.checked)}/></label>
       <button className="button primary" disabled={busy}>创建账号</button>
     </form>}
@@ -78,7 +79,7 @@ export function RegistrationManagement({ api }: { api: ReaderApi }) {
   return <div className="user-management">
     {notice}
     {settings && <>
-      <label className="user-manager-mode">注册方式<select aria-label="注册方式" value={settings.mode} disabled={busy} onChange={e => { const mode = e.currentTarget.value as RegistrationSettings['mode']; confirm({ text: `将注册方式修改为${mode === 'closed' ? '关闭注册' : mode === 'open' ? '开放注册（任何访问者都可创建账号）' : '仅邀请码注册'}？`, run: () => api.setRegistrationMode(mode) }); }}><option value="closed">关闭注册</option><option value="open">开放注册</option><option value="invite">仅邀请码注册</option></select></label>
+      <label className="user-manager-mode">注册方式<Select aria-label="注册方式" value={settings.mode} disabled={busy} onChange={e => { const mode = e.currentTarget.value as RegistrationSettings['mode']; confirm({ text: `将注册方式修改为${mode === 'closed' ? '关闭注册' : mode === 'open' ? '开放注册（任何访问者都可创建账号）' : '仅邀请码注册'}？`, run: () => api.setRegistrationMode(mode) }); }}><option value="closed">关闭注册</option><option value="open">开放注册</option><option value="invite">仅邀请码注册</option></Select></label>
       <p className="muted">关闭注册时仍可由管理员创建账号。设置立即生效并在重启后保留。</p>
       <details><summary>创建邀请码</summary><form className="user-manager-form" onSubmit={e => { e.preventDefault(); void work(async () => { setCode((await api.createInvite({ label, maxUses, days })).code); }, '邀请码已创建'); }}><label>备注<input maxLength={80} value={label} onInput={e => setLabel(e.currentTarget.value)} /></label><label>可用次数<input type="number" required min={1} max={1000} value={maxUses} onInput={e => setMaxUses(Number(e.currentTarget.value))} /></label><label>有效天数<input type="number" required min={1} max={365} value={days} onInput={e => setDays(Number(e.currentTarget.value))} /></label><button className="button primary" disabled={busy}>生成邀请码</button></form></details>
       {code && <label className="user-manager-mode">新邀请码（仅本次显示，请复制保存）<input aria-label="新邀请码" readOnly value={code} onFocus={e => e.currentTarget.select()} /></label>}

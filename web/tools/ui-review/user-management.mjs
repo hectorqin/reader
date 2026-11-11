@@ -33,7 +33,7 @@ export async function reviewUserManagement(context,page,base,shots) {
   await member.getByRole('button',{name:'启用',exact:true}).click();await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await member.getByRole('button',{name:'停用',exact:true}).waitFor();
   await member.getByRole('button',{name:'重置密码',exact:true}).click();await dialog.getByLabel('新密码',{exact:true}).fill('password456');await button('确认重置密码').click();await page.getByText('密码已重置，旧会话已失效',{exact:true}).waitFor();
   await page.screenshot({path:join(shots,'admin-users-390.png')});
-  await page.goto(base+'/#/me');await page.getByRole('link',{name:'注册与邀请'}).click();await dialog.getByLabel('注册方式').waitFor();await dialog.getByLabel('注册方式').selectOption('invite');await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await page.getByText('已保存',{exact:true}).waitFor();
+  await page.goto(base+'/#/me');await page.getByRole('link',{name:'注册与邀请'}).click();await dialog.getByLabel('注册方式').and(page.locator('select')).waitFor();await dialog.getByLabel('注册方式').and(page.locator('select')).selectOption('invite');await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await page.getByText('已保存',{exact:true}).waitFor();
   await page.getByText('创建邀请码',{exact:true}).click();await dialog.getByLabel('备注',{exact:true}).fill('家人注册');await button('生成邀请码').click();await dialog.getByLabel('新邀请码',{exact:true}).waitFor();
   const code=await dialog.getByLabel('新邀请码',{exact:true}).inputValue();assert.ok(code.length>=20);
   await page.screenshot({path:join(shots,'admin-registration-390.png')});
@@ -46,7 +46,7 @@ export async function reviewUserManagement(context,page,base,shots) {
     await visitor.goto(base+'/#/me');await visitor.getByRole('heading',{name:'我的'}).waitFor();
     assert.equal(await visitor.getByRole('link',{name:/用户管理|注册与邀请|服务配置/}).count(),0);
   } finally {await newcomer.close();}
-  await dialog.getByLabel('注册方式').selectOption('closed');await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await page.getByText('已保存',{exact:true}).waitFor();
+  await dialog.getByLabel('注册方式').and(page.locator('select')).selectOption('closed');await page.locator('dialog[role=alertdialog] .sheet-footer .primary').click();await page.getByText('已保存',{exact:true}).waitFor();
   const anonymous=await context.browser().newContext(), login=await anonymous.newPage();
   try {await login.goto(base);await login.getByText('此实例已关闭公开注册，请使用已有账号登录。',{exact:true}).waitFor();assert.equal(await login.getByRole('button',{name:'注册新账号',exact:true}).count(),0);}finally{await anonymous.close();}
 }

@@ -85,7 +85,7 @@ try{
   await toggleUser('admin',false);
   const toggleGlobal=async enabled=>{
     await admin.goto(origin+'/#/me/admin/services');
-    await admin.getByLabel('配置分类',{exact:true}).selectOption('modules');
+    await admin.getByLabel('配置分类',{exact:true}).and(admin.locator('select')).selectOption('modules');
     await admin.getByRole('checkbox',{name:'启用影音模块'}).setChecked(enabled);
     await admin.getByRole('button',{name:'保存配置',exact:true}).click();
     if(!enabled)await admin.getByRole('alertdialog').getByRole('button',{name:'确认',exact:true}).click();
@@ -94,7 +94,7 @@ try{
   await toggleGlobal(false);
   await admin.reload();
   await admin.getByText('影音服务：已关闭',{exact:true}).waitFor();
-  await admin.getByLabel('配置分类',{exact:true}).selectOption('modules');
+  await admin.getByLabel('配置分类',{exact:true}).and(admin.locator('select')).selectOption('modules');
   assert.equal(await admin.locator('.app-nav-list > li').count(),3);
   assert.equal(await admin.locator('.media-player').count(),0);
   for(const width of [390,1120]){

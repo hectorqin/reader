@@ -1,3 +1,4 @@
+import { Select } from '../../../ui/select.tsx';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { SourceType } from '../../../api/sources.ts';
@@ -50,17 +51,17 @@ export function SourceEditorPage() {
     <main className="sources-body">
       {sourceId && !source ? <Callout tone="error">来源不存在</Callout> : <form className="sources-card" onSubmit={save}>
         <label>来源类型
-          <select required disabled={!!sourceId} value={typeKey} onChange={event => { setTypeKey(event.currentTarget.value); setConfig({}); setRaw('{}'); }}>
+          <Select required disabled={!!sourceId} value={typeKey} onChange={event => { setTypeKey(event.currentTarget.value); setConfig({}); setRaw('{}'); }}>
             <option value="" disabled>选择来源类型</option>
             {types.data?.map(item => <option key={`${item.pluginId}/${item.id}`} value={`${item.pluginId}/${item.id}`}>{item.label} ({item.pluginId})</option>)}
-          </select>
+          </Select>
         </label>
         <label>名称<input required value={name} onChange={event => setName(event.currentTarget.value)} /></label>
         {type?.configSchema?.properties
           ? Object.entries(type.configSchema.properties).map(([key, field]) => field.type === 'boolean'
             ? <label key={key} className="sources-consent"><input type="checkbox" checked={config[key] === true} onChange={event => setField(key, event.currentTarget.checked)} />{field.title ?? key}</label>
             : field.enum
-              ? <label key={key}>{field.title ?? key}<select value={String(config[key] ?? field.default ?? '')} onChange={event => setField(key, event.currentTarget.value)}>{field.enum.map((value, index) => <option key={value} value={value}>{field.enumNames?.[index] ?? value}</option>)}</select></label>
+              ? <label key={key}>{field.title ?? key}<Select value={String(config[key] ?? field.default ?? '')} onChange={event => setField(key, event.currentTarget.value)}>{field.enum.map((value, index) => <option key={value} value={value}>{field.enumNames?.[index] ?? value}</option>)}</Select></label>
               : <label key={key}>{field.title ?? key}<input type={field.type === 'number' || field.type === 'integer' ? 'number' : 'text'} value={String(config[key] ?? field.default ?? '')} onChange={event => setField(key, field.type === 'number' || field.type === 'integer' ? Number(event.currentTarget.value) : event.currentTarget.value)} /></label>)
           : <label>配置 JSON<textarea rows={8} value={raw} onChange={event => setRaw(event.currentTarget.value)} /></label>}
         {jsonError && <Callout tone="error">{jsonError}</Callout>}

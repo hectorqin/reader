@@ -1,3 +1,4 @@
+import { Select } from './select.tsx';
 import type { CSSProperties } from 'react';
 import { paperIds, readerPapers, themes, type AppThemeId, type ModePreference, type ReaderPaper, type ReaderSurface, type ResolvedTheme, type ThemeMode, type ThemePreference } from '../shared/theme/theme.ts';
 import type { ChapterQuality } from '../api/sources.ts';
@@ -366,9 +367,9 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
                 : state.alternativeChecks[entry.ref]!.error}</span>}
             </button>)}</div>
             {!!state.alternatives.errors?.length && <CatalogFeedback page={state.alternatives} merged compact searching={!!state.alternativesSearching} />}
-            {state.alternativeChapters && <Sheet title="选择阅读章节" size="compact" busy={!!state.switching} onClose={() => handlers.onCancelAlternative?.()}><div className="alternative-preview"><h4>{state.alternativeTitle}</h4><label>切换后阅读的章节<select value={state.alternativeChapter ?? ''} disabled={state.switching === true} onChange={event => handlers.onAlternativeChapter?.(event.currentTarget.value)}>
+            {state.alternativeChapters && <Sheet title="选择阅读章节" size="compact" busy={!!state.switching} onClose={() => handlers.onCancelAlternative?.()}><div className="alternative-preview"><h4>{state.alternativeTitle}</h4><label>切换后阅读的章节<Select value={state.alternativeChapter ?? ''} disabled={state.switching === true} onChange={event => handlers.onAlternativeChapter?.(event.currentTarget.value)}>
               <option key="empty" value="">请选择章节</option>{state.alternativeChapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}
-            </select></label>
+            </Select></label>
               {state.alternativeLatest && <p>最新章节：{state.alternativeLatest}</p>}
               <Button disabled={state.switching || state.alternativeQualityBusy || !state.alternativeChapter} onClick={() => handlers.onCheckAlternative?.()}>{state.alternativeQualityBusy ? '正在检测正文…' : '检测所选章节 / 重试'}</Button>
               {state.alternativeQuality && <div role="status" className="chapter-quality"><strong>正文检测通过</strong><p>{state.alternativeQuality.characters} 字符 · {state.alternativeQuality.images} 张图片 · {(state.alternativeQuality.bytes / 1024).toFixed(1)} KiB · {state.alternativeQuality.elapsedMs} ms</p><p>检测仅说明本次内容可读，不保证章节完整或与原书一致。</p></div>}
@@ -1070,13 +1071,13 @@ function SelectRow({
   return (
     <div className="field">
       <label>{label}</label>
-      <select aria-label={label} value={value} onChange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}>
+      <Select aria-label={label} value={value} onChange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}
-      </select>
+      </Select>
     </div>
   );
 }
