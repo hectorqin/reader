@@ -424,3 +424,35 @@ test('a local book takes a cover from a source as a manual override that survive
   const after = (await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(h.admin) })).json().items.find((item: { title: string }) => item.title === '本地小说') as { coverUrl: string | null; manualFields: string[] };
   assert.equal(after.coverUrl, null); assert.ok(!after.manualFields.includes('cover'));
 });
+
+test('the local library browses folder by folder with covers, like any source in 发现', async (t) => {
+  const h = await harness(); t.after(() => h.close());
+  await mkdir(join(h.booksDir, '科幻', '刘慈欣'), { recursive: true }); await mkdir(join(h.booksDir, '科学'));
+  await writeFile(join(h.booksDir, '根目录的书.txt'), '第一章\n\n正文一。\n');
+  await writeFile(join(h.booksDir, '科幻', '科幻的书.txt'), '第一章\n\n正文二。\n');
+  await writeFile(join(h.booksDir, '科幻', '刘慈欣', '三体.txt'), '第一章\n\n正文三。\n');
+  await writeFile(join(h.booksDir, '科学', '科学的书.txt'), '第一章\n\n正文四。\n');
+  await h.ctx.scanner.scan();
+  const browse = async (query = '') => {
+    const response = await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/browse${query}`, headers: auth(h.admin) });
+    assert.equal(response.statusCode, 200, response.body);
+    return response.json() as { title: string; items: Array<{ ref: string; title: string; coverRef?: string }>; navigation?: Array<{ title: string; ref: string }>; nextCursor?: string };
+  };
+  const root = await browse();
+  assert.deepEqual([root.title, root.items.map((item) => item.title), root.navigation?.map((item) => item.title)], ['本地书库', ['根目录的书'], ['科幻', '科学']]);
+  const folder = await browse(`?ref=${encodeURIComponent('科幻')}`);
+  assert.deepEqual([folder.title, folder.items.map((item) => item.title), folder.navigation?.map((item) => [item.title, item.ref])], ['科幻', ['科幻的书'], [['刘慈欣', '科幻/刘慈欣']]]);
+  const leaf = await browse(`?ref=${encodeURIComponent('科幻/刘慈欣')}`);
+  assert.deepEqual([leaf.title, leaf.items.map((item) => item.title), leaf.navigation], ['刘慈欣', ['三体'], undefined]);
+  assert.equal((await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/browse?ref=${encodeURIComponent('../etc')}`, headers: auth(h.admin) })).statusCode, 403);
+
+  const book = leaf.items[0]!;
+  assert.equal(book.coverRef, undefined, 'a text file has no cover');
+  const fixture = await installFixture(h);
+  await fixture.state({ ...initialState(), covers: { cover: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHf8AAAAASUVORK5CYII=' } });
+  await h.app.inject({ method: 'POST', url: `/api/v1/books/${book.ref}/cover-source`, headers: auth(h.admin), payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'cover' } });
+  const covered = (await browse(`?ref=${encodeURIComponent('科幻/刘慈欣')}`)).items[0]!;
+  assert.equal(covered.coverRef, 'cover');
+  const image = await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/cover?entryRef=${covered.ref}&coverRef=cover`, headers: auth(h.admin) });
+  assert.equal(image.statusCode, 200, image.body); assert.equal(image.headers['content-type'], 'image/png');
+});

@@ -112,7 +112,7 @@ export function SourcesPage() {
   }, [selectedSourceId]);
   useEffect(() => { if (detail && detailQuery.data) setDetail({ ...detail, ...detailQuery.data }); }, [detailQuery.data]);
   // 发现 appears once a source can be browsed; it is a place of its own, not a mode of 搜书.
-  const exploreSources = enabledSources.filter(source => source.descriptor?.capabilities.includes('browse') && source.pluginId !== 'reader.local');
+  const exploreSources = enabledSources.filter(source => source.descriptor?.capabilities.includes('browse'));
   const tabList = ([['search', '搜书'], ...(exploreSources.length || tab === 'explore' ? [['explore', '发现']] : []), ['sources', '书源管理'], ['updates', '自动追更'], ...(admin ? [['plugins', '插件管理']] : [])] as Array<[SourceTab, string]>);
   return <div className="sources-screen sources-hub">
     <SourcesHeader title="书源与追更" backTo="/shelf" />
