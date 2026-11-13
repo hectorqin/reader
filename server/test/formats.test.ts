@@ -6,6 +6,7 @@
  * real bytes. The fixtures are built by the test itself so there is no checked-in
  * binary to drift.
  */
+import { autoShelf } from './auto-shelf.ts';
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm, readFile, utimes } from 'node:fs/promises';
@@ -199,6 +200,7 @@ before(async () => {
 
   const config = loadConfig();
   const db = openDatabase(config);
+  autoShelf(db);
   const silent = Fastify({ logger: false });
   ctx = {
     config,

@@ -110,15 +110,16 @@ export class UserService {
          VALUES (?,?,?,?,?,?,?,?,?)`,
         row.id, row.username, row.display_name, row.password_hash, row.role, row.disabled, row.created_at, row.updated_at, row.media_enabled!,
       );
-      // A new account must see the whole shared library straight away. Without
-      // this, a book scanned before the account existed would stay invisible
-      // until its file happened to change.
-      this.db.run(
-        `INSERT OR IGNORE INTO user_books (user_id, book_id, added_at)
-         SELECT ?, b.id, ? FROM books b
-         WHERE EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)`,
-        row.id, now,
-      );
+      // With `library.autoShelf` a new account starts with the whole library on its
+      // shelf; otherwise it starts empty and adds books from 书库 and 发现.
+      if (new BusinessSettingsReader(this.db).read('library').autoShelf) {
+        this.db.run(
+          `INSERT OR IGNORE INTO user_books (user_id, book_id, added_at)
+           SELECT ?, b.id, ? FROM books b
+           WHERE EXISTS (SELECT 1 FROM book_files f WHERE f.book_id = b.id AND f.missing = 0)`,
+          row.id, now,
+        );
+      }
       return toPublicUser(row);
     });
   }
