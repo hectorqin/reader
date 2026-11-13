@@ -28,7 +28,7 @@ import { DEFAULT_APP_SETTINGS, READOUT_FIELDS, READOUT_OPTIONS, type ReadoutMode
 import { formatDate } from '../lib/format.ts';
 import { ReaderIndicators } from './reader-indicators.tsx';
 import type { SpeechEngineKind } from '../render/speech.ts';
-import { type ReactNode, type JSX, useState } from 'react';
+import { Fragment, type ReactNode, type JSX, useState } from 'react';
 import { Button, IconButton, SectionTitle, SwitchRow } from './toolkit.tsx';
 import { Icon, type IconName } from './icon.tsx';
 import { ActionMenu } from './action-menu.tsx';
@@ -47,6 +47,10 @@ export interface ChromeTocEntry {
   label: string;
   depth: number;
   spine?: number;
+  /** The volume heading this entry sits under; drawn once, above the first entry that has it. */
+  volume?: string;
+  /** A short line under the label, such as when the chapter was updated. */
+  note?: string;
 }
 
 export interface SpeechBarState {
@@ -328,8 +332,10 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
                 const hasChildren = (state.toc[index + 1]?.depth ?? -1) > entry.depth;
                 if (hasChildren && collapsed.has(entry.id)) hiddenDepth = entry.depth;
                 const reachable = entry.spine !== undefined && entry.spine >= 0;
-                return (
-                  <li key={entry.id + index} data-section={entry.id}>
+                const heading = entry.volume && entry.volume !== state.toc[index - 1]?.volume ? entry.volume : '';
+                return (<Fragment key={entry.id + index}>
+                  {heading && <li className="toc-volume" role="presentation">{heading}</li>}
+                  <li data-section={entry.id}>
                     {hasChildren && <button className="toc-collapse" aria-label={entry.label + (collapsed.has(entry.id) ? ' 展开' : ' 折叠')} aria-expanded={!collapsed.has(entry.id)} onClick={() => { const next = new Set(collapsed); if (next.has(entry.id)) next.delete(entry.id); else next.add(entry.id); setCollapsed(next); }}><Icon name={collapsed.has(entry.id) ? 'chevron-right' : 'chevron-down'} size={16} /></button>}
                     <button
                       type="button"
@@ -341,10 +347,10 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
                       onClick={() => handlers.onTocEntry(entry.id)}
                     >
                       <span className="toc-index">{index + 1}</span>
-                      <span className="toc-label">{entry.label}</span>
+                      <span className="toc-label">{entry.label}{entry.note && <small className="toc-note">{entry.note}</small>}</span>
                     </button>
                   </li>
-                );
+                </Fragment>);
               })}
             </ul>
           )}

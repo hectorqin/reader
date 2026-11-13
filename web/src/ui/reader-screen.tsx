@@ -16,7 +16,13 @@ import { attachGestures } from './gestures.ts';
 import { READOUT_FIELDS, type AppSettings } from '../store/settings.ts';
 import { createStagedDoc, isStagedKind, windowIndexOf } from '../formats/windowed.ts';
 import type { BookDoc } from '../formats/types.ts';
-import type { TocEntry } from '../api/types.ts';
+import type { ContentItem, TocEntry } from '../api/types.ts';
+
+/** The directory of a chapter book, straight from its items: volumes and notes included. */
+const tocOf = (items: ContentItem[]): ChromeTocEntry[] => items.map((item) => ({
+  id: item.href, label: item.title, depth: 0, spine: item.seq,
+  ...(item.volume ? { volume: item.volume } : {}), ...(item.note ? { note: item.note } : {}),
+}));
 import type { NativePageHost } from './native-page.ts';
 import { TtsEngine, type TtsSnapshot } from '../render/tts.ts';
 import type { SpokenChunk } from '../render/tts-text.ts';
@@ -498,6 +504,7 @@ export class ReaderScreen {
         title: item.title,
         level: 0,
         spine: item.seq,
+        ...(item.volume ? { volume: item.volume } : {}), ...(item.note ? { note: item.note } : {}),
       }));
     }
     if (token !== this.loadingToken) return null;
@@ -505,6 +512,7 @@ export class ReaderScreen {
     this.patch({ toc: toc.map((entry) => ({
       id: entry.href, label: entry.title, depth: entry.level,
       ...(entry.spine === undefined ? {} : { spine: entry.spine }),
+      ...(entry.volume ? { volume: entry.volume } : {}), ...(entry.note ? { note: entry.note } : {}),
     })) });
 
     this.content = content;
@@ -838,7 +846,7 @@ export class ReaderScreen {
       const blob = await this.options.api.refreshChapter(book.id, item.resourceRef ?? item.href, { signal: run.signal });
       if (token !== this.loadingToken || run.signal.aborted) return;
       await this.publicationCache.putResource(book.id, renditionRef(item), new Uint8Array(await blob.arrayBuffer()));
-      const toc = content.items.map(value => ({ id: value.href, label: value.title, depth: 0, spine: value.seq }));
+      const toc = tocOf(content.items);
       const doc = createStagedDoc({ kind: content.kind, content, toc, orderedByBook: true, loader: { read: value => this.readStagedSection(book, value) } });
       (doc as BookDoc & { staged?: unknown }).staged = doc;
       // Navigation remains possible during the network request; restore the current landing chapter.
@@ -904,7 +912,7 @@ export class ReaderScreen {
       if (token !== this.loadingToken) return;
       const result = await this.options.api.switchSource(book.id, this.alternativeRef, this.chrome.alternativeChapter!, String(this.content?.revision ?? previous.content?.revision ?? previous.revision));
       if (token !== this.loadingToken) return;
-      const content = result.content, toc = content.items.map(item => ({ id: item.href, label: item.title, depth: 0, spine: item.seq }));
+      const content = result.content, toc = tocOf(content.items);
       const doc = createStagedDoc({ kind: content.kind, content, toc, orderedByBook: true, loader: { read: item => this.readStagedSection(book, item) } });
       (doc as BookDoc & { staged?: unknown }).staged = doc;
       const index = doc.sections.findIndex(section => section.id === result.href);
@@ -934,7 +942,7 @@ export class ReaderScreen {
     try {
       const content = await this.options.api.refreshPublication(book.id);
       if (token !== this.loadingToken) return;
-      const toc = content.items.map((item) => ({ id: item.href, label: item.title, depth: 0, spine: item.seq }));
+      const toc = tocOf(content.items);
       const doc = createStagedDoc({
         kind: content.kind, content, toc, orderedByBook: true,
         loader: { read: (item) => this.readStagedSection(book, item) },
@@ -1609,7 +1617,7 @@ export class ReaderScreen {
 
     let entries: ChromeTocEntry[] = [];
     if (book.format === 'chapters' && this.content) {
-      entries = this.content.items.map((item) => ({ id: item.href, label: item.title, depth: 0, spine: item.seq }));
+      entries = tocOf(this.content.items);
       this.patch({ toc: entries });
       return;
     }

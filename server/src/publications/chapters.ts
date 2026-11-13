@@ -64,6 +64,7 @@ export class ChapterPublications {
           // plugin's characters as HTML or run a markup parser over them.
           mediaType: chapterMedia(item.mediaType),
           ...(chapterMedia(item.mediaType).startsWith('text/plain') ? { format: 'html' as const } : {}),
+          ...(item.volume ? { volume: item.volume } : {}), ...(item.note ? { note: item.note } : {}),
         };
       }),
     };
@@ -272,6 +273,8 @@ export class ChapterPublications {
       ...(snapshot.version === undefined ? {} : { version: snapshot.version }),
       items: [...snapshot.items].sort((left, right) => left.seq - right.seq).map((item, seq) => ({
         id: item.id, seq, sourceUrl: item.sourceUrl, title: item.title, kind: 'chapter', mediaType: chapterMedia(item.mediaType), ref: item.ref,
+        // Absent rather than empty, so a directory without them keeps the revision it had.
+        ...(item.volume?.trim() ? { volume: item.volume.trim().slice(0, 200) } : {}), ...(item.note?.trim() ? { note: item.note.trim().slice(0, 200) } : {}),
       })),
     };
   }

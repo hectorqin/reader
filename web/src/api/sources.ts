@@ -10,6 +10,8 @@ export interface SourceInstance {
 }
 export interface SourceEntry {
   latestChapter?: string; sourceName?: string; coverUrl?: string;
+  /** The cover as a resource of this entry, fetched through the server (see `sourceCoverUrl`). */
+  coverRef?: string;
   ref: string; title: string; authors?: string[]; description?: string;
   options?: Array<{ id: string; label: string; available?: boolean }>;
 }

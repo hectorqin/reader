@@ -18,13 +18,15 @@ import { UploadService } from '../src/services/uploads.ts';
 
 interface Session { token: string; id: string }
 interface Item { href: string; resourceRef: string; title: string; seq: number }
-interface Chapter { id: string; seq: number; title: string; kind: 'chapter'; mediaType: string; ref: string }
+interface Chapter { id: string; seq: number; title: string; kind: 'chapter'; mediaType: string; ref: string; volume?: string; note?: string }
 interface FixtureState {
   version: string;
   items: Chapter[];
   resources: Record<string, string>;
   failManifest?: boolean;
   resourceMediaType?: string;
+  /** Base64 images by cover ref; the entry advertises `cover` when present. */
+  covers?: Record<string, string>;
 }
 
 const PLUGIN_ID = 'reader.source.chapters-test';
@@ -110,7 +112,10 @@ const entry = { ref: ${JSON.stringify(BOOK_REF)}, title: '来自插件的章节�
 const methods = {
   validateConfig: () => null,
   browse: () => ({ items: [entry] }),
-  detail: () => entry,
+  detail: async () => {
+    const state = JSON.parse(await readFile(new URL('./state.json', import.meta.url), 'utf8'));
+    return state.covers?.cover ? { ...entry, coverRef: 'cover' } : entry;
+  },
   acquire: () => ({ kind: 'chapters', publicationRef: entry.ref }),
   getManifest: async ({ publicationRef }) => {
     const state = JSON.parse(await readFile(new URL('./state.json', import.meta.url), 'utf8'));
@@ -119,6 +124,7 @@ const methods = {
   },
   readResource: async ({ context, request }) => {
     const state = JSON.parse(await readFile(new URL('./state.json', import.meta.url), 'utf8'));
+    if (state.covers?.[request.ref]) return { mediaType: request.ref === 'other' ? 'image/gif' : 'image/png', base64: state.covers[request.ref] };
     const text = state.resources[request.ref];
     if (text === undefined) throw Object.assign(new Error('missing fixture chapter'), { code: 'RESOURCE_GONE' });
     return { mediaType: state.resourceMediaType ?? 'text/plain; charset=utf-8', text: text + '\\nreader=' + context.userId };
@@ -338,4 +344,48 @@ test('chapter reading rejects executable upstream resources without replacing al
   assert.ok(rejected.statusCode >= 400, rejected.body);
   assert.doesNotMatch(rejected.headers['content-type'] as string, /^text\/html/);
   assert.equal((await asset(h, h.admin, id, book.items[0]!)).body, first.body);
+});
+
+test('directories keep volumes and notes; covers are read through the source, saved on acquisition and can be changed', async (t) => {
+  const h = await harness(); t.after(() => h.close());
+  const fixture = await installFixture(h);
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHf8AAAAASUVORK5CYII=';
+  const gif = Buffer.from('GIF89a\u0001\u0000\u0001\u0000\u0000\u0000\u0000;', 'latin1').toString('base64');
+  const state = initialState();
+  state.items[0] = { ...state.items[0]!, volume: '第一卷', note: '2024-01-01' }; state.items[1] = { ...state.items[1]!, volume: '第一卷' };
+  state.covers = { cover: png, other: gif, 'not-an-image': Buffer.from('<svg onload="alert(1)"/>').toString('base64') };
+  await fixture.state(state);
+  const member = await h.member(), id = await acquire(h, member);
+  const book = await manifest(h, member, id) as Awaited<ReturnType<typeof manifest>> & { items: Array<Item & { volume?: string; note?: string }> };
+  assert.deepEqual(book.items.map((item) => [item.volume, item.note]), [['第一卷', '2024-01-01'], ['第一卷', undefined], [undefined, undefined]]);
+  const toc = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}/toc`, headers: auth(member) });
+  assert.deepEqual(toc.json().toc.map((item: { volume?: string }) => item.volume), ['第一卷', '第一卷', undefined]);
+
+  const shelved = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}`, headers: auth(member) });
+  const coverUrl = shelved.json().book.coverUrl as string;
+  assert.match(coverUrl, new RegExp(`^/api/v1/books/${id}/cover\\?v=[a-f0-9]{10}$`), 'the cover is saved when the book is added');
+  const cover = await h.app.inject({ method: 'GET', url: coverUrl, headers: auth(member) });
+  assert.equal(cover.statusCode, 200); assert.equal(cover.headers['content-type'], 'image/png'); assert.ok(cover.rawPayload.equals(Buffer.from(png, 'base64')));
+
+  const query = (coverRef: string) => `entryRef=${encodeURIComponent(BOOK_REF)}&coverRef=${encodeURIComponent(coverRef)}`;
+  const preview = await h.app.inject({ method: 'GET', url: `/api/v1/sources/${SOURCE_ID}/cover?${query('other')}`, headers: auth(member) });
+  assert.equal(preview.statusCode, 200, preview.body); assert.equal(preview.headers['content-type'], 'image/gif'); assert.equal(preview.headers['x-content-type-options'], 'nosniff');
+  const candidate = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}/cover-candidate?${query('other')}`, headers: auth(member) });
+  assert.equal(candidate.statusCode, 200, candidate.body);
+  for (const url of [`/api/v1/sources/${SOURCE_ID}/cover?${query('not-an-image')}`, `/api/v1/books/${id}/cover-candidate?${query('not-an-image')}`]) {
+    const rejected = await h.app.inject({ method: 'GET', url, headers: auth(member) });
+    assert.equal(rejected.statusCode, 400, 'bytes that are not a raster image never reach the browser');
+  }
+  assert.equal((await h.app.inject({ method: 'GET', url: `/api/v1/sources/${SOURCE_ID}/cover?${query('other')}` })).statusCode, 401);
+
+  const changed = await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/cover-source`, headers: auth(member), payload: { entryRef: BOOK_REF, coverRef: 'other' } });
+  assert.equal(changed.statusCode, 200, changed.body);
+  const after = (await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}`, headers: auth(member) })).json().book.coverUrl as string;
+  assert.notEqual(after, coverUrl, 'a changed cover has a new URL');
+  const replaced = await h.app.inject({ method: 'GET', url: after, headers: auth(member) });
+  assert.equal(replaced.headers['content-type'], 'image/gif'); assert.ok(replaced.rawPayload.equals(Buffer.from(gif, 'base64')));
+  const refused = await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/cover-source`, headers: auth(member), payload: { entryRef: BOOK_REF, coverRef: 'not-an-image' } });
+  assert.equal(refused.statusCode, 400); assert.equal((await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}`, headers: auth(member) })).json().book.coverUrl, after);
+  const foreign = await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/cover-source`, headers: auth(h.admin), payload: { entryRef: BOOK_REF, coverRef: 'other' } });
+  assert.equal(foreign.statusCode, 404, 'another account cannot change this book');
 });

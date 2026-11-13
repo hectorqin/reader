@@ -81,6 +81,10 @@ export interface ContentItem {
    * the size one request at a time. Absent means unknown.
    */
   size?: number;
+  /** The volume a chapter belongs to; consecutive items sharing it sit under one heading. */
+  volume?: string;
+  /** A short line under the title, such as when a chapter was updated. */
+  note?: string;
 }
 
 /** A named group of items; volumes for comics, or a single implicit one. */
@@ -147,6 +151,9 @@ export interface TocEntry {
   level: number;
   /** Whole-book index, when the format has one. */
   spine?: number;
+  /** The volume heading this entry sits under, and a short line under its title. */
+  volume?: string;
+  note?: string;
 }
 
 export interface AssetRequest {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { Db } from '../db/index.ts';
 import { applyOverrides, type BaseMetadata } from './merge.ts';
 import { safeJsonParse } from '../lib/text.ts';
@@ -377,7 +378,8 @@ export class ShelfService {
       tags: effective.tags,
       pubdate: effective.pubdate,
       format: row.format,
-      coverUrl: row.cover_path ? `/api/v1/books/${row.id}/cover` : null,
+      // The cover response is immutable-cached; a changed cover file gets a new URL.
+      coverUrl: row.cover_path ? `/api/v1/books/${row.id}/cover?v=${createHash('sha1').update(row.cover_path).digest('hex').slice(0, 10)}` : null,
       fileSize: row.file_size,
       pageCount: row.page_count,
       source: effective.source,

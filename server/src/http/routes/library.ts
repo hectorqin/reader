@@ -303,7 +303,8 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
       const manifest = await ctx.sources.chapters.manifest(user.id, id);
       return {
         revision: manifest.revision,
-        toc: manifest.items.map((item) => ({ href: item.href, title: item.title, level: 0, spine: item.seq })),
+        toc: manifest.items.map((item) => ({ href: item.href, title: item.title, level: 0, spine: item.seq,
+          ...(item.volume ? { volume: item.volume } : {}), ...(item.note ? { note: item.note } : {}) })),
       };
     }
     const handler = resolveHandler(ctx, id, book.format);
@@ -487,7 +488,7 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
     const abs = resolveInside(ctx.config.dataDir, assertSafeRel(row.cover_path));
     if (!existsSync(abs)) throw notFound('cover cache missing', 'NO_COVER');
     const ext = extname(abs).toLowerCase();
-    const mime = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.svg' ? 'image/svg+xml' : 'image/jpeg';
+    const mime = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.svg' ? 'image/svg+xml' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
     reply.header('content-type', mime);
     reply.header('cache-control', 'public, max-age=31536000, immutable');
     return reply.send(createReadStream(abs));

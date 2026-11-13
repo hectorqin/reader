@@ -893,7 +893,8 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 | POST /sources/:id/search/cancel | body `{sessionId}`，取消进行中的搜索 → `{ok:true}` |
 | GET /sources/:id/search-filters | 来源声明的搜索筛选项 |
 | GET /sources/:id/entries?ref=条目引用 | 查询条目详情 |
-| POST /sources/:id/acquire | body `{entryRef, optionId?}`，获取条目并加入当前账号书架 → `{kind:"ready", publicationId}` |
+| POST /sources/:id/acquire | body `{entryRef, optionId?}`，获取条目并加入当前账号书架 → `{kind:"ready", publicationId}`；章节书的条目带 `coverRef` 时同时保存封面（失败不影响加入书架） |
+| GET /sources/:id/cover?entryRef=&coverRef= | 条目封面。由服务端通过来源读取（`readResource({publicationRef: entryRef, ref: coverRef})`），只接受 PNG/JPEG/GIF/WebP 且字节与类型相符，插件的图片地址不会到达浏览器 |
 | GET /sources/:id/credentials | 当前账号在该来源的凭据状态：`available`、`fields:[{key,label,configured}]` 等，不含明文 |
 | PUT /sources/:id/credentials/:key、DELETE 同路径 | 保存（body `{value}`）/ 删除当前账号的一项凭据 → `{ok:true}` |
 | GET /sources/:id/publications/:publicationRef/manifest | 调试用：直接读取来源的章节目录 |
@@ -924,6 +925,8 @@ pluginId 是接口兼容字段。创建返回 201 与 source 对象。本地来�
 | POST /books/:id/alternatives | body `{sessionId, cursor?, resultLimit?}`，以 SSE 返回可替换的来源结果（事件同搜索） |
 | POST /books/:id/switch-preview | body `{entryRef}`，读取候选条目的目录 → `{chapters:[{id,title}], latestChapter}` |
 | POST /books/:id/switch-source | body `{entryRef, chapterId, revision}`，换源 |
+| GET /books/:id/cover-candidate?entryRef=&coverRef= | 换封面时的候选封面，经这本书所属的来源读取，限制同上 |
+| POST /books/:id/cover-source | body `{entryRef, coverRef}`，把另一个版本的封面存为这本书的封面；封面地址随之变化（`coverUrl` 带 `?v=`） |
 | POST /books/:id/switch-quality | body `{entryRef, chapterId}`，试读候选条目的一章用于比较（返回该章内容、`latestChapter` 和 `elapsedMs`），不改动书 |
 | GET /subscriptions | 当前账号的章节更新订阅（`{subscriptions}`） |
 | PATCH /books/:id/subscription | body `{enabled?, intervalMinutes?（15–10080）, acknowledge?}` → `{subscription}` |
@@ -1211,3 +1214,8 @@ All endpoints require the account access token in the Authorization header. Read
 - PUT /api/v1/books/:id/reading-overrides accepts the same object. A correction contains id, anchor (sectionId, start, end, quote, prefix, suffix), and replacement. The submitted version must match the latest version; stale writes return `409 CONFLICT`. The response is the saved object with `version` incremented by one. Up to 500 corrections are allowed, with each quote/replacement at most 4,000 characters. headingPrefix is a literal single-line prefix of at most 60 characters.
 - POST /api/v1/books/:id/reading-overrides/undo accepts { version } and saves the preceding snapshot as a new version. History is scoped to account/book and stored in DATA_DIR/reader.db; it never rewrites library files.
 - POST /api/v1/tts/test accepts { voice?, speed? }, synthesizes a fixed sample and returns { bytes, contentType, elapsedMs, cached }. Failure codes include TTS_DISABLED, TTS_AUTH, TTS_TIMEOUT, TTS_CONTENT, TTS_EMPTY and TTS_UPSTREAM. It does not accept an upstream URL. Audio playback remains GET /api/v1/tts.
+
+### 来源条目和章节目录的可选字段
+
+- `CatalogEntry.coverRef`：封面资源引用，约定用 `readResource({publicationRef: entry.ref, ref: coverRef})` 读取。
+- 章节目录条目（插件 `getManifest` 的 `items`，以及 `/books/:id/manifest`、`/books/:id/toc` 的条目）可带 `volume`（所属卷名，相邻且相同的条目归在同一个卷标题下）和 `note`（标题下的一行说明，例如更新时间）。两者都是最长 200 字符的字符串，缺省时不出现。
