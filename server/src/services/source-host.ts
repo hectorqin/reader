@@ -43,7 +43,7 @@ export class SourceHost {
         ? provider.readResource(ctx, { publicationRef, ref })
         : Promise.reject(badRequest('source has no chapter resources', 'SOURCE_UNSUPPORTED')), signal),
     });
-    this.registry.registerBuiltin('reader.local', createLocalProvider(db, shelf));
+    this.registry.registerBuiltin('reader.local', createLocalProvider(db, shelf, config.dataDir));
     this.updates = new ChapterUpdates(db, this.chapters);
     this.registry.registerBuiltin('reader.opds', createOpdsProvider());
     this.plugins = new PluginManager(db, config.dataDir, this.registry, event => this.log?.info(event, 'source plugin diagnostic'));
