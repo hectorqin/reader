@@ -1965,6 +1965,29 @@ book-content {
   background: color-mix(in srgb, var(--reader-accent) 12%, transparent);
 }
 
+/* A volume heading: names the chapters under it, and is not one of them. */
+.toc-list .toc-volume {
+  margin-top: var(--space-2);
+  padding: 0.45rem 0.6rem 0.25rem;
+  color: var(--reader-muted);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.toc-list .toc-volume:first-child {
+  margin-top: 0;
+}
+
+/* When a chapter was updated, or how long it is: a quiet second line. */
+.toc-note {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--reader-muted);
+  font-size: var(--text-meta);
+  font-weight: 400;
+}
+
 /* A row for a chapter the loaded window cannot reach. It is still listed — the
    book does have that chapter — but it must not look tappable, because tapping it
    is the case the panel used to accept in silence. */
@@ -3698,6 +3721,20 @@ book-content {
 .catalog-empty > .icon { font-size:1.7rem; color:var(--reader-muted); }
 .catalog-empty p { margin:0; font-size:var(--text-ui); color:var(--reader-muted); line-height:1.7; }
 .catalog-book { padding:1.4rem 0; align-items:flex-start; }
+.catalog-book-main { display:flex; align-items:flex-start; gap:var(--space-3); }
+.catalog-book-main > div { flex:1; min-width:0; }
+/* A source's cover: a fixed 3:4 frame, so rows do not jump when the image arrives. */
+.lazy-cover { flex:none; display:block; width:3rem; aspect-ratio:3 / 4; overflow:hidden; border-radius:var(--radius-sm); background:var(--reader-surface); border:1px solid var(--reader-line); }
+.lazy-cover img { display:block; width:100%; height:100%; object-fit:cover; }
+.lazy-cover-placeholder { display:grid; place-items:center; width:100%; height:100%; color:var(--reader-muted); font-size:var(--text-title); }
+.cover-picker-status { margin:0 0 var(--space-3); color:var(--reader-muted); font-size:var(--text-ui); }
+.cover-picker-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(6rem, 1fr)); gap:var(--space-3); }
+.cover-picker-item { display:flex; flex-direction:column; align-items:stretch; gap:var(--space-1); min-height:44px; padding:var(--space-1); border:1px solid transparent; border-radius:var(--radius-md); background:transparent; color:var(--reader-ink); font:inherit; cursor:pointer; text-align:center; }
+.cover-picker-item .lazy-cover { width:100%; }
+.cover-picker-item small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--reader-muted); font-size:var(--text-meta); }
+.cover-picker-item:focus-visible { outline:var(--focus-ring); outline-offset:2px; }
+.cover-picker-item:disabled { opacity:.6; cursor:default; }
+@media (hover: hover) and (pointer: fine) { .cover-picker-item:hover { border-color:var(--reader-line); background:var(--reader-surface); } }
 .catalog-book strong { font-size:var(--text-title); }
 .catalog-book .source-description { line-height:1.75; color:var(--reader-muted); margin:.7rem 0 0; }
 .catalog-book .sources-actions { padding-top:.2rem; }

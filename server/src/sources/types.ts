@@ -132,6 +132,12 @@ export interface CatalogEntry {
   readonly authors?: readonly string[];
   readonly description?: string;
   readonly coverUrl?: string;
+  /**
+   * The cover as a resource of this entry: the host reads it with
+   * `readResource({ publicationRef: entry.ref, ref: coverRef })`, so a plugin's
+   * cover URL never reaches the browser.
+   */
+  readonly coverRef?: string;
   readonly language?: string;
   readonly publishedAt?: string;
   readonly latestChapter?: string;
@@ -197,6 +203,10 @@ export interface ManifestItem {
   readonly kind: 'chapter' | 'page';
   readonly mediaType: string;
   readonly ref: string;
+  /** The volume this chapter belongs to; consecutive chapters sharing it sit under one heading. */
+  readonly volume?: string;
+  /** A short line under the title, such as when the chapter was updated. */
+  readonly note?: string;
 }
 
 export interface ResourceRequest {

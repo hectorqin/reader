@@ -19,9 +19,10 @@ export function decodeCatalogEntry(input: unknown): CatalogEntry {
   const value = object(input, 'catalog entry');
   string(value.ref, 'entry ref');
   string(value.title, 'entry title');
-  for (const key of ['description', 'coverUrl', 'language', 'publishedAt', 'latestChapter', 'sourceName']) {
+  for (const key of ['description', 'coverUrl', 'coverRef', 'language', 'publishedAt', 'latestChapter', 'sourceName']) {
     if (value[key] !== undefined && typeof value[key] !== 'string') invalid(`invalid plugin entry ${key}`);
   }
+  if (typeof value.coverRef === 'string' && (!value.coverRef || value.coverRef.length > 16_384)) invalid('invalid plugin entry coverRef');
   if (value.authors !== undefined &&
       (!Array.isArray(value.authors) || value.authors.some((author) => typeof author !== 'string'))) {
     invalid('plugin authors must be strings');
@@ -113,6 +114,7 @@ export function decodeManifest(input: unknown, publicationRef: string): Manifest
     string(item.title, 'chapter title');
     string(item.mediaType, 'chapter media type');
     if (item.kind !== 'chapter' && item.kind !== 'page') invalid('invalid plugin chapter kind');
+    for (const key of ['volume', 'note']) if (item[key] !== undefined && typeof item[key] !== 'string') invalid(`invalid plugin chapter ${key}`);
     if (typeof item.seq !== 'number' || !Number.isSafeInteger(item.seq) || item.seq < 0) invalid('invalid plugin chapter order');
     if (ids.has(item.id) || sequences.has(item.seq)) invalid('plugin manifest contains duplicate chapter ids or order');
     ids.add(item.id);
