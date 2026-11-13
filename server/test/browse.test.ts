@@ -7,6 +7,7 @@
  * refusing a write on a read-only mount, and keeping progress attached to a book
  * whose file was moved.
  */
+import { autoShelf } from './auto-shelf.ts';
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rename, rm, stat, readdir } from 'node:fs/promises';
@@ -71,6 +72,7 @@ before(async () => {
 
   const config = loadConfig();
   const db = openDatabase(config);
+  autoShelf(db);
   ctx = {
     config,
     db,

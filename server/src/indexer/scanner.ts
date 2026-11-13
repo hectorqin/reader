@@ -1,3 +1,4 @@
+import { BusinessSettingsReader } from '../services/business-settings.ts';
 import { createHash } from 'node:crypto';
 import { readdir, stat, readFile } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
@@ -649,13 +650,16 @@ export class Scanner {
     if (!existing) {
       this.insertBook(bookId, parsed, coverPath, now);
       this.progress.added += 1;
-      // Every existing user gets the new book on their shelf, so the library
-      // feels shared rather than something each member must curate by hand.
-      this.db.run(
-        `INSERT OR IGNORE INTO user_books (user_id, book_id, added_at)
-         SELECT id, ?, ? FROM users`,
-        bookId, now,
-      );
+      // A new book joins the library. Whether it also lands on every shelf is the
+      // administrator's choice (`library.autoShelf`, off by default): a shelf is
+      // otherwise what its reader put on it, from 书库, 发现 or an upload of their own.
+      if (new BusinessSettingsReader(this.db).read('library').autoShelf) {
+        this.db.run(
+          `INSERT OR IGNORE INTO user_books (user_id, book_id, added_at)
+           SELECT id, ?, ? FROM users`,
+          bookId, now,
+        );
+      }
     } else {
       this.progress.updated += 1;
       // Embedded metadata is never allowed to overwrite manual edits; the

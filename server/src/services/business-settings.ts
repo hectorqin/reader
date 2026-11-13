@@ -13,7 +13,7 @@ export interface BusinessValues {
   scraping:{timeoutMs:number;retries:number};
   access:{publicUrl:string;corsOrigins:string;accessTokenTtl:number;refreshTokenTtl:number};
   webdav:{url:string;username:string;password:string;maxBytes:number};
-  library:{memberUpload:boolean};
+  library:{memberUpload:boolean;autoShelf:boolean};
 }
 export type SettingsGroup=keyof BusinessValues;
 type Field={key:string;label:string;type:'text'|'textarea'|'password'|'number'|'checkbox'|'url'|'select';default:string|number|boolean;min?:number;max?:number;help?:string;options?:Array<{value:string;label:string}>};
@@ -80,6 +80,7 @@ export const SETTINGS_SCHEMA:Record<SettingsGroup,{label:string;fields:Field[]}>
   ]},
   library:{label:'书库',fields:[
     {key:'memberUpload',label:'允许成员上传书籍',type:'checkbox',default:true,help:'成员只能新增支持格式的书籍文件：不解包压缩包、不覆盖已有文件。改名、移动、删除和新建目录始终仅限管理员'},
+    {key:'autoShelf',label:'新书自动加入所有账号的书架',type:'checkbox',default:false,help:'开启后，扫描到的新书会加到每个账号的书架，新建的账号也会带上书库里的全部书。关闭时书只进入书库，由各人在书库或发现里自行加入；自己上传的书始终加入自己的书架'},
   ]},
 };
 export function settingsDefaults<K extends SettingsGroup>(group:K):BusinessValues[K]{

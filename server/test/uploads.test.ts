@@ -10,6 +10,7 @@
  * Real bytes throughout. The parts that break (an archive's central directory, a
  * Chinese filename, a truncated stream) only break against real input.
  */
+import { autoShelf } from './auto-shelf.ts';
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, rename, writeFile, readFile, readdir, rm, stat } from 'node:fs/promises';
@@ -176,6 +177,7 @@ before(async () => {
 
   const config = loadConfig();
   const db = openDatabase(config);
+  autoShelf(db);
   ctx = {
     config,
     db,

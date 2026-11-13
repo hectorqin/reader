@@ -4,6 +4,7 @@
  * out as load-bearing, so they are regression-guarded rather than left to
  * manual verification.
  */
+import { autoShelf } from './auto-shelf.ts';
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -62,6 +63,7 @@ before(async () => {
 
   const config = loadConfig();
   const db = openDatabase(config);
+  autoShelf(db);
   ctx = {
     config,
     db,
