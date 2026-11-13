@@ -59,7 +59,7 @@ it('shows a card\'s state and marks it from the ⋯ menu', async () => {
   expect(root.querySelector('.book-state')?.textContent).toBe('在读');
   await act(() => root.querySelector<HTMLButtonElement>('.book-more')!.click());
   const options = [...document.querySelectorAll('[role^=menuitem]')].map(button => button.textContent);
-  expect(options).toEqual(['标记为想读', '标记为已读', '清除标记', '从书架拿掉']);
+  expect(options).toEqual(['标记为想读', '标记为已读', '清除标记', '更换封面', '从书架拿掉']);
   await click('标记为已读');
   expect(setReadingStatus).toHaveBeenCalledWith('b1', 'finished');
   await act(() => root.querySelector<HTMLButtonElement>('.book-more')!.click());

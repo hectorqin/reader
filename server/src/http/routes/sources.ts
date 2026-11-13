@@ -151,7 +151,17 @@ export function registerSourceRoutes(app: FastifyInstance, ctx: AppContext): voi
     const user = currentUser(request); const { id } = request.params as { id: string };
     const body = request.body as Record<string, unknown> | null;
     const entryRef = textBody(body, 'entryRef'), coverRef = textBody(body, 'coverRef');
-    return withSignal(request, reply, (signal) => host.changeCover(user.id, id, entryRef, coverRef, signal));
+    if (host.chapters.has(id)) return withSignal(request, reply, (signal) => host.changeCover(user.id, id, entryRef, coverRef, signal));
+    // A local book: the cover comes from a source the user names, and is stored as a manual override.
+    ctx.shelf.get(user.id, id);
+    const sourceId = textBody(body, 'sourceId');
+    return withSignal(request, reply, (signal) => host.overrideCover(user.id, id, sourceId, entryRef, coverRef, signal));
+  });
+  app.delete('/api/v1/books/:id/cover-source', { preHandler: auth }, async (request) => {
+    const user = currentUser(request); const { id } = request.params as { id: string };
+    if (host.chapters.has(id)) throw badRequest('this book has no file cover to restore', 'SOURCE_UNSUPPORTED');
+    ctx.shelf.get(user.id, id);
+    return host.restoreCover(id);
   });
   app.post('/api/v1/sources/:id/acquire', { preHandler: auth }, async (request, reply) => {
     const user = currentUser(request); const { id } = request.params as { id: string };

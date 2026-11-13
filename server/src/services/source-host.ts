@@ -33,7 +33,7 @@ export class SourceHost {
   private activeCalls = 0;
   private readonly activeSources = new Map<string, number>();
 
-  constructor(private readonly db: Db, private readonly config: AppConfig, shelf: () => ShelfService, private readonly log?: FastifyBaseLogger) {
+  constructor(private readonly db: Db, private readonly config: AppConfig, private readonly shelf: () => ShelfService, private readonly log?: FastifyBaseLogger) {
     this.access = new SourceAccess(db);
     this.key = createHash('sha256').update('reader/source-credentials/v1\0').update(config.jwtSecret).digest();
     this.acquisitions = new FileAcquisitions(db, config);
@@ -283,6 +283,28 @@ export class SourceHost {
       await this.storeCover(provider, ctx, bookId, entryRef, coverRef);
       return { ok: true as const };
     }, signal);
+  }
+
+  /**
+   * A cover for a book that is not a source publication (a local file): taken from any
+   * source the user can search, and kept as a manual override so a rescan never replaces it.
+   */
+  async overrideCover(userId: string, bookId: string, sourceId: string, entryRef: string, coverRef: string, signal?: AbortSignal) {
+    const { type, bytes } = await this.cover(userId, sourceId, entryRef, coverRef, signal);
+    const shelf = this.shelf(), previous = shelf.loadOverrides(bookId).cover;
+    const path = await saveCover(this.config.dataDir, `${bookId}-manual-${randomBytes(6).toString('hex')}`, { data: bytes, contentType: type });
+    shelf.setOverrides(bookId, { cover: path }, userId);
+    if (previous && previous !== path) await rm(resolveInside(this.config.dataDir, previous), { force: true }).catch(() => undefined);
+    return { ok: true as const };
+  }
+
+  /** Back to the cover the file itself carries. */
+  async restoreCover(bookId: string) {
+    const shelf = this.shelf(), previous = shelf.loadOverrides(bookId).cover;
+    if (!previous) return { ok: true as const };
+    shelf.clearOverride(bookId, 'cover');
+    await rm(resolveInside(this.config.dataDir, previous), { force: true }).catch(() => undefined);
+    return { ok: true as const };
   }
 
   private coverPath(bookId: string): string | null {

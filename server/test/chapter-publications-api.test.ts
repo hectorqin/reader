@@ -389,3 +389,38 @@ test('directories keep volumes and notes; covers are read through the source, sa
   const foreign = await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/cover-source`, headers: auth(h.admin), payload: { entryRef: BOOK_REF, coverRef: 'other' } });
   assert.equal(foreign.statusCode, 404, 'another account cannot change this book');
 });
+
+test('a local book takes a cover from a source as a manual override that survives a rescan and can be restored', async (t) => {
+  const h = await harness(); t.after(() => h.close());
+  const fixture = await installFixture(h);
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHf8AAAAASUVORK5CYII=';
+  await fixture.state({ ...initialState(), covers: { cover: png, 'not-an-image': Buffer.from('<svg/>').toString('base64') } });
+  await writeFile(join(h.booksDir, '本地小说.txt'), '第一章 开始\n\n正文内容。\n');
+  await h.ctx.scanner.scan();
+  const library = await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(h.admin) });
+  const local = library.json().items.find((item: { title: string }) => item.title === '本地小说') as { id: string; coverUrl: string | null };
+  assert.ok(local, library.body); assert.equal(local.coverUrl, null);
+  await h.app.inject({ method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(h.admin), payload: { bookIds: [local.id], action: 'add' } });
+  const read = async () => (await h.app.inject({ method: 'GET', url: `/api/v1/books/${local.id}`, headers: auth(h.admin) })).json().book as { coverUrl: string | null; manualFields: string[] };
+
+  const missing = await h.app.inject({ method: 'POST', url: `/api/v1/books/${local.id}/cover-source`, headers: auth(h.admin), payload: { entryRef: BOOK_REF, coverRef: 'cover' } });
+  assert.equal(missing.statusCode, 400, 'a local book must name the source the cover comes from');
+  const refused = await h.app.inject({ method: 'POST', url: `/api/v1/books/${local.id}/cover-source`, headers: auth(h.admin), payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'not-an-image' } });
+  assert.equal(refused.statusCode, 400); assert.equal((await read()).coverUrl, null);
+  const changed = await h.app.inject({ method: 'POST', url: `/api/v1/books/${local.id}/cover-source`, headers: auth(h.admin), payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'cover' } });
+  assert.equal(changed.statusCode, 200, changed.body);
+  const book = await read();
+  assert.ok(book.coverUrl); assert.ok(book.manualFields.includes('cover'));
+  const cover = await h.app.inject({ method: 'GET', url: book.coverUrl!, headers: auth(h.admin) });
+  assert.equal(cover.headers['content-type'], 'image/png'); assert.ok(cover.rawPayload.equals(Buffer.from(png, 'base64')));
+
+  await writeFile(join(h.booksDir, '本地小说.txt'), '第一章 开始\n\n正文内容改了。\n');
+  await h.ctx.scanner.scan();
+  const rescanned = (await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(h.admin) })).json().items.find((item: { title: string }) => item.title === '本地小说') as { id: string; coverUrl: string | null };
+  assert.ok(rescanned.coverUrl, 'a rescan keeps the chosen cover');
+
+  const restored = await h.app.inject({ method: 'DELETE', url: `/api/v1/books/${rescanned.id}/cover-source`, headers: auth(h.admin) });
+  assert.equal(restored.statusCode, 200, restored.body);
+  const after = (await h.app.inject({ method: 'GET', url: '/api/v1/books?scope=library', headers: auth(h.admin) })).json().items.find((item: { title: string }) => item.title === '本地小说') as { coverUrl: string | null; manualFields: string[] };
+  assert.equal(after.coverUrl, null); assert.ok(!after.manualFields.includes('cover'));
+});

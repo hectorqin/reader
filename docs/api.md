@@ -926,7 +926,8 @@ pluginId 是接口兼容字段。创建返回 201 与 source 对象。本地来�
 | POST /books/:id/switch-preview | body `{entryRef}`，读取候选条目的目录 → `{chapters:[{id,title}], latestChapter}` |
 | POST /books/:id/switch-source | body `{entryRef, chapterId, revision}`，换源 |
 | GET /books/:id/cover-candidate?entryRef=&coverRef= | 换封面时的候选封面，经这本书所属的来源读取，限制同上 |
-| POST /books/:id/cover-source | body `{entryRef, coverRef}`，把另一个版本的封面存为这本书的封面；封面地址随之变化（`coverUrl` 带 `?v=`） |
+| POST /books/:id/cover-source | body `{entryRef, coverRef, sourceId?}`，把书源中某个版本的封面存为这本书的封面；封面地址随之变化（`coverUrl` 带 `?v=`）。来自书源的书经它自己的来源读取；本地书必须给出 `sourceId`，封面作为手动覆盖保存（`manualFields` 含 `cover`），重新扫描不会替换 |
+| DELETE /books/:id/cover-source | 本地书恢复文件自带的封面 |
 | POST /books/:id/switch-quality | body `{entryRef, chapterId}`，试读候选条目的一章用于比较（返回该章内容、`latestChapter` 和 `elapsedMs`），不改动书 |
 | GET /subscriptions | 当前账号的章节更新订阅（`{subscriptions}`） |
 | PATCH /books/:id/subscription | body `{enabled?, intervalMinutes?（15–10080）, acknowledge?}` → `{subscription}` |

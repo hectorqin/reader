@@ -483,9 +483,9 @@ export function registerLibraryRoutes(app: FastifyInstance, ctx: AppContext): vo
 
   app.get('/api/v1/books/:id/cover', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const row = ctx.db.get<{ cover_path: string | null }>('SELECT cover_path FROM books WHERE id = ?', id);
-    if (!row?.cover_path) throw notFound('no cover for this book', 'NO_COVER');
-    const abs = resolveInside(ctx.config.dataDir, assertSafeRel(row.cover_path));
+    const coverPath = ctx.shelf.coverPath(id);
+    if (!coverPath) throw notFound('no cover for this book', 'NO_COVER');
+    const abs = resolveInside(ctx.config.dataDir, assertSafeRel(coverPath));
     if (!existsSync(abs)) throw notFound('cover cache missing', 'NO_COVER');
     const ext = extname(abs).toLowerCase();
     const mime = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.svg' ? 'image/svg+xml' : ext === '.webp' ? 'image/webp' : 'image/jpeg';

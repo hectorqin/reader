@@ -537,7 +537,7 @@ SweetAlert、Mantine `Modal`、自绘遮罩或角落浮动卡片。
 - 确认框焦点默认在「取消」；破坏性操作传 `danger`，按钮用危险色。
 - `⋯` 操作菜单和单选筛选（收藏类型等）用 `web/src/ui/action-menu.tsx` 的 `ActionMenu`：从触发按钮下方弹出的下拉菜单（手机和桌面一致），没有标题栏和遮罩，选中、Esc、Tab 或点外部即关闭，支持方向键；样式在 `web/src/styles/action-menu.css`。需要以问题形式出现的单选（书架的选择对话框）用 `ActionSheet`，即 compact Sheet 里的同一列菜单项。动作是数据（`label`、`onSelect`、`danger`、`checked`、`description`——条目下的一行说明，经 `aria-describedby` 读出），菜单先关再执行动作，所以动作可以再开一个 Sheet 或跳转。不再使用 Mantine `Menu` 或 `<details>` 下拉。
 - 章节书的目录：条目带 `volume` 时，在该卷第一章上方画一行卷标题（`.toc-volume`，不可点、不计入章节数）；带 `note` 时在章节名下显示一行小字（`.toc-note`，如更新时间）。
-- 来源封面用 `ui/lazy-cover.tsx` 的 `LazyCover`：进入视口后才经 API 取图，固定 3:4 占位。搜书结果每本书显示第一个带封面的书源的封面。书架上来自书源的书（`format: 'chapters'`）的 ⋯ 菜单有“更换封面”，打开 `ui/change-cover-sheet.tsx`：按书名和作者在其它书源中查找，列出有封面的版本，点选即保存。
+- 来源封面用 `ui/lazy-cover.tsx` 的 `LazyCover`：进入视口后才经 API 取图，固定 3:4 占位。搜书结果每本书显示第一个带封面的书源的封面。书架上每本书的 ⋯ 菜单都有“更换封面”，打开 `ui/change-cover-sheet.tsx`，列出书源中有封面的版本，点选即保存。来自书源的书（`format: 'chapters'`）按书名和作者在其它书源中查找；本地书在读者选的书源库里按书名搜索，只列出书名相同的结果，并可“恢复文件自带的封面”。
 - 锚定在控件上的只有 `ActionMenu` 下拉、选择框（`MediaSelect`、`SearchableSelect`）和正文选区工具条，它们不是 Sheet。
 
 以下是阅读器面板最初改成底部半屏的理由，仍然适用于手机形态：
