@@ -132,8 +132,8 @@ export function ShelfPage() {
   const menuItems = (book: Book): MenuItems => [
     ...readingStates.filter(state => state !== book.readingState).map(state => ({ label: '标记为' + readingLabels[state], onSelect: () => void act(book, state) })),
     book.readingState && { label: '清除标记', onSelect: () => void act(book, 'clear') },
-    // A book from a book source can take its cover from another source's edition.
-    book.format === 'chapters' && { label: '更换封面', onSelect: () => setCoverBook(book) },
+    // Any book can take its cover from a book source's edition of it.
+    { label: '更换封面', onSelect: () => setCoverBook(book) },
     { label: SHELF_ACTION_LABELS.remove, danger: true, onSelect: () => void act(book, 'remove') },
   ];
   const groupOptions = [
@@ -195,7 +195,7 @@ export function ShelfPage() {
       {query.data && pages > 1 && <Pager className="shelf-pager" page={Math.min(page, pages)} pageCount={pages} busy={query.isFetching} onGo={next => go({ page: next })} />}
     </section>
     {settingsOpen && <ShelfSettingsSheet settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSettingsOpen(false)} onOpenExternalReader={() => { setSettingsOpen(false); navigate('/me/opds', { state: { returnTo: '/shelf' } }); }} />}
-    {coverBook && <ChangeCoverSheet bookId={coverBook.id} title={coverBook.title} onClose={() => setCoverBook(null)} onChanged={() => void query.refetch()} />}
+    {coverBook && <ChangeCoverSheet book={coverBook} onClose={() => setCoverBook(null)} onChanged={() => void query.refetch()} />}
     {groupsOpen && <DialogView dialog={{ kind: 'pick', title: groups.isPending ? '分组 · 正在读取…' : groups.error ? '分组 · 读取失败' : '分组', options: groupOptions, resolve: (_value: string | null) => undefined } satisfies Dialog} destructive="" onClose={answer => {
       setGroupsOpen(false);
       if (typeof answer !== 'string') return;

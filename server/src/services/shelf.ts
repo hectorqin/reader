@@ -365,6 +365,9 @@ export class ShelfService {
       source: row.source,
     };
     const { effective, appliedFields } = applyOverrides(base, overrides);
+    // A cover the user chose sits above the one the scanner extracted, like any manual field.
+    const coverPath = overrides.cover || row.cover_path;
+    if (overrides.cover) appliedFields.push('cover');
     return {
       id: row.id,
       title: effective.title,
@@ -379,7 +382,7 @@ export class ShelfService {
       pubdate: effective.pubdate,
       format: row.format,
       // The cover response is immutable-cached; a changed cover file gets a new URL.
-      coverUrl: row.cover_path ? `/api/v1/books/${row.id}/cover?v=${createHash('sha1').update(row.cover_path).digest('hex').slice(0, 10)}` : null,
+      coverUrl: coverPath ? `/api/v1/books/${row.id}/cover?v=${createHash('sha1').update(coverPath).digest('hex').slice(0, 10)}` : null,
       fileSize: row.file_size,
       pageCount: row.page_count,
       source: effective.source,
@@ -398,6 +401,12 @@ export class ShelfService {
         : { shelfState: row.shelf_hidden === 0 ? ('on' as const) : ('off' as const) }),
       ...(row.reading_state === undefined ? {} : { readingState: row.reading_state }),
     };
+  }
+
+  /** The cover file to serve: the manually chosen one, else the scanner's. */
+  coverPath(bookId: string): string | null {
+    const manual = this.db.get<{ value: string }>("SELECT value FROM metadata_overrides WHERE book_id = ? AND field = 'cover'", bookId)?.value;
+    return manual || (this.db.get<{ cover_path: string | null }>('SELECT cover_path FROM books WHERE id = ?', bookId)?.cover_path ?? null);
   }
 
   loadOverrides(bookId: string): Record<string, string> {
