@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { coverTint } from '../../../ui/cover-tint.ts';
 import { BookGridSkeleton } from '../../../ui/book-grid-skeleton.tsx';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { LIBRARY_PATH } from '../../../shared/library-link.ts';
 import { useScrollMemory } from '../../../shared/ui/use-scroll-memory.ts';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Book, ContinueReadingItem, ReadingState } from '../../../api/types.ts';
@@ -156,7 +157,7 @@ export function ShelfPage() {
   // own they pushed the first cover a third of the way down the screen (ui.md §3.4).
   const phone = useMediaQuery('(max-width: 700px)');
   const discover = <nav className="collection-links shelf-links" aria-label="发现书籍">
-    <Link className="button collection-link" to="/library"><Icon name="library" size={18} /><span>书库</span><Icon name="chevron-right" /></Link>
+    <Link className="button collection-link" to={LIBRARY_PATH}><Icon name="library" size={18} /><span>书库</span><Icon name="chevron-right" /></Link>
     <Link className="button collection-link" to="/sources"><Icon name="search" size={18} /><span>书源</span><Icon name="chevron-right" /></Link>
   </nav>;
   return <div ref={swipe} id="shelf-scroll" className="shelf shelf-screen">
@@ -190,7 +191,7 @@ export function ShelfPage() {
       {query.isPending && <><FloatingNotice message="正在加载书架…" busy /><BookGridSkeleton density={settings.shelfDensity} /></>}
       {query.error && <Callout tone="error" title="书架加载失败" action={{ label: '重试', onClick: () => void query.refetch() }}>{describeError(query.error)}</Callout>}
       {query.data && cards.length === 0 && filtered && !queryText && <div className="empty-state collection-empty"><Icon name="book" className="empty-glyph" /><p>{status ? `还没有${readingLabels[status]}的书` : '这个分组里没有书'}</p><p className="muted">{status === 'want' ? '在书籍的“⋯”菜单里可以标记想读。' : '换一个分类，或查看全部书籍。'}</p><div className="empty-actions"><button type="button" className="button" onClick={clearFilters}>查看全部书籍</button></div></div>}
-      {query.data && cards.length === 0 && !(filtered && !queryText) && <div className="empty-state collection-empty"><Icon name="book" className="empty-glyph" /><p>{queryText ? '没有匹配的书' : '书架还没有书'}</p><p className="muted">{queryText ? '换个关键词，或者检查一下作者名的写法' : '从书库挑选喜欢的书，或通过书源搜索，加入书架后就能开始阅读。'}</p><div className="empty-actions">{queryText ? <button type="button" className="button" onClick={clearSearch}>清除搜索</button> : <><Link className="button primary" to="/sources"><Icon name="search" size={16} />去搜书</Link><Link className="button" to="/library"><Icon name="library" size={16} />打开书库</Link></>}</div></div>}
+      {query.data && cards.length === 0 && !(filtered && !queryText) && <div className="empty-state collection-empty"><Icon name="book" className="empty-glyph" /><p>{queryText ? '没有匹配的书' : '书架还没有书'}</p><p className="muted">{queryText ? '换个关键词，或者检查一下作者名的写法' : '从书库挑选喜欢的书，或通过书源搜索，加入书架后就能开始阅读。'}</p><div className="empty-actions">{queryText ? <button type="button" className="button" onClick={clearSearch}>清除搜索</button> : <><Link className="button primary" to="/sources"><Icon name="search" size={16} />去搜书</Link><Link className="button" to={LIBRARY_PATH}><Icon name="library" size={16} />打开书库</Link></>}</div></div>}
       {cards.length > 0 && <div className="book-grid" data-density={settings.shelfDensity} data-show-author={String(settings.shelfShowAuthor)} data-show-progress={String(settings.shelfShowProgress)}>{cards.map(book => <BookCard key={book.id} book={book} showAuthor={settings.shelfShowAuthor} showProgress={settings.shelfShowProgress} menu={menuItems(book)} />)}</div>}
       {query.data && pages > 1 && <Pager className="shelf-pager" page={Math.min(page, pages)} pageCount={pages} busy={query.isFetching} onGo={next => go({ page: next })} />}
     </section>

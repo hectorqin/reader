@@ -2322,6 +2322,7 @@ function emptyChromeSettings(): Partial<ChromeState> {
       ttsAutoAdvance: true,
       ttsEngine: 'auto',
       shelfDensity: 'cozy',
+      exploreLayout: 'list',
       shelfSort: 'recent',
       shelfShowAuthor: true,
       shelfShowProgress: true,

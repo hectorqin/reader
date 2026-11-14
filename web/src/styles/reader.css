@@ -2538,14 +2538,12 @@ book-content {
 @media (pointer: coarse) {
   .chip { position: relative; }
   .chip::before,
-  .book-card .book-more::before,
-  .book-card .book-shelve::before {
+  .book-card .book-more::before {
     content: '';
     position: absolute;
     inset: -0.5rem;
   }
   .chip::before { inset-inline: -0.15rem; }
-  .book-card .book-shelve::before { inset-block: -0.75rem; }
 }
 
 .chip[aria-pressed='true'] {
@@ -3033,207 +3031,6 @@ book-content {
  * bar off the bottom of the phone. `display: contents` makes the host vanish for
  * layout purposes and keeps the tree's children exactly where they were.
  */
-
-/* ---- library: the header's two-page switch ---- */
-
-/*
- * 书库 · 浏览 — the shop.
- *
- * Everything here exists because this half of the library is a *different kind of
- * page* from the file list beside it, which is what the review's second round asked
- * for (「两者列表显示逻辑不一样」): a shop puts the search at the top, fills the
- * window with covers, and gives each one a single action. The file page puts a
- * breadcrumb at the top and gives each row a menu.
- */
-
-/*
- * The search field, on the shop's own scroller.
- *
- * The field itself is the shelf's control — same pill, same glyph, same 16px — so
- * this rule only says where it sits and how wide it is allowed to be. It is inset by
- * the same token the shelf's is (`--shelf-search-inset`), which is the way two screens
- * keep their one shared control looking like one control.
- *
- * It is *not* capped at `--shelf-measure`: the shop's grid is uncapped (see below),
- * and a search field that stopped growing while the covers beside it kept going would
- * be the row that disagrees with the page.
- */
-/* 书库's subfolders: one scrollable row of chips under the search field, on its gutter. */
-.library-folders {
-  display: flex;
-  gap: var(--space-1);
-  overflow-x: auto;
-  padding: 0 var(--shelf-search-inset) var(--space-2);
-  scrollbar-width: none;
-}
-.library-folders .chip { display: inline-flex; align-items: center; gap: var(--space-1); flex: none; white-space: nowrap; }
-
-.library-search {
-  max-width: none;
-  /*
-   * The same gutter the shelf's field has, and *only* that: the field is as wide as
-   * the page, so there is no measure to subtract and no second inset to add. The
-   * covers below use the same token through their padding (see `.library-browse-grid`),
-   * which is what makes the field and the grid share a column.
-   */
-  padding-inline: var(--shelf-search-inset);
-  box-sizing: border-box;
-  margin: calc(var(--shelf-search-inset) + 0.4rem) 0;
-}
-
-/*
- * …and the panels that hang off the row are placed against the *input*, not the row.
- *
- * The magnifier and the clear button are `position: absolute` against this box, which
- * resolves against its *padding box* — so a row with a 0.75rem gutter would put both of
- * them in the gutter, i.e. the glyph would float in the margin and the clear button
- * would sit on top of the cover beside it. Their own offsets are therefore the field's
- * border plus the row's padding, which is one number rather than a coincidence.
- */
-.library-search .search-glyph {
-  inset-inline-start: calc(var(--shelf-search-inset) + 0.7rem);
-}
-
-.library-search .search-clear {
-  inset-inline-end: calc(var(--shelf-search-inset) + 0.3rem);
-}
-
-/*
- * The covers, laid out as a shop rather than as a shelf.
- *
- * The one difference from `.book-grid` that matters: this grid has **no measure
- * cap**. The shelf caps its width because a shelf is the reader's own collection at a
- * density they chose, and eleven covers across a desktop window is a wall rather than
- * a list. The library is the *server's* folder: its size is a fact about the disk, and
- * a reader browsing it on a wide screen wants more of it visible, not more margin. So
- * the columns are `auto-fill` with no maximum, and growing the window shows more books.
- *
- * The padding is the file listing's own gutter plus the search inset, because the
- * field above and the covers below it share the column and have to line up.
- */
-/*
- * The covers' own gutters, and they are *wider* than the field's by the page's own
- * padding: the field is the one control that spans the full content box (it is a
- * single row, and a search box narrower than the list it filters reads as decoration),
- * while the covers keep the page gutter they share with every other grid. The
- * difference is the point of the check below — the field must be inset from the
- * covers, not aligned with them.
- */
-.library-browse-grid {
-  padding: 0.25rem calc(0.9rem + var(--shelf-search-inset)) 0.75rem;
-}
-
-/*
- * …and the covers themselves get the shop's own size ladder.
- *
- * The shelf's ladder is tuned for a *capped* column, and the cap is what keeps it
- * from producing eleven covers a row. With the cap removed (this grid has none — see
- * above) the same minimum would tile a 1600px window with covers 130px wide, which is
- * the failure the ladder exists to prevent and would come back the moment the two
- * grids stop sharing a width rule. So the shop's minimums are the next step up, and
- * they keep climbing with the window: more of the folder on screen, and every cover
- * still big enough to read a title on.
- */
-.library-browse-grid[data-density='compact'] {
-  --shelf-cover-min: 6.5rem;
-}
-
-.library-browse-grid[data-density='comfortable'] {
-  --shelf-cover-min: 11rem;
-}
-
-@media (min-width: 40rem) {
-  .library-browse-grid {
-    --shelf-cover-min: 10.5rem;
-  }
-
-  .library-browse-grid[data-density='compact'] {
-    --shelf-cover-min: 8rem;
-  }
-
-  .library-browse-grid[data-density='comfortable'] {
-    --shelf-cover-min: 13rem;
-  }
-}
-
-@media (min-width: 72rem) {
-  /*
-   * Past the shelf's own measure the shop keeps adding columns instead of margin,
-   * because there is nothing to cap to: the covers are already at a readable size
-   * and the folder is genuinely large. This is the one place in the product where a
-   * wider window shows *more*, and it is the point of an uncapped grid.
-   */
-  .library-browse-grid {
-    --shelf-cover-min: 11.5rem;
-  }
-}
-
-/*
- * The one line above the grid, when there is something to say about it.
- *
- * `:empty` rather than a `hidden` attribute, because the component decides the
- * sentence and an empty one should cost no space at all: a blank 18px row above a
- * grid of covers is a gap the reader reads as a rendering mistake.
- */
-
-
-/*
- * A preview card: the shelf's card, with a *second* control on it.
- *
- * The card was a `<button>` on the shelf, and it cannot be one here — a button
- * inside a button is invalid, and the browser fixes it by hoisting the inner one
- * out of the outer, which puts the shelve control somewhere else on the page. So
- * the open target is an inner button and the card is a plain box that positions it.
- *
- * `position: relative` is what the shelve control is placed against, and the control
- * sits at the cover's *bottom-left*, opposite the format badge: the two would
- * otherwise overlap on a compact cover, and the badge is the quieter of the two so
- * it is the one that keeps its corner.
- */
-.book-card.is-row {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-/*
- * 加入书架, on the cover of a book that is not on the shelf.
- *
- * A pill over the artwork rather than a row under the title: the row under the title
- * is where the author lives, and a control that appears and disappears there would
- * make one card in a row taller than its neighbours — which is the ragged baseline
- * the grid's two-line title exists to prevent. Over the cover it costs nothing, and
- * it is on the artwork the reader is already looking at.
- *
- * It is *absent* rather than disabled for a book that is already shelved: a control
- * that can only be pressed to no effect is a control the reader learns to distrust,
- * and "this one is mine already" is not a state that needs saying on every card.
- */
-.book-card .book-shelve {
-  position: absolute;
-  inset-block-start: 0.3rem;
-  inset-inline-start: 0.3rem;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.15rem;
-  border: 0;
-  border-radius: var(--radius-pill);
-  padding: 0.15rem 0.4rem;
-  background: color-mix(in srgb, var(--reader-fill) 92%, transparent);
-  color: var(--reader-on-fill);
-  font-size: var(--text-micro);
-  font-family: inherit;
-  line-height: 1.5;
-  backdrop-filter: blur(4px);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-
-.book-card .book-shelve .icon {
-  font-size: var(--text-meta);
-}
 
 .manager-crumbs {
   flex: 1 1 auto;
@@ -3747,6 +3544,23 @@ book-content {
 .explore-book-text p { margin:.4rem 0 0; color:var(--reader-muted); font-size:var(--text-ui); line-height:1.6; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .explore-book-actions { grid-column:2; display:flex; gap:var(--space-2); justify-content:flex-end; }
 .explore-book-actions .button { min-height:44px; }
+/* 发现's own bar: what the local library adds (upload, file manager) on the left, the layout choice on the right. */
+.explore-tools { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2); margin-bottom:var(--space-2); }
+.explore-tools .button { min-height:44px; display:inline-flex; align-items:center; gap:var(--space-1); }
+.explore-tools .button.is-disabled { opacity:.5; pointer-events:none; }
+.explore-layout { margin-left:auto; }
+.explore-layout.segmented button { flex:none; min-height:44px; padding:0 var(--space-3); }
+.explore-layout.segmented button:focus-visible { outline:var(--focus-ring); outline-offset:-2px; }
+.explore-links + .explore-grid { margin-top:var(--space-4); }
+.explore-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(5.5rem, 1fr)); gap:var(--space-4) var(--space-3); }
+.explore-card { display:flex; flex-direction:column; gap:var(--space-2); min-width:0; }
+.explore-card-open { display:flex; flex-direction:column; flex:1 1 auto; gap:.2rem; min-width:0; padding:0; border:0; background:transparent; color:var(--reader-ink); font:inherit; text-align:left; cursor:pointer; }
+.explore-card-open:focus-visible { outline:var(--focus-ring); outline-offset:2px; }
+.explore-card .lazy-cover { width:100%; margin-bottom:.2rem; }
+.explore-card strong { font-size:var(--text-ui); line-height:1.35; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.explore-card small { color:var(--reader-muted); font-size:var(--text-meta); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.explore-card > .button { min-height:44px; width:100%; }
+@media (min-width: 720px) { .explore-grid { grid-template-columns:repeat(auto-fill, minmax(8.5rem, 1fr)); } }
 .catalog-book-main { display:flex; align-items:flex-start; gap:var(--space-3); }
 .catalog-book-main > div { flex:1; min-width:0; }
 /* A source's cover: a fixed 3:4 frame, so rows do not jump when the image arrives. */
@@ -3993,18 +3807,13 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .shelf-head-actions .shelf-links { max-width: none; margin: 0; padding: 0; gap: .4rem; }
 .shelf-head-actions .shelf-links .collection-link.button { flex: none; min-width: 0; padding: 0 .75rem; }
 .shelf-head-actions .shelf-links .collection-link.button > svg { display: none; }
-.shelf-screen .shelf-search input, .library-search input { border-radius: var(--radius-lg); min-height: 48px; }
-.library-browse-screen .library-search { margin-top: .35rem; }
-.library-path { margin-top: .75rem; padding: .25rem 0 0; }
-.library-path .manager-crumb { min-height: 44px; }
+.shelf-screen .shelf-search input { border-radius: var(--radius-lg); min-height: 48px; }
 .collection-empty.empty-state { width: calc(100% - 2rem); max-width: 30rem; margin: clamp(1.5rem, 7vh, 4rem) auto 2rem; padding: 1.75rem 1.25rem; gap: .7rem; border: 1px solid var(--reader-line); border-radius: var(--radius-xl); background: color-mix(in srgb, var(--reader-surface) 45%, var(--reader-paper)); }
 .collection-empty .empty-glyph { box-sizing: content-box; width: 30px; height: 30px; padding: 1rem; border-radius: var(--radius-lg); background: color-mix(in srgb, var(--reader-accent) 9%, transparent); color: var(--reader-accent); opacity: 1; margin-bottom: .5rem; }
 .collection-empty p { font-size: var(--text-title); line-height: 1.5; }
 .collection-empty p.muted { max-width: 23rem; font-size: var(--text-ui); line-height: 1.8; text-wrap: pretty; }
 .collection-empty .empty-actions { margin-top: .6rem; gap: .65rem; }
 .collection-empty .button { min-height: 44px; font-size: var(--text-ui); }
-/* Browsing pages with a pager, so the count is a footer line, not a sticky overlay over the grid. */
-.library-browse-body > .manager-status { position: static; background: transparent; backdrop-filter: none; border: 0; margin: .75rem auto; }
 .file-manager-header .manager-crumbs { margin-top: .75rem; padding: .25rem 0; }
 .file-manager-header .manager-crumb { min-height: 44px; }
 .library-files-screen .manager-list { margin: .5rem 1rem; border: 1px solid var(--reader-line); border-radius: var(--radius-lg); overflow: hidden; }
@@ -4046,7 +3855,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   .collection-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .5rem 2rem; padding-top: 2rem; }
   .collection-header .collection-links { margin-top: 0; }
   .collection-header .manager-crumbs { grid-column: 1 / -1; }
-  .collection-header, .library-browse-body, .library-files-screen .manager-body { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); max-width: var(--collection-measure); margin-inline: auto; }
+  .collection-header, .library-files-screen .manager-body { width: calc(100% - 2 * var(--page-gutter) + 1.8rem); max-width: var(--collection-measure); margin-inline: auto; }
   .library-files-screen .manager-row { grid-template-columns: 24px minmax(0, 1fr) minmax(15rem, 22rem) 44px; min-height: 64px; padding-block: .5rem; }
   .library-files-screen .manager-check { grid-row: 1; }
   .library-files-screen .manager-meta { grid-column: 3; grid-row: 1; justify-content: flex-end; padding-left: 0; }

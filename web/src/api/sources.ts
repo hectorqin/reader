@@ -14,6 +14,8 @@ export interface SourceEntry {
   coverRef?: string;
   ref: string; title: string; authors?: string[]; description?: string;
   options?: Array<{ id: string; label: string; available?: boolean }>;
+  /** Source-specific extras. `publicationId` names the shelf book this entry already is. */
+  metadata?: { publicationId?: string; [key: string]: unknown };
 }
 export interface SourcePage {
   limitReached?: boolean;

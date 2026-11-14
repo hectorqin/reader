@@ -409,7 +409,7 @@ URL 从头到尾不变。手机上这一点几乎看不见——直到读者按�
 | `#/` | 首页 |
 | `#/shelf` | 书架 |
 | `#/search?q=` | 书籍与影音的全局搜索 |
-| `#/library`、`#/library/books`、`#/library/files` | 书库浏览、书籍列表、文件管理（仅管理员） |
+| `#/library/files` | 书库文件管理（仅管理员）。`#/library`、`#/library/books` 重定向到「发现」里的本地书库（`#/sources?tab=explore&source=local`） |
 | `#/sources` 及 `#/sources/...` | 书源中心、浏览、书源编辑、凭据、扩展和插件管理 |
 | `#/me`、`#/me/settings`、`#/me/account`、`#/me/opds`、`#/me/admin/*` | 「我的」入口页；偏好设置（主题、书架、影音浏览、播放为同一页的分区）；账号；外部阅读器（OPDS）；管理员的用户管理、注册与邀请、服务配置。旧 `#/me/:panel` 跳到对应分区 |
 | `#/settings` | 兼容旧深链接，重定向到书架 |

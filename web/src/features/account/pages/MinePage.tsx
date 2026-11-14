@@ -1,5 +1,6 @@
 import { Icon, type IconName } from '../../../ui/icon.tsx';
 import { Link } from 'react-router-dom';
+import { LIBRARY_PATH } from '../../../shared/library-link.ts';
 import { useState, type ReactNode } from 'react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
@@ -70,7 +71,7 @@ export function MinePage() {
       <div className="mine-groups">
         <div className="mine-column">
           <Group title="内容" order={1}>
-            <Row icon="library" label="书库" to="/library" />
+            <Row icon="library" label="书库" to={LIBRARY_PATH} />
             <Row icon="feed" label="书源" to="/sources" />
             <Row icon="clock" label="时长统计" value={media?'阅读、观影、听书':'阅读'} to="/me/stats" />
             {admin && media && <Row icon="video" label="媒体库" to="/media/video/settings/libraries" state={{ returnTo: '/me' }} />}
