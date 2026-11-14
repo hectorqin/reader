@@ -50,7 +50,7 @@ describe('我的', () => {
     expect(root.querySelector('.mine-profile')?.textContent).toContain('成员');
     const links = [...root.querySelectorAll<HTMLAnchorElement>('a.mine-row')].map(a => [a.textContent, a.getAttribute('href')]);
     expect(links).toEqual([
-      ['书库', '/library'], ['书源', '/sources'], ['时长统计阅读、观影、听书', '/me/stats'],
+      ['书库', '/sources?tab=explore&source=local'], ['书源', '/sources'], ['时长统计阅读、观影、听书', '/me/stats'],
       ['偏好设置跟随系统', '/me/settings'],
       ['账号与连接', '/me/account'], ['外部阅读器OPDS', '/me/opds'],
     ]);

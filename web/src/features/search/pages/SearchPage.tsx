@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { clearRecentSearches, readRecentSearches, rememberSearch } from '../recent.ts';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { librarySearchPath } from '../../../shared/library-link.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
 import { BookCard } from '../../shelf/pages/ShelfPage.tsx';
@@ -79,7 +80,7 @@ export function SearchPage() {
     </> : <div className="search-page-results" onClickCapture={event => { if ((event.target as Element).closest('a, .media-search-result, .book-card')) remember(); }}>
       <section className="search-page-section" aria-label="书籍搜索结果">
         <header><h2>书籍{books.data ? <small>{books.data.total}</small> : null}</h2>
-          {books.data && books.data.total > BOOK_LIMIT && <Link to={`/library?q=${encodeURIComponent(query)}`}>在书库查看全部<Icon name="chevron-right" size={16} /></Link>}</header>
+          {books.data && books.data.total > BOOK_LIMIT && <Link to={librarySearchPath(query)}>在书库查看全部<Icon name="chevron-right" size={16} /></Link>}</header>
         {books.isPending ? <p role="status">正在搜索书籍…</p>
           : books.error ? <p className="media-error" role="alert">书籍搜索失败：{describeError(books.error)} <button type="button" onClick={() => void books.refetch()}>重试</button></p>
           : books.data.items.length === 0 ? <p className="search-page-empty">没有找到书籍</p>

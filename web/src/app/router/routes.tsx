@@ -1,4 +1,5 @@
-import { Navigate, Outlet, type RouteObject } from 'react-router-dom';
+import { Navigate, Outlet, useSearchParams, type RouteObject } from 'react-router-dom';
+import { LIBRARY_PATH, librarySearchPath } from '../../shared/library-link.ts';
 import { AppShell, MediaLayout } from '../App.tsx';
 import { MediaCatalogPage } from '../../features/media/pages/MediaCatalogPage.tsx';
 import { MediaSearchPage } from '../../features/media/pages/MediaSearchPage.tsx';
@@ -19,16 +20,23 @@ import {
   SourceEditorPage, SourceCredentialsPage, SourceExtensionPage, StatsPage,
   AdminUsersPage, AdminRegistrationPage, AdminServicesPage,
   MediaDetailPage, MediaPlayerPage, MediaFoldersPage, MediaNarratorsPage,
-  LibraryPage, LibraryBrowsePage, LibraryFilesPage, SourcesPage, SourceCatalogPage,
+  LibraryFilesPage, SourcesPage, SourceCatalogPage,
 } from './lazy-pages.tsx';
+
+/** A library link that carried a search keeps it: it opens 搜书 over the local library. */
+function LibraryRedirect() {
+  const query = useSearchParams()[0].get('q')?.trim();
+  return <Navigate to={query ? librarySearchPath(query) : LIBRARY_PATH} replace />;
+}
 
 export const routes = [{
   path: '/', element: <AppShell />, errorElement: <RouteErrorBoundary />, children: [
     { index: true, element: <HomePage /> },
     { path: 'shelf', element: <ShelfPage /> },
     { path: 'search', element: <SearchPage /> },
-    { path: 'library', element: <LibraryBrowsePage /> },
-    { path: 'library/books', element: <LibraryPage /> },
+    // 书库 is the local library in 发现; its old addresses still land there.
+    { path: 'library', element: <LibraryRedirect /> },
+    { path: 'library/books', element: <LibraryRedirect /> },
     { path: 'library/files', element: <LibraryFilesPage /> },
     { path: 'sources', element: <SourcesPage /> },
     // The legacy hash route /sources/search opens the complete sources hub;

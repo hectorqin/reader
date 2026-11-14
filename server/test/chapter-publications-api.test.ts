@@ -448,6 +448,7 @@ test('the local library browses folder by folder with covers, like any source in
 
   const book = leaf.items[0]!;
   assert.equal(book.coverRef, undefined, 'a text file has no cover');
+  assert.equal((book as { metadata?: { publicationId?: string } }).metadata?.publicationId, undefined, 'a library book is not yet a shelf book');
   const shelved = await h.app.inject({ method: 'GET', url: '/api/v1/books', headers: auth(h.admin) });
   assert.deepEqual(shelved.json().items, [], 'a scanned book joins the library, not a shelf');
   await h.app.inject({ method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(h.admin), payload: { bookIds: [book.ref], action: 'add' } });
@@ -456,6 +457,7 @@ test('the local library browses folder by folder with covers, like any source in
   await h.app.inject({ method: 'POST', url: `/api/v1/books/${book.ref}/cover-source`, headers: auth(h.admin), payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'cover' } });
   const covered = (await browse(`?ref=${encodeURIComponent('科幻/刘慈欣')}`)).items[0]!;
   assert.equal(covered.coverRef, 'cover');
+  assert.equal((covered as { metadata?: { publicationId?: string } }).metadata?.publicationId, book.ref, 'once shelved, the entry names the shelf book so a client offers 阅读');
   const image = await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/cover?entryRef=${covered.ref}&coverRef=cover`, headers: auth(h.admin) });
   assert.equal(image.statusCode, 200, image.body); assert.equal(image.headers['content-type'], 'image/png');
 });

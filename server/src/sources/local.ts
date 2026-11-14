@@ -9,11 +9,12 @@ import { assertSafeRel, resolveInside } from '../lib/paths.ts';
 /** The one resource a local entry has: its cover. */
 const COVER_REF = 'cover';
 
-function entry(book: Pick<BookDto, 'id' | 'title' | 'author' | 'description' | 'format'> & { coverUrl?: string | null }): CatalogEntry {
+function entry(book: Pick<BookDto, 'id' | 'title' | 'author' | 'description' | 'format'> & { coverUrl?: string | null; shelfState?: 'on' | 'off' }): CatalogEntry {
   return {
     ref: book.id, title: book.title, authors: book.author ? [book.author] : [],
     description: book.description, ...(book.coverUrl ? { coverRef: COVER_REF } : {}),
-    options: [{ id: 'read', label: '加入书架', available: true }], metadata: { format: book.format },
+    // A book already on the caller's shelf says which one, so a client offers 阅读 rather than 加入书架.
+    options: [{ id: 'read', label: '加入书架', available: true }], metadata: { format: book.format, ...(book.shelfState === 'on' ? { publicationId: book.id } : {}) },
   };
 }
 
