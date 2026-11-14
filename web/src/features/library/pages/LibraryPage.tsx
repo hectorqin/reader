@@ -122,7 +122,9 @@ function LibraryFilesAdminPage() {
   // A selection only means something on the listing it was made on: carried into another
   // folder, 删除 would act on files the admin can no longer see.
   useEffect(() => { setSelected([]); }, [path, page]);
-  const go = (next: string, p = 1) => setParams({ ...(next ? { path: next } : {}), ...(p > 1 ? { page: String(p) } : {}) }); const refresh = () => queryClient.invalidateQueries({ queryKey: ['library-files'] });
+  const go = (next: string, p = 1) => setParams({ ...(next ? { path: next } : {}), ...(p > 1 ? { page: String(p) } : {}) }); // A file change is a change to the library and to every shelf that held the book, so the
+  // browsing page and the shelf must not keep showing what they cached before it.
+  const refresh = () => Promise.all(['library-files', 'library-books', 'library-browse', 'shelf'].map(key => queryClient.invalidateQueries({ queryKey: [key] })));
   // Each action says what it did (ui.md §4), not a generic 操作已完成.
   const mutate = async <T,>(action: () => Promise<T>, describe: (result: T) => { text: string; error?: boolean }) => { setFeedback(null); try { const result = await action(); setSelected([]); await refresh(); setFeedback(describe(result)); } catch (reason) { setFeedback({ text: reason instanceof Error ? reason.message : '操作失败，请重试', error: true }); } };
   const prompt = (title: string, value = '') => new Promise<string | null>(resolve => setDialog({ kind: 'prompt', title, value, resolve }));
