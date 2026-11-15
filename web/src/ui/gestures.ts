@@ -45,6 +45,14 @@ export interface GestureHandlers {
    */
   onRelease?(deltaX: number, deltaY: number, duration: number): boolean;
   onLongPress(x: number, y: number): void;
+  /**
+   * A tap, offered with what it landed on before it is read as a zone.
+   *
+   * Return true to take it: the screen opens a picture the reader tapped, and that
+   * tap must not also turn the page. `path` is the event's composed path, innermost
+   * first, so an element inside the book's shadow root is visible in it.
+   */
+  onTapTarget?(path: EventTarget[]): boolean;
   /** True when a text selection is active: gestures must then stand aside. */
   hasSelection(): boolean;
 }
@@ -243,6 +251,7 @@ export function attachGestures(element: HTMLElement, handlers: GestureHandlers):
 
     if (distance <= TAP_MAX_DISTANCE && duration <= TAP_MAX_DURATION) {
       suppressClick = true;
+      if (handlers.onTapTarget?.(event.composedPath())) return;
       // The zone is a *layout* box, so it is read from layout geometry rather than
       // from client coordinates.
       //

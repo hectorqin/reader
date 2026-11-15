@@ -732,6 +732,23 @@ export class ReaderView {
     this.revealRange(range); return true;
   }
 
+  /**
+   * The chapter's pictures, and which of them a tap landed on — or null when the
+   * tap was not on a picture.
+   *
+   * Reflowable books only: a comic's page *is* an image, and tapping it has to stay
+   * a page turn. A picture is one the book set as a picture — small inline glyphs
+   * (a note icon, a decorated initial, a divider) are part of the text and are left
+   * to the tap they were always part of. `path` is a composed event path.
+   */
+  picturesAt(path: EventTarget[]): { images: Array<{ src: string; alt: string }>; index: number } | null {
+    if (this.doc.layout === 'fixed') return null;
+    const hit = path.find((node): node is Element => node instanceof Element && pictureSource(node) !== '');
+    if (!hit || !this.host.flow.contains(hit) || !isPicture(hit)) return null;
+    const pictures = [...this.host.flow.querySelectorAll('img, image')].filter(element => element === hit || (pictureSource(element) !== '' && isPicture(element)));
+    return { images: pictures.map(element => ({ src: pictureSource(element), alt: element.getAttribute('alt') ?? '' })), index: pictures.indexOf(hit) };
+  }
+
   /** The note a fragment of the chapter on screen points at; null when it is not a note. */
   noteAt(fragment: string): string[] | null {
     return noteAt(this.host.flow, fragment);
@@ -2209,6 +2226,26 @@ function rangeRect(range: Range): DOMRect | null {
  *  - `'unknown'` — a URL that cannot even be parsed, which is refused the same way
  *    as external: an unparseable href has no correct destination.
  */
+/** Where a picture element's pixels come from: an `<img>`, or the `<image>` of an SVG cover page. */
+function pictureSource(element: Element): string {
+  if (element instanceof HTMLImageElement) return element.currentSrc || element.src || '';
+  if (element.localName === 'image') return element.getAttribute('href') ?? element.getAttribute('xlink:href') ?? '';
+  return '';
+}
+
+/**
+ * Whether an image is a picture rather than a glyph in the text.
+ *
+ * By its size on screen: a note icon or a decorated initial is a few characters
+ * square, and a divider is long and a few pixels tall. A banner — wide, and still
+ * tall enough to hold something — is a picture.
+ */
+function isPicture(element: Element): boolean {
+  const rect = element.getBoundingClientRect();
+  const short = Math.min(rect.width, rect.height), long = Math.max(rect.width, rect.height);
+  return short >= 48 || (short >= 24 && long >= 120);
+}
+
 /** The fragment of a link the server rewrote to an absolute URL, without the `#`. */
 function linkFragment(href: string, baseURI: string): string {
   try {

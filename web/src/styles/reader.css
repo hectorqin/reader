@@ -148,6 +148,11 @@
   --reader-text-align: inherit;
   --reader-page-margin: 1.5rem;
   --reader-brightness: 1;
+  /* The picture viewer's bed and the controls drawn on it: dark in every theme, like a lightbox. */
+  --reader-viewer-bed: rgba(14, 13, 12, 0.96);
+  --reader-viewer-ink: #F3F0EA;
+  --reader-viewer-control: rgba(20, 19, 18, 0.62);
+  --reader-viewer-edge: rgba(255, 255, 255, 0.28);
   /* How much of the page outside the focused paragraph is covered (专注模式). */
   --reader-focus-veil: 0.68;
   --reader-measure: 42rem;
@@ -416,6 +421,76 @@ select {
   background: #000;
   opacity: calc(1 - var(--reader-brightness));
   mix-blend-mode: multiply;
+}
+
+/*
+ * The picture viewer (`ui/image-viewer.tsx`): the one overlay that is the whole
+ * window rather than a sheet (docs/ui.md §3.7).
+ */
+.image-viewer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--reader-viewer-bed);
+  color: var(--reader-viewer-ink);
+  overflow: hidden;
+}
+.image-viewer::backdrop { background: var(--reader-viewer-bed); }
+.image-viewer-surface {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  /* Every drag on this surface is the viewer's: no scrolling, no browser zoom, no pull-to-refresh. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: zoom-in;
+}
+.image-viewer-surface[data-zoomed='true'] { cursor: grab; }
+.image-viewer-surface img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center;
+  will-change: transform;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+.image-viewer-surface img[data-settling='true'] { transition: transform var(--motion-duration) var(--motion-ease); }
+.image-viewer-bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: calc(var(--space-2) + var(--safe-top)) calc(var(--space-3) + var(--safe-right)) var(--space-2) calc(var(--space-3) + var(--safe-left));
+  pointer-events: none;
+}
+.image-viewer-count { font-size: var(--text-ui); font-variant-numeric: tabular-nums; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); background: var(--reader-viewer-control); border: 1px solid var(--reader-viewer-edge); }
+.image-viewer .icon-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  /* Dark with a light edge: the control has to read on the bed and on a white plate alike. */
+  background: var(--reader-viewer-control);
+  border: 1px solid var(--reader-viewer-edge);
+  color: var(--reader-viewer-ink);
+  pointer-events: auto;
+}
+.image-viewer .icon-button:disabled { opacity: 0.35; }
+/* Stepping by button is for a mouse; a finger swipes, and the buttons would sit on the picture. */
+.image-viewer-step { display: none; position: absolute; top: 50%; left: calc(var(--space-3) + var(--safe-left)); transform: translateY(-50%); }
+.image-viewer-step.image-viewer-next { left: auto; right: calc(var(--space-3) + var(--safe-right)); }
+@media (hover: hover) and (pointer: fine) {
+  .image-viewer-step { display: inline-flex; align-items: center; justify-content: center; }
 }
 
 /*

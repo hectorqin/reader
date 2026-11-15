@@ -817,3 +817,34 @@ describe('专注模式 focus line', () => {
     }
   });
 });
+
+describe('ReaderView pictures', () => {
+  let container: HTMLDivElement;
+  beforeEach(() => { container = document.createElement('div'); document.body.append(container); });
+  afterEach(() => { container.remove(); vi.restoreAllMocks(); });
+
+  /** jsdom lays nothing out, so each image is given the size its `data-size` names. */
+  function sized(): void {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const size = Number(this.getAttribute('data-size') ?? 0);
+      return new DOMRect(0, 0, size, size);
+    });
+  }
+  const html = '<p>正文<img id="glyph" data-size="16" src="data:image/png;base64,AA==" alt="注"></p>'
+    + '<div><img id="one" data-size="300" src="data:image/png;base64,AQ==" alt="图一"></div><p>正文</p>'
+    + '<div><img id="two" data-size="300" src="data:image/png;base64,Ag==" alt="图二"></div>';
+
+  it('answers a tap on a picture with the chapter\'s pictures, in order, and leaves glyphs and text alone', async () => {
+    sized();
+    const doc = reflowableDoc(1);
+    const view = new ReaderView({ container, doc: { ...doc, sections: [{ id: 'c1', label: '一', html, depth: 0 }] } });
+    await view.open(0, 0);
+    const flow = view.elementHost.flow;
+    const path = (id: string) => [flow.querySelector('#' + id)!, flow];
+    expect(view.picturesAt(path('two'))).toEqual({ index: 1, images: [{ src: 'data:image/png;base64,AQ==', alt: '图一' }, { src: 'data:image/png;base64,Ag==', alt: '图二' }] });
+    expect(view.picturesAt(path('one'))?.index).toBe(0);
+    expect(view.picturesAt(path('glyph'))).toBeNull();
+    expect(view.picturesAt([flow.querySelector('p')!, flow])).toBeNull();
+    view.dispose();
+  });
+});

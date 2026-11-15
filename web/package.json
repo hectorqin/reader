@@ -18,6 +18,7 @@
     "ui:review:footnote": "npm run build && node tools/ui-review/footnote.mjs",
     "ui:review:ai": "npm run build && node tools/ui-review/ai-assist.mjs",
     "ui:review:focus": "npm run build && node tools/ui-review/focus-mode.mjs",
+    "ui:review:images": "npm run build && node tools/ui-review/image-viewer.mjs",
     "ui:review:features": "npm run build && npm --prefix ../server run build && node tools/ui-review/media-features.mjs",
     "ui:sources": "npm run build && node --import ../server/node_modules/tsx/dist/loader.mjs tools/ui-review/host-source-flow.mjs"
   },
