@@ -1308,7 +1308,10 @@ export class ReaderScreen {
         if (key === 'PageDown' || (key === ' ' && !shift) || key === (rtl ? 'ArrowLeft' : 'ArrowRight')) void this.turnPage('next');
         else if (key === 'PageUp' || (key === ' ' && shift) || key === (rtl ? 'ArrowRight' : 'ArrowLeft')) void this.turnPage('previous');
         else if (key === 'Escape') this.setChromeVisible(false);
+        // 专注模式 reads a paragraph at a time; outside it the arrows are not ours.
+        else if (key === 'ArrowDown' || key === 'ArrowUp') return this.view?.focusStep(key === 'ArrowDown' ? 1 : -1) ?? false;
         else this.letterKey(key.toLowerCase());
+        return false;
       }),
     );
   }
@@ -1353,6 +1356,7 @@ export class ReaderScreen {
       textAlign: this.settings.textAlign,
       brightness: this.settings.brightness,
       pageAnimation: this.settings.pageAnimation,
+      focus: this.settings.focus,
       tapZone: this.settings.tapZone,
       txtIndent: this.settings.txtIndent,
       txtParagraphGap: this.settings.txtParagraphGap,
@@ -2420,6 +2424,7 @@ function emptyChromeSettings(): Partial<ChromeState> {
       textAlign: 'inherit',
       brightness: 1,
       pageAnimation: 'slide',
+      focus: false,
       tapZone: 'standard',
       tapZones: tapZonePreset('standard'),
       txtIndent: 2,
@@ -2496,6 +2501,7 @@ function settingsView(
     textAlign: settings.textAlign,
     brightness: settings.brightness,
     pageAnimation: settings.pageAnimation,
+    focusMode: settings.focus,
     tapZone: settings.tapZone,
     tapZones: settings.tapZones,
     txtEncoding: settings.txtEncoding,
@@ -2614,7 +2620,7 @@ function bindChapterPull(host: HTMLElement, active: () => boolean, turn: (direct
  * page-turner. The same handler therefore serves a Bluetooth remote and a
  * desktop keyboard, with no per-host branching.
  */
-function bindKeys(target: HTMLElement, handler: (key: string, shift: boolean) => void): () => void {
+function bindKeys(target: HTMLElement, handler: (key: string, shift: boolean) => boolean): () => void {
   const onKeyDown = (event: KeyboardEvent): void => {
     // On the document, not the reader element: nothing in the reader holds focus
     // when a book opens, so a listener on the element heard no key until the reader
@@ -2632,7 +2638,8 @@ function bindKeys(target: HTMLElement, handler: (key: string, shift: boolean) =>
     // input is adjusted, and the settings panel is a column of range inputs.
     if (document.querySelector('dialog[open], [role=dialog], [role=alertdialog]')) return;
     if (event.key === ' ' || event.key === 'PageDown' || event.key === 'PageUp') event.preventDefault();
-    handler(event.key, event.shiftKey);
+    // True when the key was taken and the browser's own answer (scrolling) must not also happen.
+    if (handler(event.key, event.shiftKey)) event.preventDefault();
   };
   document.addEventListener('keydown', onKeyDown);
   return () => document.removeEventListener('keydown', onKeyDown);

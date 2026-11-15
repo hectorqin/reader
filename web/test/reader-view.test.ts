@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReaderView } from '../src/ui/reader-view.ts';
+import { ReaderView, focusLine, focusScrollFor } from '../src/ui/reader-view.ts';
 import { createStagedDoc } from '../src/formats/windowed.ts';
 import type { BookContent, ContentItem } from '../src/net/api.ts';
 import type { BookDoc } from '../src/formats/types.ts';
@@ -767,5 +767,53 @@ describe('ReaderView settings', () => {
     expect(measure).toHaveBeenCalledTimes(1);
     expect(frames).toHaveLength(0);
     raf.mockRestore();
+  });
+});
+
+/**
+ * 专注模式's arithmetic. The veils themselves need a layout and are reviewed in a
+ * real browser (`tools/ui-review/focus-mode.mjs`); what can be wrong without one is
+ * where the line sits and whether every paragraph can be reached.
+ */
+describe('专注模式 focus line', () => {
+  const height = 800, maxScroll = 5000;
+
+  it('rests at a fixed height in the middle of a chapter', () => {
+    expect(focusLine(1000, maxScroll, height)).toBe(320);
+    expect(focusLine(3000, maxScroll, height)).toBe(320);
+  });
+
+  it('reaches the top edge at the start of a chapter and the bottom edge at its end', () => {
+    expect(focusLine(0, maxScroll, height)).toBe(0);
+    expect(focusLine(100, maxScroll, height)).toBe(100);
+    expect(focusLine(maxScroll, maxScroll, height)).toBe(799);
+    expect(focusLine(maxScroll - 100, maxScroll, height)).toBe(699);
+    // A chapter barely taller than the screen still starts at the top and ends at the bottom.
+    expect(focusLine(0, 40, height)).toBe(0);
+    expect(focusLine(40, 40, height)).toBe(799);
+  });
+
+  it('never moves backwards through the content as the chapter scrolls', () => {
+    for (const max of [5000, 300, 40]) {
+      let previous = -1;
+      for (let offset = 0; offset <= max; offset++) {
+        const at = offset + focusLine(offset, max, height);
+        expect(at).toBeGreaterThanOrEqual(previous);
+        previous = at;
+      }
+    }
+  });
+
+  it('finds an offset that puts any paragraph on the line, ends and short chapters included', () => {
+    for (const max of [5000, 300, 40]) {
+      for (const top of [0, 10, 150, 400, max / 2, max + 300, max + height - 20]) {
+        const offset = focusScrollFor(top, max, height);
+        expect(offset).toBeGreaterThanOrEqual(0);
+        expect(offset).toBeLessThanOrEqual(max);
+        // The first offset that carries the line past the paragraph's top.
+        expect(offset + focusLine(offset, max, height)).toBeGreaterThan(top);
+        if (offset > 0) expect(offset - 1 + focusLine(offset - 1, max, height)).toBeLessThanOrEqual(top);
+      }
+    }
   });
 });

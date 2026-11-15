@@ -148,6 +148,13 @@ export interface ViewSettings {
    * both conventions, which is why they are separate.
    */
   txtParagraphGap: number;
+  /**
+   * 专注模式: everything but the paragraph being read is veiled.
+   *
+   * Scroll mode only. A paged book is already read a screen at a time, and a
+   * veil over a page of columns would follow nothing the reader does.
+   */
+  focus: boolean;
 }
 
 /** A stand-in for the section index being out of range, so a caller need not guard. */
@@ -168,7 +175,54 @@ const DEFAULT_SETTINGS: ViewSettings = {
   tapZone: 'standard',
   txtIndent: 2,
   txtParagraphGap: 0.55,
+  focus: false,
 };
+
+/** Where in the viewport the paragraph being read rests: a little above the middle. */
+const FOCUS_REST = 0.4;
+/** Paper left visible around the focused paragraph, so its first and last lines are not shaved. */
+const FOCUS_PAD = 4;
+const FOCUS_BLOCKS = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, pre, figure, table, dd, dt, div';
+
+/**
+ * The line, in pixels from the top of the viewport, that picks the paragraph in focus.
+ *
+ * It rests at a fixed height while there is room to scroll, which is what keeps the
+ * eye still. At the two ends there is no room: the first paragraph of a chapter can
+ * never be scrolled down to the resting line, nor the last one up to it. So the line
+ * travels from the top edge as the chapter leaves its start and to the bottom edge as
+ * it reaches its end, and every paragraph gets its turn.
+ *
+ * The two ramps are one pixel of line per pixel of scroll in a long chapter. A
+ * chapter barely taller than the screen has less scroll than that needs, so the
+ * ramps share what there is (four parts in, six out, like the line itself) and the
+ * line still runs from edge to edge without ever going backwards.
+ */
+export function focusLine(scrollTop: number, maxScroll: number, height: number): number {
+  if (maxScroll <= 0 || height <= 1) return 0;
+  const rest = height * FOCUS_REST, below = height - 1 - rest;
+  const offset = Math.max(0, Math.min(maxScroll, scrollTop));
+  const rampIn = Math.min(rest, maxScroll * FOCUS_REST), rampOut = Math.min(below, maxScroll * (1 - FOCUS_REST));
+  return rest * Math.min(1, offset / rampIn) + below * Math.max(0, 1 - (maxScroll - offset) / rampOut);
+}
+
+/**
+ * The scroll offset that puts the block whose top is `top` (in content pixels) in
+ * focus — the inverse of `focusLine`, for stepping by keyboard.
+ *
+ * Searched rather than solved: the line's position in the *content* (offset plus
+ * line) only ever grows with the offset, at both ends and in a chapter too short
+ * to have a middle, so the smallest offset that carries the line past the block's
+ * top is found the same way in every case.
+ */
+export function focusScrollFor(top: number, maxScroll: number, height: number): number {
+  let low = 0, high = Math.max(0, Math.ceil(maxScroll));
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (middle + focusLine(middle, maxScroll, height) > top) high = middle; else low = middle + 1;
+  }
+  return low;
+}
 
 /**
  * Renders a `BookDoc` and owns everything about the current position.
@@ -237,6 +291,11 @@ export class ReaderView {
    */
   private noteAnchors: Array<{ id?: string; anchor: TextAnchor; color: string }> = [];
   private searchAnchor: TextAnchor | null = null;
+  /** 专注模式: the two veils, the chapter's paragraphs in order, and the one in focus. */
+  private focusVeils: [HTMLElement, HTMLElement] | null = null;
+  private focusBlocks: HTMLElement[] = [];
+  private focusIndex = -1;
+  private focusFrame: number | null = null;
 
   constructor(options: ReaderViewOptions) {
     this.options = options;
@@ -254,7 +313,7 @@ export class ReaderView {
     this.container.append(this.host);
     this.bindChapterLinks();
     this.host.flow.addEventListener('scroll', () => this.snapStrayScroll(), { passive: true });
-    this.host.addEventListener('scroll', () => this.pageMaskScrolled(), { passive: true });
+    this.host.addEventListener('scroll', () => { this.pageMaskScrolled(); this.scheduleFocus(); }, { passive: true });
     // `load` does not bubble, so it is caught on the way down. A picture that
     // arrives after the highlights were painted pushes the text below it.
     this.host.flow.addEventListener('load', (event) => {
@@ -455,13 +514,15 @@ export class ReaderView {
     // Brightness is an overlay over the page: nothing moves, so there is nothing to
     // measure or restore — and a slider sends one of these per step of a drag.
     const changed = next ? (Object.keys(next) as Array<keyof ViewSettings>).filter(key => next[key] !== previous[key]) : null;
-    const relayout = !changed || changed.some(key => key !== 'brightness');
+    // 专注模式 is the same kind of thing: veils over a page that does not move.
+    const relayout = !changed || changed.some(key => key !== 'brightness' && key !== 'focus');
     // Capture the live position before typography changes its scroll extent — once
     // per frame. A drag delivers several steps before the restore below runs, and a
     // second measurement would read the half-reflowed page and lose the place.
     if (next && relayout && !this.relayoutPending) this.measureWithin();
     if (next) this.settings = { ...this.settings, ...next };
     this.host.setAttribute('data-paginated', String(this.settings.mode === 'paged'));
+    this.scheduleFocus();
     this.container.style.setProperty('--reader-font-scale', String(this.settings.fontScale));
     // `inherit` is what keeps the author's line-height; only an explicit user
     // choice replaces it.
@@ -718,8 +779,110 @@ export class ReaderView {
     }
   }
 
+  // ---- 专注模式 ----
+
+  private get focusActive(): boolean {
+    return this.settings.focus && this.settings.mode === 'scroll' && this.doc.layout !== 'fixed';
+  }
+
+  /** Re-places the veils on the next frame; a scroll delivers many events per frame. */
+  private scheduleFocus(): void {
+    if (!this.focusActive) { this.clearFocus(); return; }
+    if (this.focusFrame !== null) return;
+    this.focusFrame = requestAnimationFrame(() => { this.focusFrame = null; this.syncFocus(); });
+  }
+
+  private clearFocus(): void {
+    if (this.focusFrame !== null) { cancelAnimationFrame(this.focusFrame); this.focusFrame = null; }
+    this.focusVeils?.forEach(veil => veil.remove());
+    this.focusVeils = null;
+    this.focusBlocks = [];
+    this.focusIndex = -1;
+  }
+
+  /**
+   * The chapter's paragraphs, in reading order.
+   *
+   * "Paragraph" is the innermost block: a list item rather than its list, a `<p>`
+   * in a quotation rather than the quotation, and the `<div>` many books use where
+   * a `<p>` belongs. Kept until the chapter's nodes are replaced, because finding
+   * them walks the whole chapter and a scroll asks sixty times a second.
+   */
+  private paragraphs(): HTMLElement[] {
+    if (this.focusBlocks[0]?.isConnected) return this.focusBlocks;
+    this.focusBlocks = [...this.host.flow.querySelectorAll<HTMLElement>(FOCUS_BLOCKS)].filter(element =>
+      !element.querySelector(FOCUS_BLOCKS) && !element.closest('[data-reader-mark]')
+      && (element.textContent?.trim() || element.querySelector('img, svg, video, canvas')));
+    return this.focusBlocks;
+  }
+
+  /**
+   * Veils everything above and below the paragraph on the focus line.
+   *
+   * Two boxes over the page rather than a style on the book: the book's own rules
+   * are never touched, nested blocks cannot compound a dimming, and a chapter of
+   * five thousand paragraphs costs the same two elements as a chapter of five.
+   */
+  private syncFocus(): void {
+    if (!this.focusActive) { this.clearFocus(); return; }
+    const host = this.host, box = host.getBoundingClientRect();
+    const maxScroll = host.scrollHeight - host.clientHeight;
+    const blocks = this.paragraphs();
+    // A chapter that fits the screen has nothing to follow, and veiling a page the
+    // reader can see whole would only hide it.
+    if (!blocks.length || box.height <= 0 || maxScroll <= 1) { this.focusVeils?.forEach(veil => { veil.hidden = true; }); this.focusIndex = -1; return; }
+    const y = box.top + focusLine(host.scrollTop, maxScroll, box.height);
+    // The first paragraph that ends below the line. Paragraphs are in document
+    // order and so, give or take a float, in vertical order: a binary search.
+    let low = 0, high = blocks.length - 1;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (blocks[middle]!.getBoundingClientRect().bottom > y) high = middle; else low = middle + 1;
+    }
+    this.focusIndex = low;
+    const rect = blocks[low]!.getBoundingClientRect();
+    if (!this.focusVeils) {
+      const veil = (): HTMLElement => { const element = document.createElement('div'); element.className = 'focus-veil'; element.setAttribute('aria-hidden', 'true'); return element; };
+      this.focusVeils = [veil(), veil()];
+      this.container.append(...this.focusVeils);
+    }
+    const frame = this.container.getBoundingClientRect();
+    const place = (veil: HTMLElement, top: number, bottom: number): void => {
+      veil.hidden = bottom - top < 1;
+      // A pixel in from each side: on a wide window the page has hairline edges, and
+      // a veil over them would leave a notch of edge beside the focused paragraph.
+      veil.style.left = `${box.left - frame.left + 1}px`;
+      veil.style.width = `${Math.max(0, box.width - 2)}px`;
+      veil.style.top = `${top - frame.top}px`;
+      veil.style.height = `${Math.max(0, bottom - top)}px`;
+    };
+    place(this.focusVeils[0], box.top, Math.min(box.bottom, rect.top - FOCUS_PAD));
+    place(this.focusVeils[1], Math.max(box.top, rect.bottom + FOCUS_PAD), box.bottom);
+  }
+
+  /**
+   * Moves the focus one paragraph on or back, for ↓ and ↑.
+   *
+   * Returns whether the key was the mode's to answer: false outside 专注模式, so
+   * the arrows keep whatever they meant before.
+   */
+  focusStep(delta: 1 | -1): boolean {
+    if (!this.focusActive) return false;
+    const host = this.host, blocks = this.paragraphs();
+    const maxScroll = host.scrollHeight - host.clientHeight;
+    if (!blocks.length || maxScroll <= 1) return false;
+    if (this.focusIndex < 0) this.syncFocus();
+    const next = blocks[Math.max(0, Math.min(blocks.length - 1, this.focusIndex + delta))];
+    if (!next) return false;
+    const top = next.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop;
+    host.scrollTop = focusScrollFor(top, maxScroll, host.clientHeight);
+    this.syncFocus();
+    return true;
+  }
+
   /** Re-measures every highlight box against the text as it is laid out now. */
   private repaintMarks(): void {
+    this.scheduleFocus();
     if (this.doc.layout === 'fixed') return;
     this.paintAnnotations(this.noteAnchors);
     const search = this.searchAnchor;
@@ -884,6 +1047,7 @@ export class ReaderView {
     this.animationTimer = null;
     this.detachChapterLinks?.();
     this.detachChapterLinks = null;
+    this.clearFocus();
     this.clearSpeechHighlight();
     this.releaseObjectUrl();
     this.resolver.dispose();
@@ -1186,6 +1350,7 @@ export class ReaderView {
   }
 
   private emitPosition(): void {
+    this.scheduleFocus();
     const position = this.position();
     // Scroll events fire per frame; only report when the position meaningfully
     // moved, so a lazy reader does not generate a sync write every frame.

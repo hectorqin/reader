@@ -138,6 +138,8 @@ export interface ChromeState {
   textAlign: AppSettings['textAlign'];
   brightness: number;
   pageAnimation: AppSettings['pageAnimation'];
+  /** 专注模式; optional so an older state shape still renders. */
+  focusMode?: boolean;
   tapZone: AppSettings['tapZone'];
   /** 点击区域, the 3×3 grid; optional so an older state shape still renders. */
   tapZones?: TapZoneGrid;
@@ -611,6 +613,10 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         value={state.mode}
         onChange={(value) => handlers.onSetting({ mode: value as AppSettings['mode'] })}
       />
+      : null}
+      {state.layout !== 'fixed' && state.mode === 'scroll' ?
+      <SwitchRow label="专注模式" hint="淡化正在读的段落以外的正文；键盘 ↑ ↓ 逐段移动"
+        checked={state.focusMode === true} onChange={(value) => handlers.onSetting({ focus: value })} />
       : null}
       <SegmentedRow
         label="翻页动画"

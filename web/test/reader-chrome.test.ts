@@ -202,6 +202,23 @@ describe('ReaderChrome', () => {
     expect(tree.querySelector('.sheet')?.textContent).not.toContain('字号');
   });
 
+  it('offers 专注模式 in scroll mode only, off unless the reader turns it on', () => {
+    const onSetting = vi.fn();
+    const row = () => [...container.querySelectorAll<HTMLElement>('.switch-field')].find(field => field.textContent?.includes('专注模式'));
+    const show = (state: Partial<ChromeState>) => render(h(ReaderChrome, { state: chromeState({ settingsOpen: true, settingsTab: 'behavior', ...state }), stage: document.createElement('div'), handlers: { ...handlers(), onSetting } }), container);
+    show({ mode: 'paged' });
+    expect(row()).toBeUndefined();
+    show({ mode: 'scroll', layout: 'fixed' });
+    expect(row()).toBeUndefined();
+    show({ mode: 'scroll' });
+    const toggle = row()!.querySelector<HTMLButtonElement>('.switch')!;
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    act(() => toggle.click());
+    expect(onSetting).toHaveBeenLastCalledWith({ focus: true });
+    show({ mode: 'scroll', focusMode: true });
+    expect(row()!.querySelector('.switch')!.getAttribute('aria-pressed')).toBe('true');
+  });
+
   it('sets each of the nine tap cells, and keeps the last 菜单 cell a menu', () => {
     const onSetting = vi.fn();
     const stage = document.createElement('div');

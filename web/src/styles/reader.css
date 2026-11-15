@@ -148,6 +148,8 @@
   --reader-text-align: inherit;
   --reader-page-margin: 1.5rem;
   --reader-brightness: 1;
+  /* How much of the page outside the focused paragraph is covered (专注模式). */
+  --reader-focus-veil: 0.68;
   --reader-measure: 42rem;
 
   --reader-page-padding-inline: 1.5rem;
@@ -415,6 +417,23 @@ select {
   opacity: calc(1 - var(--reader-brightness));
   mix-blend-mode: multiply;
 }
+
+/*
+ * 专注模式.
+ *
+ * Two veils of paper over the page, above and below the paragraph being read
+ * (`ReaderView.syncFocus` places them). Paper at part strength rather than a
+ * style on the text: the book's own colours and rules are left alone, and the
+ * faded text keeps the relationship between ink and paper in every theme.
+ */
+.focus-veil {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  background: var(--reader-paper);
+  opacity: var(--reader-focus-veil);
+}
+.focus-veil[hidden] { display: none; }
 
 /*
  * The host is the scroll container in scroll mode and a plain frame in paged
