@@ -111,6 +111,21 @@ describe('media writes invalidate the navigation they change', () => {
     for (const query of lists) expect(affectedNavigationQuery(mutation, query)).toBe(false);
   });
 
+  it('a sync push stales what is made of reading progress: 继续阅读 and the shelf list', () => {
+    const sync = '/api/v1/sync';
+    expect(affectedNavigationQuery(sync, '/api/v1/library/continue?limit=12')).toBe(true);
+    // The shelf's 最近阅读 order and its 在读/已读 filter are read off the progress row.
+    expect(affectedNavigationQuery(sync, '/api/v1/books?scope=shelf&page=1&pageSize=60&sort=updated&order=desc')).toBe(true);
+    expect(affectedNavigationQuery(sync, '/api/v1/books?sort=title&status=reading')).toBe(true);
+    expect(affectedNavigationQuery(sync, '/api/v1/books')).toBe(true);
+    // One book, and the library index, carry no progress.
+    expect(affectedNavigationQuery(sync, '/api/v1/books/b-1')).toBe(false);
+    expect(affectedNavigationQuery(sync, '/api/v1/books?scope=library&path=a')).toBe(false);
+    expect(affectedNavigationQuery(sync, '/api/v1/books?path=a&scope=library')).toBe(false);
+    expect(affectedNavigationQuery(sync, '/api/v1/library/browse?path=a')).toBe(false);
+    expect(affectedNavigationQuery(sync, '/api/v1/media/browse?channel=video')).toBe(false);
+  });
+
   it('keeps playback, queue and favorite invalidation narrow', () => {
     expect(affectedNavigationQuery('/api/v1/media/playback/s-1/progress', '/api/v1/media/history?channel=music')).toBe(true);
     expect(affectedNavigationQuery('/api/v1/media/queue/q-1/move', '/api/v1/media/queue')).toBe(true);

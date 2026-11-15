@@ -85,7 +85,16 @@ function affectedByMediaWrite(mutation: string, query: string): boolean {
 
 /** Invalidate only the navigation resources a mutation can change. */
 export function affectedNavigationQuery(mutation: string, query: string): boolean {
-  if (/^\/api\/v1\/sync(?:\/|$)/.test(mutation)) return query.startsWith('/api/v1/library/continue');
+  // A sync push carries reading progress, and two kinds of list are made of it:
+  // 继续阅读, and the *shelf list* — its 最近阅读 order and its 在读/已读 filter are
+  // both read off the progress row. Without the second, leaving a book re-read the
+  // shelf from this cache and showed the order from before the book was opened
+  // until the page was reloaded. A single book (`/books/<id>`) and the library
+  // index (`scope=library`) carry no progress and are left alone.
+  if (/^\/api\/v1\/sync(?:\/|$)/.test(mutation)) {
+    return query.startsWith('/api/v1/library/continue')
+      || (/^\/api\/v1\/books(?:\?|$)/.test(query) && !/[?&]scope=library(?:&|$)/.test(query));
+  }
   if (mutation.startsWith('/api/v1/media/')) return affectedByMediaWrite(mutation, query);
   if (/^\/api\/v1\/(notes|tts|ai|auth)(?:\/|$)/.test(mutation)) return false;
   if (mutation === '/api/v1/library/upload') return query.startsWith('/api/v1/books') || query.startsWith('/api/v1/library/browse');
