@@ -296,6 +296,8 @@ export class ReaderView {
   private focusBlocks: HTMLElement[] = [];
   private focusIndex = -1;
   private focusFrame: number | null = null;
+  /** An object URL made for the picture viewer when the page has no `<img>` of its own. */
+  private pagePictureUrl: string | null = null;
 
   constructor(options: ReaderViewOptions) {
     this.options = options;
@@ -337,7 +339,13 @@ export class ReaderView {
     window.visualViewport?.addEventListener('resize', changed);
     window.visualViewport?.addEventListener('scroll', changed);
     this.host.shadow.addEventListener('keyup', changed);
-    const contextMenu = (event: Event) => { if (this.selectionAnchor()) event.preventDefault(); changed(); };
+    const contextMenu = (event: Event) => {
+      // A finger held on a comic page opens the page as a picture; the browser's own
+      // long-press menu for an image would open over it. A mouse's right click is left alone.
+      const touch = (event as PointerEvent).pointerType === 'touch' || (event as PointerEvent).pointerType === 'pen';
+      if (this.selectionAnchor() || (touch && this.doc.layout === 'fixed' && !this.doc.pdf)) event.preventDefault();
+      changed();
+    };
     this.host.shadow.addEventListener('contextmenu',contextMenu);
     this.detachSelection = () => {
       clearTimeout(timer); this.host.ownerDocument.removeEventListener('selectionchange', changed);
@@ -749,6 +757,28 @@ export class ReaderView {
     return { images: pictures.map(element => ({ src: pictureSource(element), alt: element.getAttribute('alt') ?? '' })), index: pictures.indexOf(hit) };
   }
 
+  /**
+   * The page on screen as a picture, for a comic — or null for anything else.
+   *
+   * A comic's page is the whole screen and a tap on it turns the page, so it is
+   * opened by a long press instead (see the screen). The page's own bytes are
+   * used when no `<img>` holds it: on Android the platform draws the page and the
+   * DOM is empty. A PDF is not offered — its pages are documents, not images.
+   */
+  pagePicture(): { images: Array<{ src: string; alt: string }>; index: number } | null {
+    if (this.doc.layout !== 'fixed' || this.doc.pdf) return null;
+    const section = this.doc.sections[this.sectionIndex];
+    const drawn = this.host.flow.querySelector<HTMLImageElement>('.fixed-page img');
+    let src = drawn?.currentSrc || drawn?.src || '';
+    if (!src && section?.image) {
+      if (this.pagePictureUrl) URL.revokeObjectURL(this.pagePictureUrl);
+      const copy = new Uint8Array(section.image.bytes.byteLength);
+      copy.set(section.image.bytes);
+      src = this.pagePictureUrl = URL.createObjectURL(new Blob([copy], { type: section.image.mediaType }));
+    }
+    return src ? { images: [{ src, alt: section?.label ?? '' }], index: 0 } : null;
+  }
+
   /** The note a fragment of the chapter on screen points at; null when it is not a note. */
   noteAt(fragment: string): string[] | null {
     return noteAt(this.host.flow, fragment);
@@ -1065,6 +1095,7 @@ export class ReaderView {
     this.detachChapterLinks?.();
     this.detachChapterLinks = null;
     this.clearFocus();
+    if (this.pagePictureUrl) { URL.revokeObjectURL(this.pagePictureUrl); this.pagePictureUrl = null; }
     this.clearSpeechHighlight();
     this.releaseObjectUrl();
     this.resolver.dispose();

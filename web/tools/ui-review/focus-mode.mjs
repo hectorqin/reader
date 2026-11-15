@@ -46,12 +46,17 @@ for (const [name, width, height] of [['phone', 390, 844], ['desktop', 1366, 768]
     const settle = () => page.evaluate(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))));
     const scrollTo = async (top) => { await page.locator('book-content').evaluate((host, value) => { host.scrollTop = value; }, top); await settle(); };
     const settings = async () => { await page.locator('.reader-actions').getByRole('button', { name: '设置', exact: true }).click(); await page.locator('.reader-screen .sheet').waitFor(); };
+    const focusRow = page.locator('.reader-screen .sheet .segmented[aria-label="专注模式"]');
     const closeSheet = async () => { await page.keyboard.press('Escape'); await page.locator('.reader-screen .sheet').waitFor({ state: 'detached' }); };
 
     assert.equal((await read()).count, 0, name + ': off by default');
 
     await settings();
-    await page.locator('.switch-field', { hasText: '专注模式' }).locator('.switch').click();
+    // The row sits on the same two edges as the rows around it.
+    const edges = await page.locator('.reader-screen .sheet .field').evaluateAll(fields => fields.map(field => { const label = field.querySelector('label').getBoundingClientRect(), control = field.querySelector('.segmented').getBoundingClientRect(); return { name: field.querySelector('label').textContent, left: Math.round(label.left), controlLeft: Math.round(control.left), right: Math.round(control.right) }; }));
+    const mine = edges.find(edge => edge.name === '专注模式'), other = edges.find(edge => edge.name === '翻页方式');
+    assert.deepEqual([mine.left, mine.controlLeft, mine.right], [other.left, other.controlLeft, other.right], name + ': 专注模式 lines up with 翻页方式 ' + JSON.stringify(edges));
+    await focusRow.getByRole('button', { name: '开', exact: true }).click();
     await closeSheet();
     await settle();
 
@@ -102,12 +107,12 @@ for (const [name, width, height] of [['phone', 390, 844], ['desktop', 1366, 768]
     await settings();
     await page.locator('.reader-screen .sheet').getByRole('button', { name: '翻页', exact: true }).click();
     await settle();
-    assert.equal(await page.locator('.switch-field', { hasText: '专注模式' }).count(), 0, name + ': the switch is not offered in paged mode');
+    assert.equal(await focusRow.count(), 0, name + ': the choice is not offered in paged mode');
     assert.equal((await read()).count, 0, name + ': no veils in paged mode');
     await page.locator('.reader-screen .sheet').getByRole('button', { name: '滚动', exact: true }).click();
     await settle();
     assert.equal((await read()).count, 2, name + ': back in scroll mode the veils return');
-    await page.locator('.switch-field', { hasText: '专注模式' }).locator('.switch').click();
+    await focusRow.getByRole('button', { name: '关', exact: true }).click();
     await settle();
     assert.equal((await read()).count, 0, name + ': switching it off removes them');
     await closeSheet();

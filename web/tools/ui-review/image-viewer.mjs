@@ -37,7 +37,7 @@ for (const [name, width, height] of [['phone', 390, 844], ['desktop', 1366, 768]
     const place = () => page.locator('book-content').evaluate(el => ({ y: el.scrollTop, chrome: document.querySelector('.reader-screen').dataset.chrome }));
     const viewer = page.locator('dialog.image-viewer');
     const shown = () => viewer.locator('img').evaluate(img => { const r = img.getBoundingClientRect(); const m = new DOMMatrix(getComputedStyle(img).transform);
-      return { src: new URL(img.src).searchParams.get('ref'), left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height, scale: m.a, x: m.e, y: m.f }; });
+      return { src: img.src.startsWith('blob:') ? img.src : new URL(img.src).searchParams.get('ref'), left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height, scale: m.a, x: m.e, y: m.f }; });
     const rest = () => viewer.locator('img').evaluate(img => Promise.all(img.getAnimations().map(animation => animation.finished)).then(() => new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))));
     const drag = async (fromX, fromY, toX, toY) => { await page.mouse.move(fromX, fromY); await page.mouse.down(); await page.mouse.move((fromX + toX) / 2, (fromY + toY) / 2, { steps: 4 }); await page.mouse.move(toX, toY, { steps: 4 }); await page.mouse.up(); };
     const centre = [width / 2, height / 2];
@@ -106,6 +106,29 @@ for (const [name, width, height] of [['phone', 390, 844], ['desktop', 1366, 768]
     await page.locator('book-content p').first().click();
     await page.waitForTimeout(300);
     assert.equal(await viewer.count(), 0, name + ': a tap on text opens nothing');
+
+    // A comic: a tap is still a page turn, and a long press opens the page as a picture.
+    await page.goto(base + '/#/book/review-comic');
+    const comicPage = page.locator('book-content .fixed-page img');
+    await comicPage.waitFor();
+    const firstPage = await comicPage.getAttribute('src');
+    await page.mouse.move(width / 2, height / 2);
+    await page.mouse.down();
+    await page.waitForTimeout(650);
+    await page.mouse.up();
+    await viewer.waitFor();
+    assert.equal(await viewer.locator('img').getAttribute('src'), firstPage, name + ': a long press opens the comic page on screen');
+    assert.equal(await viewer.locator('.image-viewer-count').count(), 0, name + ': one page, no counter');
+    await page.mouse.dblclick(width / 2, height / 2);
+    await rest();
+    assert.ok(Math.abs((await shown()).scale - 2.5) < 0.01, name + ': and it zooms like any picture');
+    await page.screenshot({ path: join(shots, `viewer-${name}-comic.png`), animations: 'disabled' });
+    await page.keyboard.press('Escape');
+    await viewer.waitFor({ state: 'detached' });
+    assert.equal(await comicPage.getAttribute('src'), firstPage, name + ': closing leaves the comic on the same page');
+    await page.mouse.click(width - 20, height / 2);
+    await page.waitForFunction(previous => document.querySelector('book-content').shadowRoot.querySelector('.fixed-page img')?.getAttribute('src') !== previous, firstPage);
+    assert.equal(await viewer.count(), 0, name + ': a tap on a comic page is still a page turn');
   } finally {
     await browser.close();
     await server.close();

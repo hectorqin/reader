@@ -614,9 +614,18 @@ function SettingsBody({ state, handlers }: { state: ChromeState; handlers: Chrom
         onChange={(value) => handlers.onSetting({ mode: value as AppSettings['mode'] })}
       />
       : null}
+      {/* A segmented row like its neighbours, so the label and the control sit on the
+          same two edges as every other row of this panel. */}
       {state.layout !== 'fixed' && state.mode === 'scroll' ?
-      <SwitchRow label="专注模式" hint="淡化正在读的段落以外的正文；键盘 ↑ ↓ 逐段移动"
-        checked={state.focusMode === true} onChange={(value) => handlers.onSetting({ focus: value })} />
+      <SegmentedRow
+        label="专注模式"
+        options={[
+          { value: 'off', label: '关' },
+          { value: 'on', label: '开' },
+        ]}
+        value={state.focusMode === true ? 'on' : 'off'}
+        onChange={(value) => handlers.onSetting({ focus: value === 'on' })}
+      />
       : null}
       <SegmentedRow
         label="翻页动画"
@@ -778,8 +787,8 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
   const playing = state.state === 'playing';
   return (
     <div className="tts-bar" data-state={state.state} role="group" aria-label="朗读控制">
-      {/* The controls are one row of their own, and the sentence with its scrubber
-          is the row below.
+      {/* Two rows, like any player: what is being read with its scrubber, then the
+          transport.
 
           The bar used to be a single row: previous, play/pause, next, the sentence
           and its range, the count chip, and an ✕ — seven things across a phone.
@@ -791,14 +800,30 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
           reader has to go looking for is a control that does not exist (the same
           argument the rail's own scrollbar is built on).
 
-          Every control is `flex: 1` so the five of them divide the width evenly
-          and the row always fits: no fixed widths to run out of, and the targets
-          grow with the screen instead of huddling in the middle of a tablet. */}
+          Every control is `flex: 1` so they divide the width evenly and the row
+          always fits: no fixed widths to run out of, and the targets grow with the
+          screen instead of huddling in the middle of a tablet. */}
+      <div className="tts-row tts-progress">
+        <span className="tts-text" title={state.label}>
+          {state.label}
+        </span>
+        <input
+          className="tts-range"
+          type="range"
+          min={0}
+          max={max}
+          step={1}
+          value={value}
+          aria-label="朗读进度"
+          onInput={(event) => handlers.onSpeechScrub(Number((event.currentTarget as HTMLInputElement).value))}
+        />
+      </div>
       <div className="tts-row tts-controls">
         <IconButton label="上一句" icon="step-backward" onClick={handlers.onSpeechPrevious} />
         <IconButton
           label={playing ? '暂停朗读' : '继续朗读'}
           icon={playing ? 'pause' : 'play'}
+          className="tts-toggle"
           onClick={handlers.onSpeechToggle}
         />
         <IconButton label="下一句" icon="step-forward" onClick={handlers.onSpeechNext} />
@@ -822,21 +847,6 @@ function SpeechBar({ state, handlers }: { state: SpeechBarState; handlers: Chrom
           icon="stop"
           className="tts-stop"
           onClick={handlers.onStopSpeech}
-        />
-      </div>
-      <div className="tts-row tts-progress">
-        <span className="tts-text" title={state.label}>
-          {state.label}
-        </span>
-        <input
-          className="tts-range"
-          type="range"
-          min={0}
-          max={max}
-          step={1}
-          value={value}
-          aria-label="朗读进度"
-          onInput={(event) => handlers.onSpeechScrub(Number((event.currentTarget as HTMLInputElement).value))}
         />
       </div>
     </div>

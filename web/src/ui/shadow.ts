@@ -447,6 +447,10 @@ const FLOW_STYLESHEET = `
   width: 100%;
   height: 100%;
 }
+/* A long press on a comic page opens it as a picture; the system's own image callout must not open first. */
+.fixed-page img {
+  -webkit-touch-callout: none;
+}
 .fixed-page[data-fit='contain'] img,
 .fixed-page[data-fit='contain'] .pdf-frame {
   max-width: 100%;

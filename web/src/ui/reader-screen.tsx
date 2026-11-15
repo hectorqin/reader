@@ -224,6 +224,8 @@ export class ReaderScreen {
   private footnote: { paragraphs: string[]; ref: string | null; fragment: string } | null = null;
   /** The chapter's pictures, open full screen on the one that was tapped. */
   private viewer: { images: ViewerImage[]; index: number } | null = null;
+  /** True while the platform's own page was taken down so the viewer could be seen over it. */
+  private viewerOverNativePage = false;
   /** Whether the server offers the AI 选区助手; unknown and old servers are "no". */
   private assistAvailable = false;
   /** The passage the AI sheet is open on. */
@@ -307,7 +309,7 @@ export class ReaderScreen {
             key={encodeAnchor(this.assist.anchor)} quote={this.assist.anchor.quote} ask={(action, question) => this.askAi(action, question)}
             onClose={() => { this.assist = null; this.patch({}); }} />}{this.viewer && <ImageViewer
             key={this.viewer.images[this.viewer.index]?.src} images={this.viewer.images} start={this.viewer.index}
-            onClose={() => { this.viewer = null; this.patch({}); }} />}{this.footnote && <Sheet
+            onClose={() => this.closeViewer()} />}{this.footnote && <Sheet
             title="注释" size="compact" className="footnote-sheet" onClose={() => { this.footnote = null; this.patch({}); }}
             footer={<Button onClick={() => this.goToNote()}>跳到注释处</Button>}>
             <div className="footnote-text">{this.footnote.paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
@@ -428,6 +430,31 @@ export class ReaderScreen {
     return result.answer;
   }
 
+  /**
+   * Opens the comic page on screen in the picture viewer.
+   *
+   * On Android the page is drawn by the platform in a view above the WebView, and
+   * a viewer inside the WebView would open underneath it. The native page is taken
+   * down for as long as the viewer is open and drawn again when it closes.
+   */
+  private openPagePicture(): boolean {
+    const picture = this.view?.pagePicture();
+    if (!picture) return false;
+    if (this.options.pageHost) { this.options.pageHost.hide(); this.viewerOverNativePage = true; }
+    this.viewer = picture;
+    this.patch({});
+    return true;
+  }
+
+  private closeViewer(): void {
+    this.viewer = null;
+    this.patch({});
+    if (!this.viewerOverNativePage) return;
+    this.viewerOverNativePage = false;
+    const view = this.view;
+    if (view) void view.open(view.currentSectionIndex(), 0).catch(() => undefined);
+  }
+
   private goToNote(): void {
     const note = this.footnote;
     if (!note) return;
@@ -460,7 +487,7 @@ export class ReaderScreen {
     this.pdfLoading = pdfLoading;
     this.closeAlternatives(); this.chapterRefresh?.abort(); this.chapterRefresh = null;
     const token = ++this.loadingToken;
-    this.toolsOpen = false; this.annotation = null; this.footnote = null; this.assist = null; this.viewer = null; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
+    this.toolsOpen = false; this.annotation = null; this.footnote = null; this.assist = null; this.viewer = null; this.viewerOverNativePage = false; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
     this.content = null; this.book = book;
     let opened = false;
     if (book.title) document.title = `${book.title} · reader`;
@@ -1300,7 +1327,9 @@ export class ReaderScreen {
         void this.finishDrag(turn ? (forward ? 'next' : 'previous') : null);
         return true;
       },
-      onLongPress: () => this.setChromeVisible(true),
+      // On a comic a tap turns the page, so its page is opened as a picture by a
+      // long press; everywhere else a long press brings the bars back.
+      onLongPress: () => { if (!this.openPagePicture()) this.setChromeVisible(true); },
       // A tap on a picture opens it, with the rest of the chapter's pictures behind it.
       onTapTarget: (path) => {
         const pictures = this.view?.picturesAt(path);

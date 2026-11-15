@@ -2209,19 +2209,22 @@ book-content {
   touch-action: manipulation;
 }
 
-.progress-scrubber::-webkit-slider-runnable-track {
+.progress-scrubber::-webkit-slider-runnable-track,
+.tts-range::-webkit-slider-runnable-track {
   height: 0.3rem;
   border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--reader-line) 70%, transparent);
 }
 
-.progress-scrubber::-moz-range-track {
+.progress-scrubber::-moz-range-track,
+.tts-range::-moz-range-track {
   height: 0.3rem;
   border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--reader-line) 70%, transparent);
 }
 
-.progress-scrubber::-webkit-slider-thumb {
+.progress-scrubber::-webkit-slider-thumb,
+.tts-range::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
   width: 1.1rem;
@@ -2236,7 +2239,8 @@ book-content {
   box-shadow: 0 1px 4px color-mix(in srgb, #000 18%, transparent);
 }
 
-.progress-scrubber::-moz-range-thumb {
+.progress-scrubber::-moz-range-thumb,
+.tts-range::-moz-range-thumb {
   width: 1.1rem;
   height: 1.1rem;
   border-radius: 50%;
@@ -2245,7 +2249,8 @@ book-content {
   box-shadow: 0 1px 4px color-mix(in srgb, #000 18%, transparent);
 }
 
-.progress-scrubber:focus-visible {
+.progress-scrubber:focus-visible,
+.tts-range:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
@@ -2501,8 +2506,11 @@ book-content {
   bottom: var(--reader-chrome-bottom);
   z-index: var(--reader-layer-bar);
   display: flex;
-  align-items: center;
-  gap: 0.35rem;
+  /* A column: the two rows are stacked. Without this they sat side by side, and the
+     sentence, the count and the scrubber were each squeezed to a few characters. */
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
   padding: 0.35rem 0.5rem;
   background: var(--reader-surface-float);
   backdrop-filter: blur(10px);
@@ -2581,26 +2589,42 @@ book-content {
   color: var(--reader-ink);
 }
 
+/* What is being read, on a line of its own, and the scrubber under it at full width. */
 .tts-bar .tts-progress {
-  gap: var(--space-2);
-  padding-inline: 0.15rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
 }
 
 .tts-bar .tts-text {
-  flex: 0 1 auto;
-  max-width: 40%;
-  font-size: var(--text-label);
-  color: var(--reader-muted);
+  font-size: var(--text-ui);
+  color: var(--reader-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Play/pause is the control the bar exists for, and is drawn as the primary one. */
+.tts-bar .tts-toggle {
+  background: var(--reader-primary);
+  color: var(--reader-on-primary);
+}
+
+.tts-bar .tts-controls .icon-button {
+  width: auto;
+  height: 2.75rem;
+}
+
+/* The same track and thumb as the page scrubber: one kind of slider in the reader. */
 .tts-range {
-  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
-  accent-color: var(--reader-accent);
+  appearance: none;
+  -webkit-appearance: none;
+  height: 1.5rem;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 /*
@@ -3788,7 +3812,19 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   }
 }
 .reader-screen .sheet .field { padding-block: 0.8rem; }
-.reader-screen .sheet .tts-bar { position: static; border-radius: var(--radius-md); width: auto; transform: none; margin-bottom: 1rem; }
+.reader-screen .sheet .tts-bar {
+  /* In the 朗读 sheet the bar is a card among the settings, not a strip over the page. */
+  position: static;
+  width: auto;
+  transform: none;
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--reader-line);
+  border-radius: var(--radius-md);
+  background: var(--reader-surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 .reader-screen .sheet .field { grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr); gap: 0.75rem; padding-block: 0.5rem; }
 .reader-screen .field input[type='range'] { min-height: 32px; }
 .reader-screen .field input[type='range']::-webkit-slider-runnable-track { height: 4px; border-radius: var(--radius-xs); background: var(--reader-line); }
