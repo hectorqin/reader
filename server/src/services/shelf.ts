@@ -271,13 +271,27 @@ export class ShelfService {
       where.push(`(${READING_STATE}) = ?`);
       params.push(options.status);
     }
+    const order = options.order === 'asc' ? 'ASC' : 'DESC';
+    const sort = options.sort ?? 'added';
+    if (!['title', 'author', 'added', 'updated'].includes(sort)) throw badRequest('invalid sort');
+    /*
+     * `updated` asks two different questions in the two scopes, and the shelf's is
+     * the one the client calls 最近阅读.
+     *
+     * In the index it is when the *book* last changed. On the shelf it is when this
+     * reader last *read* it, which is on their progress row and not on the book's:
+     * a book's own timestamp moves when its metadata is edited or a chapter source
+     * updates, and never because somebody read it. Sorting the shelf by it is why
+     * finishing an evening in one book left another at the top of 最近阅读. A book
+     * never opened has no progress row; those come after every book that has one,
+     * newest on the shelf first.
+     */
     const sortColumn = {
       title: 'b.title',
       author: 'b.author',
       added: 'ub.added_at',
-      updated: 'b.updated_at',
-    }[options.sort ?? 'added'];
-    const order = options.order === 'asc' ? 'ASC' : 'DESC';
+      updated: library ? 'b.updated_at' : `COALESCE(rp.updated_at, 0) ${order}, ub.added_at`,
+    }[sort];
     const whereSql = where.join(' AND ');
     /*
      * Sorting by `added` in library scope sorts on `ub.added_at`, which is `NULL` for a

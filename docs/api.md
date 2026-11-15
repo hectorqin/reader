@@ -139,7 +139,7 @@
 | `path` | 只返回**这个目录下**（含子目录）有文件的书。库内相对路径，`''` 等于不过滤 |
 | `scope` | `shelf`（默认）\| `library`。见下 |
 | `status` | `reading` \| `want` \| `finished`，仅书架范围生效，见 [`PUT /books/:id/reading-status`](#put-booksidreading-status) |
-| `sort` | `title` \| `author` \| `added` \| `updated`，默认 `added` |
+| `sort` | `title` \| `author` \| `added` \| `updated`，默认 `added`。`updated` 在书架（默认 scope）是**本账号最近阅读这本书的时间**（阅读进度的更新时间，没读过的排在后面、按入库时间新到旧）；在 `scope=library` 是书本身的更新时间。未知值返回 `400` |
 | `order` | `asc` \| `desc`，默认 `desc` |
 | `page` `pageSize` | 默认 1 / 50，`pageSize` 夹到 1–200 |
 
