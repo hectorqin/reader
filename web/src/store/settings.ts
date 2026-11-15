@@ -129,6 +129,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   txtParagraphGap: 0.55,
   txtEncoding: '',
   comicDirection: 'ltr',
+  focus: false,
   paper: 'theme',
   paperFollowsDark: true,
   ttsRate: 1,
@@ -187,6 +188,7 @@ export class SettingsStore {
         this.settings.paper = validReaderPaper(this.settings.paper);
         this.settings.tapZones = normalizeTapZones(parsed.tapZones, parsed.tapZone);
         if (typeof this.settings.paperFollowsDark !== 'boolean') this.settings.paperFollowsDark = true;
+        if (typeof this.settings.focus !== 'boolean') this.settings.focus = false;
         if (!['list', 'grid'].includes(this.settings.exploreLayout)) this.settings.exploreLayout = DEFAULT_APP_SETTINGS.exploreLayout;
         if (!['recent', 'added', 'title', 'author'].includes(this.settings.shelfSort)) {
           this.settings.shelfSort = DEFAULT_APP_SETTINGS.shelfSort;

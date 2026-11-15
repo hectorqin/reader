@@ -4,7 +4,7 @@ import { badRequest, conflict } from '../lib/errors.ts';
 
 export interface BusinessValues {
   modules:{mediaEnabled:boolean;newUserMediaEnabled:boolean};
-  ai:{enabled:boolean;scanEnabled:boolean;summaryEnabled:boolean;baseUrl:string;apiKey:string;model:string;scanPrompt:string;summaryPrompt:string;batchSize:number;maxInputChars:number};
+  ai:{enabled:boolean;scanEnabled:boolean;summaryEnabled:boolean;assistEnabled:boolean;assistLanguage:string;baseUrl:string;apiKey:string;model:string;scanPrompt:string;summaryPrompt:string;batchSize:number;maxInputChars:number};
   playback:{mode:'auto'|'direct'|'proxy'};
   tmdb:{enabled:boolean;token:string;apiKey:string;language:string};
   musicbrainz:{enabled:boolean;userAgent:string};
@@ -26,6 +26,8 @@ export const SETTINGS_SCHEMA:Record<SettingsGroup,{label:string;fields:Field[]}>
     {key:'enabled',label:'启用 AI',type:'checkbox',default:false},
     {key:'scanEnabled',label:'启用 AI 扫描',type:'checkbox',default:false},
     {key:'summaryEnabled',label:'启用 AI 总结',type:'checkbox',default:false},
+    {key:'assistEnabled',label:'启用 AI 选区助手',type:'checkbox',default:false,help:'阅读时选中文字可翻译、解释或提问；选中的文字及其前后文会发送给下面配置的 AI 服务'},
+    {key:'assistLanguage',label:'翻译与解答语言',type:'text',default:'简体中文'},
     {key:'baseUrl',label:'Base URL',type:'url',default:'',help:'OpenAI 兼容接口地址，例如 https://api.openai.com/v1'},
     {key:'apiKey',label:'API Key',type:'password',default:''},
     {key:'model',label:'模型',type:'text',default:'',help:'填写地址和密钥后即可获取模型，无需先保存'},
@@ -168,7 +170,7 @@ function legacySettings<K extends SettingsGroup>(group:K,config:AppConfig):Busin
   const integer=(name:string,fallback:number)=>{const value=Number(env[name]);return env[name]&&Number.isSafeInteger(value)&&value>=0?value:fallback;};
   const intervals=[config.scanInterval,config.watchInterval].filter(value=>value>0);
   const legacy:Partial<BusinessValues>={
-    ai:{enabled:false,scanEnabled:false,summaryEnabled:false,baseUrl:text('AI_BASE_URL'),apiKey:text('AI_API_KEY'),model:text('AI_MODEL'),scanPrompt:'请根据以下媒体路径识别类型。必须返回 JSON 数组，每项包含 path、category（movie/series/music/audiobook/other）、title、year、season、artist、album。不要添加解释。',summaryPrompt:'请用中文总结以下章节内容，提炼主要情节、人物和关键信息，输出简洁连贯的段落。',batchSize:500,maxInputChars:60000},
+    ai:{enabled:false,scanEnabled:false,summaryEnabled:false,assistEnabled:false,assistLanguage:'简体中文',baseUrl:text('AI_BASE_URL'),apiKey:text('AI_API_KEY'),model:text('AI_MODEL'),scanPrompt:'请根据以下媒体路径识别类型。必须返回 JSON 数组，每项包含 path、category（movie/series/music/audiobook/other）、title、year、season、artist、album。不要添加解释。',summaryPrompt:'请用中文总结以下章节内容，提炼主要情节、人物和关键信息，输出简洁连贯的段落。',batchSize:500,maxInputChars:60000},
     tmdb:{enabled:!!(text('MEDIA_TMDB_TOKEN')||text('MEDIA_TMDB_API_KEY')),token:text('MEDIA_TMDB_TOKEN'),apiKey:text('MEDIA_TMDB_API_KEY'),language:'zh-CN'},
     musicbrainz:{enabled:!!text('MEDIA_MUSICBRAINZ_USER_AGENT'),userAgent:text('MEDIA_MUSICBRAINZ_USER_AGENT')},
     tts:{enabled:!!text('TTS_URL'),url:text('TTS_URL'),token:text('TTS_TOKEN'),voicesUrl:text('TTS_VOICES_URL'),timeoutMs:integer('TTS_TIMEOUT_MS',20000),cacheMaxBytes:integer('TTS_CACHE_BYTES',268435456)},

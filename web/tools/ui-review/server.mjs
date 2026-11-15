@@ -172,7 +172,9 @@ function illustratedChapter(index) {
     return [
       '<?xml version="1.0" encoding="utf-8"?>',
       '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一卷 后记</title></head>',
-      '<body><p>后记：这一章没有插图，用来确认上一章的图片不是碰巧出现的。</p></body></html>',
+      '<body><p>后记：这一章没有插图，用来确认上一章的图片不是碰巧出现的。</p>',
+      // The target of the first chapter's "note at the back of the book".
+      '<p id="n2"><a href="ch1.xhtml#r2">[2]</a> 这是写在后记里的书后注，读者不必翻到这里就能读到它。</p></body></html>',
     ].join('\n');
   }
   const image = (name) =>
@@ -182,13 +184,17 @@ function illustratedChapter(index) {
     '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一卷 插图</title></head>',
     '<body>',
     // The plate that fits the column, as a book normally presents one…
-    `<div class="pic"><img src="${image('pic.png')}" alt="插图"/></div>`,
+    `<div class="pic" id="plate"><img src="${image('pic.png')}" alt="插图"/></div>`,
     '<p>台版 转自 天使动漫</p>',
     // …and one the publisher sized in its own pixels, which is the case the reader
     // reported. Both are on the page so one screenshot shows "a plate is drawn" and
     // "a plate wider than the page is still inside it" at the same time.
     `<div class="pic wide"><img src="${image('wide.png')}" alt="宽插图" width="${WIDE_PLATE_WIDTH}" height="${WIDE_PLATE_HEIGHT}"/></div>`,
     '<p>插图下面还有正文，这样图片没显示出来的时候，空出来的位置也是看得见的。</p>',
+    // Three kinds of link a chapter can carry: a note in this chapter, a note in
+    // another one, and a cross-reference that is not a note at all.
+    `<p>这句正文带着一条脚注<sup><a id="r1" href="#fn1">[1]</a></sup>，还有一条书后注<sup><a id="r2" href="/api/v1/books/${ILLUSTRATED_ID}/assets?__reader-book-resource__=1&amp;ref=${encodeURIComponent('OEBPS/Text/ch2.xhtml')}#n2">[2]</a></sup>，以及一个<a id="xref" href="#plate">回到插图</a>的普通链接。</p>`,
+    '<aside id="fn1" epub:type="footnote"><p><a href="#r1">[1]</a> 这是本章之内的脚注，点一下引用标记就在原处读到。</p></aside>',
     '</body></html>',
   ].join('\n');
 }
@@ -411,7 +417,8 @@ function unauthorised(reply) {
   return reply.end(JSON.stringify({ error: { code: 'NO_TOKEN', message: 'missing bearer token' } }));
 }
 
-export function createReviewServer({ port = 5199 } = {}) {
+/** `ai` turns on the AI 选区助手 stand-in; off by default so the other reviews see the app without it. */
+export function createReviewServer({ port = 5199, ai = false } = {}) {
   const seen = [];
   /*
    * The paths the review has shelved, in memory.
@@ -445,6 +452,7 @@ export function createReviewServer({ port = 5199 } = {}) {
    * still untouched, is the same data with no ordering question.
    */
   const bodies = new WeakMap();
+  const jsonBodies = new WeakMap();
   const server = createServer((request, reply) => {
     seen.push(`${request.method} ${request.url}`);
     const chunks = [];
@@ -456,6 +464,7 @@ export function createReviewServer({ port = 5199 } = {}) {
         // The shelf write sends `{ paths: [...] }`; a `FormData` upload does not parse
         // and is simply not recorded, which is the right answer for every handler here.
         if (Array.isArray(parsed?.paths)) bodies.set(request, parsed.paths);
+        jsonBodies.set(request, parsed);
       } catch {
         /* not JSON: nothing to record */
       }
@@ -832,6 +841,16 @@ export function createReviewServer({ port = 5199 } = {}) {
         ],
       });
     }
+    if (ai && path === '/api/v1/ai/capabilities') {
+      return json(reply, { summary: false, scan: false, assist: true });
+    }
+    if (ai && path === '/api/v1/ai/assist') {
+      // Answers with what it was asked, so the review can see that the passage and
+      // its paragraph arrived, not merely that something came back.
+      const body = jsonBodies.get(request) ?? {};
+      const label = { translate: '译文', explain: '解释', ask: `回答「${body.question}」` }[body.action] ?? '未知';
+      return json(reply, { answer: `${label}：${body.text}\n\n（上下文 ${String(body.context ?? '').length} 字）`, cached: false });
+    }
     if (path === `/api/v1/books/${BOOK_ID}/manifest`) {
       return json(reply, manifest());
     }
@@ -868,7 +887,8 @@ export function createReviewServer({ port = 5199 } = {}) {
         reply.writeHead(200, { 'content-type': 'image/png' });
         return reply.end(WIDE_PNG);
       }
-      const index = ILLUSTRATED_CHAPTERS.findIndex((chapter) => ref === chapter.path);
+      // The client asks for a chapter by its manifest href (`xhtml:<path>`), as the real server expects.
+      const index = ILLUSTRATED_CHAPTERS.findIndex((chapter) => ref.replace(/^xhtml:/, '') === chapter.path);
       reply.writeHead(200, { 'content-type': 'application/xhtml+xml; charset=utf-8' });
       return reply.end(illustratedChapter(index < 0 ? 0 : index));
     }

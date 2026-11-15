@@ -1,9 +1,14 @@
 .business-settings { min-width: 0; }
+/*
+ * A switch row: the name on the left, the box on the right, and the explanation —
+ * when a setting has one — on a line of its own underneath. As one flex row the
+ * explanation was a third item between the two, and a long one squeezed the box.
+ */
 .business-settings .business-setting-toggle {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: var(--space-1) var(--space-3);
   min-height: 44px;
 }
 .business-settings .business-setting-toggle input[type=checkbox] {
@@ -11,9 +16,9 @@
   height: 22px;
   min-height: 22px;
   margin: 0;
-  flex: 0 0 22px;
   accent-color: var(--reader-accent);
 }
+.business-settings .business-setting-toggle small { grid-column: 1 / -1; }
 .business-settings .business-secret-clear { justify-self: start; font-size: var(--text-meta); }
 .business-settings audio { width: 100%; }
 .business-settings .muted { line-height: 1.6; }

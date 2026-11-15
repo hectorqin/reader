@@ -1071,8 +1071,8 @@ AI 配置在业务设置的 `ai` 分组（见下文 Administrator business setti
 
 ### `GET /ai/capabilities`
 
-任何已登录账号可读 → `{ "summary": true }`。`summary` 为 AI 与章节总结都已启用且地址、密钥、模型齐全；不返回任何配置值。
-阅读器据此决定是否显示「AI 总结」按钮；旧服务端没有此接口（404）时客户端照旧显示。
+任何已登录账号可读 → `{ "summary": true, "scan": false, "assist": true }`。每一项为 AI 与对应功能（章节总结、媒体扫描、选区助手）都已启用且地址、密钥、模型齐全；不返回任何配置值。
+阅读器据此决定是否显示「AI 总结」按钮和选区工具条的「问AI」；旧服务端没有此接口（404）时客户端照旧显示「AI 总结」，不显示「问AI」。
 
 ### `POST /ai/summary`
 
@@ -1080,6 +1080,19 @@ AI 配置在业务设置的 `ai` 分组（见下文 Administrator business setti
 
 正文按配置的 `maxInputChars` 截断；结果按账号、书、章节、正文哈希和提示词哈希缓存。AI 或章节总结未启用返回 `403 AI_DISABLED`，
 地址 / 密钥 / 模型未配置完整返回 `400`。
+
+### `POST /ai/assist`
+
+就读者选中的一段文字翻译、解释或提问。
+
+`{ "bookId": "...", "action": "translate" | "explain" | "ask", "text": "选中的文字", "context": "可选，所在段落", "question": "action 为 ask 时必填" }`
+→ `{ "answer": "...", "cached": false }`。
+
+- `text` 去除首尾空白后不能为空，最多 4000 字（超出返回 `400 AI_TEXT_TOO_LONG`）；`context` 截断到 2000 字；`question` 最多 500 字。
+- 翻译与回答使用配置的 `assistLanguage`（默认「简体中文」）；原文已是该语言时翻译改为通俗转述。
+- 选中的文字和上下文在提示词里用 `<<<` / `>>>` 围起并声明为材料，其中的指令不执行。
+- 结果按账号、书和请求哈希（动作、文字、上下文、问题、语言、模型）缓存；上游失败不缓存。
+- AI 或选区助手未启用返回 `403 AI_DISABLED`；上游失败返回 `502 AI_REQUEST_FAILED` / `AI_CONNECTION_FAILED` / `AI_EMPTY_RESPONSE`。
 
 ---
 

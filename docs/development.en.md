@@ -94,6 +94,10 @@ UI reviews render in real Chromium over CDP, then take screenshots and measureme
 | `npm run ui:review --prefix web` | Builds, then reviews the app screens | `artifacts/ui-review/react-app/`, result in `verification.json` |
 | `npm run ui:review:only --prefix web` | Same, reusing the existing `web/dist` (used by CI) | Same |
 | `npm run ui:review:reader --prefix web` | Reader scenes; does not build, run `npm run build` first | `artifacts/ui-review/reader/` |
+| `npm run ui:review:footnote --prefix web` | Builds, then checks in-place footnotes, notes in another chapter, and that fragment links never change the route | `artifacts/ui-review/footnote/` |
+| `npm run ui:review:ai --prefix web` | Builds, then walks selection → 问AI → translate and ask | `artifacts/ui-review/ai-assist/` |
+| `npm run ui:review:focus --prefix web` | Builds, then checks focus mode: off by default, the focused paragraph at the start/middle/end of a chapter, ↑↓, kept across a reload, absent in paged mode | `artifacts/ui-review/focus-mode/` |
+| `npm run ui:review:images --prefix web` | Builds, then checks the picture viewer: open, step sideways, double-click zoom, pan stays inside the edge, close restores the page | `artifacts/ui-review/image-viewer/` |
 | `npm run ui:sources --prefix web` | Builds, then runs the source workflow; needs server dependencies installed | `artifacts/ui-review/sources/` |
 
 Set `UI_REVIEW_DIR` to change the output directory. Run a review and look at the screenshots after layout changes. Reviews do not emulate safe areas; check edge-touching bars with CDP `Emulation.setSafeAreaInsetsOverride`.

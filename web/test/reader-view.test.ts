@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReaderView } from '../src/ui/reader-view.ts';
+import { ReaderView, focusLine, focusScrollFor } from '../src/ui/reader-view.ts';
 import { createStagedDoc } from '../src/formats/windowed.ts';
 import type { BookContent, ContentItem } from '../src/net/api.ts';
 import type { BookDoc } from '../src/formats/types.ts';
@@ -691,10 +691,57 @@ describe('ReaderView chapter links', () => {
     view.dispose();
   });
 
-  it('lets the browser perform an in-document footnote link', async () => {
+  it('performs an in-document fragment link itself instead of handing it to the browser', async () => {
+    // The browser's fragment search does not look inside a shadow tree, and the
+    // address change it would still make is a route change in a hash-routed app.
     const view = new ReaderView({ container, doc: docWithLink('#note3') });
     await view.open(0, 0);
-    expect(clickLink(view)).toBe(true);
+    expect(clickLink(view)).toBe(false);
+    view.dispose();
+  });
+
+  it('keeps the fragment of a link into another chapter', async () => {
+    const href = new URL('/api/v1/books/b1/assets?__reader-book-resource__=1&ref=OEBPS/notes.xhtml#n12', document.baseURI).href;
+    const seen: string[] = [];
+    const view = new ReaderView({ container, doc: docWithLink(href), onChapterLink: (ref) => { seen.push(ref); return true; } });
+    await view.open(0, 0);
+    expect(clickLink(view)).toBe(false);
+    expect(seen).toEqual(['xhtml:OEBPS/notes.xhtml#n12']);
+    view.dispose();
+  });
+
+  /** A chapter with one reference mark and the note it points at. */
+  function docWithNote(link: string, note: string): BookDoc {
+    const doc = reflowableDoc(1);
+    return { ...doc, sections: [{ id: 'ch1.xhtml', label: '第一章', html: `<p>正文里的一句话${link}，后面还有正文。</p>${note}`, depth: 0 }] };
+  }
+
+  it('offers a note reference to the screen, with the note readable from the chapter', async () => {
+    const seen: Array<{ ref: string | null; fragment: string }> = [];
+    const view = new ReaderView({
+      container,
+      doc: docWithNote('<sup><a id="r1" href="#n1">[1]</a></sup>', '<p><a id="n1" href="#r1">[1]</a> 这是注释的内容。</p>'),
+      onNoteLink: (link) => { seen.push(link); return true; },
+    });
+    await view.open(0, 0);
+    expect(clickLink(view)).toBe(false);
+    expect(seen).toEqual([{ ref: null, fragment: 'n1' }]);
+    expect(view.noteAt('n1')).toEqual(['[1] 这是注释的内容。']);
+    // The way back is a place in the body text, not a note.
+    expect(view.noteAt('r1')).toBeNull();
+    view.dispose();
+  });
+
+  it('does not offer a link that reads as words rather than as a reference mark', async () => {
+    const seen: unknown[] = [];
+    const view = new ReaderView({
+      container,
+      doc: docWithNote('<a href="#n1">参见第三节的讨论</a>', '<p id="n1">第三节</p>'),
+      onNoteLink: (link) => { seen.push(link); return true; },
+    });
+    await view.open(0, 0);
+    expect(clickLink(view)).toBe(false);
+    expect(seen).toEqual([]);
     view.dispose();
   });
 });
@@ -720,5 +767,84 @@ describe('ReaderView settings', () => {
     expect(measure).toHaveBeenCalledTimes(1);
     expect(frames).toHaveLength(0);
     raf.mockRestore();
+  });
+});
+
+/**
+ * 专注模式's arithmetic. The veils themselves need a layout and are reviewed in a
+ * real browser (`tools/ui-review/focus-mode.mjs`); what can be wrong without one is
+ * where the line sits and whether every paragraph can be reached.
+ */
+describe('专注模式 focus line', () => {
+  const height = 800, maxScroll = 5000;
+
+  it('rests at a fixed height in the middle of a chapter', () => {
+    expect(focusLine(1000, maxScroll, height)).toBe(320);
+    expect(focusLine(3000, maxScroll, height)).toBe(320);
+  });
+
+  it('reaches the top edge at the start of a chapter and the bottom edge at its end', () => {
+    expect(focusLine(0, maxScroll, height)).toBe(0);
+    expect(focusLine(100, maxScroll, height)).toBe(100);
+    expect(focusLine(maxScroll, maxScroll, height)).toBe(799);
+    expect(focusLine(maxScroll - 100, maxScroll, height)).toBe(699);
+    // A chapter barely taller than the screen still starts at the top and ends at the bottom.
+    expect(focusLine(0, 40, height)).toBe(0);
+    expect(focusLine(40, 40, height)).toBe(799);
+  });
+
+  it('never moves backwards through the content as the chapter scrolls', () => {
+    for (const max of [5000, 300, 40]) {
+      let previous = -1;
+      for (let offset = 0; offset <= max; offset++) {
+        const at = offset + focusLine(offset, max, height);
+        expect(at).toBeGreaterThanOrEqual(previous);
+        previous = at;
+      }
+    }
+  });
+
+  it('finds an offset that puts any paragraph on the line, ends and short chapters included', () => {
+    for (const max of [5000, 300, 40]) {
+      for (const top of [0, 10, 150, 400, max / 2, max + 300, max + height - 20]) {
+        const offset = focusScrollFor(top, max, height);
+        expect(offset).toBeGreaterThanOrEqual(0);
+        expect(offset).toBeLessThanOrEqual(max);
+        // The first offset that carries the line past the paragraph's top.
+        expect(offset + focusLine(offset, max, height)).toBeGreaterThan(top);
+        if (offset > 0) expect(offset - 1 + focusLine(offset - 1, max, height)).toBeLessThanOrEqual(top);
+      }
+    }
+  });
+});
+
+describe('ReaderView pictures', () => {
+  let container: HTMLDivElement;
+  beforeEach(() => { container = document.createElement('div'); document.body.append(container); });
+  afterEach(() => { container.remove(); vi.restoreAllMocks(); });
+
+  /** jsdom lays nothing out, so each image is given the size its `data-size` names. */
+  function sized(): void {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const size = Number(this.getAttribute('data-size') ?? 0);
+      return new DOMRect(0, 0, size, size);
+    });
+  }
+  const html = '<p>正文<img id="glyph" data-size="16" src="data:image/png;base64,AA==" alt="注"></p>'
+    + '<div><img id="one" data-size="300" src="data:image/png;base64,AQ==" alt="图一"></div><p>正文</p>'
+    + '<div><img id="two" data-size="300" src="data:image/png;base64,Ag==" alt="图二"></div>';
+
+  it('answers a tap on a picture with the chapter\'s pictures, in order, and leaves glyphs and text alone', async () => {
+    sized();
+    const doc = reflowableDoc(1);
+    const view = new ReaderView({ container, doc: { ...doc, sections: [{ id: 'c1', label: '一', html, depth: 0 }] } });
+    await view.open(0, 0);
+    const flow = view.elementHost.flow;
+    const path = (id: string) => [flow.querySelector('#' + id)!, flow];
+    expect(view.picturesAt(path('two'))).toEqual({ index: 1, images: [{ src: 'data:image/png;base64,AQ==', alt: '图一' }, { src: 'data:image/png;base64,Ag==', alt: '图二' }] });
+    expect(view.picturesAt(path('one'))?.index).toBe(0);
+    expect(view.picturesAt(path('glyph'))).toBeNull();
+    expect(view.picturesAt([flow.querySelector('p')!, flow])).toBeNull();
+    view.dispose();
   });
 });

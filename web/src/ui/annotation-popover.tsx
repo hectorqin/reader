@@ -6,8 +6,10 @@ import { ConfirmSheet, Sheet } from './sheet.tsx';
 import { FloatingNotice } from './floating-notice.tsx';
 
 export interface AnnotationTarget { anchor: TextAnchor; rect: DOMRect; note?: Note }
-export function AnnotationPopover({ target, save, remove, close }: {
+export function AnnotationPopover({ target, save, remove, close, askAi }: {
   target: AnnotationTarget;
+  /** Present when the server offers the AI 选区助手; opens it on this selection. */
+  askAi?: () => void;
   save(type: 'highlight' | 'note' | 'bookmark', comment: string, color: string): Promise<void>;
   remove(): Promise<void>; close(): void;
 }) {
@@ -61,6 +63,7 @@ export function AnnotationPopover({ target, save, remove, close }: {
       {!target.note && <button disabled={busy} onClick={() => void work(() => save('highlight', '', color))}>高亮</button>}
       <button disabled={busy} onClick={() => setEditing(true)}>{target.note ? '编辑批注' : '批注'}</button>
       {!target.note && <button disabled={busy} onClick={() => void work(() => save('bookmark', '', ''))}>书签</button>}
+      {!target.note && askAi && <button disabled={busy} onClick={askAi}>问AI</button>}
       {target.note && <button disabled={busy} onClick={() => setConfirmDelete(true)}>删除</button>}
       <button disabled={busy} aria-label="关闭选区工具" onClick={close}>关闭</button>
     </div>

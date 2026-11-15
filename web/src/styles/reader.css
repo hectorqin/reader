@@ -148,6 +148,13 @@
   --reader-text-align: inherit;
   --reader-page-margin: 1.5rem;
   --reader-brightness: 1;
+  /* The picture viewer's bed and the controls drawn on it: dark in every theme, like a lightbox. */
+  --reader-viewer-bed: rgba(14, 13, 12, 0.96);
+  --reader-viewer-ink: #F3F0EA;
+  --reader-viewer-control: rgba(20, 19, 18, 0.62);
+  --reader-viewer-edge: rgba(255, 255, 255, 0.28);
+  /* How much of the page outside the focused paragraph is covered (专注模式). */
+  --reader-focus-veil: 0.68;
   --reader-measure: 42rem;
 
   --reader-page-padding-inline: 1.5rem;
@@ -415,6 +422,93 @@ select {
   opacity: calc(1 - var(--reader-brightness));
   mix-blend-mode: multiply;
 }
+
+/*
+ * The picture viewer (`ui/image-viewer.tsx`): the one overlay that is the whole
+ * window rather than a sheet (docs/ui.md §3.7).
+ */
+.image-viewer {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--reader-viewer-bed);
+  color: var(--reader-viewer-ink);
+  overflow: hidden;
+}
+.image-viewer::backdrop { background: var(--reader-viewer-bed); }
+.image-viewer-surface {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  /* Every drag on this surface is the viewer's: no scrolling, no browser zoom, no pull-to-refresh. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: zoom-in;
+}
+.image-viewer-surface[data-zoomed='true'] { cursor: grab; }
+.image-viewer-surface img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center;
+  will-change: transform;
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+.image-viewer-surface img[data-settling='true'] { transition: transform var(--motion-duration) var(--motion-ease); }
+.image-viewer-bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: calc(var(--space-2) + var(--safe-top)) calc(var(--space-3) + var(--safe-right)) var(--space-2) calc(var(--space-3) + var(--safe-left));
+  pointer-events: none;
+}
+.image-viewer-count { font-size: var(--text-ui); font-variant-numeric: tabular-nums; padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); background: var(--reader-viewer-control); border: 1px solid var(--reader-viewer-edge); }
+.image-viewer .icon-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  /* Dark with a light edge: the control has to read on the bed and on a white plate alike. */
+  background: var(--reader-viewer-control);
+  border: 1px solid var(--reader-viewer-edge);
+  color: var(--reader-viewer-ink);
+  pointer-events: auto;
+}
+.image-viewer .icon-button:disabled { opacity: 0.35; }
+/* Stepping by button is for a mouse; a finger swipes, and the buttons would sit on the picture. */
+.image-viewer-step { display: none; position: absolute; top: 50%; left: calc(var(--space-3) + var(--safe-left)); transform: translateY(-50%); }
+.image-viewer-step.image-viewer-next { left: auto; right: calc(var(--space-3) + var(--safe-right)); }
+@media (hover: hover) and (pointer: fine) {
+  .image-viewer-step { display: inline-flex; align-items: center; justify-content: center; }
+}
+
+/*
+ * 专注模式.
+ *
+ * Two veils of paper over the page, above and below the paragraph being read
+ * (`ReaderView.syncFocus` places them). Paper at part strength rather than a
+ * style on the text: the book's own colours and rules are left alone, and the
+ * faded text keeps the relationship between ink and paper in every theme.
+ */
+.focus-veil {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  background: var(--reader-paper);
+  opacity: var(--reader-focus-veil);
+}
+.focus-veil[hidden] { display: none; }
 
 /*
  * The host is the scroll container in scroll mode and a plain frame in paged
@@ -2115,19 +2209,22 @@ book-content {
   touch-action: manipulation;
 }
 
-.progress-scrubber::-webkit-slider-runnable-track {
+.progress-scrubber::-webkit-slider-runnable-track,
+.tts-range::-webkit-slider-runnable-track {
   height: 0.3rem;
   border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--reader-line) 70%, transparent);
 }
 
-.progress-scrubber::-moz-range-track {
+.progress-scrubber::-moz-range-track,
+.tts-range::-moz-range-track {
   height: 0.3rem;
   border-radius: var(--radius-xs);
   background: color-mix(in srgb, var(--reader-line) 70%, transparent);
 }
 
-.progress-scrubber::-webkit-slider-thumb {
+.progress-scrubber::-webkit-slider-thumb,
+.tts-range::-webkit-slider-thumb {
   appearance: none;
   -webkit-appearance: none;
   width: 1.1rem;
@@ -2142,7 +2239,8 @@ book-content {
   box-shadow: 0 1px 4px color-mix(in srgb, #000 18%, transparent);
 }
 
-.progress-scrubber::-moz-range-thumb {
+.progress-scrubber::-moz-range-thumb,
+.tts-range::-moz-range-thumb {
   width: 1.1rem;
   height: 1.1rem;
   border-radius: 50%;
@@ -2151,7 +2249,8 @@ book-content {
   box-shadow: 0 1px 4px color-mix(in srgb, #000 18%, transparent);
 }
 
-.progress-scrubber:focus-visible {
+.progress-scrubber:focus-visible,
+.tts-range:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-offset);
 }
@@ -2407,8 +2506,11 @@ book-content {
   bottom: var(--reader-chrome-bottom);
   z-index: var(--reader-layer-bar);
   display: flex;
-  align-items: center;
-  gap: 0.35rem;
+  /* A column: the two rows are stacked. Without this they sat side by side, and the
+     sentence, the count and the scrubber were each squeezed to a few characters. */
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
   padding: 0.35rem 0.5rem;
   background: var(--reader-surface-float);
   backdrop-filter: blur(10px);
@@ -2487,26 +2589,42 @@ book-content {
   color: var(--reader-ink);
 }
 
+/* What is being read, on a line of its own, and the scrubber under it at full width. */
 .tts-bar .tts-progress {
-  gap: var(--space-2);
-  padding-inline: 0.15rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
 }
 
 .tts-bar .tts-text {
-  flex: 0 1 auto;
-  max-width: 40%;
-  font-size: var(--text-label);
-  color: var(--reader-muted);
+  font-size: var(--text-ui);
+  color: var(--reader-ink);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Play/pause is the control the bar exists for, and is drawn as the primary one. */
+.tts-bar .tts-toggle {
+  background: var(--reader-primary);
+  color: var(--reader-on-primary);
+}
+
+.tts-bar .tts-controls .icon-button {
+  width: auto;
+  height: 2.75rem;
+}
+
+/* The same track and thumb as the page scrubber: one kind of slider in the reader. */
 .tts-range {
-  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
-  accent-color: var(--reader-accent);
+  appearance: none;
+  -webkit-appearance: none;
+  height: 1.5rem;
+  background: transparent;
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 /*
@@ -3685,14 +3803,28 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reader-screen .rail-button { width: 48px; height: 48px; border-radius: 50%; background: var(--reader-surface); box-shadow: 0 3px 12px #00000020; }
 .reader-screen .rail-button .icon { font-size: var(--text-display); }
 @media (max-width: 700px) {
-  .reader-screen .sheet {
+  /* Panels are a fixed half screen; a compact sheet (a note, a confirmation) stays
+     as tall as what it says (docs/ui.md §3.7). */
+  .reader-screen .sheet:not([data-size='compact']) {
     height: min(62vh, calc(100vh - var(--safe-top) - 1.5rem));
     height: min(62dvh, calc(100dvh - var(--safe-top) - 1.5rem));
     max-height: 36rem;
   }
 }
 .reader-screen .sheet .field { padding-block: 0.8rem; }
-.reader-screen .sheet .tts-bar { position: static; border-radius: var(--radius-md); width: auto; transform: none; margin-bottom: 1rem; }
+.reader-screen .sheet .tts-bar {
+  /* In the 朗读 sheet the bar is a card among the settings, not a strip over the page. */
+  position: static;
+  width: auto;
+  transform: none;
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--reader-line);
+  border-radius: var(--radius-md);
+  background: var(--reader-surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 .reader-screen .sheet .field { grid-template-columns: minmax(5.5rem, max-content) minmax(0, 1fr); gap: 0.75rem; padding-block: 0.5rem; }
 .reader-screen .field input[type='range'] { min-height: 32px; }
 .reader-screen .field input[type='range']::-webkit-slider-runnable-track { height: 4px; border-radius: var(--radius-xs); background: var(--reader-line); }
@@ -4016,6 +4148,20 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 @media (hover: hover) and (pointer: fine) { .annotation-actions button:hover { background: var(--reader-surface); }}
 .annotation-popover blockquote, .annotation-editor blockquote { margin: .3rem 0 .75rem; padding: .5rem .75rem; border-inline-start: 3px solid var(--reader-accent); max-height: 6rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .annotation-comment { margin: .5rem; max-height: 8rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A note read in place: the book's words in the app's own sheet, set as reading text. */
+.footnote-text { color: var(--reader-ink); font-size: var(--text-title); line-height: 1.7; overflow-wrap: anywhere; user-select: text; }
+.footnote-text p { margin: 0; }
+.footnote-text p + p { margin-top: var(--space-2); }
+/* AI 选区助手: the passage, what to do with it, and the one current answer. */
+.ai-assist { display: grid; gap: var(--space-3); }
+.ai-assist blockquote { margin: 0; padding: var(--space-2) var(--space-3); border-inline-start: 3px solid var(--reader-accent); max-height: 7rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--reader-muted); }
+.ai-assist-actions { display: flex; gap: var(--space-2); }
+.ai-assist-actions .button { flex: 1; min-height: 44px; }
+.ai-assist-ask { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--space-2); }
+.ai-assist-ask .button { min-height: 44px; }
+.ai-assist-status, .ai-assist-hint { margin: 0; color: var(--reader-muted); font-size: var(--text-label); }
+.ai-assist-error { margin: 0; color: var(--color-danger); font-size: var(--text-ui); overflow-wrap: anywhere; }
+.ai-assist-answer { color: var(--reader-ink); font-size: var(--text-title); line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .annotation-editor { display: grid; gap: 1rem; }
 .annotation-editor label { display: grid; gap: .5rem; }
 .annotation-editor textarea { box-sizing: border-box; width: 100%; min-height: 6rem; padding: .75rem; font: inherit; border: 1px solid var(--reader-line); border-radius: var(--radius-sm); background: var(--reader-paper); color: var(--reader-ink); resize: vertical; }
