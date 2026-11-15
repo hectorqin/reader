@@ -16,6 +16,7 @@ import { collectSpokenChunks, type SpokenChunk } from '../render/tts-text.ts';
 import { adoptWindow } from '../formats/windowed.ts';
 import { BOOK_RESOURCE_MARKER, chapterRefFromLink } from '../formats/book-resource.ts';
 import { anchorRange, selectedAnchor, type TextAnchor } from './text-anchor.ts';
+import { isNoteReference, noteAt } from './footnote.ts';
 
 export interface ReaderViewOptions {
   onSelection?(anchor: TextAnchor | null, rect: DOMRect | null): void;
@@ -56,6 +57,15 @@ export interface ReaderViewOptions {
    * is left to the gesture layer rather than swallowed silently.
    */
   onChapterLink?(ref: string): boolean;
+  /**
+   * A note reference was tapped: a link that looks like a reference mark and
+   * names a place by fragment.
+   *
+   * `ref` is the chapter the note is in, in the same form `onChapterLink` gets,
+   * or null for the chapter on screen. Returns whether the note is being shown
+   * in place; `false` hands the link back to be followed like any other.
+   */
+  onNoteLink?(link: { ref: string | null; fragment: string }): boolean;
   /**
    * Native renderer for fixed-layout pages, when the host has one.
    *
@@ -312,16 +322,31 @@ export class ReaderView {
       if (!anchor) return;
       const href = anchor.getAttribute('href');
       if (!href) return;
-      const ref = chapterRefFromLink(href, anchor.baseURI);
-      if (ref && this.options.onChapterLink?.(ref)) {
-        event.preventDefault();
-        event.stopPropagation();
+      const bare = href.trim().startsWith('#');
+      const ref = bare ? null : chapterRefFromLink(href, anchor.baseURI);
+      const fragment = bare ? href.trim().slice(1) : ref ? linkFragment(href, anchor.baseURI) : '';
+      const consume = (): void => { event.preventDefault(); event.stopPropagation(); };
+      // A note reference is answered where the reader is (see `footnote.ts`). The
+      // screen says whether it could show the note; if not, the link is a jump.
+      if (fragment && (bare || ref) && isNoteReference(anchor) && this.options.onNoteLink?.({ ref, fragment })) {
+        consume();
         return;
       }
-      // A fragment-only link is the book's own footnote machinery, and the browser
-      // has to perform it: scrolling to the note is exactly what the reader asked
-      // for. Anything else would leave the reader, so it is refused.
-      if (href.trim().startsWith('#')) return;
+      // The fragment travels with the chapter, so a link to a note at the back of
+      // the book lands on the note rather than on the first line of the notes.
+      if (ref && this.options.onChapterLink?.(fragment ? `${ref}#${fragment}` : ref)) {
+        consume();
+        return;
+      }
+      // A fragment-only link is a place in this chapter, and this view performs it.
+      // The browser cannot: its fragment search does not look inside a shadow tree,
+      // so nothing would scroll, and the address would still change to `#note3` —
+      // which, in an app routed by the hash, is a navigation away from the book.
+      if (bare) {
+        consume();
+        if (fragment) this.revealFragment(fragment);
+        return;
+      }
       const resolved = resolveWithinBook(href, anchor.baseURI);
       if (resolved === 'external') {
         event.preventDefault();
@@ -637,8 +662,18 @@ export class ReaderView {
     try { id = decodeURIComponent(fragment); } catch { /* literal id */ }
     const element = this.host.shadow.getElementById(id) ?? [...this.host.flow.querySelectorAll('[name]')].find(e => e.getAttribute('name') === id);
     if (!element) return false;
+    // An empty anchor (`<a id="n3"></a>`) has no box to reveal; the block it opens does.
+    if (!element.textContent?.trim() && element.parentElement && this.host.flow.contains(element.parentElement)) {
+      const range = document.createRange(); range.selectNode(element);
+      this.revealRange(range); return true;
+    }
     const range = document.createRange(); range.selectNodeContents(element);
     this.revealRange(range); return true;
+  }
+
+  /** The note a fragment of the chapter on screen points at; null when it is not a note. */
+  noteAt(fragment: string): string[] | null {
+    return noteAt(this.host.flow, fragment);
   }
 
   showTextAnchor(anchor: TextAnchor): boolean {
@@ -1993,6 +2028,15 @@ function rangeRect(range: Range): DOMRect | null {
  *  - `'unknown'` — a URL that cannot even be parsed, which is refused the same way
  *    as external: an unparseable href has no correct destination.
  */
+/** The fragment of a link the server rewrote to an absolute URL, without the `#`. */
+function linkFragment(href: string, baseURI: string): string {
+  try {
+    return new URL(href.trim(), baseURI).hash.slice(1);
+  } catch {
+    return '';
+  }
+}
+
 function resolveWithinBook(href: string, baseURI: string): 'internal' | 'external' | 'unknown' {
   const trimmed = href.trim();
   if (trimmed.startsWith('#')) return 'internal';

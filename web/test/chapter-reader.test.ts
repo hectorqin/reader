@@ -493,6 +493,26 @@ it('turns pages from the keyboard without the reader having focused anything fir
   expect(turn.mock.calls.map(call => call[0])).toEqual(['next', 'previous']);
 });
 
+it('answers the single-key commands, and leaves a key with a modifier to the browser', async () => {
+  const env = await setup(); serve(env.transport, content(['a', 'b']));
+  await env.screen.open(book);
+  const screen = env.screen as unknown as { goToChapter(delta: number): Promise<void>; toggleBookmark(): Promise<void>; openTools(): void };
+  const chapter = vi.spyOn(screen, 'goToChapter').mockResolvedValue(undefined);
+  const bookmark = vi.spyOn(screen, 'toggleBookmark').mockResolvedValue(undefined);
+  const tools = vi.spyOn(screen, 'openTools').mockImplementation(() => undefined);
+  const press = (key: string, init: KeyboardEventInit = {}) => act(() => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...init })); });
+  await press(']'); await press('['); await press('B'); await press('f');
+  await press('f', { ctrlKey: true });
+  expect(chapter.mock.calls.map(call => call[0])).toEqual([1, -1]);
+  expect(bookmark).toHaveBeenCalledTimes(1);
+  expect(tools).toHaveBeenCalledTimes(1);
+  // T opens the contents; with that sheet open the keys belong to it.
+  await press('t');
+  await vi.waitFor(() => expect(document.querySelector('dialog[open]')).not.toBeNull());
+  await press(']');
+  expect(chapter).toHaveBeenCalledTimes(2);
+});
+
 it('fetches the next chapter while the current one is read, once', async () => {
   const env = await setup(); serve(env.transport, content(['a', 'b', 'c']));
   await env.screen.open(book);

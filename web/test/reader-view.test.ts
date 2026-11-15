@@ -691,10 +691,57 @@ describe('ReaderView chapter links', () => {
     view.dispose();
   });
 
-  it('lets the browser perform an in-document footnote link', async () => {
+  it('performs an in-document fragment link itself instead of handing it to the browser', async () => {
+    // The browser's fragment search does not look inside a shadow tree, and the
+    // address change it would still make is a route change in a hash-routed app.
     const view = new ReaderView({ container, doc: docWithLink('#note3') });
     await view.open(0, 0);
-    expect(clickLink(view)).toBe(true);
+    expect(clickLink(view)).toBe(false);
+    view.dispose();
+  });
+
+  it('keeps the fragment of a link into another chapter', async () => {
+    const href = new URL('/api/v1/books/b1/assets?__reader-book-resource__=1&ref=OEBPS/notes.xhtml#n12', document.baseURI).href;
+    const seen: string[] = [];
+    const view = new ReaderView({ container, doc: docWithLink(href), onChapterLink: (ref) => { seen.push(ref); return true; } });
+    await view.open(0, 0);
+    expect(clickLink(view)).toBe(false);
+    expect(seen).toEqual(['xhtml:OEBPS/notes.xhtml#n12']);
+    view.dispose();
+  });
+
+  /** A chapter with one reference mark and the note it points at. */
+  function docWithNote(link: string, note: string): BookDoc {
+    const doc = reflowableDoc(1);
+    return { ...doc, sections: [{ id: 'ch1.xhtml', label: '第一章', html: `<p>正文里的一句话${link}，后面还有正文。</p>${note}`, depth: 0 }] };
+  }
+
+  it('offers a note reference to the screen, with the note readable from the chapter', async () => {
+    const seen: Array<{ ref: string | null; fragment: string }> = [];
+    const view = new ReaderView({
+      container,
+      doc: docWithNote('<sup><a id="r1" href="#n1">[1]</a></sup>', '<p><a id="n1" href="#r1">[1]</a> 这是注释的内容。</p>'),
+      onNoteLink: (link) => { seen.push(link); return true; },
+    });
+    await view.open(0, 0);
+    expect(clickLink(view)).toBe(false);
+    expect(seen).toEqual([{ ref: null, fragment: 'n1' }]);
+    expect(view.noteAt('n1')).toEqual(['[1] 这是注释的内容。']);
+    // The way back is a place in the body text, not a note.
+    expect(view.noteAt('r1')).toBeNull();
+    view.dispose();
+  });
+
+  it('does not offer a link that reads as words rather than as a reference mark', async () => {
+    const seen: unknown[] = [];
+    const view = new ReaderView({
+      container,
+      doc: docWithNote('<a href="#n1">参见第三节的讨论</a>', '<p id="n1">第三节</p>'),
+      onNoteLink: (link) => { seen.push(link); return true; },
+    });
+    await view.open(0, 0);
+    expect(clickLink(view)).toBe(false);
+    expect(seen).toEqual([]);
     view.dispose();
   });
 });

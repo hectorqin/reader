@@ -3685,7 +3685,9 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .reader-screen .rail-button { width: 48px; height: 48px; border-radius: 50%; background: var(--reader-surface); box-shadow: 0 3px 12px #00000020; }
 .reader-screen .rail-button .icon { font-size: var(--text-display); }
 @media (max-width: 700px) {
-  .reader-screen .sheet {
+  /* Panels are a fixed half screen; a compact sheet (a note, a confirmation) stays
+     as tall as what it says (docs/ui.md §3.7). */
+  .reader-screen .sheet:not([data-size='compact']) {
     height: min(62vh, calc(100vh - var(--safe-top) - 1.5rem));
     height: min(62dvh, calc(100dvh - var(--safe-top) - 1.5rem));
     max-height: 36rem;
@@ -4016,6 +4018,10 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 @media (hover: hover) and (pointer: fine) { .annotation-actions button:hover { background: var(--reader-surface); }}
 .annotation-popover blockquote, .annotation-editor blockquote { margin: .3rem 0 .75rem; padding: .5rem .75rem; border-inline-start: 3px solid var(--reader-accent); max-height: 6rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .annotation-comment { margin: .5rem; max-height: 8rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A note read in place: the book's words in the app's own sheet, set as reading text. */
+.footnote-text { color: var(--reader-ink); font-size: var(--text-title); line-height: 1.7; overflow-wrap: anywhere; user-select: text; }
+.footnote-text p { margin: 0; }
+.footnote-text p + p { margin-top: var(--space-2); }
 .annotation-editor { display: grid; gap: 1rem; }
 .annotation-editor label { display: grid; gap: .5rem; }
 .annotation-editor textarea { box-sizing: border-box; width: 100%; min-height: 6rem; padding: .75rem; font: inherit; border: 1px solid var(--reader-line); border-radius: var(--radius-sm); background: var(--reader-paper); color: var(--reader-ink); resize: vertical; }

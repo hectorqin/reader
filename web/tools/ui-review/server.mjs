@@ -172,7 +172,9 @@ function illustratedChapter(index) {
     return [
       '<?xml version="1.0" encoding="utf-8"?>',
       '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一卷 后记</title></head>',
-      '<body><p>后记：这一章没有插图，用来确认上一章的图片不是碰巧出现的。</p></body></html>',
+      '<body><p>后记：这一章没有插图，用来确认上一章的图片不是碰巧出现的。</p>',
+      // The target of the first chapter's "note at the back of the book".
+      '<p id="n2"><a href="ch1.xhtml#r2">[2]</a> 这是写在后记里的书后注，读者不必翻到这里就能读到它。</p></body></html>',
     ].join('\n');
   }
   const image = (name) =>
@@ -182,13 +184,17 @@ function illustratedChapter(index) {
     '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>第一卷 插图</title></head>',
     '<body>',
     // The plate that fits the column, as a book normally presents one…
-    `<div class="pic"><img src="${image('pic.png')}" alt="插图"/></div>`,
+    `<div class="pic" id="plate"><img src="${image('pic.png')}" alt="插图"/></div>`,
     '<p>台版 转自 天使动漫</p>',
     // …and one the publisher sized in its own pixels, which is the case the reader
     // reported. Both are on the page so one screenshot shows "a plate is drawn" and
     // "a plate wider than the page is still inside it" at the same time.
     `<div class="pic wide"><img src="${image('wide.png')}" alt="宽插图" width="${WIDE_PLATE_WIDTH}" height="${WIDE_PLATE_HEIGHT}"/></div>`,
     '<p>插图下面还有正文，这样图片没显示出来的时候，空出来的位置也是看得见的。</p>',
+    // Three kinds of link a chapter can carry: a note in this chapter, a note in
+    // another one, and a cross-reference that is not a note at all.
+    `<p>这句正文带着一条脚注<sup><a id="r1" href="#fn1">[1]</a></sup>，还有一条书后注<sup><a id="r2" href="/api/v1/books/${ILLUSTRATED_ID}/assets?__reader-book-resource__=1&amp;ref=${encodeURIComponent('OEBPS/Text/ch2.xhtml')}#n2">[2]</a></sup>，以及一个<a id="xref" href="#plate">回到插图</a>的普通链接。</p>`,
+    '<aside id="fn1" epub:type="footnote"><p><a href="#r1">[1]</a> 这是本章之内的脚注，点一下引用标记就在原处读到。</p></aside>',
     '</body></html>',
   ].join('\n');
 }
@@ -868,7 +874,8 @@ export function createReviewServer({ port = 5199 } = {}) {
         reply.writeHead(200, { 'content-type': 'image/png' });
         return reply.end(WIDE_PNG);
       }
-      const index = ILLUSTRATED_CHAPTERS.findIndex((chapter) => ref === chapter.path);
+      // The client asks for a chapter by its manifest href (`xhtml:<path>`), as the real server expects.
+      const index = ILLUSTRATED_CHAPTERS.findIndex((chapter) => ref.replace(/^xhtml:/, '') === chapter.path);
       reply.writeHead(200, { 'content-type': 'application/xhtml+xml; charset=utf-8' });
       return reply.end(illustratedChapter(index < 0 ? 0 : index));
     }

@@ -46,6 +46,9 @@ import { htmlToText, isTextOnlyMarkup, textToChapterHtml } from '../formats/segm
 import { parseLocator } from './locator.ts';
 import { tapActionAt, tapZonePreset } from './tap-zones.ts';
 import { ReadingTimeTracker } from '../features/stats/reading-time.ts';
+import { noteInMarkup } from './footnote.ts';
+import { Sheet } from './sheet.tsx';
+import { Button } from './toolkit.tsx';
 
 export interface ReaderScreenOptions {
   /** Where the shared app theme is stored (see the media theme service). */
@@ -215,6 +218,8 @@ export class ReaderScreen {
   private toolsOpen = false;
   private annotation: AnnotationTarget | null = null;
   private annotationClosedAt = -Infinity;
+  /** The note being read in place, and where its link leads if the reader wants to go there. */
+  private footnote: { paragraphs: string[]; ref: string | null; fragment: string } | null = null;
   private toolsSelection: TextAnchor | null = null;
   private toolsReturn = '';
   private preview: SpeechEngine | null = null;
@@ -289,7 +294,11 @@ export class ReaderScreen {
 <ReaderChrome
           tools={<>{this.annotation && <AnnotationPopover key={this.annotation.note?.id ?? encodeAnchor(this.annotation.anchor)} target={this.annotation}
             save={(type, comment, color) => this.saveAnnotation(type, comment, color)} remove={() => this.removeAnnotation()}
-            close={() => { this.annotation = null; this.annotationClosedAt = performance.now(); this.view?.clearSelection(); this.patch({}); }} />}{this.toolsOpen && this.manifest ? <ReadingTools
+            close={() => { this.annotation = null; this.annotationClosedAt = performance.now(); this.view?.clearSelection(); this.patch({}); }} />}{this.footnote && <Sheet
+            title="注释" size="compact" className="footnote-sheet" onClose={() => { this.footnote = null; this.patch({}); }}
+            footer={<Button onClick={() => this.goToNote()}>跳到注释处</Button>}>
+            <div className="footnote-text">{this.footnote.paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
+          </Sheet>}{this.toolsOpen && this.manifest ? <ReadingTools
             api={this.options.api} cache={this.publicationCache} offline={this.options.offline}
             sync={this.options.sync} manifest={this.manifest} selection={this.toolsSelection}
             locator={this.view?.position()?.locator ?? ''} returnLocator={this.toolsReturn}
@@ -346,6 +355,51 @@ export class ReaderScreen {
     ));
   }
 
+  /**
+   * Shows the note a reference points at without leaving the page.
+   *
+   * Returns whether the tap is being answered here. A note in the chapter on
+   * screen is read straight from it. One in another chapter of the loaded window
+   * (the usual "notes at the back of the book") has to be fetched first, so the
+   * tap is claimed at once and falls back to the jump if what arrives is not a
+   * note. A chapter outside the window is left to the jump, which already knows
+   * how to fetch a window.
+   */
+  private previewNote(ref: string | null, fragment: string): boolean {
+    const view = this.view, doc = this.doc;
+    if (!view || !doc || this.toolsOpen || this.navigating) return false;
+    const current = view.position().sectionIndex;
+    const index = ref === null ? current : view.indexOfSection(this.localSectionId(ref));
+    if (index < 0) return false;
+    const show = (paragraphs: string[]): void => { this.annotation = null; this.footnote = { paragraphs, ref: index === current ? null : ref, fragment }; this.patch({}); };
+    if (index === current) {
+      const paragraphs = view.noteAt(fragment);
+      if (paragraphs) show(paragraphs);
+      return paragraphs !== null;
+    }
+    const epoch = this.viewEpoch;
+    void (async () => {
+      let paragraphs: string[] | null = null;
+      try {
+        const lazy = doc as BookDoc & { loadSection?(index: number): Promise<import('../formats/types.ts').Section | null> };
+        const section = lazy.loadSection ? await lazy.loadSection(index) : doc.sections[index];
+        if (section?.html && section.bodyIsMarkup !== false) paragraphs = noteInMarkup(section.html, fragment);
+      } catch { /* unreadable right now: the jump reports it in its own words */ }
+      if (epoch !== this.viewEpoch || this.disposed) return;
+      if (paragraphs) show(paragraphs); else void this.goToChapterRef(`${ref}#${fragment}`);
+    })();
+    return true;
+  }
+
+  private goToNote(): void {
+    const note = this.footnote;
+    if (!note) return;
+    this.footnote = null;
+    this.patch({});
+    if (note.ref === null) this.view?.revealFragment(note.fragment);
+    else void this.goToChapterRef(`${note.ref}#${note.fragment}`);
+  }
+
   private async generateAiSummary(): Promise<void> {
     if (this.chrome.aiSummary) { this.patch({ aiSummary: '' }); return; }
     if (!this.book || !this.chrome.currentSectionId || this.chrome.aiSummaryBusy) return;
@@ -369,7 +423,7 @@ export class ReaderScreen {
     this.pdfLoading = pdfLoading;
     this.closeAlternatives(); this.chapterRefresh?.abort(); this.chapterRefresh = null;
     const token = ++this.loadingToken;
-    this.toolsOpen = false; this.annotation = null; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
+    this.toolsOpen = false; this.annotation = null; this.footnote = null; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
     this.content = null; this.book = book;
     let opened = false;
     if (book.title) document.title = `${book.title} · reader`;
@@ -1136,6 +1190,7 @@ export class ReaderScreen {
         void this.goToChapterRef(ref);
         return true;
       },
+      onNoteLink: (link) => epoch === this.viewEpoch && this.previewNote(link.ref, link.fragment),
       onChapterChange: (index, section) => {
         if (epoch !== this.viewEpoch) return;
         this.annotation = null;
@@ -1220,10 +1275,32 @@ export class ReaderScreen {
         const rtl = this.isRtl();
         if (key === 'PageDown' || (key === ' ' && !shift) || key === (rtl ? 'ArrowLeft' : 'ArrowRight')) void this.turnPage('next');
         else if (key === 'PageUp' || (key === ' ' && shift) || key === (rtl ? 'ArrowRight' : 'ArrowLeft')) void this.turnPage('previous');
-        else if (key === 's' || key === 'S') this.toggleSpeech();
         else if (key === 'Escape') this.setChromeVisible(false);
+        else this.letterKey(key.toLowerCase());
       }),
     );
+  }
+
+  /**
+   * The reader's single-key commands (docs/ui.md §3.10).
+   *
+   * Each is something a button already does; the key only saves the reach for it.
+   * `bindKeys` has already ruled out a modifier, a text field and an open sheet,
+   * so a letter here is never somebody typing.
+   */
+  private letterKey(key: string): void {
+    if (key === 's') this.toggleSpeech();
+    else if (key === 't') { this.setChromeVisible(true); this.toggleToc(); }
+    else if (key === 'f') this.openTools();
+    else if (key === 'b') void this.toggleBookmark();
+    else if (key === '[') void this.goToChapter(-1);
+    else if (key === ']') void this.goToChapter(1);
+    else if (key === 'h' && this.annotation && !this.annotation.note) {
+      // The selection toolbar's own 高亮, in the default colour.
+      void this.saveAnnotation('highlight', '', '#ffd54f').then(() => {
+        this.annotation = null; this.annotationClosedAt = performance.now(); this.view?.clearSelection(); this.patch({});
+      }).catch((error: unknown) => this.flashStatus(error instanceof Error ? error.message : '高亮失败', 2600));
+    }
   }
 
   /** Whether forward is to the left: a comic set to 右→左, or a right-to-left book. */
@@ -1756,7 +1833,11 @@ export class ReaderScreen {
 
   /** Whole-book index of a contents entry, from the fetched table of contents. */
   private tocSpineFor(ref: string): number | null {
-    const entry = this.chrome.toc.find((candidate) => candidate.id === ref);
+    // A link into a chapter may name a place the contents never listed; the chapter
+    // itself is still the one the contents know.
+    const chapter = ref.split('#')[0];
+    const entry = this.chrome.toc.find((candidate) => candidate.id === ref)
+      ?? this.chrome.toc.find((candidate) => candidate.id.split('#')[0] === chapter);
     return entry?.spine ?? null;
   }
 
