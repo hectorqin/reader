@@ -3545,10 +3545,24 @@ book-content {
 .explore-book-actions { grid-column:2; display:flex; gap:var(--space-2); justify-content:flex-end; }
 .explore-book-actions .button { min-height:44px; }
 /* 发现's own bar: what the local library adds (upload, file manager) on the left, the layout choice on the right. */
-.explore-tools { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2); margin-bottom:var(--space-2); }
-.explore-tools .button { min-height:44px; display:inline-flex; align-items:center; gap:var(--space-1); }
+.explore-tools { display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-2); margin-bottom:var(--space-3); }
+/* The source picker leads the bar; its name is the control's own label, so the caption is for assistive tech only. */
+.explore-tools .searchable-select { flex:1 1 12rem; min-width:0; max-width:22rem; margin-right:auto; }
+.explore-tools .searchable-select-label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.explore-tools .searchable-select > .searchable-select-trigger { min-height:44px; border-radius:var(--radius-md); background:var(--reader-surface); text-align:left; justify-content:space-between; }
+.explore-tools .searchable-select-menu { width:min(22rem, calc(100vw - 3rem)); border-radius:var(--radius-md); }
+.explore-tools .searchable-select-options { max-height:15rem; }
+.explore-tools .searchable-select-options button { min-height:42px; justify-content:space-between; }
+.explore-tools .button, .explore-tools label.button { min-height:44px; display:inline-flex; flex-direction:row; align-items:center; gap:var(--space-1); margin:0; white-space:nowrap; }
 .explore-tools .button.is-disabled { opacity:.5; pointer-events:none; }
-.explore-layout { margin-left:auto; }
+.explore-layout.segmented { flex:none; }
+/* A phone has one row for the picker and one for the rest, where the two local actions keep their icon and lose their words. */
+@media (max-width: 34rem) {
+  .explore-tools .searchable-select { flex-basis:100%; max-width:none; }
+  .explore-tools .button { min-width:44px; justify-content:center; }
+  .explore-tools .button > span { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+  .explore-layout.segmented { margin-left:auto; }
+}
 .explore-layout.segmented button { flex:none; min-height:44px; padding:0 var(--space-3); }
 .explore-layout.segmented button:focus-visible { outline:var(--focus-ring); outline-offset:-2px; }
 .explore-links + .explore-grid { margin-top:var(--space-4); }
@@ -3559,8 +3573,9 @@ book-content {
 .explore-card .lazy-cover { width:100%; margin-bottom:.2rem; }
 .explore-card strong { font-size:var(--text-ui); line-height:1.35; overflow-wrap:anywhere; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .explore-card small { color:var(--reader-muted); font-size:var(--text-meta); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.explore-card > .button { min-height:44px; width:100%; }
-@media (min-width: 720px) { .explore-grid { grid-template-columns:repeat(auto-fill, minmax(8.5rem, 1fr)); } }
+.explore-card > .button { min-height:40px; width:100%; font-size:var(--text-ui); }
+@media (pointer: coarse) { .explore-card > .button { min-height:44px; } }
+@media (min-width: 720px) { .explore-grid { grid-template-columns:repeat(auto-fill, minmax(8rem, 10rem)); } }
 .catalog-book-main { display:flex; align-items:flex-start; gap:var(--space-3); }
 .catalog-book-main > div { flex:1; min-width:0; }
 /* A source's cover: a fixed 3:4 frame, so rows do not jump when the image arrives. */

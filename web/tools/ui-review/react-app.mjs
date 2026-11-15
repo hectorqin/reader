@@ -111,6 +111,11 @@ async function installReaderApiStubs(page) {
     if (path.includes('/subscriptions')) body = { subscriptions: [] };
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   });
+  // Uploading is allowed, so 发现 shows the local library's whole bar.
+  await page.route('**/api/v1/library/upload', async route => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ writable: true, allowed: true }) });
+  });
   await page.route('**/api/v1/plugins**', async route => {
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ plugins: [] }) });
   });
