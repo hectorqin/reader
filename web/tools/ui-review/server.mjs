@@ -417,7 +417,8 @@ function unauthorised(reply) {
   return reply.end(JSON.stringify({ error: { code: 'NO_TOKEN', message: 'missing bearer token' } }));
 }
 
-export function createReviewServer({ port = 5199 } = {}) {
+/** `ai` turns on the AI 选区助手 stand-in; off by default so the other reviews see the app without it. */
+export function createReviewServer({ port = 5199, ai = false } = {}) {
   const seen = [];
   /*
    * The paths the review has shelved, in memory.
@@ -451,6 +452,7 @@ export function createReviewServer({ port = 5199 } = {}) {
    * still untouched, is the same data with no ordering question.
    */
   const bodies = new WeakMap();
+  const jsonBodies = new WeakMap();
   const server = createServer((request, reply) => {
     seen.push(`${request.method} ${request.url}`);
     const chunks = [];
@@ -462,6 +464,7 @@ export function createReviewServer({ port = 5199 } = {}) {
         // The shelf write sends `{ paths: [...] }`; a `FormData` upload does not parse
         // and is simply not recorded, which is the right answer for every handler here.
         if (Array.isArray(parsed?.paths)) bodies.set(request, parsed.paths);
+        jsonBodies.set(request, parsed);
       } catch {
         /* not JSON: nothing to record */
       }
@@ -837,6 +840,16 @@ export function createReviewServer({ port = 5199 } = {}) {
           },
         ],
       });
+    }
+    if (ai && path === '/api/v1/ai/capabilities') {
+      return json(reply, { summary: false, scan: false, assist: true });
+    }
+    if (ai && path === '/api/v1/ai/assist') {
+      // Answers with what it was asked, so the review can see that the passage and
+      // its paragraph arrived, not merely that something came back.
+      const body = jsonBodies.get(request) ?? {};
+      const label = { translate: '译文', explain: '解释', ask: `回答「${body.question}」` }[body.action] ?? '未知';
+      return json(reply, { answer: `${label}：${body.text}\n\n（上下文 ${String(body.context ?? '').length} 字）`, cached: false });
     }
     if (path === `/api/v1/books/${BOOK_ID}/manifest`) {
       return json(reply, manifest());

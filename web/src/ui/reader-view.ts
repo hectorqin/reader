@@ -676,6 +676,22 @@ export class ReaderView {
     return noteAt(this.host.flow, fragment);
   }
 
+  /**
+   * The paragraph a selection sits in, for a question about that selection.
+   *
+   * Empty when the selection has no paragraph of a usable size around it (it spans
+   * several, or its block is the whole chapter); the caller then has only the few
+   * characters the anchor itself carries.
+   */
+  passageAround(anchor: TextAnchor, limit = 2000): string {
+    const node = anchorRange(this.host.flow, anchor)?.commonAncestorContainer;
+    const element = node instanceof Element ? node : node?.parentElement;
+    const block = element?.closest('p, li, blockquote, dd, td, div, section');
+    if (!block || block === this.host.flow || !this.host.flow.contains(block)) return '';
+    const text = (block.textContent ?? '').replace(/\s+/g, ' ').trim();
+    return text.length <= limit ? text : '';
+  }
+
   showTextAnchor(anchor: TextAnchor): boolean {
     if (this.doc.sections[this.sectionIndex]?.id !== anchor.sectionId) return false;
     const range = anchorRange(this.host.flow, anchor);

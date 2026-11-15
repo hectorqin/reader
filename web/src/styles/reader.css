@@ -4022,6 +4022,16 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .footnote-text { color: var(--reader-ink); font-size: var(--text-title); line-height: 1.7; overflow-wrap: anywhere; user-select: text; }
 .footnote-text p { margin: 0; }
 .footnote-text p + p { margin-top: var(--space-2); }
+/* AI 选区助手: the passage, what to do with it, and the one current answer. */
+.ai-assist { display: grid; gap: var(--space-3); }
+.ai-assist blockquote { margin: 0; padding: var(--space-2) var(--space-3); border-inline-start: 3px solid var(--reader-accent); max-height: 7rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--reader-muted); }
+.ai-assist-actions { display: flex; gap: var(--space-2); }
+.ai-assist-actions .button { flex: 1; min-height: 44px; }
+.ai-assist-ask { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: var(--space-2); }
+.ai-assist-ask .button { min-height: 44px; }
+.ai-assist-status, .ai-assist-hint { margin: 0; color: var(--reader-muted); font-size: var(--text-label); }
+.ai-assist-error { margin: 0; color: var(--color-danger); font-size: var(--text-ui); overflow-wrap: anywhere; }
+.ai-assist-answer { color: var(--reader-ink); font-size: var(--text-title); line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .annotation-editor { display: grid; gap: 1rem; }
 .annotation-editor label { display: grid; gap: .5rem; }
 .annotation-editor textarea { box-sizing: border-box; width: 100%; min-height: 6rem; padding: .75rem; font: inherit; border: 1px solid var(--reader-line); border-radius: var(--radius-sm); background: var(--reader-paper); color: var(--reader-ink); resize: vertical; }

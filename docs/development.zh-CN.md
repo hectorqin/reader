@@ -95,6 +95,7 @@ UI 评审在真实 Chromium 中通过 CDP 截图并测量；浏览器缺失时�
 | `npm run ui:review:only --prefix web` | 同上，但复用已有 `web/dist`（CI 使用） | 同上 |
 | `npm run ui:review:reader --prefix web` | 阅读器场景；不自动构建，需先 `npm run build` | `artifacts/ui-review/reader/` |
 | `npm run ui:review:footnote --prefix web` | 先构建，再检查脚注原处预览、书后注与书内片段链接不改路由 | `artifacts/ui-review/footnote/` |
+| `npm run ui:review:ai --prefix web` | 先构建，再走一遍选区 →「问AI」→ 翻译与提问 | `artifacts/ui-review/ai-assist/` |
 | `npm run ui:sources --prefix web` | 先构建，再走书源流程；需已安装服务端依赖 | `artifacts/ui-review/sources/` |
 
 可用 `UI_REVIEW_DIR` 改变输出目录。布局改动后运行评审并查看截图。评审不模拟安全区，贴边栏位需另用 CDP `Emulation.setSafeAreaInsetsOverride` 检查。

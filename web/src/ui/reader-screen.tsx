@@ -47,6 +47,7 @@ import { parseLocator } from './locator.ts';
 import { tapActionAt, tapZonePreset } from './tap-zones.ts';
 import { ReadingTimeTracker } from '../features/stats/reading-time.ts';
 import { noteInMarkup } from './footnote.ts';
+import { AiAssistSheet, type AssistAction } from './ai-assist.tsx';
 import { Sheet } from './sheet.tsx';
 import { Button } from './toolkit.tsx';
 
@@ -220,6 +221,10 @@ export class ReaderScreen {
   private annotationClosedAt = -Infinity;
   /** The note being read in place, and where its link leads if the reader wants to go there. */
   private footnote: { paragraphs: string[]; ref: string | null; fragment: string } | null = null;
+  /** Whether the server offers the AI 选区助手; unknown and old servers are "no". */
+  private assistAvailable = false;
+  /** The passage the AI sheet is open on. */
+  private assist: { anchor: TextAnchor; context: string } | null = null;
   private toolsSelection: TextAnchor | null = null;
   private toolsReturn = '';
   private preview: SpeechEngine | null = null;
@@ -294,7 +299,10 @@ export class ReaderScreen {
 <ReaderChrome
           tools={<>{this.annotation && <AnnotationPopover key={this.annotation.note?.id ?? encodeAnchor(this.annotation.anchor)} target={this.annotation}
             save={(type, comment, color) => this.saveAnnotation(type, comment, color)} remove={() => this.removeAnnotation()}
-            close={() => { this.annotation = null; this.annotationClosedAt = performance.now(); this.view?.clearSelection(); this.patch({}); }} />}{this.footnote && <Sheet
+            close={() => { this.annotation = null; this.annotationClosedAt = performance.now(); this.view?.clearSelection(); this.patch({}); }}
+            {...(this.assistAvailable ? { askAi: () => this.openAssist() } : {})} />}{this.assist && <AiAssistSheet
+            key={encodeAnchor(this.assist.anchor)} quote={this.assist.anchor.quote} ask={(action, question) => this.askAi(action, question)}
+            onClose={() => { this.assist = null; this.patch({}); }} />}{this.footnote && <Sheet
             title="注释" size="compact" className="footnote-sheet" onClose={() => { this.footnote = null; this.patch({}); }}
             footer={<Button onClick={() => this.goToNote()}>跳到注释处</Button>}>
             <div className="footnote-text">{this.footnote.paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}</div>
@@ -391,6 +399,30 @@ export class ReaderScreen {
     return true;
   }
 
+  /**
+   * Opens the AI sheet on the current selection.
+   *
+   * The context is taken now, from the chapter on screen: the paragraph the
+   * selection sits in, which is what tells a model which "他" a sentence means,
+   * or failing that the few characters the anchor carries on either side.
+   */
+  private openAssist(): void {
+    const anchor = this.annotation?.anchor;
+    if (!anchor) return;
+    const context = this.view?.passageAround(anchor) || `${anchor.prefix}${anchor.quote}${anchor.suffix}`;
+    this.assist = { anchor, context };
+    this.annotation = null;
+    this.patch({});
+  }
+
+  private async askAi(action: AssistAction, question: string): Promise<string> {
+    const book = this.book, assist = this.assist;
+    if (!book || !assist) throw new Error('阅读器已关闭');
+    const { anchor, context } = assist;
+    const result = await this.options.api.aiAssist(book.id, { action, text: anchor.quote, ...(context !== anchor.quote ? { context } : {}), ...(question ? { question } : {}) });
+    return result.answer;
+  }
+
   private goToNote(): void {
     const note = this.footnote;
     if (!note) return;
@@ -423,7 +455,7 @@ export class ReaderScreen {
     this.pdfLoading = pdfLoading;
     this.closeAlternatives(); this.chapterRefresh?.abort(); this.chapterRefresh = null;
     const token = ++this.loadingToken;
-    this.toolsOpen = false; this.annotation = null; this.footnote = null; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
+    this.toolsOpen = false; this.annotation = null; this.footnote = null; this.assist = null; this.toolsReturn = ''; this.toolsSelection = null; this.stopPreview();
     this.content = null; this.book = book;
     let opened = false;
     if (book.title) document.title = `${book.title} · reader`;
@@ -449,7 +481,7 @@ export class ReaderScreen {
       // An older server without the endpoint keeps the button, as it always had.
       if (typeof this.options.api.aiCapabilities === 'function' && this.chrome.aiSummaryAvailable === undefined) {
         void this.options.api.aiCapabilities().then(capabilities => {
-          if (!this.disposed) this.patch({ aiSummaryAvailable: capabilities.summary });
+          if (!this.disposed) { this.assistAvailable = capabilities.assist === true; this.patch({ aiSummaryAvailable: capabilities.summary }); }
         }).catch(error => {
           if (!this.disposed && error instanceof ApiError && error.kind === 'not_found') this.patch({ aiSummaryAvailable: true });
         });
