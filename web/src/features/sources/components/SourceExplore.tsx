@@ -101,18 +101,17 @@ export function SourceExplore({ sources }: { sources: SourceInstance[] }) {
   const links = page?.navigation ?? [], shown = links.filter(link => link.title.toLocaleLowerCase().includes(filter.trim().toLocaleLowerCase()));
   const canUpload = local && uploadAccess.data?.allowed === true && uploadAccess.data.writable;
   // What a book offers: read it if it is (or has just become) a shelf book, else add it.
-  const action = (entry: SourceEntry) => {
+  const action = (entry: SourceEntry, quiet = false) => {
     const option = entry.options?.[0], bookId = acquired[entry.ref] ?? entry.metadata?.publicationId;
     return bookId
-      ? <Button className="primary" onClick={() => navigate(`/book/${encodeURIComponent(bookId)}`)}>阅读</Button>
-      : <Button className="primary" disabled={option?.available === false || acquire.isPending} onClick={() => acquireEntry(entry, option?.id)}>{option?.label ?? '加入书架'}</Button>;
+      ? <Button className={quiet ? '' : 'primary'} onClick={() => navigate(`/book/${encodeURIComponent(bookId)}`)}>阅读</Button>
+      : <Button className={quiet ? '' : 'primary'} disabled={option?.available === false || acquire.isPending} onClick={() => acquireEntry(entry, option?.id)}>{option?.label ?? '加入书架'}</Button>;
   };
   return <>
-    <section className="sources-card source-picker">
-      <SearchableSelect label="选择来源" value={selectedId} options={sources.map(source => ({ value: source.id, label: source.name + (source.isDefault ? '（默认）' : '') }))} onChange={setSourceId} />
-    </section>
     <section className="sources-card explore" aria-busy={busy}>
+      {/* One bar: which source, what the local library adds, and how the books are laid out. */}
       <div className="explore-tools">
+        <SearchableSelect label="选择来源" value={selectedId} options={sources.map(source => ({ value: source.id, label: source.name + (source.isDefault ? '（默认）' : '') }))} onChange={setSourceId} />
         {canUpload && <label className={'button' + (uploading || busy ? ' is-disabled' : '')}><Icon name="upload" size={18} /><span>{uploading ? '上传中…' : '上传书籍'}</span><input hidden type="file" multiple disabled={uploading || busy} onChange={event => { const files = Array.from(event.currentTarget.files ?? []); if (files.length) void upload(files); event.currentTarget.value = ''; }} /></label>}
         {local && admin && <Link className="button" to={current?.ref ? `/library/files?path=${encodeURIComponent(current.ref)}` : '/library/files'}><Icon name="folder" size={18} /><span>文件管理</span></Link>}
         <div className="segmented explore-layout" role="group" aria-label="布局">{([['list', '列表'], ['grid', '网格']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={layout === value} onClick={() => { void runtime.updateSettings({ exploreLayout: value }); }}>{label}</button>)}</div>
@@ -133,7 +132,7 @@ export function SourceExplore({ sources }: { sources: SourceInstance[] }) {
             <LazyCover url={coverUrl(selectedId, entry)} title={entry.title} />
             <strong>{entry.title}</strong><small>{entry.authors?.join(' / ') || '作者未知'}</small>
           </button>
-          {action(entry)}
+          {action(entry, true)}
         </article>)}</div>
         : <div className="explore-books">{page.items.map(entry => <article className="explore-book" key={entry.ref}>
           <LazyCover url={coverUrl(selectedId, entry)} title={entry.title} />
