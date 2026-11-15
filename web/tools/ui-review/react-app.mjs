@@ -618,7 +618,12 @@ async function runMediaReview(browser, fixture, checks, errors) {
   const createPost = page.waitForResponse(r => r.request().method() === 'POST' && r.url().endsWith('/api/v1/media/libraries'));
   await page.getByRole('button', { name: '创建并扫描', exact: true }).click();
   assert.equal((await createPost).status(), 201);
-  await page.getByRole('status').filter({ hasText: '已创建' }).waitFor({ state: 'visible' });
+  // Creating starts the scan and then opens that library's tasks. The "已创建" line is
+  // only on screen between those two requests, so waiting for it raced the app: when
+  // the scan answered first the page had already moved on and the wait timed out.
+  // The place the flow ends is what is checked.
+  const createdId = (await (await createPost).json()).id;
+  await page.waitForURL(url => url.hash.startsWith('#/media/video/settings/tasks?library=' + encodeURIComponent(createdId)));
 
   // Member session: browse allowed content; administrator settings denied.
   const memberContext = await browser.newContext({ viewport: { width: 390, height: heightFor(390) }, isMobile: true, hasTouch: true });
