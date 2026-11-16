@@ -61,7 +61,9 @@ describe('theme tokens', () => {
   for (const id of paperIds) {
     const paper = readerPapers[id];
     it(`纸色 ${paper.name}: the stylesheet matches, and ink and muted text are legible`, () => {
-      const match = stylesheet.match(new RegExp(`\\.reader-screen\\[data-paper="${id}"\\] \\{([^}]*)\\}`));
+      // The papers are declared once for every container that can wear one: the big
+      // reading stage, the in-page companion layer and the Picture-in-Picture window.
+      const match = stylesheet.match(new RegExp(`:is\\(\\s*\\.reader-screen,\\s*\\.companion-layer,\\s*\\.companion-pip\\s*\\)\\[data-paper="${id}"\\] \\{([^}]*)\\}`));
       const declared = Object.fromEntries([...(match?.[1] ?? '').matchAll(/--reader-([\w-]+):\s*([^;]+);/g)].map(m => [m[1]!, m[2]!.trim()]));
       expect(declared).toEqual({ paper: paper.bg, ink: paper.ink, muted: paper.muted, line: paper.line });
       const failures = [['ink', paper.ink], ['muted', paper.muted]].map(([name, fg]) => ({ name, value: ratio(fg!, paper.bg) }))

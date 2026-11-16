@@ -41,7 +41,8 @@ const SCALE = 2;
 
 const SCENES = [
   { name: '01-shelf', label: '书架', what: '第一屏：先看到书，再看到控件' },
-  { name: '02-reader', label: '阅读页', what: '顶部书名 / 日夜快捷按钮 / 正文 / 本章滑杆与四个底部入口', openBook: true },
+  { name: '02-reader', label: '阅读页', what: '顶部书名 / 日夜快捷按钮 / 正文 / 本章滑杆与底部入口', openBook: true },
+  { name: '02b-companion', label: '阅读页 · 小窗', what: '叠在正文上的第二个阅读视图：可拖动、可调大小、边框与纸色', openBook: true, companion: true },
   { name: '03-reader-no-chrome', label: '阅读页 · 收起工具栏', what: '工具栏一起收起，正文保持原位置，底部只留书名、页码与进度', openBook: true, tapCenter: true },
   { name: '04-panel-toc', label: '目录 · 半屏', what: '下半屏，上半屏正文仍可见', openBook: true, openPanel: '目录' },
   { name: '05-panel-settings', label: '阅读设置 · 半屏', what: '一行式行：标签在左、控件在右', openBook: true, openPanel: '设置' },
@@ -1104,6 +1105,15 @@ async function main() {
           await cdp.click(`button[aria-label="${toggle}"]`);
           await cdp.sleep(400);
         }
+      }
+      if (scene.companion) {
+        await cdp.click('button[aria-label="小窗"]');
+        await cdp.waitFor('document.querySelector(".reader-companion") !== null', 10_000);
+        await cdp.waitFor(
+          'document.querySelector(".reader-companion-stage book-content")?.shadowRoot?.querySelector(".book-flow") !== null',
+          20_000,
+        );
+        await cdp.sleep(800);
       }
       if (scene.openPanel) {
         await cdp.click(`button[aria-label="${scene.openPanel}"]`);

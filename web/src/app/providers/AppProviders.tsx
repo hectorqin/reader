@@ -3,6 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import type { AppRuntime } from '../runtime.ts';
 import { RuntimeContext } from './runtime-context.tsx';
 import { useMediaEnabled } from '../../shared/stores/features.ts';
+import { CompanionLayer } from '../../features/reader/companion/CompanionLayer.tsx';
 
 export function AppProviders({ runtime, children }: { runtime: AppRuntime; children: ReactNode }) {
   const media=useMediaEnabled();
@@ -32,5 +33,8 @@ export function AppProviders({ runtime, children }: { runtime: AppRuntime; child
   }, [runtime]);
   return <RuntimeContext value={runtime}>
     <QueryClientProvider client={runtime.queryClient}>{children}</QueryClientProvider>
+    {/* 小窗阅读 lives above the router, not inside a route: changing pages must not
+        take the second reading view down with the page it was opened from. */}
+    <CompanionLayer />
   </RuntimeContext>;
 }
