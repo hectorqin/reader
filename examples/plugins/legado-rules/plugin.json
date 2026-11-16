@@ -1,7 +1,7 @@
 {
   "id": "reader.source.legado",
   "name": "Legado rule sources",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "apiVersion": 1,
   "runtime": "node",
   "entry": "main.mjs",
@@ -17,8 +17,15 @@
             "type": "string",
             "title": "书源",
             "default": "biquge99",
-            "enum": ["biquge99"],
-            "enumNames": ["笔趣阁③（biquge99.cc）"]
+            "enum": ["biquge99", "biquw", "92xs", "biqusk", "wujixsw", "00shu"],
+            "enumNames": [
+              "笔趣阁③（biquge99.cc）",
+              "笔趣网（biquw.info）",
+              "就爱文学（92xs.info）",
+              "必去书库（biqusk.com）",
+              "无极小说（wujixsw.info）",
+              "零零小说（00shu.la）"
+            ]
           }
         },
         "required": ["sourceId"],
@@ -27,6 +34,21 @@
     }
   ],
   "permissions": {
-    "network": { "domains": ["biquge99.cc", "www.biquge99.cc", "www.biqvge99.cc"] }
+    "network": {
+      "domains": [
+        "biquge99.cc",
+        "www.biquge99.cc",
+        "www.biqvge99.cc",
+        "biquw.info",
+        "www.biquw.info",
+        "92xs.info",
+        "www.92xs.info",
+        "biqusk.com",
+        "www.biqusk.com",
+        "wujixsw.info",
+        "00shu.la",
+        "www.00shu.la"
+      ]
+    }
   }
 }

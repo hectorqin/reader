@@ -128,14 +128,26 @@ function requestHeaders(source, extra) {
 }
 
 async function fetchText(url, source, options = {}, useCache = true) {
-  const cached = useCache ? cacheGet(url) : undefined;
+  const method = String(options.method ?? 'GET').toUpperCase();
+  const cacheable = useCache && method === 'GET';
+  const cached = cacheable ? cacheGet(url) : undefined;
   if (cached) return cached;
+  const headers = requestHeaders(source, options.headers);
+  let body;
+  if (method !== 'GET' && method !== 'HEAD') {
+    body = String(options.body ?? '');
+    if (!Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded';
+    }
+  }
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     let response;
     try {
       response = await fetch(url, {
-        headers: requestHeaders(source, options.headers),
+        method,
+        headers,
+        body,
         redirect: 'follow',
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
@@ -152,7 +164,7 @@ async function fetchText(url, source, options = {}, useCache = true) {
     }
     const buffer = Buffer.from(await response.arrayBuffer());
     const entry = { text: decodeBody(buffer, response.headers.get('content-type'), options.charset), url: response.url || url };
-    if (useCache) cacheSet(url, entry);
+    if (cacheable) cacheSet(url, entry);
     return entry;
   }
   throw lastError ?? pluginError('SOURCE_UNAVAILABLE', '书源不可用');
@@ -211,24 +223,31 @@ function cssSelector(base) {
   if (base.startsWith('class.')) return `.${base.slice(6)}`;
   if (base.startsWith('id.')) return `#${base.slice(3)}`;
   if (base.startsWith('tag.')) return base.slice(4);
+  // Legado sources write meta rules as `[property=og:novel:book_name]`; the
+  // unquoted value contains colons, which CSS does not allow.
+  const attribute = /^\[([^\]=]+)=\s*([^"'\]]+)\s*\]$/.exec(base);
+  if (attribute) return `[${attribute[1]}="${attribute[2]}"]`;
   return base;
 }
 
 function parseSelector(token) {
   let base = token;
   let index = null;
+  let fromIndex = null;
   let match = /^(.*)\.(-?\d+)$/.exec(token);
   if (match && match[1]) {
     base = match[1];
     index = Number(match[2]);
   } else if ((match = /^(.*)!(\d+)$/.exec(token))) {
+    // `!N` means "all from N onwards" (Legado sources use `tr!0` for every row).
     base = match[1];
-    index = -(Number(match[2]) + 1);
+    fromIndex = Number(match[2]);
   }
-  return { css: cssSelector(base), index };
+  return { css: cssSelector(base), index, fromIndex };
 }
 
-function pickIndex(items, index) {
+function pickIndex(items, index, fromIndex) {
+  if (fromIndex !== null) return items.slice(fromIndex);
   if (index === null) return items;
   if (index < 0) return items.slice(index);
   return items.slice(index, index + 1);
@@ -262,6 +281,15 @@ function textNodesOf(node, $) {
   return out;
 }
 
+/** Rules that end in `html` return markup; the reader and descriptions want text. */
+function htmlToPlain(value) {
+  const text = String(value ?? '');
+  if (!/<(?:p|div|br|span|a|h[1-6]|li|td|dd|dt|strong|em|img|blockquote)\b[^>]*>/i.test(text)) return text;
+  const wrapped = load(`<div id="__legado_fragment">${text}</div>`);
+  const root = wrapped('#__legado_fragment').first();
+  return root.length ? textNodesOf(root[0], wrapped) : text;
+}
+
 function evalChain(chain, initialNodes, $, rootMode) {
   const tokens = String(chain ?? '').split('@').map((token) => token.trim()).filter(Boolean);
   let nodes = Array.isArray(initialNodes) ? initialNodes : [];
@@ -279,10 +307,10 @@ function evalChain(chain, initialNodes, $, rootMode) {
       }
       return attrOfFirst(nodes, $, token);
     }
-    const { css, index } = parseSelector(token);
+    const { css, index, fromIndex } = parseSelector(token);
     nodes = root ? $(css).toArray() : $(nodes).find(css).toArray();
     root = false;
-    nodes = pickIndex(nodes, index);
+    nodes = pickIndex(nodes, index, fromIndex);
   }
   return textOfFirst(nodes, $);
 }
@@ -315,10 +343,10 @@ function selectList(rule, $, rootMode, initialNodes = []) {
   let root = rootMode;
   for (const token of tokens) {
     if (OUTPUT_TOKENS.has(token)) throw pluginError('RULE_UNSUPPORTED', '列表规则不能以文本取值结尾');
-    const { css, index } = parseSelector(token);
+    const { css, index, fromIndex } = parseSelector(token);
     nodes = root ? $(css).toArray() : $(nodes).find(css).toArray();
     root = false;
-    nodes = pickIndex(nodes, index);
+    nodes = pickIndex(nodes, index, fromIndex);
   }
   return nodes;
 }
@@ -358,6 +386,12 @@ function normalizeContent(value) {
  * ---------------------------------------------------------------------- */
 
 function searchSpec(source) {
+  // A normalized spec wins over Legado's `url,{options}` suffix (which uses
+  // relaxed JSON for POST bodies and is not worth parsing).
+  if (source.search && typeof source.search === 'object' && typeof source.search.url === 'string') {
+    const { url, ...options } = source.search;
+    return { template: url, options };
+  }
   const raw = String(source.searchUrl ?? '');
   const at = raw.lastIndexOf(',{');
   if (at < 0) return { template: raw, options: {} };
@@ -380,7 +414,9 @@ async function search(source, request) {
   const spec = searchSpec(source);
   const url = absoluteUrl(expandTemplate(spec.template, query, 1), source.url);
   if (!url) throw pluginError('INVALID_CONFIG', '搜索地址无效');
-  const page = await fetchText(url, source, spec.options);
+  const options = { ...spec.options };
+  if (typeof options.body === 'string') options.body = expandTemplate(options.body, query, 1);
+  const page = await fetchText(url, source, options);
   const $ = load(page.text);
   const rules = source.rules.search;
   const nodes = selectList(rules.bookList, $, true);
@@ -393,7 +429,7 @@ async function search(source, request) {
     if (!title) continue;
     seen.add(ref);
     const authors = splitAuthors(evalRule(rules.author, [node], $, false));
-    const description = cleanText(evalRule(rules.intro, [node], $, false));
+    const description = cleanText(htmlToPlain(evalRule(rules.intro, [node], $, false)));
     const latestChapter = cleanText(evalRule(rules.lastChapter, [node], $, false));
     const kind = cleanText(evalRule(rules.kind, [node], $, false));
     const cover = absoluteUrl(evalRule(rules.coverUrl, [node], $, false), page.url);
@@ -419,7 +455,7 @@ async function detail(source, entryRef) {
   const title = cleanText(evalRule(rules.name, [], $, true)) || metaContent($, 'og:novel:book_name');
   if (!title) throw pluginError('RESOURCE_GONE', '没有读到书名，书源页面可能已失效');
   const authors = splitAuthors(evalRule(rules.author, [], $, true));
-  const description = cleanText(evalRule(rules.intro, [], $, true)) || metaContent($, 'og:description');
+  const description = cleanText(htmlToPlain(evalRule(rules.intro, [], $, true))) || metaContent($, 'og:description');
   const latestChapter = cleanText(evalRule(rules.lastChapter, [], $, true)) || metaContent($, 'og:novel:latest_chapter_name');
   const kind = cleanText(evalRule(rules.kind, [], $, true));
   const cover = absoluteUrl(evalRule(rules.coverUrl, [], $, true), page.url) || metaContent($, 'og:image');
@@ -435,6 +471,22 @@ async function detail(source, entryRef) {
   };
 }
 
+/**
+ * Some sites prepend a "latest chapters" block whose links repeat the tail of
+ * the real directory. Deduping keeps the first copy, which would put those
+ * chapters at the start of the book; drop the repeated prefix instead.
+ */
+function stripRepeatedPrefix(nodes, hrefOf) {
+  const last = new Map();
+  nodes.forEach((node, index) => {
+    const href = hrefOf(node);
+    if (href) last.set(href, index);
+  });
+  let prefix = 0;
+  while (prefix < nodes.length && last.get(hrefOf(nodes[prefix])) > prefix) prefix += 1;
+  return prefix ? nodes.slice(prefix) : nodes;
+}
+
 function chapterId(href) {
   try {
     const path = new URL(href).pathname;
@@ -446,16 +498,30 @@ function chapterId(href) {
 
 async function getManifest(source, publicationRef) {
   const ref = sameSiteUrl(publicationRef, source, '书籍');
-  const page = await fetchText(ref, source);
-  const $ = load(page.text);
+  const bookPage = await fetchText(ref, source);
+  const book$ = load(bookPage.text);
   const rules = source.rules.toc;
-  const nodes = selectList(rules.chapterList, $, true);
+  // Some sites put the complete directory behind a link on the book page.
+  const tocRule = rules.tocUrl ?? source.rules.book?.tocUrl;
+  let text = bookPage.text;
+  let base = bookPage.url;
+  if (tocRule) {
+    const target = absoluteUrl(evalRule(tocRule, [], book$, true), bookPage.url);
+    if (target) {
+      const tocPage = await fetchText(target, source);
+      text = tocPage.text;
+      base = tocPage.url;
+    }
+  }
+  const $ = load(text);
+  const selected = selectList(rules.chapterList, $, true);
+  const nodes = stripRepeatedPrefix(selected, (node) => evalRule(rules.chapterUrl, [node], $, false));
   const items = [];
   const ids = new Set();
   const refs = new Set();
   for (const node of nodes) {
     if (items.length >= MAX_CHAPTERS) break;
-    const href = absoluteUrl(evalRule(rules.chapterUrl, [node], $, false), page.url);
+    const href = absoluteUrl(evalRule(rules.chapterUrl, [node], $, false), base);
     const title = cleanText(evalRule(rules.chapterName, [node], $, false));
     if (!href || !title || refs.has(href)) continue;
     refs.add(href);
@@ -507,7 +573,7 @@ async function readResource(source, request) {
     // Last resort: plain text of #content when the rule's markers moved.
     content = $('#content').text();
   }
-  content = normalizeContent(content);
+  content = normalizeContent(htmlToPlain(content));
   if (!content) throw pluginError('RESOURCE_GONE', '该章节没有可读正文，书源规则可能已失效');
   return { mediaType: 'text/plain; charset=utf-8', text: content };
 }

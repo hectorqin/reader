@@ -7,15 +7,26 @@ turns them into the host's search → detail → chapters → resource calls.
 Supported syntax:
 
 - selectors: `class.name`, `id.name`, `tag.name`, plain CSS
-- indices: `.0`, `.-1`, `!0` (last)
+- indices: `.0`, `.-1` (one node), `!0` (all nodes from index 0 onwards)
 - output tokens: `text`, `textNodes`, `html`, `href`, `src`, `content`, `value`, `alt`
 - cleanup: `##pattern` or `##pattern##replacement`
 - fallbacks: `a||b`; concatenation: `a&&b`
 - per-source search template options after `,{...}`: `method`, `body`, `charset`, `headers`
+- a normalized `search` object is accepted instead of `searchUrl` (see `92xs`):
+  `{"url": "...", "method": "post", "body": "...{{key}}..."}`
+- `search.book` / `toc` may point at another page with `tocUrl`; `alternateHosts`
+  allows links to the site's mirror domains
 
 Not supported: `@js:` / `<js>` rules, XPath, `@put`/`@get` variables, and
 Legado's pagination/proxy features. Sources relying on those are rejected at
 call time with `RULE_UNSUPPORTED`.
+
+## Bundled sources
+
+`biquge99` (笔趣阁③), `biquw` (笔趣网), `92xs` (就爱文学), `biqusk` (必去书库),
+`wujixsw` (无极小说), `00shu` (零零小说). Each was checked end to end
+(search → detail → directory → first chapter → cover) when added. Pick one per
+instance with `config.sourceId`.
 
 ## Install
 

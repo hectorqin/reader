@@ -34,5 +34,171 @@
       },
       "content": "id.content@textNodes##请记住本书.*cc"
     }
+  },
+  "biquw": {
+    "name": "笔趣网",
+    "url": "http://www.biquw.info/",
+    "alternateHosts": ["ibiquw.org"],
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    },
+    "searchUrl": "/modules/article/search.php?action=login&searchkey={{key}}",
+    "rules": {
+      "search": {
+        "bookList": "class.toplist@li",
+        "name": "class.s1@a@text",
+        "author": "class.s3@text",
+        "bookUrl": "class.s1@a@href",
+        "lastChapter": "class.s2@a@text",
+        "kind": "class.s5@text&&class.s6@text"
+      },
+      "book": {
+        "name": "id.info@h1@text",
+        "author": "class.options@tag.span.0@text",
+        "coverUrl": "class.pic@img@src",
+        "intro": ".bookinfo_intro@text",
+        "kind": "[property=og:novel:update_time]@content&&\n[property=og:novel:category]@content&&\n[property=og:novel:status]@content",
+        "lastChapter": "class.update@a@text"
+      },
+      "toc": {
+        "chapterList": "class.book_list@li",
+        "chapterName": "tag.a@text",
+        "chapterUrl": "tag.a@href"
+      },
+      "content": "id.htmlContent@html"
+    }
+  },
+  "92xs": {
+    "name": "就爱文学",
+    "url": "http://www.92xs.info/",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    },
+    "search": {
+      "url": "/modules/article/search.php",
+      "method": "post",
+      "body": "searchtype=articlename=author&searchkey={{key}}"
+    },
+    "rules": {
+      "search": {
+        "bookList": "#author@tbody@tr!0",
+        "name": ".odd.0@text",
+        "author": ".odd.1@text",
+        "bookUrl": "a.0@href",
+        "lastChapter": ".even.0@text",
+        "kind": ".even.2@text&&.odd.2@text"
+      },
+      "book": {
+        "name": ".d_title h1@text",
+        "author": ".p_author@text##作者：",
+        "coverUrl": "#bookimg img@src",
+        "intro": "#bookintro p.-1@html##【展开】.*",
+        "lastChapter": "#newlist a.1@text",
+        "tocUrl": ".newrap a.0@href"
+      },
+      "toc": {
+        "chapterList": ".ccss",
+        "chapterName": "a@text",
+        "chapterUrl": "a@href"
+      },
+      "content": "id.ccontent@textNodes##最新网址：.*"
+    }
+  },
+  "biqusk": {
+    "name": "必去书库",
+    "url": "https://www.biqusk.com/",
+    "alternateHosts": ["biqusk.info"],
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    },
+    "searchUrl": "/s.php?q={{key}}",
+    "rules": {
+      "search": {
+        "bookList": "class.grid@tag.tr!0",
+        "name": "tag.td.0@tag.a.0@text",
+        "author": "tag.td.2@text",
+        "bookUrl": "tag.td.0@tag.a.0@href",
+        "lastChapter": "tag.td.1@tag.a.0@text##正文"
+      },
+      "book": {
+        "name": "[property=og:novel:book_name]@content##\\（.*|\\(.*|免费阅读|全文.*阅读|最新章节|小说|笔趣阁|免费.*",
+        "author": "[property=og:novel:author]@content",
+        "coverUrl": "[property=og:image]@content",
+        "intro": "[property=og:description]@content",
+        "kind": "[property=og:novel:update_time]@content&&\n[property=og:novel:category]@content&&\n[property=og:novel:status]@content",
+        "lastChapter": "[property=og:novel:latest_chapter_name]@content##免费章节 |正文卷 |正文 |VIP章节 "
+      },
+      "toc": {
+        "chapterList": "id.list@tag.dd",
+        "chapterName": "tag.a@text",
+        "chapterUrl": "tag.a@href"
+      },
+      "content": "id.content@textNodes##一秒記.*小說閱讀。|手机用户请.*更优质的阅读体验。"
+    }
+  },
+  "wujixsw": {
+    "name": "无极小说",
+    "url": "https://wujixsw.info/",
+    "alternateHosts": ["wujiwx.info"],
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    },
+    "searchUrl": "https://wujixsw.info/search.html?name={{key}}",
+    "rules": {
+      "search": {
+        "bookList": "class.novelslist2@tag.li!0",
+        "name": "class.s2@tag.a@text",
+        "author": "class.s4@text",
+        "bookUrl": "class.s2@tag.a@href",
+        "lastChapter": "class.s3@tag.a@text##免费章节 |正文卷 |正文 |VIP章节 |卷1"
+      },
+      "book": {
+        "name": "[property=og:novel:book_name]@content##\\（.*|\\(.*|免费阅读|全文.*阅读|最新章节|小说|笔趣阁|免费.*",
+        "author": "[property=og:novel:author]@content",
+        "coverUrl": "[property=og:image]@content",
+        "intro": "[property=og:description]@content",
+        "kind": "[property=og:novel:update_time]@content&&\n[property=og:novel:category]@content&&\n[property=og:novel:status]@content",
+        "lastChapter": "[property=og:novel:latest_chapter_name]@content##免费章节 |正文卷 |正文 |VIP章节 "
+      },
+      "toc": {
+        "chapterList": "id.list@tag.dd",
+        "chapterName": "tag.a@text",
+        "chapterUrl": "tag.a@href"
+      },
+      "content": "id.content@textNodes##全本小说网.*最新章节！|全本小说网.*最快更新|最新章节！|一秒记住.*免费阅读！|.*第.*章.*|笔趣阁.*最快更新.*|天才一秒记住.*|http://wujiwx\\.info/最快更新！无广告！"
+    }
+  },
+  "00shu": {
+    "name": "零零小说",
+    "url": "https://www.00shu.la/",
+    "alternateHosts": ["00shuge.com"],
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    },
+    "searchUrl": "https://www.00shu.la/modules/article/search.php?q={{key}}",
+    "rules": {
+      "search": {
+        "bookList": "class.grid@tag.tr!0",
+        "name": "tag.td.0@a@text",
+        "author": "tag.td.2@text",
+        "bookUrl": "tag.td.0@a@href",
+        "lastChapter": "tag.td.1@a@text",
+        "kind": "tag.td.4@text"
+      },
+      "book": {
+        "name": "[property=og:novel:book_name]@content",
+        "author": "[property=og:novel:author]@content",
+        "coverUrl": "[property=og:image]@content",
+        "intro": "[property=og:description]@content",
+        "kind": "id.info@tag.p.2@text&&[property=og:novel:category]@content##最后更新：",
+        "lastChapter": "id.info@tag.p.3@a@text"
+      },
+      "toc": {
+        "chapterList": "id.list@dd",
+        "chapterName": "a@text",
+        "chapterUrl": "a@href"
+      },
+      "content": "id.content@html##最新网址：[^<]*"
+    }
   }
 }
