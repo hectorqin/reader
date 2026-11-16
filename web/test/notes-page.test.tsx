@@ -13,12 +13,15 @@ const note = (id: string, patch: Record<string, unknown> = {}) => ({
 });
 let items = [note('n1'), note('n2', { type: 'note', comment: '我的批注' }), note('n3', { type: 'bookmark', text: '' })];
 let total = 3;
+let reviewBody = '';
 const runtime = {
   api: {
     notesLibrary: vi.fn(async (query: { page?: number }) => ({ items: (query.page ?? 1) > Math.ceil(total / 50) && total > 0 ? [] : items, total, page: query.page ?? 1, pageSize: 50 })),
     notesLibraryBooks: vi.fn(async () => [{ bookId: 'b 1', title: '围城', author: '钱锺书', count: 3, lastAt: 0 }]),
+    bookReview: vi.fn(async () => reviewBody ? { bookId: 'b 1', body: reviewBody, updatedAt: Date.UTC(2026, 10, 3) } : null),
+    saveBookReview: vi.fn(async (_book: string, body: string) => { reviewBody = body.trim(); return null; }),
     notesLibraryTags: vi.fn(async () => [{ tag: '婚姻', count: 2 }, { tag: '金句', count: 1 }]),
-    notesExport: vi.fn(async (_filter: unknown, format: string) => ({ filename: 'reader-notes.md', mime: 'text/markdown', content: `# ${format}`, count: 2 })),
+    notesExport: vi.fn(async (_filter: unknown, format: string) => ({ filename: 'reader-notes.md', mime: 'text/markdown', content: `# ${format}`, count: 2, reviews: 1 })),
   },
   offline: {
     deleteNote: vi.fn(async (id: string) => { items = items.filter(item => item.id !== id); total = items.length; }),
@@ -52,6 +55,7 @@ beforeEach(() => {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   items = [note('n1'), note('n2', { type: 'note', comment: '我的批注' }), note('n3', { type: 'bookmark', text: '' })];
   total = 3;
+  reviewBody = '';
   vi.clearAllMocks();
 });
 afterEach(async () => { await act(async () => render(null, root)); });
@@ -138,6 +142,42 @@ it('tags a note through the offline queue and sync, and a tag on a note filters 
   expect(where).toBe('/me/notes?tag=%E9%87%91%E5%8F%A5');
 });
 
+it('shows no review card until one book is picked', async () => {
+  await paint('/me/notes');
+  await settle();
+  expect(root.querySelector('.notes-review')).toBeNull();
+  expect(runtime.api.bookReview).not.toHaveBeenCalled();
+});
+
+it('writes a review for the picked book, saves it online and shows what the server holds', async () => {
+  await paint('/me/notes?book=b%201');
+  await settle();
+  expect(runtime.api.bookReview).toHaveBeenCalledWith('b 1', expect.anything());
+  expect(root.querySelector('.notes-review')?.textContent).toContain('写下整体的感想');
+  await act(async () => button('写书评').click());
+  const field = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="书评"]')!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(field, '一本关于婚姻的书'); field.dispatchEvent(new Event('input', { bubbles: true })); });
+  await act(async () => button('保存').click());
+  await settle();
+  expect(runtime.api.saveBookReview).toHaveBeenCalledWith('b 1', '一本关于婚姻的书');
+  expect(runtime.api.bookReview).toHaveBeenCalledTimes(2);
+  expect(root.querySelector('.notes-review-body')?.textContent).toBe('一本关于婚姻的书');
+  expect(document.querySelector('textarea[aria-label="书评"]')).toBeNull();
+});
+
+it('deleting a review asks first, then saves it empty', async () => {
+  reviewBody = '旧书评';
+  await paint('/me/notes?book=b%201');
+  await settle();
+  await act(async () => button('编辑').click());
+  await act(async () => button('删除').click());
+  expect(runtime.api.saveBookReview).not.toHaveBeenCalled();
+  await act(async () => button('确认删除').click());
+  await settle();
+  expect(runtime.api.saveBookReview).toHaveBeenCalledWith('b 1', '');
+  expect(root.querySelector('.notes-review-body')).toBeNull();
+});
+
 it('refuses a tag that is too long instead of sending it', async () => {
   await paint('/me/notes');
   await settle();
@@ -159,5 +199,5 @@ it('exports what the filter shows, copied as Markdown', async () => {
   await settle();
   expect(runtime.api.notesExport).toHaveBeenCalledWith({ q: '', type: 'highlight', bookId: '', tag: '' }, 'markdown', expect.any(Number));
   expect(writeText).toHaveBeenCalledWith('# markdown');
-  expect(document.querySelector('.notes-export-status')?.textContent).toBe('已复制 2 条');
+  expect(document.querySelector('.notes-export-status')?.textContent).toBe('已复制 2 条笔记、1 篇书评');
 });

@@ -720,6 +720,15 @@ export class BrowseService {
       fromBookId,
     );
     this.db.run('UPDATE notes SET book_id = ? WHERE book_id = ?', toBookId, fromBookId);
+    // One review per reader and book: where both copies have one, the newer survives.
+    this.db.run(
+      `INSERT INTO book_reviews (user_id, book_id, body, updated_at)
+       SELECT user_id, ?, body, updated_at FROM book_reviews WHERE book_id = ?
+       ON CONFLICT(user_id, book_id) DO UPDATE SET body = excluded.body, updated_at = excluded.updated_at
+       WHERE excluded.updated_at > book_reviews.updated_at`,
+      toBookId, fromBookId,
+    );
+    this.db.run('DELETE FROM book_reviews WHERE book_id = ?', fromBookId);
   }
 
 }

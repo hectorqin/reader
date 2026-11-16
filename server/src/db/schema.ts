@@ -320,6 +320,17 @@ CREATE TABLE IF NOT EXISTS notes (
 CREATE INDEX IF NOT EXISTS idx_notes_user_book ON notes(user_id, book_id);
 CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(user_id, updated_at);
 
+-- 书评: one reader's words about a whole book (docs/notes-library.zh-CN.md §5).
+-- Not a kind of note: notes.type is CHECK-constrained and older builds refuse a
+-- sync batch that carries a type they do not know. No row means no review.
+CREATE TABLE IF NOT EXISTS book_reviews (
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  book_id    TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  body       TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, book_id)
+);
+
 -- Highest-priority override layer: user manual edits. Never auto overwritten.
 CREATE TABLE IF NOT EXISTS metadata_overrides (
   book_id    TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,

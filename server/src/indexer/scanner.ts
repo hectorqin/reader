@@ -242,8 +242,8 @@ export class Scanner {
       // Only drop books that no longer have any live file AND that a user has
       // not added to a shelf manually; deleting a shelf entry the reader curated
       // would be a worse failure than showing a temporarily unavailable book.
-      // Nor one a reader still has notes in: notes cascade with the book, and a
-      // reader's highlights must outlive a file that was moved away
+      // Nor one a reader still has notes in, or wrote a review of: both cascade with
+      // the book, and a reader's own words must outlive a file that was moved away
       // (docs/notes-library.zh-CN.md §2).
       this.db.run(
         `DELETE FROM books
@@ -251,7 +251,8 @@ export class Scanner {
            AND id NOT IN (SELECT book_id FROM acquired_files)
            AND id NOT IN (SELECT book_id FROM chapter_publications)
            AND id NOT IN (SELECT DISTINCT book_id FROM user_books)
-           AND id NOT IN (SELECT book_id FROM notes WHERE deleted = 0)`,
+           AND id NOT IN (SELECT book_id FROM notes WHERE deleted = 0)
+           AND id NOT IN (SELECT book_id FROM book_reviews)`,
       );
 
       this.progress.running = false;

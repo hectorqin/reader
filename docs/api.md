@@ -897,7 +897,9 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 有笔记的书，按最近笔记时间倒序，供筛选。`bookId` 参数被忽略。
 
-→ `{ "books": [{ "bookId", "title", "author", "count": 3, "lastAt": 1789537864820 }] }`
+→ `{ "books": [{ "bookId", "title", "author", "count": 3, "lastAt": 1789537864820, "reviewed": true }] }`
+
+`reviewed` 表示有书评。没有按关键词、类型、标签筛选时，只有书评的书也会列出（`count` 为 0），书评的时间计入 `lastAt`。
 
 ### `GET /notes/library/tags`
 
@@ -905,11 +907,21 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 → `{ "tags": [{ "tag": "金句", "count": 4 }] }`
 
+### `GET /notes/reviews/:bookId`、`PUT /notes/reviews/:bookId`
+
+当前账号对一本书的书评。不进同步。
+
+- `GET` → `{ "review": { "bookId", "body", "updatedAt" } }`，没有书评时 `review` 为 `null`。
+- `PUT { "body": "..." }` 保存（首尾空白会去掉），最后一次写入为准；`body` 为空即删除，返回 `{ "review": null }`。
+  超过 20000 字返回 `400 REVIEW_TOO_LONG`，`body` 不是字符串返回 `400 BAD_REVIEW`，书不存在返回 `404`。
+
 ### `GET /notes/export?format=markdown|json&tz=<分钟>&q=&type=&bookId=&tag=`
 
 把筛选命中的全部笔记导出为一份文档，以 JSON 文本返回（不是文件流，Android 外壳无法处理下载）。
 
-→ `{ "filename": "reader-notes-2026-11-12.md", "mime": "text/markdown", "content": "...", "count": 12 }`
+→ `{ "filename": "reader-notes-2026-11-12.md", "mime": "text/markdown", "content": "...", "count": 12, "reviews": 1 }`
+
+`count` 是笔记条数，`reviews` 是书评篇数。书评放在所在书的开头；没有按关键词、类型、标签筛选时，只有书评的书也会导出。
 
 - `markdown`（默认）：按书、再按章节分组，原文为引用块，批注为正文，每条末尾一行是日期、类型和 `#标签`；不含书签；日期按 `tz`（相对 UTC 的分钟偏移）换算。
 - `json`：`{ "version": 1, "exportedAt", "books": [{ "id", "title", "author", "notes": [...] }] }`，含书签与 `locator`。

@@ -35,3 +35,15 @@
 .notes-export-hint { margin: 0 0 var(--space-3); font-size: var(--text-ui); color: var(--color-muted); }
 .notes-export-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .notes-export-status { min-height: 1.5em; margin: var(--space-2) 0 0; font-size: var(--text-meta); color: var(--color-muted); }
+
+/* 书评: the picked book's own words, above its notes. */
+.notes-review { display: grid; gap: var(--space-1); margin: 0 0 var(--space-3); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-line); border-radius: var(--radius-lg); background: var(--color-surface); }
+.notes-review header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.notes-review h2 { margin: 0; font-size: var(--text-title); font-weight: 600; }
+.notes-review .button { display: inline-flex; align-items: center; gap: var(--space-1); }
+.notes-review-body { margin: 0; font-size: var(--text-ui); line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.notes-review-empty { margin: 0; font-size: var(--text-ui); color: var(--color-muted); }
+.notes-review-empty .button { margin-inline-start: var(--space-2); }
+/* Finger-reachable: 16px or iOS zooms on focus. Scoped past the page frame's own
+   `.media-screen textarea` sizing, which otherwise wins and leaves a 40px box. */
+.sheet textarea.notes-review-input { width: 100%; min-height: 14rem; padding: var(--space-2); border: 1px solid var(--color-line); border-radius: var(--radius-md); background: var(--color-surface); color: var(--color-ink); font: inherit; font-size: var(--text-title); line-height: 1.7; resize: vertical; box-sizing: border-box; }

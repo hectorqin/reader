@@ -7,6 +7,7 @@ import { Db } from '../src/db/index.ts';
 import { Scanner } from '../src/indexer/scanner.ts';
 import { NotesLibraryService } from '../src/services/notes-library.ts';
 import { SyncService, encodeTags } from '../src/services/sync.ts';
+import { BookReviewService } from '../src/services/book-reviews.ts';
 import { ShelfService } from '../src/services/shelf.ts';
 import { UserService } from '../src/services/users.ts';
 import { buildApp } from '../src/http/app.ts';
@@ -130,6 +131,45 @@ test('sync carries chapter titles and tags, and a client that sends neither leav
   db.close();
 });
 
+test('a review is saved, replaced and removed by saving nothing', () => {
+  const { db } = fixture();
+  const reviews = new BookReviewService(db);
+  assert.equal(reviews.get('alice', 'b1'), null);
+  assert.deepEqual(reviews.save('alice', 'b1', '  写得真好  ', 100), { bookId: 'b1', body: '写得真好', updatedAt: 100 });
+  reviews.save('alice', 'b1', '改主意了', 200);
+  assert.deepEqual(reviews.get('alice', 'b1'), { bookId: 'b1', body: '改主意了', updatedAt: 200 });
+  assert.equal(reviews.get('bob', 'b1'), null);
+  assert.equal(reviews.save('alice', 'b1', '   ', 300), null);
+  assert.equal(reviews.get('alice', 'b1'), null);
+  assert.throws(() => reviews.save('alice', 'nope', '书不存在'), /book not found/);
+  assert.throws(() => reviews.save('alice', 'b1', '长'.repeat(20001)), /书评最长/);
+  assert.throws(() => reviews.save('alice', 'b1', 42), /body must be a string/);
+  db.close();
+});
+
+test('reviews go with their book in the facet and the export', () => {
+  const { db, notes } = fixture();
+  db.run("INSERT INTO books(id,content_hash,title,author,format,created_at,updated_at) VALUES('b3','h3','鼠疫','加缪','epub',0,0)");
+  const reviews = new BookReviewService(db);
+  reviews.save('alice', 'b1', '围城里外', T0 + 9 * DAY);
+  reviews.save('alice', 'b3', '只写了书评', T0 + 8 * DAY);
+  // A book with only a review is listed (no notes) until the notes themselves are narrowed.
+  assert.deepEqual(notes.books('alice', {}).map(book => [book.bookId, book.count, book.reviewed]), [['b1', 3, true], ['b3', 0, true], ['b2', 1, false]]);
+  assert.deepEqual(notes.books('alice', { type: 'highlight' }).map(book => book.bookId), ['b2', 'b1']);
+
+  const md = notes.export('alice', { tz: 480 }, T0 + 10 * DAY);
+  assert.equal(md.reviews, 2);
+  assert.ok(md.content.startsWith('# 读书笔记\n\n> 导出于 2026-11-12 · 3 本书 · 3 条 · 2 篇书评\n\n## 围城（手动）\n\n作者：钱锺书\n\n**书评**（2026-11-11）\n\n围城里外\n'), md.content);
+  assert.ok(md.content.includes('## 鼠疫\n\n作者：加缪\n\n**书评**（2026-11-10）\n\n只写了书评\n'));
+  // A single book exports its review even with no notes; narrowing by words leaves review-only books out.
+  const only = notes.export('alice', { bookId: 'b3' }, T0);
+  assert.deepEqual([only.count, only.reviews], [0, 1]);
+  assert.equal(notes.export('alice', { q: '城外' }, T0).reviews, 1);
+  const json = JSON.parse(notes.export('alice', { format: 'json', bookId: 'b1' }, T0).content) as { books: Array<{ review?: { body: string } }> };
+  assert.equal(json.books[0]!.review?.body, '围城里外');
+  db.close();
+});
+
 test('json export keeps bookmarks and locators', () => {
   const { db, notes } = fixture();
   const out = notes.export('alice', { format: 'json', bookId: 'b1' }, T0);
@@ -166,6 +206,12 @@ test('the HTTP routes answer for the signed-in account only', async t => {
   assert.ok(!exported.json().content.includes('别人的笔记'));
   assert.equal((await app.inject({ url: '/api/v1/notes/library?type=review', headers })).statusCode, 400);
   assert.equal((await app.inject({ url: '/api/v1/notes/library' })).statusCode, 401);
+  const put = await app.inject({ method: 'PUT', url: '/api/v1/notes/reviews/b1', headers, payload: { body: '书评' } });
+  assert.equal(put.statusCode, 200, put.body);
+  assert.equal((await app.inject({ url: '/api/v1/notes/reviews/b1', headers })).json().review.body, '书评');
+  const bob = { authorization: 'Bearer ' + signAccessToken(config, { id: 'bob', role: 'member' }).token };
+  assert.equal((await app.inject({ url: '/api/v1/notes/reviews/b1', headers: bob })).json().review, null);
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/v1/notes/reviews/b1', headers, payload: { body: '' } })).json().review, null);
 });
 
 test('a scan keeps a book whose file is gone while a reader still has notes in it', async t => {
@@ -182,6 +228,12 @@ test('a scan keeps a book whose file is gone while a reader still has notes in i
   const id = (name: string) => db.get<{ book_id: string }>('SELECT book_id FROM book_files WHERE rel_path = ?', name)!.book_id;
   const kept = id('有笔记.txt'), plain = id('没笔记.txt'), tombstoned = plain;
   addNote(db, 'n1', 'alice', kept, 'highlight', '有笔记的书', '', T0);
+  // Nor is a review on another account's book a reason to drop this one: a review alone keeps a book.
+  await writeFile(join(booksDir, '有书评.txt'), '第一章\n' + '有书评的书。'.repeat(200));
+  await scanner.scan();
+  const reviewed = id('有书评.txt');
+  new BookReviewService(db).save('alice', reviewed, '好书');
+  await rm(join(booksDir, '有书评.txt'));
   // A deleted note is not a reason to keep a book.
   addNote(db, 'n2', 'alice', tombstoned, 'highlight', '删掉的', '', T0, 1);
   await rm(join(booksDir, '有笔记.txt')); await rm(join(booksDir, '没笔记.txt'));
@@ -189,5 +241,6 @@ test('a scan keeps a book whose file is gone while a reader still has notes in i
   const exists = (book: string) => !!db.get('SELECT 1 AS ok FROM books WHERE id = ?', book);
   assert.equal(exists(plain), false, 'a book nobody shelved or annotated is still cleaned up');
   assert.equal(exists(kept), true, 'the annotated book stays');
+  assert.equal(exists(reviewed), true, 'the reviewed book stays');
   assert.equal(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM notes WHERE id = 'n1'")!.n, 1);
 });

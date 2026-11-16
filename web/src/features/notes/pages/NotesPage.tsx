@@ -9,7 +9,7 @@ import { Select } from '../../../ui/select.tsx';
 import { Pager } from '../../../ui/pager.tsx';
 import { ConfirmSheet, Sheet } from '../../../ui/sheet.tsx';
 import { notify } from '../../../ui/notifications.ts';
-import type { LibraryNote, NotesExport, NotesFilter, NotesTag } from '../../../api/client.ts';
+import type { BookReview, LibraryNote, NotesExport, NotesFilter, NotesTag } from '../../../api/client.ts';
 import type { NoteType } from '../../../api/types.ts';
 import '../styles/notes.css';
 
@@ -30,7 +30,8 @@ const KIND: Record<NoteType, string> = { highlight: '高亮', note: '批注', bo
  * coming back from a book returns to the same view. The server filters and pages;
  * this screen never holds more than the page it shows. A note's words are not
  * written here — they come from the text, in the reader. What this screen does is
- * organise: tag a note, or delete it.
+ * organise: tag a note, or delete it. With one book picked, it also holds that
+ * book's 书评, which is not a note and is saved online.
  */
 export function NotesPage() {
   const runtime = useRuntime();
@@ -53,6 +54,8 @@ export function NotesPage() {
   const list = useQuery({ queryKey: ['notes', 'library', filter, page], queryFn: ({ signal }) => runtime.api.notesLibrary({ ...filter, page }, { signal }) });
   const books = useQuery({ queryKey: ['notes', 'books', q, kind, tag], queryFn: ({ signal }) => runtime.api.notesLibraryBooks({ q, type: kind, tag }, { signal }) });
   const tags = useQuery({ queryKey: ['notes', 'tags'], queryFn: ({ signal }) => runtime.api.notesLibraryTags({ signal }) });
+  const review = useQuery({ queryKey: ['notes', 'review', book], queryFn: ({ signal }) => runtime.api.bookReview(book, { signal }), enabled: !!book });
+  const [writing, setWriting] = useState(false);
   const total = list.data?.total ?? 0;
   const pages = list.data ? Math.max(1, Math.ceil(total / list.data.pageSize)) : 1;
   // Only the response knows how many pages there are: a page past the end is clamped
@@ -97,11 +100,24 @@ export function NotesPage() {
     } finally { setBusy(false); }
   }
 
+  async function saveReview(body: string) {
+    setBusy(true);
+    try {
+      await runtime.api.saveBookReview(book, body);
+      // Re-read, then report: the card shows what the server now holds.
+      await Promise.all([review.refetch(), books.refetch()]);
+      notify(body.trim() ? '书评已保存' : '书评已删除');
+      setWriting(false);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : '书评保存失败，请重试', { kind: 'error' });
+    } finally { setBusy(false); }
+  }
+
   const submit = (event: FormEvent) => { event.preventDefault(); set({ q: input.trim(), page: '' }); };
   const returnTo = `/me/notes${params.size ? `?${params.toString()}` : ''}`;
 
   return <MediaPageFrame className="media-secondary-page notes-page" title="读书笔记" backTo="/me" backLabel="返回我的"
-    actions={<Button className="notes-export-button" disabled={!total} onClick={() => setExporting(true)}><Icon name="download" size={16} />导出</Button>}>
+    actions={<Button className="notes-export-button" disabled={!total && !books.data?.some(item => item.reviewed)} onClick={() => setExporting(true)}><Icon name="download" size={16} />导出</Button>}>
     <div className="notes-controls">
       <form className="notes-search" role="search" onSubmit={submit}>
         <input type="search" aria-label="搜索笔记" placeholder="搜索原文或批注" maxLength={200} value={input} onInput={event => setInput(event.currentTarget.value)} />
@@ -113,7 +129,7 @@ export function NotesPage() {
           <option value="">全部书籍</option>
           {/* A book picked earlier stays choosable when the other filters no longer match it. */}
           {book && books.data && !books.data.some(item => item.bookId === book) && <option value={book}>当前书籍（无匹配）</option>}
-          {(books.data ?? []).map(item => <option key={item.bookId} value={item.bookId}>{item.title}（{item.count}）</option>)}
+          {(books.data ?? []).map(item => <option key={item.bookId} value={item.bookId}>{item.title}（{item.count ? `${item.count} 条` : ''}{item.count && item.reviewed ? ' · ' : ''}{item.reviewed ? '书评' : ''}）</option>)}
         </Select>
         {(tag || !!tags.data?.length) && <Select aria-label="标签" value={tag} onChange={event => set({ tag: event.currentTarget.value, page: '' })}>
           <option value="">全部标签</option>
@@ -122,6 +138,9 @@ export function NotesPage() {
         </Select>}
       </div>
     </div>
+
+    {book && <ReviewCard review={review.data} pending={review.isPending} failed={!!review.error} busy={busy}
+      onRetry={() => void review.refetch()} onEdit={() => setWriting(true)} />}
 
     {list.error
       ? <p className="notes-state" role="alert">笔记读取失败。<button type="button" className="button" onClick={() => void list.refetch()}>重试</button></p>
@@ -162,6 +181,7 @@ export function NotesPage() {
     {removing && <ConfirmSheet danger busy={busy} title={`删除${KIND[removing.type]}`} confirmText="确认删除"
       text={removing.text ? `确定删除「${excerpt(removing.text)}」？删除后所有设备上都不再显示。` : '确定删除这个书签？删除后所有设备上都不再显示。'}
       onCancel={() => setRemoving(null)} onConfirm={() => void remove(removing)} />}
+    {writing && <ReviewSheet initial={review.data?.body ?? ''} busy={busy} onClose={() => setWriting(false)} onSave={body => void saveReview(body)} />}
     {tagging && <TagSheet note={tagging} known={tags.data ?? []} busy={busy} onClose={() => setTagging(null)} onSave={next => void saveTags(tagging, next)} />}
     {exporting && <ExportSheet filter={filter} filtered={filtered} total={total} onClose={() => setExporting(false)} />}
   </MediaPageFrame>;
@@ -180,19 +200,19 @@ function ExportSheet({ filter, filtered, total, onClose }: { filter: NotesFilter
     setBusy(true); setMessage('');
     try {
       const doc = await runtime.api.notesExport(filter, format, -new Date().getTimezoneOffset());
-      setMessage(doc.count ? await deliver(doc) : '没有可导出的内容：Markdown 不包含书签。');
+      setMessage(doc.count || doc.reviews ? await deliver(doc) : '没有可导出的内容：Markdown 不包含书签。');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '导出失败，请重试');
     } finally { setBusy(false); }
   }
-  const save = (doc: NotesExport) => { saveText(doc); return `已导出 ${doc.count} 条到 ${doc.filename}`; };
+  const save = (doc: NotesExport) => { saveText(doc); return `已导出${amount(doc)}到 ${doc.filename}`; };
   const copy = async (doc: NotesExport) => {
     if (!navigator.clipboard) throw new Error('当前环境不支持剪贴板');
     await navigator.clipboard.writeText(doc.content);
-    return `已复制 ${doc.count} 条`;
+    return `已复制${amount(doc).trimEnd()}`;
   };
   return <Sheet title="导出笔记" size="compact" busy={busy} onClose={onClose}>
-    <p className="notes-export-hint">{filtered ? `导出当前筛选出的 ${total} 条。` : `导出全部 ${total} 条。`}Markdown 按书分组，不含书签，适合放进笔记软件；JSON 包含书签与位置，适合备份。</p>
+    <p className="notes-export-hint">{filtered ? `导出当前筛选出的 ${total} 条。` : `导出全部 ${total} 条。`}书评随所在的书一起导出。Markdown 按书分组，不含书签，适合放进笔记软件；JSON 包含书签与位置，适合备份。</p>
     <div className="notes-export-actions">
       {canSave && <Button disabled={busy} onClick={() => void run('markdown', save)}>下载 Markdown</Button>}
       <Button disabled={busy} onClick={() => void run('markdown', copy)}>复制 Markdown</Button>
@@ -200,6 +220,45 @@ function ExportSheet({ filter, filtered, total, onClose }: { filter: NotesFilter
         : <Button disabled={busy} onClick={() => void run('json', copy)}>复制 JSON</Button>}
     </div>
     <p className="notes-export-status" role="status">{busy ? '正在导出…' : message}</p>
+  </Sheet>;
+}
+
+function amount(doc: NotesExport): string {
+  return ` ${[doc.count ? `${doc.count} 条笔记` : '', doc.reviews ? `${doc.reviews} 篇书评` : ''].filter(Boolean).join('、')} `;
+}
+
+const REVIEW_MAX_LENGTH = 20000;
+
+/** The picked book's 书评: what the reader wrote about the whole book, above its notes. */
+function ReviewCard({ review, pending, failed, busy, onRetry, onEdit }: {
+  review: BookReview | null | undefined; pending: boolean; failed: boolean; busy: boolean; onRetry(): void; onEdit(): void;
+}) {
+  return <section className="notes-review" aria-label="书评">
+    <header>
+      <h2>书评</h2>
+      {!pending && !failed && <Button disabled={busy} onClick={onEdit}><Icon name="edit" size={16} />{review ? '编辑' : '写书评'}</Button>}
+    </header>
+    {failed ? <p className="notes-review-empty" role="alert">书评读取失败。<button type="button" className="button" onClick={onRetry}>重试</button></p>
+      : pending ? <p className="notes-review-empty" role="status">正在读取…</p>
+        : review ? <><p className="notes-review-body">{review.body}</p><small className="notes-meta">{new Date(review.updatedAt).toLocaleDateString('zh-CN')}</small></>
+          : <p className="notes-review-empty">读完这本书，写下整体的感想。书评随笔记一起导出。</p>}
+  </section>;
+}
+
+function ReviewSheet({ initial, busy, onClose, onSave }: { initial: string; busy: boolean; onClose(): void; onSave(body: string): void }) {
+  const [body, setBody] = useState(initial);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const empty = !body.trim();
+  return <Sheet title="书评" busy={busy} onClose={onClose}
+    footer={<>
+      {initial && <Button className="danger" disabled={busy} onClick={() => setConfirmDelete(true)}>删除</Button>}
+      <Button className="primary" disabled={busy || (empty && !initial)} onClick={() => empty ? setConfirmDelete(true) : onSave(body)}>保存</Button>
+    </>}>
+    <textarea className="notes-review-input" aria-label="书评" maxLength={REVIEW_MAX_LENGTH} value={body} disabled={busy}
+      placeholder="这本书讲了什么，哪里打动了你，它让你想到了什么" onInput={event => setBody(event.currentTarget.value)} />
+    <p className="notes-export-status">书评保存在服务器上，需要联网；{body.length}/{REVIEW_MAX_LENGTH}</p>
+    {confirmDelete && <ConfirmSheet danger busy={busy} title="删除书评" text="确定删除这篇书评？删除后所有设备上都不再显示。" confirmText="确认删除"
+      onCancel={() => setConfirmDelete(false)} onConfirm={() => { setConfirmDelete(false); onSave(''); }} />}
   </Sheet>;
 }
 

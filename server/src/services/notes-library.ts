@@ -7,7 +7,8 @@ import { decodeTags } from './sync.ts';
  * 读书笔记, read across books (docs/notes-library.zh-CN.md).
  *
  * This service only reads. Notes are written through sync (`SyncService`), which is
- * what keeps the offline queue, the tombstones and last-writer-wins in one place.
+ * what keeps the offline queue, the tombstones and last-writer-wins in one place;
+ * reviews are written by `BookReviewService`.
  */
 
 export type NoteType = 'note' | 'highlight' | 'bookmark';
@@ -25,8 +26,10 @@ export interface LibraryNote {
   chapterTitle: string; tags: string[]; bookTitle: string; bookAuthor: string;
 }
 export interface NotesTag { tag: string; count: number }
-export interface NotesBook { bookId: string; title: string; author: string; count: number; lastAt: number }
-export interface NotesExport { filename: string; mime: string; content: string; count: number }
+export interface NotesBook { bookId: string; title: string; author: string; count: number; lastAt: number; reviewed: boolean }
+/** `count` is notes, `reviews` is 书评: a book may be exported for its review alone. */
+export interface NotesExport { filename: string; mime: string; content: string; count: number; reviews: number }
+interface ReviewRow { book_id: string; body: string; updated_at: number; title: string | null; author: string | null }
 
 interface NoteRow {
   id: string; book_id: string; type: NoteType; locator: string; text: string; comment: string; color: string; updated_at: number;
@@ -49,7 +52,11 @@ export class NotesLibraryService {
     return { items: this.withBooks(userId, rows), total, page, pageSize };
   }
 
-  /** The books that have notes, most recently annotated first. Ignores `bookId`: it is what that filter picks from. */
+  /**
+   * The books that have notes, most recently annotated first. Ignores `bookId`: it is
+   * what that filter picks from. With no other filter, a book that has only a review
+   * is listed too (with no notes): it is still a book the reader wrote about.
+   */
   books(userId: string, filter: NotesFilter): NotesBook[] {
     const { where, args } = condition(userId, { ...filter, bookId: '' });
     const rows = this.db.all<{ book_id: string; count: number; last_at: number; title: string | null; author: string | null }>(
@@ -57,11 +64,27 @@ export class NotesLibraryService {
        FROM notes n LEFT JOIN books b ON b.id = n.book_id WHERE ${where}
        GROUP BY n.book_id ORDER BY last_at DESC, n.book_id`, ...args,
     );
-    const shelf = this.shelf.getMany(userId, rows.map(row => row.book_id));
-    return rows.map(row => ({
-      bookId: row.book_id, count: row.count, lastAt: row.last_at,
+    // Unnarrowed, writing a review counts as writing about the book: it moves the book up.
+    const reviews = this.reviews(userId, ''), counted = narrowed(filter) ? [] : reviews;
+    const reviewedAt = new Map(counted.map(row => [row.book_id, row.updated_at]));
+    const seen = new Set(rows.map(row => row.book_id));
+    const all = [
+      ...rows.map(row => ({ ...row, last_at: Math.max(row.last_at, reviewedAt.get(row.book_id) ?? 0) })),
+      ...counted.filter(row => !seen.has(row.book_id)).map(row => ({ book_id: row.book_id, count: 0, last_at: row.updated_at, title: row.title, author: row.author })),
+    ].sort((a, b) => b.last_at - a.last_at || a.book_id.localeCompare(b.book_id));
+    const reviewed = new Set(reviews.map(row => row.book_id));
+    const shelf = this.shelf.getMany(userId, all.map(row => row.book_id));
+    return all.map(row => ({
+      bookId: row.book_id, count: row.count, lastAt: row.last_at, reviewed: reviewed.has(row.book_id),
       ...bookName(shelf.get(row.book_id), row),
     }));
+  }
+
+  private reviews(userId: string, bookId: string): ReviewRow[] {
+    return this.db.all<ReviewRow>(
+      `SELECT r.book_id, r.body, r.updated_at, b.title, b.author FROM book_reviews r LEFT JOIN books b ON b.id = r.book_id
+       WHERE r.user_id = ? ${bookId ? 'AND r.book_id = ?' : ''}`, ...(bookId ? [userId, bookId] : [userId]),
+    );
   }
 
   /** Every tag this account uses, most used first. Not narrowed by the filter: it is the vocabulary. */
@@ -87,25 +110,35 @@ export class NotesLibraryService {
     // Books by their latest note, newest first; notes inside a book oldest first.
     const groups = new Map<string, LibraryNote[]>();
     for (const note of notes) groups.set(note.bookId, [...(groups.get(note.bookId) ?? []), note]);
-    const books = [...groups.values()].sort((a, b) => b.at(-1)!.updatedAt - a.at(-1)!.updatedAt);
+    // A review goes with its book's notes. A book with a review and no matching notes is
+    // exported for the review alone, unless the reader narrowed the notes by words, type or tag.
+    const reviewRows = this.reviews(userId, query.bookId ?? '').filter(row => groups.has(row.book_id) || !narrowed(query));
+    const reviewNames = this.shelf.getMany(userId, reviewRows.map(row => row.book_id));
+    const reviews = new Map(reviewRows.map(row => [row.book_id, { body: row.body, updatedAt: row.updated_at, ...bookName(reviewNames.get(row.book_id), row) }]));
+    const lastAt = (bookId: string) => Math.max(groups.get(bookId)?.at(-1)?.updatedAt ?? 0, reviews.get(bookId)?.updatedAt ?? 0);
+    const books = [...new Set([...groups.keys(), ...reviews.keys()])].sort((a, b) => lastAt(b) - lastAt(a) || a.localeCompare(b)).map((bookId) => {
+      const group = groups.get(bookId) ?? [], review = reviews.get(bookId);
+      return { bookId, group, review, title: group[0]?.bookTitle ?? review!.title, author: group[0]?.bookAuthor ?? review!.author };
+    });
     const stamp = day(now, tz);
     if (format === 'json') {
       return {
-        filename: `reader-notes-${stamp}.json`, mime: 'application/json', count: notes.length,
+        filename: `reader-notes-${stamp}.json`, mime: 'application/json', count: notes.length, reviews: reviews.size,
         content: JSON.stringify({
           version: 1, exportedAt: now,
-          books: books.map(group => ({
-            id: group[0]!.bookId, title: group[0]!.bookTitle, author: group[0]!.bookAuthor,
+          books: books.map(({ bookId, group, review, title, author }) => ({
+            id: bookId, title, author,
+            ...(review ? { review: { body: review.body, updatedAt: review.updatedAt } } : {}),
             notes: group.map(({ id, type, locator, text, comment, color, chapterTitle, tags, updatedAt }) => ({ id, type, locator, chapterTitle, text, comment, color, tags, updatedAt })),
           })),
         }, null, 2),
       };
     }
-    const lines = ['# 读书笔记', '', `> 导出于 ${stamp} · ${books.length} 本书 · ${notes.length} 条`, ''];
-    for (const group of books) {
-      const first = group[0]!;
-      lines.push(`## ${inline(first.bookTitle)}`, '');
-      if (first.bookAuthor) lines.push(`作者：${inline(first.bookAuthor)}`, '');
+    const lines = ['# 读书笔记', '', `> 导出于 ${stamp} · ${books.length} 本书 · ${notes.length} 条${reviews.size ? ` · ${reviews.size} 篇书评` : ''}`, ''];
+    for (const { group, review, title, author } of books) {
+      lines.push(`## ${inline(title)}`, '');
+      if (author) lines.push(`作者：${inline(author)}`, '');
+      if (review) lines.push(`**书评**（${day(review.updatedAt, tz)}）`, '', review.body, '');
       // Chapters in the order the reader first annotated them: the server does not know
       // the book's own order. Notes from before chapters were recorded come first, unheaded.
       const chapters = new Map<string, LibraryNote[]>([['', []]]);
@@ -119,7 +152,7 @@ export class NotesLibraryService {
         }
       }
     }
-    return { filename: `reader-notes-${stamp}.md`, mime: 'text/markdown', count: notes.length, content: lines.join('\n') };
+    return { filename: `reader-notes-${stamp}.md`, mime: 'text/markdown', count: notes.length, reviews: reviews.size, content: lines.join('\n') };
   }
 
   private withBooks(userId: string, rows: NoteRow[]): LibraryNote[] {
@@ -156,6 +189,11 @@ function condition(userId: string, filter: NotesFilter): { where: string; args: 
     parts.push("(n.text LIKE ? ESCAPE '\\' OR n.comment LIKE ? ESCAPE '\\')"); args.push(like, like);
   }
   return { where: parts.join(' AND '), args };
+}
+
+/** Whether the reader narrowed the notes themselves (not merely picked a book). */
+function narrowed(filter: NotesFilter): boolean {
+  return !!((filter.q ?? '').trim() || filter.type || (filter.tag ?? '').trim());
 }
 
 function bookName(book: { title: string; author: string } | undefined, row: { title: string | null; author: string | null }): { title: string; author: string } {

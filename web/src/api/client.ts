@@ -761,6 +761,16 @@ export class ReaderApi {
     return (await this.get<{ books: NotesBook[] }>(`/api/v1/notes/library/books?${notesParams(query)}`, options)).books;
   }
 
+  /** This account's 书评 of a book, or null. */
+  async bookReview(bookId: string, options: RequestOptions = {}): Promise<BookReview | null> {
+    return (await this.get<{ review: BookReview | null }>(`/api/v1/notes/reviews/${encodeURIComponent(bookId)}`, options)).review;
+  }
+
+  /** Saves the 书评; an empty body removes it. Online only: reviews are not part of sync. */
+  async saveBookReview(bookId: string, body: string, options: RequestOptions = {}): Promise<BookReview | null> {
+    return (await this.call<{ review: BookReview | null }>(`/api/v1/notes/reviews/${encodeURIComponent(bookId)}`, 'PUT', { body }, options)).review;
+  }
+
   /** Every tag the account uses, most used first. */
   async notesLibraryTags(options: RequestOptions = {}): Promise<NotesTag[]> {
     return (await this.get<{ tags: NotesTag[] }>('/api/v1/notes/library/tags', options)).tags;
@@ -1038,8 +1048,9 @@ export interface NotesTag { tag: string; count: number }
 export interface NotesLibraryQuery extends NotesFilter { page?: number; pageSize?: number }
 export interface LibraryNote extends Note { chapterTitle: string; tags: string[]; bookTitle: string; bookAuthor: string }
 export interface NotesLibraryPage { items: LibraryNote[]; total: number; page: number; pageSize: number }
-export interface NotesBook { bookId: string; title: string; author: string; count: number; lastAt: number }
-export interface NotesExport { filename: string; mime: string; content: string; count: number }
+export interface NotesBook { bookId: string; title: string; author: string; count: number; lastAt: number; reviewed: boolean }
+export interface BookReview { bookId: string; body: string; updatedAt: number }
+export interface NotesExport { filename: string; mime: string; content: string; count: number; reviews: number }
 
 /** Only what is set goes on the wire, so one view has one address (and one cache key). */
 export function notesParams(query: NotesLibraryQuery): string {
