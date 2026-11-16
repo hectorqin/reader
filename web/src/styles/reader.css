@@ -4536,7 +4536,7 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   width: 8rem;
   height: 2.5rem;
   opacity: 0;
-  transition: opacity .15s ease;
+  transition: opacity var(--motion-duration) var(--motion-ease);
 }
 
 @media (hover: hover) and (pointer: fine) {
