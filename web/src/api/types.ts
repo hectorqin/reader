@@ -211,6 +211,10 @@ export interface Note {
   text: string;
   comment: string;
   color: string;
+  /** The chapter the note was made in. Absent on notes from before it was recorded. */
+  chapterTitle?: string;
+  /** The reader's own labels, edited in 读书笔记. */
+  tags?: string[];
   updatedAt: number;
   deleted?: boolean;
 }

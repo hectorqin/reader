@@ -1,6 +1,7 @@
 import type { Db } from '../db/index.ts';
 import type { ShelfService } from './shelf.ts';
 import { badRequest } from '../lib/errors.ts';
+import { decodeTags } from './sync.ts';
 
 /**
  * 读书笔记, read across books (docs/notes-library.zh-CN.md).
@@ -15,20 +16,21 @@ export const NOTES_PAGE_SIZE = 50;
 export const NOTES_PAGE_SIZE_MAX = 200;
 
 /** The filter the list, the book facet and the export all take. */
-export interface NotesFilter { q?: string; type?: string; bookId?: string }
+export interface NotesFilter { q?: string; type?: string; bookId?: string; tag?: string }
 export interface NotesListQuery extends NotesFilter { page?: string | number; pageSize?: string | number }
 export interface NotesExportQuery extends NotesFilter { format?: string; tz?: string | number }
 
 export interface LibraryNote {
   id: string; bookId: string; type: NoteType; locator: string; text: string; comment: string; color: string; updatedAt: number;
-  bookTitle: string; bookAuthor: string;
+  chapterTitle: string; tags: string[]; bookTitle: string; bookAuthor: string;
 }
+export interface NotesTag { tag: string; count: number }
 export interface NotesBook { bookId: string; title: string; author: string; count: number; lastAt: number }
 export interface NotesExport { filename: string; mime: string; content: string; count: number }
 
 interface NoteRow {
   id: string; book_id: string; type: NoteType; locator: string; text: string; comment: string; color: string; updated_at: number;
-  title: string | null; author: string | null;
+  chapter_title: string; tags: string; title: string | null; author: string | null;
 }
 
 export class NotesLibraryService {
@@ -62,6 +64,16 @@ export class NotesLibraryService {
     }));
   }
 
+  /** Every tag this account uses, most used first. Not narrowed by the filter: it is the vocabulary. */
+  tags(userId: string): NotesTag[] {
+    const counts = new Map<string, number>();
+    // Tags live one-per-line in a column (see encodeTags); an account's notes are few enough to count here.
+    for (const row of this.db.all<{ tags: string }>("SELECT tags FROM notes WHERE user_id = ? AND deleted = 0 AND tags <> ''", userId)) {
+      for (const tag of decodeTags(row.tags)) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+    return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'zh-CN'));
+  }
+
   /** Everything the filter matches, as one document. */
   export(userId: string, query: NotesExportQuery, now = Date.now()): NotesExport {
     const format = query.format ?? 'markdown';
@@ -84,7 +96,7 @@ export class NotesLibraryService {
           version: 1, exportedAt: now,
           books: books.map(group => ({
             id: group[0]!.bookId, title: group[0]!.bookTitle, author: group[0]!.bookAuthor,
-            notes: group.map(({ id, type, locator, text, comment, color, updatedAt }) => ({ id, type, locator, text, comment, color, updatedAt })),
+            notes: group.map(({ id, type, locator, text, comment, color, chapterTitle, tags, updatedAt }) => ({ id, type, locator, chapterTitle, text, comment, color, tags, updatedAt })),
           })),
         }, null, 2),
       };
@@ -94,10 +106,17 @@ export class NotesLibraryService {
       const first = group[0]!;
       lines.push(`## ${inline(first.bookTitle)}`, '');
       if (first.bookAuthor) lines.push(`作者：${inline(first.bookAuthor)}`, '');
-      for (const note of group) {
-        lines.push(`### ${day(note.updatedAt, tz)} · ${note.type === 'note' ? '批注' : '高亮'}`, '');
-        if (note.text.trim()) lines.push(...note.text.trim().split(/\r?\n/).map(line => `> ${line}`.trimEnd()), '');
-        if (note.comment.trim()) lines.push(note.comment.trim(), '');
+      // Chapters in the order the reader first annotated them: the server does not know
+      // the book's own order. Notes from before chapters were recorded come first, unheaded.
+      const chapters = new Map<string, LibraryNote[]>([['', []]]);
+      for (const note of group) chapters.set(note.chapterTitle.trim(), [...(chapters.get(note.chapterTitle.trim()) ?? []), note]);
+      for (const [chapter, chapterNotes] of chapters) {
+        if (chapter) lines.push(`### ${inline(chapter)}`, '');
+        for (const note of chapterNotes) {
+          if (note.text.trim()) lines.push(...note.text.trim().split(/\r?\n/).map(line => `> ${line}`.trimEnd()), '');
+          if (note.comment.trim()) lines.push(note.comment.trim(), '');
+          lines.push(['—', day(note.updatedAt, tz), note.type === 'note' ? '批注' : '高亮', ...note.tags.map(tag => `#${tag.replace(/\s+/g, '_')}`)].join(' '), '');
+        }
       }
     }
     return { filename: `reader-notes-${stamp}.md`, mime: 'text/markdown', count: notes.length, content: lines.join('\n') };
@@ -110,13 +129,14 @@ export class NotesLibraryService {
       const name = bookName(shelf.get(row.book_id), row);
       return {
         id: row.id, bookId: row.book_id, type: row.type, locator: row.locator, text: row.text, comment: row.comment,
-        color: row.color, updatedAt: row.updated_at, bookTitle: name.title, bookAuthor: name.author,
+        color: row.color, updatedAt: row.updated_at, chapterTitle: row.chapter_title, tags: decodeTags(row.tags),
+        bookTitle: name.title, bookAuthor: name.author,
       };
     });
   }
 }
 
-const SELECT = `SELECT n.id, n.book_id, n.type, n.locator, n.text, n.comment, n.color, n.updated_at, b.title, b.author
+const SELECT = `SELECT n.id, n.book_id, n.type, n.locator, n.text, n.comment, n.color, n.updated_at, n.chapter_title, n.tags, b.title, b.author
   FROM notes n LEFT JOIN books b ON b.id = n.book_id`;
 
 function condition(userId: string, filter: NotesFilter): { where: string; args: Array<string | number> } {
@@ -127,6 +147,8 @@ function condition(userId: string, filter: NotesFilter): { where: string; args: 
     parts.push('n.type = ?'); args.push(type);
   }
   if (filter.bookId) { parts.push('n.book_id = ?'); args.push(filter.bookId); }
+  const tag = (filter.tag ?? '').trim();
+  if (tag) { parts.push("instr(n.tags, char(10) || ? || char(10)) > 0"); args.push(tag); }
   const q = (filter.q ?? '').trim();
   if (q) {
     // A reader's words, not a pattern: % and _ in the query match themselves.

@@ -9,7 +9,7 @@ import { NotesPage } from '../src/features/notes/pages/NotesPage.tsx';
 
 const note = (id: string, patch: Record<string, unknown> = {}) => ({
   id, bookId: 'b 1', type: 'highlight', locator: `r1:0.5:${id}`, text: `原文 ${id}`, comment: '', color: '#ffd54f',
-  updatedAt: Date.UTC(2026, 10, 2), bookTitle: '围城', bookAuthor: '钱锺书', ...patch,
+  updatedAt: Date.UTC(2026, 10, 2), chapterTitle: '第三章', tags: [] as string[], bookTitle: '围城', bookAuthor: '钱锺书', ...patch,
 });
 let items = [note('n1'), note('n2', { type: 'note', comment: '我的批注' }), note('n3', { type: 'bookmark', text: '' })];
 let total = 3;
@@ -17,9 +17,13 @@ const runtime = {
   api: {
     notesLibrary: vi.fn(async (query: { page?: number }) => ({ items: (query.page ?? 1) > Math.ceil(total / 50) && total > 0 ? [] : items, total, page: query.page ?? 1, pageSize: 50 })),
     notesLibraryBooks: vi.fn(async () => [{ bookId: 'b 1', title: '围城', author: '钱锺书', count: 3, lastAt: 0 }]),
+    notesLibraryTags: vi.fn(async () => [{ tag: '婚姻', count: 2 }, { tag: '金句', count: 1 }]),
     notesExport: vi.fn(async (_filter: unknown, format: string) => ({ filename: 'reader-notes.md', mime: 'text/markdown', content: `# ${format}`, count: 2 })),
   },
-  offline: { deleteNote: vi.fn(async (id: string) => { items = items.filter(item => item.id !== id); total = items.length; }) },
+  offline: {
+    deleteNote: vi.fn(async (id: string) => { items = items.filter(item => item.id !== id); total = items.length; }),
+    upsertNotes: vi.fn(async (notes: Array<{ id: string; tags: string[] }>) => { items = items.map(item => item.id === notes[0]!.id ? { ...item, tags: notes[0]!.tags } : item); }),
+  },
   sync: { flush: vi.fn(async () => undefined) },
 } as any;
 
@@ -55,9 +59,9 @@ afterEach(async () => { await act(async () => render(null, root)); });
 it('asks the server for the view in the address and lists what comes back', async () => {
   await paint('/me/notes?q=%E5%9B%B4%E5%9F%8E&type=note&book=b%201&page=1');
   await settle();
-  expect(runtime.api.notesLibrary).toHaveBeenCalledWith({ q: '围城', type: 'note', bookId: 'b 1', page: 1 }, expect.anything());
+  expect(runtime.api.notesLibrary).toHaveBeenCalledWith({ q: '围城', type: 'note', bookId: 'b 1', tag: '', page: 1 }, expect.anything());
   // The book picker counts under the words and the type, not under its own choice.
-  expect(runtime.api.notesLibraryBooks).toHaveBeenCalledWith({ q: '围城', type: 'note' }, expect.anything());
+  expect(runtime.api.notesLibraryBooks).toHaveBeenCalledWith({ q: '围城', type: 'note', tag: '' }, expect.anything());
   expect([...root.querySelectorAll('.notes-item')].map(item => item.getAttribute('data-type'))).toEqual(['highlight', 'note', 'bookmark']);
   expect(root.querySelector('.notes-list')?.textContent).toContain('我的批注');
   expect(root.querySelector('.notes-count')?.textContent).toBe('共 3 条');
@@ -107,6 +111,44 @@ it('deleting goes through the offline queue and sync, then re-reads the list', a
   expect([...root.querySelectorAll('.notes-quote')].map(item => item.textContent)).toEqual(['原文 n2']);
 });
 
+it('tags a note through the offline queue and sync, and a tag on a note filters by it', async () => {
+  items = [note('n1', { tags: ['婚姻'] }), note('n2')];
+  total = 2;
+  await paint('/me/notes');
+  await settle();
+  // The line under a note says where it is from.
+  expect(root.querySelector('.notes-meta')?.textContent).toContain('围城 · 第三章 · 钱锺书');
+  await act(async () => button('编辑这条高亮的标签').click());
+  // Already on the note; the rest of the vocabulary is offered.
+  expect(button('移除标签 婚姻')).toBeTruthy();
+  expect(button('添加标签 婚姻')).toBeUndefined();
+  await act(async () => button('添加标签 金句').click());
+  const field = document.querySelector<HTMLInputElement>('input[aria-label="新标签"]')!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(field, '#待重读，婚姻'); field.dispatchEvent(new Event('input', { bubbles: true })); });
+  await act(async () => button('保存').click());
+  await settle();
+  const sent = runtime.offline.upsertNotes.mock.calls[0]![0][0];
+  expect(sent).toMatchObject({ id: 'n1', bookId: 'b 1', tags: ['婚姻', '金句', '待重读'], locator: 'r1:0.5:n1' });
+  // The record that goes to sync is a note, not the list row.
+  expect(sent).not.toHaveProperty('bookTitle');
+  expect(sent.updatedAt).toBeGreaterThan(Date.UTC(2026, 10, 2));
+  expect(runtime.sync.flush).toHaveBeenCalledOnce();
+  expect([...root.querySelectorAll('.notes-list .notes-tag')].map(item => item.textContent)).toEqual(['#婚姻', '#金句', '#待重读']);
+  await act(async () => button('只看标签 金句').click());
+  expect(where).toBe('/me/notes?tag=%E9%87%91%E5%8F%A5');
+});
+
+it('refuses a tag that is too long instead of sending it', async () => {
+  await paint('/me/notes');
+  await settle();
+  await act(async () => button('编辑这条高亮的标签').click());
+  const field = document.querySelector<HTMLInputElement>('input[aria-label="新标签"]')!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(field, '长'.repeat(33)); field.dispatchEvent(new Event('input', { bubbles: true })); });
+  await act(async () => button('保存').click());
+  expect(runtime.offline.upsertNotes).not.toHaveBeenCalled();
+  expect(document.body.textContent).toContain('标签最长 32 个字');
+});
+
 it('exports what the filter shows, copied as Markdown', async () => {
   const writeText = vi.fn(async () => undefined);
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
@@ -115,7 +157,7 @@ it('exports what the filter shows, copied as Markdown', async () => {
   await act(async () => button('导出').click());
   await act(async () => button('复制 Markdown').click());
   await settle();
-  expect(runtime.api.notesExport).toHaveBeenCalledWith({ q: '', type: 'highlight', bookId: '' }, 'markdown', expect.any(Number));
+  expect(runtime.api.notesExport).toHaveBeenCalledWith({ q: '', type: 'highlight', bookId: '', tag: '' }, 'markdown', expect.any(Number));
   expect(writeText).toHaveBeenCalledWith('# markdown');
   expect(document.querySelector('.notes-export-status')?.textContent).toBe('已复制 2 条');
 });

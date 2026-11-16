@@ -547,6 +547,8 @@ it('bookmarks the page on screen from the top bar, and the same button removes i
   await act(async () => { button().click(); });
   await vi.waitFor(() => expect(button().getAttribute('aria-pressed')).toBe('true'));
   expect(env.offline.notesFor(book.id).filter((note) => note.type === 'bookmark')).toHaveLength(1);
+  // 读书笔记 says which chapter a note is from.
+  expect(env.offline.notesFor(book.id)[0]?.chapterTitle).toBe('章节 a');
   await act(async () => { button().click(); });
   await vi.waitFor(() => expect(button().getAttribute('aria-pressed')).toBe('false'));
   expect(env.offline.notesFor(book.id).filter((note) => note.type === 'bookmark')).toHaveLength(0);

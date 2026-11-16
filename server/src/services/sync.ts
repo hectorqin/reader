@@ -41,8 +41,31 @@ export interface NoteRecord {
   /** Reader's own comment; left empty for highlights without a note. */
   comment: string;
   color: string;
+  /**
+   * The chapter the note was made in, as the reader saw it named. Optional on the way
+   * in: a client that predates it sends none, and the stored value is then kept.
+   */
+  chapterTitle?: string;
+  /** The reader's own labels. Optional on the way in, like `chapterTitle`. */
+  tags?: string[];
   updatedAt: number;
   deleted: boolean;
+}
+
+export const NOTE_TAG_MAX_LENGTH = 32;
+export const NOTE_TAGS_MAX = 10;
+
+/**
+ * Tags as one column: each tag on its own line, with a newline before the first and
+ * after the last, so "has this tag" is `instr(tags, '\n' || ? || '\n')` and never
+ * matches a tag that merely contains another. No tags is the empty string.
+ */
+export function encodeTags(tags: readonly string[]): string {
+  const clean = [...new Set(tags.map(tag => tag.replace(/\s+/g, ' ').trim()).filter(Boolean))];
+  return clean.length ? `\n${clean.join('\n')}\n` : '';
+}
+export function decodeTags(stored: string): string[] {
+  return stored.split('\n').filter(Boolean);
 }
 
 export interface SyncPushRequest {
@@ -67,6 +90,12 @@ export function validateSyncRecord(value: unknown): void {
   if (record.updatedAt !== undefined && (typeof record.updatedAt !== 'number' || !Number.isSafeInteger(record.updatedAt) || record.updatedAt < 0)) throw badRequest('invalid updatedAt', 'BAD_PAYLOAD');
   if (record.percentage !== undefined && (typeof record.percentage !== 'number' || !Number.isFinite(record.percentage))) throw badRequest('invalid percentage', 'BAD_PAYLOAD');
   if (record.deleted !== undefined && typeof record.deleted !== 'boolean') throw badRequest('invalid deleted', 'BAD_PAYLOAD');
+  if (record.tags !== undefined) {
+    const tags = record.tags;
+    if (!Array.isArray(tags) || tags.length > NOTE_TAGS_MAX || tags.some(tag => typeof tag !== 'string' || !tag.trim() || tag.trim().length > NOTE_TAG_MAX_LENGTH)) {
+      throw badRequest(`tags must be at most ${NOTE_TAGS_MAX} non-empty strings of at most ${NOTE_TAG_MAX_LENGTH} characters`, 'BAD_PAYLOAD');
+    }
+  }
 }
 
 /**
@@ -214,10 +243,20 @@ export class SyncService {
     if (record.type && !['note', 'highlight', 'bookmark'].includes(record.type)) {
       throw badRequest(`unsupported note type: ${record.type}`, 'BAD_NOTE_TYPE');
     }
+    // A client that predates chapter titles and tags sends neither. Its edit of the
+    // comment must not wipe what a newer client stored, so a missing field means
+    // "as it was", not "empty".
+    const stored = record.chapterTitle === undefined || record.tags === undefined
+      ? this.db.get<{ chapter_title: string; tags: string }>('SELECT chapter_title, tags FROM notes WHERE id = ?', record.id)
+      : undefined;
+    const chapterTitle = record.chapterTitle ?? stored?.chapter_title ?? '';
+    const tags = record.tags ? encodeTags(record.tags) : stored?.tags ?? '';
     this.db.run(
-      `INSERT INTO notes (id, user_id, book_id, type, locator, text, comment, color, updated_at, deleted)
-       VALUES (?,?,?,?,?,?,?,?,?,?)
+      `INSERT INTO notes (id, user_id, book_id, type, locator, text, comment, color, updated_at, deleted, chapter_title, tags)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
        ON CONFLICT(id) DO UPDATE SET
+         chapter_title = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.chapter_title ELSE notes.chapter_title END,
+         tags = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.tags ELSE notes.tags END,
          type = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.type ELSE notes.type END,
          locator = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.locator ELSE notes.locator END,
          text = CASE WHEN excluded.updated_at >= notes.updated_at THEN excluded.text ELSE notes.text END,
@@ -228,7 +267,7 @@ export class SyncService {
        WHERE notes.user_id = excluded.user_id AND notes.book_id = excluded.book_id`,
       record.id, userId, record.bookId, record.type ?? 'note', record.locator ?? '',
       record.text ?? '', record.comment ?? '', record.color ?? '',
-      record.updatedAt ?? Date.now(), record.deleted ? 1 : 0,
+      record.updatedAt ?? Date.now(), record.deleted ? 1 : 0, chapterTitle, tags,
     );
   }
 
@@ -253,8 +292,9 @@ export class SyncService {
     const noteRows = this.db.all<{
       id: string; book_id: string; type: string; locator: string; text: string;
       comment: string; color: string; updated_at: number; deleted: number; sync_revision: number;
+      chapter_title: string; tags: string;
     }>(
-      `SELECT id, book_id, type, locator, text, comment, color, updated_at, deleted, sync_revision
+      `SELECT id, book_id, type, locator, text, comment, color, updated_at, deleted, sync_revision, chapter_title, tags
        FROM notes WHERE user_id = ? AND sync_revision > ? ${bookId ? 'AND book_id = ?' : ''}
        ORDER BY sync_revision ASC LIMIT ${SYNC_PAGE_SIZE + 1}`,
       ...(bookId ? [userId, since, bookId] : [userId, since]),
@@ -282,6 +322,8 @@ export class SyncService {
         text: row.text,
         comment: row.comment,
         color: row.color,
+        chapterTitle: row.chapter_title,
+        tags: decodeTags(row.tags),
         updatedAt: row.updated_at,
         deleted: row.deleted === 1,
       })),

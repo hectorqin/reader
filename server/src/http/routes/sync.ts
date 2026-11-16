@@ -104,6 +104,8 @@ export function registerSyncRoutes(app: FastifyInstance, ctx: AppContext): void 
       text: body.text ?? '',
       comment: body.comment ?? '',
       color: body.color ?? '',
+      ...(body.chapterTitle !== undefined ? { chapterTitle: body.chapterTitle } : {}),
+      ...(body.tags !== undefined ? { tags: body.tags } : {}),
       updatedAt: body.updatedAt ?? Date.now(),
       deleted: false,
     };

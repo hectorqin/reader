@@ -316,7 +316,7 @@ export class ReaderScreen {
           </Sheet>}{this.toolsOpen && this.manifest ? <ReadingTools
             api={this.options.api} cache={this.publicationCache} offline={this.options.offline}
             sync={this.options.sync} manifest={this.manifest} selection={this.toolsSelection}
-            locator={this.view?.position()?.locator ?? ''} returnLocator={this.toolsReturn}
+            locator={this.view?.position()?.locator ?? ''} chapterTitle={this.view?.position()?.chapterTitle ?? ''} returnLocator={this.toolsReturn}
             sections={signal => this.searchSections(signal)} navigate={target => this.navigateTool(target)}
             overrides={this.overrides} saveOverrides={value => this.saveOverrides(value)} undoOverrides={() => this.undoOverrides()}
             previewHeadings={prefix => this.previewHeadings(prefix)}
@@ -793,8 +793,11 @@ export class ReaderScreen {
   private async saveAnnotation(type: 'highlight' | 'note' | 'bookmark', comment: string, color: string): Promise<void> {
     if (!this.book || !this.annotation) return;
     const { anchor, note } = this.annotation;
+    // A new note records the chapter on screen; an edited one keeps its chapter and its tags.
+    const chapterTitle = note ? note.chapterTitle : this.view?.position()?.chapterTitle;
     await this.options.offline.upsertNotes([{ id: note?.id ?? newId(), bookId: this.book.id,
-      type, locator: encodeAnchor(anchor), text: anchor.quote, comment, color, updatedAt: Date.now() }]);
+      type, locator: encodeAnchor(anchor), text: anchor.quote, comment, color,
+      ...(chapterTitle !== undefined ? { chapterTitle } : {}), ...(note?.tags ? { tags: note.tags } : {}), updatedAt: Date.now() }]);
     this.options.sync.schedule(); this.paintNotes();
   }
   private async removeAnnotation(): Promise<void> {
@@ -1624,7 +1627,7 @@ export class ReaderScreen {
       for (const note of here) await this.options.offline.deleteNote(note.id);
       this.flashStatus('已移除本页书签', 1800);
     } else {
-      await this.options.offline.upsertNotes([{ id: newId(), bookId: book.id, type: 'bookmark', locator, text: book.title, comment: '', color: '', updatedAt: Date.now() }]);
+      await this.options.offline.upsertNotes([{ id: newId(), bookId: book.id, type: 'bookmark', locator, text: book.title, comment: '', color: '', chapterTitle: this.view?.position()?.chapterTitle ?? '', updatedAt: Date.now() }]);
       this.flashStatus('已为本页加书签', 1800);
     }
     this.options.sync.schedule();

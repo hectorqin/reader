@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { Db } from '../src/db/index.ts';
 import { Scanner } from '../src/indexer/scanner.ts';
 import { NotesLibraryService } from '../src/services/notes-library.ts';
+import { SyncService, encodeTags } from '../src/services/sync.ts';
 import { ShelfService } from '../src/services/shelf.ts';
 import { UserService } from '../src/services/users.ts';
 import { buildApp } from '../src/http/app.ts';
@@ -32,6 +33,9 @@ function fixture() {
   addNote(db, 'n4', 'alice', 'b2', 'highlight', '今天，妈妈死了', '', T0 + 3 * DAY);
   addNote(db, 'n5', 'alice', 'b2', 'highlight', '已删除的一条', '', T0 + 4 * DAY, 1);
   addNote(db, 'n6', 'bob', 'b1', 'highlight', '别人的笔记', '', T0 + 5 * DAY);
+  db.run("UPDATE notes SET chapter_title = '第三章', tags = ? WHERE id = 'n1'", encodeTags(['婚姻']));
+  db.run("UPDATE notes SET chapter_title = '第三章', tags = ? WHERE id = 'n2'", encodeTags(['婚姻', '金句 摘抄']));
+  db.run("UPDATE notes SET tags = ? WHERE id = 'n6'", encodeTags(['别人的标签']));
   // b1 is on alice's shelf with a manual title; b2 is not on her shelf.
   const shelf = { getMany: (_user: string, ids: string[]) => new Map(ids.includes('b1') ? [['b1', { title: '围城（手动）', author: '钱锺书' }]] : []) } as unknown as ShelfService;
   return { db, notes: new NotesLibraryService(db, shelf) };
@@ -85,13 +89,44 @@ test('markdown export groups by book, quotes the text, leaves bookmarks out and 
   assert.equal(out.content, [
     '# 读书笔记', '', '> 导出于 2026-11-12 · 2 本书 · 3 条', '',
     '## 局外人', '', '作者：加缪', '',
-    '### 2026-11-05 · 高亮', '', '> 今天，妈妈死了', '',
+    '> 今天，妈妈死了', '', '— 2026-11-05 高亮', '',
     '## 围城（手动）', '', '作者：钱锺书', '',
-    '### 2026-11-02 · 高亮', '', '> 城外的人想冲进去', '',
-    '### 2026-11-03 · 批注', '', '> 婚姻是一座围城', '> 第二行', '', '100% 同意', '',
+    '### 第三章', '',
+    '> 城外的人想冲进去', '', '— 2026-11-02 高亮 #婚姻', '',
+    '> 婚姻是一座围城', '> 第二行', '', '100% 同意', '', '— 2026-11-03 批注 #婚姻 #金句_摘抄', '',
   ].join('\n'));
   assert.equal(notes.export('alice', { bookId: 'b2' }).count, 1);
   assert.throws(() => notes.export('alice', { format: 'pdf' }), /format/);
+  db.close();
+});
+
+test('tags filter exactly, and the vocabulary is the account\'s own, most used first', () => {
+  const { db, notes } = fixture();
+  assert.deepEqual(notes.list('alice', { tag: '婚姻' }).items.map(item => item.id), ['n2', 'n1']);
+  assert.deepEqual(notes.list('alice', { tag: '金句 摘抄' }).items.map(item => [item.id, item.chapterTitle, item.tags]), [['n2', '第三章', ['婚姻', '金句 摘抄']]]);
+  // Part of a tag is not the tag.
+  assert.deepEqual(notes.list('alice', { tag: '金句' }).items, []);
+  assert.deepEqual(notes.tags('alice'), [{ tag: '婚姻', count: 2 }, { tag: '金句 摘抄', count: 1 }]);
+  assert.deepEqual(notes.books('alice', { tag: '婚姻' }).map(book => [book.bookId, book.count]), [['b1', 2]]);
+  db.close();
+});
+
+test('sync carries chapter titles and tags, and a client that sends neither leaves them as they were', () => {
+  const db = new Db(':memory:');
+  db.run("INSERT INTO users(id,username,password_hash,role,created_at,updated_at) VALUES('alice','alice','x','member',0,0)");
+  db.run("INSERT INTO books(id,content_hash,title,author,format,created_at,updated_at) VALUES('b1','h1','围城','钱锺书','epub',0,0)");
+  const sync = new SyncService(db, { getMany: () => new Map() } as unknown as ShelfService);
+  const base = { id: 'n1', bookId: 'b1', type: 'highlight' as const, locator: 'r1:0:c', text: '原文', comment: '', color: '', deleted: false };
+  sync.push('alice', { notes: [{ ...base, chapterTitle: '第一章', tags: [' 婚姻 ', '婚姻', '金句'], updatedAt: 10 }] });
+  const pulled = () => sync.pull('alice', 0).notes.map(note => [note.comment, note.chapterTitle, note.tags]);
+  assert.deepEqual(pulled(), [['', '第一章', ['婚姻', '金句']]]);
+  // An older client edits the comment and knows nothing of the new fields.
+  sync.push('alice', { notes: [{ ...base, comment: '旧客户端的批注', updatedAt: 20 }] });
+  assert.deepEqual(pulled(), [['旧客户端的批注', '第一章', ['婚姻', '金句']]]);
+  // An explicit empty list clears the tags; a stale write changes nothing.
+  sync.push('alice', { notes: [{ ...base, comment: '旧客户端的批注', chapterTitle: '第一章', tags: [], updatedAt: 30 }] });
+  sync.push('alice', { notes: [{ ...base, tags: ['过期'], updatedAt: 5 }] });
+  assert.deepEqual(pulled(), [['旧客户端的批注', '第一章', []]]);
   db.close();
 });
 

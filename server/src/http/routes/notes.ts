@@ -23,6 +23,10 @@ export function registerNotesRoutes(app: FastifyInstance, ctx: AppContext): void
     return { books: notes().books(currentUser(request).id, request.query as NotesFilter) };
   });
 
+  app.get('/api/v1/notes/library/tags', { preHandler: auth }, async (request) => {
+    return { tags: notes().tags(currentUser(request).id) };
+  });
+
   // The document comes back as JSON text, not a download: the Android shell's WebView
   // has no download handling, so the client decides between saving and copying.
   app.get('/api/v1/notes/export', { preHandler: auth }, async (request) => {

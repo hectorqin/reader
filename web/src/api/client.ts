@@ -761,6 +761,11 @@ export class ReaderApi {
     return (await this.get<{ books: NotesBook[] }>(`/api/v1/notes/library/books?${notesParams(query)}`, options)).books;
   }
 
+  /** Every tag the account uses, most used first. */
+  async notesLibraryTags(options: RequestOptions = {}): Promise<NotesTag[]> {
+    return (await this.get<{ tags: NotesTag[] }>('/api/v1/notes/library/tags', options)).tags;
+  }
+
   /** Everything the filter matches as one Markdown or JSON document. */
   async notesExport(query: NotesFilter, format: 'markdown' | 'json', tz: number, options: RequestOptions = {}): Promise<NotesExport> {
     const params = new URLSearchParams(notesParams(query));
@@ -1028,9 +1033,10 @@ export interface ReadingStats {
 }
 export interface UserReadingTotal { userId: string; username: string; displayName: string; seconds: number }
 
-export interface NotesFilter { q?: string; type?: NoteType | ''; bookId?: string }
+export interface NotesFilter { q?: string; type?: NoteType | ''; bookId?: string; tag?: string }
+export interface NotesTag { tag: string; count: number }
 export interface NotesLibraryQuery extends NotesFilter { page?: number; pageSize?: number }
-export interface LibraryNote extends Note { bookTitle: string; bookAuthor: string }
+export interface LibraryNote extends Note { chapterTitle: string; tags: string[]; bookTitle: string; bookAuthor: string }
 export interface NotesLibraryPage { items: LibraryNote[]; total: number; page: number; pageSize: number }
 export interface NotesBook { bookId: string; title: string; author: string; count: number; lastAt: number }
 export interface NotesExport { filename: string; mime: string; content: string; count: number }
@@ -1041,6 +1047,7 @@ export function notesParams(query: NotesLibraryQuery): string {
   if (query.q) params.set('q', query.q);
   if (query.type) params.set('type', query.type);
   if (query.bookId) params.set('bookId', query.bookId);
+  if (query.tag) params.set('tag', query.tag);
   if (query.page && query.page > 1) params.set('page', String(query.page));
   if (query.pageSize) params.set('pageSize', String(query.pageSize));
   return params.toString();

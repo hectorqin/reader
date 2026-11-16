@@ -341,6 +341,9 @@ export class SyncEngine {
         text: note.text,
         comment: note.comment,
         color: note.color,
+        // Sent only when known: the server keeps what it has for a field that is absent.
+        ...(note.chapterTitle !== undefined ? { chapterTitle: note.chapterTitle } : {}),
+        ...(note.tags !== undefined ? { tags: note.tags } : {}),
         updatedAt: note.updatedAt,
         deleted: false,
       })),

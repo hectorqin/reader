@@ -9,7 +9,7 @@ import { Select } from '../../../ui/select.tsx';
 import { Pager } from '../../../ui/pager.tsx';
 import { ConfirmSheet, Sheet } from '../../../ui/sheet.tsx';
 import { notify } from '../../../ui/notifications.ts';
-import type { LibraryNote, NotesExport, NotesFilter } from '../../../api/client.ts';
+import type { LibraryNote, NotesExport, NotesFilter, NotesTag } from '../../../api/client.ts';
 import type { NoteType } from '../../../api/types.ts';
 import '../styles/notes.css';
 
@@ -28,8 +28,9 @@ const KIND: Record<NoteType, string> = { highlight: '高亮', note: '批注', bo
  *
  * The words searched for, the type, the book and the page all live in the URL, so
  * coming back from a book returns to the same view. The server filters and pages;
- * this screen never holds more than the page it shows. Notes are not written here —
- * they come from the text, in the reader — except that one can be deleted.
+ * this screen never holds more than the page it shows. A note's words are not
+ * written here — they come from the text, in the reader. What this screen does is
+ * organise: tag a note, or delete it.
  */
 export function NotesPage() {
   const runtime = useRuntime();
@@ -37,6 +38,7 @@ export function NotesPage() {
   const q = params.get('q')?.trim() ?? '';
   const type = (TYPES.some(item => item.value === params.get('type')) ? params.get('type') : 'all') as TypeChoice;
   const book = params.get('book') ?? '';
+  const tag = params.get('tag') ?? '';
   const page = Math.max(1, Math.floor(Number(params.get('page'))) || 1);
   const set = (patch: Record<string, string>, replace = false) => {
     const next = new URLSearchParams(params);
@@ -47,9 +49,10 @@ export function NotesPage() {
   useEffect(() => setInput(q), [q]);
 
   const kind: NoteType | '' = type === 'all' ? '' : type;
-  const filter: NotesFilter = { q, type: kind, bookId: book };
+  const filter: NotesFilter = { q, type: kind, bookId: book, tag };
   const list = useQuery({ queryKey: ['notes', 'library', filter, page], queryFn: ({ signal }) => runtime.api.notesLibrary({ ...filter, page }, { signal }) });
-  const books = useQuery({ queryKey: ['notes', 'books', q, kind], queryFn: ({ signal }) => runtime.api.notesLibraryBooks({ q, type: kind }, { signal }) });
+  const books = useQuery({ queryKey: ['notes', 'books', q, kind, tag], queryFn: ({ signal }) => runtime.api.notesLibraryBooks({ q, type: kind, tag }, { signal }) });
+  const tags = useQuery({ queryKey: ['notes', 'tags'], queryFn: ({ signal }) => runtime.api.notesLibraryTags({ signal }) });
   const total = list.data?.total ?? 0;
   const pages = list.data ? Math.max(1, Math.ceil(total / list.data.pageSize)) : 1;
   // Only the response knows how many pages there are: a page past the end is clamped
@@ -57,9 +60,10 @@ export function NotesPage() {
   useEffect(() => { if (list.data && page > pages) set({ page: pages > 1 ? String(pages) : '' }, true); }, [list.data, page, pages]);
 
   const [removing, setRemoving] = useState<LibraryNote | null>(null);
+  const [tagging, setTagging] = useState<LibraryNote | null>(null);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const filtered = !!(q || kind || book);
+  const filtered = !!(q || kind || book || tag);
 
   async function remove(note: LibraryNote) {
     setBusy(true);
@@ -74,6 +78,23 @@ export function NotesPage() {
     } catch (error) {
       notify(error instanceof Error ? error.message : '删除失败，请重试', { kind: 'error' });
     } finally { setBusy(false); setRemoving(null); }
+  }
+
+  async function saveTags(note: LibraryNote, next: string[]) {
+    setBusy(true);
+    try {
+      // The same path as any note edit: the offline queue, then the server, then what the server says.
+      const { bookTitle: _title, bookAuthor: _author, ...record } = note;
+      await runtime.offline.upsertNotes([{ ...record, tags: next, updatedAt: Date.now() }]);
+      await runtime.sync.flush();
+      const [fresh] = await Promise.all([list.refetch(), tags.refetch(), books.refetch()]);
+      const saved = fresh.data?.items.find(item => item.id === note.id);
+      if (fresh.error || (saved && saved.tags.join('\n') !== next.join('\n'))) notify('标签已保存在本机，尚未同步到服务器，联网后会自动完成', { kind: 'error' });
+      else notify('标签已保存');
+      setTagging(null);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : '标签保存失败，请重试', { kind: 'error' });
+    } finally { setBusy(false); }
   }
 
   const submit = (event: FormEvent) => { event.preventDefault(); set({ q: input.trim(), page: '' }); };
@@ -94,6 +115,11 @@ export function NotesPage() {
           {book && books.data && !books.data.some(item => item.bookId === book) && <option value={book}>当前书籍（无匹配）</option>}
           {(books.data ?? []).map(item => <option key={item.bookId} value={item.bookId}>{item.title}（{item.count}）</option>)}
         </Select>
+        {(tag || !!tags.data?.length) && <Select aria-label="标签" value={tag} onChange={event => set({ tag: event.currentTarget.value, page: '' })}>
+          <option value="">全部标签</option>
+          {tag && tags.data && !tags.data.some(item => item.tag === tag) && <option value={tag}>{tag}</option>}
+          {(tags.data ?? []).map(item => <option key={item.tag} value={item.tag}>{item.tag}（{item.count}）</option>)}
+        </Select>}
       </div>
     </div>
 
@@ -110,16 +136,25 @@ export function NotesPage() {
           : <>
             <p className="notes-count" aria-live="polite">共 {total} 条</p>
             <ol className="notes-list">{list.data.items.map(note => <li key={note.id} className="notes-item" data-type={note.type} style={note.color ? { '--note-color': note.color } as CSSProperties : undefined}>
-              <Link className="notes-open" to={`/book/${encodeURIComponent(note.bookId)}`} state={{ openAt: note.locator, returnTo }}>
-                <span className="notes-kind">
-                  {note.type === 'bookmark' ? <Icon name="bookmark" size={14} /> : <i className="notes-swatch" aria-hidden="true" />}
-                  {KIND[note.type]}
-                </span>
-                {note.text && <span className="notes-quote">{note.text}</span>}
-                {note.comment && <span className="notes-comment">{note.comment}</span>}
-                <span className="notes-meta">{note.bookTitle}{note.bookAuthor ? ` · ${note.bookAuthor}` : ''} · {new Date(note.updatedAt).toLocaleDateString('zh-CN')}</span>
-              </Link>
-              <IconButton icon="trash" label={`删除这条${KIND[note.type]}`} disabled={busy} onClick={() => setRemoving(note)} />
+              <div className="notes-body">
+                <Link className="notes-open" to={`/book/${encodeURIComponent(note.bookId)}`} state={{ openAt: note.locator, returnTo }}>
+                  <span className="notes-kind">
+                    {note.type === 'bookmark' ? <Icon name="bookmark" size={14} /> : <i className="notes-swatch" aria-hidden="true" />}
+                    {KIND[note.type]}
+                  </span>
+                  {/* A bookmark's text is only its book's title, which the line below already says. */}
+                  {note.type !== 'bookmark' && note.text && <span className="notes-quote">{note.text}</span>}
+                  {note.comment && <span className="notes-comment">{note.comment}</span>}
+                  <span className="notes-meta">{[note.bookTitle, note.chapterTitle, note.bookAuthor, new Date(note.updatedAt).toLocaleDateString('zh-CN')].filter(Boolean).join(' · ')}</span>
+                </Link>
+                {note.tags.length > 0 && <ul className="notes-tags" aria-label="标签">{note.tags.map(item => <li key={item}>
+                  <button type="button" className="notes-tag" aria-pressed={item === tag} aria-label={`只看标签 ${item}`} onClick={() => set({ tag: item === tag ? '' : item, page: '' })}>#{item}</button>
+                </li>)}</ul>}
+              </div>
+              <div className="notes-actions">
+                <IconButton icon="tag" label={`编辑这条${KIND[note.type]}的标签`} disabled={busy} onClick={() => setTagging(note)} />
+                <IconButton icon="trash" label={`删除这条${KIND[note.type]}`} disabled={busy} onClick={() => setRemoving(note)} />
+              </div>
             </li>)}</ol>
             {pages > 1 && <Pager className="shelf-pager" page={Math.min(page, pages)} pageCount={pages} busy={list.isFetching} onGo={next => set({ page: next > 1 ? String(next) : '' })} />}
           </>}
@@ -127,6 +162,7 @@ export function NotesPage() {
     {removing && <ConfirmSheet danger busy={busy} title={`删除${KIND[removing.type]}`} confirmText="确认删除"
       text={removing.text ? `确定删除「${excerpt(removing.text)}」？删除后所有设备上都不再显示。` : '确定删除这个书签？删除后所有设备上都不再显示。'}
       onCancel={() => setRemoving(null)} onConfirm={() => void remove(removing)} />}
+    {tagging && <TagSheet note={tagging} known={tags.data ?? []} busy={busy} onClose={() => setTagging(null)} onSave={next => void saveTags(tagging, next)} />}
     {exporting && <ExportSheet filter={filter} filtered={filtered} total={total} onClose={() => setExporting(false)} />}
   </MediaPageFrame>;
 }
@@ -164,6 +200,42 @@ function ExportSheet({ filter, filtered, total, onClose }: { filter: NotesFilter
         : <Button disabled={busy} onClick={() => void run('json', copy)}>复制 JSON</Button>}
     </div>
     <p className="notes-export-status" role="status">{busy ? '正在导出…' : message}</p>
+  </Sheet>;
+}
+
+const TAG_MAX_LENGTH = 32, TAGS_MAX = 10;
+
+/** A note's tags: remove one, type new ones, or pick from the tags already in use. */
+function TagSheet({ note, known, busy, onClose, onSave }: { note: LibraryNote; known: NotesTag[]; busy: boolean; onClose(): void; onSave(tags: string[]): void }) {
+  const [tags, setTags] = useState(note.tags);
+  const [input, setInput] = useState('');
+  const [message, setMessage] = useState('');
+  // Returns the list with the typed tags added, or null (with the reason shown) when one is not allowed.
+  function added(text: string): string[] | null {
+    const typed = text.split(/[,，、\n]/).map(item => item.replace(/^#/, '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const next = [...new Set([...tags, ...typed])];
+    if (typed.some(item => item.length > TAG_MAX_LENGTH)) { setMessage(`标签最长 ${TAG_MAX_LENGTH} 个字`); return null; }
+    if (next.length > TAGS_MAX) { setMessage(`一条笔记最多 ${TAGS_MAX} 个标签`); return null; }
+    setMessage('');
+    return next;
+  }
+  const add = (text: string) => { const next = added(text); if (next) { setTags(next); setInput(''); } };
+  // 保存 also takes what is still in the field: a typed tag is not lost for want of pressing 添加.
+  const save = () => { const next = added(input); if (next) onSave(next); };
+  const suggestions = known.filter(item => !tags.includes(item.tag)).slice(0, 12);
+  return <Sheet title="标签" size="compact" busy={busy} onClose={onClose} subtitle={excerpt(note.type === 'bookmark' ? note.bookTitle : note.text || note.comment)}
+    footer={<Button className="primary" disabled={busy} onClick={save}>保存</Button>}>
+    {tags.length > 0 ? <ul className="notes-tags notes-tags-editing" aria-label="已有标签">{tags.map(item => <li key={item}>
+      <button type="button" className="notes-tag" disabled={busy} aria-label={`移除标签 ${item}`} onClick={() => setTags(tags.filter(other => other !== item))}>#{item}<Icon name="close" size={14} /></button>
+    </li>)}</ul> : <p className="notes-export-hint">这条笔记还没有标签。</p>}
+    <form className="notes-tag-form" onSubmit={event => { event.preventDefault(); add(input); }}>
+      <input aria-label="新标签" placeholder="输入标签，多个用逗号分隔" maxLength={200} value={input} disabled={busy} onInput={event => setInput(event.currentTarget.value)} />
+      <Button type="submit" disabled={busy || !input.trim()}>添加</Button>
+    </form>
+    {suggestions.length > 0 && <ul className="notes-tags" aria-label="常用标签">{suggestions.map(item => <li key={item.tag}>
+      <button type="button" className="notes-tag" disabled={busy} aria-label={`添加标签 ${item.tag}`} onClick={() => add(item.tag)}>#{item.tag}</button>
+    </li>)}</ul>}
+    <p className="notes-export-status" role="status">{message}</p>
   </Sheet>;
 }
 
