@@ -126,6 +126,7 @@ export function CompanionReader({
       data-backdrop={clear ? 'clear' : 'solid'}
       role="region"
       aria-label="小窗阅读"
+      onContextMenu={event => { event.preventDefault(); onClose(); }}
     >
       <div
         className="reader-companion-head"

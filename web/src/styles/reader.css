@@ -4368,6 +4368,12 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 
 /* The paper itself. The chapter's own column is painted inside the shadow root
    from the same `--reader-paper` the big page uses. */
+/* A mini reading window does not need a bright platform scrollbar down its edge;
+   the wheel and drag still scroll the book. */
+.reader-companion-stage,
+.reader-companion-stage book-content { scrollbar-width: none; }
+.reader-companion-stage book-content::-webkit-scrollbar { width: 0; height: 0; }
+
 .reader-companion-stage {
   position: relative;
   flex: 1 1 auto;
@@ -4436,10 +4442,33 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   background: var(--reader-paper);
 }
 
+/*
+ * 隐藏边框, take 2: nothing but the chapter. The bars leave the flex flow and sit
+ * over the page (so showing them does not repaginate the text), and stay out of
+ * sight until the pointer is over the window. Right-click is the way out.
+ */
 .reader-companion[data-border='off'] .reader-companion-head,
 .reader-companion[data-border='off'] .reader-companion-foot {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 2;
   border-color: transparent;
   background: var(--reader-paper);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .16s ease;
+}
+
+.reader-companion[data-border='off'] .reader-companion-head { top: 0; }
+.reader-companion[data-border='off'] .reader-companion-foot { bottom: 0; }
+
+@media (hover: hover) and (pointer: fine) {
+  .reader-companion[data-border='off']:hover .reader-companion-head,
+  .reader-companion[data-border='off']:hover .reader-companion-foot {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 
 /*
