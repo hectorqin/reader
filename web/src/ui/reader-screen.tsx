@@ -306,7 +306,7 @@ export class ReaderScreen {
             save={(type, comment, color) => this.saveAnnotation(type, comment, color)} remove={() => this.removeAnnotation()}
             close={() => { this.annotation = null; this.annotationClosedAt = performance.now(); this.view?.clearSelection(); this.patch({}); }}
             {...(this.assistAvailable ? { askAi: () => this.openAssist() } : {})} />}{this.assist && <AiAssistSheet
-            key={encodeAnchor(this.assist.anchor)} quote={this.assist.anchor.quote} ask={(action, question) => this.askAi(action, question)}
+            key={encodeAnchor(this.assist.anchor)} quote={this.assist.anchor.quote} ask={(action, question) => this.askAi(action, question)} keep={comment => this.keepAnswer(comment)}
             onClose={() => { this.assist = null; this.patch({}); }} />}{this.viewer && <ImageViewer
             key={this.viewer.images[this.viewer.index]?.src} images={this.viewer.images} start={this.viewer.index}
             onClose={() => this.closeViewer()} />}{this.footnote && <Sheet
@@ -428,6 +428,16 @@ export class ReaderScreen {
     const { anchor, context } = assist;
     const result = await this.options.api.aiAssist(book.id, { action, text: anchor.quote, ...(context !== anchor.quote ? { context } : {}), ...(question ? { question } : {}) });
     return result.answer;
+  }
+
+  /** Keeps an AI answer as an annotation on the passage it was about, so it shows in 读书笔记. */
+  private async keepAnswer(comment: string): Promise<void> {
+    const book = this.book, assist = this.assist;
+    if (!book || !assist) throw new Error('阅读器已关闭');
+    const chapterTitle = this.view?.position()?.chapterTitle;
+    await this.options.offline.upsertNotes([{ id: newId(), bookId: book.id, type: 'note', locator: encodeAnchor(assist.anchor),
+      text: assist.anchor.quote, comment, color: '#ffd54f', ...(chapterTitle !== undefined ? { chapterTitle } : {}), updatedAt: Date.now() }]);
+    this.options.sync.schedule(); this.paintNotes();
   }
 
   /**
