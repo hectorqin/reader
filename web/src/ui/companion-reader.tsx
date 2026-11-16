@@ -26,6 +26,11 @@ export interface CompanionReaderProps {
   page: number;
   pages: number;
   navigating: boolean;
+  /** Fills an OS-level Picture-in-Picture window; the window itself is the frame. */
+  embedded?: boolean;
+  /** A colour chosen for the whole window, or null for the page's paper. */
+  background?: string | null;
+  onBackground?(color: string | null): void;
   onClose(): void;
   onSync(): void;
   onChapter(delta: 1 | -1): void;
@@ -43,7 +48,7 @@ const EDGE = 8;
 const clamp = (value: number, low: number, high: number): number => Math.min(high, Math.max(low, value));
 
 export function CompanionReader({
-  title, chapterLabel, chapterIndex, chapterCount, page, pages, navigating,
+  title, chapterLabel, chapterIndex, chapterCount, page, pages, navigating, embedded, background, onBackground,
   onClose, onSync, onChapter, onPage, onStage,
 }: CompanionReaderProps): JSX.Element {
   const panel = useRef<HTMLDivElement | null>(null);
@@ -66,7 +71,7 @@ export function CompanionReader({
   }, []);
 
   const begin = (event: ReactPointerEvent, mode: 'move' | 'resize'): void => {
-    if (event.button !== 0) return;
+    if (embedded || event.button !== 0) return;
     const host = panel.current?.parentElement;
     const box = panel.current?.getBoundingClientRect();
     if (!host || !box) return;
@@ -120,7 +125,7 @@ export function CompanionReader({
   return (
     <div
       ref={panel}
-      className="reader-companion"
+      className={`reader-companion${embedded ? ' reader-companion-embedded' : ''}`}
       style={style}
       data-border={bordered ? 'on' : 'off'}
       data-backdrop={clear ? 'clear' : 'solid'}
@@ -144,6 +149,15 @@ export function CompanionReader({
           <IconButton icon="palette"
             label={clear ? '背景：透底' : '背景：纸面'} pressed={clear}
             onClick={() => setClear(value => !value)} />
+          <input
+            type="color"
+            className="reader-companion-color"
+            aria-label="小窗背景色"
+            title="选择小窗背景色"
+            value={background ?? '#ffffff'}
+            onChange={event => onBackground?.(event.currentTarget.value)}
+          />
+          {background && <IconButton icon="refresh" label="恢复纸色背景" onClick={() => onBackground?.(null)} />}
           <IconTextButton className="reader-companion-border" icon={bordered ? 'fit-whole' : 'fit-fill'}
             label={bordered ? '隐藏边框' : '显示边框'}
             onClick={() => setBordered(value => !value)} />
@@ -158,7 +172,7 @@ export function CompanionReader({
         <IconButton icon="chevron-right" label="下一页" disabled={navigating} onClick={() => onPage(1)} />
         <IconButton icon="step-forward" label="下一章" disabled={navigating || (chapterCount > 0 && chapterIndex >= chapterCount)} onClick={() => onChapter(1)} />
       </div>
-      <button
+      {!embedded && <button
         type="button"
         className="reader-companion-resize"
         aria-label="拖动调整小窗大小"
@@ -168,7 +182,7 @@ export function CompanionReader({
         onPointerCancel={end}
       >
         <Icon name="fit-fill" size={14} />
-      </button>
+      </button>}
     </div>
   );
 }

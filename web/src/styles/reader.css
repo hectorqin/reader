@@ -4285,6 +4285,33 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   pointer-events: none;
 }
 
+/*
+ * Document Picture-in-Picture makes the OS window itself the frame: inside it the
+ * panel fills the window edge to edge, with no border, shadow, radius or resize
+ * handle. The descendant selector is deliberate — it must beat the in-page frame's
+ * own `top`/`right`/`width`/`height` rules below, whatever their order.
+ */
+.companion-pip {
+  margin: 0;
+  overflow: hidden;
+  background: var(--reader-paper);
+  color: var(--reader-ink);
+}
+
+.companion-layer-pip { position: fixed; inset: 0; background: var(--reader-paper); }
+
+.companion-layer-pip .reader-companion {
+  inset: 0;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--reader-paper);
+}
+
 .reader-companion {
   position: absolute;
   pointer-events: auto;
@@ -4344,7 +4371,19 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
   flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
+  gap: .25rem;
   justify-content: flex-end;
+}
+
+/* The native picker, reduced to a swatch the size of an icon button. */
+.reader-companion-color {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--reader-line);
+  border-radius: var(--radius-md);
+  background: var(--reader-surface);
+  cursor: pointer;
 }
 
 /*

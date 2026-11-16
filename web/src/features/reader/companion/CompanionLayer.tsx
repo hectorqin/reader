@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { createRoot } from 'react-dom/client';
+import { RuntimeContext } from '../../../app/providers/runtime-context.tsx';
 import type { Book, BookContent } from '../../../api/types.ts';
 import { ApiError } from '../../../api/errors.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
@@ -69,10 +71,11 @@ function viewSettingsFor(settings: AppSettings, doc: BookDoc): Partial<ViewSetti
  * inside it is a second imperative `ReaderView` with its own staged document, so
  * its window changes never rewrite the big reader's document.
  */
-export function CompanionLayer(): JSX.Element | null {
+function CompanionFrame({ inPip }: { inPip: boolean }): JSX.Element | null {
   const runtime = useRuntime();
   const request = useCompanionStore(state => state.request);
   const settings = useSettingsStore(state => state.settings);
+  const background = useCompanionStore(state => state.windowBackground);
   const theme = useThemeState(runtime.mediaApi.preferenceScope());
   const [stageNode, setStageNode] = useState<HTMLElement | null>(null);
   const [readout, setReadout] = useState<Readout>(() => initialReadout(null));
@@ -309,10 +312,11 @@ export function CompanionLayer(): JSX.Element | null {
 
   return (
     <div
-      className="companion-layer"
+      className={`companion-layer${inPip ? ' companion-layer-pip' : ''}`}
       data-theme={surface.theme}
       data-mode={surface.mode}
       {...(surface.paper ? { 'data-paper': surface.paper } : {})}
+      style={background ? backgroundVars(background) : undefined}
     >
       <CompanionReader
         key={request.book.id}
@@ -323,6 +327,9 @@ export function CompanionLayer(): JSX.Element | null {
         page={readout.page}
         pages={readout.pages}
         navigating={navigating}
+        embedded={inPip}
+        background={background}
+        onBackground={color => useCompanionStore.getState().setWindowBackground(color)}
         onClose={() => useCompanionStore.getState().close()}
         onSync={sync}
         onChapter={chapter}
@@ -331,6 +338,79 @@ export function CompanionLayer(): JSX.Element | null {
       />
     </div>
   );
+}
+
+/**
+ * The app-root host for 小窗阅读.
+ *
+ * When the browser gives us a Document Picture-in-Picture window, the frame is
+ * rendered into *that* window's document by a React root of its own. It cannot be
+ * a portal: React attaches delegated listeners per root container, and a portal
+ * into another document would draw the controls but hear none of their clicks.
+ */
+export function CompanionLayer(): JSX.Element | null {
+  const runtime = useRuntime();
+  const request = useCompanionStore(state => state.request);
+  const pip = useCompanionStore(state => state.pip);
+  const settings = useSettingsStore(state => state.settings);
+  const theme = useThemeState(runtime.mediaApi.preferenceScope());
+  const surface = resolveReaderSurface(
+    theme.preference,
+    theme.systemDark,
+    settings.paper ?? 'theme',
+    settings.paperFollowsDark ?? true,
+  );
+
+  useEffect(() => {
+    if (!pip) return;
+    const doc = pip.document;
+    doc.body.classList.add('companion-pip');
+    doc.body.style.margin = '0';
+    doc.body.style.overflow = 'hidden';
+    doc.title = '小窗阅读';
+    let host = doc.getElementById('companion-root') as HTMLElement | null;
+    if (!host) {
+      host = doc.createElement('div');
+      host.id = 'companion-root';
+      doc.body.append(host);
+    }
+    const root = createRoot(host);
+    root.render(<RuntimeContext value={runtime}><CompanionFrame inPip /></RuntimeContext>);
+    const onHide = () => useCompanionStore.getState().close();
+    pip.addEventListener('pagehide', onHide);
+    return () => {
+      pip.removeEventListener('pagehide', onHide);
+      try { root.unmount(); } catch { /* the OS window is already gone */ }
+    };
+  }, [pip, runtime]);
+
+  useEffect(() => {
+    if (!pip) return;
+    const body = pip.document.body;
+    body.dataset['theme'] = surface.theme;
+    body.dataset['mode'] = surface.mode;
+    if (surface.paper) body.dataset['paper'] = surface.paper;
+    else delete body.dataset['paper'];
+  }, [pip, surface.theme, surface.mode, surface.paper]);
+
+  if (pip) return null;
+  return request ? <CompanionFrame inPip={false} /> : null;
+}
+
+/** Makes the whole window one colour, with ink that stays readable on it. */
+function backgroundVars(color: string): Record<string, string> {
+  const hex = /^#([0-9a-f]{6})$/i.exec(color)?.[1] ?? 'ffffff';
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const dark = (r * 0.299 + g * 0.587 + b * 0.114) < 140;
+  return {
+    '--reader-paper': color,
+    '--reader-surface': color,
+    '--reader-ink': dark ? '#EDE9DF' : '#1A1A1A',
+    '--reader-muted': dark ? '#A9A398' : '#666666',
+    '--reader-line': dark ? 'rgba(255,255,255,.2)' : 'rgba(0,0,0,.16)',
+  };
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {

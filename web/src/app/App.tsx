@@ -8,7 +8,6 @@ import { AppNav, navMode } from './AppNav.tsx';
 import { playerPath } from '../features/media/stores/playback.store.ts';
 import { ThemeController } from '../shared/theme/theme.ts';
 import { useMediaEnabled } from '../shared/stores/features.ts';
-import { CompanionLayer } from '../features/reader/companion/CompanionLayer.tsx';
 import { useCompanionStore } from '../features/reader/companion/companion-store.ts';
 
 export function AppShell() {
@@ -56,7 +55,6 @@ function AuthenticatedShell() {
   }, [mode]);
   return <div className="app-shell">
     <div className="app-shell-body"><Outlet /></div>
-    <CompanionLayer />
     {mode !== 'hidden' && <AppNav mode={mode} />}
   </div>;
 }
