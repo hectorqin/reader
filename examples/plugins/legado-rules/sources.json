@@ -1,0 +1,38 @@
+{
+  "biquge99": {
+    "name": "笔趣阁③",
+    "url": "https://www.biquge99.cc/",
+    "alternateHosts": ["biqvge99.cc"],
+    "charset": "utf-8",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    },
+    "searchUrl": "https://www.biquge99.cc/s.php?ie=gbk&q={{key}}",
+    "rules": {
+      "search": {
+        "bookList": "class.bookbox",
+        "name": "class.bookname@tag.a@text##\\（.*|\\(.*|免费阅读|全文.*阅读|最新章节|笔趣阁|小说",
+        "author": "class.author@text##作者：|<",
+        "bookUrl": "class.bookname@tag.a@href",
+        "coverUrl": "class.bookimg@tag.img.0@src",
+        "intro": "class.bookinfo@p@text",
+        "kind": "class.cat@text##分类：",
+        "lastChapter": "class.update@tag.a@text##免费章节 |正文卷 |正文 |VIP章节 |百度搜索.*"
+      },
+      "book": {
+        "name": "class.info@h1@text##\\（.*|\\(.*|免费阅读|全文.*阅读|最新章节|笔趣阁|小说",
+        "author": "class.info@class.small@tag.span.0@text##作者：",
+        "coverUrl": "class.cover@img@src",
+        "intro": "class.intro@text##简介：",
+        "kind": "class.info@class.small@tag.span.4@text&&\nclass.info@class.small@tag.span.2@text&&\nclass.info@class.small@tag.span.1@text##分类：|状态：|更新时间：",
+        "lastChapter": "class.info@class.small@tag.span.5@a@text##免费章节 |正文卷 |正文 |VIP章节 |百度搜索.*"
+      },
+      "toc": {
+        "chapterList": "class.listmain@tag.dd@tag.a",
+        "chapterName": "text",
+        "chapterUrl": "href"
+      },
+      "content": "id.content@textNodes##请记住本书.*cc"
+    }
+  }
+}
