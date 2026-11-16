@@ -751,6 +751,23 @@ export class ReaderApi {
     return (await this.get<{ users: UserReadingTotal[] }>(`/api/v1/stats/reading/users?${statsParams(query)}`, options)).users;
   }
 
+  /** 读书笔记 across books: one server-filtered page, newest first. */
+  async notesLibrary(query: NotesLibraryQuery, options: RequestOptions = {}): Promise<NotesLibraryPage> {
+    return this.get<NotesLibraryPage>(`/api/v1/notes/library?${notesParams(query)}`, options);
+  }
+
+  /** The books that have notes under the same filter, for the book picker. */
+  async notesLibraryBooks(query: NotesFilter, options: RequestOptions = {}): Promise<NotesBook[]> {
+    return (await this.get<{ books: NotesBook[] }>(`/api/v1/notes/library/books?${notesParams(query)}`, options)).books;
+  }
+
+  /** Everything the filter matches as one Markdown or JSON document. */
+  async notesExport(query: NotesFilter, format: 'markdown' | 'json', tz: number, options: RequestOptions = {}): Promise<NotesExport> {
+    const params = new URLSearchParams(notesParams(query));
+    params.set('format', format); params.set('tz', String(tz));
+    return this.get<NotesExport>(`/api/v1/notes/export?${params.toString()}`, options);
+  }
+
   async putProgress(progress: ProgressInput, options: RequestOptions = {}): Promise<Progress | null> {
     const result = await this.call<{ progress: Progress | null }>(
       `/api/v1/sync/progress/${encodeURIComponent(progress.bookId)}`,
@@ -1010,6 +1027,24 @@ export interface ReadingStats {
   total: number;
 }
 export interface UserReadingTotal { userId: string; username: string; displayName: string; seconds: number }
+
+export interface NotesFilter { q?: string; type?: NoteType | ''; bookId?: string }
+export interface NotesLibraryQuery extends NotesFilter { page?: number; pageSize?: number }
+export interface LibraryNote extends Note { bookTitle: string; bookAuthor: string }
+export interface NotesLibraryPage { items: LibraryNote[]; total: number; page: number; pageSize: number }
+export interface NotesBook { bookId: string; title: string; author: string; count: number; lastAt: number }
+export interface NotesExport { filename: string; mime: string; content: string; count: number }
+
+/** Only what is set goes on the wire, so one view has one address (and one cache key). */
+export function notesParams(query: NotesLibraryQuery): string {
+  const params = new URLSearchParams();
+  if (query.q) params.set('q', query.q);
+  if (query.type) params.set('type', query.type);
+  if (query.bookId) params.set('bookId', query.bookId);
+  if (query.page && query.page > 1) params.set('page', String(query.page));
+  if (query.pageSize) params.set('pageSize', String(query.pageSize));
+  return params.toString();
+}
 
 export function statsParams(query: TimeStatsQuery): string {
   return new URLSearchParams({ from: String(query.from), to: String(query.to), tz: String(query.tz), group: query.group }).toString();

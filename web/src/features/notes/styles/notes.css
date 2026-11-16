@@ -1,0 +1,29 @@
+/* 读书笔记: one column of notes; the highlight colour is the note's own (--note-color), everything else is a token. */
+.notes-controls { display: grid; gap: var(--space-2); margin: var(--space-3) 0; }
+.notes-search { display: flex; align-items: center; gap: var(--space-1); }
+/* Finger-reachable input: 16px or iOS zooms on focus. */
+.notes-search input { flex: 1; min-width: 0; min-height: 44px; font-size: var(--text-title); }
+.notes-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.notes-filters .segmented { flex: 2 1 16rem; }
+.notes-filters .media-select-control { flex: 1 1 12rem; min-width: 0; }
+.notes-export-button { display: inline-flex; align-items: center; gap: var(--space-1); }
+
+.notes-count { margin: 0 0 var(--space-1); font-size: var(--text-meta); color: var(--color-muted); }
+.notes-state { display: grid; justify-items: start; gap: var(--space-1); margin: var(--space-4) 0; color: var(--color-muted); font-size: var(--text-ui); }
+.notes-state strong { color: var(--color-ink); font-size: var(--text-title); font-weight: 600; }
+.notes-state p { margin: 0; }
+.notes-state .button { margin-top: var(--space-1); }
+
+.notes-list { display: grid; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.notes-item { display: flex; align-items: flex-start; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--color-line); border-radius: var(--radius-lg); background: var(--color-surface); }
+.notes-open { display: grid; gap: var(--space-1); flex: 1; min-width: 0; min-height: 44px; padding: var(--space-1) var(--space-2); border-radius: var(--radius-md); color: var(--color-ink); text-decoration: none; }
+@media (hover: hover) and (pointer: fine) { .notes-open:hover { background: var(--color-surface-2); } }
+.notes-kind { display: inline-flex; align-items: center; gap: var(--space-1); font-size: var(--text-meta); color: var(--color-muted); }
+.notes-swatch { width: 10px; height: 10px; border-radius: var(--radius-xs); background: var(--note-color, var(--color-muted)); }
+.notes-quote { padding-inline-start: var(--space-2); border-inline-start: 3px solid var(--note-color, var(--color-line)); font-size: var(--text-ui); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
+.notes-comment { font-size: var(--text-ui); line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.notes-meta { font-size: var(--text-meta); color: var(--color-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.notes-export-hint { margin: 0 0 var(--space-3); font-size: var(--text-ui); color: var(--color-muted); }
+.notes-export-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.notes-export-status { min-height: 1.5em; margin: var(--space-2) 0 0; font-size: var(--text-meta); color: var(--color-muted); }

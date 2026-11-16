@@ -480,7 +480,11 @@ export class ReaderScreen {
   }
 
   /** Opens a book: fetch bytes, parse, restore position, start reporting. */
-  async open(book: Book): Promise<void> {
+  /**
+   * @param at A place to go to once the book is open (a note's locator, from 读书笔记),
+   *   instead of staying at the saved reading position.
+   */
+  async open(book: Book, at = ''): Promise<void> {
     this.pdfLoading?.abort();
     this.doc?.pdf?.dispose();
     const pdfLoading = new AbortController();
@@ -542,6 +546,7 @@ export class ReaderScreen {
         // restore message overwrite "正在载入…", which is what it is there for.
         await this.restorePosition(book, token);
         if (this.chrome.statusState === 'loading') this.hideStatus();
+        await this.openRequested(at, token);
         return;
       }
 
@@ -566,6 +571,7 @@ export class ReaderScreen {
       else this.hideStatus();
 
       await this.restorePosition(book, token);
+      await this.openRequested(at, token);
     } catch (err) {
       if (token !== this.loadingToken) return;
       this.handleLoadError(err);
@@ -1568,6 +1574,22 @@ export class ReaderScreen {
       if (this.disposed || this.book !== book) return;
       if (error instanceof ApiError && error.isAuthFailure) { this.options.onSignedOut(); return; }
       this.patch({ historyState: error instanceof ApiError && error.isConnectivity ? 'offline' : 'error' });
+    }
+  }
+
+  /**
+   * Goes to the place the book was opened for. It runs after the saved position is
+   * restored, so a place that can no longer be found leaves the reader where they
+   * were, with the reason, rather than on the first page.
+   */
+  private async openRequested(at: string, token: number): Promise<void> {
+    if (!at || token !== this.loadingToken || !this.view) return;
+    try {
+      await this.navigateTool(decodeAnchor(at) ?? at);
+      this.flashStatus('已跳到笔记位置', 1800);
+    } catch (error) {
+      if (token !== this.loadingToken) return;
+      this.flashStatus(error instanceof Error ? error.message : '无法定位到这条笔记', 4000);
     }
   }
 

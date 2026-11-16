@@ -877,6 +877,36 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 
 写墓碑。幂等：不存在也返回 `{ "ok": true }`。
 
+### `GET /notes/library?q=&type=&bookId=&page=&pageSize=`
+
+读书笔记的跨书列表（设计见[读书笔记管理](notes-library.zh-CN.md)），只读，按更新时间倒序。
+
+- `q`：在原文和批注里做子串匹配，`%`、`_` 按字面匹配；
+- `type`：`highlight` / `note` / `bookmark`，其他值返回 `400 BAD_NOTE_TYPE`；
+- `bookId`：只看一本书；
+- `page` 从 1 起，`pageSize` 默认 50、上限 200；非正整数返回 `400 BAD_PAGE`。
+
+→ `{ "items": [{ "id", "bookId", "type", "locator", "text", "comment", "color", "updatedAt", "bookTitle", "bookAuthor" }], "total": 12, "page": 1, "pageSize": 50 }`
+
+页码超界返回空 `items` 和真实的 `total`，不报错。书名与作者含手动元数据；书不在书架上时取扫描得到的值。
+
+### `GET /notes/library/books?q=&type=`
+
+有笔记的书，按最近笔记时间倒序，供筛选。`bookId` 参数被忽略。
+
+→ `{ "books": [{ "bookId", "title", "author", "count": 3, "lastAt": 1789537864820 }] }`
+
+### `GET /notes/export?format=markdown|json&tz=<分钟>&q=&type=&bookId=`
+
+把筛选命中的全部笔记导出为一份文档，以 JSON 文本返回（不是文件流，Android 外壳无法处理下载）。
+
+→ `{ "filename": "reader-notes-2026-11-12.md", "mime": "text/markdown", "content": "...", "count": 12 }`
+
+- `markdown`（默认）：按书分组，原文为引用块，批注为正文，不含书签；日期按 `tz`（相对 UTC 的分钟偏移）换算。
+- `json`：`{ "version": 1, "exportedAt", "books": [{ "id", "title", "author", "notes": [...] }] }`，含书签与 `locator`。
+
+其他 `format` 返回 `400 BAD_FORMAT`。
+
 ---
 
 ## 本地与 OPDS 来源

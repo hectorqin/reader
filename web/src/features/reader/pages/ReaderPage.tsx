@@ -16,6 +16,8 @@ export function ReaderPage() {
   const firstEntry = location.key === 'default';
   const back = useRef<() => void>(() => undefined);
   back.current = () => { if (firstEntry) navigate('/shelf', { replace: true }); else navigate(-1); };
+  // 读书笔记 opens a book at one note: the place rides in the navigation state, read once.
+  const openAt = useRef(typeof location.state?.openAt === 'string' ? location.state.openAt as string : '');
   const host = useRef<HTMLDivElement>(null);
   const [book, setBook] = useState<Book | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -60,7 +62,9 @@ export function ReaderPage() {
     // Register the reader's own persistence hook. Calling runtime.flush() here
     // would recurse through runtime.registerReader while the app is flushing.
     const unregister = runtime.registerReader(book, () => screen.flushProgress());
-    void screen.open(book);
+    void screen.open(book, openAt.current);
+    // Only the first open goes there; a re-mount (settings, account) restores the saved position.
+    openAt.current = '';
     return () => {
       unregister();
       const saved = screen.flushProgress();
