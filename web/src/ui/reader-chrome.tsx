@@ -126,6 +126,9 @@ export interface ChromeState {
   tts: SpeechBarState;
   layout: string;
   format: string;
+  /** Whether this book can be read a second time in the floating window. */
+  companionAvailable?: boolean;
+  companionOpen?: boolean;
 
   // ---- the settings projection (see `settingsView` on the screen) ----
   mode: AppSettings['mode'];
@@ -220,6 +223,8 @@ export interface ChromeHandlers {
   onSpeechNext(): void;
   onSpeechScrub(index: number): void;
   onStopSpeech(): void;
+  /** Opens or closes the floating second reading view (小窗). */
+  onCompanion?(): void;
 }
 
 export interface ReaderChromeProps {
@@ -310,6 +315,7 @@ export function ReaderChrome({ state, stage, handlers, tools }: ReaderChromeProp
         </div>
         <div className="reader-actions">
           {handlers.onTools && <TopButton icon="search" label="工具" onClick={handlers.onTools} />}
+          {handlers.onCompanion && state.companionAvailable && <TopButton icon="floating-window" label="小窗" className="companion-launch" pressed={!!state.companionOpen} onClick={handlers.onCompanion} />}
           <TopButton icon="menu" label="目录" onClick={handlers.toggleToc} />
           {/* 朗读 keeps going with its panel closed (ui.md §3.11), so the button says it is on. */}
           <TopButton icon="read-aloud" label={state.tts.active ? '朗读中' : '朗读'} pressed={state.tts.active} onClick={() => handlers.toggleSettings('speech')} />
@@ -1113,9 +1119,9 @@ function SelectRow({
  * is no word under them). Centred, equal-width, and full-height so the whole
  * column of the bar is the target rather than the glyph.
  */
-function TopButton({ icon, label, onClick, pressed }: { icon: IconName; label: string; onClick(): void; pressed?: boolean }): JSX.Element {
+function TopButton({ icon, label, onClick, pressed, className }: { icon: IconName; label: string; onClick(): void; pressed?: boolean; className?: string }): JSX.Element {
   return (
-    <button type="button" className="top-button" aria-label={label} aria-pressed={pressed} onClick={onClick}>
+    <button type="button" className={className ? `top-button ${className}` : 'top-button'} aria-label={label} aria-pressed={pressed} onClick={onClick}>
       <Icon name={icon} />
       <span className="top-button-label">{label}</span>
     </button>

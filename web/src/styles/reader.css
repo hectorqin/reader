@@ -207,6 +207,7 @@
   --reader-layer-page: 1;     /* the reading surface: below everything else here */
   --reader-layer-bar: 10;     /* the two floating bars, over the page */
   --reader-layer-rail: 14;    /* the quick-action column */
+  --reader-layer-companion: 16; /* 小窗阅读, above the rail and below sheets */
   --reader-layer-panel: 20;   /* sheets and their scrim */
   --reader-layer-readout: 5;  /* above the page, below bars and sheets */
 
@@ -4256,3 +4257,217 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
 .sources-header > .icon-button[aria-label='返回'] > .icon {
   font-size: var(--text-display);
 }
+
+/* ---- 小窗阅读 ----
+ *
+ * A second reading view floating over the page. The frame is React's; the chapter
+ * inside it is a second `ReaderView` (see `ui/companion-reader.tsx` and
+ * `mountCompanion`), so pagination is still measured from the DOM.
+ *
+ * Everything coloured here is a `--reader-*` value selected by the attributes on
+ * `.reader-screen` (theme, mode, paper), because the frame is a child of that
+ * container. That is what makes its background match the page it floats over in
+ * 纸色 and 夜间 without copying any colour into JS.
+ *
+ * It sits above the bars and rail (a floating window the reader is using) and
+ * below sheets, which own the screen when open.
+ */
+/*
+ * The app-wide bed for 小窗阅读. It sits in the authenticated shell rather than in
+ * `.reader-screen`, so the window survives a route change; the wrapper covers the
+ * viewport only to give the panel a coordinate space, and lets every pointer through
+ * outside the panel itself.
+ */
+.companion-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--reader-layer-companion, 40);
+  pointer-events: none;
+}
+
+.reader-companion {
+  position: absolute;
+  pointer-events: auto;
+  z-index: var(--reader-layer-companion);
+  top: 4.75rem;
+  right: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  width: min(30rem, calc(100% - 3rem));
+  height: min(26rem, calc(100% - 9rem));
+  min-width: 15rem;
+  min-height: 11.25rem;
+  overflow: hidden;
+  border: 1px solid var(--reader-line);
+  border-radius: var(--radius-lg);
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  box-shadow: 0 18px 50px color-mix(in srgb, var(--reader-ink) 18%, transparent);
+}
+
+.reader-companion-head {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.35rem;
+  min-height: 2.75rem;
+  padding: 0.2rem 0.35rem 0.2rem 0.75rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
+  background: var(--reader-surface);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.reader-companion-head:active { cursor: grabbing; }
+
+.reader-companion-heading {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 0.05rem;
+  min-width: 5rem;
+}
+
+.reader-companion-heading strong,
+.reader-companion-heading span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reader-companion-heading strong { font-size: var(--text-label); font-weight: 600; }
+.reader-companion-heading span { font-size: var(--text-micro); color: var(--reader-muted); }
+
+.reader-companion-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/*
+ * 隐藏边框 is written as a word, not as an unlabelled glyph.
+ *
+ * Which glyph means "take the frame away" is a guess — and the reader's report
+ * was exactly that there was no button for it. The other header controls stay
+ * icon-only; this one names the action it performs, and says 显示边框 when the
+ * frame is off so the way back is just as plain.
+ */
+.reader-companion-actions .reader-companion-border {
+  min-height: 2rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--reader-radius);
+  font-size: var(--text-micro);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.reader-companion-actions .reader-companion-border .icon { font-size: var(--text-label); }
+
+/* The paper itself. The chapter's own column is painted inside the shadow root
+   from the same `--reader-paper` the big page uses. */
+.reader-companion-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--reader-paper);
+}
+
+.reader-companion-foot {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.1rem;
+  min-height: 2.5rem;
+  padding: 0.15rem 1.6rem 0.15rem 0.35rem;
+  border-top: 1px solid color-mix(in srgb, var(--reader-line) 80%, transparent);
+  background: var(--reader-surface);
+}
+
+.reader-companion-page {
+  overflow: hidden;
+  color: var(--reader-muted);
+  font-size: var(--text-micro);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The one corner that resizes both axes. `touch-action: none` because a drag here
+   is ours, not the page's. */
+.reader-companion-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--reader-muted);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.reader-companion-resize .icon { opacity: 0.6; }
+
+@media (hover: hover) and (pointer: fine) {
+  .reader-companion-resize:hover .icon { opacity: 1; }
+}
+
+/*
+ * 隐藏边框. The hairline and the shadow go; the internal dividers do too, so the
+ * frame reads as the page continuing rather than as a box drawn on it. The border
+ * is made transparent instead of removed so the content does not shift by a pixel
+ * the moment the reader toggles it.
+ */
+.reader-companion[data-border='off'] {
+  border-color: transparent;
+  box-shadow: none;
+  /* The whole frame takes the page's paper, not the chrome's surface: a white
+     card on a warm page was still visibly a box even with its hairline gone. */
+  background: var(--reader-paper);
+}
+
+.reader-companion[data-border='off'] .reader-companion-head,
+.reader-companion[data-border='off'] .reader-companion-foot {
+  border-color: transparent;
+  background: var(--reader-paper);
+}
+
+/*
+ * 透底. A translucent bed over the page, the same treatment as the bars
+ * (`--reader-surface-float`), for readers who want the chapter behind the window
+ * to remain visible. `--reader-paper` is made transparent on the stage only, so
+ * the shadow root's own page background steps out of the way as well; the text
+ * keeps the theme's ink colour.
+ */
+.reader-companion[data-backdrop='clear'] {
+  background: color-mix(in srgb, var(--reader-surface) 68%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.reader-companion[data-backdrop='clear'] .reader-companion-head,
+.reader-companion[data-backdrop='clear'] .reader-companion-foot {
+  background: transparent;
+}
+
+.reader-companion[data-backdrop='clear'] .reader-companion-stage {
+  --reader-paper: transparent;
+  background: transparent;
+}
+
+/* The launch button is the one action in the footer that opens something rather
+   than adjusting the book; colour is what makes it findable among five equals. */
+.companion-launch { color: var(--reader-accent); }
+
+/* Six cells now: 工具 / 小窗 / 目录 / 朗读 / 外观 / 设置. */
+.reader-actions { grid-template-columns: repeat(6, minmax(0, 1fr)); }

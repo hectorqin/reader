@@ -9,6 +9,7 @@ import {
   ListOrdered, Layers, Heart, Star, Clapperboard, UserRound, Lock, LockOpen, Gauge,
   Subtitles, AudioLines, MicVocal, Shuffle, Repeat, Repeat1, Maximize, Minimize, Expand,
   Shrink, LocateFixed, LayoutGrid, House, Rss, UsersRound, Ticket, Link2, ServerCog,
+  PictureInPicture2,
 } from 'lucide-react';
 import type { CSSProperties, JSX } from 'react';
 
@@ -30,7 +31,7 @@ export const ICONS = {
   // navigation and structure
   menu: Menu, 'chevron-left': ChevronLeft, 'chevron-right': ChevronRight, 'chevron-down': ChevronDown,
   'arrow-left': ArrowLeft, 'arrow-up': ArrowUp, 'arrow-down': ArrowDown, external: ArrowUpRight,
-  home: House, grid: LayoutGrid, locate: LocateFixed,
+  home: House, grid: LayoutGrid, locate: LocateFixed, 'floating-window': PictureInPicture2,
   // files and the library
   folder: Folder, 'folder-browse': FolderOpen, 'folder-missing': FolderX, file: File, 'file-text': FileText,
   book: BookOpen, shelf: Library, library: LibraryBig, bookmark: Bookmark, feed: Rss,

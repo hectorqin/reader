@@ -8,6 +8,8 @@ import { AppNav, navMode } from './AppNav.tsx';
 import { playerPath } from '../features/media/stores/playback.store.ts';
 import { ThemeController } from '../shared/theme/theme.ts';
 import { useMediaEnabled } from '../shared/stores/features.ts';
+import { CompanionLayer } from '../features/reader/companion/CompanionLayer.tsx';
+import { useCompanionStore } from '../features/reader/companion/companion-store.ts';
 
 export function AppShell() {
   return <AuthBoundary><AuthenticatedShell /></AuthBoundary>;
@@ -54,12 +56,16 @@ function AuthenticatedShell() {
   }, [mode]);
   return <div className="app-shell">
     <div className="app-shell-body"><Outlet /></div>
+    <CompanionLayer />
     {mode !== 'hidden' && <AppNav mode={mode} />}
   </div>;
 }
 
 export function AuthBoundary({ children }: { children?: ReactNode }) {
   const session = useAuthStore(state => state.session);
+  // The floating window holds a book from the session that opened it; do not let
+  // it reappear over the login page or for the next account.
+  useEffect(() => { if (!session) useCompanionStore.getState().close(); }, [session]);
   if (!session) return <LoginPage />;
   return <>{children}</>;
 }

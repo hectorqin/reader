@@ -51,6 +51,7 @@ import { AiAssistSheet, type AssistAction } from './ai-assist.tsx';
 import { ImageViewer, type ViewerImage } from './image-viewer.tsx';
 import { Sheet } from './sheet.tsx';
 import { Button } from './toolkit.tsx';
+import { useCompanionStore } from '../features/reader/companion/companion-store.ts';
 
 export interface ReaderScreenOptions {
   /** Where the shared app theme is stored (see the media theme service). */
@@ -241,6 +242,15 @@ export class ReaderScreen {
   private alternativeEpoch = 0;
   private qualityRun: AbortController | null = null;
 
+  // ---- 小窗阅读: a second, independently paged view of the same book ----
+  //
+  // It owns its own staged document rather than sharing `this.doc`. `setWindow`
+  // rewrites `doc.sections` in place, so two views sharing one document would
+  // move each other's chapter out from under them whenever either crossed a
+  // window boundary.
+  private companionOpen = false;
+  private companionOff: (() => void) | null = null;
+
   constructor(private readonly options: ReaderScreenOptions) {
     this.settings = { ...options.settings };
     this.publicationCache = new PublicationCache(
@@ -248,6 +258,15 @@ export class ReaderScreen {
       options.platform.blobs,
       publicationScope(options.api.baseUrl || (typeof location !== 'undefined' ? location.origin : ''), options.api.currentSession()?.user.id ?? ''),
     );
+    // The window lives in the shell now, so its open/closed state can change while
+    // this screen is on the next page over; keep the footer button in step.
+    this.companionOff = useCompanionStore.subscribe((state) => {
+      const open = !!this.book && state.request?.book.id === this.book.id;
+      if (open !== this.companionOpen) {
+        this.companionOpen = open;
+        this.patch({ companionOpen: open });
+      }
+    });
 
     // The stage is created here and never re-created: `ReaderView` attaches to it
     // on every chapter, and a container the tree replaced would take the reader's
@@ -365,6 +384,7 @@ export class ReaderScreen {
             onSpeechNext: () => void this.tts?.next(),
             onSpeechScrub: (index) => this.onSpeechScrub(index),
             onStopSpeech: () => this.stopSpeech(),
+            onCompanion: () => this.toggleCompanion(),
           }}
         />
     ));
@@ -491,7 +511,8 @@ export class ReaderScreen {
     this.content = null; this.book = book;
     let opened = false;
     if (book.title) document.title = `${book.title} · reader`;
-    this.patch({ openFailure: '', title: book.title, author: book.author, description: book.description, bookInfoOpen: false, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null, refreshingChapter: false, sourceName: '', chapterUrl: '', toc: [] });
+    this.companionOpen = useCompanionStore.getState().request?.book.id === book.id;
+    this.patch({ openFailure: '', title: book.title, author: book.author, description: book.description, bookInfoOpen: false, canRefresh: book.format === 'chapters', canSwitch: false, alternatives: null, refreshingChapter: false, sourceName: '', chapterUrl: '', toc: [], companionOpen: this.companionOpen, companionAvailable: false });
     this.setStatus('loading', '正在载入…');
     this.setChromeVisible(true);
 
@@ -718,6 +739,7 @@ export class ReaderScreen {
     this.listeners.length = 0;
     for (const off of this.viewListeners) off();
     this.viewListeners.length = 0;
+    this.companionOff?.(); this.companionOff = null;
     this.view?.dispose();
     this.view = null;
     this.doc = null;
@@ -728,6 +750,53 @@ export class ReaderScreen {
     // on top of the shelf.
     this.options.pageHost?.hide();
     this.element.remove();
+  }
+
+  // ---- 小窗阅读 ----
+  //
+  // The floating window lives in the authenticated shell, not in this screen, so
+  // walking to the shelf or settings does not close it. This screen only decides
+  // whether the open book can be read a second time, and hands the shell the book,
+  // the chapter list and the current position. The shell owns the second staged
+  // document and the second ReaderView.
+
+  /** Whether the book on screen can be opened a second time in the floating view. */
+  private companionAvailable(): boolean {
+    return !!(this.book && this.doc && this.content && this.doc.layout === 'reflowable' && isStagedKind(this.content.kind));
+  }
+
+  private companionIsOpen(): boolean {
+    return !!this.book && useCompanionStore.getState().request?.book.id === this.book.id;
+  }
+
+  private toggleCompanion(): void {
+    if (this.companionIsOpen()) {
+      useCompanionStore.getState().close();
+      return;
+    }
+    if (!this.companionAvailable()) {
+      this.flashStatus('这本书不支持小窗阅读', 2200);
+      return;
+    }
+    const book = this.book;
+    const content = this.content ?? this.manifest?.content;
+    if (!book || !content) {
+      this.flashStatus('这本书还没有可用的章节', 2200);
+      return;
+    }
+    const position = this.view?.position();
+    useCompanionStore.getState().open({
+      book,
+      content,
+      toc: this.chrome.toc.map(entry => ({ id: entry.id, label: entry.label, depth: entry.depth })),
+      spine: position?.chapterPosition ?? 0,
+      within: position?.within ?? 0,
+    });
+    useCompanionStore.getState().setMainPosition({
+      bookId: book.id,
+      spine: position?.chapterPosition ?? 0,
+      within: position?.within ?? 0,
+    });
   }
 
   private async previewHeadings(prefix: string): Promise<string[]> {
@@ -1192,6 +1261,8 @@ export class ReaderScreen {
       // book's total below, which is what the server reports and the window does
       // not.
       chapterCount: this.chapterCount,
+      companionAvailable: this.companionAvailable(),
+      companionOpen: this.companionIsOpen(),
     });
     this.buildView();
     void this.renderToc();
@@ -1630,6 +1701,14 @@ export class ReaderScreen {
     });
 
     this.pendingPosition = position;
+    // The floating window may be open on this book while the reader is here; this
+    // is what 回到主阅读位置 follows. Kept even when it is closed, so a window
+    // opened later starts where the reader actually is.
+    useCompanionStore.getState().setMainPosition({
+      bookId: this.book.id,
+      spine: position.chapterPosition,
+      within: position.within,
+    });
     this.recordSpeechAnchor();
 
     // Debounced, and *only* the write: a scroll produces a position per frame, and
