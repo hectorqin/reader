@@ -788,7 +788,12 @@ export class ReaderScreen {
     useCompanionStore.getState().open({
       book,
       content,
-      toc: this.chrome.toc.map(entry => ({ id: entry.id, label: entry.label, depth: entry.depth })),
+      toc: this.chrome.toc.map(entry => ({
+        id: entry.id,
+        label: entry.label,
+        depth: entry.depth,
+        ...(entry.spine === undefined ? {} : { spine: entry.spine }),
+      })),
       spine: position?.chapterPosition ?? 0,
       within: position?.within ?? 0,
     });

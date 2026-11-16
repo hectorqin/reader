@@ -6,6 +6,8 @@ export interface CompanionTocEntry {
   id: string;
   label: string;
   depth: number;
+  /** Whole-book section index, when the server's contents list carries one. */
+  spine?: number;
 }
 
 /**

@@ -18,6 +18,13 @@ import { IconButton, IconTextButton } from './toolkit.tsx';
  * theme and paper colour, including 夜间.
  */
 
+export interface CompanionTocRow {
+  id: string;
+  label: string;
+  depth: number;
+  spine?: number;
+}
+
 export interface CompanionReaderProps {
   title: string;
   chapterLabel: string;
@@ -31,6 +38,10 @@ export interface CompanionReaderProps {
   /** A colour chosen for the whole window, or null for the page's paper. */
   background?: string | null;
   onBackground?(color: string | null): void;
+  toc?: CompanionTocRow[];
+  /** 1-based whole-book chapter, for highlighting the contents row. */
+  chapter?: number;
+  onJump?(spine: number): void;
   onClose(): void;
   onSync(): void;
   onChapter(delta: 1 | -1): void;
@@ -48,7 +59,7 @@ const EDGE = 8;
 const clamp = (value: number, low: number, high: number): number => Math.min(high, Math.max(low, value));
 
 export function CompanionReader({
-  title, chapterLabel, chapterIndex, chapterCount, page, pages, navigating, embedded, background, onBackground,
+  title, chapterLabel, chapterIndex, chapterCount, page, pages, navigating, embedded, background, onBackground, toc = [], chapter = 0, onJump,
   onClose, onSync, onChapter, onPage, onStage,
 }: CompanionReaderProps): JSX.Element {
   const panel = useRef<HTMLDivElement | null>(null);
@@ -57,6 +68,7 @@ export function CompanionReader({
   // 默认就是无边框：小窗要像正文自己延续出来的一块，而不是浮在上面的一张白卡。
   const [bordered, setBordered] = useState(false);
   const [clear, setClear] = useState(false);
+  const [tocOpen, setTocOpen] = useState(false);
   const drag = useRef<{ mode: 'move' | 'resize'; pointerId: number; startX: number; startY: number; from: Geometry } | null>(null);
   // The latest callback, so the mount effect below can keep an empty dependency list
   // and still call the screen's current method.
@@ -145,6 +157,7 @@ export function CompanionReader({
           <span>{title}{chapterCount > 0 ? ` · 第 ${chapterIndex}/${chapterCount} 章` : ''}</span>
         </div>
         <div className="reader-companion-actions">
+          <IconButton icon="menu" label="目录" pressed={tocOpen} onClick={() => setTocOpen(value => !value)} />
           <IconButton icon="locate" label="回到主阅读位置" disabled={navigating} onClick={onSync} />
           <IconButton icon="palette"
             label={clear ? '背景：透底' : '背景：纸面'} pressed={clear}
@@ -165,6 +178,38 @@ export function CompanionReader({
         </div>
       </div>
       <div ref={stage} className="reader-companion-stage" />
+      {!bordered && (
+        // An invisible corner: moving the pointer here reveals the way back to the
+        // controls without leaving a bar on the page all the time.
+        <div className="reader-companion-hotspot">
+          <div className="reader-companion-hotspot-actions">
+            <IconButton icon="menu" label="目录" pressed={tocOpen} onClick={() => setTocOpen(value => !value)} />
+            <IconTextButton className="reader-companion-border" icon="fit-whole" label="显示边框" onClick={() => setBordered(true)} />
+          </div>
+        </div>
+      )}
+      {tocOpen && (
+        <div className="reader-companion-toc" role="dialog" aria-label="目录">
+          <div className="reader-companion-toc-head">
+            <strong>目录</strong>
+            <IconButton icon="close" label="关闭目录" onClick={() => setTocOpen(false)} />
+          </div>
+          <div className="reader-companion-toc-list">
+            {toc.map((entry, index) => {
+              const target = entry.spine ?? index;
+              return (
+                <button key={`${entry.id}-${index}`} type="button"
+                  className="reader-companion-toc-item"
+                  data-current={target + 1 === chapter ? 'true' : undefined}
+                  style={{ paddingLeft: `${0.75 + Math.max(0, entry.depth) * 0.75}rem` }}
+                  onClick={() => { setTocOpen(false); onJump?.(target); }}>
+                  {entry.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="reader-companion-foot">
         <IconButton icon="step-backward" label="上一章" disabled={navigating || chapterIndex <= 1} onClick={() => onChapter(-1)} />
         <IconButton icon="chevron-left" label="上一页" disabled={navigating} onClick={() => onPage(-1)} />

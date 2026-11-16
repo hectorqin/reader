@@ -4486,28 +4486,125 @@ svg.icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; verti
  * over the page (so showing them does not repaginate the text), and stay out of
  * sight until the pointer is over the window. Right-click is the way out.
  */
-.reader-companion[data-border='off'] .reader-companion-head,
-.reader-companion[data-border='off'] .reader-companion-foot {
-  position: absolute;
-  left: 0;
-  right: 0;
-  z-index: 2;
-  border-color: transparent;
-  background: var(--reader-paper);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity .16s ease;
+/*
+ * 透底. A translucent bed over the page, the same treatment as the bars
+ * (`--reader-surface-float`), for readers who want the chapter behind the window
+ * to remain visible. `--reader-paper` is made transparent on the stage only, so
+ * the shadow root's own page background steps out of the way as well; the text
+ * keeps the theme's ink colour.
+ */
+.reader-companion[data-backdrop='clear'] {
+  background: color-mix(in srgb, var(--reader-surface) 68%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
-.reader-companion[data-border='off'] .reader-companion-head { top: 0; }
-.reader-companion[data-border='off'] .reader-companion-foot { bottom: 0; }
+.reader-companion[data-backdrop='clear'] .reader-companion-head,
+.reader-companion[data-backdrop='clear'] .reader-companion-foot {
+  background: transparent;
+}
+
+.reader-companion[data-backdrop='clear'] .reader-companion-stage {
+  --reader-paper: transparent;
+  background: transparent;
+}
+
+/* The launch button is the one action in the footer that opens something rather
+   than adjusting the book; colour is what makes it findable among five equals. */
+.companion-launch { color: var(--reader-accent); }
+
+/* Six cells now: 工具 / 小窗 / 目录 / 朗读 / 外观 / 设置. */
+.reader-actions { grid-template-columns: repeat(6, minmax(0, 1fr)); }/*
+ * 隐藏边框: nothing but the chapter. The bars are gone entirely; the only way
+ * back to the controls is the invisible corner hotspot below.
+ */
+.reader-companion[data-border='off'] .reader-companion-head,
+.reader-companion[data-border='off'] .reader-companion-foot { display: none; }
+
+/*
+ * An invisible corner: a small pointer target that reveals 目录 / 显示边框 only
+ * while the mouse is on it. At rest it is not drawn at all.
+ */
+.reader-companion-hotspot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 3;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  width: 8rem;
+  height: 2.5rem;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
 
 @media (hover: hover) and (pointer: fine) {
-  .reader-companion[data-border='off']:hover .reader-companion-head,
-  .reader-companion[data-border='off']:hover .reader-companion-foot {
-    opacity: 1;
-    pointer-events: auto;
-  }
+  .reader-companion-hotspot:hover { opacity: 1; }
+}
+
+.reader-companion-hotspot-actions {
+  display: flex;
+  align-items: center;
+  gap: .25rem;
+  padding: .25rem;
+  border-radius: 0 0 0 var(--radius-md);
+  background: var(--reader-paper);
+}
+
+.reader-companion-toc {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  background: var(--reader-paper);
+  color: var(--reader-ink);
+}
+
+.reader-companion-toc-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  padding: .35rem .5rem .35rem .9rem;
+  border-bottom: 1px solid var(--reader-line);
+  font-size: var(--text-label);
+}
+
+.reader-companion-toc-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: .35rem 0;
+}
+
+.reader-companion-toc-item {
+  display: block;
+  width: 100%;
+  padding: .5rem .75rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--text-ui);
+  text-align: left;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.reader-companion-toc-item[data-current='true'] {
+  color: var(--reader-accent);
+  font-weight: 600;
+  background: color-mix(in srgb, var(--reader-accent) 12%, transparent);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .reader-companion-toc-item:hover { background: color-mix(in srgb, var(--reader-ink) 7%, transparent); }
+}
+
 }
 
 /*

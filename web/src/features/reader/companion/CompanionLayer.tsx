@@ -289,6 +289,10 @@ function CompanionFrame({ inPip }: { inPip: boolean }): JSX.Element | null {
     });
   };
 
+  const jump = (spine: number): void => {
+    void run((current, readWindow) => openAt(current.view, current.content, spine, 0, readWindow));
+  };
+
   const page = (delta: 1 | -1): void => {
     const current = engine.current;
     if (!current || busy.current) return;
@@ -329,6 +333,9 @@ function CompanionFrame({ inPip }: { inPip: boolean }): JSX.Element | null {
         navigating={navigating}
         embedded={inPip}
         background={background}
+        toc={request.toc}
+        chapter={readout.index}
+        onJump={jump}
         onBackground={color => useCompanionStore.getState().setWindowBackground(color)}
         onClose={() => useCompanionStore.getState().close()}
         onSync={sync}
