@@ -39,3 +39,24 @@ export function renditionRef(item: { href: string; format?: string; resourceRef?
   if (item.href.startsWith('chapter:')) return `chapter-full:${item.href.slice('chapter:'.length)}`;
   return item.href;
 }
+
+/**
+ * Whether a cached chapter predates its stylesheets being embedded.
+ *
+ * A chapter read through the server applies only its `<style>` blocks; a `<link>`
+ * in its head is never loaded. Until the server embedded each chapter's linked
+ * stylesheets, an EPUB read online rendered without its publisher's styles — and a
+ * chapter cached on the device then still does, because the reader prefers its
+ * cache. Such a chapter is recognisable by the link the server used to leave: a
+ * stylesheet (not an alternate one) pointing at the book's own resources. The
+ * reader re-fetches it once when it can, and keeps the cached copy when it cannot.
+ */
+export function cachedChapterLacksStyles(bytes: Uint8Array, mediaType: string): boolean {
+  if (!/html|xml/i.test(mediaType) || bytes.byteLength > 4 * 1024 * 1024) return false;
+  const head = new TextDecoder().decode(bytes.subarray(0, 64 * 1024));
+  for (const [tag] of head.matchAll(/<link\b[^>]*>/gi)) {
+    const rel = /\brel\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1]?.toLowerCase() ?? '';
+    if (rel.split(/\s+/).includes('stylesheet') && !rel.includes('alternate') && tag.includes('__reader-book-resource__')) return true;
+  }
+  return false;
+}

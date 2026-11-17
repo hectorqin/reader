@@ -3,7 +3,7 @@ import { applyCorrections, emptyOverrides, type ReadingOverrides } from './readi
 import { loadTxt } from '../formats/txt.ts';
 import { ApiError } from '../api/errors.ts';
 import { dismissNotice, notify } from './notifications.ts';
-import { renditionRef } from './rendition.ts';
+import { cachedChapterLacksStyles, renditionRef } from './rendition.ts';
 import type { ReaderApi } from '../api/client.ts';
 import type { Book, BookContent, Manifest, Note } from '../api/types.ts';
 import { loadBook, isImagePath, extensionOf } from '../formats/index.ts';
@@ -687,8 +687,15 @@ export class ReaderScreen {
     // Keyed by the rendition, not just the section: a client that read the plain
     // text before this change and the markup after it must not serve the cached
     // plain text for a chapter it is now rendering as a document.
-    const cached = await this.publicationCache.resource(book.id, ref);
-    const blob = cached ? new Blob([toArrayBuffer(cached)]) : await this.options.api.asset(book.id, ref);
+    let cached = await this.publicationCache.resource(book.id, ref);
+    // A chapter cached before its stylesheets were embedded is fetched again once,
+    // when the network allows; offline, the cached copy is still the chapter.
+    let fresh: Blob | null = null;
+    if (cached && cachedChapterLacksStyles(cached, item.mediaType)) {
+      fresh = await this.options.api.asset(book.id, ref).catch(() => null);
+      if (fresh) cached = null;
+    }
+    const blob = cached ? new Blob([toArrayBuffer(cached)]) : fresh ?? await this.options.api.asset(book.id, ref);
     if (!cached) {
       // Cached per section, not per book, so a partially read book is partially
       // readable offline and re-opening one does not re-fetch what was read.

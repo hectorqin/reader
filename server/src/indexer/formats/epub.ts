@@ -243,11 +243,18 @@ export const epubHandler = registerFileHandler({
       if (!entry) throw new Error(`chapter not found: ${path}`);
 
       const xhtml = await archive.read(path, MAX_CHAPTER_BYTES);
-      const rewritten = rewriteChapterDocument(xhtml.toString('utf8'), {
+      const assetUrl = (archivePath: string, fragment: string): string =>
+        `${assetBase(ctx)}?${BOOK_RESOURCE_MARKER}=1&ref=${encodeURIComponent(archivePath)}${fragment ? `#${fragment}` : ''}`;
+      const withStyles = await inlineStylesheets(xhtml.toString('utf8'), posix.dirname(path), {
+        exists: (archivePath) => archive.has(archivePath),
+        size: (archivePath) => archive.get(archivePath)?.uncompressedSize ?? 0,
+        read: async (archivePath) => (await archive.read(archivePath, MAX_STYLESHEET_BYTES)).toString('utf8'),
+        assetUrl,
+      });
+      const rewritten = rewriteChapterDocument(withStyles, {
         path,
         baseDir: posix.dirname(path),
-        assetUrl: (archivePath, fragment) =>
-          `${assetBase(ctx)}?${BOOK_RESOURCE_MARKER}=1&ref=${encodeURIComponent(archivePath)}${fragment ? `#${fragment}` : ''}`,
+        assetUrl,
         exists: (archivePath) => archive.has(archivePath),
       });
 
@@ -280,6 +287,52 @@ export const epubHandler = registerFileHandler({
     };
   },
 });
+
+/** A stylesheet larger than this is not inlined into every chapter (and stays a link). */
+const MAX_STYLESHEET_BYTES = 2 * 1024 * 1024;
+
+/**
+ * A chapter's linked stylesheets, embedded as `<style>` with their `url()`s made absolute.
+ *
+ * A chapter read through the server is rendered from its body and its `<style>`
+ * blocks: the head, and every `<link>` in it, is never loaded. Left as links, an
+ * EPUB's own stylesheet silently did not apply when reading online — the opposite
+ * of what 精排 promises (docs/architecture.md). The whole-file path (offline EPUB)
+ * already applies the book's stylesheets; this makes the two agree.
+ *
+ * A stylesheet's own references (fonts, background images) are relative to *its*
+ * folder, not the chapter's, so they are resolved here, before the text moves into
+ * the chapter. The URLs are written with a bare `&`: nothing decodes entities in CSS.
+ */
+export async function inlineStylesheets(xhtml: string, baseDir: string, archive: {
+  exists(path: string): boolean; size(path: string): number; read(path: string): Promise<string>;
+  assetUrl(path: string, fragment: string): string;
+}): Promise<string> {
+  const links = [...xhtml.matchAll(/<link\b[^>]*>/gi)];
+  if (!links.length) return xhtml;
+  const replacements = new Map<string, string>();
+  for (const [tag] of links) {
+    if (replacements.has(tag)) continue;
+    const rel = /\brel\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1]?.toLowerCase() ?? '';
+    const href = /\bhref\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1] ?? '';
+    if (!rel.split(/\s+/).includes('stylesheet') || rel.includes('alternate')) continue;
+    if (!href || /^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(href)) continue;
+    const cssPath = posix.normalize(baseDir === '.' ? splitFragment(href)[0] : `${baseDir}/${splitFragment(href)[0]}`);
+    if (!archive.exists(cssPath) || archive.size(cssPath) > MAX_STYLESHEET_BYTES) continue;
+    let css: string;
+    try { css = await archive.read(cssPath); } catch { continue; }
+    const cssDir = posix.dirname(cssPath);
+    const resolved = css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (whole: string, quote: string, value: string) => {
+      const trimmed = value.trim();
+      if (/^(?:[a-z][a-z0-9+.-]*:|#|\/\/)/i.test(trimmed)) return whole;
+      const [target, fragment] = splitFragment(trimmed);
+      const full = posix.normalize(cssDir === '.' ? target : `${cssDir}/${target}`);
+      return archive.exists(full) ? `url(${quote}${archive.assetUrl(full, fragment)}${quote})` : whole;
+    });
+    replacements.set(tag, `<style data-href="${escapeAttribute(cssPath)}">${resolved.replace(/<\/style/gi, '<\\/style')}</style>`);
+  }
+  return replacements.size ? xhtml.replace(/<link\b[^>]*>/gi, tag => replacements.get(tag) ?? tag) : xhtml;
+}
 
 /**
  * First heading in a chapter document, for a book whose OPF has no titles.

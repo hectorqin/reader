@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { renditionRef } from '../src/ui/rendition.ts';
+import { cachedChapterLacksStyles, renditionRef } from '../src/ui/rendition.ts';
 
 /**
  * Which reference the reader asks the server for.
@@ -47,5 +47,19 @@ describe('the reference a section is fetched under', () => {
     expect(renditionRef({ href: 'chapter:3' })).toBe('chapter:3');
     expect(renditionRef({ href: 'page:0', format: 'image' })).toBe('page:0');
     expect(renditionRef({ href: 'chunk:4096' })).toBe('chunk:4096');
+  });
+});
+
+describe('cached chapters from before stylesheets were embedded', () => {
+  const bytes = (html: string) => new TextEncoder().encode(html);
+  const marked = '/api/v1/books/b/assets?__reader-book-resource__=1&amp;ref=OEBPS%2Fbook.css';
+  it('are recognised by the stylesheet link the server used to leave', () => {
+    expect(cachedChapterLacksStyles(bytes(`<html><head><link rel="stylesheet" href="${marked}"/></head><body/></html>`), 'application/xhtml+xml')).toBe(true);
+  });
+  it('are not: an embedded stylesheet, an alternate one, a missing one, or a non-document', () => {
+    expect(cachedChapterLacksStyles(bytes('<html><head><style data-href="OEBPS/book.css">p{}</style></head></html>'), 'application/xhtml+xml')).toBe(false);
+    expect(cachedChapterLacksStyles(bytes(`<link rel="alternate stylesheet" href="${marked}"/>`), 'text/html')).toBe(false);
+    expect(cachedChapterLacksStyles(bytes('<link rel="stylesheet" href="../missing.css"/>'), 'text/html')).toBe(false);
+    expect(cachedChapterLacksStyles(bytes(`<link rel="stylesheet" href="${marked}"/>`), 'text/plain')).toBe(false);
   });
 });

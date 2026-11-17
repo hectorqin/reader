@@ -526,6 +526,18 @@ Android 只覆盖它真正能做得更好的部分——连通性和设备名—
 对比一下被删掉的做法：reset 样式表、统一的「阅读主题」、给 `p` 加边距。
 它们都能让排版「看起来一致」，而一致性恰恰是这里要避免的东西。
 
+### 经服务端阅读的章节，样式表嵌在章节里
+
+在线阅读的 EPUB 和 Kindle 书是一章一章从服务端取的，阅读器只取章节的正文和其中的 `<style>`，
+`<head>` 里的 `<link rel="stylesheet">` 不会被加载。所以服务端在发出章节时把它链接的样式表嵌成
+`<style>`（`inlineStylesheets`，`server/src/indexer/formats/epub.ts`；Kindle 见 `mobi.ts`），
+并把样式表里相对**样式表自身**的 `url()`（字体、背景图）改写成带资源标记的绝对地址。
+CSS 不解码实体，所以地址里用裸 `&`。超过 2 MB 的样式表、备用样式表（`alternate`）和找不到的样式表不嵌入。
+
+此前在线阅读的 EPUB 一直没有应用出版方样式表（整书下载后的离线阅读是应用的）。设备上已经缓存的旧章节
+仍带着那个没被加载的 `<link>`：阅读器取缓存时认出这种章节，联网时重新取一次并替换缓存，
+离线时照旧用缓存（`cachedChapterLacksStyles`，`web/src/ui/rendition.ts`）。
+
 ### 书的样式隔离在 shadow root 里
 
 书里一条 `p { color: red }` 不能改到书架，App 的 `.topbar` 也不能被书撞上。
