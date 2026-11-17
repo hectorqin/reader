@@ -21,6 +21,8 @@ type FileAcquisition = Extract<Acquisition, { kind: 'file' }>;
 const EXTENSIONS: Readonly<Record<string, string>> = {
   'application/epub+zip': 'epub',
   'application/pdf': 'pdf',
+  'application/x-mobipocket-ebook': 'mobi',
+  'application/vnd.amazon.mobi8-ebook': 'azw3',
   'text/plain': 'txt',
   'text/markdown': 'md',
   'application/vnd.comicbook+zip': 'cbz',

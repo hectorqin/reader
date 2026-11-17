@@ -90,7 +90,7 @@ On Windows, the Compose setup above avoids shell-specific path and line-continua
 
 ### Local books
 
-Place EPUB, TXT, PDF, CBZ/ZIP, or comic image directories in your mounted library. By default, the server checks the library for changes every 60 seconds; administrators can change the interval (0 disables it) under Me → Service configuration → Scan settings (扫描设置). The server also scans once at startup. With a writable mount, administrators upload from the file manager and members use 上传书籍 (Upload books) at the top of the library page (book formats only; no unpacking, no overwriting).
+Place EPUB, Kindle (DRM-free MOBI/AZW3/AZW), TXT, PDF, CBZ/ZIP, or comic image directories in your mounted library. By default, the server checks the library for changes every 60 seconds; administrators can change the interval (0 disables it) under Me → Service configuration → Scan settings (扫描设置). The server also scans once at startup. With a writable mount, administrators upload from the file manager and members use 上传书籍 (Upload books) at the top of the library page (book formats only; no unpacking, no overwriting).
 
 The shelf contains readable books; the library lets you browse the disk directory. Removing a book from a shelf is different from deleting its file. See the [user guide (中文)](user-guide.zh-CN.md).
 

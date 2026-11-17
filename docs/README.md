@@ -29,6 +29,7 @@ The project README introduces reader. Use the guides below for installation, eve
 | [架构与数据边界 / Architecture](architecture.md) | 数据目录、身份、同步和客户端架构 / Data boundaries, identity, sync, client architecture |
 | [前端 React 架构](frontend-react-migration.md) | Web 入口、Provider、路由、feature 边界和长生命周期资源 |
 | [API](api.md) | 鉴权、书籍、资源、进度、文件管理、OPDS 与影音 / Auth, books, resources, progress, file management, OPDS and media |
+| [Kindle 格式](kindle-formats.zh-CN.md) | MOBI/AZW3 如何读取与发布、无法读取时的行为、限制 |
 | [读书笔记管理](notes-library.zh-CN.md) | 全库笔记页、导出、笔记与书的生命周期，以及后续方向 |
 | [界面规范 / UI guidelines](ui.md) | 布局、交互、可访问性 / Layout, interaction, accessibility |
 
