@@ -8,6 +8,7 @@
  *   pdf     -> .pdf
  *   cbz     -> .cbz, .zip   (claims .zip only when the contents look like a comic)
  *   txt     -> .txt
+ *   mobi    -> .mobi, .azw3, .azw (Kindle; read on the server, served like an EPUB)
  *   image   -> image extensions (last, so nothing specific is shadowed)
  *
  * Directory handlers have no extension and are consulted by the scanner after
@@ -21,6 +22,7 @@ import './epub.ts';
 import './pdf.ts';
 import './comic-archive.ts';
 import './text.ts';
+import './mobi.ts';
 import './image.ts';
 import './comic-directory.ts';
 

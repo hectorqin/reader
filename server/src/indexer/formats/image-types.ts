@@ -31,6 +31,9 @@ export function imageContentType(name: string): string {
 const ZIP_IMAGE_TYPES: Record<string, string> = {
   '.epub': 'application/epub+zip',
   '.pdf': 'application/pdf',
+  '.mobi': 'application/x-mobipocket-ebook',
+  '.azw': 'application/vnd.amazon.ebook',
+  '.azw3': 'application/vnd.amazon.mobi8-ebook',
   '.zip': 'application/zip',
   '.cbz': 'application/vnd.comicbook+zip',
   '.cbr': 'application/vnd.comicbook-rar',

@@ -104,6 +104,23 @@ test('acquisition revalidates provider references and streams the selected file'
   await assert.rejects(() => provider.detail(ctx, 'not-a-ref'), code('INVALID_SOURCE_REF'));
 });
 
+test('Kindle files are downloadable, and an EPUB of the same book is preferred when no format was picked', async () => {
+  const feed = (links: Array<{ href: string; type: string }>) => jsonFeed({ publications: [{
+    metadata: { identifier: 'urn:book:k', title: 'K' }, links: links.map(link => ({ ...link, rel: ACQUIRE })),
+  }] });
+  const both = transport({ [ROOT]: feed([{ href: '/k.azw3', type: 'application/vnd.amazon.mobi8-ebook' }, { href: '/k.epub', type: 'application/epub+zip' }]) });
+  let provider = createOpdsProvider(both);
+  let entry = (await provider.browse!(context(), {})).items[0]!;
+  let acquisition = await provider.acquire(context(), { entryRef: entry.ref }) as Extract<Acquisition, { kind: 'file' }>;
+  assert.equal(acquisition.mediaType, 'application/epub+zip');
+  const only = transport({ [ROOT]: feed([{ href: '/k.mobi', type: 'application/x-mobipocket-ebook' }]) });
+  provider = createOpdsProvider(only);
+  entry = (await provider.browse!(context(), {})).items[0]!;
+  acquisition = await provider.acquire(context(), { entryRef: entry.ref }) as Extract<Acquisition, { kind: 'file' }>;
+  assert.equal(acquisition.kind, 'file');
+  assert.equal(acquisition.mediaType, 'application/x-mobipocket-ebook');
+});
+
 test('borrowing, purchases and DRM are explicit external actions rather than file downloads', async () => {
   for (const [rel, mediaType, expected] of [
     [`${ACQUIRE}/borrow`, 'application/epub+zip', 'borrow'],

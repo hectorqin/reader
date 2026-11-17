@@ -11,6 +11,7 @@ const ACQUISITION = 'http://opds-spec.org/acquisition';
 const FILE_TYPES = new Set([
   'application/epub+zip', 'application/pdf', 'text/plain',
   'application/vnd.comicbook+zip', 'application/x-cbz',
+  'application/x-mobipocket-ebook', 'application/vnd.amazon.mobi8-ebook',
 ]);
 
 type ObjectValue = Record<string, unknown>;
@@ -71,6 +72,17 @@ function hasRel(link: OpdsLink, rel: string): boolean { return link.rel.includes
 function isAcquisition(link: OpdsLink): boolean { return link.rel.some((rel) => rel === ACQUISITION || rel.startsWith(`${ACQUISITION}/`)); }
 function downloadable(link: OpdsLink): boolean {
   return (hasRel(link, ACQUISITION) || hasRel(link, `${ACQUISITION}/open-access`)) && FILE_TYPES.has(plainType(link.type));
+}
+
+/**
+ * The format to fetch when the reader did not pick one. A feed often offers one book
+ * as EPUB and as Kindle; the EPUB keeps the publisher's styling with the fewest
+ * conversions, so Kindle files are taken only when nothing else is offered.
+ */
+const KINDLE_TYPES = new Set(['application/x-mobipocket-ebook', 'application/vnd.amazon.mobi8-ebook']);
+function preferredDownload(links: OpdsLink[]): OpdsLink | undefined {
+  const usable = links.filter(downloadable);
+  return usable.find((link) => !KINDLE_TYPES.has(plainType(link.type))) ?? usable[0];
 }
 
 function documentLinks(parsed: OpdsDocument, all: OpdsLink[]): void {
@@ -394,7 +406,7 @@ export function createOpdsProvider(options: OpdsProviderOptions = {}): SourcePro
       const { book } = await lookup(ctx, request.entryRef);
       const selected = request.optionId
         ? book.acquisitions.find((link) => optionId(link) === request.optionId)
-        : book.acquisitions.find(downloadable) ?? book.acquisitions[0];
+        : preferredDownload(book.acquisitions) ?? book.acquisitions[0];
       if (!selected) fail('OPDS acquisition option no longer exists', 'RESOURCE_GONE', 404);
       if (!downloadable(selected)) {
         return { kind: 'action-required', action: {
