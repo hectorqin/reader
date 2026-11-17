@@ -107,3 +107,70 @@ export function formatDuration(seconds: number): string {
   const hours = Math.floor(minutes / 60), rest = minutes % 60;
   return hours ? (rest ? `${hours}小时${rest}分` : `${hours}小时`) : `${rest}分`;
 }
+
+// ---- 阅读日历 ---------------------------------------------------------------
+
+/** The heatmap's span: the last 53 weeks, Monday to Sunday, ending with this week. */
+export function heatmapRange(now = new Date()): StatsRange {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sinceMonday = (today.getDay() + 6) % 7;
+  const from = new Date(today.getFullYear(), today.getMonth(), today.getDate() - sinceMonday - 52 * 7);
+  const to = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  return { from: from.getTime(), to: to.getTime(), label: '近一年', anchor: '' };
+}
+
+/**
+ * Five steps, fixed in minutes rather than relative to the reader's own busiest
+ * day: "a square this dark is an hour" stays true from one year to the next, and a
+ * single long holiday does not wash every ordinary day out to the lightest step.
+ */
+export const HEAT_STEPS: ReadonlyArray<{ min: number; label: string }> = [
+  { min: 1, label: '不足15分' },
+  { min: 15 * 60, label: '15分以上' },
+  { min: 30 * 60, label: '半小时以上' },
+  { min: 60 * 60, label: '1小时以上' },
+  { min: 2 * 60 * 60, label: '2小时以上' },
+];
+export function heatLevel(seconds: number): number {
+  let level = 0;
+  HEAT_STEPS.forEach((step, index) => { if (seconds >= step.min) level = index + 1; });
+  return level;
+}
+
+export interface HeatCell { key: string; label: string; seconds: number; level: number; future: boolean }
+export interface HeatWeek { cells: HeatCell[]; month: string }
+
+/**
+ * Days as weeks (columns of Monday..Sunday). A week whose first days open a month is
+ * labelled with it, so the month names sit where the months start.
+ */
+export function heatWeeks(points: ReadonlyArray<{ key: string; label: string; from: number; seconds: number }>, now = new Date()): HeatWeek[] {
+  const weeks: HeatWeek[] = [];
+  points.forEach((point, index) => {
+    if (index % 7 === 0) weeks.push({ cells: [], month: '' });
+    const week = weeks[weeks.length - 1]!;
+    week.cells.push({ key: point.key, label: point.label, seconds: point.seconds, level: heatLevel(point.seconds), future: point.from > now.getTime() });
+    const date = new Date(point.from);
+    if (date.getDate() <= 7 && index % 7 === 0) week.month = `${date.getMonth() + 1}月`;
+  });
+  return weeks;
+}
+
+export interface HeatSummary { days: number; total: number; current: number; longest: number }
+
+/**
+ * Days with any time, the total, and streaks of consecutive days. Today without
+ * reading yet does not break the current streak: the day is not over.
+ */
+export function heatSummary(points: ReadonlyArray<{ key: string; seconds: number; from: number }>, now = new Date()): HeatSummary {
+  const past = points.filter(point => point.from <= now.getTime());
+  let longest = 0, run = 0;
+  for (const point of past) { run = point.seconds > 0 ? run + 1 : 0; longest = Math.max(longest, run); }
+  let current = 0;
+  for (let index = past.length - 1; index >= 0; index -= 1) {
+    if (past[index]!.seconds > 0) current += 1;
+    else if (index === past.length - 1) continue;
+    else break;
+  }
+  return { days: past.filter(point => point.seconds > 0).length, total: past.reduce((sum, point) => sum + point.seconds, 0), current, longest };
+}
