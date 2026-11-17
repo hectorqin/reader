@@ -295,6 +295,35 @@ describe('chapter publication reading', () => {
     expect(body(second.screen)?.querySelector('img')?.getAttribute('src')).toMatch(/^data:image\/png/);
     expect(second.transport.requests.some((request) => request.url.includes('/assets?'))).toBe(false);
   });
+  it('re-fetches a chapter cached before its stylesheets were embedded, and keeps it when offline', async () => {
+    const kv = new MemoryKv(); const blobs = new MemoryBlobs();
+    const styled = content(['styled']); styled.kind = 'reflowable';
+    delete styled.items[0]!.format; styled.items[0]!.mediaType = 'application/xhtml+xml';
+    const ref = styled.items[0]!.resourceRef!;
+    const stale = '<html><head><link rel="stylesheet" href="/api/v1/books/b/assets?__reader-book-resource__=1&amp;ref=book.css"/></head><body><p>旧的缓存</p></body></html>';
+    const cache = new PublicationCache(kv, blobs, publicationScope('http://one.test', 'u1'));
+    // Offline first: the stale copy is still the chapter.
+    await cache.putResource(book.id, ref, new TextEncoder().encode(stale));
+    const offline = await setup(kv, blobs);
+    offline.transport.respondWith((request) => {
+      if (request.url.endsWith('/manifest')) return { status: 200, headers: {}, json: manifest(styled) };
+      if (request.url.includes('/assets?')) throw new ApiError('offline', 'offline');
+      return { status: 200, headers: {}, json: { progress: null } };
+    });
+    await offline.screen.open(book);
+    expect(body(offline.screen)?.textContent).toContain('旧的缓存');
+    offline.screen.dispose(); screens.splice(screens.indexOf(offline.screen), 1);
+    // Online: fetched again, rendered with its style, and the cache replaced.
+    const online = await setup(kv, blobs);
+    online.transport.respondWith((request) => {
+      if (request.url.endsWith('/manifest')) return { status: 200, headers: {}, json: manifest(styled) };
+      if (request.url.includes('/assets?')) return { status: 200, headers: {}, bytes: new TextEncoder().encode('<html><head><style data-href="book.css">p { color: red; }</style></head><body><p>新的正文</p></body></html>') };
+      return { status: 200, headers: {}, json: { progress: null } };
+    });
+    await online.screen.open(book);
+    expect(body(online.screen)?.textContent).toContain('新的正文');
+    expect(new TextDecoder().decode((await cache.resource(book.id, ref))!)).toContain('<style data-href="book.css">');
+  });
   it('ignores delayed chapter callbacks after disposal and an offline account switch', async () => {
     const env = await setup();
     let release!: () => void;

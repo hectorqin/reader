@@ -8,7 +8,7 @@ import type { Manifest, Note } from '../api/types.ts';
 import type { OfflineStore } from '../store/offline.ts';
 import type { SyncEngine } from '../core/sync.ts';
 import { PublicationCache } from '../store/publications.ts';
-import { OfflineDownload, type DownloadState } from '../core/offline-download.ts';
+import { OfflineDownload, RANGED_FORMATS, type DownloadState } from '../core/offline-download.ts';
 import { decodeAnchor, encodeAnchor, findText, type SearchHit, type TextAnchor } from './text-anchor.ts';
 import { ApiError } from '../api/errors.ts';
 import { newId } from '../core/id.ts';
@@ -48,7 +48,7 @@ export function ReadingTools(props: ReadingToolsProps) {
   const [noteFilter, setNoteFilter] = useState<'all' | 'bookmark' | 'annotation'>('all');
   const [deleteId, setDeleteId] = useState('');
   const editorRef = useRef<HTMLDivElement>(null);
-  const [from, setFrom] = useState(1), [to, setTo] = useState(['chapters', 'txt'].includes(props.manifest.book.format) ? props.manifest.content?.total ?? 1 : 1);
+  const [from, setFrom] = useState(1), [to, setTo] = useState(RANGED_FORMATS.includes(props.manifest.book.format) ? props.manifest.content?.total ?? 1 : 1);
   const [downloadReady, setDownloadReady] = useState(false);
   const [download, setDownload] = useState<DownloadState | null>(null);
   const [usage, setUsage] = useState(0), [books, setBooks] = useState<Array<{ id: string; bytes: number }>>([]), [quota, setQuota] = useState(256);
@@ -57,7 +57,7 @@ export function ReadingTools(props: ReadingToolsProps) {
   const searchRun = useRef<AbortController | null>(null), alive = useRef(true);
   const task = useMemo(() => new OfflineDownload(props.api, props.cache, props.manifest, state => { if (alive.current) setDownload(state); }), []);
   const bookId = props.manifest.book.id;
-  const rangedDownload = ['chapters', 'txt'].includes(props.manifest.book.format) && !props.overrides.headingPrefix;
+  const rangedDownload = RANGED_FORMATS.includes(props.manifest.book.format) && !props.overrides.headingPrefix;
   const visibleNotes = notes.filter(note => noteFilter === 'all' || (noteFilter === 'bookmark' ? note.type === 'bookmark' : note.type !== 'bookmark'));
   const bookmarked = notes.some(note => note.type === 'bookmark' && note.locator === props.locator);
   useEffect(() => { if (editing || composing) editorRef.current?.querySelector('textarea')?.focus(); }, [editing, composing]);

@@ -99,7 +99,9 @@ test('KF8: skeletons and fragments, stylesheet flows, kindle: links and the NCX'
   const first = await text(await handler.asset(ctx, { ref: 'xhtml:text/part0000.xhtml' }));
   // The fragment sits inside the skeleton's body.
   assert.match(first, /<body aid="0" id="aid-0"><div aid="1" id="ch0"><p>One /);
-  assert.match(first, /<link rel="stylesheet" href="\/api\/v1\/books\/book-1\/assets\?__reader-book-resource__=1&ref=flow%2F1\.css"\/>/);
+  // The stylesheet is embedded: a chapter read through the server applies <style>, not <link>.
+  assert.doesNotMatch(first, /<link rel="stylesheet"/);
+  assert.ok(first.includes('<style>p { color: navy; background: url(/api/v1/books/book-1/assets?__reader-book-resource__=1&ref=res%2F0); }</style>'), first);
   assert.match(first, /<img src="\/api\/v1\/books\/book-1\/assets\?__reader-book-resource__=1&ref=res%2F0"\/>/);
   assert.match(first, /<a href="\/api\/v1\/books\/book-1\/assets\?__reader-book-resource__=1&ref=text%2Fpart0001\.xhtml#ch1">to 1<\/a>/);
   const second = await text(await handler.asset(ctx, { ref: 'xhtml:text/part0001.xhtml' }));
@@ -110,6 +112,25 @@ test('KF8: skeletons and fragments, stylesheet flows, kindle: links and the NCX'
   assert.equal(await text(css), 'p { color: navy; background: url(/api/v1/books/book-1/assets?__reader-book-resource__=1&ref=res%2F0); }');
   await assert.rejects(handler.asset(ctx, { ref: 'flow/0.css' }), (error: AppError) => error.statusCode === 404);
   assert.deepEqual((await handler.toc!(ctx)).map(entry => entry.title), ['第 1 章', '第 2 章']);
+});
+
+test('an offline chapter carries its stylesheet and images, and keeps fonts and chapter links as links', async t => {
+  const file = buildKf8({ chapters: ['<p>One {{img}} {{link:1}}</p>', '<p>Two</p>'], css: 'p { color: navy; } p::before { content: url(kindle:embed:0001?mime=image/png); } @font-face { src: url(kindle:embed:0002); }' });
+  const ctx = await onDisk(t, 'book.azw3', file);
+  const online = await text(await handler.asset(ctx, { ref: 'xhtml:text/part0000.xhtml' }));
+  const offline = await text(await handler.asset(ctx, { ref: 'offline:xhtml:text/part0000.xhtml' }));
+  // Online, images stay links; offline, they are data URLs.
+  assert.match(online, /<img src="\/api\/v1\/books\/book-1\/assets/);
+  assert.doesNotMatch(offline, /<link rel="stylesheet"/);
+  const png = `data:image/png;base64,${PNG.toString('base64')}`;
+  assert.ok(offline.includes(`<style>p { color: navy; } p::before { content: url(${png}); }`), offline);
+  assert.ok(offline.includes(`<img src="${png}"/>`));
+  // A resource that is not an image (here: missing) stays a link; so does the next chapter.
+  assert.match(offline, /url\(\/api\/v1\/books\/book-1\/assets\?__reader-book-resource__=1&ref=res%2F1\)/);
+  assert.match(offline, /href="\/api\/v1\/books\/book-1\/assets\?__reader-book-resource__=1&ref=text%2Fpart0001\.xhtml#ch1"/);
+  // MOBI 6 images inline the same way.
+  const mobi = await onDisk(t, 'old.mobi', buildMobi6({ chapters: ['<p>{{img}}</p>'] }).file);
+  assert.ok((await text(await handler.asset(mobi, { ref: 'offline:xhtml:text/part0000.xhtml' }))).includes(`<img src="${png}" />`));
 });
 
 test('a hybrid .mobi is read from its KF8 half, with images numbered from the first header', async t => {
