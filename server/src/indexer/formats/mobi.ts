@@ -347,6 +347,41 @@ function RESOURCE(ref: string, fragment = ''): string {
   // entity is decoded. In an HTML attribute `&ref=` is not a character reference.
   return `${BASE}?${BOOK_RESOURCE_MARKER}=1&ref=${encodeURIComponent(ref)}${fragment ? `#${encodeURIComponent(fragment)}` : ''}`;
 }
+/**
+ * A KF8 chapter's stylesheets, embedded as `<style>`.
+ *
+ * Always, not only offline: a chapter read through the server is rendered from its
+ * body and its `<style>` blocks, and a `<link>` in the head is not fetched, so a
+ * linked stylesheet would simply not apply. The stylesheets are small and their
+ * own URLs are already rewritten, so embedding them costs little.
+ *
+ * With `images`, the chapter also renders with no network: its images become
+ * `data:` URLs. That is what the offline download asks for (`offline:<chapter>`),
+ * and stores under the chapter's own key, so the reader reads it back unchanged.
+ * Fonts stay links: one font inlined into every chapter would multiply its size by
+ * the chapter count, and offline the reader's own font is a fine stand-in. So does
+ * an image too large to be worth carrying twice.
+ */
+const INLINE_IMAGE_LIMIT = 4 * 1024 * 1024;
+function selfContained(html: string, book: KindleBook, images: boolean): string {
+  const marker = `${BASE}?${BOOK_RESOURCE_MARKER}=1&ref=`;
+  const flowRef = new RegExp(`<link\\b[^>]*href=["']${escapeRegExp(marker)}flow%2F(\\d+)\\.css["'][^>]*>`, 'gi');
+  const embedded = html.replace(flowRef, (tag, n: string) => {
+    const range = book.flows[Number(n)];
+    if (!range || Number(n) === 0) return tag;
+    return `<style>${replaceKindleUris(book.text.subarray(range[0], range[1]).toString('utf8')).replace(/<\/style/gi, '<\\/style')}</style>`;
+  });
+  if (!images) return embedded;
+  return embedded.replace(new RegExp(`${escapeRegExp(marker)}res%2F(\\d+)`, 'g'), (url, n: string) => {
+    let data: Buffer;
+    try { data = book.resource(Number(n)); } catch { return url; }
+    const type = sniffResource(data);
+    if (!type.startsWith('image/') || data.length > INLINE_IMAGE_LIMIT) return url;
+    return `data:${type};base64,${data.toString('base64')}`;
+  });
+}
+function escapeRegExp(text: string): string { return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
 function withAssetBase(html: string, ctx: HandlerContext): string {
   if (!ctx.bookId) throw new Error('HandlerContext.bookId is required to rewrite chapter links');
   return html.split(BASE).join(`/api/v1/books/${encodeURIComponent(ctx.bookId)}/assets`);
@@ -454,12 +489,13 @@ export const mobiHandler = registerFileHandler({
 
   async asset(ctx: HandlerContext, req): Promise<AssetPayload> {
     const book = await open(ctx);
-    const ref = req.ref.replace(/^xhtml:/, '').replace(/#.*$/, '');
+    const offline = req.ref.startsWith('offline:');
+    const ref = req.ref.replace(/^offline:/, '').replace(/^xhtml:/, '').replace(/#.*$/, '');
     const chapter = /^text\/part(\d{4,})\.xhtml$/.exec(ref);
     if (chapter) {
       const found = book.chapters[Number(chapter[1])];
       if (!found) throw new AppError(404, 'NOT_FOUND', `chapter not found: ${ref}`);
-      const body = Buffer.from(withAssetBase(found.html(), ctx), 'utf8');
+      const body = Buffer.from(withAssetBase(selfContained(found.html(), book, offline), ctx), 'utf8');
       return { data: body, contentType: 'text/html; charset=utf-8', filename: ref.slice(5), size: body.byteLength };
     }
     const flow = /^flow\/(\d+)\.(css|svg)$/.exec(ref);

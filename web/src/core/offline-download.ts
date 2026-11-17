@@ -3,6 +3,17 @@ import type { Manifest } from '../api/types.ts';
 import { OFFLINE_FILE, PublicationCache } from '../store/publications.ts';
 import { renditionRef } from '../ui/rendition.ts';
 
+/**
+ * Formats downloaded chapter by chapter, in a range the reader picks. A Kindle book
+ * is one of them: the server reads the container, and each chapter is fetched in its
+ * self-contained form (`offline:` — stylesheet and images inside it) so it renders
+ * with no network. See docs/kindle-formats.zh-CN.md.
+ */
+export const RANGED_FORMATS: readonly string[] = ['chapters', 'txt', 'mobi'];
+const SELF_CONTAINED_FORMATS: readonly string[] = ['mobi'];
+/** Marks a chapter stored in its self-contained form; one read online is not. */
+const selfContainedKey = (ref: string): string => `offline-ready:${ref}`;
+
 export interface DownloadState {
   status: 'idle' | 'running' | 'paused' | 'cancelled' | 'complete' | 'error';
   completed: number; total: number; from: number; to: number; message: string; revision?: string | undefined;
@@ -30,7 +41,7 @@ export class OfflineDownload {
     await this.pending;
     await this.update({ status: cancel ? 'cancelled' : 'paused', message: cancel ? '已取消，已下载内容保留' : '已暂停，可继续下载' });
   }
-  async start(from = 1, to = ['chapters', 'txt'].includes(this.manifest.book.format) ? this.manifest.content?.total ?? 1 : 1): Promise<void> {
+  async start(from = 1, to = RANGED_FORMATS.includes(this.manifest.book.format) ? this.manifest.content?.total ?? 1 : 1): Promise<void> {
     if (this.run) return;
     const run = this.run = new AbortController();
     this.pending = this.download(run, from, to).finally(() => { if (this.run === run) this.run = null; });
@@ -43,11 +54,12 @@ export class OfflineDownload {
   private async download(run: AbortController, from: number, to: number): Promise<void> {
     const book = this.manifest.book, signal = run.signal;
     const overrides = await this.cache.overrides(book.id);
-    const chapters = ['chapters', 'txt'].includes(book.format) && !!this.manifest.content && !(book.format === 'txt' && overrides?.headingPrefix);
+    const chapters = RANGED_FORMATS.includes(book.format) && !!this.manifest.content && !(book.format === 'txt' && overrides?.headingPrefix);
+    const selfContained = SELF_CONTAINED_FORMATS.includes(book.format);
     const total = chapters ? this.manifest.content?.total ?? 0 : 1;
     try {
       if (book.format === 'image' && this.manifest.files.length > 1) throw new Error('图片目录暂不支持整书离线下载');
-      if (!['chapters', 'epub', 'txt', 'pdf', 'cbz', 'zip', 'image'].includes(book.format)) throw new Error('此格式暂不支持整书离线下载');
+      if (!['chapters', 'epub', 'txt', 'pdf', 'cbz', 'zip', 'image', 'mobi'].includes(book.format)) throw new Error('此格式暂不支持整书离线下载');
       if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1 || to < from || to > total) throw new Error('章节范围无效');
       await this.update({ status: 'running', from, to, total: to - from + 1, completed: 0, message: '正在下载', revision: this.manifest.content?.revision });
       await this.cache.putManifest(book.id, this.manifest);
@@ -70,9 +82,13 @@ export class OfflineDownload {
         if (items.length !== to - from + 1) throw new Error('目录已变化，请重新打开书籍再下载');
         for (const item of items) {
           signal.throwIfAborted(); const ref = renditionRef(item);
-          if (!await this.cache.resource(book.id, ref)) {
-            const blob = await this.api.asset(book.id, ref, { signal });
+          // A self-contained chapter replaces the plain one reading cached under the same
+          // key; the marker says which one is there, so a resumed download skips it.
+          const ready = selfContained ? !!await this.cache.resource(book.id, selfContainedKey(ref)) : !!await this.cache.resource(book.id, ref);
+          if (!ready) {
+            const blob = await this.api.asset(book.id, selfContained ? `offline:${ref}` : ref, { signal });
             signal.throwIfAborted(); await this.cache.putResource(book.id, ref, new Uint8Array(await blob.arrayBuffer()));
+            if (selfContained) await this.cache.putResource(book.id, selfContainedKey(ref), new Uint8Array([1]));
           }
           signal.throwIfAborted(); await this.update({ completed: this.state.completed + 1 });
         }
