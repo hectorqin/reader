@@ -6,6 +6,7 @@ import { registerAuthRoutes } from './routes/auth.ts';
 import { registerLibraryRoutes } from './routes/library.ts';
 import { registerSyncRoutes } from './routes/sync.ts';
 import { registerStatsRoutes } from './routes/stats.ts';
+import { registerNotesRoutes } from './routes/notes.ts';
 import { registerReadingOverrideRoutes } from './routes/reading-overrides.ts';
 import { registerTtsRoutes } from './routes/tts.ts';
 import { registerWebRoutes } from './routes/web.ts';
@@ -85,6 +86,7 @@ export function buildApp(ctx: AppContext,mediaRuntime?:MediaService): FastifyIns
   registerLibraryRoutes(app, ctx);
   registerSyncRoutes(app, ctx);
   registerStatsRoutes(app, ctx);
+  registerNotesRoutes(app, ctx);
   registerTtsRoutes(app, ctx);
   registerReadingOverrideRoutes(app, ctx);
   registerSourceRoutes(app, ctx);

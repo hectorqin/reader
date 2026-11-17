@@ -210,6 +210,23 @@ describe('chapter publication reading', () => {
     expect(body(env.screen)?.textContent).toContain('resource:r1:b');
   });
 
+  it('opens at the place it was asked for (a note from 读书笔记) instead of the saved position', async () => {
+    const env = await setup(); serve(env.transport, content(['a', 'b']));
+    await env.offline.setProgress({ bookId: book.id, locator: 'r1:0.0000:chapter:a', percentage: 0,
+      chapterTitle: 'a', device: 'phone', updatedAt: 10 });
+    await env.screen.open(book, 'r1:0.0000:chapter:b');
+    expect(body(env.screen)?.textContent).toContain('resource:r1:b');
+  });
+
+  it('stays at the saved position, and says why, when the requested place is gone', async () => {
+    const env = await setup(); serve(env.transport, content(['a', 'b']));
+    await env.offline.setProgress({ bookId: book.id, locator: 'r1:0.0000:chapter:b', percentage: 0.5,
+      chapterTitle: 'b', device: 'phone', updatedAt: 10 });
+    await env.screen.open(book, 'rt1:' + JSON.stringify({ sectionId: 'chapter:b', start: 0, end: 4, quote: '不在书里', prefix: '', suffix: '' }));
+    expect(body(env.screen)?.textContent).toContain('resource:r1:b');
+    expect(document.body.textContent).toContain('原文位置已变化');
+  });
+
   it('switches from the contents panel only after chapter selection and preserves the old view on failure', async () => {
     const env = await setup(); let failSwitch = true;
     env.transport.respondWith(request => {
@@ -530,6 +547,8 @@ it('bookmarks the page on screen from the top bar, and the same button removes i
   await act(async () => { button().click(); });
   await vi.waitFor(() => expect(button().getAttribute('aria-pressed')).toBe('true'));
   expect(env.offline.notesFor(book.id).filter((note) => note.type === 'bookmark')).toHaveLength(1);
+  // 读书笔记 says which chapter a note is from.
+  expect(env.offline.notesFor(book.id)[0]?.chapterTitle).toBe('章节 a');
   await act(async () => { button().click(); });
   await vi.waitFor(() => expect(button().getAttribute('aria-pressed')).toBe('false'));
   expect(env.offline.notesFor(book.id).filter((note) => note.type === 'bookmark')).toHaveLength(0);

@@ -306,7 +306,7 @@ export class ReaderScreen {
             save={(type, comment, color) => this.saveAnnotation(type, comment, color)} remove={() => this.removeAnnotation()}
             close={() => { this.annotation = null; this.annotationClosedAt = performance.now(); this.view?.clearSelection(); this.patch({}); }}
             {...(this.assistAvailable ? { askAi: () => this.openAssist() } : {})} />}{this.assist && <AiAssistSheet
-            key={encodeAnchor(this.assist.anchor)} quote={this.assist.anchor.quote} ask={(action, question) => this.askAi(action, question)}
+            key={encodeAnchor(this.assist.anchor)} quote={this.assist.anchor.quote} ask={(action, question) => this.askAi(action, question)} keep={comment => this.keepAnswer(comment)}
             onClose={() => { this.assist = null; this.patch({}); }} />}{this.viewer && <ImageViewer
             key={this.viewer.images[this.viewer.index]?.src} images={this.viewer.images} start={this.viewer.index}
             onClose={() => this.closeViewer()} />}{this.footnote && <Sheet
@@ -316,7 +316,7 @@ export class ReaderScreen {
           </Sheet>}{this.toolsOpen && this.manifest ? <ReadingTools
             api={this.options.api} cache={this.publicationCache} offline={this.options.offline}
             sync={this.options.sync} manifest={this.manifest} selection={this.toolsSelection}
-            locator={this.view?.position()?.locator ?? ''} returnLocator={this.toolsReturn}
+            locator={this.view?.position()?.locator ?? ''} chapterTitle={this.view?.position()?.chapterTitle ?? ''} returnLocator={this.toolsReturn}
             sections={signal => this.searchSections(signal)} navigate={target => this.navigateTool(target)}
             overrides={this.overrides} saveOverrides={value => this.saveOverrides(value)} undoOverrides={() => this.undoOverrides()}
             previewHeadings={prefix => this.previewHeadings(prefix)}
@@ -430,6 +430,16 @@ export class ReaderScreen {
     return result.answer;
   }
 
+  /** Keeps an AI answer as an annotation on the passage it was about, so it shows in 读书笔记. */
+  private async keepAnswer(comment: string): Promise<void> {
+    const book = this.book, assist = this.assist;
+    if (!book || !assist) throw new Error('阅读器已关闭');
+    const chapterTitle = this.view?.position()?.chapterTitle;
+    await this.options.offline.upsertNotes([{ id: newId(), bookId: book.id, type: 'note', locator: encodeAnchor(assist.anchor),
+      text: assist.anchor.quote, comment, color: '#ffd54f', ...(chapterTitle !== undefined ? { chapterTitle } : {}), updatedAt: Date.now() }]);
+    this.options.sync.schedule(); this.paintNotes();
+  }
+
   /**
    * Opens the comic page on screen in the picture viewer.
    *
@@ -480,7 +490,11 @@ export class ReaderScreen {
   }
 
   /** Opens a book: fetch bytes, parse, restore position, start reporting. */
-  async open(book: Book): Promise<void> {
+  /**
+   * @param at A place to go to once the book is open (a note's locator, from 读书笔记),
+   *   instead of staying at the saved reading position.
+   */
+  async open(book: Book, at = ''): Promise<void> {
     this.pdfLoading?.abort();
     this.doc?.pdf?.dispose();
     const pdfLoading = new AbortController();
@@ -542,6 +556,7 @@ export class ReaderScreen {
         // restore message overwrite "正在载入…", which is what it is there for.
         await this.restorePosition(book, token);
         if (this.chrome.statusState === 'loading') this.hideStatus();
+        await this.openRequested(at, token);
         return;
       }
 
@@ -566,6 +581,7 @@ export class ReaderScreen {
       else this.hideStatus();
 
       await this.restorePosition(book, token);
+      await this.openRequested(at, token);
     } catch (err) {
       if (token !== this.loadingToken) return;
       this.handleLoadError(err);
@@ -787,8 +803,11 @@ export class ReaderScreen {
   private async saveAnnotation(type: 'highlight' | 'note' | 'bookmark', comment: string, color: string): Promise<void> {
     if (!this.book || !this.annotation) return;
     const { anchor, note } = this.annotation;
+    // A new note records the chapter on screen; an edited one keeps its chapter and its tags.
+    const chapterTitle = note ? note.chapterTitle : this.view?.position()?.chapterTitle;
     await this.options.offline.upsertNotes([{ id: note?.id ?? newId(), bookId: this.book.id,
-      type, locator: encodeAnchor(anchor), text: anchor.quote, comment, color, updatedAt: Date.now() }]);
+      type, locator: encodeAnchor(anchor), text: anchor.quote, comment, color,
+      ...(chapterTitle !== undefined ? { chapterTitle } : {}), ...(note?.tags ? { tags: note.tags } : {}), updatedAt: Date.now() }]);
     this.options.sync.schedule(); this.paintNotes();
   }
   private async removeAnnotation(): Promise<void> {
@@ -1571,6 +1590,22 @@ export class ReaderScreen {
     }
   }
 
+  /**
+   * Goes to the place the book was opened for. It runs after the saved position is
+   * restored, so a place that can no longer be found leaves the reader where they
+   * were, with the reason, rather than on the first page.
+   */
+  private async openRequested(at: string, token: number): Promise<void> {
+    if (!at || token !== this.loadingToken || !this.view) return;
+    try {
+      await this.navigateTool(decodeAnchor(at) ?? at);
+      this.flashStatus('已跳到笔记位置', 1800);
+    } catch (error) {
+      if (token !== this.loadingToken) return;
+      this.flashStatus(error instanceof Error ? error.message : '无法定位到这条笔记', 4000);
+    }
+  }
+
   /** Goes back to a place from 阅读记录; that place then becomes the saved position. */
   private async restoreHistory(locator: string): Promise<void> {
     this.patch({ bookInfoOpen: false });
@@ -1602,7 +1637,7 @@ export class ReaderScreen {
       for (const note of here) await this.options.offline.deleteNote(note.id);
       this.flashStatus('已移除本页书签', 1800);
     } else {
-      await this.options.offline.upsertNotes([{ id: newId(), bookId: book.id, type: 'bookmark', locator, text: book.title, comment: '', color: '', updatedAt: Date.now() }]);
+      await this.options.offline.upsertNotes([{ id: newId(), bookId: book.id, type: 'bookmark', locator, text: book.title, comment: '', color: '', chapterTitle: this.view?.position()?.chapterTitle ?? '', updatedAt: Date.now() }]);
       this.flashStatus('已为本页加书签', 1800);
     }
     this.options.sync.schedule();

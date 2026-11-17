@@ -2,7 +2,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AiAssistSheet, type AssistAction } from '../src/ui/ai-assist.tsx';
+import { AiAssistSheet, MAX_KEPT_ANSWER, keptAnswer, type AssistAction } from '../src/ui/ai-assist.tsx';
 import { AnnotationPopover } from '../src/ui/annotation-popover.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -29,6 +29,32 @@ describe('AiAssistSheet', () => {
     await flush();
     expect(host.querySelector('.ai-assist-answer')?.textContent).toBe('解释');
     expect(ask.mock.calls).toEqual([['translate', ''], ['explain', '']]);
+  });
+
+  it('keeps an answer as an annotation that says what was asked, once', async () => {
+    const keep = vi.fn(async () => undefined);
+    act(() => root.render(<AiAssistSheet quote="To be" ask={async () => ' 生存还是毁灭 '} keep={keep} onClose={() => undefined} />));
+    expect(button('存为批注')).toBeUndefined();
+    act(() => button('翻译').click());
+    await flush();
+    act(() => button('存为批注').click());
+    await flush();
+    expect(keep).toHaveBeenCalledWith('AI 翻译\n生存还是毁灭');
+    expect(button('已存为批注').disabled).toBe(true);
+    // A new answer can be kept again.
+    act(() => button('解释').click());
+    await flush();
+    expect(button('存为批注').disabled).toBe(false);
+  });
+
+  it('cuts a kept answer to what an annotation holds, and leaves the button out where notes cannot be written', async () => {
+    expect(keptAnswer('ask', '这是谁？', '答')).toBe('问：这是谁？\n答');
+    expect(keptAnswer('explain', '', '长'.repeat(5000))).toHaveLength(MAX_KEPT_ANSWER);
+    act(() => root.render(<AiAssistSheet quote="To be" ask={async () => '译文'} onClose={() => undefined} />));
+    act(() => button('翻译').click());
+    await flush();
+    expect(host.querySelector('.ai-assist-answer')?.textContent).toBe('译文');
+    expect(button('存为批注')).toBeUndefined();
   });
 
   it('asks the reader\'s own question, and only when there is one', async () => {

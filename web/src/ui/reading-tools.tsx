@@ -18,6 +18,8 @@ export interface SearchSection { id: string; title: string; text: string }
 export interface ReadingToolsProps {
   api: ReaderApi; cache: PublicationCache; offline: OfflineStore; sync: SyncEngine; manifest: Manifest;
   selection: TextAnchor | null; locator: string; returnLocator: string;
+  /** The chapter on screen, recorded on a new note so 读书笔记 can say where it is from. */
+  chapterTitle?: string;
   sections(signal: AbortSignal): AsyncGenerator<SearchSection>;
   navigate(target: TextAnchor | string): Promise<void>;
   overrides: ReadingOverrides;
@@ -113,7 +115,7 @@ export function ReadingTools(props: ReadingToolsProps) {
     const note: Note = editing && !bookmark ? { ...editing, type: editing.type === 'bookmark' ? 'bookmark' : comment.trim() ? 'note' : 'highlight', comment, color, updatedAt: Date.now() } : {
       id: newId(), bookId, type: bookmark ? 'bookmark' : comment.trim() ? 'note' : 'highlight',
       locator: bookmark ? props.locator : encodeAnchor(selected!), text: bookmark ? props.manifest.book.title : selected!.quote,
-      comment: bookmark ? '' : comment, color: bookmark ? '' : color, updatedAt: Date.now(),
+      comment: bookmark ? '' : comment, color: bookmark ? '' : color, ...(props.chapterTitle ? { chapterTitle: props.chapterTitle } : {}), updatedAt: Date.now(),
     };
     await props.offline.upsertNotes([note]); props.sync.schedule();
     setNotes(props.offline.notesFor(bookId));

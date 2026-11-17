@@ -9,6 +9,7 @@ import {
   ListOrdered, Layers, Heart, Star, Clapperboard, UserRound, Lock, LockOpen, Gauge,
   Subtitles, AudioLines, MicVocal, Shuffle, Repeat, Repeat1, Maximize, Minimize, Expand,
   Shrink, LocateFixed, LayoutGrid, House, Rss, UsersRound, Ticket, Link2, ServerCog,
+  NotebookPen, Tag,
 } from 'lucide-react';
 import type { CSSProperties, JSX } from 'react';
 
@@ -34,6 +35,7 @@ export const ICONS = {
   // files and the library
   folder: Folder, 'folder-browse': FolderOpen, 'folder-missing': FolderX, file: File, 'file-text': FileText,
   book: BookOpen, shelf: Library, library: LibraryBig, bookmark: Bookmark, feed: Rss,
+  notes: NotebookPen, tag: Tag,
   // actions
   search: Search, close: X, plus: Plus, check: Check, upload: Upload, trash: Trash2,
   download: Download, refresh: RefreshCw, edit: Pencil, sort: ArrowDownUp, more: Ellipsis,

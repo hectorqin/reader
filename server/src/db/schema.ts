@@ -25,6 +25,8 @@ ALTER TABLE chapter_resources ADD COLUMN media_type TEXT NOT NULL DEFAULT 'text/
 ALTER TABLE user_books ADD COLUMN reading_status TEXT;
 ALTER TABLE reading_progress ADD COLUMN sync_revision INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE notes ADD COLUMN sync_revision INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE notes ADD COLUMN chapter_title TEXT NOT NULL DEFAULT '';
+ALTER TABLE notes ADD COLUMN tags TEXT NOT NULL DEFAULT '';
 `;
 
 export const SYNC_TRACKING_SQL = `
@@ -317,6 +319,17 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 CREATE INDEX IF NOT EXISTS idx_notes_user_book ON notes(user_id, book_id);
 CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(user_id, updated_at);
+
+-- 书评: one reader's words about a whole book (docs/notes-library.zh-CN.md §5).
+-- Not a kind of note: notes.type is CHECK-constrained and older builds refuse a
+-- sync batch that carries a type they do not know. No row means no review.
+CREATE TABLE IF NOT EXISTS book_reviews (
+  user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  book_id    TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+  body       TEXT NOT NULL,
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY (user_id, book_id)
+);
 
 -- Highest-priority override layer: user manual edits. Never auto overwritten.
 CREATE TABLE IF NOT EXISTS metadata_overrides (
