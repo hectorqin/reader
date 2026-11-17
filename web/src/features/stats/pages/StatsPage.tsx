@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { useMediaEnabled } from '../../../shared/stores/features.ts';
@@ -8,7 +8,7 @@ import { MediaPageFrame } from '../../media/components/MediaPageFrame.tsx';
 import { IconButton, Segmented } from '../../../ui/toolkit.tsx';
 import { Icon } from '../../../ui/icon.tsx';
 import type { TimeStatsGroup, TimeStatsQuery } from '../../../api/client.ts';
-import { STAT_KINDS, buildPeriods, formatDuration, mergeSeries, mergeWorks, periodRange, shiftAnchor, statsTz, type StatKind } from '../stats-model.ts';
+import { HEAT_STEPS, STAT_KINDS, buildPeriods, formatDuration, heatSummary, heatWeeks, heatmapRange, mergeSeries, mergeWorks, periodRange, shiftAnchor, statsTz, type StatKind } from '../stats-model.ts';
 import '../styles/stats.css';
 
 const GROUPS: Array<{ value: TimeStatsGroup; label: string }> = [
@@ -112,6 +112,8 @@ export function StatsPage() {
       </details>
     </section>
 
+    <ReadingCalendar kind={kind} onPick={key => set({ g: '', at: key.slice(0, 7), sel: key })} />
+
     <section className="stats-works" aria-label="作品">
       <h2>{pick ? `${pick.label}的作品` : `${range.label}的作品`}{pick && <button type="button" className="stats-clear" onClick={() => set({ sel: '' })}>看整段</button>}</h2>
       {works.length === 0 && !reading.isPending && <p className="stats-empty">这段时间还没有记录。时长从这个版本起开始统计。</p>}
@@ -129,6 +131,54 @@ export function StatsPage() {
     </section>
     {user?.role === 'admin' && <AdminOverview query={chartQuery} label={range.label} />}
   </MediaPageFrame>;
+}
+
+/**
+ * 阅读日历: the last 53 weeks, one square per day, darker for more time. It follows
+ * the kind filter above it (阅读 alone, or everything), and a day opens the chart on
+ * that day's month with the day picked, so its works are listed below.
+ */
+function ReadingCalendar({ kind, onPick }: { kind: StatKind | ''; onPick(key: string): void }) {
+  const runtime = useRuntime();
+  const enabled = useMediaEnabled();
+  const now = new Date();
+  const range = heatmapRange(now);
+  const query: TimeStatsQuery = { from: range.from, to: range.to, tz: statsTz(), group: 'day' };
+  const reading = useQuery({ queryKey: ['stats', 'reading', query], queryFn: ({ signal }) => runtime.api.readingStats(query, { signal }) });
+  const media = useQuery({ queryKey: ['stats', 'media', query], queryFn: ({ signal }) => runtime.mediaApi.timeStats(query, signal), enabled, retry: false });
+  const periods = useMemo(() => buildPeriods('day', range), [range.from, range.to]);
+  const points = mergeSeries(periods, reading.data, enabled ? media.data : undefined)
+    .map(point => ({ ...point, seconds: kind ? point.byKind[kind] : STAT_KINDS.reduce((sum, item) => sum + point.byKind[item.kind], 0) }));
+  const weeks = heatWeeks(points, now);
+  const summary = heatSummary(points, now);
+  const what = kind ? STAT_KINDS.find(item => item.kind === kind)!.label : '阅读与影音';
+  const scroller = useRef<HTMLDivElement>(null);
+  // The weeks that matter are the recent ones: on a narrow screen, start at the right.
+  useEffect(() => { const el = scroller.current; if (el) el.scrollLeft = el.scrollWidth; }, [reading.isPending]);
+  return <section className="stats-calendar" aria-label="阅读日历" data-kind={kind || 'all'}>
+    <h2>{kind && kind !== 'reading' ? `${what}日历` : '阅读日历'}<small>近一年</small></h2>
+    <p className="stats-calendar-summary" aria-live="polite">{reading.isPending ? '正在读取…'
+      : summary.days ? `${summary.days} 天有记录 · 合计 ${formatDuration(summary.total)} · 当前连续 ${summary.current} 天 · 最长连续 ${summary.longest} 天`
+        : '近一年还没有记录。'}</p>
+    <div className="stats-calendar-scroll" ref={scroller}>
+      <div className="stats-calendar-grid" role="grid" aria-label={`${what}，近一年每天的时长`}>
+        <div className="stats-calendar-days" aria-hidden="true"><span /><span>一</span><span /><span>三</span><span /><span>五</span><span /></div>
+        {weeks.map((week, index) => <div key={index} className="stats-calendar-week" role="row">
+          <span className="stats-calendar-month" aria-hidden="true">{week.month}</span>
+          {week.cells.map(cell => <button type="button" role="gridcell" key={cell.key} className="stats-calendar-day" data-level={cell.level}
+            disabled={cell.future} aria-label={`${cell.label} ${cell.seconds ? formatDuration(cell.seconds) : '无记录'}`} title={`${cell.label} ${cell.seconds ? formatDuration(cell.seconds) : '无记录'}`}
+            onClick={() => onPick(cell.key)} />)}
+        </div>)}
+      </div>
+    </div>
+    <div className="stats-calendar-legend" aria-label="图例">
+      <span>少</span>
+      <i className="stats-calendar-day" data-level={0} title="无记录" />
+      {HEAT_STEPS.map((step, index) => <i key={step.min} className="stats-calendar-day" data-level={index + 1} title={step.label} />)}
+      <span>多（深色为 2 小时以上）</span>
+    </div>
+    {enabled && !kind && media.error && <p className="stats-note">影音时长暂时无法读取，日历只包含阅读。</p>}
+  </section>;
 }
 
 /** Administrators: each account's time in the range shown, by kind. */

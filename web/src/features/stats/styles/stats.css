@@ -73,3 +73,39 @@
 .stats-work-time { flex: none; font-size: var(--text-ui); font-variant-numeric: tabular-nums; }
 .stats-empty { color: var(--color-muted); font-size: var(--text-ui); }
 .stats-admin-scroll { overflow-x: auto; }
+
+/* 阅读日历. One hue per kind (the kind's own --color-chart-N; the brand colour for
+ * everything), five steps by opacity, so the scale reads the same in light and dark. */
+.stats-calendar { margin-top: var(--space-4); }
+.stats-calendar { --heat: var(--color-brand-text); }
+.stats-calendar[data-kind='reading'] { --heat: var(--color-chart-1); }
+.stats-calendar[data-kind='video'] { --heat: var(--color-chart-2); }
+.stats-calendar[data-kind='audiobook'] { --heat: var(--color-chart-3); }
+.stats-calendar[data-kind='music'] { --heat: var(--color-chart-4); }
+.stats-calendar h2 { display: flex; align-items: baseline; gap: var(--space-2); margin: 0 0 var(--space-1); font-size: var(--text-title); font-weight: 600; }
+.stats-calendar h2 small { font-size: var(--text-meta); font-weight: 400; color: var(--color-muted); }
+.stats-calendar-summary { margin: 0 0 var(--space-2); font-size: var(--text-meta); color: var(--color-muted); }
+.stats-calendar-scroll { overflow-x: auto; padding-bottom: var(--space-1); }
+.stats-calendar-grid { display: flex; gap: 3px; width: max-content; }
+.stats-calendar-week, .stats-calendar-days { display: grid; grid-template-rows: 1rem repeat(7, 12px); gap: 3px; }
+/* The weekday names stay put while the weeks scroll under them on a narrow screen. */
+.stats-calendar-days { position: sticky; left: 0; z-index: 1; background: var(--media-background, var(--color-bg)); }
+.stats-calendar-days span { font-size: var(--text-micro); line-height: 12px; color: var(--color-muted); padding-inline-end: 4px; }
+.stats-calendar-month { font-size: var(--text-micro); line-height: 1rem; color: var(--color-muted); white-space: nowrap; width: 12px; overflow: visible; }
+/* Scoped under the page: the page frame's own `.media-screen button` sizing (40px
+ * minimum) would otherwise win and stack every day on top of its neighbours. */
+.stats-page .stats-calendar-day {
+  display: block; width: 12px; height: 12px; min-width: 0; min-height: 0; padding: 0; border: 0;
+  border-radius: var(--radius-xs); background: color-mix(in srgb, var(--color-ink) 9%, transparent); cursor: pointer;
+}
+.stats-page .stats-calendar-day[data-level='1'] { background: color-mix(in srgb, var(--heat) 25%, var(--color-surface)); }
+.stats-page .stats-calendar-day[data-level='2'] { background: color-mix(in srgb, var(--heat) 45%, var(--color-surface)); }
+.stats-page .stats-calendar-day[data-level='3'] { background: color-mix(in srgb, var(--heat) 65%, var(--color-surface)); }
+.stats-page .stats-calendar-day[data-level='4'] { background: color-mix(in srgb, var(--heat) 82%, var(--color-surface)); }
+.stats-page .stats-calendar-day[data-level='5'] { background: var(--heat); }
+.stats-page .stats-calendar-day:disabled { visibility: hidden; }
+.stats-calendar-day:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 1px; }
+@media (hover: hover) and (pointer: fine) { .stats-calendar button.stats-calendar-day:hover { outline: 1px solid var(--color-ink); } }
+.stats-calendar-legend { display: flex; align-items: center; gap: 3px; margin-top: var(--space-1); font-size: var(--text-micro); color: var(--color-muted); }
+.stats-calendar-legend span { margin-inline: var(--space-1); }
+.stats-page .stats-calendar-legend .stats-calendar-day { cursor: default; }
