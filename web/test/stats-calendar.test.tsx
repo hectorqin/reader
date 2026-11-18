@@ -48,7 +48,9 @@ it('draws a year of days, darker for more time, with the streaks', async () => {
   expect(new Date(yearQuery.from).getDay()).toBe(1);
   const days = calendar.querySelectorAll('button.stats-calendar-day');
   expect(days.length).toBeGreaterThanOrEqual(52 * 7 + 1);
-  const level = (key: string) => [...days].find(day => day.getAttribute('aria-label')!.startsWith(`${Number(key.slice(5, 7))}月${Number(key.slice(8))}日`) && !(day as HTMLButtonElement).disabled)?.getAttribute('data-level');
+  // A label names month and day only, and a year of weeks reaches back past the same
+  // date last year: the day wanted is the *latest* cell with that label.
+  const level = (key: string) => [...days].findLast(day => day.getAttribute('aria-label')!.startsWith(`${Number(key.slice(5, 7))}月${Number(key.slice(8))}日`) && !(day as HTMLButtonElement).disabled)?.getAttribute('data-level');
   expect(level(daysAgo(1))).toBe('5');
   expect(level(daysAgo(2))).toBe('2');
   expect(level(daysAgo(40))).toBe('1');
