@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { SourceEntry, SourceInstance, SourcePage } from '../../../api/sources.ts';
+import type { LibraryScanResult } from '../../../api/types.ts';
 import { useRuntime } from '../../../app/providers/runtime-context.tsx';
 import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { useSettingsStore } from '../../../shared/stores/settings.store.ts';
@@ -10,6 +11,14 @@ import { notify } from '../../../ui/notifications.ts';
 import { SearchableSelect } from '../../../ui/searchable-select.tsx';
 import { Button, Callout, Icon } from '../../../ui/toolkit.tsx';
 import { SourceBookDetailSheet } from './SourceBookDetailSheet.tsx';
+
+/** What a scan found, in the words of ui.md §4: what changed, or that nothing did. */
+export function describeScan(result: LibraryScanResult): string {
+  const parts = [result.added && `新增 ${result.added} 本`, result.updated && `更新 ${result.updated} 本`, result.removed && `${result.removed} 本文件已不在`]
+    .filter(Boolean);
+  const failed = result.failed ? `${parts.length ? '；' : ''}${result.failed} 个文件读取失败` : '';
+  return parts.length || failed ? `书库已更新：${parts.join('、')}${failed}` : '书库已是最新';
+}
 
 /** One step of the trail: the page a crumb leads back to. */
 interface Crumb { ref?: string; title: string }
@@ -72,6 +81,19 @@ export function SourceExplore({ sources }: { sources: SourceInstance[] }) {
     } catch (reason) { setError(reason instanceof Error ? reason.message : '上传失败，请重试'); }
     finally { setUploading(false); }
   };
+  // 刷新: look at the library again and reload the level being shown. An administrator's
+  // refresh scans first, so a file just copied into the books folder turns up here.
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = async () => {
+    setRefreshing(true); setError('');
+    try {
+      const result = await runtime.api.refreshLibrary(admin);
+      for (const key of ['shelf', 'search', 'library-files']) void queryClient.invalidateQueries({ queryKey: [key] });
+      await open(trail.slice(0, -1), current?.ref);
+      if (result) notify(describeScan(result), { kind: result.failed ? 'error' : 'success' });
+    } catch (reason) { setError(reason instanceof Error ? reason.message : '刷新失败，请重试'); }
+    finally { setRefreshing(false); }
+  };
   const loadMore = async () => {
     if (!page?.nextCursor || more || !selectedId) return;
     const run = epoch.current;
@@ -113,6 +135,7 @@ export function SourceExplore({ sources }: { sources: SourceInstance[] }) {
       <div className="explore-tools">
         <SearchableSelect label="选择来源" value={selectedId} options={sources.map(source => ({ value: source.id, label: source.name + (source.isDefault ? '（默认）' : '') }))} onChange={setSourceId} />
         {canUpload && <label className={'button' + (uploading || busy ? ' is-disabled' : '')}><Icon name="upload" size={18} /><span>{uploading ? '上传中…' : '上传书籍'}</span><input hidden type="file" multiple disabled={uploading || busy} onChange={event => { const files = Array.from(event.currentTarget.files ?? []); if (files.length) void upload(files); event.currentTarget.value = ''; }} /></label>}
+        {local && <button type="button" className="button" disabled={refreshing || busy || uploading} aria-label={admin ? '扫描书库并刷新' : '刷新书库'} title={admin ? '扫描书库并刷新' : '刷新书库'} onClick={() => void refresh()}><Icon name="refresh" size={18} /><span>{refreshing ? (admin ? '扫描中…' : '刷新中…') : '刷新'}</span></button>}
         {local && admin && <Link className="button" to={current?.ref ? `/library/files?path=${encodeURIComponent(current.ref)}` : '/library/files'}><Icon name="folder" size={18} /><span>文件管理</span></Link>}
         <div className="segmented explore-layout" role="group" aria-label="布局">{([['list', '列表'], ['grid', '网格']] as const).map(([value, label]) => <button type="button" key={value} aria-pressed={layout === value} onClick={() => { void runtime.updateSettings({ exploreLayout: value }); }}>{label}</button>)}</div>
       </div>

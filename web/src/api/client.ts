@@ -25,6 +25,7 @@ import type {
   SyncPushResult,
   TocEntry,
   UploadResult,
+  LibraryScanResult,
   User,
 } from './types.ts';
 import type { Platform } from '../core/platform.ts';
@@ -604,6 +605,24 @@ export class ReaderApi {
     options: RequestOptions = {},
   ): Promise<BatchResult> {
     return this.call('/api/v1/library/browse/shelf', 'POST', { ...target, action }, options);
+  }
+
+  /**
+   * 刷新 on 书库: looks at the library again. An administrator's refresh first runs
+   * the incremental scan (mtime + size, so cheap when nothing changed; a scan
+   * already running is joined, not restarted) and returns what it found; anyone
+   * else only drops the cached listings, which the periodic scan keeps current.
+   * Either way the next read of the shelf, the library and its 发现 pages goes
+   * to the server.
+   */
+  async refreshLibrary(scan: boolean, options: RequestOptions = {}): Promise<LibraryScanResult | null> {
+    if (scan) return (await this.call<{ result: LibraryScanResult }>('/api/v1/library/scan', 'POST', undefined, options)).result;
+    await this.queryClient.invalidateQueries({
+      queryKey: ['reader'],
+      predicate: query => affectedNavigationQuery('/api/v1/library/scan', String(query.queryKey[4])),
+      refetchType: 'none',
+    });
+    return null;
   }
 
   /**

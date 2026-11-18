@@ -347,6 +347,18 @@ export interface UploadResult {
   } | null;
 }
 
+/** What one library scan found. Mirrors the server's `ScanResult`. */
+export interface LibraryScanResult {
+  scanned: number;
+  added: number;
+  updated: number;
+  unchanged: number;
+  removed: number;
+  failed: number;
+  lastError: string | null;
+  durationMs: number;
+}
+
 /** Outcome of a batch operation. Mirrors the server's `BatchResult`. */
 export interface BatchResult {
   /** Rows changed; a folder counts once per book inside it. */

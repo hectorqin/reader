@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '../src/shared/ui/render-root.ts';
-import { SourceExplore } from '../src/features/sources/components/SourceExplore.tsx';
+import { SourceExplore, describeScan } from '../src/features/sources/components/SourceExplore.tsx';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
 import { useAuthStore } from '../src/shared/stores/auth.store.ts';
 import { useSettingsStore } from '../src/shared/stores/settings.store.ts';
@@ -22,8 +22,9 @@ const catalog = vi.fn(async (id: string, request: { ref?: string }) => id === 'l
     { ref: 'off', title: '不在架的书', options: [{ id: 'read', label: '加入书架' }] }] }
   : { title: '发现', items: [{ ref: 'r', title: '远端的书' }] });
 const upload = vi.fn(async () => ({ uploaded: [{}], skipped: [] }));
+const refreshLibrary = vi.fn(async (scan: boolean) => scan ? { scanned: 3, added: 2, updated: 0, unchanged: 1, removed: 0, failed: 0, lastError: null, durationMs: 5 } : null);
 const runtime = {
-  api: { baseUrl: 'https://reader.example.com', sourceCatalog: catalog, upload, uploadProbe: async () => ({ allowed: true, writable: true }), coverBytes: async () => new Uint8Array() },
+  api: { baseUrl: 'https://reader.example.com', sourceCatalog: catalog, upload, refreshLibrary, uploadProbe: async () => ({ allowed: true, writable: true }), coverBytes: async () => new Uint8Array() },
   updateSettings: async (patch: object) => useSettingsStore.getState().update(patch),
 } as any;
 const paint = async (url: string) => {
@@ -40,7 +41,7 @@ afterEach(() => {
   act(() => render(null, root));
   useAuthStore.setState({ session: null, verifiedUser: null });
   useSettingsStore.getState().replace({ ...DEFAULT_APP_SETTINGS });
-  catalog.mockClear(); upload.mockClear();
+  catalog.mockClear(); upload.mockClear(); refreshLibrary.mockClear();
 });
 
 describe('发现', () => {
@@ -65,6 +66,7 @@ describe('发现', () => {
     await paint('/sources?tab=explore');
     expect(catalog).toHaveBeenLastCalledWith('legado-1', {});
     expect(root.querySelector('.explore-tools label, .explore-tools a')).toBeNull();
+    expect(buttons('.explore-tools > button')).toEqual([]);
     expect(root.querySelector('.explore-books')).not.toBeNull();
     const grid = [...root.querySelectorAll<HTMLButtonElement>('.explore-layout button')].find(button => button.textContent === '网格')!;
     await act(async () => { grid.click(); });
@@ -72,5 +74,35 @@ describe('发现', () => {
     expect(root.querySelector('.explore-books')).toBeNull();
     expect(root.querySelector('.explore-grid .explore-card')?.textContent).toContain('远端的书');
     expect(grid.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('refreshes 书库 where it stands: an administrator scans first, a member reloads', async () => {
+    useAuthStore.setState({ verifiedUser: { id: 'u', username: 'a', displayName: 'A', role: 'admin', createdAt: 0 } as any });
+    await paint(LIBRARY_PATH);
+    await act(async () => { root.querySelector<HTMLButtonElement>('.explore-link')!.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    catalog.mockClear();
+    const refresh = () => [...root.querySelectorAll<HTMLButtonElement>('.explore-tools > button')].find(button => button.textContent === '刷新')!;
+    await act(async () => { refresh().click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(refreshLibrary).toHaveBeenCalledWith(true);
+    // The folder being shown is read again, not the top of the library.
+    expect(catalog).toHaveBeenCalledTimes(1);
+    expect(catalog).toHaveBeenLastCalledWith('lib-7', { ref: '科幻' });
+    expect(root.querySelector('.explore-trail [aria-current]')?.textContent).toBe('科幻');
+
+    act(() => render(null, root));
+    useAuthStore.setState({ verifiedUser: { id: 'm', username: 'm', displayName: 'M', role: 'member', createdAt: 0 } as any });
+    refreshLibrary.mockClear();
+    await paint(LIBRARY_PATH);
+    await act(async () => { refresh().click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+    expect(refreshLibrary).toHaveBeenCalledWith(false);
+  });
+});
+
+describe('describeScan', () => {
+  const base = { scanned: 0, added: 0, updated: 0, unchanged: 0, removed: 0, failed: 0, lastError: null, durationMs: 0 };
+  it('says what changed, or that nothing did', () => {
+    expect(describeScan(base)).toBe('书库已是最新');
+    expect(describeScan({ ...base, added: 2, removed: 1 })).toBe('书库已更新：新增 2 本、1 本文件已不在');
+    expect(describeScan({ ...base, failed: 1 })).toBe('书库已更新：1 个文件读取失败');
   });
 });
