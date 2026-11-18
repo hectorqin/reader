@@ -203,6 +203,23 @@ test('duplicate copies collapse into one book', async () => {
   assert.equal(after.length, before.length, 'a byte-identical copy must not create a new book');
 });
 
+test('deleting one of two identical copies renames the book after the copy that is left', async () => {
+  const text = '第一章\n\n两份一样的正文。\n';
+  await writeFile(join(booksDir, '同书原名.txt'), text);
+  await ctx.scanner.scan();
+  await writeFile(join(booksDir, '同书改名2.txt'), text);
+  await ctx.scanner.scan();
+  const title = () => ctx.db.get<{ title: string }>(
+    `SELECT b.title FROM books b JOIN book_files f ON f.book_id = b.id WHERE f.rel_path = '同书原名.txt'`)?.title;
+  assert.equal(title(), '同书改名2', 'the copy parsed last named the shared book');
+  await rm(join(booksDir, '同书改名2.txt'));
+  await ctx.scanner.scan();
+  assert.equal(title(), '同书原名', 'with that copy gone, the book is named after the file that remains');
+  assert.equal(ctx.db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM book_files WHERE rel_path = '同书改名2.txt'`)!.n, 0);
+  await rm(join(booksDir, '同书原名.txt'));
+  await ctx.scanner.scan();
+});
+
 test('manual metadata is never overwritten by a rescan, and can be undone', async () => {
   const owner = await login('owner');
   const book = ctx.db.get<{ id: string }>('SELECT id FROM books WHERE identifier = ?', 'urn:isbn:9787536692930')!;
@@ -608,10 +625,13 @@ test('a manual metadata override reaches the continue-reading card', async () =>
 
   const listing = await app.inject({ method: 'GET', url: '/api/v1/books?search=%E5%BE%85%E6%94%B9%E5%90%8D', headers: auth(session.token) });
   const book = (listing.json() as { items: Array<{ id: string }> }).items[0]!;
-  await app.inject({
+  // A local book's metadata is the library's, edited by an administrator.
+  const owner = await login('owner');
+  const renamed = await app.inject({
     method: 'PATCH', url: `/api/v1/books/${book.id}/metadata`,
-    headers: auth(session.token), payload: { title: '改好的名字' },
+    headers: auth(owner.token), payload: { title: '改好的名字' },
   });
+  assert.equal(renamed.statusCode, 200, renamed.body);
   ctx.db.run(
     `INSERT INTO reading_progress (user_id, book_id, locator, percentage, chapter_title, device, updated_at)
      VALUES (?,?,?,?,?,?,?)`,
