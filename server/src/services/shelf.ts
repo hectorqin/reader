@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Db } from '../db/index.ts';
 import { applyOverrides, type BaseMetadata } from './merge.ts';
 import { safeJsonParse } from '../lib/text.ts';
-import { badRequest, notFound } from '../lib/errors.ts';
+import { badRequest, forbidden, notFound } from '../lib/errors.ts';
 
 export interface BookDto {
   id: string;
@@ -165,6 +165,9 @@ export interface ListOptions {
 function escapeLike(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
+
+/** Names one cover file, so a cover address changes when the cover does (`?v=`). */
+export const coverVersion = (coverPath: string): string => createHash('sha1').update(coverPath).digest('hex').slice(0, 10);
 
 export class ShelfService {
   constructor(private readonly db: Db) {}
@@ -345,6 +348,42 @@ export class ShelfService {
   }
 
   /**
+   * A book this user can see: on their shelf, or in the library with a live file.
+   *
+   * 书库 is open to every reader, so a library book is as visible as a shelf one.
+   * Editing its metadata or cover (both shared by every reader) goes through this,
+   * not `get`: requiring the shelf protected nothing, since anyone may add the book
+   * first, and it left 书库 unable to edit what it shows.
+   */
+  getVisible(userId: string, bookId: string): BookDto {
+    const row = this.db.get<BookRow>(`SELECT ${BOOK_COLUMNS} FROM books WHERE id = ?`, bookId);
+    if (!row) throw notFound('book not found');
+    const visible = this.db.get<{ n: number }>(
+      `SELECT (EXISTS (SELECT 1 FROM user_books WHERE user_id = ? AND book_id = ? AND hidden = 0)
+            OR EXISTS (SELECT 1 FROM book_files WHERE book_id = ? AND missing = 0)) AS n`,
+      userId, bookId, bookId,
+    );
+    if (!visible?.n) throw notFound('book not found');
+    return this.toDto(row);
+  }
+
+  /**
+   * A book this user may edit (编辑信息, 更换封面): one they can see, and — for a
+   * local book — only as an administrator.
+   *
+   * A local book's metadata and cover are one record every reader shares, so a
+   * reader's edit would rename the book on everyone's shelf. A book from a book
+   * source (`chapters`) stays the reader's to edit, as before.
+   */
+  getEditable(user: { id: string; role: string }, bookId: string): BookDto {
+    const book = this.getVisible(user.id, bookId);
+    if (book.format !== 'chapters' && user.role !== 'admin') {
+      throw forbidden('only an administrator may edit a library book', 'ADMIN_REQUIRED');
+    }
+    return book;
+  }
+
+  /**
    * Several books by id, in one round trip, as a map.
    *
    * The `user_books` join is applied for the same reason `get` applies it: an id
@@ -411,7 +450,7 @@ export class ShelfService {
       pubdate: effective.pubdate,
       format: row.format,
       // The cover response is immutable-cached; a changed cover file gets a new URL.
-      coverUrl: coverPath ? `/api/v1/books/${row.id}/cover?v=${createHash('sha1').update(coverPath).digest('hex').slice(0, 10)}` : null,
+      coverUrl: coverPath ? `/api/v1/books/${row.id}/cover?v=${coverVersion(coverPath)}` : null,
       fileSize: row.file_size,
       pageCount: row.page_count,
       source: effective.source,

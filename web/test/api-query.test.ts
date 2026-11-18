@@ -135,6 +135,15 @@ describe('media writes invalidate the navigation they change', () => {
     expect(affectedNavigationQuery(mutation, '/api/v1/media/browse?channel=music')).toBe(false);
   });
 
+  it('a metadata or cover edit stales every list the book is drawn in', () => {
+    for (const mutation of ['/api/v1/books/b-1/metadata', '/api/v1/books/b-1/metadata/title', '/api/v1/books/b-1/cover-source']) {
+      expect(affectedNavigationQuery(mutation, '/api/v1/books?scope=shelf&page=1')).toBe(true);
+      expect(affectedNavigationQuery(mutation, '/api/v1/books?scope=library')).toBe(true);
+      expect(affectedNavigationQuery(mutation, '/api/v1/sources/lib-7/browse?ref=a')).toBe(true);
+      expect(affectedNavigationQuery(mutation, '/api/v1/media/browse?channel=music')).toBe(false);
+    }
+  });
+
   it('a member’s 书库 refresh drops the cached library pages without asking for a scan', async () => {
     const transport = new FakeTransport();
     transport.json({ title: '书库', items: [] });

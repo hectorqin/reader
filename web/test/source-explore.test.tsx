@@ -106,3 +106,28 @@ describe('describeScan', () => {
     expect(describeScan({ ...base, failed: 1 })).toBe('书库已更新：1 个文件读取失败');
   });
 });
+
+describe('书库 detail', () => {
+  it('offers 编辑信息 and 更换封面 to administrators, on the local library’s books only', async () => {
+    useAuthStore.setState({ verifiedUser: { id: 'a', username: 'a', displayName: 'A', role: 'admin', createdAt: 0 } as any });
+    const detailOf = async () => {
+      const open = [...root.querySelectorAll<HTMLButtonElement>('.explore-book-actions button')].find(button => button.textContent === '详情')!;
+      await act(async () => { open.click(); await new Promise(resolve => setTimeout(resolve, 0)); });
+      const labels = [...document.querySelectorAll<HTMLButtonElement>('.book-detail-manage button')].map(button => button.textContent);
+      act(() => { [...document.querySelectorAll<HTMLButtonElement>('dialog button')].find(button => button.getAttribute('aria-label') === '关闭')?.click(); });
+      return labels;
+    };
+    runtime.api.sourceDetail = async () => ({});
+    await paint(LIBRARY_PATH);
+    expect(await detailOf()).toEqual(['编辑信息', '更换封面']);
+    act(() => render(null, root));
+    await paint('/sources?tab=explore');
+    expect(await detailOf()).toEqual([]);
+    // A reader's edit would rename the book for everyone, so a member gets neither.
+    act(() => render(null, root));
+    useAuthStore.setState({ verifiedUser: { id: 'm', username: 'm', displayName: 'M', role: 'member', createdAt: 0 } as any });
+    await paint(LIBRARY_PATH);
+    expect(await detailOf()).toEqual([]);
+  });
+});
+

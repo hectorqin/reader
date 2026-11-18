@@ -104,6 +104,11 @@ export function affectedNavigationQuery(mutation: string, query: string): boolea
   }
   if (mutation === '/api/v1/library/browse/shelf') return query.startsWith('/api/v1/books') || query.startsWith('/api/v1/library/continue');
   if (/^\/api\/v1\/library\/browse\//.test(mutation)) return query.startsWith('/api/v1/library/browse') || query.startsWith('/api/v1/books');
+  // A book's metadata and cover are the library's, drawn by every list it is in: the
+  // shelf, the library index and 书库 in 发现 — not only the book itself.
+  if (/^\/api\/v1\/books\/[^/]+\/(metadata|cover-source)(?:\/|$)/.test(mutation)) {
+    return query.startsWith('/api/v1/books') || query.startsWith('/api/v1/library/continue') || /^\/api\/v1\/sources\/[^/]+\/(browse|entries)(?:\?|$)/.test(query);
+  }
   if (/^\/api\/v1\/books\//.test(mutation)) {
     const id = mutation.match(/^\/api\/v1\/books\/([^/]+)/)?.[1];
     return query.startsWith('/api/v1/books') && (!id || query.includes('/books/' + id));

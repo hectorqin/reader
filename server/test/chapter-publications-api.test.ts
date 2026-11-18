@@ -456,10 +456,40 @@ test('the local library browses folder by folder with covers, like any source in
   await fixture.state({ ...initialState(), covers: { cover: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHf8AAAAASUVORK5CYII=' } });
   await h.app.inject({ method: 'POST', url: `/api/v1/books/${book.ref}/cover-source`, headers: auth(h.admin), payload: { sourceId: SOURCE_ID, entryRef: BOOK_REF, coverRef: 'cover' } });
   const covered = (await browse(`?ref=${encodeURIComponent('科幻/刘慈欣')}`)).items[0]!;
-  assert.equal(covered.coverRef, 'cover');
+  assert.match(covered.coverRef ?? '', /^cover@[0-9a-f]{10}$/, 'the cover address names the cover, so a changed one is not served from cache');
   assert.equal((covered as { metadata?: { publicationId?: string } }).metadata?.publicationId, book.ref, 'once shelved, the entry names the shelf book so a client offers 阅读');
-  const image = await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/cover?entryRef=${covered.ref}&coverRef=cover`, headers: auth(h.admin) });
+  const image = await h.app.inject({ method: 'GET', url: `/api/v1/sources/local/cover?entryRef=${covered.ref}&coverRef=${encodeURIComponent(covered.coverRef!)}`, headers: auth(h.admin) });
   assert.equal(image.statusCode, 200, image.body); assert.equal(image.headers['content-type'], 'image/png');
+});
+
+test('only an administrator edits a local book, from 书库 or the shelf; a reader sees the edit', async (t) => {
+  const h = await harness(); t.after(() => h.close());
+  await writeFile(join(h.booksDir, '书库里的书.txt'), '第一章\n\n正文。\n');
+  await h.ctx.scanner.scan();
+  const member = await h.member();
+  const id = h.ctx.db.get<{ id: string }>("SELECT id FROM books WHERE title = '书库里的书'")!.id;
+  const patch = (session: Session, payload: object) => h.app.inject({ method: 'PATCH', url: `/api/v1/books/${id}/metadata`, headers: auth(session), payload });
+
+  // The admin need not shelve it first: 书库 is where the library is edited.
+  const edited = await patch(h.admin, { title: '改过的书名', author: '某作者' });
+  assert.equal(edited.statusCode, 200, edited.body);
+  assert.deepEqual([edited.json().book.title, edited.json().book.author], ['改过的书名', '某作者']);
+  const listed = await h.app.inject({ method: 'GET', url: '/api/v1/sources/local/browse', headers: auth(member) });
+  assert.deepEqual(listed.json().items.map((item: { title: string }) => item.title), ['改过的书名'], 'the edit is the library\'s, so every reader sees it');
+
+  // A reader cannot, in 书库 or with the book on their own shelf: it would rename it for everyone.
+  assert.equal((await patch(member, { title: 'x' })).json().error.code, 'ADMIN_REQUIRED');
+  await h.app.inject({ method: 'POST', url: '/api/v1/library/browse/shelf', headers: auth(member), payload: { bookIds: [id], action: 'add' } });
+  assert.equal((await patch(member, { title: 'x' })).statusCode, 403);
+  assert.equal((await h.app.inject({ method: 'DELETE', url: `/api/v1/books/${id}/metadata/title`, headers: auth(member) })).statusCode, 403);
+  assert.equal((await h.app.inject({ method: 'POST', url: `/api/v1/books/${id}/cover-source`, headers: auth(member), payload: { sourceId: 'any', entryRef: 'e', coverRef: 'c' } })).statusCode, 403);
+  assert.equal((await h.app.inject({ method: 'DELETE', url: `/api/v1/books/${id}/cover-source`, headers: auth(member) })).statusCode, 403);
+  const book = await h.app.inject({ method: 'GET', url: `/api/v1/books/${id}`, headers: auth(member) });
+  assert.equal(book.json().book.title, '改过的书名', 'reading the book is still everyone\'s');
+
+  const undone = await h.app.inject({ method: 'DELETE', url: `/api/v1/books/${id}/metadata/title`, headers: auth(h.admin) });
+  assert.equal(undone.json().book.title, '书库里的书');
+  assert.equal((await h.app.inject({ method: 'PATCH', url: '/api/v1/books/no-such-book/metadata', headers: auth(h.admin), payload: { title: 'x' } })).statusCode, 404);
 });
 
 test('by default a book joins the library only; an upload lands on the uploader\'s shelf; autoShelf restores sharing', async (t) => {

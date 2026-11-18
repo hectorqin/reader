@@ -26,6 +26,7 @@ import type {
   TocEntry,
   UploadResult,
   LibraryScanResult,
+  BookMetadataField,
   User,
 } from './types.ts';
 import type { Platform } from '../core/platform.ts';
@@ -303,6 +304,14 @@ export class ReaderApi {
     await this.call('/api/v1/books/' + encodeURIComponent(id) + '/cover-source', 'POST', { entryRef, coverRef, ...(sourceId ? { sourceId } : {}) });
   }
   /** A local book goes back to the cover its file carries. */
+  /** 编辑信息: manual values, kept above whatever a rescan reads from the file. */
+  async updateBookMetadata(id: string, patch: Partial<Record<BookMetadataField, string | string[]>>): Promise<Book> {
+    return (await this.call<{ book: Book }>('/api/v1/books/' + encodeURIComponent(id) + '/metadata', 'PATCH', patch)).book;
+  }
+  /** Drops one manual value, so the field shows what the file says again. */
+  async clearBookMetadata(id: string, field: BookMetadataField): Promise<Book> {
+    return (await this.call<{ book: Book }>('/api/v1/books/' + encodeURIComponent(id) + '/metadata/' + encodeURIComponent(field), 'DELETE')).book;
+  }
   async restoreCover(id: string): Promise<void> { await this.call('/api/v1/books/' + encodeURIComponent(id) + '/cover-source', 'DELETE'); }
   async switchPreview(id: string, entryRef: string): Promise<{ chapters: Array<{ id: string; title: string }>; latestChapter?: string }> {
     return this.call('/api/v1/books/' + encodeURIComponent(id) + '/switch-preview', 'POST', { entryRef });

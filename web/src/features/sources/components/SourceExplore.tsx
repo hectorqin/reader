@@ -11,6 +11,8 @@ import { notify } from '../../../ui/notifications.ts';
 import { SearchableSelect } from '../../../ui/searchable-select.tsx';
 import { Button, Callout, Icon } from '../../../ui/toolkit.tsx';
 import { SourceBookDetailSheet } from './SourceBookDetailSheet.tsx';
+import { BookMetadataSheet } from '../../../ui/book-metadata-sheet.tsx';
+import { ChangeCoverSheet, type CoverBook } from '../../../ui/change-cover-sheet.tsx';
 
 /** What a scan found, in the words of ui.md §4: what changed, or that nothing did. */
 export function describeScan(result: LibraryScanResult): string {
@@ -94,6 +96,21 @@ export function SourceExplore({ sources }: { sources: SourceInstance[] }) {
     } catch (reason) { setError(reason instanceof Error ? reason.message : '刷新失败，请重试'); }
     finally { setRefreshing(false); }
   };
+  // An administrator edits 书库's books and gives them another cover from here, on the
+  // shelf or not: what is changed is the library's, shown to every reader.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [covering, setCovering] = useState<CoverBook | null>(null);
+  const changeCover = async (bookId: string) => {
+    try {
+      // The sheet offers 恢复文件封面 only to a book whose cover was set by hand.
+      const { book } = await runtime.api.getBook(bookId);
+      setDetail(null); setCovering({ id: book.id, title: book.title, format: book.format, manualFields: book.manualFields });
+    } catch (reason) { notify(reason instanceof Error ? reason.message : '读取书籍失败', { kind: 'error' }); }
+  };
+  const changed = () => {
+    void queryClient.invalidateQueries({ queryKey: ['shelf'] });
+    void open(trail.slice(0, -1), current?.ref);
+  };
   const loadMore = async () => {
     if (!page?.nextCursor || more || !selectedId) return;
     const run = epoch.current;
@@ -165,6 +182,9 @@ export function SourceExplore({ sources }: { sources: SourceInstance[] }) {
       {page && !busy && !links.length && !page.items.length && <div className="catalog-empty"><strong>{local ? '这个文件夹里还没有书' : '这里还没有内容'}</strong><p>{local ? (canUpload ? '用上方的“上传书籍”添加，或把文件放进书库目录后等待扫描。' : '把文件放进书库目录后，扫描完成就会出现在这里。') : '换一个分类或书源试试。'}</p></div>}
       {page?.nextCursor && <div className="catalog-pagination"><button className="button" type="button" disabled={more || busy} onClick={() => void loadMore()}>{more ? '正在加载…' : '加载更多'}</button></div>}
     </section>
-    {detail && <SourceBookDetailSheet detail={detail} pending={detailQuery.isPending} error={detailQuery.error} acquiring={acquire.isPending} onAcquire={acquireEntry} onClose={() => setDetail(null)} />}
+    {detail && <SourceBookDetailSheet detail={detail} pending={detailQuery.isPending} error={detailQuery.error} acquiring={acquire.isPending} onAcquire={acquireEntry} onClose={() => setDetail(null)}
+      {...(local && admin ? { onEdit: () => { setEditing(detail.ref); setDetail(null); }, onChangeCover: () => { void changeCover(detail.ref); } } : {})} />}
+    {editing && <BookMetadataSheet bookId={editing} onClose={() => setEditing(null)} onSaved={changed} />}
+    {covering && <ChangeCoverSheet book={covering} onClose={() => setCovering(null)} onChanged={changed} />}
   </>;
 }
