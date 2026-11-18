@@ -126,6 +126,27 @@ describe('media writes invalidate the navigation they change', () => {
     expect(affectedNavigationQuery(sync, '/api/v1/media/browse?channel=video')).toBe(false);
   });
 
+  it.each(['/api/v1/library/upload', '/api/v1/library/scan'])('%s stales the shelf, the library and 书库 in 发现', mutation => {
+    expect(affectedNavigationQuery(mutation, '/api/v1/books?scope=shelf')).toBe(true);
+    expect(affectedNavigationQuery(mutation, '/api/v1/library/browse?path=a')).toBe(true);
+    expect(affectedNavigationQuery(mutation, '/api/v1/sources/lib-7/browse?ref=a')).toBe(true);
+    expect(affectedNavigationQuery(mutation, '/api/v1/sources/lib-7/browse')).toBe(true);
+    expect(affectedNavigationQuery(mutation, '/api/v1/sources')).toBe(false);
+    expect(affectedNavigationQuery(mutation, '/api/v1/media/browse?channel=music')).toBe(false);
+  });
+
+  it('a member’s 书库 refresh drops the cached library pages without asking for a scan', async () => {
+    const transport = new FakeTransport();
+    transport.json({ title: '书库', items: [] });
+    const api = await apiWith(transport);
+    await api.sourceCatalog('lib-7');
+    await api.sourceCatalog('lib-7');
+    expect(transport.requests).toHaveLength(1);
+    expect(await api.refreshLibrary(false)).toBeNull();
+    await api.sourceCatalog('lib-7');
+    expect(transport.requests.map(request => request.method)).toEqual(['GET', 'GET']);
+  });
+
   it('keeps playback, queue and favorite invalidation narrow', () => {
     expect(affectedNavigationQuery('/api/v1/media/playback/s-1/progress', '/api/v1/media/history?channel=music')).toBe(true);
     expect(affectedNavigationQuery('/api/v1/media/queue/q-1/move', '/api/v1/media/queue')).toBe(true);
