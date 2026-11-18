@@ -9,7 +9,9 @@
  * does focus go" slightly differently. The rule is now one rule (docs/ui.md §3.7):
  *
  *  - Phones (≤700px): a bottom sheet with a grip, as tall as its content and never
- *    taller than the screen allows.
+ *    taller than the screen allows. The grip and title bar drag it: down closes it
+ *    (a fourth exit, refused while `busy`), up expands a regular sheet to nearly the
+ *    whole screen (`sheet-drag.ts`).
  *  - Wider windows: a drawer on the right edge; `size="wide"` gives forms that need
  *    it more width. `size="compact"` (confirmations, prompts, short pick lists) opens
  *    next to the tap or control that asked the question instead: a two-button
@@ -28,6 +30,7 @@
 import { type JSX, type ReactNode, useLayoutEffect, useRef } from 'react';
 import { Button, IconButton } from './toolkit.tsx';
 import { placeNotifications } from './notifications.ts';
+import { startSheetDrag } from './sheet-drag.ts';
 import '../styles/sheet.css';
 
 export type SheetSize = 'regular' | 'compact' | 'wide';
@@ -96,6 +99,11 @@ export function Sheet({
   }, []);
 
   const requestClose = () => { if (!state.current.busy) state.current.onClose(); };
+  // On a phone the grip and title bar drag the sheet: down to close, up to expand.
+  const drag = (event: React.PointerEvent) => {
+    if (typeof matchMedia !== 'function' || matchMedia(WIDE).matches) return;
+    startSheetDrag(event.nativeEvent, ref.current!, { expandable: size !== 'compact', busy: () => state.current.busy, close: requestClose });
+  };
   const outside = (event: { clientX: number; clientY: number; target: EventTarget; currentTarget: HTMLDialogElement }) => {
     if (event.target !== event.currentTarget) return false;
     const rect = event.currentTarget.getBoundingClientRect();
@@ -128,8 +136,8 @@ export function Sheet({
         if (event.key === 'Tab') trapTab(event.currentTarget, event);
       }}
     >
-      <div className="sheet-grip" aria-hidden="true" />
-      <header className="sheet-header">
+      <div className="sheet-grip" aria-hidden="true" onPointerDown={drag} />
+      <header className="sheet-header" onPointerDown={drag}>
         <h2>{title}</h2>
         {subtitle ? <span className="sheet-subtitle">{subtitle}</span> : null}
         {actions}

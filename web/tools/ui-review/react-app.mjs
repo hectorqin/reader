@@ -222,6 +222,36 @@ async function runReaderReview(browser, origin, checks, errors) {
   await page.locator('.book-grid .book-card').first().waitFor();
   const firstCoverTop = await page.locator('.book-grid .book-card').first().evaluate(el => Math.round(el.getBoundingClientRect().top));
   assert.ok(firstCoverTop <= Math.round(heightFor(390) / 3), `shelf 390px: first cover starts at ${firstCoverTop}px`);
+  // A phone sheet drags by its grip (ui.md §3.7): up to expand, down to its usual
+  // height, further down to close. Real touches through CDP, so the browser's own
+  // touch → pointer conversion and `touch-action` are what is exercised.
+  await page.getByRole('button', { name: /^书架设置/ }).click();
+  const sheet = page.locator('dialog.sheet[open]');
+  await sheet.waitFor();
+  await page.waitForTimeout(300);
+  const touch = await context.newCDPSession(page);
+  const swipe = async (fromY, toY) => {
+    const grip = await sheet.locator('.sheet-grip').boundingBox();
+    const x = Math.round(grip.x + grip.width / 2), start = Math.round(grip.y + grip.height / 2) + fromY;
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y: start }] });
+    for (let step = 1; step <= 12; step++) {
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: Math.round(start + (toY * step) / 12) }] });
+      await page.waitForTimeout(16);
+    }
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForTimeout(450);
+  };
+  const restHeight = await sheet.evaluate(el => el.getBoundingClientRect().height);
+  await swipe(0, -400);
+  const expanded = await sheet.evaluate(el => ({ on: el.hasAttribute('data-expanded'), height: el.getBoundingClientRect().height, bottom: el.getBoundingClientRect().bottom }));
+  assert.ok(expanded.on && expanded.height > restHeight + 40 && expanded.height >= heightFor(390) * 0.9, `sheet drag up: ${JSON.stringify({ restHeight, ...expanded })}`);
+  assert.ok(Math.abs(expanded.bottom - heightFor(390)) <= 1, `expanded sheet stays on the bottom edge: ${expanded.bottom}`);
+  await page.screenshot({ path: join(output, 'sheet-expanded-390.png') });
+  await swipe(0, 300);
+  const back = await sheet.evaluate(el => ({ on: el.hasAttribute('data-expanded'), height: el.getBoundingClientRect().height }));
+  assert.ok(!back.on && Math.abs(back.height - restHeight) <= 2, `sheet drag down from expanded: ${JSON.stringify({ restHeight, ...back })}`);
+  await swipe(0, 450);
+  assert.equal(await page.locator('dialog.sheet[open]').count(), 0, 'a sheet pulled down closes');
   // The same screen in the dark half of the theme (follow-system is the default).
   await page.emulateMedia({ colorScheme: 'dark' });
   await capture(page, 'shelf-dark', checks, errors);
