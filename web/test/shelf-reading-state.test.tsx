@@ -5,10 +5,11 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '../src/shared/ui/render-root.ts';
 import { RuntimeContext } from '../src/app/providers/runtime-context.tsx';
+import { useAuthStore } from '../src/shared/stores/auth.store.ts';
 
 /** 书架 (prototypes 2/19): 在读 / 想读 / 已读 and 分组 drive the query and the URL; ⋯ marks a book. */
 const shelfCalls: unknown[][] = [];
-const book = { id: 'b1', title: '夜航船', author: '示例作者', coverUrl: null, format: 'epub', readingState: 'reading' };
+const book: Record<string, unknown> = { id: 'b1', title: '夜航船', author: '示例作者', coverUrl: null, format: 'epub', readingState: 'reading' };
 vi.mock('../src/features/shelf/queries/shelf.queries.ts', () => ({
   useShelf: (...args: unknown[]) => { shelfCalls.push(args); return { data: { items: [book], total: 1, pageSize: 60 }, isPending: false, error: null }; },
   useShelfGroups: (enabled: boolean) => ({ data: enabled ? { authors: [], series: ['三体'], tags: ['科幻'], formats: [] } : undefined, isPending: false, error: null }),
@@ -36,7 +37,7 @@ const paint = (path: string) => act(() => render(
     </></QueryClientProvider>
   </RuntimeContext.Provider>, root));
 const click = (text: string) => act(() => [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === text)!.click());
-afterEach(() => { act(() => render(null, root)); shelfCalls.length = 0; setReadingStatus.mockClear(); });
+afterEach(() => { act(() => render(null, root)); shelfCalls.length = 0; setReadingStatus.mockClear(); useAuthStore.setState({ session: null, verifiedUser: null }); book.format = 'epub'; });
 
 it('filters by reading state and by one 分组, keeping both in the URL', async () => {
   paint('/shelf?status=want');
@@ -55,16 +56,31 @@ it('filters by reading state and by one 分组, keeping both in the URL', async 
 });
 
 it('shows a card\'s state and marks it from the ⋯ menu', async () => {
+  useAuthStore.setState({ verifiedUser: { id: 'a', username: 'a', displayName: 'A', role: 'admin', createdAt: 0 } as any });
   paint('/shelf');
   expect(root.querySelector('.book-state')?.textContent).toBe('在读');
   await act(() => root.querySelector<HTMLButtonElement>('.book-more')!.click());
   const options = [...document.querySelectorAll('[role^=menuitem]')].map(button => button.textContent);
-  expect(options).toEqual(['标记为想读', '标记为已读', '清除标记', '更换封面', '从书架拿掉']);
+  expect(options).toEqual(['标记为想读', '标记为已读', '清除标记', '编辑信息', '更换封面', '从书架拿掉']);
   await click('标记为已读');
   expect(setReadingStatus).toHaveBeenCalledWith('b1', 'finished');
   await act(() => root.querySelector<HTMLButtonElement>('.book-more')!.click());
   await click('清除标记');
   expect(setReadingStatus).toHaveBeenLastCalledWith('b1', null);
+});
+
+it('keeps a local book\'s 编辑信息 and 更换封面 to administrators; a reader\'s source book is theirs', async () => {
+  useAuthStore.setState({ verifiedUser: { id: 'm', username: 'm', displayName: 'M', role: 'member', createdAt: 0 } as any });
+  const menu = async () => {
+    await act(() => root.querySelector<HTMLButtonElement>('.book-more')!.click());
+    return [...document.querySelectorAll('[role^=menuitem]')].map(button => button.textContent);
+  };
+  paint('/shelf');
+  expect(await menu()).toEqual(['标记为想读', '标记为已读', '清除标记', '从书架拿掉']);
+  act(() => render(null, root));
+  book.format = 'chapters';
+  paint('/shelf');
+  expect(await menu()).toEqual(['标记为想读', '标记为已读', '清除标记', '编辑信息', '更换封面', '从书架拿掉']);
 });
 
 it('reads the filter and sort from the URL on every navigation, not once at mount', async () => {

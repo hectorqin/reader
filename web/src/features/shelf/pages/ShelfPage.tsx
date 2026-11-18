@@ -20,6 +20,8 @@ import { notify } from '../../../ui/notifications.ts';
 import { Pager } from '../../../ui/pager.tsx';
 import { ActionMenu, type MenuItems } from '../../../ui/action-menu.tsx';
 import { ChangeCoverSheet } from '../../../ui/change-cover-sheet.tsx';
+import { BookMetadataSheet } from '../../../ui/book-metadata-sheet.tsx';
+import { useAuthStore } from '../../../shared/stores/auth.store.ts';
 import { describeShelfAction, SHELF_ACTION_LABELS } from '../../../ui/shelf-membership.ts';
 
 const coverCache = new WeakMap<object, Map<string, string>>();
@@ -67,6 +69,7 @@ type BookAction = ReadingState | 'clear' | 'remove';
 
 export function ShelfPage() {
   const runtime = useRuntime();
+  const admin = useAuthStore(state => state.verifiedUser?.role === 'admin');
   const queryClient = useQueryClient();
   const settings = useSettingsStore(state => state.settings);
   const [params, setParams] = useSearchParams();
@@ -84,6 +87,7 @@ export function ShelfPage() {
   const [groupsOpen, setGroupsOpen] = useState(false);
   const [actionError, setActionError] = useState('');
   const [coverBook, setCoverBook] = useState<Book | null>(null);
+  const [editBook, setEditBook] = useState<string | null>(null);
   // 在读 / 想读 / 已读 and one 分组 (a series or a tag), all in the URL like the page and sort.
   const status = isReadingState(params.get('status')) ? params.get('status') as ReadingState : undefined;
   const series = params.get('series') || undefined, tag = series ? undefined : params.get('tag') || undefined;
@@ -133,8 +137,12 @@ export function ShelfPage() {
   const menuItems = (book: Book): MenuItems => [
     ...readingStates.filter(state => state !== book.readingState).map(state => ({ label: '标记为' + readingLabels[state], onSelect: () => void act(book, state) })),
     book.readingState && { label: '清除标记', onSelect: () => void act(book, 'clear') },
-    // Any book can take its cover from a book source's edition of it.
-    { label: '更换封面', onSelect: () => setCoverBook(book) },
+    // A local book's metadata and cover are shared by every reader, so only an
+    // administrator changes them; a book from a book source stays its reader's.
+    ...(admin || book.format === 'chapters' ? [
+      { label: '编辑信息', onSelect: () => setEditBook(book.id) },
+      { label: '更换封面', onSelect: () => setCoverBook(book) },
+    ] : []),
     { label: SHELF_ACTION_LABELS.remove, danger: true, onSelect: () => void act(book, 'remove') },
   ];
   const groupOptions = [
@@ -196,6 +204,7 @@ export function ShelfPage() {
       {query.data && pages > 1 && <Pager className="shelf-pager" page={Math.min(page, pages)} pageCount={pages} busy={query.isFetching} onGo={next => go({ page: next })} />}
     </section>
     {settingsOpen && <ShelfSettingsSheet settings={settings} onPatch={patch => { void runtime.updateSettings(patch); }} onClose={() => setSettingsOpen(false)} onOpenExternalReader={() => { setSettingsOpen(false); navigate('/me/opds', { state: { returnTo: '/shelf' } }); }} />}
+    {editBook && <BookMetadataSheet bookId={editBook} onClose={() => setEditBook(null)} onSaved={() => void queryClient.invalidateQueries({ queryKey: ['shelf'] })} />}
     {coverBook && <ChangeCoverSheet book={coverBook} onClose={() => setCoverBook(null)} onChanged={() => void query.refetch()} />}
     {groupsOpen && <DialogView dialog={{ kind: 'pick', title: groups.isPending ? '分组 · 正在读取…' : groups.error ? '分组 · 读取失败' : '分组', options: groupOptions, resolve: (_value: string | null) => undefined } satisfies Dialog} destructive="" onClose={answer => {
       setGroupsOpen(false);

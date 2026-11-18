@@ -665,7 +665,13 @@ manifest 的每个条目还带 `ref`，即这个文件对应的**资源引用**�
 `seriesIndex` `pubdate` `tags`（`tags` 用逗号分隔的字符串）。其他键被忽略；一个可改字段都没有时返回
 `400 BAD_REQUEST`。→ `{ "book": {...} }`（应用覆盖后的书籍 DTO）
 
-写入的是覆盖层，**扫描永远不会覆盖它**。
+写入的是覆盖层，**扫描永远不会覆盖它**。覆盖层属于这本书而不是某个读者，所有人看到的都是改后的值。
+
+**谁能改：** 本地书（书库里的书，`format` 不是 `chapters`）只有管理员能改，不要求在管理员自己的书架上；
+其他人返回 `403 ADMIN_REQUIRED`，书在自己书架上也一样——本地书只有一份记录，读者改了会把所有人书架上的书名都改掉。
+来自书源的书（`chapters`）仍由书架上有这本书的读者自己改。
+`DELETE /books/:id/metadata/:field` 和本地书的 `POST/DELETE /books/:id/cover-source` 用同一条规则。
+读这本书（`GET /books/:id`）对所有能看到它的人开放：在自己书架上，或者在书库里（还有在盘的文件）。
 
 ### `DELETE /books/:id/metadata/:field`
 
