@@ -228,14 +228,16 @@ id = sha256( (dc:identifier ?? '').toLowerCase() + '\0' + sha256(fileBytes) )
 一个商城只陈列你已经买过的东西。现在它读 `scope=library`（`docs/api.md`），
 每一项带 `shelfState`，于是「这一页有 N 本还不在书架上」和封面上的角标说的是同一件事。
 
-**离线镜像是缓存，所以「少了一本书」它自己推不出来。** `offline.replaceBooks`
-只会**加**：它拿到的是一页书，它没有任何办法知道「这一页里没有的那本书」是读者刚拿掉的、
-还是这一次没请求到。于是书架在**冷启动的第一帧**画的是 `offline.books()`，
-而那一帧里被拿掉的书还在——在线时下一帧会被服务端的答案替换掉，离线时永远不会。
-所以移除路径显式调一次 `offline.removeBooks(result.books)`，而且是在 `refresh`**之后**：
-放在前面只有在「服务端已经不再返回这本书」时才正确，而那正好是把镜像写成
-「一个带 bug 的缓存」的那个假设。`result.books` 是服务端自己说它改过的那几本，
-两边都是它说了算。
+**书架不再有离线镜像。** 书架、书库都是 React Query 直接向服务端分页请求，冷启动不再先画本地缓存。
+离线时能打开的是「已下载离线阅读」的书：`ReaderPage` 在连接失败时先查 `offline.books()`，
+查不到就读下载时与文件字节一起存下的 manifest（`PublicationCache`），再从本地缓存读字节。
+`offline.ts` 仍保留书目记录及 `replaceBooks` / `removeBooks`（只加不减、移除需显式调用的语义不变），
+但 React 迁移（`2aaa428`）之后已没有调用方写入它，`offline.books()` 只剩旧版本留下的数据。
+
+> 历史：旧 shell 的书架冷启动第一帧画 `offline.books()`。因为 `replaceBooks` 只会**加**——
+> 它拿到的是一页书，分不清「这一页里没有的那本」是被拿掉了还是没请求到——移除路径在 `refresh`
+> **之后**显式调 `offline.removeBooks(result.books)`，以服务端说它改过的那几本为准。
+> 若恢复书架镜像，这条约束仍然成立。
 
 ### 增量拉取
 
@@ -411,7 +413,7 @@ URL 从头到尾不变。手机上这一点几乎看不见——直到读者按�
 | `#/search?q=` | 书籍与影音的全局搜索 |
 | `#/library/files` | 书库文件管理（仅管理员）。`#/library`、`#/library/books` 重定向到「发现」里的本地书库（`#/sources?tab=explore&source=local`） |
 | `#/sources` 及 `#/sources/...` | 书源中心、浏览、书源编辑、凭据、扩展和插件管理 |
-| `#/me`、`#/me/settings`、`#/me/account`、`#/me/opds`、`#/me/admin/*` | 「我的」入口页；偏好设置（主题、书架、影音浏览、播放为同一页的分区）；账号；外部阅读器（OPDS）；管理员的用户管理、注册与邀请、服务配置。旧 `#/me/:panel` 跳到对应分区 |
+| `#/me`、`#/me/settings`、`#/me/stats`、`#/me/notes`、`#/me/account`、`#/me/opds`、`#/me/admin/*` | 「我的」入口页；偏好设置（主题、书架、影音浏览、播放为同一页的分区）；时长统计；读书笔记；账号；外部阅读器（OPDS）；管理员的用户管理、注册与邀请、服务配置。旧 `#/me/:panel` 跳到对应分区 |
 | `#/settings` | 兼容旧深链接，重定向到书架 |
 | `#/book/:bookId` | 阅读器 |
 | `#/media/:channel` | 影音频道目录 |

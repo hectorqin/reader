@@ -1,6 +1,6 @@
 # Configuration
 
-[Project home](../README.en.md) · [Documentation](README.md) · [简体中文](configuration.zh-CN.md)
+[Project home](../README.md) · [Documentation](README.md) · [简体中文](configuration.zh-CN.md)
 
 For a first installation, follow [getting started](getting-started.en.md). This page covers configuration, maintenance, and troubleshooting.
 
@@ -21,6 +21,8 @@ Administrators configure AI features, media playback mode, HTTP speech, scanning
 
 On first upgrade, legacy business environment variables are imported once. Existing database values, including cleared credentials, always win. See [business settings (中文)](business-settings.zh-CN.md).
 
+The variables imported once are: `PUBLIC_URL`, `CORS_ORIGINS`, `ACCESS_TOKEN_TTL`, `REFRESH_TOKEN_TTL` (login and service access); `SCAN_INTERVAL`, `WATCH_INTERVAL` (the scan interval becomes the smaller of the two that is above 0); `ALLOW_REGISTRATION=true` (registration starts open); `AI_BASE_URL`, `AI_API_KEY`, `AI_MODEL`; `MEDIA_TMDB_TOKEN`, `MEDIA_TMDB_API_KEY`, `MEDIA_MUSICBRAINZ_USER_AGENT`; `TTS_URL`, `TTS_TOKEN`, `TTS_VOICES_URL`, `TTS_TIMEOUT_MS`, `TTS_CACHE_BYTES`; `WEBDAV_URL`, `WEBDAV_USERNAME`, `WEBDAV_PASSWORD`, `WEBDAV_MAX_BYTES`. New deployments do not need them.
+
 ## Deployment environment variables
 
 These are defaults when running the server directly. The Docker image additionally sets `DATA_DIR=/data`, `WEB_DIR=/app/web`, `BOOKS_DIR=/books`, and `MEDIA_FFPROBE_PATH=/usr/bin/ffprobe`.
@@ -31,13 +33,18 @@ These are defaults when running the server directly. The Docker image additional
 | `DATA_DIR` | `data` under the current working directory | Server state and caches |
 | `HOST` | `0.0.0.0` | Listen address |
 | `PORT` | `5888` | Listen port |
-| `READER_TOKEN_SECRET` | Generated | Signing secret, at least 16 characters; otherwise stored in `DATA_DIR/token.secret` |
+| `TRUST_PROXY` | `false` | Trusted reverse-proxy IPs/CIDRs, comma-separated; `loopback` for a proxy on the same host. `true` (trust everyone) is rejected |
+| `READER_TOKEN_SECRET` | Generated | Signing secret, at least 16 characters (the old name `JWT_SECRET` still works); if unset, generated and stored in `DATA_DIR/token.secret` |
 | `LOG_LEVEL` | `info` | Logging level |
 | `MEDIA_FFPROBE_PATH` | `ffprobe` | Local media probe executable; without it media is still indexed, but duration, tags, and chapters may be incomplete |
 | `MEDIA_FFMPEG_PATH` | `ffmpeg` | Embedded artwork and subtitle extraction; no transcoding |
 | `WEB_DIR` | `web` under the current working directory | Built Web client directory |
 
 Run `docker compose up -d` after changing environment variables. Keep the signing secret stable to preserve sessions. Accounts, progress, and notes cannot be recovered by rescanning book files.
+
+`X-Forwarded-*` headers from clients are not trusted by default. Behind a reverse proxy, list the proxy addresses in `TRUST_PROXY` and have the proxy overwrite the forwarded headers. Otherwise rate limits aggregate on the proxy's own IP and same-origin HTTPS detection cannot see the forwarded protocol and host. Never list networks that clients can reach directly as trusted proxies.
+
+Authentication endpoints are rate limited: login 60 per IP per minute, and at most 10 attempts per IP and username per minute (reset by a successful login); registration 5 per IP per 10 minutes; refresh 240 per IP per minute; password change and admin reset 20 per IP per 10 minutes. At most 4 password-hashing operations run at once. Limits return `429` with `Retry-After`. State is in-process memory: a restart clears it, and multi-replica deployments need shared limiting at the gateway.
 
 ## HTTPS and reverse proxies
 

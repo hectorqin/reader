@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Self-hosted book library + media server (books, movies/TV, music, audiobooks). Three independent parts, no root `package.json`:
+Self-hosted book library + media server (books, movies/TV, music, audiobooks). Three independent parts; the root `package.json` holds repo tooling only (Prettier, husky, lint-staged):
 
 - `server/` — Node ≥22 (CI uses 24), TypeScript run directly via `tsx`, Fastify, built-in `node:sqlite`.
 - `web/` — React 19 + Vite client. The **same build** is served by the server and bundled into the Android app.
@@ -14,7 +14,7 @@ Docs (mostly Chinese) live in `docs/`; `docs/architecture.md` explains *why* thi
 
 ## Commands
 
-Run from repo root (or `cd` into the package). CI runs install → typecheck → test → build per package: GitHub Actions `.github/workflows/ci.yml` (PRs and every branch push; also UI review, Android shell check + debug APK). `main` is the long-lived development branch and never releases on push: `.github/workflows/release.yml` runs only for `v*` tags or a manual run, runs CI first, then publishes the multi-arch (amd64 + arm64, native runners) image to Docker Hub `hectorqin/reader-pro` (`x.y.z`/`x.y`/`latest` + `sha-*` for tags; branch name + `sha-*` for manual runs); it needs the `DOCKER_USERNAME`/`DOCKER_PASSWORD` secrets. `android/scripts/check-shell.sh` checks the JS bridge contract: only `@JavascriptInterface` methods count, and each must be declared in `web/src/android-bridge.d.ts` (method syntax, `name?(): T` for optional).
+Run from repo root (or `cd` into the package). `npm ci` at the root installs git hooks: pre-commit runs Prettier on staged files (`.prettierrc.json`, width 120, single quotes; CSS double quotes; Markdown ignored), commit-msg enforces Conventional Commits (`scripts/check-commit-msg.mjs`). `npm run format` / `npm run format:check` (CI) cover the whole repo. Tests that read CSS/source text must tolerate Prettier output (lower-case hex, wrapped selectors). CI runs install → typecheck → test → build per package: GitHub Actions `.github/workflows/ci.yml` (PRs and every branch push; also UI review, Android shell check + debug APK). `main` is the long-lived development branch and never releases on push: `.github/workflows/release.yml` runs only for `v*` tags or a manual run, runs CI first, then publishes the multi-arch (amd64 + arm64, native runners) image to Docker Hub `hectorqin/reader-pro` (`x.y.z`/`x.y`/`latest` + `sha-*` for tags; branch name + `sha-*` for manual runs); it needs the `DOCKER_USERNAME`/`DOCKER_PASSWORD` secrets. `android/scripts/check-shell.sh` checks the JS bridge contract: only `@JavascriptInterface` methods count, and each must be declared in `web/src/android-bridge.d.ts` (method syntax, `name?(): T` for optional).
 
 ```sh
 npm ci --prefix server && npm ci --prefix web
@@ -61,5 +61,5 @@ Icons: map a name to a Lucide glyph in `ICONS` in `web/src/ui/icon.tsx` (this pr
 - **Theming**: `ThemeController` (`shared/theme/theme.ts`) writes `data-theme`/`data-mode` on `<html>`; components use `--color-*` tokens from `styles/theme-tokens.css` (`--reader-*` and media aliases map onto them). Read/save theme via `readThemePreference`/`saveThemePreference`/`resolveAppTheme` (and `useThemeState` from `shared/theme/use-theme.ts` in React), never storage directly. New colors/spacing/durations become tokens, not literals.
 - UI is built from the project's own components (`ui/toolkit.tsx`, `ui/sheet.tsx` as the only modal type, `ui/action-menu.tsx` for every ⋯ menu, `ui/dialog.tsx`, `ui/pager.tsx`) with Lucide icons drawn only through `ui/icon.tsx`. Mantine was removed; some docs still mention it.
 - Lists are server-paginated with the page in the URL (`docs/ui.md` §3.5). After a write, re-fetch and only then report. The client must not reconstruct facts the server already knows (e.g. book↔file joins); write by book id.
-- Offline mirror (`store/offline.ts`) is additive-only; removals must call `offline.removeBooks` explicitly.
+- Offline mirror (`store/offline.ts`) holds progress/notes outbox; its book list is additive-only (removals must call `offline.removeBooks` explicitly), but since the React migration nothing writes it — offline reading opens downloaded books from the manifest stored by `PublicationCache` (see `ReaderPage`).
 - **Mobile/PWA layout** (`docs/ui.md` §2.5, §3.1, §3.3): every `:hover` goes inside `@media (hover: hover) and (pointer: fine)` (enforced by `test/design-tokens.test.ts`); safe areas via the `--safe-*` vars, added only by the layer touching that screen edge (in sidebar mode the sidebar owns the left inset and `.app-shell-body` the right one); finger-reachable inputs ≥16px (`--text-title`) or iOS zooms on focus. `ui:review` does not emulate safe areas — check edge-touching bars with CDP `Emulation.setSafeAreaInsetsOverride`. Manifest/icons/launch colours: `docs/pwa.zh-CN.md`.

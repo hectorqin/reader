@@ -1,6 +1,6 @@
 # 部署配置
 
-[项目首页](../README.md) · [文档中心](README.md) · [English](configuration.en.md)
+[项目首页](../README.zh-CN.md) · [文档中心](README.md) · [English](configuration.en.md)
 
 初次部署请先看[入门指南](getting-started.zh-CN.md)。本页适用于部署后的配置、维护与排错。
 
@@ -21,6 +21,8 @@
 
 升级首次启动会导入旧业务环境变量；数据库存在配置后不再读取这些环境变量，清空字段也不会恢复旧值。
 
+会被一次性导入的旧变量：`PUBLIC_URL`、`CORS_ORIGINS`、`ACCESS_TOKEN_TTL`、`REFRESH_TOKEN_TTL`（登录与服务访问）；`SCAN_INTERVAL`、`WATCH_INTERVAL`（扫描间隔取两者中大于 0 的较小值）；`ALLOW_REGISTRATION=true`（注册策略设为开放）；`AI_BASE_URL`、`AI_API_KEY`、`AI_MODEL`；`MEDIA_TMDB_TOKEN`、`MEDIA_TMDB_API_KEY`、`MEDIA_MUSICBRAINZ_USER_AGENT`；`TTS_URL`、`TTS_TOKEN`、`TTS_VOICES_URL`、`TTS_TIMEOUT_MS`、`TTS_CACHE_BYTES`；`WEBDAV_URL`、`WEBDAV_USERNAME`、`WEBDAV_PASSWORD`、`WEBDAV_MAX_BYTES`。新部署无需设置它们。
+
 ## 部署环境变量
 
 以下是直接运行服务端时的默认值。Docker 镜像另设 `DATA_DIR=/data`、`WEB_DIR=/app/web`、`BOOKS_DIR=/books` 和 `MEDIA_FFPROBE_PATH=/usr/bin/ffprobe`。
@@ -32,7 +34,7 @@
 | `HOST` | `0.0.0.0` | 监听地址 |
 | `PORT` | `5888` | 监听端口 |
 | `TRUST_PROXY` | `false` | 可信反向代理的 IP/CIDR，多个以逗号分隔；同机代理可用 `loopback`，不接受无条件信任的 `true` |
-| `READER_TOKEN_SECRET` | 自动生成 | 至少 16 字符的签名密钥；默认保存在 `DATA_DIR/token.secret` |
+| `READER_TOKEN_SECRET` | 自动生成 | 至少 16 字符的签名密钥（旧名 `JWT_SECRET` 仍可用）；未设置时生成并保存在 `DATA_DIR/token.secret` |
 | `LOG_LEVEL` | `info` | 日志级别 |
 | `MEDIA_FFPROBE_PATH` | `ffprobe` | 影音技术信息读取程序；缺失时仍可扫描入库，时长、标签及章节信息可能不完整 |
 | `MEDIA_FFMPEG_PATH` | `ffmpeg` | 内嵌封面与字幕提取程序，不提供转码 |
